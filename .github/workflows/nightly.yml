@@ -171,9 +171,9 @@ jobs:
         
         Write-Host "Configuring Qt6 build (${{ matrix.arch }})..."
         cd $QT_BUILD_PATH
-        $cmake_cmd = "cmake `"$QT_SRC_PATH`" -DCMAKE_INSTALL_PREFIX=`"$QT_INSTALL_PATH`" -DCMAKE_BUILD_TYPE=Release -DQT_BUILD_EXAMPLES=OFF -DQT_BUILD_TESTS=OFF"
+        $cmake_cmd = "cmake `"$QT_SRC_PATH`" -DCMAKE_INSTALL_PREFIX=`"$QT_INSTALL_PATH`" -DCMAKE_BUILD_TYPE=Release -DQT_BUILD_EXAMPLES=OFF -DQT_BUILD_TESTS=OFF -DQT_BUILD_DOCUMENTATION=OFF -DFEATURE_tracepointgen=OFF"
         if ("${{ matrix.arch }}" -eq "x86") {
-          $cmake_cmd = "cmake `"$QT_SRC_PATH`" -A Win32 -DCMAKE_INSTALL_PREFIX=`"$QT_INSTALL_PATH`" -DCMAKE_BUILD_TYPE=Release -DQT_BUILD_EXAMPLES=OFF -DQT_BUILD_TESTS=OFF"
+          $cmake_cmd = "cmake `"$QT_SRC_PATH`" -A Win32 -DCMAKE_INSTALL_PREFIX=`"$QT_INSTALL_PATH`" -DCMAKE_BUILD_TYPE=Release -DQT_BUILD_EXAMPLES=OFF -DQT_BUILD_TESTS=OFF -DQT_BUILD_DOCUMENTATION=OFF -DFEATURE_tracepointgen=OFF"
         }
         Invoke-Expression $cmake_cmd
         

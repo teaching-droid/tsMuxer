@@ -73,7 +73,9 @@ jobs:
           -DCMAKE_INSTALL_PREFIX="$QT_INSTALL_PATH" `
           -DCMAKE_BUILD_TYPE=Release `
           -DQT_BUILD_EXAMPLES=OFF `
-          -DQT_BUILD_TESTS=OFF
+          -DQT_BUILD_TESTS=OFF `
+          -DQT_BUILD_DOCUMENTATION=OFF `
+          -DFEATURE_tracepointgen=OFF
         
         Write-Host "Building Qt6 32-bit (this may take 30+ minutes)..."
         cmake --build . --config Release -j ([Environment]::ProcessorCount)
