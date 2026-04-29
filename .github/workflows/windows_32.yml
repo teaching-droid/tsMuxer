@@ -12,32 +12,76 @@ jobs:
     - uses: actions/checkout@v4
       name: checkout
 
-    - name: Setup Qt6 Windows 7 (Qt6windows7)
-      run: |
-        $QT_ZIP = "${{ runner.temp }}\qt6.7z"
-        $QT_PATH = "${{ runner.temp }}\qt6windows7"
-        
-        Write-Host "Downloading Qt6 Windows 7 compatible binaries (32-bit)..."
-        $QT_URL = "https://github.com/crystalidea/qt6windows7/releases/download/v6.8.3/qt6_x86_to_run_on_windows7.7z"
-        Write-Host "URL: $QT_URL"
-        
-        Invoke-WebRequest -Uri $QT_URL -OutFile $QT_ZIP
-        
-        Write-Host "Extracting Qt6 binaries..."
-        mkdir $QT_PATH
-        7z x $QT_ZIP -o"$QT_PATH" -y
-        
-        Write-Host "Qt6 extraction complete. Directory structure:"
-        Get-ChildItem -Path $QT_PATH -Recurse -Depth 2 | Select-Object FullName
-        
-        Write-Host "Qt6 path: $QT_PATH"
-        Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_PREFIX_PATH=$QT_PATH"
+    - name: Cache Qt6 Windows 7 Build
+      id: cache-qt6
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}\qt6-install-x86
+        key: qt6-windows7-x86-6.8.3-${{ hashFiles('.github/workflows/windows_32.yml') }}
+        restore-keys: |
+          qt6-windows7-x86-6.8.3-
 
-    - name: Build tsMuxer (32-bit)
+    - name: Setup Qt6 Windows 7 (Build from source)
+      if: steps.cache-qt6.outputs.cache-hit != 'true'
       run: |
+        $QT_SRC_ZIP = "${{ runner.temp }}\qt6.zip"
+        $QT_PATCH_ZIP = "${{ runner.temp }}\qt6windows7-patches.zip"
+        $QT_SRC_PATH = "${{ runner.temp }}\qt6-src-x86"
+        $QT_BUILD_PATH = "${{ runner.temp }}\qt6-build-x86"
+        $QT_INSTALL_PATH = "${{ runner.temp }}\qt6-install-x86"
+        
+        Write-Host "Downloading official Qt6 source..."
+        $QT_SRC_URL = "https://github.com/qt/qt5/archive/refs/tags/v6.8.3.zip"
+        Invoke-WebRequest -Uri $QT_SRC_URL -OutFile $QT_SRC_ZIP
+        
+        Write-Host "Downloading qt6windows7 patches..."
+        $QT_PATCH_URL = "https://github.com/crystalidea/qt6windows7/archive/refs/tags/v6.8.3.zip"
+        Invoke-WebRequest -Uri $QT_PATCH_URL -OutFile $QT_PATCH_ZIP
+        
+        Write-Host "Extracting Qt6 source..."
+        Expand-Archive -Path $QT_SRC_ZIP -DestinationPath "${{ runner.temp }}" -Force
+        Rename-Item -Path "${{ runner.temp }}\qt5-6.8.3" -NewName $QT_SRC_PATH -Force
+        
+        Write-Host "Extracting qt6windows7 patches..."
+        $QT_PATCH_EXTRACT = "${{ runner.temp }}\qt6windows7-patches"
+        Expand-Archive -Path $QT_PATCH_ZIP -DestinationPath $QT_PATCH_EXTRACT -Force
+        
+        Write-Host "Applying qt6windows7 patches..."
+        Copy-Item -Path "$QT_PATCH_EXTRACT\qt6windows7-6.8.3\qtbase\src\*" -Destination "$QT_SRC_PATH\qtbase\src" -Recurse -Force
+        
+        Write-Host "Creating build directory..."
+        mkdir $QT_BUILD_PATH
+        mkdir $QT_INSTALL_PATH
+        
+        Write-Host "Configuring Qt6 build (32-bit)..."
+        cd $QT_BUILD_PATH
+        cmake "$QT_SRC_PATH/qtbase" `
+          -A Win32 `
+          -DCMAKE_INSTALL_PREFIX="$QT_INSTALL_PATH" `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DQT_BUILD_EXAMPLES=OFF `
+          -DQT_BUILD_TESTS=OFF `
+          -DFEATURE_static_runtime=ON
+        
+        Write-Host "Building Qt6 32-bit (this may take 30+ minutes)..."
+        cmake --build . --config Release -j ([Environment]::ProcessorCount)
+        
+        Write-Host "Installing Qt6..."
+        cmake --install . --config Release
+        
+        Write-Host "Qt6 32-bit with Windows 7 patches build complete!"
+
+    - name: Build tsMuxer
+      run: |
+        $QT_INSTALL_PATH = "${{ runner.temp }}\qt6-install-x86"
+        
         mkdir build
         cd build
-        cmake ../ -A Win32 -DCMAKE_PREFIX_PATH="${{ env.CMAKE_PREFIX_PATH }}" -DTSMUXER_GUI=ON -DCMAKE_BUILD_TYPE=Release
+        cmake ../ `
+          -A Win32 `
+          -DCMAKE_PREFIX_PATH="$QT_INSTALL_PATH" `
+          -DTSMUXER_GUI=ON `
+          -DCMAKE_BUILD_TYPE=Release
         cmake --build . --config Release
         
         if (!(Test-Path "../bin")) { mkdir "../bin" }
