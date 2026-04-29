@@ -47,7 +47,20 @@ jobs:
         Expand-Archive -Path $QT_PATCH_ZIP -DestinationPath $QT_PATCH_EXTRACT -Force
         
         Write-Host "Applying qt6windows7 patches..."
-        Copy-Item -Path "$QT_PATCH_EXTRACT\qt6windows7-6.8.3\qtbase\src\*" -Destination "$QT_SRC_PATH\qtbase\src" -Recurse -Force
+        $PatchSrcPath = "$QT_PATCH_EXTRACT\qt6windows7-6.8.3\qtbase\src"
+        $QtSrcPath = "$QT_SRC_PATH\qtbase\src"
+        Write-Host "Patch source: $PatchSrcPath"
+        Write-Host "Qt destination: $QtSrcPath"
+        Get-ChildItem -Path $PatchSrcPath -Recurse | ForEach-Object {
+          $RelativePath = $_.FullName.Substring($PatchSrcPath.Length + 1)
+          $DestPath = Join-Path $QtSrcPath $RelativePath
+          if ($_.PSIsContainer) {
+            if (!(Test-Path $DestPath)) { mkdir $DestPath | Out-Null }
+          } else {
+            Copy-Item -Path $_.FullName -Destination $DestPath -Force
+          }
+        }
+        Write-Host "Patches applied successfully"
         
         Write-Host "Creating build directory..."
         mkdir $QT_BUILD_PATH
