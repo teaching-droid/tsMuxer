@@ -31,7 +31,7 @@ jobs:
         $QT_INSTALL_PATH = "${{ runner.temp }}\qt6-install"
         
         Write-Host "Downloading official Qt6 source..."
-        $QT_SRC_URL = "https://github.com/qt/qt5/archive/refs/tags/v6.8.3.zip"
+        $QT_SRC_URL = "https://github.com/qt/qtbase/archive/refs/tags/v6.8.3.zip"
         Invoke-WebRequest -Uri $QT_SRC_URL -OutFile $QT_SRC_ZIP
         
         Write-Host "Downloading qt6windows7 patches..."
@@ -40,7 +40,7 @@ jobs:
         
         Write-Host "Extracting Qt6 source..."
         Expand-Archive -Path $QT_SRC_ZIP -DestinationPath "${{ runner.temp }}" -Force
-        Rename-Item -Path "${{ runner.temp }}\qt5-6.8.3" -NewName $QT_SRC_PATH -Force
+        Rename-Item -Path "${{ runner.temp }}\qtbase-6.8.3" -NewName $QT_SRC_PATH -Force
         
         Write-Host "Extracting qt6windows7 patches..."
         $QT_PATCH_EXTRACT = "${{ runner.temp }}\qt6windows7-patches"
@@ -48,7 +48,7 @@ jobs:
         
         Write-Host "Applying qt6windows7 patches..."
         $PatchSrcPath = "$QT_PATCH_EXTRACT\qt6windows7-6.8.3\qtbase\src"
-        $QtSrcPath = "$QT_SRC_PATH\qtbase\src"
+        $QtSrcPath = "$QT_SRC_PATH\src"
         Write-Host "Patch source: $PatchSrcPath"
         Write-Host "Qt destination: $QtSrcPath"
         Get-ChildItem -Path $PatchSrcPath -Recurse | ForEach-Object {
@@ -68,7 +68,7 @@ jobs:
         
         Write-Host "Configuring Qt6 build (64-bit)..."
         cd $QT_BUILD_PATH
-        cmake "$QT_SRC_PATH/qtbase" `
+        cmake "$QT_SRC_PATH" `
           -DCMAKE_INSTALL_PREFIX="$QT_INSTALL_PATH" `
           -DCMAKE_BUILD_TYPE=Release `
           -DQT_BUILD_EXAMPLES=OFF `
