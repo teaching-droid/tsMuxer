@@ -125,6 +125,9 @@ jobs:
         mkdir $QT_PATH
         7z x $QT_ZIP -o"$QT_PATH" -y
         
+        Write-Host "Qt6 extraction complete. Directory structure:"
+        Get-ChildItem -Path $QT_PATH -Recurse -Depth 2 | Select-Object FullName
+        
         Write-Host "Qt6 path: $QT_PATH"
         Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_PREFIX_PATH=$QT_PATH"
 
