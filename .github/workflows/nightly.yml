@@ -102,10 +102,10 @@ jobs:
         include:
           - arch: "x86_64"
             artifact: "w64.zip"
-            qt_url: "https://github.com/crystalidea/qt6windows7/releases/download/6.8.3/qt-6.8.3-win64-msvc2022-static.zip"
+            qt_url: "https://github.com/crystalidea/qt6windows7/releases/download/v6.8.3/qt6_x64_to_run_on_windows7.7z"
           - arch: "x86"
             artifact: "w32.zip"
-            qt_url: "https://github.com/crystalidea/qt6windows7/releases/download/6.8.3/qt-6.8.3-win32-msvc2022-static.zip"
+            qt_url: "https://github.com/crystalidea/qt6windows7/releases/download/v6.8.3/qt6_x86_to_run_on_windows7.7z"
     
     steps:
     - uses: actions/checkout@v4
@@ -113,14 +113,17 @@ jobs:
 
     - name: Setup Qt6 Windows 7 (Qt6windows7)
       run: |
-        $QT_ZIP = "${{ runner.temp }}\qt6.zip"
+        $QT_ZIP = "${{ runner.temp }}\qt6.7z"
         $QT_PATH = "${{ runner.temp }}\qt6windows7"
         
         Write-Host "Downloading Qt6 Windows 7 compatible binaries..."
+        Write-Host "URL: ${{ matrix.qt_url }}"
+        
         Invoke-WebRequest -Uri "${{ matrix.qt_url }}" -OutFile $QT_ZIP
         
         Write-Host "Extracting Qt6 binaries..."
-        Expand-Archive -Path $QT_ZIP -DestinationPath $QT_PATH -Force
+        mkdir $QT_PATH
+        7z x $QT_ZIP -o"$QT_PATH" -y
         
         Write-Host "Qt6 path: $QT_PATH"
         Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_PREFIX_PATH=$QT_PATH"
@@ -136,7 +139,7 @@ jobs:
         }
         cmake --build . --config Release
         
-        mkdir -p ../bin
+        if (!(Test-Path "../bin")) { mkdir "../bin" }
         Copy-Item -Path "tsMuxer/Release/tsmuxer.exe" -Destination "../bin/tsMuxeR.exe" -Force
         if (Test-Path "tsMuxerGUI/Release/tsmuxergui.exe") {
           Copy-Item -Path "tsMuxerGUI/Release/tsmuxergui.exe" -Destination "../bin/tsMuxerGUI.exe" -Force

@@ -14,16 +14,18 @@ jobs:
 
     - name: Setup Qt6 Windows 7 (Qt6windows7)
       run: |
-        $QT_VERSION = "6.8.3"
-        $QT_URL = "https://github.com/crystalidea/qt6windows7/releases/download/$QT_VERSION/qt-$QT_VERSION-win64-msvc2022-static.zip"
-        $QT_ZIP = "${{ runner.temp }}\qt6.zip"
+        $QT_ZIP = "${{ runner.temp }}\qt6.7z"
         $QT_PATH = "${{ runner.temp }}\qt6windows7"
         
         Write-Host "Downloading Qt6 Windows 7 compatible binaries..."
+        $QT_URL = "https://github.com/crystalidea/qt6windows7/releases/download/v6.8.3/qt6_x64_to_run_on_windows7.7z"
+        Write-Host "URL: $QT_URL"
+        
         Invoke-WebRequest -Uri $QT_URL -OutFile $QT_ZIP
         
         Write-Host "Extracting Qt6 binaries..."
-        Expand-Archive -Path $QT_ZIP -DestinationPath $QT_PATH -Force
+        mkdir $QT_PATH
+        7z x $QT_ZIP -o"$QT_PATH" -y
         
         Write-Host "Qt6 path: $QT_PATH"
         Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_PREFIX_PATH=$QT_PATH"
@@ -35,7 +37,7 @@ jobs:
         cmake ../ -DCMAKE_PREFIX_PATH="${{ env.CMAKE_PREFIX_PATH }}" -DTSMUXER_GUI=ON -DCMAKE_BUILD_TYPE=Release
         cmake --build . --config Release
         
-        mkdir -p ../bin
+        if (!(Test-Path "../bin")) { mkdir "../bin" }
         Copy-Item -Path "tsMuxer/Release/tsmuxer.exe" -Destination "../bin/tsMuxeR.exe" -Force
         if (Test-Path "tsMuxerGUI/Release/tsmuxergui.exe") {
           Copy-Item -Path "tsMuxerGUI/Release/tsmuxergui.exe" -Destination "../bin/tsMuxerGUI.exe" -Force
