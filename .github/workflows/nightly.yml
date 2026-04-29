@@ -62,65 +62,136 @@ jobs:
           echo "::notice::Nightly check skipped: ${{ steps.check.outputs.skip_reason }}"
         fi
   
-  build-docker:
-  
+  build-linux:
     needs: check
-
     if: needs.check.outputs.status == 0
-  
     runs-on: ubuntu-latest
     
     steps:
     - uses: actions/checkout@v4
       name: checkout
 
-    - name: Free disk space
+    - name: Install dependencies
       run: |
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /usr/local/lib/android
-        sudo rm -rf /opt/ghc
-        sudo rm -rf /opt/hostedtoolcache/CodeQL
-        sudo docker image prune --all --force
+        sudo apt-get update
+        sudo apt-get install -y libfreetype-dev zlib1g-dev
+      
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.7.*'
+        modules: 'qtmultimedia'
+      
+    - run: ./scripts/rebuild_linux_with_gui.sh
+      name: build-for-linux
 
-    - name: Pull Docker image
-      run: docker pull jaminmc/tsmuxer_build:latest
-      
-    - run: rm -f bin/.gitkeep
-      name: clean-bin-folder
-      
-    - name: build-for-linux
-      run: >
-        docker run --rm
-        -v ${{ github.workspace }}:/work -w /work
-        jaminmc/tsmuxer_build:latest
-        ./scripts/rebuild_linux_with_gui_docker.sh
-      
-    - name: build-for-win64
-      run: >
-        docker run --rm
-        -v ${{ github.workspace }}:/work -w /work
-        jaminmc/tsmuxer_build:latest
-        ./scripts/rebuild_mxe_with_gui_docker.sh
-      
-    - name: build-for-win32
-      run: >
-        docker run --rm
-        -v ${{ github.workspace }}:/work -w /work
-        jaminmc/tsmuxer_build:latest
-        ./scripts/rebuild_mxe32_with_gui_docker.sh
-
-    - name: build-for-mac
-      run: >
-        docker run --rm
-        -v ${{ github.workspace }}:/work -w /work
-        jaminmc/tsmuxer_build:latest
-        ./scripts/rebuild_osxcross_with_gui_docker.sh
-
-    - name: Upload All Builds
-      id: upload-builds
+    - name: Upload Linux Build
       uses: softprops/action-gh-release@v2
       with:
-        files: ./bin/*.zip
+        files: ./bin/lnx.zip
+        tag_name: nightly-${{ needs.check.outputs.version }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-windows:
+    needs: check
+    if: needs.check.outputs.status == 0
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - arch: "x86_64"
+            artifact: "w64.zip"
+            qt_url: "https://github.com/crystalidea/qt6windows7/releases/download/6.8.3/qt-6.8.3-win64-msvc2022-static.zip"
+          - arch: "x86"
+            artifact: "w32.zip"
+            qt_url: "https://github.com/crystalidea/qt6windows7/releases/download/6.8.3/qt-6.8.3-win32-msvc2022-static.zip"
+    
+    steps:
+    - uses: actions/checkout@v4
+      name: checkout
+
+    - name: Setup Qt6 Windows 7 (Qt6windows7)
+      run: |
+        $QT_ZIP = "${{ runner.temp }}\qt6.zip"
+        $QT_PATH = "${{ runner.temp }}\qt6windows7"
+        
+        Write-Host "Downloading Qt6 Windows 7 compatible binaries..."
+        Invoke-WebRequest -Uri "${{ matrix.qt_url }}" -OutFile $QT_ZIP
+        
+        Write-Host "Extracting Qt6 binaries..."
+        Expand-Archive -Path $QT_ZIP -DestinationPath $QT_PATH -Force
+        
+        Write-Host "Qt6 path: $QT_PATH"
+        Add-Content -Path $env:GITHUB_ENV -Value "CMAKE_PREFIX_PATH=$QT_PATH"
+
+    - name: Build tsMuxer
+      run: |
+        mkdir build
+        cd build
+        if ("${{ matrix.arch }}" -eq "x86") {
+          cmake ../ -A Win32 -DCMAKE_PREFIX_PATH="${{ env.CMAKE_PREFIX_PATH }}" -DTSMUXER_GUI=ON -DCMAKE_BUILD_TYPE=Release
+        } else {
+          cmake ../ -DCMAKE_PREFIX_PATH="${{ env.CMAKE_PREFIX_PATH }}" -DTSMUXER_GUI=ON -DCMAKE_BUILD_TYPE=Release
+        }
+        cmake --build . --config Release
+        
+        mkdir -p ../bin
+        Copy-Item -Path "tsMuxer/Release/tsmuxer.exe" -Destination "../bin/tsMuxeR.exe" -Force
+        if (Test-Path "tsMuxerGUI/Release/tsmuxergui.exe") {
+          Copy-Item -Path "tsMuxerGUI/Release/tsmuxergui.exe" -Destination "../bin/tsMuxerGUI.exe" -Force
+        }
+        cd ..
+
+    - name: Package Build
+      run: |
+        cd bin
+        if (Test-Path "tsMuxerGUI.exe") {
+          7z a -y ${{ matrix.artifact }} tsMuxeR.exe tsMuxerGUI.exe
+        } else {
+          7z a -y ${{ matrix.artifact }} tsMuxeR.exe
+        }
+
+    - name: Upload Windows Build
+      uses: softprops/action-gh-release@v2
+      with:
+        files: ./bin/${{ matrix.artifact }}
+        tag_name: nightly-${{ needs.check.outputs.version }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos:
+    needs: check
+    if: needs.check.outputs.status == 0
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+          - arch: x86_64
+    
+    steps:
+    - uses: actions/checkout@v4
+      name: checkout
+      
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.7.*'
+        modules: 'qtmultimedia'
+      
+    - run: ./scripts/build_macos_native.sh
+      name: build-for-mac
+      env:
+        CMAKE_OSX_ARCHITECTURES: ${{ matrix.arch }}
+
+    - name: Rename zip with architecture
+      run: mv build/bin/mac.zip build/bin/mac-${{ matrix.arch }}.zip
+
+    - name: Upload macOS Build
+      uses: softprops/action-gh-release@v2
+      with:
+        files: build/bin/mac-${{ matrix.arch }}.zip
         tag_name: nightly-${{ needs.check.outputs.version }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}        
