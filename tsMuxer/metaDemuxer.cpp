@@ -716,6 +716,8 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
             }
 
             const uint32_t fileBlockSize = demuxer->getFileBlockSize();
+            if (fileBlockSize == 0)
+                continue;  // avoid divide-by-zero in the detect loop for empty/edge containers
             DemuxedData demuxedData;
             std::map<int32_t, TrackInfo> acceptedPidMap;
             demuxer->getTrackList(acceptedPidMap);
