@@ -15,6 +15,19 @@
 #include <QStandardPaths>
 #include <QTemporaryFile>
 #include <QTime>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QFileInfo>
+#include <QGridLayout>
+#include <QGroupBox>
+#include <QLabel>
+#include <QLineEdit>
+#include <QLocale>
+#include <QPushButton>
+#include <QRegularExpression>
+#include <QRegularExpressionValidator>
+#include <QSpinBox>
+#include <QVBoxLayout>
 
 #include <unordered_set>
 
@@ -328,6 +341,7 @@ void initLanguageComboBox(QComboBox* comboBox)
     comboBox->addItem(QString::fromUtf8("Deutsch"), "de");
     comboBox->addItem(QString::fromUtf8("עִברִית"), "he");
     comboBox->addItem(QString::fromUtf8("Español"), "es");
+    comboBox->addItem(QString::fromUtf8("日本語"), "ja");
     comboBox->setCurrentIndex(-1);  // makes sure currentIndexChanged() is emitted when reading settings.
 }
 
@@ -543,6 +557,364 @@ TsMuxerWindow::TsMuxerWindow()
 
     ui->trackSplitter->setStretchFactor(0, 10);
     ui->trackSplitter->setStretchFactor(1, 100);
+
+    // ---- "BDMV folder -> ISO" tab (menu-preserving full-disc copy + dual-layer guard band) ----
+    {
+        auto* bdmvTab = new QWidget();
+        auto* g = new QGridLayout(bdmvTab);
+        auto* info = new QLabel(
+            tr("Wrap an existing BDMV disc folder into a burnable BD-ROM ISO, byte-for-byte, so BD-J menus and "
+               "every stream are kept intact (no re-mux). Works with any unprotected BDMV, whether you "
+               "authored it yourself or it is an already-readable disc copy. On a multi-layer disc (dual-layer "
+               "BD-R DL, or triple and quad-layer BD-R XL) the layer-break guard fills the defect-prone sectors "
+               "at each layer transition with zeros, so the movie plays seamlessly across the break. Point it at "
+               "the folder that contains BDMV/ (and CERTIFICATE/ if present)."),
+            bdmvTab);
+        info->setWordWrap(true);
+        auto* folderEdit = new QLineEdit(bdmvTab);
+        auto* folderBtn = new QPushButton(tr("Browse..."), bdmvTab);
+        auto* isoEdit = new QLineEdit(bdmvTab);
+        auto* isoBtn = new QPushButton(tr("Browse..."), bdmvTab);
+        auto* guardSpin = new QSpinBox(bdmvTab);
+        guardSpin->setRange(0, 1024);
+        guardSpin->setValue(64);
+        guardSpin->setSuffix(tr(" MB"));
+        auto* guardHintLabel = new QLabel(bdmvTab);
+        guardHintLabel->setWordWrap(true);
+        // --- Layer-break calculator: disc type + ImgBurn "Free Sectors" -> break(s), auto-filled ---
+        auto* discTypeCombo = new QComboBox(bdmvTab);
+        discTypeCombo->addItem(tr("BD-R/RE DL 50 GB (2 layers)"), 2);
+        discTypeCombo->addItem(tr("BD-R XL 100 GB (3 layers)"), 3);
+        discTypeCombo->addItem(tr("BD-R XL 128 GB (4 layers)"), 4);
+        auto* freeSectorsEdit = new QLineEdit(bdmvTab);
+        freeSectorsEdit->setPlaceholderText(tr("ImgBurn -> Free Sectors (e.g. 47,305,728)"));
+        // Accept the number exactly as ImgBurn prints it: grouped with commas, dots or spaces (locale-agnostic).
+        freeSectorsEdit->setValidator(
+            new QRegularExpressionValidator(QRegularExpression(QStringLiteral("[0-9 .,]*")), freeSectorsEdit));
+        auto* helpBtn = new QPushButton(tr("Where do I find this?"), bdmvTab);
+        auto* breaksLabel = new QLabel(bdmvTab);
+        breaksLabel->setWordWrap(true);
+        auto* compatLabel = new QLabel(bdmvTab);
+        compatLabel->setWordWrap(true);
+        compatLabel->setStyleSheet("color:#c0392b; font-weight:bold;");  // red: BD-R XL at-your-own-risk caveat
+        auto* divisLabel = new QLabel(bdmvTab);
+        divisLabel->setWordWrap(true);
+        divisLabel->setStyleSheet("color:#c0392b; font-weight:bold;");  // red: Free Sectors input looks wrong
+        auto* buildBtn = new QPushButton(tr("Build ISO"), bdmvTab);
+        // Static row labels kept as pointers so they can be re-translated on a runtime language change.
+        auto* folderLabel = new QLabel(tr("BDMV folder:"), bdmvTab);
+        auto* outputLabel = new QLabel(tr("Output ISO:"), bdmvTab);
+        auto* guardLabel = new QLabel(tr("Layer-break guard (after break):"), bdmvTab);
+        auto* discTypeLabel = new QLabel(tr("Disc type:"), bdmvTab);
+        auto* freeSectorsLabel = new QLabel(tr("Free Sectors (ImgBurn):"), bdmvTab);
+
+        // Read Free Sectors as a plain number no matter how it was pasted (47,305,728 / 47.305.728 / 47 305 728).
+        auto readFreeSectors = [freeSectorsEdit]() -> qint64
+        {
+            QString digits = freeSectorsEdit->text();
+            digits.remove(QRegularExpression(QStringLiteral("[^0-9]")));
+            return digits.toLongLong();
+        };
+        // Compute the break sector(s) from disc type + Free Sectors (empty = nothing entered yet).
+        auto breaksList = [discTypeCombo, readFreeSectors]() -> QStringList
+        {
+            QStringList parts;
+            const int layers = discTypeCombo->currentData().toInt();
+            const qint64 total = readFreeSectors();
+            if (total > 0)
+                for (int k = 1; k < layers; ++k)
+                    parts << QString::number(total * k / layers);
+            return parts;
+        };
+        auto refresh = [breaksList, readFreeSectors, discTypeCombo, breaksLabel, compatLabel, divisLabel]()
+        {
+            const int layers = discTypeCombo->currentData().toInt();
+            const qint64 total = readFreeSectors();
+            const QStringList parts = breaksList();
+            if (parts.isEmpty())
+                breaksLabel->setText(
+                    tr("Enter the disc's \"Free Sectors\" (from ImgBurn) to calculate the layer break(s) for the "
+                       "exact disc you are burning."));
+            else
+            {
+                QStringList pretty;
+                for (const QString& p : parts)
+                    pretty << QLocale().toString(p.toLongLong());
+                breaksLabel->setText(tr("Calculated layer break(s): %1").arg(pretty.join("   |   ")));
+            }
+            // Sanity checks on the entered Free Sectors. Standard BD user-data capacities (in 2048-byte sectors)
+            // sit in well-separated bands, so a value far from the selected disc type almost always means the
+            // wrong disc type was picked or the wrong line was copied.
+            QStringList warns;
+            if (total > 0)
+            {
+                QString looksLike;
+                if (total >= 10000000 && total < 20000000)
+                    looksLike = QStringLiteral("25 GB");
+                else if (total >= 20000000 && total <= 28000000)
+                    looksLike = QStringLiteral("50 GB");
+                else if (total >= 42000000 && total <= 52000000)
+                    looksLike = QStringLiteral("100 GB");
+                else if (total >= 56000000 && total <= 68000000)
+                    looksLike = QStringLiteral("128 GB");
+                const QString selected =
+                    layers == 2 ? QStringLiteral("50 GB") : layers == 3 ? QStringLiteral("100 GB") : QStringLiteral("128 GB");
+                if (looksLike.isEmpty())
+                    warns << tr("%1 sectors does not match any standard BD disc size. Double-check the Free "
+                                "Sectors value against ImgBurn.")
+                                 .arg(QLocale().toString(total));
+                else if (looksLike != selected)
+                    warns << tr("%1 sectors looks like a %2 disc, but %3 is selected. Check the disc type above, "
+                                "or the Free Sectors value.")
+                                 .arg(QLocale().toString(total), looksLike, selected);
+                // A correctly formatted N-layer disc's Free Sectors divides evenly by N; if it does not, the
+                // value was most likely mistyped or the wrong ImgBurn line was copied (for example the "EL:" line).
+                if (total % layers != 0)
+                    warns << tr("%1 does not divide evenly across %2 layers. A correctly formatted %2-layer disc "
+                                "normally does, so check for a mistyped or wrong Free Sectors line. The break is "
+                                "still placed safely just under the boundary and the guard band absorbs the rounding.")
+                                 .arg(QLocale().toString(total))
+                                 .arg(layers);
+            }
+            divisLabel->setText(warns.join("\n\n"));
+            compatLabel->setText(layers >= 3
+                ? tr("At your own risk: many Blu-ray players cannot read 100/128 GB BD-R XL discs at all, and "
+                     "there is no guarantee yours will. Keeping the image around 66 GB (the first two layers) and "
+                     "finalizing the disc improves the odds on some players, but even 66 GB is not guaranteed to "
+                     "play. The full 100/128 GB needs a recent player that explicitly supports high-capacity BD-R "
+                     "XL media. Always test on your own device.")
+                : QString());
+        };
+        // Colour-coded guidance for the guard size. The layer defect measured on real hardware was about 35 MB,
+        // so 64 MB is the safe recommendation. Lower is allowed (0 = align only) but the risk is made visible.
+        auto updateGuard = [guardSpin, guardHintLabel]()
+        {
+            const int mb = guardSpin->value();
+            QString colour, text;
+            if (mb == 0)
+            {
+                colour = QStringLiteral("#7f8c8d");
+                text = tr("Alignment only, no defect protection.");
+            }
+            else if (mb < 35)
+            {
+                colour = QStringLiteral("#c0392b");
+                text = tr("Below the ~35 MB layer defect measured on real hardware. Video may land on bad "
+                          "sectors. 64 MB recommended.");
+            }
+            else if (mb < 64)
+            {
+                colour = QStringLiteral("#b26a00");
+                text = tr("Covers the ~35 MB measured defect but with little margin. 64 MB recommended.");
+            }
+            else
+            {
+                colour = QStringLiteral("#2e7d32");
+                text = tr("Recommended. Covers the ~35 MB measured defect with margin.");
+            }
+            guardHintLabel->setStyleSheet(QStringLiteral("color:%1; font-weight:bold;").arg(colour));
+            guardHintLabel->setText(text);
+        };
+        int r = 0;
+        g->addWidget(info, r++, 0, 1, 3);
+        g->addWidget(folderLabel, r, 0);
+        g->addWidget(folderEdit, r, 1);
+        g->addWidget(folderBtn, r++, 2);
+        g->addWidget(outputLabel, r, 0);
+        g->addWidget(isoEdit, r, 1);
+        g->addWidget(isoBtn, r++, 2);
+        g->addWidget(guardLabel, r, 0);
+        g->addWidget(guardSpin, r++, 1);
+        g->addWidget(guardHintLabel, r++, 0, 1, 3);
+        g->addWidget(discTypeLabel, r, 0);
+        g->addWidget(discTypeCombo, r, 1);
+        g->addWidget(helpBtn, r++, 2);
+        g->addWidget(freeSectorsLabel, r, 0);
+        g->addWidget(freeSectorsEdit, r++, 1);
+        g->addWidget(breaksLabel, r++, 0, 1, 3);
+        g->addWidget(divisLabel, r++, 0, 1, 3);
+        g->addWidget(compatLabel, r++, 0, 1, 3);
+        g->addWidget(buildBtn, r++, 1);
+        g->setRowStretch(r, 1);
+        ui->tabWidget->addTab(bdmvTab, tr("BDMV folder -> ISO"));
+
+        connect(discTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), bdmvTab,
+                [refresh](int) { refresh(); });
+        connect(freeSectorsEdit, &QLineEdit::textChanged, bdmvTab, [refresh](const QString&) { refresh(); });
+        connect(guardSpin, QOverload<int>::of(&QSpinBox::valueChanged), bdmvTab, [updateGuard](int) { updateGuard(); });
+        connect(helpBtn, &QPushButton::clicked, this,
+                [this]
+                {
+                    QMessageBox::information(
+                        this, tr("Finding the disc's \"Free Sectors\""),
+                        tr("<b>You only need ONE number from the blank disc: its total capacity in sectors.</b>"
+                           "<br><br><b>In ImgBurn:</b>"
+                           "<ol>"
+                           "<li>Insert the blank BD-R / BD-RE disc.</li>"
+                           "<li>Choose <i>Write image file to disc</i>.</li>"
+                           "<li>Under <i>Destination</i>, select your burner.</li>"
+                           "<li>In the right-hand <i>Device / Disc Information</i> panel, read the "
+                           "<b>Free Sectors</b> line (for example 47,305,728).</li>"
+                           "<li>The <i>Number of Layers</i> line just below tells you 50 / 100 / 128 GB.</li>"
+                           "</ol>"
+                           "Pick the matching disc type here and paste <b>Free Sectors</b> into the box - the "
+                           "layer break(s) are calculated for you:"
+                           "<ul>"
+                           "<li>BD50 (2 layers): Free / 2</li>"
+                           "<li>BD100 (3 layers): Free / 3 and Free x 2 / 3</li>"
+                           "<li>BD128 (4 layers): Free / 4, Free x 2 / 4, Free x 3 / 4</li>"
+                           "</ul>"
+                           "<b>Important:</b> use ImgBurn's <i>Free Sectors</i>, not the Windows capacity - "
+                           "Windows can report a smaller number and put the break in the wrong place."));
+                });
+        refresh();
+        updateGuard();
+
+        // Re-translate everything created here on a runtime language change. Designer widgets are handled by
+        // ui->retranslateUi(); these hand-built widgets are not, so register a hook the changeEvent will call.
+        m_retranslateHooks.push_back(
+            [this, bdmvTab, info, folderLabel, outputLabel, guardLabel, discTypeLabel, freeSectorsLabel, folderBtn,
+             isoBtn, helpBtn, buildBtn, discTypeCombo, freeSectorsEdit, guardSpin, refresh, updateGuard]()
+            {
+                ui->tabWidget->setTabText(ui->tabWidget->indexOf(bdmvTab), tr("BDMV folder -> ISO"));
+                info->setText(tr("Wrap an existing BDMV disc folder into a burnable BD-ROM ISO, byte-for-byte, so "
+                                 "BD-J menus and every stream are kept intact (no re-mux). Works with any "
+                                 "unprotected BDMV, whether you authored it yourself or it is an already-readable "
+                                 "disc copy. On a multi-layer disc (dual-layer BD-R DL, or triple and quad-layer "
+                                 "BD-R XL) the layer-break guard fills the defect-prone sectors at each layer "
+                                 "transition with zeros, so the movie plays seamlessly across the break. Point it "
+                                 "at the folder that contains BDMV/ (and CERTIFICATE/ if present)."));
+                folderLabel->setText(tr("BDMV folder:"));
+                outputLabel->setText(tr("Output ISO:"));
+                guardLabel->setText(tr("Layer-break guard (after break):"));
+                discTypeLabel->setText(tr("Disc type:"));
+                freeSectorsLabel->setText(tr("Free Sectors (ImgBurn):"));
+                folderBtn->setText(tr("Browse..."));
+                isoBtn->setText(tr("Browse..."));
+                helpBtn->setText(tr("Where do I find this?"));
+                buildBtn->setText(tr("Build ISO"));
+                discTypeCombo->setItemText(0, tr("BD-R/RE DL 50 GB (2 layers)"));
+                discTypeCombo->setItemText(1, tr("BD-R XL 100 GB (3 layers)"));
+                discTypeCombo->setItemText(2, tr("BD-R XL 128 GB (4 layers)"));
+                freeSectorsEdit->setPlaceholderText(tr("ImgBurn -> Free Sectors (e.g. 47,305,728)"));
+                guardSpin->setSuffix(tr(" MB"));
+                refresh();      // re-render the dynamic break / warning labels in the new language
+                updateGuard();  // re-render the guard hint in the new language
+            });
+
+        connect(folderBtn, &QPushButton::clicked, this,
+                [this, folderEdit, isoEdit]
+                {
+                    const QString d = QFileDialog::getExistingDirectory(this, tr("Select the BDMV disc folder"),
+                                                                        lastInputDir);
+                    if (d.isEmpty())
+                        return;
+                    folderEdit->setText(QDir::toNativeSeparators(d));
+                    lastInputDir = d;
+                    if (isoEdit->text().isEmpty())
+                        isoEdit->setText(QDir::toNativeSeparators(d + "/" + QFileInfo(d).fileName() + ".iso"));
+                });
+        connect(isoBtn, &QPushButton::clicked, this,
+                [this, isoEdit]
+                {
+                    const QString f = QFileDialog::getSaveFileName(this, tr("Output ISO"), isoEdit->text(),
+                                                                   tr("Disk image (*.iso)"));
+                    if (!f.isEmpty())
+                        isoEdit->setText(QDir::toNativeSeparators(f));
+                });
+        connect(buildBtn, &QPushButton::clicked, this,
+                [this, folderEdit, isoEdit, guardSpin, discTypeCombo, freeSectorsEdit, breaksList, buildBtn]
+                {
+                    const QString folder = folderEdit->text().trimmed();
+                    const QString iso = isoEdit->text().trimmed();
+                    if (folder.isEmpty() || iso.isEmpty())
+                    {
+                        QMessageBox::warning(this, tr("tsMuxeR"),
+                                             tr("Please select a BDMV folder and an output ISO file."));
+                        return;
+                    }
+                    const QStringList breaks = breaksList();
+                    if (breaks.isEmpty())
+                    {
+                        QMessageBox::warning(this, tr("tsMuxeR"),
+                                             tr("Enter the disc's \"Free Sectors\" (from ImgBurn) so the layer "
+                                                "break can be calculated for the exact disc you are burning."));
+                        return;
+                    }
+                    if (discTypeCombo->currentData().toInt() >= 3 &&
+                        QMessageBox::warning(
+                            this, tr("BD-R XL - read at your own risk"),
+                            tr("Many Blu-ray players cannot read 100/128 GB BD-R XL discs at all, and there is no "
+                               "guarantee yours will. You are proceeding at your own risk.\n\n"
+                               "Keeping the image around 66 GB (the first two layers) improves the odds on some "
+                               "players, but even 66 GB is not guaranteed to play. Test on your own device.\n\n"
+                               "Build the ISO anyway?"),
+                            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+                        return;
+                    if (!QDir(folder).exists("BDMV") &&
+                        QMessageBox::question(this, tr("tsMuxeR"),
+                                              tr("The selected folder has no BDMV subfolder. Continue anyway?")) !=
+                            QMessageBox::Yes)
+                        return;
+                    if (QFile::exists(iso) &&
+                        QMessageBox::question(this, tr("tsMuxeR"),
+                                              tr("The output ISO already exists. Overwrite it?")) != QMessageBox::Yes)
+                        return;
+                    muxForm->prepare(tr("Building BD-ROM ISO from BDMV folder"));
+                    buildBtn->setEnabled(false);
+                    muxForm->show();
+                    runInMuxMode = true;
+                    QStringList args;
+                    args << "--bdmv-to-iso" << ("--layer-break-guard=" + QString::number(guardSpin->value()));
+                    if (!breaks.isEmpty())
+                        args << ("--layer-break-lbn=" + breaks.join(","));
+                    args << folder << iso;
+                    tsMuxerExecute(args);
+                });
+        // re-enable the Build button whenever the tsMuxer process finishes
+        void (QProcess::*finishedSig)(int, QProcess::ExitStatus) = &QProcess::finished;
+        connect(&proc, finishedSig, this, [buildBtn](int, QProcess::ExitStatus) { buildBtn->setEnabled(true); });
+    }
+
+    // ---- dual-layer (BD-R/RE DL) guard controls for the normal Blu-ray / Blu-ray ISO output ----
+    {
+        auto* dlBox = new QGroupBox(tr("Dual-layer (BD-R/RE DL)"), this);
+        auto* dl = new QGridLayout(dlBox);
+        auto* discSizeCombo = new QComboBox(dlBox);
+        discSizeCombo->setObjectName("dlDiscSize");
+        discSizeCombo->addItems(QStringList() << tr("Off") << "BD25" << "BD50" << "BD100" << "BD128");
+        auto* guardCheck = new QCheckBox(tr("Layer-break guard"), dlBox);
+        guardCheck->setObjectName("dlGuardCheck");
+        auto* guardSpin = new QSpinBox(dlBox);
+        guardSpin->setObjectName("dlGuardSpin");
+        guardSpin->setRange(0, 1024);
+        guardSpin->setValue(64);
+        guardSpin->setSuffix(tr(" MB"));
+        guardSpin->setEnabled(false);
+        auto* oversizeCheck = new QCheckBox(tr("Allow oversize"), dlBox);
+        oversizeCheck->setObjectName("dlAllowOversize");
+        auto* fitLabel = new QLabel(tr("Fit to disc:"), dlBox);
+        int rr = 0;
+        dl->addWidget(fitLabel, rr, 0);
+        dl->addWidget(discSizeCombo, rr++, 1);
+        dl->addWidget(guardCheck, rr, 0);
+        dl->addWidget(guardSpin, rr++, 1);
+        dl->addWidget(oversizeCheck, rr++, 0, 1, 2);
+        connect(guardCheck, &QCheckBox::toggled, guardSpin, &QWidget::setEnabled);
+        if (auto* v = findChild<QVBoxLayout*>("verticalLayout_2"))
+            v->addWidget(dlBox);
+
+        // Re-translate this groupbox on a runtime language change (see the BDMV->ISO tab hook above).
+        m_retranslateHooks.push_back(
+            [dlBox, fitLabel, guardCheck, oversizeCheck, discSizeCombo]()
+            {
+                dlBox->setTitle(tr("Dual-layer (BD-R/RE DL)"));
+                fitLabel->setText(tr("Fit to disc:"));
+                guardCheck->setText(tr("Layer-break guard"));
+                oversizeCheck->setText(tr("Allow oversize"));
+                discSizeCombo->setItemText(0, tr("Off"));
+            });
+    }
 
     writeSettings();
 }
@@ -1790,6 +2162,21 @@ QString TsMuxerWindow::getMuxOpts()
         rez += " --avchd";
     else if (ui->radioButtonDemux->isChecked())
         rez += " --demux";
+    // dual-layer guard options (Blu-ray / Blu-ray ISO output; the layer-break guard only takes effect
+    // for ISO output, where tsMuxeR itself writes the image).
+    if (ui->radioButtonBluRay->isChecked() || ui->radioButtonBluRayISO->isChecked())
+    {
+        auto* discSizeCombo = findChild<QComboBox*>("dlDiscSize");
+        if (discSizeCombo && discSizeCombo->currentIndex() > 0)
+            rez += " --disc-size=" + discSizeCombo->currentText().toLower();
+        auto* guardCheck = findChild<QCheckBox*>("dlGuardCheck");
+        auto* guardSpin = findChild<QSpinBox*>("dlGuardSpin");
+        if (guardCheck && guardSpin && guardCheck->isChecked())
+            rez += " --layer-break-guard=" + QString::number(guardSpin->value());
+        auto* oversizeCheck = findChild<QCheckBox*>("dlAllowOversize");
+        if (oversizeCheck && oversizeCheck->isChecked())
+            rez += " --allow-oversize";
+    }
     if (ui->checkBoxCBR->isChecked())
         rez += " --cbr --bitrate=" + QString::number(ui->editCBRBitrate->value(), 'f', 3);
     else
@@ -2814,6 +3201,8 @@ void TsMuxerWindow::changeEvent(QEvent* event)
         ui->retranslateUi(this);
         fontSettingsModel->onLanguageChanged();
         langCodesModel->onLanguageChanged();
+        for (const auto& hook : m_retranslateHooks)
+            hook();  // re-translate the hand-built BDMV->ISO tab and dual-layer groupbox
     }
     QWidget::changeEvent(event);
 }
@@ -2935,7 +3324,7 @@ bool TsMuxerWindow::eventFilter(QObject* obj, QEvent* event)
 {
     if (obj == ui->label_Donate && event->type() == QEvent::MouseButtonPress)
     {
-        QDesktopServices::openUrl(QUrl("https://github.com/jaminmc/tsMuxer"));
+        QDesktopServices::openUrl(QUrl("https://github.com/teaching-droid/tsMuxer"));
         return true;
     }
     else

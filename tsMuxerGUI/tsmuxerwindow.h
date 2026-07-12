@@ -7,6 +7,9 @@
 #include <QTranslator>
 #include <QWidget>
 
+#include <functional>
+#include <vector>
+
 #if QT_MULTIMEDIA_LIB
 #include <QSoundEffect>
 #endif
@@ -188,6 +191,8 @@ class TsMuxerWindow : public QWidget
     bool runInMuxMode;
     QString lastInputDir;
     QString lastOutputDir;
+    // Retranslation hooks for hand-built (non-designer) widgets; run from changeEvent(LanguageChange).
+    std::vector<std::function<void()>> m_retranslateHooks;
     QList<QUrl> addFileList;
     QTimer opacityTimer;
     bool m_updateMeta;
