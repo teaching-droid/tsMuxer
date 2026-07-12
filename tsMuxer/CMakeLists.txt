@@ -103,7 +103,9 @@ if (${PkgConfig_FOUND} AND NOT ${WITHOUT_PKGCONFIG})
   endif()
 else()
   find_package(ZLIB REQUIRED)
-  find_package(Freetype REQUIRED)
+  if (NOT WIN32)
+    find_package(Freetype REQUIRED)
+  endif()
 endif()
 
 target_include_directories(tsmuxer PRIVATE
