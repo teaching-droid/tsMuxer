@@ -64,9 +64,18 @@ tsMuxer is written in C++20. It can be compiled for Windows, Linux and Mac.
 **Build Requirements:**
 - CMake 3.12 or later
 - C++20 compatible compiler (GCC 10+, Clang 11+, MSVC 2019+)
-- Qt6 for the GUI (requires Windows 8 or later; a separate Qt5 build is available for Windows 7)
+- Qt6 for the GUI
 
-**Windows 7 Users:** Separate Qt5 builds are available for both 32-bit and 64-bit. See build artifacts or refer to docs/COMPILING.md for build instructions. 
+**Windows 7 Users:** the Windows release binaries are built against Qt 6.8 with the
+[qt6windows7](https://github.com/crystalidea/qt6windows7) compatibility patches, so the
+standard 32-bit and 64-bit builds run on Windows 7 and newer. No separate build is needed.
+
+## Downloads
+
+Ready-made binaries are produced by the build workflows: open the Actions tab, pick the
+newest "Build for Windows 64-bit" (or 32-bit / Linux / Mac) run and download its artifact.
+The Windows zip contains `tsMuxeR.exe` (command line) and `tsMuxerGUI.exe`, both
+self-contained. Tagged versions additionally appear on the Releases page.
 
 ## History
 
@@ -106,7 +115,7 @@ We’ll take care of tagging your issue with the appropriated labels and answer 
 
 If you’re not familiar with open-source workflows or our set of technologies, do not hesitate to ask for help! We can mentor you or propose good first bugs (as labeled in our issues). Also welcome to add your name to Credits section of this document.
 
-All pull requests must pass code style checks which are executed with `clang-format` version 9. Therefore, it is advised to install an appropriate commit hook (for example [this one](https://github.com/barisione/clang-format-hooks)) to your local repository in order to commit properly formatted code right away.
+All pull requests must pass code style checks which are executed with `clang-format` version 18. Therefore, it is advised to install an appropriate commit hook (for example [this one](https://github.com/barisione/clang-format-hooks)) to your local repository in order to commit properly formatted code right away.
 
 ## Submitting Bugs
 
@@ -146,5 +155,7 @@ Roman Vasilenko (physic)
 * Alexey Shidlovsky (alexls74)
 * Lonely Crane (lonecrane)
 * Markus Feist (markusfeist)
+* jaminmc
+* teaching-droid
 
 <sub><sup>For sake of brevity I am including anyone who has merged a pull request!</sup></sub>
