@@ -758,7 +758,7 @@ int main(int argc, char** argv)
     }
     argv = argv_vec.data();
 #endif
-    LTRACE(LT_INFO, 2, "tsMuxeR version " TSMUXER_VERSION);  // TODO: add own fork URL once published
+    LTRACE(LT_INFO, 2, "tsMuxeR version " TSMUXER_VERSION << ". github.com/teaching-droid/tsMuxer");
     int firstMplsOffset = 0;
     int firstM2tsOffset = 0;
     int blankNum = 1900;
