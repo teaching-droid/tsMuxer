@@ -9,46 +9,25 @@ The following sections outline how to build tsMuxer and tsMuxerGUI for your chos
   - GCC 10 or later
   - Clang 11 or later
   - MSVC 2019 or later
-- **Qt**: Qt6 for the GUI component (Qt5 available for Windows 7 compatibility)
+- **Qt**: Qt6 for the GUI component
 
-**Note on Windows Compatibility:** The Qt6 GUI (tsMuxerGUI) requires Windows 8 and later. A separate Qt5 build is available for Windows 7 users (see Windows 7 build artifacts or the Windows (MXE on Linux) section below for Qt5 build instructions).
+**Note on Windows Compatibility:** the Windows binaries are built against Qt 6.8 with the
+[qt6windows7](https://github.com/crystalidea/qt6windows7) compatibility patches, so the standard
+32-bit and 64-bit builds run on Windows 7 and newer. No separate Qt5 build is needed. See the
+Windows (native) section below.
 
-## Docker (All Platforms)
+## Docker (Linux build)
 
-You can use the [Docker container](https://github.com/jaminmc/tsmuxer_build) to build tsMuxer for your chosen platform. To build the GUI you will need to follow the instructions specifically for your platform.
+You can use the [Docker container](https://github.com/jaminmc/tsmuxer_build) to build the Linux
+binaries. Browse to the tsMuxer repository and run:
 
-To create the builds using the Docker container, follow the steps below:
-
-1. Pull `jaminmc/tsmuxer_build` from the Docker repository:
 ```
-docker pull jaminmc/tsmuxer_build
-```
-
-Or build `jaminmc/tsmuxer_build` from source:
-```
-git clone https://github.com/jaminmc/tsmuxer_build.git
-cd tsmuxer_build
-docker build -t jaminmc/tsmuxer_build .
+docker run -it --rm -v $(pwd):/workdir -w="/workdir" jaminmc/tsmuxer_build bash -c ". scripts/rebuild_linux_with_gui_docker.sh"
 ```
 
-2. Browse to the tsMuxer repository and run one of the following commands:
-
-*Linux*
-```
-docker run -it --rm -v $(pwd):/workdir -w="/workdir" jaminmc/tsmuxer_build bash -c ". scripts/rebuild_linux_docker.sh"
-```
-
-*Windows*
-```
-docker run -it --rm -v $(pwd):/workdir -w="/workdir" jaminmc/tsmuxer_build bash -c ". scripts/rebuild_mxe_docker.sh"
-```
-
-*OSX*
-```
-docker run -it --rm -v $(pwd):/workdir -w="/workdir" jaminmc/tsmuxer_build bash -c ". scripts/rebuild_osxcross_docker.sh"
-```
-
-The executable binary will be saved to the "\bin" folder.
+The executables will be saved to the "bin" folder. Windows and Mac builds do not use Docker in
+this repository; see their own sections below (the CI workflows under `.github/workflows/` are
+the reference for how the release binaries are produced).
 
 ## Linux
 
@@ -201,34 +180,30 @@ Or run the following to build the GUI as well:
 ./scripts/rebuild_mxe_with_gui.sh
 ```
 
-### Windows 7 (Qt5 build for compatibility)
+## Windows (native, Visual Studio)
 
-For Windows 7 compatibility, separate builds using Qt5.13 are available for both 32-bit and 64-bit. Qt6 requires Windows 8 or later, but Qt5.13 supports Windows 7.
+This is how the release binaries are built (see `.github/workflows/windows_64.yml`). You need
+Visual Studio 2019 or later with the C++ workload, CMake and a Git Bash shell.
 
-**64-bit build (recommended for modern systems):**
-
-```
-docker run -it --rm -v $(pwd):/work -w /work jaminmc/tsmuxer_build:latest ./scripts/rebuild_mxe_with_gui_qt5_docker.sh
-```
-
-This will produce 64-bit binaries in `bin/w64-qt5/` that are compatible with Windows 7 (64-bit).
-
-**32-bit build (for legacy 32-bit Windows 7 systems):**
+The easy way is the helper script, which downloads the pre-built static
+[qt6windows7](https://github.com/crystalidea/qt6windows7) package (Qt 6.8 patched for
+Windows 7), builds the CLI and the GUI, and drops self-contained `tsMuxeR.exe` and
+`tsMuxerGUI.exe` into `bin/`:
 
 ```
-docker run -it --rm -v $(pwd):/work -w /work jaminmc/tsmuxer_build:latest ./scripts/rebuild_mxe32_with_gui_qt5_docker.sh
+./scripts/rebuild_windows64_native.sh    # 64-bit
+./scripts/rebuild_windows32_native.sh    # 32-bit
 ```
 
-This will produce 32-bit binaries in `bin/w32-qt5/` that are compatible with Windows 7 (32-bit).
-
-Alternatively, if building locally with MXE and Qt5 installed:
+For development you can also configure against any regular Qt 6 installation (for example one
+installed with aqtinstall). Note that the prebuilt Qt packages from the Qt installer are shared
+libraries only, so such a build needs windeployqt and runs on Windows 10 and later; only the
+static qt6windows7 route produces the single-file, Windows 7 capable executables:
 
 ```
-./scripts/rebuild_mxe_with_gui.sh     # for 64-bit
-./scripts/rebuild_mxe32_with_gui.sh   # for 32-bit (after ensuring Qt5 is selected)
+cmake -B build -DTSMUXER_GUI=ON -DCMAKE_PREFIX_PATH=C:/Qt/6.8.3/msvc2022_64
+cmake --build build --config Release
 ```
-
-The output will be the same Windows 7-compatible binaries.
 
 ## Windows (Msys2)
 
@@ -265,7 +240,7 @@ pacman -Sy --needed $MINGW_PACKAGE_PREFIX-qt6-static
 Download tsMuxer repo and browse to its location:
 ```
 cd ~
-git clone https://github.com/jaminmc/tsMuxer.git
+git clone https://github.com/teaching-droid/tsMuxer.git
 cd tsMuxer
 ```
 
