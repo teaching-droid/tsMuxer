@@ -131,12 +131,12 @@ statt eines Abbruchs.
 ## BD-R XL (100 / 128 GB): Wiedergabe im Player
 
 Viele Blu-ray-Player können 100- oder 128-GB-BD-R-XL-Discs **gar nicht** lesen, und es gibt
-keine Garantie, dass ein bestimmter Player es kann. Für die besten Chancen hältst du das
-Image bei etwa 66 GB (den ersten beiden Layern) und finalisierst die Disc. Die vollen 100
-oder 128 GB brauchen einen aktuellen Player, der beschreibbare Medien mit hoher Kapazität
-ausdrücklich unterstützt. Verbatim-Medien und langsames Brennen (2x) liefern die
-zuverlässigsten Ergebnisse. Das ist eine Grenze des Players, nicht des ISO, also am besten
-am eigenen Gerät testen.
+keine Garantie, dass ein bestimmter Player es kann. Wenn du das Image bei etwa 66 GB (den
+ersten beiden Layern) hältst und die Disc finalisierst, steigen die Chancen bei manchen
+Playern, aber auch 66 GB spielen nicht garantiert. Die vollen 100 oder 128 GB brauchen einen
+aktuellen Player, der beschreibbare Medien mit hoher Kapazität ausdrücklich unterstützt.
+Verbatim-Medien und langsames Brennen (2x) liefern die zuverlässigsten Ergebnisse. Das ist
+eine Grenze des Players, nicht des ISO, also am besten am eigenen Gerät testen.
 
 ---
 

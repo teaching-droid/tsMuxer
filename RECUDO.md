@@ -75,8 +75,8 @@ ImgBurn "Free Sectors" value into the break sectors for you.
 ## BD-R XL (100 / 128 GB) player compatibility
 
 Many Blu-ray players cannot read 100 or 128 GB BD-R XL discs at all, and there is no
-guarantee a given player will. For the best chance of playback, keep the image around 66 GB
-(the first two layers) and finalize the disc; the full 100 or 128 GB needs a recent player
-that explicitly supports high-capacity recordable media. Verbatim media and a slow (2x) burn
-give the most reliable results. This is a player limitation, not an ISO one, so test on your
-own device.
+guarantee a given player will. Keeping the image around 66 GB (the first two layers) and
+finalizing the disc improves the odds on some players, but even 66 GB is not guaranteed to
+play. The full 100 or 128 GB needs a recent player that explicitly supports high-capacity
+recordable media. Verbatim media and a slow (2x) burn give the most reliable results. This is
+a player limitation, not an ISO one, so test on your own device.
