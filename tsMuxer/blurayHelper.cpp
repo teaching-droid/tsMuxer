@@ -279,7 +279,7 @@ void BlurayHelper::close()
 }
 
 bool BlurayHelper::open(const string& dst, const DiskType dt, const int64_t diskSize, const int extraISOBlocks,
-                        const bool useReproducibleIsoHeader)
+                        const bool useReproducibleIsoHeader, const int layerBreakGuardMB, const int layerBreakLbn)
 {
     m_dstPath = toNativeSeparators(dst);
 
@@ -289,7 +289,19 @@ bool BlurayHelper::open(const string& dst, const DiskType dt, const int64_t disk
     if (fileExt == "ISO")
     {
         m_isoWriter = new IsoWriter(useReproducibleIsoHeader ? IsoHeaderData::reproducible() : IsoHeaderData::normal());
-        m_isoWriter->setLayerBreakPoint(0xBA7200);  // around 25Gb
+        if (layerBreakGuardMB >= 0)
+        {
+            // --layer-break-guard: on BD-R DL the write continues on layer 1 at a media-fixed
+            // image offset - exactly half the disc (the historic hardcoded 0xBA7200 was ~1 MiB
+            // short of the true boundary and, more importantly, was never acted upon: the
+            // padding check had no call sites). --layer-break-lbn overrides the break sector
+            // for testing / non-standard geometries.
+            const int breakLbn =
+                layerBreakLbn > 0 ? layerBreakLbn : static_cast<int>(BD50_CAPACITY / 2 / SECTOR_SIZE);
+            m_isoWriter->setLayerBreakPoint(breakLbn);
+            m_isoWriter->setLayerBreakGuard(
+                static_cast<int>(static_cast<int64_t>(layerBreakGuardMB) * 1024 * 1024 / SECTOR_SIZE));
+        }
         return m_isoWriter->open(m_dstPath, diskSize, extraISOBlocks);
     }
     m_dstPath = closeDirPath(m_dstPath, getDirSeparator());

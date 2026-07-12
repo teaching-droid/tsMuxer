@@ -20,7 +20,7 @@ class BlurayHelper final : public FileFactory
     ~BlurayHelper() override;
 
     bool open(const std::string& dst, DiskType dt, int64_t diskSize = 0, int extraISOBlocks = 0,
-              bool useReproducibleIsoHeader = false);
+              bool useReproducibleIsoHeader = false, int layerBreakGuardMB = -1, int layerBreakLbn = 0);
     void createBluRayDirs() const;
     bool writeBluRayFiles(const MuxerManager& muxer, bool usedBlankPL, int mplsNum, int blankNum,
                           bool stereoMode) const;

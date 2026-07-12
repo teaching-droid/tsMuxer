@@ -319,7 +319,7 @@ int64_t ByteFileWriter::size() const { return m_curPos - m_buffer; }
 
 // ------------------------------ FileEntryInfo ------------------------------------
 
-FileEntryInfo::FileEntryInfo(IsoWriter* owner, FileEntryInfo* parent, const uint8_t objectId, const FileTypes fileType)
+FileEntryInfo::FileEntryInfo(IsoWriter* owner, FileEntryInfo* parent, const uint32_t objectId, const FileTypes fileType)
     : m_owner(owner),
       m_parent(parent),
       m_sectorNum(0),
@@ -385,7 +385,7 @@ int FileEntryInfo::allocateEntity(const int sectorNum)
 {
     m_sectorNum = sectorNum;
     if (!isFile())
-        m_sectorsUsed = 2;  // restriction here: amount of files/subdirs is limited by sector size.
+        m_sectorsUsed = 1 + dirContentSectors();  // 1 File Entry + N content sectors (multi-sector dirs)
     else if (m_extents.size() <= MAX_EXTENTS_IN_EXTFILE)
         m_sectorsUsed = 1;
     else
@@ -403,21 +403,15 @@ void FileEntryInfo::serializeFile() const
     assert(writed == m_sectorsUsed);
 }
 
-void FileEntryInfo::serializeDir() const
+void FileEntryInfo::fillDirContent(ByteFileWriter& writer) const
 {
-    uint8_t buffer[SECTOR_SIZE] = {};
-
-    ByteFileWriter writer;
-    writer.setBuffer(buffer, sizeof(buffer));
-
     // ------------ 1 (parent entry) ---------------
-
     writer.writeDescriptorTag(DescriptorTag::FileId, m_owner->absoluteSectorNum() + 1);
     writer.writeLE16(0x01);  // File Version Number
     writer.writeLE8(0x0A);   // File Characteristics, parent flag (3-th bit) and  'directory' bit (1-th)
     writer.writeLE8(0x00);   // Length of File Identifier (=L_FI)
 
-    const uint8_t parentId = m_parent ? m_parent->m_objectId : 0;
+    const uint32_t parentId = m_parent ? m_parent->m_objectId : 0;
     writer.writeLongAD(0x800, m_parent ? m_parent->m_sectorNum : m_owner->absoluteSectorNum(), 0x01,
                        parentId);  // parent entry ICB
     writer.writeLE16(0);           // Length of Implementation Use
@@ -427,11 +421,39 @@ void FileEntryInfo::serializeDir() const
     // ------------ 2 (entries) ---------------
     for (const auto& i : m_files) writeEntity(writer, i);
     for (const auto& i : m_subDirs) writeEntity(writer, i);
-    assert(writer.size() < SECTOR_SIZE);  // not supported
+}
+
+int FileEntryInfo::dirContentSectors() const
+{
+    // Size the FID stream by building it into a scratch buffer (exact - avoids fragile hand-counting of
+    // FID + padding sizes). Tag-location values differ from serialize time, but the byte SIZE is identical.
+    const size_t bound = (m_files.size() + m_subDirs.size() + 1) * 320 + SECTOR_SIZE;
+    std::vector<uint8_t> scratch(bound, 0);
+    ByteFileWriter writer;
+    writer.setBuffer(scratch.data(), static_cast<int>(scratch.size()));
+    fillDirContent(writer);
+    const int sectors = static_cast<int>(roundUp64(writer.size(), SECTOR_SIZE) / SECTOR_SIZE);
+    return sectors < 1 ? 1 : sectors;
+}
+
+void FileEntryInfo::serializeDir() const
+{
+    // The FID stream (parent + file/subdir entries) may span MULTIPLE sectors - BD discs routinely have
+    // 40-55 entries in STREAM/CLIPINF/PLAYLIST, past the ~38 that fit one sector. The File Entry's
+    // short_ad describes it as one contiguous extent of writer.size() bytes at m_sectorNum+1 covering
+    // contentSectors blocks (short_ad length is 30-bit, so a multi-sector directory needs no new logic).
+    const int contentSectors = m_sectorsUsed - 1;  // reserved by allocateEntity via dirContentSectors()
+    std::vector<uint8_t> buffer(static_cast<size_t>(contentSectors) * SECTOR_SIZE, 0);
+
+    ByteFileWriter writer;
+    writer.setBuffer(buffer.data(), static_cast<int>(buffer.size()));
+    fillDirContent(writer);
+    assert(writer.size() <= static_cast<int64_t>(buffer.size()));  // must fit the sectors allocateEntity reserved
 
     m_owner->writeExtendedFileEntryDescriptor(false, m_objectId, m_fileType, writer.size(), m_sectorNum + 1,
                                               static_cast<uint16_t>(m_subDirs.size() + 1));
-    m_owner->writeSector(buffer);
+    for (int s = 0; s < contentSectors; ++s)
+        m_owner->writeSector(buffer.data() + static_cast<size_t>(s) * SECTOR_SIZE);
 }
 
 void FileEntryInfo::addExtent(const Extent& extent)
@@ -452,6 +474,29 @@ void FileEntryInfo::addExtent(const Extent& extent)
 }
 
 int32_t FileEntryInfo::write(const uint8_t* data, const int32_t len)
+{
+    // Dual-layer guard band: if this write would reach the zero-fill zone around the BD-R DL
+    // layer break, cut the file at a sector-aligned file offset (UDF allocation descriptors
+    // only allow non-final extents to be whole sectors), pad the zone, and continue the file
+    // in a new extent behind it. m2ts data arrives in 6144-byte Aligned Units (= 3 sectors),
+    // so for the main stream the cut lands exactly between write calls (head == 0).
+    if (len > 0 && m_owner->nearLayerBreak(len))
+    {
+        const int head = (SECTOR_SIZE - m_sectorBufferSize) % SECTOR_SIZE;
+        if (head < len)
+        {
+            if (head > 0)
+                writeImpl(data, head);  // fill the current sector to reach alignment
+            m_owner->checkLayerBreakPoint(len - head);
+            writeImpl(data + head, len - head);
+            return len;
+        }
+        // write too small to reach a sector boundary: defer, a later write re-tests
+    }
+    return writeImpl(data, len);
+}
+
+int32_t FileEntryInfo::writeImpl(const uint8_t* data, const int32_t len)
 {
     if (m_owner->m_lastWritedObjectID != m_objectId)
     {
@@ -600,6 +645,7 @@ IsoWriter::IsoWriter(const IsoHeaderData& hdrData)
     m_opened = false;
     m_volumeLabel = " ";
     m_layerBreakPoint = 0;
+    m_layerBreakGuardSectors = 0;
 }
 
 IsoWriter::~IsoWriter()
@@ -1000,7 +1046,7 @@ void IsoWriter::writeAllocationExtentDescriptor(const ExtentList* extents, const
     m_file.write(m_buffer, SECTOR_SIZE);
 }
 
-int IsoWriter::writeExtendedFileEntryDescriptor(const bool namedStream, const uint8_t objectId,
+int IsoWriter::writeExtendedFileEntryDescriptor(const bool namedStream, const uint32_t objectId,
                                                 const FileTypes fileType, const uint64_t len, const uint32_t pos,
                                                 const uint16_t linkCount, const ExtentList* extents)
 {
@@ -1056,7 +1102,7 @@ int IsoWriter::writeExtendedFileEntryDescriptor(const bool namedStream, const ui
     // skip Stream Directory ICB
 
     strcpy(reinterpret_cast<char*>(m_buffer) + 169, m_impId.c_str());  // Implementation Identifier
-    m_buffer[200] = objectId;                                          // Unique ID
+    buff32[200 / 4] = objectId;                                        // Unique ID (32-bit LE; was 1 byte -> 255-file cap)
 
     // skip Length of Extended Attributes
     if (fileType != FileTypes::File && fileType != FileTypes::RealtimeFile)
@@ -1412,22 +1458,52 @@ void IsoWriter::writeSector(const uint8_t* sectorData) { m_file.write(sectorData
 
 int IsoWriter::writeRawData(const uint8_t* data, const int size) { return m_file.write(data, size); }
 
+int64_t IsoWriter::imageLBA() const { return m_file.pos() / SECTOR_SIZE; }
+
+bool IsoWriter::nearLayerBreak(const int upcomingBytes) const
+{
+    if (m_layerBreakPoint == 0)
+        return false;
+    const int64_t lbn = imageLBA();
+    const int64_t zoneStart = static_cast<int64_t>(m_layerBreakPoint) - m_layerBreakGuardSectors;
+    const int64_t zoneEnd = static_cast<int64_t>(m_layerBreakPoint) + m_layerBreakGuardSectors;
+    const int64_t lenSectors = (static_cast<int64_t>(upcomingBytes) + SECTOR_SIZE - 1) / SECTOR_SIZE;
+    return lbn < zoneEnd && lbn + lenSectors > zoneStart;
+}
+
+// If the upcoming write of maxExtentSize bytes would touch the guard zone around the layer
+// break, fill the image with zero sectors up to the far edge of the zone. The zone is
+// [break - guard, break + guard) in ABSOLUTE image sectors (the historic code compared the
+// partition-relative absoluteSectorNum() against an absolute LBA and was never called; both
+// fixed here). The interrupted file continues in a fresh extent (m_lastWritedObjectID reset),
+// so the padding belongs to no file and players never read it. Must only be called at a
+// sector-aligned file offset - FileEntryInfo::write() guarantees that.
 void IsoWriter::checkLayerBreakPoint(const int maxExtentSize)
 {
-    const int lbn = absoluteSectorNum();
-    if (lbn < m_layerBreakPoint && lbn + maxExtentSize > m_layerBreakPoint)
+    if (m_layerBreakPoint == 0)
+        return;
+    const int64_t lbn = imageLBA();
+    const int64_t zoneStart = static_cast<int64_t>(m_layerBreakPoint) - m_layerBreakGuardSectors;
+    const int64_t zoneEnd = static_cast<int64_t>(m_layerBreakPoint) + m_layerBreakGuardSectors;
+    const int64_t lenSectors = (static_cast<int64_t>(maxExtentSize) + SECTOR_SIZE - 1) / SECTOR_SIZE;
+    if (lbn < zoneEnd && lbn + lenSectors > zoneStart)
     {
-        const int rest = m_layerBreakPoint - lbn;
-        const int size = rest * SECTOR_SIZE;
-        const auto tmpBuffer = new uint8_t[size];
-        memset(tmpBuffer, 0, size);
-        m_file.write(tmpBuffer, size);
-        delete[] tmpBuffer;
+        static constexpr int PAD_CHUNK_SECTORS = 512;  // write the filler in 1 MB chunks
+        const std::vector<uint8_t> zeroBuff(PAD_CHUNK_SECTORS * SECTOR_SIZE, 0);
+        int64_t restSectors = zoneEnd - lbn;
+        while (restSectors > 0)
+        {
+            const int n = static_cast<int>(std::min<int64_t>(restSectors, PAD_CHUNK_SECTORS));
+            m_file.write(zeroBuff.data(), n * SECTOR_SIZE);
+            restSectors -= n;
+        }
         m_lastWritedObjectID = -1;
     }
 }
 
 void IsoWriter::setLayerBreakPoint(const int lbn) { m_layerBreakPoint = lbn; }
+
+void IsoWriter::setLayerBreakGuard(const int sectors) { m_layerBreakGuardSectors = sectors; }
 
 IsoHeaderData IsoHeaderData::normal()
 {

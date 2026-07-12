@@ -123,7 +123,7 @@ struct MappingEntry
 
 struct FileEntryInfo
 {
-    FileEntryInfo(IsoWriter* owner, FileEntryInfo* parent, uint8_t objectId, FileTypes fileType);
+    FileEntryInfo(IsoWriter* owner, FileEntryInfo* parent, uint32_t objectId, FileTypes fileType);
     ~FileEntryInfo();
 
     int32_t write(const uint8_t* data, int32_t len);
@@ -136,6 +136,7 @@ struct FileEntryInfo
     [[nodiscard]] FileEntryInfo* fileByName(const std::string& name) const;
 
    private:
+    int32_t writeImpl(const uint8_t* data, int32_t len);
     void addSubDir(FileEntryInfo* dir);
     void addFile(FileEntryInfo* file);
     void serialize() const;  // flush directory tree to a disk
@@ -143,6 +144,8 @@ struct FileEntryInfo
     void writeEntity(ByteFileWriter& writer, const FileEntryInfo* subDir) const;
     void serializeDir() const;
     void serializeFile() const;
+    void fillDirContent(ByteFileWriter& writer) const;  // write the directory's FID stream (parent + entries)
+    [[nodiscard]] int dirContentSectors() const;        // sectors the FID stream occupies (>=1; multi-sector aware)
     [[nodiscard]] bool isFile() const;
 
     friend class IsoWriter;
@@ -154,7 +157,7 @@ struct FileEntryInfo
     FileEntryInfo* m_parent;
     int m_sectorNum;
     int m_sectorsUsed;
-    uint8_t m_objectId;
+    uint32_t m_objectId;
     std::string m_name;
     FileTypes m_fileType;
 
@@ -193,6 +196,7 @@ class IsoWriter
     void close();
 
     void setLayerBreakPoint(int lbn);
+    void setLayerBreakGuard(int sectors);
 
    private:
     enum class Partition
@@ -204,6 +208,8 @@ class IsoWriter
     void setMetaPartitionSize(int size);
     int writeRawData(const uint8_t* data, int size);
     void checkLayerBreakPoint(int maxExtentSize);
+    [[nodiscard]] bool nearLayerBreak(int upcomingBytes) const;
+    [[nodiscard]] int64_t imageLBA() const;
     void writePrimaryVolumeDescriptor();
     void writeAnchorVolumeDescriptor(uint32_t endPartitionAddr);
     void writeImpUseDescriptor();
@@ -212,7 +218,7 @@ class IsoWriter
     void writeUnallocatedSpaceDescriptor();
     void writeTerminationDescriptor();
     void writeLogicalVolumeIntegrityDescriptor();
-    int writeExtendedFileEntryDescriptor(bool namedStream, uint8_t objectId, FileTypes fileType, uint64_t len,
+    int writeExtendedFileEntryDescriptor(bool namedStream, uint32_t objectId, FileTypes fileType, uint64_t len,
                                          uint32_t pos, uint16_t linkCount, const ExtentList* extents = nullptr);
     void writeFileSetDescriptor();
     void writeAllocationExtentDescriptor(const ExtentList* extents, size_t start, size_t indexEnd);
@@ -245,7 +251,7 @@ class IsoWriter
     uint8_t m_buffer[SECTOR_SIZE];
     time_t m_currentTime;
 
-    uint8_t m_objectUniqId;
+    uint32_t m_objectUniqId;
     uint32_t m_totalFiles;
     uint32_t m_totalDirectories;
     uint32_t m_volumeSize;
@@ -268,7 +274,12 @@ class IsoWriter
 
     std::map<int, MappingEntry> m_mappingEntries;
     bool m_opened;
-    int m_layerBreakPoint;  // in sectors
+    // Dual-layer guard band (--layer-break-guard): m_layerBreakPoint is the ABSOLUTE image sector
+    // where BD-R DL layer 1 begins (media-fixed at half the disc); m_layerBreakGuardSectors is the
+    // amount of zero-filler placed on EACH side of it so no file data sits on the defect-prone
+    // sectors around the physical layer transition. 0 layer break point = feature off (default).
+    int m_layerBreakPoint;         // in sectors, absolute image LBA
+    int m_layerBreakGuardSectors;  // guard band on each side of the break, in sectors
 };
 
 class ISOFile final : public AbstractOutputStream
