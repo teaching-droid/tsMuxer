@@ -53,6 +53,7 @@ set(tsmuxer_ts_files
   translations/tsmuxergui_de.ts
   translations/tsmuxergui_he.ts
   translations/tsmuxergui_es.ts
+  translations/tsmuxergui_ja.ts
 )
 
 set(lang_qrc "translations.qrc")
