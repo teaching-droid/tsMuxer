@@ -3,17 +3,22 @@
 
 #include <fs/systemlog.h>
 
+#include <memory>
+
 void WriterData::execute() const
 {
     switch (m_command)
     {
     case Commands::wdWrite:
+    {
+        // Own the buffer via RAII so it is freed even if write() throws (e.g. disk full).
+        const std::unique_ptr<uint8_t[]> bufferGuard(m_buffer);
         if (m_mainFile)
         {
             m_mainFile->write(m_buffer, m_bufferLen);
         }
-        delete[] m_buffer;
         break;
+    }
     default:
         break;
     }
@@ -31,8 +36,24 @@ BufferedFileWriter::~BufferedFileWriter()
     while (!m_writeQueue.empty())
     {
         WriterData writerData = m_writeQueue.pop();
-        writerData.execute();
+        try
+        {
+            writerData.execute();  // RAII frees the buffer even if the write fails
+        }
+        catch (...)
+        {
+            // In teardown: never let a write failure throw out of a destructor.
+        }
     }
+}
+
+void BufferedFileWriter::setError(const std::string& msg)
+{
+    {
+        std::lock_guard<std::mutex> lock(m_errorMutex);
+        m_lastErrorStr = msg;
+    }
+    m_lastErrorCode.store(-1);  // publish only after the message is stored
 }
 
 void BufferedFileWriter::thread_main()
@@ -40,27 +61,32 @@ void BufferedFileWriter::thread_main()
     while (!m_terminated)
     {
         WriterData writerData = m_writeQueue.peek();
-        try
+        if (m_lastErrorCode.load() == 0)
         {
-            writerData.execute();
+            try
+            {
+                writerData.execute();
+            }
+            catch (std::runtime_error& e)
+            {
+                setError(e.what());
+                LTRACE(LT_ERROR, 0, "BufferedFileWriter::thread_main() throws runtime_error: " << e.what());
+            }
+            catch (std::exception& e)
+            {
+                setError(e.what());
+                LTRACE(LT_ERROR, 0, "BufferedFileWriter::thread_main() throws exception: " << e.what());
+            }
+            catch (...)
+            {
+                setError("Unknown exception");
+                LTRACE(LT_ERROR, 0, "BufferedFileWriter::thread_main() throws unknown exception");
+            }
         }
-        catch (std::runtime_error& e)
+        else if (writerData.m_command == WriterData::Commands::wdWrite)
         {
-            m_lastErrorStr = e.what();
-            m_lastErrorCode = -1;
-            LTRACE(LT_ERROR, 0, "BufferedFileWriter::thread_main() throws runtime_error: " << e.what());
-        }
-        catch (std::exception& e)
-        {
-            m_lastErrorStr = e.what();
-            m_lastErrorCode = -1;
-            LTRACE(LT_ERROR, 0, "BufferedFileWriter::thread_main() throws exception: " << e.what());
-        }
-        catch (...)
-        {
-            m_lastErrorStr = "Unknown exception";
-            m_lastErrorCode = -1;
-            LTRACE(LT_ERROR, 0, "BufferedFileWriter::thread_main() throws unknown exception");
+            // Already failed once: drain remaining buffers without retrying writes that would just fail again.
+            delete[] writerData.m_buffer;
         }
         m_writeQueue.pop();
     }

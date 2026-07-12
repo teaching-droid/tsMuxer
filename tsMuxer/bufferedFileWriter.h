@@ -6,6 +6,11 @@
 #include <system/terminatablethread.h>
 #include <types/types.h>
 
+#include <atomic>
+#include <mutex>
+#include <stdexcept>
+#include <string>
+
 #include "vod_common.h"
 
 constexpr unsigned WRITE_QUEUE_MAX_SIZE = 400 * 1024 * 1024 / DEFAULT_FILE_BLOCK_SIZE;  // 400 Mb max queue size
@@ -40,21 +45,32 @@ class BufferedFileWriter final : public TerminatableThread
 
     bool addWriterData(const WriterData& data)
     {
-        if (m_lastErrorCode == 0)
+        if (m_lastErrorCode.load() == 0)
         {
             return m_writeQueue.push(data);
         }
-        throw std::runtime_error(m_lastErrorStr);
+        throw std::runtime_error(getLastError());
     }
     bool isQueueEmpty() const { return m_writeQueue.empty(); }
+
+    // Thread-safe async-write error state (set by the writer thread, read by the mux thread).
+    bool hasError() const { return m_lastErrorCode.load() != 0; }
+    std::string getLastError() const
+    {
+        std::lock_guard<std::mutex> lock(m_errorMutex);
+        return m_lastErrorStr;
+    }
 
    protected:
     void thread_main() override;
 
    private:
-    int m_lastErrorCode;
+    void setError(const std::string& msg);
+
+    std::atomic<int> m_lastErrorCode;
+    mutable std::mutex m_errorMutex;
     std::string m_lastErrorStr;
-    bool m_terminated;
+    std::atomic<bool> m_terminated;
 
     WaitableSafeQueue<WriterData> m_writeQueue;
 };
