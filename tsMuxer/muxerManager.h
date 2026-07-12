@@ -58,6 +58,15 @@ class MuxerManager final
 
     [[nodiscard]] bool useReproducibleIsoHeader() const { return m_reproducibleIsoHeader; }
 
+    // Fit-to-disc guard: target disc capacity in bytes (0 = disabled) + oversize override.
+    [[nodiscard]] int64_t getDiscSizeLimit() const { return m_discSizeLimit; }
+    [[nodiscard]] bool getAllowOversize() const { return m_allowOversize; }
+
+    // Dual-layer guard band: MB of zero-fill on each side of the BD-R DL layer break (-1 = off),
+    // plus an optional break-sector override for testing / non-standard geometries.
+    [[nodiscard]] int getLayerBreakGuardMB() const { return m_layerBreakGuardMB; }
+    [[nodiscard]] int getLayerBreakLbn() const { return m_layerBreakLbn; }
+
     enum class SubTrackMode
     {
         All,
@@ -99,6 +108,10 @@ class MuxerManager final
     bool m_bluRayMode;
     bool m_demuxMode;
     bool m_reproducibleIsoHeader = false;
+    int64_t m_discSizeLimit = 0;   // --disc-size: target disc capacity in bytes (0 = guard off)
+    bool m_allowOversize = false;  // --allow-oversize: warn instead of abort on an over-capacity image
+    int m_layerBreakGuardMB = -1;  // --layer-break-guard: MB of zero-fill each side of the DL break (-1 = off)
+    int m_layerBreakLbn = 0;       // --layer-break-lbn: break-sector override (0 = BD-R DL default)
 
     /// Results of the discovery (probe) phase, indexed by stream index.
     std::vector<StreamDiscoveryData> m_discoveryData;

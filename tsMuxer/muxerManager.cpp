@@ -192,7 +192,10 @@ void MuxerManager::checkTrackList(const vector<StreamInfo>& ci) const
         else if (si.m_codec == mlpCodecInfo.programName)
         {
             mlpFound = true;
-            if (si.m_addParams.find("merge-ac3-track") != si.m_addParams.end())
+            // TrueHD is BD-compliant when interleaved with an AC-3 core, whether the core
+            // comes from another track (merge-ac3-track) or a separate file (merge-ac3-file).
+            if (si.m_addParams.find("merge-ac3-track") != si.m_addParams.end() ||
+                si.m_addParams.find("merge-ac3-file") != si.m_addParams.end())
                 mlpMergedWithAc3 = true;
         }
     }
@@ -261,6 +264,17 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     m_mainMuxer->close();
     if (m_subMuxer)
         m_subMuxer->close();
+
+    // Drain any writes the muxers queued during flush/close, then surface a failed
+    // async write (e.g. disk full at the tail of a large image) instead of silently
+    // reporting success over a truncated, non-playable output.
+    waitForWriting();
+    if (m_fileWriter->hasError())
+    {
+        const std::string err = m_fileWriter->getLastError();
+        m_fileWriter.reset();
+        throw std::runtime_error("Failed to write output (disk full or I/O error): " + err);
+    }
 
     m_fileWriter.reset();
 }
@@ -347,6 +361,57 @@ int MuxerManager::syncWriteBuffer(AbstractMuxer* muxer, const uint8_t* buff, con
     return rez;
 }
 
+namespace
+{
+// Parse a --disc-size value: a bd25/bd50/bd100/bd128 keyword, or a raw number with an optional
+// unit suffix (k/m/g = decimal 10^3/10^6/10^9; ki/mi/gi = binary; none or b = bytes).
+// Returns the capacity in bytes, or 0 if the value is unparseable.
+int64_t parseDiscSizeValue(const string& raw)
+{
+    const string s = strToUpperCase(trimStr(raw));
+    if (s == "BD25" || s == "25")
+        return BD25_CAPACITY;
+    if (s == "BD50" || s == "50")
+        return BD50_CAPACITY;
+    if (s == "BD100" || s == "100")
+        return BD100_CAPACITY;
+    if (s == "BD128" || s == "128")
+        return BD128_CAPACITY;
+    size_t i = 0;
+    while (i < s.size() && ((s[i] >= '0' && s[i] <= '9') || s[i] == '.')) ++i;
+    if (i == 0)
+        return 0;
+    double num = 0.0;
+    try
+    {
+        num = std::stod(s.substr(0, i));
+    }
+    catch (...)
+    {
+        return 0;
+    }
+    const string unit = s.substr(i);
+    double mult;
+    if (unit.empty() || unit == "B")
+        mult = 1.0;
+    else if (unit == "K" || unit == "KB")
+        mult = 1e3;
+    else if (unit == "M" || unit == "MB")
+        mult = 1e6;
+    else if (unit == "G" || unit == "GB")
+        mult = 1e9;
+    else if (unit == "KI" || unit == "KIB")
+        mult = 1024.0;
+    else if (unit == "MI" || unit == "MIB")
+        mult = 1024.0 * 1024.0;
+    else if (unit == "GI" || unit == "GIB")
+        mult = 1024.0 * 1024.0 * 1024.0;
+    else
+        return 0;
+    return static_cast<int64_t>(num * mult);
+}
+}  // namespace
+
 void MuxerManager::parseMuxOpt(const string& opts)
 {
     const vector<string> params = splitQuotedStr(opts.c_str(), ' ');
@@ -367,6 +432,8 @@ void MuxerManager::parseMuxOpt(const string& opts)
             setAsyncMode(false);
         else if (paramPair[0] == "--cut-start" || paramPair[0] == "--cut-end")
         {
+            if (paramPair.size() < 2)
+                THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
             int64_t coeff = 1;
             string postfix;
             for (const auto j : paramPair[1])
@@ -396,6 +463,8 @@ void MuxerManager::parseMuxOpt(const string& opts)
         }
         else if (paramPair[0] == "--extra-iso-space")
         {
+            if (paramPair.size() < 2)
+                THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
             m_extraIsoBlocks = strToInt32(paramPair[1]);
         }
         else if (paramPair[0] == "--blu-ray" || paramPair[0] == "--blu-ray-v3" || paramPair[0] == "--avchd")
@@ -409,6 +478,39 @@ void MuxerManager::parseMuxOpt(const string& opts)
         else if (paramPair[0] == "--constant-iso-hdr")
         {
             m_reproducibleIsoHeader = true;
+        }
+        else if (paramPair[0] == "--disc-size")
+        {
+            if (paramPair.size() < 2)
+                THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
+            m_discSizeLimit = parseDiscSizeValue(paramPair[1]);
+            if (m_discSizeLimit <= 0)
+                THROW(ERR_COMMON, "Invalid --disc-size value '"
+                                      << paramPair[1]
+                                      << "'. Use bd25/bd50/bd100/bd128, or a byte count with an optional "
+                                         "k/m/g/gib suffix (e.g. 25000000000, 24g, 23gib).");
+        }
+        else if (paramPair[0] == "--allow-oversize")
+        {
+            m_allowOversize = true;
+        }
+        else if (paramPair[0] == "--layer-break-guard")
+        {
+            if (paramPair.size() < 2)
+                THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
+            m_layerBreakGuardMB = strToInt32(paramPair[1]);
+            if (m_layerBreakGuardMB < 0 || m_layerBreakGuardMB > 1024)
+                THROW(ERR_COMMON, "Invalid --layer-break-guard value '" << paramPair[1]
+                                                                        << "'. Expected 0..1024 (megabytes).");
+        }
+        else if (paramPair[0] == "--layer-break-lbn")
+        {
+            if (paramPair.size() < 2)
+                THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
+            m_layerBreakLbn = strToInt32(paramPair[1]);
+            if (m_layerBreakLbn <= 0)
+                THROW(ERR_COMMON, "Invalid --layer-break-lbn value '" << paramPair[1]
+                                                                      << "'. Expected a positive sector number.");
         }
     }
 }

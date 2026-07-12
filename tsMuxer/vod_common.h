@@ -103,6 +103,14 @@ enum class DiskType
     AVCHD
 };
 
+// Usable byte capacities of the burnable Blu-ray media classes (BDA/ECMA logical volume sizes).
+// These are the real recordable ("BD-R") capacities, not marketing decimal-GB (25 GB BD-R holds
+// 25,025,314,816 bytes, not 25,000,000,000). Used by the --disc-size fit-to-disc guard.
+constexpr int64_t BD25_CAPACITY = 25025314816LL;    // BD-R  SL  (single layer,  "25 GB")
+constexpr int64_t BD50_CAPACITY = 50050629632LL;    // BD-R  DL  (dual layer,    "50 GB")
+constexpr int64_t BD100_CAPACITY = 100103356416LL;  // BD-R XL  (triple layer,  "100 GB")
+constexpr int64_t BD128_CAPACITY = 128001769472LL;  // BD-R XL  (quad layer,    "128 GB")
+
 uint16_t AV_RB16(const uint8_t* buffer);
 uint32_t AV_RB24(const uint8_t* buffer);
 uint32_t AV_RB32(uint8_t* buffer);
