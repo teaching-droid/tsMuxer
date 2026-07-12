@@ -66,21 +66,23 @@ Information" die Zeile **Free Sectors** ablesen → durch 2 teilen.
 ## Schritt 2 – ISO bauen
 
 ```
-tsMuxeR --bdmv-to-iso --layer-break-guard=32 [--layer-break-lbn=<Sektor>] "<BDMV-Ordner>" "<Ausgabe.iso>"
+tsMuxeR --bdmv-to-iso --layer-break-guard=64 [--layer-break-lbn=<Sektor>] "<BDMV-Ordner>" "<Ausgabe.iso>"
 ```
 
-- `--layer-break-guard=32` = 32 MB Schutzzone auf **jeder** Seite des Breaks (guter Standardwert).
+- `--layer-break-guard=64` = 64 MB Nullen **nach** dem Break (Layer-1-Start, dort sind Discs
+  fehleranfällig) plus 4 MB Rand davor. Die Zone ist **asymmetrisch**, weil der Defekt am
+  Layer-1-Anfang liegt (real gemessen ~35 MB, Layer 0 war sauber) - **64 empfohlen**.
 - `--layer-break-lbn=<Sektor>` = nur nötig, wenn **kein** Standard-50-GB-Rohling
   (sonst weglassen → automatisch 12.219.392).
 
 **Beispiel (Standard-50-GB-Disc):**
 ```
-tsMuxeR --bdmv-to-iso --layer-break-guard=32 "D:\ZurueckInDieZukunft\BDMV_Ordner" "D:\BTTF.iso"
+tsMuxeR --bdmv-to-iso --layer-break-guard=64 "D:\ZurueckInDieZukunft\BDMV_Ordner" "D:\BTTF.iso"
 ```
 
 **Beispiel (Disc mit abweichender Kapazität, Break in ImgBurn ermittelt):**
 ```
-tsMuxeR --bdmv-to-iso --layer-break-guard=32 --layer-break-lbn=11826176 "D:\Film\BDMV_Ordner" "D:\Film.iso"
+tsMuxeR --bdmv-to-iso --layer-break-guard=64 --layer-break-lbn=11826176 "D:\Film\BDMV_Ordner" "D:\Film.iso"
 ```
 
 Der Ordner muss den `BDMV`-Ordner (und ggf. `CERTIFICATE`) enthalten. MakeMKV-Hilfsordner
@@ -132,7 +134,7 @@ bricht vor dem Bau ab, wenn das Image nicht auf die Zielgröße passt
 | Option | Bedeutung |
 |--------|-----------|
 | `--bdmv-to-iso <Ordner> <iso>` | BDMV-Ordner 1:1 in ein BD-ROM-ISO packen (Menüs bleiben) |
-| `--layer-break-guard=<MB>` | Schutzzone in MB je Seite des Layer-Breaks |
+| `--layer-break-guard=<MB>` | Nullen in MB **nach** dem Break (Layer-1-Seite) + 4 MB davor; 64 empfohlen |
 | `--layer-break-lbn=<Sektor>` | Layer-0-Kapazität in Sektoren (= Gesamtsektoren / 2); Standard 12.219.392 |
 | `--disc-size=bd25\|bd50\|bd100\|bd128` | Abbruch, falls Image nicht passt |
 | `--allow-oversize` | mit `--disc-size`: nur Warnung statt Abbruch |

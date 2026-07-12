@@ -9,7 +9,7 @@ default behaviour is unchanged.
 |--------|---------|
 | `--disc-size=<bd25\|bd50\|bd100\|bd128 \| bytes>` | Fit-to-disc guard. Aborts **before** muxing if the estimated image won't fit the target disc. |
 | `--allow-oversize` | With `--disc-size`, downgrade an over-capacity overrun from a hard error to a warning. |
-| `--layer-break-guard=<MB>` | Zero-fill `<MB>` on **each** side of the BD-R/RE DL layer break so no file data lands on the defect-prone sectors around the physical layer transition. The crossing file stays one logically-contiguous UDF file (two extents around the gap); playback is seamless via the player's read-ahead. `0` = align to the break without extra filler. Off when not given. |
+| `--layer-break-guard=<MB>` | Zero-fill `<MB>` **after** the BD-R/RE DL layer break (the start of layer 1, where discs are defect-prone), plus a fixed 4 MB margin **before** it. No file data lands on those sectors; the crossing file (usually the movie) stays one logically-contiguous UDF file (two extents around the gap) and plays seamlessly via read-ahead. The zone is **asymmetric** on purpose: real-hardware testing showed the layer-1 defect can be **~35 MB** while the tail of layer 0 is clean, so the budget goes where the defect is. **Use 64** (covers ~35 MB with margin). `0` = align without filler. Off when not given. |
 | `--layer-break-lbn=<sector>` | Override the layer-break sector (see below). |
 
 ## New mode: `--bdmv-to-iso`
@@ -65,6 +65,6 @@ tsMuxeR itself never touches the burner.
 
 1. Read the target disc's full capacity (e.g. ImgBurn "Free Sectors"); `LBN = total / 2`.
    For a standard 50 GB disc, `LBN = 12,219,392` (the default — skip step in that case).
-2. `tsMuxeR --bdmv-to-iso --layer-break-guard=32 --layer-break-lbn=<LBN> <BDMV_folder> out.iso`
+2. `tsMuxeR --bdmv-to-iso --layer-break-guard=64 --layer-break-lbn=<LBN> <BDMV_folder> out.iso`
 3. Burn `out.iso` with verify. The DL layer break is media-fixed, so the burner switches
    layers at the same LBN and the guard zone lands exactly on it.

@@ -575,11 +575,13 @@ All parameters in this group start with two dashes:
 --allow-oversize      With --disc-size, downgrade an over-capacity overrun from a
                       hard error to a warning and build the (oversized) image anyway.
 --layer-break-guard   Dual-layer safety padding for ISO output: place <n> megabytes
-                      of zero-filler on each side of the BD-R DL layer break (at
-                      half the disc, ~25.02 GB) so no file data sits on the
-                      defect-prone sectors around the physical layer transition.
-                      0 aligns data to the break without extra filler. Off when
-                      not specified. Only meaningful for images burned to BD-R DL.
+                      of zero-filler AFTER the BD-R/RE DL layer break (the start of
+                      layer 1, where real discs are defect-prone), plus a small 4 MB
+                      margin before it, so no file data sits on those sectors. The
+                      crossing file (usually the movie) stays logically contiguous
+                      and plays seamlessly. Real-hardware data shows the layer-1
+                      defect can be ~35 MB, so 64 is recommended. 0 aligns to the
+                      break without filler. Off when not specified. BD-R/RE DL only.
 --layer-break-lbn     Override the layer-break sector for --layer-break-guard. This is
                       the target disc's Layer 0 capacity in 2048-byte LBA sectors. For
                       BD-R/RE DL the two layers are equal, so it equals the disc's TOTAL

@@ -645,7 +645,8 @@ IsoWriter::IsoWriter(const IsoHeaderData& hdrData)
     m_opened = false;
     m_volumeLabel = " ";
     m_layerBreakPoint = 0;
-    m_layerBreakGuardSectors = 0;
+    m_layerBreakGuardBeforeSectors = 0;
+    m_layerBreakGuardAfterSectors = 0;
 }
 
 IsoWriter::~IsoWriter()
@@ -1465,8 +1466,8 @@ bool IsoWriter::nearLayerBreak(const int upcomingBytes) const
     if (m_layerBreakPoint == 0)
         return false;
     const int64_t lbn = imageLBA();
-    const int64_t zoneStart = static_cast<int64_t>(m_layerBreakPoint) - m_layerBreakGuardSectors;
-    const int64_t zoneEnd = static_cast<int64_t>(m_layerBreakPoint) + m_layerBreakGuardSectors;
+    const int64_t zoneStart = static_cast<int64_t>(m_layerBreakPoint) - m_layerBreakGuardBeforeSectors;
+    const int64_t zoneEnd = static_cast<int64_t>(m_layerBreakPoint) + m_layerBreakGuardAfterSectors;
     const int64_t lenSectors = (static_cast<int64_t>(upcomingBytes) + SECTOR_SIZE - 1) / SECTOR_SIZE;
     return lbn < zoneEnd && lbn + lenSectors > zoneStart;
 }
@@ -1483,8 +1484,8 @@ void IsoWriter::checkLayerBreakPoint(const int maxExtentSize)
     if (m_layerBreakPoint == 0)
         return;
     const int64_t lbn = imageLBA();
-    const int64_t zoneStart = static_cast<int64_t>(m_layerBreakPoint) - m_layerBreakGuardSectors;
-    const int64_t zoneEnd = static_cast<int64_t>(m_layerBreakPoint) + m_layerBreakGuardSectors;
+    const int64_t zoneStart = static_cast<int64_t>(m_layerBreakPoint) - m_layerBreakGuardBeforeSectors;
+    const int64_t zoneEnd = static_cast<int64_t>(m_layerBreakPoint) + m_layerBreakGuardAfterSectors;
     const int64_t lenSectors = (static_cast<int64_t>(maxExtentSize) + SECTOR_SIZE - 1) / SECTOR_SIZE;
     if (lbn < zoneEnd && lbn + lenSectors > zoneStart)
     {
@@ -1503,7 +1504,16 @@ void IsoWriter::checkLayerBreakPoint(const int maxExtentSize)
 
 void IsoWriter::setLayerBreakPoint(const int lbn) { m_layerBreakPoint = lbn; }
 
-void IsoWriter::setLayerBreakGuard(const int sectors) { m_layerBreakGuardSectors = sectors; }
+void IsoWriter::setLayerBreakGuard(const int afterSectors)
+{
+    // The BD-R/RE DL layer-1-start defect is ASYMMETRIC: real-hardware data (Verbatim BD-R DL, 2026-07-11)
+    // showed the first ~35 MB of layer 1 uncorrectable while the tail of layer 0 verified 100% clean. So put
+    // the requested guard AFTER the break (layer 1, where the defect lives) and only a small fixed margin
+    // before it (layer 0) - the same fill protects a far larger layer-1 defect than a symmetric zone would.
+    m_layerBreakGuardAfterSectors = afterSectors;
+    const int beforeMargin = 4 * 1024 * 1024 / SECTOR_SIZE;  // 4 MB layer-0-side safety margin
+    m_layerBreakGuardBeforeSectors = afterSectors < beforeMargin ? afterSectors : beforeMargin;
+}
 
 IsoHeaderData IsoHeaderData::normal()
 {
