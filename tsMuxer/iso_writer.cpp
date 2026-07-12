@@ -644,7 +644,7 @@ IsoWriter::IsoWriter(const IsoHeaderData& hdrData)
     m_lastWritedObjectID = -1;
     m_opened = false;
     m_volumeLabel = " ";
-    m_layerBreakPoint = 0;
+    m_layerBreakPoints.clear();
     m_layerBreakGuardBeforeSectors = 0;
     m_layerBreakGuardAfterSectors = 0;
 }
@@ -1463,46 +1463,55 @@ int64_t IsoWriter::imageLBA() const { return m_file.pos() / SECTOR_SIZE; }
 
 bool IsoWriter::nearLayerBreak(const int upcomingBytes) const
 {
-    if (m_layerBreakPoint == 0)
+    if (m_layerBreakPoints.empty())
         return false;
     const int64_t lbn = imageLBA();
-    const int64_t zoneStart = static_cast<int64_t>(m_layerBreakPoint) - m_layerBreakGuardBeforeSectors;
-    const int64_t zoneEnd = static_cast<int64_t>(m_layerBreakPoint) + m_layerBreakGuardAfterSectors;
     const int64_t lenSectors = (static_cast<int64_t>(upcomingBytes) + SECTOR_SIZE - 1) / SECTOR_SIZE;
-    return lbn < zoneEnd && lbn + lenSectors > zoneStart;
+    for (const int bp : m_layerBreakPoints)
+    {
+        const int64_t zoneStart = static_cast<int64_t>(bp) - m_layerBreakGuardBeforeSectors;
+        const int64_t zoneEnd = static_cast<int64_t>(bp) + m_layerBreakGuardAfterSectors;
+        if (lbn < zoneEnd && lbn + lenSectors > zoneStart)
+            return true;
+    }
+    return false;
 }
 
-// If the upcoming write of maxExtentSize bytes would touch the guard zone around the layer
-// break, fill the image with zero sectors up to the far edge of the zone. The zone is
-// [break - guard, break + guard) in ABSOLUTE image sectors (the historic code compared the
-// partition-relative absoluteSectorNum() against an absolute LBA and was never called; both
-// fixed here). The interrupted file continues in a fresh extent (m_lastWritedObjectID reset),
-// so the padding belongs to no file and players never read it. Must only be called at a
-// sector-aligned file offset - FileEntryInfo::write() guarantees that.
+// If the upcoming write would touch the guard zone around ANY layer break, fill zero sectors up
+// to the far edge of that break's zone. Each zone is [break - guardBefore, break + guardAfter)
+// in ABSOLUTE image sectors (asymmetric: the defect lives at the START of the next layer). The
+// interrupted file continues in a fresh extent (m_lastWritedObjectID reset), so the padding
+// belongs to no file and players never read it. A BD-R/RE DL has 1 break; BDXL 100 GB has 2,
+// 128 GB has 3. Must only be called at a sector-aligned file offset - FileEntryInfo::write()
+// guarantees that.
 void IsoWriter::checkLayerBreakPoint(const int maxExtentSize)
 {
-    if (m_layerBreakPoint == 0)
+    if (m_layerBreakPoints.empty())
         return;
     const int64_t lbn = imageLBA();
-    const int64_t zoneStart = static_cast<int64_t>(m_layerBreakPoint) - m_layerBreakGuardBeforeSectors;
-    const int64_t zoneEnd = static_cast<int64_t>(m_layerBreakPoint) + m_layerBreakGuardAfterSectors;
     const int64_t lenSectors = (static_cast<int64_t>(maxExtentSize) + SECTOR_SIZE - 1) / SECTOR_SIZE;
-    if (lbn < zoneEnd && lbn + lenSectors > zoneStart)
+    for (const int bp : m_layerBreakPoints)
     {
-        static constexpr int PAD_CHUNK_SECTORS = 512;  // write the filler in 1 MB chunks
-        const std::vector<uint8_t> zeroBuff(PAD_CHUNK_SECTORS * SECTOR_SIZE, 0);
-        int64_t restSectors = zoneEnd - lbn;
-        while (restSectors > 0)
+        const int64_t zoneStart = static_cast<int64_t>(bp) - m_layerBreakGuardBeforeSectors;
+        const int64_t zoneEnd = static_cast<int64_t>(bp) + m_layerBreakGuardAfterSectors;
+        if (lbn < zoneEnd && lbn + lenSectors > zoneStart)
         {
-            const int n = static_cast<int>(std::min<int64_t>(restSectors, PAD_CHUNK_SECTORS));
-            m_file.write(zeroBuff.data(), n * SECTOR_SIZE);
-            restSectors -= n;
+            static constexpr int PAD_CHUNK_SECTORS = 512;  // write the filler in 1 MB chunks
+            const std::vector<uint8_t> zeroBuff(PAD_CHUNK_SECTORS * SECTOR_SIZE, 0);
+            int64_t restSectors = zoneEnd - lbn;
+            while (restSectors > 0)
+            {
+                const int n = static_cast<int>(std::min<int64_t>(restSectors, PAD_CHUNK_SECTORS));
+                m_file.write(zeroBuff.data(), n * SECTOR_SIZE);
+                restSectors -= n;
+            }
+            m_lastWritedObjectID = -1;
+            return;  // at most one break per write (breaks are far apart)
         }
-        m_lastWritedObjectID = -1;
     }
 }
 
-void IsoWriter::setLayerBreakPoint(const int lbn) { m_layerBreakPoint = lbn; }
+void IsoWriter::setLayerBreakPoints(const std::vector<int>& lbns) { m_layerBreakPoints = lbns; }
 
 void IsoWriter::setLayerBreakGuard(const int afterSectors)
 {

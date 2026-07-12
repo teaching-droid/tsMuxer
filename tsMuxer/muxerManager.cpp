@@ -507,10 +507,18 @@ void MuxerManager::parseMuxOpt(const string& opts)
         {
             if (paramPair.size() < 2)
                 THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
-            m_layerBreakLbn = strToInt32(paramPair[1]);
-            if (m_layerBreakLbn <= 0)
-                THROW(ERR_COMMON, "Invalid --layer-break-lbn value '" << paramPair[1]
-                                                                      << "'. Expected a positive sector number.");
+            // One sector for BD-R/RE DL, or a comma-separated list for BDXL (100 GB = 2 breaks,
+            // 128 GB = 3): e.g. --layer-break-lbn=15768576,31537152
+            m_layerBreakLbns.clear();
+            for (const auto& tok : splitStr(paramPair[1].c_str(), ','))
+            {
+                const int lbn = strToInt32(trimStr(tok).c_str());
+                if (lbn <= 0)
+                    THROW(ERR_COMMON, "Invalid --layer-break-lbn value '"
+                                          << paramPair[1] << "'. Expected positive sector number(s), "
+                                                             "comma-separated for BDXL.");
+                m_layerBreakLbns.push_back(lbn);
+            }
         }
     }
 }

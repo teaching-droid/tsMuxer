@@ -195,7 +195,7 @@ class IsoWriter
 
     void close();
 
-    void setLayerBreakPoint(int lbn);
+    void setLayerBreakPoints(const std::vector<int>& lbns);
     void setLayerBreakGuard(int sectors);
 
    private:
@@ -278,9 +278,9 @@ class IsoWriter
     // where BD-R DL layer 1 begins (media-fixed at half the disc); m_layerBreakGuardSectors is the
     // amount of zero-filler placed on EACH side of it so no file data sits on the defect-prone
     // sectors around the physical layer transition. 0 layer break point = feature off (default).
-    int m_layerBreakPoint;               // in sectors, absolute image LBA
-    int m_layerBreakGuardBeforeSectors;  // zero-fill BEFORE the break (layer 0 side; small safety margin)
-    int m_layerBreakGuardAfterSectors;   // zero-fill AFTER the break (layer 1 side; the main defect protection)
+    std::vector<int> m_layerBreakPoints;  // absolute image LBAs of the layer breaks (DL=1, BDXL 100=2, 128=3)
+    int m_layerBreakGuardBeforeSectors;   // zero-fill BEFORE each break (previous layer side; small margin)
+    int m_layerBreakGuardAfterSectors;    // zero-fill AFTER each break (next layer side; main defect protection)
 };
 
 class ISOFile final : public AbstractOutputStream

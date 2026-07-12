@@ -582,17 +582,16 @@ All parameters in this group start with two dashes:
                       and plays seamlessly. Real-hardware data shows the layer-1
                       defect can be ~35 MB, so 64 is recommended. 0 aligns to the
                       break without filler. Off when not specified. BD-R/RE DL only.
---layer-break-lbn     Override the layer-break sector for --layer-break-guard. This is
-                      the target disc's Layer 0 capacity in 2048-byte LBA sectors. For
-                      BD-R/RE DL the two layers are equal, so it equals the disc's TOTAL
-                      sector count / 2. Default 12,219,392 (a 50GB disc = 25GB/layer).
-                      Read the total from the disc's FULL formatted capacity (e.g.
-                      ImgBurn "Free Sectors"), NOT a partial/POW format-capacity value
-                      (which some APIs report and which gives a wrong, smaller break).
+--layer-break-lbn     Layer break sector(s) for --layer-break-guard, in 2048-byte LBA
+                      sectors = the disc's TOTAL sectors / number of layers. One value for
+                      BD-R/RE DL (default 12,219,392 = a 50GB disc, 25GB/layer); a COMMA-
+                      SEPARATED list for BDXL: 100GB has 2 breaks (Free/3, 2*Free/3), 128GB
+                      has 3. Read the total from the disc's FULL formatted capacity (ImgBurn
+                      "Free Sectors"), NOT a partial/POW value (which gives a wrong break).
 --bdmv-to-iso         Separate mode: tsMuxeR --bdmv-to-iso [--layer-break-guard=<MB>]
-                      [--layer-break-lbn=<sector>] <BDMV_folder> <out.iso>
-                      Wrap an existing (decrypted) BDMV folder into a UDF 2.50 BD-ROM
-                      ISO byte-for-byte - no re-mux, no re-numbering - so BD-J menus and
+                      [--layer-break-lbn=<s[,s...]>] <BDMV_folder> <out.iso>
+                      Wrap an existing BDMV folder into a UDF 2.50 BD-ROM ISO byte-for-byte
+                      - no re-mux, no re-numbering - so BD-J menus and
                       all clip/playlist references stay valid, while applying the
                       dual-layer guard band. The largest .m2ts is written first so the
                       main title straddles the layer break and gets the guard.
@@ -604,14 +603,15 @@ All parameters in this group start with two dashes:
 #include <shellapi.h>
 #endif
 
-// RECUDO: wrap an existing (decrypted) BDMV folder into a burnable UDF 2.50 BD-ROM ISO byte-for-byte,
-// applying the dual-layer guard band. No re-mux, no re-numbering - so BD-J menus and every clip/playlist
+// Wrap an existing BDMV folder into a burnable UDF 2.50 BD-ROM ISO byte-for-byte (works with any
+// unprotected BDMV, authored or copied), applying the dual-layer guard band. No re-mux, no re-numbering
+// - so BD-J menus and every clip/playlist
 // reference stay valid. The largest .m2ts (the main movie) is written FIRST so it straddles the ~25 GB
 // physical layer break and gets the guard band; the rest fill layer 1. Skips MakeMKV helper folders.
 static int bdmvFolderToGuardedIso(const int argc, char** argv)
 {
     int layerBreakGuardMB = -1;
-    int layerBreakLbn = 0;
+    std::vector<int> layerBreakLbns;
     vector<string> positional;
     for (int i = 2; i < argc; ++i)
     {
@@ -621,7 +621,11 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
             if (a.rfind("--layer-break-guard=", 0) == 0)
                 layerBreakGuardMB = std::stoi(a.substr(20));
             else if (a.rfind("--layer-break-lbn=", 0) == 0)
-                layerBreakLbn = std::stoi(a.substr(18));
+            {
+                layerBreakLbns.clear();
+                for (const auto& tok : splitStr(a.substr(18).c_str(), ','))
+                    layerBreakLbns.push_back(std::stoi(tok));
+            }
             else
                 positional.push_back(a);
         }
@@ -696,14 +700,14 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     // the metadata partition must hold ~1 File Entry per file + directory content; size it from the count
     const int extraISOBlocks = static_cast<int>(items.size()) / 32 + 16;
 
-    LTRACE(LT_INFO, 2, "RECUDO bdmv-to-iso: " << items.size() << " files, " << static_cast<int64_t>(total / 1000000)
+    LTRACE(LT_INFO, 2, "bdmv-to-iso: " << items.size() << " files, " << static_cast<int64_t>(total / 1000000)
                                               << " MB -> " << outIso);
     if (layerBreakGuardMB >= 0)
         LTRACE(LT_INFO, 2, "  layer-break guard " << layerBreakGuardMB << " MB/side; largest file first ("
                                                   << static_cast<int64_t>(items[0].size / 1000000) << " MB)");
 
     BlurayHelper helper;
-    if (!helper.open(outIso, DiskType::BLURAY, total, extraISOBlocks, false, layerBreakGuardMB, layerBreakLbn))
+    if (!helper.open(outIso, DiskType::BLURAY, total, extraISOBlocks, false, layerBreakGuardMB, layerBreakLbns))
     {
         LTRACE(LT_ERROR, 2, "Can't create output ISO " << outIso);
         return -1;
@@ -735,7 +739,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
         in.close();
     }
     helper.close();
-    LTRACE(LT_INFO, 2, "RECUDO bdmv-to-iso complete -> " << outIso);
+    LTRACE(LT_INFO, 2, "bdmv-to-iso complete -> " << outIso);
     return 0;
 }
 
@@ -978,7 +982,7 @@ int main(int argc, char** argv)
                 }
                 if (!blurayHelper.open(dstFile, dt, muxerManager.totalSize(), muxerManager.getExtraISOBlocks(),
                                        muxerManager.useReproducibleIsoHeader(), muxerManager.getLayerBreakGuardMB(),
-                                       muxerManager.getLayerBreakLbn()))
+                                       muxerManager.getLayerBreakLbns()))
                     throw runtime_error(string("Can't create output file ") + dstFile);
                 blurayHelper.setVolumeLabel(isoDiskLabel);
                 blurayHelper.createBluRayDirs();

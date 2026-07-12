@@ -279,7 +279,8 @@ void BlurayHelper::close()
 }
 
 bool BlurayHelper::open(const string& dst, const DiskType dt, const int64_t diskSize, const int extraISOBlocks,
-                        const bool useReproducibleIsoHeader, const int layerBreakGuardMB, const int layerBreakLbn)
+                        const bool useReproducibleIsoHeader, const int layerBreakGuardMB,
+                        const std::vector<int>& layerBreakLbns)
 {
     m_dstPath = toNativeSeparators(dst);
 
@@ -291,14 +292,13 @@ bool BlurayHelper::open(const string& dst, const DiskType dt, const int64_t disk
         m_isoWriter = new IsoWriter(useReproducibleIsoHeader ? IsoHeaderData::reproducible() : IsoHeaderData::normal());
         if (layerBreakGuardMB >= 0)
         {
-            // --layer-break-guard: on BD-R DL the write continues on layer 1 at a media-fixed
-            // image offset - exactly half the disc (the historic hardcoded 0xBA7200 was ~1 MiB
-            // short of the true boundary and, more importantly, was never acted upon: the
-            // padding check had no call sites). --layer-break-lbn overrides the break sector
-            // for testing / non-standard geometries.
-            const int breakLbn =
-                layerBreakLbn > 0 ? layerBreakLbn : static_cast<int>(BD50_CAPACITY / 2 / SECTOR_SIZE);
-            m_isoWriter->setLayerBreakPoint(breakLbn);
+            // Layer break(s) in absolute image sectors. Default (none given) = one break at half a
+            // BD-R/RE DL disc. For BDXL pass the real breaks via --layer-break-lbn: 100 GB (3 layers)
+            // has 2 breaks, 128 GB (4 layers) has 3 - compute them as (disc Free Sectors / layers * k).
+            std::vector<int> breaks = layerBreakLbns;
+            if (breaks.empty())
+                breaks.push_back(static_cast<int>(BD50_CAPACITY / 2 / SECTOR_SIZE));
+            m_isoWriter->setLayerBreakPoints(breaks);
             m_isoWriter->setLayerBreakGuard(
                 static_cast<int>(static_cast<int64_t>(layerBreakGuardMB) * 1024 * 1024 / SECTOR_SIZE));
         }
