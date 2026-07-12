@@ -1,6 +1,6 @@
 # tsMuxer
 
-> **Note:** This is a modernized fork of [justdan96/tsMuxer](https://github.com/justdan96/tsMuxer), updated to C++20 with Qt6 support.
+> **Note:** This is a fork of [jaminmc/tsMuxer](https://github.com/jaminmc/tsMuxer) (itself a modernized C++20/Qt6 fork of [justdan96/tsMuxer](https://github.com/justdan96/tsMuxer)). It adds multi-layer disc authoring: a menu-preserving BDMV to ISO mode, a layer-break guard band for BD-R/RE DL and BD-R XL media, a fit-to-disc capacity guard, and a layer-break calculator in the GUI. See [DISC_AUTHORING.md](docs/DISC_AUTHORING.md) (also available [auf Deutsch](docs/DISC_AUTHORING_DE.md)).
 
 ## Vision
 
@@ -25,6 +25,15 @@ Some of the major features include:
 * Output/Author to compliant Blu-ray Disc or AVCHD
 * Matroska (MKV/MKA) muxing support
 * Blu-ray 3D support
+
+Additions in this fork (see [DISC_AUTHORING.md](docs/DISC_AUTHORING.md) for details):
+
+* `--bdmv-to-iso`: wrap an existing unprotected BDMV folder into a burnable BD-ROM ISO byte-for-byte, keeping BD-J menus and all clip/playlist references intact
+* `--layer-break-guard`: zero-fill the defect-prone sectors around each layer transition of BD-R/RE DL and BD-R XL media, so the movie plays seamlessly across the break (validated on real hardware)
+* `--layer-break-lbn`: set the layer break sector(s); takes a comma list for 100/128 GB BD-R XL (2 or 3 breaks)
+* `--disc-size` / `--allow-oversize`: abort (or warn) before muxing if the image will not fit the target disc
+* GUI: a "BDMV folder -> ISO" tab with a layer-break calculator (you copy the blank disc's "Free Sectors" value out of ImgBurn and paste it in; the break sectors are calculated for you), colour-coded guard hints, and input sanity warnings
+* GUI: fully translated interface (German, Spanish, French, Hebrew, Japanese, Russian, Chinese)
 
 ## Ethics
 
