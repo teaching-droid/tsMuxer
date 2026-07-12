@@ -623,8 +623,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
             else if (a.rfind("--layer-break-lbn=", 0) == 0)
             {
                 layerBreakLbns.clear();
-                for (const auto& tok : splitStr(a.substr(18).c_str(), ','))
-                    layerBreakLbns.push_back(std::stoi(tok));
+                for (const auto& tok : splitStr(a.substr(18).c_str(), ',')) layerBreakLbns.push_back(std::stoi(tok));
             }
             else
                 positional.push_back(a);
@@ -700,11 +699,13 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     // the metadata partition must hold ~1 File Entry per file + directory content; size it from the count
     const int extraISOBlocks = static_cast<int>(items.size()) / 32 + 16;
 
-    LTRACE(LT_INFO, 2, "bdmv-to-iso: " << items.size() << " files, " << static_cast<int64_t>(total / 1000000)
-                                              << " MB -> " << outIso);
+    LTRACE(
+        LT_INFO, 2,
+        "bdmv-to-iso: " << items.size() << " files, " << static_cast<int64_t>(total / 1000000) << " MB -> " << outIso);
     if (layerBreakGuardMB >= 0)
-        LTRACE(LT_INFO, 2, "  layer-break guard " << layerBreakGuardMB << " MB/side; largest file first ("
-                                                  << static_cast<int64_t>(items[0].size / 1000000) << " MB)");
+        LTRACE(LT_INFO, 2,
+               "  layer-break guard " << layerBreakGuardMB << " MB/side; largest file first ("
+                                      << static_cast<int64_t>(items[0].size / 1000000) << " MB)");
 
     BlurayHelper helper;
     if (!helper.open(outIso, DiskType::BLURAY, total, extraISOBlocks, false, layerBreakGuardMB, layerBreakLbns))

@@ -452,8 +452,7 @@ void FileEntryInfo::serializeDir() const
 
     m_owner->writeExtendedFileEntryDescriptor(false, m_objectId, m_fileType, writer.size(), m_sectorNum + 1,
                                               static_cast<uint16_t>(m_subDirs.size() + 1));
-    for (int s = 0; s < contentSectors; ++s)
-        m_owner->writeSector(buffer.data() + static_cast<size_t>(s) * SECTOR_SIZE);
+    for (int s = 0; s < contentSectors; ++s) m_owner->writeSector(buffer.data() + static_cast<size_t>(s) * SECTOR_SIZE);
 }
 
 void FileEntryInfo::addExtent(const Extent& extent)
@@ -1103,7 +1102,7 @@ int IsoWriter::writeExtendedFileEntryDescriptor(const bool namedStream, const ui
     // skip Stream Directory ICB
 
     strcpy(reinterpret_cast<char*>(m_buffer) + 169, m_impId.c_str());  // Implementation Identifier
-    buff32[200 / 4] = objectId;                                        // Unique ID (32-bit LE; was 1 byte -> 255-file cap)
+    buff32[200 / 4] = objectId;  // Unique ID (32-bit LE; was 1 byte -> 255-file cap)
 
     // skip Length of Extended Attributes
     if (fileType != FileTypes::File && fileType != FileTypes::RealtimeFile)

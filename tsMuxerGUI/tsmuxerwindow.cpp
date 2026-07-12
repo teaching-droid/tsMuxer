@@ -1,32 +1,32 @@
 #include "tsmuxerwindow.h"
 
+#include <QCheckBox>
 #include <QColorDialog>
+#include <QComboBox>
 #include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
 #include <QDropEvent>
 #include <QFileDialog>
-#include <QFontDialog>
-#include <QLibraryInfo>
-#include <QMessageBox>
-#include <QMimeData>
-#include <QSettings>
-#include <QSignalBlocker>
-#include <QStandardPaths>
-#include <QTemporaryFile>
-#include <QTime>
-#include <QCheckBox>
-#include <QComboBox>
 #include <QFileInfo>
+#include <QFontDialog>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QLabel>
+#include <QLibraryInfo>
 #include <QLineEdit>
 #include <QLocale>
+#include <QMessageBox>
+#include <QMimeData>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
+#include <QSettings>
+#include <QSignalBlocker>
 #include <QSpinBox>
+#include <QStandardPaths>
+#include <QTemporaryFile>
+#include <QTime>
 #include <QVBoxLayout>
 
 #include <unordered_set>
@@ -622,8 +622,7 @@ TsMuxerWindow::TsMuxerWindow()
             const int layers = discTypeCombo->currentData().toInt();
             const qint64 total = readFreeSectors();
             if (total > 0)
-                for (int k = 1; k < layers; ++k)
-                    parts << QString::number(total * k / layers);
+                for (int k = 1; k < layers; ++k) parts << QString::number(total * k / layers);
             return parts;
         };
         auto refresh = [breaksList, readFreeSectors, discTypeCombo, breaksLabel, compatLabel, divisLabel]()
@@ -638,8 +637,7 @@ TsMuxerWindow::TsMuxerWindow()
             else
             {
                 QStringList pretty;
-                for (const QString& p : parts)
-                    pretty << QLocale().toString(p.toLongLong());
+                for (const QString& p : parts) pretty << QLocale().toString(p.toLongLong());
                 breaksLabel->setText(tr("Calculated layer break(s): %1").arg(pretty.join("   |   ")));
             }
             // Sanity checks on the entered Free Sectors. Standard BD user-data capacities (in 2048-byte sectors)
@@ -657,8 +655,9 @@ TsMuxerWindow::TsMuxerWindow()
                     looksLike = QStringLiteral("100 GB");
                 else if (total >= 56000000 && total <= 68000000)
                     looksLike = QStringLiteral("128 GB");
-                const QString selected =
-                    layers == 2 ? QStringLiteral("50 GB") : layers == 3 ? QStringLiteral("100 GB") : QStringLiteral("128 GB");
+                const QString selected = layers == 2   ? QStringLiteral("50 GB")
+                                         : layers == 3 ? QStringLiteral("100 GB")
+                                                       : QStringLiteral("128 GB");
                 if (looksLike.isEmpty())
                     warns << tr("%1 sectors does not match any standard BD disc size. Double-check the Free "
                                 "Sectors value against ImgBurn.")
@@ -677,13 +676,14 @@ TsMuxerWindow::TsMuxerWindow()
                                  .arg(layers);
             }
             divisLabel->setText(warns.join("\n\n"));
-            compatLabel->setText(layers >= 3
-                ? tr("At your own risk: many Blu-ray players cannot read 100/128 GB BD-R XL discs at all, and "
-                     "there is no guarantee yours will. Keeping the image around 66 GB (the first two layers) and "
-                     "finalizing the disc improves the odds on some players, but even 66 GB is not guaranteed to "
-                     "play. The full 100/128 GB needs a recent player that explicitly supports high-capacity BD-R "
-                     "XL media. Always test on your own device.")
-                : QString());
+            compatLabel->setText(
+                layers >= 3
+                    ? tr("At your own risk: many Blu-ray players cannot read 100/128 GB BD-R XL discs at all, and "
+                         "there is no guarantee yours will. Keeping the image around 66 GB (the first two layers) and "
+                         "finalizing the disc improves the odds on some players, but even 66 GB is not guaranteed to "
+                         "play. The full 100/128 GB needs a recent player that explicitly supports high-capacity BD-R "
+                         "XL media. Always test on your own device.")
+                    : QString());
         };
         // Colour-coded guidance for the guard size. The layer defect measured on real hardware was about 35 MB,
         // so 64 MB is the safe recommendation. Lower is allowed (0 = align only) but the risk is made visible.
@@ -699,8 +699,9 @@ TsMuxerWindow::TsMuxerWindow()
             else if (mb < 35)
             {
                 colour = QStringLiteral("#c0392b");
-                text = tr("Below the ~35 MB layer defect measured on real hardware. Video may land on bad "
-                          "sectors. 64 MB recommended.");
+                text =
+                    tr("Below the ~35 MB layer defect measured on real hardware. Video may land on bad "
+                       "sectors. 64 MB recommended.");
             }
             else if (mb < 64)
             {
@@ -777,13 +778,14 @@ TsMuxerWindow::TsMuxerWindow()
              isoBtn, helpBtn, buildBtn, discTypeCombo, freeSectorsEdit, guardSpin, refresh, updateGuard]()
             {
                 ui->tabWidget->setTabText(ui->tabWidget->indexOf(bdmvTab), tr("BDMV folder -> ISO"));
-                info->setText(tr("Wrap an existing BDMV disc folder into a burnable BD-ROM ISO, byte-for-byte, so "
-                                 "BD-J menus and every stream are kept intact (no re-mux). Works with any "
-                                 "unprotected BDMV, whether you authored it yourself or it is an already-readable "
-                                 "disc copy. On a multi-layer disc (dual-layer BD-R DL, or triple and quad-layer "
-                                 "BD-R XL) the layer-break guard fills the defect-prone sectors at each layer "
-                                 "transition with zeros, so the movie plays seamlessly across the break. Point it "
-                                 "at the folder that contains BDMV/ (and CERTIFICATE/ if present)."));
+                info->setText(
+                    tr("Wrap an existing BDMV disc folder into a burnable BD-ROM ISO, byte-for-byte, so "
+                       "BD-J menus and every stream are kept intact (no re-mux). Works with any "
+                       "unprotected BDMV, whether you authored it yourself or it is an already-readable "
+                       "disc copy. On a multi-layer disc (dual-layer BD-R DL, or triple and quad-layer "
+                       "BD-R XL) the layer-break guard fills the defect-prone sectors at each layer "
+                       "transition with zeros, so the movie plays seamlessly across the break. Point it "
+                       "at the folder that contains BDMV/ (and CERTIFICATE/ if present)."));
                 folderLabel->setText(tr("BDMV folder:"));
                 outputLabel->setText(tr("Output ISO:"));
                 guardLabel->setText(tr("Layer-break guard (after break):"));
@@ -805,8 +807,8 @@ TsMuxerWindow::TsMuxerWindow()
         connect(folderBtn, &QPushButton::clicked, this,
                 [this, folderEdit, isoEdit]
                 {
-                    const QString d = QFileDialog::getExistingDirectory(this, tr("Select the BDMV disc folder"),
-                                                                        lastInputDir);
+                    const QString d =
+                        QFileDialog::getExistingDirectory(this, tr("Select the BDMV disc folder"), lastInputDir);
                     if (d.isEmpty())
                         return;
                     folderEdit->setText(QDir::toNativeSeparators(d));
@@ -817,8 +819,8 @@ TsMuxerWindow::TsMuxerWindow()
         connect(isoBtn, &QPushButton::clicked, this,
                 [this, isoEdit]
                 {
-                    const QString f = QFileDialog::getSaveFileName(this, tr("Output ISO"), isoEdit->text(),
-                                                                   tr("Disk image (*.iso)"));
+                    const QString f =
+                        QFileDialog::getSaveFileName(this, tr("Output ISO"), isoEdit->text(), tr("Disk image (*.iso)"));
                     if (!f.isEmpty())
                         isoEdit->setText(QDir::toNativeSeparators(f));
                 });

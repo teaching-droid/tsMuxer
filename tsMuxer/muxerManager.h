@@ -108,9 +108,9 @@ class MuxerManager final
     bool m_bluRayMode;
     bool m_demuxMode;
     bool m_reproducibleIsoHeader = false;
-    int64_t m_discSizeLimit = 0;   // --disc-size: target disc capacity in bytes (0 = guard off)
-    bool m_allowOversize = false;  // --allow-oversize: warn instead of abort on an over-capacity image
-    int m_layerBreakGuardMB = -1;  // --layer-break-guard: MB of zero-fill each side of the DL break (-1 = off)
+    int64_t m_discSizeLimit = 0;        // --disc-size: target disc capacity in bytes (0 = guard off)
+    bool m_allowOversize = false;       // --allow-oversize: warn instead of abort on an over-capacity image
+    int m_layerBreakGuardMB = -1;       // --layer-break-guard: MB of zero-fill each side of the DL break (-1 = off)
     std::vector<int> m_layerBreakLbns;  // --layer-break-lbn: break sector(s); empty = BD-R/RE DL default
 
     /// Results of the discovery (probe) phase, indexed by stream index.

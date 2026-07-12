@@ -500,8 +500,8 @@ void MuxerManager::parseMuxOpt(const string& opts)
                 THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
             m_layerBreakGuardMB = strToInt32(paramPair[1]);
             if (m_layerBreakGuardMB < 0 || m_layerBreakGuardMB > 1024)
-                THROW(ERR_COMMON, "Invalid --layer-break-guard value '" << paramPair[1]
-                                                                        << "'. Expected 0..1024 (megabytes).");
+                THROW(ERR_COMMON,
+                      "Invalid --layer-break-guard value '" << paramPair[1] << "'. Expected 0..1024 (megabytes).");
         }
         else if (paramPair[0] == "--layer-break-lbn")
         {
@@ -514,9 +514,9 @@ void MuxerManager::parseMuxOpt(const string& opts)
             {
                 const int lbn = strToInt32(trimStr(tok).c_str());
                 if (lbn <= 0)
-                    THROW(ERR_COMMON, "Invalid --layer-break-lbn value '"
-                                          << paramPair[1] << "'. Expected positive sector number(s), "
-                                                             "comma-separated for BDXL.");
+                    THROW(ERR_COMMON, "Invalid --layer-break-lbn value '" << paramPair[1]
+                                                                          << "'. Expected positive sector number(s), "
+                                                                             "comma-separated for BDXL.");
                 m_layerBreakLbns.push_back(lbn);
             }
         }
