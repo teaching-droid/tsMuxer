@@ -124,12 +124,6 @@ The very rough and incomplete testing document is available at [TESTING.md](docs
 
 We are not currently accepting any kind of donations and we do not have a bounty program.
 
-### Sponsorships
-
-The project is part of the [MacStadium Open Source Program](https://www.macstadium.com/opensource) to create native Apple Silicon executables for Mac OS.
-
-![MacStadiumOpenSource](https://uploads-ssl.webflow.com/5ac3c046c82724970fc60918/5c019d917bba312af7553b49_MacStadium-developerlogo.png)
-
 ## Versioning
 
 Version numbering follows the [Semantic versioning](http://semver.org/) approach.
