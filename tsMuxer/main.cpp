@@ -2,6 +2,7 @@
 #include <fs/systemlog.h>
 #include <fs/textfile.h>
 
+#include <algorithm>
 #include <iostream>
 #include <vector>
 
@@ -566,6 +567,33 @@ All parameters in this group start with two dashes:
                       of small files, it may be required to define extra space.
 --constant-iso-hdr    Generates an ISO header that does not depend on the program
                       version or the current time. Not meant for normal usage.
+--disc-size           Fit-to-disc guard for BD/ISO output. Aborts before muxing if
+                      the estimated image will not fit the target disc. Accepts the
+                      keywords bd25/bd50/bd100/bd128, or a byte count with an optional
+                      k/m/g (decimal) or ki/mi/gi (binary) suffix (e.g. 25000000000,
+                      24g, 23gib).
+--allow-oversize      With --disc-size, downgrade an over-capacity overrun from a
+                      hard error to a warning and build the (oversized) image anyway.
+--layer-break-guard   Dual-layer safety padding for ISO output: place <n> megabytes
+                      of zero-filler on each side of the BD-R DL layer break (at
+                      half the disc, ~25.02 GB) so no file data sits on the
+                      defect-prone sectors around the physical layer transition.
+                      0 aligns data to the break without extra filler. Off when
+                      not specified. Only meaningful for images burned to BD-R DL.
+--layer-break-lbn     Override the layer-break sector for --layer-break-guard. This is
+                      the target disc's Layer 0 capacity in 2048-byte LBA sectors. For
+                      BD-R/RE DL the two layers are equal, so it equals the disc's TOTAL
+                      sector count / 2. Default 12,219,392 (a 50GB disc = 25GB/layer).
+                      Read the total from the disc's FULL formatted capacity (e.g.
+                      ImgBurn "Free Sectors"), NOT a partial/POW format-capacity value
+                      (which some APIs report and which gives a wrong, smaller break).
+--bdmv-to-iso         Separate mode: tsMuxeR --bdmv-to-iso [--layer-break-guard=<MB>]
+                      [--layer-break-lbn=<sector>] <BDMV_folder> <out.iso>
+                      Wrap an existing (decrypted) BDMV folder into a UDF 2.50 BD-ROM
+                      ISO byte-for-byte - no re-mux, no re-numbering - so BD-J menus and
+                      all clip/playlist references stay valid, while applying the
+                      dual-layer guard band. The largest .m2ts is written first so the
+                      main title straddles the layer break and gets the guard.
 )help";
     LTRACE(LT_INFO, 2, help);
 }
@@ -573,6 +601,141 @@ All parameters in this group start with two dashes:
 #ifdef _WIN32
 #include <shellapi.h>
 #endif
+
+// RECUDO: wrap an existing (decrypted) BDMV folder into a burnable UDF 2.50 BD-ROM ISO byte-for-byte,
+// applying the dual-layer guard band. No re-mux, no re-numbering - so BD-J menus and every clip/playlist
+// reference stay valid. The largest .m2ts (the main movie) is written FIRST so it straddles the ~25 GB
+// physical layer break and gets the guard band; the rest fill layer 1. Skips MakeMKV helper folders.
+static int bdmvFolderToGuardedIso(const int argc, char** argv)
+{
+    int layerBreakGuardMB = -1;
+    int layerBreakLbn = 0;
+    vector<string> positional;
+    for (int i = 2; i < argc; ++i)
+    {
+        const string a = argv[i];
+        try
+        {
+            if (a.rfind("--layer-break-guard=", 0) == 0)
+                layerBreakGuardMB = std::stoi(a.substr(20));
+            else if (a.rfind("--layer-break-lbn=", 0) == 0)
+                layerBreakLbn = std::stoi(a.substr(18));
+            else
+                positional.push_back(a);
+        }
+        catch (...)
+        {
+            LTRACE(LT_ERROR, 2, "Invalid value in " << a);
+            return -1;
+        }
+    }
+    if (positional.size() != 2)
+    {
+        LTRACE(LT_ERROR, 2,
+               "Usage: tsMuxeR --bdmv-to-iso [--layer-break-guard=<MB>] [--layer-break-lbn=<sector>] "
+               "<BDMV_folder> <out.iso>");
+        return -1;
+    }
+    string srcRoot = positional[0];
+    const string outIso = positional[1];
+    while (!srcRoot.empty() && (srcRoot.back() == '/' || srcRoot.back() == '\\')) srcRoot.pop_back();
+
+    // normalize a full source path to a forward-slash, disc-relative path (strip srcRoot prefix, unify
+    // separators, collapse the '//' that findFiles() leaves where the recursion concatenates paths)
+    auto toRel = [&srcRoot](const string& full)
+    {
+        string out;
+        for (char c : full.substr(srcRoot.size()))
+        {
+            if (c == '\\')
+                c = '/';
+            if (c == '/' && (out.empty() || out.back() == '/'))
+                continue;
+            out += c;
+        }
+        return out;
+    };
+
+    vector<string> files;
+    // findDirs() appends "*" to the path, so the walk root needs a trailing separator to list children
+    if (!findFilesRecursive(srcRoot + getDirSeparator(), "*", &files) || files.empty())
+    {
+        LTRACE(LT_ERROR, 2, "No files found under " << srcRoot);
+        return -1;
+    }
+
+    // keep BD structure only (drop MakeMKV/other helper folders); precompute disc-relative paths + sizes
+    struct Item
+    {
+        string full;
+        string rel;
+        int64_t size;
+    };
+    vector<Item> items;
+    int64_t total = 0;
+    for (auto& f : files)
+    {
+        const string rel = toRel(f);
+        const string top = rel.substr(0, rel.find('/'));
+        if (top == "MAKEMKV" || top.empty())
+            continue;
+        const auto sz = static_cast<int64_t>(getFileSize(f));
+        items.push_back({f, rel, sz});
+        total += sz;
+    }
+    if (items.empty())
+    {
+        LTRACE(LT_ERROR, 2, "No BDMV content found under " << srcRoot);
+        return -1;
+    }
+    // largest .m2ts first -> the main movie straddles the layer break and gets the guard band
+    std::stable_sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.size > b.size; });
+
+    // the metadata partition must hold ~1 File Entry per file + directory content; size it from the count
+    const int extraISOBlocks = static_cast<int>(items.size()) / 32 + 16;
+
+    LTRACE(LT_INFO, 2, "RECUDO bdmv-to-iso: " << items.size() << " files, " << static_cast<int64_t>(total / 1000000)
+                                              << " MB -> " << outIso);
+    if (layerBreakGuardMB >= 0)
+        LTRACE(LT_INFO, 2, "  layer-break guard " << layerBreakGuardMB << " MB/side; largest file first ("
+                                                  << static_cast<int64_t>(items[0].size / 1000000) << " MB)");
+
+    BlurayHelper helper;
+    if (!helper.open(outIso, DiskType::BLURAY, total, extraISOBlocks, false, layerBreakGuardMB, layerBreakLbn))
+    {
+        LTRACE(LT_ERROR, 2, "Can't create output ISO " << outIso);
+        return -1;
+    }
+    IsoWriter* iso = helper.isoWriter();
+
+    vector<uint8_t> buf(1024 * 1024);
+    for (auto& item : items)
+    {
+        File in;
+        if (!in.open(item.full.c_str(), File::ofRead))
+        {
+            LTRACE(LT_ERROR, 2, "Can't read " << item.full);
+            return -1;
+        }
+        ISOFile* out = iso->createFile();
+        out->open(item.rel.c_str(), File::ofWrite);
+        int n;
+        while ((n = in.read(buf.data(), static_cast<uint32_t>(buf.size()))) > 0)
+        {
+            if (out->write(buf.data(), static_cast<uint32_t>(n)) < 0)
+            {
+                LTRACE(LT_ERROR, 2, "Write error on " << item.rel);
+                return -1;
+            }
+        }
+        out->close();
+        delete out;
+        in.close();
+    }
+    helper.close();
+    LTRACE(LT_INFO, 2, "RECUDO bdmv-to-iso complete -> " << outIso);
+    return 0;
+}
 
 int main(int argc, char** argv)
 {
@@ -615,6 +778,8 @@ int main(int argc, char** argv)
 
     try
     {
+        if (argc >= 4 && string(argv[1]) == "--bdmv-to-iso")
+            return bdmvFolderToGuardedIso(argc, argv);
         if (argc == 2)
         {
             string str = argv[1];
@@ -778,8 +943,40 @@ int main(int argc, char** argv)
 
             if (dt != DiskType::NONE)
             {
+                // Fit-to-disc guard (--disc-size): abort BEFORE the (multi-hour) mux if the image
+                // won't fit the target disc, unless --allow-oversize downgrades it to a warning.
+                const int64_t discLimit = muxerManager.getDiscSizeLimit();
+                if (discLimit > 0)
+                {
+                    // totalSize() is the sum of source elementary-stream sizes; the muxed BD M2TS adds
+                    // TS(188/184)+M2TS(192/188) framing, PSI/PCR/padding and UDF/BDMV overhead, so the
+                    // real image runs ~5% larger. Compare that inflated estimate against the capacity.
+                    const int64_t estSize = muxerManager.totalSize() / 100 * 105;
+                    const double estGb = estSize / 1e9;
+                    const double capGb = discLimit / 1e9;
+                    if (estSize > discLimit)
+                    {
+                        if (muxerManager.getAllowOversize())
+                            LTRACE(LT_WARN, 2,
+                                   "Capacity guard: estimated image ~"
+                                       << estGb << " GB exceeds the " << capGb
+                                       << " GB target disc; continuing due to --allow-oversize (it will NOT fit "
+                                          "that disc).");
+                        else
+                            THROW(ERR_COMMON,
+                                  "Capacity guard: estimated image ~"
+                                      << estGb << " GB exceeds the " << capGb
+                                      << " GB target disc. Lower the bitrate/duration, choose a larger --disc-size, "
+                                         "or pass --allow-oversize to build it anyway. Aborted before muxing.");
+                    }
+                    else
+                        LTRACE(LT_INFO, 2,
+                               "Capacity guard: estimated image ~" << estGb << " GB fits the " << capGb
+                                                                   << " GB target disc.");
+                }
                 if (!blurayHelper.open(dstFile, dt, muxerManager.totalSize(), muxerManager.getExtraISOBlocks(),
-                                       muxerManager.useReproducibleIsoHeader()))
+                                       muxerManager.useReproducibleIsoHeader(), muxerManager.getLayerBreakGuardMB(),
+                                       muxerManager.getLayerBreakLbn()))
                     throw runtime_error(string("Can't create output file ") + dstFile);
                 blurayHelper.setVolumeLabel(isoDiskLabel);
                 blurayHelper.createBluRayDirs();
