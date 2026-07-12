@@ -2246,9 +2246,17 @@ void MPLSParser::composeSTN_table(BitStreamWriter& writer, const size_t PlayItem
             number_of_PG_textST_stream_entries++;
         else
         {
-            LTRACE(LT_ERROR, 2,
-                   "Unsupported media type " << (int)stream_coding_type << " for AVCHD/Blu-ray muxing. Aborting...");
-            THROW(ERR_COMMON, "")
+            // Not a Blu-ray/AVCHD stream type this muxer can place in the playlist STN table: DVB
+            // subtitles (0x06), SCTE-27, BD text subtitles (textST 0x92) and interactive menus (IG
+            // 0x91) all land here. Skip the stream from the playlist with a warning instead of a THROW
+            // that would destroy a finished, multi-hour mux at the playlist stage. PGS is
+            // the supported subtitle type; text/SRT input is rendered to PGS upstream and arrives as
+            // SUB_PGS. IG (menus) stays uncounted until menu authoring is implemented.
+            LTRACE(LT_WARN, 2,
+                   "Blu-ray playlist: skipping a stream with unsupported coding type "
+                       << static_cast<int>(stream_coding_type)
+                       << " (not PGS) - it will not be selectable. Menus (IG) and DVB/text subtitles "
+                          "are not supported for authoring yet.");
         }
     }
 
