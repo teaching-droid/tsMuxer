@@ -3,6 +3,7 @@ name: Build for Linux
 on:
   push:
     branches: [master]
+    tags: ["v*"]
 
 jobs:
   build:

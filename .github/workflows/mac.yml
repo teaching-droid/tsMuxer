@@ -3,6 +3,7 @@ name: Build for Mac
 on:
   push:
     branches: [master]
+    tags: ["v*"]
   pull_request:
     branches: [master]
 
