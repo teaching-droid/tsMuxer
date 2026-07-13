@@ -89,7 +89,9 @@ jobs:
           -DQT_BUILD_EXAMPLES=OFF `
           -DQT_BUILD_TESTS=OFF `
           -DQT_BUILD_DOCUMENTATION=OFF `
-          -DFEATURE_tracepointgen=OFF
+          -DFEATURE_tracepointgen=OFF `
+          -DFEATURE_sql_psql=OFF `
+          -DFEATURE_sql_mysql=OFF
         if ($LASTEXITCODE -ne 0) { throw "Qt configure failed" }
 
         Write-Host "Building Qt6 32-bit (this may take 30+ minutes)..."
