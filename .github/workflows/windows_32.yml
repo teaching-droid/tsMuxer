@@ -147,6 +147,11 @@ jobs:
         if ($LASTEXITCODE -ne 0) { throw "zlib build failed" }
         cmake --install $ZBUILD
         if ($LASTEXITCODE -ne 0) { throw "zlib install failed" }
+        # zlib's CMake names the static lib libzs.lib (not zlibstatic.lib); normalize it to a known name.
+        $static = Get-ChildItem "$ZINST\lib\*.lib" | Where-Object { $_.Name -match 'zs|static' } | Select-Object -First 1
+        if (-not $static) { $static = Get-ChildItem "$ZINST\lib\*.lib" | Sort-Object Length -Descending | Select-Object -First 1 }
+        Copy-Item $static.FullName "$ZINST\lib\zlibstatic.lib" -Force
+        Write-Host "normalized static zlib lib: $($static.Name) -> zlibstatic.lib"
 
     - name: Build tsMuxer
       run: |
