@@ -8,8 +8,11 @@ The following sections outline how to build tsMuxer and tsMuxerGUI for your chos
 - **C++ Compiler**: C++20 support required
   - GCC 10 or later
   - Clang 11 or later
-  - MSVC 2019 or later
-- **Qt**: Qt6 for the GUI component
+  - MSVC 2019 or later (the Windows release builds use Visual Studio 2022)
+- **Qt**: Qt 6 for the GUI component. The Windows release builds use Qt 6.8.3 with the
+  [qt6windows7](https://github.com/crystalidea/qt6windows7) patches, linked statically and built
+  from source with **Ninja** (the Visual Studio generator cannot build Qt, because Qt uses
+  per-configuration `EXCLUDE_FROM_ALL` targets that multi-config generators reject).
 
 **Note on Windows Compatibility:** the Windows binaries are built against Qt 6.8 with the
 [qt6windows7](https://github.com/crystalidea/qt6windows7) compatibility patches, so the standard
@@ -182,23 +185,20 @@ Or run the following to build the GUI as well:
 
 ## Windows (native, Visual Studio)
 
-This is how the release binaries are built (see `.github/workflows/windows_64.yml`). You need
-Visual Studio 2019 or later with the C++ workload, CMake and a Git Bash shell.
+You need Visual Studio 2022 with the C++ workload, CMake, and Ninja.
 
-The easy way is the helper script, which downloads the pre-built static
-[qt6windows7](https://github.com/crystalidea/qt6windows7) package (Qt 6.8 patched for
-Windows 7), builds the CLI and the GUI, and drops self-contained `tsMuxeR.exe` and
-`tsMuxerGUI.exe` into `bin/`:
+The single-file, Windows 7 capable release binaries are produced by the CI workflow
+`.github/workflows/windows_64.yml`: it builds Qt 6.8.3 from source (with the
+[qt6windows7](https://github.com/crystalidea/qt6windows7) patches) and links it statically. That
+Qt build takes roughly 40 minutes; the workflow is the reference if you want to reproduce it
+locally. Qt must be configured with the Ninja generator, from a Visual Studio developer command
+prompt (so `cl.exe` is on `PATH`); the Visual Studio generator cannot build Qt.
 
-```
-./scripts/rebuild_windows64_native.sh    # 64-bit
-./scripts/rebuild_windows32_native.sh    # 32-bit
-```
-
-For development you can also configure against any regular Qt 6 installation (for example one
-installed with aqtinstall). Note that the prebuilt Qt packages from the Qt installer are shared
-libraries only, so such a build needs windeployqt and runs on Windows 10 and later; only the
-static qt6windows7 route produces the single-file, Windows 7 capable executables:
+For day-to-day development it is much quicker to configure tsMuxer against a regular Qt 6
+installation (for example one installed with aqtinstall). Those prebuilt Qt packages are shared
+libraries, so the result needs `windeployqt` to gather the Qt DLLs beside the executable and runs
+on Windows 10 and later; only the static qt6windows7 route above yields the single-file Windows 7
+capable executable.
 
 ```
 cmake -B build -DTSMUXER_GUI=ON -DCMAKE_PREFIX_PATH=C:/Qt/6.8.3/msvc2022_64

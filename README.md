@@ -63,8 +63,10 @@ tsMuxer is written in C++20. It can be compiled for Windows, Linux and Mac.
 
 **Build Requirements:**
 - CMake 3.12 or later
-- C++20 compatible compiler (GCC 10+, Clang 11+, MSVC 2019+)
-- Qt6 for the GUI
+- C++20 compatible compiler (GCC 10+, Clang 11+, MSVC 2019+; the Windows release builds use Visual Studio 2022)
+- Qt 6 for the GUI. The Windows release builds link Qt 6.8.3 statically, using the
+  [qt6windows7](https://github.com/crystalidea/qt6windows7) patches, and build Qt from source with
+  Ninja (the Visual Studio generator cannot build Qt). See [COMPILING.md](docs/COMPILING.md).
 
 **Windows 7 Users:** the Windows release binaries are built against Qt 6.8 with the
 [qt6windows7](https://github.com/crystalidea/qt6windows7) compatibility patches, so the
