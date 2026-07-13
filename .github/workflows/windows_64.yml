@@ -139,19 +139,14 @@ jobs:
         $ZSRC = "${{ runner.temp }}\zlib-src"
         $ZBUILD = "${{ runner.temp }}\zlib-build"
         $ZINST = "${{ runner.temp }}\zlib-install"
-        git clone --depth 1 --branch v1.3.1 https://github.com/madler/zlib.git $ZSRC
+        git clone --depth 1 --branch v1.3.1 https://github.com/madler/zlib.git "$ZSRC"
         if ($LASTEXITCODE -ne 0) { throw "zlib clone failed" }
-        cmake -S $ZSRC -B $ZBUILD -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$ZINST
+        cmake -S "$ZSRC" -B "$ZBUILD" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$ZINST"
         if ($LASTEXITCODE -ne 0) { throw "zlib configure failed" }
-        cmake --build $ZBUILD
+        cmake --build "$ZBUILD"
         if ($LASTEXITCODE -ne 0) { throw "zlib build failed" }
-        cmake --install $ZBUILD
+        cmake --install "$ZBUILD"
         if ($LASTEXITCODE -ne 0) { throw "zlib install failed" }
-        # zlib's CMake names the static lib libzs.lib (not zlibstatic.lib); normalize it to a known name.
-        $static = Get-ChildItem "$ZINST\lib\*.lib" | Where-Object { $_.Name -match 'zs|static' } | Select-Object -First 1
-        if (-not $static) { $static = Get-ChildItem "$ZINST\lib\*.lib" | Sort-Object Length -Descending | Select-Object -First 1 }
-        Copy-Item $static.FullName "$ZINST\lib\zlibstatic.lib" -Force
-        Write-Host "normalized static zlib lib: $($static.Name) -> zlibstatic.lib"
 
     - name: Build tsMuxer
       run: |
