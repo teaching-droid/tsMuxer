@@ -76,8 +76,9 @@ standard 32-bit and 64-bit builds run on Windows 7 and newer. No separate build 
 
 Ready-made binaries are produced by the build workflows: open the Actions tab, pick the
 newest "Build for Windows 64-bit" (or 32-bit / Linux / Mac) run and download its artifact.
-The Windows zip contains `tsMuxeR.exe` (command line) and `tsMuxerGUI.exe`, both
-self-contained. Tagged versions additionally appear on the Releases page.
+The Windows zip is a self-contained folder: `tsMuxeR.exe` (command line), `tsMuxerGUI.exe`,
+and the Qt and runtime DLLs they need. Unzip it and run; nothing needs installing. Tagged
+versions additionally appear on the Releases page.
 
 ## History
 

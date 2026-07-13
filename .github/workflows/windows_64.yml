@@ -172,8 +172,17 @@ jobs:
         if (Test-Path "tsMuxerGUI/tsmuxergui.exe") {
           Copy-Item -Path "tsMuxerGUI/tsmuxergui.exe" -Destination "../bin/tsMuxerGUI.exe" -Force
           # Qt is a shared build here, so gather the Windows 7 patched Qt DLLs and plugins next to the GUI.
-          & "$QT_INSTALL_PATH\bin\windeployqt.exe" --release --no-translations --no-system-d3d-compiler --no-opengl-sw --compiler-runtime "../bin/tsMuxerGUI.exe"
+          & "$QT_INSTALL_PATH\bin\windeployqt.exe" --release --no-translations --no-system-d3d-compiler --no-opengl-sw --no-compiler-runtime "../bin/tsMuxerGUI.exe"
           if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
+          # A QWidget app never loads the Direct3D shader compiler; drop it (large, Windows 10 oriented).
+          Remove-Item "../bin/dxcompiler.dll","../bin/dxil.dll","../bin/vc_redist.x64.exe" -Force -ErrorAction SilentlyContinue
+          # Bundle the actual VC++ runtime DLLs so the package is portable (no installer needed).
+          $crt = Get-ChildItem "$env:VCToolsRedistDir\x64" -Filter "Microsoft.VC*.CRT" -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $crt) { $crt = Get-ChildItem "C:\Program Files\Microsoft Visual Studio" -Recurse -Filter "Microsoft.VC*.CRT" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1 }
+          if ($crt) { Copy-Item "$($crt.FullName)\*.dll" "../bin/" -Force }
+          # Bundle the Universal CRT so a bare Windows 7 runs with nothing installed.
+          $ucrt = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Redist" -Recurse -Filter ucrtbase.dll -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
+          if ($ucrt) { Copy-Item (Join-Path $ucrt.DirectoryName '*.dll') "../bin/" -Force }
         }
         cd ..
 
