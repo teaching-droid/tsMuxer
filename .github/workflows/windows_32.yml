@@ -102,6 +102,35 @@ jobs:
 
         Write-Host "Qt6 32-bit with Windows 7 patches build complete!"
 
+    - name: Build Qt6 qttools (LinguistTools, x86)
+      run: |
+        $ErrorActionPreference = "Stop"
+        $QT_INSTALL_PATH = "${{ runner.temp }}\qt6-install-x86"
+        if (Test-Path "$QT_INSTALL_PATH\bin\lrelease.exe") {
+          Write-Host "qttools already present (from cache), skipping."
+          exit 0
+        }
+        $TT_SRC = "${{ runner.temp }}\qttools-src-x86"
+        $TT_BUILD = "${{ runner.temp }}\qttools-build-x86"
+        Write-Host "Downloading qttools source..."
+        Invoke-WebRequest -Uri "https://github.com/qt/qttools/archive/refs/tags/v6.8.3.zip" -OutFile "${{ runner.temp }}\qttools.zip"
+        Expand-Archive -Path "${{ runner.temp }}\qttools.zip" -DestinationPath "${{ runner.temp }}" -Force
+        Rename-Item -Path "${{ runner.temp }}\qttools-6.8.3" -NewName $TT_SRC -Force
+        cmake -S $TT_SRC -B $TT_BUILD -G Ninja `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DCMAKE_PREFIX_PATH="$QT_INSTALL_PATH" `
+          -DCMAKE_INSTALL_PREFIX="$QT_INSTALL_PATH" `
+          -DQT_BUILD_EXAMPLES=OFF `
+          -DQT_BUILD_TESTS=OFF `
+          -DFEATURE_designer=OFF `
+          -DFEATURE_assistant=OFF `
+          -DFEATURE_qdoc=OFF
+        if ($LASTEXITCODE -ne 0) { throw "qttools configure failed" }
+        cmake --build $TT_BUILD
+        if ($LASTEXITCODE -ne 0) { throw "qttools build failed" }
+        cmake --install $TT_BUILD
+        if ($LASTEXITCODE -ne 0) { throw "qttools install failed" }
+
     - name: Build zlib (static, x86)
       run: |
         $ErrorActionPreference = "Stop"
