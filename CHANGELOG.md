@@ -1,5 +1,22 @@
+## tsMuxeR 2.8.0
+
+Multi-layer disc authoring, on top of jaminmc/tsMuxer. See docs/DISC_AUTHORING.md.
+
+- `--bdmv-to-iso`: wrap an existing unprotected BDMV folder into a burnable BD-ROM ISO byte for byte, keeping the BD-J menus and all clip and playlist references intact (no re-mux, no re-numbering)
+- `--layer-break-guard=<MB>`: zero-fill the defect-prone sectors around each layer transition of BD-R/RE DL and BD-R XL media, so the movie plays across the break. Validated on real hardware, where it absorbed a genuine layer-1 defect
+- `--layer-break-lbn=<sector[,sector...]>`: set the layer break sector(s); takes a comma list for 100 GB (2 breaks) and 128 GB (3 breaks) BD-R XL
+- `--disc-size` and `--allow-oversize`: abort, or warn, before muxing if the estimated image will not fit the target disc
+- ISO writer: multi-sector directories and 32-bit object IDs, so full retail discs (hundreds of files) can be wrapped
+- Propagate asynchronous write errors so a truncated disc is no longer reported as a successful mux; fix a buffer leak on the write path
+- Skip unsupported subtitle coding types in the Blu-ray playlist with a warning instead of aborting a finished, multi-hour mux
+- Guard a divide-by-zero in the discovery phase, and stop a bogus "MLP is not standard" warning when a TrueHD track is merged with an AC-3 core from a file
+- GUI: a "BDMV folder to ISO" tab with a layer-break calculator (paste the disc's Free Sectors from ImgBurn and the break sectors are worked out), colour-coded guard hints, disc-type and divisibility sanity warnings, and a BD-R XL at-your-own-risk confirmation
+- GUI: dual-layer capacity and guard controls on the Blu-ray outputs, and runtime language switching that also updates the hand-built widgets
+- GUI: added Japanese, and completed German, Spanish, French, Hebrew, Russian and Chinese to full coverage
+- Windows: the release binaries build Qt 6.8.3 statically with the qt6windows7 patches, so the standard 32-bit and 64-bit builds run on Windows 7 and newer. This replaces the earlier separate Qt5 build. The workflow builds Qt, qttools and a static zlib with Ninja
+
 ## tsMuxeR 2.7.2
-- **Qt6 GUI requires Windows 8+:** The default GUI build now requires Qt6, which only supports Windows 8 and later. A separate Qt5 build is available for Windows 7 compatibility (see build artifacts or docs/COMPILING.md)
+- **Qt6 GUI:** The default GUI build uses Qt6. In this fork the Windows binaries are built with the qt6windows7 patches, so they still run on Windows 7 (see docs/COMPILING.md)
 - Added language selection to the video track options in the GUI, matching the existing audio/subtitle language selector
 - Fixed AAC audio not being detected in MP4/MOV containers (reported as "Can't detect stream type"), caused by missing ADTS header generation when ESDS parsing did not set the AAC flag, and by channel count corruption from the AudioSpecificConfig channel configuration index
 - Fixed MKV and MOV/MP4 demuxers returning absolute timecodes instead of relative delays, causing audio/video sync offsets (e.g. delay stored in differing track start times or edit lists) to be lost during remuxing

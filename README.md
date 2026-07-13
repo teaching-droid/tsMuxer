@@ -137,7 +137,7 @@ We are not currently accepting any kind of donations and we do not have a bounty
 
 ## Versioning
 
-Version numbering follows the [Semantic versioning](http://semver.org/) approach.
+Version numbering follows the [Semantic versioning](https://semver.org/) approach.
 
 ## License
 

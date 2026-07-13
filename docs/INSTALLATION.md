@@ -2,21 +2,18 @@
 
 The following executables are created to be portable, so you can just save and extract the compressed package for your platform. 
 
-Nightly builds are created by GitHub Actions and stored as [releases](https://github.com/jaminmc/tsMuxer/releases). Please visit the releases page in order to download the release you're interested in.
+Builds are produced by GitHub Actions. Download them from the newest run's artifacts on the
+[Actions](https://github.com/teaching-droid/tsMuxer/actions) tab, or, for tagged versions, from the
+[releases](https://github.com/teaching-droid/tsMuxer/releases) page.
 
 ## Windows
 
-The ZIP file for Windows can just be unzipped and the executables can be used straight away - there are no dependencies.
-
-**Windows 7 Users:** Two builds are available for your architecture:
-- **64-bit:** `tsMuxer-w64-qt5*.zip` - For 64-bit Windows 7
-- **32-bit:** `tsMuxer-w32-qt5*.zip` - For 32-bit Windows 7
-
-Also available (requires Windows 8+):
-- `tsMuxer-w64*.zip` - 64-bit with Qt6 GUI
-- `tsMuxer-w32*.zip` - 32-bit with Qt6 GUI
-
-Download the appropriate Qt5 build for your Windows 7 system architecture.
+The ZIP file for Windows can just be unzipped and the executables can be used straight away, there
+are no dependencies. The Windows binaries are built with Qt 6.8 and the
+[qt6windows7](https://github.com/crystalidea/qt6windows7) patches, so the standard builds run on
+Windows 7 and newer:
+- `tsMuxer-w64*.zip` - 64-bit
+- `tsMuxer-w32*.zip` - 32-bit
 
 ## Linux
 

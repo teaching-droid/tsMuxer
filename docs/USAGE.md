@@ -6,6 +6,13 @@ The simplest thing to do is to use the tsMuxerGUI. A screenshot of that can be s
 
 ![tsMuxerGUI_Screenshot](https://user-images.githubusercontent.com/122434/148913872-b7af9caa-c2ca-4892-8853-06fd6329a15a.png)
 
+## Multi-layer disc authoring (this fork)
+
+This fork adds a "BDMV folder to ISO" tab and the `--bdmv-to-iso`, `--layer-break-guard`,
+`--layer-break-lbn`, `--disc-size` and `--allow-oversize` options for authoring dual-layer and
+BD-R XL discs. See [DISC_AUTHORING.md](DISC_AUTHORING.md) (also available in German as
+[DISC_AUTHORING_DE.md](DISC_AUTHORING_DE.md)) for the details and the layer-break calculator.
+
 ### Editing the Meta File in the GUI
 
 The tsMuxerGUI displays an auto-generated meta file in the "Meta file" section. This preview shows the exact content that will be used when you start muxing. 
