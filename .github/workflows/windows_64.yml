@@ -36,6 +36,11 @@ jobs:
         $QT_BUILD_PATH = "${{ runner.temp }}\qt6-build"
         $QT_INSTALL_PATH = "${{ runner.temp }}\qt6-install"
 
+        if (Test-Path "$QT_INSTALL_PATH\bin\moc.exe") {
+          Write-Host "Qt already present (restored from cache), skipping the 40-minute rebuild."
+          exit 0
+        }
+
         Write-Host "Downloading official Qt6 source..."
         $QT_SRC_URL = "https://github.com/qt/qtbase/archive/refs/tags/v6.8.3.zip"
         Invoke-WebRequest -Uri $QT_SRC_URL -OutFile $QT_SRC_ZIP
@@ -96,16 +101,34 @@ jobs:
 
         Write-Host "Qt6 with Windows 7 patches build complete!"
 
+    - name: Build zlib (static)
+      run: |
+        $ErrorActionPreference = "Stop"
+        $ZSRC = "${{ runner.temp }}\zlib-src"
+        $ZBUILD = "${{ runner.temp }}\zlib-build"
+        $ZINST = "${{ runner.temp }}\zlib-install"
+        git clone --depth 1 --branch v1.3.1 https://github.com/madler/zlib.git $ZSRC
+        if ($LASTEXITCODE -ne 0) { throw "zlib clone failed" }
+        cmake -S $ZSRC -B $ZBUILD -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$ZINST
+        if ($LASTEXITCODE -ne 0) { throw "zlib configure failed" }
+        cmake --build $ZBUILD
+        if ($LASTEXITCODE -ne 0) { throw "zlib build failed" }
+        cmake --install $ZBUILD
+        if ($LASTEXITCODE -ne 0) { throw "zlib install failed" }
+
     - name: Build tsMuxer
       run: |
         $ErrorActionPreference = "Stop"
         $QT_INSTALL_PATH = "${{ runner.temp }}\qt6-install"
+        $ZINST = "${{ runner.temp }}\zlib-install"
 
         mkdir build
         cd build
         cmake ../ `
           -G Ninja `
           -DCMAKE_PREFIX_PATH="$QT_INSTALL_PATH" `
+          -DZLIB_INCLUDE_DIR="$ZINST\include" `
+          -DZLIB_LIBRARY="$ZINST\lib\zlibstatic.lib" `
           -DTSMUXER_GUI=ON `
           -DCMAKE_BUILD_TYPE=Release
         if ($LASTEXITCODE -ne 0) { throw "tsMuxer configure failed" }
