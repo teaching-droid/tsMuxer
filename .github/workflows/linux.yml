@@ -33,24 +33,27 @@ jobs:
 
     - name: Package
       run: |
+        ver="${GITHUB_REF_NAME#v}"
+        asset="tsMuxeR-${ver}-linux-x64.zip"
+        echo "ASSET=${asset}" >> "$GITHUB_ENV"
         mkdir -p bin
         find build -maxdepth 3 -type f -name tsmuxer    -exec cp {} bin/tsMuxeR \;
         find build -maxdepth 3 -type f -name tsmuxergui -exec cp {} bin/tsMuxerGUI \;
         chmod +x bin/tsMuxeR bin/tsMuxerGUI 2>/dev/null || true
         cd bin
-        if [ -f tsMuxerGUI ]; then zip -9 lnx.zip tsMuxeR tsMuxerGUI; else zip -9 lnx.zip tsMuxeR; fi
+        if [ -f tsMuxerGUI ]; then zip -9 "$asset" tsMuxeR tsMuxerGUI; else zip -9 "$asset" tsMuxeR; fi
         ls -la
 
     - uses: actions/upload-artifact@v4
       with:
          name: tsMuxer-linux
-         path: bin/lnx.zip
+         path: bin/${{ env.ASSET }}
       name: upload-artefact
 
     - name: Upload to Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v2
       with:
-        files: bin/lnx.zip
+        files: bin/${{ env.ASSET }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

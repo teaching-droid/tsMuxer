@@ -192,24 +192,27 @@ jobs:
 
     - name: Package Build
       run: |
+        $ver = $env:GITHUB_REF_NAME -replace '^v',''
+        $asset = "tsMuxeR-$ver-windows-x86.zip"
+        Add-Content -Path $env:GITHUB_ENV -Value "ASSET=$asset"
         cd bin
         if (Test-Path "tsMuxerGUI.exe") {
-          7z a -y ..\w32.zip *
-          Move-Item ..\w32.zip .\w32.zip -Force
+          7z a -y "..\$asset" *
+          Move-Item "..\$asset" ".\$asset" -Force
         } else {
-          7z a -y w32.zip tsMuxeR.exe
+          7z a -y "$asset" tsMuxeR.exe
         }
 
     - uses: actions/upload-artifact@v4
       with:
         name: tsMuxer-w32
-        path: bin/w32.zip
+        path: bin/${{ env.ASSET }}
       name: upload-artifact
 
     - name: Upload to Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v2
       with:
-        files: bin/w32.zip
+        files: bin/${{ env.ASSET }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
