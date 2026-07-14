@@ -111,6 +111,17 @@ The GUI exposes the same features with no command line. On the "BDMV folder -> I
   estimate, so raising the buffer updates it at once.
 - **Build ISO** runs the same `--bdmv-to-iso` command with those values.
 
+## Guard size on the burned disc (sector alignment)
+
+The guard fills whole 2048-byte sectors, and it starts at the end of the movie's last data extent
+rather than at an exact byte offset. The zero band around the layer break therefore snaps to sector
+and file-extent boundaries: on a finished disc it matches the size you set closely (within about
+1 MB) but not to the exact byte, and it tends to be equal or a little larger, never meaningfully
+short. For example, setting 160 MB per side reads back as about 160.2 MB. That is normal alignment,
+not a defect. Because the guard is sized in tens to hundreds of MB to cover the roughly 35 MB defect
+region at the layer transition, a sub-MB alignment difference has no effect on playback. So if you
+read a finished disc and the zero band is not exactly the value you entered, that is expected.
+
 ## BD-R XL (100 / 128 GB) player compatibility
 
 Many Blu-ray players cannot read 100 or 128 GB BD-R XL discs at all, and there is no

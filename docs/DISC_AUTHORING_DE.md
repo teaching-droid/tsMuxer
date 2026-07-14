@@ -164,6 +164,12 @@ Die grafische Oberfläche bietet dieselben Funktionen ganz ohne Kommandozeile. A
 
 ---
 
+## Schutzzonen-Größe auf der gebrannten Disc (Sektor-Ausrichtung)
+
+Die Schutzzone füllt immer ganze 2048-Byte-Sektoren und beginnt am Ende des letzten Datenbereichs des Films, nicht an einem exakten Byte-Offset. Die Nullzone rund um den Layer-Break richtet sich daher an Sektor- und Extent-Grenzen aus: Auf einer fertigen Disc entspricht sie dem eingestellten Wert sehr genau (bis auf etwa 1 MB), aber nicht bis aufs Byte, und sie fällt eher gleich groß oder etwas größer aus, nie nennenswert kleiner. Ein eingestellter Wert von 160 MB pro Seite kann also als etwa 160,2 MB zurückgelesen werden. Das ist normale Ausrichtung, kein Fehler. Da die Schutzzone in der Größenordnung von zig bis hunderten MB liegt und den etwa 35 MB großen Defektbereich am Layer-Übergang abdeckt, hat eine Abweichung von unter 1 MB keinen Einfluss auf die Wiedergabe. Wenn die Nullzone auf einer fertigen Disc also nicht exakt dem eingegebenen Wert entspricht, ist das zu erwarten.
+
+---
+
 ## BD-R XL (100 / 128 GB): Wiedergabe im Player
 
 Viele Blu-ray-Player können 100- oder 128-GB-BD-R-XL-Discs **gar nicht** lesen, und es gibt
