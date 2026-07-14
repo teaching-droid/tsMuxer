@@ -152,6 +152,18 @@ statt eines Abbruchs.
 
 ---
 
+## In der grafischen Oberfläche (der Reiter „BDMV folder -> ISO")
+
+Die grafische Oberfläche bietet dieselben Funktionen ganz ohne Kommandozeile. Auf dem Reiter „BDMV folder -> ISO":
+
+- **BDMV folder and output ISO.** Wähle als Ordner das Wurzelverzeichnis der Disc, das `BDMV/` (und `CERTIFICATE/`) enthält. Ein eingebundenes ISO-Laufwerk lässt sich genauso als Ordner verwenden.
+- **Layer-break calculator.** Wähle den Disc-Typ und füge die „Free Sectors" aus ImgBurn ein. Die Break-Sektoren werden automatisch berechnet; passt der Wert nicht zum gewählten Disc-Typ, erscheint eine Warnung.
+- **Layer-break guard (after break).** Hier legst du die Größe der Schutzzone in MB fest; ein farblich hervorgehobener Hinweis nennt den empfohlenen Wert (64 MB). Setze das Häkchen bei **Also fill before the break (advanced)**, um ein zweites Feld einzublenden und auch die Zone vor dem Break aufzufüllen. Das hilft bei Medien, die auf beiden Seiten des Übergangs schwach sind.
+- **Fit estimate.** Eine Live-Anzeige zeigt die geschätzte Image-Größe im Verhältnis zur Disc-Kapazität an, während du Ordner, Disc-Typ, „Free Sectors" und Schutzzone einträgst: grün, wenn es passt (und wie viel Platz übrig bleibt), rot, wenn nicht (und um wie viel). Die Schutzzone fließt in die Schätzung ein; eine größere Zone aktualisiert die Anzeige also sofort.
+- **Build ISO** führt denselben `--bdmv-to-iso`-Befehl mit diesen Werten aus.
+
+---
+
 ## BD-R XL (100 / 128 GB): Wiedergabe im Player
 
 Viele Blu-ray-Player können 100- oder 128-GB-BD-R-XL-Discs **gar nicht** lesen, und es gibt

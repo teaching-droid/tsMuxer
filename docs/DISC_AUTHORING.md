@@ -93,6 +93,24 @@ ImgBurn "Free Sectors" value into the break sectors for you.
 3. Burn `out.iso` with verify. The layer break is media-fixed, so the burner switches layers
    at the same sector and the guard zone lands exactly on it.
 
+## In the GUI (the "BDMV folder to ISO" tab)
+
+The GUI exposes the same features with no command line. On the "BDMV folder -> ISO" tab:
+
+- **BDMV folder and output ISO.** Point the folder at the disc root that holds `BDMV/` (and
+  `CERTIFICATE/`). A mounted ISO drive works as the folder too.
+- **Layer-break calculator.** Choose the disc type and paste the disc's "Free Sectors" from
+  ImgBurn; the break sector(s) are calculated for you, with a warning if the value does not
+  match the selected disc type.
+- **Layer-break guard (after break).** The guard size in MB, with a colour-coded hint (64 MB
+  recommended). Tick **Also fill before the break (advanced)** to reveal a second field and pad
+  the zone before the break as well, for media that are weak on both sides of the transition.
+- **Fit estimate.** A live line shows the estimated image size against the disc's capacity as
+  you fill in the folder, disc type, Free Sectors and guard: green when it fits (and how much
+  space is left), red when it does not (and by how much). The guard band counts toward the
+  estimate, so raising the buffer updates it at once.
+- **Build ISO** runs the same `--bdmv-to-iso` command with those values.
+
 ## BD-R XL (100 / 128 GB) player compatibility
 
 Many Blu-ray players cannot read 100 or 128 GB BD-R XL discs at all, and there is no
