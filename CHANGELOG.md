@@ -1,3 +1,8 @@
+## tsMuxeR 2.8.1
+
+- GUI: show the version number in the window title (previously only the git commit was shown)
+- GUI: stop the "#" column header from overlapping the select-all checkbox in the track list
+
 ## tsMuxeR 2.8.0
 
 Multi-layer disc authoring, on top of jaminmc/tsMuxer. See docs/DISC_AUTHORING.md.
