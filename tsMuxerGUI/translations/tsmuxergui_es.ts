@@ -3803,6 +3803,10 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>Estimated image %1 GB of %2 GB (%3%). Does NOT fit, over by %4 GB.</source>
         <translation>Imagen estimada: %1 GB de %2 GB (%3%). NO cabe, se excede en %4 GB.</translation>
     </message>
+    <message>
+        <source>The zeros fill whole 2048-byte sectors and snap to the movie's file boundaries, so the burned zone matches this value within about 1 MB (never meaningfully short).</source>
+        <translation>Los ceros rellenan sectores completos de 2048 bytes y se ajustan a los límites de los archivos de la película, de modo que la zona grabada coincide con este valor dentro de un margen de aproximadamente 1 MB (nunca se queda corta de forma significativa).</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

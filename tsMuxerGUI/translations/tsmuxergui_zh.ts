@@ -3802,6 +3802,10 @@ Build the ISO anyway?</source>
         <source>Estimated image %1 GB of %2 GB (%3%). Does NOT fit, over by %4 GB.</source>
         <translation>预计镜像大小 %1 GB,共 %2 GB(%3%)。放不下,超出 %4 GB。</translation>
     </message>
+    <message>
+        <source>The zeros fill whole 2048-byte sectors and snap to the movie's file boundaries, so the burned zone matches this value within about 1 MB (never meaningfully short).</source>
+        <translation>这些零会填满完整的 2048 字节扇区,并对齐到影片的文件边界,因此刻录出的区域与此数值的偏差在约 1 MB 以内(绝不会明显小于该数值)。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

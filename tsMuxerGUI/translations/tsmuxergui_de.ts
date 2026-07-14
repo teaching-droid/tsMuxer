@@ -3802,6 +3802,10 @@ ISO trotzdem erstellen?</translation>
         <source>Estimated image %1 GB of %2 GB (%3%). Does NOT fit, over by %4 GB.</source>
         <translation>Geschätztes Image %1 GB von %2 GB (%3%). Passt NICHT, %4 GB zu viel.</translation>
     </message>
+    <message>
+        <source>The zeros fill whole 2048-byte sectors and snap to the movie's file boundaries, so the burned zone matches this value within about 1 MB (never meaningfully short).</source>
+        <translation>Die Nullen füllen ganze 2048-Byte-Sektoren und richten sich an den Dateigrenzen des Films aus, sodass die gebrannte Zone diesem Wert bis auf etwa 1 MB genau entspricht (nie nennenswert zu kurz).</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

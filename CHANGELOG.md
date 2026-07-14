@@ -1,3 +1,8 @@
+## tsMuxeR 2.9.2
+
+- GUI: add a tooltip on the layer-break guard field explaining that the burned zone aligns to whole 2048-byte sectors and file boundaries, so it matches the entered value within about 1 MB
+- CI: name the release assets tsMuxeR-<version>-<platform>.zip instead of w64.zip / lnx.zip / mac-<arch>.zip
+
 ## tsMuxeR 2.9.1
 
 - GUI: move the dual-layer controls (Fit to disc, Layer-break guard, Allow oversize) out of the progress dialog into the main window Output group, and show them only for Blu-ray ISO or Blu-ray folder output (hidden for TS, M2TS, MKV, AVCHD and Demux)

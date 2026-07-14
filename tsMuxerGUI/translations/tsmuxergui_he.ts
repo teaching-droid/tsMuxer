@@ -3802,6 +3802,10 @@ Build the ISO anyway?</source>
         <source>Estimated image %1 GB of %2 GB (%3%). Does NOT fit, over by %4 GB.</source>
         <translation>דמות התקליטור המשוערת: %1 GB מתוך %2 GB (%3%). אינה נכנסת, חורגת ב-%4 GB.</translation>
     </message>
+    <message>
+        <source>The zeros fill whole 2048-byte sectors and snap to the movie's file boundaries, so the burned zone matches this value within about 1 MB (never meaningfully short).</source>
+        <translation>האפסים ממלאים סקטורים שלמים בגודל 2048 בתים ומתיישרים לגבולות קובצי הסרט, כך שהאזור הצרוב תואם לערך זה בטווח של כ-1 MB (ולעולם אינו קטן ממנו באופן משמעותי).</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

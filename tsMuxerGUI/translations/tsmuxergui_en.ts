@@ -3798,6 +3798,10 @@ Build the ISO anyway?</source>
         <source>Estimated image %1 GB of %2 GB (%3%). Does NOT fit, over by %4 GB.</source>
         <translation>Estimated image %1 GB of %2 GB (%3%). Does NOT fit, over by %4 GB.</translation>
     </message>
+    <message>
+        <source>The zeros fill whole 2048-byte sectors and snap to the movie's file boundaries, so the burned zone matches this value within about 1 MB (never meaningfully short).</source>
+        <translation>The zeros fill whole 2048-byte sectors and snap to the movie's file boundaries, so the burned zone matches this value within about 1 MB (never meaningfully short).</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

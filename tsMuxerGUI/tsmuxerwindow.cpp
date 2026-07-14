@@ -581,6 +581,9 @@ TsMuxerWindow::TsMuxerWindow()
         guardSpin->setRange(0, 1024);
         guardSpin->setValue(64);
         guardSpin->setSuffix(tr(" MB"));
+        guardSpin->setToolTip(
+            tr("The zeros fill whole 2048-byte sectors and snap to the movie's file boundaries, so "
+               "the burned zone matches this value within about 1 MB (never meaningfully short)."));
         auto* guardHintLabel = new QLabel(bdmvTab);
         guardHintLabel->setWordWrap(true);
         // Two-zone guard (advanced): also pad BEFORE the break, for media defective on both sides of the
@@ -928,6 +931,10 @@ TsMuxerWindow::TsMuxerWindow()
                 discTypeCombo->setItemText(2, tr("BD-R XL 128 GB (4 layers)"));
                 freeSectorsEdit->setPlaceholderText(tr("ImgBurn -> Free Sectors (e.g. 47,305,728)"));
                 guardSpin->setSuffix(tr(" MB"));
+                guardSpin->setToolTip(
+                    tr("The zeros fill whole 2048-byte sectors and snap to the movie's file "
+                       "boundaries, so the burned zone matches this value within about 1 MB (never "
+                       "meaningfully short)."));
                 beforeCheck->setText(tr("Also fill before the break (advanced)"));
                 beforeCheck->setToolTip(
                     tr("Most discs only fail at the start of the next layer, so the default puts the fill there. Some "
