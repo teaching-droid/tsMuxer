@@ -645,10 +645,11 @@ TsMuxerWindow::TsMuxerWindow()
         // no-defect-management BDXL burn); un-ticking re-locks and restores the safe default.
         freeSectorsEdit->setReadOnly(true);
         auto* manualCheck = new QCheckBox(tr("Enter Free Sectors manually (advanced)"), bdmvTab);
-        manualCheck->setToolTip(tr("The Free Sectors above are pre-filled for the selected disc and locked to "
-                                   "prevent accidental changes. Tick this only if ImgBurn shows a different Free "
-                                   "Sectors for your exact disc, then type that number. Un-tick to restore the "
-                                   "standard value."));
+        manualCheck->setToolTip(
+            tr("The Free Sectors above are pre-filled for the selected disc and locked to "
+               "prevent accidental changes. Tick this only if ImgBurn shows a different Free "
+               "Sectors for your exact disc, then type that number. Un-tick to restore the "
+               "standard value."));
         auto* helpBtn = new QPushButton(tr("Where do I find this?"), bdmvTab);
         auto* breaksLabel = new QLabel(bdmvTab);
         breaksLabel->setWordWrap(true);
@@ -994,8 +995,7 @@ TsMuxerWindow::TsMuxerWindow()
         m_retranslateHooks.push_back(
             [this, bdmvTab, info, folderLabel, outputLabel, guardLabel, discTypeLabel, freeSectorsLabel, folderBtn,
              isoBtn, helpBtn, buildBtn, discTypeCombo, freeSectorsEdit, manualCheck, guardSpin, refresh, updateGuard,
-             beforeCheck, guardBeforeLabel, guardBeforeSpin, guardBeforeHint, fitLabel, updateFit,
-             updateFolderStatus]()
+             beforeCheck, guardBeforeLabel, guardBeforeSpin, guardBeforeHint, fitLabel, updateFit, updateFolderStatus]()
             {
                 ui->tabWidget->setTabText(ui->tabWidget->indexOf(bdmvTab), tr("BDMV folder -> ISO"));
                 info->setText(
@@ -1026,10 +1026,11 @@ TsMuxerWindow::TsMuxerWindow()
                        "Free Sectors for your disc, use that value."));
                 freeSectorsEdit->setPlaceholderText(tr("ImgBurn -> Free Sectors (e.g. 47,305,728)"));
                 manualCheck->setText(tr("Enter Free Sectors manually (advanced)"));
-                manualCheck->setToolTip(tr("The Free Sectors above are pre-filled for the selected disc and locked to "
-                                           "prevent accidental changes. Tick this only if ImgBurn shows a different "
-                                           "Free Sectors for your exact disc, then type that number. Un-tick to "
-                                           "restore the standard value."));
+                manualCheck->setToolTip(
+                    tr("The Free Sectors above are pre-filled for the selected disc and locked to "
+                       "prevent accidental changes. Tick this only if ImgBurn shows a different "
+                       "Free Sectors for your exact disc, then type that number. Un-tick to "
+                       "restore the standard value."));
                 guardSpin->setSuffix(tr(" MB"));
                 guardSpin->setToolTip(
                     tr("The zeros fill whole 2048-byte sectors and snap to the movie's file "
