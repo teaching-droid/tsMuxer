@@ -724,7 +724,14 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     }
     IsoWriter* iso = helper.isoWriter();
 
+    // Emit "<pct>% complete" as the copy runs so the GUI progress bar advances. The copy is the slow
+    // part (it may be reading an optical disc at only a few MB/s), so without this the bar sits at 0.0%
+    // for the whole build and looks hung. Print only when the tenth-of-a-percent changes, so at most
+    // ~1000 short lines are written regardless of the ISO size; std::endl flushes each so the GUI, which
+    // reads stdout through a pipe, sees them live rather than after the buffer fills.
     vector<uint8_t> buf(1024 * 1024);
+    int64_t written = 0;
+    int lastTenths = -1;
     for (auto& item : items)
     {
         File in;
@@ -742,6 +749,16 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
             {
                 LTRACE(LT_ERROR, 2, "Write error on " << item.rel);
                 return -1;
+            }
+            written += n;
+            if (total > 0)
+            {
+                const int tenths = static_cast<int>(static_cast<double>(written) / static_cast<double>(total) * 1000.0);
+                if (tenths != lastTenths)
+                {
+                    lastTenths = tenths;
+                    cout << tenths / 10 << '.' << tenths % 10 << "% complete" << std::endl;
+                }
             }
         }
         out->close();
