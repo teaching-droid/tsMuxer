@@ -1,6 +1,11 @@
+## tsMuxeR 2.9.4
+
+- Fix reading a BDMV from a mounted ISO or optical disc. The recursive directory scan tested the directory attribute with XOR, so on read-only media (where folders also carry the read-only and archive attributes) it skipped every folder and reported no files. Reported by Coopervid
+- GUI: when the input BDMV is on read-only media such as a mounted ISO, default the output ISO to a writable folder instead of the read-only drive, and warn before building if the chosen output is not writable. Reported by Coopervid
+
 ## tsMuxeR 2.9.3
 
-- GUI: hide the mux controls (output type, file name, meta file, and the mux and meta buttons) while the "BDMV folder to ISO" tab is active. That tab is self-contained and uses its own Build ISO button, so the mux controls were irrelevant and confusing there
+- GUI: hide the mux controls (output type, file name, meta file, and the mux and meta buttons) while the "BDMV folder to ISO" tab is active. That tab is self-contained and uses its own Build ISO button, so the mux controls were irrelevant and confusing there. Reported by Coopervid
 
 ## tsMuxeR 2.9.2
 

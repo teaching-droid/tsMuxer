@@ -1,6 +1,6 @@
 {
   "name": "tsmuxer",
-  "version-string": "2.9.3",
+  "version-string": "2.9.4",
   "builtin-baseline": "03e366fb91e38b9432ebd5f8cc79f7c8f55e96ab",
   "dependencies": ["zlib", "freetype"]
 }

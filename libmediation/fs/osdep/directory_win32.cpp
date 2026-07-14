@@ -103,7 +103,10 @@ bool findDirs(const string& path, vector<string>* dirsList)
 
     do
     {
-        if (!(fileData.dwFileAttributes ^ FILE_ATTRIBUTE_DIRECTORY))
+        // Test the directory bit with AND, not XOR: on read-only media (a mounted ISO, an optical disc)
+        // directories also carry FILE_ATTRIBUTE_READONLY/ARCHIVE, so the old XOR check skipped every
+        // directory and the recursive scan found nothing.
+        if (fileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
         {
             auto dirName = toUtf8(fileData.cFileName);
 

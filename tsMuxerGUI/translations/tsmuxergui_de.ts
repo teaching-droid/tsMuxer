@@ -3806,6 +3806,10 @@ ISO trotzdem erstellen?</translation>
         <source>The zeros fill whole 2048-byte sectors and snap to the movie's file boundaries, so the burned zone matches this value within about 1 MB (never meaningfully short).</source>
         <translation>Die Nullen füllen ganze 2048-Byte-Sektoren und richten sich an den Dateigrenzen des Films aus, sodass die gebrannte Zone diesem Wert bis auf etwa 1 MB genau entspricht (nie nennenswert zu kurz).</translation>
     </message>
+    <message>
+        <source>The output ISO is on a read-only drive, so it cannot be written there. Choose a writable output location (not the mounted disc).</source>
+        <translation>Die Ausgabe-ISO liegt auf einem schreibgeschützten Laufwerk, sodass sie dort nicht geschrieben werden kann. Wählen Sie einen beschreibbaren Ausgabeort (nicht die eingebundene Disc).</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

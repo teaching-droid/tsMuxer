@@ -3807,6 +3807,10 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>The zeros fill whole 2048-byte sectors and snap to the movie's file boundaries, so the burned zone matches this value within about 1 MB (never meaningfully short).</source>
         <translation>Los ceros rellenan sectores completos de 2048 bytes y se ajustan a los límites de los archivos de la película, de modo que la zona grabada coincide con este valor dentro de un margen de aproximadamente 1 MB (nunca se queda corta de forma significativa).</translation>
     </message>
+    <message>
+        <source>The output ISO is on a read-only drive, so it cannot be written there. Choose a writable output location (not the mounted disc).</source>
+        <translation>La ISO de salida está en una unidad de solo lectura, así que no se puede escribir ahí. Elige una ubicación de salida donde se pueda escribir (no el disco montado).</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -3802,6 +3802,10 @@ Build the ISO anyway?</source>
         <source>The zeros fill whole 2048-byte sectors and snap to the movie's file boundaries, so the burned zone matches this value within about 1 MB (never meaningfully short).</source>
         <translation>The zeros fill whole 2048-byte sectors and snap to the movie's file boundaries, so the burned zone matches this value within about 1 MB (never meaningfully short).</translation>
     </message>
+    <message>
+        <source>The output ISO is on a read-only drive, so it cannot be written there. Choose a writable output location (not the mounted disc).</source>
+        <translation>The output ISO is on a read-only drive, so it cannot be written there. Choose a writable output location (not the mounted disc).</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

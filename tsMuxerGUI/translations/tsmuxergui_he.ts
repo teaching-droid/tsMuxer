@@ -3806,6 +3806,10 @@ Build the ISO anyway?</source>
         <source>The zeros fill whole 2048-byte sectors and snap to the movie's file boundaries, so the burned zone matches this value within about 1 MB (never meaningfully short).</source>
         <translation>האפסים ממלאים סקטורים שלמים בגודל 2048 בתים ומתיישרים לגבולות קובצי הסרט, כך שהאזור הצרוב תואם לערך זה בטווח של כ-1 MB (ולעולם אינו קטן ממנו באופן משמעותי).</translation>
     </message>
+    <message>
+        <source>The output ISO is on a read-only drive, so it cannot be written there. Choose a writable output location (not the mounted disc).</source>
+        <translation>קובץ ה-ISO של הפלט נמצא בכונן לקריאה בלבד, ולכן לא ניתן לכתוב אותו שם. בחר מיקום פלט הניתן לכתיבה (לא התקליטור המחובר).</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

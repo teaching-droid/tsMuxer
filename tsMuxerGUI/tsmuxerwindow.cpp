@@ -27,6 +27,7 @@
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QStandardPaths>
+#include <QStorageInfo>
 #include <QTemporaryFile>
 #include <QTime>
 #include <QVBoxLayout>
@@ -960,7 +961,24 @@ TsMuxerWindow::TsMuxerWindow()
                     folderEdit->setText(QDir::toNativeSeparators(d));
                     lastInputDir = d;
                     if (isoEdit->text().isEmpty())
-                        isoEdit->setText(QDir::toNativeSeparators(d + "/" + QFileInfo(d).fileName() + ".iso"));
+                    {
+                        // A drive root (a mounted ISO) has no file name; fall back to the volume label, then "disc".
+                        QString name = QFileInfo(d).fileName();
+                        if (name.isEmpty())
+                            name = QStorageInfo(d).displayName();
+                        if (name.isEmpty())
+                            name = QStringLiteral("disc");
+                        // The input may be a read-only mounted ISO or optical disc; the output ISO cannot be written
+                        // there, so default it to a writable folder (the user can still change it) in that case.
+                        QString outDir = d;
+                        if (QStorageInfo(d).isReadOnly())
+                        {
+                            outDir = QStandardPaths::writableLocation(QStandardPaths::MoviesLocation);
+                            if (outDir.isEmpty())
+                                outDir = QDir::homePath();
+                        }
+                        isoEdit->setText(QDir::toNativeSeparators(outDir + "/" + name + ".iso"));
+                    }
                 });
         connect(isoBtn, &QPushButton::clicked, this,
                 [this, isoEdit]
@@ -970,58 +988,66 @@ TsMuxerWindow::TsMuxerWindow()
                     if (!f.isEmpty())
                         isoEdit->setText(QDir::toNativeSeparators(f));
                 });
-        connect(buildBtn, &QPushButton::clicked, this,
-                [this, folderEdit, isoEdit, guardSpin, discTypeCombo, freeSectorsEdit, breaksList, buildBtn,
-                 beforeCheck, guardBeforeSpin]
+        connect(
+            buildBtn, &QPushButton::clicked, this,
+            [this, folderEdit, isoEdit, guardSpin, discTypeCombo, freeSectorsEdit, breaksList, buildBtn, beforeCheck,
+             guardBeforeSpin]
+            {
+                const QString folder = folderEdit->text().trimmed();
+                const QString iso = isoEdit->text().trimmed();
+                if (folder.isEmpty() || iso.isEmpty())
                 {
-                    const QString folder = folderEdit->text().trimmed();
-                    const QString iso = isoEdit->text().trimmed();
-                    if (folder.isEmpty() || iso.isEmpty())
-                    {
-                        QMessageBox::warning(this, tr("tsMuxeR"),
-                                             tr("Please select a BDMV folder and an output ISO file."));
-                        return;
-                    }
-                    const QStringList breaks = breaksList();
-                    if (breaks.isEmpty())
-                    {
-                        QMessageBox::warning(this, tr("tsMuxeR"),
-                                             tr("Enter the disc's \"Free Sectors\" (from ImgBurn) so the layer "
-                                                "break can be calculated for the exact disc you are burning."));
-                        return;
-                    }
-                    if (discTypeCombo->currentData().toInt() >= 3 &&
-                        QMessageBox::warning(
-                            this, tr("BD-R XL - read at your own risk"),
-                            tr("Many Blu-ray players cannot read 100/128 GB BD-R XL discs at all, and there is no "
-                               "guarantee yours will. You are proceeding at your own risk.\n\n"
-                               "Keeping the image around 66 GB (the first two layers) improves the odds on some "
-                               "players, but even 66 GB is not guaranteed to play. Test on your own device.\n\n"
-                               "Build the ISO anyway?"),
-                            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
-                        return;
-                    if (!QDir(folder).exists("BDMV") &&
-                        QMessageBox::question(this, tr("tsMuxeR"),
-                                              tr("The selected folder has no BDMV subfolder. Continue anyway?")) !=
-                            QMessageBox::Yes)
-                        return;
-                    if (QFile::exists(iso) &&
-                        QMessageBox::question(this, tr("tsMuxeR"),
-                                              tr("The output ISO already exists. Overwrite it?")) != QMessageBox::Yes)
-                        return;
-                    muxForm->prepare(tr("Building BD-ROM ISO from BDMV folder"));
-                    buildBtn->setEnabled(false);
-                    muxForm->show();
-                    runInMuxMode = true;
-                    QStringList args;
-                    args << "--bdmv-to-iso" << ("--layer-break-guard=" + QString::number(guardSpin->value()));
-                    if (beforeCheck->isChecked())
-                        args << ("--layer-break-guard-before=" + QString::number(guardBeforeSpin->value()));
-                    if (!breaks.isEmpty())
-                        args << ("--layer-break-lbn=" + breaks.join(","));
-                    args << folder << iso;
-                    tsMuxerExecute(args);
-                });
+                    QMessageBox::warning(this, tr("tsMuxeR"),
+                                         tr("Please select a BDMV folder and an output ISO file."));
+                    return;
+                }
+                if (QStorageInfo(QFileInfo(iso).absolutePath()).isReadOnly())
+                {
+                    QMessageBox::warning(this, tr("tsMuxeR"),
+                                         tr("The output ISO is on a read-only drive, so it cannot be written there. "
+                                            "Choose a writable output location (not the mounted disc)."));
+                    return;
+                }
+                const QStringList breaks = breaksList();
+                if (breaks.isEmpty())
+                {
+                    QMessageBox::warning(this, tr("tsMuxeR"),
+                                         tr("Enter the disc's \"Free Sectors\" (from ImgBurn) so the layer "
+                                            "break can be calculated for the exact disc you are burning."));
+                    return;
+                }
+                if (discTypeCombo->currentData().toInt() >= 3 &&
+                    QMessageBox::warning(
+                        this, tr("BD-R XL - read at your own risk"),
+                        tr("Many Blu-ray players cannot read 100/128 GB BD-R XL discs at all, and there is no "
+                           "guarantee yours will. You are proceeding at your own risk.\n\n"
+                           "Keeping the image around 66 GB (the first two layers) improves the odds on some "
+                           "players, but even 66 GB is not guaranteed to play. Test on your own device.\n\n"
+                           "Build the ISO anyway?"),
+                        QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+                    return;
+                if (!QDir(folder).exists("BDMV") &&
+                    QMessageBox::question(this, tr("tsMuxeR"),
+                                          tr("The selected folder has no BDMV subfolder. Continue anyway?")) !=
+                        QMessageBox::Yes)
+                    return;
+                if (QFile::exists(iso) &&
+                    QMessageBox::question(this, tr("tsMuxeR"), tr("The output ISO already exists. Overwrite it?")) !=
+                        QMessageBox::Yes)
+                    return;
+                muxForm->prepare(tr("Building BD-ROM ISO from BDMV folder"));
+                buildBtn->setEnabled(false);
+                muxForm->show();
+                runInMuxMode = true;
+                QStringList args;
+                args << "--bdmv-to-iso" << ("--layer-break-guard=" + QString::number(guardSpin->value()));
+                if (beforeCheck->isChecked())
+                    args << ("--layer-break-guard-before=" + QString::number(guardBeforeSpin->value()));
+                if (!breaks.isEmpty())
+                    args << ("--layer-break-lbn=" + breaks.join(","));
+                args << folder << iso;
+                tsMuxerExecute(args);
+            });
         // re-enable the Build button whenever the tsMuxer process finishes
         void (QProcess::*finishedSig)(int, QProcess::ExitStatus) = &QProcess::finished;
         connect(&proc, finishedSig, this, [buildBtn](int, QProcess::ExitStatus) { buildBtn->setEnabled(true); });
