@@ -1045,8 +1045,10 @@ TsMuxerWindow::TsMuxerWindow()
         dl->addWidget(guardSpin, rr++, 1);
         dl->addWidget(oversizeCheck, rr++, 0, 1, 2);
         connect(guardCheck, &QCheckBox::toggled, guardSpin, &QWidget::setEnabled);
-        if (auto* v = findChild<QVBoxLayout*>("verticalLayout_2"))
-            v->addWidget(dlBox);
+        // Add to the main window's Output group. Use ui->verticalLayout_2 directly rather than
+        // findChild("verticalLayout_2"): the muxForm progress dialog is a child of this window and has a
+        // layout of the same name, so findChild would inject the group into the progress dialog instead.
+        ui->verticalLayout_2->addWidget(dlBox);
 
         // Re-translate this groupbox on a runtime language change (see the BDMV->ISO tab hook above).
         m_retranslateHooks.push_back(
