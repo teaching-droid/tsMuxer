@@ -3822,6 +3822,26 @@ ISO trotzdem erstellen?</translation>
         <source>BDMV folder found.</source>
         <translation>BDMV-Ordner gefunden.</translation>
     </message>
+    <message>
+        <source>BD-R DL 50 GB (2 layers)</source>
+        <translation>BD-R DL 50 GB (2 Schichten)</translation>
+    </message>
+    <message>
+        <source>BD-RE DL 50 GB (2 layers)</source>
+        <translation>BD-RE DL 50 GB (2 Schichten)</translation>
+    </message>
+    <message>
+        <source>Picking a disc pre-fills its standard Free Sectors below; you can still edit it. Write-once BD-R uses the full capacity, rewritable BD-RE reserves spare area and is a little smaller. BD-RE capacity also depends on how the disc was formatted, so if ImgBurn shows a different Free Sectors for your disc, use that value.</source>
+        <translation>Bei Auswahl eines Rohlings werden die standardmäßigen Free Sectors unten vorab ausgefüllt; Sie können den Wert weiterhin bearbeiten. Einmal beschreibbare BD-R nutzt die volle Kapazität, wiederbeschreibbare BD-RE reserviert Ersatzbereich und ist etwas kleiner. Die Kapazität der BD-RE hängt außerdem davon ab, wie der Rohling formatiert wurde. Wenn ImgBurn also andere Free Sectors für Ihren Rohling anzeigt, verwenden Sie diesen Wert.</translation>
+    </message>
+    <message>
+        <source>Enter Free Sectors manually (advanced)</source>
+        <translation>Free Sectors manuell eingeben (erweitert)</translation>
+    </message>
+    <message>
+        <source>The Free Sectors above are pre-filled for the selected disc and locked to prevent accidental changes. Tick this only if ImgBurn shows a different Free Sectors for your exact disc, then type that number. Un-tick to restore the standard value.</source>
+        <translation>Die Free Sectors oben sind für den ausgewählten Rohling vorab ausgefüllt und gesperrt, um versehentliche Änderungen zu verhindern. Aktivieren Sie dieses Kästchen nur, wenn ImgBurn andere Free Sectors für Ihren konkreten Rohling anzeigt, und geben Sie dann diese Zahl ein. Deaktivieren Sie das Kästchen, um den Standardwert wiederherzustellen.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -3822,6 +3822,26 @@ Build the ISO anyway?</source>
         <source>BDMV folder found.</source>
         <translation>נמצאה תיקיית BDMV.</translation>
     </message>
+    <message>
+        <source>BD-R DL 50 GB (2 layers)</source>
+        <translation>BD-R DL 50 GB (2 שכבות)</translation>
+    </message>
+    <message>
+        <source>BD-RE DL 50 GB (2 layers)</source>
+        <translation>BD-RE DL 50 GB (2 שכבות)</translation>
+    </message>
+    <message>
+        <source>Picking a disc pre-fills its standard Free Sectors below; you can still edit it. Write-once BD-R uses the full capacity, rewritable BD-RE reserves spare area and is a little smaller. BD-RE capacity also depends on how the disc was formatted, so if ImgBurn shows a different Free Sectors for your disc, use that value.</source>
+        <translation>בחירת דיסק ממלאת מראש את ערך Free Sectors הסטנדרטי שלו למטה; עדיין ניתן לערוך אותו. BD-R לצריבה חד-פעמית משתמש בקיבולת המלאה, ואילו BD-RE הניתן לצריבה חוזרת שומר שטח רזרבי ולכן מעט קטן יותר. קיבולת BD-RE תלויה גם באופן שבו הדיסק פורמט, ולכן אם ImgBurn מציג ערך Free Sectors שונה עבור הדיסק שלך, השתמש בערך זה.</translation>
+    </message>
+    <message>
+        <source>Enter Free Sectors manually (advanced)</source>
+        <translation>הזן Free Sectors ידנית (מתקדם)</translation>
+    </message>
+    <message>
+        <source>The Free Sectors above are pre-filled for the selected disc and locked to prevent accidental changes. Tick this only if ImgBurn shows a different Free Sectors for your exact disc, then type that number. Un-tick to restore the standard value.</source>
+        <translation>ערך Free Sectors שלמעלה ממולא מראש עבור הדיסק שנבחר ונעול כדי למנוע שינויים בשוגג. סמן תיבה זו רק אם ImgBurn מציג ערך Free Sectors שונה עבור הדיסק המדויק שלך, ולאחר מכן הקלד את המספר הזה. בטל את הסימון כדי לשחזר את הערך הסטנדרטי.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

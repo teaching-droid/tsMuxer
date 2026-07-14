@@ -3823,6 +3823,26 @@ Build the ISO anyway?</source>
         <source>BDMV folder found.</source>
         <translation>Папка BDMV найдена.</translation>
     </message>
+    <message>
+        <source>BD-R DL 50 GB (2 layers)</source>
+        <translation>BD-R DL 50 GB (2 слоя)</translation>
+    </message>
+    <message>
+        <source>BD-RE DL 50 GB (2 layers)</source>
+        <translation>BD-RE DL 50 GB (2 слоя)</translation>
+    </message>
+    <message>
+        <source>Picking a disc pre-fills its standard Free Sectors below; you can still edit it. Write-once BD-R uses the full capacity, rewritable BD-RE reserves spare area and is a little smaller. BD-RE capacity also depends on how the disc was formatted, so if ImgBurn shows a different Free Sectors for your disc, use that value.</source>
+        <translation>При выборе диска стандартное значение Free Sectors ниже заполняется автоматически; вы по-прежнему можете его изменить. Записываемый один раз BD-R использует всю ёмкость, а перезаписываемый BD-RE резервирует запасную область и немного меньше. Ёмкость BD-RE также зависит от того, как был отформатирован диск, поэтому, если ImgBurn показывает другое значение Free Sectors для вашего диска, используйте это значение.</translation>
+    </message>
+    <message>
+        <source>Enter Free Sectors manually (advanced)</source>
+        <translation>Ввести Free Sectors вручную (для опытных)</translation>
+    </message>
+    <message>
+        <source>The Free Sectors above are pre-filled for the selected disc and locked to prevent accidental changes. Tick this only if ImgBurn shows a different Free Sectors for your exact disc, then type that number. Un-tick to restore the standard value.</source>
+        <translation>Значение Free Sectors выше заполнено автоматически для выбранного диска и заблокировано во избежание случайных изменений. Установите этот флажок, только если ImgBurn показывает другое значение Free Sectors именно для вашего диска, затем введите это число. Снимите флажок, чтобы восстановить стандартное значение.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

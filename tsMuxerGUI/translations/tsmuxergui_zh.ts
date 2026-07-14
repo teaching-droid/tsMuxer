@@ -3822,6 +3822,26 @@ Build the ISO anyway?</source>
         <source>BDMV folder found.</source>
         <translation>已找到 BDMV 文件夹。</translation>
     </message>
+    <message>
+        <source>BD-R DL 50 GB (2 layers)</source>
+        <translation>BD-R DL 50 GB（双层）</translation>
+    </message>
+    <message>
+        <source>BD-RE DL 50 GB (2 layers)</source>
+        <translation>BD-RE DL 50 GB（双层）</translation>
+    </message>
+    <message>
+        <source>Picking a disc pre-fills its standard Free Sectors below; you can still edit it. Write-once BD-R uses the full capacity, rewritable BD-RE reserves spare area and is a little smaller. BD-RE capacity also depends on how the disc was formatted, so if ImgBurn shows a different Free Sectors for your disc, use that value.</source>
+        <translation>选择光盘后，下方会自动预填其标准的 Free Sectors；你仍可自行编辑。一次性写入的 BD-R 使用全部容量，可擦写的 BD-RE 会保留备用区域，因此容量略小。BD-RE 的容量还取决于光盘的格式化方式，所以如果 ImgBurn 为你的光盘显示了不同的 Free Sectors，请以该数值为准。</translation>
+    </message>
+    <message>
+        <source>Enter Free Sectors manually (advanced)</source>
+        <translation>手动输入 Free Sectors（高级）</translation>
+    </message>
+    <message>
+        <source>The Free Sectors above are pre-filled for the selected disc and locked to prevent accidental changes. Tick this only if ImgBurn shows a different Free Sectors for your exact disc, then type that number. Un-tick to restore the standard value.</source>
+        <translation>上方的 Free Sectors 已根据所选光盘预填，并已锁定以防止意外更改。仅当 ImgBurn 为你的具体光盘显示了不同的 Free Sectors 时才勾选此项，然后输入该数字。取消勾选可恢复标准值。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

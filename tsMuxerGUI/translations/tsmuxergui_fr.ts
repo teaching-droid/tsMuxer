@@ -3822,6 +3822,26 @@ Créer l'ISO malgré tout ?</translation>
         <source>BDMV folder found.</source>
         <translation>Dossier BDMV trouvé.</translation>
     </message>
+    <message>
+        <source>BD-R DL 50 GB (2 layers)</source>
+        <translation>BD-R DL 50 GB (2 couches)</translation>
+    </message>
+    <message>
+        <source>BD-RE DL 50 GB (2 layers)</source>
+        <translation>BD-RE DL 50 GB (2 couches)</translation>
+    </message>
+    <message>
+        <source>Picking a disc pre-fills its standard Free Sectors below; you can still edit it. Write-once BD-R uses the full capacity, rewritable BD-RE reserves spare area and is a little smaller. BD-RE capacity also depends on how the disc was formatted, so if ImgBurn shows a different Free Sectors for your disc, use that value.</source>
+        <translation>Choisir un disque pré-remplit ses Free Sectors standard ci-dessous ; vous pouvez toujours les modifier. Le BD-R à écriture unique utilise toute la capacité, tandis que le BD-RE réinscriptible réserve une zone de secours et est un peu plus petit. La capacité du BD-RE dépend aussi de la façon dont le disque a été formaté ; donc si ImgBurn affiche un Free Sectors différent pour votre disque, utilisez cette valeur.</translation>
+    </message>
+    <message>
+        <source>Enter Free Sectors manually (advanced)</source>
+        <translation>Saisir les Free Sectors manuellement (avancé)</translation>
+    </message>
+    <message>
+        <source>The Free Sectors above are pre-filled for the selected disc and locked to prevent accidental changes. Tick this only if ImgBurn shows a different Free Sectors for your exact disc, then type that number. Un-tick to restore the standard value.</source>
+        <translation>Les Free Sectors ci-dessus sont pré-remplis pour le disque sélectionné et verrouillés afin d'éviter toute modification accidentelle. Cochez cette case uniquement si ImgBurn affiche un Free Sectors différent pour votre disque exact, puis saisissez ce nombre. Décochez-la pour rétablir la valeur standard.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

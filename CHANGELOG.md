@@ -1,3 +1,9 @@
+## tsMuxeR 2.10.0
+
+- GUI (BDMV to ISO): the disc-type list now has separate BD-R DL and BD-RE DL entries and pre-fills the disc's standard "Free Sectors" for the chosen media, so you no longer need to run ImgBurn for a standard disc. The field is locked to prevent accidental changes; tick "Enter Free Sectors manually (advanced)" to override it for a non-standard disc (a reformatted BD-RE, or a BDXL burned without defect management). The pre-filled capacities were read from real Verbatim discs and match the Blu-ray/BDXL spec. Requested by Coopervid.
+- Windows: fixed the GUI failing to start on Windows 7 with "api-ms-win-core-winrt-l1-1-0.dll is missing". The release build was shipping an unpatched, Windows 8+ Qt6 because a stale build cache skipped the qt6windows7-patched rebuild; the cache is now keyed so the patched build runs, and CI fails if a WinRT (Windows 8+) import ever returns to the shipped Qt. Reported by Coopervid.
+- CI: updated actions/checkout to v5 (Node.js 20 is deprecated).
+
 ## tsMuxeR 2.9.6
 
 - BDMV to ISO: report copy progress so the GUI progress bar advances while the ISO builds. The build itself is unchanged; it can simply be slow when the source is an optical disc (a few MB/s), and previously the bar sat at 0.0% the whole time and looked hung. tsMuxeR now prints "percent complete" as it copies, so the bar sweeps from 0 to 100. Reported by Coopervid

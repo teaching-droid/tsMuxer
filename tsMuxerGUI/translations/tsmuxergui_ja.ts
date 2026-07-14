@@ -3822,6 +3822,26 @@ Build the ISO anyway?</source>
         <source>BDMV folder found.</source>
         <translation>BDMVフォルダーが見つかりました。</translation>
     </message>
+    <message>
+        <source>BD-R DL 50 GB (2 layers)</source>
+        <translation>BD-R DL 50 GB (2層)</translation>
+    </message>
+    <message>
+        <source>BD-RE DL 50 GB (2 layers)</source>
+        <translation>BD-RE DL 50 GB (2層)</translation>
+    </message>
+    <message>
+        <source>Picking a disc pre-fills its standard Free Sectors below; you can still edit it. Write-once BD-R uses the full capacity, rewritable BD-RE reserves spare area and is a little smaller. BD-RE capacity also depends on how the disc was formatted, so if ImgBurn shows a different Free Sectors for your disc, use that value.</source>
+        <translation>ディスクを選択すると、下の標準的な Free Sectors が自動入力されますが、その後も編集できます。追記型の BD-R は全容量を使用し、書き換え型の BD-RE は予備領域を確保するぶん少し小さくなります。BD-RE の容量はディスクのフォーマット方法にも左右されるため、ImgBurn がお使いのディスクについて異なる Free Sectors を表示する場合は、その値を使用してください。</translation>
+    </message>
+    <message>
+        <source>Enter Free Sectors manually (advanced)</source>
+        <translation>Free Sectors を手動で入力（上級者向け）</translation>
+    </message>
+    <message>
+        <source>The Free Sectors above are pre-filled for the selected disc and locked to prevent accidental changes. Tick this only if ImgBurn shows a different Free Sectors for your exact disc, then type that number. Un-tick to restore the standard value.</source>
+        <translation>上の Free Sectors は選択したディスク用に自動入力されており、誤った変更を防ぐためロックされています。ImgBurn がお使いの実際のディスクについて異なる Free Sectors を表示する場合のみ、このチェックボックスをオンにして、その数値を入力してください。標準値に戻すにはチェックを外してください。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

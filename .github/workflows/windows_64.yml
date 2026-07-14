@@ -13,7 +13,7 @@ jobs:
     runs-on: windows-2022
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       name: checkout
 
     - name: Set up MSVC (x64)
@@ -26,9 +26,9 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ${{ runner.temp }}\qt6-install
-        key: qt6-windows7-x64-6.8.3-ninja-${{ hashFiles('.github/workflows/windows_64.yml') }}
+        key: qt6-windows7-x64-6.8.3-ninja-p2-${{ hashFiles('.github/workflows/windows_64.yml') }}
         restore-keys: |
-          qt6-windows7-x64-6.8.3-ninja-
+          qt6-windows7-x64-6.8.3-ninja-p2-
 
     - name: Setup Qt6 Windows 7 (Build from source)
       if: steps.cache-qt6.outputs.cache-hit != 'true'
@@ -187,6 +187,18 @@ jobs:
           # Bundle the Universal CRT so a bare Windows 7 runs with nothing installed.
           $ucrt = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Redist" -Recurse -Filter ucrtbase.dll -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
           if ($ucrt) { Copy-Item (Join-Path $ucrt.DirectoryName '*.dll') "../bin/" -Force }
+          # Windows 7 guard: the shipped Qt must NOT statically import the WinRT API set
+          # (api-ms-win-core-winrt-l1-1-0.dll is Windows 8+); if it does, the GUI cannot start on
+          # Windows 7. This catches a stale/unpatched Qt build before it reaches a release.
+          $winrtHit = @()
+          foreach ($dll in @("../bin/Qt6Core.dll","../bin/platforms/qwindows.dll")) {
+            if (Test-Path $dll) {
+              $ascii = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes((Resolve-Path $dll)))
+              if ($ascii -match "api-ms-win-core-winrt-l1-1-0\.dll") { $winrtHit += $dll }
+            }
+          }
+          if ($winrtHit.Count -gt 0) { throw "Windows 7 check FAILED: WinRT (Win8+) import found in: $($winrtHit -join ', '). The qt6windows7 patch did not take - the Qt cache is stale; bump the cache key prefix." }
+          Write-Host "Windows 7 check passed: Qt6Core.dll and platforms/qwindows.dll are WinRT-free."
         }
         cd ..
 

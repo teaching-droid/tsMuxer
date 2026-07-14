@@ -614,14 +614,41 @@ TsMuxerWindow::TsMuxerWindow()
         fitLabel->setWordWrap(true);
         // --- Layer-break calculator: disc type + ImgBurn "Free Sectors" -> break(s), auto-filled ---
         auto* discTypeCombo = new QComboBox(bdmvTab);
-        discTypeCombo->addItem(tr("BD-R/RE DL 50 GB (2 layers)"), 2);
+        // Item data: UserRole = layer count (drives the break calculation); UserRole+1 = the disc's standard
+        // blank Free Sectors, pre-filled into the (locked) field below. These are the values ImgBurn reports for
+        // a blank disc: BD-R DL presents the full capacity, while BD-RE (spare area) and BDXL 100/128 GB
+        // (mandatory ISA/OSA spare) are defect-managed and a little smaller - which is why BD-R DL and BD-RE DL
+        // are separate entries. These numbers are facts about the physical media: they were read from real
+        // Verbatim discs (ImgBurn "Free Sectors") and match the Blu-ray/BDXL spec. The larger
+        // no-defect-management capacities (48,878,592 for 100 GB, 62,500,864 for 128 GB) appear only when a
+        // disc is burned without defect-management formatting.
+        discTypeCombo->addItem(tr("BD-R DL 50 GB (2 layers)"), 2);
+        discTypeCombo->setItemData(0, 24438784, Qt::UserRole + 1);
+        discTypeCombo->addItem(tr("BD-RE DL 50 GB (2 layers)"), 2);
+        discTypeCombo->setItemData(1, 23652352, Qt::UserRole + 1);
         discTypeCombo->addItem(tr("BD-R XL 100 GB (3 layers)"), 3);
+        discTypeCombo->setItemData(2, 47305728, Qt::UserRole + 1);
         discTypeCombo->addItem(tr("BD-R XL 128 GB (4 layers)"), 4);
+        discTypeCombo->setItemData(3, 60403712, Qt::UserRole + 1);
+        discTypeCombo->setToolTip(
+            tr("Picking a disc pre-fills its standard Free Sectors below; you can still edit it. Write-once "
+               "BD-R uses the full capacity, rewritable BD-RE reserves spare area and is a little smaller. "
+               "BD-RE capacity also depends on how the disc was formatted, so if ImgBurn shows a different "
+               "Free Sectors for your disc, use that value."));
         auto* freeSectorsEdit = new QLineEdit(bdmvTab);
         freeSectorsEdit->setPlaceholderText(tr("ImgBurn -> Free Sectors (e.g. 47,305,728)"));
         // Accept the number exactly as ImgBurn prints it: grouped with commas, dots or spaces (locale-agnostic).
         freeSectorsEdit->setValidator(
             new QRegularExpressionValidator(QRegularExpression(QStringLiteral("[0-9 .,]*")), freeSectorsEdit));
+        // The value is pre-filled from the disc type and LOCKED, so the correct number cannot be changed by
+        // accident. The checkbox below unlocks it for a non-standard disc (a reformatted BD-RE, or a
+        // no-defect-management BDXL burn); un-ticking re-locks and restores the safe default.
+        freeSectorsEdit->setReadOnly(true);
+        auto* manualCheck = new QCheckBox(tr("Enter Free Sectors manually (advanced)"), bdmvTab);
+        manualCheck->setToolTip(tr("The Free Sectors above are pre-filled for the selected disc and locked to "
+                                   "prevent accidental changes. Tick this only if ImgBurn shows a different Free "
+                                   "Sectors for your exact disc, then type that number. Un-tick to restore the "
+                                   "standard value."));
         auto* helpBtn = new QPushButton(tr("Where do I find this?"), bdmvTab);
         auto* breaksLabel = new QLabel(bdmvTab);
         breaksLabel->setWordWrap(true);
@@ -715,6 +742,14 @@ TsMuxerWindow::TsMuxerWindow()
                          "play. The full 100/128 GB needs a recent player that explicitly supports high-capacity BD-R "
                          "XL media. Always test on your own device.")
                     : QString());
+        };
+        // Pre-fill the standard Free Sectors for the selected disc so the user does not have to run ImgBurn for a
+        // disc whose capacity never changes. Still editable (a reformatted BD-RE, or an odd disc, can differ).
+        auto autoFillFreeSectors = [discTypeCombo, freeSectorsEdit]()
+        {
+            const qint64 fs = discTypeCombo->currentData(Qt::UserRole + 1).toLongLong();
+            if (fs > 0)
+                freeSectorsEdit->setText(QLocale().toString(fs));
         };
         // Colour-coded guidance for the guard size. The layer defect measured on real hardware was about 35 MB,
         // so 64 MB is the safe recommendation. Lower is allowed (0 = align only) but the risk is made visible.
@@ -870,6 +905,7 @@ TsMuxerWindow::TsMuxerWindow()
         g->addWidget(helpBtn, r++, 2);
         g->addWidget(freeSectorsLabel, r, 0);
         g->addWidget(freeSectorsEdit, r++, 1);
+        g->addWidget(manualCheck, r++, 1, 1, 2);
         g->addWidget(breaksLabel, r++, 0, 1, 3);
         g->addWidget(divisLabel, r++, 0, 1, 3);
         g->addWidget(compatLabel, r++, 0, 1, 3);
@@ -879,8 +915,9 @@ TsMuxerWindow::TsMuxerWindow()
         ui->tabWidget->addTab(bdmvTab, tr("BDMV folder -> ISO"));
 
         connect(discTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), bdmvTab,
-                [refresh, updateFit](int)
+                [autoFillFreeSectors, refresh, updateFit](int)
                 {
+                    autoFillFreeSectors();  // pre-fill the picked disc's standard Free Sectors (editable)
                     refresh();
                     updateFit();
                 });
@@ -889,6 +926,13 @@ TsMuxerWindow::TsMuxerWindow()
                 {
                     refresh();
                     updateFit();
+                });
+        connect(manualCheck, &QCheckBox::toggled, bdmvTab,
+                [freeSectorsEdit, autoFillFreeSectors](bool on)
+                {
+                    freeSectorsEdit->setReadOnly(!on);
+                    if (!on)
+                        autoFillFreeSectors();  // re-locking restores the safe pre-filled value
                 });
         connect(guardSpin, QOverload<int>::of(&QSpinBox::valueChanged), bdmvTab,
                 [updateGuard, updateFit](int)
@@ -938,6 +982,7 @@ TsMuxerWindow::TsMuxerWindow()
                            "<b>Important:</b> use ImgBurn's <i>Free Sectors</i>, not the Windows capacity - "
                            "Windows can report a smaller number and put the break in the wrong place."));
                 });
+        autoFillFreeSectors();  // start with the default disc's standard Free Sectors already filled in
         refresh();
         updateGuard();
         recomputeFolderSize();
@@ -948,8 +993,9 @@ TsMuxerWindow::TsMuxerWindow()
         // ui->retranslateUi(); these hand-built widgets are not, so register a hook the changeEvent will call.
         m_retranslateHooks.push_back(
             [this, bdmvTab, info, folderLabel, outputLabel, guardLabel, discTypeLabel, freeSectorsLabel, folderBtn,
-             isoBtn, helpBtn, buildBtn, discTypeCombo, freeSectorsEdit, guardSpin, refresh, updateGuard, beforeCheck,
-             guardBeforeLabel, guardBeforeSpin, guardBeforeHint, fitLabel, updateFit, updateFolderStatus]()
+             isoBtn, helpBtn, buildBtn, discTypeCombo, freeSectorsEdit, manualCheck, guardSpin, refresh, updateGuard,
+             beforeCheck, guardBeforeLabel, guardBeforeSpin, guardBeforeHint, fitLabel, updateFit,
+             updateFolderStatus]()
             {
                 ui->tabWidget->setTabText(ui->tabWidget->indexOf(bdmvTab), tr("BDMV folder -> ISO"));
                 info->setText(
@@ -969,10 +1015,21 @@ TsMuxerWindow::TsMuxerWindow()
                 isoBtn->setText(tr("Browse..."));
                 helpBtn->setText(tr("Where do I find this?"));
                 buildBtn->setText(tr("Build ISO"));
-                discTypeCombo->setItemText(0, tr("BD-R/RE DL 50 GB (2 layers)"));
-                discTypeCombo->setItemText(1, tr("BD-R XL 100 GB (3 layers)"));
-                discTypeCombo->setItemText(2, tr("BD-R XL 128 GB (4 layers)"));
+                discTypeCombo->setItemText(0, tr("BD-R DL 50 GB (2 layers)"));
+                discTypeCombo->setItemText(1, tr("BD-RE DL 50 GB (2 layers)"));
+                discTypeCombo->setItemText(2, tr("BD-R XL 100 GB (3 layers)"));
+                discTypeCombo->setItemText(3, tr("BD-R XL 128 GB (4 layers)"));
+                discTypeCombo->setToolTip(
+                    tr("Picking a disc pre-fills its standard Free Sectors below; you can still edit it. Write-once "
+                       "BD-R uses the full capacity, rewritable BD-RE reserves spare area and is a little smaller. "
+                       "BD-RE capacity also depends on how the disc was formatted, so if ImgBurn shows a different "
+                       "Free Sectors for your disc, use that value."));
                 freeSectorsEdit->setPlaceholderText(tr("ImgBurn -> Free Sectors (e.g. 47,305,728)"));
+                manualCheck->setText(tr("Enter Free Sectors manually (advanced)"));
+                manualCheck->setToolTip(tr("The Free Sectors above are pre-filled for the selected disc and locked to "
+                                           "prevent accidental changes. Tick this only if ImgBurn shows a different "
+                                           "Free Sectors for your exact disc, then type that number. Un-tick to "
+                                           "restore the standard value."));
                 guardSpin->setSuffix(tr(" MB"));
                 guardSpin->setToolTip(
                     tr("The zeros fill whole 2048-byte sectors and snap to the movie's file "

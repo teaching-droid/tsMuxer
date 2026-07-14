@@ -3823,6 +3823,26 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>BDMV folder found.</source>
         <translation>Carpeta BDMV encontrada.</translation>
     </message>
+    <message>
+        <source>BD-R DL 50 GB (2 layers)</source>
+        <translation>BD-R DL 50 GB (2 capas)</translation>
+    </message>
+    <message>
+        <source>BD-RE DL 50 GB (2 layers)</source>
+        <translation>BD-RE DL 50 GB (2 capas)</translation>
+    </message>
+    <message>
+        <source>Picking a disc pre-fills its standard Free Sectors below; you can still edit it. Write-once BD-R uses the full capacity, rewritable BD-RE reserves spare area and is a little smaller. BD-RE capacity also depends on how the disc was formatted, so if ImgBurn shows a different Free Sectors for your disc, use that value.</source>
+        <translation>Al elegir un disco se rellenan automáticamente sus Free Sectors estándar de abajo; aun así puedes editarlos. El BD-R de una sola escritura usa toda la capacidad, mientras que el BD-RE regrabable reserva un área de repuesto y es un poco más pequeño. La capacidad del BD-RE también depende de cómo se haya formateado el disco, así que si ImgBurn muestra unos Free Sectors distintos para tu disco, usa ese valor.</translation>
+    </message>
+    <message>
+        <source>Enter Free Sectors manually (advanced)</source>
+        <translation>Introducir Free Sectors manualmente (avanzado)</translation>
+    </message>
+    <message>
+        <source>The Free Sectors above are pre-filled for the selected disc and locked to prevent accidental changes. Tick this only if ImgBurn shows a different Free Sectors for your exact disc, then type that number. Un-tick to restore the standard value.</source>
+        <translation>Los Free Sectors de arriba se rellenan automáticamente para el disco seleccionado y quedan bloqueados para evitar cambios accidentales. Marca esta casilla solo si ImgBurn muestra unos Free Sectors distintos para tu disco concreto, y luego escribe ese número. Desmarca la casilla para restaurar el valor estándar.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

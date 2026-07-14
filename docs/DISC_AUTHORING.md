@@ -74,7 +74,7 @@ hands back. Example seen on a real Verbatim BD-R DL:
 | Source | Total sectors | / 2 | Correct? |
 |--------|---------------|-----|----------|
 | ImgBurn "Disc Information, Free Sectors" | **24,438,784** | **12,219,392** | yes, the real break |
-| Windows IMAPI `TotalSectorsOnMedia` | 23,652,352 | 11,826,176 | no, a partial format-capacity descriptor, 0.8 GB too early |
+| Windows IMAPI `TotalSectorsOnMedia` | 23,652,352 | 11,826,176 | no for a BD-R DL: 23,652,352 is the defect-managed (BD-RE DL) capacity, 0.8 GB too early |
 
 Feeding the wrong (smaller) number puts the guard zone about 0.8 GB before the real layer
 transition, so live video ends up on the defect-prone sectors, which is the exact thing the
@@ -99,9 +99,15 @@ The GUI exposes the same features with no command line. On the "BDMV folder -> I
 
 - **BDMV folder and output ISO.** Point the folder at the disc root that holds `BDMV/` (and
   `CERTIFICATE/`). A mounted ISO drive works as the folder too.
-- **Layer-break calculator.** Choose the disc type and paste the disc's "Free Sectors" from
-  ImgBurn; the break sector(s) are calculated for you, with a warning if the value does not
-  match the selected disc type.
+- **Disc type with pre-filled Free Sectors.** Pick the disc from the list (BD-R DL 50 GB,
+  BD-RE DL 50 GB, BD-R XL 100 GB, BD-R XL 128 GB) and its standard "Free Sectors" value is
+  filled in and **locked** automatically, so you do not have to run ImgBurn and cannot change
+  the value by accident; the layer break(s) are calculated for you. BD-R DL and BD-RE DL are
+  separate entries because they differ: a blank BD-R DL holds 24,438,784 sectors (full
+  capacity), while a BD-RE DL holds 23,652,352 (it reserves defect-management spare). If your
+  disc is non-standard (a reformatted BD-RE, or a BDXL burned without defect management), tick
+  **Enter Free Sectors manually (advanced)** to unlock the field and type the value ImgBurn
+  shows for your exact disc.
 - **Layer-break guard (after break).** The guard size in MB, with a colour-coded hint (64 MB
   recommended). Tick **Also fill before the break (advanced)** to reveal a second field and pad
   the zone before the break as well, for media that are weak on both sides of the transition.
@@ -110,6 +116,26 @@ The GUI exposes the same features with no command line. On the "BDMV folder -> I
   space is left), red when it does not (and by how much). The guard band counts toward the
   estimate, so raising the buffer updates it at once.
 - **Build ISO** runs the same `--bdmv-to-iso` command with those values.
+
+## Standard capacities the GUI pre-fills
+
+The disc-type dropdown fills these blank-disc "Free Sectors" values (2048-byte sectors), the
+same numbers ImgBurn reports for a normal blank disc, and locks the field so the value cannot
+be changed by accident:
+
+| Disc | Free Sectors | Note |
+|------|-------------|------|
+| BD-R DL 50 GB | 24,438,784 | write-once, full capacity |
+| BD-RE DL 50 GB | 23,652,352 | rewritable, reserves defect-management spare |
+| BD-R XL 100 GB | 47,305,728 | BDXL, defect-managed |
+| BD-R XL 128 GB | 60,403,712 | BDXL, defect-managed |
+
+These are the defect-managed (normal) capacities. The numbers are facts about the media: they
+were read from real Verbatim discs (ImgBurn "Free Sectors") and match the Blu-ray/BDXL spec. A
+disc burned WITHOUT defect-management formatting has a larger full capacity (for example
+48,878,592 for 100 GB or 62,500,864 for 128 GB); if ImgBurn shows one of those for your disc,
+tick **Enter Free Sectors manually (advanced)** and type it. BD-RE capacity in particular
+depends on how the disc was formatted, which is why the field can be unlocked.
 
 ## Guard size on the burned disc (sector alignment)
 
