@@ -85,7 +85,7 @@ irgendeinem beliebigen API-Wert. Beispiel von einem echten Verbatim BD-R DL:
 | Quelle | Gesamtsektoren | / 2 | richtig? |
 |--------|----------------|-----|----------|
 | ImgBurn: „Disc Information, **Free Sectors**" | **24.438.784** | **12.219.392** | ✅ echter Break |
-| Windows/IMAPI `TotalSectorsOnMedia` | 23.652.352 | 11.826.176 | ❌ nur ein Teil-Kapazitätswert, 0,8 GB zu früh |
+| Windows/IMAPI `TotalSectorsOnMedia` | 23.652.352 | 11.826.176 | ❌ für eine BD-R DL: 23.652.352 ist die Kapazität mit Fehlerverwaltung (BD-RE DL), 0,8 GB zu früh |
 
 Ein falscher (zu kleiner) Wert legt die Schutzzone etwa 0,8 GB **vor** den echten
 Layer-Wechsel. Dann liegen doch Videodaten auf den kritischen Sektoren. **Immer die volle
@@ -157,10 +157,25 @@ statt eines Abbruchs.
 Die grafische Oberfläche bietet dieselben Funktionen ganz ohne Kommandozeile. Auf dem Reiter „BDMV folder -> ISO":
 
 - **BDMV folder and output ISO.** Wähle als Ordner das Wurzelverzeichnis der Disc, das `BDMV/` (und `CERTIFICATE/`) enthält. Ein eingebundenes ISO-Laufwerk lässt sich genauso als Ordner verwenden.
-- **Layer-break calculator.** Wähle den Disc-Typ und füge die „Free Sectors" aus ImgBurn ein. Die Break-Sektoren werden automatisch berechnet; passt der Wert nicht zum gewählten Disc-Typ, erscheint eine Warnung.
+- **Disc-Typ mit vorausgefüllten Free Sectors.** Wähle die Disc aus der Liste (BD-R DL 50 GB, BD-RE DL 50 GB, BD-R XL 100 GB, BD-R XL 128 GB); die standardmäßigen „Free Sectors" werden automatisch eingetragen und **gesperrt**, sodass du ImgBurn nicht ausführen musst und den Wert nicht versehentlich änderst. Die Break-Sektoren werden für dich berechnet. BD-R DL und BD-RE DL sind getrennte Einträge, weil sie sich unterscheiden: eine leere BD-R DL fasst 24.438.784 Sektoren (volle Kapazität), eine BD-RE DL dagegen 23.652.352 (sie reserviert Ersatzbereich für die Fehlerverwaltung). Ist deine Disc nicht standardmäßig (eine neu formatierte BD-RE oder eine ohne Fehlerverwaltung gebrannte BDXL), setze das Häkchen bei **Enter Free Sectors manually (advanced)**, um das Feld zu entsperren und den Wert einzugeben, den ImgBurn für deine konkrete Disc anzeigt.
 - **Layer-break guard (after break).** Hier legst du die Größe der Schutzzone in MB fest; ein farblich hervorgehobener Hinweis nennt den empfohlenen Wert (64 MB). Setze das Häkchen bei **Also fill before the break (advanced)**, um ein zweites Feld einzublenden und auch die Zone vor dem Break aufzufüllen. Das hilft bei Medien, die auf beiden Seiten des Übergangs schwach sind.
 - **Fit estimate.** Eine Live-Anzeige zeigt die geschätzte Image-Größe im Verhältnis zur Disc-Kapazität an, während du Ordner, Disc-Typ, „Free Sectors" und Schutzzone einträgst: grün, wenn es passt (und wie viel Platz übrig bleibt), rot, wenn nicht (und um wie viel). Die Schutzzone fließt in die Schätzung ein; eine größere Zone aktualisiert die Anzeige also sofort.
 - **Build ISO** führt denselben `--bdmv-to-iso`-Befehl mit diesen Werten aus.
+
+---
+
+## Standard-Kapazitäten, die die Oberfläche vorausfüllt
+
+Die Disc-Typ-Auswahl trägt diese „Free Sectors" einer leeren Disc ein (2048-Byte-Sektoren), dieselben Zahlen, die ImgBurn für eine normale leere Disc anzeigt, und sperrt das Feld, damit der Wert nicht versehentlich geändert wird:
+
+| Disc | Free Sectors | Hinweis |
+|------|-------------|---------|
+| BD-R DL 50 GB | 24.438.784 | einmal beschreibbar, volle Kapazität |
+| BD-RE DL 50 GB | 23.652.352 | wiederbeschreibbar, reserviert Ersatzbereich für die Fehlerverwaltung |
+| BD-R XL 100 GB | 47.305.728 | BDXL, mit Fehlerverwaltung |
+| BD-R XL 128 GB | 60.403.712 | BDXL, mit Fehlerverwaltung |
+
+Das sind die (normalen) Kapazitäten mit Fehlerverwaltung. Die Zahlen sind Fakten über das Medium: Sie wurden von echten Verbatim-Discs abgelesen (ImgBurn „Free Sectors") und stimmen mit der Blu-ray/BDXL-Spezifikation überein. Eine ohne Fehlerverwaltungs-Formatierung gebrannte Disc hat eine größere volle Kapazität (zum Beispiel 48.878.592 bei 100 GB oder 62.500.864 bei 128 GB); zeigt ImgBurn eine davon für deine Disc an, setze das Häkchen bei **Enter Free Sectors manually (advanced)** und gib sie ein. Besonders die BD-RE-Kapazität hängt davon ab, wie die Disc formatiert wurde, weshalb sich das Feld entsperren lässt.
 
 ---
 
