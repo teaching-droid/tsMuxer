@@ -1,3 +1,7 @@
+## tsMuxeR 2.9.1
+
+- GUI: move the dual-layer controls (Fit to disc, Layer-break guard, Allow oversize) out of the progress dialog into the main window Output group, and show them only for Blu-ray ISO or Blu-ray folder output (hidden for TS, M2TS, MKV, AVCHD and Demux)
+
 ## tsMuxeR 2.9.0
 
 - `--layer-break-guard-before=<MB>`: size the guard zone before the layer break on its own, instead of the fixed 4 MB margin, for media that are defective on both sides of the transition. The default stays asymmetric (the measured defect sits at the start of the next layer)

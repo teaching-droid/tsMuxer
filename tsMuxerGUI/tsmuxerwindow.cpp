@@ -1049,6 +1049,15 @@ TsMuxerWindow::TsMuxerWindow()
         // findChild("verticalLayout_2"): the muxForm progress dialog is a child of this window and has a
         // layout of the same name, so findChild would inject the group into the progress dialog instead.
         ui->verticalLayout_2->addWidget(dlBox);
+        // These options only apply to Blu-ray ISO / folder output (see the meta builder), so show the group
+        // only for those output modes and keep it hidden for TS / M2TS / MKV / AVCHD / Demux.
+        auto updateDlVisibility = [this, dlBox]()
+        { dlBox->setVisible(ui->radioButtonBluRayISO->isChecked() || ui->radioButtonBluRay->isChecked()); };
+        updateDlVisibility();
+        connect(ui->radioButtonBluRayISO, &QAbstractButton::toggled, dlBox,
+                [updateDlVisibility](bool) { updateDlVisibility(); });
+        connect(ui->radioButtonBluRay, &QAbstractButton::toggled, dlBox,
+                [updateDlVisibility](bool) { updateDlVisibility(); });
 
         // Re-translate this groupbox on a runtime language change (see the BDMV->ISO tab hook above).
         m_retranslateHooks.push_back(
