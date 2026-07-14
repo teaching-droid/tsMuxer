@@ -835,15 +835,31 @@ TsMuxerWindow::TsMuxerWindow()
         ui->tabWidget->addTab(bdmvTab, tr("BDMV folder -> ISO"));
 
         connect(discTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), bdmvTab,
-                [refresh, updateFit](int) { refresh(); updateFit(); });
+                [refresh, updateFit](int)
+                {
+                    refresh();
+                    updateFit();
+                });
         connect(freeSectorsEdit, &QLineEdit::textChanged, bdmvTab,
-                [refresh, updateFit](const QString&) { refresh(); updateFit(); });
+                [refresh, updateFit](const QString&)
+                {
+                    refresh();
+                    updateFit();
+                });
         connect(guardSpin, QOverload<int>::of(&QSpinBox::valueChanged), bdmvTab,
-                [updateGuard, updateFit](int) { updateGuard(); updateFit(); });
+                [updateGuard, updateFit](int)
+                {
+                    updateGuard();
+                    updateFit();
+                });
         connect(guardBeforeSpin, QOverload<int>::of(&QSpinBox::valueChanged), bdmvTab,
                 [updateFit](int) { updateFit(); });
         connect(folderEdit, &QLineEdit::textChanged, bdmvTab,
-                [recomputeFolderSize, updateFit](const QString&) { recomputeFolderSize(); updateFit(); });
+                [recomputeFolderSize, updateFit](const QString&)
+                {
+                    recomputeFolderSize();
+                    updateFit();
+                });
         connect(beforeCheck, &QCheckBox::toggled, bdmvTab,
                 [guardBeforeLabel, guardBeforeSpin, guardBeforeHint, updateFit](bool on)
                 {
@@ -948,8 +964,8 @@ TsMuxerWindow::TsMuxerWindow()
                         isoEdit->setText(QDir::toNativeSeparators(f));
                 });
         connect(buildBtn, &QPushButton::clicked, this,
-                [this, folderEdit, isoEdit, guardSpin, discTypeCombo, freeSectorsEdit, breaksList, buildBtn, beforeCheck,
-                 guardBeforeSpin]
+                [this, folderEdit, isoEdit, guardSpin, discTypeCombo, freeSectorsEdit, breaksList, buildBtn,
+                 beforeCheck, guardBeforeSpin]
                 {
                     const QString folder = folderEdit->text().trimmed();
                     const QString iso = isoEdit->text().trimmed();
