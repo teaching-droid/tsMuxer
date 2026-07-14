@@ -187,18 +187,41 @@ jobs:
           # Bundle the Universal CRT so a bare Windows 7 runs with nothing installed.
           $ucrt = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Redist" -Recurse -Filter ucrtbase.dll -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
           if ($ucrt) { Copy-Item (Join-Path $ucrt.DirectoryName '*.dll') "../bin/" -Force }
-          # Windows 7 guard: the shipped Qt must NOT statically import the WinRT API set
-          # (api-ms-win-core-winrt-l1-1-0.dll is Windows 8+); if it does, the GUI cannot start on
-          # Windows 7. This catches a stale/unpatched Qt build before it reaches a release.
+          # Replace the Qt runtime with the crystalidea qt6windows7 PREBUILT Windows 7 DLLs (same Qt
+          # 6.8.3 / MSVC, binary compatible). Building qtbase from the patched source is still needed
+          # above for moc/headers/libs, but its Qt6Core.dll and qwindows.dll come out with a WinRT
+          # (Windows 8+) import, so the GUI cannot start on Windows 7; the prebuilt runtime is
+          # WinRT-free and Windows 7 proven. Only files we already ship are overwritten.
+          $w7zip = "${{ runner.temp }}\qt6win7-runtime.7z"
+          $w7dir = "${{ runner.temp }}\qt6win7-runtime"
+          Invoke-WebRequest -Uri "https://github.com/crystalidea/qt6windows7/releases/download/v6.8.3/qt6_x64_to_run_on_windows7.7z" -OutFile $w7zip
+          7z x $w7zip "-o$w7dir" -y | Out-Null
+          # Swap Qt files only. The VC++/UCRT runtime stays the fresh one bundled above: our
+          # executables are built with the newest toolset and need it, and a newer CRT runs the
+          # prebuilt Qt fine, while the prebuilt package's older msvcp140 might miss exports.
+          $replaced = 0
+          Get-ChildItem -Recurse "../bin" -Filter "*.dll" | ForEach-Object {
+            $rel = [System.IO.Path]::GetRelativePath((Resolve-Path "../bin"), $_.FullName)
+            if ($rel -notmatch '^(Qt6[^\\]*\.dll$|platforms\\|styles\\|imageformats\\|generic\\|tls\\)') { return }
+            $src = Join-Path $w7dir $rel
+            if (Test-Path $src) { Copy-Item $src $_.FullName -Force; $replaced++ }
+          }
+          Write-Host "Replaced $replaced Qt runtime files with the Windows 7 prebuilt ones."
+          if ($replaced -lt 5) { throw "Windows 7 runtime swap failed: only $replaced files replaced (expected Qt6Core/Gui/Widgets/Network + qwindows at least)." }
+          # This optional plugin imports WinRT and has no Windows 7 build; Qt runs fine without it
+          # (it only provides network change notifications).
+          Remove-Item "../bin/networkinformation" -Recurse -Force -ErrorAction SilentlyContinue
+          # Windows 7 guard: nothing the loader touches may import the WinRT API set
+          # (api-ms-win-core-winrt-l1-1-0.dll is Windows 8+), or the GUI cannot start on Windows 7.
           $winrtHit = @()
-          foreach ($dll in @("../bin/Qt6Core.dll","../bin/platforms/qwindows.dll")) {
+          foreach ($dll in @("../bin/Qt6Core.dll","../bin/Qt6Gui.dll","../bin/Qt6Widgets.dll","../bin/Qt6Network.dll","../bin/platforms/qwindows.dll")) {
             if (Test-Path $dll) {
               $ascii = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes((Resolve-Path $dll)))
               if ($ascii -match "api-ms-win-core-winrt-l1-1-0\.dll") { $winrtHit += $dll }
             }
           }
-          if ($winrtHit.Count -gt 0) { throw "Windows 7 check FAILED: WinRT (Win8+) import found in: $($winrtHit -join ', '). The qt6windows7 patch did not take - the Qt cache is stale; bump the cache key prefix." }
-          Write-Host "Windows 7 check passed: Qt6Core.dll and platforms/qwindows.dll are WinRT-free."
+          if ($winrtHit.Count -gt 0) { throw "Windows 7 check FAILED: WinRT (Win8+) import found in: $($winrtHit -join ', ')." }
+          Write-Host "Windows 7 check passed: the shipped Qt runtime is WinRT-free."
         }
         cd ..
 
