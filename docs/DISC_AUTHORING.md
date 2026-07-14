@@ -29,6 +29,26 @@ Playback target: software players (VLC, libbluray, Kodi, PowerDVD) are the relia
 environment for a self-authored BD-J disc. Some set-top players restrict BD-J on recordable
 media.
 
+## Working from an existing ISO
+
+tsMuxeR reads a BDMV folder, not an ISO image, and it never edits an ISO in place. You do not
+have to unpack the ISO first, though. Mount it in a virtual drive so it shows up as a drive
+letter, then point `--bdmv-to-iso` at that drive and let tsMuxeR read the disc structure
+straight from the mounted image:
+
+- Windows 8, 10 and 11: double-click the `.iso` to mount it (for example as `E:`).
+- Windows 7: install a free virtual-drive tool (WinCDEmu or Virtual CloneDrive), then mount.
+
+```
+tsMuxeR --bdmv-to-iso --layer-break-guard=64 --layer-break-lbn=<breaks> E:\ out.iso
+```
+
+tsMuxeR reads the files from the mounted drive and writes a new guarded ISO in one pass, byte
+for byte, with no re-mux. This only works with unencrypted material: a mounted retail image
+that still carries AACS is not readable as plain files. You only need this step when you are
+burning to dual-layer or BD-R XL media and want the layer-break guard. A single-layer image
+that already plays can be burned directly.
+
 ## IMPORTANT: which numbers are `--layer-break-lbn`?
 
 `--layer-break-lbn` is the sector where the drive physically switches from one layer to the

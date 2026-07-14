@@ -34,6 +34,30 @@ Diese Erweiterung von tsMuxeR packt einen **unverschlüsselten** BDMV-Ordner
 
 ---
 
+## Aus einem vorhandenen ISO arbeiten
+
+tsMuxeR liest einen BDMV-Ordner, kein ISO-Image, und bearbeitet ein ISO nie direkt. Du musst
+das ISO aber nicht vorher entpacken. Binde es in einem virtuellen Laufwerk ein, sodass es als
+Laufwerksbuchstabe erscheint, und richte `--bdmv-to-iso` dann auf dieses Laufwerk. tsMuxeR
+liest die Disc-Struktur direkt aus dem eingebundenen Image:
+
+- Windows 8, 10 und 11: das `.iso` doppelklicken, um es einzubinden (z. B. als `E:`).
+- Windows 7: ein kostenloses Tool für virtuelle Laufwerke installieren (WinCDEmu oder
+  Virtual CloneDrive), dann einbinden.
+
+```
+tsMuxeR --bdmv-to-iso --layer-break-guard=64 --layer-break-lbn=<Sektor[,Sektor...]> E:\ Ausgabe.iso
+```
+
+tsMuxeR liest die Dateien vom eingebundenen Laufwerk und schreibt in einem Durchgang ein
+neues ISO mit Schutzzone, byte-genau und ohne neues Muxen. Das funktioniert nur mit
+**unverschlüsseltem** Material: ein eingebundenes Kaufdisc-Image, das noch AACS trägt, ist so
+nicht als normale Dateien lesbar. Diesen Schritt brauchst du nur, wenn du auf Dual-Layer- oder
+BD-R-XL-Medien brennst und die Layer-Break-Schutzzone willst. Ein Single-Layer-Image, das
+bereits läuft, kannst du direkt brennen.
+
+---
+
 ## Schritt 1: Layer-Break der Disc ermitteln (WICHTIG!)
 
 Der Wert für `--layer-break-lbn` ist der Sektor, an dem der Brenner physisch von einem
