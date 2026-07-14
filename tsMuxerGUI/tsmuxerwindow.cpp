@@ -578,6 +578,8 @@ TsMuxerWindow::TsMuxerWindow()
         auto* folderBtn = new QPushButton(tr("Browse..."), bdmvTab);
         auto* isoEdit = new QLineEdit(bdmvTab);
         auto* isoBtn = new QPushButton(tr("Browse..."), bdmvTab);
+        auto* folderStatusLabel = new QLabel(bdmvTab);
+        folderStatusLabel->setWordWrap(true);
         auto* guardSpin = new QSpinBox(bdmvTab);
         guardSpin->setRange(0, 1024);
         guardSpin->setValue(64);
@@ -756,6 +758,14 @@ TsMuxerWindow::TsMuxerWindow()
                 *folderBytes = -1;
                 return;
             }
+            // On read-only media (a mounted ISO or optical disc) the folder is the whole disc, so use the
+            // volume's used space instead of walking every file, which is slow on an optical drive.
+            const QStorageInfo si(folder);
+            if (si.isValid() && si.isReadOnly())
+            {
+                *folderBytes = si.bytesTotal() - si.bytesAvailable();
+                return;
+            }
             qint64 sum = 0;
             const QDir base(folder);
             QDirIterator it(folder, QDir::Files, QDirIterator::Subdirectories);
@@ -768,6 +778,35 @@ TsMuxerWindow::TsMuxerWindow()
                 sum += it.fileInfo().size();
             }
             *folderBytes = sum;
+        };
+        // Immediate feedback on the selected folder: whether it holds a BDMV, and whether it is a read-only disc
+        // (in which case the output ISO must go to a writable location, not the disc).
+        auto updateFolderStatus = [folderEdit, folderStatusLabel]()
+        {
+            const QString folder = folderEdit->text().trimmed();
+            if (folder.isEmpty())
+            {
+                folderStatusLabel->setText(QString());
+                return;
+            }
+            if (!QDir(folder).exists("BDMV"))
+            {
+                folderStatusLabel->setStyleSheet(QStringLiteral("color:#b26a00; font-weight:bold;"));
+                folderStatusLabel->setText(
+                    tr("No BDMV subfolder here. Select the folder that contains BDMV (a disc's root)."));
+            }
+            else if (QStorageInfo(folder).isReadOnly())
+            {
+                folderStatusLabel->setStyleSheet(QStringLiteral("color:#1565c0; font-weight:bold;"));
+                folderStatusLabel->setText(
+                    tr("BDMV disc detected (read-only). The output ISO cannot be written to the "
+                       "disc, so choose a writable output location."));
+            }
+            else
+            {
+                folderStatusLabel->setStyleSheet(QStringLiteral("color:#2e7d32; font-weight:bold;"));
+                folderStatusLabel->setText(tr("BDMV folder found."));
+            }
         };
         auto updateFit =
             [folderBytes, readFreeSectors, discTypeCombo, guardSpin, beforeCheck, guardBeforeSpin, fitLabel]()
@@ -815,6 +854,7 @@ TsMuxerWindow::TsMuxerWindow()
         g->addWidget(folderLabel, r, 0);
         g->addWidget(folderEdit, r, 1);
         g->addWidget(folderBtn, r++, 2);
+        g->addWidget(folderStatusLabel, r++, 0, 1, 3);
         g->addWidget(outputLabel, r, 0);
         g->addWidget(isoEdit, r, 1);
         g->addWidget(isoBtn, r++, 2);
@@ -859,8 +899,9 @@ TsMuxerWindow::TsMuxerWindow()
         connect(guardBeforeSpin, QOverload<int>::of(&QSpinBox::valueChanged), bdmvTab,
                 [updateFit](int) { updateFit(); });
         connect(folderEdit, &QLineEdit::textChanged, bdmvTab,
-                [recomputeFolderSize, updateFit](const QString&)
+                [updateFolderStatus, recomputeFolderSize, updateFit](const QString&)
                 {
+                    updateFolderStatus();
                     recomputeFolderSize();
                     updateFit();
                 });
@@ -901,13 +942,14 @@ TsMuxerWindow::TsMuxerWindow()
         updateGuard();
         recomputeFolderSize();
         updateFit();
+        updateFolderStatus();
 
         // Re-translate everything created here on a runtime language change. Designer widgets are handled by
         // ui->retranslateUi(); these hand-built widgets are not, so register a hook the changeEvent will call.
         m_retranslateHooks.push_back(
             [this, bdmvTab, info, folderLabel, outputLabel, guardLabel, discTypeLabel, freeSectorsLabel, folderBtn,
              isoBtn, helpBtn, buildBtn, discTypeCombo, freeSectorsEdit, guardSpin, refresh, updateGuard, beforeCheck,
-             guardBeforeLabel, guardBeforeSpin, guardBeforeHint, fitLabel, updateFit]()
+             guardBeforeLabel, guardBeforeSpin, guardBeforeHint, fitLabel, updateFit, updateFolderStatus]()
             {
                 ui->tabWidget->setTabText(ui->tabWidget->indexOf(bdmvTab), tr("BDMV folder -> ISO"));
                 info->setText(
@@ -946,9 +988,10 @@ TsMuxerWindow::TsMuxerWindow()
                 guardBeforeHint->setText(
                     tr("The default is asymmetric (most defects sit at the start of the next layer). Turn this on only "
                        "for media that also fail just before the break."));
-                refresh();      // re-render the dynamic break / warning labels in the new language
-                updateGuard();  // re-render the guard hint in the new language
-                updateFit();    // re-render the fit estimate in the new language
+                refresh();             // re-render the dynamic break / warning labels in the new language
+                updateGuard();         // re-render the guard hint in the new language
+                updateFit();           // re-render the fit estimate in the new language
+                updateFolderStatus();  // re-render the folder status in the new language
             });
 
         connect(folderBtn, &QPushButton::clicked, this,

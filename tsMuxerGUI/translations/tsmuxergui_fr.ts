@@ -3810,6 +3810,18 @@ Créer l'ISO malgré tout ?</translation>
         <source>The output ISO is on a read-only drive, so it cannot be written there. Choose a writable output location (not the mounted disc).</source>
         <translation>L'ISO de sortie se trouve sur un lecteur en lecture seule, il est donc impossible de l'y écrire. Choisissez un emplacement de sortie accessible en écriture (pas le disque monté).</translation>
     </message>
+    <message>
+        <source>No BDMV subfolder here. Select the folder that contains BDMV (a disc's root).</source>
+        <translation>Aucun sous-dossier BDMV ici. Sélectionnez le dossier qui contient BDMV (la racine d'un disque).</translation>
+    </message>
+    <message>
+        <source>BDMV disc detected (read-only). The output ISO cannot be written to the disc, so choose a writable output location.</source>
+        <translation>Disque BDMV détecté (en lecture seule). L'ISO de sortie ne peut pas être écrite sur le disque. Choisissez donc un emplacement de sortie accessible en écriture.</translation>
+    </message>
+    <message>
+        <source>BDMV folder found.</source>
+        <translation>Dossier BDMV trouvé.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

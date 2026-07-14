@@ -3810,6 +3810,18 @@ Build the ISO anyway?</source>
         <source>The output ISO is on a read-only drive, so it cannot be written there. Choose a writable output location (not the mounted disc).</source>
         <translation>输出 ISO 位于只读驱动器上，因此无法写入。请选择一个可写的输出位置（不要选择已挂载的光盘）。</translation>
     </message>
+    <message>
+        <source>No BDMV subfolder here. Select the folder that contains BDMV (a disc's root).</source>
+        <translation>这里没有 BDMV 子文件夹。请选择包含 BDMV 的文件夹(光盘根目录)。</translation>
+    </message>
+    <message>
+        <source>BDMV disc detected (read-only). The output ISO cannot be written to the disc, so choose a writable output location.</source>
+        <translation>检测到 BDMV 光盘(只读)。输出 ISO 无法写入该光盘,请选择一个可写的输出位置。</translation>
+    </message>
+    <message>
+        <source>BDMV folder found.</source>
+        <translation>已找到 BDMV 文件夹。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

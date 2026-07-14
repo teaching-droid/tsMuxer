@@ -1,3 +1,7 @@
+## tsMuxeR 2.9.5
+
+- GUI: the "BDMV folder to ISO" tab now shows immediate feedback when you pick a folder: whether a BDMV was found, and for a read-only disc (a mounted ISO or optical drive) a note that the output ISO must go to a writable location. The folder size is also read instantly for discs (from the volume) instead of walking every file, so selecting an optical drive no longer stalls. Reported by Coopervid
+
 ## tsMuxeR 2.9.4
 
 - Fix reading a BDMV from a mounted ISO or optical disc. The recursive directory scan tested the directory attribute with XOR, so on read-only media (where folders also carry the read-only and archive attributes) it skipped every folder and reported no files. Reported by Coopervid

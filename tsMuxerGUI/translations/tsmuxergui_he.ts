@@ -3810,6 +3810,18 @@ Build the ISO anyway?</source>
         <source>The output ISO is on a read-only drive, so it cannot be written there. Choose a writable output location (not the mounted disc).</source>
         <translation>קובץ ה-ISO של הפלט נמצא בכונן לקריאה בלבד, ולכן לא ניתן לכתוב אותו שם. בחר מיקום פלט הניתן לכתיבה (לא התקליטור המחובר).</translation>
     </message>
+    <message>
+        <source>No BDMV subfolder here. Select the folder that contains BDMV (a disc's root).</source>
+        <translation>אין כאן תת-תיקיית BDMV. בחר את התיקייה שמכילה את BDMV (שורש התקליטור).</translation>
+    </message>
+    <message>
+        <source>BDMV disc detected (read-only). The output ISO cannot be written to the disc, so choose a writable output location.</source>
+        <translation>זוהה תקליטור BDMV (לקריאה בלבד). לא ניתן לכתוב את קובץ ה-ISO של הפלט אל התקליטור, ולכן בחר מיקום פלט הניתן לכתיבה.</translation>
+    </message>
+    <message>
+        <source>BDMV folder found.</source>
+        <translation>נמצאה תיקיית BDMV.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

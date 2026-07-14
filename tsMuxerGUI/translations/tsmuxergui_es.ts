@@ -3811,6 +3811,18 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>The output ISO is on a read-only drive, so it cannot be written there. Choose a writable output location (not the mounted disc).</source>
         <translation>La ISO de salida está en una unidad de solo lectura, así que no se puede escribir ahí. Elige una ubicación de salida donde se pueda escribir (no el disco montado).</translation>
     </message>
+    <message>
+        <source>No BDMV subfolder here. Select the folder that contains BDMV (a disc's root).</source>
+        <translation>Aquí no hay ninguna subcarpeta BDMV. Selecciona la carpeta que contiene BDMV (la raíz de un disco).</translation>
+    </message>
+    <message>
+        <source>BDMV disc detected (read-only). The output ISO cannot be written to the disc, so choose a writable output location.</source>
+        <translation>Disco BDMV detectado (solo lectura). La ISO de salida no se puede escribir en el disco, así que elige una ubicación de salida donde se pueda escribir.</translation>
+    </message>
+    <message>
+        <source>BDMV folder found.</source>
+        <translation>Carpeta BDMV encontrada.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
