@@ -1,3 +1,7 @@
+## tsMuxeR 2.9.3
+
+- GUI: hide the mux controls (output type, file name, meta file, and the mux and meta buttons) while the "BDMV folder to ISO" tab is active. That tab is self-contained and uses its own Build ISO button, so the mux controls were irrelevant and confusing there
+
 ## tsMuxeR 2.9.2
 
 - GUI: add a tooltip on the layer-break guard field explaining that the burned zone aligns to whole 2048-byte sectors and file boundaries, so it matches the entered value within about 1 MB

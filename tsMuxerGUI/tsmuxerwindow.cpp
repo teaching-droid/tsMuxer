@@ -1025,6 +1025,21 @@ TsMuxerWindow::TsMuxerWindow()
         // re-enable the Build button whenever the tsMuxer process finishes
         void (QProcess::*finishedSig)(int, QProcess::ExitStatus) = &QProcess::finished;
         connect(&proc, finishedSig, this, [buildBtn](int, QProcess::ExitStatus) { buildBtn->setEnabled(true); });
+
+        // The BDMV to ISO tab is self-contained (it has its own Build ISO button), so hide the main window's
+        // mux controls (Output type, File name, Meta file, and the mux/meta buttons) while it is the active
+        // tab. They apply only to the normal mux flow on the other tabs and are confusing here.
+        auto updateBottomForTab = [this, bdmvTab]()
+        {
+            const bool onBdmv = ui->tabWidget->currentWidget() == bdmvTab;
+            ui->groupBox_4->setVisible(!onBdmv);       // Output (type radios + File name; holds the dual-layer box)
+            ui->groupBox_2->setVisible(!onBdmv);       // Meta file
+            ui->buttonMux->setVisible(!onBdmv);        // Start muxing
+            ui->buttonSaveMeta->setVisible(!onBdmv);   // Save meta file
+            ui->buttonResetMeta->setVisible(!onBdmv);  // Reset meta to auto-generated
+        };
+        connect(ui->tabWidget, &QTabWidget::currentChanged, this, [updateBottomForTab](int) { updateBottomForTab(); });
+        updateBottomForTab();
     }
 
     // ---- dual-layer (BD-R/RE DL) guard controls for the normal Blu-ray / Blu-ray ISO output ----
