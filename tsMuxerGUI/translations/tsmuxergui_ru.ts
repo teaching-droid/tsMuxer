@@ -3775,6 +3775,34 @@ Build the ISO anyway?</source>
         <source>Can&apos;t create temporary meta file &quot;%1&quot;</source>
         <translation>Не возможно создать временный файл проекта &quot;%1&quot;</translation>
     </message>
+    <message>
+        <source>Also fill before the break (advanced)</source>
+        <translation>Также заполнять перед разрывом (дополнительно)</translation>
+    </message>
+    <message>
+        <source>Most discs only fail at the start of the next layer, so the default puts the fill there. Some media are also weak just before the break, so you can set the before and after zones independently.</source>
+        <translation>Большинство дисков дают сбой только в начале следующего слоя, поэтому по умолчанию заполнение размещается именно там. Некоторые носители уязвимы и прямо перед разрывом, поэтому зоны до и после разрыва можно задавать независимо друг от друга.</translation>
+    </message>
+    <message>
+        <source>Guard before break:</source>
+        <translation>Защита перед разрывом:</translation>
+    </message>
+    <message>
+        <source>The default is asymmetric (most defects sit at the start of the next layer). Turn this on only for media that also fail just before the break.</source>
+        <translation>По умолчанию схема асимметрична (большинство дефектов приходится на начало следующего слоя). Включайте этот параметр только для носителей, которые также дают сбой прямо перед разрывом.</translation>
+    </message>
+    <message>
+        <source>Select a BDMV folder and enter Free Sectors to estimate whether it fits.</source>
+        <translation>Выберите папку BDMV и введите значение «Free Sectors», чтобы оценить, поместится ли образ.</translation>
+    </message>
+    <message>
+        <source>Estimated image %1 GB of %2 GB (%3%). Fits, %4 GB free.</source>
+        <translation>Расчётный размер образа %1 GB из %2 GB (%3%). Помещается, свободно %4 GB.</translation>
+    </message>
+    <message>
+        <source>Estimated image %1 GB of %2 GB (%3%). Does NOT fit, over by %4 GB.</source>
+        <translation>Расчётный размер образа %1 GB из %2 GB (%3%). НЕ помещается, превышение на %4 GB.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

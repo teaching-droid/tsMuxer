@@ -6,6 +6,7 @@
 #include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
+#include <QDirIterator>
 #include <QDropEvent>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -22,6 +23,7 @@
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
 #include <QSettings>
+#include <QSharedPointer>
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QStandardPaths>
@@ -581,6 +583,29 @@ TsMuxerWindow::TsMuxerWindow()
         guardSpin->setSuffix(tr(" MB"));
         auto* guardHintLabel = new QLabel(bdmvTab);
         guardHintLabel->setWordWrap(true);
+        // Two-zone guard (advanced): also pad BEFORE the break, for media defective on both sides of the
+        // transition rather than only the start of the next layer.
+        auto* beforeCheck = new QCheckBox(tr("Also fill before the break (advanced)"), bdmvTab);
+        beforeCheck->setToolTip(
+            tr("Most discs only fail at the start of the next layer, so the default puts the fill there. Some "
+               "media are also weak just before the break, so you can set the before and after zones independently."));
+        auto* guardBeforeSpin = new QSpinBox(bdmvTab);
+        guardBeforeSpin->setRange(0, 1024);
+        guardBeforeSpin->setValue(4);
+        guardBeforeSpin->setSuffix(tr(" MB"));
+        auto* guardBeforeLabel = new QLabel(tr("Guard before break:"), bdmvTab);
+        auto* guardBeforeHint = new QLabel(
+            tr("The default is asymmetric (most defects sit at the start of the next layer). Turn this on only for "
+               "media that also fail just before the break."),
+            bdmvTab);
+        guardBeforeHint->setWordWrap(true);
+        guardBeforeHint->setStyleSheet("color:#7f8c8d;");
+        guardBeforeLabel->setVisible(false);
+        guardBeforeSpin->setVisible(false);
+        guardBeforeHint->setVisible(false);
+        // Fit estimate label (folder size + guard band + UDF overhead vs the disc's Free Sectors capacity).
+        auto* fitLabel = new QLabel(bdmvTab);
+        fitLabel->setWordWrap(true);
         // --- Layer-break calculator: disc type + ImgBurn "Free Sectors" -> break(s), auto-filled ---
         auto* discTypeCombo = new QComboBox(bdmvTab);
         discTypeCombo->addItem(tr("BD-R/RE DL 50 GB (2 layers)"), 2);
@@ -716,6 +741,71 @@ TsMuxerWindow::TsMuxerWindow()
             guardHintLabel->setStyleSheet(QStringLiteral("color:%1; font-weight:bold;").arg(colour));
             guardHintLabel->setText(text);
         };
+        // Fit calculator: cache the folder byte size (recomputed only when the folder changes) and combine it
+        // with the guard band and the Free Sectors capacity into a live fits / does-not-fit estimate.
+        QSharedPointer<qint64> folderBytes = QSharedPointer<qint64>::create(-1);
+        auto recomputeFolderSize = [folderEdit, folderBytes]()
+        {
+            const QString folder = folderEdit->text().trimmed();
+            if (folder.isEmpty() || !QDir(folder).exists())
+            {
+                *folderBytes = -1;
+                return;
+            }
+            qint64 sum = 0;
+            const QDir base(folder);
+            QDirIterator it(folder, QDir::Files, QDirIterator::Subdirectories);
+            while (it.hasNext())
+            {
+                it.next();
+                // match the CLI: skip the MakeMKV helper folder so the estimate reflects what actually gets written
+                if (base.relativeFilePath(it.filePath()).startsWith(QStringLiteral("MAKEMKV/"), Qt::CaseSensitive))
+                    continue;
+                sum += it.fileInfo().size();
+            }
+            *folderBytes = sum;
+        };
+        auto updateFit =
+            [folderBytes, readFreeSectors, discTypeCombo, guardSpin, beforeCheck, guardBeforeSpin, fitLabel]()
+        {
+            const qint64 fb = *folderBytes;
+            const qint64 freeSec = readFreeSectors();
+            if (fb < 0 || freeSec <= 0)
+            {
+                fitLabel->setStyleSheet(QStringLiteral("color:#7f8c8d;"));
+                fitLabel->setText(tr("Select a BDMV folder and enter Free Sectors to estimate whether it fits."));
+                return;
+            }
+            const int layers = discTypeCombo->currentData().toInt();
+            const int breaks = layers - 1;
+            const int afterMB = guardSpin->value();
+            const int beforeMB = beforeCheck->isChecked() ? guardBeforeSpin->value() : qMin(afterMB, 4);
+            const qint64 guardBytes = static_cast<qint64>(afterMB + beforeMB) * breaks * 1024 * 1024;
+            const qint64 overhead = 16LL * 1024 * 1024;  // approximate UDF metadata
+            const qint64 occupied = fb + guardBytes + overhead;
+            const qint64 capacity = freeSec * 2048LL;
+            const double usedGb = occupied / 1000000000.0;
+            const double capGb = capacity / 1000000000.0;
+            const double pct = capacity > 0 ? occupied * 100.0 / capacity : 0.0;
+            if (occupied <= capacity)
+            {
+                fitLabel->setStyleSheet(QStringLiteral("color:#2e7d32; font-weight:bold;"));
+                fitLabel->setText(tr("Estimated image %1 GB of %2 GB (%3%). Fits, %4 GB free.")
+                                      .arg(usedGb, 0, 'f', 2)
+                                      .arg(capGb, 0, 'f', 2)
+                                      .arg(pct, 0, 'f', 1)
+                                      .arg((capacity - occupied) / 1000000000.0, 0, 'f', 2));
+            }
+            else
+            {
+                fitLabel->setStyleSheet(QStringLiteral("color:#c0392b; font-weight:bold;"));
+                fitLabel->setText(tr("Estimated image %1 GB of %2 GB (%3%). Does NOT fit, over by %4 GB.")
+                                      .arg(usedGb, 0, 'f', 2)
+                                      .arg(capGb, 0, 'f', 2)
+                                      .arg(pct, 0, 'f', 1)
+                                      .arg((occupied - capacity) / 1000000000.0, 0, 'f', 2));
+            }
+        };
         int r = 0;
         g->addWidget(info, r++, 0, 1, 3);
         g->addWidget(folderLabel, r, 0);
@@ -727,6 +817,10 @@ TsMuxerWindow::TsMuxerWindow()
         g->addWidget(guardLabel, r, 0);
         g->addWidget(guardSpin, r++, 1);
         g->addWidget(guardHintLabel, r++, 0, 1, 3);
+        g->addWidget(beforeCheck, r++, 0, 1, 3);
+        g->addWidget(guardBeforeLabel, r, 0);
+        g->addWidget(guardBeforeSpin, r++, 1);
+        g->addWidget(guardBeforeHint, r++, 0, 1, 3);
         g->addWidget(discTypeLabel, r, 0);
         g->addWidget(discTypeCombo, r, 1);
         g->addWidget(helpBtn, r++, 2);
@@ -735,14 +829,29 @@ TsMuxerWindow::TsMuxerWindow()
         g->addWidget(breaksLabel, r++, 0, 1, 3);
         g->addWidget(divisLabel, r++, 0, 1, 3);
         g->addWidget(compatLabel, r++, 0, 1, 3);
+        g->addWidget(fitLabel, r++, 0, 1, 3);
         g->addWidget(buildBtn, r++, 1);
         g->setRowStretch(r, 1);
         ui->tabWidget->addTab(bdmvTab, tr("BDMV folder -> ISO"));
 
         connect(discTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), bdmvTab,
-                [refresh](int) { refresh(); });
-        connect(freeSectorsEdit, &QLineEdit::textChanged, bdmvTab, [refresh](const QString&) { refresh(); });
-        connect(guardSpin, QOverload<int>::of(&QSpinBox::valueChanged), bdmvTab, [updateGuard](int) { updateGuard(); });
+                [refresh, updateFit](int) { refresh(); updateFit(); });
+        connect(freeSectorsEdit, &QLineEdit::textChanged, bdmvTab,
+                [refresh, updateFit](const QString&) { refresh(); updateFit(); });
+        connect(guardSpin, QOverload<int>::of(&QSpinBox::valueChanged), bdmvTab,
+                [updateGuard, updateFit](int) { updateGuard(); updateFit(); });
+        connect(guardBeforeSpin, QOverload<int>::of(&QSpinBox::valueChanged), bdmvTab,
+                [updateFit](int) { updateFit(); });
+        connect(folderEdit, &QLineEdit::textChanged, bdmvTab,
+                [recomputeFolderSize, updateFit](const QString&) { recomputeFolderSize(); updateFit(); });
+        connect(beforeCheck, &QCheckBox::toggled, bdmvTab,
+                [guardBeforeLabel, guardBeforeSpin, guardBeforeHint, updateFit](bool on)
+                {
+                    guardBeforeLabel->setVisible(on);
+                    guardBeforeSpin->setVisible(on);
+                    guardBeforeHint->setVisible(on);
+                    updateFit();
+                });
         connect(helpBtn, &QPushButton::clicked, this,
                 [this]
                 {
@@ -770,12 +879,15 @@ TsMuxerWindow::TsMuxerWindow()
                 });
         refresh();
         updateGuard();
+        recomputeFolderSize();
+        updateFit();
 
         // Re-translate everything created here on a runtime language change. Designer widgets are handled by
         // ui->retranslateUi(); these hand-built widgets are not, so register a hook the changeEvent will call.
         m_retranslateHooks.push_back(
             [this, bdmvTab, info, folderLabel, outputLabel, guardLabel, discTypeLabel, freeSectorsLabel, folderBtn,
-             isoBtn, helpBtn, buildBtn, discTypeCombo, freeSectorsEdit, guardSpin, refresh, updateGuard]()
+             isoBtn, helpBtn, buildBtn, discTypeCombo, freeSectorsEdit, guardSpin, refresh, updateGuard, beforeCheck,
+             guardBeforeLabel, guardBeforeSpin, guardBeforeHint, fitLabel, updateFit]()
             {
                 ui->tabWidget->setTabText(ui->tabWidget->indexOf(bdmvTab), tr("BDMV folder -> ISO"));
                 info->setText(
@@ -800,8 +912,19 @@ TsMuxerWindow::TsMuxerWindow()
                 discTypeCombo->setItemText(2, tr("BD-R XL 128 GB (4 layers)"));
                 freeSectorsEdit->setPlaceholderText(tr("ImgBurn -> Free Sectors (e.g. 47,305,728)"));
                 guardSpin->setSuffix(tr(" MB"));
+                beforeCheck->setText(tr("Also fill before the break (advanced)"));
+                beforeCheck->setToolTip(
+                    tr("Most discs only fail at the start of the next layer, so the default puts the fill there. Some "
+                       "media are also weak just before the break, so you can set the before and after zones "
+                       "independently."));
+                guardBeforeLabel->setText(tr("Guard before break:"));
+                guardBeforeSpin->setSuffix(tr(" MB"));
+                guardBeforeHint->setText(
+                    tr("The default is asymmetric (most defects sit at the start of the next layer). Turn this on only "
+                       "for media that also fail just before the break."));
                 refresh();      // re-render the dynamic break / warning labels in the new language
                 updateGuard();  // re-render the guard hint in the new language
+                updateFit();    // re-render the fit estimate in the new language
             });
 
         connect(folderBtn, &QPushButton::clicked, this,
@@ -825,7 +948,8 @@ TsMuxerWindow::TsMuxerWindow()
                         isoEdit->setText(QDir::toNativeSeparators(f));
                 });
         connect(buildBtn, &QPushButton::clicked, this,
-                [this, folderEdit, isoEdit, guardSpin, discTypeCombo, freeSectorsEdit, breaksList, buildBtn]
+                [this, folderEdit, isoEdit, guardSpin, discTypeCombo, freeSectorsEdit, breaksList, buildBtn, beforeCheck,
+                 guardBeforeSpin]
                 {
                     const QString folder = folderEdit->text().trimmed();
                     const QString iso = isoEdit->text().trimmed();
@@ -868,6 +992,8 @@ TsMuxerWindow::TsMuxerWindow()
                     runInMuxMode = true;
                     QStringList args;
                     args << "--bdmv-to-iso" << ("--layer-break-guard=" + QString::number(guardSpin->value()));
+                    if (beforeCheck->isChecked())
+                        args << ("--layer-break-guard-before=" + QString::number(guardBeforeSpin->value()));
                     if (!breaks.isEmpty())
                         args << ("--layer-break-lbn=" + breaks.join(","));
                     args << folder << iso;
@@ -1207,7 +1333,7 @@ void TsMuxerWindow::colorizeCurrentRow(const QtvCodecInfo* codecInfo, int rowInd
         if (codecItem && !codecItem->text().contains(tr("(incompatible)")))
             codecItem->setText(codecInfo->displayName + " " + tr("(incompatible)"));
 
-        // Set a tooltip on the whole row — codec-specific message
+        // Set a tooltip on the whole row, codec-specific message
         QString tip;
         if (codecInfo->programName == "A_FLAC")
             tip = tr("%1 is only supported for MKV and Demux output. "

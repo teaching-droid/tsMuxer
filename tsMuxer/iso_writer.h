@@ -196,7 +196,8 @@ class IsoWriter
     void close();
 
     void setLayerBreakPoints(const std::vector<int>& lbns);
-    void setLayerBreakGuard(int sectors);
+    void setLayerBreakGuard(int afterSectors);
+    void setLayerBreakGuard(int beforeSectors, int afterSectors);
 
    private:
     enum class Partition

@@ -3774,6 +3774,34 @@ Build the ISO anyway?</source>
         <source>Can&apos;t create temporary meta file &quot;%1&quot;</source>
         <translation>一時metaファイル「%1」を作成できません</translation>
     </message>
+    <message>
+        <source>Also fill before the break (advanced)</source>
+        <translation>ブレイク前も埋める（上級者向け）</translation>
+    </message>
+    <message>
+        <source>Most discs only fail at the start of the next layer, so the default puts the fill there. Some media are also weak just before the break, so you can set the before and after zones independently.</source>
+        <translation>ほとんどのディスクでは次の層の先頭でのみ問題が起きるため、既定ではその位置に埋め込み領域を配置します。メディアによってはブレイクの直前も弱いことがあるため、ブレイク前とブレイク後の領域をそれぞれ個別に設定できます。</translation>
+    </message>
+    <message>
+        <source>Guard before break:</source>
+        <translation>ガード (ブレイク前):</translation>
+    </message>
+    <message>
+        <source>The default is asymmetric (most defects sit at the start of the next layer). Turn this on only for media that also fail just before the break.</source>
+        <translation>既定では非対称です（大半の欠陥は次の層の先頭に生じるため）。ブレイクの直前でも問題が起きるメディアの場合にのみ、この設定をオンにしてください。</translation>
+    </message>
+    <message>
+        <source>Select a BDMV folder and enter Free Sectors to estimate whether it fits.</source>
+        <translation>BDMVフォルダーを選択して Free Sectors を入力すると、ディスクに収まるかどうかを見積もれます。</translation>
+    </message>
+    <message>
+        <source>Estimated image %1 GB of %2 GB (%3%). Fits, %4 GB free.</source>
+        <translation>推定イメージサイズ %1 GB / %2 GB (%3%)。収まります。空き %4 GB。</translation>
+    </message>
+    <message>
+        <source>Estimated image %1 GB of %2 GB (%3%). Does NOT fit, over by %4 GB.</source>
+        <translation>推定イメージサイズ %1 GB / %2 GB (%3%)。収まりません。%4 GB 超過。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

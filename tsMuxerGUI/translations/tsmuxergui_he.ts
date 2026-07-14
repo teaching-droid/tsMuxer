@@ -3774,6 +3774,34 @@ Build the ISO anyway?</source>
         <source>Can&apos;t create temporary meta file &quot;%1&quot;</source>
         <translation>לא ניתן ליצור מטא קובץ זמני &quot;%1&quot;</translation>
     </message>
+    <message>
+        <source>Also fill before the break (advanced)</source>
+        <translation>מילוי גם לפני השבירה (מתקדם)</translation>
+    </message>
+    <message>
+        <source>Most discs only fail at the start of the next layer, so the default puts the fill there. Some media are also weak just before the break, so you can set the before and after zones independently.</source>
+        <translation>רוב התקליטורים נכשלים רק בתחילת השכבה הבאה, ולכן ברירת המחדל ממקמת שם את המילוי. חלק מסוגי המדיה חלשים גם ממש לפני השבירה, ולכן ניתן להגדיר את האזור שלפני השבירה ואת האזור שאחריה בנפרד.</translation>
+    </message>
+    <message>
+        <source>Guard before break:</source>
+        <translation>מגן לפני השבירה:</translation>
+    </message>
+    <message>
+        <source>The default is asymmetric (most defects sit at the start of the next layer). Turn this on only for media that also fail just before the break.</source>
+        <translation>ברירת המחדל אינה סימטרית (רוב הפגמים נמצאים בתחילת השכבה הבאה). הפעל אפשרות זו רק עבור מדיה שנכשלת גם ממש לפני השבירה.</translation>
+    </message>
+    <message>
+        <source>Select a BDMV folder and enter Free Sectors to estimate whether it fits.</source>
+        <translation>בחר תיקיית BDMV והזן את ערך Free Sectors כדי להעריך אם היא נכנסת לתקליטור.</translation>
+    </message>
+    <message>
+        <source>Estimated image %1 GB of %2 GB (%3%). Fits, %4 GB free.</source>
+        <translation>דמות התקליטור המשוערת: %1 GB מתוך %2 GB (%3%). נכנסת, %4 GB פנויים.</translation>
+    </message>
+    <message>
+        <source>Estimated image %1 GB of %2 GB (%3%). Does NOT fit, over by %4 GB.</source>
+        <translation>דמות התקליטור המשוערת: %1 GB מתוך %2 GB (%3%). אינה נכנסת, חורגת ב-%4 GB.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -3774,6 +3774,34 @@ ISO trotzdem erstellen?</translation>
         <source>Can&apos;t create temporary meta file &quot;%1&quot;</source>
         <translation>Temporäre Metadatei kann nicht erstellt werden &quot;%1&quot;</translation>
     </message>
+    <message>
+        <source>Also fill before the break (advanced)</source>
+        <translation>Auch vor dem Break auffüllen (erweitert)</translation>
+    </message>
+    <message>
+        <source>Most discs only fail at the start of the next layer, so the default puts the fill there. Some media are also weak just before the break, so you can set the before and after zones independently.</source>
+        <translation>Die meisten Discs versagen nur am Anfang des nächsten Layers, daher füllt die Standardeinstellung dort auf. Manche Medien sind aber auch kurz vor dem Break anfällig, sodass Sie die Zonen davor und danach unabhängig voneinander einstellen können.</translation>
+    </message>
+    <message>
+        <source>Guard before break:</source>
+        <translation>Layer-Break-Schutz (vor dem Break):</translation>
+    </message>
+    <message>
+        <source>The default is asymmetric (most defects sit at the start of the next layer). Turn this on only for media that also fail just before the break.</source>
+        <translation>Die Standardeinstellung ist asymmetrisch (die meisten Defekte liegen am Anfang des nächsten Layers). Aktivieren Sie dies nur für Medien, die auch kurz vor dem Break versagen.</translation>
+    </message>
+    <message>
+        <source>Select a BDMV folder and enter Free Sectors to estimate whether it fits.</source>
+        <translation>Wählen Sie einen BDMV-Ordner und geben Sie die Free Sectors ein, um abzuschätzen, ob es passt.</translation>
+    </message>
+    <message>
+        <source>Estimated image %1 GB of %2 GB (%3%). Fits, %4 GB free.</source>
+        <translation>Geschätztes Image %1 GB von %2 GB (%3%). Passt, %4 GB frei.</translation>
+    </message>
+    <message>
+        <source>Estimated image %1 GB of %2 GB (%3%). Does NOT fit, over by %4 GB.</source>
+        <translation>Geschätztes Image %1 GB von %2 GB (%3%). Passt NICHT, %4 GB zu viel.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

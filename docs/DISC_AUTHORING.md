@@ -10,6 +10,7 @@ jaminmc/tsMuxer. All of them are opt-in; the default behaviour is unchanged.
 | `--disc-size=<bd25\|bd50\|bd100\|bd128 \| bytes>` | Fit-to-disc guard. Aborts before muxing if the estimated image will not fit the target disc. |
 | `--allow-oversize` | With `--disc-size`, turn an over-capacity overrun from a hard error into a warning. |
 | `--layer-break-guard=<MB>` | Zero-fill `<MB>` after each layer break (the start of the next layer, where discs are defect-prone), plus a fixed 4 MB margin before it. No file data lands on those sectors; the file that crosses the break (usually the movie) stays one logically contiguous UDF file, two extents around the gap, and plays seamlessly through read-ahead. The zone is asymmetric on purpose: real-hardware testing showed the next-layer defect can reach about 35 MB while the tail of the previous layer is clean, so the budget goes where the defect is. Use `64` (covers about 35 MB with margin). `0` aligns without filler. Off when not given. |
+| `--layer-break-guard-before=<MB>` | Optional. Size the zone BEFORE each break on its own, instead of the default small 4 MB margin. The default is asymmetric because the measured defect sits at the start of the next layer, but some media are also weak just before the break, so this lets you pad both sides. Leave unset to keep the asymmetric default. |
 | `--layer-break-lbn=<sector[,sector...]>` | Set the layer break sector(s). One value for BD-R/RE DL, two for 100 GB BD-R XL, three for 128 GB BD-R XL (see below). |
 
 ## New mode: `--bdmv-to-iso`

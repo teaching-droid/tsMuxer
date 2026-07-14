@@ -3775,6 +3775,34 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>Can&apos;t create temporary meta file &quot;%1&quot;</source>
         <translation>No se ha podido crear el archivo de proyecto &quot;%1&quot;</translation>
     </message>
+    <message>
+        <source>Also fill before the break (advanced)</source>
+        <translation>Rellenar también antes del salto (avanzado)</translation>
+    </message>
+    <message>
+        <source>Most discs only fail at the start of the next layer, so the default puts the fill there. Some media are also weak just before the break, so you can set the before and after zones independently.</source>
+        <translation>La mayoría de los discos solo fallan al principio de la siguiente capa, de modo que, por defecto, el relleno se coloca ahí. Algunos soportes también son débiles justo antes del salto, así que puedes configurar las zonas anterior y posterior de forma independiente.</translation>
+    </message>
+    <message>
+        <source>Guard before break:</source>
+        <translation>Banda de guarda antes del salto:</translation>
+    </message>
+    <message>
+        <source>The default is asymmetric (most defects sit at the start of the next layer). Turn this on only for media that also fail just before the break.</source>
+        <translation>El valor por defecto es asimétrico (la mayoría de los defectos se sitúan al principio de la siguiente capa). Actívalo solo para soportes que también fallen justo antes del salto.</translation>
+    </message>
+    <message>
+        <source>Select a BDMV folder and enter Free Sectors to estimate whether it fits.</source>
+        <translation>Selecciona una carpeta BDMV e introduce los Free Sectors para estimar si cabe.</translation>
+    </message>
+    <message>
+        <source>Estimated image %1 GB of %2 GB (%3%). Fits, %4 GB free.</source>
+        <translation>Imagen estimada: %1 GB de %2 GB (%3%). Cabe, %4 GB libres.</translation>
+    </message>
+    <message>
+        <source>Estimated image %1 GB of %2 GB (%3%). Does NOT fit, over by %4 GB.</source>
+        <translation>Imagen estimada: %1 GB de %2 GB (%3%). NO cabe, se excede en %4 GB.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

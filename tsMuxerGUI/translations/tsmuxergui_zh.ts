@@ -3774,6 +3774,34 @@ Build the ISO anyway?</source>
         <source>Can&apos;t create temporary meta file &quot;%1&quot;</source>
         <translation>无法创建临时项目文件 &quot;%1&quot;</translation>
     </message>
+    <message>
+        <source>Also fill before the break (advanced)</source>
+        <translation>同时填充分层点之前的区域(高级)</translation>
+    </message>
+    <message>
+        <source>Most discs only fail at the start of the next layer, so the default puts the fill there. Some media are also weak just before the break, so you can set the before and after zones independently.</source>
+        <translation>大多数光盘只在下一层的起始处才会出现读取问题,因此默认会把填充区放在那里。部分介质在分层点之前也比较脆弱,所以你可以分别设置分层点前后的填充区域。</translation>
+    </message>
+    <message>
+        <source>Guard before break:</source>
+        <translation>分层点保护带(分层点之前):</translation>
+    </message>
+    <message>
+        <source>The default is asymmetric (most defects sit at the start of the next layer). Turn this on only for media that also fail just before the break.</source>
+        <translation>默认设置为非对称(大多数缺陷都位于下一层的起始处)。仅当介质在分层点之前也会出现问题时,才开启此项。</translation>
+    </message>
+    <message>
+        <source>Select a BDMV folder and enter Free Sectors to estimate whether it fits.</source>
+        <translation>选择 BDMV 文件夹并输入 Free Sectors,以估算是否放得下。</translation>
+    </message>
+    <message>
+        <source>Estimated image %1 GB of %2 GB (%3%). Fits, %4 GB free.</source>
+        <translation>预计镜像大小 %1 GB,共 %2 GB(%3%)。放得下,剩余 %4 GB。</translation>
+    </message>
+    <message>
+        <source>Estimated image %1 GB of %2 GB (%3%). Does NOT fit, over by %4 GB.</source>
+        <translation>预计镜像大小 %1 GB,共 %2 GB(%3%)。放不下,超出 %4 GB。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

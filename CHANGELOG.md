@@ -1,3 +1,8 @@
+## tsMuxeR 2.9.0
+
+- `--layer-break-guard-before=<MB>`: size the guard zone before the layer break on its own, instead of the fixed 4 MB margin, for media that are defective on both sides of the transition. The default stays asymmetric (the measured defect sits at the start of the next layer)
+- GUI: the "BDMV folder to ISO" tab gains an optional "fill before the break" control with a short note on when to use it, and a live fit estimate that shows the image size against the disc's Free Sectors and whether it will fit
+
 ## tsMuxeR 2.8.1
 
 - GUI: show the version number in the window title (previously only the git commit was shown)

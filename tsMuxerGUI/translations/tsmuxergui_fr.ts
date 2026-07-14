@@ -3774,6 +3774,34 @@ Créer l'ISO malgré tout ?</translation>
         <source>Can&apos;t create temporary meta file &quot;%1&quot;</source>
         <translation>Impossible de créer le fichier Meta temporaire &quot;%1&quot;</translation>
     </message>
+    <message>
+        <source>Also fill before the break (advanced)</source>
+        <translation>Remplir aussi avant le changement (avancé)</translation>
+    </message>
+    <message>
+        <source>Most discs only fail at the start of the next layer, so the default puts the fill there. Some media are also weak just before the break, so you can set the before and after zones independently.</source>
+        <translation>La plupart des disques ne présentent des défauts qu'au début de la couche suivante, c'est donc là que le remplissage est placé par défaut. Certains supports sont également fragiles juste avant le changement, vous pouvez donc définir indépendamment les zones avant et après.</translation>
+    </message>
+    <message>
+        <source>Guard before break:</source>
+        <translation>Bande de garde de couche (avant le changement) :</translation>
+    </message>
+    <message>
+        <source>The default is asymmetric (most defects sit at the start of the next layer). Turn this on only for media that also fail just before the break.</source>
+        <translation>Le réglage par défaut est asymétrique (la plupart des défauts se situent au début de la couche suivante). N'activez cette option que pour les supports qui présentent également des défauts juste avant le changement.</translation>
+    </message>
+    <message>
+        <source>Select a BDMV folder and enter Free Sectors to estimate whether it fits.</source>
+        <translation>Sélectionnez un dossier BDMV et saisissez les Free Sectors pour estimer si l'image tient sur le disque.</translation>
+    </message>
+    <message>
+        <source>Estimated image %1 GB of %2 GB (%3%). Fits, %4 GB free.</source>
+        <translation>Image estimée à %1 GB sur %2 GB (%3%). Tient sur le disque, %4 GB libres.</translation>
+    </message>
+    <message>
+        <source>Estimated image %1 GB of %2 GB (%3%). Does NOT fit, over by %4 GB.</source>
+        <translation>Image estimée à %1 GB sur %2 GB (%3%). Ne tient PAS, dépassement de %4 GB.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

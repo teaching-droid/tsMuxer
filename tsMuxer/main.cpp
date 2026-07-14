@@ -582,6 +582,9 @@ All parameters in this group start with two dashes:
                       and plays seamlessly. Real-hardware data shows the layer-1
                       defect can be ~35 MB, so 64 is recommended. 0 aligns to the
                       break without filler. Off when not specified. BD-R/RE DL only.
+--layer-break-guard-before  Optional: size the BEFORE-break zone (MB) on its own instead
+                      of the default small 4 MB margin, making the guard symmetric or custom.
+                      Use when a disc is also defect-prone just before the layer break.
 --layer-break-lbn     Layer break sector(s) for --layer-break-guard, in 2048-byte LBA
                       sectors = the disc's TOTAL sectors / number of layers. One value for
                       BD-R/RE DL (default 12,219,392 = a 50GB disc, 25GB/layer); a COMMA-
@@ -589,7 +592,7 @@ All parameters in this group start with two dashes:
                       has 3. Read the total from the disc's FULL formatted capacity (ImgBurn
                       "Free Sectors"), NOT a partial/POW value (which gives a wrong break).
 --bdmv-to-iso         Separate mode: tsMuxeR --bdmv-to-iso [--layer-break-guard=<MB>]
-                      [--layer-break-lbn=<s[,s...]>] <BDMV_folder> <out.iso>
+                      [--layer-break-guard-before=<MB>] [--layer-break-lbn=<s[,s...]>] <BDMV_folder> <out.iso>
                       Wrap an existing BDMV folder into a UDF 2.50 BD-ROM ISO byte-for-byte
                       - no re-mux, no re-numbering - so BD-J menus and
                       all clip/playlist references stay valid, while applying the
@@ -611,6 +614,7 @@ All parameters in this group start with two dashes:
 static int bdmvFolderToGuardedIso(const int argc, char** argv)
 {
     int layerBreakGuardMB = -1;
+    int layerBreakGuardBeforeMB = -1;
     std::vector<int> layerBreakLbns;
     vector<string> positional;
     for (int i = 2; i < argc; ++i)
@@ -618,7 +622,9 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
         const string a = argv[i];
         try
         {
-            if (a.rfind("--layer-break-guard=", 0) == 0)
+            if (a.rfind("--layer-break-guard-before=", 0) == 0)
+                layerBreakGuardBeforeMB = std::stoi(a.substr(27));
+            else if (a.rfind("--layer-break-guard=", 0) == 0)
                 layerBreakGuardMB = std::stoi(a.substr(20));
             else if (a.rfind("--layer-break-lbn=", 0) == 0)
             {
@@ -637,8 +643,8 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     if (positional.size() != 2)
     {
         LTRACE(LT_ERROR, 2,
-               "Usage: tsMuxeR --bdmv-to-iso [--layer-break-guard=<MB>] [--layer-break-lbn=<sector>] "
-               "<BDMV_folder> <out.iso>");
+               "Usage: tsMuxeR --bdmv-to-iso [--layer-break-guard=<MB>] [--layer-break-guard-before=<MB>] "
+               "[--layer-break-lbn=<sector>] <BDMV_folder> <out.iso>");
         return -1;
     }
     string srcRoot = positional[0];
@@ -704,11 +710,14 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
         "bdmv-to-iso: " << items.size() << " files, " << static_cast<int64_t>(total / 1000000) << " MB -> " << outIso);
     if (layerBreakGuardMB >= 0)
         LTRACE(LT_INFO, 2,
-               "  layer-break guard " << layerBreakGuardMB << " MB/side; largest file first ("
-                                      << static_cast<int64_t>(items[0].size / 1000000) << " MB)");
+               "  layer-break guard " << layerBreakGuardMB << " MB after"
+                                      << (layerBreakGuardBeforeMB >= 0 ? " + custom before-zone" : "")
+                                      << "; largest file first (" << static_cast<int64_t>(items[0].size / 1000000)
+                                      << " MB)");
 
     BlurayHelper helper;
-    if (!helper.open(outIso, DiskType::BLURAY, total, extraISOBlocks, false, layerBreakGuardMB, layerBreakLbns))
+    if (!helper.open(outIso, DiskType::BLURAY, total, extraISOBlocks, false, layerBreakGuardMB, layerBreakLbns,
+                     layerBreakGuardBeforeMB))
     {
         LTRACE(LT_ERROR, 2, "Can't create output ISO " << outIso);
         return -1;

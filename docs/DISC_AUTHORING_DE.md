@@ -185,6 +185,7 @@ eine Grenze des Players, nicht des ISO, also am besten am eigenen Gerät testen.
 |--------|-----------|
 | `--bdmv-to-iso <Ordner> <iso>` | BDMV-Ordner 1:1 in ein BD-ROM-ISO packen (Menüs bleiben) |
 | `--layer-break-guard=<MB>` | Nullen in MB **nach** jedem Break (Layer-Seite) plus 4 MB davor; 64 empfohlen |
+| `--layer-break-guard-before=<MB>` | Optional: Zone **vor** dem Break eigenständig festlegen statt der 4 MB Standardmarge; für Medien, die auch vor dem Break schwach sind |
 | `--layer-break-lbn=<Sektor[,Sektor...]>` | Break-Sektor(en): 1 Wert bei DL, 2 bei 100 GB, 3 bei 128 GB |
 | `--disc-size=bd25\|bd50\|bd100\|bd128` | Abbruch, falls Image nicht passt |
 | `--allow-oversize` | mit `--disc-size`: nur Warnung statt Abbruch |

@@ -1523,6 +1523,15 @@ void IsoWriter::setLayerBreakGuard(const int afterSectors)
     m_layerBreakGuardBeforeSectors = afterSectors < beforeMargin ? afterSectors : beforeMargin;
 }
 
+void IsoWriter::setLayerBreakGuard(const int beforeSectors, const int afterSectors)
+{
+    // Two-zone override (--layer-break-guard-before): the caller sizes both sides explicitly. The default is
+    // asymmetric because the measured defect sits at the START of the next layer, but some media are weak on
+    // BOTH sides of the transition, so each zone can be set on its own.
+    m_layerBreakGuardBeforeSectors = beforeSectors;
+    m_layerBreakGuardAfterSectors = afterSectors;
+}
+
 IsoHeaderData IsoHeaderData::normal()
 {
     return IsoHeaderData{"*tsMuxeR " TSMUXER_VERSION, std::string("*tsMuxeR ") + int32uToHex(random32()), time(nullptr),

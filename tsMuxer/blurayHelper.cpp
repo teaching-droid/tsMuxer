@@ -280,7 +280,7 @@ void BlurayHelper::close()
 
 bool BlurayHelper::open(const string& dst, const DiskType dt, const int64_t diskSize, const int extraISOBlocks,
                         const bool useReproducibleIsoHeader, const int layerBreakGuardMB,
-                        const std::vector<int>& layerBreakLbns)
+                        const std::vector<int>& layerBreakLbns, const int layerBreakGuardBeforeMB)
 {
     m_dstPath = toNativeSeparators(dst);
 
@@ -299,8 +299,14 @@ bool BlurayHelper::open(const string& dst, const DiskType dt, const int64_t disk
             if (breaks.empty())
                 breaks.push_back(static_cast<int>(BD50_CAPACITY / 2 / SECTOR_SIZE));
             m_isoWriter->setLayerBreakPoints(breaks);
-            m_isoWriter->setLayerBreakGuard(
-                static_cast<int>(static_cast<int64_t>(layerBreakGuardMB) * 1024 * 1024 / SECTOR_SIZE));
+            const int afterSectors =
+                static_cast<int>(static_cast<int64_t>(layerBreakGuardMB) * 1024 * 1024 / SECTOR_SIZE);
+            if (layerBreakGuardBeforeMB >= 0)
+                m_isoWriter->setLayerBreakGuard(
+                    static_cast<int>(static_cast<int64_t>(layerBreakGuardBeforeMB) * 1024 * 1024 / SECTOR_SIZE),
+                    afterSectors);
+            else
+                m_isoWriter->setLayerBreakGuard(afterSectors);
         }
         return m_isoWriter->open(m_dstPath, diskSize, extraISOBlocks);
     }
