@@ -30,7 +30,17 @@ jobs:
       
     - name: build-for-linux
       run: ./scripts/rebuild_linux_with_gui.sh
-      
+
+    - name: Package
+      run: |
+        mkdir -p bin
+        find build -maxdepth 3 -type f -name tsmuxer    -exec cp {} bin/tsMuxeR \;
+        find build -maxdepth 3 -type f -name tsmuxergui -exec cp {} bin/tsMuxerGUI \;
+        chmod +x bin/tsMuxeR bin/tsMuxerGUI 2>/dev/null || true
+        cd bin
+        if [ -f tsMuxerGUI ]; then zip -9 lnx.zip tsMuxeR tsMuxerGUI; else zip -9 lnx.zip tsMuxeR; fi
+        ls -la
+
     - uses: actions/upload-artifact@v4
       with:
          name: tsMuxer-linux
