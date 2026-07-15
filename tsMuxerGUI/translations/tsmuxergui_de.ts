@@ -3842,6 +3842,10 @@ ISO trotzdem erstellen?</translation>
         <source>The Free Sectors above are pre-filled for the selected disc and locked to prevent accidental changes. Tick this only if ImgBurn shows a different Free Sectors for your exact disc, then type that number. Un-tick to restore the standard value.</source>
         <translation>Die Free Sectors oben sind für den ausgewählten Rohling vorab ausgefüllt und gesperrt, um versehentliche Änderungen zu verhindern. Aktivieren Sie dieses Kästchen nur, wenn ImgBurn andere Free Sectors für Ihren konkreten Rohling anzeigt, und geben Sie dann diese Zahl ein. Deaktivieren Sie das Kästchen, um den Standardwert wiederherzustellen.</translation>
     </message>
+    <message>
+        <source>Covers the ~35 MB layer defect measured on real hardware, with margin. Some media are worse (defect zones of 1 GB or more have been seen): if a test burn fails just after the layer break, raise this. The field allows up to 9999 MB.</source>
+        <translation>Deckt den auf echter Hardware gemessenen Schichtdefekt von ~35 MB mit Reserve ab. Manche Medien sind schlechter (Defektzonen von 1 GB oder mehr wurden schon beobachtet): Wenn ein Probebrand direkt nach dem Schichtwechsel fehlschlägt, erhöhen Sie diesen Wert. Das Feld erlaubt bis zu 9999 MB.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

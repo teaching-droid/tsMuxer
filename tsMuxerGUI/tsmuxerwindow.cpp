@@ -581,7 +581,7 @@ TsMuxerWindow::TsMuxerWindow()
         auto* folderStatusLabel = new QLabel(bdmvTab);
         folderStatusLabel->setWordWrap(true);
         auto* guardSpin = new QSpinBox(bdmvTab);
-        guardSpin->setRange(0, 1024);
+        guardSpin->setRange(0, 9999);
         guardSpin->setValue(64);
         guardSpin->setSuffix(tr(" MB"));
         guardSpin->setToolTip(
@@ -596,7 +596,7 @@ TsMuxerWindow::TsMuxerWindow()
             tr("Most discs only fail at the start of the next layer, so the default puts the fill there. Some "
                "media are also weak just before the break, so you can set the before and after zones independently."));
         auto* guardBeforeSpin = new QSpinBox(bdmvTab);
-        guardBeforeSpin->setRange(0, 1024);
+        guardBeforeSpin->setRange(0, 9999);
         guardBeforeSpin->setValue(4);
         guardBeforeSpin->setSuffix(tr(" MB"));
         auto* guardBeforeLabel = new QLabel(tr("Guard before break:"), bdmvTab);
@@ -778,7 +778,10 @@ TsMuxerWindow::TsMuxerWindow()
             else
             {
                 colour = QStringLiteral("#2e7d32");
-                text = tr("Recommended. Covers the ~35 MB measured defect with margin.");
+                text =
+                    tr("Covers the ~35 MB layer defect measured on real hardware, with margin. Some media are "
+                       "worse (defect zones of 1 GB or more have been seen): if a test burn fails just after "
+                       "the layer break, raise this. The field allows up to 9999 MB.");
             }
             guardHintLabel->setStyleSheet(QStringLiteral("color:%1; font-weight:bold;").arg(colour));
             guardHintLabel->setText(text);
@@ -1180,7 +1183,7 @@ TsMuxerWindow::TsMuxerWindow()
         guardCheck->setObjectName("dlGuardCheck");
         auto* guardSpin = new QSpinBox(dlBox);
         guardSpin->setObjectName("dlGuardSpin");
-        guardSpin->setRange(0, 1024);
+        guardSpin->setRange(0, 9999);
         guardSpin->setValue(64);
         guardSpin->setSuffix(tr(" MB"));
         guardSpin->setEnabled(false);

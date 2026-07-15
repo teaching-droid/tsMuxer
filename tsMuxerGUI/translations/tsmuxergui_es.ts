@@ -3843,6 +3843,10 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>The Free Sectors above are pre-filled for the selected disc and locked to prevent accidental changes. Tick this only if ImgBurn shows a different Free Sectors for your exact disc, then type that number. Un-tick to restore the standard value.</source>
         <translation>Los Free Sectors de arriba se rellenan automáticamente para el disco seleccionado y quedan bloqueados para evitar cambios accidentales. Marca esta casilla solo si ImgBurn muestra unos Free Sectors distintos para tu disco concreto, y luego escribe ese número. Desmarca la casilla para restaurar el valor estándar.</translation>
     </message>
+    <message>
+        <source>Covers the ~35 MB layer defect measured on real hardware, with margin. Some media are worse (defect zones of 1 GB or more have been seen): if a test burn fails just after the layer break, raise this. The field allows up to 9999 MB.</source>
+        <translation>Cubre el defecto de capa de ~35 MB medido en hardware real, con margen. Algunos discos son peores (se han visto zonas defectuosas de 1 GB o más): si una grabación de prueba falla justo después del salto de capa, aumente este valor. El campo admite hasta 9999 MB.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

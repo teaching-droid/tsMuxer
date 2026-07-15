@@ -3842,6 +3842,10 @@ Créer l'ISO malgré tout ?</translation>
         <source>The Free Sectors above are pre-filled for the selected disc and locked to prevent accidental changes. Tick this only if ImgBurn shows a different Free Sectors for your exact disc, then type that number. Un-tick to restore the standard value.</source>
         <translation>Les Free Sectors ci-dessus sont pré-remplis pour le disque sélectionné et verrouillés afin d'éviter toute modification accidentelle. Cochez cette case uniquement si ImgBurn affiche un Free Sectors différent pour votre disque exact, puis saisissez ce nombre. Décochez-la pour rétablir la valeur standard.</translation>
     </message>
+    <message>
+        <source>Covers the ~35 MB layer defect measured on real hardware, with margin. Some media are worse (defect zones of 1 GB or more have been seen): if a test burn fails just after the layer break, raise this. The field allows up to 9999 MB.</source>
+        <translation>Couvre le défaut de couche de ~35 MB mesuré sur du matériel réel, avec une marge de sécurité. Certains supports sont pires (on a observé des zones de défaut de 1 GB ou plus) : si une gravure d'essai échoue juste après le changement de couche, augmentez cette valeur. Ce champ accepte jusqu'à 9999 MB.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

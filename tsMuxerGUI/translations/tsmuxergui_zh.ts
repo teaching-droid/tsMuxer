@@ -3842,6 +3842,10 @@ Build the ISO anyway?</source>
         <source>The Free Sectors above are pre-filled for the selected disc and locked to prevent accidental changes. Tick this only if ImgBurn shows a different Free Sectors for your exact disc, then type that number. Un-tick to restore the standard value.</source>
         <translation>上方的 Free Sectors 已根据所选光盘预填，并已锁定以防止意外更改。仅当 ImgBurn 为你的具体光盘显示了不同的 Free Sectors 时才勾选此项，然后输入该数字。取消勾选可恢复标准值。</translation>
     </message>
+    <message>
+        <source>Covers the ~35 MB layer defect measured on real hardware, with margin. Some media are worse (defect zones of 1 GB or more have been seen): if a test burn fails just after the layer break, raise this. The field allows up to 9999 MB.</source>
+        <translation>涵盖在真实硬件上实测到的约 35 MB 换层缺陷，并留有余量。部分介质情况更差（曾出现 1 GB 或更大的缺陷区域）：如果试烧在换层处之后不久失败，请调高此值。此字段最大可填 9999 MB。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

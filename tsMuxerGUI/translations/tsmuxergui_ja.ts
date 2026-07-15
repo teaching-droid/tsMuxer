@@ -3842,6 +3842,10 @@ Build the ISO anyway?</source>
         <source>The Free Sectors above are pre-filled for the selected disc and locked to prevent accidental changes. Tick this only if ImgBurn shows a different Free Sectors for your exact disc, then type that number. Un-tick to restore the standard value.</source>
         <translation>上の Free Sectors は選択したディスク用に自動入力されており、誤った変更を防ぐためロックされています。ImgBurn がお使いの実際のディスクについて異なる Free Sectors を表示する場合のみ、このチェックボックスをオンにして、その数値を入力してください。標準値に戻すにはチェックを外してください。</translation>
     </message>
+    <message>
+        <source>Covers the ~35 MB layer defect measured on real hardware, with margin. Some media are worse (defect zones of 1 GB or more have been seen): if a test burn fails just after the layer break, raise this. The field allows up to 9999 MB.</source>
+        <translation>実機で測定された約35 MBの層欠陥を、余裕をもってカバーします。メディアによってはこれより悪いものもあり(1 GB以上の欠陥領域が確認された例もあります)、レイヤーブレイク直後にテスト書き込みが失敗する場合は、この値を上げてください。このフィールドには最大9999 MBまで指定できます。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
