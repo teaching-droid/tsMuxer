@@ -115,7 +115,7 @@ tsMuxeR --bdmv-to-iso --layer-break-guard=64 --layer-break-lbn=<Sektor[,Sektor..
 
 **Beispiel (50-GB-DL, Break in ImgBurn ermittelt):**
 ```
-tsMuxeR --bdmv-to-iso --layer-break-guard=64 --layer-break-lbn=12219392 "D:\ZurueckInDieZukunft\BDMV_Ordner" "D:\BTTF.iso"
+tsMuxeR --bdmv-to-iso --layer-break-guard=64 --layer-break-lbn=12219392 "D:\MeinFilm\BDMV_Ordner" "D:ilm.iso"
 ```
 
 **Beispiel (100-GB-BD-R-XL, zwei Breaks):**
