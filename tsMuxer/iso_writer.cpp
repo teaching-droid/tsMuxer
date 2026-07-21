@@ -1460,6 +1460,8 @@ int IsoWriter::writeRawData(const uint8_t* data, const int size) { return m_file
 
 int64_t IsoWriter::imageLBA() const { return m_file.pos() / SECTOR_SIZE; }
 
+int64_t IsoWriter::currentImageLBA() const { return imageLBA(); }
+
 bool IsoWriter::nearLayerBreak(const int upcomingBytes) const
 {
     if (m_layerBreakPoints.empty())
@@ -1483,6 +1485,20 @@ bool IsoWriter::nearLayerBreak(const int upcomingBytes) const
 // belongs to no file and players never read it. A BD-R/RE DL has 1 break; BDXL 100 GB has 2,
 // 128 GB has 3. Must only be called at a sector-aligned file offset - FileEntryInfo::write()
 // guarantees that.
+void IsoWriter::writeZeroPad(const int64_t sectors)
+{
+    static constexpr int PAD_CHUNK_SECTORS = 512;  // write the filler in 1 MB chunks
+    const std::vector<uint8_t> zeroBuff(PAD_CHUNK_SECTORS * SECTOR_SIZE, 0);
+    int64_t restSectors = sectors;
+    while (restSectors > 0)
+    {
+        const int n = static_cast<int>(std::min<int64_t>(restSectors, PAD_CHUNK_SECTORS));
+        m_file.write(zeroBuff.data(), n * SECTOR_SIZE);
+        restSectors -= n;
+    }
+    m_lastWritedObjectID = -1;
+}
+
 void IsoWriter::checkLayerBreakPoint(const int maxExtentSize)
 {
     if (m_layerBreakPoints.empty())
@@ -1495,19 +1511,50 @@ void IsoWriter::checkLayerBreakPoint(const int maxExtentSize)
         const int64_t zoneEnd = static_cast<int64_t>(bp) + m_layerBreakGuardAfterSectors;
         if (lbn < zoneEnd && lbn + lenSectors > zoneStart)
         {
-            static constexpr int PAD_CHUNK_SECTORS = 512;  // write the filler in 1 MB chunks
-            const std::vector<uint8_t> zeroBuff(PAD_CHUNK_SECTORS * SECTOR_SIZE, 0);
-            int64_t restSectors = zoneEnd - lbn;
-            while (restSectors > 0)
-            {
-                const int n = static_cast<int>(std::min<int64_t>(restSectors, PAD_CHUNK_SECTORS));
-                m_file.write(zeroBuff.data(), n * SECTOR_SIZE);
-                restSectors -= n;
-            }
-            m_lastWritedObjectID = -1;
+            m_layerBreakPads.push_back({bp, lbn, zoneEnd});
+            writeZeroPad(zoneEnd - lbn);
             return;  // at most one break per write (breaks are far apart)
         }
     }
+}
+
+bool IsoWriter::padOverZoneIfFileCrosses(const int64_t fileSizeBytes, const int64_t discCapacitySectors)
+{
+    if (m_layerBreakPoints.empty() || fileSizeBytes <= 0)
+        return false;
+    // Without a known capacity, derive a conservative one from the break spacing (layers hold the
+    // user data evenly, so the disc ends one layer past the last break). Prevents moving a file
+    // past the break when doing so would push the image beyond the disc.
+    int64_t capacity = discCapacitySectors;
+    if (capacity <= 0)
+        capacity = static_cast<int64_t>(m_layerBreakPoints.back()) + m_layerBreakPoints.front();
+    const int64_t lbn = imageLBA();
+    const int64_t fileSectors = (fileSizeBytes + SECTOR_SIZE - 1) / SECTOR_SIZE;
+    for (size_t i = 0; i < m_layerBreakPoints.size(); ++i)
+    {
+        const int bp = m_layerBreakPoints[i];
+        const int64_t zoneStart = static_cast<int64_t>(bp) - m_layerBreakGuardBeforeSectors;
+        const int64_t zoneEnd = static_cast<int64_t>(bp) + m_layerBreakGuardAfterSectors;
+        if (lbn >= zoneStart || lbn + fileSectors <= zoneStart)
+            continue;  // file starts past this zone, or ends before reaching it
+        // The file would cross this zone. Move it wholly past the break only if it then fits
+        // before the NEXT zone (and within the disc, when the capacity is known); a file larger
+        // than a layer must straddle and keeps the normal mid-file pad.
+        const int64_t fileEndIfMoved = zoneEnd + fileSectors;
+        if (i + 1 < m_layerBreakPoints.size())
+        {
+            const int64_t nextZoneStart =
+                static_cast<int64_t>(m_layerBreakPoints[i + 1]) - m_layerBreakGuardBeforeSectors;
+            if (fileEndIfMoved > nextZoneStart)
+                return false;
+        }
+        if (fileEndIfMoved > capacity)
+            return false;
+        m_layerBreakPads.push_back({bp, lbn, zoneEnd});
+        writeZeroPad(zoneEnd - lbn);
+        return true;
+    }
+    return false;
 }
 
 void IsoWriter::setLayerBreakPoints(const std::vector<int>& lbns) { m_layerBreakPoints = lbns; }
@@ -1516,10 +1563,14 @@ void IsoWriter::setLayerBreakGuard(const int afterSectors)
 {
     // The BD-R/RE DL layer-1-start defect is ASYMMETRIC: real-hardware data (Verbatim BD-R DL, 2026-07-11)
     // showed the first ~35 MB of layer 1 uncorrectable while the tail of layer 0 verified 100% clean. So put
-    // the requested guard AFTER the break (layer 1, where the defect lives) and only a small fixed margin
-    // before it (layer 0) - the same fill protects a far larger layer-1 defect than a symmetric zone would.
+    // the requested guard AFTER the break (layer 1, where the defect lives) and a proportional margin before
+    // it (layer 0): one sixteenth of the after value, the 64:4 ratio of the original design, with a 4 MB
+    // floor. A bigger safety appetite then scales both sides while keeping the budget where the defect is.
     m_layerBreakGuardAfterSectors = afterSectors;
-    const int beforeMargin = 4 * 1024 * 1024 / SECTOR_SIZE;  // 4 MB layer-0-side safety margin
+    const int floorMargin = 4 * 1024 * 1024 / SECTOR_SIZE;  // at least 4 MB on the layer-0 side
+    int beforeMargin = afterSectors / 16;
+    if (beforeMargin < floorMargin)
+        beforeMargin = floorMargin;
     m_layerBreakGuardBeforeSectors = afterSectors < beforeMargin ? afterSectors : beforeMargin;
 }
 

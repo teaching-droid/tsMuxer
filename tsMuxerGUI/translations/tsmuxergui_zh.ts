@@ -3846,6 +3846,34 @@ Build the ISO anyway?</source>
         <source>Covers the ~35 MB layer defect measured on real hardware, with margin. Some media are worse (defect zones of 1 GB or more have been seen): if a test burn fails just after the layer break, raise this. The field allows up to 9999 MB.</source>
         <translation>涵盖在真实硬件上实测到的约 35 MB 换层缺陷，并留有余量。部分介质情况更差（曾出现 1 GB 或更大的缺陷区域）：如果试烧在换层处之后不久失败，请调高此值。此字段最大可填 9999 MB。</translation>
     </message>
+    <message>
+        <source>Keep original file order (seamless branching)</source>
+        <translation>保持原始文件顺序（无缝分支）</translation>
+    </message>
+    <message>
+        <source>Files are normally written largest first, so the main movie sits on the layer break and gets the guard. Discs that use seamless branching play many separate segments in sequence; keeping the original order stores them close to their playback order, which reads more smoothly.</source>
+        <translation>文件通常按从大到小的顺序写入，因此正片会位于换层点上并获得保护区。采用无缝分支的光盘会依次播放许多独立片段；保持原始顺序可让这些片段按接近播放顺序的方式存放，读取更加流畅。</translation>
+    </message>
+    <message>
+        <source>Below the ~35 MB layer defect measured on real hardware. Video may land on bad sectors. 256 MB recommended.</source>
+        <translation>低于在实际硬件上测得的约 35 MB 换层缺陷。视频可能落在坏扇区上。建议 256 MB。</translation>
+    </message>
+    <message>
+        <source>Covers the typical ~35 MB defect, but larger bad zones are common on real media, and on a defect-managed disc the true layer switch can sit up to 128 MB after the calculated break. 256 MB recommended.</source>
+        <translation>可覆盖典型的约 35 MB 缺陷，但实际盘片上更大的坏区并不少见；而且在启用缺陷管理的光盘上，实际换层位置可能位于计算出的换层点之后最多 128 MB 处。建议 256 MB。</translation>
+    </message>
+    <message>
+        <source>Recommended. Covers all commonly reported defect zones (35 to 258 MB) and the shifted layer switch of defect-managed discs. For the rare defects over 1 GB, raise it; the field goes up to 9999.</source>
+        <translation>推荐设置。可覆盖所有常见报告的缺陷区（35 至 258 MB）以及启用缺陷管理的光盘上偏移后的换层位置。对于罕见的超过 1 GB 的缺陷，可调高此值；该输入框最大可设为 9999。</translation>
+    </message>
+    <message>
+        <source>Below the ~35 MB layer defect measured on real hardware. Video may land on bad sectors. 288 MB recommended.</source>
+        <translation>低于在真实硬件上实测到的 ~35 MB 层缺陷范围。视频可能落在坏扇区上。建议使用 288 MB。</translation>
+    </message>
+    <message>
+        <source>Covers the typical ~35 MB defect, but larger bad zones are common on real media, and on a defect-managed disc the true layer switch can sit up to 128 MB after the calculated break. 288 MB recommended.</source>
+        <translation>可覆盖典型的 ~35 MB 缺陷，但实际盘片上出现更大坏区的情况很常见，而且在缺陷管理光盘上，真实的换层位置可能位于计算出的换层点之后最多 128 MB 处。建议使用 288 MB。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

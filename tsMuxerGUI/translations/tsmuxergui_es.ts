@@ -3847,6 +3847,34 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>Covers the ~35 MB layer defect measured on real hardware, with margin. Some media are worse (defect zones of 1 GB or more have been seen): if a test burn fails just after the layer break, raise this. The field allows up to 9999 MB.</source>
         <translation>Cubre el defecto de capa de ~35 MB medido en hardware real, con margen. Algunos discos son peores (se han visto zonas defectuosas de 1 GB o más): si una grabación de prueba falla justo después del salto de capa, aumente este valor. El campo admite hasta 9999 MB.</translation>
     </message>
+    <message>
+        <source>Keep original file order (seamless branching)</source>
+        <translation>Mantener el orden original de los archivos (seamless branching)</translation>
+    </message>
+    <message>
+        <source>Files are normally written largest first, so the main movie sits on the layer break and gets the guard. Discs that use seamless branching play many separate segments in sequence; keeping the original order stores them close to their playback order, which reads more smoothly.</source>
+        <translation>Normalmente los archivos se escriben empezando por el más grande, de modo que la película principal queda sobre el salto de capa y recibe la zona de protección. Los discos que usan seamless branching reproducen muchos segmentos separados en secuencia; mantener el orden original los almacena cerca de su orden de reproducción, lo que permite una lectura más fluida.</translation>
+    </message>
+    <message>
+        <source>Below the ~35 MB layer defect measured on real hardware. Video may land on bad sectors. 256 MB recommended.</source>
+        <translation>Por debajo del defecto de capa de ~35 MB medido en hardware real. El vídeo puede caer en sectores defectuosos. Se recomiendan 256 MB.</translation>
+    </message>
+    <message>
+        <source>Covers the typical ~35 MB defect, but larger bad zones are common on real media, and on a defect-managed disc the true layer switch can sit up to 128 MB after the calculated break. 256 MB recommended.</source>
+        <translation>Cubre el defecto típico de ~35 MB, pero en los discos reales son frecuentes las zonas dañadas más grandes, y en un disco con gestión de defectos el cambio de capa real puede situarse hasta 128 MB después del salto calculado. Se recomiendan 256 MB.</translation>
+    </message>
+    <message>
+        <source>Recommended. Covers all commonly reported defect zones (35 to 258 MB) and the shifted layer switch of defect-managed discs. For the rare defects over 1 GB, raise it; the field goes up to 9999.</source>
+        <translation>Recomendado. Cubre todas las zonas de defectos notificadas habitualmente (de 35 a 258 MB) y el cambio de capa desplazado de los discos con gestión de defectos. Para los raros defectos de más de 1 GB, auméntelo; el campo admite hasta 9999.</translation>
+    </message>
+    <message>
+        <source>Below the ~35 MB layer defect measured on real hardware. Video may land on bad sectors. 288 MB recommended.</source>
+        <translation>Por debajo del defecto de capa de ~35 MB medido en hardware real. El vídeo podría caer en sectores dañados. Se recomiendan 288 MB.</translation>
+    </message>
+    <message>
+        <source>Covers the typical ~35 MB defect, but larger bad zones are common on real media, and on a defect-managed disc the true layer switch can sit up to 128 MB after the calculated break. 288 MB recommended.</source>
+        <translation>Cubre el defecto típico de ~35 MB, pero en los discos reales son frecuentes las zonas dañadas más grandes, y en un disco con gestión de defectos el cambio de capa real puede situarse hasta 128 MB después del salto calculado. Se recomiendan 288 MB.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

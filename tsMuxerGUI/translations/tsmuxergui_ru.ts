@@ -3847,6 +3847,34 @@ Build the ISO anyway?</source>
         <source>Covers the ~35 MB layer defect measured on real hardware, with margin. Some media are worse (defect zones of 1 GB or more have been seen): if a test burn fails just after the layer break, raise this. The field allows up to 9999 MB.</source>
         <translation>Покрывает дефект слоя ~35 MB, измеренный на реальном оборудовании, с запасом. Некоторые носители хуже (встречались дефектные зоны размером 1 GB и более): если пробная запись даёт сбой сразу после перехода между слоями, увеличьте это значение. Поле допускает значения до 9999 MB.</translation>
     </message>
+    <message>
+        <source>Keep original file order (seamless branching)</source>
+        <translation>Сохранять исходный порядок файлов (seamless branching)</translation>
+    </message>
+    <message>
+        <source>Files are normally written largest first, so the main movie sits on the layer break and gets the guard. Discs that use seamless branching play many separate segments in sequence; keeping the original order stores them close to their playback order, which reads more smoothly.</source>
+        <translation>Обычно файлы записываются от больших к меньшим, поэтому основной фильм оказывается на переходе между слоями (layer break) и получает защитную зону. Диски с seamless branching воспроизводят множество отдельных сегментов подряд; сохранение исходного порядка размещает их ближе к порядку воспроизведения, что обеспечивает более плавное чтение.</translation>
+    </message>
+    <message>
+        <source>Below the ~35 MB layer defect measured on real hardware. Video may land on bad sectors. 256 MB recommended.</source>
+        <translation>Меньше дефектной зоны слоя ~35 MB, замеренной на реальном оборудовании. Видео может попасть на сбойные секторы. Рекомендуется 256 MB.</translation>
+    </message>
+    <message>
+        <source>Covers the typical ~35 MB defect, but larger bad zones are common on real media, and on a defect-managed disc the true layer switch can sit up to 128 MB after the calculated break. 256 MB recommended.</source>
+        <translation>Покрывает типичный дефект ~35 MB, однако на реальных носителях нередки и более крупные сбойные зоны, а на диске с управлением дефектами фактическая смена слоя может находиться на расстоянии до 128 MB после расчётной точки перехода. Рекомендуется 256 MB.</translation>
+    </message>
+    <message>
+        <source>Recommended. Covers all commonly reported defect zones (35 to 258 MB) and the shifted layer switch of defect-managed discs. For the rare defects over 1 GB, raise it; the field goes up to 9999.</source>
+        <translation>Рекомендуемое значение. Покрывает все обычно встречающиеся дефектные зоны (от 35 до 258 MB) и смещённую смену слоя на дисках с управлением дефектами. Для редких дефектов свыше 1 GB увеличьте значение; поле допускает до 9999.</translation>
+    </message>
+    <message>
+        <source>Below the ~35 MB layer defect measured on real hardware. Video may land on bad sectors. 288 MB recommended.</source>
+        <translation>Меньше дефекта слоя ~35 MB, измеренного на реальном оборудовании. Видео может попасть на сбойные секторы. Рекомендуется 288 MB.</translation>
+    </message>
+    <message>
+        <source>Covers the typical ~35 MB defect, but larger bad zones are common on real media, and on a defect-managed disc the true layer switch can sit up to 128 MB after the calculated break. 288 MB recommended.</source>
+        <translation>Покрывает типичный дефект ~35 MB, но на реальных носителях часто встречаются более крупные сбойные зоны, а на диске с управлением дефектами фактическая смена слоя может находиться на расстоянии до 128 MB после расчётной точки перехода. Рекомендуется 288 MB.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

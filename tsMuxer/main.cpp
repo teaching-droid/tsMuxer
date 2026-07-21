@@ -3,7 +3,11 @@
 #include <fs/textfile.h>
 
 #include <algorithm>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <set>
+#include <sstream>
 #include <vector>
 
 #include <cmath>
@@ -611,11 +615,76 @@ All parameters in this group start with two dashes:
 // - so BD-J menus and every clip/playlist
 // reference stay valid. The largest .m2ts (the main movie) is written FIRST so it straddles the ~25 GB
 // physical layer break and gets the guard band; the rest fill layer 1. Skips MakeMKV helper folders.
+// Read one PCR (90 kHz base units) from an .m2ts file near the given byte offset, scanning up to
+// ~7.7 MB of source packets backward (dir=-1) or forward (dir=+1). Used to translate a guard pad's
+// position inside a stream file into an approximate playback time.
+static bool findM2tsPcrNear(const string& fileName, const int64_t startOffset, const int dir, uint64_t* pcrOut)
+{
+    File f;
+    if (!f.open(fileName.c_str(), File::ofRead))
+        return false;
+    constexpr int UNIT = 192;  // m2ts source packet: TP_extra_header(4) + TS packet(188)
+    constexpr int64_t MAX_SCAN = 40000;
+    int64_t packet = startOffset / UNIT;
+    if (dir < 0 && packet > 0)
+        --packet;
+    uint8_t u[UNIT];
+    for (int64_t k = 0; k < MAX_SCAN && packet >= 0; ++k, packet += dir)
+    {
+        if (f.seek(packet * UNIT, File::SeekMethod::smBegin) != packet * UNIT)
+            break;
+        if (f.read(u, UNIT) != UNIT)
+            break;
+        if (u[4] != 0x47)
+            continue;  // TS sync byte
+        const int afc = (u[4 + 3] >> 4) & 0x3;
+        if (afc != 2 && afc != 3)
+            continue;  // no adaptation field
+        if (u[4 + 4] < 7 || !(u[4 + 5] & 0x10))
+            continue;  // adaptation field too short or no PCR_flag
+        *pcrOut = (static_cast<uint64_t>(u[4 + 6]) << 25) | (static_cast<uint64_t>(u[4 + 7]) << 17) |
+                  (static_cast<uint64_t>(u[4 + 8]) << 9) | (static_cast<uint64_t>(u[4 + 9]) << 1) | (u[4 + 10] >> 7);
+        f.close();
+        return true;
+    }
+    f.close();
+    return false;
+}
+
+// Robust playback-position read. A single PCR read near a pad boundary can land in a small block
+// with a foreign timeline (measured on a real UHD stream: one spot answered 1:47 where the movie
+// time was 0:47), so sample several offsets spread over ~32 MB and take the median; an isolated
+// stray block cannot win a median.
+static bool findM2tsPcrMedian(const string& fileName, const int64_t offset, const int dir, uint64_t* pcrOut)
+{
+    // spread of a few MB: wide enough to step over a stray block (a measured one was under
+    // 256 KB), narrow enough that the median stays within seconds of the true position
+    static constexpr int64_t SPREAD[] = {0, 512 * 1024, 1024 * 1024, 2 * 1024 * 1024, 4 * 1024 * 1024};
+    std::vector<uint64_t> vals;
+    for (const int64_t step : SPREAD)
+    {
+        const int64_t o = dir < 0 ? offset - step : offset + step;
+        if (o < 0)
+            continue;
+        uint64_t pcr = 0;
+        if (findM2tsPcrNear(fileName, o, dir, &pcr))
+            vals.push_back(pcr);
+    }
+    if (vals.empty())
+        return false;
+    std::sort(vals.begin(), vals.end());
+    *pcrOut = vals[vals.size() / 2];
+    return true;
+}
+
 static int bdmvFolderToGuardedIso(const int argc, char** argv)
 {
     int layerBreakGuardMB = -1;
     int layerBreakGuardBeforeMB = -1;
     std::vector<int> layerBreakLbns;
+    bool originalOrder = false;
+    bool layerFit = true;
+    int64_t discCapacitySectors = 0;
     vector<string> positional;
     for (int i = 2; i < argc; ++i)
     {
@@ -631,6 +700,12 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                 layerBreakLbns.clear();
                 for (const auto& tok : splitStr(a.substr(18).c_str(), ',')) layerBreakLbns.push_back(std::stoi(tok));
             }
+            else if (a.rfind("--disc-capacity=", 0) == 0)
+                discCapacitySectors = std::stoll(a.substr(16));
+            else if (a == "--original-order")
+                originalOrder = true;
+            else if (a == "--no-layer-fit")
+                layerFit = false;
             else
                 positional.push_back(a);
         }
@@ -644,12 +719,29 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     {
         LTRACE(LT_ERROR, 2,
                "Usage: tsMuxeR --bdmv-to-iso [--layer-break-guard=<MB>] [--layer-break-guard-before=<MB>] "
-               "[--layer-break-lbn=<sector>] <BDMV_folder> <out.iso>");
+               "[--layer-break-lbn=<sector>] [--disc-capacity=<sectors>] [--original-order] [--no-layer-fit] "
+               "<BDMV_folder> <out.iso>");
         return -1;
     }
     string srcRoot = positional[0];
     const string outIso = positional[1];
     while (!srcRoot.empty() && (srcRoot.back() == '/' || srcRoot.back() == '\\')) srcRoot.pop_back();
+    // A common slip is selecting the BDMV folder itself instead of the disc root that contains it.
+    // Building from there would put STREAM/ at the ISO root and the disc would not play, so step up
+    // to the parent automatically.
+    {
+        const size_t sep = srcRoot.find_last_of("/\\");
+        if (sep != string::npos)
+        {
+            string base = srcRoot.substr(sep + 1);
+            for (auto& c : base) c = static_cast<char>(toupper(c));
+            if (base == "BDMV")
+            {
+                srcRoot = srcRoot.substr(0, sep);
+                LTRACE(LT_INFO, 2, "The selected folder is BDMV itself; using its parent " << srcRoot);
+            }
+        }
+    }
 
     // normalize a full source path to a forward-slash, disc-relative path (strip srcRoot prefix, unify
     // separators, collapse the '//' that findFiles() leaves where the recursion concatenates paths)
@@ -684,23 +776,40 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     };
     vector<Item> items;
     int64_t total = 0;
+    // Only the disc-structure folders belong in a BD-ROM image. A whitelist keeps everything else
+    // out by construction: previously built ISOs sitting next to BDMV, MakeMKV helper folders,
+    // desktop.ini and other strays would otherwise be muxed in (and inflate the size until the
+    // image no longer fits the disc).
+    std::set<string> skippedTop;
     for (auto& f : files)
     {
         const string rel = toRel(f);
-        const string top = rel.substr(0, rel.find('/'));
-        if (top == "MAKEMKV" || top.empty())
+        string top = rel.substr(0, rel.find('/'));
+        for (auto& c : top) c = static_cast<char>(toupper(c));
+        if (top != "BDMV" && top != "CERTIFICATE" && top != "AACS")
+        {
+            if (!top.empty())
+                skippedTop.insert(rel.substr(0, rel.find('/')));
             continue;
+        }
         const auto sz = static_cast<int64_t>(getFileSize(f));
         items.push_back({f, rel, sz});
         total += sz;
     }
+    for (const auto& s : skippedTop)
+        LTRACE(LT_INFO, 2, "  skipping \"" << s << "\" (not part of the BDMV disc structure)");
     if (items.empty())
     {
         LTRACE(LT_ERROR, 2, "No BDMV content found under " << srcRoot);
         return -1;
     }
-    // largest .m2ts first -> the main movie straddles the layer break and gets the guard band
-    std::stable_sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.size > b.size; });
+    // Default: largest .m2ts first, so the main movie straddles the layer break and gets the guard
+    // band. --original-order keeps the files in their disc order instead; better for seamless
+    // branching titles whose many segments should stay physically close to their playback order.
+    if (originalOrder)
+        std::stable_sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.rel < b.rel; });
+    else
+        std::stable_sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.size > b.size; });
 
     // the metadata partition must hold ~1 File Entry per file + directory content; size it from the count
     const int extraISOBlocks = static_cast<int>(items.size()) / 32 + 16;
@@ -709,11 +818,21 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
         LT_INFO, 2,
         "bdmv-to-iso: " << items.size() << " files, " << static_cast<int64_t>(total / 1000000) << " MB -> " << outIso);
     if (layerBreakGuardMB >= 0)
-        LTRACE(LT_INFO, 2,
-               "  layer-break guard " << layerBreakGuardMB << " MB after"
-                                      << (layerBreakGuardBeforeMB >= 0 ? " + custom before-zone" : "")
-                                      << "; largest file first (" << static_cast<int64_t>(items[0].size / 1000000)
-                                      << " MB)");
+    {
+        // the first-file size is only meaningful for largest-first (it names the main movie);
+        // in original order the first file is typically a tiny playlist and "0 MB" reads broken
+        if (originalOrder)
+            LTRACE(LT_INFO, 2,
+                   "  layer-break guard " << layerBreakGuardMB << " MB after"
+                                          << (layerBreakGuardBeforeMB >= 0 ? " + custom before-zone" : "")
+                                          << "; original file order");
+        else
+            LTRACE(LT_INFO, 2,
+                   "  layer-break guard " << layerBreakGuardMB << " MB after"
+                                          << (layerBreakGuardBeforeMB >= 0 ? " + custom before-zone" : "")
+                                          << "; largest file first (" << static_cast<int64_t>(items[0].size / 1000000)
+                                          << " MB)");
+    }
 
     BlurayHelper helper;
     if (!helper.open(outIso, DiskType::BLURAY, total, extraISOBlocks, false, layerBreakGuardMB, layerBreakLbns,
@@ -732,6 +851,15 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     vector<uint8_t> buf(1024 * 1024);
     int64_t written = 0;
     int lastTenths = -1;
+    // Per-file data ranges in absolute image sectors, aligned with `items`; used afterwards to map
+    // each written guard pad back to the file (and playback position) it interrupted.
+    struct FileRange
+    {
+        int64_t startLbn;
+        int64_t endLbn;
+    };
+    vector<FileRange> ranges;
+    ranges.reserve(items.size());
     for (auto& item : items)
     {
         File in;
@@ -740,6 +868,10 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
             LTRACE(LT_ERROR, 2, "Can't read " << item.full);
             return -1;
         }
+        // Layer-fit: start the file after the break instead of splitting it, when it fits there
+        if (layerFit)
+            iso->padOverZoneIfFileCrosses(item.size, discCapacitySectors);
+        const int64_t startLbn = iso->currentImageLBA();
         ISOFile* out = iso->createFile();
         out->open(item.rel.c_str(), File::ofWrite);
         int n;
@@ -764,8 +896,69 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
         out->close();
         delete out;
         in.close();
+        ranges.push_back({startLbn, iso->currentImageLBA()});
     }
+    const auto pads = iso->layerBreakPads();  // copy: helper.close() finalizes the writer
     helper.close();
+
+    // Human-readable map of every guard pad: which break, how much fill on each side, which file it
+    // interrupted, and (for stream files) the playback time. Printed to the log AND written as a
+    // sidecar "<out.iso>.layerbreak.txt" so verification tools know where to look on the disc.
+    if (!pads.empty())
+    {
+        auto isM2ts = [](const string& s)
+        {
+            if (s.size() < 5)
+                return false;
+            string ext = s.substr(s.size() - 5);
+            for (auto& c : ext) c = static_cast<char>(tolower(c));
+            return ext == ".m2ts";
+        };
+        std::ostringstream side;
+        side << "tsMuxeR layer break map (sectors of 2048 bytes)\n";
+        side << "image: " << outIso << "\n";
+        for (const auto& pad : pads)
+        {
+            const double beforeMB = static_cast<double>(pad.breakLbn - pad.padStartLbn) / 512.0;
+            const double afterMB = static_cast<double>(pad.padEndLbn - pad.breakLbn) / 512.0;
+            std::ostringstream line;
+            line << "break " << pad.breakLbn << ": zeros " << pad.padStartLbn << " .. " << pad.padEndLbn << " ("
+                 << std::fixed << std::setprecision(1) << beforeMB << " MB before + " << afterMB << " MB after)";
+            string loc;
+            for (size_t j = 0; j < items.size() && loc.empty(); ++j)
+            {
+                if (pad.padStartLbn > ranges[j].startLbn && pad.padStartLbn < ranges[j].endLbn)
+                {
+                    // pad splits this file; in-file offset excludes any earlier pads inside the same file
+                    int64_t off = (pad.padStartLbn - ranges[j].startLbn) * 2048;
+                    for (const auto& p2 : pads)
+                        if (p2.padStartLbn > ranges[j].startLbn && p2.padStartLbn < pad.padStartLbn)
+                            off -= (p2.padEndLbn - p2.padStartLbn) * 2048;
+                    loc = "inside " + items[j].rel + " at file offset " + std::to_string(off);
+                    uint64_t pcr0 = 0, pcrX = 0;
+                    if (isM2ts(items[j].rel) && findM2tsPcrMedian(items[j].full, 0, +1, &pcr0) &&
+                        findM2tsPcrMedian(items[j].full, off, -1, &pcrX) && pcrX >= pcr0)
+                    {
+                        const auto sec = static_cast<int64_t>((pcrX - pcr0) / 90000);
+                        std::ostringstream ts;
+                        ts << sec / 3600 << ":" << std::setw(2) << std::setfill('0') << (sec / 60) % 60 << ":"
+                           << std::setw(2) << std::setfill('0') << sec % 60;
+                        loc += ", playback time about " + ts.str();
+                    }
+                }
+                else if (pad.padEndLbn == ranges[j].startLbn)
+                    loc = "between files; " + items[j].rel + " starts on the next layer";
+            }
+            if (loc.empty())
+                loc = "location not matched to a file";
+            LTRACE(LT_INFO, 2, "  " << line.str());
+            LTRACE(LT_INFO, 2, "    " << loc);
+            side << line.str() << "\n  " << loc << "\n";
+        }
+        std::ofstream sideFile(outIso + ".layerbreak.txt", std::ios::binary);
+        if (sideFile)
+            sideFile << side.str();
+    }
     LTRACE(LT_INFO, 2, "bdmv-to-iso complete -> " << outIso);
     return 0;
 }

@@ -376,6 +376,10 @@ QString TsMuxerWindow::getDefaultOutputFileName() const
         return prefix;
 }
 
+// Long tooltips must be rich text, else Qt renders them as a single endless line; a <p>
+// wrapper turns on word wrapping without touching the translated strings themselves.
+static QString wrapTip(const QString& text) { return QStringLiteral("<p>") + text + QStringLiteral("</p>"); }
+
 TsMuxerWindow::TsMuxerWindow()
     : ui(new Ui::TsMuxerWindow),
       disableUpdatesCnt(0),
@@ -576,29 +580,43 @@ TsMuxerWindow::TsMuxerWindow()
         info->setWordWrap(true);
         auto* folderEdit = new QLineEdit(bdmvTab);
         auto* folderBtn = new QPushButton(tr("Browse..."), bdmvTab);
+        // Icon-only refresh: re-reads the selected folder (size, status, fit) after its contents
+        // changed on disk, since re-picking the same path fires no change signal.
+        auto* folderRefreshBtn = new QPushButton(bdmvTab);
+        folderRefreshBtn->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
+        folderRefreshBtn->setFixedWidth(folderRefreshBtn->sizeHint().height() + 8);
         auto* isoEdit = new QLineEdit(bdmvTab);
         auto* isoBtn = new QPushButton(tr("Browse..."), bdmvTab);
         auto* folderStatusLabel = new QLabel(bdmvTab);
         folderStatusLabel->setWordWrap(true);
         auto* guardSpin = new QSpinBox(bdmvTab);
         guardSpin->setRange(0, 9999);
-        guardSpin->setValue(64);
+        // 288 MB default: reported real-world defect zones cluster around 35/64/258 MB, and on
+        // defect-managed discs with asymmetric spare areas the real transition sits up to 128 MB
+        // after the calculated break; 288 covers all of these with margin. The rare 1.5 GB class defects that
+        // have also been reported need a manually raised value (the field goes to 9999).
+        guardSpin->setValue(288);
         guardSpin->setSuffix(tr(" MB"));
         guardSpin->setToolTip(
-            tr("The zeros fill whole 2048-byte sectors and snap to the movie's file boundaries, so "
-               "the burned zone matches this value within about 1 MB (never meaningfully short)."));
+            wrapTip(tr("The zeros fill whole 2048-byte sectors and snap to the movie's file boundaries, so "
+                       "the burned zone matches this value within about 1 MB (never meaningfully short).")));
         auto* guardHintLabel = new QLabel(bdmvTab);
         guardHintLabel->setWordWrap(true);
         // Two-zone guard (advanced): also pad BEFORE the break, for media defective on both sides of the
         // transition rather than only the start of the next layer.
         auto* beforeCheck = new QCheckBox(tr("Also fill before the break (advanced)"), bdmvTab);
-        beforeCheck->setToolTip(
+        beforeCheck->setToolTip(wrapTip(
             tr("Most discs only fail at the start of the next layer, so the default puts the fill there. Some "
-               "media are also weak just before the break, so you can set the before and after zones independently."));
+               "media are also weak just before the break, so you can set the before and after zones independently.")));
         auto* guardBeforeSpin = new QSpinBox(bdmvTab);
         guardBeforeSpin->setRange(0, 9999);
-        guardBeforeSpin->setValue(4);
+        // Starts at, and follows, the engine's proportional default (after/16, floor 4 MB) until the
+        // user edits it themselves; from then on their explicit value wins. One-way: the after field
+        // never follows this one.
+        guardBeforeSpin->setValue(16);
         guardBeforeSpin->setSuffix(tr(" MB"));
+        QSharedPointer<bool> beforeOverridden = QSharedPointer<bool>::create(false);
+        QSharedPointer<bool> beforeSyncing = QSharedPointer<bool>::create(false);
         auto* guardBeforeLabel = new QLabel(tr("Guard before break:"), bdmvTab);
         auto* guardBeforeHint = new QLabel(
             tr("The default is asymmetric (most defects sit at the start of the next layer). Turn this on only for "
@@ -631,10 +649,10 @@ TsMuxerWindow::TsMuxerWindow()
         discTypeCombo->addItem(tr("BD-R XL 128 GB (4 layers)"), 4);
         discTypeCombo->setItemData(3, 60403712, Qt::UserRole + 1);
         discTypeCombo->setToolTip(
-            tr("Picking a disc pre-fills its standard Free Sectors below; you can still edit it. Write-once "
-               "BD-R uses the full capacity, rewritable BD-RE reserves spare area and is a little smaller. "
-               "BD-RE capacity also depends on how the disc was formatted, so if ImgBurn shows a different "
-               "Free Sectors for your disc, use that value."));
+            wrapTip(tr("Picking a disc pre-fills its standard Free Sectors below; you can still edit it. Write-once "
+                       "BD-R uses the full capacity, rewritable BD-RE reserves spare area and is a little smaller. "
+                       "BD-RE capacity also depends on how the disc was formatted, so if ImgBurn shows a different "
+                       "Free Sectors for your disc, use that value.")));
         auto* freeSectorsEdit = new QLineEdit(bdmvTab);
         freeSectorsEdit->setPlaceholderText(tr("ImgBurn -> Free Sectors (e.g. 47,305,728)"));
         // Accept the number exactly as ImgBurn prints it: grouped with commas, dots or spaces (locale-agnostic).
@@ -646,10 +664,15 @@ TsMuxerWindow::TsMuxerWindow()
         freeSectorsEdit->setReadOnly(true);
         auto* manualCheck = new QCheckBox(tr("Enter Free Sectors manually (advanced)"), bdmvTab);
         manualCheck->setToolTip(
-            tr("The Free Sectors above are pre-filled for the selected disc and locked to "
-               "prevent accidental changes. Tick this only if ImgBurn shows a different Free "
-               "Sectors for your exact disc, then type that number. Un-tick to restore the "
-               "standard value."));
+            wrapTip(tr("The Free Sectors above are pre-filled for the selected disc and locked to "
+                       "prevent accidental changes. Tick this only if ImgBurn shows a different Free "
+                       "Sectors for your exact disc, then type that number. Un-tick to restore the "
+                       "standard value.")));
+        auto* orderCheck = new QCheckBox(tr("Keep original file order (seamless branching)"), bdmvTab);
+        orderCheck->setToolTip(
+            wrapTip(tr("Files are normally written largest first, so the main movie sits on the layer break and gets "
+                       "the guard. Discs that use seamless branching play many separate segments in sequence; keeping "
+                       "the original order stores them close to their playback order, which reads more smoothly.")));
         auto* helpBtn = new QPushButton(tr("Where do I find this?"), bdmvTab);
         auto* breaksLabel = new QLabel(bdmvTab);
         breaksLabel->setWordWrap(true);
@@ -753,7 +776,8 @@ TsMuxerWindow::TsMuxerWindow()
                 freeSectorsEdit->setText(QLocale().toString(fs));
         };
         // Colour-coded guidance for the guard size. The layer defect measured on real hardware was about 35 MB,
-        // so 64 MB is the safe recommendation. Lower is allowed (0 = align only) but the risk is made visible.
+        // but larger zones and the defect-managed break shift make 256 MB the safe recommendation. Lower is
+        // allowed (0 = align only) but the risk is made visible.
         auto updateGuard = [guardSpin, guardHintLabel]()
         {
             const int mb = guardSpin->value();
@@ -768,20 +792,23 @@ TsMuxerWindow::TsMuxerWindow()
                 colour = QStringLiteral("#c0392b");
                 text =
                     tr("Below the ~35 MB layer defect measured on real hardware. Video may land on bad "
-                       "sectors. 64 MB recommended.");
+                       "sectors. 288 MB recommended.");
             }
-            else if (mb < 64)
+            else if (mb < 288)
             {
                 colour = QStringLiteral("#b26a00");
-                text = tr("Covers the ~35 MB measured defect but with little margin. 64 MB recommended.");
+                text =
+                    tr("Covers the typical ~35 MB defect, but larger bad zones are common on real media, and "
+                       "on a defect-managed disc the true layer switch can sit up to 128 MB after the "
+                       "calculated break. 288 MB recommended.");
             }
             else
             {
                 colour = QStringLiteral("#2e7d32");
                 text =
-                    tr("Covers the ~35 MB layer defect measured on real hardware, with margin. Some media are "
-                       "worse (defect zones of 1 GB or more have been seen): if a test burn fails just after "
-                       "the layer break, raise this. The field allows up to 9999 MB.");
+                    tr("Recommended. Covers all commonly reported defect zones (35 to 258 MB) and the shifted "
+                       "layer switch of defect-managed discs. For the rare defects over 1 GB, raise it; the "
+                       "field goes up to 9999.");
             }
             guardHintLabel->setStyleSheet(QStringLiteral("color:%1; font-weight:bold;").arg(colour));
             guardHintLabel->setText(text);
@@ -792,7 +819,10 @@ TsMuxerWindow::TsMuxerWindow()
         auto recomputeFolderSize = [folderEdit, folderBytes]()
         {
             const QString folder = folderEdit->text().trimmed();
-            if (folder.isEmpty() || !QDir(folder).exists())
+            // Only measure a folder that actually holds a BDMV. This also prevents walking huge
+            // unrelated trees (a parent folder full of movies, or a bare drive root while a path is
+            // being typed), which froze the GUI and left a misleading size on screen.
+            if (folder.isEmpty() || !QDir(folder).exists() || !QDir(folder).exists(QStringLiteral("BDMV")))
             {
                 *folderBytes = -1;
                 return;
@@ -805,16 +835,22 @@ TsMuxerWindow::TsMuxerWindow()
                 *folderBytes = si.bytesTotal() - si.bytesAvailable();
                 return;
             }
+            // Match the CLI: only the disc-structure folders count. Anything else at the root (a
+            // previously built ISO, helper folders, stray files) is not written to the image, so it
+            // must not count toward the estimate either; a leftover output ISO inside the source
+            // folder used to inflate the estimate into a false "does not fit".
             qint64 sum = 0;
-            const QDir base(folder);
-            QDirIterator it(folder, QDir::Files, QDirIterator::Subdirectories);
-            while (it.hasNext())
+            for (const auto& sub : {QStringLiteral("BDMV"), QStringLiteral("CERTIFICATE"), QStringLiteral("AACS")})
             {
-                it.next();
-                // match the CLI: skip the MakeMKV helper folder so the estimate reflects what actually gets written
-                if (base.relativeFilePath(it.filePath()).startsWith(QStringLiteral("MAKEMKV/"), Qt::CaseSensitive))
+                const QString subPath = folder + QLatin1Char('/') + sub;
+                if (!QDir(subPath).exists())
                     continue;
-                sum += it.fileInfo().size();
+                QDirIterator it(subPath, QDir::Files, QDirIterator::Subdirectories);
+                while (it.hasNext())
+                {
+                    it.next();
+                    sum += it.fileInfo().size();
+                }
             }
             *folderBytes = sum;
         };
@@ -861,7 +897,9 @@ TsMuxerWindow::TsMuxerWindow()
             const int layers = discTypeCombo->currentData().toInt();
             const int breaks = layers - 1;
             const int afterMB = guardSpin->value();
-            const int beforeMB = beforeCheck->isChecked() ? guardBeforeSpin->value() : qMin(afterMB, 4);
+            // mirrors the engine default: before = after/16 (the 64:4 design ratio), at least 4 MB
+            const int beforeMB =
+                beforeCheck->isChecked() ? guardBeforeSpin->value() : qMin(afterMB, qMax(4, afterMB / 16));
             const qint64 guardBytes = static_cast<qint64>(afterMB + beforeMB) * breaks * 1024 * 1024;
             const qint64 overhead = 16LL * 1024 * 1024;  // approximate UDF metadata
             const qint64 occupied = fb + guardBytes + overhead;
@@ -892,8 +930,9 @@ TsMuxerWindow::TsMuxerWindow()
         g->addWidget(info, r++, 0, 1, 3);
         g->addWidget(folderLabel, r, 0);
         g->addWidget(folderEdit, r, 1);
-        g->addWidget(folderBtn, r++, 2);
-        g->addWidget(folderStatusLabel, r++, 0, 1, 3);
+        g->addWidget(folderBtn, r, 2);
+        g->addWidget(folderRefreshBtn, r++, 3);
+        g->addWidget(folderStatusLabel, r++, 0, 1, 4);
         g->addWidget(outputLabel, r, 0);
         g->addWidget(isoEdit, r, 1);
         g->addWidget(isoBtn, r++, 2);
@@ -914,6 +953,7 @@ TsMuxerWindow::TsMuxerWindow()
         g->addWidget(divisLabel, r++, 0, 1, 3);
         g->addWidget(compatLabel, r++, 0, 1, 3);
         g->addWidget(fitLabel, r++, 0, 1, 3);
+        g->addWidget(orderCheck, r++, 0, 1, 3);
         g->addWidget(buildBtn, r++, 1);
         g->setRowStretch(r, 1);
         ui->tabWidget->addTab(bdmvTab, tr("BDMV folder -> ISO"));
@@ -938,14 +978,32 @@ TsMuxerWindow::TsMuxerWindow()
                     if (!on)
                         autoFillFreeSectors();  // re-locking restores the safe pre-filled value
                 });
+        // The before field mirrors the proportional default (after/16, floor 4 MB) until the user
+        // touches it; a programmatic update is marked with beforeSyncing so it does not count as a
+        // user edit.
+        auto syncBeforeSpin = [guardSpin, guardBeforeSpin, beforeOverridden, beforeSyncing]()
+        {
+            if (*beforeOverridden)
+                return;
+            const int after = guardSpin->value();
+            *beforeSyncing = true;
+            guardBeforeSpin->setValue(qMin(after, qMax(4, after / 16)));
+            *beforeSyncing = false;
+        };
         connect(guardSpin, QOverload<int>::of(&QSpinBox::valueChanged), bdmvTab,
-                [updateGuard, updateFit](int)
+                [syncBeforeSpin, updateGuard, updateFit](int)
                 {
+                    syncBeforeSpin();
                     updateGuard();
                     updateFit();
                 });
         connect(guardBeforeSpin, QOverload<int>::of(&QSpinBox::valueChanged), bdmvTab,
-                [updateFit](int) { updateFit(); });
+                [beforeOverridden, beforeSyncing, updateFit](int)
+                {
+                    if (!*beforeSyncing)
+                        *beforeOverridden = true;  // the user set an explicit value; stop following
+                    updateFit();
+                });
         connect(folderEdit, &QLineEdit::textChanged, bdmvTab,
                 [updateFolderStatus, recomputeFolderSize, updateFit](const QString&)
                 {
@@ -953,14 +1011,19 @@ TsMuxerWindow::TsMuxerWindow()
                     recomputeFolderSize();
                     updateFit();
                 });
-        connect(beforeCheck, &QCheckBox::toggled, bdmvTab,
-                [guardBeforeLabel, guardBeforeSpin, guardBeforeHint, updateFit](bool on)
-                {
-                    guardBeforeLabel->setVisible(on);
-                    guardBeforeSpin->setVisible(on);
-                    guardBeforeHint->setVisible(on);
-                    updateFit();
-                });
+        connect(
+            beforeCheck, &QCheckBox::toggled, bdmvTab,
+            [guardBeforeLabel, guardBeforeSpin, guardBeforeHint, beforeOverridden, syncBeforeSpin, updateFit](bool on)
+            {
+                guardBeforeLabel->setVisible(on);
+                guardBeforeSpin->setVisible(on);
+                guardBeforeHint->setVisible(on);
+                if (on)
+                    syncBeforeSpin();  // opening the advanced field shows the current proportional value
+                else
+                    *beforeOverridden = false;  // closing it returns to the following default
+                updateFit();
+            });
         connect(helpBtn, &QPushButton::clicked, this,
                 [this]
                 {
@@ -997,8 +1060,9 @@ TsMuxerWindow::TsMuxerWindow()
         // ui->retranslateUi(); these hand-built widgets are not, so register a hook the changeEvent will call.
         m_retranslateHooks.push_back(
             [this, bdmvTab, info, folderLabel, outputLabel, guardLabel, discTypeLabel, freeSectorsLabel, folderBtn,
-             isoBtn, helpBtn, buildBtn, discTypeCombo, freeSectorsEdit, manualCheck, guardSpin, refresh, updateGuard,
-             beforeCheck, guardBeforeLabel, guardBeforeSpin, guardBeforeHint, fitLabel, updateFit, updateFolderStatus]()
+             isoBtn, helpBtn, buildBtn, discTypeCombo, freeSectorsEdit, manualCheck, orderCheck, guardSpin, refresh,
+             updateGuard, beforeCheck, guardBeforeLabel, guardBeforeSpin, guardBeforeHint, fitLabel, updateFit,
+             updateFolderStatus]()
             {
                 ui->tabWidget->setTabText(ui->tabWidget->indexOf(bdmvTab), tr("BDMV folder -> ISO"));
                 info->setText(
@@ -1022,28 +1086,34 @@ TsMuxerWindow::TsMuxerWindow()
                 discTypeCombo->setItemText(1, tr("BD-RE DL 50 GB (2 layers)"));
                 discTypeCombo->setItemText(2, tr("BD-R XL 100 GB (3 layers)"));
                 discTypeCombo->setItemText(3, tr("BD-R XL 128 GB (4 layers)"));
-                discTypeCombo->setToolTip(
+                discTypeCombo->setToolTip(wrapTip(
                     tr("Picking a disc pre-fills its standard Free Sectors below; you can still edit it. Write-once "
                        "BD-R uses the full capacity, rewritable BD-RE reserves spare area and is a little smaller. "
                        "BD-RE capacity also depends on how the disc was formatted, so if ImgBurn shows a different "
-                       "Free Sectors for your disc, use that value."));
+                       "Free Sectors for your disc, use that value.")));
                 freeSectorsEdit->setPlaceholderText(tr("ImgBurn -> Free Sectors (e.g. 47,305,728)"));
+                orderCheck->setText(tr("Keep original file order (seamless branching)"));
+                orderCheck->setToolTip(wrapTip(
+                    tr("Files are normally written largest first, so the main movie sits on the layer break and "
+                       "gets the guard. Discs that use seamless branching play many separate segments in "
+                       "sequence; keeping the original order stores them close to their playback order, which "
+                       "reads more smoothly.")));
                 manualCheck->setText(tr("Enter Free Sectors manually (advanced)"));
                 manualCheck->setToolTip(
-                    tr("The Free Sectors above are pre-filled for the selected disc and locked to "
-                       "prevent accidental changes. Tick this only if ImgBurn shows a different "
-                       "Free Sectors for your exact disc, then type that number. Un-tick to "
-                       "restore the standard value."));
+                    wrapTip(tr("The Free Sectors above are pre-filled for the selected disc and locked to "
+                               "prevent accidental changes. Tick this only if ImgBurn shows a different "
+                               "Free Sectors for your exact disc, then type that number. Un-tick to "
+                               "restore the standard value.")));
                 guardSpin->setSuffix(tr(" MB"));
                 guardSpin->setToolTip(
-                    tr("The zeros fill whole 2048-byte sectors and snap to the movie's file "
-                       "boundaries, so the burned zone matches this value within about 1 MB (never "
-                       "meaningfully short)."));
+                    wrapTip(tr("The zeros fill whole 2048-byte sectors and snap to the movie's file "
+                               "boundaries, so the burned zone matches this value within about 1 MB (never "
+                               "meaningfully short).")));
                 beforeCheck->setText(tr("Also fill before the break (advanced)"));
-                beforeCheck->setToolTip(
+                beforeCheck->setToolTip(wrapTip(
                     tr("Most discs only fail at the start of the next layer, so the default puts the fill there. Some "
                        "media are also weak just before the break, so you can set the before and after zones "
-                       "independently."));
+                       "independently.")));
                 guardBeforeLabel->setText(tr("Guard before break:"));
                 guardBeforeSpin->setSuffix(tr(" MB"));
                 guardBeforeHint->setText(
@@ -1055,35 +1125,48 @@ TsMuxerWindow::TsMuxerWindow()
                 updateFolderStatus();  // re-render the folder status in the new language
             });
 
-        connect(folderBtn, &QPushButton::clicked, this,
-                [this, folderEdit, isoEdit]
+        connect(
+            folderBtn, &QPushButton::clicked, this,
+            [this, folderEdit, isoEdit, updateFolderStatus, recomputeFolderSize, updateFit]
+            {
+                QString d = QFileDialog::getExistingDirectory(this, tr("Select the BDMV disc folder"), lastInputDir);
+                if (d.isEmpty())
+                    return;
+                // Common slip: picking the BDMV folder itself instead of the disc root above it.
+                // Step up to the parent so the built ISO gets the proper BDMV/ root.
+                if (QFileInfo(d).fileName().compare(QStringLiteral("BDMV"), Qt::CaseInsensitive) == 0)
+                    d = QFileInfo(d).absolutePath();
+                folderEdit->setText(QDir::toNativeSeparators(d));
+                // Re-picking the same folder fires no textChanged, but its contents may have
+                // changed (files removed to make the image fit), so refresh explicitly.
+                updateFolderStatus();
+                recomputeFolderSize();
+                updateFit();
+                lastInputDir = d;
+                if (isoEdit->text().isEmpty())
                 {
-                    const QString d =
-                        QFileDialog::getExistingDirectory(this, tr("Select the BDMV disc folder"), lastInputDir);
-                    if (d.isEmpty())
-                        return;
-                    folderEdit->setText(QDir::toNativeSeparators(d));
-                    lastInputDir = d;
-                    if (isoEdit->text().isEmpty())
+                    // A drive root (a mounted ISO) has no file name; fall back to the volume label, then "disc".
+                    QString name = QFileInfo(d).fileName();
+                    if (name.isEmpty())
+                        name = QStorageInfo(d).displayName();
+                    if (name.isEmpty())
+                        name = QStringLiteral("disc");
+                    // Never default the output ISO into the source folder itself: a leftover ISO
+                    // there would count into the next fit estimate and even into a rebuild. Use
+                    // the PARENT folder; for a drive root or read-only media fall back to a
+                    // writable location (the user can still change it).
+                    QString outDir = QFileInfo(d).absolutePath();
+                    if (outDir == d || QStorageInfo(d).isReadOnly() || !QFileInfo(outDir).isWritable())
                     {
-                        // A drive root (a mounted ISO) has no file name; fall back to the volume label, then "disc".
-                        QString name = QFileInfo(d).fileName();
-                        if (name.isEmpty())
-                            name = QStorageInfo(d).displayName();
-                        if (name.isEmpty())
-                            name = QStringLiteral("disc");
-                        // The input may be a read-only mounted ISO or optical disc; the output ISO cannot be written
-                        // there, so default it to a writable folder (the user can still change it) in that case.
-                        QString outDir = d;
-                        if (QStorageInfo(d).isReadOnly())
-                        {
-                            outDir = QStandardPaths::writableLocation(QStandardPaths::MoviesLocation);
-                            if (outDir.isEmpty())
-                                outDir = QDir::homePath();
-                        }
-                        isoEdit->setText(QDir::toNativeSeparators(outDir + "/" + name + ".iso"));
+                        outDir = QStandardPaths::writableLocation(QStandardPaths::MoviesLocation);
+                        if (outDir.isEmpty())
+                            outDir = QDir::homePath();
                     }
-                });
+                    // QDir::filePath joins correctly even when outDir is a drive root ("I:/"),
+                    // where naive string concatenation produced "I:\\name.iso"
+                    isoEdit->setText(QDir::toNativeSeparators(QDir(outDir).filePath(name + QStringLiteral(".iso"))));
+                }
+            });
         connect(isoBtn, &QPushButton::clicked, this,
                 [this, isoEdit]
                 {
@@ -1092,10 +1175,21 @@ TsMuxerWindow::TsMuxerWindow()
                     if (!f.isEmpty())
                         isoEdit->setText(QDir::toNativeSeparators(f));
                 });
+        connect(folderRefreshBtn, &QPushButton::clicked, bdmvTab,
+                [folderEdit, updateFolderStatus, recomputeFolderSize, updateFit]
+                {
+                    // also fix a hand-typed path that points at the BDMV folder itself
+                    const QString cur = folderEdit->text().trimmed();
+                    if (QFileInfo(cur).fileName().compare(QStringLiteral("BDMV"), Qt::CaseInsensitive) == 0)
+                        folderEdit->setText(QDir::toNativeSeparators(QFileInfo(cur).absolutePath()));
+                    updateFolderStatus();
+                    recomputeFolderSize();
+                    updateFit();
+                });
         connect(
             buildBtn, &QPushButton::clicked, this,
             [this, folderEdit, isoEdit, guardSpin, discTypeCombo, freeSectorsEdit, breaksList, buildBtn, beforeCheck,
-             guardBeforeSpin]
+             guardBeforeSpin, orderCheck, readFreeSectors]
             {
                 const QString folder = folderEdit->text().trimmed();
                 const QString iso = isoEdit->text().trimmed();
@@ -1149,6 +1243,12 @@ TsMuxerWindow::TsMuxerWindow()
                     args << ("--layer-break-guard-before=" + QString::number(guardBeforeSpin->value()));
                 if (!breaks.isEmpty())
                     args << ("--layer-break-lbn=" + breaks.join(","));
+                if (orderCheck->isChecked())
+                    args << "--original-order";
+                // Lets the engine's layer-fit placement know the true disc end, so a file is only
+                // moved wholly past the break when it genuinely still fits on the disc.
+                if (const qint64 fsSectors = readFreeSectors(); fsSectors > 0)
+                    args << ("--disc-capacity=" + QString::number(fsSectors));
                 args << folder << iso;
                 tsMuxerExecute(args);
             });
@@ -1184,7 +1284,7 @@ TsMuxerWindow::TsMuxerWindow()
         auto* guardSpin = new QSpinBox(dlBox);
         guardSpin->setObjectName("dlGuardSpin");
         guardSpin->setRange(0, 9999);
-        guardSpin->setValue(64);
+        guardSpin->setValue(288);
         guardSpin->setSuffix(tr(" MB"));
         guardSpin->setEnabled(false);
         auto* oversizeCheck = new QCheckBox(tr("Allow oversize"), dlBox);

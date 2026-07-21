@@ -1,3 +1,18 @@
+## tsMuxeR 2.11.0
+
+- GUI (BDMV to ISO): the layer-break guard now defaults to 288 MB. Reported real defect zones cluster around 35, 64 and 258 MB, and on a defect-managed disc the true layer switch can sit up to 128 MB after the calculated break; 288 covers all of these. The coloured hint under the field explains the choice at every value. Requested by Coopervid, based on his defect-size reports.
+- The small guard before the break now scales proportionally with the main guard: one sixteenth of the after value (the 64:4 ratio of the original design), at least 4 MB, so 288 gives 18 MB before. The advanced field shows the live value and stops following the moment you set your own. Suggested by Coopervid.
+- Layer-fit placement (automatic): when the file that would cross the break fits completely on the next layer, it is placed there whole, so the break falls cleanly between two files. Two big titles (theatrical and directors cut) get one layer each; on seamless-branching discs the break lands between segments, the same spot commercial authoring uses. A movie larger than a layer still straddles the break with the guard, as before. Disable with --no-layer-fit.
+- New checkbox "Keep original file order (seamless branching)" (CLI: --original-order): keeps the many segment files of a branching disc in their playback order instead of largest-first.
+- Layer break report: after every build, the log shows where each guard landed, and for the main movie the playback time of the break, so you know where to spot-check on a player. The same information is saved next to the image as name.iso.layerbreak.txt. On seamless-branching discs the time is relative to the named segment file.
+- CLI: --disc-capacity=<sectors> lets the layer-fit placement respect the disc end; the GUI passes it automatically.
+- Selecting the BDMV folder itself (instead of the disc root above it) now automatically steps up to the parent, in the GUI and the CLI. Reported by Coopervid.
+- The folder row has a refresh button, and re-picking the same folder re-reads it, so a fit estimate can no longer go stale after files were removed. Reported by Coopervid.
+- The suggested output ISO now goes to the parent of the source folder, and the build only ever includes the disc structure folders (BDMV, CERTIFICATE, AACS); anything else next to them, such as a previously built ISO, is skipped with a log line instead of being muxed in.
+- Long tooltips now word-wrap instead of rendering as one endless line.
+- The playback-time reader samples several positions and uses the median, so a small block with a foreign timeline inside a stream can no longer produce a wrong time.
+- The disc-authoring guide (English, German, Japanese) covers all of the above, plus new sections on seamless branching and defect-managed discs (measured on real hardware).
+
 ## tsMuxeR 2.10.1
 
 - GUI (BDMV to ISO): the layer-break guard field now accepts up to 9999 MB (was 1024), for media whose defect zone at the layer transition is much larger than the ~35 MB typical case. The size hint now says so and suggests raising the guard if a test burn fails just after the break. Reported by Coopervid.

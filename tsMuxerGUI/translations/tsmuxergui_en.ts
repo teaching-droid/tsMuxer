@@ -3842,6 +3842,34 @@ Build the ISO anyway?</source>
         <source>Covers the ~35 MB layer defect measured on real hardware, with margin. Some media are worse (defect zones of 1 GB or more have been seen): if a test burn fails just after the layer break, raise this. The field allows up to 9999 MB.</source>
         <translation>Covers the ~35 MB layer defect measured on real hardware, with margin. Some media are worse (defect zones of 1 GB or more have been seen): if a test burn fails just after the layer break, raise this. The field allows up to 9999 MB.</translation>
     </message>
+    <message>
+        <source>Keep original file order (seamless branching)</source>
+        <translation>Keep original file order (seamless branching)</translation>
+    </message>
+    <message>
+        <source>Files are normally written largest first, so the main movie sits on the layer break and gets the guard. Discs that use seamless branching play many separate segments in sequence; keeping the original order stores them close to their playback order, which reads more smoothly.</source>
+        <translation>Files are normally written largest first, so the main movie sits on the layer break and gets the guard. Discs that use seamless branching play many separate segments in sequence; keeping the original order stores them close to their playback order, which reads more smoothly.</translation>
+    </message>
+    <message>
+        <source>Below the ~35 MB layer defect measured on real hardware. Video may land on bad sectors. 256 MB recommended.</source>
+        <translation>Below the ~35 MB layer defect measured on real hardware. Video may land on bad sectors. 256 MB recommended.</translation>
+    </message>
+    <message>
+        <source>Covers the typical ~35 MB defect, but larger bad zones are common on real media, and on a defect-managed disc the true layer switch can sit up to 128 MB after the calculated break. 256 MB recommended.</source>
+        <translation>Covers the typical ~35 MB defect, but larger bad zones are common on real media, and on a defect-managed disc the true layer switch can sit up to 128 MB after the calculated break. 256 MB recommended.</translation>
+    </message>
+    <message>
+        <source>Recommended. Covers all commonly reported defect zones (35 to 258 MB) and the shifted layer switch of defect-managed discs. For the rare defects over 1 GB, raise it; the field goes up to 9999.</source>
+        <translation>Recommended. Covers all commonly reported defect zones (35 to 258 MB) and the shifted layer switch of defect-managed discs. For the rare defects over 1 GB, raise it; the field goes up to 9999.</translation>
+    </message>
+    <message>
+        <source>Below the ~35 MB layer defect measured on real hardware. Video may land on bad sectors. 288 MB recommended.</source>
+        <translation>Below the ~35 MB layer defect measured on real hardware. Video may land on bad sectors. 288 MB recommended.</translation>
+    </message>
+    <message>
+        <source>Covers the typical ~35 MB defect, but larger bad zones are common on real media, and on a defect-managed disc the true layer switch can sit up to 128 MB after the calculated break. 288 MB recommended.</source>
+        <translation>Covers the typical ~35 MB defect, but larger bad zones are common on real media, and on a defect-managed disc the true layer switch can sit up to 128 MB after the calculated break. 288 MB recommended.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

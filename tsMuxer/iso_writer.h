@@ -199,6 +199,24 @@ class IsoWriter
     void setLayerBreakGuard(int afterSectors);
     void setLayerBreakGuard(int beforeSectors, int afterSectors);
 
+    // One record per zero-fill actually written for a layer break, in absolute image sectors.
+    // padStartLbn can be well before zoneStart (the fill starts wherever the interrupted write
+    // stood), and equals the pre-file position for a whole-file layer-fit pad.
+    struct LayerBreakPad
+    {
+        int breakLbn;
+        int64_t padStartLbn;
+        int64_t padEndLbn;
+    };
+    [[nodiscard]] const std::vector<LayerBreakPad>& layerBreakPads() const { return m_layerBreakPads; }
+
+    // Layer-fit placement: called before a file's data starts. If the file, written from the
+    // current position, would run into a guard zone AND it fits completely between that zone's
+    // end and the next zone (and the disc capacity, when known), pad with zeros up to the zone
+    // end so the whole file lands on the next layer. Returns true if a pad was written.
+    bool padOverZoneIfFileCrosses(int64_t fileSizeBytes, int64_t discCapacitySectors);
+    [[nodiscard]] int64_t currentImageLBA() const;
+
    private:
     enum class Partition
     {
@@ -282,6 +300,8 @@ class IsoWriter
     std::vector<int> m_layerBreakPoints;  // absolute image LBAs of the layer breaks (DL=1, BDXL 100=2, 128=3)
     int m_layerBreakGuardBeforeSectors;   // zero-fill BEFORE each break (previous layer side; small margin)
     int m_layerBreakGuardAfterSectors;    // zero-fill AFTER each break (next layer side; main defect protection)
+    std::vector<LayerBreakPad> m_layerBreakPads;  // where zeros were actually written (for reporting)
+    void writeZeroPad(int64_t sectors);           // shared zero-fill used by both pad paths
 };
 
 class ISOFile final : public AbstractOutputStream

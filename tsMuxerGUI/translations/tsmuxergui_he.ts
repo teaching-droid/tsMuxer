@@ -3846,6 +3846,34 @@ Build the ISO anyway?</source>
         <source>Covers the ~35 MB layer defect measured on real hardware, with margin. Some media are worse (defect zones of 1 GB or more have been seen): if a test burn fails just after the layer break, raise this. The field allows up to 9999 MB.</source>
         <translation>מכסה את פגם השכבה בגודל ~35 MB שנמדד על חומרה אמיתית, עם מרווח ביטחון. חלק מהמדיה גרועה יותר (נצפו אזורי פגם בגודל 1 GB או יותר): אם צריבת ניסיון נכשלת מיד לאחר מעבר השכבה, הגדל ערך זה. השדה מאפשר עד 9999 MB.</translation>
     </message>
+    <message>
+        <source>Keep original file order (seamless branching)</source>
+        <translation>שמור על סדר הקבצים המקורי (seamless branching)</translation>
+    </message>
+    <message>
+        <source>Files are normally written largest first, so the main movie sits on the layer break and gets the guard. Discs that use seamless branching play many separate segments in sequence; keeping the original order stores them close to their playback order, which reads more smoothly.</source>
+        <translation>בדרך כלל הקבצים נכתבים מהגדול לקטן, ולכן הסרט הראשי יושב על נקודת מעבר השכבה (Layer Break) ומקבל את אזור ההגנה. תקליטורים המשתמשים ב-seamless branching מנגנים מקטעים נפרדים רבים ברצף; שמירה על הסדר המקורי מאחסנת אותם קרוב לסדר הניגון שלהם, וכך הקריאה חלקה יותר.</translation>
+    </message>
+    <message>
+        <source>Below the ~35 MB layer defect measured on real hardware. Video may land on bad sectors. 256 MB recommended.</source>
+        <translation>מתחת לפגם השכבה בגודל ~35 MB שנמדד על חומרה אמיתית. הווידאו עלול להיכתב על סקטורים פגומים. מומלץ 256 MB.</translation>
+    </message>
+    <message>
+        <source>Covers the typical ~35 MB defect, but larger bad zones are common on real media, and on a defect-managed disc the true layer switch can sit up to 128 MB after the calculated break. 256 MB recommended.</source>
+        <translation>מכסה את הפגם האופייני של ~35 MB, אך אזורים פגומים גדולים יותר נפוצים במדיה אמיתית, ובתקליטור עם ניהול פגמים מעבר השכבה האמיתי עשוי להימצא עד 128 MB אחרי נקודת המעבר המחושבת. מומלץ 256 MB.</translation>
+    </message>
+    <message>
+        <source>Recommended. Covers all commonly reported defect zones (35 to 258 MB) and the shifted layer switch of defect-managed discs. For the rare defects over 1 GB, raise it; the field goes up to 9999.</source>
+        <translation>מומלץ. מכסה את כל אזורי הפגמים המדווחים לרוב (35 עד 258 MB) ואת מעבר השכבה המוסט של תקליטורים עם ניהול פגמים. עבור הפגמים הנדירים שמעל 1 GB, הגדילו את הערך; השדה מאפשר עד 9999.</translation>
+    </message>
+    <message>
+        <source>Below the ~35 MB layer defect measured on real hardware. Video may land on bad sectors. 288 MB recommended.</source>
+        <translation>מתחת לפגם השכבה של ~35 MB שנמדד בחומרה אמיתית. הווידאו עלול להיכתב על סקטורים פגומים. מומלץ 288 MB.</translation>
+    </message>
+    <message>
+        <source>Covers the typical ~35 MB defect, but larger bad zones are common on real media, and on a defect-managed disc the true layer switch can sit up to 128 MB after the calculated break. 288 MB recommended.</source>
+        <translation>מכסה את הפגם הטיפוסי של ~35 MB, אך אזורים פגומים גדולים יותר נפוצים במדיה אמיתית, ובדיסק עם ניהול פגמים מעבר השכבה בפועל עשוי להימצא עד 128 MB אחרי נקודת המעבר המחושבת. מומלץ 288 MB.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

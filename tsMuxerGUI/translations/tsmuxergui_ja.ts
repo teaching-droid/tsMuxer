@@ -3846,6 +3846,34 @@ Build the ISO anyway?</source>
         <source>Covers the ~35 MB layer defect measured on real hardware, with margin. Some media are worse (defect zones of 1 GB or more have been seen): if a test burn fails just after the layer break, raise this. The field allows up to 9999 MB.</source>
         <translation>実機で測定された約35 MBの層欠陥を、余裕をもってカバーします。メディアによってはこれより悪いものもあり(1 GB以上の欠陥領域が確認された例もあります)、レイヤーブレイク直後にテスト書き込みが失敗する場合は、この値を上げてください。このフィールドには最大9999 MBまで指定できます。</translation>
     </message>
+    <message>
+        <source>Keep original file order (seamless branching)</source>
+        <translation>元のファイル順序を維持(シームレスブランチング)</translation>
+    </message>
+    <message>
+        <source>Files are normally written largest first, so the main movie sits on the layer break and gets the guard. Discs that use seamless branching play many separate segments in sequence; keeping the original order stores them close to their playback order, which reads more smoothly.</source>
+        <translation>通常、ファイルはサイズの大きい順に書き込まれるため、本編がレイヤーブレイク上に配置され、ガード領域で保護されます。シームレスブランチングを使用するディスクでは、多数の個別セグメントを連続して再生します。元の順序を維持するとセグメントが再生順に近い並びで記録され、読み取りがよりスムーズになります。</translation>
+    </message>
+    <message>
+        <source>Below the ~35 MB layer defect measured on real hardware. Video may land on bad sectors. 256 MB recommended.</source>
+        <translation>実機で測定された約 35 MB のレイヤー欠陥を下回るサイズです。映像が不良セクタに重なる可能性があります。256 MB を推奨します。</translation>
+    </message>
+    <message>
+        <source>Covers the typical ~35 MB defect, but larger bad zones are common on real media, and on a defect-managed disc the true layer switch can sit up to 128 MB after the calculated break. 256 MB recommended.</source>
+        <translation>一般的な約 35 MB の欠陥はカバーしますが、実際のメディアではより大きな不良領域も珍しくなく、欠陥管理ディスクでは実際の層切り替え位置が計算上のレイヤーブレイクから最大 128 MB 後方になることがあります。256 MB を推奨します。</translation>
+    </message>
+    <message>
+        <source>Recommended. Covers all commonly reported defect zones (35 to 258 MB) and the shifted layer switch of defect-managed discs. For the rare defects over 1 GB, raise it; the field goes up to 9999.</source>
+        <translation>推奨設定。一般に報告されているすべての欠陥領域(35 ~ 258 MB)と、欠陥管理ディスクにおける層切り替え位置のずれをカバーします。まれにある 1 GB を超える欠陥には値を増やしてください。この欄は最大 9999 まで設定できます。</translation>
+    </message>
+    <message>
+        <source>Below the ~35 MB layer defect measured on real hardware. Video may land on bad sectors. 288 MB recommended.</source>
+        <translation>実機で測定された ~35 MB のレイヤー欠陥を下回っています。映像が不良セクタ上に配置される可能性があります。288 MB を推奨します。</translation>
+    </message>
+    <message>
+        <source>Covers the typical ~35 MB defect, but larger bad zones are common on real media, and on a defect-managed disc the true layer switch can sit up to 128 MB after the calculated break. 288 MB recommended.</source>
+        <translation>一般的な ~35 MB の欠陥はカバーできますが、実際のメディアではさらに大きな不良ゾーンもよく見られ、欠陥管理されたディスクでは実際の層切り替え位置が計算上のレイヤーブレイクより最大 128 MB 後方になることがあります。288 MB を推奨します。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
