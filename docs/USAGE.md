@@ -13,6 +13,9 @@ This fork adds a "BDMV folder to ISO" tab and the `--bdmv-to-iso`, `--layer-brea
 BD-R XL discs. See [DISC_AUTHORING.md](DISC_AUTHORING.md) (also available in German as
 [DISC_AUTHORING_DE.md](DISC_AUTHORING_DE.md)) for the details and the layer-break calculator.
 
+A step-by-step guide to the "BDMV folder to ISO" tab, with screenshots of every stage, is in
+[BDMV_TO_ISO.md](BDMV_TO_ISO.md).
+
 ### Editing the Meta File in the GUI
 
 The tsMuxerGUI displays an auto-generated meta file in the "Meta file" section. This preview shows the exact content that will be used when you start muxing. 
