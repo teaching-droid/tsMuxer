@@ -54,6 +54,8 @@ For a standard blank disc the field is filled in for you and stays locked. If yo
 
 ### Where to find the Free Sectors value in ImgBurn
 
+**Note:** ImgBurn is independent third-party software and is not part of tsMuxeR, nor affiliated with, endorsed by, or maintained by this project. It is shown here only as a widely used example; any comparable burning tool that reports the disc's free sectors works just as well.
+
 The `Where do I find this?` button next to the field opens this explanation. Open ImgBurn and choose **Write image file to disc**:
 
 ![ImgBurn main menu](img/imgburn/imgburn_1_menu.png)

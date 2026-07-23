@@ -54,6 +54,8 @@ Bei einem üblichen Rohling wird das Feld für Sie ausgefüllt und bleibt gesper
 
 ### Wo Sie den Free-Sectors-Wert in ImgBurn finden
 
+**Hinweis:** ImgBurn ist eigenständige Software von Dritten und weder Teil von tsMuxeR noch mit diesem Projekt verbunden, von ihm empfohlen oder betreut. Es dient hier nur als weit verbreitetes Beispiel; jedes vergleichbare Brennprogramm, das die Free Sectors der Disc anzeigt, ist ebenso geeignet.
+
 Die Schaltfläche `Wo finde ich das?` neben dem Feld öffnet diese Erklärung. Starten Sie ImgBurn und wählen Sie **Write image file to disc**:
 
 ![ImgBurn-Hauptmenü](img/imgburn/imgburn_1_menu.png)
