@@ -36,7 +36,7 @@ Sobald der Ordner gewählt ist, füllt sich der Reiter von selbst:
 3. Der Layer-Break-Schutz, voreingestellt auf die empfohlenen 288 MB (dazu unten mehr).
 4. Der Disc-Typ, den Sie brennen wollen.
 5. Die Free Sectors des Rohlings und darunter die berechnete Position des Layer-Breaks.
-6. Die Größenabschätzung: wie groß das Image wird, ob es auf den gewählten Disc-Typ passt und wie viel Platz übrig bleibt. Dieselbe Zeile warnt auch, wenn der Inhalt nicht passt.
+6. Die Größenabschätzung: wie groß das Image wird, ob es auf den gewählten Disc-Typ passt und wie viel Platz übrig bleibt. Dieselbe Zeile warnt auch, wenn der Inhalt nicht passt. Als Faustregel sollten es etwa 90 Prozent oder weniger sein (siehe "Wie voll die Disc werden sollte" weiter unten).
 
 Wenn alles stimmt, können Sie direkt auf `ISO erstellen` gehen. Die folgenden Abschnitte erklären die einzelnen Einstellungen.
 
@@ -48,9 +48,27 @@ Wählen Sie die Disc, die Sie tatsächlich brennen. Die Auswahl legt die Kapazit
 
 ## Free Sectors
 
-Bei einem üblichen Rohling wird das Feld für Sie ausgefüllt und bleibt gesperrt. Meldet Ihr Brennprogramm für Ihre konkrete Disc einen anderen Wert, setzen Sie den Haken bei `Free Sectors manuell eingeben (erweitert)` und tragen die Zahl ein; der berechnete Layer-Break aktualisiert sich sofort. Die Schaltfläche `Wo finde ich das?` erklärt, wo ImgBurn den Wert anzeigt.
+Bei einem üblichen Rohling wird das Feld für Sie ausgefüllt und bleibt gesperrt. Meldet Ihr Brennprogramm für Ihre konkrete Disc einen anderen Wert, setzen Sie den Haken bei `Free Sectors manuell eingeben (erweitert)` und tragen die Zahl ein; der berechnete Layer-Break aktualisiert sich sofort.
 
 ![Free Sectors von Hand eingeben](img/de/05_manual_sectors.png)
+
+### Wo Sie den Free-Sectors-Wert in ImgBurn finden
+
+Die Schaltfläche `Wo finde ich das?` neben dem Feld öffnet diese Erklärung. Starten Sie ImgBurn und wählen Sie **Write image file to disc**:
+
+![ImgBurn-Hauptmenü](img/imgburn/imgburn_1_menu.png)
+
+Legen Sie den Rohling ins Laufwerk. Das Disc-Informationsfeld rechts nennt **Free Sectors**; das ist die Zahl, die Sie eintragen:
+
+![ImgBurn Free Sectors](img/imgburn/imgburn_2_free_sectors.png)
+
+Verwenden Sie den Wert bei Free Sectors selbst, nicht Free Space (der in Bytes steht) oder eine Sektorenzahl aus einem anderen Programm; nur Free Sectors ist die volle formatierte Kapazität der Disc.
+
+## Wie voll die Disc werden sollte
+
+Füllen Sie die Disc möglichst nur zu etwa 90 Prozent, nicht bis zum Rand. Optische Medien werden von innen nach außen beschrieben, und die äußersten Sektoren, die zuletzt und am schnellsten geschrieben werden, haben die schlechteste Brennqualität; dort treten Lesefehler zuerst auf. Wenn der Brennvorgang bei etwa 90 Prozent bleibt, hält er Ihren Film von dieser schlechtesten Zone fern.
+
+Die Größenabschätzung macht das leicht ablesbar: im Beispiel oben füllt das Image 83 Prozent der Disc, bequem unter 90. Steigt der Wert über 90 Prozent, nehmen Sie den nächstgrößeren Disc-Typ.
 
 ## Der Layer-Break-Schutz
 

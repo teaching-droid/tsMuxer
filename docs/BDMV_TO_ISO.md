@@ -36,7 +36,7 @@ After the folder is chosen, the tab fills itself in:
 3. The layer-break guard, preset to the recommended 288 MB (more on this below).
 4. The disc type you plan to burn.
 5. The Free Sectors of the blank disc and, below it, the calculated layer break position(s).
-6. The fit estimate: how large the image will be, whether it fits on the chosen disc type, and how much room is left. The same line warns you if the content does not fit.
+6. The fit estimate: how large the image will be, whether it fits on the chosen disc type, and how much room is left. The same line warns you if the content does not fit. As a rule of thumb, aim for about 90 percent or less (see "How full to make the disc" below).
 
 If everything looks right you can go straight to `Build ISO`. The remaining sections explain the individual settings.
 
@@ -48,9 +48,27 @@ Pick the disc you will actually burn. The choice sets the disc capacity and how 
 
 ## Free Sectors
 
-For a standard blank disc the field is filled in for you and stays locked. If your burning program reports a different value for your specific disc, tick `Enter Free Sectors manually (advanced)` and type that number; the calculated layer break updates immediately. The `Where do I find this?` button explains where ImgBurn shows the value.
+For a standard blank disc the field is filled in for you and stays locked. If your burning program reports a different value for your specific disc, tick `Enter Free Sectors manually (advanced)` and type that number; the calculated layer break updates immediately.
 
 ![Manual Free Sectors entry](img/en/05_manual_sectors.png)
+
+### Where to find the Free Sectors value in ImgBurn
+
+The `Where do I find this?` button next to the field opens this explanation. Open ImgBurn and choose **Write image file to disc**:
+
+![ImgBurn main menu](img/imgburn/imgburn_1_menu.png)
+
+Put the blank disc in the drive. The disc information panel on the right lists **Free Sectors**; that is the number to enter:
+
+![ImgBurn Free Sectors](img/imgburn/imgburn_2_free_sectors.png)
+
+Use the Free Sectors value itself, not Free Space (which is in bytes) or a sector count from another tool; only Free Sectors is the disc's full formatted capacity.
+
+## How full to make the disc
+
+Aim to fill the disc only to about 90 percent, not to the brim. Blank optical media are written from the inside outward, and the outermost sectors, written last and fastest, are where burn quality is weakest and read errors appear first. Keeping the burn to about 90 percent keeps your movie off that worst zone.
+
+The fit estimate makes this easy to judge: in the example above the image fills 83 percent of the disc, comfortably under 90. If the estimate climbs past 90 percent, use the next larger disc type.
 
 ## The layer-break guard
 
