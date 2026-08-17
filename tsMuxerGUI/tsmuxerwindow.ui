@@ -2762,6 +2762,9 @@ p, li { white-space: pre-wrap; }
            <layout class="QHBoxLayout" name="horizontalLayoutDvProfile">
             <item>
              <widget class="QLabel" name="labelDvProfile">
+              <property name="visible">
+               <bool>false</bool>
+              </property>
               <property name="text">
                <string>Dolby Vision:</string>
               </property>
@@ -2769,6 +2772,9 @@ p, li { white-space: pre-wrap; }
             </item>
             <item>
              <widget class="QComboBox" name="comboBoxDvProfile">
+              <property name="visible">
+               <bool>false</bool>
+              </property>
               <property name="toolTip">
                <string>Only applies to a dual layer Dolby Vision source muxed to Matroska. Profile 7 carries the disc as it is. Profile 8.1 converts the Dolby Vision metadata so the file plays as single layer Dolby Vision on many more devices, while the disc's own metadata travels with it so the two layers can be separated again exactly. The file does not get smaller. Profile 8.1 needs the libdovi library beside tsMuxeR.</string>
               </property>

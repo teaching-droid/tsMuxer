@@ -633,6 +633,10 @@ TsMuxerWindow::TsMuxerWindow()
 
     ui->DiskLabel->setVisible(false);
     ui->DiskLabelEdit->setVisible(false);
+    // Nothing has been loaded yet, so nothing about Dolby Vision applies. The designer file hides
+    // this row too, so it is never seen even for a frame; the call is here so the state comes from
+    // the same rule that maintains it afterwards rather than from a designer default.
+    updateDvProfileVisible();
 
     ui->label_Donate->installEventFilter(this);
 
