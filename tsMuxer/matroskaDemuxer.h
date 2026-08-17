@@ -97,6 +97,7 @@ class MatroskaDemuxer final : public IOContextDemuxer
     std::vector<MatroskaAttachment> m_attachments;
     std::string m_attachmentSource;  // the file the payloads are read back from
     void loadAttachments(const std::string& fileName);
+    void applyStartCodeRule();
 
     AVPacket* m_lastDeliveryPacket;
 

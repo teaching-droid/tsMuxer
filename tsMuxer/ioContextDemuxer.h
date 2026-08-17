@@ -1,6 +1,7 @@
 #ifndef IO_CONTEXT_DEMUXER_H_
 #define IO_CONTEXT_DEMUXER_H_
 
+#include <string>
 #include <vector>
 
 #include "abstractDemuxer.h"
@@ -22,6 +23,9 @@ class ParsedTrackPrivData
     virtual void setPrivData(uint8_t* buff, int size) {}
     virtual void extractData(AVPacket* pkt, uint8_t* buff, int size) = 0;
     virtual unsigned newBufferSize(uint8_t* buff, unsigned size) { return 0; }
+    // How the source framed its start codes, for the track types that rebuild Annex-B. Everything
+    // else has no start codes to write and ignores it. See parseStartCodeRule in nalUnits.h.
+    virtual void setStartCodeRule(const std::string& rule) {}
 };
 
 enum class IOContextTrackType

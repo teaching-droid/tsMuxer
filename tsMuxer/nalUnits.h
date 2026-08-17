@@ -2,10 +2,28 @@
 #define NAL_UNITS_H_
 
 #include <map>
+#include <string>
 #include <unordered_set>
 #include <vector>
 
 #include "bitStream.h"
+
+// How a source framed its start codes, recorded per NAL type as "4:32,33,34,35,62 3:0,1,8,19,21,39".
+//
+// Three bytes and four are both legal and the coded video is identical either way, but a disc uses
+// one convention consistently and a rebuild that does not follow it is not byte identical to its
+// source. Matroska stores these codecs LENGTH PREFIXED and holds no start codes at all, so the rule
+// has to travel beside the file and be applied wherever Annex-B is built again.
+//
+// Anything unparsable is ignored rather than guessed at, which leaves the four byte default in
+// place. One definition of the format, used by everything that reads it.
+void parseStartCodeRule(const std::string& rule, std::map<int, int>& out);
+
+// The manifest a tsMuxeR Matroska file carries when it has anything to record about its source.
+inline constexpr char DV_MANIFEST_ATTACHMENT_NAME[] = "dv-manifest.txt";
+
+// One "  key   value" line out of that manifest.
+std::string dvManifestValue(const std::string& text, const std::string& key);
 
 static constexpr int Extended_SAR = 255;
 static constexpr double h264_ar_coeff[] = {

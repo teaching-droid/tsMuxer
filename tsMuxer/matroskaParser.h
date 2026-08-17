@@ -2,6 +2,8 @@
 #define MATROSKA_PARSER_H
 
 // #include "avcodecs.h"
+#include <map>
+#include <string>
 #include <vector>
 
 #include "aac.h"
@@ -265,13 +267,19 @@ class ParsedH264TrackData : public ParsedTrackPrivData
     ParsedH264TrackData(uint8_t* buff, int size);
     ~ParsedH264TrackData() override = default;
     void extractData(AVPacket* pkt, uint8_t* buff, int size) override;
+    void setStartCodeRule(const std::string& rule) override;
 
    protected:
     uint8_t m_nalSize;
     bool m_firstExtract;
 
     std::vector<std::vector<uint8_t>> m_spsPpsList;
-    static void writeNalHeader(uint8_t*& dst);
+    // NAL type to 3 or 4. Empty means four throughout, which is what this has always written.
+    std::map<int, int> m_startCodeByType;
+
+    void writeNalHeader(uint8_t*& dst, int nalType) const;
+    // The NAL type sits in a different place in each codec, and it is what the rule is keyed on.
+    [[nodiscard]] virtual int nalTypeOf(const uint8_t* nal, int size) const;
     [[nodiscard]] size_t getSPSPPSLen() const;
     int writeSPSPPS(uint8_t* dst) const;
     virtual bool spsppsExists(uint8_t* buff, int size);
@@ -284,6 +292,9 @@ class ParsedH265TrackData final : public ParsedH264TrackData
     ~ParsedH265TrackData() override = default;
 
     bool spsppsExists(uint8_t* buff, int size) override;
+
+   protected:
+    [[nodiscard]] int nalTypeOf(const uint8_t* nal, int size) const override;
 };
 
 class ParsedH266TrackData final : public ParsedH264TrackData
@@ -293,6 +304,9 @@ class ParsedH266TrackData final : public ParsedH264TrackData
     ~ParsedH266TrackData() override = default;
 
     bool spsppsExists(uint8_t* buff, int size) override;
+
+   protected:
+    [[nodiscard]] int nalTypeOf(const uint8_t* nal, int size) const override;
 };
 
 class ParsedAV1TrackData final : public ParsedTrackPrivData

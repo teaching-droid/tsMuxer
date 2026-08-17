@@ -2158,7 +2158,7 @@ void MatroskaMuxer::writeCues()
 // same order, that an extracted RPU file uses, so it is worth something outside tsMuxeR.
 static const char DV_RPU_ATTACHMENT_NAME[] = "dv-original-rpu.bin";
 static const char DV_RPU_PTS_ATTACHMENT_NAME[] = "dv-original-rpu-pts.bin";
-static const char DV_MANIFEST_ATTACHMENT_NAME[] = "dv-manifest.txt";
+// DV_MANIFEST_ATTACHMENT_NAME lives in nalUnits.h, since both readers of it need the same name.
 
 static std::string hexBytes(const uint8_t* data, const int len)
 {

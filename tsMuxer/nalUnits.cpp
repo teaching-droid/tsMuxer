@@ -12,6 +12,65 @@
 
 static constexpr uint8_t BDROM_METADATA_GUID[] = "\x17\xee\x8c\x60\xf8\x4d\x11\xd9\x8c\xd6\x08\x00\x20\x0c\x9a\x66";
 
+void parseStartCodeRule(const std::string& rule, std::map<int, int>& out)
+{
+    out.clear();
+    size_t at = 0;
+    while (at < rule.size())
+    {
+        const size_t colon = rule.find(':', at);
+        if (colon == std::string::npos || colon == at)
+            return;
+        const int len = rule[at] - '0';
+        if (len != 3 && len != 4)
+            return;
+        size_t end = rule.find(' ', colon);
+        if (end == std::string::npos)
+            end = rule.size();
+        size_t item = colon + 1;
+        while (item < end)
+        {
+            size_t comma = rule.find(',', item);
+            if (comma == std::string::npos || comma > end)
+                comma = end;
+            const std::string number = rule.substr(item, comma - item);
+            if (!number.empty())
+            {
+                const int nalType = atoi(number.c_str());
+                if (nalType >= 0 && nalType <= 63)
+                    out[nalType] = len;
+            }
+            item = comma + 1;
+        }
+        at = end + 1;
+    }
+}
+
+std::string dvManifestValue(const std::string& text, const std::string& key)
+{
+    size_t at = 0;
+    while (at < text.size())
+    {
+        size_t lineEnd = text.find('\n', at);
+        if (lineEnd == std::string::npos)
+            lineEnd = text.size();
+        std::string line = text.substr(at, lineEnd - at);
+        at = lineEnd + 1;
+        while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
+        const size_t first = line.find_first_not_of(' ');
+        if (first == std::string::npos)
+            continue;
+        line = line.substr(first);
+        if (line.compare(0, key.size(), key) != 0 || line.size() <= key.size() || line[key.size()] != ' ')
+            continue;
+        const size_t valueAt = line.find_first_not_of(' ', key.size());
+        if (valueAt == std::string::npos)
+            return std::string();
+        return line.substr(valueAt);
+    }
+    return std::string();
+}
+
 void NALUnit::write_rbsp_trailing_bits(BitStreamWriter& writer)
 {
     writer.putBit(1);

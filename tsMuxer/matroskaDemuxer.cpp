@@ -2,12 +2,14 @@
 
 #include <algorithm>
 #include <climits>
+#include <set>
 
 #include <fs/systemlog.h>
 #include <types/types.h>
 
 #include "abstractDemuxer.h"
 #include "avPacket.h"
+#include "nalUnits.h"
 #include "subTrackFilter.h"
 #include "vodCoreException.h"
 
@@ -1087,6 +1089,45 @@ void MatroskaDemuxer::openFile(const std::string& streamName)
     matroska_read_header();
     // Separately, on its own handle, so nothing about the streaming read is disturbed.
     loadAttachments(streamName);
+    applyStartCodeRule();
+}
+
+// A file this muxer wrote records how its source framed its start codes, because Matroska stores
+// these codecs length prefixed and holds none. Without that record every stream rebuilt from such a
+// file comes out four byte, whatever the source did, and never matches it. Any other file carries no
+// manifest, so nothing changes for it.
+//
+// This is the whole track, as it is read for an ordinary mux. The split path applies the same rule
+// again on its own side, from the same line, so the two agree.
+void MatroskaDemuxer::applyStartCodeRule()
+{
+    std::vector<uint8_t> manifestBytes;
+    if (!getAttachment(DV_MANIFEST_ATTACHMENT_NAME, manifestBytes))
+        return;
+
+    const std::string rule =
+        dvManifestValue(std::string(manifestBytes.begin(), manifestBytes.end()), "start-code");
+    if (rule.empty())
+        return;
+
+    int applied = 0;
+    for (int i = 0; i < num_tracks; i++)
+    {
+        if (tracks[i] != nullptr && tracks[i]->parsed_priv_data != nullptr)
+        {
+            tracks[i]->parsed_priv_data->setStartCodeRule(rule);
+            applied++;
+        }
+    }
+
+    // Said once per file, not once per open. A file is opened and thrown away during track
+    // detection before the mux opens it again, so the plain message appears twice for one input and
+    // reads like something happening twice.
+    static std::set<std::string> reported;
+    if (applied > 0 && reported.insert(m_attachmentSource + "|" + rule).second)
+        LTRACE(LT_INFO, 2,
+               "This file records how its source framed the video (" << rule
+                                                                     << "), so it is framed the same way again.");
 }
 
 void MatroskaDemuxer::readClose()

@@ -31,6 +31,7 @@ static bool isKnownTrackParam(const std::string& name);
 #include "mpeg2StreamReader.h"
 #include "mpegAudioStreamReader.h"
 #include "mpegStreamReader.h"
+#include "nalUnits.h"
 #include "opusStreamReader.h"
 #include "pgsStreamReader.h"
 #include "programStreamDemuxer.h"
@@ -52,32 +53,14 @@ extern "C"
 // manifest that travels beside them.
 static const char DV_RPU_ATTACHMENT[] = "dv-original-rpu.bin";
 static const char DV_RPU_PTS_ATTACHMENT[] = "dv-original-rpu-pts.bin";
-static const char DV_MANIFEST_ATTACHMENT[] = "dv-manifest.txt";
+// The manifest's own name is DV_MANIFEST_ATTACHMENT_NAME, in nalUnits.h, because the demuxer reads
+// the same file for the framing rule.
 
-// One "  key   value" line out of the manifest.
+// One "  key   value" line out of the manifest. Defined once in nalUnits.cpp, because the demuxer
+// reads the same manifest to frame its own output.
 static std::string manifestValue(const std::string& text, const std::string& key)
 {
-    size_t at = 0;
-    while (at < text.size())
-    {
-        size_t lineEnd = text.find('\n', at);
-        if (lineEnd == std::string::npos)
-            lineEnd = text.size();
-        std::string line = text.substr(at, lineEnd - at);
-        at = lineEnd + 1;
-        while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
-        size_t first = line.find_first_not_of(' ');
-        if (first == std::string::npos)
-            continue;
-        line = line.substr(first);
-        if (line.compare(0, key.size(), key) != 0 || line.size() <= key.size() || line[key.size()] != ' ')
-            continue;
-        size_t valueAt = line.find_first_not_of(' ', key.size());
-        if (valueAt == std::string::npos)
-            return std::string();
-        return line.substr(valueAt);
-    }
-    return std::string();
+    return dvManifestValue(text, key);
 }
 
 // Load the disc's own RPUs out of a profile 8.1 carrier and hand them to the splitter.
@@ -93,7 +76,7 @@ static std::string manifestValue(const std::string& text, const std::string& key
 static void loadDvOriginalRpus(AbstractDemuxer* demuxer, HevcDolbyVisionFilter* filter)
 {
     std::vector<uint8_t> manifestBytes;
-    if (demuxer == nullptr || !demuxer->getAttachment(DV_MANIFEST_ATTACHMENT, manifestBytes))
+    if (demuxer == nullptr || !demuxer->getAttachment(DV_MANIFEST_ATTACHMENT_NAME, manifestBytes))
         return;
 
     const std::string manifest(manifestBytes.begin(), manifestBytes.end());
@@ -103,12 +86,7 @@ static void loadDvOriginalRpus(AbstractDemuxer* demuxer, HevcDolbyVisionFilter* 
     // no manifest at all.
     const std::string scRule = manifestValue(manifest, "start-code");
     if (!scRule.empty())
-    {
-        filter->setStartCodeRule(scRule);
-        LTRACE(LT_INFO, 2,
-               "This file records how its source framed the video (" << scRule
-                                                                     << "), so the disc is framed the same way.");
-    }
+        filter->setStartCodeRule(scRule);  // the demuxer reports it, once, for every path that uses it
 
     // The rest applies only to a profile 8.1 carrier. A manifest that carries nothing but the
     // framing rule has no RPU attachment and must not be treated as if it did.

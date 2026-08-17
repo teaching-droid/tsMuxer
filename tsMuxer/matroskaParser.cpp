@@ -57,11 +57,29 @@ ParsedH264TrackData::ParsedH264TrackData(uint8_t* buff, const int size) : Parsed
     }
 };
 
-void ParsedH264TrackData::writeNalHeader(uint8_t*& dst)
+void ParsedH264TrackData::setStartCodeRule(const std::string& rule) { parseStartCodeRule(rule, m_startCodeByType); }
+
+int ParsedH264TrackData::nalTypeOf(const uint8_t* nal, const int size) const { return size >= 1 ? nal[0] & 0x1F : -1; }
+
+// Four bytes unless the source's own framing was recorded and says three for this NAL type. Both
+// are legal and decode identically; the difference only matters when the point is to reproduce a
+// source byte for byte, and Matroska keeps no start codes to copy.
+void ParsedH264TrackData::writeNalHeader(uint8_t*& dst, const int nalType) const
 {
-    for (int i = 0; i < 3; i++) *dst++ = 0;
+    int len = 4;
+    if (nalType >= 0)
+    {
+        const auto found = m_startCodeByType.find(nalType);
+        if (found != m_startCodeByType.end())
+            len = found->second;
+    }
+    for (int i = 0; i < len - 1; i++) *dst++ = 0;
     *dst++ = 1;
 }
+
+// An UPPER BOUND, deliberately. It counts four bytes for every start code, and a three byte one
+// simply leaves a byte unused. Overstating it wastes a byte per NAL; understating it is a heap
+// overflow, so this stays as it is and the packet is sized afterwards from what was written.
 size_t ParsedH264TrackData::getSPSPPSLen() const
 {
     size_t rez = 0;
@@ -74,7 +92,7 @@ int ParsedH264TrackData::writeSPSPPS(uint8_t* dst) const
     const uint8_t* start = dst;
     for (auto& i : m_spsPpsList)
     {
-        writeNalHeader(dst);
+        writeNalHeader(dst, nalTypeOf(i.data(), static_cast<int>(i.size())));
         memcpy(dst, i.data(), i.size());
         dst += i.size();
     }
@@ -142,9 +160,11 @@ void ParsedH264TrackData::extractData(AVPacket* pkt, uint8_t* buff, const int si
     {
         LTRACE(LT_ERROR, 2, "Matroska parse error: invalid H264 NAL unit size. NAL unit truncated.");
     }
+    // Sized for a four byte start code on every NAL, which is the largest this can write. Where the
+    // source's own framing was three, one byte per NAL goes unused and the packet is sized below
+    // from what was actually produced.
     newBufSize += elements * (4 - m_nalSize);
     pkt->data = new uint8_t[newBufSize];
-    pkt->size = newBufSize;
 
     uint8_t* dst = pkt->data;
     if (m_firstExtract)
@@ -166,12 +186,14 @@ void ParsedH264TrackData::extractData(AVPacket* pkt, uint8_t* buff, const int si
             elSize = (curPos[0] << 8l) + curPos[1];
         else
             THROW(ERR_COMMON, "Unsupported nal unit size " << elSize)
-        writeNalHeader(dst);
+        const auto avail = static_cast<int>(end - (curPos + m_nalSize));
+        writeNalHeader(dst, nalTypeOf(curPos + m_nalSize, FFMIN(static_cast<int>(elSize), avail)));
         assert((curPos[m_nalSize] & 0x80) == 0);
         memcpy(dst, curPos + m_nalSize, FFMIN(elSize, (uint32_t)(end - curPos)));
         curPos += elSize + m_nalSize;
         dst += elSize;
     }
+    pkt->size = static_cast<int>(dst - pkt->data);
     m_firstExtract = false;
 }
 
@@ -179,6 +201,11 @@ void ParsedH264TrackData::extractData(AVPacket* pkt, uint8_t* buff, const int si
 ParsedH265TrackData::ParsedH265TrackData(const uint8_t* buff, const int size) : ParsedH264TrackData(nullptr, 0)
 {
     m_spsPpsList = hevc_extract_priv_data(buff, size, &m_nalSize);
+}
+
+int ParsedH265TrackData::nalTypeOf(const uint8_t* nal, const int size) const
+{
+    return size >= 1 ? (nal[0] >> 1) & 0x3F : -1;
 }
 
 bool ParsedH265TrackData::spsppsExists(uint8_t* buff, const int size)
@@ -214,6 +241,13 @@ bool ParsedH265TrackData::spsppsExists(uint8_t* buff, const int size)
 ParsedH266TrackData::ParsedH266TrackData(const uint8_t* buff, const int size) : ParsedH264TrackData(nullptr, 0)
 {
     m_spsPpsList = vvc_extract_priv_data(buff, size, &m_nalSize);
+}
+
+// VVC puts the type in the SECOND byte: byte 0 is the forbidden zero bit, a reserved bit and the
+// layer id, byte 1 is the five type bits and the temporal id.
+int ParsedH266TrackData::nalTypeOf(const uint8_t* nal, const int size) const
+{
+    return size >= 2 ? (nal[1] >> 3) & 0x1F : -1;
 }
 
 bool ParsedH266TrackData::spsppsExists(uint8_t* buff, const int size)

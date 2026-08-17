@@ -75,41 +75,8 @@ void HevcDolbyVisionFilter::fillPids(const PIDSet& acceptedPIDs, const int pid)
         m_elStreamIndex = -1;
 }
 
-// "4:35,32,33,34 3:1,39". Anything unparsable is ignored rather than guessed at, which leaves the
-// four byte default in place.
-void HevcDolbyVisionFilter::setStartCodeRule(const std::string& rule)
-{
-    m_startCodeByType.clear();
-    size_t at = 0;
-    while (at < rule.size())
-    {
-        const size_t colon = rule.find(':', at);
-        if (colon == std::string::npos || colon == at)
-            return;
-        const int len = rule[at] - '0';
-        if (len != 3 && len != 4)
-            return;
-        size_t end = rule.find(' ', colon);
-        if (end == std::string::npos)
-            end = rule.size();
-        size_t item = colon + 1;
-        while (item < end)
-        {
-            size_t comma = rule.find(',', item);
-            if (comma == std::string::npos || comma > end)
-                comma = end;
-            const std::string number = rule.substr(item, comma - item);
-            if (!number.empty())
-            {
-                const int nalType = atoi(number.c_str());
-                if (nalType >= 0 && nalType <= 63)
-                    m_startCodeByType[nalType] = len;
-            }
-            item = comma + 1;
-        }
-        at = end + 1;
-    }
-}
+// "4:35,32,33,34 3:1,39", parsed by parseStartCodeRule so there is one definition of the format.
+void HevcDolbyVisionFilter::setStartCodeRule(const std::string& rule) { parseStartCodeRule(rule, m_startCodeByType); }
 
 void HevcDolbyVisionFilter::emit(const int streamIndex, const uint8_t* data, const uint8_t* dataEnd,
                                  DemuxedData& demuxedData, int64_t& discardSize, const int nalType) const
