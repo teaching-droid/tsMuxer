@@ -1323,13 +1323,40 @@ void METADemuxer::addTrack(vector<CheckStreamRez>& rez, CheckStreamRez trackRez)
     if (trackRez.codecInfo.codecID == h264DepCodecInfo.codecID && trackRez.multiSubStream)
     {
         // split combined MVC/AVC track to substreams
+        trackRez.subTrack = 1;  // the dependent view, which is what this codec id names
         rez.push_back(trackRez);
 
         trackRez.codecInfo = h264CodecInfo;
+        trackRez.subTrack = 2;
         const size_t postfixPos = trackRez.streamDescr.find("3d-pg");
         if (postfixPos != string::npos)
             trackRez.streamDescr = trackRez.streamDescr.substr(0, postfixPos);
 
+        rez.push_back(trackRez);
+    }
+    else if (trackRez.codecInfo.codecID == hevcCodecInfo.codecID && trackRez.multiSubStream)
+    {
+        // A dual layer Dolby Vision disc stored as ONE Matroska track: the base layer, the
+        // enhancement layer wrapped in unspecified NALs, and one RPU per picture. Listing it as
+        // two entries is what lets it be separated again without hand writing a meta file, since
+        // the interface already turns a sub track number into subTrack= on its own.
+        //
+        // BEWARE THE ORDER. The numbering above names the DEPENDENT view 1; here 1 is the BASE
+        // layer, which is the opposite way round. Getting it wrong swaps the layers and authors a
+        // disc with the enhancement layer as the picture, and nothing downstream would notice.
+        const std::string full = trackRez.streamDescr;
+        const size_t dvPos = full.find(" Dolby Vision");
+
+        trackRez.subTrack = HevcDolbyVisionFilter::BL_SUB_TRACK;
+        // The base layer alone carries neither the RPU nor the enhancement layer, so it must not
+        // keep a description that claims them.
+        if (dvPos != std::string::npos)
+            trackRez.streamDescr = full.substr(0, dvPos);
+        trackRez.streamDescr += " (base layer)";
+        rez.push_back(trackRez);
+
+        trackRez.subTrack = HevcDolbyVisionFilter::EL_SUB_TRACK;
+        trackRez.streamDescr = full + " (enhancement layer)";
         rez.push_back(trackRez);
     }
     else

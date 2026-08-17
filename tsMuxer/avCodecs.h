@@ -43,7 +43,13 @@ struct CodecInfo
 struct CheckStreamRez
 {
     CheckStreamRez()
-        : trackID(0), delay(0), containerStreamType(0), multiSubStream(false), isSecondary(false), unused(false)
+        : trackID(0),
+          delay(0),
+          containerStreamType(0),
+          multiSubStream(false),
+          subTrack(0),
+          isSecondary(false),
+          unused(false)
     {
     }
     CodecInfo codecInfo;
@@ -56,6 +62,15 @@ struct CheckStreamRez
     int containerStreamType;
 
     bool multiSubStream;
+    // Which half of a combined track this entry is, as it appears in subTrack= on a meta line.
+    // 0 means the entry is not a sub track.
+    //
+    // It has to be carried rather than derived. For a combined AVC and MVC track the two halves
+    // have DIFFERENT codec ids, so the number could be worked out from the codec alone; a merged
+    // dual layer Dolby Vision track is two HEVC entries with the SAME id, and the two conventions
+    // run OPPOSITE ways round: MVC calls the dependent view 1, Dolby Vision calls the base layer
+    // 1. Deriving it would silently swap the layers and author a disc with them reversed.
+    int subTrack;
     bool isSecondary;
     bool unused;
 };

@@ -188,7 +188,16 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
             if (streams[i].delay)
                 LTRACE(LT_INFO, 2, "Stream delay: " << streams[i].delay);
             if (streams[i].multiSubStream)
-                LTRACE(LT_INFO, 2, "subTrack: " << (streams[i].codecInfo.codecID == CODEC_V_MPEG4_H264_DEP ? 1 : 2));
+            {
+                // Print what the entry says it is. Deriving the number from the codec id worked
+                // only while the two halves of a combined track had different ids; a merged dual
+                // layer Dolby Vision track is two HEVC entries, and its numbering runs the
+                // opposite way round from the MVC one.
+                const int subTrack = streams[i].subTrack != 0
+                                         ? streams[i].subTrack
+                                         : (streams[i].codecInfo.codecID == CODEC_V_MPEG4_H264_DEP ? 1 : 2);
+                LTRACE(LT_INFO, 2, "subTrack: " << subTrack);
+            }
         }
         else
         {

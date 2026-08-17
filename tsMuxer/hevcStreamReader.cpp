@@ -304,6 +304,18 @@ CheckStreamRez HEVCStreamReader::checkStream(uint8_t* buffer, const int len)
                 rez.streamDescr += " RPU";
             if (m_hdr->isDVEL)
                 rez.streamDescr += " EL";
+
+            // Both together means this ONE track holds a whole dual layer disc: the base layer,
+            // the enhancement layer wrapped in unspecified NALs, and an RPU per picture. Saying so
+            // is what lets the track be listed as its two layers and separated again without a
+            // hand written meta file.
+            //
+            // The pair is the honest test. An RPU alone is a single layer profile 5 or 8 track,
+            // which has nothing to separate; and a disc's own enhancement layer track carries its
+            // NALs UNWRAPPED, so it never sets the enhancement flag here and cannot be mistaken
+            // for a merged one.
+            if (m_hdr->isDVRPU && m_hdr->isDVEL)
+                rez.multiSubStream = true;
         }
     }
 
