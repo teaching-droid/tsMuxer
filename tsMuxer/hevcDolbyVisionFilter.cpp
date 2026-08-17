@@ -5,6 +5,7 @@
 #include "hevc.h"
 #include "nalUnits.h"
 #include "vodCoreException.h"
+#include "vod_common.h"
 
 // A four byte start code. The Matroska reader hands every NAL over in Annex-B form already
 // (matroskaParser.cpp writeNalHeader), so the split re-emits the same framing on both sides.
@@ -17,8 +18,51 @@ HevcDolbyVisionFilter::HevcDolbyVisionFilter(const int demuxedPID)
       m_elStreamIndex(-1),
       m_unwrapped(0),
       m_rpu(0),
-      m_warnedNoWrappers(false)
+      m_warnedNoWrappers(false),
+      m_haveOriginals(false),
+      m_restored(0)
 {
+}
+
+void HevcDolbyVisionFilter::setOriginalRpus(DvOriginalRpus&& rpus)
+{
+    m_originals = std::move(rpus);
+    if (m_originals.offsets.size() != m_originals.pts.size())
+        THROW(ERR_COMMON, "Dolby Vision: this file preserves "
+                              << m_originals.offsets.size() << " original RPUs but timestamps for "
+                              << m_originals.pts.size()
+                              << ". They cannot be matched to pictures, so the disc is not rebuilt from it.")
+
+    // Presentation order is what sorts them, so the timestamps must already be in order. If they
+    // are not, the file has been altered and a lookup would silently find the wrong entry.
+    for (size_t i = 1; i < m_originals.pts.size(); ++i)
+    {
+        if (m_originals.pts[i] <= m_originals.pts[i - 1])
+            THROW(ERR_COMMON,
+                  "Dolby Vision: the preserved original RPUs are not in presentation order, so this file has been "
+                  "altered since it was written and the disc is not rebuilt from it.")
+    }
+
+    m_haveOriginals = !m_originals.offsets.empty();
+}
+
+// A plain binary search. The index is sorted because presentation order sorts it, which is checked
+// once when it arrives rather than assumed here.
+int64_t HevcDolbyVisionFilter::entryForPts(const int64_t pts) const
+{
+    size_t lo = 0;
+    size_t hi = m_originals.pts.size();
+    while (lo < hi)
+    {
+        const size_t mid = lo + (hi - lo) / 2;
+        if (m_originals.pts[mid] < pts)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    if (lo < m_originals.pts.size() && m_originals.pts[lo] == pts)
+        return static_cast<int64_t>(lo);
+    return -1;
 }
 
 void HevcDolbyVisionFilter::fillPids(const PIDSet& acceptedPIDs, const int pid)
@@ -82,7 +126,37 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
             }
             else if (nalType == static_cast<int>(HevcUnit::NalType::DVRPU))
             {
-                emit(m_elStreamIndex, curNal, nalEnd, demuxedData, discardSize);
+                if (m_haveOriginals)
+                {
+                    // A profile 8.1 carrier. What travels inline is the CONVERTED RPU; the disc's
+                    // own is in the attachment, found by this picture's timestamp.
+                    const int64_t ms =
+                        avPacket.pts == AV_NOPTS_VALUE_INTERNAL ? -1 : avPacket.pts / INTERNAL_PTS_PER_MS;
+                    const int64_t entry = ms < 0 ? -1 : entryForPts(ms);
+                    if (entry < 0)
+                        THROW(ERR_COMMON,
+                              "Dolby Vision: a picture at "
+                                  << ms
+                                  << " ms has no preserved original RPU, so this file no longer lines up with the "
+                                     "metadata it carries. It has been cut or re-muxed since it was written, and a "
+                                     "disc built from it would be wrong, so it is refused.")
+
+                    // Rebuild the NAL: the attachment stores the payload with its two byte header
+                    // removed, which is what an extracted RPU file holds, so the header goes back.
+                    const uint8_t* payload = m_originals.data.data() + m_originals.offsets[entry];
+                    const uint32_t len = m_originals.lengths[entry];
+                    std::vector<uint8_t> nal;
+                    nal.reserve(len + 2);
+                    nal.push_back(curNal[0]);
+                    nal.push_back(curNal[1]);
+                    nal.insert(nal.end(), payload, payload + len);
+                    emit(m_elStreamIndex, nal.data(), nal.data() + nal.size(), demuxedData, discardSize);
+                    m_restored++;
+                }
+                else
+                {
+                    emit(m_elStreamIndex, curNal, nalEnd, demuxedData, discardSize);
+                }
                 m_rpu++;
             }
             else

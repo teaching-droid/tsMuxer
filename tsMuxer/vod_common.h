@@ -59,6 +59,11 @@ constexpr unsigned PCR_FREQUENCY = 90000;
 
 static constexpr int64_t INTERNAL_PTS_FREQ = 196 * 27000000ll;
 static constexpr int64_t INT_FREQ_TO_TS_FREQ = INTERNAL_PTS_FREQ / PCR_FREQUENCY;
+static constexpr int64_t INTERNAL_PTS_PER_MS = INTERNAL_PTS_FREQ / 1000;
+
+// "this packet has no timestamp". It was private to the Matroska reader; it is here because a
+// filter downstream now has to be able to tell an absent timestamp from a real one.
+static constexpr int64_t AV_NOPTS_VALUE_INTERNAL = 0x8000000000000000LL;
 
 static constexpr uint32_t GOP_BUFFER_SIZE = 2 * 1024 * 1024;  // 512*1024;
 

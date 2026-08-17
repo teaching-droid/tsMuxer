@@ -43,6 +43,134 @@ static bool isKnownTrackParam(const std::string& name);
 #include "vod_common.h"
 #include "vvcStreamReader.h"
 
+extern "C"
+{
+#include "zlib.h"
+}
+
+// The names and the byte layout are fixed by the muxer that writes them, and stated in the
+// manifest that travels beside them.
+static const char DV_RPU_ATTACHMENT[] = "dv-original-rpu.bin";
+static const char DV_RPU_PTS_ATTACHMENT[] = "dv-original-rpu-pts.bin";
+static const char DV_MANIFEST_ATTACHMENT[] = "dv-manifest.txt";
+
+// One "  key   value" line out of the manifest.
+static std::string manifestValue(const std::string& text, const std::string& key)
+{
+    size_t at = 0;
+    while (at < text.size())
+    {
+        size_t lineEnd = text.find('\n', at);
+        if (lineEnd == std::string::npos)
+            lineEnd = text.size();
+        std::string line = text.substr(at, lineEnd - at);
+        at = lineEnd + 1;
+        while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
+        size_t first = line.find_first_not_of(' ');
+        if (first == std::string::npos)
+            continue;
+        line = line.substr(first);
+        if (line.compare(0, key.size(), key) != 0 || line.size() <= key.size() || line[key.size()] != ' ')
+            continue;
+        size_t valueAt = line.find_first_not_of(' ', key.size());
+        if (valueAt == std::string::npos)
+            return std::string();
+        return line.substr(valueAt);
+    }
+    return std::string();
+}
+
+// Load the disc's own RPUs out of a profile 8.1 carrier and hand them to the splitter.
+//
+// A file with no manifest is an ordinary profile 7 merged track: it carries its originals inline
+// and there is nothing to restore, so this does nothing at all and the split behaves as before.
+//
+// A file WITH a manifest is making a promise, and every part of that promise is checked here
+// rather than trusted: the attachments are present, they are the size and the checksum the
+// manifest states, there is one timestamp per entry, and the order is the one claimed. The
+// manifest itself says a mismatch must be refused rather than guessed, because the result would be
+// a disc that looks right and is wrong.
+static void loadDvOriginalRpus(AbstractDemuxer* demuxer, HevcDolbyVisionFilter* filter)
+{
+    std::vector<uint8_t> manifestBytes;
+    if (demuxer == nullptr || !demuxer->getAttachment(DV_MANIFEST_ATTACHMENT, manifestBytes))
+        return;
+
+    const std::string manifest(manifestBytes.begin(), manifestBytes.end());
+    const std::string order = manifestValue(manifest, "rpu-order");
+    if (order != "display")
+        THROW(ERR_COMMON, "Dolby Vision: this file states that its preserved original RPUs are in '"
+                              << order << "' order, which this version does not know how to put back.")
+
+    std::vector<uint8_t> rpuBytes;
+    std::vector<uint8_t> ptsBytes;
+    if (!demuxer->getAttachment(DV_RPU_ATTACHMENT, rpuBytes) ||
+        !demuxer->getAttachment(DV_RPU_PTS_ATTACHMENT, ptsBytes))
+        THROW(ERR_COMMON,
+              "Dolby Vision: this file says it preserves the original RPUs so the disc can be rebuilt, but the "
+              "attachments holding them are missing. They are dropped by some tools when a file is copied.")
+
+    const uint32_t rpuCrc =
+        static_cast<uint32_t>(crc32(crc32(0, nullptr, 0), rpuBytes.data(), static_cast<uInt>(rpuBytes.size())));
+    const uint32_t ptsCrc =
+        static_cast<uint32_t>(crc32(crc32(0, nullptr, 0), ptsBytes.data(), static_cast<uInt>(ptsBytes.size())));
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%08x", rpuCrc);
+    if (manifestValue(manifest, "rpu-crc32") != buf)
+        THROW(ERR_COMMON,
+              "Dolby Vision: the preserved original RPUs do not match the checksum this file records for them, so "
+              "they have been altered and the disc is not rebuilt from them.")
+    snprintf(buf, sizeof(buf), "%08x", ptsCrc);
+    if (manifestValue(manifest, "pts-crc32") != buf)
+        THROW(ERR_COMMON,
+              "Dolby Vision: the timestamps of the preserved original RPUs do not match the checksum this file "
+              "records for them, so they have been altered and the disc is not rebuilt from them.")
+
+    DvOriginalRpus originals;
+    // Split on the four byte start code that separates the entries, keeping one buffer.
+    for (size_t i = 0; i + 4 <= rpuBytes.size(); ++i)
+    {
+        if (rpuBytes[i] != 0 || rpuBytes[i + 1] != 0 || rpuBytes[i + 2] != 0 || rpuBytes[i + 3] != 1)
+            continue;
+        if (!originals.offsets.empty())
+            originals.lengths.push_back(static_cast<uint32_t>(i - originals.offsets.back()));
+        originals.offsets.push_back(static_cast<uint32_t>(i + 4));
+        i += 3;
+    }
+    if (!originals.offsets.empty())
+        originals.lengths.push_back(static_cast<uint32_t>(rpuBytes.size() - originals.offsets.back()));
+
+    const size_t declared = static_cast<size_t>(strtoull(manifestValue(manifest, "rpu-count").c_str(), nullptr, 10));
+    if (originals.offsets.size() != declared)
+        THROW(ERR_COMMON, "Dolby Vision: this file records " << declared << " preserved original RPUs but holds "
+                                                             << originals.offsets.size()
+                                                             << ", so the disc is not rebuilt from it.")
+
+    if (ptsBytes.size() != originals.offsets.size() * 8)
+        THROW(ERR_COMMON,
+              "Dolby Vision: this file preserves "
+                  << originals.offsets.size() << " original RPUs but " << ptsBytes.size() / 8
+                  << " timestamps for them, so they cannot be matched to pictures and the disc is not rebuilt.")
+
+    originals.pts.reserve(ptsBytes.size() / 8);
+    for (size_t i = 0; i + 8 <= ptsBytes.size(); i += 8)
+    {
+        int64_t value = 0;
+        for (int b = 0; b < 8; ++b) value = (value << 8) | ptsBytes[i + b];
+        originals.pts.push_back(value);
+    }
+
+    originals.data = std::move(rpuBytes);
+    const size_t count = originals.offsets.size();
+    filter->setOriginalRpus(std::move(originals));
+
+    LTRACE(LT_INFO, 2,
+           "Dolby Vision: this file was written as profile 8.1 and preserves the disc's own "
+               << count
+               << " RPUs. They are put back as the layers are separated, so the disc is rebuilt exactly rather "
+                  "than from converted metadata.");
+}
+
 using namespace std;
 
 static constexpr int MAX_DEMUX_BUFFER_SIZE = 1024 * 1024 * 192;
@@ -2023,9 +2151,17 @@ bool ContainerToReaderWrapper::openStream(int readerID, const char* streamName, 
             if (codecInfo->codecID == CODEC_V_MPEG4_H264 || codecInfo->codecID == CODEC_V_MPEG4_H264_DEP)
                 demuxer->setPidFilter(srcPID, new CombinedH264Filter(srcPID));
             else if (codecInfo->codecID == CODEC_V_MPEG4_H265)
+            {
                 // A merged dual layer Dolby Vision track, split back into base layer and
                 // enhancement layer. subTrack=1 is the base layer, subTrack=2 the enhancement.
-                demuxer->setPidFilter(srcPID, new HevcDolbyVisionFilter(srcPID));
+                auto dvFilter = new HevcDolbyVisionFilter(srcPID);
+                // If the file was written as profile 8.1 its RPUs were converted, and the disc's
+                // own are attached beside them. Load them now, before anything is written, so a
+                // file that no longer matches its metadata fails at once instead of half way
+                // through authoring a disc.
+                loadDvOriginalRpus(demuxer, dvFilter);
+                demuxer->setPidFilter(srcPID, dvFilter);
+            }
             else
                 THROW(ERR_INVALID_CODEC_FORMAT, "Unsupported parameter subTrack for codec " << codecInfo->displayName)
         }

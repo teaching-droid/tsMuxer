@@ -42,9 +42,8 @@ static constexpr int AC3_CORE_STREAM_BASE = 0x40000000;
 
 using namespace std;
 
-// Divisor to convert from internal PTS frequency to milliseconds.
-// Internal timestamps use INTERNAL_PTS_FREQ (196 * 27MHz = 5,292,000,000 / sec).
-static constexpr int64_t INTERNAL_PTS_PER_MS = INTERNAL_PTS_FREQ / 1000;  // 5292000
+// INTERNAL_PTS_PER_MS, the divisor from the internal PTS frequency to milliseconds, now lives in
+// vod_common.h: the Dolby Vision splitter has to convert the same way round on the way back.
 
 // ═══════════════════════════════ EBML Writing Utilities ═══════════════════════════════
 

@@ -41,6 +41,12 @@ class MatroskaDemuxer final : public IOContextDemuxer
 
     [[nodiscard]] int64_t getFileDurationNano() const override { return fileDuration; }
 
+    // Fetch an attached file by name. The bytes are read from the file when asked for, not held
+    // from the header parse: one of these attachments is the preserved Dolby Vision metadata of a
+    // whole feature, tens of megabytes, and the file is opened and thrown away twice during track
+    // detection before anything wants it.
+    bool getAttachment(const std::string& name, std::vector<uint8_t>& out) override;
+
    private:
     typedef Track MatroskaTrack;
     typedef IOContextTrackType MatroskaTrackType;
@@ -78,7 +84,19 @@ class MatroskaDemuxer final : public IOContextDemuxer
     std::map<int64_t, int64_t> m_firstTimecode;
     bool index_parsed;
     bool metadata_parsed;
+    bool attachments_parsed;
     int num_streams;
+
+    // Where each attached file's payload lives, rather than the payload itself.
+    struct MatroskaAttachment
+    {
+        std::string name;
+        int64_t dataPos = 0;
+        int64_t dataSize = 0;
+    };
+    std::vector<MatroskaAttachment> m_attachments;
+    std::string m_attachmentSource;  // the file the payloads are read back from
+    void loadAttachments(const std::string& fileName);
 
     AVPacket* m_lastDeliveryPacket;
 

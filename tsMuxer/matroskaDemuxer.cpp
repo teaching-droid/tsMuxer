@@ -18,7 +18,7 @@ extern "C"
 
 typedef uint64_t offset_t;
 
-static constexpr int64_t AV_NOPTS_VALUE = 0x8000000000000000LL;
+static constexpr int64_t AV_NOPTS_VALUE = AV_NOPTS_VALUE_INTERNAL;
 
 static constexpr int PKT_FLAG_KEY = 1;
 static constexpr int AVERROR_INVALIDDATA = -1;
@@ -201,6 +201,8 @@ MatroskaDemuxer::MatroskaDemuxer(const BufferedReaderManager& readManager)
     m_firstTimecode.clear();
     index_parsed = false;
     metadata_parsed = false;
+    attachments_parsed = false;
+    m_attachments.clear();
     writing_app = nullptr;
     muxing_app = nullptr;
 }
@@ -669,9 +671,15 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
                 auto* pkt = new AVPacket();
                 pkt->data = nullptr;
                 pkt->size = 0;
-                pkt->pts = timecode * INTERNAL_PTS_FREQ / 1000;
+                // A block whose timestamp could not be worked out above leaves timecode at the
+                // "no timestamp" sentinel. Multiplying that produced a number that is not the
+                // sentinel any more and, for the common case, lands close enough to zero to be
+                // taken for a real timestamp at the very start of the stream. Anything ordering
+                // pictures by timestamp then sorts that picture to the front, silently. Carry the
+                // sentinel through instead so it can be recognised.
+                pkt->pts = timecode == AV_NOPTS_VALUE ? AV_NOPTS_VALUE : timecode * INTERNAL_PTS_FREQ / 1000;
                 pkt->pos = pos;
-                pkt->duration = duration * INTERNAL_PTS_FREQ / 1000;
+                pkt->duration = duration == AV_NOPTS_VALUE ? AV_NOPTS_VALUE : duration * INTERNAL_PTS_FREQ / 1000;
 
                 pkt->stream_index = track + 1;  // tracks[track]->stream_index;
 
@@ -1070,11 +1078,15 @@ void MatroskaDemuxer::openFile(const std::string& streamName)
     m_firstTimecode.clear();
     index_parsed = false;
     metadata_parsed = false;
+    attachments_parsed = false;
+    m_attachments.clear();
 
     writing_app = nullptr;
     muxing_app = nullptr;
     num_tracks = 0;
     matroska_read_header();
+    // Separately, on its own handle, so nothing about the streaming read is disturbed.
+    loadAttachments(streamName);
 }
 
 void MatroskaDemuxer::readClose()
@@ -1315,6 +1327,13 @@ int MatroskaDemuxer::matroska_read_header()
 
         /* file index (if seekable, seek to Cues/Tags to parse it) */
         case MATROSKA_ID_SEEKHEAD:
+        {
+            ebml_read_skip();
+            break;
+        }
+
+        /* attachments are read separately, see loadAttachments */
+        case MATROSKA_ID_ATTACHMENTS:
         {
             ebml_read_skip();
             break;
@@ -1584,6 +1603,164 @@ int MatroskaDemuxer::matroska_parse_metadata()
     }
 
     return res;
+}
+
+// ─── attachments ─────────────────────────────────────────────────────────────
+//
+// Read on a file handle of their own, deliberately, and NOT through the demuxer's own reader.
+//
+// Attachments can sit either side of the clusters. This project's muxer writes them after, because
+// their contents are not known until the mux has finished, so the streaming header parse below
+// stops before ever reaching them. The obvious answer is to seek there and seek back, and that was
+// tried: it disturbs the reader's position, its cached element id and its buffer, and the damage
+// surfaces far away, deep inside the clusters, as a parse error. A second handle cannot do that to
+// anything, and the cost is a handful of seeks over element headers.
+namespace
+{
+struct EbmlScan
+{
+    File& f;
+    int64_t pos = 0;
+
+    explicit EbmlScan(File& file) : f(file) {}
+
+    bool byteAt(const int64_t at, uint8_t& out)
+    {
+        f.seek(at);
+        return f.read(&out, 1) == 1;
+    }
+
+    // An element id keeps its marker bit; a size does not. Both are variable length, the length
+    // given by the position of the top set bit of the first byte.
+    bool readNumber(int64_t& value, const bool keepMarker, int& width)
+    {
+        uint8_t first;
+        if (!byteAt(pos, first) || first == 0)
+            return false;
+        width = 1;
+        uint8_t mask = 0x80;
+        while (!(first & mask))
+        {
+            mask >>= 1;
+            width++;
+            if (width > 8)
+                return false;
+        }
+        std::vector<uint8_t> raw(width);
+        f.seek(pos);
+        if (f.read(raw.data(), width) != width)
+            return false;
+        value = keepMarker ? raw[0] : (raw[0] & (mask - 1));
+        for (int i = 1; i < width; ++i) value = (value << 8) | raw[i];
+        pos += width;
+        return true;
+    }
+
+    bool readElement(uint32_t& id, int64_t& size, int64_t& bodyPos)
+    {
+        int width = 0;
+        int64_t rawId = 0;
+        if (!readNumber(rawId, true, width))
+            return false;
+        id = static_cast<uint32_t>(rawId);
+        if (!readNumber(size, false, width))
+            return false;
+        bodyPos = pos;
+        return true;
+    }
+};
+
+// One AttachedFile: its name, and where its payload lives.
+bool scanAttachedFile(EbmlScan& scan, const int64_t end, std::string& name, int64_t& dataPos, int64_t& dataSize)
+{
+    while (scan.pos < end)
+    {
+        uint32_t id = 0;
+        int64_t size = 0, body = 0;
+        if (!scan.readElement(id, size, body))
+            return false;
+        if (id == MATROSKA_ID_FILENAME)
+        {
+            std::vector<char> text(static_cast<size_t>(size) + 1, 0);
+            scan.f.seek(body);
+            if (scan.f.read(text.data(), static_cast<uint32_t>(size)) != static_cast<int>(size))
+                return false;
+            name.assign(text.data(), static_cast<size_t>(size));
+        }
+        else if (id == MATROSKA_ID_FILEDATA)
+        {
+            dataPos = body;
+            dataSize = size;
+        }
+        scan.pos = body + size;
+    }
+    return true;
+}
+}  // namespace
+
+// Walk the top level of the file, stepping over clusters by their declared size rather than
+// reading them, and record every attachment found.
+void MatroskaDemuxer::loadAttachments(const std::string& fileName)
+{
+    File f;
+    if (!f.open(fileName.c_str(), File::ofRead))
+        return;
+
+    const int64_t fileSize = f.size();
+    EbmlScan scan(f);
+    int64_t segmentEnd = fileSize;
+    bool inSegment = false;
+
+    while (scan.pos < fileSize)
+    {
+        uint32_t id = 0;
+        int64_t size = 0, body = 0;
+        if (!scan.readElement(id, size, body))
+            break;
+
+        if (id == MATROSKA_ID_SEGMENT)
+        {
+            // Descend rather than step over: everything of interest is inside it.
+            inSegment = true;
+            segmentEnd = (size > 0 && body + size <= fileSize) ? body + size : fileSize;
+            scan.pos = body;
+            continue;
+        }
+
+        if (id == MATROSKA_ID_ATTACHMENTS)
+        {
+            const int64_t attEnd = body + size;
+            scan.pos = body;
+            while (scan.pos < attEnd)
+            {
+                uint32_t fileId = 0;
+                int64_t fileSizeField = 0, fileBody = 0;
+                if (!scan.readElement(fileId, fileSizeField, fileBody))
+                    break;
+                if (fileId == MATROSKA_ID_ATTACHEDFILE)
+                {
+                    MatroskaAttachment att;
+                    const int64_t save = scan.pos;
+                    scan.pos = fileBody;
+                    if (scanAttachedFile(scan, fileBody + fileSizeField, att.name, att.dataPos, att.dataSize) &&
+                        !att.name.empty() && att.dataSize > 0)
+                        m_attachments.push_back(att);
+                    scan.pos = save;
+                }
+                scan.pos = fileBody + fileSizeField;
+            }
+            scan.pos = attEnd;
+            continue;
+        }
+
+        scan.pos = body + size;
+        if (inSegment && scan.pos >= segmentEnd)
+            break;
+    }
+
+    f.close();
+    attachments_parsed = true;
+    m_attachmentSource = fileName;
 }
 
 /* Seek to a given offset.
@@ -2465,6 +2642,30 @@ int MatroskaDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& ac
     discardSize = m_processedBytes - m_lastProcessedBytes - demuxedSize;
     m_lastProcessedBytes = m_processedBytes;
     return 0;
+}
+
+// Read one attached file's bytes now. The caller position is saved and restored, including the
+// cached element id, because unlike the header parse this can be called at any point.
+bool MatroskaDemuxer::getAttachment(const std::string& name, std::vector<uint8_t>& out)
+{
+    const MatroskaAttachment* found = nullptr;
+    for (const auto& att : m_attachments)
+        if (att.name == name)
+            found = &att;
+    if (found == nullptr || found->dataSize <= 0)
+        return false;
+
+    // Again on a handle of its own. The demuxer's reader is left exactly where it was.
+    File f;
+    if (!f.open(m_attachmentSource.c_str(), File::ofRead))
+        return false;
+    out.resize(static_cast<size_t>(found->dataSize));
+    f.seek(found->dataPos);
+    const bool ok = f.read(out.data(), static_cast<uint32_t>(found->dataSize)) == static_cast<int>(found->dataSize);
+    f.close();
+    if (!ok)
+        out.clear();
+    return ok;
 }
 
 void MatroskaDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)

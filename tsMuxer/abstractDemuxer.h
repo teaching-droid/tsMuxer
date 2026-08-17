@@ -135,6 +135,10 @@ class AbstractDemuxer
         return nullptr;
     }
 
+    /// Fetch a file attached to the container by name.  Only containers that
+    /// carry attachments implement this; the default is that there are none.
+    virtual bool getAttachment(const std::string& name, std::vector<uint8_t>& out) { return false; }
+
     [[nodiscard]] SubTrackFilter* getPidFilter(const int pid)
     {
         const PIDFilters::const_iterator itr = m_pidFilters.find(pid);
