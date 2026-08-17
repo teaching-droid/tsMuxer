@@ -236,7 +236,8 @@ class MatroskaMuxer final : public AbstractMuxer
     // them. Only in profile 8.1 mode, and only when RPUs were actually converted.
     void writeAttachments();
     // The manifest text, built once the frame count and the checksum are known.
-    [[nodiscard]] std::string buildDvManifest(uint64_t rpuBytes, uint32_t rpuCrc) const;
+    [[nodiscard]] std::string buildDvManifest(uint64_t rpuBytes, uint32_t rpuCrc, uint64_t ptsBytes,
+                                              uint32_t ptsCrc) const;
     // Build the SeekHead element, header included, so it can be written in both places.
     [[nodiscard]] std::vector<uint8_t> buildSeekHead() const;
     // Write SeekHead element at end of file

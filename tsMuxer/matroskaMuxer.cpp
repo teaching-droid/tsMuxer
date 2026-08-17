@@ -2085,6 +2085,7 @@ void MatroskaMuxer::writeCues()
 // The name the preserved RPUs are attached under. Deliberately the same layout, and now also the
 // same order, that an extracted RPU file uses, so it is worth something outside tsMuxeR.
 static const char DV_RPU_ATTACHMENT_NAME[] = "dv-original-rpu.bin";
+static const char DV_RPU_PTS_ATTACHMENT_NAME[] = "dv-original-rpu-pts.bin";
 static const char DV_MANIFEST_ATTACHMENT_NAME[] = "dv-manifest.txt";
 
 static std::string hexBytes(const uint8_t* data, const int len)
@@ -2115,7 +2116,8 @@ static std::string fourCcToString(const uint32_t fourCc)
 // own making, and a convention that is not written down is indistinguishable from a mistake. The
 // manifest is what keeps it honest: it says what the file really is, in text, so a person and a
 // tool can both find out without reverse engineering the video track.
-std::string MatroskaMuxer::buildDvManifest(const uint64_t rpuBytes, const uint32_t rpuCrc) const
+std::string MatroskaMuxer::buildDvManifest(const uint64_t rpuBytes, const uint32_t rpuCrc, const uint64_t ptsBytes,
+                                           const uint32_t ptsCrc) const
 {
     // The record the track itself declares, so the manifest can state both sides of the swap.
     std::string declared = "none";
@@ -2133,6 +2135,8 @@ std::string MatroskaMuxer::buildDvManifest(const uint64_t rpuBytes, const uint32
 
     char crcBuf[16];
     snprintf(crcBuf, sizeof(crcBuf), "%08x", rpuCrc);
+    char ptsCrcBuf[16];
+    snprintf(ptsCrcBuf, sizeof(ptsCrcBuf), "%08x", ptsCrc);
 
     std::ostringstream s;
     s << "tsMuxeR Dolby Vision carrier\r\n"
@@ -2157,6 +2161,10 @@ std::string MatroskaMuxer::buildDvManifest(const uint64_t rpuBytes, const uint32
       << "  rpu-crc32             " << crcBuf << "\r\n"
       << "  rpu-order             display\r\n"
       << "  rpu-format            start-code\r\n"
+      << "  pts-attachment        " << DV_RPU_PTS_ATTACHMENT_NAME << "\r\n"
+      << "  pts-bytes             " << ptsBytes << "\r\n"
+      << "  pts-crc32             " << ptsCrcBuf << "\r\n"
+      << "  pts-format            int64-be-milliseconds\r\n"
       << "  declared-config       " << declared << "\r\n"
       << "  original-config       " << original
       << "\r\n"
@@ -2180,6 +2188,14 @@ std::string MatroskaMuxer::buildDvManifest(const uint64_t rpuBytes, const uint32
          "the order the pictures are stored in: a stream with B pictures is stored in decode order,\r\n"
          "and the two orders part company from the first picture after a key frame onwards. Anything\r\n"
          "matching these entries to pictures has to sort the pictures by presentation time first.\r\n"
+         "\r\n"
+         "pts-attachment\r\n"
+         "--------------\r\n"
+         "So that nothing has to work that mapping out, the presentation time of every entry is\r\n"
+         "written down beside it, in the same order, as a signed 64 bit big endian count of\r\n"
+         "milliseconds from the start of the stream. That is the same value a reader recovers from a\r\n"
+         "block, so putting an original back is a lookup rather than a reconstruction. The list is\r\n"
+         "sorted, because presentation order is what sorts it.\r\n"
          "\r\n"
          "Rebuilding the disc\r\n"
          "-------------------\r\n"
@@ -2230,6 +2246,30 @@ void MatroskaMuxer::writeAttachments()
                          "--dv-profile=7, which carries the disc unchanged.")
     }
 
+    // The index that lets the split put each original back without guessing.
+    //
+    // The entries are in presentation order; the pictures in the file are in decode order. Rather
+    // than make the reader work the mapping out by looking ahead, the timestamp of each entry is
+    // written down beside it, and the swap becomes a lookup.
+    //
+    // IT MUST BE THE TIMESTAMP THE READER WILL SEE, which is NOT the one used to sort. The sort key
+    // is the source's own presentation time in internal units; what goes into the file is a
+    // millisecond value relative to the start of the stream, and that is what a reader recovers
+    // from a block. Writing the sort key here would produce an index that never matches anything.
+    std::vector<uint8_t> ptsBlob;
+    ptsBlob.reserve(ordered.size() * 8);
+    int64_t previousMs = INT64_MIN;
+    for (const auto* entry : ordered)
+    {
+        const int64_t ms = (entry->pts - m_firstTimecode) / INTERNAL_PTS_PER_MS;
+        if (ms == previousMs)
+            THROW(ERR_COMMON,
+                  "Dolby Vision: two pictures land on the same millisecond, so the original RPUs "
+                  "cannot be indexed by timestamp and the profile 8.1 file would not be reversible.")
+        previousMs = ms;
+        for (int shift = 56; shift >= 0; shift -= 8) ptsBlob.push_back(static_cast<uint8_t>((ms >> shift) & 0xFF));
+    }
+
     static constexpr uint8_t START_CODE[4] = {0, 0, 0, 1};
 
     uint64_t rpuBytes = 0;
@@ -2241,13 +2281,16 @@ void MatroskaMuxer::writeAttachments()
         rpuCrc = static_cast<uint32_t>(crc32(rpuCrc, m_dvRpuPayload.data() + entry->offset, entry->length));
     }
 
-    const std::string manifest = buildDvManifest(rpuBytes, rpuCrc);
+    const uint32_t ptsCrc =
+        static_cast<uint32_t>(crc32(crc32(0, nullptr, 0), ptsBlob.data(), static_cast<uInt>(ptsBlob.size())));
+    const std::string manifest = buildDvManifest(rpuBytes, rpuCrc, ptsBlob.size(), ptsCrc);
     const uint32_t manifestCrc = static_cast<uint32_t>(crc32(
         crc32(0, nullptr, 0), reinterpret_cast<const uint8_t*>(manifest.data()), static_cast<uInt>(manifest.size())));
 
     // Derived from the content rather than drawn at random, so muxing the same input twice gives
     // the same file. A UID has to be non-zero, and a count of zero returned earlier.
     const uint64_t rpuUid = (static_cast<uint64_t>(rpuCrc) << 32) | m_dvRpuIndex.size();
+    const uint64_t ptsUid = (static_cast<uint64_t>(ptsCrc) << 32) | 2;
     const uint64_t manifestUid = (static_cast<uint64_t>(manifestCrc) << 32) | 1;
 
     auto attachedFileHead =
@@ -2268,31 +2311,51 @@ void MatroskaMuxer::writeAttachments()
         "See " +
             std::string(DV_MANIFEST_ATTACHMENT_NAME) + ".",
         DV_RPU_ATTACHMENT_NAME, "application/octet-stream", rpuUid);
-    const std::vector<uint8_t> manifestHead =
-        attachedFileHead("What this file is and how the original disc is rebuilt from it.", DV_MANIFEST_ATTACHMENT_NAME,
-                         "text/plain", manifestUid);
+
+    // The two small ones travel the same way: built in memory and written after the RPUs.
+    struct SmallAttachment
+    {
+        std::vector<uint8_t> head;
+        std::vector<uint8_t> data;
+        uint8_t dataHdr[16];
+        int dataHdrLen;
+        uint64_t fileSize;
+        uint8_t fileHdr[16];
+        int fileHdrLen;
+    };
+    std::vector<SmallAttachment> small(2);
+    small[0].head = attachedFileHead("Presentation time of each entry in " + std::string(DV_RPU_ATTACHMENT_NAME) +
+                                         ", same order, 8 bytes big endian each, in milliseconds.",
+                                     DV_RPU_PTS_ATTACHMENT_NAME, "application/octet-stream", ptsUid);
+    small[0].data = std::move(ptsBlob);
+    small[1].head = attachedFileHead("What this file is and how the original disc is rebuilt from it.",
+                                     DV_MANIFEST_ATTACHMENT_NAME, "text/plain", manifestUid);
+    small[1].data.assign(manifest.begin(), manifest.end());
+
+    for (auto& s : small)
+    {
+        s.dataHdrLen = ebml_write_id(s.dataHdr, MATROSKA_ID_FILEDATA);
+        s.dataHdrLen += ebml_write_size(s.dataHdr + s.dataHdrLen, s.data.size());
+        s.fileSize = s.head.size() + s.dataHdrLen + s.data.size();
+        s.fileHdrLen = ebml_write_master_open(s.fileHdr, MATROSKA_ID_ATTACHEDFILE, s.fileSize);
+    }
 
     uint8_t rpuDataHdr[16];
     int rpuDataHdrLen = ebml_write_id(rpuDataHdr, MATROSKA_ID_FILEDATA);
     rpuDataHdrLen += ebml_write_size(rpuDataHdr + rpuDataHdrLen, rpuBytes);
 
-    uint8_t manifestDataHdr[16];
-    int manifestDataHdrLen = ebml_write_id(manifestDataHdr, MATROSKA_ID_FILEDATA);
-    manifestDataHdrLen += ebml_write_size(manifestDataHdr + manifestDataHdrLen, manifest.size());
-
     const uint64_t rpuFileSize = rpuHead.size() + rpuDataHdrLen + rpuBytes;
-    const uint64_t manifestFileSize = manifestHead.size() + manifestDataHdrLen + manifest.size();
 
     uint8_t rpuFileHdr[16];
     const int rpuFileHdrLen = ebml_write_master_open(rpuFileHdr, MATROSKA_ID_ATTACHEDFILE, rpuFileSize);
-    uint8_t manifestFileHdr[16];
-    const int manifestFileHdrLen = ebml_write_master_open(manifestFileHdr, MATROSKA_ID_ATTACHEDFILE, manifestFileSize);
+
+    uint64_t total = rpuFileHdrLen + rpuFileSize;
+    for (const auto& s : small) total += s.fileHdrLen + s.fileSize;
 
     m_attachmentsPos = m_file.pos() - m_segmentStartPos;
 
     uint8_t header[16];
-    const int hdrLen = ebml_write_master_open(header, MATROSKA_ID_ATTACHMENTS,
-                                              rpuFileHdrLen + rpuFileSize + manifestFileHdrLen + manifestFileSize);
+    const int hdrLen = ebml_write_master_open(header, MATROSKA_ID_ATTACHMENTS, total);
     writeToFile(header, hdrLen);
 
     writeToFile(rpuFileHdr, rpuFileHdrLen);
@@ -2316,16 +2379,19 @@ void MatroskaMuxer::writeAttachments()
     }
     writeToFile(chunk);
 
-    writeToFile(manifestFileHdr, manifestFileHdrLen);
-    writeToFile(manifestHead);
-    writeToFile(manifestDataHdr, manifestDataHdrLen);
-    writeToFile(reinterpret_cast<const uint8_t*>(manifest.data()), static_cast<int>(manifest.size()));
+    for (const auto& s : small)
+    {
+        writeToFile(s.fileHdr, s.fileHdrLen);
+        writeToFile(s.head);
+        writeToFile(s.dataHdr, s.dataHdrLen);
+        writeToFile(s.data);
+    }
 
     LTRACE(LT_INFO, 2,
            "Dolby Vision: attached " << m_dvRpuIndex.size() << " original profile 7 RPUs (" << rpuBytes
                                      << " bytes, crc32 " << std::hex << rpuCrc << std::dec
-                                     << ") in presentation order, plus the manifest that explains them. "
-                                        "The original disc can be rebuilt from this file.");
+                                     << ") in presentation order, with their timestamps and the manifest that "
+                                        "explains them. The original disc can be rebuilt from this file.");
 }
 
 // ──────────────── SeekHead ───────────────────────────────────────────────────
