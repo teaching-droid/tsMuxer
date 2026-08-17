@@ -38,7 +38,7 @@ Additions in this fork (see [DISC_AUTHORING.md](docs/DISC_AUTHORING.md) for deta
 
 Dolby Vision and Blu-ray conformance:
 
-* Carry a dual layer Dolby Vision disc in a single Matroska track, and split it back into two layers to author a disc again. A merged track is listed as its two layers, so it can be separated in the interface without hand writing a meta file. Every picture and every piece of Dolby Vision metadata comes back exactly, measured on whole titles including a seamless branching one; see [docs/DOLBY_VISION.md](docs/DOLBY_VISION.md)
+* Carry a dual layer Dolby Vision disc in a single Matroska track, and split it back into two layers to author a disc again. A merged track is listed as its two layers, so it can be separated in the interface without hand writing a meta file. The rebuilt streams are byte for byte identical to the disc, measured over a whole 73 GB feature and over a seamless branching title, through both Dolby Vision profiles; see [docs/DOLBY_VISION.md](docs/DOLBY_VISION.md)
 * Store such a disc as Dolby Vision profile 8.1, which many more devices accept, while keeping the disc's own metadata alongside so the original disc can still be built from the file. The file does not get smaller, and that is the point of it
 * Keep the AC-3 core of a TrueHD track in Matroska as its own track, instead of dropping it
 * Name the IMAX variant of a DTS:X track

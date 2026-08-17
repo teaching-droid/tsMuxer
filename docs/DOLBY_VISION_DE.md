@@ -103,22 +103,32 @@ Meldung abgelehnt, statt mitten in einem Spielfilm zu scheitern.
 Gemessen wurde an ganzen Titeln statt an kurzen Clips, denn ein Clip kann weder das Ende eines
 Streams noch eine Naht zwischen Segmenten prüfen, und beides erwies sich als wichtig:
 
-- ein ganzer Spielfilm, beide Layer: alle 2.064.653 Einheiten identisch und alle 166.928
-  ursprünglichen Metadatensätze der Disc wiederhergestellt
-- ein ganzes Segment, beide Layer: jede Einheit identisch und über 7 GB hinweg Byte für Byte
-  identisch
+- ein ganzer Spielfilm, 73 GB, beide Layer: die neu aufgebauten Streams sind **Byte für Byte
+  identisch** mit der Disc, 59,33 GB Base Layer und 4,25 GB Enhancement Layer, auf beiden Seiten
+  ohne Rest, und alle 166.928 ursprünglichen Metadatensätze der Disc wiederhergestellt. Mit Profil 7
+  ebenso wie mit Profil 8.1, die Disc kommt also exakt zurück, während ihre Metadaten umgewandelt
+  und wieder eingesetzt werden
 - ein ganzer Titel mit **Seamless Branching**, 23 an 22 Stellen aneinandergefügte Clips: der
   Neuaufbau mit Profil 7 und der mit Profil 8.1 sind auf beiden Layern Byte für Byte identisch
 
-Im Klartext: **Jedes Bild und jedes Stück Dolby-Vision-Metadaten kommt exakt zurück.**
+Im Klartext: **Die Disc, die herauskommt, ist die Disc, die hineingegangen ist.**
 
-### Eine ehrliche Einschränkung
+### Wie die Startcode-Form erhalten bleibt
 
-Ein neu aufgebauter Stream ist überall dort Byte für Byte mit der Quelle identisch, wo die Disc
-dieselbe Form von Startcode verwendet, die auch tsMuxeR schreibt, und das trifft auf die meisten
-Discs zu, aber nicht auf alle. Wo eine Disc abweicht, liegt der Unterschied allein in der Länge des
-Startcodes, die in beiden Formen zulässig ist und identisch decodiert wird; Bilder und Metadaten
-bleiben davon unberührt. Das ist keine Besonderheit von Dolby Vision und gilt für Profil 7 genauso.
+Eine Disc setzt ihre Startcodes auf die eine oder die andere Weise, mit drei Bytes oder mit vier.
+Beides ist zulässig und wird identisch decodiert, doch eine einzelne Disc bleibt sich darin treu, und
+Matroska speichert dieses Video mit Längenpräfix und enthält überhaupt keine Startcodes. Eine aus
+Matroska neu aufgebaute Disc kam deshalb immer mit vier Bytes heraus, ganz gleich was die Quelle tat,
+und eine Disc mit der kürzeren Form kam nie Byte für Byte zurück, so korrekt alles andere auch war.
+
+Die Form der Quelle reist jetzt mit der Datei mit und wird wiederhergestellt. Sie wird pro NAL-Typ
+festgehalten, denn genau so verfahren Discs, und eine pauschale Drei-Byte-Regel wäre nicht
+normkonform. Ein NAL-Typ, der in einer Quelle in beiden Formen vorkommt, wird gar nicht festgehalten,
+statt zu raten, und eine Quelle, die durchgehend vier Bytes verwendet, ebenso wenig, denn das
+schreibt tsMuxeR ohnehin. Eine Datei ohne Besonderheiten trägt also nichts Zusätzliches, und der
+schlimmste Fall ist das bisherige Verhalten und kein falsches. Nichts davon ist eine Besonderheit von
+Dolby Vision: eine gewöhnliche Single-Layer-Disc, die nach Matroska und zurück geht, behält ihre Form
+auf dem gleichen Weg.
 
 ### Der Rest der Disc
 

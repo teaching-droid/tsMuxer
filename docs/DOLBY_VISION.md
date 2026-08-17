@@ -98,21 +98,31 @@ saying so, rather than failing part way through a feature.
 Measured on whole titles rather than short clips, because a clip cannot exercise the end of a
 stream or a join between segments, and both turned out to matter:
 
-- a whole feature, both layers: every one of 2,064,653 units identical, and every one of the
-  disc's 166,928 original metadata records restored
-- a whole segment, both layers: every unit identical, and byte for byte identical over 7 GB
+- a whole feature, 73 GB, both layers: the rebuilt streams are **byte for byte identical** to the
+  disc, 59.33 GB of base layer and 4.25 GB of enhancement layer with nothing left over on either
+  side, and all 166,928 of the disc's original metadata records restored. Through profile 7 and
+  through profile 8.1 alike, so the disc comes back exactly while its metadata is converted and
+  put back
 - a whole **seamless branching** title, 23 clips joined at 22 points: the profile 7 rebuild and the
   profile 8.1 rebuild are byte for byte identical on both layers
 
-In plain terms: **every picture and every piece of Dolby Vision metadata comes back exactly.**
+In plain terms: **the disc that comes out is the disc that went in.**
 
-### One honest limit
+### How the start code framing is kept
 
-A rebuilt stream is byte for byte identical to the source wherever the disc uses the same start
-code form tsMuxeR writes, which is most discs but not all. Where a disc differs, the difference is
-the start code length only, which is legal either way and decodes identically; the pictures and the
-metadata are unaffected. This is not specific to Dolby Vision and applies to profile 7 in the same
-way.
+A disc frames its start codes one way or the other, three bytes or four. Both are legal and decode
+identically, but a given disc is consistent about it, and Matroska stores this video length prefixed
+and holds no start codes at all. A disc rebuilt from Matroska therefore used to come out four byte
+whatever the source did, so a disc using the shorter form never came back byte for byte, however
+correct everything else was.
+
+The source's own framing now travels with the file and is reproduced. It is recorded per NAL type,
+because that is what discs actually do and a blanket three byte rule would not be conformant. A NAL
+type framed both ways in one source records nothing rather than guessing, and a source that used
+four bytes throughout records nothing either, because that is what tsMuxeR writes anyway. So a file
+with nothing unusual to say carries nothing extra, and the worst case is the old behaviour rather
+than a wrong one. None of this is specific to Dolby Vision: an ordinary single layer disc taken to
+Matroska and authored back keeps its framing the same way.
 
 ### The rest of the disc
 
