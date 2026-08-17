@@ -58,10 +58,7 @@ static const char DV_RPU_PTS_ATTACHMENT[] = "dv-original-rpu-pts.bin";
 
 // One "  key   value" line out of the manifest. Defined once in nalUnits.cpp, because the demuxer
 // reads the same manifest to frame its own output.
-static std::string manifestValue(const std::string& text, const std::string& key)
-{
-    return dvManifestValue(text, key);
-}
+static std::string manifestValue(const std::string& text, const std::string& key) { return dvManifestValue(text, key); }
 
 // Load the disc's own RPUs out of a profile 8.1 carrier and hand them to the splitter.
 //

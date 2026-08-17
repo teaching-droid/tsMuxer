@@ -1105,8 +1105,7 @@ void MatroskaDemuxer::applyStartCodeRule()
     if (!getAttachment(DV_MANIFEST_ATTACHMENT_NAME, manifestBytes))
         return;
 
-    const std::string rule =
-        dvManifestValue(std::string(manifestBytes.begin(), manifestBytes.end()), "start-code");
+    const std::string rule = dvManifestValue(std::string(manifestBytes.begin(), manifestBytes.end()), "start-code");
     if (rule.empty())
         return;
 
@@ -1125,9 +1124,9 @@ void MatroskaDemuxer::applyStartCodeRule()
     // reads like something happening twice.
     static std::set<std::string> reported;
     if (applied > 0 && reported.insert(m_attachmentSource + "|" + rule).second)
-        LTRACE(LT_INFO, 2,
-               "This file records how its source framed the video (" << rule
-                                                                     << "), so it is framed the same way again.");
+        LTRACE(
+            LT_INFO, 2,
+            "This file records how its source framed the video (" << rule << "), so it is framed the same way again.");
 }
 
 void MatroskaDemuxer::readClose()
