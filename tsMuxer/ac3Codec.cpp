@@ -285,6 +285,9 @@ AC3Codec::AC3ParseError AC3Codec::parseHeader(uint8_t* buf, const uint8_t* end)
                 gbc.skipBits(6);                  // frmsizecod
         }
 
+        if (m_atmosFramesProbed < ATMOS_PROBE_FRAMES)
+            m_atmosFramesProbed++;
+
         if (gbc.getBit())  // addbsi exist
         {
             if (gbc.getBits(6) == 1)  // addbsi length
@@ -298,7 +301,26 @@ AC3Codec::AC3ParseError AC3Codec::parseHeader(uint8_t* buf, const uint8_t* end)
                 {
                     const auto complexity_index_type_a = gbc.getBits(8);
                     if (complexity_index_type_a <= 16)
-                        m_isAtmos = true;
+                    {
+                        // Frames must AGREE, and on the same object count. Reaching this field
+                        // means walking a dozen variable length fields, so one frame landing on
+                        // the pattern says very little; a real object stream carries it in every
+                        // frame with the same count.
+                        if (m_atmosHits == 0 || complexity_index_type_a == m_jocObjects)
+                        {
+                            m_jocObjects = static_cast<uint8_t>(complexity_index_type_a);
+                            m_atmosHits++;
+                        }
+                        else
+                        {
+                            // Frames disagreeing means the walk is landing somewhere else. Start
+                            // again rather than accumulate a majority out of noise.
+                            m_jocObjects = static_cast<uint8_t>(complexity_index_type_a);
+                            m_atmosHits = 1;
+                        }
+                        if (m_atmosHits >= ATMOS_MIN_HITS)
+                            m_isAtmos = true;
+                    }
                 }
             }
         }
@@ -586,7 +608,15 @@ const std::string AC3Codec::getStreamInfo()
         if (isEAC3())
             str << "EAC3 ";
         if (m_isAtmos)
-            str << "+ ATMOS, ";
+        {
+            // Name the carriage, and say how many objects. This is joint object coding, which is
+            // how Atmos travels in E-AC-3 and is a different thing from the Atmos substream of a
+            // TrueHD track, even though both used to print the same three words.
+            str << "+ ATMOS (JOC";
+            if (m_jocObjects > 0)
+                str << ", " << static_cast<int>(m_jocObjects) << " objects";
+            str << "), ";
+        }
 
         str << "Bitrate: " << (m_bit_rate + m_bit_rateExt) / 1000 << "Kbps ";
         if (m_bit_rateExt)

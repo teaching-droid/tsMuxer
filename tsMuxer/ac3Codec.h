@@ -55,6 +55,9 @@ class AC3Codec
         m_dsurmod = 0;
         m_mixinfoexists = false;
         m_isAtmos = false;
+        m_jocObjects = 0;
+        m_atmosHits = 0;
+        m_atmosFramesProbed = 0;
     }
 
     virtual ~AC3Codec() = default;
@@ -95,6 +98,20 @@ class AC3Codec
     int m_frame_size;
     bool m_mixinfoexists;
     bool m_isAtmos;
+
+    // Dolby Atmos carried in E-AC-3 as joint object coding. The marker sits in the addbsi field
+    // and is a Type A extension per ETSI TS 103 420, together with a complexity index that IS the
+    // object count.
+    //
+    // One frame is not enough to say so. The walk to addbsi passes through a dozen variable length
+    // fields, so a single frame landing on the pattern by accident used to latch the flag on for
+    // the whole track and it was never cleared. Agreement across frames is demanded instead, on
+    // the same object count, which is the discipline the DTS:X badge already uses.
+    uint8_t m_jocObjects;     // complexity_index_type_a, the number of objects
+    int m_atmosHits;          // frames agreeing on it
+    int m_atmosFramesProbed;  // frames looked at, so the probe can stop
+    static constexpr int ATMOS_MIN_HITS = 2;
+    static constexpr int ATMOS_PROBE_FRAMES = 10;  // checkStream decodes this many before asking
 
     MLPCodec mlp;
 
