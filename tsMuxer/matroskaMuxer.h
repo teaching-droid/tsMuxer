@@ -232,6 +232,11 @@ class MatroskaMuxer final : public AbstractMuxer
 
     // Write Cues element at end of file
     void writeCues();
+    // Write the Attachments element: the preserved original RPUs and the manifest that explains
+    // them. Only in profile 8.1 mode, and only when RPUs were actually converted.
+    void writeAttachments();
+    // The manifest text, built once the frame count and the checksum are known.
+    [[nodiscard]] std::string buildDvManifest(uint64_t rpuBytes, uint32_t rpuCrc) const;
     // Write SeekHead element at end of file
     void writeSeekHead();
 
@@ -252,12 +257,34 @@ class MatroskaMuxer final : public AbstractMuxer
     // NAL type 63, which a decoder skips: that is what keeps the original disc recoverable, and it
     // is why the file does NOT get smaller the way the usual one way conversion does.
     //
-    // m_dvOriginalRpuBin collects the ORIGINAL profile 7 RPUs in the layout an extracted RPU file
-    // writes (a 4-byte start code then the RPU payload without its 2-byte NAL header), so the
-    // preserved original is readable by the existing tooling and not only by tsMuxeR.
+    // The ORIGINAL profile 7 RPUs are kept and written out as an attachment, in the layout an
+    // extracted RPU file uses (a 4-byte start code then the RPU payload without its 2-byte NAL
+    // header), so the preserved original is readable by the existing tooling and not only by
+    // tsMuxeR. Without it the conversion would be one way: it is many to one, so no procedure of
+    // any kind can recover a profile 7 RPU from an 8.1 one.
+    //
+    // The payloads sit end to end in one buffer with an index beside them, rather than as a vector
+    // of vectors, because a feature has upwards of 160,000 of them.
+    //
+    // ORDER. They are collected as the mux walks the pictures, which is DECODE order, and written
+    // out in DISPLAY order, because that is the order an extracted RPU file uses everywhere else.
+    // Keeping decode order would produce a file that other tools parse happily and use wrongly.
+    // The manifest states the order, and the split reorders on the way back.
+    struct DvRpuEntry
+    {
+        int64_t pts;
+        uint64_t offset;
+        uint32_t length;
+    };
     bool m_dvWriteProfile81 = false;
-    std::vector<uint8_t> m_dvOriginalRpuBin;
+    std::vector<uint8_t> m_dvRpuPayload;
+    std::vector<DvRpuEntry> m_dvRpuIndex;
+    int64_t m_dvCurrentRpuPts = 0;
     int64_t m_dvRpusConverted = 0;
+    // The record this file WOULD have declared as a dual layer profile 7 track. Not used by the
+    // track itself, which declares 8.1; it goes into the manifest so a rebuild can restore it.
+    uint8_t m_dvProfile7Config[24] = {};
+    uint32_t m_dvProfile7ConfigType = 0;
 
     // Segment layout
     int64_t m_segmentStartPos;  // file position of the first byte after the Segment header
@@ -277,6 +304,7 @@ class MatroskaMuxer final : public AbstractMuxer
     int64_t m_segmentInfoPos;
     int64_t m_tracksPos;
     int64_t m_cuesPos;
+    int64_t m_attachmentsPos = 0;
 
     // Timecode tracking
     int64_t m_firstTimecode;  // first PTS seen (in INTERNAL_PTS_FREQ units) – used as reference

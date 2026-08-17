@@ -6,6 +6,12 @@
 #include <cmath>
 #include <cstring>
 #include <random>
+#include <sstream>
+
+extern "C"
+{
+#include "zlib.h"
+}
 
 #include "aac.h"
 #include "aacStreamReader.h"
@@ -1128,6 +1134,12 @@ void MatroskaMuxer::refreshTrackProperties()
         if (mergedType == 0)
             continue;
 
+        // In profile 8.1 mode, also work out the record this track WOULD have declared as a dual
+        // layer profile 7 one, and keep it for the manifest. It is what a rebuild has to restore,
+        // and it cannot be derived later because the enhancement layer reader is gone by then.
+        if (m_dvWriteProfile81)
+            m_dvProfile7ConfigType = blReader->buildDoViConfigRecordDualLayer(m_dvProfile7Config, *elReader);
+
         baseTrack->dvElStreamIndex = track.streamIndex;
         baseTrack->dvBlockAddIdType = mergedType;
         memcpy(baseTrack->dvConfig, merged, sizeof(merged));
@@ -1595,13 +1607,15 @@ std::vector<uint8_t> MatroskaMuxer::convertDvElToLengthPrefixed(const uint8_t* d
                     THROW(ERR_COMMON, "Dolby Vision: converting an RPU to profile 8.1 failed after "
                                           << m_dvRpusConverted << " frames: " << err)
                 }
-                // The original, in the layout an extracted RPU file uses: a 4-byte start code
-                // then the payload WITHOUT its two byte NAL header. Verified against a real RPU.bin.
-                m_dvOriginalRpuBin.push_back(0x00);
-                m_dvOriginalRpuBin.push_back(0x00);
-                m_dvOriginalRpuBin.push_back(0x00);
-                m_dvOriginalRpuBin.push_back(0x01);
-                m_dvOriginalRpuBin.insert(m_dvOriginalRpuBin.end(), curPos + 2, naluEnd);
+                // Keep the original. The payload only, WITHOUT its two byte NAL header, which is
+                // what an extracted RPU file stores; the start code is added when the attachment is
+                // written, so nothing has to be stripped again to reorder it.
+                DvRpuEntry entry;
+                entry.pts = m_dvCurrentRpuPts;
+                entry.offset = m_dvRpuPayload.size();
+                entry.length = static_cast<uint32_t>(naluSize - 2);
+                m_dvRpuPayload.insert(m_dvRpuPayload.end(), curPos + 2, naluEnd);
+                m_dvRpuIndex.push_back(entry);
                 m_dvRpusConverted++;
             }
 
@@ -1800,6 +1814,10 @@ void MatroskaMuxer::drainHeldFrames(MkvTrackInfo& track, const bool atEndOfStrea
 
         if (el != track.dvElDone.end())
         {
+            // Which picture this enhancement access unit belongs to. In profile 8.1 mode the
+            // original RPU is kept aside as it passes, and its timestamp is what later puts the
+            // attachment into display order.
+            m_dvCurrentRpuPts = front.pts;
             const std::vector<uint8_t> wrapped =
                 convertDvElToLengthPrefixed(el->second.data(), static_cast<int>(el->second.size()));
             front.data.insert(front.data.end(), wrapped.begin(), wrapped.end());
@@ -2032,6 +2050,254 @@ void MatroskaMuxer::writeCues()
     writeToFile(allPoints);
 }
 
+// ──────────────── Attachments ────────────────────────────────────────────────
+
+// The name the preserved RPUs are attached under. Deliberately the same layout, and now also the
+// same order, that an extracted RPU file uses, so it is worth something outside tsMuxeR.
+static const char DV_RPU_ATTACHMENT_NAME[] = "dv-original-rpu.bin";
+static const char DV_MANIFEST_ATTACHMENT_NAME[] = "dv-manifest.txt";
+
+static std::string hexBytes(const uint8_t* data, const int len)
+{
+    static const char* digits = "0123456789abcdef";
+    std::string out;
+    out.reserve(static_cast<size_t>(len) * 2);
+    for (int i = 0; i < len; ++i)
+    {
+        out += digits[(data[i] >> 4) & 0x0F];
+        out += digits[data[i] & 0x0F];
+    }
+    return out;
+}
+
+static std::string fourCcToString(const uint32_t fourCc)
+{
+    std::string out;
+    for (int i = 3; i >= 0; --i)
+    {
+        const char c = static_cast<char>((fourCc >> (i * 8)) & 0xFF);
+        out += (c >= 0x20 && c < 0x7F) ? c : '?';
+    }
+    return out;
+}
+
+// A file that declares profile 8.1 while carrying profile 7 data is a convention of this project's
+// own making, and a convention that is not written down is indistinguishable from a mistake. The
+// manifest is what keeps it honest: it says what the file really is, in text, so a person and a
+// tool can both find out without reverse engineering the video track.
+std::string MatroskaMuxer::buildDvManifest(const uint64_t rpuBytes, const uint32_t rpuCrc) const
+{
+    // The record the track itself declares, so the manifest can state both sides of the swap.
+    std::string declared = "none";
+    for (const auto& [streamIdx, track] : m_tracks)
+    {
+        if (track.dvElStreamIndex >= 0 && track.dvBlockAddIdType != 0)
+        {
+            declared = fourCcToString(track.dvBlockAddIdType) + " " + hexBytes(track.dvConfig, 24);
+            break;
+        }
+    }
+    const std::string original = m_dvProfile7ConfigType != 0
+                                     ? fourCcToString(m_dvProfile7ConfigType) + " " + hexBytes(m_dvProfile7Config, 24)
+                                     : std::string("none");
+
+    char crcBuf[16];
+    snprintf(crcBuf, sizeof(crcBuf), "%08x", rpuCrc);
+
+    std::ostringstream s;
+    s << "tsMuxeR Dolby Vision carrier\r\n"
+         "============================\r\n"
+         "\r\n"
+         "This file plays as an ordinary single layer Dolby Vision profile 8.1 video, and it also\r\n"
+         "carries everything needed to rebuild the dual layer profile 7 disc it was made from.\r\n"
+         "\r\n"
+         "The usual profile 7 to 8.1 conversion cannot be undone. It drops the enhancement layer and\r\n"
+         "rewrites every RPU, and that rewrite is many to one: different originals land on the same\r\n"
+         "result, so nothing can tell them apart afterwards. This file keeps the originals instead of\r\n"
+         "trying to reconstruct them, which is why it is not smaller than a profile 7 one.\r\n"
+         "\r\n";
+
+    s << "  dv-container-version  1\r\n"
+      << "  declared-profile      8.1\r\n"
+      << "  carried-profile       7\r\n"
+      << "  frames                " << m_dvRpuIndex.size() << "\r\n"
+      << "  rpu-attachment        " << DV_RPU_ATTACHMENT_NAME << "\r\n"
+      << "  rpu-count             " << m_dvRpuIndex.size() << "\r\n"
+      << "  rpu-bytes             " << rpuBytes << "\r\n"
+      << "  rpu-crc32             " << crcBuf << "\r\n"
+      << "  rpu-order             display\r\n"
+      << "  rpu-format            start-code\r\n"
+      << "  declared-config       " << declared << "\r\n"
+      << "  original-config       " << original
+      << "\r\n"
+         "\r\n";
+
+    s << "What the video track holds\r\n"
+         "--------------------------\r\n"
+         "  the base layer, unchanged\r\n"
+         "  the enhancement layer, every NAL inside an unspecified NAL of type 63, which a decoder\r\n"
+         "    is required to skip, so it costs nothing at playback\r\n"
+         "  one RPU per picture, converted to profile 8.1\r\n"
+         "\r\n"
+         "rpu-format: start-code\r\n"
+         "----------------------\r\n"
+         "Each entry is the four bytes 00 00 00 01 followed by the RPU payload with its two byte NAL\r\n"
+         "header removed. That is the layout an extracted RPU file uses.\r\n"
+         "\r\n"
+         "rpu-order: display\r\n"
+         "------------------\r\n"
+         "The entries run in presentation order, which is what an extracted RPU file uses. It is NOT\r\n"
+         "the order the pictures are stored in: a stream with B pictures is stored in decode order,\r\n"
+         "and the two orders part company from the first picture after a key frame onwards. Anything\r\n"
+         "matching these entries to pictures has to sort the pictures by presentation time first.\r\n"
+         "\r\n"
+         "Rebuilding the disc\r\n"
+         "-------------------\r\n"
+         "Split the video track: NAL types 62 and 63 go to the enhancement layer, everything else\r\n"
+         "goes to the base layer, and the type 63 wrapper is removed. Then put each original RPU back\r\n"
+         "in place of the converted one, taking them in presentation order, and restore\r\n"
+         "original-config as the track's Dolby Vision record. tsMuxeR does all of this through\r\n"
+         "subTrack= on the meta line.\r\n"
+         "\r\n"
+         "If the count or the checksum does not agree, refuse rather than guess. A mismatch means the\r\n"
+         "file has been cut or re-muxed and these entries no longer line up with the pictures, and\r\n"
+         "the result would be a disc that looks right and is wrong.\r\n";
+
+    return s.str();
+}
+
+// Write the preserved original RPUs and the manifest. Only in profile 8.1 mode: a profile 7 file
+// carries its originals inline and needs neither.
+void MatroskaMuxer::writeAttachments()
+{
+    if (!m_dvWriteProfile81 || m_dvRpuIndex.empty())
+        return;
+
+    // Into DISPLAY order. They were collected as the mux walked the pictures, which is decode
+    // order; see the note beside m_dvRpuIndex for why the attachment does not keep that order.
+    std::vector<const DvRpuEntry*> ordered;
+    ordered.reserve(m_dvRpuIndex.size());
+    for (const auto& entry : m_dvRpuIndex) ordered.push_back(&entry);
+    std::stable_sort(ordered.begin(), ordered.end(),
+                     [](const DvRpuEntry* a, const DvRpuEntry* b) { return a->pts < b->pts; });
+
+    // Each original is tagged with the presentation time of the picture it belongs to, so two
+    // entries sharing one means a single picture was given more than one RPU. That is seen when a
+    // source stops part way through an access unit: the last enhancement access unit has no
+    // picture of its own to pair with and its RPU lands on the previous one.
+    //
+    // Such a file cannot be put back, because the originals no longer match the pictures one for
+    // one, and no ordering of them would fix that. Refusing beats writing a file that claims to be
+    // reversible and is not.
+    for (size_t i = 1; i < ordered.size(); ++i)
+    {
+        if (ordered[i]->pts == ordered[i - 1]->pts)
+            THROW(ERR_COMMON,
+                  "Dolby Vision: one picture carries "
+                      << "more than one RPU, so the originals cannot be matched to pictures one for one and "
+                         "the profile 8.1 file would not be reversible. This is what a source that ends part "
+                         "way through an access unit looks like; re-mux from a complete source, or use "
+                         "--dv-profile=7, which carries the disc unchanged.")
+    }
+
+    static constexpr uint8_t START_CODE[4] = {0, 0, 0, 1};
+
+    uint64_t rpuBytes = 0;
+    uint32_t rpuCrc = static_cast<uint32_t>(crc32(0, nullptr, 0));
+    for (const auto* entry : ordered)
+    {
+        rpuBytes += sizeof(START_CODE) + entry->length;
+        rpuCrc = static_cast<uint32_t>(crc32(rpuCrc, START_CODE, sizeof(START_CODE)));
+        rpuCrc = static_cast<uint32_t>(crc32(rpuCrc, m_dvRpuPayload.data() + entry->offset, entry->length));
+    }
+
+    const std::string manifest = buildDvManifest(rpuBytes, rpuCrc);
+    const uint32_t manifestCrc = static_cast<uint32_t>(crc32(
+        crc32(0, nullptr, 0), reinterpret_cast<const uint8_t*>(manifest.data()), static_cast<uInt>(manifest.size())));
+
+    // Derived from the content rather than drawn at random, so muxing the same input twice gives
+    // the same file. A UID has to be non-zero, and a count of zero returned earlier.
+    const uint64_t rpuUid = (static_cast<uint64_t>(rpuCrc) << 32) | m_dvRpuIndex.size();
+    const uint64_t manifestUid = (static_cast<uint64_t>(manifestCrc) << 32) | 1;
+
+    auto attachedFileHead =
+        [](const std::string& desc, const std::string& name, const std::string& mime, const uint64_t uid)
+    {
+        std::vector<uint8_t> buf(desc.size() + name.size() + mime.size() + 96);
+        int p = 0;
+        p += ebml_write_string(buf.data() + p, MATROSKA_ID_FILEDESCRIPTION, desc);
+        p += ebml_write_string(buf.data() + p, MATROSKA_ID_FILENAME, name);
+        p += ebml_write_string(buf.data() + p, MATROSKA_ID_FILEMIMETYPE, mime);
+        p += ebml_write_uint(buf.data() + p, MATROSKA_ID_FILEUID, uid);
+        buf.resize(p);
+        return buf;
+    };
+
+    const std::vector<uint8_t> rpuHead = attachedFileHead(
+        "Original Dolby Vision profile 7 RPUs, one per picture, in presentation order. "
+        "See " +
+            std::string(DV_MANIFEST_ATTACHMENT_NAME) + ".",
+        DV_RPU_ATTACHMENT_NAME, "application/octet-stream", rpuUid);
+    const std::vector<uint8_t> manifestHead =
+        attachedFileHead("What this file is and how the original disc is rebuilt from it.", DV_MANIFEST_ATTACHMENT_NAME,
+                         "text/plain", manifestUid);
+
+    uint8_t rpuDataHdr[16];
+    int rpuDataHdrLen = ebml_write_id(rpuDataHdr, MATROSKA_ID_FILEDATA);
+    rpuDataHdrLen += ebml_write_size(rpuDataHdr + rpuDataHdrLen, rpuBytes);
+
+    uint8_t manifestDataHdr[16];
+    int manifestDataHdrLen = ebml_write_id(manifestDataHdr, MATROSKA_ID_FILEDATA);
+    manifestDataHdrLen += ebml_write_size(manifestDataHdr + manifestDataHdrLen, manifest.size());
+
+    const uint64_t rpuFileSize = rpuHead.size() + rpuDataHdrLen + rpuBytes;
+    const uint64_t manifestFileSize = manifestHead.size() + manifestDataHdrLen + manifest.size();
+
+    uint8_t rpuFileHdr[16];
+    const int rpuFileHdrLen = ebml_write_master_open(rpuFileHdr, MATROSKA_ID_ATTACHEDFILE, rpuFileSize);
+    uint8_t manifestFileHdr[16];
+    const int manifestFileHdrLen = ebml_write_master_open(manifestFileHdr, MATROSKA_ID_ATTACHEDFILE, manifestFileSize);
+
+    m_attachmentsPos = m_file.pos() - m_segmentStartPos;
+
+    uint8_t header[16];
+    const int hdrLen = ebml_write_master_open(header, MATROSKA_ID_ATTACHMENTS,
+                                              rpuFileHdrLen + rpuFileSize + manifestFileHdrLen + manifestFileSize);
+    writeToFile(header, hdrLen);
+
+    writeToFile(rpuFileHdr, rpuFileHdrLen);
+    writeToFile(rpuHead);
+    writeToFile(rpuDataHdr, rpuDataHdrLen);
+
+    // Batched, because a feature has upwards of 160,000 of these and each one would otherwise be
+    // two calls into the file.
+    std::vector<uint8_t> chunk;
+    chunk.reserve(1024 * 1024 + 4096);
+    for (const auto* entry : ordered)
+    {
+        chunk.insert(chunk.end(), START_CODE, START_CODE + sizeof(START_CODE));
+        chunk.insert(chunk.end(), m_dvRpuPayload.data() + entry->offset,
+                     m_dvRpuPayload.data() + entry->offset + entry->length);
+        if (chunk.size() >= 1024 * 1024)
+        {
+            writeToFile(chunk);
+            chunk.clear();
+        }
+    }
+    writeToFile(chunk);
+
+    writeToFile(manifestFileHdr, manifestFileHdrLen);
+    writeToFile(manifestHead);
+    writeToFile(manifestDataHdr, manifestDataHdrLen);
+    writeToFile(reinterpret_cast<const uint8_t*>(manifest.data()), static_cast<int>(manifest.size()));
+
+    LTRACE(LT_INFO, 2,
+           "Dolby Vision: attached " << m_dvRpuIndex.size() << " original profile 7 RPUs (" << rpuBytes
+                                     << " bytes, crc32 " << std::hex << rpuCrc << std::dec
+                                     << ") in presentation order, plus the manifest that explains them. "
+                                        "The original disc can be rebuilt from this file.");
+}
+
 // ──────────────── SeekHead ───────────────────────────────────────────────────
 
 void MatroskaMuxer::writeSeekHead()
@@ -2048,6 +2314,8 @@ void MatroskaMuxer::writeSeekHead()
     items.push_back({MATROSKA_ID_TRACKS, m_tracksPos});
     if (m_cuesPos > 0)
         items.push_back({MATROSKA_ID_CUES, m_cuesPos});
+    if (m_attachmentsPos > 0)
+        items.push_back({MATROSKA_ID_ATTACHMENTS, m_attachmentsPos});
 
     std::vector<uint8_t> allEntries;
 
@@ -2100,6 +2368,9 @@ bool MatroskaMuxer::close()
 
     // Write Cues
     writeCues();
+
+    // Write the preserved original RPUs and the manifest, in profile 8.1 mode
+    writeAttachments();
 
     // Write SeekHead at the end
     writeSeekHead();

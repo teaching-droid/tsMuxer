@@ -59,6 +59,15 @@ static constexpr uint32_t MATROSKA_ID_TAGS = 0x1254C367;
 static constexpr uint32_t MATROSKA_ID_SEEKHEAD = 0x114D9B74;
 static constexpr uint32_t MATROSKA_ID_CLUSTER = 0x1F43B675;
 static constexpr uint32_t MATROSKA_ID_CHAPTERS = 0x1043A770;
+static constexpr uint32_t MATROSKA_ID_ATTACHMENTS = 0x1941A469;
+
+/* IDs in the attachments master */
+static constexpr uint16_t MATROSKA_ID_ATTACHEDFILE = 0x61A7;
+static constexpr uint16_t MATROSKA_ID_FILEDESCRIPTION = 0x467E;
+static constexpr uint16_t MATROSKA_ID_FILENAME = 0x466E;
+static constexpr uint16_t MATROSKA_ID_FILEMIMETYPE = 0x4660;
+static constexpr uint16_t MATROSKA_ID_FILEDATA = 0x465C;
+static constexpr uint16_t MATROSKA_ID_FILEUID = 0x46AE;
 
 /* IDs in the info master */
 static constexpr uint32_t MATROSKA_ID_TIMECODESCALE = 0x2AD7B1;
