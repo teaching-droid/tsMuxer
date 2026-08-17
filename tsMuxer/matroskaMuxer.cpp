@@ -1190,6 +1190,33 @@ void MatroskaMuxer::refreshTrackProperties()
                        << ", with base layer, enhancement layer and RPU.");
     }
 
+    // --dv-profile=8.1 with nothing to convert used to be accepted in silence. There is only ever
+    // something to convert when a dual layer source has been folded into one track, so if no fold
+    // happened the option did nothing at all and the file came out exactly as profile 7 would have
+    // made it, with no way to tell from the log. Refusing names the reason instead.
+    //
+    // A single layer file is the ordinary case here: it is already profile 5 or 8 and there is no
+    // second layer to fold, so nothing about it needs converting.
+    if (m_dvWriteProfile81)
+    {
+        bool folded = false;
+        for (const auto& [streamIdx, track] : m_tracks)
+        {
+            if (track.dvElStreamIndex >= 0)
+            {
+                folded = true;
+                break;
+            }
+        }
+        if (!folded)
+            THROW(ERR_COMMON,
+                  "--dv-profile=8.1 converts the Dolby Vision metadata of a DUAL LAYER source, and this mux has no "
+                  "dual layer Dolby Vision track to convert. A single layer file already carries its picture and its "
+                  "RPU in one track, so there is nothing to fold and nothing to convert: leave --dv-profile out and "
+                  "the file is written as it is. A dual layer disc needs BOTH of its video streams listed, the base "
+                  "layer and the enhancement layer.")
+    }
+
     // A Blu-ray TrueHD track arrives as its lossless frames PLUS a 448 kbps AC-3 core, both on one
     // PID, because a disc has to carry something for a player that cannot decode the lossless
     // stream. Matroska has no such arrangement: an A_TRUEHD track holds the lossless stream alone,
