@@ -291,7 +291,13 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
     uint8_t* curPos = dstBuffer;
     if (avPacket.size > 4 && avPacket.size < dstEnd - dstBuffer)
     {
-        auto nalType = static_cast<NALUnit::NALType>(avPacket.data[4] & 0x1f);
+        // A start code is three bytes or four, and both are legal, so where the NAL header sits has
+        // to be worked out rather than assumed. Reading byte 4 unconditionally lands one byte INTO
+        // the header of a three byte framed packet, so the type comes out wrong and an access unit
+        // delimiter already present is not recognised. The HEVC and VVC readers have always
+        // detected it; this one did not.
+        const int offset = avPacket.data[2] == 1 ? 3 : 4;
+        auto nalType = static_cast<NALUnit::NALType>(avPacket.data[offset] & 0x1f);
         if (nalType == NALUnit::NALType::nuDelimiter || nalType == NALUnit::NALType::nuDRD)
         {
             // place delimiter at first place

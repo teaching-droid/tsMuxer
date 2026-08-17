@@ -300,7 +300,10 @@ AC3Codec::AC3ParseError AC3Codec::parseHeader(uint8_t* buf, const uint8_t* end)
                 if (flag_ec3_extension_type_a)
                 {
                     const auto complexity_index_type_a = gbc.getBits(8);
-                    if (complexity_index_type_a <= 16)
+                    // The complexity index IS the object count, so ZERO is not object audio and
+                    // must not earn the name. The old test accepted it, which meant a frame whose
+                    // walk landed on two zero bytes looked exactly like a valid Type A extension.
+                    if (complexity_index_type_a >= 1 && complexity_index_type_a <= 16)
                     {
                         // Frames must AGREE, and on the same object count. Reaching this field
                         // means walking a dozen variable length fields, so one frame landing on
