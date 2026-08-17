@@ -2507,6 +2507,22 @@
 <context>
     <name>TsMuxerWindow</name>
     <message>
+        <source>Dolby Vision:</source>
+        <translation>Dolby Vision：</translation>
+    </message>
+    <message>
+        <source>Profile 7, as on the disc</source>
+        <translation>配置文件 7，与光盘上的一致</translation>
+    </message>
+    <message>
+        <source>Profile 8.1, plays on more devices</source>
+        <translation>配置文件 8.1，可在更多设备上播放</translation>
+    </message>
+    <message>
+        <source>Only applies to a dual layer Dolby Vision source muxed to Matroska. Profile 7 carries the disc as it is. Profile 8.1 converts the Dolby Vision metadata so the file plays as single layer Dolby Vision on many more devices, while the disc's own metadata travels with it so the two layers can be separated again exactly. The file does not get smaller. Profile 8.1 needs the libdovi library beside tsMuxeR.</source>
+        <translation>仅适用于封装到 Matroska 的双层 Dolby Vision 源。配置文件 7 会原样保留光盘的内容。配置文件 8.1 会转换 Dolby Vision 元数据，使文件能以单层 Dolby Vision 的形式在更多设备上播放；同时光盘自身的元数据也会随文件一起保留，因此之后仍可将两层完全精确地重新分离出来。文件不会因此变小。配置文件 8.1 需要将 libdovi 库放在 tsMuxeR 所在的目录中。</translation>
+    </message>
+    <message>
         <source>Picking a disc pre-fills the FULL Free Sectors for that size. ALWAYS check it against what ImgBurn shows for your own disc. A disc formatted with defect management reports less, and how much less depends on how it was formatted: one blank 25 GB disc offered three different spare area sizes, so no single reduced figure can be listed here. If yours differs, tick "Enter Free Sectors manually" and type what ImgBurn shows: the layer break is worked out from that number, so a wrong one puts the guard in the wrong place.</source>
         <translation>选择光盘后会预填该容量的完整 Free Sectors 数值。请务必将其与 ImgBurn 为你自己的光盘显示的数值核对。带缺陷管理格式化的光盘会显示更少，具体少多少取决于格式化方式：一张 25 GB 空白光盘就提供了三种不同的备用区大小，因此无法在此列出单一的缩减数值。如果你的光盘不同，请勾选"手动输入 Free Sectors"并填入 ImgBurn 显示的数值：分层点由该数值计算得出，数值错误会把保护带放到错误的位置。</translation>
     </message>

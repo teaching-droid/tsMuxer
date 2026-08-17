@@ -2507,6 +2507,22 @@
 <context>
     <name>TsMuxerWindow</name>
     <message>
+        <source>Dolby Vision:</source>
+        <translation>Dolby Vision:</translation>
+    </message>
+    <message>
+        <source>Profile 7, as on the disc</source>
+        <translation>Профиль 7, как на диске</translation>
+    </message>
+    <message>
+        <source>Profile 8.1, plays on more devices</source>
+        <translation>Профиль 8.1, воспроизводится на большем числе устройств</translation>
+    </message>
+    <message>
+        <source>Only applies to a dual layer Dolby Vision source muxed to Matroska. Profile 7 carries the disc as it is. Profile 8.1 converts the Dolby Vision metadata so the file plays as single layer Dolby Vision on many more devices, while the disc's own metadata travels with it so the two layers can be separated again exactly. The file does not get smaller. Profile 8.1 needs the libdovi library beside tsMuxeR.</source>
+        <translation>Применяется только при мультиплексировании двухслойного источника Dolby Vision в Matroska. Профиль 7 переносит содержимое диска как есть. Профиль 8.1 преобразует метаданные Dolby Vision так, что файл воспроизводится как однослойный Dolby Vision на гораздо большем числе устройств, при этом собственные метаданные диска сохраняются в файле, поэтому оба слоя можно снова разделить и в точности восстановить исходный диск. Файл меньше не становится. Для профиля 8.1 нужна библиотека libdovi рядом с tsMuxeR.</translation>
+    </message>
+    <message>
         <source>Picking a disc pre-fills the FULL Free Sectors for that size. ALWAYS check it against what ImgBurn shows for your own disc. A disc formatted with defect management reports less, and how much less depends on how it was formatted: one blank 25 GB disc offered three different spare area sizes, so no single reduced figure can be listed here. If yours differs, tick "Enter Free Sectors manually" and type what ImgBurn shows: the layer break is worked out from that number, so a wrong one puts the guard in the wrong place.</source>
         <translation>При выборе диска подставляется ПОЛНОЕ значение Free Sectors для этого размера. ВСЕГДА сверяйте его с тем, что ImgBurn показывает для вашего диска. Диск, отформатированный с управлением дефектами, показывает меньше, а насколько меньше, зависит от того, как его форматировали: один чистый диск на 25 GB предложил три разных размера запасной области, поэтому единого уменьшенного значения здесь быть не может. Если у вас другое, отметьте "Ввести Free Sectors вручную" и введите то, что показывает ImgBurn: точка разрыва слоя рассчитывается из этого числа, поэтому неверное поместит защиту не туда.</translation>
     </message>

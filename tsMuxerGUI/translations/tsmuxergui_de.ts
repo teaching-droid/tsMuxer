@@ -2507,6 +2507,22 @@
 <context>
     <name>TsMuxerWindow</name>
     <message>
+        <source>Dolby Vision:</source>
+        <translation>Dolby Vision:</translation>
+    </message>
+    <message>
+        <source>Profile 7, as on the disc</source>
+        <translation>Profil 7, wie auf der Disc</translation>
+    </message>
+    <message>
+        <source>Profile 8.1, plays on more devices</source>
+        <translation>Profil 8.1, läuft auf mehr Geräten</translation>
+    </message>
+    <message>
+        <source>Only applies to a dual layer Dolby Vision source muxed to Matroska. Profile 7 carries the disc as it is. Profile 8.1 converts the Dolby Vision metadata so the file plays as single layer Dolby Vision on many more devices, while the disc's own metadata travels with it so the two layers can be separated again exactly. The file does not get smaller. Profile 8.1 needs the libdovi library beside tsMuxeR.</source>
+        <translation>Gilt nur für eine Dual-Layer-Quelle mit Dolby Vision, die in Matroska gemuxt wird. Profil 7 übernimmt die Disc unverändert. Profil 8.1 wandelt die Dolby-Vision-Metadaten so um, dass die Datei als Single-Layer-Dolby-Vision auf deutlich mehr Geräten läuft, wobei die eigenen Metadaten der Disc mitgeführt werden, sodass sich die beiden Layer wieder exakt trennen lassen. Die Datei wird dadurch nicht kleiner. Für Profil 8.1 muss die Bibliothek libdovi neben tsMuxeR liegen.</translation>
+    </message>
+    <message>
         <source>Picking a disc pre-fills the FULL Free Sectors for that size. ALWAYS check it against what ImgBurn shows for your own disc. A disc formatted with defect management reports less, and how much less depends on how it was formatted: one blank 25 GB disc offered three different spare area sizes, so no single reduced figure can be listed here. If yours differs, tick "Enter Free Sectors manually" and type what ImgBurn shows: the layer break is worked out from that number, so a wrong one puts the guard in the wrong place.</source>
         <translation>Bei Auswahl eines Rohlings wird die VOLLE Free-Sectors-Zahl dieser Größe eingetragen. Prüfen Sie sie IMMER gegen das, was ImgBurn für Ihren eigenen Rohling anzeigt. Eine mit Fehlerverwaltung formatierte Disc meldet weniger, und wie viel weniger hängt davon ab, wie sie formatiert wurde: ein einzelner 25-GB-Rohling bot hier drei verschiedene Größen für den Ersatzbereich an, deshalb lässt sich hier kein einzelner reduzierter Wert aufführen. Weicht Ihrer ab, haken Sie "Free Sectors manuell eingeben" an und tragen Sie den Wert von ImgBurn ein: Der Layer-Break wird aus dieser Zahl berechnet, ein falscher Wert setzt den Schutz also an die falsche Stelle.</translation>
     </message>

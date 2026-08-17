@@ -2753,6 +2753,7 @@ void TsMuxerWindow::continueAddFile()
     }
     updateMaxOffsets();
     updateCustomChapters();
+    updateDvProfileVisible();
     disableUpdatesCnt--;
     trackLVItemSelectionChanged();
     emit fileAdded();
@@ -3052,6 +3053,9 @@ QString TsMuxerWindow::getMuxOpts()
         rez += " --avchd";
     else if (ui->radioButtonDemux->isChecked())
         rez += " --demux";
+    else if (ui->radioButtonMKV->isChecked() && ui->comboBoxDvProfile->isVisible() &&
+             ui->comboBoxDvProfile->currentIndex() == 1)
+        rez += " --dv-profile=8.1";
     // dual-layer guard options (Blu-ray / Blu-ray ISO output; the layer-break guard only takes effect
     // for ISO output, where tsMuxeR itself writes the image).
     if (ui->radioButtonBluRay->isChecked() || ui->radioButtonBluRayISO->isChecked())
@@ -3854,6 +3858,26 @@ void TsMuxerWindow::moveRow(int index, int index2)
     ui->trackLV->setCurrentCell(index2, 0);
 }
 
+// Show the Dolby Vision profile row only when it applies: Matroska output, and a source that
+// actually carries a dual layer Dolby Vision track. A merged track lists as two rows, base layer
+// and enhancement layer, which is exactly what the description says.
+void TsMuxerWindow::updateDvProfileVisible()
+{
+    bool dualLayerDv = false;
+    for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+    {
+        const QtvCodecInfo* codecInfo = getCodecInfo(i);
+        if (codecInfo && codecInfo->descr.contains("Dolby Vision") && codecInfo->subTrack != 0)
+        {
+            dualLayerDv = true;
+            break;
+        }
+    }
+    const bool show = ui->radioButtonMKV->isChecked() && dualLayerDv;
+    ui->labelDvProfile->setVisible(show);
+    ui->comboBoxDvProfile->setVisible(show);
+}
+
 void TsMuxerWindow::RadioButtonMuxClick()
 {
     if (outFileNameDisableChange)
@@ -3864,6 +3888,10 @@ void TsMuxerWindow::RadioButtonMuxClick()
         ui->buttonMux->setText(tr("Start muxing"));
     ui->checkBoxNewAudioPes->setChecked(!ui->radioButtonTS->isChecked());
     ui->checkBoxNewAudioPes->setEnabled(ui->radioButtonTS->isChecked() || ui->radioButtonM2TS->isChecked());
+    // The Dolby Vision profile only means anything for Matroska output, so it is hidden rather
+    // than greyed out anywhere else: a disabled control still invites the question of what it is
+    // for, and here the answer would be "nothing, in this mode".
+    updateDvProfileVisible();
     outFileNameDisableChange = true;
     if (ui->radioButtonBluRay->isChecked() || ui->radioButtonDemux->isChecked() || ui->radioButtonAVCHD->isChecked())
     {

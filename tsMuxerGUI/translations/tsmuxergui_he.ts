@@ -2507,6 +2507,22 @@
 <context>
     <name>TsMuxerWindow</name>
     <message>
+        <source>Dolby Vision:</source>
+        <translation>Dolby Vision:</translation>
+    </message>
+    <message>
+        <source>Profile 7, as on the disc</source>
+        <translation>פרופיל 7, כמו בתקליטור</translation>
+    </message>
+    <message>
+        <source>Profile 8.1, plays on more devices</source>
+        <translation>פרופיל 8.1, מתנגן במכשירים רבים יותר</translation>
+    </message>
+    <message>
+        <source>Only applies to a dual layer Dolby Vision source muxed to Matroska. Profile 7 carries the disc as it is. Profile 8.1 converts the Dolby Vision metadata so the file plays as single layer Dolby Vision on many more devices, while the disc's own metadata travels with it so the two layers can be separated again exactly. The file does not get smaller. Profile 8.1 needs the libdovi library beside tsMuxeR.</source>
+        <translation>חל רק על מקור Dolby Vision דו-שכבתי שממוזג ל-Matroska. פרופיל 7 מעביר את התקליטור כפי שהוא. פרופיל 8.1 ממיר את המטא-נתונים של Dolby Vision כך שהקובץ מתנגן כ-Dolby Vision חד-שכבתי במכשירים רבים בהרבה, בעוד שהמטא-נתונים המקוריים של התקליטור נשמרים בתוך הקובץ, כך שניתן להפריד שוב את שתי השכבות במדויק. גודל הקובץ אינו קטן כתוצאה מכך. פרופיל 8.1 מצריך את ספריית libdovi לצד tsMuxeR.</translation>
+    </message>
+    <message>
         <source>Picking a disc pre-fills the FULL Free Sectors for that size. ALWAYS check it against what ImgBurn shows for your own disc. A disc formatted with defect management reports less, and how much less depends on how it was formatted: one blank 25 GB disc offered three different spare area sizes, so no single reduced figure can be listed here. If yours differs, tick "Enter Free Sectors manually" and type what ImgBurn shows: the layer break is worked out from that number, so a wrong one puts the guard in the wrong place.</source>
         <translation>בחירת דיסק ממלאת מראש את מספר Free Sectors המלא עבור הגודל הזה. תמיד השווה אותו למה ש-ImgBurn מציג עבור הדיסק שלך. דיסק שעוצב עם ניהול פגמים מדווח על פחות, וכמה פחות תלוי באופן שבו עוצב: דיסק ריק אחד בנפח 25 GB הציע כאן שלושה גדלים שונים של שטח רזרבי, ולכן לא ניתן לציין כאן ערך מופחת יחיד. אם שלך שונה, סמן את "הזן Free Sectors ידנית" והקלד את מה ש-ImgBurn מציג: שבירת השכבה מחושבת מהמספר הזה, ולכן ערך שגוי ימקם את המגן במקום הלא נכון.</translation>
     </message>

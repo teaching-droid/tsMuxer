@@ -2507,6 +2507,22 @@
 <context>
     <name>TsMuxerWindow</name>
     <message>
+        <source>Dolby Vision:</source>
+        <translation>Dolby Vision:</translation>
+    </message>
+    <message>
+        <source>Profile 7, as on the disc</source>
+        <translation>プロファイル 7（ディスクと同じ）</translation>
+    </message>
+    <message>
+        <source>Profile 8.1, plays on more devices</source>
+        <translation>プロファイル 8.1（より多くの機器で再生可能）</translation>
+    </message>
+    <message>
+        <source>Only applies to a dual layer Dolby Vision source muxed to Matroska. Profile 7 carries the disc as it is. Profile 8.1 converts the Dolby Vision metadata so the file plays as single layer Dolby Vision on many more devices, while the disc's own metadata travels with it so the two layers can be separated again exactly. The file does not get smaller. Profile 8.1 needs the libdovi library beside tsMuxeR.</source>
+        <translation>デュアルレイヤーの Dolby Vision ソースを Matroska に多重化する場合にのみ適用されます。プロファイル 7 はディスクの内容をそのまま収めます。プロファイル 8.1 は Dolby Vision メタデータを変換し、はるかに多くの機器でシングルレイヤーの Dolby Vision として再生できるようにします。その際、ディスク本来のメタデータもファイルに一緒に保持されるため、2つのレイヤーを元どおり正確に分離し直すことができます。ファイルサイズは小さくなりません。プロファイル 8.1 を使うには、tsMuxeR と同じ場所に置いた libdovi ライブラリが必要です。</translation>
+    </message>
+    <message>
         <source>Picking a disc pre-fills the FULL Free Sectors for that size. ALWAYS check it against what ImgBurn shows for your own disc. A disc formatted with defect management reports less, and how much less depends on how it was formatted: one blank 25 GB disc offered three different spare area sizes, so no single reduced figure can be listed here. If yours differs, tick "Enter Free Sectors manually" and type what ImgBurn shows: the layer break is worked out from that number, so a wrong one puts the guard in the wrong place.</source>
         <translation>ディスクを選択すると、その容量の完全な Free Sectors が入力されます。必ず、お使いのディスクについて ImgBurn が表示する値と照合してください。欠陥管理でフォーマットされたディスクはこれより小さい値を返し、どれだけ小さいかはフォーマット方法によります。ある 25 GB の未使用ディスクは予備領域のサイズを 3 通り提示したため、ここに単一の削減値を載せることはできません。異なる場合は「Free Sectors を手動で入力」にチェックを入れ、ImgBurn の値を入力してください。レイヤーブレイクはこの数値から計算されるため、誤った値はガードを誤った位置に置きます。</translation>
     </message>

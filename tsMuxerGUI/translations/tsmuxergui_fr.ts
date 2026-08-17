@@ -2507,6 +2507,22 @@
 <context>
     <name>TsMuxerWindow</name>
     <message>
+        <source>Dolby Vision:</source>
+        <translation>Dolby Vision :</translation>
+    </message>
+    <message>
+        <source>Profile 7, as on the disc</source>
+        <translation>Profil 7, comme sur le disque</translation>
+    </message>
+    <message>
+        <source>Profile 8.1, plays on more devices</source>
+        <translation>Profil 8.1, lisible sur plus d'appareils</translation>
+    </message>
+    <message>
+        <source>Only applies to a dual layer Dolby Vision source muxed to Matroska. Profile 7 carries the disc as it is. Profile 8.1 converts the Dolby Vision metadata so the file plays as single layer Dolby Vision on many more devices, while the disc's own metadata travels with it so the two layers can be separated again exactly. The file does not get smaller. Profile 8.1 needs the libdovi library beside tsMuxeR.</source>
+        <translation>S'applique uniquement à une source Dolby Vision à double couche muxée en Matroska. Le profil 7 reprend le disque tel quel. Le profil 8.1 convertit les métadonnées Dolby Vision afin que le fichier se lise en Dolby Vision à simple couche sur bien plus d'appareils, tandis que les métadonnées propres au disque l'accompagnent, ce qui permet de reconstituer les deux couches à l'identique. Le fichier n'en devient pas plus petit. Le profil 8.1 nécessite la bibliothèque libdovi dans le même dossier que tsMuxeR.</translation>
+    </message>
+    <message>
         <source>Picking a disc pre-fills the FULL Free Sectors for that size. ALWAYS check it against what ImgBurn shows for your own disc. A disc formatted with defect management reports less, and how much less depends on how it was formatted: one blank 25 GB disc offered three different spare area sizes, so no single reduced figure can be listed here. If yours differs, tick "Enter Free Sectors manually" and type what ImgBurn shows: the layer break is worked out from that number, so a wrong one puts the guard in the wrong place.</source>
         <translation>Choisir un disque pré-remplit le nombre COMPLET de Free Sectors pour cette taille. Vérifiez-le TOUJOURS avec ce qu'ImgBurn affiche pour votre propre disque. Un disque formaté avec gestion des défauts en indique moins, et le déficit dépend de la façon dont il a été formaté : un seul disque vierge de 25 GB a proposé ici trois tailles de zone de secours différentes, aucune valeur réduite unique ne peut donc figurer ici. Si le vôtre diffère, cochez "Saisir les Free Sectors manuellement" et tapez ce qu'affiche ImgBurn : le changement de couche est calculé à partir de ce nombre, une valeur erronée place donc la bande de garde au mauvais endroit.</translation>
     </message>
