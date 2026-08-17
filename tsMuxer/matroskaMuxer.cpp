@@ -694,6 +694,21 @@ void MatroskaMuxer::writeToFile(const std::vector<uint8_t>& data)
         m_file.write(data.data(), static_cast<int>(data.size()));
 }
 
+// A Void element occupying EXACTLY totalBytes, header included, so a reserved area can be filled
+// without its size shifting. The size field is written at a fixed two bytes rather than the
+// shortest that fits, because the arithmetic has to be exact and reversible.
+void MatroskaMuxer::writeVoid(const int totalBytes)
+{
+    if (totalBytes < VOID_MIN_BYTES)
+        return;
+    uint8_t buf[8];
+    int len = ebml_write_id(buf, EBML_ID_VOID);
+    len += ebml_write_size_fixed(buf + len, static_cast<uint64_t>(totalBytes) - VOID_MIN_BYTES, 2);
+    writeToFile(buf, len);
+    const std::vector<uint8_t> filler(static_cast<size_t>(totalBytes) - VOID_MIN_BYTES, 0);
+    writeToFile(filler);
+}
+
 // ──────────────── EBML Header ────────────────────────────────────────────────
 
 void MatroskaMuxer::writeEBMLHeader()
@@ -1013,6 +1028,21 @@ void MatroskaMuxer::openDstFile()
     pos = ebml_write_unknown_size(segBuf, 8);
     writeToFile(segBuf, pos);
     m_segmentStartPos = m_file.pos();
+
+    // 3. Reserve room at the FRONT of the segment for a SeekHead.
+    //
+    // Cues, and now the attachments, are written after the clusters because their contents are not
+    // known until the mux has finished. A reader that only looks at the head of the file therefore
+    // never finds them, and one that copies a file from what it found silently leaves them behind.
+    // Measured: a file whose attachments sat only after the clusters came back from a third party
+    // remux with the video intact and the attachments gone, which for the Dolby Vision carrier
+    // means the originals needed to rebuild the disc are lost without a word.
+    //
+    // A SeekHead at the front is what the format expects and what fixes it. The size is not known
+    // yet, so a Void of fixed size holds the space and close() writes the real thing over it,
+    // padding whatever is left with a smaller Void.
+    m_seekHeadReservePos = m_file.pos();
+    writeVoid(SEEKHEAD_RESERVE);
 
     // SegmentInfo and Tracks are deferred to the first muxPacket call,
     // because stream readers haven't parsed their headers yet at this point.
@@ -2300,9 +2330,10 @@ void MatroskaMuxer::writeAttachments()
 
 // ──────────────── SeekHead ───────────────────────────────────────────────────
 
-void MatroskaMuxer::writeSeekHead()
+// Build the complete SeekHead element, header included, so it can be written both at the front of
+// the segment, into the reserved area, and at the end where it has always gone.
+std::vector<uint8_t> MatroskaMuxer::buildSeekHead() const
 {
-    // Build seek entries for SegmentInfo, Tracks, and Cues
     struct SeekItem
     {
         uint32_t id;
@@ -2340,12 +2371,47 @@ void MatroskaMuxer::writeSeekHead()
         allEntries.insert(allEntries.end(), entryBuf, entryBuf + entryLen);
     }
 
-    // Write SeekHead master element
     uint8_t header[16];
     int hdrLen = ebml_write_id(header, MATROSKA_ID_SEEKHEAD);
     hdrLen += ebml_write_size(header + hdrLen, allEntries.size());
-    writeToFile(header, hdrLen);
-    writeToFile(allEntries);
+
+    std::vector<uint8_t> out(header, header + hdrLen);
+    out.insert(out.end(), allEntries.begin(), allEntries.end());
+    return out;
+}
+
+void MatroskaMuxer::writeSeekHead()
+{
+    const std::vector<uint8_t> seekHead = buildSeekHead();
+    writeToFile(seekHead);
+}
+
+// Put the same SeekHead in the space reserved at the front of the segment. Without it, everything
+// written after the clusters is invisible to a reader that does not scan the whole file, and a
+// tool that copies the file leaves those elements behind.
+void MatroskaMuxer::writeFrontSeekHead()
+{
+    if (m_seekHeadReservePos <= 0)
+        return;
+
+    const std::vector<uint8_t> seekHead = buildSeekHead();
+    if (static_cast<int>(seekHead.size()) + VOID_MIN_BYTES > SEEKHEAD_RESERVE)
+    {
+        // Never seen in practice: five entries need about 120 bytes against 256 reserved. Saying so
+        // beats writing over whatever follows.
+        LTRACE(LT_WARN, 2,
+               "Matroska: the seek index needs " << seekHead.size() << " bytes but only " << SEEKHEAD_RESERVE
+                                                 << " were reserved at the front of the file, so it is written "
+                                                    "only at the end. Elements after the clusters may not be "
+                                                    "found by other software.");
+        return;
+    }
+
+    const int64_t resume = m_file.pos();
+    m_file.seek(m_seekHeadReservePos);
+    writeToFile(seekHead);
+    writeVoid(SEEKHEAD_RESERVE - static_cast<int>(seekHead.size()));
+    m_file.seek(resume);
 }
 
 // ──────────────── close ──────────────────────────────────────────────────────
@@ -2372,8 +2438,10 @@ bool MatroskaMuxer::close()
     // Write the preserved original RPUs and the manifest, in profile 8.1 mode
     writeAttachments();
 
-    // Write SeekHead at the end
+    // Write SeekHead at the end, and again into the space reserved at the front so that everything
+    // after the clusters can actually be found
     writeSeekHead();
+    writeFrontSeekHead();
 
     // Patch the Segment size now that we know the total length
     const int64_t segmentEnd = m_file.pos();

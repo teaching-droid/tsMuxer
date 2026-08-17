@@ -237,8 +237,14 @@ class MatroskaMuxer final : public AbstractMuxer
     void writeAttachments();
     // The manifest text, built once the frame count and the checksum are known.
     [[nodiscard]] std::string buildDvManifest(uint64_t rpuBytes, uint32_t rpuCrc) const;
+    // Build the SeekHead element, header included, so it can be written in both places.
+    [[nodiscard]] std::vector<uint8_t> buildSeekHead() const;
     // Write SeekHead element at end of file
     void writeSeekHead();
+    // Write the same SeekHead into the space reserved at the front of the segment.
+    void writeFrontSeekHead();
+    // Write a Void element occupying exactly this many bytes, header included.
+    void writeVoid(int totalBytes);
 
     // Low-level: write bytes to the output file
     void writeToFile(const uint8_t* data, int len);
@@ -305,6 +311,13 @@ class MatroskaMuxer final : public AbstractMuxer
     int64_t m_tracksPos;
     int64_t m_cuesPos;
     int64_t m_attachmentsPos = 0;
+
+    // Space held at the front of the segment for the seek index, filled in at close. Cues and the
+    // attachments are written after the clusters because they are not known until then, and
+    // without an index at the front other software does not find them.
+    int64_t m_seekHeadReservePos = 0;
+    static constexpr int SEEKHEAD_RESERVE = 256;  // five entries need about 120
+    static constexpr int VOID_MIN_BYTES = 3;      // one byte of ID plus a two byte size
 
     // Timecode tracking
     int64_t m_firstTimecode;  // first PTS seen (in INTERNAL_PTS_FREQ units) – used as reference
