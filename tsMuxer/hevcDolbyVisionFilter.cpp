@@ -75,12 +75,58 @@ void HevcDolbyVisionFilter::fillPids(const PIDSet& acceptedPIDs, const int pid)
         m_elStreamIndex = -1;
 }
 
+// "4:35,32,33,34 3:1,39". Anything unparsable is ignored rather than guessed at, which leaves the
+// four byte default in place.
+void HevcDolbyVisionFilter::setStartCodeRule(const std::string& rule)
+{
+    m_startCodeByType.clear();
+    size_t at = 0;
+    while (at < rule.size())
+    {
+        const size_t colon = rule.find(':', at);
+        if (colon == std::string::npos || colon == at)
+            return;
+        const int len = rule[at] - '0';
+        if (len != 3 && len != 4)
+            return;
+        size_t end = rule.find(' ', colon);
+        if (end == std::string::npos)
+            end = rule.size();
+        size_t item = colon + 1;
+        while (item < end)
+        {
+            size_t comma = rule.find(',', item);
+            if (comma == std::string::npos || comma > end)
+                comma = end;
+            const std::string number = rule.substr(item, comma - item);
+            if (!number.empty())
+            {
+                const int nalType = atoi(number.c_str());
+                if (nalType >= 0 && nalType <= 63)
+                    m_startCodeByType[nalType] = len;
+            }
+            item = comma + 1;
+        }
+        at = end + 1;
+    }
+}
+
 void HevcDolbyVisionFilter::emit(const int streamIndex, const uint8_t* data, const uint8_t* dataEnd,
-                                 DemuxedData& demuxedData, int64_t& discardSize) const
+                                 DemuxedData& demuxedData, int64_t& discardSize, const int nalType) const
 {
     if (streamIndex >= 0)
     {
-        demuxedData[streamIndex].append(START_CODE, sizeof(START_CODE));
+        // Four bytes unless the source's own framing was recorded and says three for this type.
+        // Matroska holds no start codes at all, so without that record every rebuilt disc came out
+        // four byte regardless of what the source did.
+        int len = static_cast<int>(sizeof(START_CODE));
+        if (nalType >= 0)
+        {
+            const auto found = m_startCodeByType.find(nalType);
+            if (found != m_startCodeByType.end())
+                len = found->second;
+        }
+        demuxedData[streamIndex].append(START_CODE + (sizeof(START_CODE) - len), len);
         demuxedData[streamIndex].append(data, dataEnd - data);
     }
     else
@@ -121,7 +167,7 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
                 // An enhancement layer NAL inside its wrapper. Drop the two wrapper bytes and what
                 // is left IS the NAL as the disc carried it, header included. Nothing is unescaped:
                 // the NAL was emulation prevented before it was ever wrapped.
-                emit(m_elStreamIndex, curNal + 2, nalEnd, demuxedData, discardSize);
+                emit(m_elStreamIndex, curNal + 2, nalEnd, demuxedData, discardSize, (curNal[2] >> 1) & 0x3F);
                 m_unwrapped++;
             }
             else if (nalType == static_cast<int>(HevcUnit::NalType::DVRPU))
@@ -150,18 +196,18 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
                     nal.push_back(curNal[0]);
                     nal.push_back(curNal[1]);
                     nal.insert(nal.end(), payload, payload + len);
-                    emit(m_elStreamIndex, nal.data(), nal.data() + nal.size(), demuxedData, discardSize);
+                    emit(m_elStreamIndex, nal.data(), nal.data() + nal.size(), demuxedData, discardSize, nalType);
                     m_restored++;
                 }
                 else
                 {
-                    emit(m_elStreamIndex, curNal, nalEnd, demuxedData, discardSize);
+                    emit(m_elStreamIndex, curNal, nalEnd, demuxedData, discardSize, nalType);
                 }
                 m_rpu++;
             }
             else
             {
-                emit(m_blStreamIndex, curNal, nalEnd, demuxedData, discardSize);
+                emit(m_blStreamIndex, curNal, nalEnd, demuxedData, discardSize, nalType);
             }
         }
 

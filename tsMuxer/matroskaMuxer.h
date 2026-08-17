@@ -122,6 +122,18 @@ class MatroskaMuxer final : public AbstractMuxer
         int64_t dvElFramesMerged;
         int64_t dvElFramesUnmatched;
 
+        // How the SOURCE framed its NALs, per NAL type: a start code is three bytes or four, both
+        // are legal, and the coded video is identical either way. Matroska stores these codecs
+        // LENGTH PREFIXED, so the framing is not in the file at all and a disc rebuilt from it
+        // always came out four byte. Discs differ: one measured here uses four bytes only for the
+        // access unit delimiter and the parameter sets, three for everything else.
+        //
+        // Recorded per TYPE rather than as one value, because that is what the discs actually do. A
+        // type seen with both lengths sets startCodeMixed, and nothing is then claimed: a rule that
+        // does not reproduce the source is worse than no rule.
+        std::map<int, int> startCodeByType;
+        bool startCodeMixed;
+
         // Audio-specific
         int sampleRate;
         int channels;
@@ -176,6 +188,7 @@ class MatroskaMuxer final : public AbstractMuxer
               dvElPts(-1),
               dvElFramesMerged(0),
               dvElFramesUnmatched(0),
+              startCodeMixed(false),
               sampleRate(0),
               channels(0),
               bitDepth(0),
@@ -236,8 +249,10 @@ class MatroskaMuxer final : public AbstractMuxer
     // them. Only in profile 8.1 mode, and only when RPUs were actually converted.
     void writeAttachments();
     // The manifest text, built once the frame count and the checksum are known.
-    [[nodiscard]] std::string buildDvManifest(uint64_t rpuBytes, uint32_t rpuCrc, uint64_t ptsBytes,
-                                              uint32_t ptsCrc) const;
+    [[nodiscard]] std::string buildDvManifest(uint64_t rpuBytes, uint32_t rpuCrc, uint64_t ptsBytes, uint32_t ptsCrc,
+                                              const std::string& scRule) const;
+    // A manifest carrying only the start code rule, for a file that is not a profile 8.1 carrier.
+    void writeStartCodeOnlyManifest(const std::string& scRule);
     // Build the SeekHead element, header included, so it can be written in both places.
     [[nodiscard]] std::vector<uint8_t> buildSeekHead() const;
     // Write SeekHead element at end of file
@@ -364,11 +379,19 @@ class MatroskaMuxer final : public AbstractMuxer
     // For H.264/HEVC/VVC: Annex B start codes → 4-byte length-prefixed NALUs
     // Returns empty vector if no conversion needed (data is passed through as-is).
     static std::vector<uint8_t> convertAV1ToLowOverhead(const uint8_t* data, int size);
-    static std::vector<uint8_t> convertAnnexBToLengthPrefixed(const uint8_t* data, int size);
+    // Not static: it records how the source framed each NAL type as it passes, which is the only
+    // point at which that information still exists.
+    std::vector<uint8_t> convertAnnexBToLengthPrefixed(MkvTrackInfo& track, const uint8_t* data, int size);
+    // Note one observation. len is 3 or 4.
+    static void noteStartCode(MkvTrackInfo& track, int nalType, int len);
+    // The NAL type of a NAL, by codec. Returns -1 when the codec has no such notion.
+    static int nalTypeOf(int codecID, const uint8_t* nal, int size);
+    // "4:35,32,33,34 3:1,39" or empty when nothing definite can be said.
+    [[nodiscard]] static std::string startCodeRule(const MkvTrackInfo& track);
     // The same, for the enhancement layer half of a dual layer Dolby Vision access unit: every NAL
     // wrapped in an unspecified type 63 NAL, except the RPU which passes through unchanged.
     // Not static: in profile 8.1 mode it converts the RPU as it passes and keeps the original.
-    std::vector<uint8_t> convertDvElToLengthPrefixed(const uint8_t* data, int size);
+    std::vector<uint8_t> convertDvElToLengthPrefixed(MkvTrackInfo& track, const uint8_t* data, int size);
 
     // Cluster splitting thresholds
     static constexpr int64_t CLUSTER_MAX_DURATION_MS = 5000;      // 5 seconds

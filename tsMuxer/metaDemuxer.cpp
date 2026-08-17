@@ -97,6 +97,24 @@ static void loadDvOriginalRpus(AbstractDemuxer* demuxer, HevcDolbyVisionFilter* 
         return;
 
     const std::string manifest(manifestBytes.begin(), manifestBytes.end());
+
+    // How the source framed its NALs, if it was recorded. This is independent of Dolby Vision: an
+    // ordinary profile 7 file carries the same line, and a file with nothing unusual to say carries
+    // no manifest at all.
+    const std::string scRule = manifestValue(manifest, "start-code");
+    if (!scRule.empty())
+    {
+        filter->setStartCodeRule(scRule);
+        LTRACE(LT_INFO, 2,
+               "This file records how its source framed the video (" << scRule
+                                                                     << "), so the disc is framed the same way.");
+    }
+
+    // The rest applies only to a profile 8.1 carrier. A manifest that carries nothing but the
+    // framing rule has no RPU attachment and must not be treated as if it did.
+    if (manifestValue(manifest, "rpu-attachment").empty())
+        return;
+
     const std::string order = manifestValue(manifest, "rpu-order");
     if (order != "display")
         THROW(ERR_COMMON, "Dolby Vision: this file states that its preserved original RPUs are in '"

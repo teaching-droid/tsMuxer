@@ -2,6 +2,8 @@
 #define HEVC_DOLBY_VISION_FILTER_H_
 
 #include <cstdint>
+#include <map>
+#include <string>
 #include <vector>
 
 #include "abstractDemuxer.h"
@@ -54,14 +56,21 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
     // than part way through authoring a disc.
     void setOriginalRpus(DvOriginalRpus&& rpus);
 
+    // How the source framed each NAL type, as recorded in the manifest, for example
+    // "4:35,32,33,34 3:1,39". Anything not named keeps the four byte form this muxer writes by
+    // default, so an unparsable or empty rule simply changes nothing.
+    void setStartCodeRule(const std::string& rule);
+
     // Sub-track numbers as they appear in subTrack= on the meta line.
     static constexpr int BL_SUB_TRACK = 1;
     static constexpr int EL_SUB_TRACK = 2;
 
    private:
     void fillPids(const PIDSet& acceptedPIDs, int pid);
+    // nalType decides the start code length when the source's framing was recorded; pass -1 to
+    // keep the four byte default.
     void emit(int streamIndex, const uint8_t* data, const uint8_t* dataEnd, DemuxedData& demuxedData,
-              int64_t& discardSize) const;
+              int64_t& discardSize, int nalType) const;
     // Which preserved original belongs to the picture at this timestamp, or -1 if none does.
     [[nodiscard]] int64_t entryForPts(int64_t pts) const;
 
@@ -75,6 +84,8 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
     DvOriginalRpus m_originals;
     bool m_haveOriginals;
     int64_t m_restored;  // RPUs swapped back for the disc's own
+
+    std::map<int, int> m_startCodeByType;  // NAL type to 3 or 4, empty means four throughout
 };
 
 #endif  // HEVC_DOLBY_VISION_FILTER_H_

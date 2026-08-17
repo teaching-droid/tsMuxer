@@ -1540,7 +1540,69 @@ std::vector<uint8_t> MatroskaMuxer::convertAV1ToLowOverhead(const uint8_t* data,
     return result;
 }
 
-std::vector<uint8_t> MatroskaMuxer::convertAnnexBToLengthPrefixed(const uint8_t* data, int size)
+// The NAL type, which sits in a different place in each codec.
+int MatroskaMuxer::nalTypeOf(const int codecID, const uint8_t* nal, const int size)
+{
+    if (size < 1)
+        return -1;
+    switch (codecID)
+    {
+    case CODEC_V_MPEG4_H264:
+        return nal[0] & 0x1F;
+    case CODEC_V_MPEG4_H265:
+        return (nal[0] >> 1) & 0x3F;
+    case CODEC_V_MPEG4_H266:
+        return size >= 2 ? (nal[1] >> 3) & 0x1F : -1;
+    default:
+        return -1;
+    }
+}
+
+void MatroskaMuxer::noteStartCode(MkvTrackInfo& track, const int nalType, const int len)
+{
+    if (nalType < 0 || track.startCodeMixed)
+        return;
+    const auto seen = track.startCodeByType.find(nalType);
+    if (seen == track.startCodeByType.end())
+        track.startCodeByType[nalType] = len;
+    else if (seen->second != len)
+        track.startCodeMixed = true;  // this type is framed both ways, so no rule describes it
+}
+
+// Turn the observations into the line that goes into the manifest, or nothing.
+//
+// Nothing is written when a type was framed both ways, or when every type used four bytes, which is
+// what this muxer writes anyway and therefore needs no recording.
+std::string MatroskaMuxer::startCodeRule(const MkvTrackInfo& track)
+{
+    if (track.startCodeMixed || track.startCodeByType.empty())
+        return {};
+
+    std::string three, four;
+    for (const auto& [nalType, len] : track.startCodeByType)
+    {
+        std::string& into = len == 3 ? three : four;
+        if (!into.empty())
+            into += ",";
+        into += std::to_string(nalType);
+    }
+    if (three.empty())
+        return {};  // all four byte, which is the default
+
+    std::string rule;
+    if (!four.empty())
+        rule = "4:" + four;
+    if (!three.empty())
+    {
+        if (!rule.empty())
+            rule += " ";
+        rule += "3:" + three;
+    }
+    return rule;
+}
+
+std::vector<uint8_t> MatroskaMuxer::convertAnnexBToLengthPrefixed(MkvTrackInfo& track, const uint8_t* data,
+                                                                  const int size)
 {
     // Convert Annex B start-code-separated NALUs to 4-byte length-prefixed NALUs.
     // This is the format required for H.264/HEVC/VVC in Matroska.
@@ -1567,6 +1629,12 @@ std::vector<uint8_t> MatroskaMuxer::convertAnnexBToLengthPrefixed(const uint8_t*
         const int naluSize = static_cast<int>(naluEnd - curPos);
         if (naluSize > 0)
         {
+            // How the source framed this one. curPos sits just after the start code, so the byte in
+            // front of the three that make it up says whether there was a fourth. Guarded, because
+            // the very first NAL of the buffer may have nothing in front of it.
+            const int startCodeLen = (curPos - data >= 4 && curPos[-4] == 0) ? 4 : 3;
+            noteStartCode(track, nalTypeOf(track.codecID, curPos, naluSize), startCodeLen);
+
             // Write 4-byte big-endian length
             result.push_back(static_cast<uint8_t>((naluSize >> 24) & 0xFF));
             result.push_back(static_cast<uint8_t>((naluSize >> 16) & 0xFF));
@@ -1583,7 +1651,7 @@ std::vector<uint8_t> MatroskaMuxer::convertAnnexBToLengthPrefixed(const uint8_t*
     return result;
 }
 
-std::vector<uint8_t> MatroskaMuxer::convertDvElToLengthPrefixed(const uint8_t* data, int size)
+std::vector<uint8_t> MatroskaMuxer::convertDvElToLengthPrefixed(MkvTrackInfo& track, const uint8_t* data, int size)
 {
     // The enhancement layer half of a dual layer Dolby Vision access unit, converted into the same
     // length prefixed form and appended after the base layer's NALs.
@@ -1619,6 +1687,12 @@ std::vector<uint8_t> MatroskaMuxer::convertDvElToLengthPrefixed(const uint8_t* d
         {
             const int nalType = (curPos[0] >> 1) & 0x3F;
             const bool isRpu = nalType == static_cast<int>(HevcUnit::NalType::DVRPU);
+
+            // The enhancement layer's own framing, recorded against the NAL's own type. The split
+            // strips the wrapper and re-emits this same NAL, so this type is the one that decides
+            // how it is framed on the way back out.
+            const int startCodeLen = (curPos - data >= 4 && curPos[-4] == 0) ? 4 : 3;
+            noteStartCode(track, nalType, startCodeLen);
 
             // Profile 8.1 mode: the RPU that goes into the picture is the CONVERTED one, and the
             // original is kept aside so the disc can be rebuilt from this file later. Everything
@@ -1713,7 +1787,7 @@ void MatroskaMuxer::flushPendingFrame(MkvTrackInfo& track)
     case CODEC_V_MPEG4_H264:
     case CODEC_V_MPEG4_H265:
     case CODEC_V_MPEG4_H266:
-        convertedData = convertAnnexBToLengthPrefixed(frameData, frameSize);
+        convertedData = convertAnnexBToLengthPrefixed(track, frameData, frameSize);
         break;
     default:
         break;
@@ -1847,7 +1921,7 @@ void MatroskaMuxer::drainHeldFrames(MkvTrackInfo& track, const bool atEndOfStrea
             // attachment into display order.
             m_dvCurrentRpuPts = front.pts;
             const std::vector<uint8_t> wrapped =
-                convertDvElToLengthPrefixed(el->second.data(), static_cast<int>(el->second.size()));
+                convertDvElToLengthPrefixed(track, el->second.data(), static_cast<int>(el->second.size()));
             front.data.insert(front.data.end(), wrapped.begin(), wrapped.end());
             track.dvElDone.erase(el);
             track.dvElFramesMerged++;
@@ -2114,8 +2188,30 @@ static std::string fourCcToString(const uint32_t fourCc)
 // own making, and a convention that is not written down is indistinguishable from a mistake. The
 // manifest is what keeps it honest: it says what the file really is, in text, so a person and a
 // tool can both find out without reverse engineering the video track.
+// The start code section, shared by both manifests so the two say the same thing the same way.
+static std::string startCodeSection(const std::string& rule)
+{
+    if (rule.empty())
+        return {};
+    return "  start-code            " + rule +
+           "\r\n"
+           "\r\n"
+           "start-code\r\n"
+           "----------\r\n"
+           "How the source framed its NALs, which Matroska cannot hold because it stores these\r\n"
+           "codecs length prefixed, with no start codes at all. Read as \"length: NAL types\", so\r\n"
+           "\"4:35,32,33,34 3:1,39\" means the access unit delimiter and the parameter sets used a\r\n"
+           "four byte start code and the slices and SEI used a three byte one. Both forms are legal\r\n"
+           "and the coded video is identical either way; recording it lets a disc built from this\r\n"
+           "file carry the source's own framing instead of always the four byte form.\r\n"
+           "\r\n"
+           "A type framed both ways in the same source is not recorded at all, and neither is a\r\n"
+           "source that used four bytes throughout, since that is what is written by default.\r\n"
+           "\r\n";
+}
+
 std::string MatroskaMuxer::buildDvManifest(const uint64_t rpuBytes, const uint32_t rpuCrc, const uint64_t ptsBytes,
-                                           const uint32_t ptsCrc) const
+                                           const uint32_t ptsCrc, const std::string& scRule) const
 {
     // The record the track itself declares, so the manifest can state both sides of the swap.
     std::string declared = "none";
@@ -2164,9 +2260,11 @@ std::string MatroskaMuxer::buildDvManifest(const uint64_t rpuBytes, const uint32
       << "  pts-crc32             " << ptsCrcBuf << "\r\n"
       << "  pts-format            int64-be-milliseconds\r\n"
       << "  declared-config       " << declared << "\r\n"
-      << "  original-config       " << original
-      << "\r\n"
-         "\r\n";
+      << "  original-config       " << original << "\r\n";
+    if (!scRule.empty())
+        s << startCodeSection(scRule);
+    else
+        s << "\r\n";
 
     s << "What the video track holds\r\n"
          "--------------------------\r\n"
@@ -2210,12 +2308,85 @@ std::string MatroskaMuxer::buildDvManifest(const uint64_t rpuBytes, const uint32
     return s.str();
 }
 
+// A manifest carrying nothing but the start code rule, for a file that is not a profile 8.1
+// carrier. Written only when there IS a rule, so an ordinary file gains no attachment at all.
+void MatroskaMuxer::writeStartCodeOnlyManifest(const std::string& scRule)
+{
+    std::ostringstream s;
+    s << "tsMuxeR stream notes\r\n"
+         "====================\r\n"
+         "\r\n"
+         "This file records how its source framed the video, so that a disc built from it can be\r\n"
+         "framed the same way. Nothing here changes how the file plays.\r\n"
+         "\r\n";
+    s << startCodeSection(scRule);
+    const std::string manifest = s.str();
+
+    const uint32_t crc = static_cast<uint32_t>(crc32(
+        crc32(0, nullptr, 0), reinterpret_cast<const uint8_t*>(manifest.data()), static_cast<uInt>(manifest.size())));
+
+    std::vector<uint8_t> head(256 + strlen(DV_MANIFEST_ATTACHMENT_NAME));
+    int p = 0;
+    p += ebml_write_string(head.data() + p, MATROSKA_ID_FILEDESCRIPTION,
+                           "How the source framed the video, so a disc built from this file matches it.");
+    p += ebml_write_string(head.data() + p, MATROSKA_ID_FILENAME, DV_MANIFEST_ATTACHMENT_NAME);
+    p += ebml_write_string(head.data() + p, MATROSKA_ID_FILEMIMETYPE, "text/plain");
+    p += ebml_write_uint(head.data() + p, MATROSKA_ID_FILEUID, (static_cast<uint64_t>(crc) << 32) | 3);
+    head.resize(p);
+
+    uint8_t dataHdr[16];
+    int dataHdrLen = ebml_write_id(dataHdr, MATROSKA_ID_FILEDATA);
+    dataHdrLen += ebml_write_size(dataHdr + dataHdrLen, manifest.size());
+
+    const uint64_t fileSize = head.size() + dataHdrLen + manifest.size();
+    uint8_t fileHdr[16];
+    const int fileHdrLen = ebml_write_master_open(fileHdr, MATROSKA_ID_ATTACHEDFILE, fileSize);
+
+    m_attachmentsPos = m_file.pos() - m_segmentStartPos;
+    uint8_t header[16];
+    const int hdrLen = ebml_write_master_open(header, MATROSKA_ID_ATTACHMENTS, fileHdrLen + fileSize);
+    writeToFile(header, hdrLen);
+    writeToFile(fileHdr, fileHdrLen);
+    writeToFile(head);
+    writeToFile(dataHdr, dataHdrLen);
+    writeToFile(reinterpret_cast<const uint8_t*>(manifest.data()), static_cast<int>(manifest.size()));
+
+    LTRACE(LT_INFO, 2,
+           "Recorded how the source framed the video (" << scRule
+                                                        << "), so a disc built from this file can be framed the "
+                                                           "same way rather than always the four byte form.");
+}
+
 // Write the preserved original RPUs and the manifest. Only in profile 8.1 mode: a profile 7 file
 // carries its originals inline and needs neither.
 void MatroskaMuxer::writeAttachments()
 {
+    // The start code rule of the video track, if the source used anything other than the four byte
+    // form this muxer writes. Taken from the merged Dolby Vision track when there is one, since
+    // that is the track a disc gets rebuilt from, otherwise from the first video track.
+    std::string scRule;
+    for (const auto& [streamIdx, track] : m_tracks)
+    {
+        if (track.trackType != 1 || track.dvMergedIntoStream >= 0)
+            continue;
+        const std::string rule = startCodeRule(track);
+        if (!rule.empty())
+        {
+            scRule = rule;
+            if (track.dvElStreamIndex >= 0)
+                break;  // the merged Dolby Vision track wins outright
+        }
+    }
+
     if (!m_dvWriteProfile81 || m_dvRpuIndex.empty())
+    {
+        // Not a profile 8.1 carrier. There is still something worth recording if the source framed
+        // its NALs in a way this muxer would not reproduce, because a disc rebuilt from this file
+        // would otherwise come out differing from the source in every start code.
+        if (!scRule.empty())
+            writeStartCodeOnlyManifest(scRule);
         return;
+    }
 
     // Into DISPLAY order. They were collected as the mux walked the pictures, which is decode
     // order; see the note beside m_dvRpuIndex for why the attachment does not keep that order.
@@ -2281,7 +2452,7 @@ void MatroskaMuxer::writeAttachments()
 
     const uint32_t ptsCrc =
         static_cast<uint32_t>(crc32(crc32(0, nullptr, 0), ptsBlob.data(), static_cast<uInt>(ptsBlob.size())));
-    const std::string manifest = buildDvManifest(rpuBytes, rpuCrc, ptsBlob.size(), ptsCrc);
+    const std::string manifest = buildDvManifest(rpuBytes, rpuCrc, ptsBlob.size(), ptsCrc, scRule);
     const uint32_t manifestCrc = static_cast<uint32_t>(crc32(
         crc32(0, nullptr, 0), reinterpret_cast<const uint8_t*>(manifest.data()), static_cast<uInt>(manifest.size())));
 
