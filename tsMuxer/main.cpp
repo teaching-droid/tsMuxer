@@ -607,6 +607,19 @@ All parameters in this group start with two dashes:
                       having a given maximum size. KB, KiB, MB, MiB, GB and GiB
                       are accepted as size units.
 --right-eye           Use base video stream for right eye. Used for 3DBD only.
+--dv-profile          Matroska output only, and only for a dual layer Dolby Vision
+                      source. 7 (the default) carries the disc as it is: profile 7,
+                      both layers. 8.1 converts the Dolby Vision metadata so the file
+                      plays as single layer profile 8.1, which many more devices
+                      accept, while the disc's enhancement layer still travels inside
+                      the track where decoders skip it, and the disc's OWN metadata is
+                      attached beside it so the two layers can be separated again
+                      exactly. The file is therefore NOT smaller than a profile 7 one;
+                      that is the price of being able to rebuild the disc from it.
+                      8.1 needs the libdovi library (dovi.dll on Windows) beside
+                      tsMuxeR. It is published for 64 bit Windows; other platforms
+                      build it from source. Without it the option is refused before
+                      muxing starts.
 )help"
                             R"help(--start-time          Timestamp of the first video frame. May be defined as 45Khz
                       clock (just a number) or as time in hh:mm:ss.zzz format.

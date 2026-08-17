@@ -655,23 +655,22 @@ void MatroskaMuxer::parseMuxOpt(const std::string& opts)
     }
     else if (value == "8.1" || value == "81")
     {
-        // HELD BACK ON PURPOSE. The conversion works and produces a playable file, but it is a one
-        // way street: the profile 7 to 8.1 rewrite is many to one, so the enhancement layer metadata
-        // cannot be recovered from the result by any means. Measured on a real disc, two thirds of
-        // the RPUs become indistinguishable from one another.
+        // The conversion to 8.1 cannot be undone on its own: it is many to one, so nothing can
+        // recover a profile 7 RPU from an 8.1 one. What makes it safe is that the disc's own RPUs
+        // travel with the file as an attachment and are put back when it is split, which is
+        // measured rather than assumed, on whole features, byte for byte.
         //
-        // The half that makes it safe, carrying the ORIGINAL RPUs alongside so the disc can be
-        // rebuilt, is not finished. Shipping the conversion without it would hand people a silent
-        // and permanent loss that looks like a convenience, which is worse than not offering it.
-        //
-        // Everything needed is already here, including the runtime binding to libdovi. When the
-        // originals travel with the file and disc to 8.1 to disc comes back byte identical, delete
-        // this branch's refusal and restore the library check that used to live here.
-        THROW(ERR_COMMON,
-              "--dv-profile=8.1 is not available in this release. Converting to profile 8.1 discards "
-              "the enhancement layer metadata and cannot be undone, and the part that preserves the "
-              "original so the disc can be rebuilt from the file is not finished. Use "
-              "--dv-profile=7, the default, which carries the disc unchanged.")
+        // Checked HERE rather than when the first RPU turns up, because that would be most of the
+        // way through a mux of a feature. The message names the library and what to do about it.
+        if (!DoviLib::instance().available())
+        {
+            THROW(ERR_COMMON, "--dv-profile=8.1 needs "
+                                  << DoviLib::libraryName() << ", which converts the Dolby Vision metadata, and "
+                                  << DoviLib::instance().loadError()
+                                  << ". Put it beside tsMuxeR (a prebuilt one is published for 64 bit Windows; other "
+                                     "platforms build it from source), or leave --dv-profile at 7.")
+        }
+        m_dvWriteProfile81 = true;
     }
     else
     {
