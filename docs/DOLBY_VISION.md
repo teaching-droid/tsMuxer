@@ -114,8 +114,27 @@ the start code length only, which is legal either way and decodes identically; t
 metadata are unaffected. This is not specific to Dolby Vision and applies to profile 7 in the same
 way.
 
-Audio, subtitles and the disc structure are authored fresh, as they are for any mux. The statement
-above is about the video.
+### The rest of the disc
+
+The statement above is about the video. Audio, subtitles and the disc structure are authored fresh,
+as they are for any mux, and they were measured rather than assumed. The same disc authored two ways,
+straight from its layers and by way of a Matroska file:
+
+| | result |
+| --- | --- |
+| lossless audio | identical, byte for byte |
+| the AC-3 compatibility core beside it | one frame short, see below |
+| subtitles | identical, byte for byte |
+| the clip information file, including its seek map | identical, byte for byte |
+| the playlist, the index and the movie object | identical, byte for byte |
+| the program map and the clock reference | identical in every field |
+| the transport layout | identical apart from the last moment of a cut |
+
+**The one blemish:** authoring a disc from a Matroska file loses the final frame of the AC-3
+compatibility core, 32 ms of the fallback stream that exists for players which cannot decode the
+lossless one. The lossless stream itself is complete and identical. This is not new and not specific
+to Dolby Vision; it is the point where the two audio streams are braided back onto one stream, and it
+happens because the last core frame has no lossless frame left to travel beside.
 
 ### Refusals rather than guesses
 

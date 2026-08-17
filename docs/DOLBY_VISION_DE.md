@@ -120,8 +120,28 @@ Discs zu, aber nicht auf alle. Wo eine Disc abweicht, liegt der Unterschied alle
 Startcodes, die in beiden Formen zulässig ist und identisch decodiert wird; Bilder und Metadaten
 bleiben davon unberührt. Das ist keine Besonderheit von Dolby Vision und gilt für Profil 7 genauso.
 
-Audio, Untertitel und die Disc-Struktur werden neu erstellt, wie bei jedem Muxen. Die Aussage oben
-bezieht sich auf das Video.
+### Der Rest der Disc
+
+Die Aussage oben bezieht sich auf das Video. Audio, Untertitel und die Disc-Struktur werden neu
+erstellt, wie bei jedem Muxen, und sie wurden gemessen und nicht angenommen. Dieselbe Disc auf zwei
+Wegen erstellt, direkt aus ihren Layern und über eine Matroska-Datei:
+
+| | Ergebnis |
+| --- | --- |
+| verlustfreies Audio | identisch, Byte für Byte |
+| der AC-3-Kern daneben | ein Frame zu kurz, siehe unten |
+| Untertitel | identisch, Byte für Byte |
+| die Clip-Informationsdatei samt Suchindex | identisch, Byte für Byte |
+| Playlist, Index und Movie Object | identisch, Byte für Byte |
+| Program Map und Clock Reference | in jedem Feld identisch |
+| der Aufbau des Transportstroms | identisch, abgesehen vom letzten Moment eines Schnitts |
+
+**Der eine Schönheitsfehler:** Wird eine Disc aus einer Matroska-Datei erstellt, fehlt der letzte
+Frame des AC-3-Kompatibilitätskerns, also 32 ms jenes Ersatzstroms, der für Player existiert, die den
+verlustfreien Strom nicht decodieren können. Der verlustfreie Strom selbst ist vollständig und
+identisch. Das ist nicht neu und keine Besonderheit von Dolby Vision: es passiert an der Stelle, an
+der die beiden Audioströme wieder zu einem verflochten werden, weil dem letzten Kern-Frame kein
+verlustfreier Frame mehr zur Seite steht.
 
 ### Ablehnen statt raten
 
