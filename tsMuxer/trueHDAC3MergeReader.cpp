@@ -18,7 +18,9 @@ TrueHDAC3MergeReader::TrueHDAC3MergeReader(const std::map<std::string, std::stri
       m_nextAc3Time(0),
       m_ac3SamplesPerSyncFrame(0),
       m_pendingEmitSamples(0),
-      m_pendingEmitSampleRate(0)
+      m_pendingEmitSampleRate(0),
+      m_ac3FramesEmitted(0),
+      m_coverageReported(false)
 {
     const auto itTrack = addParams.find("merge-ac3-track");
     const auto itFile = addParams.find("merge-ac3-file");
@@ -28,6 +30,8 @@ TrueHDAC3MergeReader::TrueHDAC3MergeReader(const std::map<std::string, std::stri
     if (itTrack != addParams.end() && !itTrack->second.empty())
         m_mergeAc3Pid = strToInt32(itTrack->second.c_str());
 }
+
+TrueHDAC3MergeReader::~TrueHDAC3MergeReader() { reportCoreCoverage(); }
 
 const CodecInfo& TrueHDAC3MergeReader::getCodecInfo() { return trueHDCodecInfo; }
 
@@ -121,6 +125,7 @@ int TrueHDAC3MergeReader::readPacket(AVPacket& avPacket)
             m_thdDemuxWaitAc3 = false;
             avPacket.dts = avPacket.pts = m_nextAc3Time;
             avPacket.flags |= AVPacket::IS_CORE_PACKET;
+            m_ac3FramesEmitted++;
             if (m_pendingEmitSampleRate > 0 && m_pendingEmitSamples > 0)
                 m_nextAc3Time +=
                     static_cast<int64_t>(INTERNAL_PTS_FREQ) * m_pendingEmitSamples / m_pendingEmitSampleRate;
@@ -143,6 +148,7 @@ int TrueHDAC3MergeReader::readPacket(AVPacket& avPacket)
             avPacket.duration = 0;
             avPacket.dts = avPacket.pts = m_nextAc3Time;
             avPacket.flags |= AVPacket::IS_CORE_PACKET;
+            m_ac3FramesEmitted++;
             if (q.sample_rate > 0 && q.samples > 0)
                 m_nextAc3Time += static_cast<int64_t>(INTERNAL_PTS_FREQ) * q.samples / q.sample_rate;
             m_thdDemuxWaitAc3 = false;
@@ -204,6 +210,43 @@ int TrueHDAC3MergeReader::flushPacket(AVPacket& avPacket)
                 avPacket.pts = avPacket.dts = m_totalTHDSamples * INTERNAL_PTS_FREQ / m_samplerate;
     }
     return rez;
+}
+
+// Say so if the AC-3 core did not last as long as the lossless track it was merged into.
+//
+// This used to pass in silence. A merge given a source covering only the first of two joined parts
+// produced a complete lossless track, a core that stopped half way, "Mux successful complete", exit
+// zero, and no warning anywhere. Half the title had TrueHD with no compatibility core under it,
+// which a Blu-ray does not allow, and nothing said a word.
+//
+// MEASURED AT THE END RATHER THAN GUESSED FROM THE META, on purpose. The setup that usually causes
+// it, a joined TrueHD line with a single merge-ac3-file, is ALSO the correct way to do it when the
+// AC-3 files were joined in an earlier pass. Warning on the setup would fire on correct usage and
+// become noise; warning on the outcome only fires when something is actually missing.
+//
+// The tolerance is one second against the known loss of exactly one final frame, 32 ms, which is a
+// separate and documented matter. A second is thirty times that, so this cannot fire on it.
+void TrueHDAC3MergeReader::reportCoreCoverage()
+{
+    if (m_coverageReported)
+        return;
+    m_coverageReported = true;
+    if (m_samplerate <= 0 || m_ac3FramesEmitted == 0)
+        return;
+
+    const double losslessSec = static_cast<double>(m_totalTHDSamples) / m_samplerate;
+    const double coreSec = static_cast<double>(m_nextAc3Time) / INTERNAL_PTS_FREQ;
+    if (losslessSec - coreSec <= 1.0)
+        return;
+
+    LTRACE(LT_WARN, 2,
+           "Warning: the AC-3 core covers only "
+               << static_cast<int64_t>(coreSec) << " s of a " << static_cast<int64_t>(losslessSec)
+               << " s TrueHD track, so the last " << static_cast<int64_t>(losslessSec - coreSec)
+               << " s of it has no compatibility core, which a Blu-ray does not allow. The AC-3 source ran out "
+                  "first: it must cover the whole TrueHD track, including every part of a joined one. "
+                  "merge-ac3-track follows a join by itself; merge-ac3-file does not, so join the AC-3 files in "
+                  "a separate pass first and merge the single result.");
 }
 
 bool TrueHDAC3MergeReader::needMPLSCorrection() const { return false; }

@@ -22,6 +22,8 @@ class TrueHDAC3MergeReader final : public MLPStreamReader
     TrueHDAC3MergeReader(const TrueHDAC3MergeReader&) = delete;
     TrueHDAC3MergeReader& operator=(const TrueHDAC3MergeReader&) = delete;
 
+    ~TrueHDAC3MergeReader() override;
+
     [[nodiscard]] int mergeAc3TrackPid() const { return m_mergeAc3Pid; }
 
     void setNewStyleAudioPES(bool value) { m_useNewStyleAudioPES = value; }
@@ -45,6 +47,7 @@ class TrueHDAC3MergeReader final : public MLPStreamReader
 
     void extractAc3FramesFromAccum();
     void fillDelayedFromQueue();
+    void reportCoreCoverage();
 
     int m_mergeAc3Pid;
     bool m_useNewStyleAudioPES;
@@ -61,6 +64,13 @@ class TrueHDAC3MergeReader final : public MLPStreamReader
     int m_ac3SamplesPerSyncFrame;
     int m_pendingEmitSamples;
     int m_pendingEmitSampleRate;
+
+    // A short AC-3 source used to be merged in silence: the lossless track came out complete, the
+    // core simply stopped part way, and the mux reported success. Nothing in the log said that half
+    // the title had no compatibility core under it. These two count what actually went out so the
+    // gap can be reported at the end, when it is a fact rather than a guess about the meta file.
+    int64_t m_ac3FramesEmitted;
+    bool m_coverageReported;
 
     struct Ac3FrameParser : AC3Codec
     {

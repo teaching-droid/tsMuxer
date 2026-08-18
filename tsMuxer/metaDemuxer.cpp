@@ -301,6 +301,23 @@ void METADemuxer::openFile(const string& streamName)
 
     TextFile file(m_streamName.c_str(), File::ofRead);
     string str;
+
+    // A track folded into a TrueHD track by merge-ac3-track must not ALSO be muxed as a stream of
+    // its own. That combination opened the same track of the same file twice on one container and
+    // then crashed while closing, AFTER printing "Mux successful complete", leaving a file that
+    // looked finished. It is also meaningless: the compatibility core would be written twice, once
+    // braided into the TrueHD track and once beside it.
+    //
+    // It matters because it is what the interface produces if you set the merge and leave the AC-3
+    // track ticked in the track list, which is the natural thing to do.
+    //
+    // Checked as the lines are read, against what has been read SO FAR, in both directions, so it
+    // is caught whichever order the two lines appear in. It has to refuse BEFORE the second of the
+    // two streams is opened: refusing afterwards would leave the duplicate open and the close would
+    // still be the one that crashes.
+    std::set<std::pair<string, int>> muxedTracks;
+    std::set<std::pair<string, int>> mergeSources;
+
     file.readLine(str);
     while (str.length() > 0)
     {
@@ -360,6 +377,31 @@ void METADemuxer::openFile(const string& streamName)
                 if (ac3Pid == thdPid)
                     THROW(ERR_INVALID_CODEC_FORMAT,
                           "merge-ac3-track must be a different track number than the TrueHD track= parameter.")
+                if (muxedTracks.find({codecStreamName, ac3Pid}) != muxedTracks.end())
+                    THROW(ERR_INVALID_CODEC_FORMAT,
+                          "Track "
+                              << ac3Pid
+                              << " is already muxed as a track of its own, so it cannot also be merged into the TrueHD "
+                                 "track with merge-ac3-track. Remove that track from the mux and keep only the TrueHD "
+                                 "line: merge-ac3-track already carries the AC-3 core inside it, which is where a "
+                                 "Blu-ray expects it.")
+                mergeSources.insert({codecStreamName, ac3Pid});
+            }
+        }
+        {
+            // The same rule seen from the other side, for a plain track line that names a track an
+            // earlier line already claimed as its merge source.
+            const auto trackParam = addParams.find("track");
+            if (trackParam != addParams.end() && !trackParam->second.empty())
+            {
+                const int pid = strToInt32(trackParam->second.c_str());
+                if (mergeSources.find({codecStreamName, pid}) != mergeSources.end())
+                    THROW(ERR_INVALID_CODEC_FORMAT,
+                          "Track " << pid
+                                   << " is already being merged into a TrueHD track with merge-ac3-track, so it cannot "
+                                      "also be muxed as a track of its own. Remove this line: the AC-3 core is carried "
+                                      "inside the TrueHD track, which is where a Blu-ray expects it.")
+                muxedTracks.insert({codecStreamName, pid});
             }
         }
         if (!m_HevcFound)
