@@ -2507,6 +2507,18 @@
 <context>
     <name>TsMuxerWindow</name>
     <message>
+        <source>Add a file as a NEW, separate input. To continue a title with its next part instead, select that part's first file and use join.</source>
+        <translation>Anade un archivo como una entrada NUEVA e independiente. Para continuar un titulo con su parte siguiente, seleccione el primer archivo de esa parte y pulse Unir.</translation>
+    </message>
+    <message>
+        <source>Append another file to the END of the selected one, so the two are muxed as a single continuous title. This is what you want for a film split across two discs or two parts: select part 1, press join, and choose part 2. The appended file is shown indented with ++ beneath the one it continues. Every part must have the same file extension.</source>
+        <translation>Anade otro archivo al FINAL del seleccionado, de modo que ambos se multiplexen como un unico titulo continuo. Esto es lo que necesita para una pelicula dividida en dos discos o dos partes: seleccione la parte 1, pulse Unir y elija la parte 2. El archivo anadido aparece sangrado con ++ debajo del que continua. Todas las partes deben tener la misma extension de archivo.</translation>
+    </message>
+    <message>
+        <source>The files this mux reads. A line indented with ++ is joined onto the file above it and continues it, rather than being a separate input.</source>
+        <translation>Los archivos que lee esta multiplexacion. Una linea sangrada con ++ esta unida al archivo de encima y lo continua, en lugar de ser una entrada independiente.</translation>
+    </message>
+    <message>
         <source>Dolby Vision:</source>
         <translation>Dolby Vision:</translation>
     </message>

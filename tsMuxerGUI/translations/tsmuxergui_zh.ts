@@ -2507,6 +2507,18 @@
 <context>
     <name>TsMuxerWindow</name>
     <message>
+        <source>Add a file as a NEW, separate input. To continue a title with its next part instead, select that part's first file and use join.</source>
+        <translation>将文件添加为新的独立输入。若要用下一部分继续同一影片，请选择该部分的第一个文件并点击加入。</translation>
+    </message>
+    <message>
+        <source>Append another file to the END of the selected one, so the two are muxed as a single continuous title. This is what you want for a film split across two discs or two parts: select part 1, press join, and choose part 2. The appended file is shown indented with ++ beneath the one it continues. Every part must have the same file extension.</source>
+        <translation>将另一个文件追加到所选文件的末尾，使两者合成为一个连续的影片。分成两张碟或两部分的电影正需要此功能：选择第 1 部分，点击加入，再选择第 2 部分。追加的文件会以 ++ 缩进显示在它所延续的文件下方。所有部分必须具有相同的文件扩展名。</translation>
+    </message>
+    <message>
+        <source>The files this mux reads. A line indented with ++ is joined onto the file above it and continues it, rather than being a separate input.</source>
+        <translation>本次混流读取的文件。以 ++ 缩进的行会连接到其上方的文件并作为它的延续，而不是独立的输入。</translation>
+    </message>
+    <message>
         <source>Dolby Vision:</source>
         <translation>Dolby Vision：</translation>
     </message>

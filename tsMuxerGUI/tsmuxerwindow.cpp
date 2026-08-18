@@ -631,6 +631,22 @@ TsMuxerWindow::TsMuxerWindow()
     void (QProcess::*processError)(QProcess::ProcessError) = &QProcess::errorOccurred;
     connect(&proc, processError, this, &TsMuxerWindow::onProcessError);
 
+    // The input file panel explained nothing about itself. Every control on it, the two buttons
+    // and the list, had no tooltip at all, so someone holding a release split across two discs saw
+    // a button called "join" sitting between "add" and "remove" with nothing to say what it joins
+    // or why they would want it. The only description of the feature was one line in a sixty line
+    // list on the About tab. That is what sends people to other tools for something this already
+    // does, so the answer is here rather than in the documentation.
+    ui->addBtn->setToolTip(wrapTip(tr("Add a file as a NEW, separate input. To continue a title with its next "
+                                      "part instead, select that part's first file and use join.")));
+    ui->btnAppend->setToolTip(
+        wrapTip(tr("Append another file to the END of the selected one, so the two are muxed as a single "
+                   "continuous title. This is what you want for a film split across two discs or two parts: "
+                   "select part 1, press join, and choose part 2. The appended file is shown indented with "
+                   "++ beneath the one it continues. Every part must have the same file extension.")));
+    ui->inputFilesLV->setToolTip(wrapTip(tr("The files this mux reads. A line indented with ++ is joined onto the "
+                                            "file above it and continues it, rather than being a separate input.")));
+
     ui->DiskLabel->setVisible(false);
     ui->DiskLabelEdit->setVisible(false);
     // Nothing has been loaded yet, so nothing about Dolby Vision applies. The designer file hides

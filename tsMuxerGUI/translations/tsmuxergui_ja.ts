@@ -2507,6 +2507,18 @@
 <context>
     <name>TsMuxerWindow</name>
     <message>
+        <source>Add a file as a NEW, separate input. To continue a title with its next part instead, select that part's first file and use join.</source>
+        <translation>ファイルを新しい独立した入力として追加します。タイトルを次のパートで続けたい場合は、そのパートの最初のファイルを選択して結合を使用してください。</translation>
+    </message>
+    <message>
+        <source>Append another file to the END of the selected one, so the two are muxed as a single continuous title. This is what you want for a film split across two discs or two parts: select part 1, press join, and choose part 2. The appended file is shown indented with ++ beneath the one it continues. Every part must have the same file extension.</source>
+        <translation>選択したファイルの末尾に別のファイルを追加し、2つを1つの連続したタイトルとして多重化します。2枚のディスクや2つのパートに分割された映画にはこれを使います。パート1を選択し、結合を押して、パート2を選んでください。追加されたファイルは、続きの元となるファイルの下に ++ 付きでインデント表示されます。すべてのパートは同じ拡張子である必要があります。</translation>
+    </message>
+    <message>
+        <source>The files this mux reads. A line indented with ++ is joined onto the file above it and continues it, rather than being a separate input.</source>
+        <translation>この多重化が読み込むファイルです。++ でインデントされた行は、その上のファイルに連結されて続きとなり、独立した入力ではありません。</translation>
+    </message>
+    <message>
         <source>Dolby Vision:</source>
         <translation>Dolby Vision:</translation>
     </message>
