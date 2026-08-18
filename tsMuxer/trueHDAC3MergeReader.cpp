@@ -2,6 +2,7 @@
 
 #include <fs/systemlog.h>
 
+#include <iomanip>
 #include <sstream>
 
 #include "abstractStreamReader.h"
@@ -189,9 +190,15 @@ int TrueHDAC3MergeReader::readPacket(AVPacket& avPacket)
 
         m_totalTHDSamples += m_samples;
         m_demuxedTHDSamplesForAc3 += m_samples;
-        // Trigger AC3 wait when we have enough TrueHD samples and AC3 frames available
+        // Trigger AC3 wait when we have enough TrueHD samples and AC3 frames available.
+        // A frame held in the delayed buffer counts as available. Priority 4 above keeps exactly
+        // one frame back OUT of the queue, so at the end of the stream the queue is empty
+        // precisely BECAUSE its last element is the frame now sitting in that buffer. Testing the
+        // queue alone therefore never re-arms, Priority 1 is never reached again, and that frame
+        // dies with the reader: N frames in and N-1 out, on every length, for the same reason
+        // every time.
         if (m_ac3SamplesPerSyncFrame > 0 && m_demuxedTHDSamplesForAc3 >= m_ac3SamplesPerSyncFrame &&
-            !m_ac3FrameQueue.empty())
+            (!m_ac3FrameQueue.empty() || !m_delayedAc3Buffer.isEmpty()))
         {
             m_demuxedTHDSamplesForAc3 -= m_ac3SamplesPerSyncFrame;
             m_thdDemuxWaitAc3 = true;
@@ -224,8 +231,14 @@ int TrueHDAC3MergeReader::flushPacket(AVPacket& avPacket)
 // AC-3 files were joined in an earlier pass. Warning on the setup would fire on correct usage and
 // become noise; warning on the outcome only fires when something is actually missing.
 //
-// The tolerance is one second against the known loss of exactly one final frame, 32 ms, which is a
-// separate and documented matter. A second is thirty times that, so this cannot fire on it.
+// THE TOLERANCE IS ONE AC-3 FRAME, and it used to be one second. The wider figure was never about
+// what a disc needs: it was chosen to sit outside a separate defect that dropped the final core
+// frame on every merge, 32 ms, so that the warning could not fire on it. That defect is fixed, so
+// the allowance goes back to what the format itself asks for. The core is emitted in whole frames,
+// so a lossless track whose length is not an exact multiple of one frame can legitimately come up a
+// fraction of a frame short; more than a whole frame is a real gap. A pressed disc has no shortfall
+// at all: 938 core frames for 938 over a measured cut, the core being constant bitrate and therefore
+// a clock. At one second the warning stayed silent on a core a full second short of its track.
 void TrueHDAC3MergeReader::reportCoreCoverage()
 {
     if (m_coverageReported)
@@ -236,17 +249,20 @@ void TrueHDAC3MergeReader::reportCoreCoverage()
 
     const double losslessSec = static_cast<double>(m_totalTHDSamples) / m_samplerate;
     const double coreSec = static_cast<double>(m_nextAc3Time) / INTERNAL_PTS_FREQ;
-    if (losslessSec - coreSec <= 1.0)
+    const double coreFrameSec = coreSec / m_ac3FramesEmitted;
+    if (losslessSec - coreSec <= coreFrameSec)
         return;
 
-    LTRACE(LT_WARN, 2,
-           "Warning: the AC-3 core covers only "
-               << static_cast<int64_t>(coreSec) << " s of a " << static_cast<int64_t>(losslessSec)
-               << " s TrueHD track, so the last " << static_cast<int64_t>(losslessSec - coreSec)
-               << " s of it has no compatibility core, which a Blu-ray does not allow. The AC-3 source ran out "
-                  "first: it must cover the whole TrueHD track, including every part of a joined one. "
-                  "merge-ac3-track follows a join by itself; merge-ac3-file does not, so join the AC-3 files in "
-                  "a separate pass first and merge the single result.");
+    // Two decimals rather than whole seconds, because a gap can now be reported that is shorter
+    // than a second, and "the last 0 s of it has no compatibility core" says nothing.
+    std::ostringstream msg;
+    msg << std::fixed << std::setprecision(2) << "Warning: the AC-3 core covers only " << coreSec << " s of a "
+        << losslessSec << " s TrueHD track, so the last " << (losslessSec - coreSec)
+        << " s of it has no compatibility core, which a Blu-ray does not allow. The AC-3 source ran out "
+           "first: it must cover the whole TrueHD track, including every part of a joined one. "
+           "merge-ac3-track follows a join by itself; merge-ac3-file does not, so join the AC-3 files in "
+           "a separate pass first and merge the single result.";
+    LTRACE(LT_WARN, 2, msg.str());
 }
 
 bool TrueHDAC3MergeReader::needMPLSCorrection() const { return false; }
