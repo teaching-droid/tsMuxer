@@ -357,7 +357,15 @@ void FileEntryInfo::addFile(FileEntryInfo* file) { m_files.push_back(file); }
 
 void FileEntryInfo::writeEntity(ByteFileWriter& writer, const FileEntryInfo* subDir) const
 {
-    const bool isSystemFile = (m_objectId == 0);
+    // The metadata bit belongs to the CHILD being described, not to the directory describing it.
+    // It used to read m_objectId, this directory's own id, which is 0 for the system stream
+    // directory AND for the root directory alike, because both are constructed with id 0. So every
+    // ordinary file placed at the root of the image was marked as a UDF metadata stream: it listed
+    // with the right name and size and then refused to open, "access denied", while the same file
+    // one directory down was fine. Only the unique id mapping file is built with id 0; everything a
+    // user contributes is numbered from 16 up, so the child's own id is the discriminator that was
+    // meant here.
+    const bool isSystemFile = (subDir->m_objectId == 0);
 
     writer.writeDescriptorTag(DescriptorTag::FileId, m_owner->absoluteSectorNum() + 1);
     writer.writeLE16(0x01);  // File Version Number
