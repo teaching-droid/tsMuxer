@@ -2519,6 +2519,14 @@
         <translation>本次混流读取的文件。以 ++ 缩进的行会连接到其上方的文件并作为它的延续，而不是独立的输入。</translation>
     </message>
     <message>
+        <source>Remove the selected file, and its tracks with it. Take care with a joined title: a part joined beneath this one with ++ is NOT removed too. It loses the ++ and stays behind as a separate input in its own right, so removing part 1 leaves part 2 muxing on its own.</source>
+        <translation>删除所选文件及其轨道。请注意已连接的标题：以 ++ 连接在其下方的部分不会被一并删除。它会失去 ++ 并作为独立的输入保留下来，因此删除第 1 部分后，第 2 部分会单独混流。</translation>
+    </message>
+    <message>
+        <source>Remove the selected track from the mux altogether. To leave a track out without losing it, untick its box in the list instead: that can be undone, this cannot, and the file has to be added again to get the track back.</source>
+        <translation>将所选轨道彻底从混流中删除。若只想排除某条轨道而不失去它，请改为取消列表中的勾选：勾选可以恢复，删除则不能，要找回轨道必须重新添加文件。</translation>
+    </message>
+    <message>
         <source>Dolby Vision:</source>
         <translation>Dolby Vision：</translation>
     </message>

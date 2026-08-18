@@ -2519,6 +2519,14 @@
         <translation>הקבצים שמיזוג זה קורא. שורה מוזחת עם ++ מצורפת לקובץ שמעליה וממשיכה אותו, במקום להיות קלט נפרד.</translation>
     </message>
     <message>
+        <source>Remove the selected file, and its tracks with it. Take care with a joined title: a part joined beneath this one with ++ is NOT removed too. It loses the ++ and stays behind as a separate input in its own right, so removing part 1 leaves part 2 muxing on its own.</source>
+        <translation>מסיר את הקובץ הנבחר, ואת הרצועות שלו עמו. יש להיזהר עם כותר מחובר: חלק שמחובר מתחתיו עם ++ אינו מוסר עמו. הוא מאבד את ה-++ ונשאר כקלט נפרד בפני עצמו, כך שהסרת חלק 1 משאירה את חלק 2 ממוזג לבדו.</translation>
+    </message>
+    <message>
+        <source>Remove the selected track from the mux altogether. To leave a track out without losing it, untick its box in the list instead: that can be undone, this cannot, and the file has to be added again to get the track back.</source>
+        <translation>מסיר לחלוטין את הרצועה הנבחרת מהמיזוג. כדי להשאיר רצועה בחוץ בלי לאבד אותה, בטלו במקום זאת את הסימון בתיבה שברשימה: את זה אפשר לבטל, את ההסרה לא, ויש להוסיף את הקובץ מחדש כדי להחזיר את הרצועה.</translation>
+    </message>
+    <message>
         <source>Dolby Vision:</source>
         <translation>Dolby Vision:</translation>
     </message>

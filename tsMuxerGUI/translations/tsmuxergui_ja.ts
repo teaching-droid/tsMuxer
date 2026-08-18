@@ -2519,6 +2519,14 @@
         <translation>この多重化が読み込むファイルです。++ でインデントされた行は、その上のファイルに連結されて続きとなり、独立した入力ではありません。</translation>
     </message>
     <message>
+        <source>Remove the selected file, and its tracks with it. Take care with a joined title: a part joined beneath this one with ++ is NOT removed too. It loses the ++ and stays behind as a separate input in its own right, so removing part 1 leaves part 2 muxing on its own.</source>
+        <translation>選択したファイルと、そのトラックを一緒に削除します。結合されたタイトルにはご注意ください。その下に ++ で結合されたパートは一緒には削除されません。++ が外れ、独立した入力として残るため、パート 1 を削除するとパート 2 だけが多重化されます。</translation>
+    </message>
+    <message>
+        <source>Remove the selected track from the mux altogether. To leave a track out without losing it, untick its box in the list instead: that can be undone, this cannot, and the file has to be added again to get the track back.</source>
+        <translation>選択したトラックを多重化から完全に削除します。トラックを失わずに除外するには、代わりにリストのチェックを外してください。そちらは元に戻せますが、削除は元に戻せず、トラックを戻すにはファイルを追加し直す必要があります。</translation>
+    </message>
+    <message>
         <source>Dolby Vision:</source>
         <translation>Dolby Vision:</translation>
     </message>

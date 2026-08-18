@@ -2508,15 +2508,23 @@
     <name>TsMuxerWindow</name>
     <message>
         <source>Add a file as a NEW, separate input. To continue a title with its next part instead, select that part's first file and use join.</source>
-        <translation>Ajoute un fichier comme entree NOUVELLE et distincte. Pour prolonger un titre avec sa partie suivante, selectionnez le premier fichier de cette partie et cliquez sur joindre.</translation>
+        <translation>Ajoute un fichier comme entrée NOUVELLE et distincte. Pour prolonger un titre avec sa partie suivante, sélectionnez le premier fichier de cette partie et cliquez sur joindre.</translation>
     </message>
     <message>
         <source>Append another file to the END of the selected one, so the two are muxed as a single continuous title. This is what you want for a film split across two discs or two parts: select part 1, press join, and choose part 2. The appended file is shown indented with ++ beneath the one it continues. Every part must have the same file extension.</source>
-        <translation>Ajoute un autre fichier a la FIN de celui selectionne, afin que les deux soient multiplexes comme un seul titre continu. C'est ce qu'il faut pour un film reparti sur deux disques ou deux parties : selectionnez la partie 1, cliquez sur joindre, puis choisissez la partie 2. Le fichier ajoute apparait en retrait avec ++ sous celui qu'il prolonge. Toutes les parties doivent avoir la meme extension de fichier.</translation>
+        <translation>Ajoute un autre fichier à la FIN de celui sélectionné, afin que les deux soient multiplexés comme un seul titre continu. C'est ce qu'il faut pour un film réparti sur deux disques ou deux parties : sélectionnez la partie 1, cliquez sur joindre, puis choisissez la partie 2. Le fichier ajouté apparaît en retrait avec ++ sous celui qu'il prolonge. Toutes les parties doivent avoir la même extension de fichier.</translation>
     </message>
     <message>
         <source>The files this mux reads. A line indented with ++ is joined onto the file above it and continues it, rather than being a separate input.</source>
-        <translation>Les fichiers que ce multiplexage lit. Une ligne en retrait avec ++ est jointe au fichier au-dessus et le prolonge, au lieu d'etre une entree distincte.</translation>
+        <translation>Les fichiers que ce multiplexage lit. Une ligne en retrait avec ++ est jointe au fichier au-dessus et le prolonge, au lieu d'être une entrée distincte.</translation>
+    </message>
+    <message>
+        <source>Remove the selected file, and its tracks with it. Take care with a joined title: a part joined beneath this one with ++ is NOT removed too. It loses the ++ and stays behind as a separate input in its own right, so removing part 1 leaves part 2 muxing on its own.</source>
+        <translation>Supprime le fichier sélectionné, et ses pistes avec lui. Attention à un titre joint : une partie jointe en dessous avec ++ n'est PAS supprimée pour autant. Elle perd le ++ et demeure une entrée distincte à part entière, si bien que supprimer la partie 1 laisse la partie 2 se multiplexer seule.</translation>
+    </message>
+    <message>
+        <source>Remove the selected track from the mux altogether. To leave a track out without losing it, untick its box in the list instead: that can be undone, this cannot, and the file has to be added again to get the track back.</source>
+        <translation>Supprime entièrement la piste sélectionnée du multiplexage. Pour écarter une piste sans la perdre, décochez plutôt sa case dans la liste : cela s'annule, ceci non, et il faut rajouter le fichier pour récupérer la piste.</translation>
     </message>
     <message>
         <source>Dolby Vision:</source>

@@ -637,15 +637,32 @@ TsMuxerWindow::TsMuxerWindow()
     // or why they would want it. The only description of the feature was one line in a sixty line
     // list on the About tab. That is what sends people to other tools for something this already
     // does, so the answer is here rather than in the documentation.
-    ui->addBtn->setToolTip(wrapTip(tr("Add a file as a NEW, separate input. To continue a title with its next "
-                                      "part instead, select that part's first file and use join.")));
+    ui->addBtn->setToolTip(
+        wrapTip(tr("Add a file as a NEW, separate input. To continue a title with its next "
+                   "part instead, select that part's first file and use join.")));
     ui->btnAppend->setToolTip(
         wrapTip(tr("Append another file to the END of the selected one, so the two are muxed as a single "
                    "continuous title. This is what you want for a film split across two discs or two parts: "
                    "select part 1, press join, and choose part 2. The appended file is shown indented with "
                    "++ beneath the one it continues. Every part must have the same file extension.")));
-    ui->inputFilesLV->setToolTip(wrapTip(tr("The files this mux reads. A line indented with ++ is joined onto the "
-                                            "file above it and continues it, rather than being a separate input.")));
+    ui->inputFilesLV->setToolTip(
+        wrapTip(tr("The files this mux reads. A line indented with ++ is joined onto the "
+                   "file above it and continues it, rather than being a separate input.")));
+    // The two "remove" buttons were missed when the rest of this panel was explained, and between
+    // them they hold the sharpest traps left here. The one under "join" does NOT remove a joined
+    // part along with the file it continues: onRemoveBtnClick strips the ++ from the next line
+    // instead, which quietly turns part 2 into a title of its own. The one beside the track list
+    // sits a few pixels from the tick box that does the reversible version of the same job.
+    ui->removeFile->setToolTip(
+        wrapTip(tr("Remove the selected file, and its tracks with it. Take care with a joined "
+                   "title: a part joined beneath this one with ++ is NOT removed too. It loses "
+                   "the ++ and stays behind as a separate input in its own right, so removing "
+                   "part 1 leaves part 2 muxing on its own.")));
+    ui->removeTrackBtn->setToolTip(
+        wrapTip(tr("Remove the selected track from the mux altogether. To leave a track out "
+                   "without losing it, untick its box in the list instead: that can be "
+                   "undone, this cannot, and the file has to be added again to get the "
+                   "track back.")));
 
     ui->DiskLabel->setVisible(false);
     ui->DiskLabelEdit->setVisible(false);

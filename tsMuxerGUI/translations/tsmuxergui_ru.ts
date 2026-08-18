@@ -2519,6 +2519,14 @@
         <translation>Файлы, которые читает это мультиплексирование. Строка с отступом и ++ присоединена к файлу выше и продолжает его, а не является отдельным источником.</translation>
     </message>
     <message>
+        <source>Remove the selected file, and its tracks with it. Take care with a joined title: a part joined beneath this one with ++ is NOT removed too. It loses the ++ and stays behind as a separate input in its own right, so removing part 1 leaves part 2 muxing on its own.</source>
+        <translation>Удаляет выбранный файл и вместе с ним его дорожки. Осторожно с объединённым тайтлом: часть, присоединённая ниже с ++, НЕ удаляется вместе с ним. Она теряет ++ и остаётся отдельным источником сама по себе, поэтому удаление части 1 оставляет часть 2 мультиплексироваться в одиночку.</translation>
+    </message>
+    <message>
+        <source>Remove the selected track from the mux altogether. To leave a track out without losing it, untick its box in the list instead: that can be undone, this cannot, and the file has to be added again to get the track back.</source>
+        <translation>Полностью удаляет выбранную дорожку из мультиплексирования. Чтобы исключить дорожку, не теряя её, снимите вместо этого её флажок в списке: это можно отменить, а удаление нет, и файл придётся добавить заново, чтобы вернуть дорожку.</translation>
+    </message>
+    <message>
         <source>Dolby Vision:</source>
         <translation>Dolby Vision:</translation>
     </message>
