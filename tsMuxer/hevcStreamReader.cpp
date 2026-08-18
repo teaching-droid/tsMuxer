@@ -1014,6 +1014,14 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
     }
     if (m_eof)
     {
+        // The last access unit of the stream has no NAL after it to announce that a new frame
+        // started, which is what every other access unit relies on. Without this it never gets its
+        // timings: it is appended to the PREVIOUS PES, with no timestamp and no delimiter of its
+        // own, and it is not counted. A stream that ends with EOS, EOB or an access unit delimiter
+        // already took the branch above when it reached that NAL, and arrives here with sliceFound
+        // false, so its output is unchanged.
+        if (sliceFound)
+            incTimings();
         m_lastDecodedPos = m_bufEnd;
         return 0;
     }

@@ -51,7 +51,6 @@ int MPEGStreamReader::flushPacket(AVPacket& avPacket)
 
     if (m_tmpBufferLen > 0)
     {
-        const uint8_t* prevPos = m_curPos;
         m_curPos = m_tmpBuffer;
         m_bufEnd = m_tmpBuffer + m_tmpBufferLen;
         const int isNal = bufFromNAL();
@@ -59,11 +58,15 @@ int MPEGStreamReader::flushPacket(AVPacket& avPacket)
         if (isNal)
         {
             m_shortStartCodes = isNal < 4;
-            if ((prevPos + isNal) > m_lastDecodedPos)
-            {
-                m_lastDecodedPos = nullptr;
-                decodeRez = decodeNal(m_curPos + isNal);
-            }
+            // decodeNal already refuses to decode anything at or before m_lastDecodedPos. The guard
+            // that used to stand here duplicated that test with m_curPos as it was BEFORE
+            // storeBufferRest moved the buffer tail to the front of m_tmpBuffer, compared against an
+            // m_lastDecodedPos that HAD been rebased by the same move. Comparing the two therefore
+            // always passed, and passing it cleared m_lastDecodedPos, which defeated the real guard
+            // below as well. The result was that the last access unit of a stream was decoded a
+            // second time: counted twice, and its timings advanced once too often, which split the
+            // final access unit across two PES and left the track one frame too long.
+            decodeRez = decodeNal(m_curPos + isNal);
         }
         if (decodeRez == 0)
         {
