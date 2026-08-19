@@ -635,6 +635,16 @@ void MatroskaMuxer::buildCodecPrivate(MkvTrackInfo& track)
 
 void MatroskaMuxer::parseMuxOpt(const std::string& opts)
 {
+    // Splitting belongs to the transport stream writer; this one has no notion of it. Asking for it
+    // on Matroska output used to produce ONE file and "Mux successful complete" with nothing said,
+    // so a 421 MB source asked to split at 50 MB came back whole while the same meta aimed at .ts
+    // gave nine parts. Say so, the way the demux path already does for the same reason.
+    for (const char* splitOpt : {"--split-size", "--split-duration"})
+        if (opts.find(splitOpt) != std::string::npos)
+            LTRACE(LT_WARN, 2,
+                   "Warning: splitting is not implemented for Matroska output. "
+                       << splitOpt << " was ignored and the whole mux went into one file.");
+
     // --dv-profile=<7|8.1>. 7 is the default and means "carry the disc as it is", the faithful dual
     // layer track. 8.1 converts the RPU so the file plays as single layer Dolby Vision on the many
     // devices that do not understand profile 7.

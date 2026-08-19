@@ -147,6 +147,8 @@ class TsMuxerWindow : public QWidget
     QtvCodecInfo* getCurrentCodec();
     // merge-ac3-track and merge-ac3-file are mutually exclusive; grey out whichever does not apply.
     void updateMergeAc3Exclusion(QtvCodecInfo* codecInfo);
+    // Splitting is produced by the transport stream writer, so not every output can do it.
+    [[nodiscard]] bool outputCanSplit() const;
     void delTracksByFileName(const QString& fileName);
     void deleteTrack(int idx);
     void updateNum();

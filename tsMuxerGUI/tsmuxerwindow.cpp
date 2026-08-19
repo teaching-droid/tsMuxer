@@ -3212,11 +3212,16 @@ QString TsMuxerWindow::getMuxOpts()
             rez += QString(" --custom-chapters=") + custChapStr;
         }
     }
-    if (ui->splitByDuration->isChecked())
-        rez += QString(" --split-duration=") + ui->spinEditSplitDuration->text();
-    if (ui->splitBySize->isChecked())
-        rez += QString(" --split-size=") + QString::number(ui->editSplitSize->value(), 'f', 3) +
-               ui->comboBoxMeasure->currentData().toString();
+    // Only write these where they can be honoured. The tick is remembered either way, so choosing
+    // an output that cannot split hides the option rather than discarding what was set.
+    if (outputCanSplit())
+    {
+        if (ui->splitByDuration->isChecked())
+            rez += QString(" --split-duration=") + ui->spinEditSplitDuration->text();
+        if (ui->splitBySize->isChecked())
+            rez += QString(" --split-size=") + QString::number(ui->editSplitSize->value(), 'f', 3) +
+                   ui->comboBoxMeasure->currentData().toString();
+    }
 
     int startCut = qTimeToMsec(ui->cutStartTimeEdit->time());
     int endCut = qTimeToMsec(ui->cutEndTimeEdit->time());
@@ -3667,12 +3672,27 @@ void TsMuxerWindow::onChapterParamsChanged()
     updateMetaLines();
 }
 
+// Splitting is written by the transport stream muxer. Matroska output has no notion of it and demux
+// output refuses it as well, so neither can split. Ticking the boxes there changed nothing at all
+// and said nothing about it: a 421 MB source asked to split at 50 MB came back as one whole file
+// with a success message, while the same settings aimed at .ts gave nine parts.
+bool TsMuxerWindow::outputCanSplit() const
+{
+    return !(ui->radioButtonMKV->isChecked() || ui->radioButtonDemux->isChecked());
+}
+
 void TsMuxerWindow::onSplitCutParamsChanged()
 {
-    ui->spinEditSplitDuration->setEnabled(ui->splitByDuration->isChecked());
-    ui->labelSplitByDur->setEnabled(ui->splitByDuration->isChecked());
-    ui->editSplitSize->setEnabled(ui->splitBySize->isChecked());
-    ui->comboBoxMeasure->setEnabled(ui->splitBySize->isChecked());
+    // Grey the whole group where it cannot work, rather than leave it looking live. The tick itself
+    // is kept, so switching back to an output that can split restores the setting instead of
+    // quietly dropping it.
+    const bool canSplit = outputCanSplit();
+    ui->splitByDuration->setEnabled(canSplit);
+    ui->splitBySize->setEnabled(canSplit);
+    ui->spinEditSplitDuration->setEnabled(canSplit && ui->splitByDuration->isChecked());
+    ui->labelSplitByDur->setEnabled(canSplit && ui->splitByDuration->isChecked());
+    ui->editSplitSize->setEnabled(canSplit && ui->splitBySize->isChecked());
+    ui->comboBoxMeasure->setEnabled(canSplit && ui->splitBySize->isChecked());
 
     ui->cutStartTimeEdit->setEnabled(ui->checkBoxCut->isChecked());
     ui->cutEndTimeEdit->setEnabled(ui->checkBoxCut->isChecked());
@@ -3958,6 +3978,9 @@ void TsMuxerWindow::RadioButtonMuxClick()
     // than greyed out anywhere else: a disabled control still invites the question of what it is
     // for, and here the answer would be "nothing, in this mode".
     updateDvProfileVisible();
+    // Whether the split controls apply depends on the output that was just chosen, so settle them
+    // here too and not only when one of them is clicked.
+    onSplitCutParamsChanged();
     outFileNameDisableChange = true;
     if (ui->radioButtonBluRay->isChecked() || ui->radioButtonDemux->isChecked() || ui->radioButtonAVCHD->isChecked())
     {
