@@ -63,7 +63,7 @@ class TSMuxer final : public AbstractMuxer
     const std::vector<uint32_t>& getMuxedPacketCnt() { return m_muxedPacketCnt; }
     [[nodiscard]] size_t splitFileCnt() const { return m_fileNames.size(); }
     void setSplitDuration(const int64_t value) { m_splitDuration = value; }
-    void setSplitSize(const uint32_t value) { m_splitSize = value; }
+    void setSplitSize(const int64_t value) { m_splitSize = value; }
     void parseMuxOpt(const std::string& opts) override;
 
     void setFileName(const std::string& fileName, FileFactory* fileFactory) override;
@@ -135,7 +135,9 @@ class TSMuxer final : public AbstractMuxer
     int m_curFileNum;
     bool m_bluRayMode;
     bool m_hdmvDescriptors;
-    uint32_t m_splitSize;
+    // 64 bit: a split size is a byte count and 4 GiB is a perfectly ordinary one. As a uint32_t it
+    // wrapped, so 4 GiB became 0 and turned splitting off, and 4.5 GB became 205 MB.
+    int64_t m_splitSize;
     int64_t m_splitDuration;
 
     bool m_useNewStyleAudioPES;

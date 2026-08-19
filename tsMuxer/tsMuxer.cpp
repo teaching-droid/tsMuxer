@@ -780,7 +780,11 @@ bool TSMuxer::isSplitPoint(const AVPacket& avPacket) const
 
     if (m_splitSize > 0)
     {
-        return m_muxedPacketCnt[m_muxedPacketCnt.size() - 1] * m_frameSize > m_splitSize;
+        // 64 bit on purpose: the packet count is a uint32_t and the frame size an int, so the
+        // product was worked out in 32 bit arithmetic and wrapped once a part passed 4 GB. Widening
+        // m_splitSize alone would not have been enough, because any split size above 4 GB is
+        // compared against a size that starts counting from zero again at that point.
+        return static_cast<int64_t>(m_muxedPacketCnt[m_muxedPacketCnt.size() - 1]) * m_frameSize > m_splitSize;
     }
     if (m_splitDuration > 0)
     {
@@ -1751,7 +1755,12 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
             else if (postfix == "KIB")
                 coeff = 1024;
             string prefix = paramPair[1].substr(0, paramPair[1].size() - postfix.size());
-            setSplitSize(static_cast<uint32_t>(strToDouble(prefix.c_str()) * static_cast<double>(coeff)));
+            const int64_t splitBytes = static_cast<int64_t>(strToDouble(prefix.c_str()) * static_cast<double>(coeff));
+            // A size that works out at zero or less can only be a typo, and accepting it would turn
+            // splitting off without a word, which is what asking for 4 GiB used to do.
+            if (splitBytes <= 0)
+                THROW(ERR_COMMON, "Invalid --split-size value \"" << paramPair[1] << "\": it must be above zero.")
+            setSplitSize(splitBytes);
             m_computeMuxStats = true;
         }
         else if (paramPair[0] == "--blu-ray" || paramPair[0] == "--blu-ray-v3" || paramPair[0] == "--avchd")
