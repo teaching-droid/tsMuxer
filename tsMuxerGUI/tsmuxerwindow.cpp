@@ -1755,6 +1755,12 @@ TsMuxerWindow::TsMuxerWindow()
             });
     }
 
+    // Settle the output dependent controls once at start up as well. RadioButtonMuxClick does it on
+    // every later change, but it returns early while the output name is being set, so the very first
+    // state has to be established here or the window opens with everything live.
+    updateBluRayTabEnabled();
+    onSplitCutParamsChanged();
+
     writeSettings();
 }
 
@@ -3653,9 +3659,57 @@ void TsMuxerWindow::onGeneralCheckboxClicked()
     ui->editMaxBitrate->setEnabled(ui->checkBoxRVBR->isChecked());
     ui->editMinBitrate->setEnabled(ui->checkBoxRVBR->isChecked());
     ui->editCBRBitrate->setEnabled(ui->checkBoxCBR->isChecked());
-    ui->BlackplaylistCombo->setEnabled(ui->checkBoxBlankPL->isChecked());
-    ui->BlackplaylistLabel->setEnabled(ui->checkBoxBlankPL->isChecked());
+    // The blank playlist number follows its own tick AND the output, or ticking the box would put
+    // the number back for an output that never writes a playlist at all.
+    const bool blankPL = ui->checkBoxBlankPL->isChecked() && isDiskOutput();
+    ui->BlackplaylistCombo->setEnabled(blankPL);
+    ui->BlackplaylistLabel->setEnabled(blankPL);
     updateMetaLines();
+}
+
+// The Blu-ray tab took no notice of the chosen output. Every control on it stayed live for TS, MKV
+// and Demux alike, measured across all seven outputs before any of this was written: 23 controls,
+// not one of which changed state. Their values were already being dropped, since getMuxOpts() only
+// writes them out under isDiskOutput() and friends, so what was wrong was the tab saying otherwise.
+//
+// Greyed rather than hidden. Hiding suits a control whose answer is "nothing, in this mode", the way
+// the Dolby Vision row and the layer break guard are already hidden, but a whole tab that empties and
+// refills as the output changes is worse than one that dims. Greying does NOT silence a tooltip in
+// this build, measured on two widget types, so the explanation stays reachable either way.
+//
+// Nothing is cleared. Every setting survives the trip, so choosing MKV and coming back to Blu-ray
+// finds the tab as it was left.
+void TsMuxerWindow::updateBluRayTabEnabled()
+{
+    const bool disk = isDiskOutput();  // Blu-ray, Blu-ray ISO, AVCHD
+    const bool bd = ui->radioButtonBluRay->isChecked() || ui->radioButtonBluRayISO->isChecked();
+    // Default track flags are written for Matroska too, not only for a disc: see getAudioMetaInfo
+    // and getSubMetaInfo, which both test isDiskOutput() OR MKV.
+    const bool defaults = disk || ui->radioButtonMKV->isChecked();
+
+    // Whole groups, because everything inside them shares one condition. Disabling the group leaves
+    // each child's own enabled flag untouched, so the rules that govern them individually still
+    // apply when the group comes back.
+    if (auto* chapters = findChild<QGroupBox*>("groupBox_3"))
+        chapters->setEnabled(disk);  // --auto-chapters / --custom-chapters
+    if (auto* threeD = findChild<QGroupBox*>("groupBox_11"))
+        threeD->setEnabled(disk);  // --right-eye
+    if (auto* defTracks = findChild<QGroupBox*>("defaultTracksGroupBox"))
+        defTracks->setEnabled(defaults);  // default= on the track lines
+
+    // The Options group is mixed and cannot be greyed as a whole: the mux start time applies to
+    // EVERY output, and it lives in there beside options that do not.
+    ui->checkBoxV3->setEnabled(bd);         // --blu-ray-v3, and AVCHD has no V3
+    ui->checkBoxBlankPL->setEnabled(disk);  // --insertBlankPL
+    const bool blankPL = disk && ui->checkBoxBlankPL->isChecked();
+    ui->BlackplaylistCombo->setEnabled(blankPL);
+    ui->BlackplaylistLabel->setEnabled(blankPL);
+    ui->spinBoxMplsNum->setEnabled(disk);  // --mplsOffset
+    ui->spinBoxM2tsNum->setEnabled(disk);  // --m2tsOffset
+
+    // The picture in picture group is deliberately left alone. It is not decided by the output at
+    // all: those parameters go out only for a track marked secondary, so its condition belongs to
+    // the selected track and would need its own pass.
 }
 
 void TsMuxerWindow::onGeneralSpinboxValueChanged() { updateMetaLines(); }
@@ -3979,8 +4033,9 @@ void TsMuxerWindow::RadioButtonMuxClick()
     // for, and here the answer would be "nothing, in this mode".
     updateDvProfileVisible();
     // Whether the split controls apply depends on the output that was just chosen, so settle them
-    // here too and not only when one of them is clicked.
+    // here too and not only when one of them is clicked. Same for the Blu-ray tab.
     onSplitCutParamsChanged();
+    updateBluRayTabEnabled();
     outFileNameDisableChange = true;
     if (ui->radioButtonBluRay->isChecked() || ui->radioButtonDemux->isChecked() || ui->radioButtonAVCHD->isChecked())
     {

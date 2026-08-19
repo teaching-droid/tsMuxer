@@ -149,6 +149,8 @@ class TsMuxerWindow : public QWidget
     void updateMergeAc3Exclusion(QtvCodecInfo* codecInfo);
     // Splitting is produced by the transport stream writer, so not every output can do it.
     [[nodiscard]] bool outputCanSplit() const;
+    // Grey the Blu-ray tab's controls that the chosen output does not use.
+    void updateBluRayTabEnabled();
     void delTracksByFileName(const QString& fileName);
     void deleteTrack(int idx);
     void updateNum();
