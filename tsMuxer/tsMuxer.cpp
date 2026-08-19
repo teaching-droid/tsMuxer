@@ -34,6 +34,16 @@ static constexpr int64_t M_CBR_PCR_DELTA = 7000;
 
 static constexpr int64_t DEFAULT_VBV_BUFFER_LEN = 500;  // default 500 ms vbv buffer
 
+// The muxing rate, in bits per second, at which the PCR pacing stops working. The pacing term
+// used in three places below is (m_lastPCR + m_pcrBits) * PCR_FREQUENCY / m_cbrBitrate, and it
+// adds m_pcrBits, a count of bits, to m_lastPCR, a count of 90 kHz ticks. The sum only stays
+// under the media time while PCR_FREQUENCY / m_cbrBitrate is below one, so the term degenerates
+// once the rate in bits per second falls to the tick rate. That is why this is the same number
+// as PCR_FREQUENCY rather than a chosen one. Measured on a two second, 258,500 byte mux:
+// 91 kbps and everything above it is unaffected, 90 kbps gives 624,348 bytes, 89 kbps gives
+// 23.9 GB and 35 kbps gives 292 MB.
+static constexpr int DEGENERATE_MUX_RATE = PCR_FREQUENCY;
+
 static constexpr int PAT_PID = 0;
 static constexpr int SIT_PID = 0x1f;
 static constexpr int NULL_PID = 8191;
@@ -1704,6 +1714,20 @@ void TSMuxer::writeOutBuffer()
     }
 }
 
+// Both --bitrate and --maxbitrate end up in m_cbrBitrate, so both have to be held above the rate
+// the pacing can carry. --minbitrate is deliberately left alone: on its own it never reaches the
+// pacing term, and zero is what the GUI writes when no lower bound is wanted.
+static int checkedMuxRate(const std::string& option, const std::string& value)
+{
+    const auto rate = static_cast<int>(strToDouble(value.c_str()) * 1000.0);
+    if (rate <= DEGENERATE_MUX_RATE)
+        THROW(ERR_COMMON, "Invalid " << option << " value \"" << value << "\": the rate is in kbps and must be above "
+                                     << DEGENERATE_MUX_RATE / 1000
+                                     << ". At or below that the muxing clock overtakes the media and the output "
+                                        "grows without bound.")
+    return rate;
+}
+
 void TSMuxer::parseMuxOpt(const std::string& opts)
 {
     const vector<string> params = splitStr(opts.c_str(), ' ');
@@ -1720,11 +1744,12 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
             m_hdmvDescriptors = false;
         else if (paramPair[0] == "--bitrate" && paramPair.size() > 1)
         {
-            setMaxBitrate(static_cast<int>(strToDouble(paramPair[1].c_str()) * 1000.0));
-            setMinBitrate(static_cast<int>(strToDouble(paramPair[1].c_str()) * 1000.0));
+            const int rate = checkedMuxRate(paramPair[0], paramPair[1]);
+            setMaxBitrate(rate);
+            setMinBitrate(rate);
         }
         else if (paramPair[0] == "--maxbitrate" && paramPair.size() > 1)
-            setMaxBitrate(static_cast<int>(strToDouble(paramPair[1].c_str()) * 1000.0));
+            setMaxBitrate(checkedMuxRate(paramPair[0], paramPair[1]));
         else if (paramPair[0] == "--minbitrate" && paramPair.size() > 1)
             setMinBitrate(static_cast<int>(strToDouble(paramPair[1].c_str()) * 1000.0));
         else if (paramPair[0] == "--vbv-len" && paramPair.size() > 1)
