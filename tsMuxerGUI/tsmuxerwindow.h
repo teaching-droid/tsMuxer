@@ -145,6 +145,8 @@ class TsMuxerWindow : public QWidget
     // Show the Dolby Vision profile row only for Matroska output of a dual layer source.
     void updateDvProfileVisible();
     QtvCodecInfo* getCurrentCodec();
+    // merge-ac3-track and merge-ac3-file are mutually exclusive; grey out whichever does not apply.
+    void updateMergeAc3Exclusion(QtvCodecInfo* codecInfo);
     void delTracksByFileName(const QString& fileName);
     void deleteTrack(int idx);
     void updateNum();

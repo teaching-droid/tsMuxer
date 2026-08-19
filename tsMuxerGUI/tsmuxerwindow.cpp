@@ -2327,21 +2327,7 @@ void TsMuxerWindow::onAudioSubtitlesParamsChanged()
     {
         codecInfo->mergeAc3Track = ui->mergeAc3TrackSpinBox->value();
         codecInfo->mergeAc3File = ui->mergeAc3FileLineEdit->text().trimmed();
-
-        // Mutual exclusion: prefer track merge when set; otherwise allow file merge.
-        if (codecInfo->mergeAc3Track > 0)
-        {
-            codecInfo->mergeAc3File.clear();
-            ui->mergeAc3FileLineEdit->blockSignals(true);
-            ui->mergeAc3FileLineEdit->setText(QString());
-            ui->mergeAc3FileLineEdit->blockSignals(false);
-        }
-        else if (!codecInfo->mergeAc3File.isEmpty())
-        {
-            ui->mergeAc3TrackSpinBox->blockSignals(true);
-            ui->mergeAc3TrackSpinBox->setValue(0);
-            ui->mergeAc3TrackSpinBox->blockSignals(false);
-        }
+        updateMergeAc3Exclusion(codecInfo);
     }
     else
     {
@@ -2353,6 +2339,44 @@ void TsMuxerWindow::onAudioSubtitlesParamsChanged()
     colorizeCurrentRow(codecInfo);
 
     updateMetaLines();
+}
+
+// merge-ac3-track and merge-ac3-file are mutually exclusive: metaDemuxer.cpp refuses a track line
+// carrying both, in two separate places, so only one of them can ever reach a mux.
+//
+// This used to be enforced by WIPING the file field the moment a track was set. The field stayed
+// enabled the whole time, so it took focus and accepted keystrokes and threw them away without a
+// word: a path typed with a track already set vanished as it was entered, a path typed FIRST was
+// deleted when a track was set afterwards, and clearing the track again did not bring it back.
+//
+// Grey out the one that does not apply instead. The exclusion becomes visible, nothing anyone types
+// is ever discarded, and clearing whichever control is in use re-enables the other, so there is
+// always a way back.
+void TsMuxerWindow::updateMergeAc3Exclusion(QtvCodecInfo* codecInfo)
+{
+    const bool isTrueHd =
+        codecInfo != nullptr && codecInfo->programName == "A_MLP" && codecInfo->displayName == QString("TRUE-HD");
+    const bool showTrack = isTrueHd && codecInfo->trackID != 0;
+    const bool showFile = isTrueHd;
+
+    bool trackSet = showTrack && ui->mergeAc3TrackSpinBox->value() > 0;
+    bool fileSet = showFile && !ui->mergeAc3FileLineEdit->text().trimmed().isEmpty();
+
+    // Both at once is only reachable from a meta file that already carries both, which the engine
+    // would refuse anyway. Resolve it the way the meta writer does, by preferring the track, so
+    // neither control is left disabled with no way out of the state.
+    if (trackSet && fileSet)
+    {
+        ui->mergeAc3FileLineEdit->blockSignals(true);
+        ui->mergeAc3FileLineEdit->setText(QString());
+        ui->mergeAc3FileLineEdit->blockSignals(false);
+        codecInfo->mergeAc3File.clear();
+        fileSet = false;
+    }
+
+    ui->mergeAc3TrackSpinBox->setEnabled(showTrack && !fileSet);
+    ui->mergeAc3FileLineEdit->setEnabled(showFile && !trackSet);
+    ui->mergeAc3FileBrowseButton->setEnabled(showFile && !trackSet);
 }
 
 void TsMuxerWindow::onEditDelayChanged(int)
@@ -2545,6 +2569,11 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
                 ui->mergeAc3FileLineEdit->setText(codecInfo->mergeAc3File);
             else
                 ui->mergeAc3FileLineEdit->setText(QString());
+
+            // Both controls have their values now, so settle which of the two applies. Selecting a
+            // track has to do this as well as editing one, or a track that arrives with a merge
+            // already set would show both controls enabled.
+            updateMergeAc3Exclusion(codecInfo);
 
             bool isPGS = codecInfo->displayName == "PGS";
             ui->checkBoxKeepFps->setVisible(isPGS);
