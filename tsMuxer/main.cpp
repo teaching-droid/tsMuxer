@@ -683,9 +683,15 @@ All parameters in this group start with two dashes:
                         --layer-break-guard=<MB>         see above
                         --layer-break-guard-before=<MB>  see above
                         --layer-break-lbn=<s[,s...]>     see above
-                        --disc-capacity=<sectors>  Total sectors of the target disc. Needed by
-                              --inner-only, and used to decide whether a file fits after the
-                              break. Read it from the disc's FULL formatted capacity.
+                        --disc-capacity=<sectors>  Total sectors of the target disc. Read it from
+                              the disc's FULL formatted capacity. Needed by --inner-only, used to
+                              decide whether a file fits after the break, and used to CHECK THE
+                              RESULT: with it, the build is refused up front when the payload plus
+                              the guard cannot fit, and the finished image is measured against the
+                              disc before the run ends. Without it neither check can run, and the
+                              log says so.
+                        --allow-oversize  Report an over-capacity image as a warning instead of
+                              refusing, and build (or keep) it anyway.
                         --keep-extra-files  Copy EVERYTHING in the source folder, not just
                               BDMV, CERTIFICATE and AACS. Without this, anything else at the
                               top level is skipped with a "skipping ..." line: helper folders
@@ -788,6 +794,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     int64_t discCapacitySectors = 0;
     bool keepExtras = false;
     bool innerOnly = false;
+    bool allowOversize = false;
     string discLabel;
     vector<string> positional;
     for (int i = 2; i < argc; ++i)
@@ -814,6 +821,8 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                 keepExtras = true;
             else if (a == "--inner-only")
                 innerOnly = true;
+            else if (a == "--allow-oversize")
+                allowOversize = true;
             else if (a.rfind("--label=", 0) == 0)
                 discLabel = a.substr(8);
             else
@@ -830,7 +839,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
         LTRACE(LT_ERROR, 2,
                "Usage: tsMuxeR --bdmv-to-iso [--layer-break-guard=<MB>] [--layer-break-guard-before=<MB>] "
                "[--layer-break-lbn=<sector>] [--disc-capacity=<sectors>] [--original-order] [--no-layer-fit] "
-               "[--keep-extra-files] [--inner-only] [--label=<string>] <BDMV_folder> <out.iso>");
+               "[--keep-extra-files] [--inner-only] [--allow-oversize] [--label=<string>] <BDMV_folder> <out.iso>");
         return -1;
     }
     string srcRoot = positional[0];
@@ -977,6 +986,13 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     else
         std::stable_sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.size > b.size; });
 
+    // The copy buffer below, named here because two pieces of arithmetic depend on its size: a guard
+    // pad is laid down from wherever the current write lands to the far edge of the zone, so it can
+    // begin up to one whole buffer before the zone starts and the image grows by that much more than
+    // the guard asked for.
+    constexpr int64_t COPY_BUFFER_BYTES = 16 * 1024 * 1024;
+    const int64_t overrunSectors = COPY_BUFFER_BYTES / 2048;
+
     // --inner-only: keep the payload on the inner tracks of every layer and pad each layer's outer edge
     // (the rim) with zeros. BD-R DL fixes the layer break at the physical layer-0 capacity, so the drive
     // cannot be made to jump early; instead we widen the layer-break guard symmetrically to (free space)/2
@@ -994,7 +1010,13 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
         const int64_t payloadSectors = (total + 2047) / 2048;
         const int64_t marginSectors = 8192;  // ~16 MB for UDF overhead + a small inner free tail
         const int nBreaks = static_cast<int>(layerBreakLbns.size());
-        const int64_t guardEach = (discCapacitySectors - payloadSectors - marginSectors) / (2 * nBreaks);
+        // Reserve the pad overrun as well as the margin. Without this the guard is sized to consume
+        // everything the margin does not, and the overrun then spends that same margin a second time:
+        // measured on a 1 GB payload, a guard asked for 89.0 MB each side was written as 104.1 MB
+        // before + 89.0 MB after and the image landed 1.44 MB OVER the disc, silently. The margin
+        // covers the UDF structures (~4 MB) and cannot also absorb an overrun of up to 16 MB.
+        const int64_t guardEach =
+            (discCapacitySectors - payloadSectors - marginSectors - nBreaks * overrunSectors) / (2 * nBreaks);
         if (guardEach <= 0)
             LTRACE(LT_WARN, 2,
                    "--inner-only: the disc is (nearly) full, so there is no room to pad; keeping the normal guard");
@@ -1032,6 +1054,123 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                                           << " MB)");
     }
 
+    // Fit-to-disc check. Of the three padding paths only --inner-only ever consulted the target
+    // capacity: it sizes its guard FROM the free space. A manual --layer-break-guard added its
+    // padding with no reference to the capacity, and a plain build wrote the image with no
+    // reference to it either. Measured on this tree: a folder left 2 MB under a BD50 produced an
+    // image 2.06 MB OVER it, and a 288 MB guard on a full BD50 produced one 329 MB over. Both were
+    // silent and both exited 0, so the first sign of trouble was a failed burn.
+    //
+    // Four things make up the finished image. Two are CERTAIN before a byte is written:
+    //   payload  the source files, each rounded up to whole sectors
+    //   guard    both zones of every break the payload actually reaches. The before-zone is a
+    //            sixteenth of the after-zone with a 4 MB floor, unless --layer-break-guard-before
+    //            sets it outright. A zone beyond the end of the payload is never padded at all
+    // and two are only BOUNDED:
+    //   overrun  checkLayerBreakPoint() pads from wherever the current write lands to the far edge
+    //            of the zone, so a guarded break costs anywhere from nothing to one whole copy
+    //            buffer MORE than the guard asked for. Measured 5.94 MB on a BD50 and 15.06 MB on
+    //            a 1 GB payload: real, variable, and not knowable in advance
+    //   UDF      the volume structures, which grow with the disc because the metadata partition
+    //            takes another 64 KB block per 16 GB: 3.81 MB on a BD25, 4.06 on a BD50, 4.44 on
+    //            a BD100
+    //
+    // That difference decides what may be refused. Payload plus guard zones is a true lower bound:
+    // the pad always covers at least the whole zone, so nothing can bring the image below it and
+    // exceeding the capacity there is a fact rather than a forecast. Refusing on it turns away no
+    // correct build. The bounded two may not refuse anything, so a build that clears the lower
+    // bound but lands inside them is reported as close rather than judged, and the finished image
+    // is measured exactly further down, where no model is needed.
+    //
+    // Refusing up front costs a second, where finding out afterwards costs an hour of copying.
+    constexpr int64_t UDF_MARGIN_SECTORS = 8192;  // ~16 MB, the same reserve --inner-only uses
+    const int64_t payloadSect = (total + 2047) / 2048;
+    int64_t guardZoneSectors = 0;     // certain: the pad is never smaller than this
+    int64_t guardOverrunSectors = 0;  // bounded: 0 to one copy buffer for each break reached
+    if (layerBreakGuardMB >= 0)
+    {
+        const int64_t afterSectors = static_cast<int64_t>(layerBreakGuardMB) * 1024 * 1024 / 2048;
+        int64_t beforeSectors = static_cast<int64_t>(layerBreakGuardBeforeMB) * 1024 * 1024 / 2048;
+        if (layerBreakGuardBeforeMB < 0)
+        {
+            // mirrors IsoWriter::setLayerBreakGuard(afterSectors): a sixteenth, with a 4 MB floor,
+            // never larger than the after-zone itself
+            constexpr int64_t floorSectors = 4 * 1024 * 1024 / 2048;
+            beforeSectors = afterSectors / 16 < floorSectors ? floorSectors : afterSectors / 16;
+            if (beforeSectors > afterSectors)
+                beforeSectors = afterSectors;
+        }
+        std::vector<int> breaks = layerBreakLbns;
+        if (breaks.empty())
+            breaks.push_back(static_cast<int>(BD50_CAPACITY / 2 / 2048));  // BlurayHelper's default break
+        for (const int bp : breaks)
+        {
+            // A zone the payload never reaches costs nothing, so counting it would refuse builds
+            // that fit. The payload alone reaching the zone is the conservative test: the header
+            // and any earlier pad only push the data further in, never back.
+            if (payloadSect > static_cast<int64_t>(bp) - beforeSectors)
+            {
+                guardZoneSectors += beforeSectors + afterSectors;
+                guardOverrunSectors += overrunSectors;
+            }
+        }
+    }
+    // --inner-only is exempt from the ESTIMATE only. It has already done this arithmetic against the
+    // same capacity, reserving both the UDF margin and the overrun, so its guard is by construction
+    // whatever is left over; estimating it again would count those reserves twice and refuse every
+    // inner-only build. The exact check below still applies, and matters most there, since that path
+    // fills the disc deliberately.
+    if (discCapacitySectors <= 0)
+        LTRACE(LT_INFO, 2, "  no --disc-capacity given, so the image is NOT checked against a disc size");
+    else if (innerOnly)
+        LTRACE(LT_INFO, 2, "  capacity: --inner-only sized the guard from the disc; the image is checked when written");
+    else
+    {
+        const int64_t leastSectors = payloadSect + guardZoneSectors;  // the image cannot come out smaller
+        const double capMB = static_cast<double>(discCapacitySectors) / 512.0;
+        if (leastSectors > discCapacitySectors)
+        {
+            std::ostringstream why;
+            why << std::fixed << std::setprecision(1) << "the payload"
+                << (guardZoneSectors > 0 ? " and guard need " : " needs ") << static_cast<double>(leastSectors) / 512.0
+                << " MB before any UDF structure is written, and the disc holds " << capMB << " MB, so this image is "
+                << static_cast<double>(leastSectors - discCapacitySectors) / 512.0 << " MB too big";
+            if (guardZoneSectors > 0)
+            {
+                const int64_t roomSectors = discCapacitySectors - payloadSect;
+                why << ". The guard asks for " << static_cast<double>(guardZoneSectors) / 512.0
+                    << " MB of padding, and the payload leaves room for at most "
+                    << static_cast<double>(roomSectors > 0 ? roomSectors : 0) / 512.0 << " MB";
+            }
+            if (allowOversize)
+                LTRACE(LT_WARN, 2, "  capacity: " << why.str() << "; continuing because --allow-oversize was given");
+            else
+            {
+                LTRACE(LT_ERROR, 2,
+                       "  capacity: " << why.str() << ". " << (guardZoneSectors > 0 ? "Shrink the guard, use" : "Use")
+                                      << " a larger disc, drop files, or pass --allow-oversize to build it anyway. "
+                                         "Nothing has been written");
+                return -1;
+            }
+        }
+        else if (leastSectors + guardOverrunSectors + UDF_MARGIN_SECTORS > discCapacitySectors)
+            // Clear of the lower bound, but inside the band the guard overrun and the UDF structures
+            // decide. Saying "it fits" here would be a guess, so say what is actually known and let
+            // the exact check at the end of the run settle it.
+            LTRACE(LT_WARN, 2,
+                   "  capacity: this will be close. "
+                       << std::fixed << std::setprecision(1)
+                       << static_cast<double>(discCapacitySectors - leastSectors) / 512.0 << " MB is left for the "
+                       << (guardOverrunSectors > 0 ? "guard overrun (up to 16 MB) and the " : "")
+                       << "UDF structures (about 4 MB, more on a larger disc). The finished image is measured against "
+                          "the disc before this run ends");
+        else
+            LTRACE(LT_INFO, 2,
+                   "  capacity: fits, with " << std::fixed << std::setprecision(1)
+                                             << static_cast<double>(discCapacitySectors - leastSectors) / 512.0
+                                             << " MB to spare before the UDF structures");
+    }
+
     BlurayHelper helper;
     if (!helper.open(outIso, DiskType::BLURAY, total, extraISOBlocks, false, layerBreakGuardMB, layerBreakLbns,
                      layerBreakGuardBeforeMB))
@@ -1050,7 +1189,9 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     // for the whole build and looks hung. Print only when the tenth-of-a-percent changes, so at most
     // ~1000 short lines are written regardless of the ISO size; std::endl flushes each so the GUI, which
     // reads stdout through a pipe, sees them live rather than after the buffer fills.
-    vector<uint8_t> buf(16 * 1024 * 1024);  // 16 MB: fewer syscalls / higher throughput on fast NVMe
+    // 16 MB: fewer syscalls and higher throughput on NVMe. Shares COPY_BUFFER_BYTES with the
+    // capacity estimate above, which has to know how far ahead of a guard zone a write can land.
+    vector<uint8_t> buf(COPY_BUFFER_BYTES);
     int64_t written = 0;
     int lastTenths = -1;
     // Per-file data ranges in absolute image sectors, aligned with `items`; used afterwards to map
@@ -1166,6 +1307,49 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
         std::ofstream sideFile(outIso + ".layerbreak.txt", std::ios::binary);
         if (sideFile)
             sideFile << side.str();
+    }
+    // Now the exact answer. The estimate above had to reserve a margin for the UDF structures and
+    // the guard overrun; the finished file needs no estimate, so measure it. This is also what
+    // catches anything the model above does not know about, instead of leaving it to a failed burn.
+    if (discCapacitySectors > 0)
+    {
+        int64_t isoBytes = -1;
+        File img;
+        if (img.open(outIso.c_str(), File::ofRead))
+        {
+            isoBytes = img.size();
+            img.close();
+        }
+        if (isoBytes < 0)
+            LTRACE(LT_WARN, 2, "  capacity: cannot re-open the finished image, so its size was not checked");
+        else
+        {
+            const int64_t capBytes = discCapacitySectors * 2048;
+            const double diffMB = static_cast<double>(isoBytes - capBytes) / (1024.0 * 1024.0);
+            if (isoBytes > capBytes)
+            {
+                // The image is kept either way: it took a long time to write and deleting a user's
+                // output to make a point would be worse than telling them plainly.
+                if (allowOversize)
+                    LTRACE(LT_WARN, 2,
+                           "  capacity: the image is " << std::fixed << std::setprecision(2) << diffMB
+                                                       << " MB TOO BIG for the disc and will not burn; kept because "
+                                                          "--allow-oversize was given");
+                else
+                {
+                    LTRACE(LT_ERROR, 2,
+                           "  capacity: the image is " << std::fixed << std::setprecision(2) << diffMB
+                                                       << " MB TOO BIG for the disc and will not burn (" << isoBytes
+                                                       << " bytes against " << capBytes << "). It was kept at "
+                                                       << outIso);
+                    return -1;
+                }
+            }
+            else
+                LTRACE(LT_INFO, 2,
+                       "  capacity: the image fits the disc, with " << std::fixed << std::setprecision(2) << -diffMB
+                                                                    << " MB to spare");
+        }
     }
     LTRACE(LT_INFO, 2, "bdmv-to-iso complete -> " << outIso);
     return 0;
