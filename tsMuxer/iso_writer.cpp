@@ -556,7 +556,16 @@ void FileEntryInfo::close()
 {
     if (m_sectorBufferSize)
     {
-        const auto delta = static_cast<int>(m_fileSize / SECTOR_SIZE);
+        // The tail of a file that does not end on a sector boundary is buffered and written here.
+        // It belongs at the end of the LAST extent, so the offset has to be measured inside that
+        // extent: lbnPos is where the last extent starts, not where the file starts. Using the whole
+        // file's length seeks past the end of the image by everything the earlier extents hold, and
+        // writing there stretches the image by exactly that much. A file only grows a second extent
+        // past MAX_EXTENT_SIZE or at a layer break guard, and only an unaligned length reaches this
+        // branch at all, which is why a real .m2ts (always a multiple of its 6144 byte aligned unit)
+        // never showed it. Measured before the fix: a 3 GB source produced a 6.4 GB image, and a
+        // 50 GB source a 99.7 GB one. For a single extent the two are the same value.
+        const auto delta = static_cast<int>(m_extents.rbegin()->size / SECTOR_SIZE);
         m_owner->sectorSeek(IsoWriter::Partition::MainPartition, m_extents.rbegin()->lbnPos + delta);
         memset(m_sectorBuffer + m_sectorBufferSize, 0, SECTOR_SIZE - m_sectorBufferSize);
         m_owner->writeRawData(m_sectorBuffer, SECTOR_SIZE);
