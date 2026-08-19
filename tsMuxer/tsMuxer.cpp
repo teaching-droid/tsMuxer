@@ -1731,6 +1731,9 @@ static int checkedMuxRate(const std::string& option, const std::string& value)
 void TSMuxer::parseMuxOpt(const std::string& opts)
 {
     const vector<string> params = splitStr(opts.c_str(), ' ');
+    bool cbrAsked = false;
+    bool vbrAsked = false;
+    bool rateGiven = false;
     for (auto& i : params)
     {
         vector<string> paramPair = splitStr(trimStr(i).c_str(), '=');
@@ -1742,11 +1745,16 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
             setNewStyleAudioPES(true);
         else if (paramPair[0] == "--no-hdmv-descriptors")
             m_hdmvDescriptors = false;
+        else if (paramPair[0] == "--cbr")
+            cbrAsked = true;
+        else if (paramPair[0] == "--vbr")
+            vbrAsked = true;
         else if (paramPair[0] == "--bitrate" && paramPair.size() > 1)
         {
             const int rate = checkedMuxRate(paramPair[0], paramPair[1]);
             setMaxBitrate(rate);
             setMinBitrate(rate);
+            rateGiven = true;
         }
         else if (paramPair[0] == "--maxbitrate" && paramPair.size() > 1)
             setMaxBitrate(checkedMuxRate(paramPair[0], paramPair[1]));
@@ -1798,6 +1806,23 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
             m_computeMuxStats = true;
         }
     }
+    // Neither --cbr nor --vbr is a switch. Nothing anywhere reads them, the rate comes from
+    // --bitrate alone, and until now both words fell out of the bottom of this loop without a
+    // sound. So a meta that asked for a fixed bitrate and forgot to give one got a variable
+    // bitrate mux and no hint that its request had been dropped.
+    if (cbrAsked && vbrAsked)
+        LTRACE(LT_WARN, 2,
+               "Warning: --cbr and --vbr were both given, and they ask for opposite things. Neither one is a "
+               "switch: the rate comes from --bitrate, so the mux is constant bitrate with it and variable "
+               "bitrate without it.");
+    else if (cbrAsked && !rateGiven)
+        LTRACE(LT_WARN, 2,
+               "Warning: --cbr was given without --bitrate, so there is no rate to hold to and the mux is "
+               "variable bitrate.");
+    else if (vbrAsked && rateGiven)
+        LTRACE(LT_WARN, 2,
+               "Warning: --vbr was given together with --bitrate. --bitrate fixes the rate and it wins, so the "
+               "mux is constant bitrate.");
 }
 
 void TSMuxer::setSubMode(AbstractMuxer* mainMuxer, const bool flushInterleavedBlock)

@@ -568,16 +568,25 @@ All parameters in this group start with two dashes:
                       DTS-HD. Activated automatically for BD muxing.
 --no-hdmv-descriptors Use ITU-T H.222.0 | ISO/IEC 13818-1 descriptors instead of
                       HDMV descriptors. Not activated for BD or AVCHD muxing.
---vbr                 Use variable bitrate. This is the default mode.
---minbitrate          Sets the lower limit of the VBR bitrate. If the stream has
-                      a smaller bitrate, null packets will be inserted to
-                      compensate.
---maxbitrate          The upper limit of the VBR bitrate.
---cbr                 Muxing mode with a fixed bitrate. --vbr and --cbr must not
-                      be used together.
---bitrate             Set a fixed bitrate in Mbps (e.g. --bitrate=35). This sets
-                      both the minimum and maximum bitrate to the same value,
-                      enabling CBR mode.
+--vbr                 Use variable bitrate. This is the default mode, so on its
+                      own the word changes nothing.
+--minbitrate          Sets the lower limit of the muxing rate, in kbps. If the
+                      streams together come to less, null packets are inserted
+                      to make up the difference. Has no effect unless --bitrate
+                      or --maxbitrate is given as well.
+--maxbitrate          Sets the rate, in kbps, that the transport stream is paced
+                      to. It is not a ceiling: nothing is dropped or delayed if
+                      the streams need more, so a value below what they need
+                      does not make the output any smaller. Must be above 90.
+--cbr                 Ask for a fixed bitrate. The rate comes from --bitrate, so
+                      --cbr on its own does nothing. --vbr and --cbr must not be
+                      used together.
+--bitrate             Set a fixed bitrate in kbps, so --bitrate=35000 means
+                      35 Mbps. This sets both the minimum and the maximum to
+                      that value. Where the streams need less, null packets pad
+                      the difference; where they need more they are still
+                      written in full, so the output can come out above the
+                      figure asked for. Must be above 90.
 --vbv-len             The  length  of the  virtual  buffer  in milliseconds.  The
                       default value  is 500.  Typically, this  option  is used
                       together with --cbr. The parameter is similar to  the value
