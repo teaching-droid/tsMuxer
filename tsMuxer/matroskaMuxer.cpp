@@ -2195,7 +2195,7 @@ void MatroskaMuxer::writeCues()
 // same order, that an extracted RPU file uses, so it is worth something outside tsMuxeR.
 static const char DV_RPU_ATTACHMENT_NAME[] = "dv-original-rpu.bin";
 static const char DV_RPU_PTS_ATTACHMENT_NAME[] = "dv-original-rpu-pts.bin";
-// DV_MANIFEST_ATTACHMENT_NAME lives in nalUnits.h, since both readers of it need the same name.
+// MANIFEST_ATTACHMENT_NAME lives in nalUnits.h, since both readers of it need the same name.
 
 static std::string hexBytes(const uint8_t* data, const int len)
 {
@@ -2362,11 +2362,11 @@ void MatroskaMuxer::writeStartCodeOnlyManifest(const std::string& scRule)
     const uint32_t crc = static_cast<uint32_t>(crc32(
         crc32(0, nullptr, 0), reinterpret_cast<const uint8_t*>(manifest.data()), static_cast<uInt>(manifest.size())));
 
-    std::vector<uint8_t> head(256 + strlen(DV_MANIFEST_ATTACHMENT_NAME));
+    std::vector<uint8_t> head(256 + strlen(MANIFEST_ATTACHMENT_NAME));
     int p = 0;
     p += ebml_write_string(head.data() + p, MATROSKA_ID_FILEDESCRIPTION,
                            "How the source framed the video, so a disc built from this file matches it.");
-    p += ebml_write_string(head.data() + p, MATROSKA_ID_FILENAME, DV_MANIFEST_ATTACHMENT_NAME);
+    p += ebml_write_string(head.data() + p, MATROSKA_ID_FILENAME, MANIFEST_ATTACHMENT_NAME);
     p += ebml_write_string(head.data() + p, MATROSKA_ID_FILEMIMETYPE, "text/plain");
     p += ebml_write_uint(head.data() + p, MATROSKA_ID_FILEUID, (static_cast<uint64_t>(crc) << 32) | 3);
     head.resize(p);
@@ -2515,7 +2515,7 @@ void MatroskaMuxer::writeAttachments()
     const std::vector<uint8_t> rpuHead = attachedFileHead(
         "Original Dolby Vision profile 7 RPUs, one per picture, in presentation order. "
         "See " +
-            std::string(DV_MANIFEST_ATTACHMENT_NAME) + ".",
+            std::string(MANIFEST_ATTACHMENT_NAME) + ".",
         DV_RPU_ATTACHMENT_NAME, "application/octet-stream", rpuUid);
 
     // The two small ones travel the same way: built in memory and written after the RPUs.
@@ -2535,7 +2535,7 @@ void MatroskaMuxer::writeAttachments()
                                      DV_RPU_PTS_ATTACHMENT_NAME, "application/octet-stream", ptsUid);
     small[0].data = std::move(ptsBlob);
     small[1].head = attachedFileHead("What this file is and how the original disc is rebuilt from it.",
-                                     DV_MANIFEST_ATTACHMENT_NAME, "text/plain", manifestUid);
+                                     MANIFEST_ATTACHMENT_NAME, "text/plain", manifestUid);
     small[1].data.assign(manifest.begin(), manifest.end());
 
     for (auto& s : small)

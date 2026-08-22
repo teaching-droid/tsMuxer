@@ -1102,7 +1102,7 @@ void MatroskaDemuxer::openFile(const std::string& streamName)
 void MatroskaDemuxer::applyStartCodeRule()
 {
     std::vector<uint8_t> manifestBytes;
-    if (!getAttachment(DV_MANIFEST_ATTACHMENT_NAME, manifestBytes))
+    if (!getAttachment(MANIFEST_ATTACHMENT_NAME, manifestBytes))
         return;
 
     const std::string rule = dvManifestValue(std::string(manifestBytes.begin(), manifestBytes.end()), "start-code");

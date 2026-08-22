@@ -53,7 +53,7 @@ extern "C"
 // manifest that travels beside them.
 static const char DV_RPU_ATTACHMENT[] = "dv-original-rpu.bin";
 static const char DV_RPU_PTS_ATTACHMENT[] = "dv-original-rpu-pts.bin";
-// The manifest's own name is DV_MANIFEST_ATTACHMENT_NAME, in nalUnits.h, because the demuxer reads
+// The manifest's own name is MANIFEST_ATTACHMENT_NAME, in nalUnits.h, because the demuxer reads
 // the same file for the framing rule.
 
 // One "  key   value" line out of the manifest. Defined once in nalUnits.cpp, because the demuxer
@@ -73,7 +73,7 @@ static std::string manifestValue(const std::string& text, const std::string& key
 static void loadDvOriginalRpus(AbstractDemuxer* demuxer, HevcDolbyVisionFilter* filter)
 {
     std::vector<uint8_t> manifestBytes;
-    if (demuxer == nullptr || !demuxer->getAttachment(DV_MANIFEST_ATTACHMENT_NAME, manifestBytes))
+    if (demuxer == nullptr || !demuxer->getAttachment(MANIFEST_ATTACHMENT_NAME, manifestBytes))
         return;
 
     const std::string manifest(manifestBytes.begin(), manifestBytes.end());

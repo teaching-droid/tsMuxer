@@ -20,7 +20,7 @@
 void parseStartCodeRule(const std::string& rule, std::map<int, int>& out);
 
 // The manifest a tsMuxeR Matroska file carries when it has anything to record about its source.
-inline constexpr char DV_MANIFEST_ATTACHMENT_NAME[] = "dv-manifest.txt";
+inline constexpr char MANIFEST_ATTACHMENT_NAME[] = "tsmuxer-manifest.txt";
 
 // One "  key   value" line out of that manifest.
 std::string dvManifestValue(const std::string& text, const std::string& key);
