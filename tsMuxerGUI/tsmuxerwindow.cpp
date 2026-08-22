@@ -538,6 +538,11 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->movedownBtn, &QPushButton::clicked, this, &TsMuxerWindow::onMoveDownButtonCLick);
     connect(ui->checkFPS, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onVideoCheckBoxChanged);
     connect(ui->checkBoxLevel, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onVideoCheckBoxChanged);
+    // The Dolby Vision profile selector had no connection at all, while every other combo here has
+    // one. The meta file handed to the muxer IS the text in the preview, so a choice that never
+    // refreshed the preview never reached the mux either: picking profile 8.1 changed the combo
+    // and nothing else, and the disc came out as profile 7 with nothing said about it.
+    connect(ui->comboBoxDvProfile, comboBoxIndexChanged, this, &TsMuxerWindow::updateMetaLines);
     connect(ui->comboBoxSEI, comboBoxIndexChanged, this, &TsMuxerWindow::onVideoCheckBoxChanged);
     connect(ui->checkBoxSecondaryVideo, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onVideoCheckBoxChanged);
     connect(ui->checkBoxSPS, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onVideoCheckBoxChanged);
@@ -2607,6 +2612,9 @@ void TsMuxerWindow::trackLVItemChanged(QTableWidgetItem* item)
         return;
 
     Q_UNUSED(item);
+    // Before updateMetaLines, because unticking a layer can take the Dolby Vision selector away and
+    // the meta is written from whether that selector is showing.
+    updateDvProfileVisible();
     updateMetaLines();
     ui->moveupBtn->setEnabled(ui->trackLV->currentItem() != 0);
     ui->movedownBtn->setEnabled(ui->trackLV->currentItem() != 0);
@@ -3863,6 +3871,10 @@ void TsMuxerWindow::deleteTrack(int idx)
     }
 
     updateMaxOffsets();
+    // Removing a track can take away the layer that made the Dolby Vision selector apply. Without
+    // this the selector stayed visible and --dv-profile=8.1 went on being written into a mux with
+    // nothing left to fold.
+    updateDvProfileVisible();
     updateMetaLines();
     ui->moveupBtn->setEnabled(ui->trackLV->currentItem() != 0);
     ui->movedownBtn->setEnabled(ui->trackLV->currentItem() != 0);
@@ -4003,14 +4015,47 @@ void TsMuxerWindow::moveRow(int index, int index2)
 // and enhancement layer, which is exactly what the description says.
 void TsMuxerWindow::updateDvProfileVisible()
 {
+    // Two shapes qualify and they look nothing alike.
+    //
+    // An already merged Matroska track arrives as two rows sharing one track number, told apart by
+    // subTrack, and carrying Dolby Vision in the description.
+    //
+    // A DISC arrives as two independent video tracks, both with subTrack 0: a base layer that says
+    // nothing about Dolby Vision, and an enhancement layer that carries the RPU. Only the first
+    // shape was recognised here, so the selector never appeared for the source docs/DOLBY_VISION.md
+    // describes, and a disc taken to Matroska came out as profile 7 with nothing said about it.
+    //
+    // The disc test mirrors the muxer's own pairing: a video track AFTER THE FIRST carrying Dolby
+    // Vision data. Not "any track with an RPU", because a single layer profile 8 track has one too
+    // and must be left alone.
+    //
+    // Unchecked rows are skipped, because they never reach the muxer: an unticked row goes into the
+    // meta commented out. Counting them left the selector showing after the enhancement layer was
+    // unticked, which put --dv-profile=8.1 into a mux with nothing to fold.
     bool dualLayerDv = false;
+    int videoTracksSeen = 0;
     for (int i = 0; i < ui->trackLV->rowCount(); ++i)
     {
+        const QTableWidgetItem* rowItem = ui->trackLV->item(i, 0);
+        if (rowItem == nullptr || rowItem->checkState() != Qt::Checked)
+            continue;
         const QtvCodecInfo* codecInfo = getCodecInfo(i);
-        if (codecInfo && codecInfo->descr.contains("Dolby Vision") && codecInfo->subTrack != 0)
+        if (codecInfo == nullptr)
+            continue;
+        const bool carriesDv = codecInfo->descr.contains("Dolby Vision");
+        if (carriesDv && codecInfo->subTrack != 0)
         {
             dualLayerDv = true;
             break;
+        }
+        if (isVideoCodec(codecInfo->displayName))
+        {
+            ++videoTracksSeen;
+            if (videoTracksSeen > 1 && carriesDv)
+            {
+                dualLayerDv = true;
+                break;
+            }
         }
     }
     const bool show = ui->radioButtonMKV->isChecked() && dualLayerDv;
