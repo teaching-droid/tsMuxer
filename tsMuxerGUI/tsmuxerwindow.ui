@@ -939,6 +939,9 @@
                      <property name="decimals">
                       <number>3</number>
                      </property>
+                     <property name="minimum">
+                      <double>91.000000000000000</double>
+                     </property>
                      <property name="maximum">
                       <double>99999.990000000005239</double>
                      </property>
@@ -1044,6 +1047,9 @@
                      </property>
                      <property name="decimals">
                       <number>3</number>
+                     </property>
+                     <property name="minimum">
+                      <double>91.000000000000000</double>
                      </property>
                      <property name="maximum">
                       <double>99999.990000000005239</double>
