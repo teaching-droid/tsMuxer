@@ -40,6 +40,16 @@ extern "C"
 // routed by real stream index, so the companion is keyed clear of every real one.
 static constexpr int AC3_CORE_STREAM_BASE = 0x40000000;
 
+// Said in two places, so it lives in one: openDstFile refuses before the destination is touched,
+// and refreshTrackProperties keeps the same refusal as a backstop for a pair that looked foldable
+// and turned out not to be.
+static constexpr char DV_PROFILE81_NEEDS_DUAL_LAYER[] =
+    "--dv-profile=8.1 converts the Dolby Vision metadata of a DUAL LAYER source, and this mux has no "
+    "dual layer Dolby Vision track to convert. A single layer file already carries its picture and its "
+    "RPU in one track, so there is nothing to fold and nothing to convert: leave --dv-profile out and "
+    "the file is written as it is. A dual layer disc needs BOTH of its video streams listed, the base "
+    "layer and the enhancement layer.";
+
 using namespace std;
 
 // INTERNAL_PTS_PER_MS, the divisor from the internal PTS frequency to milliseconds, now lives in
@@ -1018,9 +1028,42 @@ void MatroskaMuxer::writeTracks()
 
 // ──────────────── openDstFile ────────────────────────────────────────────────
 
+// Could a fold happen at all? A NECESSARY condition, not the full test, and the distinction is the
+// whole point of this function.
+//
+// The real pairing cannot be run here. It needs dvBlockAddIdType, which is built from the codec
+// reader in refreshTrackProperties, and that runs on the first packet precisely because a reader
+// has not parsed anything yet at this stage. Asking the exact question early gets the answer "no"
+// for every mux, including the ones that work.
+//
+// What IS knowable here is the track list, and folding needs two HEVC video tracks. With fewer
+// than two there is nothing a later reader could discover that would make a fold possible, so
+// refusing is safe. With two or more this returns true and the exact check in
+// refreshTrackProperties still decides.
+bool MatroskaMuxer::couldFoldDualLayer() const
+{
+    int hevcVideoTracks = 0;
+    for (const auto& [streamIdx, track] : m_tracks)
+    {
+        if (track.trackType != 1)
+            continue;
+        if (dynamic_cast<HEVCStreamReader*>(track.codecReader) != nullptr)
+            ++hevcVideoTracks;
+    }
+    return hevcVideoTracks >= 2;
+}
+
 void MatroskaMuxer::openDstFile()
 {
     m_fileName = m_origFileName;
+
+    // Refuse BEFORE the destination is touched. This check used to live in refreshTrackProperties,
+    // which runs on the first packet, by which time the file has been created and truncated: a mux
+    // that refused to run replaced whatever was at that path with a 308 byte stub. Measured on a
+    // 96,002 byte file. The muxer knows its tracks by now, since they are added before this is
+    // called, so nothing is lost by asking here.
+    if (m_dvWriteProfile81 && !couldFoldDualLayer())
+        THROW(ERR_COMMON, DV_PROFILE81_NEEDS_DUAL_LAYER)
 
     if (!m_file.open(m_fileName.c_str(), File::ofWrite))
         THROW(ERR_CANT_CREATE_FILE, "Can't create output file " << m_fileName)
@@ -1218,13 +1261,12 @@ void MatroskaMuxer::refreshTrackProperties()
                 break;
             }
         }
+        // Reaching this is now the narrow case only: openDstFile has already refused a mux with no
+        // candidate pair at all, before the destination was opened. What is left here is a pair
+        // that looked foldable and whose configuration record could not be built, which is rare
+        // enough to be worth keeping as a backstop rather than assuming it cannot happen.
         if (!folded)
-            THROW(ERR_COMMON,
-                  "--dv-profile=8.1 converts the Dolby Vision metadata of a DUAL LAYER source, and this mux has no "
-                  "dual layer Dolby Vision track to convert. A single layer file already carries its picture and its "
-                  "RPU in one track, so there is nothing to fold and nothing to convert: leave --dv-profile out and "
-                  "the file is written as it is. A dual layer disc needs BOTH of its video streams listed, the base "
-                  "layer and the enhancement layer.")
+            THROW(ERR_COMMON, DV_PROFILE81_NEEDS_DUAL_LAYER)
     }
 
     // A Blu-ray TrueHD track arrives as its lossless frames PLUS a 448 kbps AC-3 core, both on one

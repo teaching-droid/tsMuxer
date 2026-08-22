@@ -359,6 +359,10 @@ class MatroskaMuxer final : public AbstractMuxer
 
     // Refresh track properties from codec readers (called when readers are initialized)
     void refreshTrackProperties();
+    // Is a Dolby Vision fold possible at all, in the sense that the track list does not rule it
+    // out? A necessary condition only, asked before the destination is opened so that a mux which
+    // cannot run does not truncate a file. The exact test lives in refreshTrackProperties.
+    [[nodiscard]] bool couldFoldDualLayer() const;
     // Write the deferred header (SegmentInfo + Tracks)
     void writeDeferredHeader();
     // Replay buffered pre-header packets (sets m_firstTimecode to min PTS)
