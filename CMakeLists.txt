@@ -23,6 +23,38 @@ else()
 endif()
 add_definitions("-DTSMUXER_VERSION=\"${TSMUXER_VERSION}\"")
 
+# The commit above is read at CONFIGURE time and baked into the compile flags, so building again
+# in an already configured directory keeps printing whatever commit it was configured with. A
+# local build here reported a commit 24 behind the one it actually contained, which matters
+# because that line is what people quote in a bug report, and it was believed once already.
+# Watching the files git rewrites when HEAD moves makes cmake re-run on the next build, which
+# costs a fraction of a second on an existing build directory. Nothing is watched when git is
+# absent, so a source tarball builds exactly as before.
+set(TSMUXER_GIT_DIR "${CMAKE_SOURCE_DIR}/.git")
+if(EXISTS "${TSMUXER_GIT_DIR}" AND NOT IS_DIRECTORY "${TSMUXER_GIT_DIR}")
+  # In a worktree or a submodule .git is a file naming the real directory.
+  file(READ "${TSMUXER_GIT_DIR}" TSMUXER_GIT_FILE)
+  if(TSMUXER_GIT_FILE MATCHES "gitdir: *([^\r\n]+)")
+    get_filename_component(TSMUXER_GIT_DIR "${CMAKE_MATCH_1}" ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
+  endif()
+endif()
+if(IS_DIRECTORY "${TSMUXER_GIT_DIR}")
+  # HEAD covers a checkout and a detached head; the branch ref covers a commit on the current
+  # branch, which does NOT rewrite HEAD; packed-refs covers a tree whose refs are packed.
+  set(TSMUXER_GIT_WATCH "${TSMUXER_GIT_DIR}/HEAD" "${TSMUXER_GIT_DIR}/packed-refs")
+  if(EXISTS "${TSMUXER_GIT_DIR}/HEAD")
+    file(READ "${TSMUXER_GIT_DIR}/HEAD" TSMUXER_GIT_HEAD)
+    if(TSMUXER_GIT_HEAD MATCHES "ref: *([^\r\n]+)")
+      list(APPEND TSMUXER_GIT_WATCH "${TSMUXER_GIT_DIR}/${CMAKE_MATCH_1}")
+    endif()
+  endif()
+  foreach(watched IN LISTS TSMUXER_GIT_WATCH)
+    if(EXISTS "${watched}")
+      set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${watched}")
+    endif()
+  endforeach()
+endif()
+
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   include(GNUInstallDirs)
   mark_as_advanced(CLEAR
