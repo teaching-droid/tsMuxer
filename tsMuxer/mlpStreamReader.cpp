@@ -22,6 +22,34 @@ void MLPStreamReader::applyDiscoveryData(const StreamDiscoveryData& data)
 
 int MLPStreamReader::getHeaderLen() { return MLP_HEADER_LEN; }
 
+uint8_t* MLPStreamReader::findFrame(uint8_t* buff, uint8_t* end)
+{
+    uint8_t* frame = MLPCodec::findFrame(buff, end);
+
+    // A Blu-ray track that carries the AC-3 compatibility core starts with an AC-3 frame and
+    // interleaves the lossless frames behind it. Read as A_MLP the core frames are skipped, and
+    // most of the lossless data goes with them: measured at 1.54 seconds recovered from a 39.9
+    // second track, in a file that still reports itself as correct 8 channel 24 bit TrueHD. The
+    // mux path loses the same way. Every label on the result is right and the audio is not there,
+    // so this has to be refused rather than warned about.
+    //
+    // The test is the disc arrangement itself: an AC-3 sync word at the very start, with the
+    // first lossless frame somewhere behind it. A standalone TrueHD stream begins with its own
+    // frame, so it returns the start of the buffer and never matches.
+    if (!m_coreProbed)
+    {
+        m_coreProbed = true;
+        if (frame != nullptr && frame != buff && end - buff >= 2 && buff[0] == 0x0B && buff[1] == 0x77)
+            THROW(ERR_INVALID_CODEC_FORMAT,
+                  "This track carries an AC-3 core with the TrueHD interleaved behind it, which is how a Blu-ray "
+                  "stores it, so A_MLP reads only a part of it. Change this line's codec to A_AC3: tsMuxeR keeps "
+                  "the core and the lossless track together under that name, and it is what the track listing "
+                  "reports for this track. Add down-to-ac3 to that line if you want the AC-3 core on its own.")
+    }
+
+    return frame;
+}
+
 const std::string MLPStreamReader::getStreamInfo()
 {
     std::ostringstream str;
