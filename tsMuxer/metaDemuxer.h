@@ -94,12 +94,19 @@ class ContainerToReaderWrapper final : public AbstractReader
         FileNameIterator* m_iterator;
         std::map<uint32_t, uint32_t> lastReadCnt;
         std::map<uint32_t, uint32_t> lastReadRez;
+        // What the container actually holds, read once when it is opened. Used to refuse a track
+        // number that is not there, which otherwise produced an empty file and reported success.
+        // Cached because TSDemuxer::getTrackList re-reads the file to find the PMT, and openStream
+        // runs once per track line.
+        std::map<int32_t, TrackInfo> m_trackList;
+        bool m_trackListKnown;
         DemuxerData()
         {
             m_demuxer = nullptr;
             m_firstRead = true;
             m_iterator = nullptr;
             m_allFragmented = true;
+            m_trackListKnown = false;
         }
         bool m_firstRead;
         bool m_allFragmented;  // // container reader does not contain any sequence track reader(s)

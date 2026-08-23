@@ -2201,6 +2201,42 @@ bool ContainerToReaderWrapper::openStream(int readerID, const char* streamName, 
         demuxer->setFileIterator(m_demuxers[streamName].m_iterator);
 
         demuxer->openFile(streamName);
+
+        // Read the track list once, here, while the file is open and before any track is
+        // registered against it.
+        demuxer->getTrackList(m_demuxers[streamName].m_trackList);
+        m_demuxers[streamName].m_trackListKnown = true;
+    }
+
+    // A track number the container does not hold used to be accepted in silence. Nothing ever
+    // matched it, so the output was an EMPTY file with "Demux complete" printed after it and exit
+    // code 0. Refuse instead, and say what the file does hold, because the usual cause is a track=
+    // copied from the source a file was made FROM.
+    {
+        const DemuxerData& info = m_demuxers[streamName];
+        const int wantedPid = SubTrackFilter::isSubTrack(pid) ? pid >> 16 : pid;
+        if (wantedPid != 0 && info.m_trackListKnown && !info.m_trackList.empty() &&
+            info.m_trackList.find(wantedPid) == info.m_trackList.end())
+        {
+            std::string present;
+            int shown = 0;
+            for (const auto& track : info.m_trackList)
+            {
+                if (shown == 12)
+                {
+                    present += ", and more";
+                    break;
+                }
+                if (shown)
+                    present += ", ";
+                present += std::to_string(track.first);
+                ++shown;
+            }
+            THROW(ERR_CANT_OPEN_STREAM,
+                  "Track " << wantedPid << " is not in \"" << streamName << "\". This file has track " << present
+                           << ". A remuxed or demuxed file does not keep the track numbers of the file it was made "
+                              "from, so a track= copied from the original will not match.")
+        }
     }
 
     if (SubTrackFilter::isSubTrack(pid))
