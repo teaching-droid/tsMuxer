@@ -20,6 +20,62 @@ static constexpr uint16_t ff_mpa_freq_tab[3] = {44100, 48000, 32000};
 // static constexpr int MPA_DUAL = 2;
 static constexpr int MPA_MONO = 3;
 
+// Frame length in bytes from a header alone, or 0 when it cannot be worked out. Deliberately a
+// copy of the arithmetic in mp3DecodeFrame rather than a call to it: this runs while SEARCHING,
+// on bytes that are very often not a frame at all, and it must not disturb the decoder's state.
+static int mp3FrameSizeFromHeader(const uint32_t header)
+{
+    int lsf, mpeg25;
+    if (header & (1 << 20))
+    {
+        lsf = (header & (1 << 19)) ? 0 : 1;
+        mpeg25 = 0;
+    }
+    else
+    {
+        lsf = 1;
+        mpeg25 = 1;
+    }
+    const int layer = 4 - static_cast<int>((header >> 17) & 3);
+    if (layer == 4)
+        return 0;
+    const unsigned sampleRateIndex = (header >> 10) & 3;
+    if (sampleRateIndex == 3)
+        return 0;
+    const int sampleRate = ff_mpa_freq_tab[sampleRateIndex] >> (lsf + mpeg25);
+    if (sampleRate <= 0)
+        return 0;
+    const unsigned bitrateIndex = (header >> 12) & 0xf;
+    // A free format stream, index 0, has no length in its header. mp3DecodeFrame already refuses
+    // those, so requiring a length here takes nothing away that works today.
+    if (bitrateIndex == 0 || bitrateIndex == 15)
+        return 0;
+    const int padding = static_cast<int>((header >> 9) & 1);
+    int size = ff_mpa_bitrate_tab[lsf][layer - 1][bitrateIndex];
+    switch (layer)
+    {
+    case 1:
+        size = (size * 12000) / sampleRate;
+        size = (size + padding) * 4;
+        break;
+    case 2:
+        size = (size * 144000) / sampleRate;
+        size += padding;
+        break;
+    default:
+    case 3:
+        size = (size * 144000) / (sampleRate << lsf);
+        size += padding;
+        break;
+    }
+    return size;
+}
+
+// The fields a real stream keeps constant from one frame to the next: the sync word, the version,
+// the layer and the sample rate. Bitrate and padding are excluded because a variable bitrate file
+// changes both legitimately, frame by frame.
+static constexpr uint32_t MP3_CONSTANT_FIELDS = 0xfffe0c00;
+
 uint8_t* MP3Codec::mp3FindFrame(uint8_t* buff, const uint8_t* end)
 {
     if (buff == nullptr)
@@ -39,6 +95,30 @@ uint8_t* MP3Codec::mp3FindFrame(uint8_t* buff, const uint8_t* end)
         // frequency
         if ((header & (3 << 10)) == 3 << 10)
             continue;
+
+        // A LONE HEADER IS NOT ENOUGH. The four tests above examine eleven sync bits and three
+        // small fields, which arbitrary data satisfies roughly once every few thousand bytes, so
+        // any sizeable block of non-audio in front of the stream is certain to contain matches. A
+        // metadata tag is exactly that: measured on a real file, a UTF-16 byte order mark inside
+        // the tag passed every test above, and the bytes from there to the true first frame were
+        // written into the output as if they were sound. Demuxing an ordinary tagged file produced
+        // an elementary stream beginning with the track title.
+        //
+        // So require the frame to be CONFIRMED by its successor: a second header exactly one frame
+        // later, agreeing on the fields a stream does not change. Two independent matches at a
+        // computed distance are far beyond coincidence, and this is what the detection path has
+        // always done with its ten frame run; only this search accepted a single hit.
+        const int frameSize = mp3FrameSizeFromHeader(header);
+        if (frameSize <= 4)
+            continue;
+        if (cur + frameSize + 4 <= end)
+        {
+            const uint32_t next = my_ntohl(*reinterpret_cast<uint32_t*>(cur + frameSize));
+            if ((next & MP3_CONSTANT_FIELDS) != (header & MP3_CONSTANT_FIELDS))
+                continue;
+        }
+        // Too near the end of the buffer to look: accept it. Refusing here would discard the last
+        // frame of every stream, which is a certain loss traded against a possible one.
         return cur;
     }
     return nullptr;
