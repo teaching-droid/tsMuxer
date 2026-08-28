@@ -23,6 +23,7 @@ SimplePacketizerReader::SimplePacketizerReader()
     m_pendingLost = 0;
     m_tagCredit = 0;
     m_tagProbePos = nullptr;
+    m_tagCeilingEnd = nullptr;
     m_containerDataType = 0;
     m_containerStreamIndex = 0;
     m_stretch = 1.0;
@@ -560,6 +561,93 @@ static int64_t tagBytesAt(const uint8_t* p, const uint8_t* end)
     return total;
 }
 
+// ** HOW FAR A TAG THE READER HAS ACTUALLY VERIFIED REACHES, WHICH IS NOT HOW LONG IT SAYS IT IS. **
+//
+// This exists for one job: to tell a frame search where it is allowed to DISBELIEVE a sync. An AAC
+// sync is twelve bits and two more, with no checksum, so arbitrary data satisfies it about once
+// every sixteen thousand bytes. In front of the audio that arbitrary data is usually a picture: a
+// 1.2 MB cover art tag holds about seventy false syncs, and the reader used to demux 455,104 bytes
+// for a stream whose audio is 194,146. Requiring a second header one frame length on removes them.
+//
+// ** BUT THE SAME STRICTNESS, APPLIED TO REAL AUDIO, DESTROYS IT. ** A genuine frame whose
+// successor is damaged looks exactly like a false sync, and refusing it throws away everything in
+// front of the next confirmable one. Measured: one flipped byte cost 881 bytes of undamaged audio,
+// and on a file whose frames are separated by junk it cost 193,449 of 194,146.
+//
+// The two cases cannot be told apart by looking at the candidate, or at how many frames follow it;
+// they are identical on every such measure. What DOES separate them is nothing about the sync at
+// all: it is whether the reader is standing inside a block of metadata that declared itself and
+// then proved it. Inside such a block a refusal costs nothing, because there is no audio there to
+// lose. Outside it, the unmodified answer is returned and nothing can be lost that was not lost
+// before.
+//
+// So the ceiling must be what was VERIFIED, never what was declared. The credit path above is
+// deliberately permissive when a body has not arrived, because a tag larger than a read block is
+// still a tag and should not be charged as loss; a ceiling may not be, because it decides where
+// audio may be disbelieved. A length taken on trust here would let a few bytes of forged header
+// arm a skip over real audio, which is the whole defect this file already fixed once for the loss
+// figure.
+//
+// Formats with nothing to walk forward do not feed it. Lyrics3 v1 is found by searching for its
+// closing keyword rather than by stepping through declared sizes, so it is not here, and neither is
+// v2, whose walk is not separable from that search at this point. They therefore behave exactly as
+// they always did: no ceiling, no strictness, no risk.
+static int64_t oneTagCeiling(const uint8_t* p, const uint8_t* end)
+{
+    const int64_t avail = end - p;
+
+    // ID3v2, and the whole tag must be here. See above: permissive is right for the credit and
+    // wrong for the ceiling.
+    if (avail >= 10 && p[0] == 'I' && p[1] == 'D' && p[2] == '3' && p[3] != 0xff && p[4] != 0xff &&
+        (p[6] | p[7] | p[8] | p[9]) < 0x80)
+    {
+        const int64_t size = (static_cast<int64_t>(p[6]) << 21) | (static_cast<int64_t>(p[7]) << 14) |
+                             (static_cast<int64_t>(p[8]) << 7) | static_cast<int64_t>(p[9]);
+        const bool hasFooter = p[3] >= 4 && (p[5] & 0x10) != 0;
+        const int64_t len = 10 + size + (hasFooter ? 10 : 0);
+        return avail >= len && id3v2BodyIsPlausible(p, end, len) ? len : 0;
+    }
+
+    // APEv2 already produces exactly this number as the conservative half of its walk: the whole
+    // tag when every item was stepped through and the size landed on its end, and the 32 header
+    // bytes when it could not be.
+    if (avail >= 32 && memcmp(p, "APETAGEX", 8) == 0)
+    {
+        const bool isHeader = (p[23] & 0x20) != 0;
+        if (!isHeader)
+            return 32;
+        int64_t walkEnd = 32;
+        apev2BodyIsPlausible(p, end, &walkEnd);
+        return walkEnd;
+    }
+
+    // The two fixed size tags are their own proof: there is no declared length to corrupt. ID3v1
+    // still goes through oneTagLength so that the year characters are checked there rather than
+    // tested twice in two places that could drift apart.
+    if (avail >= 227 && p[0] == 'T' && p[1] == 'A' && p[2] == 'G' && p[3] == '+')
+        return 227;
+    if (avail >= 128 && p[0] == 'T' && p[1] == 'A' && p[2] == 'G' && p[3] != '+')
+        return oneTagLength(p, end) == 128 ? 128 : 0;
+
+    return 0;
+}
+
+// The verified run beginning exactly at p, tags back to back, the way tagRunAt walks the declared
+// one. Everything is an offset, so nothing can be formed past the buffer even if a length lies.
+static int64_t tagCeilingRunAt(const uint8_t* p, const uint8_t* end)
+{
+    const int64_t avail = end - p;
+    int64_t total = 0;
+    while (total < avail)
+    {
+        const int64_t len = oneTagCeiling(p + total, end);
+        if (len <= 0 || len > avail - total)
+            break;
+        total += len;
+    }
+    return total;
+}
+
 static constexpr double mplsEps = INTERNAL_PTS_FREQ / 45000.0 / 2.0;
 
 void SimplePacketizerReader::doMplsCorrection()
@@ -691,6 +779,8 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
         int skipBeforeBytes = 0;
         if (m_needSync)
         {
+            // Where a frame search may disbelieve a sync, and nowhere else. See oneTagCeiling.
+            m_tagCeilingEnd = m_curPos + tagCeilingRunAt(m_curPos, m_bufEnd);
             uint8_t* frame = findFrame(m_curPos, m_bufEnd);
             if (frame == nullptr)
             {
@@ -901,6 +991,11 @@ CheckStreamRez SimplePacketizerReader::checkStream(uint8_t* buffer, const int le
 
     CheckStreamRez rez;
     uint8_t* end = buffer + len;
+    // ** DETECTION NEEDS THE CEILING TOO, AND FOR THE SAME REASON THE DEMUX DOES. ** This retries
+    // the search only five times, so it escapes about ten bytes of junk and no more. Without a
+    // ceiling a tagged file is not recognised at all: a real one carrying cover art answered
+    // "Can't detect stream type" and could not be muxed.
+    m_tagCeilingEnd = buffer + tagCeilingRunAt(buffer, end);
     uint8_t* frame = findFrame(buffer, end);
     if (frame == nullptr)
     {

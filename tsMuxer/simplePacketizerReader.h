@@ -94,6 +94,10 @@ class SimplePacketizerReader : public AbstractStreamReader
     int64_t m_lostBytes;
     int64_t m_readBytes;  // see getReadSize(), summed in setBuffer
     bool m_everSynced;  // a frame of this codec has been found at least once
+    // Past the last byte of a metadata tag run that the recogniser WALKED AND VERIFIED at the
+    // current search position, or the position itself when there is none. A frame search may
+    // disbelieve a sync below this and nowhere else. See oneTagCeiling for why.
+    const uint8_t* m_tagCeilingEnd;
     // Bytes abandoned with no frame found, held back rather than counted as lost until a frame IS
     // found again. TRAILING DATA IS, BY DEFINITION, DATA AFTER WHICH NO FRAME EVER FOLLOWS, so a
     // gap that is never closed was the tail and a gap that is closed was a real hole. An

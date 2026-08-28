@@ -21,7 +21,9 @@ class AACCodec
           m_rdb(0)
     {
     }
-    static uint8_t* findAacFrame(uint8_t* buffer, const uint8_t* end);
+    // tagCeiling: past the last byte of a VERIFIED metadata tag at the search position, below
+    // which a sync may be disbelieved. Pass buffer, or nullptr, to disbelieve nothing.
+    static uint8_t* findAacFrame(uint8_t* buffer, const uint8_t* end, const uint8_t* tagCeiling);
     static int getFrameSize(const uint8_t* buffer);
     bool decodeFrame(uint8_t* buffer, const uint8_t* end);
     void buildADTSHeader(uint8_t* buffer, unsigned frameSize);

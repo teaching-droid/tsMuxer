@@ -17,7 +17,7 @@ class AACStreamReader final : public SimplePacketizerReader, public AACCodec
    protected:
     int getHeaderLen() override;
     int decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, int& skipBeforeBytes) override;
-    uint8_t* findFrame(uint8_t* buff, uint8_t* end) override { return findAacFrame(buff, end); }
+    uint8_t* findFrame(uint8_t* buff, uint8_t* end) override { return findAacFrame(buff, end, m_tagCeilingEnd); }
     double getFrameDuration() override { return static_cast<double>(m_samples) * INTERNAL_PTS_FREQ / m_sample_rate; }
     const CodecInfo& getCodecInfo() override { return aacCodecInfo; }
     const std::string getStreamInfo() override;
