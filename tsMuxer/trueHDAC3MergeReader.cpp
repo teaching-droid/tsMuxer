@@ -21,7 +21,9 @@ TrueHDAC3MergeReader::TrueHDAC3MergeReader(const std::map<std::string, std::stri
       m_pendingEmitSamples(0),
       m_pendingEmitSampleRate(0),
       m_ac3FramesEmitted(0),
-      m_coverageReported(false)
+      m_coverageReported(false),
+      m_ac3CoreSampleRate(0),
+      m_ac3CoreChannels(0)
 {
     const auto itTrack = addParams.find("merge-ac3-track");
     const auto itFile = addParams.find("merge-ac3-file");
@@ -115,6 +117,13 @@ void TrueHDAC3MergeReader::extractAc3FramesFromAccum()
         q.sample_rate = m_ac3Parser.frameSampleRate();
         if (m_ac3SamplesPerSyncFrame == 0 && q.samples > 0)
             m_ac3SamplesPerSyncFrame = q.samples;
+        // The first frame that parsed is what the core IS. Nothing later overwrites it, so a
+        // damaged frame in the middle of the source cannot rewrite the track header behind it.
+        if (m_ac3CoreSampleRate == 0 && q.sample_rate > 0)
+        {
+            m_ac3CoreSampleRate = q.sample_rate;
+            m_ac3CoreChannels = m_ac3Parser.frameChannels();
+        }
         m_ac3FrameQueue.push_back(std::move(q));
         pos += total;
     }

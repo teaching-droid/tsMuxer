@@ -31,6 +31,7 @@ extern "C"
 #include "nalUnits.h"
 #include "opusStreamReader.h"
 #include "simplePacketizerReader.h"
+#include "trueHDAC3MergeReader.h"
 #include "tsMuxer.h"  // HDR10_metadata, filled from the HEVC SEI while parsing
 #include "vodCoreException.h"
 #include "vvc.h"
@@ -1290,11 +1291,28 @@ void MatroskaMuxer::refreshTrackProperties()
     {
         if (track.trackType != 2 || track.matroskaCodecID != MATROSKA_CODEC_ID_AUDIO_TRUEHD || track.dropAc3Core)
             continue;
+        // isTrueHD means "AC-3 core plus lossless", the disc arrangement. A TrueHD track read out
+        // of a Matroska file has no core, and down-to-ac3 has already turned the whole thing into
+        // plain AC-3.
         const auto ac3 = dynamic_cast<AC3Codec*>(track.codecReader);
-        // isTrueHD means "AC-3 core plus lossless", the disc arrangement, and it is the only case
-        // with a core to rescue. A TrueHD track read out of a Matroska file has none, and
-        // down-to-ac3 has already turned the whole thing into plain AC-3.
-        if (ac3 == nullptr || !ac3->isTrueHD() || ac3->getDownconvertToAC3())
+        const bool discCore = ac3 != nullptr && ac3->isTrueHD() && !ac3->getDownconvertToAC3();
+
+        // ** THE SAME PAIRING ARRIVING BY THE OTHER ROUTE USED TO BE THROWN AWAY IN SILENCE. **
+        //
+        // merge-ac3-track= and merge-ac3-file= build a TrueHD track with a core beside it out of two
+        // separate sources, and they do it through a reader that is not in the AC-3 family at all,
+        // so the question above answered no, no companion track was made, and every core packet met
+        // the ac3CoreStreamIndex < 0 line in muxPacketInternal and was dropped. Measured on a
+        // 4,261,662 byte TrueHD stream with a 1,120,000 byte AC-3 companion: the output was the same
+        // size to the byte as the same TrueHD muxed with no companion at all, one track instead of
+        // two, at "Mux successful complete" with nothing said. The core the user asked for was gone.
+        //
+        // The question that decides this is whether the track has a core travelling with it, and two
+        // readers can answer it.
+        const auto merged = dynamic_cast<TrueHDAC3MergeReader*>(track.codecReader);
+        const bool mergedCore = merged != nullptr && merged->hasAc3Core();
+
+        if (!discCore && !mergedCore)
             continue;
 
         MkvTrackInfo core;
@@ -1309,9 +1327,10 @@ void MatroskaMuxer::refreshTrackProperties()
         core.language = track.language;
         // The rate and channel count read from an AC-3 family reader a few lines above describe the
         // CORE, not the lossless stream, so they belong to this track rather than the one they were
-        // read onto.
-        core.sampleRate = track.sampleRate;
-        core.channels = track.channels;
+        // read onto. A merged core is the other way round: its track was opened as A_MLP and carries
+        // the LOSSLESS figures, 8 channels where the core has 6, so the core is asked for its own.
+        core.sampleRate = mergedCore ? merged->ac3CoreSampleRate() : track.sampleRate;
+        core.channels = mergedCore ? merged->ac3CoreChannels() : track.channels;
         core.markedDefault = false;
         core.ac3CoreOfStream = streamIdx;
         static std::mt19937_64 rng(std::random_device{}());
@@ -1320,11 +1339,19 @@ void MatroskaMuxer::refreshTrackProperties()
         track.ac3CoreStreamIndex = core.streamIndex;
         coreTracks.emplace_back(core.streamIndex, core);
 
-        LTRACE(LT_INFO, 2,
-               "TrueHD: keeping the AC-3 compatibility core as its own track. Matroska cannot carry "
-               "it inside the lossless track the way a disc does, and dropping it would lose the "
-               "only part a Blu-ray needs. Use merge-ac3-track= to put them back on one stream when "
-               "authoring a disc from this file, or drop-ac3-core to leave the core out.");
+        if (mergedCore)
+            LTRACE(LT_INFO, 2,
+                   "TrueHD: the merged AC-3 core is written as its own track. Matroska cannot carry "
+                   "it inside the lossless track the way a disc does, so the two travel side by "
+                   "side here and merge-ac3-track= puts them back on one stream when this file is "
+                   "authored to a disc. Use drop-ac3-core to leave the core out.");
+        else
+            LTRACE(LT_INFO, 2,
+                   "TrueHD: keeping the AC-3 compatibility core as its own track. Matroska cannot "
+                   "carry it inside the lossless track the way a disc does, and dropping it would "
+                   "lose the only part a Blu-ray needs. Use merge-ac3-track= to put them back on "
+                   "one stream when authoring a disc from this file, or drop-ac3-core to leave the "
+                   "core out.");
     }
     for (auto& [key, core] : coreTracks) m_tracks[key] = core;
 

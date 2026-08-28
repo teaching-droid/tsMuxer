@@ -26,6 +26,16 @@ class TrueHDAC3MergeReader final : public MLPStreamReader
 
     [[nodiscard]] int mergeAc3TrackPid() const { return m_mergeAc3Pid; }
 
+    // The AC-3 companion is a stream in its own right, and a container that cannot carry it inside
+    // the lossless track has to be told what it is. A disc TrueHD track answers the same question
+    // through AC3Codec::isTrueHD, which this reader is not in a position to answer because its two
+    // halves came from two separate sources. These figures describe the CORE, not the lossless
+    // stream the rest of this reader reports on, and they are read from the first core frame that
+    // actually parsed rather than from the meta file.
+    [[nodiscard]] bool hasAc3Core() const { return m_ac3CoreSampleRate > 0; }
+    [[nodiscard]] int ac3CoreSampleRate() const { return m_ac3CoreSampleRate; }
+    [[nodiscard]] uint8_t ac3CoreChannels() const { return m_ac3CoreChannels; }
+
     void setNewStyleAudioPES(bool value) { m_useNewStyleAudioPES = value; }
 
     void setAc3SideData(const uint8_t* data, uint32_t len);
@@ -72,12 +82,17 @@ class TrueHDAC3MergeReader final : public MLPStreamReader
     int64_t m_ac3FramesEmitted;
     bool m_coverageReported;
 
+    // Taken from the first AC-3 frame that parsed, so they are a measurement and not a promise.
+    int m_ac3CoreSampleRate;
+    uint8_t m_ac3CoreChannels;
+
     struct Ac3FrameParser : AC3Codec
     {
         int parse(uint8_t* b, uint8_t* e, int& sk) { return decodeFrame(b, e, sk); }
         uint8_t* findAc3Sync(uint8_t* b, const uint8_t* e) { return findFrame(b, e); }
         [[nodiscard]] int frameSamples() const { return m_samples; }
         [[nodiscard]] int frameSampleRate() const { return m_sample_rate; }
+        [[nodiscard]] uint8_t frameChannels() const { return m_channels; }
     };
     Ac3FrameParser m_ac3Parser;
 };
