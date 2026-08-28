@@ -36,6 +36,11 @@ class MPEGStreamReader;
 
 static constexpr int MAX_PES_HEADER_LEN = 512;
 
+// Raise the option refusals that main() would otherwise raise AFTER the destination has been
+// created, which replaced the user existing image with a stub. Called while the meta file is
+// still being read. Sets nothing; the checks inside TSMuxer::parseMuxOpt stay as the backstop.
+void validateMuxOptsEarly(const std::string& opts);
+
 class TSMuxer final : public AbstractMuxer
 {
     typedef AbstractMuxer base_class;

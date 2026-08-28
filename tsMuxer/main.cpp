@@ -1709,6 +1709,12 @@ int main(int argc, char** argv)
             if (!isValidFileName(dstFile))
                 throw runtime_error(string("Output filename is invalid: ") + dstFile);
 
+            // ** BEFORE THE DESTINATION IS CREATED, NOT AFTER. ** This stood below the block that
+            // creates the output image, so a meta that selects no tracks replaced an existing .iso
+            // with a stub and then refused. The capacity guard just below already had this right.
+            if (muxerManager.getTrackCnt() == 0)
+                THROW(ERR_COMMON, "No tracks selected")
+
             if (dt != DiskType::NONE)
             {
                 // Fit-to-disc guard (--disc-size): abort BEFORE the (multi-hour) mux if the image
@@ -1750,8 +1756,6 @@ int main(int argc, char** argv)
                 blurayHelper.createBluRayDirs();
                 dstFile = blurayHelper.m2tsFileName(firstM2tsOffset);
             }
-            if (muxerManager.getTrackCnt() == 0)
-                THROW(ERR_COMMON, "No tracks selected")
             muxerManager.doMux(dstFile, dt != DiskType::NONE ? &blurayHelper : nullptr);
             if (dt != DiskType::NONE)
             {

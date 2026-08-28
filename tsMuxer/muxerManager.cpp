@@ -332,6 +332,9 @@ bool MuxerManager::openMetaFile(const string& fileName)
         if (strStartWith(str, "MUXOPT"))
         {
             m_muxOpts = str;
+            // Refuse a bad option HERE, while the meta is still being read and no destination
+            // exists. Raised any later it replaced the user existing output image with a stub.
+            validateMuxOptsEarly(m_muxOpts);
             parseMuxOpt(m_muxOpts);
             m_mvcBaseViewR = m_muxOpts.find("right-eye") != string::npos;
         }

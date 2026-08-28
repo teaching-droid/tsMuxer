@@ -1717,7 +1717,73 @@ void TSMuxer::writeOutBuffer()
 // Both --bitrate and --maxbitrate end up in m_cbrBitrate, so both have to be held above the rate
 // the pacing can carry. --minbitrate is deliberately left alone: on its own it never reaches the
 // pacing term, and zero is what the GUI writes when no lower bound is wanted.
-static int checkedMuxRate(const std::string& option, const std::string& value)
+int checkedMuxRate(const std::string& option, const std::string& value);  // defined below
+
+// The size a --split-size value works out at, or a refusal. A size of zero or less can only be a
+// typo, and accepting it would turn splitting off without a word, which is what asking for 4 GiB
+// used to do before the option was widened to 64 bit.
+int64_t checkedSplitSize(const std::string& value)
+{
+    int64_t coeff = 1;
+    string postfix;
+    for (const auto& j : value)
+        if (!((j >= '0' && j <= '9') || j == '.'))
+            postfix += j;
+    postfix = strToUpperCase(postfix);
+    if (postfix == "GB")
+        coeff = 1000LL * 1000 * 1000;
+    else if (postfix == "GIB")
+        coeff = 1024LL * 1024 * 1024;
+    else if (postfix == "MB")
+        coeff = 1000LL * 1000;
+    else if (postfix == "MIB")
+        coeff = 1024LL * 1024;
+    else if (postfix == "KB")
+        coeff = 1000;
+    else if (postfix == "KIB")
+        coeff = 1024;
+    const string prefix = value.substr(0, value.size() - postfix.size());
+    const int64_t splitBytes = static_cast<int64_t>(strToDouble(prefix.c_str()) * static_cast<double>(coeff));
+    if (splitBytes <= 0)
+        THROW(ERR_COMMON, "Invalid --split-size value \"" << value << "\": it must be above zero.")
+    return splitBytes;
+}
+
+// ** A REFUSAL AFTER THE DESTINATION IS OPENED DESTROYS THE USER'S FILE, AND THE USER ASKED THE
+// PROGRAM TO STOP. **
+//
+// main() creates the output image before the mux runs, so every refusal raised later replaced an
+// existing .iso with a stub: 2,490,368 bytes of a good disc image became 1,769,472, three runs out
+// of three, while the message said the mux had been refused. Measured on four separate refusals
+// from three different commits, so it is a class and not one slip.
+//
+// This runs while the meta file is still being read, before any destination exists. It sets
+// nothing and returns nothing: it exists only to raise the same refusal earlier. The checks below
+// STAY where they are as the backstop, which is the discipline cc0eb53 used, so a route that does
+// not pass through here is still refused, only later.
+//
+// ** IT CALLS THE SAME PREDICATES THE REAL PARSE CALLS, DELIBERATELY. ** An early check that asks a
+// DIFFERENT question is the trap cc0eb53 fell into: its early gate only counted HEVC video tracks,
+// so it closed one route of at least three. One predicate in one place cannot drift from itself.
+//
+// --minbitrate is not here, exactly as it is not in the parse below: on its own it never reaches
+// the pacing term, and zero is what the interface writes when no lower bound is wanted.
+void validateMuxOptsEarly(const std::string& opts)
+{
+    const vector<string> params = splitQuotedStr(opts.c_str(), ' ');
+    for (auto& i : params)
+    {
+        vector<string> paramPair = splitStr(trimStr(i).c_str(), '=');
+        if (paramPair.size() < 2)
+            continue;
+        if (paramPair[0] == "--bitrate" || paramPair[0] == "--maxbitrate")
+            checkedMuxRate(paramPair[0], paramPair[1]);
+        else if (paramPair[0] == "--split-size")
+            checkedSplitSize(paramPair[1]);
+    }
+}
+
+int checkedMuxRate(const std::string& option, const std::string& value)
 {
     const auto rate = static_cast<int>(strToDouble(value.c_str()) * 1000.0);
     if (rate <= DEGENERATE_MUX_RATE)
@@ -1769,31 +1835,7 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
         }
         else if (paramPair[0] == "--split-size")
         {
-            int64_t coeff = 1;
-            string postfix;
-            for (const auto& j : paramPair[1])
-                if (!((j >= '0' && j <= '9') || j == '.'))
-                    postfix += j;
-            postfix = strToUpperCase(postfix);
-            if (postfix == "GB")
-                coeff = 1000LL * 1000 * 1000;
-            else if (postfix == "GIB")
-                coeff = 1024LL * 1024 * 1024;
-            else if (postfix == "MB")
-                coeff = 1000LL * 1000;
-            else if (postfix == "MIB")
-                coeff = 1024LL * 1024;
-            else if (postfix == "KB")
-                coeff = 1000;
-            else if (postfix == "KIB")
-                coeff = 1024;
-            string prefix = paramPair[1].substr(0, paramPair[1].size() - postfix.size());
-            const int64_t splitBytes = static_cast<int64_t>(strToDouble(prefix.c_str()) * static_cast<double>(coeff));
-            // A size that works out at zero or less can only be a typo, and accepting it would turn
-            // splitting off without a word, which is what asking for 4 GiB used to do.
-            if (splitBytes <= 0)
-                THROW(ERR_COMMON, "Invalid --split-size value \"" << paramPair[1] << "\": it must be above zero.")
-            setSplitSize(splitBytes);
+            setSplitSize(checkedSplitSize(paramPair[1]));
             m_computeMuxStats = true;
         }
         else if (paramPair[0] == "--blu-ray" || paramPair[0] == "--blu-ray-v3" || paramPair[0] == "--avchd")
