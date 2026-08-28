@@ -29,6 +29,11 @@ class H264StreamReader final : public MPEGStreamReader
     CheckStreamRez checkStream(uint8_t* buffer, int len);
     void applyDiscoveryData(const StreamDiscoveryData& data) override;
     void setH264SPSCont(const bool val) { m_h264SPSCont = val; }
+    // ** THE READER'S OWN TEST, NOT A NEW ONE. ** m_spsCounter < 2 is exactly what decides, a few
+    // lines into readPacket, that a stream does not repeat its parameter sets and needs them
+    // inserted. Asking a different question here would be a second predicate that can drift from
+    // the first. A source that DOES repeat them is counted past 2 and needs no warning.
+    [[nodiscard]] bool spsPpsRepeatedInStream() const { return m_h264SPSCont || m_spsCounter >= 2; }
 
     void setInsertSEI(const SeiMethod value) { m_insertSEIMethod = value; }
     [[nodiscard]] SeiMethod getInsertSEI() const { return m_insertSEIMethod; }

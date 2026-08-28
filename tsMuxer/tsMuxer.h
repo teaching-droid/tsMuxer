@@ -69,6 +69,7 @@ class TSMuxer final : public AbstractMuxer
     [[nodiscard]] size_t splitFileCnt() const { return m_fileNames.size(); }
     void setSplitDuration(const int64_t value) { m_splitDuration = value; }
     void setSplitSize(const int64_t value) { m_splitSize = value; }
+    [[nodiscard]] bool isSplitting() const { return m_splitSize > 0 || m_splitDuration > 0; }
     void parseMuxOpt(const std::string& opts) override;
 
     void setFileName(const std::string& fileName, FileFactory* fileFactory) override;

@@ -22,6 +22,7 @@
 #include "pgsStreamReader.h"
 #include "simplePacketizerReader.h"
 #include "singleFileMuxer.h"
+#include "h264StreamReader.h"
 #include "tsMuxer.h"
 
 using namespace std;
@@ -1419,6 +1420,44 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
 //
 // A SINGLE track still prints exactly the sentence it always did: that is the common case, and the
 // suite asserts its shape.
+// ** A SPLIT PART THAT CANNOT DECODE ON ITS OWN, WRITTEN WITHOUT A WORD. **
+//
+// H.264 carries its parameter sets once at the start unless asked otherwise, and splitting cuts the
+// stream into files that each have to stand alone. Every part after the first therefore refers to a
+// parameter set that is not in it. Measured on an ordinary 11 MB source split at 3 MB: the first
+// part decodes 203 frames and the other three fail with "non-existing PPS 0 referenced", while
+// tsMuxeR reports "Mux successful complete". On a Blu-ray that is three unplayable clips out of
+// four.
+//
+// contSPS already exists and the help already calls it recommended for BD muxing. What was missing
+// is anything telling the user that this particular job needed it. Nothing here changes an output
+// byte: it is a warning, and the worst a mistake in it can do is print a line that did not apply.
+//
+// It stays quiet when the source already repeats its parameter sets per GOP, because then each part
+// carries its own and the option is not needed.
+static void reportSplitWithoutParameterSets(const MuxerManager& muxerManager)
+{
+    const auto mainMuxer = dynamic_cast<TSMuxer*>(muxerManager.getMainMuxer());
+    if (mainMuxer == nullptr || !mainMuxer->isSplitting())
+        return;
+
+    for (const StreamInfo& si : muxerManager.getStreamInfo())
+    {
+        const auto reader = dynamic_cast<H264StreamReader*>(si.m_streamReader);
+        if (reader == nullptr || reader->spsPpsRepeatedInStream())
+            continue;
+        const std::string name =
+            si.m_fullStreamName.empty() ? ("\"" + si.m_streamName + "\"") : si.m_fullStreamName;
+        LTRACE(LT_WARN, 2,
+               "Warning: " << name
+                           << " was split, and its H.264 parameter sets appear only once at the start, so "
+                              "every part after the first refers to a parameter set it does not contain and "
+                              "will not decode on its own. Add contSPS to that line to repeat them before each "
+                              "key frame. The parts already written are affected; this is not a warning about "
+                              "the next run.");
+    }
+}
+
 static void reportLostData(const MuxerManager& muxerManager)
 {
     struct Entry
@@ -1706,6 +1745,7 @@ int main(int argc, char** argv)
             muxerManager.doMux(dstFile, nullptr);
 
             LTRACE(LT_INFO, 2, "Mux successful complete");
+            reportSplitWithoutParameterSets(muxerManager);
             reportLostData(muxerManager);
         }
         else if (muxMode)
@@ -1818,6 +1858,7 @@ int main(int argc, char** argv)
             }
 
             LTRACE(LT_INFO, 2, "Mux successful complete");
+            reportSplitWithoutParameterSets(muxerManager);
             reportLostData(muxerManager);
         }
         else
