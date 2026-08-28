@@ -238,9 +238,48 @@ void BufferedReader::thread_main()
                                         // data->m_nextFileInfo = NEXT_FILE_FIRST_BLOCK;
                                         data->m_firstBlock = true;
                                         bytesReaded = data->readBlock(buffer, m_blockSize);
-                                        if (bytesReaded < static_cast<int>(m_blockSize))
+
+                                        // ** ONE STEP WAS NOT ENOUGH, AND THE REST OF THE JOIN WAS
+                                        // THROWN AWAY IN SILENCE. **
+                                        //
+                                        // This branch is reached only when the previous part ended
+                                        // EXACTLY on a read block boundary, because that is what
+                                        // makes the following read return nothing at all. It opened
+                                        // the next part and then, if THAT part did not fill a block,
+                                        // declared the whole list finished. A part shorter than one
+                                        // block, or an empty one, therefore ended the join and every
+                                        // part after it was never opened.
+                                        //
+                                        // Measured on three parts of one AC-3 stream cut on frame
+                                        // boundaries, so the truth is arithmetic: 20,035,292 bytes
+                                        // went in and 2,097,152 came out, at exit 0 with no warning.
+                                        // Two parts were unaffected, which is why this survived.
+                                        //
+                                        // An empty part must be stepped over rather than believed,
+                                        // and a short one only means the block could not be filled,
+                                        // not that the list has ended.
+                                        while (bytesReaded == 0 && data->itr)
+                                        {
+                                            const std::string moreName = data->itr->getNextName();
+                                            if (moreName.empty() || moreName == data->m_streamName)
+                                                break;
+                                            data->closeStream();
+                                            data->m_streamName = moreName;
+                                            if (!data->openStream())
+                                                break;
+                                            bytesReaded = data->readBlock(buffer, m_blockSize);
+                                        }
+
+                                        if (bytesReaded == 0)
                                         {
                                             data->m_eof = true;
+                                            data->m_lastBlock = true;
+                                        }
+                                        else if (bytesReaded < static_cast<int>(m_blockSize))
+                                        {
+                                            // More parts may follow. The next pass reads nothing
+                                            // from this one and takes the branch above, which either
+                                            // opens the part after it or ends the list properly.
                                             data->m_lastBlock = true;
                                         }
                                     }
