@@ -354,6 +354,22 @@ void METADemuxer::openFile(const string& streamName)
         string codec = trimStr(params[0]);
         string codecStreamName = trimStr(params[1]);
         codec = strToUpperCase(codec);
+        // ** THE KEY IS THE FILE THE LINE OPENS, NOT THE TEXT THAT NAMES IT. **
+        //
+        // The guard below refuses a track that is both merged into a TrueHD line and muxed on its
+        // own, because the two readers then share one DemuxerData and the second close frees what
+        // the first still holds. It keyed on the TYPED NAME, and a JOIN is written as "a"+"b", so
+        // the joined line and the plain line naming "a" produced different keys and the joined line
+        // walked straight past it into the same access violation, after printing "Mux successful
+        // complete". Measured on the shipped binary: four separate shapes segfault, of which the
+        // smallest is one media file joined to itself.
+        //
+        // ContainerToReaderWrapper keys its demuxers on fileList[0], not on the typed text, so that
+        // is what decides whether two readers share anything. extractFileList is the same splitter
+        // addStream itself uses below and the loss report uses in main.cpp: it unquotes, splits an
+        // UNQUOTED plus, and leaves a plus INSIDE a quoted path alone, so a file genuinely named
+        // with a plus sign is still one file and is still caught when it really is a duplicate.
+        const string streamKey = extractFileList(codecStreamName)[0];
         if (codec == "A_MLP" && (addParams.find("merge-ac3-track") != addParams.end() ||
                                  addParams.find("merge-ac3-file") != addParams.end()))
         {
@@ -377,7 +393,7 @@ void METADemuxer::openFile(const string& streamName)
                 if (ac3Pid == thdPid)
                     THROW(ERR_INVALID_CODEC_FORMAT,
                           "merge-ac3-track must be a different track number than the TrueHD track= parameter.")
-                if (muxedTracks.find({codecStreamName, ac3Pid}) != muxedTracks.end())
+                if (muxedTracks.find({streamKey, ac3Pid}) != muxedTracks.end())
                     THROW(ERR_INVALID_CODEC_FORMAT,
                           "Track "
                               << ac3Pid
@@ -385,7 +401,7 @@ void METADemuxer::openFile(const string& streamName)
                                  "track with merge-ac3-track. Remove that track from the mux and keep only the TrueHD "
                                  "line: merge-ac3-track already carries the AC-3 core inside it, which is where a "
                                  "Blu-ray expects it.")
-                mergeSources.insert({codecStreamName, ac3Pid});
+                mergeSources.insert({streamKey, ac3Pid});
             }
         }
         {
@@ -395,13 +411,13 @@ void METADemuxer::openFile(const string& streamName)
             if (trackParam != addParams.end() && !trackParam->second.empty())
             {
                 const int pid = strToInt32(trackParam->second.c_str());
-                if (mergeSources.find({codecStreamName, pid}) != mergeSources.end())
+                if (mergeSources.find({streamKey, pid}) != mergeSources.end())
                     THROW(ERR_INVALID_CODEC_FORMAT,
                           "Track " << pid
                                    << " is already being merged into a TrueHD track with merge-ac3-track, so it cannot "
                                       "also be muxed as a track of its own. Remove this line: the AC-3 core is carried "
                                       "inside the TrueHD track, which is where a Blu-ray expects it.")
-                muxedTracks.insert({codecStreamName, pid});
+                muxedTracks.insert({streamKey, pid});
             }
         }
         if (!m_HevcFound)
