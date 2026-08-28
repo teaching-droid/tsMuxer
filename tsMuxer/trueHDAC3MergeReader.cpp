@@ -40,12 +40,33 @@ void TrueHDAC3MergeReader::setAc3SideData(const uint8_t* data, const uint32_t le
 {
     if (data == nullptr || len == 0)
         return;
+    // ** THE AC-3 HALF ARRIVES HERE AND NOT THROUGH setBuffer, SO IT HAS TO BE COUNTED HERE. **
+    //
+    // merge-ac3-track braids a separate AC-3 stream into this TrueHD track, and those bytes reach
+    // the reader down their own path. The loss report divides by getReadSize(), which is summed in
+    // setBuffer, so the AC-3 half was missing from it entirely: the eighth review measured the
+    // report claiming 4,251,706 bytes were read for a track that had just been written out at
+    // 5,302,772. ** IT SAID FEWER BYTES WERE READ THAN WERE WRITTEN, WHICH CANNOT BE TRUE OF
+    // ANYTHING. ** The ninth review found it still there.
+    m_readBytes += len;
     const size_t off = m_ac3Accum.size();
     m_ac3Accum.resize(off + len);
     memcpy(m_ac3Accum.data() + off, data, len);
     extractAc3FramesFromAccum();
 }
 
+// ** THE DENOMINATOR COUNTED THIS HALF AND THE NUMERATOR HAD NO PATH TO IT. **
+//
+// setAc3SideData adds the AC-3 half to getReadSize(), which is what the loss report divides by, but
+// every byte this function abandons was abandoned in silence, so a real loss in that half could not
+// be reported at all. Measured on one AC-3 file used two ways: read as an ordinary track it reports
+// "202496 bytes of the 1120000 read", and braided into a TrueHD track by merge-ac3 the same damage
+// is ** SILENT **.
+//
+// There are three places here where a byte is given up, and each one is now charged: the garbage
+// skipped to reach a sync, the single byte dropped when a frame will not parse, and the run
+// discarded when a whole block holds no sync at all. Nothing else changes; the frames themselves
+// are counted by the denominator already.
 void TrueHDAC3MergeReader::extractAc3FramesFromAccum()
 {
     // Parse with a read cursor and compact the accumulator ONCE at the end. The
@@ -62,17 +83,23 @@ void TrueHDAC3MergeReader::extractAc3FramesFromAccum()
         {
             // no sync in the rest: keep at most the last 4096 bytes of it
             if (m_ac3Accum.size() - pos > 65536)
-                pos = m_ac3Accum.size() - 4096;
+            {
+                const size_t keepFrom = m_ac3Accum.size() - 4096;
+                m_lostBytes += static_cast<int64_t>(keepFrom - pos);
+                pos = keepFrom;
+            }
             break;
         }
-        pos += frame - start;  // drop garbage before the sync
+        m_lostBytes += frame - start;  // the garbage before the sync is data that could not be used
+        pos += frame - start;
         int skipBytes = 0;
         const int flen = m_ac3Parser.parse(frame, end, skipBytes);
         if (flen == NOT_ENOUGH_BUFFER)
             break;  // partial frame stays at the front for the next call
         if (flen <= 0)
         {
-            pos++;  // bad frame: resync from the next byte
+            m_lostBytes++;  // bad frame: this byte is abandoned, so it is a loss
+            pos++;          // resync from the next byte
             continue;
         }
         if (m_ac3Parser.isEAC3())

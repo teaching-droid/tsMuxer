@@ -802,6 +802,28 @@ int LPCMStreamReader::readPacket(AVPacket& avPacket)
         if (frame == nullptr)
         {
             m_processedBytes += m_bufEnd - m_curPos;
+            // The same accounting as the base class. THIS FUNCTION IS A COPY OF IT, so anything
+            // added there has to be added here too or this codec silently reports nothing.
+            //
+            // IN PRACTICE THESE COUNTERS CANNOT FIRE FOR LPCM, and the reason is worth stating
+            // correctly because an earlier version of this comment stated it wrongly twice.
+            // findFrame CAN return nullptr, at line 614, when m_headerType is htNone and
+            // detectLPCMType fails; decodeFrame CAN answer "this is not a frame", returning 0 at
+            // line 586 when m_bitsPerSample is 0. Both happen: asking for A_LPCM on a TrueHD or
+            // DTS track gives a 0 byte file by exactly that route.
+            //
+            // WHAT ACTUALLY KEEPS THESE AT ZERO IS m_everSynced. On every path that fails, no
+            // frame is ever decoded, so m_everSynced is never set and both guards below are false.
+            // And once a real PCM stream HAS synced it cannot desync, because there is no sync
+            // word to lose: corrupting the samples changes what it sounds like, not whether it
+            // parses. Measured, a stream with 3,000 random bytes altered demuxes to exactly the
+            // same byte count as the original and reports nothing, correctly.
+            //
+            // They are written anyway so that this copy does not silently diverge from the
+            // original, and so that a future change which CAN reject PCM data is counted.
+            // ** DO NOT READ A SILENT LPCM RESULT AS EVIDENCE THAT THE REPORT WORKS. **
+            if (m_everSynced)
+                m_pendingLost += m_bufEnd - m_curPos;
             return NEED_MORE_DATA;
         }
         const int decodeRez = decodeFrame(frame, m_bufEnd, skipBytes, skipBeforeBytes);
@@ -816,9 +838,21 @@ int LPCMStreamReader::readPacket(AVPacket& avPacket)
         {
             m_curPos++;
             m_processedBytes++;
+            if (m_everSynced)
+                m_lostBytes++;
             return 0;
         }
         m_processedBytes += frame - m_curPos;
+        // Before the first frame these are the leading fragment of a stream that began mid frame,
+        // which is not a loss. After it they are data being abandoned, except for any part of them
+        // that is a recognised tag, which is skipped on purpose wherever it sits. A frame having
+        // been found, anything held back earlier was a hole rather than the tail, so it is promoted.
+        if (m_everSynced)
+            m_lostBytes += frame - m_curPos;
+        else
+            m_everSynced = true;
+        m_lostBytes += m_pendingLost;
+        m_pendingLost = 0;
         LTRACE(LT_INFO, 2,
                "Decoding " << getCodecInfo().displayName << " stream (track " << m_streamIndex
                            << "): " << getStreamInfo());

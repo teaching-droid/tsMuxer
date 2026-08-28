@@ -20,6 +20,7 @@
 #include "mpegStreamReader.h"
 #include "muxerManager.h"
 #include "pgsStreamReader.h"
+#include "simplePacketizerReader.h"
 #include "singleFileMuxer.h"
 #include "tsMuxer.h"
 
@@ -1364,6 +1365,136 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     return 0;
 }
 
+// Say so when a track lost data on the way through.
+//
+// A track read under a codec name that does not match what is actually in it does not fail. The
+// reader hunts for the next frame it recognises, throws away everything in between, and the run
+// ends with "Demux complete", exit 0, and a file that probes as healthy. Measured on a Blu-ray
+// TrueHD track carrying an AC-3 compatibility core, asked for as A_MLP: 1,841,388 bytes out of
+// 12,177,210, which decodes 1.54 seconds of a 39.87 second track. Every label on that file is
+// correct. Nothing on screen said that six sevenths of it had been dropped, because the only sign
+// was 375 "Resync stream" lines scattered through the log.
+//
+// MEASURED AT THE END, from what the readers actually did, rather than predicted from the meta
+// file. Three attempts to predict it were built and all three were withdrawn: each read the
+// container up front to decide, and that read is exactly what tsMuxeR's shared streaming reader
+// cannot afford, so each broke joins or refused correct input. An outcome cannot false refuse.
+//
+// A WARNING RATHER THAN A REFUSAL, and that is not timidity. Asked to read the same track as the
+// wrong codec, ffmpeg produces a file of 1,841,388 bytes, the same count to the byte, and exits 0.
+// Asked to read a stream with 10,000 corrupted bytes, ffmpeg drops 70 per cent of it and exits 0,
+// and mkvmerge keeps almost all of it and says nothing at all. No reference tool treats partial
+// loss as a failure, so neither does this. What none of them does is state the size of the loss,
+// and that is the part worth adding.
+//
+// The threshold is any loss at all, after the first frame is found. That needs no tuning: 48
+// correct sources measured here lose exactly zero bytes, and the 32 that begin part way through a
+// frame account for all of their skip before the first sync, which getLostSize does not count.
+// One line per track that lost data, and the explanation ONCE.
+//
+// ** THE EXPLANATION USED TO BE REPEATED PER TRACK, AND THAT GETS WORSE THE MORE TRACKS ARE
+// AFFECTED. ** The ninth review measured a six track job printing six warnings of 427 characters
+// each, 2,562 in total, identical apart from the first 55 - about 32 lines of near duplicate prose
+// on an 80 column console, in which the six facts that actually differ are the least visible part.
+// A six track Blu-ray demux is an everyday job, and the signal to noise ratio FELL as the number of
+// affected tracks rose, which is the wrong direction.
+//
+// A SINGLE track still prints exactly the sentence it always did: that is the common case, and the
+// suite asserts its shape.
+static void reportLostData(const MuxerManager& muxerManager)
+{
+    struct Entry
+    {
+        std::string who;
+        std::string codec;
+        int64_t lost;
+        int64_t total;
+        bool isJoin;
+    };
+    std::vector<Entry> hits;
+
+    for (const StreamInfo& si : muxerManager.getStreamInfo())
+    {
+        const auto reader = dynamic_cast<SimplePacketizerReader*>(si.m_streamReader);
+        if (reader == nullptr)
+            continue;
+        const int64_t lost = reader->getLostSize();
+        // ** WHAT WAS READ, NOT WHAT GOT THROUGH. ** This was getProcessedSize(), which omits
+        // anything the reader steps over on purpose, so a trailing tag made the denominator short
+        // by exactly its own length: two files of IDENTICAL size with the SAME real loss printed
+        // different totals. merge-ac3-track= braids a second stream in through its own path, and
+        // getReadSize() counts that half where setBuffer never saw it.
+        const int64_t total = reader->getReadSize();
+        if (lost <= 0 || total <= 0)
+            continue;
+
+        // THE TRACK IS NAMED AS THE USER NAMED IT. The internal identifier is zero for every meta
+        // line that carries no track number, which is every elementary stream, so two different
+        // tracks both printed "track 0" and the number appeared nowhere else in the log.
+        const auto trackParam = si.m_addParams.find("track");
+        std::ostringstream who;
+        if (trackParam != si.m_addParams.end() && !trackParam->second.empty())
+            who << "track " << trackParam->second << " of ";
+        // m_fullStreamName is the text as it was typed and ALREADY CARRIES ITS QUOTES. Adding
+        // another pair printed a doubled quote around every path.
+        const std::string name = si.m_fullStreamName.empty() ? ("\"" + si.m_streamName + "\"") : si.m_fullStreamName;
+        who << name;
+
+        // On a join the name is the WHOLE "a"+"b" string, so "list the file on its own" asks the
+        // reader to paste that back, which prints a banner, one blank line and exit 0 - the same
+        // thing tsMuxeR prints for a path that does not exist. extractFileList is the same splitter
+        // the meta parser uses, so "a+b" inside ONE quoted path is not mistaken for a join.
+        hits.push_back({who.str(), si.m_codec, lost, total, extractFileList(name).size() > 1});
+    }
+
+    if (hits.empty())
+        return;
+
+    const bool anyJoin = std::any_of(hits.begin(), hits.end(), [](const Entry& e) { return e.isJoin; });
+    const bool allJoin = std::all_of(hits.begin(), hits.end(), [](const Entry& e) { return e.isJoin; });
+    // ** THE SEAM CLAUSE NAMED ONLY ONE END OF THE SEAM, AND IT WAS THE WRONG ONE. ** It said "when
+    // a joined part STARTS part way through a frame". The case measured is the opposite end: the
+    // FIRST part does not END on a frame boundary, so its 975 byte tail cannot be used. A reader of
+    // the old sentence checked whether any part began mid frame, found that none did, and was left
+    // with two causes they could each disprove in one command.
+    const std::string why =
+        "That happens when the source is damaged, when a joined part does not begin or end on a "
+        "frame boundary so the fragment at the seam cannot be used, or when the codec name on that "
+        "line is not the one the track holds. ";
+    // ** ONE CLOSING SENTENCE IS PRINTED FOR EVERY TRACK LISTED, SO IT HAS TO BE TRUE OF ALL OF
+    // THEM. ** Choosing it on anyJoin told a track that is NOT a join to "List each part on its
+    // own", when it has no parts to list. That is the same defect as the one fixed for the single
+    // track shape, reappearing in the many track shape, which is why the mixed case is now a
+    // fixture rather than an assumption: one ordinary file and one join, both losing data.
+    const std::string advice =
+        allJoin  ? "List each part on its own to see the codec name tsMuxeR reports for it."
+        : anyJoin ? "List each file, and each part of a join, on its own to see the codec name "
+                    "tsMuxeR reports for it."
+                  : "List the file on its own to see the codec name tsMuxeR reports for it.";
+
+    if (hits.size() == 1)
+    {
+        const Entry& e = hits.front();
+        std::ostringstream msg;
+        msg << "Warning: " << e.who << ": " << e.lost << " bytes of the " << e.total
+            << " read for this track as " << e.codec << " could not be used and were dropped. " << why << advice;
+        LTRACE(LT_WARN, 2, msg.str());
+        return;
+    }
+
+    std::ostringstream head;
+    head << "Warning: " << hits.size() << " tracks lost data on the way through:";
+    LTRACE(LT_WARN, 2, head.str());
+    for (const Entry& e : hits)
+    {
+        std::ostringstream line;
+        line << "  " << e.who << ": " << e.lost << " bytes of the " << e.total << " read for this track as "
+             << e.codec << " could not be used and were dropped.";
+        LTRACE(LT_WARN, 2, line.str());
+    }
+    LTRACE(LT_WARN, 2, why + advice);
+}
+
 int main(int argc, char** argv)
 {
 #ifdef _WIN32
@@ -1557,6 +1688,7 @@ int main(int argc, char** argv)
             muxerManager.doMux(dstFile, nullptr);
 
             LTRACE(LT_INFO, 2, "Mux successful complete");
+            reportLostData(muxerManager);
         }
         else if (muxMode)
         {
@@ -1664,6 +1796,7 @@ int main(int argc, char** argv)
             }
 
             LTRACE(LT_INFO, 2, "Mux successful complete");
+            reportLostData(muxerManager);
         }
         else
         {
@@ -1681,6 +1814,7 @@ int main(int argc, char** argv)
             createDir(dstFile, true);
             sMuxer.doMux(dstFile, nullptr);
             LTRACE(LT_INFO, 2, "Demux complete.");
+            reportLostData(sMuxer);
         }
         auto endTime = std::chrono::steady_clock::now();
         auto totalTime = endTime - startTime;

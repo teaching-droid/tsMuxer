@@ -51,6 +51,11 @@ class MuxerManager final
 
     void parseMuxOpt(const std::string& opts);
     int getTrackCnt() { return static_cast<int>(m_metaDemuxer.getCodecInfo().size()); }
+
+    /// The tracks and their readers, for a caller that wants to ask them what they did.
+    /// Still valid after doMux: METADemuxer::readClose(), which deletes the readers, runs only
+    /// from openFile and from the destructor.
+    [[nodiscard]] const std::vector<StreamInfo>& getStreamInfo() const { return m_metaDemuxer.getStreamInfo(); }
     [[nodiscard]] bool getHevcFound() const { return m_metaDemuxer.m_HevcFound; }
     [[nodiscard]] AbstractMuxer* getMainMuxer() const;
     [[nodiscard]] AbstractMuxer* getSubMuxer() const;
