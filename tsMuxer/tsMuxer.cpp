@@ -1828,13 +1828,21 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
             setMinBitrate(static_cast<int>(strToDouble(paramPair[1].c_str()) * 1000.0));
         else if (paramPair[0] == "--vbv-len" && paramPair.size() > 1)
             setVBVBufferLen(strToInt32(paramPair[1].c_str()));
+        // Written with a space instead of an equals sign this read past the end of the vector. See
+        // the same guard in main.cpp: undefined behaviour, so it crashed on some options and read
+        // rubbish on others. Silently ignoring it is not an option here, because turning splitting
+        // off without a word is the defect the size check above was written to stop.
         else if (paramPair[0] == "--split-duration")
         {
+            if (paramPair.size() < 2)
+                THROW(ERR_COMMON, "Missing value for " << paramPair[0])
             setSplitDuration(strToInt64(paramPair[1].c_str()) * INTERNAL_PTS_FREQ);
             m_computeMuxStats = true;
         }
         else if (paramPair[0] == "--split-size")
         {
+            if (paramPair.size() < 2)
+                THROW(ERR_COMMON, "Missing value for " << paramPair[0])
             setSplitSize(checkedSplitSize(paramPair[1]));
             m_computeMuxStats = true;
         }

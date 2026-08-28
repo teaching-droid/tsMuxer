@@ -62,8 +62,18 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                 vector<string> paramPair = splitStr(trimStr(param).c_str(), '=');
                 if (paramPair.empty())
                     continue;
+                // ** AN OPTION WRITTEN WITH A SPACE INSTEAD OF AN EQUALS SIGN READ PAST THE END OF THE
+                // VECTOR. ** splitStr on "--auto-chapters" alone yields one element, and every branch
+                // below reached for the second. That is undefined behaviour, so it crashed on some
+                // options and quietly read rubbish on others; three of these segfaulted outright.
+                // --custom-chapters, in this same block, always had the guard, and --cut-start already
+                // words the refusal, so both the shape and the sentence are the ones already here.
                 if (paramPair[0] == "--auto-chapters")
+                {
+                if (paramPair.size() < 2)
+                    THROW(ERR_COMMON, "Missing value for " << paramPair[0])
                     autoChapterLen = strToInt32(paramPair[1].c_str()) * 60;
+                }
                 else if (paramPair[0] == "--custom-chapters" && paramPair.size() > 1)
                 {
                     vector<string> chapList = splitStr(paramPair[1].c_str(), ';');
@@ -71,18 +81,24 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                 }
                 else if (paramPair[0] == "--mplsOffset")
                 {
+                if (paramPair.size() < 2)
+                    THROW(ERR_COMMON, "Missing value for " << paramPair[0])
                     firstMplsOffset = strToInt32(paramPair[1].c_str());
                     if (firstMplsOffset > 1999)
                         THROW(ERR_COMMON, "Too large m2ts offset " << firstMplsOffset)
                 }
                 else if (paramPair[0] == "--blankOffset")
                 {
+                if (paramPair.size() < 2)
+                    THROW(ERR_COMMON, "Missing value for " << paramPair[0])
                     blankNum = strToInt32(paramPair[1].c_str());
                     if (blankNum > 1999)
                         THROW(ERR_COMMON, "Too large black playlist offset " << blankNum)
                 }
                 else if (paramPair[0] == "--m2tsOffset")
                 {
+                if (paramPair.size() < 2)
+                    THROW(ERR_COMMON, "Missing value for " << paramPair[0])
                     firstM2tsOffset = strToInt32(paramPair[1].c_str());
                     if (firstM2tsOffset > 99999)
                         THROW(ERR_COMMON, "Too large m2ts offset " << firstM2tsOffset)
@@ -91,6 +107,8 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                     insertBlankPL = true;
                 else if (paramPair[0] == "--label")
                 {
+                if (paramPair.size() < 2)
+                    THROW(ERR_COMMON, "Missing value for " << paramPair[0])
                     isoDiskLabel = paramPair[1];
                 }
             }
