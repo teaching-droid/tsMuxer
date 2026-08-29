@@ -1,5 +1,6 @@
 #include "matroskaMuxer.h"
 
+#include <fs/directory.h>
 #include <fs/systemlog.h>
 
 #include <algorithm>
@@ -214,7 +215,8 @@ MatroskaMuxer::MatroskaMuxer(MuxerManager* owner)
       m_firstTimecodeSet(false),
       m_lastTimecodeMs(0),
       m_durationValueFilePos(0),
-      m_headerWritten(false)
+      m_headerWritten(false),
+      m_destinationOpen(false)
 {
 }
 
@@ -1066,8 +1068,41 @@ void MatroskaMuxer::openDstFile()
     if (m_dvWriteProfile81 && !couldFoldDualLayer())
         THROW(ERR_COMMON, DV_PROFILE81_NEEDS_DUAL_LAYER)
 
+    // ** THE DESTINATION IS NOT CREATED HERE, AND THAT IS THE WHOLE POINT. **
+    //
+    // Opening a file for writing truncates it, so creating it here meant that every refusal raised
+    // afterwards destroyed whatever was already at that path. The gate above closes the route it
+    // can close, but it only COUNTS video tracks: the exact Dolby Vision test needs a value built
+    // from the codec reader and cannot run until a frame has been parsed. Measured with a 96,002
+    // byte file at the output path: two HEVC tracks that are not a Dolby Vision pair, and a real
+    // dual layer pair listed enhancement layer first, both left a 308 byte stub behind.
+    //
+    // So the file is created in openDestination instead, which writeDeferredHeader calls after
+    // refreshTrackProperties has had its chance to throw. Every one of this class's uses of m_file
+    // is after the header, so there is exactly one place to open it rather than one per write.
+    //
+    // The path is still checked NOW, so a bad destination is reported at the same moment as before
+    // rather than after parsing has started. ofNoTruncate opens without emptying the file, so the
+    // check costs the user nothing. If the check is what brought the file into being, it is removed
+    // again: a refusal should not leave an empty file where there was none.
+    const bool existedBeforeProbe = fileExists(m_fileName);
+    if (!m_file.open(m_fileName.c_str(), File::ofWrite + File::ofNoTruncate))
+        THROW(ERR_CANT_CREATE_FILE, "Can't create output file " << m_fileName)
+    m_file.close();
+    if (!existedBeforeProbe)
+        deleteFile(m_fileName);
+
+    m_headerWritten = false;
+}
+
+void MatroskaMuxer::openDestination()
+{
+    if (m_destinationOpen)
+        return;
+
     if (!m_file.open(m_fileName.c_str(), File::ofWrite))
         THROW(ERR_CANT_CREATE_FILE, "Can't create output file " << m_fileName)
+    m_destinationOpen = true;
 
     // 1. Write EBML Header
     writeEBMLHeader();
@@ -1095,10 +1130,6 @@ void MatroskaMuxer::openDstFile()
     // padding whatever is left with a smaller Void.
     m_seekHeadReservePos = m_file.pos();
     writeVoid(SEEKHEAD_RESERVE);
-
-    // SegmentInfo and Tracks are deferred to the first muxPacket call,
-    // because stream readers haven't parsed their headers yet at this point.
-    m_headerWritten = false;
 }
 
 void MatroskaMuxer::refreshTrackProperties()
@@ -1380,8 +1411,13 @@ void MatroskaMuxer::refreshTrackProperties()
 
 void MatroskaMuxer::writeDeferredHeader()
 {
-    // Re-read track properties now that stream readers have parsed their headers
+    // Re-read track properties now that stream readers have parsed their headers. This is where
+    // the exact Dolby Vision test lives and where it throws, so nothing below it may run before it.
     refreshTrackProperties();
+
+    // Only now is the mux known to be going ahead, so only now is the destination created. Before
+    // this line the file at that path is whatever the user had there.
+    openDestination();
 
     // Build codec private data for all tracks
     for (auto& [streamIdx, track] : m_tracks) buildCodecPrivate(track);
@@ -2766,6 +2802,12 @@ bool MatroskaMuxer::close()
         writeDeferredHeader();
         replayBufferedPackets();
     }
+
+    // A mux with no tracks at all never reaches writeDeferredHeader, so the destination is still
+    // uncreated. It was created at this point before, and everything below writes to it, so it is
+    // created here to keep that case exactly as it was. close() runs only after a successful mux,
+    // never while an exception is unwinding, so this cannot undo what a refusal protected.
+    openDestination();
 
     // Flush any pending accumulated frames for all tracks
     for (auto& [streamIdx, track] : m_tracks) flushPendingFrame(track);

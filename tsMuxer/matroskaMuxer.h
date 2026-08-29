@@ -345,6 +345,8 @@ class MatroskaMuxer final : public AbstractMuxer
     // have received at least one packet, because stream readers haven't fully
     // initialized (e.g. audio sample rate / channels) at openDstFile time.
     bool m_headerWritten;
+    // Has the destination actually been created yet? openDstFile deliberately does not create it.
+    bool m_destinationOpen;
     std::set<int> m_seenStreams;  // stream indices that have sent at least one packet
 
     // Buffered packets accumulated before the header is written.
@@ -363,6 +365,10 @@ class MatroskaMuxer final : public AbstractMuxer
     // out? A necessary condition only, asked before the destination is opened so that a mux which
     // cannot run does not truncate a file. The exact test lives in refreshTrackProperties.
     [[nodiscard]] bool couldFoldDualLayer() const;
+    // Create the destination and write the EBML and Segment headers. Called from
+    // writeDeferredHeader, AFTER refreshTrackProperties has had its chance to refuse, so that a
+    // mux which does not run never touches the file at that path. Does nothing if already open.
+    void openDestination();
     // Write the deferred header (SegmentInfo + Tracks)
     void writeDeferredHeader();
     // Replay buffered pre-header packets (sets m_firstTimecode to min PTS)
