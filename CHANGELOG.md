@@ -341,10 +341,8 @@ These are real and they are not fixed. They are listed so you know where you sta
 - The tag checks defend against damage, which is what happens in practice. They do not defend
   against a deliberately crafted tag.
 
-These four were found while checking this release and are **not** fixed in it:
+These three were found while checking this release and are **not** fixed in it:
 
-- **A 96 kHz TrueHD track merged with its AC-3 core uses the wrong clock.** Most of the lossless
-  audio then arrives after the time it should be played at. 48 kHz tracks are not affected.
 - **AV1 video read from an elementary stream loses the start of the file**, puts every frame into
   one packet, and reports "Processed 0 video frames" while reporting success. AV1 inside a
   container is not affected.
