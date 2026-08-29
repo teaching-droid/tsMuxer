@@ -162,6 +162,32 @@ on the image.
 
 An image whose names are all plain English letters is exactly the same as before.
 
+**An ISO with more than 4093 files and folders wrecked itself, and said nothing at all.**
+
+An ISO keeps a small table with one line per file and per folder. The room for that table was a
+fixed 64 KB, which holds 4093 lines and not one more, and nothing checked. So line 4094 was written
+over memory that belonged to something else.
+
+The program then died with no message on screen at all, and left an image behind that no program
+will open. Counted exactly: 4068 extra files beside a BDMV folder is 4093 lines and works, 4069 is
+4094 and dies.
+
+The table is now made as big as it needs to be, and every part of the ISO writer refuses to write
+past the end of its own space instead of writing over something else.
+
+A folder of 6000 files now builds, and all 6000 come back out with the right names and the right
+contents. 20,000 works too.
+
+**And an ISO that was too big for its own file table said "complete" instead of saying no.**
+
+Above about 23,000 files the ISO writer runs out of a different kind of room, and it has always had
+a message for that. The message never appeared, because the writer only finished its work when it
+was being thrown away, and a program cannot report a problem at that moment. It either stopped dead
+with nothing said, or claimed success over an unusable image.
+
+The image is now finished before the program reports anything, so the message arrives, and it names
+the numbers.
+
 **A file at the root of an ISO was marked as system data.**
 
 A file placed at the top level of an image built with `--keep-extra-files` was marked as UDF
@@ -385,11 +411,10 @@ These are real and they are not fixed. They are listed so you know where you sta
 - Splitting is not supported for Matroska output. The program now says so instead of ignoring it.
 - The tag checks defend against damage, which is what happens in practice. They do not defend
   against a deliberately crafted tag.
-
-This one was found while checking this release and is **not** fixed in it:
-
-- **An ISO with more than about 4093 files and folders can fail while it is being built**, and
-  leave an image behind that cannot be used. Ordinary discs are far below that number.
+- An ISO with more than about **23,000 files and folders** is refused, because the space set aside
+  for the file table is worked out from the file count alone and does not allow for the folder
+  listings. The refusal names the numbers and `--extra-iso-space` makes the space bigger. An
+  ordinary disc holds a few dozen files.
 
 ---
 
