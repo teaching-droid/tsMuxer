@@ -1435,6 +1435,24 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
 //
 // It stays quiet when the source already repeats its parameter sets per GOP, because then each part
 // carries its own and the option is not needed.
+// --dv-profile is read by the Matroska muxer and by nothing else, so on any other output it was
+// accepted, did nothing, and said nothing: measured, the transport stream produced with it is md5
+// identical to the one produced without it. Say so, rather than leave the user believing a
+// conversion happened. A warning and not a refusal, following the split options, which are also
+// simply not implemented for one output and now say so instead of ignoring the request.
+static void reportDvProfileIgnored(const MuxerManager& muxerManager, const char* outputName)
+{
+    if (muxerManager.getMuxOpts().find("--dv-profile") == std::string::npos)
+        return;
+    LTRACE(LT_WARN, 2,
+           "Warning: --dv-profile was ignored, because it applies to Matroska output only and this is "
+               << outputName
+               << ". Matroska has to carry a dual layer Dolby Vision source in ONE track, and the option "
+                  "chooses how its metadata is written when that happens. A disc and a transport stream "
+                  "carry the two layers as two streams, the way the source disc does, so there is nothing "
+                  "to convert. The output is byte for byte what it would have been without the option.");
+}
+
 static void reportSplitWithoutParameterSets(const MuxerManager& muxerManager)
 {
     const auto mainMuxer = dynamic_cast<TSMuxer*>(muxerManager.getMainMuxer());
@@ -1755,6 +1773,7 @@ int main(int argc, char** argv)
             MuxerManager muxerManager(readManager, tsMuxerFactory);
             muxerManager.setAllowStereoMux(fileExt2 == "SSIF" || dt != DiskType::NONE);
             muxerManager.openMetaFile(argv[1]);
+            reportDvProfileIgnored(muxerManager, dt != DiskType::NONE ? "a disc" : "a transport stream");
             if (!isV3() && dt == DiskType::BLURAY && muxerManager.getHevcFound())
             {
                 LTRACE(LT_INFO, 2, "HEVC stream detected: changing Blu-Ray version to V3.");
@@ -1865,6 +1884,7 @@ int main(int argc, char** argv)
         {
             MuxerManager sMuxer(readManager, singleFileMuxerFactory);
             sMuxer.openMetaFile(argv[1]);
+            reportDvProfileIgnored(sMuxer, "a demux");
             if (sMuxer.getTrackCnt() == 0)
                 THROW(ERR_COMMON, "No tracks selected")
 
