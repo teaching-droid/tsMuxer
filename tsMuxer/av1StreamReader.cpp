@@ -14,7 +14,9 @@
 using namespace std;
 
 AV1StreamReader::AV1StreamReader()
-    : m_seqHdrFound(false),
+    : m_framing(Av1Framing::UNDECIDED),
+      m_brokenObuWarned(false),
+      m_seqHdrFound(false),
       m_firstFrame(true),
       m_lastIFrame(false),
       m_firstFileFrame(false),
@@ -47,6 +49,150 @@ void AV1StreamReader::incTimings()
 }
 
 // ---------------------------------------------------------------------------
+// Low overhead OBU framing, which is what an AV1 file on disk actually holds
+// ---------------------------------------------------------------------------
+
+bool AV1StreamReader::isLowOverhead(const uint8_t* buf, const uint8_t* end)
+{
+    // A start code at the very front is the framing tsMuxeR writes itself and the one the
+    // container readers hand over, so that case needs no further looking.
+    if (end - buf >= 4 && buf[0] == 0 && buf[1] == 0 && (buf[2] == 1 || (buf[2] == 0 && buf[3] == 1)))
+        return false;
+
+    // Otherwise walk the buffer as a chain of sized OBUs. A length that is not really a length
+    // lands the next header on compressed data, where the forbidden bit, the reserved bit or
+    // the type nearly always fails, so a chain of several that all check out is a strong sign.
+    int obus = 0;
+    const uint8_t* p = buf;
+    while (p < end && obus < 8)
+    {
+        Av1ObuHeader hdr;
+        const int hdrLen = hdr.parse(p, end);
+        if (hdrLen < 0 || !hdr.obu_has_size_field)
+            return false;
+        const int type = static_cast<int>(hdr.obu_type);
+        if (type == 0 || (type > 8 && type != 15))
+            return false;
+        int lebLen = 0;
+        const int64_t payloadLen = decodeLeb128(p + hdrLen, end, lebLen);
+        if (payloadLen < 0)
+            return obus >= 2;  // the length itself runs off this buffer
+        const uint8_t* next = p + hdrLen + lebLen + payloadLen;
+        if (next > end || next < p)
+            return obus >= 2;  // a whole OBU chain that simply continues past this buffer
+        p = next;
+        obus++;
+    }
+    return obus >= 2;
+}
+
+size_t AV1StreamReader::convertPending(const bool lastBlock)
+{
+    const uint8_t* src = m_pending.data();
+    const uint8_t* const end = src + m_pending.size();
+
+    // A start code and an OBU header for every OBU, plus the emulation prevention bytes. The
+    // same generous estimate the container path uses, so the buffer can never run short.
+    const size_t capacity = MAX_AV_PACKET_SIZE + m_pending.size() * 2 + 64;
+    if (m_convBuffer.size() < capacity)
+        m_convBuffer.resize(capacity);
+    uint8_t* const dstStart = m_convBuffer.data() + MAX_AV_PACKET_SIZE;
+    const uint8_t* const dstEnd = m_convBuffer.data() + m_convBuffer.size();
+    uint8_t* dst = dstStart;
+
+    bool broken = false;
+    while (src < end)
+    {
+        Av1ObuHeader hdr;
+        const int hdrLen = hdr.parse(src, end);
+        if (hdrLen < 0 || !hdr.obu_has_size_field)
+        {
+            broken = true;
+            break;
+        }
+        int lebLen = 0;
+        const int64_t payloadLen = decodeLeb128(src + hdrLen, end, lebLen);
+        if (payloadLen < 0)
+        {
+            // Eight bytes present and still no end to the length means it is not a length at
+            // all; fewer than that means it is split across the block boundary.
+            if (end - (src + hdrLen) >= 8)
+                broken = true;
+            break;
+        }
+        const uint8_t* payload = src + hdrLen + lebLen;
+        if (payload + payloadLen > end)
+            break;  // this OBU is split across blocks, carry it whole to the next one
+
+        // Start code, then the OBU header with obu_has_size_field cleared, then the payload
+        // with emulation prevention: byte for byte what matroskaParser and movDemuxer build.
+        *dst++ = 0x00;
+        *dst++ = 0x00;
+        *dst++ = 0x01;
+        *dst++ = static_cast<uint8_t>(src[0] & ~0x02);
+        if (hdr.obu_extension_flag)
+            *dst++ = src[1];
+
+        if (payloadLen > 0)
+        {
+            const int encoded = av1_add_emulation_prevention(payload, payload + payloadLen, dst,
+                                                             static_cast<size_t>(dstEnd - dst));
+            if (encoded < 0)
+                THROW(ERR_COMMON_SMALL_BUFFER,
+                      "Not enough buffer to convert an AV1 OBU of " << payloadLen << " bytes")
+            dst += encoded;
+        }
+        src = payload + payloadLen;
+    }
+
+    m_pending.erase(m_pending.begin(), m_pending.begin() + (src - m_pending.data()));
+
+    if (broken)
+    {
+        // Neither carrying these bytes for ever nor writing them out as if they were video is
+        // right, so they are dropped and said out loud, once.
+        if (!m_brokenObuWarned)
+        {
+            LTRACE(LT_WARN, 2,
+                   "AV1: the OBU chain breaks after " << m_totalFrameNum << " frames, "
+                                                      << m_pending.size() << " bytes skipped");
+            m_brokenObuWarned = true;
+        }
+        m_pending.clear();
+    }
+    else if (lastBlock && !m_pending.empty())
+    {
+        LTRACE(LT_WARN, 2, "AV1: the stream ends inside an OBU, " << m_pending.size() << " trailing bytes ignored");
+        m_pending.clear();
+    }
+
+    return static_cast<size_t>(dst - dstStart);
+}
+
+void AV1StreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const bool lastBlock)
+{
+    // Every block arrives behind the front pad the reader protocol prefixes it with.
+    const uint8_t* const block = data + MAX_AV_PACKET_SIZE;
+
+    if (m_framing == Av1Framing::UNDECIDED && dataLen > 0)
+    {
+        m_framing = isLowOverhead(block, block + dataLen) ? Av1Framing::LOW_OVERHEAD : Av1Framing::START_CODES;
+        if (m_framing == Av1Framing::LOW_OVERHEAD)
+            LTRACE(LT_INFO, 2, "AV1 elementary stream in the low overhead format, converting OBU framing on read");
+    }
+
+    if (m_framing != Av1Framing::LOW_OVERHEAD)
+    {
+        MPEGStreamReader::setBuffer(data, dataLen, lastBlock);
+        return;
+    }
+
+    m_pending.insert(m_pending.end(), block, block + dataLen);
+    const size_t converted = convertPending(lastBlock);
+    MPEGStreamReader::setBuffer(m_convBuffer.data(), static_cast<uint32_t>(converted), lastBlock);
+}
+
+// ---------------------------------------------------------------------------
 // checkStream - detect AV1 stream from elementary data
 // ---------------------------------------------------------------------------
 
@@ -59,7 +205,30 @@ void AV1StreamReader::applyDiscoveryData(const StreamDiscoveryData& data)
 CheckStreamRez AV1StreamReader::checkStream(uint8_t* buffer, const int len)
 {
     CheckStreamRez rez;
-    uint8_t* end = buffer + len;
+
+    // The probe buffer is the head of the file exactly as it sits on disk, so it may be in the
+    // low overhead format that the scan below cannot see. Convert a copy first. Data that is
+    // already start code framed, which is what getTSDescriptor passes in, is left untouched.
+    std::vector<uint8_t> probe;
+    uint8_t* scanBuf = buffer;
+    int scanLen = len;
+    if (len > 0 && isLowOverhead(buffer, buffer + len))
+    {
+        std::vector<uint8_t> savedPending;
+        savedPending.swap(m_pending);
+        m_pending.assign(buffer, buffer + len);
+        const size_t converted = convertPending(false);
+        probe.assign(m_convBuffer.begin() + MAX_AV_PACKET_SIZE,
+                     m_convBuffer.begin() + MAX_AV_PACKET_SIZE + converted);
+        m_pending.swap(savedPending);
+        if (!probe.empty())
+        {
+            scanBuf = probe.data();
+            scanLen = static_cast<int>(probe.size());
+        }
+    }
+    buffer = scanBuf;
+    uint8_t* end = buffer + scanLen;
 
     // Two-pass detection: first find a valid sequence header, then verify
     // we can also find a frame OBU (FRAME or FRAME_HEADER) to confirm this
