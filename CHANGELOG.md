@@ -233,6 +233,10 @@ needed it. It now warns and names the option. No output byte changes.
 The same job produced nine parts as a transport stream and one 421 MB file as Matroska, both
 reporting success. It now says so, and the interface greys the split controls for Matroska.
 
+**`--dv-profile` was accepted and ignored on every output but Matroska.**
+
+The option is read by the Matroska muxer and by nothing else. On a disc, a transport stream or a demux it was accepted, did nothing, and said nothing. Measured on the same source twice, differing only in whether the option is present: both files have md5 65c5268e3c4c034aad92b6e898998368. It warns now, and names the output it is talking about. A warning and not a refusal, because on those outputs the option is not wrong so much as meaningless. A disc and a transport stream carry the two layers as two streams, the way the source disc does, so there is nothing to fold and nothing to convert.
+
 **Asking for profile 8.1 with nothing to convert.**
 
 This did nothing at all and said nothing. It is now refused, with the reason.
@@ -328,8 +332,6 @@ These are real and they are not fixed. They are listed so you know where you sta
   It no longer destroys a file at that path.
 - `merge-ac3-track` naming a track that is **not in the file** is accepted in silence, and no AC-3
   track is written.
-- `--dv-profile=8.1` on transport stream output is accepted, does nothing and says nothing. The
-  refusal is correct for Matroska output only.
 - The lost data warning does **not** report data lost at the very start or the very end of a track.
 - A companion file longer than the track it is merged into is counted in the total, although the
   extra could never have been used.
