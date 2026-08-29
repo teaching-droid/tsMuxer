@@ -1275,6 +1275,48 @@ void MatroskaMuxer::refreshTrackProperties()
                        << ", with base layer, enhancement layer and RPU.");
     }
 
+    // A dual layer pair listed the WRONG WAY ROUND never pairs, and used to say nothing true about
+    // it. The base layer is whichever video track comes first, and the enhancement layer is the one
+    // that carries the RPU, so with the enhancement layer listed first the loop above looks at the
+    // base layer, finds no RPU on it, and gives up.
+    //
+    // Without --dv-profile that came out as two separate tracks with the enhancement layer wearing
+    // a Dolby Vision record of its own, at "Mux successful complete" and with nothing said: a dual
+    // layer disc in, a file with no Dolby Vision out. With --dv-profile=8.1 it was refused, and the
+    // refusal said the mux has no dual layer track and that both streams must be listed, when both
+    // WERE listed.
+    //
+    // The shape is recognised without changing which track is chosen, so nothing that pairs today
+    // pairs differently: the first video track carries an RPU, a later one carries none, and that
+    // later one is larger in both directions. A picture in picture stream is smaller than the video
+    // it accompanies, never larger, so it cannot match, and a single layer track on its own has no
+    // second video track to compare against.
+    bool reversedDualLayer = false;
+    if (baseTrack != nullptr && baseTrack->dvElStreamIndex < 0 && baseTrack->dvBlockAddIdType)
+    {
+        const auto elReader = dynamic_cast<HEVCStreamReader*>(baseTrack->codecReader);
+        for (const auto& [streamIdx, track] : m_tracks)
+        {
+            if (track.trackType != 1 || track.streamIndex == baseTrack->streamIndex || track.dvBlockAddIdType)
+                continue;
+            const auto blReader = dynamic_cast<HEVCStreamReader*>(track.codecReader);
+            if (blReader == nullptr || elReader == nullptr)
+                continue;
+            if (blReader->getStreamWidth() > elReader->getStreamWidth() &&
+                blReader->getStreamHeight() > elReader->getStreamHeight())
+            {
+                reversedDualLayer = true;
+                break;
+            }
+        }
+    }
+
+    if (reversedDualLayer && !m_dvWriteProfile81)
+        LTRACE(LT_WARN, 2,
+               "Dolby Vision: the enhancement layer is listed BEFORE the base layer, so the two are not "
+               "folded into one track and this file carries no Dolby Vision. The base layer is the larger "
+               "picture and belongs first. Swap the two video lines and the pair is folded as it should be.");
+
     // --dv-profile=8.1 with nothing to convert used to be accepted in silence. There is only ever
     // something to convert when a dual layer source has been folded into one track, so if no fold
     // happened the option did nothing at all and the file came out exactly as profile 7 would have
@@ -1298,7 +1340,15 @@ void MatroskaMuxer::refreshTrackProperties()
         // that looked foldable and whose configuration record could not be built, which is rare
         // enough to be worth keeping as a backstop rather than assuming it cannot happen.
         if (!folded)
+        {
+            if (reversedDualLayer)
+                THROW(ERR_COMMON,
+                      "--dv-profile=8.1 needs the two layers in the order a disc has them, and this mux lists "
+                      "the ENHANCEMENT LAYER FIRST. The base layer is the larger picture and belongs on the "
+                      "first video line; the enhancement layer, the smaller one carrying the Dolby Vision RPU, "
+                      "belongs on the second. Swap the two video lines and the pair is folded and converted.")
             THROW(ERR_COMMON, DV_PROFILE81_NEEDS_DUAL_LAYER)
+        }
     }
 
     // A Blu-ray TrueHD track arrives as its lossless frames PLUS a 448 kbps AC-3 core, both on one
