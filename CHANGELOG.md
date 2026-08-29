@@ -1,36 +1,361 @@
 ## tsMuxeR 2.18.0
 
-- A CORRECTION TO 2.17.0 FIRST. That release claimed, without qualification, that a dual layer Dolby Vision disc taken into one Matroska track and split back out produces a Blu-ray byte identical to authoring it straight from those layers. It was measured on one disc and stated for all of them. On a disc that frames its start codes the shorter way it was false: the rebuilt base layer first differs 736 bytes in. What differed was the framing alone. Every picture and every piece of Dolby Vision metadata came back exactly even on that disc, both forms are conformant and decode identically, and a disc authored with 2.17.0 plays as it should, so this costs nobody a rebuild. The 2.17.0 entry has been corrected in place and the README line with it. It is being said here as well because the release notes are mirrored where they cannot be edited, and because a claim of this kind is the sort of thing people choose an archive format on. The claim now holds as it was written: the entry below has the figures, on a whole feature rather than a clip.
-- A cover art tag in front of an AAC stream was demuxed as audio. An AAC sync is twelve bits and two more with no checksum, so arbitrary data satisfies it about once every sixteen thousand bytes, and in front of the audio that arbitrary data is usually a picture: a file carrying 1.2 MB of cover art produced 455,104 bytes where the audio is 194,146, beginning inside the picture with a header a decoder reads as 32000 Hz and four channels where the truth is 48000 Hz mono. The same file could not be opened at all, since the search is retried only five times and escapes about ten bytes of junk, so it was refused with "Can't detect stream type" instead of muxed. Requiring a second header exactly one frame length on removes those false syncs, since two matches at a distance the first one computed are far beyond coincidence, but applied everywhere that also destroys real audio, and not by accident: a genuine frame whose successor is damaged is indistinguishable from a false sync, so refusing it throws away every real frame in front of the next confirmable one. One flipped byte cost 881 bytes of undamaged audio, and a file whose frames are separated by junk lost 193,449 of its 194,146 at exit 0 and in silence. The two cases cannot be told apart by looking at the sync, nor by counting the frames after it; they are identical on every such measure at every depth. What separates them is where the reader is standing, because refusing a sync cannot cost audio where there is no audio, and a metadata tag is exactly that place. So a sync may now be disbelieved inside a tag the reader has walked and verified and nowhere else, verified rather than merely declared, since a length taken on trust would let a few bytes of forged header arm a skip over real audio. ID3v2 counts only when the whole tag is present and its body walks, APEv2 uses the conservative half of the walk added for the loss report, the two fixed size tags are their own proof, and Lyrics3 does not feed it at all because it is found by searching for its closing keyword rather than by stepping through declared sizes. Detection was given the same ceiling, because that is where the unreadable file was. With no verified tag the ceiling is the search position itself and the first candidate is returned, which is what the reader already did: across a corpus of twenty one files the demuxed track is byte identical to the previous release on twenty of them, and the twenty first is the cover art file, where it is byte identical to the audio stripped out by hand. A tag that does not verify buys nothing on purpose, so the same file with its length field corrupted, and a trailing tag whose body is a repeated false sync, both leak exactly as they did before. That is the trade, and it is the right way round: a leak at the end of a file is visible and reaches nothing, while the leak this removes is at the front, where it mis-declares the stream and stops the file being opened.
-- A track that lost data on the way through now says so, with the figure, instead of finishing at exit 0 in silence. A damaged source, a joined part that does not end on a frame boundary, or a codec name that is not the one the track holds each cost audio quietly, and the only way to notice was to compare sizes by hand. Most of the work is in what it refuses to report, because a warning on a file that is perfectly fine is worse than no warning at all: a metadata tag is not lost audio, and counting one as lost put a warning on ordinary tagged music, where two tagged MP3s joined announced 4,239 bytes dropped on output byte identical to the same join without the tags. So the tags that sit in front of, behind and between elementary streams are recognised by their own declared lengths, and every one of them is validated rather than believed. An ID3v2 body is walked frame by frame and its padding must be zero, which the specification requires in those words, so ten bytes of damage that happen to read "ID3" no longer swallow the rest of the file. An APEv2 item list is walked and must land exactly on the declared size; without that a well formed 32 byte header over a dropped region hid the loss entirely, one file reporting "1000032 bytes of the 2000626 read" and the same bytes behind such a header reporting nothing. Lyrics3 v2 declares a size per field so the fields are stepped through, replacing a bounded search that charged every tag past its bound as lost audio, where a legal 900 KB tag produced "900099 bytes ... dropped" on a file whose output is identical to the same file carrying no tag at all. ID3v1 needs more than the three bytes "TAG" to justify stepping over 128, since a legal MLP frame header is those same three bytes and cost 18,926, so the four year characters must be digits, spaces or nul. A TrueHD track with an AC-3 core merged into it counts both halves, which it did not: the report claimed fewer bytes read than the track was written out at, and a loss in the AC-3 half had no path to the figure, the same damage reporting "202496 bytes of the 1120000 read" as an ordinary track and nothing at all once merged. Each merged figure is now exactly the two halves added up, checked on five damaged files by reading every companion again on its own. The limits are worth stating rather than glossing. The tag walks validate structure, and an item value is opaque by design because it carries cover art, so a deliberately crafted tag can declare one item whose value is the audio and be believed, at a cost of about eleven bytes; that defends against corruption, which is what occurs in practice, and not against forgery, which nothing confined to this reader can do. Data lost at the very start or the very end of a track is still not reported, so a track that is mostly junk at the end can report very little, and a companion file longer than the track it is merged into is counted in the total although the excess could never have been used. Nothing here changes a single output byte: the figure is a report, no decision is taken from it, and every demuxed track is byte identical to the same job before the change.
-- An AAC track could lose one frame, and always the same one, when the audio began close to the end of a read block. The reader answers "not a frame" and "there is not enough data yet to say" with the same value, so a header cut short by the block end was treated as junk: the position advanced by one byte, the byte was charged as lost, and the frame was gone. The window is exactly one header wide, which is what made it hard to see. Measured on a file whose audio begins six bytes before the end of the first block, with the data in front of it carrying no false sync of its own, a junk prefix one byte shorter comes out at 194,146 bytes and the whole stream, and the prefix that crosses the boundary comes out at 193,637, short by 509, which is exactly the first frame's declared length, at exit 0 and with no warning. AC-3 has always answered this properly and AAC now does the same, which is a three line change. The same branch is also why such a file could take minutes rather than seconds, since the reader ground through the whole window one byte at a time; a set of four test files that took over two minutes now takes seventeen seconds. That is only the case where a header is cut short by a block end, and the broader cost of rescanning a region already searched is a separate matter, untouched here.
-- The start code framing of the source is now carried through Matroska, which is what makes the sentence above true. A start code is three bytes or four, both legal and identical once decoded, and discs differ: one measured here uses four bytes for the access unit delimiter and the parameter sets and three for everything else, which is the conformant minimal form, while two others use four throughout. Matroska stores these codecs length prefixed, so no start code exists in the file to copy, and a disc rebuilt from one always came out four byte. Authoring the same disc directly, with no Matroska in between, already preserved the framing, which is what made this visible as a property of one code path rather than of the disc. The framing is now observed as the source passes, recorded per NAL type rather than as one value for the file, because that is what the discs actually do and a blanket three byte mode would not be conformant, and reproduced on the way back out. Nothing is recorded that cannot be reproduced: a NAL type seen framed both ways records nothing, a source that used four bytes throughout records nothing since that is already the default, and a rule that cannot be read back changes nothing, so an ordinary file gains nothing and the worst case is no improvement rather than wrong output. The disc that had never come back identical now does, over the whole 73 GB feature and through both Dolby Vision profiles. It applies to every way out of a Matroska file and not only to a Dolby Vision rebuild, so this is not a Dolby Vision matter at all: an ordinary single layer disc taken to Matroska and authored back reproduces its source framing as well, where before it came out four byte whatever the source did. Measured against a build of the previous version so the comparison is of this change and nothing else: a base layer that differed at byte 736 is identical for all 294,346,414 bytes of the rebuilt stream, and an H.264 stream framed three byte throughout comes back with 6,834 three byte codes and no four byte ones, the same as it went in.
-- --dv-profile=8.1 is available again, held back in 2.17.0 because the conversion could not be undone. A dual layer disc can now be stored as single layer profile 8.1, which many more devices accept, and still be turned back into the disc it came from. The conversion is many to one, so no arithmetic recovers a profile 7 RPU from an 8.1 one; instead the disc's own RPUs travel with the file as an attachment, in the layout an extracted RPU file uses so anything else can read it, and are put back when the file is split. They are attached in presentation order rather than the decode order the mux collects them in, because that is the order every other tool assumes: measured on four discs the two orders part company for 83 to 93 percent of pictures while running no more than seven apart, so decode order would have produced a file that parses happily everywhere and is used wrongly. A third attachment carries the presentation time of every entry so a picture is looked up rather than counted to. Everything the file promises is checked before a single picture is written, both attachments present, both matching their recorded checksums, one timestamp per entry and the count and order as claimed, and a file that fails any of it is refused, because the alternative is a disc that looks right and is wrong. Asking for it where there is nothing to convert is now refused with the reason, rather than accepted in silence: a single layer file already carries its picture and its RPU in one track, so the option used to do nothing at all and the file came out exactly as it would have without it, with nothing in the log to say so. Measured on whole titles rather than clips, since a clip exercises neither a tail nor a join and both mattered: a 73 GB feature comes back byte for byte identical on both layers, 59.33 GB of base layer and 4.25 GB of enhancement layer with nothing left over on either side, with all 166,928 of the disc's original metadata records restored, and that holds through profile 7 and profile 8.1 alike, so the disc is reproduced exactly while its metadata is converted and put back; and a seamless branching title of 23 clips and 22 joins, 2:22:52, where the profile 7 and profile 8.1 rebuilds are byte identical on both layers.
-- The seek index is now also written at the front of the file. Cues have always gone after the clusters, because their contents are not known until the mux has finished, and nothing at the head of the file pointed at them. That was survivable for an index and is not survivable for an attachment: checked against other software, the attachments were not listed at all, and copying such a file produced one with the video intact and the attachments silently gone, which for a profile 8.1 carrier means one pass through another muxer destroys the only copy of what the disc is rebuilt from. 256 bytes are reserved at the front of the segment and the real index is written over them at close. The index at the end stays, so nothing that relied on it changes, and if the reserved space ever failed to hold the entries the file is still correct and the log says the index is only at the end.
-- A merged Dolby Vision track now lists as its two layers, so it can be separated in the interface instead of by hand writing a meta file with subTrack=. The interface needed no change for this: it has always read a sub track number out of the listing and written it back, and that code does not care which codec it came from. The numbering is the opposite way round from the MVC case that mechanism was built for, which calls the dependent view 1 where Dolby Vision calls the base layer 1, so the number is now carried on the listing entry rather than derived from the codec id. Deriving it worked for MVC only because its two halves have different codec ids; on two HEVC entries it would have swapped the layers and authored a disc with the quarter resolution enhancement layer as the picture, which nothing downstream would have caught.
-- GUI: a Dolby Vision selector beside the output format, offering the disc as it is or profile 8.1. It is hidden rather than greyed out unless it applies, meaning Matroska output of a source that really carries a dual layer track, since a disabled control still invites the question of what it is for. Translated into all eight interface languages. There is also a new docs/DOLBY_VISION.md, in English, German and Japanese, covering the two layers and why Matroska needs them in one track, splitting a merged track apart again, both profiles, the library each platform needs, and what is preserved. It states the thing people most often expect and do not get: profile 8.1 does not make the file smaller here, because the enhancement layer and the disc's own metadata are kept so that the disc can be rebuilt, and that is the point of it.
-- An E-AC-3 track carrying Atmos now says which kind it is and how many objects it holds, "+ ATMOS (JOC, 16 objects)". It used to print the same three words as a TrueHD track carrying Atmos, though the two are different things, joint object coding in the addbsi field against a fourth substream. The object count was already being decoded and discarded, and it is the complexity index of the Type A extension, so a sixteen object mix looked exactly like a minimal one. The more important half is that the test was hardened: reaching that field means walking a dozen variable length fields, so one frame landing on the pattern by accident used to latch the badge on for a whole track and it was never cleared. Frames must now agree on the same non zero object count before the track is named, the same discipline the DTS:X badge uses, and a frame that disagrees restarts the count rather than adding to a majority built out of noise. TrueHD is deliberately unchanged: its Atmos is inferred from the substream count rather than read from a payload, which deserves its own evidence rather than being altered while something else is being changed.
-- Fixed the H.264 reader assuming a four byte start code. It read the NAL type from a fixed offset, which on a three byte framed stream is one byte into the header, so the type came out wrong, an access unit delimiter already present was not recognised, and the muxer added a second one. The HEVC and VVC readers have always worked the length out from the byte in front of the start code, which is exact, and this one now does the same, so four byte material behaves exactly as before. Verified on a real stream reframed to three bytes: 841 delimiters in and 841 out, one per picture and no duplicates, with everything else byte identical.
+Most of this release is about output that was wrong, or data that was missing, **and the program
+did not say so**. It finished, it said "Mux successful complete", and it returned success. Ten
+separate faults did that.
 
-- For anyone who builds from source: the version line named the commit the build directory was CONFIGURED with, not the one that was built. The commit is read when cmake configures and baked into the compile flags, so rebuilding in an existing directory never refreshed it, and a build here reported a commit 24 behind the code it contained. Releases were never affected because the build service configures a fresh tree every time; it is a local build that misreports itself, which is exactly the position someone is in when they build from source to report a problem. cmake now re-runs when HEAD moves, watching the branch reference as well since a commit on the current branch does not rewrite HEAD, and the packed form for a tree whose references are packed. Where git is absent nothing is watched and a source tarball builds as before.
-- Writing a BDMV folder to an ISO could SILENTLY LOSE THE LAST BYTES OF A FILE. A file that does not end on a sector boundary keeps its final partial sector in a buffer and writes it separately, and the position for that write was measured from the start of the FILE but added to the start of the LAST EXTENT. Those are the same place only while a file has one extent, which is why this survived: a file grows a second extent only past a gigabyte or where a layer break guard splits it, and only an unaligned length reaches the branch at all. The loud half of the fault was an image at roughly twice its proper size, with the data at the front, a hole of nearly the whole payload, and the closing structures at the end. The half that matters is quieter: those last bytes went into the padding past the end of the image and the sector they belonged in kept its zeros, so the image mounts, every file inside reads at its correct LENGTH, and the tail is gone. A genuine stream file is written in units of three sectors so it can never trigger this; extra files carried onto the image with --keep-extra-files can. Measured with a source whose every byte is checkable rather than a zero filled one, because a zero filled source cannot tell correct data from a hole: before the fix a 2.3 GB file read back off the mounted image differs from its source and its last 4096 bytes differ, after it the file is identical byte for byte. The arithmetic matches the observed inflation exactly, 3,170,893,824 bytes predicted and measured on a 3 GB reproducer. ANYONE WHO BUILT AN ISO THIS WAY WITH EXTRA FILES ON AN EARLIER RELEASE SHOULD CHECK IT.
-- A muxing rate at or below 90 kbps made the muxer WRITE UNTIL THE DISK FILLED. The pacing expression adds a count of bits to a count of 90 kHz ticks, so it only stays under the media time while the rate in bits per second is above the tick rate, and below that the clock runs away from the media and the null padding follows it. The boundary is therefore the tick rate itself rather than a number anyone chose, and it lands on the kilobit: 91 kbps and everything above it is unaffected, 90 kbps produces two and a half times the correct size, 89 kbps turned a two second, 258,500 byte mux into 23.9 GB, and 35 kbps into 292 MB. Each of those reported "Mux successful complete" and exited zero. A 3.36 MB AC-3 file asked for 64 kbps produced 796 MB. The range is refused now, on both --bitrate and --maxbitrate, with a message that names the option, the value and the unit, and nothing is written before the refusal. --minbitrate is deliberately not checked, since on its own it never reaches that expression and zero is what the interface writes when no lower bound is wanted. The expression itself is left alone: correcting it would move the output of every mux that sets a bitrate, which is a separate piece of work with its own evidence, so this release fences off the range where it visibly detonates rather than pretending to cure it.
-- The bitrate options did not do what the help said, in three separate ways. --maxbitrate was described as "The upper limit of the VBR bitrate" and is not a limit of any kind: a 1 Mbps ceiling on a 30.77 Mbps track produces a byte for byte identical file, and so does 40 Mbps, and so does leaving the option out. Nothing anywhere drops, delays or refuses payload because of a rate, and a muxer cannot turn a 30 Mbps stream into a 1 Mbps one without re-encoding it, so it is now described as what it is, a rate the transport stream is paced to, with the point spelled out that a value below what the streams need does not make the output any smaller. --bitrate was documented in Mbps with --bitrate=35 as its example; the parser multiplies by 1000, so the unit is kbps and the example was out by a factor of a thousand and sat inside the range that used to fill the disk. And --cbr and --vbr are read by nothing at all: both fell out of the bottom of the option loop in silence, so a meta reading "--cbr" and nothing else produced a variable bitrate mux identical to asking for nothing, with no indication that the request had gone nowhere. Both words are recognised now and three combinations that cannot mean what they appear to say so: --cbr with no --bitrate, --cbr and --vbr together, which the help itself forbids and nothing checked, and --vbr beside --bitrate. The mux is untouched by all of it, every case measured comes out at exactly the byte count it had before, and everything the interface writes stays silent. docs/USAGE.md carried the same three sentences and is corrected with it.
-- Writing a BDMV folder to an ISO now checks the result against the target disc, which it never did. The muxing path has always refused an over-capacity build unless --allow-oversize downgrades it; the folder to image path had no check and no warning, so a user could be handed an image that silently would not burn. It refuses before writing anything when the payload plus the layer break guard zones already exceed the disc, warns inside the band where the answer is uncertain, and measures the finished image exactly before the run ends. --allow-oversize, which this path did not previously parse at all, downgrades both. Only certain quantities may refuse: payload plus guard zones is a true lower bound on the image, while the UDF structures and the guard's own overrun are bounded rather than known, so they may only warn. A flat reserve would have falsely refused a real build that fitted by 196,608 bytes. Making that check also found --inner-only overshooting the disc silently by 1.44 MB, because its margin had to cover both the UDF structures and a pad overrun of up to one copy buffer and could not; it now reserves the overrun as well and lands 22.56 MB under on the same build, confirmed on a real dual layer scenario where it went from 13.06 MB under to 21.06 MB under, predicted before the run. An image is never deleted on a refusal that comes after the write.
-- A file placed at the ROOT of an ISO built with --keep-extra-files was stamped with the UDF metadata bit and would not open. The flag was read from the parent directory's object id, and both the root directory and the system stream directory are built with id zero, so anything at the root inherited a bit that says the file is metadata rather than content. Files inside a subdirectory were unaffected, which is why this went unnoticed. Reported by @DreckSoft.
-- --split-size was 32 bit, so asking for 4 GiB wrapped to zero and turned splitting OFF entirely without a word, and 4.5 GB produced 205 MB parts. Two defects rather than one: the running comparison overflowed as well, multiplying a 32 bit packet count by the frame size, so widening the size alone would not have worked. Proven by forming a single 4,405,683,744 byte part from 4.7 GB of joined input, which the old arithmetic could not express. A size of zero or less is refused now rather than silently disabling splitting, since accepting it turns the feature off without a word, which is exactly what asking for 4 GiB used to do. Anyone whose meta asked for 4 GiB or more got one file and will now get real splitting.
-- Splitting was ignored for Matroska output in silence. The same meta produced nine parts as a transport stream and one 421 MB file as Matroska, with a success message and exit code zero in both cases. Matroska has no split support here, and its option parser only ever looked for the Dolby Vision profile, so both split options fell past it unread. The engine says so now, mirroring the demux path which already did, and the interface greys the split controls for Matroska and demux output and stops writing the option into the meta at all, because greying alone would still have emitted it. The tick is preserved across a change of output format rather than cleared, so nothing a user set is lost by looking at another format.
-- The Blu-ray settings tab took no notice of the chosen output format. Surveyed before anything was changed: 23 controls across all seven output formats, and not one of them changed state, while the meta builder had been dropping every one of them for the formats that cannot use them. So nothing was ever muxed wrongly; the tab was simply saying something untrue about itself. Chapters, the blank playlist, playlist and stream numbering and the 3D right eye flag now follow disc output, Force BD-ROM V3 follows Blu-ray and Blu-ray image output only since AVCHD has no V3, the default track flags follow those three and Matroska, and the mux start time stays live because it applies everywhere. Whole group boxes are disabled where one condition covers everything inside, which leaves each control's own rule intact for when the group returns. Nothing is cleared: a chapter length and a playlist offset set for disc output survive a trip through transport stream output and come back, and the meta produced for a disc is identical before and after that trip, which is the point of the change. The picture in picture group is deliberately untouched, since its condition is the selected track being secondary rather than the output format.
-- The Merge AC-3 file box took what was typed into it and threw it away. Setting the track number beside it cleared the file box but left it enabled, so it still accepted keystrokes and discarded them on the next update, and clearing the track number did not bring the path back. The exclusion between the two is a real engine rule, verified by running all three forms, so no mux was ever wrong, but the interface was silently eating input. The control that does not apply is greyed now rather than wiped, both directions resolve so neither can deadlock, and a path typed into it survives.
-- The Max bitrate box defaulted to 99.99 kbps, which is a genuine restriction of 99,990 bits per second, and neither bitrate field is remembered between sessions, so every session started there. On a 29 Mbps track that broke the Blu-ray requirement for a clock reference at least every 100 ms once in thirty seconds and reversed the sign of the drift against the presentation times. It is 48000 now, which is the rate this program already writes into the clip information for a Blu-ray, and at that value the output is byte for byte identical to not ticking the box at all, so the change cannot regress a mux that was working.
-- The last picture of a stream that ends without an end of stream marker was lost on HEVC and duplicated on H.264, one coupled cause in code six stream readers share. Ground truth counted from the elementary streams rather than from the muxer's own report, and verified on a real interleaved 3D file as well as on plain streams.
-- The last frame of the AC-3 core was dropped by every merge since the feature existed. The coverage warning's tolerance is re-derived to one AC-3 frame with it, so a file that is now complete is not reported as short.
-- Fixed a crash and a silent half core, both around the AC-3 core merge. A merged track that was read back could produce a partial core with no warning, which is worse than the crash beside it because the file looks finished.
-- A Matroska file written from a source that frames its start codes the shorter way carries a small text attachment recording how that source was framed, so a disc built from it can be framed the same way. That attachment was named as a Dolby Vision file, and the name reached files that have nothing to do with Dolby Vision: muxing the base layer of a pressed disc to an ordinary Matroska file, with no Dolby Vision option anywhere and no enhancement layer in the output, produced a file listing dv-manifest.txt in its attachments. Anyone opening it in a tool that shows attachments was told the file carries Dolby Vision data, which it does not. The file's own first line already reads "tsMuxeR stream notes" and only the name said otherwise, so it is tsmuxer-manifest.txt now. The name is a private agreement between the muxer that writes it and the demuxer that reads it back, so it is changed here rather than after a release carries it.
-- GUI: the input file panel explains itself, both remove buttons say which is which, and the accents are back in the translations that had lost them. The Dolby Vision row no longer appears on a freshly opened window before a file has been loaded.
-- THE DOLBY VISION PROFILE SELECTOR DID NOTHING. Every other combo box in that window is connected to something that refreshes the meta, and this one was connected to nothing at all. The meta file handed to the muxer IS the text in that preview, so a choice that never refreshed it never reached the mux either: picking profile 8.1 moved the control and changed nothing else, and the file came out as profile 7 with nothing in the log to say so. That held for every source, including the already merged Matroska file the feature was verified against when it was built. Two more faults in the same control came with it. It never appeared for a DISC, only for an already merged file, which is the opposite of what the documentation describes: a disc lists its two layers as independent video tracks while the rule wanted a sub track number that only a merged track has, so a user following the documentation loaded the disc, saw no selector and silently got profile 7. The rule now also recognises the disc shape, mirroring the muxer's own pairing, which is a video track after the first one that carries Dolby Vision data, and not merely any track with an RPU, because a single layer profile 8 track has one too and must be left alone. And it did not refresh when a track was removed or unticked, so removing the enhancement layer left it showing and put the option into a mux with nothing left to fold; the two missing refresh points are added and unchecked rows are skipped when it decides, since an unticked row reaches the muxer commented out. Measured in the running window afterwards on both source shapes: choosing profile 8.1 puts the option into the meta for a dual layer disc and for a merged file alike, where before neither did, while a transport stream output and a single layer source both correctly show nothing.
-- A REFUSED DOLBY VISION MUX DESTROYED THE FILE IT REFUSED TO WRITE. Asking for profile 8.1 where there is no dual layer track to convert is refused with an explanation, but the refusal happened on the first packet, by which time the destination had been created and truncated: a 96,002 byte file came back as a 308 byte stub. The check now runs before the destination is opened, so it covers every route to the option and not only the interface one. It cannot be the exact check there, because that one needs a value built from the codec reader and a reader has parsed nothing that early; what is knowable is the track list, and a fold needs two HEVC video tracks, so fewer than two refuses and two or more lets the exact check decide as before.
-- The two bitrate boxes could ask for a rate the muxer refuses. Neither declared a minimum, so the default of zero applied and a value inside the refused range could be typed in and written into the meta. Both now start at 91, the first rate the pacing can carry. The defaults are unchanged and far above it, so an interface nobody has touched produces exactly what it did.
+If you only read one part of these notes, read the next one.
+
+### A correction to 2.17.0, first
+
+That release said that a dual layer Dolby Vision disc taken into a Matroska file and split back out gives a Blu-ray identical to the original. It was measured on one disc and then stated for all of them. On a disc that writes its start codes in the shorter form it was not true. The rebuilt video first differs 736 bytes in.
+
+Only the framing differed. Every picture and every piece of Dolby Vision data came back exactly, even on that disc. Both forms are correct and play the same. So a disc made with 2.17.0 works, and nobody needs to rebuild anything.
+
+The 2.17.0 entry is corrected in place, and so is the line in the README. It is repeated here because release notes get copied to places where they cannot be edited later. The claim now holds as it was written, and the entry below has the figures, measured on a whole film.
+
+---
+
+### If you used an earlier version, please check these files
+
+These faults were silent. Your files may be affected and look fine.
+
+**1. An ISO you built with `--keep-extra-files`.**
+The last part of a file could be missing. The image opens, the file is listed at the right size,
+and the end of it is gone. Only extra files you added yourself are affected. The disc's own video
+files are never affected.
+
+**2. A job where you asked for `--split-size=4GB` or larger.**
+You got one big file instead of several parts. Splitting was turned off, and nothing said so.
+
+**3. An AAC audio track you demuxed from a file with cover art.**
+You may have got the picture instead of the sound. One test file gave 455,104 bytes where the
+audio is only 194,146 bytes.
+
+**4. A film you joined from three or more parts.**
+If the first part ended exactly on a 2 MB boundary, everything after the second part was dropped.
+In one test, 20,035,292 bytes went in and 2,097,152 bytes came out.
+
+**5. A TrueHD track you merged with an AC-3 file, written to Matroska.**
+The AC-3 sound was thrown away. The file looks normal and the AC-3 is simply not there.
+
+---
+
+### Fixed: your data was being lost, and nothing said so
+
+**A joined film lost everything after the second part.**
+
+When you join files, the reader moves to the next part when a read returns less data than asked
+for. A part that ends exactly on a 2 MB boundary does not do that. It returns a full block, and
+then it returns nothing. That took a different path, which opened the next part and then decided
+the whole list was finished.
+
+So any part shorter than 2 MB, or an empty part, ended the join. Every part after it was never
+opened. Two parts always worked, which is why nobody noticed: you need a first part that ends on
+the boundary and a third part before anything is lost.
+
+Measured on three parts of one sound track: 20,035,292 bytes in, 2,097,152 bytes out, success
+reported, no warning.
+
+**A picture in front of an AAC track was read as sound.**
+
+Many audio files start with a tag that holds the cover art. The marker that starts an AAC frame is
+only fourteen bits long and has no checksum, so random data matches it about once every sixteen
+thousand bytes. Inside a picture, that random data is very common.
+
+A file with 1.2 MB of cover art produced 455,104 bytes of "audio" where the real audio is 194,146
+bytes. It started inside the picture. The same file could not be opened at all, and was refused
+with "Can't detect stream type".
+
+The reader may now distrust a marker **inside a tag it has read and checked**, and nowhere else.
+That matters: refusing markers everywhere destroys real sound. One damaged byte cost 881 bytes of
+good audio in a test, and a file with junk between its frames lost 193,449 of its 194,146 bytes.
+Inside a tag there is no audio to lose, so it is safe there and only there.
+
+**An AAC track lost one frame near a block boundary.**
+
+The reader reads in 2 MB blocks. It used the same answer for "this is not a frame" and "I do not
+have enough data yet to tell". So a frame header cut in half by the end of a block was treated as
+rubbish and skipped.
+
+Measured on a file whose audio starts six bytes before the end of the first block: 193,637 bytes
+instead of 194,146. Exactly 509 bytes short, which is the length of the first frame.
+
+The same fault also made these files very slow. Four test files took over two minutes. They now
+take seventeen seconds.
+
+**A metadata tag was written into demuxed MPEG audio.**
+
+The tag at the start or end of an MP3 was copied into the audio file as if it were sound.
+
+**The last part of a large file was written past the end of an ISO.**
+
+A file that does not end exactly on a sector boundary keeps its last partial sector in a buffer and
+writes it separately. The position for that write was measured from the start of the file, but
+added to the start of the last piece of it. Those are the same place only while the file is in one
+piece.
+
+A file is only split into pieces past one gigabyte, or where a layer break guard splits it, which
+is why this survived so long. The loud version of the fault was an image about twice its correct
+size. **The quiet version is the one that matters**: those last bytes went into the padding at the
+end of the image, and the sector they belonged in stayed empty. The image opens. Every file inside
+reads at its correct size. The end of the file is gone.
+
+Tested with a file whose every byte can be checked, because a file full of zeros cannot tell a hole
+from correct data. Before: a 2.3 GB file read back off the image differs from the original, and its
+last 4096 bytes differ. After: identical.
+
+**Asking for a 4 GB split turned splitting off.**
+
+The split size was held in a 32 bit number. 4 GB does not fit, so it became zero, and zero meant
+"do not split". 4.5 GB became 205 MB parts.
+
+There were two faults, not one: the running total overflowed as well. Proven by building a single
+part of 4,405,683,744 bytes, which the old arithmetic could not even express.
+
+A size of zero or less is now refused, instead of quietly switching the feature off.
+
+**A merged AC-3 sound track was thrown away in Matroska.**
+
+A Blu-ray carries TrueHD sound as the lossless stream **plus** a normal AC-3 version, so that a
+player which cannot decode TrueHD still has sound. Matroska cannot hold both in one track, so this
+program writes the AC-3 as its own track.
+
+`merge-ac3-track` and `merge-ac3-file` build the same pair from two separate sources. They use a
+different reader, so the test that asks "is there an AC-3 version here" said no, and every AC-3
+frame was dropped.
+
+Measured with a 4,261,662 byte TrueHD stream and a 1,120,000 byte AC-3 file:
+
+- before: 4,397,657 bytes out, one track. That is **the same size, to the byte**, as the TrueHD
+  muxed with no AC-3 file at all
+- after: 5,514,890 bytes out, two tracks
+
+The loss happened twice over. Turning that file back into a disc gave 4,323,248 bytes instead of
+7,212,432, and said nothing then either.
+
+Both reference tools write the same shape, and the AC-3 track now decodes identically to the one
+another tool produces, over all 953,856 samples it holds.
+
+**A file at the root of an ISO was marked as system data.**
+
+A file placed at the top level of an image built with `--keep-extra-files` was marked as UDF
+metadata and would not open. Files inside a folder were fine, which is why this was not noticed.
+Reported by @DreckSoft.
+
+**The last picture of a stream with no end marker was lost.**
+
+On HEVC the last picture went missing. On H.264 it was written twice. One cause, in code that six readers share. Counted from the video itself rather than from the muxer's own report, and checked on a real 3D file as well as on plain streams.
+
+**The last frame of the AC-3 core was dropped by every merge since the feature existed.**
+
+The tolerance in the coverage warning was worked out again with it, so a file that is now complete is not reported as short.
+
+---
+
+### Fixed: a refusal that destroyed the file it refused to write
+
+Opening a file for writing empties it at once. The program created the output file **before** it
+knew the job could run. So when it then refused, your existing file at that path was already gone.
+
+**A refused image.**
+
+Measured: 2,490,368 bytes of a good disc image replaced by a 1,769,472 byte stub.
+
+**A rate the program cannot use.**
+
+A muxing rate of 90 kbps or below made the program **write until the disk was full**. 89 kbps
+turned a two second, 258,500 byte job into 23.9 GB. Each one reported success. The range is refused
+now, and nothing is written before the refusal.
+
+**A refused Matroska file.**
+
+The Dolby Vision check that decides this needs the video to be read first, so it cannot run before
+the file is opened. An earlier fix moved a simpler check earlier, but that check only counts video
+tracks, so two video tracks passed it and the file was emptied anyway.
+
+The output file is now created only after the real check has passed. Tested with a 96,002 byte file
+at the output path, across ten different refusals: **all ten now leave it untouched**. Two of them
+used to leave a 308 byte stub.
+
+A bad output path is still reported at once, before any reading starts.
+
+---
+
+### Fixed: crashes
+
+**An option written with a space.**
+
+Writing an option with a space instead of an equals sign, for example `--split-size 4GB`, read past
+the end of a list and could crash.
+
+**A joined file on a merge-ac3 line.**
+
+A line that joins two files and also merges an AC-3 file walked past its safety check and crashed,
+after printing "Mux successful complete". The check compared the name that was typed, not the file
+the line really opens, so a joined line went straight past it.
+
+**A crash and a half core, both around the AC-3 core merge.**
+
+A merged track that was read back could produce only part of its AC-3 core, with no warning. That is
+worse than the crash beside it, because the file looks finished.
+
+---
+
+### Fixed: the program stayed quiet when it should have spoken
+
+**A track that lost data now says so.**
+
+If a track loses data on the way through, you now get a warning with the number of bytes, instead
+of success and silence.
+
+Most of the work here is in what it does **not** report, because a warning on a perfectly good file
+is worse than no warning. A metadata tag is not lost sound. Counting one as lost put a warning on
+ordinary tagged music: two joined MP3s reported 4,239 bytes lost on a file that is identical to the
+same join without tags.
+
+So each kind of tag is now read properly and checked, not simply believed.
+
+**A split that leaves parts you cannot play.**
+
+H.264 video carries its setup data once, at the start. When you split the output, every part after
+the first refers to setup data that is not in it.
+
+Measured on an 11 MB file split at 3 MB, and decoded part by part: part 1 gave 203 frames, and
+parts 2, 3 and 4 all failed. **On a Blu-ray that is three unplayable clips out of four**, written
+while the program reported success.
+
+The option that fixes this already existed. What was missing was anything telling you that this job
+needed it. It now warns and names the option. No output byte changes.
+
+**Splitting was ignored for Matroska.**
+
+The same job produced nine parts as a transport stream and one 421 MB file as Matroska, both
+reporting success. It now says so, and the interface greys the split controls for Matroska.
+
+**Asking for profile 8.1 with nothing to convert.**
+
+This did nothing at all and said nothing. It is now refused, with the reason.
+
+**The bitrate options did not match their help text.**
+
+Three separate problems. `--maxbitrate` was described as a limit and is not one: a 1 Mbps ceiling on
+a 30.77 Mbps track gives an identical file. `--bitrate` was documented in Mbps but is read as kbps,
+so the example in the help was wrong by a factor of a thousand. And `--cbr` and `--vbr` were read by
+nothing at all.
+
+All three are corrected, and three combinations that cannot mean what they look like now say so.
+No output byte changes.
+
+---
+
+### New
+
+**A disc rebuilt from a Matroska file is now identical to the original.**
+
+A start code is the marker between pieces of video. It can be three bytes or four. Both are legal
+and both decode the same, but discs differ, and Matroska does not store start codes at all. So a
+disc rebuilt through Matroska always came out in the four byte form.
+
+The program now notes which form the source used, for each kind of piece, and writes it back the
+same way. A whole 73 GB film now comes back **byte for byte identical** on both video layers,
+through both Dolby Vision profiles.
+
+This is not only a Dolby Vision matter. Any single layer disc taken to Matroska and back now keeps
+its original form too.
+
+**Dolby Vision profile 8.1, with the disc still rebuildable.**
+
+A dual layer Dolby Vision disc can now be stored as single layer profile 8.1, which many more
+devices accept, and still be turned back into the disc it came from.
+
+The conversion cannot be reversed by calculation, so the disc's own data travels with the file as
+an attachment and is put back when the file is split again. Everything the file promises is checked
+before a single picture is written.
+
+**Please note: this does not make the file smaller.** The second layer is kept so that the disc can
+be rebuilt. That is the point of it.
+
+**The index is now written at the front of the file as well.**
+
+The index has always been written after the video, because it is not known until the end. Nothing
+at the front pointed to it. That is survivable for an index and not survivable for an attachment:
+other software did not list the attachments at all, and copying such a file produced one with the
+video intact and the attachments quietly gone.
+
+**An image is now checked against the disc you are burning to.**
+
+Writing a folder to an ISO never checked whether the result would fit. It now refuses before
+writing anything when the content already cannot fit, warns when the answer is close, and measures
+the finished image before the run ends. `--allow-oversize` turns both into warnings.
+
+Making that check also found `--inner-only` going over the disc by 1.44 MB in silence. It now lands
+22.56 MB inside it.
+
+**Smaller additions.**
+
+- A merged Dolby Vision track is listed as its two layers, so you can separate it in the interface
+  instead of writing a meta file by hand.
+- An E-AC-3 track with Atmos now says which kind it is and how many objects it holds.
+- The H.264 reader no longer assumes a four byte start code. It read the type from a fixed place, which on a short framed stream is one byte inside the header, so the type came out wrong and the muxer added a second delimiter. Checked on a real stream reframed to three bytes: 841 delimiters in, 841 out.
+- The stream notes attachment has an honest name now. A Matroska file made from a source with short start codes carries a small text file recording how that source was framed. It used to be called dv-manifest.txt, which says Dolby Vision, and that name turned up on files with no Dolby Vision in them at all. The file's own first line already said "tsMuxeR stream notes", so it is tsmuxer-manifest.txt now.
+
+---
+
+### Interface
+
+- A Dolby Vision selector beside the output format. It is hidden, not greyed, unless it applies.
+- The selector used to do nothing at all. Choosing profile 8.1 moved the control and changed
+  nothing else.
+- The Blu-ray tab took no notice of the chosen output. 23 controls, and not one of them changed.
+  Nothing was ever muxed wrongly; the tab was simply saying something untrue about itself.
+- The Merge AC-3 file box threw away what you typed into it.
+- The Max bitrate box started at 99.99 kbps, which is a real limit of 99,990 bits per second. It is
+  48000 now, which gives a file identical to not using the box at all.
+- The bitrate boxes could ask for a rate the program refuses.
+- The Dolby Vision row appeared on a freshly opened window with nothing loaded.
+- The add, join and remove buttons and the file list now have help text. The join button explains
+  what it is for, which is a film split across two discs.
+
+---
+
+### Known limits
+
+These are real and they are not fixed. They are listed so you know where you stand.
+
+- A dual layer Dolby Vision pair listed with the **enhancement layer first** is refused, and the
+  message says the source is not dual layer, which is not true. Listing the base layer first works.
+  It no longer destroys a file at that path.
+- `merge-ac3-track` naming a track that is **not in the file** is accepted in silence, and no AC-3
+  track is written.
+- `--dv-profile=8.1` on transport stream output is accepted, does nothing and says nothing. The
+  refusal is correct for Matroska output only.
+- The lost data warning does **not** report data lost at the very start or the very end of a track.
+- A companion file longer than the track it is merged into is counted in the total, although the
+  extra could never have been used.
+- Splitting is not supported for Matroska output. The program now says so instead of ignoring it.
+- The tag checks defend against damage, which is what happens in practice. They do not defend
+  against a deliberately crafted tag.
+
+These four were found while checking this release and are **not** fixed in it:
+
+- **A 96 kHz TrueHD track merged with its AC-3 core uses the wrong clock.** Most of the lossless
+  audio then arrives after the time it should be played at. 48 kHz tracks are not affected.
+- **AV1 video read from an elementary stream loses the start of the file**, puts every frame into
+  one packet, and reports "Processed 0 video frames" while reporting success. AV1 inside a
+  container is not affected.
+- **A file name on an ISO that needs 16 bit characters, such as Cyrillic or Greek, is shortened
+  without warning.** Two different names can then become one name, and one of the files is lost.
+- **An ISO with more than about 4093 files and folders can fail while it is being built**, and
+  leave an image behind that cannot be used. Ordinary discs are far below that number.
+
+---
+
+### For anyone building from source
+
+The version line named the commit the build folder was **configured** with, not the one that was
+built. A local build here reported a commit 24 behind the code it contained. Releases were never
+affected. It now updates when the code moves.
 
 ## tsMuxeR 2.17.0
 
