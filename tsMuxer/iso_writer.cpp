@@ -7,6 +7,7 @@
 #include <climits>
 #include <cstring>
 #include <ctime>
+#include <sstream>
 
 #include <fs/systemlog.h>
 
@@ -298,10 +299,24 @@ void ByteFileWriter::setBuffer(uint8_t* buffer, const int len)
     m_curPos = buffer;
 }
 
-void ByteFileWriter::writeLE8(const uint8_t value) { *m_curPos++ = value; }
+// m_bufferEnd was recorded and never read, so every writer here ran off the end of its buffer in
+// silence. Refusing is the only safe answer: a caller that has run out of room cannot produce a
+// usable image, and carrying on writes over whatever the heap put next.
+void ByteFileWriter::checkRoom(const size_t bytes) const
+{
+    if (m_curPos + bytes > m_bufferEnd)
+        throw std::runtime_error("ISO error: the UDF writer ran out of buffer");
+}
+
+void ByteFileWriter::writeLE8(const uint8_t value)
+{
+    checkRoom(1);
+    *m_curPos++ = value;
+}
 
 void ByteFileWriter::writeLE16(const uint16_t value)
 {
+    checkRoom(2);
     const auto pos16 = reinterpret_cast<uint16_t*>(m_curPos);
     *pos16 = value;
     m_curPos += 2;
@@ -309,6 +324,7 @@ void ByteFileWriter::writeLE16(const uint16_t value)
 
 void ByteFileWriter::writeLE32(const uint32_t value)
 {
+    checkRoom(4);
     const auto pos32 = reinterpret_cast<uint32_t*>(m_curPos);
     *pos32 = value;
     m_curPos += 4;
@@ -363,6 +379,7 @@ void ByteFileWriter::writeDString(const std::string& value, const int64_t len) {
 
 void ByteFileWriter::writeBytes(const uint8_t* data, const size_t len)
 {
+    checkRoom(len);
     memcpy(m_curPos, data, len);
     m_curPos += len;
 }
@@ -767,7 +784,18 @@ IsoWriter::IsoWriter(const IsoHeaderData& hdrData)
 
 IsoWriter::~IsoWriter()
 {
-    close();
+    try
+    {
+        close();
+    }
+    catch (...)
+    {
+        // A destructor must not throw. close() refuses when the metadata partition is too small,
+        // and when it is running here it is usually because that same refusal is already unwinding
+        // the stack: a second throw out of a destructor ends the process on the spot, with the
+        // message never printed and nothing on stdout or stderr at all. The first one is the one
+        // that matters, and close() already gives up on its second entry.
+    }
     delete m_rootDirInfo;
     delete m_systemStreamDir;
 }
@@ -992,22 +1020,35 @@ void IsoWriter::allocateMetadata()
     allocateEntity(m_systemStreamDir, m_systemStreamLBN);
 
     if (m_systemStreamLBN + 3 > m_metadataFileLen / SECTOR_SIZE)
-        throw std::runtime_error(
-            "ISO error: Not enough space in metadata partition. It possible in a split mode if a lot of files. Please "
-            "provide addition input parameter --extra-iso-space to increate metadata space. Default value for this "
-            "parameter in split mode: 4");
+    {
+        std::ostringstream msg;
+        msg << "ISO error: not enough space in the metadata partition. It holds " << m_metadataFileLen / SECTOR_SIZE
+            << " sectors and " << m_systemStreamLBN + 3 << " are needed for " << m_mappingEntries.size()
+            << " files and directories. Use --extra-iso-space to enlarge it, in units of 64K.";
+        throw std::runtime_error(msg.str());
+    }
 
     // write udf unique id mapping file
     m_file.seek(static_cast<int64_t>(METADATA_START_ADDR) * SECTOR_SIZE + m_metadataFileLen);
 
-    const auto buffer = new uint8_t[ALLOC_BLOCK_SIZE];
-    memset(buffer, 0, ALLOC_BLOCK_SIZE);
+    // One entry per file and per directory, sixteen bytes each, behind a forty eight byte header.
+    // This used to be written into a fixed 64 KB block, which holds (65536 - 48) / 16 = 4093
+    // entries and not one more, and nothing in ByteFileWriter looked at where the buffer ended. So
+    // entry 4094 wrote past a heap allocation: a segmentation fault with nothing on stdout or
+    // stderr, and an unusable image left behind at the output path. The size is computed now, and
+    // the writer refuses to run off the end of any buffer rather than corrupting the heap.
+    constexpr size_t MAPPING_HEADER_SIZE = 48;
+    constexpr size_t MAPPING_ENTRY_SIZE = 16;
+    const size_t mappingSize = MAPPING_HEADER_SIZE + MAPPING_ENTRY_SIZE * m_mappingEntries.size();
+    std::vector<uint8_t> buffer(static_cast<size_t>(roundUp64(mappingSize, ALLOC_BLOCK_SIZE)), 0);
     ByteFileWriter writer;
-    writer.setBuffer(buffer, ALLOC_BLOCK_SIZE);
+    writer.setBuffer(buffer.data(), static_cast<int>(buffer.size()));
 
     writer.writeCharSpecString(m_impId.c_str(), 32);
     writer.writeLE32(0);  // flags
-    writer.writeLE32(static_cast<uint16_t>(m_mappingEntries.size()));
+    // The count is a four byte field. Casting it through uint16_t first threw away everything past
+    // 65,535 entries, which no image could reach while the write above crashed at 4,094.
+    writer.writeLE32(static_cast<uint32_t>(m_mappingEntries.size()));
     writer.writeLE32(0);  // reserved
     writer.writeLE32(0);  // reserved
 
@@ -1020,15 +1061,17 @@ void IsoWriter::allocateMetadata()
         writer.writeLE16(1);  // object partition
     }
 
-    m_metadataMappingFile->write(buffer, static_cast<int32_t>(writer.size()));
+    m_metadataMappingFile->write(buffer.data(), static_cast<int32_t>(writer.size()));
     m_metadataMappingFile->close();
-    delete[] buffer;
 }
 
 void IsoWriter::close()
 {
     if (!m_opened)
         return;
+    // Cleared before anything below can refuse, so the destructor's call does not run all this a
+    // second time while the first refusal is on its way out.
+    m_opened = false;
 
     memset(m_buffer, 0, sizeof(m_buffer));
     while (m_file.size() % ALLOC_BLOCK_SIZE != 1024LL * 62) m_file.write(m_buffer, SECTOR_SIZE);
@@ -1063,7 +1106,6 @@ void IsoWriter::close()
     writeMetadata(m_metadataLBN);
 
     writeDescriptors();
-    m_opened = false;
 }
 
 void IsoWriter::writeDescriptors()

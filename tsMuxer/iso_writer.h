@@ -94,6 +94,8 @@ class ByteFileWriter
     [[nodiscard]] int64_t size() const;
 
    private:
+    void checkRoom(size_t bytes) const;
+
     uint8_t* m_buffer;
     uint8_t* m_bufferEnd;
     uint8_t* m_curPos;

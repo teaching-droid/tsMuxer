@@ -1,5 +1,7 @@
 #include "blurayHelper.h"
 
+#include <memory>
+
 #include <fs/directory.h>
 #include <fs/systemlog.h>
 #include <array>
@@ -273,8 +275,14 @@ void BlurayHelper::close()
     if (m_isoWriter)
     {
         LTRACE(LT_INFO, 2, "Finalize ISO disk");
-        delete m_isoWriter;
+        // Finalise through close() rather than leaving it to the destructor. Finalising can refuse,
+        // and a refusal thrown out of a destructor cannot be reported: it either ends the process
+        // where it stands, with nothing on stdout or stderr, or it is swallowed and the run says it
+        // succeeded over an image no reader will open. Both were measured. The writer is handed to
+        // a unique_ptr first, so it is destroyed either way.
+        const std::unique_ptr<IsoWriter> writer(m_isoWriter);
         m_isoWriter = nullptr;
+        writer->close();
     }
 }
 
