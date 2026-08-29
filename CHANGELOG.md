@@ -137,6 +137,31 @@ The loss happened twice over. Turning that file back into a disc gave 4,323,248 
 Both reference tools write the same shape, and the AC-3 track now decodes identically to the one
 another tool produces, over all 953,856 samples it holds.
 
+**File names on an ISO were measured in the wrong units, and names were cut short.**
+
+An ISO stores a file name either as one byte per letter, or as two bytes per letter when the name
+needs letters that do not fit in one. The writer worked out how much room to leave from the name's
+size in UTF-8, which is a different number, and four things went wrong because of it.
+
+A Cyrillic or Greek name was cut short, because each plain letter in it takes one byte in UTF-8 and
+two on the image. Three Cyrillic letters in front of `_document_v1.txt` left eleven letters of
+nineteen. A `v2` file beside it was cut at the same place, so both files ended up with the same
+name and one of the two was lost. The mux said it was complete.
+
+A Japanese or Chinese name was cut in the middle of a letter, leaving half a character at the end.
+
+A name like `cafe.txt` written with an accent got an invisible zero glued to the end of it.
+
+And a name too long for the field wrapped round instead of being refused. A 150 letter Greek name
+made an image that no program will open at all. 7-Zip answers "Cannot open the file as archive",
+and the mux still said it was complete.
+
+The name is now written first and measured afterwards, so the two always agree. A name that is
+still too long is cut at a whole letter and the log says which name it was and how much of it went
+on the image.
+
+An image whose names are all plain English letters is exactly the same as before.
+
 **A file at the root of an ISO was marked as system data.**
 
 A file placed at the top level of an image built with `--keep-extra-files` was marked as UDF
@@ -361,10 +386,8 @@ These are real and they are not fixed. They are listed so you know where you sta
 - The tag checks defend against damage, which is what happens in practice. They do not defend
   against a deliberately crafted tag.
 
-These two were found while checking this release and are **not** fixed in it:
+This one was found while checking this release and is **not** fixed in it:
 
-- **A file name on an ISO that needs 16 bit characters, such as Cyrillic or Greek, is shortened
-  without warning.** Two different names can then become one name, and one of the files is lost.
 - **An ISO with more than about 4093 files and folders can fail while it is being built**, and
   leave an image behind that cannot be used. Ordinary discs are far below that number.
 
