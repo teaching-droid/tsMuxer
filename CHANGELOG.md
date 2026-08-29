@@ -188,6 +188,21 @@ with nothing said, or claimed success over an unusable image.
 The image is now finished before the program reports anything, so the message arrives, and it names
 the numbers.
 
+**A Dolby Vision disc listed the wrong way round lost its Dolby Vision without a word.**
+
+A Dolby Vision disc carries the picture on two video streams: a large base layer, and a smaller
+enhancement layer that holds the Dolby Vision data. They have to be listed in that order. The
+program worked out which was which from the order alone, so listing them the other way round meant
+the two were never joined.
+
+Without `--dv-profile` the mux said it worked. What came out was two separate tracks with no Dolby
+Vision at all, and nothing in the log said so. With `--dv-profile=8.1` it was refused, and the
+refusal said that both video streams must be listed, when both were listed.
+
+The program now recognises the wrong order and says so plainly, and the message tells you to swap
+the two video lines. Files that were already right are exactly the same as before, including a disc
+with a picture in picture stream beside the main video.
+
 **A file at the root of an ISO was marked as system data.**
 
 A file placed at the top level of an image built with `--keep-extra-files` was marked as UDF
@@ -402,9 +417,9 @@ Making that check also found `--inner-only` going over the disc by 1.44 MB in si
 
 These are real and they are not fixed. They are listed so you know where you stand.
 
-- A dual layer Dolby Vision pair listed with the **enhancement layer first** is refused, and the
-  message says the source is not dual layer, which is not true. Listing the base layer first works.
-  It no longer destroys a file at that path.
+- A dual layer Dolby Vision pair listed with the **enhancement layer first** is still not joined
+  automatically. It now says so and tells you to swap the two lines, instead of saying something
+  untrue or nothing at all. Listing the base layer first works.
 - The lost data warning does **not** report data lost at the very start or the very end of a track.
 - A companion file longer than the track it is merged into is counted in the total, although the
   extra could never have been used.
