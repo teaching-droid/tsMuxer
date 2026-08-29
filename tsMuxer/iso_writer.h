@@ -87,6 +87,7 @@ class ByteFileWriter
     void writeCharSpecString(const char* value, int len);
     void writeUDFString(const char* value, int len);
     void skipBytes(int value);
+    void writeBytes(const uint8_t* data, size_t len);
     void doPadding(int padSize);
     void writeTimestamp(time_t time);
 

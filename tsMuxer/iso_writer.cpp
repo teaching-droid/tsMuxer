@@ -8,6 +8,8 @@
 #include <cstring>
 #include <ctime>
 
+#include <fs/systemlog.h>
+
 #include "convertUTF.h"
 #include "utf8Converter.h"
 #include "vod_common.h"
@@ -182,6 +184,81 @@ std::vector<std::uint8_t> serializeDString(const std::string& str, const size_t 
     return rv;
 }
 
+/*
+ * A UDF File Identifier is NOT a dstring. It is a compression byte followed by the name itself,
+ * one byte per character in the 8 bit form and TWO in the 16 bit one, and L_FI counts exactly
+ * those bytes with no padding and no trailing length byte.
+ *
+ * The old route through serializeDString sized the field from the name's UTF-8 byte count. For a
+ * name that needs the 16 bit form that is the wrong number: every ASCII character in it costs one
+ * byte in UTF-8 and two in UTF-16, so the budget ran out and the name was cut short in silence.
+ * "abv_document_v1.txt" with three Cyrillic letters at the front came out as eleven characters of
+ * nineteen, and a v2 beside it came out with the SAME name, so one of the two files was lost.
+ *
+ * L_FI is a single byte, so a 16 bit name cannot exceed 127 characters. A longer one is cut on a
+ * character boundary and said out loud where the name is set, rather than wrapping the length.
+ */
+constexpr size_t MAX_FILE_IDENTIFIER = 255;
+
+std::vector<std::uint8_t> serializeFileIdentifier(const std::string& str, int* charsKept)
+{
+    int kept = 0;
+    if (charsKept)
+        *charsKept = 0;
+    if (str.empty())
+        return {};
+
+    std::vector<std::uint8_t> rv;
+#ifdef _WIN32
+    const auto str_u8 = reinterpret_cast<const std::uint8_t*>(str.c_str());
+    std::string utf8Str = convertUTF::isLegalUTF8String(str_u8, static_cast<int>(str.length()))
+                              ? str
+                              : UtfConverter::toUtf8(str_u8, str.length(), UtfConverter::SourceFormat::sfANSI);
+#else
+    auto& utf8Str = str;
+#endif
+    using namespace convertUTF;
+    rv.reserve(MAX_FILE_IDENTIFIER);
+    if (canUse8BitUnicode(utf8Str))
+    {
+        rv.push_back(8);
+        IterateUTF8Chars(utf8Str,
+                         [&](const uint8_t c)
+                         {
+                             if (rv.size() + 1 > MAX_FILE_IDENTIFIER)
+                                 return false;
+                             rv.push_back(c);
+                             ++kept;
+                             return true;
+                         });
+    }
+    else
+    {
+        rv.push_back(16);
+        IterateUTF8Chars(utf8Str,
+                         [&](auto c)
+                         {
+                             UTF16 high_surrogate, low_surrogate;
+                             std::tie(high_surrogate, low_surrogate) = ConvertUTF32toUTF16(c);
+                             const size_t need = low_surrogate ? 4 : 2;
+                             if (rv.size() + need > MAX_FILE_IDENTIFIER)
+                                 return false;
+                             rv.push_back(static_cast<uint8_t>(high_surrogate >> 8));
+                             rv.push_back(static_cast<uint8_t>(high_surrogate));
+                             if (low_surrogate)
+                             {
+                                 rv.push_back(static_cast<uint8_t>(low_surrogate >> 8));
+                                 rv.push_back(static_cast<uint8_t>(low_surrogate));
+                             }
+                             ++kept;
+                             return true;
+                         });
+    }
+    if (charsKept)
+        *charsKept = kept;
+    return rv;
+}
+
 void writeDString(uint8_t* buffer, const char* value, const size_t fieldLen)
 {
     auto content = serializeDString(value, fieldLen);
@@ -284,9 +361,16 @@ void ByteFileWriter::writeDString(const char* value, const int64_t len)
 
 void ByteFileWriter::writeDString(const std::string& value, const int64_t len) { writeDString(value.c_str(), len); }
 
+void ByteFileWriter::writeBytes(const uint8_t* data, const size_t len)
+{
+    memcpy(m_curPos, data, len);
+    m_curPos += len;
+}
+
 void ByteFileWriter::doPadding(const int padSize)
 {
-    m_curPos--;
+    // It used to step back one byte here, to drop the trailing length byte a dstring carries. The
+    // only caller writes a File Identifier now, which has no such byte, so there is nothing to undo.
     auto rest = static_cast<int>((m_curPos - m_buffer) % padSize);
     if (rest)
     {
@@ -348,6 +432,19 @@ FileEntryInfo::~FileEntryInfo()
 bool FileEntryInfo::setName(const std::string& name)
 {
     m_name = name;
+    int charsKept = 0;
+    serializeFileIdentifier(name, &charsKept);
+    int charsTotal = 0;
+    convertUTF::IterateUTF8Chars(name,
+                                 [&](auto)
+                                 {
+                                     ++charsTotal;
+                                     return true;
+                                 });
+    if (charsKept > 0 && charsKept < charsTotal)
+        LTRACE(LT_WARN, 2,
+               "ISO: the name \"" << name << "\" is longer than a UDF file identifier holds, so only its first "
+                                  << charsKept << " characters go on the image");
     return true;
 }
 
@@ -370,11 +467,14 @@ void FileEntryInfo::writeEntity(ByteFileWriter& writer, const FileEntryInfo* sub
     writer.writeDescriptorTag(DescriptorTag::FileId, m_owner->absoluteSectorNum() + 1);
     writer.writeLE16(0x01);  // File Version Number
     writer.writeLE8(!subDir->isFile() ? 0x02
-                                      : (isSystemFile ? 0x10 : 0));      // File Characteristics, 'directory' bit (1-th)
-    writer.writeLE8(static_cast<uint8_t>(subDir->m_name.length()) + 1);  // Length of File Identifier (=L_FI)
+                                      : (isSystemFile ? 0x10 : 0));  // File Characteristics, 'directory' bit (1-th)
+    // L_FI is the length of what is actually written, so the name is encoded FIRST and its own
+    // size used. Deriving it from the UTF-8 byte count is what cut 16 bit names short.
+    const auto identifier = serializeFileIdentifier(subDir->m_name, nullptr);
+    writer.writeLE8(static_cast<uint8_t>(identifier.size()));                  // Length of File Identifier (=L_FI)
     writer.writeLongAD(0x800, subDir->m_sectorNum, 0x01, subDir->m_objectId);  // ICB
     writer.writeLE16(0);                                                       // Length of Implementation Use
-    writer.writeDString(subDir->m_name);
+    writer.writeBytes(identifier.data(), identifier.size());
     writer.doPadding(4);
     writer.closeDescriptorTag();
 }
