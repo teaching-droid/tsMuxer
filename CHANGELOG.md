@@ -151,6 +151,26 @@ On HEVC the last picture went missing. On H.264 it was written twice. One cause,
 
 The tolerance in the coverage warning was worked out again with it, so a file that is now complete is not reported as short.
 
+**An AV1 file on its own lost the start of the file and counted no frames at all.**
+
+An AV1 file on disk is a plain chain of blocks, each one carrying its own length. It has no start
+markers. tsMuxeR handles AV1 inside itself the way it handles H.264 and HEVC, which do have start
+markers, and the reader looked for them in the file.
+
+There are none. So it threw away everything up to the first three bytes that looked like a start
+marker by accident, found no block boundary after that, and wrote the whole rest of the file as one
+packet. Then it said "Processed 0 video frames" next to "Mux successful complete".
+
+Measured on a file of 51,960 bytes holding 50 pictures: the first accidental marker sits 10,992
+bytes in, so 10,992 bytes were dropped, one packet came out instead of fifty, and the count was
+zero. AV1 inside a container was never affected.
+
+The reader now works out how the file is laid out and reads it either way. The same file gives 50
+pictures and 50 packets, a 66.8 MB file gives its 3,000, and the pictures that come back out are
+the same ones that went in, to the last pixel. A file that stops in the middle of a block, or whose
+blocks do not follow on from each other, now says so and gives the number of bytes it skipped.
+tsMuxeR can also recognise these files now, where it used to answer "Can't detect stream type".
+
 ---
 
 ### Fixed: a refusal that destroyed the file it refused to write
@@ -341,11 +361,8 @@ These are real and they are not fixed. They are listed so you know where you sta
 - The tag checks defend against damage, which is what happens in practice. They do not defend
   against a deliberately crafted tag.
 
-These three were found while checking this release and are **not** fixed in it:
+These two were found while checking this release and are **not** fixed in it:
 
-- **AV1 video read from an elementary stream loses the start of the file**, puts every frame into
-  one packet, and reports "Processed 0 video frames" while reporting success. AV1 inside a
-  container is not affected.
 - **A file name on an ISO that needs 16 bit characters, such as Cyrillic or Greek, is shortened
   without warning.** Two different names can then become one name, and one of the files is lost.
 - **An ISO with more than about 4093 files and folders can fail while it is being built**, and
