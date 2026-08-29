@@ -280,8 +280,33 @@ void TrueHDAC3MergeReader::reportCoreCoverage()
     if (m_coverageReported)
         return;
     m_coverageReported = true;
-    if (m_samplerate <= 0 || m_ac3FramesEmitted == 0)
+    // m_readBytes is what THIS reader was actually fed. A discovery pass runs before the mux and
+    // builds a reader of its own that is never given anything, so without this every merge, including
+    // the ones that work, reported a missing core from that reader's destructor. Measured: the
+    // discovery instance ends with readBytes 0, and the muxing instance with 5,343,300 on a merge
+    // that worked and 4,230,468 on one whose AC-3 source gave nothing.
+    if (m_samplerate <= 0 || m_readBytes == 0)
         return;
+
+    // ** NO CORE AT ALL WAS THE ONE OUTCOME THIS SAID NOTHING ABOUT. **
+    //
+    // The zero was excluded so the average below would not divide by it, which left the WORST
+    // result, a merge that produced no compatibility core whatever, as the only silent one. The loss
+    // report cannot catch it either: a track that is not in the file contributes no bytes read, so
+    // there is nothing to charge. Measured on a Matroska source, the same line differing only in the
+    // track number: one the file holds gives 7,212,432 bytes and names the track the core came from,
+    // one it does not hold gives 4,323,248 bytes, no core, no warning, exit 0.
+    if (m_ac3FramesEmitted == 0)
+    {
+        LTRACE(LT_WARN, 2,
+               "Warning: no AC-3 compatibility core was written for this TrueHD track, so the output has "
+               "none at all, which a Blu-ray does not allow. Nothing usable came back from the AC-3 "
+               "source. With merge-ac3-track, check that the number names a track the file really holds, "
+               "because a remuxed file does not keep the track numbers of the file it was made from. "
+               "With merge-ac3-file, check that the file is a classic AC-3 stream. Listing the source on "
+               "its own shows the tracks and codecs tsMuxeR finds in it.");
+        return;
+    }
 
     const double losslessSec = static_cast<double>(m_totalTHDSamples) / m_samplerate;
     const double coreSec = static_cast<double>(m_nextAc3Time) / INTERNAL_PTS_FREQ;
