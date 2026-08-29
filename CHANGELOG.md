@@ -233,6 +233,10 @@ needed it. It now warns and names the option. No output byte changes.
 The same job produced nine parts as a transport stream and one 421 MB file as Matroska, both
 reporting success. It now says so, and the interface greys the split controls for Matroska.
 
+**A merge that produced no AC-3 core at all said nothing about it.**
+
+The warning that reports a short core opened by excluding zero, so that an average below it would not divide by zero. That left the worst outcome as the only silent one. Measured on a Matroska source, the same line differing only in the track number: a track the file holds gives 7,212,432 bytes and names the track the core came from, and a track it does not hold gives 4,323,248 bytes, no core, no warning and exit 0. That is 2,889,184 bytes of compatibility audio gone in silence, and the lost data report cannot catch it either, because a track that is not in the file contributes no bytes read and so has nothing to charge. It is easy to reach: a remuxed file does not keep the track numbers of the file it was made from, so a meta copied from the original can name a track that is not there. It now says so, and says what to check.
+
 **`--dv-profile` was accepted and ignored on every output but Matroska.**
 
 The option is read by the Matroska muxer and by nothing else. On a disc, a transport stream or a demux it was accepted, did nothing, and said nothing. Measured on the same source twice, differing only in whether the option is present: both files have md5 65c5268e3c4c034aad92b6e898998368. It warns now, and names the output it is talking about. A warning and not a refusal, because on those outputs the option is not wrong so much as meaningless. A disc and a transport stream carry the two layers as two streams, the way the source disc does, so there is nothing to fold and nothing to convert.
@@ -330,8 +334,6 @@ These are real and they are not fixed. They are listed so you know where you sta
 - A dual layer Dolby Vision pair listed with the **enhancement layer first** is refused, and the
   message says the source is not dual layer, which is not true. Listing the base layer first works.
   It no longer destroys a file at that path.
-- `merge-ac3-track` naming a track that is **not in the file** is accepted in silence, and no AC-3
-  track is written.
 - The lost data warning does **not** report data lost at the very start or the very end of a track.
 - A companion file longer than the track it is merged into is counted in the total, although the
   extra could never have been used.
