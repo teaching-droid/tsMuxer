@@ -135,11 +135,10 @@ size_t AV1StreamReader::convertPending(const bool lastBlock)
 
         if (payloadLen > 0)
         {
-            const int encoded = av1_add_emulation_prevention(payload, payload + payloadLen, dst,
-                                                             static_cast<size_t>(dstEnd - dst));
+            const int encoded =
+                av1_add_emulation_prevention(payload, payload + payloadLen, dst, static_cast<size_t>(dstEnd - dst));
             if (encoded < 0)
-                THROW(ERR_COMMON_SMALL_BUFFER,
-                      "Not enough buffer to convert an AV1 OBU of " << payloadLen << " bytes")
+                THROW(ERR_COMMON_SMALL_BUFFER, "Not enough buffer to convert an AV1 OBU of " << payloadLen << " bytes")
             dst += encoded;
         }
         src = payload + payloadLen;
@@ -154,8 +153,8 @@ size_t AV1StreamReader::convertPending(const bool lastBlock)
         if (!m_brokenObuWarned)
         {
             LTRACE(LT_WARN, 2,
-                   "AV1: the OBU chain breaks after " << m_totalFrameNum << " frames, "
-                                                      << m_pending.size() << " bytes skipped");
+                   "AV1: the OBU chain breaks after " << m_totalFrameNum << " frames, " << m_pending.size()
+                                                      << " bytes skipped");
             m_brokenObuWarned = true;
         }
         m_pending.clear();
@@ -218,8 +217,7 @@ CheckStreamRez AV1StreamReader::checkStream(uint8_t* buffer, const int len)
         savedPending.swap(m_pending);
         m_pending.assign(buffer, buffer + len);
         const size_t converted = convertPending(false);
-        probe.assign(m_convBuffer.begin() + MAX_AV_PACKET_SIZE,
-                     m_convBuffer.begin() + MAX_AV_PACKET_SIZE + converted);
+        probe.assign(m_convBuffer.begin() + MAX_AV_PACKET_SIZE, m_convBuffer.begin() + MAX_AV_PACKET_SIZE + converted);
         m_pending.swap(savedPending);
         if (!probe.empty())
         {
