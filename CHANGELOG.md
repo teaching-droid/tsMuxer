@@ -442,6 +442,12 @@ before a single picture is written.
 **Please note: this does not make the file smaller.** The second layer is kept so that the disc can
 be rebuilt. That is the point of it.
 
+**Profile 8.1 needs libdovi**, which is not part of tsMuxeR and is not in the downloads. On 64 bit
+Windows put `dovi.dll` beside `tsMuxeR.exe`; on Linux and macOS build it, or install a package if
+your distribution has one. Without it `--dv-profile=8.1` is refused before muxing starts rather
+than failing part way through a feature, and the message names the library. The table in
+`docs/DOLBY_VISION.md` has the detail, in English, German and Japanese.
+
 **The index is now written at the front of the file as well.**
 
 The index has always been written after the video, because it is not known until the end. Nothing
