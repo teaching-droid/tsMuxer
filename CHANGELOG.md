@@ -237,6 +237,24 @@ the same ones that went in, to the last pixel. A file that stops in the middle o
 blocks do not follow on from each other, now says so and gives the number of bytes it skipped.
 tsMuxeR can also recognise these files now, where it used to answer "Can't detect stream type".
 
+**And the other way round: `--demux` wrote an AV1 file that no other program will open.**
+
+The same difference, from the other side. When you pull an AV1 track out of a disc or a transport
+stream, tsMuxeR wrote the file in its own internal arrangement with the start markers still in it.
+ffmpeg refuses such a file outright, and refuses it even when told to expect AV1, while it reads a
+file from any encoder without complaint. The mux said it was complete.
+
+It writes the real thing now. There was a second half to it: an AV1 file is a chain of picture
+groups and each one has to begin with a small marker of its own, with nothing in front of the very
+first. A transport stream carries a header ahead of that marker, so writing the pieces out in the
+order they arrive still produced a file ffmpeg would not open. That header is now written just
+after the marker instead, so nothing is dropped.
+
+Measured: ffmpeg reads the file now and gets all 50 pictures, and the pictures that come out are
+the same ones that went in. Take away the one header the transport stream adds and the file is
+byte for byte the encoder's original. Every other kind of track comes out of a demux exactly as
+before.
+
 ---
 
 ### Fixed: a refusal that destroyed the file it refused to write
