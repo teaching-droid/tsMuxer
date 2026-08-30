@@ -93,7 +93,7 @@ class SimplePacketizerReader : public AbstractStreamReader
     int64_t m_processedBytes;
     int64_t m_lostBytes;
     int64_t m_readBytes;  // see getReadSize(), summed in setBuffer
-    bool m_everSynced;  // a frame of this codec has been found at least once
+    bool m_everSynced;    // a frame of this codec has been found at least once
     // Past the last byte of a metadata tag run that the recogniser WALKED AND VERIFIED at the
     // current search position, or the position itself when there is none. A frame search may
     // disbelieve a sync below this and nowhere else. See oneTagCeiling for why.
@@ -114,8 +114,6 @@ class SimplePacketizerReader : public AbstractStreamReader
     // frame search does all the stepping over, exactly as it did before any of this existed.
     int64_t m_tagCredit;
     const uint8_t* m_tagProbePos;  // so one chain is not credited twice while the position is held
-
-
 
     uint64_t m_frameNum;
     bool m_needSync;

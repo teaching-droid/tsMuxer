@@ -14,6 +14,7 @@
 #include "blank_patterns.h"
 #include "blurayHelper.h"
 #include "convertUTF.h"
+#include "h264StreamReader.h"
 #include "iso_writer.h"
 #include "matroskaMuxer.h"
 #include "metaDemuxer.h"
@@ -22,7 +23,6 @@
 #include "pgsStreamReader.h"
 #include "simplePacketizerReader.h"
 #include "singleFileMuxer.h"
-#include "h264StreamReader.h"
 #include "tsMuxer.h"
 
 using namespace std;
@@ -71,8 +71,8 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                 // words the refusal, so both the shape and the sentence are the ones already here.
                 if (paramPair[0] == "--auto-chapters")
                 {
-                if (paramPair.size() < 2)
-                    THROW(ERR_COMMON, "Missing value for " << paramPair[0])
+                    if (paramPair.size() < 2)
+                        THROW(ERR_COMMON, "Missing value for " << paramPair[0])
                     autoChapterLen = strToInt32(paramPair[1].c_str()) * 60;
                 }
                 else if (paramPair[0] == "--custom-chapters" && paramPair.size() > 1)
@@ -82,24 +82,24 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                 }
                 else if (paramPair[0] == "--mplsOffset")
                 {
-                if (paramPair.size() < 2)
-                    THROW(ERR_COMMON, "Missing value for " << paramPair[0])
+                    if (paramPair.size() < 2)
+                        THROW(ERR_COMMON, "Missing value for " << paramPair[0])
                     firstMplsOffset = strToInt32(paramPair[1].c_str());
                     if (firstMplsOffset > 1999)
                         THROW(ERR_COMMON, "Too large m2ts offset " << firstMplsOffset)
                 }
                 else if (paramPair[0] == "--blankOffset")
                 {
-                if (paramPair.size() < 2)
-                    THROW(ERR_COMMON, "Missing value for " << paramPair[0])
+                    if (paramPair.size() < 2)
+                        THROW(ERR_COMMON, "Missing value for " << paramPair[0])
                     blankNum = strToInt32(paramPair[1].c_str());
                     if (blankNum > 1999)
                         THROW(ERR_COMMON, "Too large black playlist offset " << blankNum)
                 }
                 else if (paramPair[0] == "--m2tsOffset")
                 {
-                if (paramPair.size() < 2)
-                    THROW(ERR_COMMON, "Missing value for " << paramPair[0])
+                    if (paramPair.size() < 2)
+                        THROW(ERR_COMMON, "Missing value for " << paramPair[0])
                     firstM2tsOffset = strToInt32(paramPair[1].c_str());
                     if (firstM2tsOffset > 99999)
                         THROW(ERR_COMMON, "Too large m2ts offset " << firstM2tsOffset)
@@ -108,8 +108,8 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                     insertBlankPL = true;
                 else if (paramPair[0] == "--label")
                 {
-                if (paramPair.size() < 2)
-                    THROW(ERR_COMMON, "Missing value for " << paramPair[0])
+                    if (paramPair.size() < 2)
+                        THROW(ERR_COMMON, "Missing value for " << paramPair[0])
                     isoDiskLabel = paramPair[1];
                 }
             }
@@ -1464,8 +1464,7 @@ static void reportSplitWithoutParameterSets(const MuxerManager& muxerManager)
         const auto reader = dynamic_cast<H264StreamReader*>(si.m_streamReader);
         if (reader == nullptr || reader->spsPpsRepeatedInStream())
             continue;
-        const std::string name =
-            si.m_fullStreamName.empty() ? ("\"" + si.m_streamName + "\"") : si.m_fullStreamName;
+        const std::string name = si.m_fullStreamName.empty() ? ("\"" + si.m_streamName + "\"") : si.m_fullStreamName;
         LTRACE(LT_WARN, 2,
                "Warning: " << name
                            << " was split, and its H.264 parameter sets appear only once at the start, so "
@@ -1541,18 +1540,17 @@ static void reportLostData(const MuxerManager& muxerManager)
     // own", when it has no parts to list. That is the same defect as the one fixed for the single
     // track shape, reappearing in the many track shape, which is why the mixed case is now a
     // fixture rather than an assumption: one ordinary file and one join, both losing data.
-    const std::string advice =
-        allJoin  ? "List each part on its own to see the codec name tsMuxeR reports for it."
-        : anyJoin ? "List each file, and each part of a join, on its own to see the codec name "
-                    "tsMuxeR reports for it."
-                  : "List the file on its own to see the codec name tsMuxeR reports for it.";
+    const std::string advice = allJoin   ? "List each part on its own to see the codec name tsMuxeR reports for it."
+                               : anyJoin ? "List each file, and each part of a join, on its own to see the codec name "
+                                           "tsMuxeR reports for it."
+                                         : "List the file on its own to see the codec name tsMuxeR reports for it.";
 
     if (hits.size() == 1)
     {
         const Entry& e = hits.front();
         std::ostringstream msg;
-        msg << "Warning: " << e.who << ": " << e.lost << " bytes of the " << e.total
-            << " read for this track as " << e.codec << " could not be used and were dropped. " << why << advice;
+        msg << "Warning: " << e.who << ": " << e.lost << " bytes of the " << e.total << " read for this track as "
+            << e.codec << " could not be used and were dropped. " << why << advice;
         LTRACE(LT_WARN, 2, msg.str());
         return;
     }
@@ -1563,8 +1561,8 @@ static void reportLostData(const MuxerManager& muxerManager)
     for (const Entry& e : hits)
     {
         std::ostringstream line;
-        line << "  " << e.who << ": " << e.lost << " bytes of the " << e.total << " read for this track as "
-             << e.codec << " could not be used and were dropped.";
+        line << "  " << e.who << ": " << e.lost << " bytes of the " << e.total << " read for this track as " << e.codec
+             << " could not be used and were dropped.";
         LTRACE(LT_WARN, 2, line.str());
     }
     LTRACE(LT_WARN, 2, why + advice);
