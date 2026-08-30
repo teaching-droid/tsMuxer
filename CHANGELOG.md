@@ -57,6 +57,29 @@ the boundary and a third part before anything is lost.
 Measured on three parts of one sound track: 20,035,292 bytes in, 2,097,152 bytes out, success
 reported, no warning.
 
+**A tag in the middle of an audio file destroyed a piece of the sound.**
+
+A file made by sticking two audio files together has a tag where they join. The part of the program
+that reads a frame of sound never checked that it was looking at one. Handed the first four bytes of
+a tag, it read them as a frame 314 bytes long, wrote those 314 bytes into the output as if they were
+sound, and landed inside the first real frame after the tag, which was then thrown away.
+
+That is why a small tag did damage and a large one did not: with a large tag the imaginary frame
+stayed inside it.
+
+Measured on a clean recording with a tag pushed into the middle of it, twelve tag sizes from 10
+bytes to 1024. Before, anything under 314 bytes cost a whole frame of sound, about a fortieth of a
+second, and part of the tag came out in the audio. Now all twelve produce exactly what the same
+recording produces with no tag at all, and none of them complains.
+
+**And a tag that begins right at the edge of a read block was reported as lost.**
+
+The program reads a file in 2 MB pieces. A tag whose first bytes fall at the end of one piece cannot
+be recognised there, and by the time the next piece arrives the program has already read past the
+start of it, so the whole tag was counted as lost data on a file whose sound is complete. Measured
+on a 360,989 byte tag beginning five bytes before the boundary. It now carries those few bytes over
+to the next piece.
+
 **A picture in front of an AAC track was read as sound.**
 
 Many audio files start with a tag that holds the cover art. The marker that starts an AAC frame is
@@ -475,14 +498,6 @@ These are real and they are not fixed. They are listed so you know where you sta
 - Splitting is not supported for Matroska output. The program now says so instead of ignoring it.
 - The tag checks defend against damage, which is what happens in practice. They do not defend
   against a deliberately crafted tag.
-- **A small tag in the MIDDLE of an audio file costs a little audio.** A file made by sticking two
-  audio files together has a tag where they join. If that tag is smaller than about 512 bytes, the
-  reader loses between 86 and 777 bytes of sound at that point, which is a fraction of a second.
-  Measured across eleven tag sizes: below 512 bytes it happens, at 512 and above nothing is lost at
-  all, and most tags are larger than that. The lost data warning reports every byte of it, so you
-  are told when it happens. Fixing it means stepping over tags again, which an earlier version did
-  and which was removed after it was found to destroy audio in thirteen other ways, so it is being
-  done carefully rather than quickly.
 - An ISO with more than about **23,000 files and folders** is refused, because the space set aside
   for the file table is worked out from the file count alone and does not allow for the folder
   listings. The refusal names the numbers and `--extra-iso-space` makes the space bigger. An
