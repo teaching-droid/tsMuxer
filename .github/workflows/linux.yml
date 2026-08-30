@@ -37,11 +37,22 @@ jobs:
         asset="tsMuxeR-${ver}-linux-x64.zip"
         echo "ASSET=${asset}" >> "$GITHUB_ENV"
         mkdir -p bin
-        find build -maxdepth 3 -type f -name tsmuxer    -exec cp {} bin/tsMuxeR \;
-        find build -maxdepth 3 -type f -name tsmuxergui -exec cp {} bin/tsMuxerGUI \;
+        # -iname and not -name. The CMake targets are "tsmuxer" and "tsMuxerGUI", find is case
+        # sensitive on Linux, so -name tsmuxergui matched nothing and the GUI was left out of every
+        # Linux release. Windows never showed it because Test-Path ignores case.
+        find build -maxdepth 3 -type f -iname tsmuxer    -exec cp {} bin/tsMuxeR \;
+        find build -maxdepth 3 -type f -iname tsmuxergui -exec cp {} bin/tsMuxerGUI \;
         chmod +x bin/tsMuxeR bin/tsMuxerGUI 2>/dev/null || true
         cd bin
-        if [ -f tsMuxerGUI ]; then zip -9 "$asset" tsMuxeR tsMuxerGUI; else zip -9 "$asset" tsMuxeR; fi
+        # This job builds with -DTSMUXER_GUI=ON, so a missing GUI is a broken build and not a
+        # smaller release. It used to zip the command line tool on its own and say nothing at all.
+        for f in tsMuxeR tsMuxerGUI; do
+          if [ ! -f "$f" ]; then
+            echo "::error::$f was not built. Refusing to publish a partial release."
+            exit 1
+          fi
+        done
+        zip -9 "$asset" tsMuxeR tsMuxerGUI
         ls -la
 
     - uses: actions/upload-artifact@v4
