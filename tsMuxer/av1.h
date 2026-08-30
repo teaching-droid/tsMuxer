@@ -136,4 +136,21 @@ int av1_add_emulation_prevention(const uint8_t* src, const uint8_t* srcEnd, uint
 // Remove AV1 TS emulation prevention bytes. Returns decoded size, or -1 on error.
 int av1_remove_emulation_prevention(const uint8_t* src, const uint8_t* srcEnd, uint8_t* dst, size_t dstSize);
 
+/*
+ * Turn tsMuxeR's internal AV1 framing back into what an AV1 file on disk actually holds.
+ *
+ * Internally, and inside a transport stream, an OBU is written the way H.264 and HEVC write a NAL:
+ * a start code, the OBU header with obu_has_size_field CLEARED, and an emulation prevented payload.
+ * On disk there are no start codes at all. The AV1 specification's low overhead bitstream format is
+ * a bare chain of OBUs, each carrying obu_has_size_field and its own leb128 length, and that is what
+ * every encoder writes and every other program reads.
+ *
+ * Unlike MatroskaMuxer::convertAV1ToLowOverhead, which does the same conversion for Matroska, this
+ * keeps EVERY OBU: Matroska strips temporal delimiters and deduplicates sequence headers because its
+ * own rules say to, and a standalone .obu file needs them both.
+ *
+ * Returns the number of bytes appended to out, or -1 if the input cannot be walked.
+ */
+int av1_start_codes_to_low_overhead(const uint8_t* src, const uint8_t* end, std::vector<uint8_t>& out);
+
 #endif  // AV1_H_

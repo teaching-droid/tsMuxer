@@ -588,6 +588,65 @@ std::vector<std::vector<uint8_t>> av1_extract_priv_data(const uint8_t* buff, con
 // Emulation prevention (same algorithm as H.264/HEVC Annex-B)
 // ---------------------------------------------------------------------------
 
+int av1_start_codes_to_low_overhead(const uint8_t* src, const uint8_t* end, std::vector<uint8_t>& out)
+{
+    const size_t startSize = out.size();
+    auto* const dataStart = const_cast<uint8_t*>(src);
+    auto* const dataEnd = const_cast<uint8_t*>(end);
+
+    std::vector<uint8_t> rawBuf(static_cast<size_t>(end - src) + 1);
+    uint8_t* curObu = NALUnit::findNextNAL(dataStart, dataEnd);
+
+    while (curObu < dataEnd)
+    {
+        Av1ObuHeader obuHdr;
+        const int hdrLen = obuHdr.parse(curObu, dataEnd);
+        if (hdrLen < 0)
+        {
+            out.resize(startSize);
+            return -1;
+        }
+
+        uint8_t* const nextStartCode = NALUnit::findNALWithStartCode(curObu, dataEnd, true);
+
+        // Trailing zeros belong to the next start code, not to this OBU. Trimmed the same way the
+        // reader trims them, so the two agree about where an OBU ends.
+        uint8_t* obuPayloadEnd = nextStartCode;
+        while (obuPayloadEnd > curObu + hdrLen && obuPayloadEnd[-1] == 0) obuPayloadEnd--;
+
+        const uint8_t* payload = curObu + hdrLen;
+        const int payloadWithEPLen = static_cast<int>(obuPayloadEnd - payload);
+
+        int rawPayloadLen = 0;
+        if (payloadWithEPLen > 0)
+        {
+            rawPayloadLen =
+                av1_remove_emulation_prevention(payload, payload + payloadWithEPLen, rawBuf.data(), rawBuf.size());
+            if (rawPayloadLen < 0)
+            {
+                memcpy(rawBuf.data(), payload, payloadWithEPLen);
+                rawPayloadLen = payloadWithEPLen;
+            }
+        }
+
+        out.push_back(static_cast<uint8_t>(curObu[0] | 0x02));  // obu_has_size_field SET
+        if (obuHdr.obu_extension_flag)
+            out.push_back(curObu[1]);
+
+        uint8_t leb128Buf[8];
+        const int leb128Len = encodeLeb128(leb128Buf, static_cast<uint64_t>(rawPayloadLen));
+        out.insert(out.end(), leb128Buf, leb128Buf + leb128Len);
+        if (rawPayloadLen > 0)
+            out.insert(out.end(), rawBuf.data(), rawBuf.data() + rawPayloadLen);
+
+        if (nextStartCode >= dataEnd)
+            break;
+        curObu = NALUnit::findNextNAL(nextStartCode, dataEnd);
+    }
+
+    return static_cast<int>(out.size() - startSize);
+}
+
 int av1_add_emulation_prevention(const uint8_t* src, const uint8_t* srcEnd, uint8_t* dst, size_t dstSize)
 {
     return NALUnit::encodeNAL(src, srcEnd, dst, dstSize);

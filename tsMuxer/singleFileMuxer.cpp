@@ -285,11 +285,17 @@ bool SingleFileMuxer::muxPacket(AVPacket& avPacket)
     streamInfo->m_dts = avPacket.dts;
     streamInfo->m_pts = avPacket.pts;
 
+    // What goes in the file is the codec's ON DISK form, which for everything but AV1 is the packet
+    // exactly as it stands. The size is taken AFTER any conversion, so the buffer test below is
+    // made against what is really about to be written.
+    const uint8_t* outData = avPacket.data;
+    const int outSize = avPacket.codec->prepareDemuxPacket(avPacket.data, avPacket.size, &outData);
+
     // If the frame would overflow the output buffer, force a flush first.
     // The buffer is blockSize + MAX_AV_PACKET_SIZE + ADD_DATA_SIZE; frames
     // larger than MAX_AV_PACKET_SIZE (e.g. multichannel FLAC) need this.
     constexpr int bufCapacity = DEFAULT_FILE_BLOCK_SIZE + MAX_AV_PACKET_SIZE + ADD_DATA_SIZE;
-    if (streamInfo->m_bufLen + avPacket.size > bufCapacity && streamInfo->m_bufLen > 0)
+    if (streamInfo->m_bufLen + outSize > bufCapacity && streamInfo->m_bufLen > 0)
     {
         if (m_owner->isAsyncMode())
         {
@@ -305,8 +311,8 @@ bool SingleFileMuxer::muxPacket(AVPacket& avPacket)
         streamInfo->m_bufLen = 0;
     }
 
-    memcpy(streamInfo->m_buffer + streamInfo->m_bufLen, avPacket.data, avPacket.size);
-    streamInfo->m_bufLen += avPacket.size;
+    memcpy(streamInfo->m_buffer + streamInfo->m_bufLen, outData, outSize);
+    streamInfo->m_bufLen += outSize;
     writeOutBuffer(streamInfo);
     return true;
 }

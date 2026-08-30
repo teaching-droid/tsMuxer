@@ -16,6 +16,8 @@ using namespace std;
 AV1StreamReader::AV1StreamReader()
     : m_framing(Av1Framing::UNDECIDED),
       m_brokenObuWarned(false),
+      m_demuxSeqHdrPending(false),
+      m_demuxSawTd(false),
       m_seqHdrFound(false),
       m_firstFrame(true),
       m_lastIFrame(false),
@@ -542,9 +544,130 @@ int AV1StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPa
     if (needInsSeqHdr)
     {
         avPacket.flags |= AVPacket::IS_SPS_PPS_IN_GOP;
-        curPos = writeBuffer(m_seqHdrBuffer, curPos, dstEnd);
+        // A demux writes a file, and an AV1 file is a chain of temporal units each of which BEGINS
+        // with a temporal delimiter. Nothing may sit in front of the first one: writing the
+        // sequence header here put an OBU there, and ffmpeg refused the whole file for it. So in
+        // demux mode the header is owed rather than written, and prepareDemuxPacket puts it just
+        // after the temporal delimiter the packet starts with.
+        if (m_demuxMode)
+            m_demuxSeqHdrPending = true;
+        else
+            curPos = writeBuffer(m_seqHdrBuffer, curPos, dstEnd);
     }
 
     m_firstFileFrame = false;
     return static_cast<int>(curPos - dstBuffer);
+}
+
+// Step over one low overhead OBU. Returns false when there is not a whole one at `at`.
+static bool obuAt(const std::vector<uint8_t>& buf, const size_t at, Av1ObuType& type, size_t& next)
+{
+    const uint8_t* const begin = buf.data() + at;
+    const uint8_t* const end = buf.data() + buf.size();
+    Av1ObuHeader hdr;
+    const int hdrLen = hdr.parse(begin, end);
+    if (hdrLen < 0 || !hdr.obu_has_size_field)
+        return false;
+    int lebLen = 0;
+    const int64_t payloadLen = decodeLeb128(begin + hdrLen, end, lebLen);
+    if (payloadLen < 0)
+        return false;
+    const size_t n = at + hdrLen + lebLen + static_cast<size_t>(payloadLen);
+    if (n > buf.size())
+        return false;
+    type = hdr.obu_type;
+    next = n;
+    return true;
+}
+
+int AV1StreamReader::prepareDemuxPacket(uint8_t* data, const int size, const uint8_t** outData)
+{
+    // The internal framing is start codes, the way H.264 and HEVC are framed. An .obu file has none
+    // of that: every OBU carries its own leb128 length instead. Without this a demux wrote a file
+    // no other program will open, at exit 0 and with nothing said.
+    m_demuxBuffer.clear();
+    const int converted = av1_start_codes_to_low_overhead(data, data + size, m_demuxBuffer);
+    if (converted <= 0 || m_demuxBuffer.empty())
+    {
+        *outData = data;
+        return size;
+    }
+
+    // ** AN AV1 FILE BEGINS WITH A TEMPORAL DELIMITER AND NOTHING MAY STAND IN FRONT OF IT. **
+    // A transport stream carries a sequence header ahead of the first delimiter, so writing the
+    // packets out in the order they arrive put that header at the head of the file and ffmpeg
+    // refused the whole thing, forced with -f obu as well. Anything ahead of the first delimiter is
+    // held back and written immediately after it instead: nothing is dropped, and the file starts
+    // the way the format says it must.
+    if (!m_demuxSawTd)
+    {
+        size_t at = 0;
+        size_t tdStart = m_demuxBuffer.size();
+        size_t tdEnd = m_demuxBuffer.size();
+        while (at < m_demuxBuffer.size())
+        {
+            Av1ObuType type;
+            size_t next;
+            if (!obuAt(m_demuxBuffer, at, type, next))
+                break;
+            if (type == Av1ObuType::TEMPORAL_DELIMITER)
+            {
+                tdStart = at;
+                tdEnd = next;
+                break;
+            }
+            at = next;
+        }
+        if (tdStart == m_demuxBuffer.size())
+        {
+            // Still no delimiter. Keep these and write nothing yet.
+            m_demuxHeld.insert(m_demuxHeld.end(), m_demuxBuffer.begin(), m_demuxBuffer.end());
+            *outData = data;
+            return 0;
+        }
+        std::vector<uint8_t> ordered;
+        ordered.reserve(m_demuxBuffer.size() + m_demuxHeld.size());
+        ordered.insert(ordered.end(), m_demuxBuffer.begin() + tdStart, m_demuxBuffer.begin() + tdEnd);
+        ordered.insert(ordered.end(), m_demuxHeld.begin(), m_demuxHeld.end());
+        ordered.insert(ordered.end(), m_demuxBuffer.begin(), m_demuxBuffer.begin() + tdStart);
+        ordered.insert(ordered.end(), m_demuxBuffer.begin() + tdEnd, m_demuxBuffer.end());
+        m_demuxBuffer.swap(ordered);
+        m_demuxHeld.clear();
+        m_demuxHeld.shrink_to_fit();
+        m_demuxSawTd = true;
+    }
+
+    // The sequence header a split part is owed goes INSIDE the first temporal unit, never in front
+    // of it. It is only ever a copy of one the stream already carried, so this changes nothing for
+    // a whole file; it is what makes each part of a split demux decodable on its own.
+    if (m_demuxSeqHdrPending)
+    {
+        m_demuxSeqHdrPending = false;
+        if (!m_seqHdrBuffer.isEmpty())
+        {
+            std::vector<uint8_t> framed{0, 0, 1};
+            framed.insert(framed.end(), m_seqHdrBuffer.data(), m_seqHdrBuffer.data() + m_seqHdrBuffer.size());
+            std::vector<uint8_t> onDisk;
+            if (av1_start_codes_to_low_overhead(framed.data(), framed.data() + framed.size(), onDisk) > 0)
+            {
+                // Past the leading temporal delimiter, if there is one.
+                size_t at = 0;
+                Av1ObuHeader hdr;
+                const uint8_t* const begin = m_demuxBuffer.data();
+                const uint8_t* const end = begin + m_demuxBuffer.size();
+                const int hdrLen = hdr.parse(begin, end);
+                if (hdrLen > 0 && hdr.obu_has_size_field && hdr.obu_type == Av1ObuType::TEMPORAL_DELIMITER)
+                {
+                    int lebLen = 0;
+                    const int64_t payloadLen = decodeLeb128(begin + hdrLen, end, lebLen);
+                    if (payloadLen >= 0)
+                        at = static_cast<size_t>(hdrLen + lebLen + payloadLen);
+                }
+                m_demuxBuffer.insert(m_demuxBuffer.begin() + at, onDisk.begin(), onDisk.end());
+            }
+        }
+    }
+
+    *outData = m_demuxBuffer.data();
+    return static_cast<int>(m_demuxBuffer.size());
 }

@@ -76,6 +76,18 @@ class BaseAbstractStreamReader
     {
         return 0;
     }
+
+    /*
+     * Hand the demux writer the form this codec has ON DISK. For every codec but one that is the
+     * reader's internal framing unchanged, and this default hands the packet over untouched. AV1
+     * is the exception: internally an OBU is framed with a start code, the way H.264 and HEVC frame
+     * a NAL, and an .obu file on disk has no start codes anywhere.
+     */
+    virtual int prepareDemuxPacket(uint8_t* data, const int size, const uint8_t** outData)
+    {
+        *outData = data;
+        return size;
+    }
 };
 
 #endif

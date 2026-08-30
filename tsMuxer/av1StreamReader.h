@@ -19,6 +19,7 @@ class AV1StreamReader final : public MPEGStreamReader
     void applyDiscoveryData(const StreamDiscoveryData& data) override;
     [[nodiscard]] bool needSPSForSplit() const override { return false; }
     void setBuffer(uint8_t* data, uint32_t dataLen, bool lastBlock = false) override;
+    int prepareDemuxPacket(uint8_t* data, int size, const uint8_t** outData) override;
 
    protected:
     const CodecInfo& getCodecInfo() override;
@@ -33,7 +34,11 @@ class AV1StreamReader final : public MPEGStreamReader
     void updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* nextNal, int oldSpsLen) override;
     int writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPacket& avPacket,
                           PriorityDataInfo* priorityData) override;
-    void onSplitEvent() override { m_firstFileFrame = true; }
+    void onSplitEvent() override
+    {
+        m_firstFileFrame = true;
+        m_demuxSawTd = false;  // a new part is a new file and starts with a temporal delimiter too
+    }
 
    private:
     void incTimings();
@@ -59,8 +64,12 @@ class AV1StreamReader final : public MPEGStreamReader
     };
     Av1Framing m_framing;
     bool m_brokenObuWarned;
-    std::vector<uint8_t> m_pending;     // source bytes not yet converted, an OBU may span blocks
-    std::vector<uint8_t> m_convBuffer;  // front pad plus the converted OBUs handed to the base
+    std::vector<uint8_t> m_pending;      // source bytes not yet converted, an OBU may span blocks
+    std::vector<uint8_t> m_convBuffer;   // front pad plus the converted OBUs handed to the base
+    std::vector<uint8_t> m_demuxBuffer;  // the same OBUs turned back into the on disk form
+    bool m_demuxSeqHdrPending;           // a sequence header owed to the head of a demuxed part
+    std::vector<uint8_t> m_demuxHeld;    // OBUs seen before the first temporal delimiter of a part
+    bool m_demuxSawTd;                   // the part has begun, so nothing is held back any more
 
     Av1SequenceHeader m_seqHdr;
     bool m_seqHdrFound;
