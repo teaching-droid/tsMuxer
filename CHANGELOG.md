@@ -382,6 +382,16 @@ No output byte changes.
 
 ---
 
+**The Linux download had no GUI in it, and nothing said so.**
+
+Every Linux release contained the command line tool on its own. The step that builds the download
+looked for the interface under a name with different capital letters from the one it is built with,
+found nothing, and quietly packed the zip without it. Windows was never affected, because Windows
+does not care about capital letters in a file name.
+
+It is fixed, and it can no longer happen quietly: if the interface is missing the build now stops
+instead of publishing half a release. Reported by @Frankaboy7.
+
 ### New
 
 **A disc rebuilt from a Matroska file is now identical to the original.**
