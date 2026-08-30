@@ -286,6 +286,25 @@ A bad output path is still reported at once, before any reading starts.
 
 ---
 
+**Setting the frame rate on an HEVC track read one part of the stream as if it were another.**
+
+Two kinds of header carry the frame rate, and the code that writes a new one was handed either of
+them but always treated it as the first kind. The two are unrelated, so on the second kind it read
+a number out of the wrong place in memory. Running the same file through the same program eight
+times gave three different answers.
+
+Most of the time that number came out as zero, and the program said "cannot override FPS in stream"
+and changed nothing. Occasionally it came out as something else, said nothing, and wrote four bytes
+at whatever position that number pointed at.
+
+That is fixed: only the header that can carry a new frame rate is written to, and the other is left
+alone as it always should have been. The same file now gives the same answer every time, and the
+warnings that were appearing for no reason are gone.
+
+**Still not fixed, and this is how it came to light:** nothing writes a frame rate into the second
+kind of header at all. If a file keeps its timing only there, `fps=` will not change what the file
+says about itself. It is listed under Known limits.
+
 ### Fixed: crashes
 
 **An option written with a space.**
@@ -442,6 +461,11 @@ These are real and they are not fixed. They are listed so you know where you sta
 - A companion file longer than the track it is merged into is counted in the total, although the
   extra could never have been used.
 - Splitting is not supported for Matroska output. The program now says so instead of ignoring it.
+- **`fps=` does not always reach an HEVC stream.** The frame rate can live in either of two headers.
+  Only one of them is ever written, so a file that keeps its timing in the other keeps its original
+  frame rate no matter what you ask for. The file still plays at the rate you asked for, because
+  the container and the disc carry it too; it is what the video stream says about itself that is
+  unchanged.
 - The tag checks defend against damage, which is what happens in practice. They do not defend
   against a deliberately crafted tag.
 - **A small tag in the MIDDLE of an audio file costs a little audio.** A file made by sticking two
