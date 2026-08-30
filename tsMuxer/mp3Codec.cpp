@@ -132,6 +132,25 @@ int MP3Codec::mp3DecodeFrame(uint8_t* buff, const uint8_t* end)
     if (end - buff < 4)
         return 0;
     const uint32_t header = my_ntohl(*reinterpret_cast<uint32_t*>(buff));
+
+    // ** THE ELEVEN SYNC BITS, WHICH THIS NEVER CHECKED. **
+    //
+    // mp3FindFrame tests them before it will even consider a candidate. This function did not, so
+    // anything at all handed to it came back as a frame with a length derived from whatever the
+    // bytes happened to say. An ID3v2 tag header is the ordinary way to meet that: the four bytes
+    // "ID3" and a version byte parse as Layer II at 11 kHz and return a length of 314.
+    //
+    // The reader is at a real frame boundary when it meets a tag mid stream, so it took those 314
+    // bytes as audio, wrote them out, and landed 58 bytes INSIDE the first real frame after the
+    // tag, which was then thrown away. Measured on a clean stream with a tag pushed in on a frame
+    // boundary: a tag SHORTER than 314 bytes destroys one whole 835 byte frame of audio, a longer
+    // one does not, because the bogus frame stays inside the tag and the resync lands correctly.
+    //
+    // Nothing that is a real frame can fail this test, because a real frame carries these bits by
+    // definition, and the search path already required them of every candidate it returns.
+    if ((header & 0xffe00000) != 0xffe00000)
+        return 0;
+
     if (header & (1 << 20))
     {
         lsf = (header & (1 << 19)) ? 0 : 1;

@@ -219,9 +219,10 @@ static bool apev2BodyIsPlausible(const uint8_t* p, const uint8_t* end, int64_t* 
     if (avail < 32)
         return true;  // the header is not all here yet, so it is judged when it is
 
-    const auto le32 = [](const uint8_t* q) {
-        return static_cast<int64_t>(q[0]) | (static_cast<int64_t>(q[1]) << 8) |
-               (static_cast<int64_t>(q[2]) << 16) | (static_cast<int64_t>(q[3]) << 24);
+    const auto le32 = [](const uint8_t* q)
+    {
+        return static_cast<int64_t>(q[0]) | (static_cast<int64_t>(q[1]) << 8) | (static_cast<int64_t>(q[2]) << 16) |
+               (static_cast<int64_t>(q[3]) << 24);
     };
     const int64_t version = le32(p + 8);
     const int64_t size = le32(p + 12);
@@ -784,6 +785,31 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
             uint8_t* frame = findFrame(m_curPos, m_bufEnd);
             if (frame == nullptr)
             {
+                // ** A TAG HEADER THAT STRADDLES A READ BLOCK BOUNDARY. **
+                //
+                // A tag is recognised by its first few bytes, and none of them can be read when
+                // only a handful are on this side of the boundary. Once the next block arrives
+                // m_curPos is already past the header, so the region scan starts INSIDE the tag
+                // body and finds nothing, the run credit was never armed, and the whole tag is
+                // charged as loss. Measured on a 360,989 byte tag whose header begins five bytes
+                // before a 2 MB boundary: every byte of it reported as lost on a file whose audio
+                // is complete.
+                //
+                // So a SHORT tail is carried into the next block instead, exactly as the paths
+                // below do when a frame is split. The bound is what the longest header any format
+                // needs to identify itself, so this can never accumulate: it is at most a few tens
+                // of bytes once per read block. Carried unconditionally, the way the split frame
+                // paths below already do, and flushPacket deals with whatever is left at the end.
+                constexpr int64_t LONGEST_TAG_HEADER = 32;  // APETAGEX, the longest of them
+                const int64_t tail = m_bufEnd - m_curPos;
+                if (tail > 0 && tail < LONGEST_TAG_HEADER)
+                {
+                    memmove(m_tmpBuffer.data(), m_curPos, static_cast<size_t>(tail));
+                    m_tmpBufferLen = static_cast<int>(tail);
+                    m_curPos = m_bufEnd;
+                    return NEED_MORE_DATA;
+                }
+
                 m_processedBytes += m_bufEnd - m_curPos;
                 // Nothing recognisable is left in this buffer. HELD BACK, not counted: if a frame
                 // turns up later this really was a hole and it is promoted to lost; if none ever
