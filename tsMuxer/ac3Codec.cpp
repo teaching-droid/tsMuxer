@@ -390,6 +390,7 @@ int AC3Codec::decodeFrame(uint8_t* buf, uint8_t* end, int& skipBytes)
     try
     {
         int rez = 0;
+        m_frameIsCore = false;
 
         if (end - buf < 2)
             return NOT_ENOUGH_BUFFER;
@@ -441,6 +442,7 @@ int AC3Codec::decodeFrame(uint8_t* buf, uint8_t* end, int& skipBytes)
                     m_waitMoreData = true;
                     m_state = AC3State::stateDecodeTrueHDFirst;
                 }
+                m_frameIsCore = true;
                 return rez;
             }
             m_state = AC3State::stateDecodeTrueHD;

@@ -42,6 +42,7 @@ class AC3Codec
     {
         m_downconvertToAC3 = m_true_hd_mode = false;
         m_state = AC3State::stateDecodeAC3;
+        m_frameIsCore = false;
         m_waitMoreData = false;
         AC3Codec::setTestMode(false);
         m_frameDuration = 0;
@@ -79,6 +80,11 @@ class AC3Codec
     virtual const std::string getStreamInfo();
 
     AC3State m_state;
+    // Set by decodeFrame for the frame it has just sized: true when that frame is an AC-3
+    // core frame braided into a TrueHD track. m_state cannot answer this, because it only moves
+    // to stateDecodeTrueHDFirst when the NEXT frame is not another core frame, so on a disc that
+    // delivers the core in groups, every frame but the last of a group looked like TrueHD.
+    bool m_frameIsCore;
     bool m_waitMoreData;
     bool m_downconvertToAC3;
     bool m_true_hd_mode;
