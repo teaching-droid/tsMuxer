@@ -704,6 +704,24 @@ int HEVCStreamReader::setDoViDescriptor(uint8_t* dstBuff) const
 
 void HEVCStreamReader::updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* nextNal, int)
 {
+    // ** THIS IS HANDED THE SPS AS WELL AS THE VPS, AND THEY ARE SIBLINGS. **
+    //
+    // intDecodeNAL calls updateFPS with m_vps at the VPS branch and with m_sps at the SPS one, and
+    // the cast below used to take whatever arrived. HevcSpsUnit is not a parent or a child of
+    // HevcVpsUnit, it is a SIBLING, so casting one to the other and reading
+    // num_units_in_tick_bit_pos read whatever member of the SPS happens to lie at that offset.
+    //
+    // Measured on ONE unchanged file over eight runs: 0, 256 and 512. When the value came out 0 it
+    // warned "cannot override FPS in stream" and the fps was not written; when it came out 256 or
+    // 512 it said nothing and tried a 32 bit write at that bit position in the SPS. Same input,
+    // same binary, different answer, which is what undefined behaviour looks like from outside.
+    //
+    // The SPS has no setFPS, only a getFPS, so there was never anything here for it to do. The
+    // rest of updateFPS still runs for the SPS and still reads its frame rate; only the rewrite,
+    // which is the VPS's alone, is skipped.
+    if (nalUnit != m_vps)
+        return;
+
     const int oldNalSize = static_cast<int>(nextNal - buff);
     m_vpsSizeDiff = 0;
     const auto vps = static_cast<HevcVpsUnit*>(nalUnit);
