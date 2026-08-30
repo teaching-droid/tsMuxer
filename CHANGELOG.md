@@ -444,6 +444,14 @@ These are real and they are not fixed. They are listed so you know where you sta
 - Splitting is not supported for Matroska output. The program now says so instead of ignoring it.
 - The tag checks defend against damage, which is what happens in practice. They do not defend
   against a deliberately crafted tag.
+- **A small tag in the MIDDLE of an audio file costs a little audio.** A file made by sticking two
+  audio files together has a tag where they join. If that tag is smaller than about 512 bytes, the
+  reader loses between 86 and 777 bytes of sound at that point, which is a fraction of a second.
+  Measured across eleven tag sizes: below 512 bytes it happens, at 512 and above nothing is lost at
+  all, and most tags are larger than that. The lost data warning reports every byte of it, so you
+  are told when it happens. Fixing it means stepping over tags again, which an earlier version did
+  and which was removed after it was found to destroy audio in thirteen other ways, so it is being
+  done carefully rather than quickly.
 - An ISO with more than about **23,000 files and folders** is refused, because the space set aside
   for the file table is worked out from the file count alone and does not allow for the folder
   listings. The refusal names the numbers and `--extra-iso-space` makes the space bigger. An
