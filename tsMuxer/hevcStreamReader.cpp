@@ -719,20 +719,33 @@ void HEVCStreamReader::updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* ne
     // The SPS has no setFPS, only a getFPS, so there was never anything here for it to do. The
     // rest of updateFPS still runs for the SPS and still reads its frame rate; only the rewrite,
     // which is the VPS's alone, is skipped.
-    if (nalUnit != m_vps)
+    // Both units carry a copy of the timing and both are handed here, so each is asked to rewrite
+    // its own. The SPS could not be until now: it had no setFPS at all, which is why a stream whose
+    // VPS declares no timing kept its original rate whatever fps= asked for.
+    m_vpsSizeDiff = 0;
+    HevcUnit* unit = nullptr;
+    bool rewritten = false;
+    if (nalUnit == m_vps && m_vps != nullptr)
+    {
+        unit = m_vps;
+        rewritten = m_vps->setFPS(m_fps);
+    }
+    else if (nalUnit == m_sps && m_sps != nullptr)
+    {
+        unit = m_sps;
+        rewritten = m_sps->setFPS(m_fps);
+    }
+    else
+        return;
+
+    // The unit carries no timing to change, or the write would not fit. Either way the stream is
+    // left exactly as it came in.
+    if (!rewritten)
         return;
 
     const int oldNalSize = static_cast<int>(nextNal - buff);
-    m_vpsSizeDiff = 0;
-    const auto vps = static_cast<HevcVpsUnit*>(nalUnit);
-    if (!vps->setFPS(m_fps))
-    {
-        // FPS override failed (missing timing info or buffer too small).
-        // Leave the stream unmodified rather than crashing.
-        return;
-    }
-    auto tmpBuffer = std::make_unique<uint8_t[]>(vps->nalBufferLen() + 16);
-    const int newSpsLen = vps->serializeBuffer(tmpBuffer.get(), tmpBuffer.get() + vps->nalBufferLen() + 16);
+    auto tmpBuffer = std::make_unique<uint8_t[]>(unit->nalBufferLen() + 16);
+    const int newSpsLen = unit->serializeBuffer(tmpBuffer.get(), tmpBuffer.get() + unit->nalBufferLen() + 16);
     if (newSpsLen == -1)
         THROW(ERR_COMMON, "Not enough buffer")
 
@@ -967,10 +980,17 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                 if (rez)
                     return rez;
                 m_spsPpsFound = true;
+                m_vpsSizeDiff = 0;
                 updateFPS(m_sps, curPos, nextNalWithStartCode, 0);
+                // m_vpsSizeDiff is named for the VPS and now carries either, because rewriting the
+                // timing moves the end of whichever NAL was rewritten: the new values need a
+                // different number of emulation prevention bytes from the old ones. Everything
+                // after this point has to use the NEW end or it reads the wrong bytes.
+                //
                 // The level lives in the SPS as well as the VPS, and a player may read either.
-                applyForcedLevel(m_sps, curPos, nextNalWithStartCode);
-                storeBuffer(m_spsBuffer, curPos, nextNalWithStartCode);
+                applyForcedLevel(m_sps, curPos, nextNalWithStartCode + m_vpsSizeDiff);
+                nextNal += m_vpsSizeDiff;
+                storeBuffer(m_spsBuffer, curPos, nextNalWithStartCode + m_vpsSizeDiff);
                 break;
             case HevcUnit::NalType::PPS:
                 if (!m_pps)

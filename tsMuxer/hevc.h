@@ -106,6 +106,7 @@ struct HevcSpsUnit : HevcUnitWithProfile
     HevcSpsUnit();
     int deserialize();
     [[nodiscard]] double getFPS() const;
+    [[nodiscard]] bool setFPS(double fps);
     [[nodiscard]] std::string getDescription() const;
 
     uint8_t vps_id;
@@ -154,6 +155,10 @@ struct HevcSpsUnit : HevcUnitWithProfile
     unsigned num_short_term_ref_pic_sets;
     unsigned num_units_in_tick;
     unsigned time_scale;
+    // Where vui_num_units_in_tick begins, recorded during the parse the same way the VPS records
+    // its own, because it cannot be found again afterwards: everything in front of it is variable
+    // length. -1 means this SPS carries no timing info and there is nothing to rewrite.
+    int num_units_in_tick_bit_pos;
     unsigned PicSizeInCtbsY_bits;
 
    private:

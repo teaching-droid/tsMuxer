@@ -355,6 +355,7 @@ HevcSpsUnit::HevcSpsUnit()
       num_short_term_ref_pic_sets(0),
       num_units_in_tick(0),
       time_scale(0),
+      num_units_in_tick_bit_pos(-1),
       PicSizeInCtbsY_bits(0)
 {
 }
@@ -473,6 +474,7 @@ int HevcSpsUnit::vui_parameters()
 
     if (m_reader.getBit())  // vui_timing_info_present_flag
     {
+        num_units_in_tick_bit_pos = m_reader.getBitsCount();
         num_units_in_tick = m_reader.getBits(32);
         time_scale = m_reader.getBits(32);
 
@@ -728,6 +730,26 @@ int HevcSpsUnit::deserialize()
 double HevcSpsUnit::getFPS() const
 {
     return num_units_in_tick ? static_cast<double>(time_scale) / num_units_in_tick : 0;
+}
+
+// The same rewrite HevcVpsUnit::setFPS does, for the copy of the timing the SPS carries in its VUI.
+// There was no such function at all until now, so a stream whose VPS declares no timing kept its
+// original rate in the bitstream whatever fps= asked for. Only the units the parse actually found
+// can be rewritten: -1 means this SPS has no timing to change, and saying so is the whole point.
+bool HevcSpsUnit::setFPS(const double fps)
+{
+    time_scale = lround(fps) * 1000000;
+    num_units_in_tick = lround(time_scale / fps);
+
+    if (num_units_in_tick_bit_pos <= 0)
+        return false;
+
+    if (!updateBits(num_units_in_tick_bit_pos, 32, num_units_in_tick))
+        return false;
+    if (!updateBits(num_units_in_tick_bit_pos + 32, 32, time_scale))
+        return false;
+
+    return true;
 }
 
 string HevcSpsUnit::getDescription() const
