@@ -301,9 +301,11 @@ That is fixed: only the header that can carry a new frame rate is written to, an
 alone as it always should have been. The same file now gives the same answer every time, and the
 warnings that were appearing for no reason are gone.
 
-**Still not fixed, and this is how it came to light:** nothing writes a frame rate into the second
-kind of header at all. If a file keeps its timing only there, `fps=` will not change what the file
-says about itself. It is listed under Known limits.
+**And the gap it exposed is closed too: `fps=` now reaches a stream that keeps its timing in the
+second header.** Nothing had ever written a frame rate there, so a file that declares its rate only
+in that header kept the old one no matter what you asked for. Eight bytes change and the rest of the
+header does not; the decoded picture is identical, because all that changes is what the file says
+about its own rate.
 
 ### Fixed: crashes
 
@@ -461,11 +463,6 @@ These are real and they are not fixed. They are listed so you know where you sta
 - A companion file longer than the track it is merged into is counted in the total, although the
   extra could never have been used.
 - Splitting is not supported for Matroska output. The program now says so instead of ignoring it.
-- **`fps=` does not always reach an HEVC stream.** The frame rate can live in either of two headers.
-  Only one of them is ever written, so a file that keeps its timing in the other keeps its original
-  frame rate no matter what you ask for. The file still plays at the rate you asked for, because
-  the container and the disc carry it too; it is what the video stream says about itself that is
-  unchanged.
 - The tag checks defend against damage, which is what happens in practice. They do not defend
   against a deliberately crafted tag.
 - **A small tag in the MIDDLE of an audio file costs a little audio.** A file made by sticking two
