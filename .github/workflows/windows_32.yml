@@ -1,6 +1,9 @@
 name: Build for Windows 32-bit
 
 on:
+  # Lets a build be run by hand against any branch, from the Actions tab. The zips it
+  # attaches are how a tester gets a build without a release existing.
+  workflow_dispatch:
   push:
     branches: [master]
     tags: ["v*"]
