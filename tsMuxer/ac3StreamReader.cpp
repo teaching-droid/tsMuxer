@@ -214,7 +214,21 @@ int AC3StreamReader::flushPacket(AVPacket& avPacket)
     const int rez = SimplePacketizerReader::flushPacket(avPacket);
     if (rez > 0 && m_true_hd_mode && !m_downconvertToAC3)
     {
-        if (!(avPacket.flags & AVPacket::PRIORITY_DATA))
+        // The last frame of a braided track arrives through here, and it can be a CORE frame.
+        // Such a packet reaches this point still carrying the timestamp of an earlier one, and
+        // it also carries PRIORITY_DATA, so the branch below left the stale value in place and
+        // wrote it to the output. Measured on a disc that groups its core: the final frame came
+        // out stamped two frames behind the previous core frame on a 7.6 minute cut, and twelve
+        // frames behind over a whole feature. It is the only backward step in that output that
+        // the interleave does not explain. A core frame belongs on the core clock, here as much
+        // as anywhere else.
+        if (rez >= 2 && avPacket.data != nullptr && avPacket.data[0] == 0x0B && avPacket.data[1] == 0x77)
+        {
+            avPacket.pts = avPacket.dts = m_nextAc3Time;
+            avPacket.flags |= AVPacket::IS_CORE_PACKET;
+            m_nextAc3Time += m_frameDuration;
+        }
+        else if (!(avPacket.flags & AVPacket::PRIORITY_DATA))
             avPacket.pts = avPacket.dts =
                 m_totalTHDSamples * INTERNAL_PTS_FREQ / mlp.m_samplerate;  // replace time to a next HD packet
     }
