@@ -4058,6 +4058,10 @@ ISO trotzdem erstellen?</translation>
         <source>%1 (stream type 0x%2). Muxing this stream type is not implemented.</source>
         <translation>%1 (Streamtyp 0x%2). Das Muxen dieses Streamtyps ist nicht implementiert.</translation>
     </message>
+    <message>
+        <source> (track %1 in the file)</source>
+        <translation> (Spur %1 in der Datei)</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
