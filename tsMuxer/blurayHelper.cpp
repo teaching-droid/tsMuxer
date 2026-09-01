@@ -318,6 +318,16 @@ bool BlurayHelper::open(const string& dst, const DiskType dt, const int64_t disk
         }
         return m_isoWriter->open(m_dstPath, diskSize, extraISOBlocks);
     }
+    // A FOLDER destination. The guard works by writing zeros at particular sector positions and only
+    // the ISO writer places sectors, so there is nothing here for it to act on. That is the shape of
+    // the feature rather than a defect. The defect was staying silent about it: the option parses, the
+    // mux succeeds, and the disc is burned without the guard the user asked for. The interface already
+    // greys these out for folder output, so this catches a meta file or a command line.
+    if (layerBreakGuardMB >= 0 || layerBreakGuardBeforeMB >= 0)
+        LTRACE(LT_WARN, 2,
+               "Warning: --layer-break-guard applies to an .iso destination and is being ignored, because "
+               "this mux writes a folder and only a disc image has sector positions to reserve. Author the "
+               "folder as now, then run it through BDMV folder to ISO, where the guard is applied.");
     m_dstPath = closeDirPath(m_dstPath, getDirSeparator());
     return true;
 }
