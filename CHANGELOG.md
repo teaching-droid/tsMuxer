@@ -1,7 +1,8 @@
 ## tsMuxeR 2.18.1
 
-Three faults, all of them long standing. Two are about a disc layout that no version has ever
-handled correctly, and one is a feature that has not worked in this fork at all.
+Everything here is long standing. Two faults are about a disc layout that no version has ever
+handled correctly, one is a feature that has not worked in this fork at all, and the rest are in
+what the interface shows and what the program reports about a file.
 
 ### Fixed: a disc that delivers its AC-3 core in groups
 
@@ -80,6 +81,14 @@ reader by a different path and were counted nowhere, so the bar stopped short by
 of the file that stream takes up. On a 60 GB file with a 339 MiB AC-3 track, 0.589 percent of it,
 the bar stopped at 99.4 and stayed there while the mux finished normally. Nothing written to disk
 changes: the same job through 2.18.0 and through this gives byte identical output.
+
+**The enhancement layer of a Dolby Vision file was listed at the base layer's resolution.** A
+profile 7 disc taken into a Matroska file keeps both layers in one track, which is shown as two
+rows, and both rows were described from the base layer. So the enhancement layer read 3840x2160
+where the disc it came from says 1920x1080, and a mismatched pair looked like a matched one. Only
+the reported value was ever wrong, and that was checked before anything was changed: the layer
+separates out at 1920x1080 and muxes back to a disc at 1920x1080, both matching the source. The
+second row is described from the enhancement layer's own parameter sets now. Reported by a tester.
 
 ### Also
 
