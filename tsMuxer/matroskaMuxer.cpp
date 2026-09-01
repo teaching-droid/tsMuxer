@@ -690,8 +690,11 @@ void MatroskaMuxer::parseMuxOpt(const std::string& opts)
             THROW(ERR_COMMON, "--dv-profile=8.1 needs "
                                   << DoviLib::libraryName() << ", which converts the Dolby Vision metadata, and "
                                   << DoviLib::instance().loadError()
-                                  << ". Put it beside tsMuxeR (a prebuilt one is published for 64 bit Windows; other "
-                                     "platforms build it from source), or leave --dv-profile at 7.")
+                                  << ". Put it beside tsMuxeR. On 64 bit Windows take "
+                                     "libdovi-<version>-x86_64-pc-windows-msvc.zip from the dovi_tool releases page "
+                                     "and use the dovi.dll inside it. Do NOT take dovi_tool-<version>.zip from the "
+                                     "same page: that is the command line tool and this cannot use it. Other "
+                                     "platforms build the library from source. Or leave --dv-profile at 7.")
         }
         m_dvWriteProfile81 = true;
     }

@@ -90,6 +90,18 @@ Profile 8.1 uses the **libdovi** library, which is not part of tsMuxeR.
 | Linux, macOS | build libdovi from source, or install a package if your distribution has one |
 | Windows 32-bit | not available. There is no 32-bit build of the library. |
 
+**Where to get it.** The library is published on the [dovi_tool releases page](https://github.com/quietvoid/dovi_tool/releases), as
+`libdovi-<version>-x86_64-pc-windows-msvc.zip`. That archive holds one file, `dovi.dll`, and that
+is the file to place beside `tsMuxeR.exe`.
+
+Do not take `dovi_tool-<version>-x86_64-pc-windows-msvc.zip` from the same page. That is the
+command line tool and tsMuxeR cannot use it. Both sit side by side and the tool has the more
+obvious name, which is the usual mistake.
+
+The release is numbered after dovi_tool, so the library inside carries a different number:
+`libdovi-3.4.0` is attached to release `2.3.3`. Searching the page for the library version will
+find nothing. Any libdovi from 3.3.1 onward carries the four entry points tsMuxeR asks for.
+
 If the library is missing, `--dv-profile=8.1` is refused **before** muxing starts, with a message
 saying so, rather than failing part way through a feature.
 
