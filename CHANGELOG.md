@@ -1,3 +1,56 @@
+## tsMuxeR 2.18.3
+
+One fault in the interface that made four options do nothing, and one thing the program now tells
+you about a 3D disc.
+
+### Fixed: the dual-layer options never reached the muxer
+
+The meta text is what the muxer is actually handed. Not one control in the Dual-Layer group was
+connected to what rebuilds it, so ticking the layer-break guard, choosing a disc in Fit to disc, or
+allowing oversize changed nothing at all: the mux ran with the text as it stood. The option only
+appeared once something else rebuilt the meta, such as switching the output between ISO and folder,
+which is why toggling that looked like a cure.
+
+Four options were dead this way:
+
+```
+--allow-oversize      ticked, absent, and the mux refused anyway
+--disc-size           chosen, absent, so no capacity check at all
+--layer-break-guard   ticked, absent, so no guard was written
+--layer-break-lbn     worked out from the chosen disc, absent with it
+```
+
+Eight controls are connected now, the pattern every other control in that window already uses.
+
+Checked by driving the window itself, selecting Blu-ray ISO and never touching the output type
+afterwards: on 2.18.2 ticking the guard leaves the meta line unchanged, and with this it gains
+`--layer-break-guard=288`, and `--allow-oversize` with it.
+
+Then every one of the 46 toggles in the window was tried, on all eight tabs and on two different
+source files, to find out whether anything else was in the same state. Nothing was.
+
+The BDMV to ISO tab was never affected, because it builds its command line directly and does not
+use the meta. That is why that route kept working.
+
+Reported by @DreckSoft, who also found that it explained a layer-break guard that appeared to do
+nothing.
+
+### New: it says when a 3D disc's video is being written twice
+
+A 3D Blu-ray stores its video once and gives it three names. The base view and the dependent view
+are cut into chunks and written alternately, and that run of sectors is what the `.ssif` names; the
+same sectors are addressed again as two `.m2ts`, so a 2D player opens the base one and never sees
+the rest.
+
+BDMV to ISO keeps everything under BDMV, so all three are copied as ordinary files and the video
+goes into the image twice. On a pressed 3D disc measured here, 32,586 MB of a 46 GB title, which
+fits no disc, least of all the one it came from.
+
+This release only says so, naming the file and how much of the image is duplicated. Writing the
+video once is the next piece of work. Nothing is written differently yet.
+
+---
+
 ## tsMuxeR 2.18.2
 
 Two fixes, and both are about the program saying what it did rather than doing something different.
