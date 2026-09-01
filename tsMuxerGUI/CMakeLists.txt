@@ -42,6 +42,7 @@ if(Qt6Multimedia_FOUND)
     message(STATUS "Qt6Multimedia found but disabled for static Linux build")
   else()
     list(APPEND tsmuxer_gui_libs Qt6::Multimedia)
+    set(TSMUXER_HAVE_MULTIMEDIA TRUE)
   endif()
 endif()
 
@@ -112,6 +113,16 @@ elseif (UNIX)
 endif()
 
 target_link_libraries(tsMuxerGUI ${tsmuxer_gui_libs})
+
+# "Play sound at end" is guarded by QT_MULTIMEDIA_LIB in the source. qmake defined that
+# macro by itself for QT += multimedia; CMake does not, and linking Qt6::Multimedia sets
+# nothing. So the test was silently false in every CMake build and the feature has always
+# fallen through to QApplication::beep(), which on Windows is usually inaudible. It last
+# worked in a qmake build. Defined here in step with the linking above, so the static Linux
+# build that deliberately leaves Multimedia out still takes the beep path.
+if(TSMUXER_HAVE_MULTIMEDIA)
+  target_compile_definitions(tsMuxerGUI PRIVATE QT_MULTIMEDIA_LIB=1)
+endif()
 
 # On macOS, ensure tsMuxeR CLI is built before the GUI (for the copy step)
 if (APPLE)
