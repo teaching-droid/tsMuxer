@@ -1,3 +1,83 @@
+## tsMuxeR 2.18.1
+
+Three faults, all of them long standing. Two are about a disc layout that no version has ever
+handled correctly, and one is a feature that has not worked in this fork at all.
+
+### Fixed: a disc that delivers its AC-3 core in groups
+
+A TrueHD track carries an AC-3 core braided into the same PID. Every disc tested here delivers one
+core frame at a time, between 38 and 39 TrueHD units apart. A disc reported in issue 10 delivers
+them in groups of three, and on that layout two separate things went wrong.
+
+**Most of the core was stamped from the wrong clock.**
+
+A core frame was recognised by the state the decoder was left in after sizing it, and that state
+only changes when the NEXT frame is not another core frame. So in a group of three, only the last
+one was recognised. The other two were stamped from the TrueHD clock and advanced it by an access
+unit they do not represent, while the core's own clock advanced once per group instead of once per
+frame.
+
+Measured on the reported title, a whole feature of 94 minutes:
+
+- of 14,207 core frames in a 7.6 minute cut, 8,476 were stamped from the wrong clock
+- the core clock ran at a third speed: 182 seconds of clock for 454 seconds of audio
+- 70,803 timestamps went **backwards**, the worst by 3,486 seconds, which is 58 minutes
+- the error grew with the length of the film, so a longer film was worse
+
+Afterwards the worst backward step is 0.094 seconds and it no longer grows. What remains is the
+disc's own grouping: three core frames written together span three frame times, so the TrueHD unit
+after them is behind. The audio itself was never affected and is byte for byte identical to the
+disc either way, all 2,408,473,724 bytes of it.
+
+**And the last frame of the track kept a timestamp from an earlier one.**
+
+The final frame arrives through the flush path, and on such a disc it can be a core frame. It got
+there still carrying an old timestamp, and it also carries a flag that suppressed the replacement,
+so the stale value was written out. It was the only backward step in that output the interleave does
+not account for: two frames behind on a short cut, twelve over a whole feature.
+
+Steps between core frames are now 2,880 throughout, with no repeated timestamp anywhere.
+
+Verified unchanged where the core arrives one frame at a time, against the released 2.18.0: a
+640 kbps core with AVC video, 214,745,088 bytes, and a 448 kbps core with HEVC video, 375,742,464
+bytes, both byte for byte identical. So the core bitrate is not what matters, the grouping is.
+
+Reported and confirmed on hardware by @TexasChainsaw83.
+
+### Fixed: play sound at end
+
+The option has never worked in this fork, on any platform, and does work in the last release built
+with the old build system. Two separate reasons.
+
+The code is guarded by a macro that the old build system defined by itself and the current one does
+not, so on every platform the sound was compiled out and a system beep was used instead.
+
+On Windows there was also nothing to compile against. That build compiles Qt from source from its
+base package alone so that the result runs on Windows 7, and sound is a separate package that is not
+built. The 2.18.0 package carries four Qt libraries and no sound library at all, so it could not have
+played there whatever the macro said. Windows now uses the system's own call, which takes the sound
+from memory, needs nothing that is not already on the machine, and works on Windows 7 as well.
+
+Reported by @Nemesh64, and confirmed by @oniiz86 with the detail that made it findable: that it
+worked in 2.7.0 and in nothing since.
+
+### Also
+
+- **Where to get the library profile 8.1 needs is now written down.** It said only that a prebuilt
+  one is published. The releases page it comes from carries the command line tool beside the
+  library, under a more obvious name, and the release is numbered after the tool so the library
+  inside has a different version on it. Somebody copied the tool in and it did not work, which is
+  the mistake the page invites. The archive to take, the one file inside it and the two traps are
+  named now, in the documentation in all three languages and in the refusal message itself.
+
+### For anyone building from source
+
+- A build can now be started by hand from the Actions tab against any branch, so someone testing a
+  fix can be given a build without a release being published. The zips are the same, and no release
+  is created.
+
+---
+
 ## tsMuxeR 2.18.0
 
 Most of this release is about output that was wrong, or data that was missing, **and the program
