@@ -90,6 +90,46 @@ the reported value was ever wrong, and that was checked before anything was chan
 separates out at 1920x1080 and muxes back to a disc at 1920x1080, both matching the source. The
 second row is described from the enhancement layer's own parameter sets now. Reported by a tester.
 
+### Fixed: a mux that stopped for five minutes at 75 percent
+
+Writing a Matroska file, the muxer held every packet in memory until every track had delivered one,
+so that the codec readers were initialised before the track headers were written. Nothing bounded
+that wait.
+
+On a pressed disc whose third subtitle track has its first packet 74.99 percent of the way into a
+72 GB title, that meant holding three quarters of the film in memory: 42 GB on a machine with 64 GB,
+with the output file not created at all and not one byte written. It then spent 178 seconds writing
+those packets out and 127 more freeing them. Nothing was read during either, so the progress figure
+sat at 75.0 percent for five minutes and the program looked hung.
+
+The percentage where it stops is not a threshold in the program. It is where that subtitle track
+begins, so a different disc stops at a different number, and a machine with less memory stops
+earlier still.
+
+Subtitle tracks are no longer waited for. A subtitle track entry is complete before any packet
+arrives, nothing in it is discovered by parsing, and it is the one kind of track that legitimately
+carries nothing for a long stretch, because a forced subtitle track only has content in the scenes
+that need it. Video and audio are still waited for, because their sample rate, channel count and
+even their codec id are not known until the first frame.
+
+The same title, the same meta file, before and after:
+
+```
+                    before          after
+wall time           9 min 11 s      3 min 49 s
+longest pause       305.4 s         1.0 s
+peak memory         42.95 GB        0.054 GB
+output              60,290,004,931 bytes, both
+```
+
+The output is unchanged. Five track combinations were muxed from the same source before and after:
+identical file sizes, and identical block digests, every block of every track. A Matroska file
+carries randomly generated identifiers, so two runs of any one build differ in a few bytes of the
+header; the two builds differ in exactly those bytes and no others.
+
+A track of another kind that started as late would still do this. That case needs a different
+answer and has not been seen.
+
 ### Also
 
 - **Where to get the library profile 8.1 needs is now written down.** It said only that a prebuilt
