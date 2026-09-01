@@ -653,6 +653,13 @@ TsMuxerWindow::TsMuxerWindow()
     ui->addBtn->setToolTip(
         wrapTip(tr("Add a file as a NEW, separate input. To continue a title with its next "
                    "part instead, select that part's first file and use join.")));
+    ui->mergeAc3TrackSpinBox->setToolTip(wrapTip(
+        tr("A Blu-ray carries a TrueHD track with its AC-3 core braided into the same stream, and a "
+           "Matroska file has to keep them apart. Give the ROW NUMBER of the AC-3 track in the list "
+           "above and the two are put back together, which is what a disc needs. 0 leaves them "
+           "separate. That row keeps its tick and is still shown, it simply travels inside the "
+           "TrueHD track instead of being written on its own.")));
+    ui->mergeAc3TrackLabel->setToolTip(ui->mergeAc3TrackSpinBox->toolTip());
     ui->btnAppend->setToolTip(
         wrapTip(tr("Append another file to the END of the selected one, so the two are muxed as a single "
                    "continuous title. This is what you want for a film split across two discs or two parts: "
@@ -3555,6 +3562,30 @@ void TsMuxerWindow::onMergeAc3FileBrowseClicked()
     onAudioSubtitlesParamsChanged();
 }
 
+// The merge box is read as a row number in the track list, which is the only numbering the
+// user can see. This turns it into the track number the meta needs.
+int TsMuxerWindow::mergeAc3TrackIdForRow(const int row) const
+{
+    if (row < 1 || row > ui->trackLV->rowCount())
+        return row;  // out of range: pass it through, so a hand edited value still works
+    auto iCodec = ui->trackLV->item(row - 1, 0)->data(Qt::UserRole).toLongLong();
+    const auto* info = reinterpret_cast<const QtvCodecInfo*>(iCodec);
+    return info != nullptr && info->trackID != 0 ? info->trackID : row;
+}
+
+// True when this row is the one some TrueHD track is folding into itself.
+bool TsMuxerWindow::isRowMergedIntoTrueHd(const int row) const
+{
+    for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+    {
+        auto iCodec = ui->trackLV->item(i, 0)->data(Qt::UserRole).toLongLong();
+        const auto* info = reinterpret_cast<const QtvCodecInfo*>(iCodec);
+        if (info != nullptr && info->programName == "A_MLP" && info->mergeAc3Track == row + 1 && i != row)
+            return true;
+    }
+    return false;
+}
+
 void TsMuxerWindow::updateMetaLines()
 {
     if (!m_updateMeta || disableUpdatesCnt > 0)
@@ -3603,6 +3634,14 @@ void TsMuxerWindow::updateMetaLines()
         if (isCodecIncompatibleWithFormat(codecInfo->programName))
             prefix = "#";
 
+        // A track folded into a TrueHD track travels inside it, so it must not also be muxed
+        // on a line of its own. The muxer refuses that combination, and until now the
+        // interface could produce it: setting the merge left the AC-3 row ticked, and both
+        // lines were written. The row is left visible and ticked, because the user chose it
+        // deliberately; it is its separate output line that is wrong.
+        if (isRowMergedIntoTrueHd(i))
+            prefix = "#";
+
         postfix.clear();
         if (codecInfo->programName.startsWith('S'))
         {
@@ -3634,8 +3673,16 @@ void TsMuxerWindow::updateMetaLines()
             postfix += QString(", track=") + QString::number(codecInfo->trackID);
         if (codecInfo->programName == "A_MLP" && codecInfo->mergeAc3Track > 0)
         {
-            if (codecInfo->mergeAc3Track != codecInfo->trackID)
-                postfix += QString(", merge-ac3-track=") + QString::number(codecInfo->mergeAc3Track);
+            // The box asks for a number and the only numbers on screen are the row numbers in
+            // the track list, so that is what it is read as. It is NOT the same as the track
+            // number the meta needs: a Dolby Vision file puts its two layers on two rows that
+            // share one track, so from the row below them onwards the two numberings differ.
+            // Reading 4 off an AC-3 row and writing 4 into the meta pointed at the track after
+            // it. Without a second video row the two are the same number, so nothing changes
+            // for a file that has none.
+            const int mergedTrackId = mergeAc3TrackIdForRow(codecInfo->mergeAc3Track);
+            if (mergedTrackId != 0 && mergedTrackId != codecInfo->trackID)
+                postfix += QString(", merge-ac3-track=") + QString::number(mergedTrackId);
         }
         else if (codecInfo->programName == "A_MLP" && !codecInfo->mergeAc3File.isEmpty())
         {

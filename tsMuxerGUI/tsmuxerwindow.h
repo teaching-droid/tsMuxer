@@ -150,6 +150,8 @@ class TsMuxerWindow : public QWidget
     QtvCodecInfo* getCurrentCodec();
     // merge-ac3-track and merge-ac3-file are mutually exclusive; grey out whichever does not apply.
     void updateMergeAc3Exclusion(QtvCodecInfo* codecInfo);
+    [[nodiscard]] int mergeAc3TrackIdForRow(int row) const;
+    [[nodiscard]] bool isRowMergedIntoTrueHd(int row) const;
     // Splitting is produced by the transport stream writer, so not every output can do it.
     [[nodiscard]] bool outputCanSplit() const;
     // Grey the Blu-ray tab's controls that the chosen output does not use.
