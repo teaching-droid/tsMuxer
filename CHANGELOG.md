@@ -61,6 +61,26 @@ from memory, needs nothing that is not already on the machine, and works on Wind
 Reported by @Nemesh64, and confirmed by @oniiz86 with the detail that made it findable: that it
 worked in 2.7.0 and in nothing since.
 
+### Fixed: the interface and the progress figure
+
+**The Merge AC-3 track box asked for a number the track list never shows.** It was written into
+the meta as it stood, and the meta wants the track number in the source file, while the only
+numbers on screen are the row numbers of the list. Those are not the same once a Dolby Vision file
+is loaded: its two layers take two rows and share one track, so every row below them is one ahead
+of its track. Reading 4 off the AC-3 row named the track after it. The box is read as a row number
+now, and it explains itself when hovered. Where there is no second video row the two are the same
+number, so nothing changes for a file that has none.
+
+**And the merged track was still written on a line of its own**, which the muxer refuses, so the
+interface was producing a combination it had been told to reject. That line is left out now. The
+row keeps its tick: it is still in the output, just inside the TrueHD track rather than beside it.
+
+**The progress figure could never reach the end when a track was merged in.** Those bytes reach the
+reader by a different path and were counted nowhere, so the bar stopped short by exactly the share
+of the file that stream takes up. On a 60 GB file with a 339 MiB AC-3 track, 0.589 percent of it,
+the bar stopped at 99.4 and stayed there while the mux finished normally. Nothing written to disk
+changes: the same job through 2.18.0 and through this gives byte identical output.
+
 ### Also
 
 - **Where to get the library profile 8.1 needs is now written down.** It said only that a prebuilt
