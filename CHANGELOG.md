@@ -1,7 +1,7 @@
 ## tsMuxeR 2.18.3
 
-One fault in the interface that made four options do nothing, and one thing the program now tells
-you about a 3D disc.
+One fault in the interface that made four options do nothing, and a new message when a 3D disc's
+video is being written into the image twice.
 
 ### Fixed: the dual-layer options never reached the muxer
 
@@ -46,8 +46,13 @@ BDMV to ISO keeps everything under BDMV, so all three are copied as ordinary fil
 goes into the image twice. On a pressed 3D disc measured here, 32,586 MB of a 46 GB title, which
 fits no disc, least of all the one it came from.
 
-This release only says so, naming the file and how much of the image is duplicated. Writing the
-video once is the next piece of work. Nothing is written differently yet.
+**This release only reports it**, naming the file and how much of the image is duplicated. Nothing
+is written differently yet, so an image built with this version is exactly what 2.18.2 built.
+
+It is here because it is the first step of a feature being built: writing the video once, so a 3D
+disc taken to an image comes out the size it should be. That work is underway and the message is
+the part that was ready. If you have been wondering why a 3D image came out roughly double, this
+is the answer, and the fix is coming.
 
 ---
 
