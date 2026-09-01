@@ -11,6 +11,7 @@
 #include <vector>
 
 #include <cmath>
+#include "bdSsifImport.h"
 #include "blank_patterns.h"
 #include "blurayHelper.h"
 #include "convertUTF.h"
@@ -948,6 +949,23 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     }
     for (const auto& s : skippedTop)
         LTRACE(LT_INFO, 2, "  skipping \"" << s << "\" (not part of the BDMV disc structure)");
+
+    // A 3D disc stores its video ONCE and names it three times: the .ssif and the two .m2ts are
+    // views over the same sectors. Copying all three by name writes the video twice and roughly
+    // doubles the image. Reported here for now; rebuilding the .ssif as an alias comes next.
+    {
+        const std::vector<BdSsifGroup> ssifGroups = bdFindSsifGroups(srcRoot);
+        for (const auto& g : ssifGroups)
+        {
+            int64_t dup = 0;
+            for (const int64_t c : g.baseChunkBytes) dup += c;
+            for (const int64_t c : g.depChunkBytes) dup += c;
+            LTRACE(LT_INFO, 2,
+                   "  3D: " << g.ssifRel << " is " << g.baseRel << " and " << g.depRel << " interleaved in "
+                            << g.baseChunkBytes.size() << " chunk pairs, so " << dup / (1024 * 1024)
+                            << " MB of this image is the same video twice");
+        }
+    }
     if (items.empty())
     {
         LTRACE(LT_ERROR, 2, "No BDMV content found under " << srcRoot);
