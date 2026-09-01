@@ -653,12 +653,12 @@ TsMuxerWindow::TsMuxerWindow()
     ui->addBtn->setToolTip(
         wrapTip(tr("Add a file as a NEW, separate input. To continue a title with its next "
                    "part instead, select that part's first file and use join.")));
-    ui->mergeAc3TrackSpinBox->setToolTip(wrapTip(
-        tr("A Blu-ray carries a TrueHD track with its AC-3 core braided into the same stream, and a "
-           "Matroska file has to keep them apart. Give the ROW NUMBER of the AC-3 track in the list "
-           "above and the two are put back together, which is what a disc needs. 0 leaves them "
-           "separate. That row keeps its tick and is still shown, it simply travels inside the "
-           "TrueHD track instead of being written on its own.")));
+    ui->mergeAc3TrackSpinBox->setToolTip(
+        wrapTip(tr("A Blu-ray carries a TrueHD track with its AC-3 core braided into the same stream, and a "
+                   "Matroska file has to keep them apart. Give the ROW NUMBER of the AC-3 track in the list "
+                   "above and the two are put back together, which is what a disc needs. 0 leaves them "
+                   "separate. That row keeps its tick and is still shown, it simply travels inside the "
+                   "TrueHD track instead of being written on its own.")));
     ui->mergeAc3TrackLabel->setToolTip(ui->mergeAc3TrackSpinBox->toolTip());
     ui->btnAppend->setToolTip(
         wrapTip(tr("Append another file to the END of the selected one, so the two are muxed as a single "
@@ -2969,9 +2969,8 @@ void TsMuxerWindow::myPlaySound(const QString& fileName)
     if (f.open(QIODevice::ReadOnly))
     {
         m_soundData = f.readAll();
-        if (!m_soundData.isEmpty() &&
-            PlaySoundW(reinterpret_cast<LPCWSTR>(m_soundData.constData()), nullptr,
-                       SND_MEMORY | SND_ASYNC | SND_NODEFAULT))
+        if (!m_soundData.isEmpty() && PlaySoundW(reinterpret_cast<LPCWSTR>(m_soundData.constData()), nullptr,
+                                                 SND_MEMORY | SND_ASYNC | SND_NODEFAULT))
             return;
     }
     QApplication::beep();
