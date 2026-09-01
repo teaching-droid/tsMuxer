@@ -2354,6 +2354,7 @@ void TsMuxerWindow::onAudioSubtitlesParamsChanged()
         codecInfo->mergeAc3Track = ui->mergeAc3TrackSpinBox->value();
         codecInfo->mergeAc3File = ui->mergeAc3FileLineEdit->text().trimmed();
         updateMergeAc3Exclusion(codecInfo);
+        updateMergeAc3Suffix();
     }
     else
     {
@@ -2582,7 +2583,10 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
             ui->mergeAc3TrackSpinBox->setVisible(showMergeTrack);
             ui->mergeAc3TrackSpinBox->setEnabled(showMergeTrack);
             if (showMergeTrack)
+            {
                 ui->mergeAc3TrackSpinBox->setValue(codecInfo->mergeAc3Track);
+                updateMergeAc3Suffix();
+            }
             else
                 ui->mergeAc3TrackSpinBox->setValue(0);
 
@@ -3560,6 +3564,20 @@ void TsMuxerWindow::onMergeAc3FileBrowseClicked()
     ui->mergeAc3FileLineEdit->setText(QDir::toNativeSeparators(fileName));
     disableUpdatesCnt--;
     onAudioSubtitlesParamsChanged();
+}
+
+// The box holds a row number and the muxer reports the track number, so the two disagree on any
+// file where they differ, and the user is left holding a number that appears nowhere in the log.
+// Both are shown, in the box itself, so "merged from track 3" lines up with something on screen.
+void TsMuxerWindow::updateMergeAc3Suffix()
+{
+    const int row = ui->mergeAc3TrackSpinBox->value();
+    if (row <= 0)
+    {
+        ui->mergeAc3TrackSpinBox->setSuffix(QString());
+        return;
+    }
+    ui->mergeAc3TrackSpinBox->setSuffix(tr(" (track %1 in the file)").arg(mergeAc3TrackIdForRow(row)));
 }
 
 // The merge box is read as a row number in the track list, which is the only numbering the
