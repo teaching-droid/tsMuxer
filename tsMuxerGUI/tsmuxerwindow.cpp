@@ -1713,6 +1713,25 @@ TsMuxerWindow::TsMuxerWindow()
         connect(ui->radioButtonBluRay, &QAbstractButton::toggled, dlBox,
                 [updateDlVisibility](bool) { updateDlVisibility(); });
 
+        // EVERY control in this group has to rebuild the meta, and until now not one of them did.
+        // The meta is what the muxer is actually given, so ticking the guard, choosing a disc or
+        // allowing oversize changed nothing: the mux ran with the text as it stood, and the option
+        // only appeared once something else rebuilt it, such as switching the output between ISO
+        // and folder. That is exactly how it was reported, twice: a guard that did nothing, and an
+        // Allow oversize that still refused.
+        //
+        // The same fault was fixed once before for the Dolby Vision selector a few hundred lines up.
+        // A control added to this window is not wired until it says so here.
+        connect(discSizeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+                &TsMuxerWindow::updateMetaLines);
+        connect(guardCheck, &QCheckBox::toggled, this, &TsMuxerWindow::updateMetaLines);
+        connect(guardSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &TsMuxerWindow::updateMetaLines);
+        connect(beforeCheck, &QCheckBox::toggled, this, &TsMuxerWindow::updateMetaLines);
+        connect(beforeSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &TsMuxerWindow::updateMetaLines);
+        connect(oversizeCheck, &QCheckBox::toggled, this, &TsMuxerWindow::updateMetaLines);
+        connect(dlManualCheck, &QCheckBox::toggled, this, &TsMuxerWindow::updateMetaLines);
+        connect(dlFreeSectorsEdit, &QLineEdit::textChanged, this, [this](const QString&) { updateMetaLines(); });
+
         // Re-translate this groupbox on a runtime language change (see the BDMV->ISO tab hook above).
         m_retranslateHooks.push_back(
             [dlBox, fitLabel, guardCheck, guardSpin, oversizeCheck, discSizeCombo, beforeCheck, beforeSpin,
