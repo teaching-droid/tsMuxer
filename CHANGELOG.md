@@ -1,3 +1,41 @@
+## tsMuxeR 2.18.2
+
+Two fixes, and both are about the program saying what it did rather than doing something different.
+Every image and every disc this version writes is byte for byte what 2.18.1 wrote.
+
+### Fixed: a layer break guard that was asked for and never written
+
+The guard fills the sectors around a layer break with zeros, so that no part of the film sits where a
+burn is most likely to fail. It acts only when a write actually reaches the zone around the break,
+and if the break falls past the end of the image, nothing is written. Nothing was said either.
+
+That is the ordinary outcome of leaving **Fit to disc** at **Off**: with no disc chosen the break
+falls back to half a BD50, sector 12,219,392 or about 25 GB, so an image smaller than that never
+reaches it. The image then comes out the same size it would have been without the option, which from
+outside looks exactly like the guard not working. Measured on one source, one option apart:
+
+```
+no guard                                        2,004,418,560 bytes
+--layer-break-guard=288                         2,004,418,560 bytes, and silent
+the same, with the break inside the content     2,327,052,288 bytes, 307.7 MiB of guard
+```
+
+The first two being identical is the whole report. It now says which sector the image ends at, which
+sector the break is at, and the two ways to fix it: set Fit to disc to the disc you are burning, or
+give the break directly with `--layer-break-lbn`. A mux where the guard does land is unaffected; the
+warning is raised only when no zone was written at all.
+
+Reported by @DreckSoft.
+
+### Fixed: a layer break guard asked for with a folder destination
+
+The guard reserves sector positions, and only the disc image writer places sectors, so a folder
+destination has nothing for it to act on. The interface greys those controls out for folder output,
+but a meta file or a command line could still pass the option, and it was then ignored without a
+word. It now says so, and names the folder to ISO route, where the guard does apply.
+
+---
+
 ## tsMuxeR 2.18.1
 
 Everything here is long standing. Two faults are about a disc layout that no version has ever
