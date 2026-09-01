@@ -51,6 +51,7 @@ void TrueHDAC3MergeReader::setAc3SideData(const uint8_t* data, const uint32_t le
     // 5,302,772. ** IT SAID FEWER BYTES WERE READ THAN WERE WRITTEN, WHICH CANNOT BE TRUE OF
     // ANYTHING. ** The ninth review found it still there.
     m_readBytes += len;
+    m_ac3BytesConsumed += len;
     const size_t off = m_ac3Accum.size();
     m_ac3Accum.resize(off + len);
     memcpy(m_ac3Accum.data() + off, data, len);
