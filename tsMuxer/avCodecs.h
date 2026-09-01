@@ -54,6 +54,11 @@ struct CheckStreamRez
     }
     CodecInfo codecInfo;
     std::string streamDescr;
+    // For a merged dual layer Dolby Vision track only: how the ENHANCEMENT layer describes itself.
+    // The track is listed as two rows and the two layers are different pictures, so one string
+    // cannot describe both. Empty for every other kind of track, and empty when the enhancement
+    // layer's own parameter sets could not be read, which leaves the old behaviour in place.
+    std::string elStreamDescr;
     std::string lang;
     int32_t trackID;
     int64_t delay;  // auto delay for audio

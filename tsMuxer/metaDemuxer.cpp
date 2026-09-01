@@ -1407,7 +1407,12 @@ void METADemuxer::addTrack(vector<CheckStreamRez>& rez, CheckStreamRez trackRez)
         rez.push_back(trackRez);
 
         trackRez.subTrack = HevcDolbyVisionFilter::EL_SUB_TRACK;
-        trackRez.streamDescr = full + " (enhancement layer)";
+        // Described from the ENHANCEMENT layer's own parameter sets when the reader found them,
+        // because the two layers are different pictures and `full` is the base layer's: a profile
+        // 7 disc pairs 3840x2160 with 1920x1080. Falls back to `full` when they were not found,
+        // which is what this always showed.
+        const std::string& elFull = trackRez.elStreamDescr.empty() ? full : trackRez.elStreamDescr;
+        trackRez.streamDescr = elFull + " (enhancement layer)";
         rez.push_back(trackRez);
     }
     else

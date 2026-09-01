@@ -148,6 +148,8 @@ HEVCStreamReader::~HEVCStreamReader()
     delete m_pps;
     delete m_hdr;
     delete m_slice;
+    delete m_elVps;
+    delete m_elSps;
 }
 
 void HEVCStreamReader::applyDiscoveryData(const StreamDiscoveryData& data)
@@ -173,6 +175,63 @@ void HEVCStreamReader::fillVideoDiscoveryData(StreamDiscoveryData& data)
     {
         data.isDVRPU = m_hdr->isDVRPU;
         data.isDVEL = m_hdr->isDVEL;
+    }
+}
+
+// A merged dual layer track carries the enhancement layer's NALs inside wrapper NALs. Two bytes
+// off the front and what is left IS the NAL as the disc carried it, header included, still
+// emulation prevented, which is the same unwrapping HevcDolbyVisionFilter does when it separates
+// the layers for real. Only the parameter sets are taken, and only so the enhancement layer can be
+// described with its own picture size rather than the base layer's.
+//
+// A failure here must cost nothing: the caller checks for a null and falls back to the base
+// layer's description, which is what was always shown before.
+void HEVCStreamReader::readElParameterSet(const uint8_t* nal, const uint8_t* nextNal)
+{
+    if (nextNal - nal < 4)
+        return;
+    const auto innerType = static_cast<HevcUnit::NalType>((nal[2] >> 1) & 0x3f);
+    if (innerType != HevcUnit::NalType::VPS && innerType != HevcUnit::NalType::SPS)
+        return;
+    if (innerType == HevcUnit::NalType::VPS ? m_elVps != nullptr : m_elSps != nullptr)
+        return;
+    try
+    {
+        if (innerType == HevcUnit::NalType::VPS)
+        {
+            m_elVps = new HevcVpsUnit();
+            m_elVps->decodeBuffer(nal + 2, nextNal);
+            if (m_elVps->deserialize() != 0)
+            {
+                delete m_elVps;
+                m_elVps = nullptr;
+            }
+        }
+        else
+        {
+            m_elSps = new HevcSpsUnit();
+            m_elSps->decodeBuffer(nal + 2, nextNal);
+            if (m_elSps->deserialize() != 0)
+            {
+                delete m_elSps;
+                m_elSps = nullptr;
+            }
+        }
+    }
+    catch (BitStreamException&)
+    {
+        // What the bit reader throws when a NAL runs out under it. Nothing is reported: this is a
+        // probe, and the only thing lost is a resolution in a listing.
+        if (innerType == HevcUnit::NalType::VPS)
+        {
+            delete m_elVps;
+            m_elVps = nullptr;
+        }
+        else
+        {
+            delete m_elSps;
+            m_elSps = nullptr;
+        }
     }
 }
 
@@ -251,7 +310,10 @@ CheckStreamRez HEVCStreamReader::checkStream(uint8_t* buffer, const int len)
             if (nal[1] == 1)
             {
                 if (nalType == HevcUnit::NalType::DVEL)
+                {
                     m_hdr->isDVEL = true;
+                    readElParameterSet(nal, nextNal);
+                }
                 else
                     m_hdr->isDVRPU = true;
                 V3_flags |= DV;
@@ -315,7 +377,25 @@ CheckStreamRez HEVCStreamReader::checkStream(uint8_t* buffer, const int len)
             // NALs UNWRAPPED, so it never sets the enhancement flag here and cannot be mistaken
             // for a merged one.
             if (m_hdr->isDVRPU && m_hdr->isDVEL)
+            {
                 rez.multiSubStream = true;
+                // The listing splits this one track into two rows, and the second row is a
+                // DIFFERENT picture: a profile 7 disc pairs a 3840x2160 base layer with a
+                // 1920x1080 enhancement layer. Both rows used to be described from m_sps, which
+                // is the BASE layer's, so the enhancement layer was reported at the base layer's
+                // resolution. Left empty when the enhancement layer's own SPS was not found, and
+                // the caller then falls back to the description built above.
+                if (m_elSps)
+                {
+                    std::string elDescr = m_elSps->getDescription();
+                    const size_t frElPos = elDescr.find("Frame rate: not found");
+                    if (frElPos != string::npos && m_elVps)
+                        elDescr = elDescr.substr(0, frElPos) + string(" ") + m_elVps->getDescription();
+                    // The same tail as the row above, because the separated track carries the RPU
+                    // and the enhancement layer just as this one does.
+                    rez.elStreamDescr = elDescr + " Dolby Vision RPU EL";
+                }
+            }
         }
     }
 

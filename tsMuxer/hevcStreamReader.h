@@ -58,6 +58,9 @@ class HEVCStreamReader final : public MPEGStreamReader
    private:
     [[nodiscard]] bool isSlice(HevcUnit::NalType nalType) const;
     [[nodiscard]] bool isSuffix(HevcUnit::NalType nalType) const;
+    // Reads the enhancement layer's own VPS or SPS out of one wrapper NAL of a merged dual layer
+    // track. Keeps the first of each and ignores anything it cannot parse.
+    void readElParameterSet(const uint8_t* nal, const uint8_t* nextNal);
     void incTimings();
     int toFullPicOrder(const HevcSliceHeader* slice, unsigned pic_bits);
     static void storeBuffer(MemoryBlock& dst, const uint8_t* data, const uint8_t* dataEnd);
@@ -70,6 +73,12 @@ class HEVCStreamReader final : public MPEGStreamReader
     HevcSpsUnit* m_sps;
     HevcPpsUnit* m_pps;
     HevcHdrUnit* m_hdr;
+    // The ENHANCEMENT layer's own parameter sets, read out of the wrapper NALs of a merged dual
+    // layer track. Only the probe fills these, and only to describe the second of the two rows
+    // that track is listed as. A profile 7 disc pairs a 3840x2160 base layer with a 1920x1080
+    // enhancement layer, so describing both rows from m_sps reported the wrong picture for one.
+    HevcVpsUnit* m_elVps = nullptr;
+    HevcSpsUnit* m_elSps = nullptr;
     int m_seiParseWarns = 0;
     HevcSliceHeader* m_slice;
     bool m_firstFrame;
