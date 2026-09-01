@@ -114,6 +114,12 @@ endif()
 
 target_link_libraries(tsMuxerGUI ${tsmuxer_gui_libs})
 
+# PlaySound, used for the end-of-mux sound on Windows where Qt Multimedia is not built.
+# See myPlaySound in tsmuxerwindow.cpp.
+if(WIN32)
+  target_link_libraries(tsMuxerGUI winmm)
+endif()
+
 # "Play sound at end" is guarded by QT_MULTIMEDIA_LIB in the source. qmake defined that
 # macro by itself for QT += multimedia; CMake does not, and linking Qt6::Multimedia sets
 # nothing. So the test was silently false in every CMake build and the feature has always

@@ -1,3 +1,11 @@
+// _WIN32 and not Q_OS_WIN: the Qt macro comes from a Qt header, and none has been included yet
+// at this point in the file.
+#ifdef _WIN32
+#include <windows.h>
+
+#include <mmsystem.h>
+#endif
+
 #include "tsmuxerwindow.h"
 
 #include <QCheckBox>
@@ -2939,7 +2947,24 @@ void TsMuxerWindow::readFromStderr()
 
 void TsMuxerWindow::myPlaySound(const QString& fileName)
 {
-#if QT_MULTIMEDIA_LIB
+#if defined(Q_OS_WIN)
+    // The Windows build compiles Qt from qtbase alone so that the result runs on Windows 7,
+    // and Multimedia is a separate module that is not built, so QSoundEffect does not exist
+    // here. The old fallback was QApplication::beep(), which makes no sound at all on a
+    // machine whose system sounds are off, and that is why this option has never worked on
+    // Windows. PlaySound takes the wav from memory, needs no Qt module and no library that
+    // is not already on the machine, and has been present since long before Windows 7.
+    QFile f(fileName);
+    if (f.open(QIODevice::ReadOnly))
+    {
+        m_soundData = f.readAll();
+        if (!m_soundData.isEmpty() &&
+            PlaySoundW(reinterpret_cast<LPCWSTR>(m_soundData.constData()), nullptr,
+                       SND_MEMORY | SND_ASYNC | SND_NODEFAULT))
+            return;
+    }
+    QApplication::beep();
+#elif QT_MULTIMEDIA_LIB
     sound.setSource(QUrl(QString("qrc%1").arg(fileName)));
     sound.play();
 #else

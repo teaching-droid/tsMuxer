@@ -13,6 +13,9 @@
 #if QT_MULTIMEDIA_LIB
 #include <QSoundEffect>
 #endif
+#ifdef Q_OS_WIN
+#include <QByteArray>
+#endif
 
 #include "codecinfo.h"
 
@@ -226,6 +229,11 @@ class TsMuxerWindow : public QWidget
     QSoundEffect sound;
 #endif
     void myPlaySound(const QString& fileName);
+#ifdef Q_OS_WIN
+    // PlaySound reads the wav straight out of this while it plays, and it plays
+    // asynchronously, so the bytes have to outlive the call.
+    QByteArray m_soundData;
+#endif
     bool isVideoCropped();
 
     FontSettingsTableModel* fontSettingsModel;
