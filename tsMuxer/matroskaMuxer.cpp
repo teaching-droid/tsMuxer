@@ -38,6 +38,10 @@ extern "C"
 #include "vvc.h"
 #include "vvcStreamReader.h"
 
+// The Matroska TrackType values this muxer writes. Only the subtitle one is asked about away
+// from where the tracks are built, so only it is named.
+static constexpr uint8_t MKV_TRACK_TYPE_SUBTITLE = 17;
+
 // Key for the AC-3 core companion of a TrueHD track (see refreshTrackProperties). Packets are
 // routed by real stream index, so the companion is keyed clear of every real one.
 static constexpr int AC3_CORE_STREAM_BASE = 0x40000000;
@@ -333,7 +337,7 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
     }
     else if (codecName[0] == 'S')
     {
-        track.trackType = 17;  // subtitle
+        track.trackType = MKV_TRACK_TYPE_SUBTITLE;
     }
 
     m_tracks[streamIndex] = track;
@@ -1558,6 +1562,18 @@ void MatroskaMuxer::writeChapters()
     writeToFile(chapters.data(), static_cast<int>(chapters.size()));
 }
 
+// How many tracks have to deliver a packet before the header can be written. Subtitle tracks do
+// not, so a file of nothing but subtitles gives zero here and the header goes out on the first
+// packet, which is correct: there is nothing left to discover.
+size_t MatroskaMuxer::tracksNeedingFirstPacket() const
+{
+    size_t n = 0;
+    for (const auto& [streamIdx, track] : m_tracks)
+        if (track.trackType != MKV_TRACK_TYPE_SUBTITLE)
+            ++n;
+    return n;
+}
+
 void MatroskaMuxer::replayBufferedPackets()
 {
     if (m_preHeaderPackets.empty())
@@ -2147,13 +2163,24 @@ bool MatroskaMuxer::muxPacket(AVPacket& avPacket)
     if (it == m_tracks.end())
         return true;
 
-    // Before the header is written, buffer packets and wait until all tracks
-    // have delivered at least one packet.  This ensures all codec readers are
-    // fully initialized (e.g. audio sample rate, channels) before we write the
-    // Matroska track headers.
+    // Before the header is written, buffer packets and wait until every track that needs its first
+    // packet has delivered one. This ensures those codec readers are fully initialized (e.g. audio
+    // sample rate, channels) before we write the Matroska track headers.
+    //
+    // SUBTITLE TRACKS ARE NOT WAITED FOR, and that is not a shortcut. A subtitle entry is complete
+    // at intAddStream: it sets trackType and nothing else, refreshTrackProperties leaves it alone,
+    // and no field of it is discovered by parsing. It is also the ONE kind of track that legitimately
+    // carries nothing for a long stretch, because a forced subtitle track only has content in the
+    // scenes that need it.
+    //
+    // Waiting for one was measured on a pressed disc whose third subtitle track has its first packet
+    // 74.99 percent of the way into a 72 GB title: the muxer held 42 GB of packets in memory on a
+    // 64 GB machine, then spent 178 seconds writing them out and 127 more freeing them, with the
+    // progress figure stopped at 75.0 percent the whole time because nothing was being read.
     if (!m_headerWritten)
     {
-        m_seenStreams.insert(avPacket.stream_index);
+        if (it->second.trackType != MKV_TRACK_TYPE_SUBTITLE)
+            m_seenStreams.insert(avPacket.stream_index);
 
         // Buffer a copy of this packet
         BufferedPacket bp;
@@ -2163,7 +2190,7 @@ bool MatroskaMuxer::muxPacket(AVPacket& avPacket)
         bp.data.assign(avPacket.data, avPacket.data + avPacket.size);
         m_preHeaderPackets.push_back(std::move(bp));
 
-        if (m_seenStreams.size() >= m_tracks.size())
+        if (m_seenStreams.size() >= tracksNeedingFirstPacket())
         {
             writeDeferredHeader();
             replayBufferedPackets();

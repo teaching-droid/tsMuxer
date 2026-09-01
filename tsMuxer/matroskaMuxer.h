@@ -347,7 +347,9 @@ class MatroskaMuxer final : public AbstractMuxer
     bool m_headerWritten;
     // Has the destination actually been created yet? openDstFile deliberately does not create it.
     bool m_destinationOpen;
-    std::set<int> m_seenStreams;  // stream indices that have sent at least one packet
+    // Stream indices that have sent at least one packet AND need to before the header can be
+    // written, which is every kind of track except subtitles. See muxPacket.
+    std::set<int> m_seenStreams;
 
     // Buffered packets accumulated before the header is written.
     struct BufferedPacket
@@ -373,6 +375,7 @@ class MatroskaMuxer final : public AbstractMuxer
     void writeDeferredHeader();
     // Replay buffered pre-header packets (sets m_firstTimecode to min PTS)
     void replayBufferedPackets();
+    [[nodiscard]] size_t tracksNeedingFirstPacket() const;
 
     // Flush any pending accumulated frame data for a track as a single SimpleBlock.
     void flushPendingFrame(MkvTrackInfo& track);
