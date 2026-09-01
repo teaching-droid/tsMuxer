@@ -1106,6 +1106,26 @@ void IsoWriter::close()
     writeMetadata(m_metadataLBN);
 
     writeDescriptors();
+
+    // A guard that was asked for and never written is the same silence 2.18.0 went through the rest
+    // of this file removing. It happens when the break falls past the end of the image, which is the
+    // normal outcome of leaving the disc unset: with no disc, the break defaults to half a BD50, so
+    // anything smaller than about 25 GB never reaches it. The image then comes out byte for byte the
+    // size it would have been without the option, which is exactly what it looks like from outside.
+    if ((m_layerBreakGuardAfterSectors > 0 || m_layerBreakGuardBeforeSectors > 0) && m_layerBreakPads.empty() &&
+        !m_layerBreakPoints.empty())
+    {
+        const int64_t imageSectors = m_file.size() / SECTOR_SIZE;
+        const int64_t firstBreak = m_layerBreakPoints.front();
+        if (imageSectors <= firstBreak)
+            LTRACE(LT_WARN, 2,
+                   "Warning: no layer break guard was written, because the image ends before the break. The "
+                       << "image is " << imageSectors << " sectors (" << imageSectors * SECTOR_SIZE / 1000000000.0
+                       << " GB) and the first break is at sector " << firstBreak << " ("
+                       << firstBreak * static_cast<int64_t>(SECTOR_SIZE) / 1000000000.0
+                       << " GB). Choose the disc you are burning to, so the break is worked out from it, or "
+                          "give the break directly with --layer-break-lbn.");
+    }
 }
 
 void IsoWriter::writeDescriptors()
