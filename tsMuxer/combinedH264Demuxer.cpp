@@ -259,7 +259,14 @@ int CombinedH264Filter::demuxPacket(DemuxedData& demuxedData, const PIDSet& acce
     uint8_t* dataEnd = avPacket.data + avPacket.size;
     uint8_t* nextNal = NALUnit::findNALWithStartCode(curNal + 3, dataEnd, true);
     int64_t discardSize = 0;
-    while (curNal < dataEnd - 4)
+
+    // The smallest NAL that can end a packet is four bytes: a three byte start code and the header.
+    // Stopping at dataEnd - 4 leaves exactly that one unread, and an access unit that ends with the
+    // end of sequence NAL, 00 00 01 0A, therefore lost it. The same bound is correct in
+    // simpleDemuxBlock, where a NAL at the end of the buffer is not lost but deferred to the next
+    // block through m_tmpBuffer. Here there is no next block: a packet is one complete access unit,
+    // so whatever is not read here is gone.
+    while (curNal + 4 <= dataEnd)
     {
         const int prefixLen = getPrefixLen(curNal, dataEnd);
         if (prefixLen != 0)
