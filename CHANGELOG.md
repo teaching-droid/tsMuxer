@@ -79,6 +79,33 @@ call that forgot the output path fell through to the ordinary muxing path, which
 is routed on its own name now, and all three of `--bdmv-to-iso`, one argument and three arguments
 print what the mode expects.
 
+### Fixed: the layer-break guard could move a UDF structure and corrupt files
+
+Found while testing the 3D authoring path, and it turned out to have nothing to do with 3D.
+
+The UDF unique-id mapping file lives at a fixed address just past the metadata partition, and it is
+written at the very end of the build by seeking BACK to it. `FileEntryInfo::write` consults the
+layer-break guard on every write, so a guard zone that reached back that far padded the mapping file
+FORWARD, out of its own home and into the data area.
+
+The guard exists to move file data off the sectors around a layer transition. A volume structure has
+nowhere else it may live, so moving one does not protect it, it destroys the image. The guard is now
+suppressed while such a structure is written.
+
+The metadata region grows with the file count, so the two eventually meet. Measured on a 12,005 file
+tree with `--inner-only` on a BD50, which is a supported combination and not a contrived one:
+
+```
+before   the mapping file's home is sector 12,928, the guard's before-zone begins at 8,704,
+         so the structure was written at sector 24,429,792 and four navigation files
+         (index.bdmv, MovieObject.bdmv and both .clpi) came back wrong
+after    12,005 of 12,005 files byte for byte identical
+```
+
+Also visible on a small tree with a hand-set early break, where it silently replaced the first
+sector of the first file with a descriptor: eight break positions from 700 to 2000 sectors are now
+byte-exact where four of them were not.
+
 ### Fixed: a layer-break guard could land inside a 3D chunk
 
 The guard pad is laid down wherever the copy write that reaches the zone happens to begin, and a

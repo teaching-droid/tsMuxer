@@ -770,6 +770,7 @@ IsoWriter::IsoWriter(const IsoHeaderData& hdrData)
     m_rootDirInfo = nullptr;
     m_systemStreamDir = nullptr;
 
+    m_layerBreakSuppressed = false;
     m_metadataFileLen = 0x30000;
     m_systemStreamLBN = 0;
     m_metadataMirrorLBN = 0;
@@ -1073,8 +1074,20 @@ void IsoWriter::allocateMetadata()
         writer.writeLE16(1);  // object partition
     }
 
+    // The mapping file lives at a fixed address just past the metadata partition, and it is written
+    // here, long after the file data, by seeking BACK to it. That seek lands on a low sector, and
+    // FileEntryInfo::write consults the layer break guard on every write, so a guard zone reaching
+    // that far back would pad the mapping file FORWARD out of its own home and into the data.
+    //
+    // Measured before this: a 12,005 file tree with --inner-only put the mapping file's home at
+    // sector 12,928 and the guard's before-zone began at 8,704, so the structure was written at
+    // sector 24,429,792, about 24 million sectors from where UDF expects it, and four navigation
+    // files came back wrong. The guard is there to move file data off the sectors around a break;
+    // this is not file data and has nowhere else it may go.
+    m_layerBreakSuppressed = true;
     m_metadataMappingFile->write(buffer.data(), static_cast<int32_t>(writer.size()));
     m_metadataMappingFile->close();
+    m_layerBreakSuppressed = false;
 }
 
 void IsoWriter::close()
@@ -1660,7 +1673,7 @@ int64_t IsoWriter::currentImageLBA() const { return imageLBA(); }
 
 bool IsoWriter::nearLayerBreak(const int upcomingBytes) const
 {
-    if (m_layerBreakPoints.empty())
+    if (m_layerBreakSuppressed || m_layerBreakPoints.empty())
         return false;
     const int64_t lbn = imageLBA();
     const int64_t lenSectors = (static_cast<int64_t>(upcomingBytes) + SECTOR_SIZE - 1) / SECTOR_SIZE;

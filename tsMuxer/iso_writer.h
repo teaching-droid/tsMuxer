@@ -313,7 +313,11 @@ class IsoWriter
     int m_layerBreakGuardBeforeSectors;   // zero-fill BEFORE each break (previous layer side; small margin)
     int m_layerBreakGuardAfterSectors;    // zero-fill AFTER each break (next layer side; main defect protection)
     std::vector<LayerBreakPad> m_layerBreakPads;  // where zeros were actually written (for reporting)
-    void writeZeroPad(int64_t sectors);           // shared zero-fill used by both pad paths
+    // Set while a UDF structure is being written at a fixed address of its own. The guard exists to
+    // move FILE DATA off the sectors around a layer break; a volume structure has nowhere else it
+    // may live, so moving one does not protect it, it destroys the image.
+    bool m_layerBreakSuppressed;
+    void writeZeroPad(int64_t sectors);  // shared zero-fill used by both pad paths
 };
 
 class ISOFile final : public AbstractOutputStream
