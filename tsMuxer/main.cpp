@@ -513,10 +513,12 @@ Additional parameters for H.264 video tracks:
 - contSPS           If the original video doesn't contain repetitive SPS/PPS,
                     then SPS/PPS will be added to the stream before each key
                     frame. This option is recommended for BD muxing.
-- subTrack          Used for combined AVC/MVC tracks only. TsMuxeR always
-                    demultiplexes such tracks to separate AVC and MVC streams.
-                    Setting this to 1 sets the reference to the AVC part, while
-                    2 sets it to the MVC part.
+- subTrack          Selects one half of a track that carries two streams.
+                    tsMuxeR always splits such a track into its two parts.
+                    For a combined AVC/MVC track, 1 is the MVC part and 2 is
+                    the AVC part. For a dual layer Dolby Vision track, 1 is
+                    the base layer and 2 is the enhancement layer. The two
+                    cases do not number their parts the same way.
 - secondary         Mux as secondary video (PIP).
 - pipCorner         Corner for PIP video. Allowed values: "TopLeft","TopRight",
                     "BottomRight", "BottomLeft". 
