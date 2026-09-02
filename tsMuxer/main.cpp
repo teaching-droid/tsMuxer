@@ -2034,8 +2034,16 @@ int main(int argc, char** argv)
                             string file1 = mainMuxer->getFileNameByIdx(i);
                             string file2 = subMuxer->getFileNameByIdx(i);
                             int ssifNum = strToInt32(extractFileName(file1));
-                            if (!file1.empty() && !file2.empty())
-                                IsoWriter->createInterleavedFile(file1, file2, blurayHelper.ssifFileName(ssifNum));
+                            // The result is checked because it can now mean something. It used to be
+                            // guarded by assertions, which a release build removes, so there was
+                            // nothing to check; they refuse and say why instead. Carrying on past a
+                            // refusal would finish with "Mux successful complete" and leave a
+                            // zero-length .ssif in the image, which is a 3D disc that cannot play.
+                            if (!file1.empty() && !file2.empty() &&
+                                !IsoWriter->createInterleavedFile(file1, file2, blurayHelper.ssifFileName(ssifNum)))
+                                throw runtime_error(string("Can't build the interleaved 3D file ") +
+                                                    blurayHelper.ssifFileName(ssifNum) +
+                                                    ". The reason is above; the disc would not play in 3D.");
                         }
                     }
                 }
