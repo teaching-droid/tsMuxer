@@ -23,7 +23,7 @@ as found.
 
 Off by default. Without it the image is byte for byte what it was before.
 
-Measured on a six-group tree taken off a pressed 3D disc, with 1, 2, 2, 4, 4 and 4 chunk pairs:
+Measured on a six-group 3D structure, with 1, 2, 2, 4, 4 and 4 chunk pairs:
 
 ```
 without   366,084,096 bytes, every chunk of video present TWICE
@@ -33,17 +33,17 @@ with      188,088,320 bytes, every chunk present ONCE, dependent view first
 All 18 files read back byte for byte identical to the source, checked twice with two independent
 readers: 7-Zip, and the operating system's own UDF driver, which is what a player uses.
 
-Then on a whole pressed 3D disc, 852 files and 40.8 GiB, its feature interleaved in 1,774 chunk
-pairs:
+Then on a full-size 3D structure, 852 files and 40.8 GiB, its main title interleaved in 1,774
+chunk pairs:
 
 ```
-image        43,796,791,296 bytes, against 43,800,002,560 for the pressed disc itself
+image        43,796,791,296 bytes, against 43,800,002,560 for the source it was built from
 a plain copy would have written 87.2 GB
 files        852 of 852 byte for byte identical, 0 different, 0 missing, 0 added
 ```
 
-The disc stores its video once, and the rebuilt image lands 3.21 MB from the same size, which is
-the difference in UDF overhead and nothing else. `0 added` says the disc's own `BACKUP` came
+The source stores its video once, and the rebuilt image lands 3.21 MB from the same size, which
+is the difference in UDF overhead and nothing else. `0 added` says the source's own `BACKUP` came
 through untouched rather than being regenerated.
 
 ### The 3D authoring path was verified, not changed
@@ -116,8 +116,8 @@ byte-exact where four of them were not.
 The guard pad is laid down wherever the copy write that reaches the zone happens to begin, and a
 chunk larger than the 16 MB copy buffer takes several writes, so the pad could fall inside a chunk.
 The interrupted view then gained a piece its partner did not have and the group could not be
-rebuilt at all. Reproduced on a real disc's tables, which have 125 chunks over 16 MB in the feature
-alone:
+rebuilt at all. Reproduced on real chunk tables, which have 125 chunks over 16 MB in the main
+title alone:
 
 ```
 Can't interleave BDMV/STREAM/SSIF/00019.ssif: 5 pieces against 4
