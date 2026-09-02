@@ -33,6 +33,30 @@ with      188,088,320 bytes, every chunk present ONCE, dependent view first
 All 18 files read back byte for byte identical to the source, checked twice with two independent
 readers: 7-Zip, and the operating system's own UDF driver, which is what a player uses.
 
+Then on a whole pressed 3D disc, 852 files and 40.8 GiB, its feature interleaved in 1,774 chunk
+pairs:
+
+```
+image        43,796,791,296 bytes, against 43,800,002,560 for the pressed disc itself
+a plain copy would have written 87.2 GB
+files        852 of 852 byte for byte identical, 0 different, 0 missing, 0 added
+```
+
+The disc stores its video once, and the rebuilt image lands 3.21 MB from the same size, which is
+the difference in UDF overhead and nothing else. `0 added` says the disc's own `BACKUP` came
+through untouched rather than being regenerated.
+
+### The 3D authoring path was verified, not changed
+
+tsMuxeR has authored 3D discs from streams for years, and `createInterleavedFile` is shared between
+that path and the new one, so it was run rather than assumed. Muxing the two views of a 3D source
+to a Blu-ray ISO gives a base view and a dependent view whose sizes sum to the `.ssif` exactly,
+inside an image too small to hold the video twice, with the dependent chunk first. Building a disc
+that way and then copying it with `--3d-single-copy` returns every file byte for byte.
+
+Note that only a Blu-ray ISO can hold this. Two files sharing one run of sectors is a property of
+the UDF image; a folder on an ordinary filesystem cannot express it.
+
 ### Fixed: an interleaved file could be built wrong instead of refused
 
 `createInterleavedFile` guarded its two preconditions with assertions, which a release build
