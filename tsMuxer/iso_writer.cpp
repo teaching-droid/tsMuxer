@@ -941,15 +941,27 @@ bool IsoWriter::createInterleavedFile(const std::string& inFile1, const std::str
     if (!outEntry)
         return false;
 
-    assert(inEntry1->m_extents.size() == inEntry2->m_extents.size());
+    // These two conditions used to be assertions, which a release build removes. Both of them mean
+    // the interleave cannot be described: unequal extent counts leave chunks with no partner, and a
+    // part-sector extent cannot be addressed by a non-final allocation descriptor at all. Building
+    // the alias anyway yields a file of exactly the right length with its halves out of step, which
+    // is the worst way to be wrong, so say what is wrong and refuse.
+    if (inEntry1->m_extents.size() != inEntry2->m_extents.size())
+    {
+        LTRACE(LT_ERROR, 2,
+               "Can't interleave " << outFile << ": " << inEntry1->m_extents.size() << " pieces against "
+                                   << inEntry2->m_extents.size() << ", so the two views are not cut the same way");
+        return false;
+    }
     for (size_t i = 0; i < inEntry1->m_extents.size(); ++i)
     {
-        assert(inEntry1->m_extents[i].size % SECTOR_SIZE == 0);
-        assert(inEntry2->m_extents[i].size % SECTOR_SIZE == 0);
+        if (inEntry1->m_extents[i].size % SECTOR_SIZE != 0 || inEntry2->m_extents[i].size % SECTOR_SIZE != 0)
+        {
+            LTRACE(LT_ERROR, 2, "Can't interleave " << outFile << ": piece " << i << " is not a whole sector count");
+            return false;
+        }
         outEntry->addExtent(inEntry2->m_extents[i]);
         outEntry->addExtent(inEntry1->m_extents[i]);
-        // outEntry->m_extents.push_back(inEntry2->m_extents[i]);
-        // outEntry->m_extents.push_back(inEntry1->m_extents[i]);
     }
     // outEntry->m_fileSize = inEntry1->m_fileSize + inEntry2->m_fileSize;
 
@@ -1720,6 +1732,16 @@ void IsoWriter::checkLayerBreakPoint(const int maxExtentSize)
             return;  // at most one break per write (breaks are far apart)
         }
     }
+}
+
+void IsoWriter::padBeforeInterleavedPair(const int64_t pairBytes)
+{
+    if (pairBytes <= 0)
+        return;
+    // Clamped rather than refused: the value only decides whether the coming pair reaches the
+    // guard zone, and a clamp can make that test eager, never blind.
+    const int upcoming = pairBytes > INT32_MAX ? INT32_MAX : static_cast<int>(pairBytes);
+    checkLayerBreakPoint(upcoming);
 }
 
 bool IsoWriter::padOverZoneIfFileCrosses(const int64_t fileSizeBytes, const int64_t discCapacitySectors)

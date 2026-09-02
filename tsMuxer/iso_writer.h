@@ -218,6 +218,14 @@ class IsoWriter
     // end and the next zone (and the disc capacity, when known), pad with zeros up to the zone
     // end so the whole file lands on the next layer. Returns true if a pad was written.
     bool padOverZoneIfFileCrosses(int64_t fileSizeBytes, int64_t discCapacitySectors);
+
+    // Interleaved 3D groups: the two views have to end up cut into the SAME number of pieces, or
+    // the .ssif cannot be described as an alias over them. Left to the ordinary path a guard pad
+    // lands wherever a copy write happens to reach the zone, and a chunk larger than the copy
+    // buffer takes several writes, so the pad falls INSIDE a chunk and the interrupted view gains
+    // a piece its partner does not have. Called before each pair of chunks, this moves the pad to
+    // the boundary between pairs, where both views are between pieces and stay in step.
+    void padBeforeInterleavedPair(int64_t pairBytes);
     [[nodiscard]] int64_t currentImageLBA() const;
 
    private:

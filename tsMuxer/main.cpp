@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <set>
 #include <sstream>
 #include <vector>
@@ -814,6 +815,98 @@ static bool findM2tsPcrMedian(const string& fileName, const int64_t offset, cons
     return true;
 }
 
+// Write one 3D group into the image the way a pressed disc holds it. The base view and the
+// dependent view are cut into the chunks their own clip info files name and written alternately,
+// dependent chunk first, and the .ssif is then given those same sectors under its own name. The
+// video is stored once and all three names resolve to it, so the group costs what the two views
+// cost instead of twice that.
+//
+// The alternation is what creates the pieces. IsoWriter opens a new extent whenever the file being
+// written changes, so writing dep, base, dep, base leaves each view holding every other chunk, and
+// createInterleavedFile lists them back in that same order.
+// dataStartLbn comes back as the sector the group's DATA begins on, which is not where it was
+// called: a guard pad placed before the first pair sits in between. The layer break report maps a
+// pad to the file it interrupted by sector range, so a range that started before its own pad would
+// leave that pad describing itself.
+static bool writeSsifGroup(IsoWriter* iso, const string& srcRoot, const BdSsifGroup& g, vector<uint8_t>& buf,
+                           int64_t& written, const int64_t total, int& lastTenths, int64_t& dataStartLbn)
+{
+    File baseIn, depIn;
+    if (!baseIn.open((srcRoot + "/" + g.baseRel).c_str(), File::ofRead))
+    {
+        LTRACE(LT_ERROR, 2, "Can't read " << g.baseRel);
+        return false;
+    }
+    if (!depIn.open((srcRoot + "/" + g.depRel).c_str(), File::ofRead))
+    {
+        LTRACE(LT_ERROR, 2, "Can't read " << g.depRel);
+        return false;
+    }
+    ISOFile* baseOut = iso->createFile();
+    baseOut->open(g.baseRel.c_str(), File::ofWrite);
+    ISOFile* depOut = iso->createFile();
+    depOut->open(g.depRel.c_str(), File::ofWrite);
+
+    auto copyChunk = [&](File& in, ISOFile* out, int64_t bytes)
+    {
+        while (bytes > 0)
+        {
+            const auto want = static_cast<uint32_t>(
+                bytes < static_cast<int64_t>(buf.size()) ? bytes : static_cast<int64_t>(buf.size()));
+            const int rd = in.read(buf.data(), want);
+            if (rd <= 0)
+                return false;
+            if (out->write(buf.data(), static_cast<uint32_t>(rd)) < 0)
+                return false;
+            bytes -= rd;
+            written += rd;
+            if (total > 0)
+            {
+                const int tenths = static_cast<int>(static_cast<double>(written) / static_cast<double>(total) * 1000.0);
+                if (tenths != lastTenths)
+                {
+                    lastTenths = tenths;
+                    cout << tenths / 10 << '.' << tenths % 10 << "% complete" << std::endl;
+                }
+            }
+        }
+        return true;
+    };
+
+    bool ok = true;
+    dataStartLbn = iso->currentImageLBA();
+    for (size_t i = 0; ok && i < g.baseChunkBytes.size(); ++i)
+    {
+        // Any layer break guard is laid down HERE, between one pair and the next, so both views
+        // are cut the same way and the alias below can describe them. Without this the pad falls
+        // wherever a copy write reaches the zone, which for a chunk larger than the copy buffer is
+        // inside a chunk: measured on a six group tree, one view came out with 5 pieces against
+        // the other's 4 and the group could not be rebuilt at all.
+        iso->padBeforeInterleavedPair(g.depChunkBytes[i] + g.baseChunkBytes[i]);
+        if (i == 0)
+            dataStartLbn = iso->currentImageLBA();
+        // Dependent chunk first. Confirmed on three discs, and invisible in the file sizes: getting
+        // it the wrong way round produces an .ssif of exactly the right length with the two views
+        // swapped, which no size check would ever catch.
+        ok = copyChunk(depIn, depOut, g.depChunkBytes[i]) && copyChunk(baseIn, baseOut, g.baseChunkBytes[i]);
+    }
+    baseOut->close();
+    delete baseOut;
+    depOut->close();
+    delete depOut;
+    baseIn.close();
+    depIn.close();
+    if (!ok)
+    {
+        LTRACE(LT_ERROR, 2, "Read error while writing " << g.ssifRel << " from its two views");
+        return false;
+    }
+
+    // NOTE THE ORDER. createInterleavedFile emits inFile2's piece before inFile1's, so passing
+    // (base, dep) is what puts the dependent chunk first and matches the disc.
+    return iso->createInterleavedFile(g.baseRel, g.depRel, g.ssifRel);
+}
+
 static int bdmvFolderToGuardedIso(const int argc, char** argv)
 {
     int layerBreakGuardMB = -1;
@@ -823,6 +916,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     bool layerFit = true;
     int64_t discCapacitySectors = 0;
     bool keepExtras = false;
+    bool singleCopy3d = false;
     bool innerOnly = false;
     bool allowOversize = false;
     string discLabel;
@@ -849,6 +943,8 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                 layerFit = false;
             else if (a == "--keep-extra-files")
                 keepExtras = true;
+            else if (a == "--3d-single-copy")
+                singleCopy3d = true;
             else if (a == "--inner-only")
                 innerOnly = true;
             else if (a == "--allow-oversize")
@@ -869,7 +965,8 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
         LTRACE(LT_ERROR, 2,
                "Usage: tsMuxeR --bdmv-to-iso [--layer-break-guard=<MB>] [--layer-break-guard-before=<MB>] "
                "[--layer-break-lbn=<sector>] [--disc-capacity=<sectors>] [--original-order] [--no-layer-fit] "
-               "[--keep-extra-files] [--inner-only] [--allow-oversize] [--label=<string>] <BDMV_folder> <out.iso>");
+               "[--keep-extra-files] [--3d-single-copy] [--inner-only] [--allow-oversize] [--label=<string>] "
+               "<BDMV_folder> <out.iso>");
         return -1;
     }
     string srcRoot = positional[0];
@@ -922,6 +1019,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
         string full;
         string rel;
         int64_t size;
+        int ssifGroup;  // -1 for an ordinary file; otherwise the 3D group this one entry stands for
     };
     vector<Item> items;
     int64_t total = 0;
@@ -944,7 +1042,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
             continue;
         }
         const auto sz = static_cast<int64_t>(getFileSize(f));
-        items.push_back({f, rel, sz});
+        items.push_back({f, rel, sz, -1});
         total += sz;
     }
     for (const auto& s : skippedTop)
@@ -952,19 +1050,70 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
 
     // A 3D disc stores its video ONCE and names it three times: the .ssif and the two .m2ts are
     // views over the same sectors. Copying all three by name writes the video twice and roughly
-    // doubles the image. Reported here for now; rebuilding the .ssif as an alias comes next.
+    // doubles the image. --3d-single-copy writes it once instead, the way the disc itself does.
+    const std::vector<BdSsifGroup> ssifGroups = bdFindSsifGroups(srcRoot);
+    size_t interleavedGroups = 0;
+    for (const auto& g : ssifGroups)
     {
-        const std::vector<BdSsifGroup> ssifGroups = bdFindSsifGroups(srcRoot);
-        for (const auto& g : ssifGroups)
+        int64_t dup = 0;
+        for (const int64_t c : g.baseChunkBytes) dup += c;
+        for (const int64_t c : g.depChunkBytes) dup += c;
+        LTRACE(LT_INFO, 2,
+               "  3D: " << g.ssifRel << " is " << g.baseRel << " and " << g.depRel << " interleaved in "
+                        << g.baseChunkBytes.size() << " chunk pairs, so " << dup / (1024 * 1024)
+                        << " MB of this image is the same video twice");
+    }
+    if (!ssifGroups.empty() && !singleCopy3d)
+        LTRACE(LT_INFO, 2, "  3D: add --3d-single-copy to store that video once, as the source disc does");
+
+    // Fold each group's three files into ONE entry in the copy list, sized at what the group really
+    // costs the image: both views, once. Everything downstream then works off the truth, so the
+    // largest-first sort still puts the main feature at the front, the capacity check still refuses
+    // an image that will not fit, and the progress bar still ends at 100.
+    if (singleCopy3d && !ssifGroups.empty())
+    {
+        auto upperOf = [](string t)
         {
-            int64_t dup = 0;
-            for (const int64_t c : g.baseChunkBytes) dup += c;
-            for (const int64_t c : g.depChunkBytes) dup += c;
-            LTRACE(LT_INFO, 2,
-                   "  3D: " << g.ssifRel << " is " << g.baseRel << " and " << g.depRel << " interleaved in "
-                            << g.baseChunkBytes.size() << " chunk pairs, so " << dup / (1024 * 1024)
-                            << " MB of this image is the same video twice");
+            for (auto& c : t) c = static_cast<char>(toupper(static_cast<unsigned char>(c)));
+            return t;
+        };
+        std::map<string, size_t> memberOf;  // three entries per group, all pointing at it
+        for (size_t gi = 0; gi < ssifGroups.size(); ++gi)
+        {
+            memberOf[upperOf(ssifGroups[gi].ssifRel)] = gi;
+            memberOf[upperOf(ssifGroups[gi].baseRel)] = gi;
+            memberOf[upperOf(ssifGroups[gi].depRel)] = gi;
         }
+        vector<Item> kept;
+        kept.reserve(items.size());
+        vector<bool> placed(ssifGroups.size(), false);
+        int64_t saved = 0;
+        for (const auto& it : items)
+        {
+            const auto found = memberOf.find(upperOf(it.rel));
+            if (found == memberOf.end())
+            {
+                kept.push_back(it);
+                continue;
+            }
+            const size_t gi = found->second;
+            if (placed[gi])
+                continue;  // the group is already in the list; its other two names add nothing
+            placed[gi] = true;
+            int64_t payload = 0;
+            for (const int64_t c : ssifGroups[gi].baseChunkBytes) payload += c;
+            for (const int64_t c : ssifGroups[gi].depChunkBytes) payload += c;
+            kept.push_back({string(), ssifGroups[gi].ssifRel, payload, static_cast<int>(gi)});
+            saved += payload;  // exactly the second copy that is no longer written
+            ++interleavedGroups;
+        }
+        items.swap(kept);
+        total = 0;
+        for (const auto& it : items) total += it.size;
+        if (interleavedGroups > 0)
+            LTRACE(LT_INFO, 2,
+                   "  3D: writing " << interleavedGroups << " interleaved group(s) once, so the image is "
+                                    << saved / (1024 * 1024) << " MB smaller");
     }
     if (items.empty())
     {
@@ -1014,7 +1163,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
             else if (R.rfind("BDMV/BDJO/", 0) == 0)
                 dst = "BDMV/BACKUP/BDJO/" + baseName(it.rel);
             if (!dst.empty())
-                backup.push_back({it.full, dst, it.size});
+                backup.push_back({it.full, dst, it.size, -1});
         }
         for (const auto& b : backup)
         {
@@ -1079,7 +1228,8 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     }
 
     // the metadata partition must hold ~1 File Entry per file + directory content; size it from the count
-    const int extraISOBlocks = static_cast<int>(items.size()) / 32 + 16;
+    // Each folded 3D group is one entry in `items` but still three files in the image.
+    const int extraISOBlocks = static_cast<int>(items.size() + 2 * interleavedGroups) / 32 + 16;
 
     LTRACE(
         LT_INFO, 2,
@@ -1252,16 +1402,26 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     ranges.reserve(items.size());
     for (auto& item : items)
     {
+        // Layer-fit: start the file after the break instead of splitting it, when it fits there.
+        // A folded 3D group is treated as one file here, which is what it is on the disc.
+        if (layerFit)
+            iso->padOverZoneIfFileCrosses(item.size, discCapacitySectors);
+        const int64_t startLbn = iso->currentImageLBA();
+        if (item.ssifGroup >= 0)
+        {
+            int64_t dataStartLbn = startLbn;
+            if (!writeSsifGroup(iso, srcRoot, ssifGroups[item.ssifGroup], buf, written, total, lastTenths,
+                                dataStartLbn))
+                return -1;
+            ranges.push_back({dataStartLbn, iso->currentImageLBA()});
+            continue;
+        }
         File in;
         if (!in.open(item.full.c_str(), File::ofRead))
         {
             LTRACE(LT_ERROR, 2, "Can't read " << item.full);
             return -1;
         }
-        // Layer-fit: start the file after the break instead of splitting it, when it fits there
-        if (layerFit)
-            iso->padOverZoneIfFileCrosses(item.size, discCapacitySectors);
-        const int64_t startLbn = iso->currentImageLBA();
         ISOFile* out = iso->createFile();
         out->open(item.rel.c_str(), File::ofWrite);
         int n;
@@ -1627,7 +1787,11 @@ int main(int argc, char** argv)
 
     try
     {
-        if (argc >= 4 && string(argv[1]) == "--bdmv-to-iso")
+        // Route on the mode alone, not on how many arguments came with it. At argc >= 4 a call
+        // that left out the output path fell through to the ordinary muxing path, which tried to
+        // open "--bdmv-to-iso" as a meta file and printed one character of the resulting exception
+        // instead of saying what the mode expects.
+        if (argc >= 2 && string(argv[1]) == "--bdmv-to-iso")
             return bdmvFolderToGuardedIso(argc, argv);
         if (argc == 2)
         {
