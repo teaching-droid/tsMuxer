@@ -33,6 +33,7 @@ Additions in this fork (see [DISC_AUTHORING.md](docs/DISC_AUTHORING.md) for deta
 * `--layer-break-guard`: zero-fill the defect-prone sectors around each layer transition of BD-R/RE DL and BD-R XL media, so the movie plays seamlessly across the break (validated on real hardware)
 * `--layer-break-lbn`: set the layer break sector(s); takes a comma list for 100/128 GB BD-R XL (2 or 3 breaks)
 * `--disc-size` / `--allow-oversize`: abort (or warn) before muxing if the image will not fit the target disc
+* `--3d-single-copy`: store a 3D disc's video once instead of twice, the way the source disc holds it, so the image is about half the size and fits back onto the disc it came from
 * GUI: a "BDMV folder -> ISO" tab with a layer-break calculator (you copy the blank disc's "Free Sectors" value out of ImgBurn and paste it in; the break sectors are calculated for you), colour-coded guard hints, and input sanity warnings
 * GUI: fully translated interface (German, Spanish, French, Hebrew, Japanese, Russian, Chinese)
 

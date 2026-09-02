@@ -1,3 +1,70 @@
+## tsMuxeR 2.18.4
+
+A 3D disc can now be wrapped into an ISO without writing its video twice.
+
+### New: `--3d-single-copy`
+
+A 3D Blu-ray stores its video ONCE and gives it three names. The base view and the dependent view
+are cut into chunks and written alternately, and that single run of sectors is what the `.ssif`
+names. The same sectors are addressed again as two `.m2ts`, one naming only the base chunks and one
+only the dependent chunks, so a 2D player opens the base `.m2ts` and never sees the rest.
+
+Copying all three by name writes the video twice. 2.18.3 started reporting that; this writes it
+once instead, so all three names resolve to the same sectors again, as on the source disc.
+
+```
+tsMuxeR --bdmv-to-iso --3d-single-copy <BDMV_folder> out.iso
+```
+
+Both facts it needs are stated on the disc, so nothing is guessed: the clip info file lists where
+the chunks divide, and the playlist names which two clips pair up. A group whose five files are not
+all present, or whose two views are not cut into the same number of chunks, is left alone and copied
+as found.
+
+Off by default. Without it the image is byte for byte what it was before.
+
+Measured on a six-group tree taken off a pressed 3D disc, with 1, 2, 2, 4, 4 and 4 chunk pairs:
+
+```
+without   366,084,096 bytes, every chunk of video present TWICE
+with      188,088,320 bytes, every chunk present ONCE, dependent view first
+```
+
+All 18 files read back byte for byte identical to the source, checked twice with two independent
+readers: 7-Zip, and the operating system's own UDF driver, which is what a player uses.
+
+### Fixed: an interleaved file could be built wrong instead of refused
+
+`createInterleavedFile` guarded its two preconditions with assertions, which a release build
+removes. Both mean the interleave cannot be described: unequal piece counts leave chunks with no
+partner, and a part-sector piece cannot be addressed by a non-final allocation descriptor. Building
+it anyway produces a file of exactly the right length with its two halves out of step, which no size
+check catches and no reader reports. Both conditions now say what is wrong and refuse.
+
+### Fixed: leaving out the output path printed one character
+
+`--bdmv-to-iso` was only routed to its own handler when at least four arguments came with it, so a
+call that forgot the output path fell through to the ordinary muxing path, which tried to open
+`--bdmv-to-iso` as a meta file and printed a single character of the resulting exception. The mode
+is routed on its own name now, and all three of `--bdmv-to-iso`, one argument and three arguments
+print what the mode expects.
+
+### Fixed: a layer-break guard could land inside a 3D chunk
+
+The guard pad is laid down wherever the copy write that reaches the zone happens to begin, and a
+chunk larger than the 16 MB copy buffer takes several writes, so the pad could fall inside a chunk.
+The interrupted view then gained a piece its partner did not have and the group could not be
+rebuilt at all. Reproduced on a real disc's tables, which have 125 chunks over 16 MB in the feature
+alone:
+
+```
+Can't interleave BDMV/STREAM/SSIF/00019.ssif: 5 pieces against 4
+```
+
+The pad is now placed at the boundary between one pair of chunks and the next, where both views are
+between pieces and stay in step. Verified with the pad falling both before a group and inside one,
+byte exact in each case.
+
 ## tsMuxeR 2.18.3
 
 One fault in the interface that made four options do nothing, and a new message when a 3D disc's

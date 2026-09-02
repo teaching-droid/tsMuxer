@@ -19,6 +19,7 @@ Dieser Fork ergänzt jaminmc/tsMuxer um Authoring-Funktionen für mehrschichtige
 | `--disc-capacity=<Sektoren>` | Optional, nur mit `--bdmv-to-iso`. Die gesamten Free Sectors der Disc; erlaubt der Layer-Fit-Platzierung zu prüfen, ob eine Datei, die ganz hinter einen Break verschoben wird, noch auf die Disc passt. Ohne Angabe wird aus dem Break-Abstand eine konservative Kapazität abgeleitet. Die grafische Oberfläche übergibt den Wert automatisch. |
 | `--original-order` | Optional, nur mit `--bdmv-to-iso`. Schreibt die Dateien in ihrer numerischen (Wiedergabe-)Reihenfolge statt der größten zuerst; für Seamless-Branching-Discs, deren viele Segmente nahe an ihrer Wiedergabereihenfolge bleiben sollen. |
 | `--no-layer-fit` | Optional, nur mit `--bdmv-to-iso`. Schaltet die Layer-Fit-Platzierung ab (siehe unten); die Datei, die die Schutzzone überquert, wird dann immer geteilt. |
+| `--3d-single-copy` | Optional, nur mit `--bdmv-to-iso`. Speichert das Video einer 3D-Disc einmal statt zweimal (siehe unten). Standardmäßig aus: ohne die Option ist das Abbild Byte für Byte das, was es immer war. |
 
 ## Neuer Modus: `--bdmv-to-iso`
 
@@ -49,6 +50,31 @@ jeder Schutzzone: den Sektorbereich der Nullen, die betroffene Datei, den Byte-O
 und bei einer Stream-Datei die ungefähre Wiedergabezeit des Breaks. Beachte die im Abschnitt
 zur grafischen Oberfläche beschriebene Seamless-Branching-Einschränkung: Innerhalb einer
 Segmentdatei ist die Zeit relativ zum Segment.
+
+### 3D-Discs: `--3d-single-copy`
+
+Eine 3D-Blu-ray speichert ihr Video EINMAL und gibt ihm drei Namen. Die Basisansicht und die
+abhängige Ansicht werden in Blöcke zerlegt und abwechselnd geschrieben, und genau dieser eine
+Sektorenlauf ist das, was die `.ssif` benennt. Dieselben Sektoren werden noch einmal als zwei
+`.m2ts` angesprochen: eine benennt nur die Basisblöcke, die andere nur die abhängigen. Ein
+2D-Player öffnet die Basis-`.m2ts` und sieht den Rest nie. Drei Dateinamen, eine Kopie der Daten.
+
+Werden alle drei über ihren Namen kopiert, landet das Video zweimal im Abbild und dieses wird
+etwa doppelt so groß. Deshalb passt eine 3D-Disc, die von einer BD50 stammt, nicht wieder auf
+eine BD50. `--3d-single-copy` schreibt es einmal, so wie die Quelldisc es hält, und die drei
+Namen zeigen wieder auf dieselben Sektoren.
+
+```
+tsMuxeR --bdmv-to-iso --3d-single-copy <BDMV_Ordner> out.iso
+```
+
+Beide dafür nötigen Angaben stehen auf der Disc selbst, es wird also nichts geraten: die
+Clip-Info-Datei nennt die Blockgrenzen, die Playlist nennt die beiden zusammengehörenden Clips.
+Eine Gruppe, deren fünf Dateien nicht vollständig vorliegen oder deren beide Ansichten nicht in
+gleich viele Blöcke zerlegt sind, wird in Ruhe gelassen und unverändert kopiert.
+
+Ohne die Option ändert sich gar nichts. Der Build meldet nur, was er gefunden hat, und weist auf
+die Option hin.
 
 Wiedergabeziel: Software-Player (VLC, libbluray, Kodi, PowerDVD) sind die zuverlässige
 Umgebung für eine selbst erstellte BD-J-Disc. Manche Standalone-Player schränken BD-J auf

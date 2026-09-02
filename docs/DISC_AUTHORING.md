@@ -19,6 +19,7 @@ jaminmc/tsMuxer. All of them are opt-in; the default behaviour is unchanged.
 | `--disc-capacity=<sectors>` | Optional, `--bdmv-to-iso` only. The disc's total Free Sectors; lets the layer-fit placement check that moving a file wholly past a break still fits on the disc. Without it a conservative capacity is derived from the break spacing. The GUI passes this automatically. |
 | `--original-order` | Optional, `--bdmv-to-iso` only. Write the files in their numeric (playback) order instead of largest first; for seamless-branching discs whose many segments should stay close to their playback order. |
 | `--no-layer-fit` | Optional, `--bdmv-to-iso` only. Disable the layer-fit placement (see below) and always split whichever file crosses the guard zone. |
+| `--3d-single-copy` | Optional, `--bdmv-to-iso` only. Store a 3D disc's video once instead of twice (see below). Off by default: without it the image is byte for byte what it has always been. |
 
 ## New mode: `--bdmv-to-iso`
 
@@ -46,6 +47,30 @@ After the build, the log and a `<out.iso>.layerbreak.txt` sidecar report each gu
 position: the zeros' sector range, the file involved, the byte offset inside it, and for a
 stream file the approximate playback time of the break. Note the seamless-branching
 limitation described in the GUI section: inside a segment file the time is segment-relative.
+
+### 3D discs: `--3d-single-copy`
+
+A 3D Blu-ray stores its video ONCE and gives it three names. The base view and the dependent
+view are cut into chunks and written alternately, and that single run of sectors is what the
+`.ssif` names. The same sectors are addressed again as two `.m2ts`, one naming only the base
+chunks and one only the dependent chunks, so a 2D player opens the base `.m2ts` and never sees
+the rest. Three file names, one copy of the data.
+
+Copying all three by name writes the video twice and roughly doubles the image, which is why a
+3D disc taken from a BD50 does not fit back onto one. `--3d-single-copy` writes it once, the
+way the source disc holds it, and the three names all resolve to the same sectors again.
+
+```
+tsMuxeR --bdmv-to-iso --3d-single-copy <BDMV_folder> out.iso
+```
+
+Both facts it needs are stated on the disc itself, so nothing is guessed: the clip info file
+lists where the chunks divide, and the playlist names which two clips pair up. A group whose
+five files are not all present, or whose two views are not cut into the same number of chunks,
+is left alone and copied as found.
+
+Without the option nothing changes at all. The build only reports what it found, and says the
+option exists.
 
 Playback target: software players (VLC, libbluray, Kodi, PowerDVD) are the reliable
 environment for a self-authored BD-J disc. Some set-top players restrict BD-J on recordable
