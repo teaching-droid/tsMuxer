@@ -65,6 +65,11 @@ partner, and a part-sector piece cannot be addressed by a non-final allocation d
 it anyway produces a file of exactly the right length with its two halves out of step, which no size
 check catches and no reader reports. Both conditions now say what is wrong and refuse.
 
+The 3D authoring path calls the same function and ignored its result, which was reasonable while
+the only outcome was an assertion a release build deletes. It acts on a refusal now: carrying on
+past one would end the build with "Mux successful complete" while leaving a zero-length `.ssif`
+in the image, which is a 3D disc that cannot play, reported as a success.
+
 ### The BDMV folder to ISO tab has a checkbox for it
 
 The option was reachable only from the command line, and that tab is where someone wrapping a 3D
