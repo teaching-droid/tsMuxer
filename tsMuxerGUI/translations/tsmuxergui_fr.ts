@@ -3967,6 +3967,14 @@ Créer l'ISO malgré tout ?</translation>
         <translation>Le bord extérieur d'un disque est la partie la plus sujette aux erreurs à la gravure. Avec cette case cochée, le film est tassé vers les pistes intérieures de chaque couche et la zone extérieure est remplie de zéros, de sorte que les données restent loin du bord extérieur fragile. L'image est complétée jusqu'au disque entier, la gravure écrit donc tout le disque. La zone de garde du changement de couche est dimensionnée automatiquement ; les Free Sectors du disque doivent être renseignés.</translation>
     </message>
     <message>
+        <source>3D disc: store the video once, not twice</source>
+        <translation>Disque 3D : stocker la vidéo une fois, pas deux</translation>
+    </message>
+    <message>
+        <source>A 3D disc stores its video once and gives it three names: the .ssif and the two .m2ts are the same sectors seen three ways. Copying all three by name writes the video twice and roughly doubles the image, which is why a 3D disc taken from a BD50 will not fit back onto one. Tick this to store it once, the way the source disc holds it. Has no effect on a 2D disc.</source>
+        <translation>Un disque 3D stocke sa vidéo une seule fois et lui donne trois noms : le .ssif et les deux .m2ts sont les mêmes secteurs vus de trois façons. Copier les trois par leur nom écrit la vidéo deux fois et double presque l'image, ce qui explique qu'un disque 3D pris sur un BD50 ne tienne plus sur un BD50. Cochez cette case pour la stocker une seule fois, comme le fait le disque source. Sans effet sur un disque 2D.</translation>
+    </message>
+    <message>
         <source>Disc label (optional):</source>
         <translation>Nom du disque (facultatif) :</translation>
     </message>

@@ -3968,6 +3968,14 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <translation>El borde exterior de un disco es la parte más propensa a errores al grabar. Con esta casilla marcada, la película se compacta hacia las pistas interiores de cada capa y la zona exterior se rellena con ceros, de modo que los datos quedan lejos del débil borde exterior. La imagen se rellena hasta el disco completo, así que la grabación escribe todo el disco. La zona de guarda del salto de capa se dimensiona automáticamente; hay que tener definidos los Free Sectors del disco.</translation>
     </message>
     <message>
+        <source>3D disc: store the video once, not twice</source>
+        <translation>Disco 3D: almacenar el vídeo una vez, no dos</translation>
+    </message>
+    <message>
+        <source>A 3D disc stores its video once and gives it three names: the .ssif and the two .m2ts are the same sectors seen three ways. Copying all three by name writes the video twice and roughly doubles the image, which is why a 3D disc taken from a BD50 will not fit back onto one. Tick this to store it once, the way the source disc holds it. Has no effect on a 2D disc.</source>
+        <translation>Un disco 3D almacena su vídeo una sola vez y le da tres nombres: el .ssif y los dos .m2ts son los mismos sectores vistos de tres maneras. Copiar los tres por su nombre escribe el vídeo dos veces y casi duplica la imagen, por lo que un disco 3D tomado de un BD50 ya no cabe en un BD50. Marque esta casilla para almacenarlo una sola vez, tal como lo guarda el disco de origen. No tiene efecto en un disco 2D.</translation>
+    </message>
+    <message>
         <source>Disc label (optional):</source>
         <translation>Etiqueta del disco (opcional):</translation>
     </message>

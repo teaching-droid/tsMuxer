@@ -3967,6 +3967,14 @@ Build the ISO anyway?</source>
         <translation>ディスクの外周は書き込み時に最もエラーが起きやすい部分です。これをオンにすると、映像は各層の内周トラック側に寄せられ、外周はゼロで埋められるので、データは弱い外周から離れた位置に保たれます。イメージはディスク全体まで埋められるため、書き込みはディスク全体に及びます。レイヤーブレイクのガードは自動的にサイズ調整されます。ディスクの Free Sectors の設定が必要です。</translation>
     </message>
     <message>
+        <source>3D disc: store the video once, not twice</source>
+        <translation>3D ディスク: 映像を 2 回ではなく 1 回だけ格納する</translation>
+    </message>
+    <message>
+        <source>A 3D disc stores its video once and gives it three names: the .ssif and the two .m2ts are the same sectors seen three ways. Copying all three by name writes the video twice and roughly doubles the image, which is why a 3D disc taken from a BD50 will not fit back onto one. Tick this to store it once, the way the source disc holds it. Has no effect on a 2D disc.</source>
+        <translation>3D ディスクは映像を 1 回だけ保存し、それに 3 つの名前を与えます。.ssif と 2 つの .m2ts は同じセクタを 3 通りに見たものです。3 つを名前どおりにコピーすると映像が 2 度書き込まれ、イメージはおよそ 2 倍になります。BD50 から取った 3D ディスクが BD50 に戻らないのはそのためです。これをオンにすると、ソースディスクと同じ形で 1 回だけ格納します。2D ディスクには影響しません。</translation>
+    </message>
+    <message>
         <source>Disc label (optional):</source>
         <translation>ディスクラベル（任意）:</translation>
     </message>

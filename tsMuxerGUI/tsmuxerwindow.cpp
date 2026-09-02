@@ -833,6 +833,13 @@ TsMuxerWindow::TsMuxerWindow()
                "packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so "
                "the data stays off the weak outer edge. The image is padded to the full disc, so the burn writes "
                "the whole disc. The layer-break guard is sized automatically; needs the disc Free Sectors set.")));
+        auto* singleCopy3dCheck = new QCheckBox(tr("3D disc: store the video once, not twice"), bdmvTab);
+        singleCopy3dCheck->setToolTip(
+            wrapTip(tr("A 3D disc stores its video once and gives it three names: the .ssif and the two .m2ts are the "
+                       "same sectors seen three ways. Copying all three by name writes the video twice and "
+                       "roughly doubles the image, which is why a 3D disc taken from a BD50 will not fit back "
+                       "onto one. Tick this to store it once, the way the source disc holds it. Has no effect "
+                       "on a 2D disc.")));
         auto* discLabelLabel = new QLabel(tr("Disc label (optional):"), bdmvTab);
         auto* labelEdit = new QLineEdit(bdmvTab);
         labelEdit->setToolTip(wrapTip(tr("Volume label written into the ISO. Leave empty to keep the default.")));
@@ -1127,6 +1134,7 @@ TsMuxerWindow::TsMuxerWindow()
         g->addWidget(labelEdit, r++, 1, 1, 2);
         g->addWidget(keepExtrasCheck, r++, 0, 1, 3);
         g->addWidget(innerOnlyCheck, r++, 0, 1, 3);
+        g->addWidget(singleCopy3dCheck, r++, 0, 1, 3);
         g->addWidget(orderCheck, r++, 0, 1, 3);
         g->addWidget(buildBtn, r++, 1);
         g->setRowStretch(r, 1);
@@ -1252,8 +1260,8 @@ TsMuxerWindow::TsMuxerWindow()
         m_retranslateHooks.push_back(
             [this, bdmvTab, info, folderLabel, outputLabel, guardLabel, discTypeLabel, freeSectorsLabel, folderBtn,
              isoBtn, helpBtn, buildBtn, discTypeCombo, freeSectorsEdit, manualCheck, orderCheck, keepExtrasCheck,
-             innerOnlyCheck, discLabelLabel, labelEdit, guardSpin, refresh, updateGuard, beforeCheck, guardBeforeLabel,
-             guardBeforeSpin, guardBeforeHint, fitLabel, updateFit, updateFolderStatus]()
+             innerOnlyCheck, singleCopy3dCheck, discLabelLabel, labelEdit, guardSpin, refresh, updateGuard, beforeCheck,
+             guardBeforeLabel, guardBeforeSpin, guardBeforeHint, fitLabel, updateFit, updateFolderStatus]()
             {
                 ui->tabWidget->setTabText(ui->tabWidget->indexOf(bdmvTab), tr("BDMV folder -> ISO"));
                 info->setText(
@@ -1303,6 +1311,13 @@ TsMuxerWindow::TsMuxerWindow()
                     "packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so "
                     "the data stays off the weak outer edge. The image is padded to the full disc, so the burn writes "
                     "the whole disc. The layer-break guard is sized automatically; needs the disc Free Sectors set.")));
+                singleCopy3dCheck->setText(tr("3D disc: store the video once, not twice"));
+                singleCopy3dCheck->setToolTip(wrapTip(
+                    tr("A 3D disc stores its video once and gives it three names: the .ssif and the two .m2ts are the "
+                       "same sectors seen three ways. Copying all three by name writes the video twice and "
+                       "roughly doubles the image, which is why a 3D disc taken from a BD50 will not fit back "
+                       "onto one. Tick this to store it once, the way the source disc holds it. Has no effect "
+                       "on a 2D disc.")));
                 discLabelLabel->setText(tr("Disc label (optional):"));
                 labelEdit->setToolTip(
                     wrapTip(tr("Volume label written into the ISO. Leave empty to keep the default.")));
@@ -1397,7 +1412,8 @@ TsMuxerWindow::TsMuxerWindow()
         connect(
             buildBtn, &QPushButton::clicked, this,
             [this, folderEdit, isoEdit, guardSpin, discTypeCombo, freeSectorsEdit, breaksList, buildBtn, beforeCheck,
-             guardBeforeSpin, orderCheck, keepExtrasCheck, innerOnlyCheck, labelEdit, readFreeSectors]
+             guardBeforeSpin, orderCheck, keepExtrasCheck, innerOnlyCheck, singleCopy3dCheck, labelEdit,
+             readFreeSectors]
             {
                 const QString folder = folderEdit->text().trimmed();
                 const QString iso = isoEdit->text().trimmed();
@@ -1462,6 +1478,8 @@ TsMuxerWindow::TsMuxerWindow()
                     args << "--keep-extra-files";
                 if (innerOnlyCheck->isChecked())
                     args << "--inner-only";
+                if (singleCopy3dCheck->isChecked())
+                    args << "--3d-single-copy";
                 if (const QString lbl = labelEdit->text().trimmed(); !lbl.isEmpty())
                     args << ("--label=" + lbl);
                 args << folder << iso;

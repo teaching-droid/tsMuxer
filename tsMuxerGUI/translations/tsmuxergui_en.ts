@@ -3855,6 +3855,14 @@ Build the ISO anyway?</source>
         <translation>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so the data stays off the weak outer edge. The image is padded to the full disc, so the burn writes the whole disc. The layer-break guard is sized automatically; needs the disc Free Sectors set.</translation>
     </message>
     <message>
+        <source>3D disc: store the video once, not twice</source>
+        <translation>3D disc: store the video once, not twice</translation>
+    </message>
+    <message>
+        <source>A 3D disc stores its video once and gives it three names: the .ssif and the two .m2ts are the same sectors seen three ways. Copying all three by name writes the video twice and roughly doubles the image, which is why a 3D disc taken from a BD50 will not fit back onto one. Tick this to store it once, the way the source disc holds it. Has no effect on a 2D disc.</source>
+        <translation>A 3D disc stores its video once and gives it three names: the .ssif and the two .m2ts are the same sectors seen three ways. Copying all three by name writes the video twice and roughly doubles the image, which is why a 3D disc taken from a BD50 will not fit back onto one. Tick this to store it once, the way the source disc holds it. Has no effect on a 2D disc.</translation>
+    </message>
+    <message>
         <source>Disc label (optional):</source>
         <translation>Disc label (optional):</translation>
     </message>

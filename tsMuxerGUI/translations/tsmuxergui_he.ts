@@ -3967,6 +3967,14 @@ Build the ISO anyway?</source>
         <translation>השוליים החיצוניים של דיסק הם החלק הרגיש ביותר לשגיאות בצריבה. כאשר האפשרות מסומנת, הסרט נדחס אל הרצועות הפנימיות של כל שכבה והאזור החיצוני מתמלא באפסים, כך שהנתונים נשארים הרחק מהשוליים החיצוניים החלשים. הקובץ מרופד עד לגודל הדיסק המלא, ולכן הצריבה כותבת את כל הדיסק. אזור המגן של מעבר השכבה מחושב אוטומטית; יש להגדיר את ה-Free Sectors של הדיסק.</translation>
     </message>
     <message>
+        <source>3D disc: store the video once, not twice</source>
+        <translation>דיסק תלת-ממד: לאחסן את הווידאו פעם אחת, לא פעמיים</translation>
+    </message>
+    <message>
+        <source>A 3D disc stores its video once and gives it three names: the .ssif and the two .m2ts are the same sectors seen three ways. Copying all three by name writes the video twice and roughly doubles the image, which is why a 3D disc taken from a BD50 will not fit back onto one. Tick this to store it once, the way the source disc holds it. Has no effect on a 2D disc.</source>
+        <translation>דיסק תלת-ממד מאחסן את הווידאו שלו פעם אחת ונותן לו שלושה שמות: קובץ ה-.ssif ושני קבצי ה-.m2ts הם אותם סקטורים בשלוש תצוגות שונות. העתקת שלושתם לפי השם כותבת את הווידאו פעמיים ומכפילה כמעט את גודל התמונה, ולכן דיסק תלת-ממד שנלקח מ-BD50 כבר אינו נכנס חזרה ל-BD50. סמן אפשרות זו כדי לאחסן אותו פעם אחת בלבד, כפי שדיסק המקור שומר אותו. אין לכך השפעה על דיסק דו-ממדי.</translation>
+    </message>
+    <message>
         <source>Disc label (optional):</source>
         <translation>תווית הדיסק (רשות):</translation>
     </message>

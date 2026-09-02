@@ -3967,6 +3967,14 @@ ISO trotzdem erstellen?</translation>
         <translation>Der äußere Rand einer Disc ist der fehleranfälligste Teil beim Brennen. Mit gesetztem Haken wird der Film zu den inneren Spuren jeder Schicht gepackt und der äußere Rand mit Nullen gefüllt, sodass die Daten vom schwachen Außenrand fernbleiben. Das Abbild wird auf die volle Disc aufgefüllt, der Brennvorgang beschreibt also die ganze Disc. Die Layer-Break-Schutzzone wird automatisch bemessen; die Free Sectors der Disc müssen gesetzt sein.</translation>
     </message>
     <message>
+        <source>3D disc: store the video once, not twice</source>
+        <translation>3D-Disc: Video einmal speichern, nicht zweimal</translation>
+    </message>
+    <message>
+        <source>A 3D disc stores its video once and gives it three names: the .ssif and the two .m2ts are the same sectors seen three ways. Copying all three by name writes the video twice and roughly doubles the image, which is why a 3D disc taken from a BD50 will not fit back onto one. Tick this to store it once, the way the source disc holds it. Has no effect on a 2D disc.</source>
+        <translation>Eine 3D-Disc speichert ihr Video einmal und gibt ihm drei Namen: Die .ssif und die beiden .m2ts sind dieselben Sektoren, dreifach betrachtet. Werden alle drei über ihren Namen kopiert, landet das Video zweimal im Abbild und dieses wird etwa doppelt so groß. Deshalb passt eine 3D-Disc, die von einer BD50 stammt, nicht wieder auf eine BD50. Mit gesetztem Haken wird es einmal gespeichert, so wie die Quelldisc es hält. Bei einer 2D-Disc ohne Wirkung.</translation>
+    </message>
+    <message>
         <source>Disc label (optional):</source>
         <translation>Datenträgerbezeichnung (optional):</translation>
     </message>

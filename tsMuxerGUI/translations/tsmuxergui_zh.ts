@@ -3967,6 +3967,14 @@ Build the ISO anyway?</source>
         <translation>光盘的外缘是刻录时最容易出错的部分。勾选此项后，影片会被集中到每一层的内圈轨道，外缘区域用零填充，使数据远离脆弱的外缘。映像会填充到整张光盘大小，因此刻录会写满整张盘。层切换保护区会自动调整大小；需要设置光盘的 Free Sectors。</translation>
     </message>
     <message>
+        <source>3D disc: store the video once, not twice</source>
+        <translation>3D 光盘：视频只存储一次，而非两次</translation>
+    </message>
+    <message>
+        <source>A 3D disc stores its video once and gives it three names: the .ssif and the two .m2ts are the same sectors seen three ways. Copying all three by name writes the video twice and roughly doubles the image, which is why a 3D disc taken from a BD50 will not fit back onto one. Tick this to store it once, the way the source disc holds it. Has no effect on a 2D disc.</source>
+        <translation>3D 光盘只保存一份视频，却给它三个名字：.ssif 和两个 .m2ts 是同一批扇区的三种视图。按名称复制这三个文件会把视频写入两次，映像大约会翻倍，这就是从 BD50 取出的 3D 光盘无法再装回 BD50 的原因。勾选此项可像源光盘那样只存储一次。对 2D 光盘无效。</translation>
+    </message>
+    <message>
         <source>Disc label (optional):</source>
         <translation>光盘卷标（可选）：</translation>
     </message>

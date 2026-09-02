@@ -3968,6 +3968,14 @@ Build the ISO anyway?</source>
         <translation>Внешний край диска является самой подверженной ошибкам частью при записи. Если этот флажок установлен, фильм смещается к внутренним дорожкам каждого слоя, а внешняя область заполняется нулями, так что данные остаются вдали от слабого внешнего края. Образ дополняется до полного диска, поэтому запись охватывает весь диск. Защитная зона смены слоя рассчитывается автоматически; должны быть заданы Free Sectors диска.</translation>
     </message>
     <message>
+        <source>3D disc: store the video once, not twice</source>
+        <translation>3D-диск: хранить видео один раз, а не дважды</translation>
+    </message>
+    <message>
+        <source>A 3D disc stores its video once and gives it three names: the .ssif and the two .m2ts are the same sectors seen three ways. Copying all three by name writes the video twice and roughly doubles the image, which is why a 3D disc taken from a BD50 will not fit back onto one. Tick this to store it once, the way the source disc holds it. Has no effect on a 2D disc.</source>
+        <translation>3D-диск хранит своё видео один раз и даёт ему три имени. Файл .ssif и два файла .m2ts представляют собой одни и те же секторы, показанные тремя способами. Если скопировать все три по именам, видео будет записано дважды и образ увеличится примерно вдвое. Именно поэтому 3D-диск, снятый с BD50, уже не помещается обратно на BD50. Отметьте этот пункт, чтобы сохранить видео один раз, так же как это делает исходный диск. На 2D-диск не влияет.</translation>
+    </message>
+    <message>
         <source>Disc label (optional):</source>
         <translation>Метка диска (необязательно):</translation>
     </message>
