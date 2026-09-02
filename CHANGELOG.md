@@ -1,3 +1,59 @@
+## tsMuxeR 2.18.5
+
+A 3D disc muxed to MKV now keeps both views in one video track, so the file is read as 3D
+instead of flat. No behaviour outside 3D changes.
+
+### 3D to MKV: both views in one track
+
+A 3D source has two video streams, the base view and the dependent view. Until now each became a
+track of its own, and the second one carried a codec id that general software does not recognise.
+The file rebuilt a disc correctly, but nothing else could see the second view, so it was read as
+flat 2D everywhere.
+
+Both views now travel in one track, which is the form other software writes:
+
+- the dependent view's NAL units follow the base view's in the same block
+- the track is marked StereoMode 13, both eyes in one block, left eye first
+- the MVC configuration record is written as the "mvcC" block addition mapping, built from both
+  views' parameter sets
+
+There is no option to set. A source with no dependent view is muxed exactly as before.
+
+A full length 3D source of 40 GB came out as a 34.1 GiB MKV of 2 h 5 min, read back as two views
+at Stereo High, with its TrueHD and AC-3 tracks intact.
+
+### Fixed: the last NAL of an access unit could be dropped
+
+When a combined AVC and MVC track was split back into two views, a NAL unit of exactly four bytes
+at the end of a packet was never read, because the loop stopped four bytes short of the end. An
+access unit ending with the end of sequence NAL lost it.
+
+This runs for combined AVC and MVC tracks only, so nothing outside 3D can reach it.
+
+### Fixed: the subTrack documentation was the wrong way round
+
+For a combined AVC and MVC track, subTrack=1 is the MVC part and subTrack=2 is the AVC part. The
+usage text and the documentation both said the opposite, so a meta file written from them put each
+view in the other's place.
+
+They also both said subTrack was for combined AVC and MVC tracks only. That stopped being true when
+dual layer Dolby Vision began using it, where 1 is the base layer and 2 the enhancement layer. The
+two cases do not number their parts the same way, and the text now says so.
+
+### How it was checked
+
+A disc was built straight from the source, and a second one from the MKV, then compared file by
+file:
+
+```
+before this release   12 of 12 files identical
+after this release    12 of 12 files identical
+```
+
+The MKV changed completely in between and the disc did not move at all. The same comparison was
+run against a 3D file written by other software, with the old build and the new one: 12 of 12
+identical both ways.
+
 ## tsMuxeR 2.18.4
 
 A 3D disc can now be wrapped into an ISO without writing its video twice.
