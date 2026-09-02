@@ -57,7 +57,7 @@ that way and then copying it with `--3d-single-copy` returns every file byte for
 Note that only a Blu-ray ISO can hold this. Two files sharing one run of sectors is a property of
 the UDF image; a folder on an ordinary filesystem cannot express it.
 
-### Fixed: an interleaved file could be built wrong instead of refused
+### Fixed: an interleaved 3D file could be built wrong instead of refused
 
 `createInterleavedFile` guarded its two preconditions with assertions, which a release build
 removes. Both mean the interleave cannot be described: unequal piece counts leave chunks with no
@@ -86,7 +86,14 @@ print what the mode expects.
 
 ### Fixed: the layer-break guard could move a UDF structure and corrupt files
 
-Found while testing the 3D authoring path, and it turned out to have nothing to do with 3D.
+**This is not a 3D fault.** It was found while testing the 3D authoring path, but it reproduces on
+an ordinary copy with `--3d-single-copy` off and no 3D content involved.
+
+**Who it reaches.** It needs a disc of roughly 7,000 files or more, with `--layer-break-guard` or
+`--inner-only` in use. For scale, a full feature disc measured here holds 852 files, about a ninth
+of that, so an ordinary disc was never at risk. If you built an image far larger than that with an
+earlier version, a BD-J disc for instance, the result is worth checking. The damage is silent: the
+build reports success and the files look normal.
 
 The UDF unique-id mapping file lives at a fixed address just past the metadata partition, and it is
 written at the very end of the build by seeking BACK to it. `FileEntryInfo::write` consults the
@@ -113,7 +120,7 @@ byte-exact where four of them were not.
 
 ### Fixed: a layer-break guard could land inside a 3D chunk
 
-The guard pad is laid down wherever the copy write that reaches the zone happens to begin, and a
+3D only, and only with a guard in use. The guard pad is laid down wherever the copy write that reaches the zone happens to begin, and a
 chunk larger than the 16 MB copy buffer takes several writes, so the pad could fall inside a chunk.
 The interrupted view then gained a piece its partner did not have and the group could not be
 rebuilt at all. Reproduced on real chunk tables, which have 125 chunks over 16 MB in the main
