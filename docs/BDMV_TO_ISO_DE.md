@@ -113,6 +113,7 @@ Unten im Reiter sitzen zwei weitere Optionen:
 
 * `Datenträgerbezeichnung (optional)`: die Volume-Bezeichnung, die in die ISO geschrieben wird. Leer lassen behält das bisherige Verhalten bei.
 * `Alle Dateien aus dem Ordner einschließen (nicht nur BDMV)`: Standardmäßig enthält das Image die Disc-Struktur-Ordner (`BDMV`, `CERTIFICATE`, `AACS`). Mit diesem Haken kommen auch alle übrigen Dateien und Ordner neben `BDMV` hinzu, etwa Readme-Dateien oder Cover-Bilder.
+* `3D-Disc: Video einmal speichern, nicht zweimal`: Eine 3D-Disc hält ihr Video einmal unter drei Namen; die `.ssif` und die beiden `.m2ts` sind dieselben Sektoren, dreifach betrachtet. Werden alle drei über ihren Namen kopiert, landet es zweimal im Abbild und dieses wird etwa doppelt so groß, sodass eine 3D-Disc von einer BD50 nicht mehr auf eine BD50 passt. Mit diesem Haken wird es einmal gespeichert, so wie die Quelldisc es hält. Bei einer 2D-Disc ohne Wirkung.
 
 So oder so vervollständigt tsMuxeR für Sie die komplette Standard-Blu-ray-Ordnerstruktur: die leeren Ordner `AUXDATA`, `BDJO`, `JAR` und `META`, einen `CERTIFICATE`-Ordner und ein `BACKUP` mit Kopien von `index.bdmv`, `MovieObject.bdmv` sowie den Dateien aus `PLAYLIST`/`CLIPINF`, dieselbe Struktur, die tsMuxeR auch beim Erstellen einer Disc anlegt. Nur was der Quelle fehlt, wird ergänzt, und die großen `.m2ts`-Streams werden nie doppelt abgelegt. So sind Player, die das vollständige Layout erwarten, zufrieden, ohne dass das Image aufgebläht wird.
 

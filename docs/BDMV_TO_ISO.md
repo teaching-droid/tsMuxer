@@ -109,10 +109,11 @@ Use it when your priority is the most robust possible burn and you do not mind t
 
 ## Disc label and included files
 
-Two more options sit at the bottom of the tab:
+Three more options sit at the bottom of the tab:
 
 * `Disc label (optional)`: the volume label written into the ISO. Leave it empty to keep the previous behaviour.
 * `Include all files from the folder (not just BDMV)`: by default the image holds the disc-structure folders (`BDMV`, `CERTIFICATE`, `AACS`). Tick this to also add every other file and folder next to `BDMV`, such as readme files or cover art.
+* `3D disc: store the video once, not twice`: a 3D disc holds its video once under three names, the `.ssif` and the two `.m2ts` being the same sectors seen three ways. Copying all three by name writes it twice and roughly doubles the image, so a 3D disc taken from a BD50 no longer fits on one. Tick this to store it once, the way the source disc does. It has no effect on a 2D disc.
 
 Either way, tsMuxeR completes the full standard Blu-ray folder layout for you: the empty `AUXDATA`, `BDJO`, `JAR` and `META` folders, a `CERTIFICATE` folder, and a `BACKUP` filled with copies of `index.bdmv`, `MovieObject.bdmv` and the `PLAYLIST`/`CLIPINF` files, the same structure tsMuxeR creates when it authors a disc. Only what the source is missing is added, and the large `.m2ts` streams are never duplicated, so players that expect the complete layout are satisfied without bloating the image.
 

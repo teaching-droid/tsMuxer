@@ -41,6 +41,12 @@ partner, and a part-sector piece cannot be addressed by a non-final allocation d
 it anyway produces a file of exactly the right length with its two halves out of step, which no size
 check catches and no reader reports. Both conditions now say what is wrong and refuse.
 
+### The BDMV folder to ISO tab has a checkbox for it
+
+The option was reachable only from the command line, and that tab is where someone wrapping a 3D
+disc actually is. One checkbox next to the other build options, off like the option itself, with a
+tooltip explaining the three names. Translated into all eight interface languages.
+
 ### Fixed: leaving out the output path printed one character
 
 `--bdmv-to-iso` was only routed to its own handler when at least four arguments came with it, so a
