@@ -96,16 +96,40 @@ class MatroskaMuxer final : public AbstractMuxer
         uint32_t dvBlockAddIdType;
         uint8_t dvConfig[24];
 
-        // Dual layer Dolby Vision. A disc carries the picture on two video streams, a base layer
-        // and a quarter resolution enhancement layer holding the RPU; Matroska carries both in ONE
-        // track. On the base track dvElStreamIndex names the enhancement stream being folded in and
-        // dvElConfig holds that stream's own HEVC configuration record, written beside the Dolby
-        // Vision record as the "hvcE" block addition mapping. On the enhancement track
-        // dvMergedIntoStream names the base track it was folded into, and no track entry and no
+        // Folding a second video stream into one track. A disc can carry one picture on two
+        // video streams, and Matroska carries both in ONE track. Two kinds do this:
+        //
+        //   dual layer Dolby Vision   a base layer and a quarter resolution enhancement layer
+        //                             holding the RPU
+        //   3D                        the base view and the dependent MVC view
+        //
+        // The mechanism is the same for both and lives in the fields below: match by pts, hold
+        // the base frames until their partner arrives, append, write one block. Only the
+        // conversion of the folded bytes and the configuration written beside them differ.
+        //
+        // On the base track foldElStreamIndex names the stream being folded in. On the folded
+        // track foldedIntoStream names the base track it went into, and no track entry and no
         // block of its own are written for it.
-        int dvElStreamIndex;
-        int dvMergedIntoStream;
+        //
+        // dvElConfig is Dolby Vision only: the enhancement stream's own HEVC configuration
+        // record, written as the "hvcE" block addition mapping.
+        enum class FoldKind : uint8_t
+        {
+            None,
+            DolbyVisionEl,  // wrapped in NAL type 63, which an unaware decoder skips
+            MvcDependent    // the dependent view, appended as it is with its delimiter dropped
+        };
+        FoldKind foldKind;
+
+        int foldElStreamIndex;
+        int foldedIntoStream;
         std::vector<uint8_t> dvElConfig;
+
+        // The MVC configuration record, on the base track of a 3D pair. It carries BOTH views'
+        // parameter sets, so it is the one thing that says how to decode the second view. Written
+        // beside the video as the "mvcC" block addition mapping, and again at the end of
+        // CodecPrivate, which is where the reference 3D files put it.
+        std::vector<uint8_t> mvcConfig;
 
         // A base layer frame waiting for its enhancement layer. The two layers do not arrive in
         // step, so frames are held in arrival order and released as their partner turns up.
@@ -115,12 +139,12 @@ class MatroskaMuxer final : public AbstractMuxer
             int64_t pts;
             uint8_t flags;
         };
-        std::deque<HeldFrame> dvHeldFrames;
-        std::map<int64_t, std::vector<uint8_t>> dvElDone;  // completed enhancement AUs, by pts
-        std::vector<uint8_t> pendingElData;                // the enhancement AU still arriving
-        int64_t dvElPts;
-        int64_t dvElFramesMerged;
-        int64_t dvElFramesUnmatched;
+        std::deque<HeldFrame> heldFrames;
+        std::map<int64_t, std::vector<uint8_t>> elDone;  // completed enhancement AUs, by pts
+        std::vector<uint8_t> pendingElData;              // the enhancement AU still arriving
+        int64_t elPts;
+        int64_t elFramesMerged;
+        int64_t elFramesUnmatched;
 
         // How the SOURCE framed its NALs, per NAL type: a start code is three bytes or four, both
         // are legal, and the coded video is identical either way. Matroska stores these codecs
@@ -183,11 +207,12 @@ class MatroskaMuxer final : public AbstractMuxer
               isHdr10(false),
               dvBlockAddIdType(0),
               dvConfig{},
-              dvElStreamIndex(-1),
-              dvMergedIntoStream(-1),
-              dvElPts(-1),
-              dvElFramesMerged(0),
-              dvElFramesUnmatched(0),
+              foldKind(FoldKind::None),
+              foldElStreamIndex(-1),
+              foldedIntoStream(-1),
+              elPts(-1),
+              elFramesMerged(0),
+              elFramesUnmatched(0),
               startCodeMixed(false),
               sampleRate(0),
               channels(0),
@@ -219,6 +244,8 @@ class MatroskaMuxer final : public AbstractMuxer
 
     // Build the AVCDecoderConfigurationRecord from H.264 SPS/PPS
     static std::vector<uint8_t> buildAVCDecoderConfigRecord(AbstractStreamReader* reader);
+    static std::vector<uint8_t> buildMVCDecoderConfigRecord(AbstractStreamReader* baseReader,
+                                                            AbstractStreamReader* depReader);
     // Build the HEVCDecoderConfigurationRecord from HEVC VPS/SPS/PPS
     static std::vector<uint8_t> buildHEVCDecoderConfigRecord(AbstractStreamReader* reader);
     // Build the VVCDecoderConfigurationRecord
@@ -405,6 +432,8 @@ class MatroskaMuxer final : public AbstractMuxer
     // wrapped in an unspecified type 63 NAL, except the RPU which passes through unchanged.
     // Not static: in profile 8.1 mode it converts the RPU as it passes and keeps the original.
     std::vector<uint8_t> convertDvElToLengthPrefixed(MkvTrackInfo& track, const uint8_t* data, int size);
+    std::vector<uint8_t> convertMvcDepToLengthPrefixed(MkvTrackInfo& track, const uint8_t* data, int size);
+    void pairMvcViews();
 
     // Cluster splitting thresholds
     static constexpr int64_t CLUSTER_MAX_DURATION_MS = 5000;      // 5 seconds

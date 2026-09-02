@@ -117,6 +117,11 @@ static constexpr uint8_t MATROSKA_ID_VIDEOPIXELWIDTH = 0xB0;
 static constexpr uint8_t MATROSKA_ID_VIDEOPIXELHEIGHT = 0xBA;
 static constexpr uint8_t MATROSKA_ID_VIDEOFLAGINTERLACED = 0x9A;
 static constexpr uint16_t MATROSKA_ID_VIDEOSTEREOMODE = 0x53B9;
+// 0x53B9 above is OldStereoMode, which almost nothing writes any more. The current element
+// is 0x53B8, and its values are not the same set: 13 there means both views are carried in
+// one block, left eye first, which is what a folded 3D track is.
+static constexpr uint16_t MATROSKA_ID_VIDEOSTEREOMODE_CURRENT = 0x53B8;
+static constexpr uint64_t MATROSKA_STEREO_BOTH_EYES_LEFT_FIRST = 13;
 static constexpr uint16_t MATROSKA_ID_VIDEOASPECTRATIO = 0x54B3;
 static constexpr uint32_t MATROSKA_ID_VIDEOCOLOURSPACE = 0x2EB524;
 

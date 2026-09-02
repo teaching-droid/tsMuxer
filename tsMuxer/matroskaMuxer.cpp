@@ -406,6 +406,93 @@ std::vector<uint8_t> MatroskaMuxer::buildAVCDecoderConfigRecord(AbstractStreamRe
     return record;
 }
 
+// The MVC configuration record for a 3D pair. Measured off a reference 3D file before it was
+// written: the same shape as the AVC record, but carrying BOTH views' parameter sets. The base
+// view's SPS comes first and the dependent view's SUBSET SPS second, then both views' PPS.
+//
+// The profile and level are taken from the subset SPS, not the base one, because they describe the
+// PAIR. A 3D disc reads 128 there, Stereo High, where the base view on its own says 100.
+std::vector<uint8_t> MatroskaMuxer::buildMVCDecoderConfigRecord(AbstractStreamReader* baseReader,
+                                                                AbstractStreamReader* depReader)
+{
+    const auto h264Base = dynamic_cast<H264StreamReader*>(baseReader);
+    const auto h264Dep = dynamic_cast<H264StreamReader*>(depReader);
+    if (!h264Base || !h264Dep)
+        return {};
+
+    const auto serialize = [](const auto* ps) -> std::vector<uint8_t>
+    {
+        uint8_t buf[4096];
+        const int len = ps->serializeBuffer(buf, buf + sizeof(buf), false);
+        return len > 0 ? std::vector<uint8_t>(buf, buf + len) : std::vector<uint8_t>();
+    };
+    const auto nalTypeIs = [](const std::vector<uint8_t>& v, const NALUnit::NALType t)
+    { return !v.empty() && (v[0] & 0x1F) == static_cast<int>(t); };
+
+    std::vector<std::vector<uint8_t>> spsUnits, ppsUnits;
+    size_t subsetSpsIdx = SIZE_MAX;
+
+    for (auto& [id, sps] : h264Base->m_spsMap)
+        if (auto v = serialize(sps); !v.empty())
+            spsUnits.push_back(std::move(v));
+
+    // From the dependent view take the SUBSET sequence parameter set only. Its map can also hold a
+    // copy of the base view's own SPS, and writing that one twice would describe a stream that does
+    // not exist.
+    for (auto& [id, sps] : h264Dep->m_spsMap)
+    {
+        auto v = serialize(sps);
+        if (!nalTypeIs(v, NALUnit::NALType::nuSubSPS))
+            continue;
+        subsetSpsIdx = spsUnits.size();
+        spsUnits.push_back(std::move(v));
+    }
+
+    // No subset SPS means the second stream is not a dependent view, whatever it was labelled, and
+    // a record built from it would be a promise the file cannot keep.
+    if (subsetSpsIdx == SIZE_MAX || spsUnits.empty())
+        return {};
+
+    for (auto& [id, pps] : h264Base->m_ppsMap)
+        if (auto v = serialize(pps); !v.empty())
+            ppsUnits.push_back(std::move(v));
+    for (auto& [id, pps] : h264Dep->m_ppsMap)
+    {
+        auto v = serialize(pps);
+        if (v.empty())
+            continue;
+        // The dependent view repeats the base view's picture parameter sets as well as adding its
+        // own. Compared by bytes rather than by id, because the two streams number them separately.
+        if (std::find(ppsUnits.begin(), ppsUnits.end(), v) == ppsUnits.end())
+            ppsUnits.push_back(std::move(v));
+    }
+
+    const std::vector<uint8_t>& subset = spsUnits[subsetSpsIdx];
+    if (subset.size() < 4)
+        return {};
+
+    std::vector<uint8_t> record;
+    record.push_back(1);          // configurationVersion
+    record.push_back(subset[1]);  // profile_idc, from the subset SPS: 128, Stereo High
+    record.push_back(subset[2]);  // profile compatibility flags
+    record.push_back(subset[3]);  // level_idc
+    record.push_back(0xFF);       // lengthSizeMinusOne = 3, four byte NAL lengths | reserved
+    record.push_back(static_cast<uint8_t>(0xE0 | (spsUnits.size() & 0x1F)));
+
+    const auto appendSet = [&record](const std::vector<uint8_t>& v)
+    {
+        const uint16_t sz = static_cast<uint16_t>(v.size());
+        record.push_back(static_cast<uint8_t>(sz >> 8));
+        record.push_back(static_cast<uint8_t>(sz & 0xFF));
+        record.insert(record.end(), v.begin(), v.end());
+    };
+    for (const auto& v : spsUnits) appendSet(v);
+    record.push_back(static_cast<uint8_t>(ppsUnits.size()));
+    for (const auto& v : ppsUnits) appendSet(v);
+
+    return record;
+}
+
 std::vector<uint8_t> MatroskaMuxer::buildHEVCDecoderConfigRecord(AbstractStreamReader* reader)
 {
     const auto hevc = dynamic_cast<HEVCStreamReader*>(reader);
@@ -851,7 +938,7 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track)
     // Size the buffer dynamically: fixed fields + colour and mastering metadata (~130 bytes on
     // its own, eight 64 bit floats among them) + codec private data + the enhancement layer's
     // configuration record, which is another one of comparable size on a dual layer track.
-    const size_t bufSize = 1024 + track.codecPrivate.size() + track.dvElConfig.size();
+    const size_t bufSize = 1024 + track.codecPrivate.size() + track.dvElConfig.size() + 2 * track.mvcConfig.size();
     std::vector<uint8_t> inner(bufSize);
     int pos = 0;
 
@@ -935,6 +1022,13 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track)
         // of 0.00002. Matroska wants floats in the 0..1 range, hence the 50000 divisor.
         vPos += writeColourInfo(videoBuf + vPos, track);
 
+        // 3D: both views travel in one block, so the track has to say so or a player has no
+        // reason to look for a second one. 13 is "both eyes laced in one block, left eye first",
+        // which is how a reference 3D file describes exactly this arrangement.
+        if (track.foldKind == MkvTrackInfo::FoldKind::MvcDependent)
+            vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEOSTEREOMODE_CURRENT,
+                                    MATROSKA_STEREO_BOTH_EYES_LEFT_FIRST);
+
         // Write Video master
         pos += ebml_write_master_open(inner.data() + pos, MATROSKA_ID_TRACKVIDEO, vPos);
         memcpy(inner.data() + pos, videoBuf, vPos);
@@ -972,6 +1066,21 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track)
                 pos += b2;
             }
         }
+
+        // 3D: the MVC configuration record, saying how the second view in every block decodes.
+        if (!track.mvcConfig.empty())
+        {
+            std::vector<uint8_t> body(64 + track.mvcConfig.size());
+            int b = 0;
+            b += ebml_write_uint(body.data() + b, MATROSKA_ID_BLOCKADDIDVALUE, 1);
+            b += ebml_write_uint(body.data() + b, MATROSKA_ID_BLOCKADDIDTYPE, 0x6D766343 /* mvcC */);
+            b += ebml_write_binary(body.data() + b, MATROSKA_ID_BLOCKADDIDEXTRADATA, track.mvcConfig.data(),
+                                   static_cast<int>(track.mvcConfig.size()));
+            pos += ebml_write_uint(inner.data() + pos, MATROSKA_ID_MAXBLOCKADDITIONID, 1);
+            pos += ebml_write_master_open(inner.data() + pos, MATROSKA_ID_BLOCKADDITIONMAPPING, b);
+            memcpy(inner.data() + pos, body.data(), b);
+            pos += b;
+        }
     }
 
     // Audio sub-element
@@ -1008,7 +1117,7 @@ void MatroskaMuxer::writeTracks()
     for (const auto& [streamIdx, track] : m_tracks)
     {
         // A Dolby Vision enhancement layer folded into its base track is not a track of its own.
-        if (track.dvMergedIntoStream >= 0)
+        if (track.foldedIntoStream >= 0)
             continue;
         ordered.push_back(&track);
     }
@@ -1050,6 +1159,41 @@ void MatroskaMuxer::writeTracks()
 // than two there is nothing a later reader could discover that would make a fold possible, so
 // refusing is safe. With two or more this returns true and the exact check in
 // refreshTrackProperties still decides.
+// 3D: a disc stores the two views as two elementary streams, and Matroska carries both in ONE
+// track. Without this a 3D disc came out as two video tracks, the second one labelled with a codec
+// id general software does not know, so the file round tripped back to a disc correctly and played
+// as flat 2D everywhere else.
+//
+// The pairing is by CODEC, not by order or size: a dependent view is the only thing that decodes to
+// CODEC_V_MPEG4_H264_DEP, so there is nothing to guess. The base view is the video track in front
+// of it, which is the order a disc lists them and the order the demuxer hands them over.
+void MatroskaMuxer::pairMvcViews()
+{
+    MkvTrackInfo* baseTrack = nullptr;
+    for (auto& [streamIdx, track] : m_tracks)
+    {
+        if (track.trackType != 1)
+            continue;
+        if (track.codecID != CODEC_V_MPEG4_H264_DEP)
+        {
+            // Remember the most recent ordinary video track. A dependent view belongs to the one
+            // in front of it, not simply to the first track in the file, so a mux carrying two 3D
+            // pairs pairs each of them with its own base view.
+            if (track.foldElStreamIndex < 0 && track.foldedIntoStream < 0)
+                baseTrack = &track;
+            continue;
+        }
+        if (baseTrack == nullptr || baseTrack->codecID != CODEC_V_MPEG4_H264 || baseTrack->foldElStreamIndex >= 0)
+            continue;
+
+        baseTrack->foldKind = MkvTrackInfo::FoldKind::MvcDependent;
+        baseTrack->foldElStreamIndex = track.streamIndex;
+        track.foldedIntoStream = baseTrack->streamIndex;
+        track.foldKind = MkvTrackInfo::FoldKind::MvcDependent;
+        baseTrack = nullptr;
+    }
+}
+
 bool MatroskaMuxer::couldFoldDualLayer() const
 {
     int hevcVideoTracks = 0;
@@ -1237,7 +1381,7 @@ void MatroskaMuxer::refreshTrackProperties()
             baseTrack = &track;
             continue;
         }
-        if (!track.dvBlockAddIdType || baseTrack->dvElStreamIndex >= 0)
+        if (!track.dvBlockAddIdType || baseTrack->foldElStreamIndex >= 0)
             continue;
 
         const auto blReader = dynamic_cast<HEVCStreamReader*>(baseTrack->codecReader);
@@ -1260,10 +1404,10 @@ void MatroskaMuxer::refreshTrackProperties()
         if (m_dvWriteProfile81)
             m_dvProfile7ConfigType = blReader->buildDoViConfigRecordDualLayer(m_dvProfile7Config, *elReader);
 
-        baseTrack->dvElStreamIndex = track.streamIndex;
+        baseTrack->foldElStreamIndex = track.streamIndex;
         baseTrack->dvBlockAddIdType = mergedType;
         memcpy(baseTrack->dvConfig, merged, sizeof(merged));
-        track.dvMergedIntoStream = baseTrack->streamIndex;
+        track.foldedIntoStream = baseTrack->streamIndex;
         track.dvBlockAddIdType = 0;
 
         if (m_dvWriteProfile81)
@@ -1299,7 +1443,7 @@ void MatroskaMuxer::refreshTrackProperties()
     // it accompanies, never larger, so it cannot match, and a single layer track on its own has no
     // second video track to compare against.
     bool reversedDualLayer = false;
-    if (baseTrack != nullptr && baseTrack->dvElStreamIndex < 0 && baseTrack->dvBlockAddIdType)
+    if (baseTrack != nullptr && baseTrack->foldElStreamIndex < 0 && baseTrack->dvBlockAddIdType)
     {
         const auto elReader = dynamic_cast<HEVCStreamReader*>(baseTrack->codecReader);
         for (const auto& [streamIdx, track] : m_tracks)
@@ -1336,7 +1480,7 @@ void MatroskaMuxer::refreshTrackProperties()
         bool folded = false;
         for (const auto& [streamIdx, track] : m_tracks)
         {
-            if (track.dvElStreamIndex >= 0)
+            if (track.foldElStreamIndex >= 0)
             {
                 folded = true;
                 break;
@@ -1357,6 +1501,8 @@ void MatroskaMuxer::refreshTrackProperties()
             THROW(ERR_COMMON, DV_PROFILE81_NEEDS_DUAL_LAYER)
         }
     }
+
+    pairMvcViews();
 
     // A Blu-ray TrueHD track arrives as its lossless frames PLUS a 448 kbps AC-3 core, both on one
     // PID, because a disc has to carry something for a player that cannot decode the lossless
@@ -1449,7 +1595,7 @@ void MatroskaMuxer::refreshTrackProperties()
     int nextNumber = 1;
     for (auto& [streamIdx, track] : m_tracks)
     {
-        if (track.dvMergedIntoStream >= 0 || track.ac3CoreOfStream >= 0)
+        if (track.foldedIntoStream >= 0 || track.ac3CoreOfStream >= 0)
             continue;
         track.trackNumber = nextNumber++;
         // The core takes the number straight after the track it came from, so it sits beside it
@@ -1487,9 +1633,33 @@ void MatroskaMuxer::writeDeferredHeader()
     // mapping is written as a zero length blob without anything failing.
     for (auto& [streamIdx, track] : m_tracks)
     {
-        if (track.dvElStreamIndex < 0)
+        if (track.foldElStreamIndex < 0)
             continue;
-        const auto el = m_tracks.find(track.dvElStreamIndex);
+        const auto el = m_tracks.find(track.foldElStreamIndex);
+
+        // 3D takes a different record: the two views share one, built from both their parameter
+        // sets, and written as the "mvcC" block addition mapping.
+        //
+        // A reference 3D file ALSO appends it to CodecPrivate, inside an mvcC box after the avcC
+        // record, and this deliberately does not. Our avcC stops after the parameter sets, without
+        // the four byte extension that profile 100 is supposed to carry, because the SPS parser
+        // range checks the bit depths and then throws them away. On a bare record nothing notices,
+        // since a reader stops at the end of the buffer. Put a box after it and a reader following
+        // the format reads four bytes of that box as the missing extension and misparses the rest.
+        // The record is already carried, unambiguously, in the block addition mapping.
+        if (track.foldKind == MkvTrackInfo::FoldKind::MvcDependent)
+        {
+            if (el != m_tracks.end())
+                track.mvcConfig = buildMVCDecoderConfigRecord(track.codecReader, el->second.codecReader);
+            if (track.mvcConfig.empty())
+            {
+                LTRACE(LT_WARN, 2,
+                       "3D: the dependent view has no subset sequence parameter set, so no MVC "
+                       "configuration record is written. Both views are still in the track.");
+            }
+            continue;
+        }
+
         if (el != m_tracks.end())
             track.dvElConfig = el->second.codecPrivate;
         if (track.dvElConfig.empty())
@@ -1862,6 +2032,22 @@ std::vector<uint8_t> MatroskaMuxer::convertAnnexBToLengthPrefixed(MkvTrackInfo& 
     return result;
 }
 
+// The dependent view of a 3D pair, converted into the same length prefixed form and appended after
+// the base view's NALs. Nothing is wrapped and nothing is stripped, unlike the Dolby Vision
+// enhancement layer: both views are H.264, and a decoder that does not understand MVC already
+// ignores the dependent view's NAL types on its own.
+//
+// The view and dependency delimiter, NAL type 24, is KEPT, though at least one other 3D file does
+// not carry it. Dropping it was measured and costs the byte exact rebuild: h264StreamReader writes
+// a replacement when the view is muxed back to a disc, but with a three byte start code where the
+// disc had four, which moves every byte after it. Keeping it costs nothing, because type 24 is
+// unspecified in H.264 and a decoder that does not know it has to ignore it.
+std::vector<uint8_t> MatroskaMuxer::convertMvcDepToLengthPrefixed(MkvTrackInfo& track, const uint8_t* data,
+                                                                  const int size)
+{
+    return convertAnnexBToLengthPrefixed(track, data, size);
+}
+
 std::vector<uint8_t> MatroskaMuxer::convertDvElToLengthPrefixed(MkvTrackInfo& track, const uint8_t* data, int size)
 {
     // The enhancement layer half of a dual layer Dolby Vision access unit, converted into the same
@@ -2014,13 +2200,13 @@ void MatroskaMuxer::flushPendingFrame(MkvTrackInfo& track)
     // NOT arrive in step, the base layer runs several access units ahead, so the enhancement layer
     // for this picture has very likely not been delivered at all. Hold the frame instead and write
     // it once its enhancement access unit is complete.
-    if (track.dvElStreamIndex >= 0)
+    if (track.foldElStreamIndex >= 0)
     {
         MkvTrackInfo::HeldFrame held;
         held.data.assign(frameData, frameData + frameSize);
         held.pts = track.pendingPts;
         held.flags = track.pendingFlags;
-        track.dvHeldFrames.push_back(std::move(held));
+        track.heldFrames.push_back(std::move(held));
         track.pendingFrameData.clear();
         track.hasPendingFrame = false;
         drainHeldFrames(track, false);
@@ -2112,45 +2298,52 @@ void MatroskaMuxer::drainHeldFrames(MkvTrackInfo& track, const bool atEndOfStrea
     if (atEndOfStream && !track.pendingElData.empty())
     {
         // The last enhancement access unit has no successor to close it.
-        track.dvElDone[track.dvElPts] = std::move(track.pendingElData);
+        track.elDone[track.elPts] = std::move(track.pendingElData);
         track.pendingElData.clear();
     }
 
-    while (!track.dvHeldFrames.empty())
+    while (!track.heldFrames.empty())
     {
-        MkvTrackInfo::HeldFrame& front = track.dvHeldFrames.front();
-        const auto el = track.dvElDone.find(front.pts);
-        const bool forced = atEndOfStream || track.dvHeldFrames.size() > MAX_HELD_FRAMES;
+        MkvTrackInfo::HeldFrame& front = track.heldFrames.front();
+        const auto el = track.elDone.find(front.pts);
+        const bool forced = atEndOfStream || track.heldFrames.size() > MAX_HELD_FRAMES;
 
-        if (el == track.dvElDone.end() && !forced)
+        if (el == track.elDone.end() && !forced)
             break;  // its enhancement layer may still be on its way
 
-        if (el != track.dvElDone.end())
+        if (el != track.elDone.end())
         {
             // Which picture this enhancement access unit belongs to. In profile 8.1 mode the
             // original RPU is kept aside as it passes, and its timestamp is what later puts the
             // attachment into display order.
-            m_dvCurrentRpuPts = front.pts;
-            const std::vector<uint8_t> wrapped =
-                convertDvElToLengthPrefixed(track, el->second.data(), static_cast<int>(el->second.size()));
+            std::vector<uint8_t> wrapped;
+            if (track.foldKind == MkvTrackInfo::FoldKind::MvcDependent)
+            {
+                wrapped = convertMvcDepToLengthPrefixed(track, el->second.data(), static_cast<int>(el->second.size()));
+            }
+            else
+            {
+                m_dvCurrentRpuPts = front.pts;
+                wrapped = convertDvElToLengthPrefixed(track, el->second.data(), static_cast<int>(el->second.size()));
+            }
             front.data.insert(front.data.end(), wrapped.begin(), wrapped.end());
-            track.dvElDone.erase(el);
-            track.dvElFramesMerged++;
+            track.elDone.erase(el);
+            track.elFramesMerged++;
         }
         else
         {
-            track.dvElFramesUnmatched++;
+            track.elFramesUnmatched++;
         }
 
         writeBlock(track, front.data.data(), static_cast<int>(front.data.size()), front.pts, front.flags);
-        track.dvHeldFrames.pop_front();
+        track.heldFrames.pop_front();
     }
 
     if (atEndOfStream)
     {
         // Anything still here belongs to pictures that were never delivered.
-        track.dvElFramesUnmatched += static_cast<int64_t>(track.dvElDone.size());
-        track.dvElDone.clear();
+        track.elFramesUnmatched += static_cast<int64_t>(track.elDone.size());
+        track.elDone.clear();
     }
 }
 
@@ -2252,22 +2445,22 @@ bool MatroskaMuxer::muxPacketInternal(AVPacket& avPacket)
 
     // A folded Dolby Vision enhancement layer writes no block of its own. Its bytes are collected
     // on the base track, one access unit at a time, and appended to the matching base layer frame.
-    if (track.dvMergedIntoStream >= 0)
+    if (track.foldedIntoStream >= 0)
     {
-        const auto base = m_tracks.find(track.dvMergedIntoStream);
+        const auto base = m_tracks.find(track.foldedIntoStream);
         if (base == m_tracks.end())
             return true;
         MkvTrackInfo& bl = base->second;
 
         // A packet with a new timestamp means the previous access unit is complete. Only then can
         // it be matched, because a large one arrives as several packets.
-        if (!bl.pendingElData.empty() && bl.dvElPts != avPacket.pts)
+        if (!bl.pendingElData.empty() && bl.elPts != avPacket.pts)
         {
-            bl.dvElDone[bl.dvElPts] = std::move(bl.pendingElData);
+            bl.elDone[bl.elPts] = std::move(bl.pendingElData);
             bl.pendingElData.clear();
             drainHeldFrames(bl, false);
         }
-        bl.dvElPts = avPacket.pts;
+        bl.elPts = avPacket.pts;
         bl.pendingElData.insert(bl.pendingElData.end(), avPacket.data, avPacket.data + avPacket.size);
         return true;
     }
@@ -2304,7 +2497,7 @@ bool MatroskaMuxer::doFlush()
 
     // Then release every base layer frame still held for its enhancement layer.
     for (auto& [streamIdx, track] : m_tracks)
-        if (track.dvElStreamIndex >= 0)
+        if (track.foldElStreamIndex >= 0)
             drainHeldFrames(track, true);
 
     // Say plainly how the dual layer merge went. A count of frames that could not be placed is the
@@ -2312,16 +2505,18 @@ bool MatroskaMuxer::doFlush()
     // file would still play, as HDR10, with a Dolby Vision record promising more than it delivers.
     for (auto& [streamIdx, track] : m_tracks)
     {
-        if (track.dvElStreamIndex < 0)
+        if (track.foldElStreamIndex < 0)
             continue;
+        const bool mvc = track.foldKind == MkvTrackInfo::FoldKind::MvcDependent;
         LTRACE(LT_INFO, 2,
-               "Dolby Vision: " << track.dvElFramesMerged << " enhancement layer frames merged into the base "
-                                << "video track.");
-        if (track.dvElFramesUnmatched > 0)
+               (mvc ? "3D: " : "Dolby Vision: ")
+                   << track.elFramesMerged << (mvc ? " dependent view frames" : " enhancement layer frames")
+                   << " merged into the base video track.");
+        if (track.elFramesUnmatched > 0)
             LTRACE(LT_WARN, 2,
-                   "Dolby Vision: " << track.dvElFramesUnmatched
-                                    << " enhancement layer frames could not be matched to a base "
-                                       "layer picture and were left out.");
+                   (mvc ? "3D: " : "Dolby Vision: ")
+                       << track.elFramesUnmatched << (mvc ? " dependent view frames" : " enhancement layer frames")
+                       << " could not be matched to a base view picture and were left out.");
     }
 
     flushCluster();
@@ -2439,7 +2634,7 @@ std::string MatroskaMuxer::buildDvManifest(const uint64_t rpuBytes, const uint32
     std::string declared = "none";
     for (const auto& [streamIdx, track] : m_tracks)
     {
-        if (track.dvElStreamIndex >= 0 && track.dvBlockAddIdType != 0)
+        if (track.foldElStreamIndex >= 0 && track.dvBlockAddIdType != 0)
         {
             declared = fourCcToString(track.dvBlockAddIdType) + " " + hexBytes(track.dvConfig, 24);
             break;
@@ -2589,13 +2784,13 @@ void MatroskaMuxer::writeAttachments()
     std::string scRule;
     for (const auto& [streamIdx, track] : m_tracks)
     {
-        if (track.trackType != 1 || track.dvMergedIntoStream >= 0)
+        if (track.trackType != 1 || track.foldedIntoStream >= 0)
             continue;
         const std::string rule = startCodeRule(track);
         if (!rule.empty())
         {
             scRule = rule;
-            if (track.dvElStreamIndex >= 0)
+            if (track.foldElStreamIndex >= 0)
                 break;  // the merged Dolby Vision track wins outright
         }
     }
