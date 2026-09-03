@@ -3100,6 +3100,15 @@ void TsMuxerWindow::onProcessError(QProcess::ProcessError error)
                 text += '\n';
             text += procErrOutput[i];
         }
+        // A killed process usually says nothing, and a box with no message tells the reader
+        // nothing at all: it does not even say which program stopped. Closing the window while
+        // a file was still being examined produced exactly that, and it read as a fault of its
+        // own rather than the consequence of ending the process.
+        if (text.trimmed().isEmpty())
+            text =
+                tr("tsMuxeR stopped without reporting a reason.\n\n"
+                   "If this appeared while a file was still being examined, or as the window was "
+                   "closing, the process was ended before it could finish. Nothing has been written.");
         msgBox.setText(text);
         break;
     default:
