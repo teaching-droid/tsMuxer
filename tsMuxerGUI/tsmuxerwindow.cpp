@@ -1664,16 +1664,30 @@ TsMuxerWindow::TsMuxerWindow()
         dlFillFreeSectors();
         updateDlFreeSectorsRow();
         updateDlBreaks();
-        connect(discSizeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), dlBox,
-                [dlFillFreeSectors, updateDlBreaks, updateDlFreeSectorsRow, dlManualCheck](int)
-                {
-                    // A new disc means a new standard capacity: re-fill and re-lock, so a value typed
-                    // for the previous disc cannot silently carry over to this one.
-                    dlManualCheck->setChecked(false);
-                    dlFillFreeSectors();
-                    updateDlFreeSectorsRow();
-                    updateDlBreaks();
-                });
+        connect(
+            discSizeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), dlBox,
+            [dlFillFreeSectors, updateDlBreaks, updateDlFreeSectorsRow, dlManualCheck, guardCheck, discSizeCombo](int)
+            {
+                // A new disc means a new standard capacity: re-fill and re-lock, so a value typed
+                // for the previous disc cannot silently carry over to this one.
+                dlManualCheck->setChecked(false);
+                dlFillFreeSectors();
+                updateDlFreeSectorsRow();
+                updateDlBreaks();
+                // Choosing a disc that HAS a layer break turns the guard on with it. A file lying
+                // across that break is the fault the guard exists to prevent, so fitting to a
+                // dual layer disc without it checked the size and left the break unprotected,
+                // which is half of what asking to fit a disc means. The BDMV to ISO tab has
+                // always applied the guard on its own, and its disc list is multi-layer only.
+                //
+                // This is a default and not a lock. Unticking it afterwards sticks, and only
+                // choosing another disc sets it again.
+                //
+                // Off and a single layer disc have NO break, so the guard is cleared for them
+                // rather than left naming a boundary that does not exist. The combo's data is
+                // the layer count, and breaks are layers - 1.
+                guardCheck->setChecked(discSizeCombo->currentData().toInt() >= 2);
+            });
         connect(dlManualCheck, &QCheckBox::toggled, dlBox,
                 [dlFreeSectorsEdit, dlFillFreeSectors, updateDlBreaks](const bool on)
                 {
