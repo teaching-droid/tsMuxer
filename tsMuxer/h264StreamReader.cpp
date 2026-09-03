@@ -37,6 +37,7 @@ H264StreamReader::H264StreamReader()
     m_firstDecodeNal = true;
     orig_hrd_parameters_present_flag = false;
     orig_vcl_parameters_present_flag = false;
+    m_spsFlagsKnown = false;
     m_lastPictStruct = 0;
 
     m_bSliceFound = false;
@@ -576,6 +577,7 @@ void H264StreamReader::additionalStreamCheck(uint8_t* buff, uint8_t* end)
             tmpsps.deserialize();
             orig_hrd_parameters_present_flag = tmpsps.nalHrdParams.isPresent;
             orig_vcl_parameters_present_flag = tmpsps.vclHrdParams.isPresent;
+            m_spsFlagsKnown = true;
             tmpspsfound = true;
             break;
         case NALUnit::NALType::nuPPS:
@@ -1328,8 +1330,24 @@ int H264StreamReader::processSPS(uint8_t* buff)
     sps->decodeBuffer(buff, nextNal);
     const int nalRez = sps->deserialize();
 
-    if (orig_hrd_parameters_present_flag != sps->nalHrdParams.isPresent ||
-        orig_vcl_parameters_present_flag != sps->vclHrdParams.isPresent)
+    // The FIRST sequence parameter set is adopted, not compared. These two flags start false
+    // in the constructor, and checkStream is what normally replaces them with the stream's own
+    // values. checkStream is reached from getTSDescriptor, so a transport stream output gets
+    // it and a Matroska one never did: the defaults were still in place when the first real
+    // SPS arrived, every stream carrying HRD parameters compared unequal, and the warning
+    // fired BECAUSE the stream was being seen for the first time.
+    //
+    // Measured on a 3D source: to a disc, stored 1,1 against an SPS of 1,1 and silence; to
+    // Matroska, stored 0,0 against the same 1,1, one warning per stream, and 1,1 against 1,1
+    // for every SPS after it. The stream was identical throughout.
+    if (!m_spsFlagsKnown)
+    {
+        orig_hrd_parameters_present_flag = sps->nalHrdParams.isPresent;
+        orig_vcl_parameters_present_flag = sps->vclHrdParams.isPresent;
+        m_spsFlagsKnown = true;
+    }
+    else if (orig_hrd_parameters_present_flag != sps->nalHrdParams.isPresent ||
+             orig_vcl_parameters_present_flag != sps->vclHrdParams.isPresent)
     {
         orig_hrd_parameters_present_flag = sps->nalHrdParams.isPresent;
         orig_vcl_parameters_present_flag = sps->vclHrdParams.isPresent;

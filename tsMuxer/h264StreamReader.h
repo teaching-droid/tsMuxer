@@ -146,6 +146,10 @@ class H264StreamReader final : public MPEGStreamReader
     std::vector<uint8_t> m_decodedSliceHeader;
     int m_removalDelay;
     bool m_spsChangeWarned;
+    // Whether the two flags above hold a real stream's values yet, as opposed to the
+    // constructor's false. Without it the first SPS was compared against the defaults and
+    // reported as a change.
+    bool m_spsFlagsKnown;
 };
 
 #endif
