@@ -1738,8 +1738,22 @@ bool scanAttachedFile(EbmlScan& scan, const int64_t end, std::string& name, int6
 }
 }  // namespace
 
-// Walk the top level of the file, stepping over clusters by their declared size rather than
-// reading them, and record every attachment found.
+// Find the attachments WITHOUT reading the media.
+//
+// This runs on every Matroska file that is opened, so what it costs is what every file costs
+// before its track list appears. It used to walk the top level from front to back, stepping over
+// each cluster by its declared size. That is correct, and on a long file it is thousands of seeks:
+// a 36.6 GB file here holds 7,293 clusters, so about 29,000 seeks and reads to answer a question
+// the format already answers. On a local SSD that is under a second. On an external or network
+// drive it is minutes, and it looks like the program has hung.
+//
+// The SeekHead at the front of the segment says where the top level elements are, and this muxer
+// writes one deliberately so that what follows the clusters can be found (see writeFrontSeekHead).
+// mkvmerge writes one too. So read the index and go straight there.
+//
+// If a SeekHead exists and does not mention attachments, the file has none: an index that lists
+// Info, Tracks and Cues but no Attachments is not silent about them, it is saying there are none.
+// Only a file with no SeekHead at all falls back to the old walk.
 void MatroskaDemuxer::loadAttachments(const std::string& fileName)
 {
     File f;
@@ -1748,54 +1762,209 @@ void MatroskaDemuxer::loadAttachments(const std::string& fileName)
 
     const int64_t fileSize = f.size();
     EbmlScan scan(f);
-    int64_t segmentEnd = fileSize;
-    bool inSegment = false;
 
+    // Every AttachedFile inside one Attachments element.
+    auto readAttachments = [&](const int64_t body, const int64_t size)
+    {
+        const int64_t attEnd = body + size;
+        scan.pos = body;
+        while (scan.pos < attEnd)
+        {
+            uint32_t fileId = 0;
+            int64_t fileSizeField = 0, fileBody = 0;
+            if (!scan.readElement(fileId, fileSizeField, fileBody))
+                break;
+            if (fileId == MATROSKA_ID_ATTACHEDFILE)
+            {
+                MatroskaAttachment att;
+                const int64_t save = scan.pos;
+                scan.pos = fileBody;
+                if (scanAttachedFile(scan, fileBody + fileSizeField, att.name, att.dataPos, att.dataSize) &&
+                    !att.name.empty() && att.dataSize > 0)
+                    m_attachments.push_back(att);
+                scan.pos = save;
+            }
+            scan.pos = fileBody + fileSizeField;
+        }
+    };
+
+    // A fixed width big endian number out of an element's body.
+    auto readUInt = [&](const int64_t at, const int64_t width, uint64_t& out) -> bool
+    {
+        if (width <= 0 || width > 8)
+            return false;
+        uint8_t buf[8] = {0};
+        scan.f.seek(at);
+        if (scan.f.read(buf, static_cast<uint32_t>(width)) != static_cast<int>(width))
+            return false;
+        out = 0;
+        for (int i = 0; i < static_cast<int>(width); ++i) out = (out << 8) | buf[i];
+        return true;
+    };
+
+    // Read one SeekHead. Returns where it says the attachments are, as an offset from the start of
+    // the segment's data, or 0 if it does not name them. A writer may keep the front index small and
+    // point at a fuller one elsewhere, so a SeekHead naming another SeekHead is reported separately.
+    auto readSeekHead = [&](const int64_t body, const int64_t size, int64_t& nextSeekHead) -> int64_t
+    {
+        int64_t attAt = 0;
+        nextSeekHead = 0;
+        const int64_t end = body + size;
+        scan.pos = body;
+        while (scan.pos < end)
+        {
+            uint32_t id = 0;
+            int64_t sz = 0, b = 0;
+            if (!scan.readElement(id, sz, b))
+                break;
+            if (id == MATROSKA_ID_SEEKENTRY)
+            {
+                uint64_t seekId = 0, seekPos = 0;
+                bool haveId = false, havePos = false;
+                const int64_t entryEnd = b + sz;
+                const int64_t resume = b + sz;
+                scan.pos = b;
+                while (scan.pos < entryEnd)
+                {
+                    uint32_t eid = 0;
+                    int64_t esz = 0, eb = 0;
+                    if (!scan.readElement(eid, esz, eb))
+                        break;
+                    // A SeekID carries the element id with its marker bit, which is how the
+                    // MATROSKA_ID_ constants are written, so the two compare directly.
+                    if (eid == MATROSKA_ID_SEEKID)
+                        haveId = readUInt(eb, esz, seekId);
+                    else if (eid == MATROSKA_ID_SEEKPOSITION)
+                        havePos = readUInt(eb, esz, seekPos);
+                    scan.pos = eb + esz;
+                }
+                if (haveId && havePos)
+                {
+                    if (seekId == MATROSKA_ID_ATTACHMENTS)
+                        attAt = static_cast<int64_t>(seekPos);
+                    else if (seekId == MATROSKA_ID_SEEKHEAD)
+                        nextSeekHead = static_cast<int64_t>(seekPos);
+                }
+                scan.pos = resume;
+                continue;
+            }
+            scan.pos = b + sz;
+        }
+        return attAt;
+    };
+
+    // Where the segment's data begins. Every SeekPosition is measured from there.
+    int64_t segmentData = -1;
+    int64_t segmentEnd = fileSize;
     while (scan.pos < fileSize)
     {
         uint32_t id = 0;
         int64_t size = 0, body = 0;
         if (!scan.readElement(id, size, body))
             break;
-
         if (id == MATROSKA_ID_SEGMENT)
         {
-            // Descend rather than step over: everything of interest is inside it.
-            inSegment = true;
+            segmentData = body;
             segmentEnd = (size > 0 && body + size <= fileSize) ? body + size : fileSize;
-            scan.pos = body;
-            continue;
-        }
-
-        if (id == MATROSKA_ID_ATTACHMENTS)
-        {
-            const int64_t attEnd = body + size;
-            scan.pos = body;
-            while (scan.pos < attEnd)
-            {
-                uint32_t fileId = 0;
-                int64_t fileSizeField = 0, fileBody = 0;
-                if (!scan.readElement(fileId, fileSizeField, fileBody))
-                    break;
-                if (fileId == MATROSKA_ID_ATTACHEDFILE)
-                {
-                    MatroskaAttachment att;
-                    const int64_t save = scan.pos;
-                    scan.pos = fileBody;
-                    if (scanAttachedFile(scan, fileBody + fileSizeField, att.name, att.dataPos, att.dataSize) &&
-                        !att.name.empty() && att.dataSize > 0)
-                        m_attachments.push_back(att);
-                    scan.pos = save;
-                }
-                scan.pos = fileBody + fileSizeField;
-            }
-            scan.pos = attEnd;
-            continue;
-        }
-
-        scan.pos = body + size;
-        if (inSegment && scan.pos >= segmentEnd)
             break;
+        }
+        scan.pos = body + size;
+    }
+
+    bool sawSeekHead = false;
+    int64_t attAt = 0;
+
+    if (segmentData >= 0)
+    {
+        // Only the head of the segment, as far as the first cluster. Everything that says where
+        // things are lives before the media, so this stops the moment the media starts.
+        int64_t nextSeekHead = 0;
+        scan.pos = segmentData;
+        while (scan.pos < segmentEnd)
+        {
+            uint32_t id = 0;
+            int64_t size = 0, body = 0;
+            if (!scan.readElement(id, size, body))
+                break;
+            if (id == MATROSKA_ID_CLUSTER)
+                break;
+            if (id == MATROSKA_ID_SEEKHEAD)
+            {
+                sawSeekHead = true;
+                int64_t nested = 0;
+                const int64_t at = readSeekHead(body, size, nested);
+                if (at > 0)
+                    attAt = at;
+                if (nested > 0)
+                    nextSeekHead = nested;
+            }
+            else if (id == MATROSKA_ID_ATTACHMENTS)
+            {
+                // Written before the media, so it is already here.
+                readAttachments(body, size);
+                f.close();
+                attachments_parsed = true;
+                m_attachmentSource = fileName;
+                return;
+            }
+            scan.pos = body + size;
+        }
+
+        // One level of "the index you want is over there".
+        if (attAt == 0 && nextSeekHead > 0)
+        {
+            scan.pos = segmentData + nextSeekHead;
+            uint32_t id = 0;
+            int64_t size = 0, body = 0;
+            if (scan.readElement(id, size, body) && id == MATROSKA_ID_SEEKHEAD)
+            {
+                int64_t ignored = 0;
+                attAt = readSeekHead(body, size, ignored);
+            }
+        }
+    }
+
+    if (attAt > 0)
+    {
+        scan.pos = segmentData + attAt;
+        uint32_t id = 0;
+        int64_t size = 0, body = 0;
+        if (scan.readElement(id, size, body) && id == MATROSKA_ID_ATTACHMENTS)
+            readAttachments(body, size);
+    }
+    else if (!sawSeekHead)
+    {
+        // No index at all. Nothing for it but the old walk, stepping over clusters by their
+        // declared size. Rare, and the only case that still pays for it.
+        int64_t segEnd = segmentEnd;
+        bool inSegment = false;
+        scan.pos = 0;
+        while (scan.pos < fileSize)
+        {
+            uint32_t id = 0;
+            int64_t size = 0, body = 0;
+            if (!scan.readElement(id, size, body))
+                break;
+
+            if (id == MATROSKA_ID_SEGMENT)
+            {
+                inSegment = true;
+                segEnd = (size > 0 && body + size <= fileSize) ? body + size : fileSize;
+                scan.pos = body;
+                continue;
+            }
+
+            if (id == MATROSKA_ID_ATTACHMENTS)
+            {
+                readAttachments(body, size);
+                scan.pos = body + size;
+                continue;
+            }
+
+            scan.pos = body + size;
+            if (inSegment && scan.pos >= segEnd)
+                break;
+        }
     }
 
     f.close();
