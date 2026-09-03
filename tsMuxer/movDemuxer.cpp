@@ -1963,6 +1963,16 @@ int MovDemuxer::mov_read_elst(MOVAtom atom)
 
 double MovDemuxer::getTrackFps(const uint32_t trackId)
 {
+    // Bounds checked, as MatroskaDemuxer::getTrackFps is, and as getTrackCodecPrivate a few
+    // hundred lines above already is. A subTrack stream is identified by a SUB-PID,
+    // (pid << 16) + subTrack, so an unchecked tracks[trackId - 1] reads tens of thousands of
+    // entries past the end and takes the process with it.
+    //
+    // That is reachable without any of this being unusual: an mp4 whose video track holds a
+    // merged Dolby Vision picture, read back with subTrack= and no fps= on the line, crashed
+    // 2.18.4 and 2.18.5 with an access violation.
+    if (trackId == 0 || static_cast<int>(trackId) > num_tracks)
+        return 0.0;
     const auto st = reinterpret_cast<MOVStreamContext*>(tracks[trackId - 1]);
     return st->fps;
 }
