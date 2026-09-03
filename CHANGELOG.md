@@ -1,3 +1,39 @@
+## tsMuxeR 2.18.8
+
+A single layer Dolby Vision source built a disc that would not play. That is fixed, along with
+three other faults, and an added .m2ts from a 3D disc now says when it is only half of the picture.
+
+### New: an added .m2ts from a 3D disc says it is only half of the picture
+
+A 3D disc gives its video three names: an .m2ts holding the base view, a second .m2ts holding the
+dependent view, and an .ssif holding both. Adding one of the .m2ts files looked like ordinary 2D
+video, with nothing to say otherwise, and a disc built from it came out flat.
+
+The track information now says the file is the base view only, and names the .ssif that holds both
+views, so the right file can be picked without knowing the layout beforehand.
+
+### Fixed
+
+* **A single layer Dolby Vision source built a Blu-ray or an m2ts that would not play.** Profile 5
+and profile 8 carry their RPU in the base layer and have no enhancement layer, so such a source has
+one video stream. That stream was written to the enhancement layer PID, 0x1015, where no player
+looks for a picture, and the disc played as nothing at all. It now goes to 0x1011 with all other
+video. Dual layer profile 7 sources were never affected.
+
+* **A warning said `SPS parameters is not consistent throughout a stream` on streams that never
+change.** It compared the first parameter set it saw against a value that nothing had set yet, so
+it fired because the stream was new rather than because anything in it differed. It still fires
+when a stream really does change.
+
+* **The window could not set an HEVC level.** The control was greyed out for an HEVC track, so the
+only way to ask for one was to type `level=` into the meta file by hand, which the muxer has always
+accepted. The list of levels also stopped at 5.1, and now goes to 6.2.
+
+* **A Dolby Vision message said base view where it means base layer.** Base view is a 3D term.
+Nothing but the wording changed.
+
+Reported and tested by @Coopervid.
+
 ## tsMuxeR 2.18.7
 
 A Dolby Vision MKV or MP4 remuxed to MKV now keeps its Dolby Vision. Before this it did not, and
