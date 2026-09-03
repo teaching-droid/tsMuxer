@@ -2571,13 +2571,22 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
                 setComboBoxText(ui->comboBoxAR, codecInfo->arText);
             else
                 ui->comboBoxAR->setCurrentIndex(0);
-            ui->checkBoxLevel->setEnabled(codecInfo->displayName == "H.264" || codecInfo->displayName == "MVC");
+            // The level can be rewritten for HEVC as well, and has been since the muxer
+            // gained it, but this box never offered it: an HEVC track greyed the control out
+            // and the only way to ask was to type level= into the meta by hand.
+            //
+            // The SEI and SPS boxes below are NOT the same question, which is why they had to
+            // be separated from it rather than enabled alongside. insertSEI, forceSEI and
+            // contSPS are read on an AVC track line only and do nothing at all on HEVC, so
+            // offering them there would promise something that cannot happen.
+            const bool isAvcTrack = codecInfo->displayName == "H.264" || codecInfo->displayName == "MVC";
+            ui->checkBoxLevel->setEnabled(isAvcTrack || codecInfo->displayName == "HEVC");
             if (ui->checkBoxLevel->isEnabled())
                 setComboBoxText(ui->comboBoxLevel, codecInfo->levelText);
             else
                 ui->comboBoxLevel->setCurrentIndex(0);
-            ui->comboBoxSEI->setEnabled(ui->checkBoxLevel->isEnabled());
-            ui->checkBoxSPS->setEnabled(ui->checkBoxLevel->isEnabled());
+            ui->comboBoxSEI->setEnabled(isAvcTrack);
+            ui->checkBoxSPS->setEnabled(isAvcTrack);
             ui->comboBoxAR->setEnabled(codecInfo->displayName == "MPEG-2");
             ui->comboBoxAR->setEnabled(true);
             ui->labelAR->setEnabled(ui->comboBoxAR->isEnabled());
@@ -2810,7 +2819,10 @@ void TsMuxerWindow::continueAddFile()
             info.fpsText = QString::number(fps);
         info.fpsTextOrig = QString::number(fps);
         level = extractFloatFromDescr(info.descr, "@");
-        info.levelText = QString::number(level);
+        // One decimal, because that is how the list reads. Plain QString::number turns 4.0
+        // into "4", which matches no entry, and setComboBoxText then ADDS a stray "4" rather
+        // than selecting "4.0".
+        info.levelText = QString::number(level, 'f', 1);
         if (info.descr.indexOf("pulldown") >= 0)
             info.delPulldown = 0;
 

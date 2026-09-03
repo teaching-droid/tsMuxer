@@ -503,6 +503,21 @@
                   <string notr="true">5.1</string>
                  </property>
                 </item>
+                <item>
+                 <property name="text">
+                  <string notr="true">6.0</string>
+                 </property>
+                </item>
+                <item>
+                 <property name="text">
+                  <string notr="true">6.1</string>
+                 </property>
+                </item>
+                <item>
+                 <property name="text">
+                  <string notr="true">6.2</string>
+                 </property>
+                </item>
                </widget>
               </item>
               <item row="1" column="3">
