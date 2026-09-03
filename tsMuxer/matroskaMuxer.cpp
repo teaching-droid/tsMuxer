@@ -2516,7 +2516,9 @@ bool MatroskaMuxer::doFlush()
             LTRACE(LT_WARN, 2,
                    (mvc ? "3D: " : "Dolby Vision: ")
                        << track.elFramesUnmatched << (mvc ? " dependent view frames" : " enhancement layer frames")
-                       << " could not be matched to a base view picture and were left out.");
+                       << (mvc ? " could not be matched to a base view picture"
+                               : " could not be matched to a base layer picture")
+                       << " and were left out.");
     }
 
     flushCluster();
