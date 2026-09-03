@@ -226,7 +226,21 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
         if (!isSecondary)
         {
             const uint16_t doubleMux = (m_subMode || m_masterMode) ? 2 : 1;
-            if (codecReader != nullptr && codecReader->getStreamHDR() == 4)
+            // A stream that carries Dolby Vision is the ENHANCEMENT layer only when a base
+            // layer came before it. getStreamHDR() == 4 says nothing more than "there is
+            // Dolby Vision in here", and in profile 5 and profile 8 there is no enhancement
+            // layer at all: the RPU travels in the base, so the only video stream there is
+            // belongs on 0x1011.
+            //
+            // Without the count, such a disc put its only picture on 0x1015, where no player
+            // looks for primary video. Measured on a player: it does not play at all, while
+            // the same picture with the RPU stripped, which lands on 0x1011, plays as HDR.
+            // The old behaviour was therefore strictly worse than the fallback it denied.
+            //
+            // It also disagreed with itself. BL_TRACK is set only in the branch below, and
+            // HEVCStreamReader derives isDVBL from BL_TRACK, so a single layer stream was
+            // described as a base layer while being placed on the enhancement layer PID.
+            if (codecReader != nullptr && codecReader->getStreamHDR() == 4 && m_videoTrackCnt > 0)
             {
                 tsStreamIndex = 0x1015 + m_DVvideoTrackCnt * doubleMux;
                 m_DVvideoTrackCnt++;
