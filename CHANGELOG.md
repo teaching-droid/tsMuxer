@@ -1,3 +1,30 @@
+## tsMuxeR 2.18.9
+
+Opening a Matroska file could take minutes, or look as though the program had stopped. That is
+fixed, and it had been happening since 2.18.0.
+
+### Fixed
+
+* **Opening a Matroska file could take minutes.** Every mkv that was opened had its whole top
+level walked, cluster by cluster, to look for attachments. On a long file that is thousands of
+seeks before the track list appears, and a 36.6 GB file holds 7,293 clusters. On a local SSD it
+takes under a second, which is why it went unnoticed. On an external or network drive it is
+minutes, and it looks like a program that has hung. The file's own index is now read instead,
+which answers the same question in 6 element reads rather than 7,302. Files that carry no index
+at all still take the old route, and attachments are still found wherever they sit, including
+after the clusters.
+
+* **An error box could appear with nothing written in it.** Closing the window while a file was
+still being examined produced a box with an icon, an OK button and no message, which did not even
+say what had stopped. It now says the muxer ended without giving a reason, and that nothing has
+been written.
+
+* **The program reported the wrong version number.** 2.18.8 said 2.18.7. Nothing behaved
+differently, but anyone checking which version they were running, or saying so in a report, was
+told the wrong one.
+
+Reported by @Shay2242.
+
 ## tsMuxeR 2.18.8
 
 A single layer Dolby Vision source built a disc that would not play. That is fixed, along with
