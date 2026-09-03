@@ -232,6 +232,49 @@ bool appendTailChunk(std::vector<int64_t>& chunks, const int64_t fileSize)
 }
 }  // namespace
 
+std::string bdFindSsifForM2ts(const std::string& m2tsPath, bool& isBaseView)
+{
+    isBaseView = false;
+
+    // It has to sit where a disc puts it, <root>/BDMV/STREAM/xxxxx.m2ts. Anything else is not
+    // a disc layout and there is nothing to look up.
+    std::string norm = m2tsPath;
+    for (char& ch : norm)
+        if (ch == '\\')
+            ch = '/';
+    std::string upper = norm;
+    for (char& ch : upper) ch = static_cast<char>(toupper(static_cast<unsigned char>(ch)));
+    const size_t streamPos = upper.rfind("/BDMV/STREAM/");
+    if (streamPos == std::string::npos || upper.size() < 5 || upper.compare(upper.size() - 5, 5, ".M2TS") != 0)
+        return std::string();
+
+    const std::string root = norm.substr(0, streamPos);
+    const std::string leaf = norm.substr(norm.find_last_of('/') + 1);
+    if (leaf.size() < 6)
+        return std::string();
+    const std::string myId = leaf.substr(0, 5);
+
+    std::vector<std::string> playlists;
+    if (!findFilesRecursive(root + "/BDMV/PLAYLIST/", "*.mpls", &playlists))
+        return std::string();
+
+    for (const auto& mpls : playlists)
+    {
+        std::string baseId, depId;
+        if (!bdReadPlaylistStereoPair(mpls, baseId, depId))
+            continue;  // an ordinary 2D playlist, which is most of them
+        if (myId != baseId && myId != depId)
+            continue;
+        // The interleaved file is named after the BASE clip, whichever half was asked about.
+        const std::string rel = "BDMV/STREAM/SSIF/" + baseId + ".ssif";
+        if (getFileSize(root + "/" + rel) == 0)
+            continue;  // the pairing is stated but the file is not there
+        isBaseView = myId == baseId;
+        return rel;
+    }
+    return std::string();
+}
+
 std::vector<BdSsifGroup> bdFindSsifGroups(const std::string& srcRoot)
 {
     std::vector<BdSsifGroup> groups;

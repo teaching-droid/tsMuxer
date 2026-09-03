@@ -50,6 +50,18 @@ bool bdReadClipChunkSizes(const std::string& clpiPath, std::vector<int64_t>& siz
 // playlist describes no stereoscopic sub path, which is every 2D playlist.
 bool bdReadPlaylistStereoPair(const std::string& mplsPath, std::string& baseClipId, std::string& depClipId);
 
+// Whether one .m2ts is half of a 3D pair, and where the whole picture is.
+//
+// A 3D disc's .m2ts names ONE view. Someone who adds it gets a file that looks like ordinary
+// 2D video, with nothing to say that the other half is sitting in a .ssif beside it. That is
+// what the disc intends for a 2D player, and a trap for anyone trying to build a 3D disc.
+//
+// Only the playlists are read, so this costs a fraction of bdFindSsifGroups and answers even
+// for a pair that one would refuse. Returns the disc relative path of the .ssif holding both
+// views, or an empty string when the file is not part of a pair. isBaseView says which half
+// was asked about.
+std::string bdFindSsifForM2ts(const std::string& m2tsPath, bool& isBaseView);
+
 // Every interleaved group under a disc root, found by reading the playlists and then the clip info
 // of each pair. srcRoot is the folder holding BDMV. Groups whose files are missing are left out.
 std::vector<BdSsifGroup> bdFindSsifGroups(const std::string& srcRoot);

@@ -139,6 +139,12 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
     DetectStreamRez streamInfo = METADemuxer::DetectStreamReader(readManager, fileName, mplsParser == nullptr);
     vector<CheckStreamRez>& streams = streamInfo.streams;
 
+    // A 3D disc's .m2ts names ONE view, so this file may be half a picture. The disc says so
+    // in its playlists; say it too, on the video line, rather than leaving someone to find out
+    // when the 3D they built plays flat.
+    bool ssifIsBaseView = false;
+    const std::string ssifPartner = bdFindSsifForM2ts(fileName, ssifIsBaseView);
+
     for (unsigned i = 0; i < streams.size(); i++)
     {
         if (streams[i].trackID != 0)
@@ -205,6 +211,12 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                 else
                     descr += "   (disabled)";
             }
+            // Both halves are worth telling. The base view looks like ordinary 2D video, and
+            // the dependent view is recognisable but says nothing about where its partner is.
+            if (!ssifPartner.empty() && (streams[i].codecInfo.codecID == CODEC_V_MPEG4_H264 ||
+                                         streams[i].codecInfo.codecID == CODEC_V_MPEG4_H264_DEP))
+                descr += ssifIsBaseView ? "   3D: base view only, both views are in " + ssifPartner
+                                        : "   3D: dependent view only, both views are in " + ssifPartner;
             LTRACE(LT_INFO, 2, "Stream info: " << descr);
             LTRACE(LT_INFO, 2, "Stream lang: " << streams[i].lang);
             if (streams[i].delay)
