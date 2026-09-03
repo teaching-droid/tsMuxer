@@ -1,3 +1,17 @@
+## tsMuxeR 2.18.6
+
+An mp4 read with `subTrack=` could crash the muxer. That is the only change.
+
+### Fixed
+
+* **An mp4 read with `subTrack=` could crash the muxer.** An mp4 whose video track holds a merged
+Dolby Vision picture crashed when it was read back with `subTrack=` and no `fps=` on the meta line.
+The frame rate lookup was handed a sub-track number and read past the end of its array. The mux
+died with an access violation and wrote nothing. The same file in an mkv was never affected,
+because the Matroska side of that lookup already checked its range.
+
+Present in 2.18.4 and 2.18.5. Nothing outside that case behaves differently.
+
 ## tsMuxeR 2.18.5
 
 A 3D disc muxed to MKV now keeps both views in one video track, so the file is read as 3D
