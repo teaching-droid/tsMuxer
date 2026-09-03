@@ -1039,14 +1039,27 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
                 dd.codecName = si.m_codec;
                 dd.trackID = pid;
 
+                // A subTrack line names a SUB-PID, (pid << 16) + subTrack, while this probe opens
+                // the container WITHOUT a subTrack filter and only ever produces the raw pid. Every
+                // lookup of a sub-PID therefore missed and the probe below was skipped, so
+                // discovery never ran for a subTrack stream and nothing it finds was applied:
+                // the Dolby Vision flags, the frame rate, the codec private data. A merged Dolby
+                // Vision track consequently lost its Dolby Vision when muxed to Matroska, because
+                // the flags those records are built from are set here or not at all.
+                //
+                // The raw track is also the RIGHT thing to probe. It still carries the wrapped
+                // enhancement layer and the RPU, which is what has to be seen; a split half does
+                // not necessarily carry either.
+                const int probePid = SubTrackFilter::isSubTrack(pid) ? (pid >> 16) : pid;
+
                 // 1) Extract codec-private from the container
                 int cpSize = 0;
-                const uint8_t* cp = demuxer->getTrackCodecPrivate(pid, cpSize);
+                const uint8_t* cp = demuxer->getTrackCodecPrivate(probePid, cpSize);
                 if (cp && cpSize > 0)
                     dd.codecPrivate.assign(cp, cp + cpSize);
 
                 // 2) Get the demuxed elementary stream data for this PID
-                auto demuxIt = demuxedData.find(pid);
+                auto demuxIt = demuxedData.find(probePid);
                 if (demuxIt == demuxedData.end() || demuxIt->second.size() == 0)
                 {
                     // No data demuxed for this track -- skip probe
@@ -1057,8 +1070,8 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
                 // 3) Create a temporary reader and probe
                 int containerDataType = 0;
                 int containerStreamIndex = 0;
-                if (acceptedPidMap.find(pid) != acceptedPidMap.end())
-                    containerDataType = acceptedPidMap[pid].m_trackType;
+                if (acceptedPidMap.find(probePid) != acceptedPidMap.end())
+                    containerDataType = acceptedPidMap[probePid].m_trackType;
 
                 // Use detectTrackReader-style probing: try each reader type
                 // Actually, we know the codec from the meta file, so create directly
@@ -1096,7 +1109,7 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
                     // Pre-seed the container FPS so that checkStream() has it
                     // available.  Without this, streams that lack embedded
                     // timing info would leave fps=0 in the discovery data.
-                    const double containerFps = correctFps(demuxer->getTrackFps(pid));
+                    const double containerFps = correctFps(demuxer->getTrackFps(probePid));
                     if (containerFps > 0.0 && videoReader->getFPS() == 0.0)
                         videoReader->setFPS(containerFps);
 
@@ -1120,6 +1133,20 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
                         dd.trackID = pid;
                         dd.streamDescr = rez.streamDescr;
                         videoReader->fillVideoDiscoveryData(dd);
+
+                        // The probe saw the MERGED track, so it reports Dolby Vision for
+                        // whichever half asked. Only the enhancement layer carries the RPU,
+                        // which is what the same picture probed as two separate elementary
+                        // streams reports, and what the pairing depends on: a base layer that
+                        // claims an RPU stops being treated as a base layer, and the muxer
+                        // then writes disc PIDs 0x1015 and 0x1016 instead of 0x1011 and
+                        // 0x1015. Measured, which is why this is here.
+                        const int subTrackNo = SubTrackFilter::isSubTrack(pid) ? (pid & 0xFFFF) : 0;
+                        if (subTrackNo != 0 && subTrackNo != HevcDolbyVisionFilter::EL_SUB_TRACK)
+                        {
+                            dd.isDVRPU = false;
+                            dd.isDVEL = false;
+                        }
                         // Restore codec-private from container
                         if (dd.codecPrivate.empty() && cp && cpSize > 0)
                             dd.codecPrivate.assign(cp, cp + cpSize);
