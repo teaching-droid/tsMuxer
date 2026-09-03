@@ -1,14 +1,14 @@
 ## tsMuxeR 2.18.7
 
-A Dolby Vision file muxed to MKV now keeps its Dolby Vision. Before this it did not, and nothing
-said so.
+A Dolby Vision MKV or MP4 remuxed to MKV now keeps its Dolby Vision. Before this it did not, and
+nothing said so.
 
 ### Fixed
 
-* **A Dolby Vision file muxed to MKV lost its Dolby Vision.** A merged Dolby Vision track read back
-with `subTrack=` and written to Matroska gave two plain video tracks. They carried no Dolby Vision
-records. The file went in as Dolby Vision and came out as plain HDR. Muxing the same source to a
-disc was never affected.
+* **A Dolby Vision MKV or MP4 remuxed to MKV lost its Dolby Vision.** Such a file holds both layers
+in one video track. Read back with `subTrack=` and written to Matroska, it gave two plain video
+tracks with no Dolby Vision records on them. What went in as Dolby Vision came out as plain HDR.
+Muxing the same source to a disc was never affected, and neither was any other output.
 
 * **Nothing found about a subTrack stream reached it.** The cause was wider than Dolby Vision. The
 probe looked for such a stream under a number the container never uses, so it was skipped and
