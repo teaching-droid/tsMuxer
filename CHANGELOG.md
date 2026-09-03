@@ -1,3 +1,23 @@
+## tsMuxeR 2.18.7
+
+A Dolby Vision file muxed to MKV now keeps its Dolby Vision. Before this it did not, and nothing
+said so.
+
+### Fixed
+
+* **A Dolby Vision file muxed to MKV lost its Dolby Vision.** A merged Dolby Vision track read back
+with `subTrack=` and written to Matroska gave two plain video tracks. They carried no Dolby Vision
+records. The file went in as Dolby Vision and came out as plain HDR. Muxing the same source to a
+disc was never affected.
+
+* **Nothing found about a subTrack stream reached it.** The cause was wider than Dolby Vision. The
+probe looked for such a stream under a number the container never uses, so it was skipped and
+everything it would have found was lost, the frame rate included.
+
+A Dolby Vision MKV from this version is read back with `subTrack=1` and `subTrack=2`. One from an
+earlier version still wants `track=1` and `track=2`, because it holds two separate tracks rather
+than one.
+
 ## tsMuxeR 2.18.6
 
 An mp4 read with `subTrack=` could crash the muxer. That is the only change.
