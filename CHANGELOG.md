@@ -1,7 +1,7 @@
 ## tsMuxeR 2.18.8
 
 A single layer Dolby Vision source built a disc that would not play. That is fixed, along with
-three other faults, and an added .m2ts from a 3D disc now says when it is only half of the picture.
+four other faults, and an added .m2ts from a 3D disc now says when it is only half of the picture.
 
 ### New: an added .m2ts from a 3D disc says it is only half of the picture
 
@@ -29,10 +29,17 @@ when a stream really does change.
 only way to ask for one was to type `level=` into the meta file by hand, which the muxer has always
 accepted. The list of levels also stopped at 5.1, and now goes to 6.2.
 
+* **Fitting to a dual layer disc left the layer break unprotected.** Choosing a disc under
+"Fit to disc" set the capacity and nothing else, so the size was checked and the break was not. A
+disc with 2 or more layers now turns the layer-break guard on with it. It is a default and not a
+lock: unticking it afterwards sticks, and only choosing another disc sets it again. Off and the
+single layer BD 25 clear it, because they have no layer break for a guard to sit on. The BDMV to
+ISO tab already worked this way.
+
 * **A Dolby Vision message said base view where it means base layer.** Base view is a 3D term.
 Nothing but the wording changed.
 
-Reported and tested by @Coopervid.
+Reported and tested by @Coopervid and @DreckSoft.
 
 ## tsMuxeR 2.18.7
 
