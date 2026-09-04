@@ -99,7 +99,13 @@ class IOContextDemuxer : public AbstractDemuxer
     [[nodiscard]] int64_t getProcessedBytes() const { return m_processedBytes; }
 
    protected:
-    static constexpr int MAX_STREAMS = 64;
+    // How many tracks a source may contain. Not a format limit: a Blu-ray allocates each kind of
+    // stream from its own 32 wide block of PIDs, so no disc can carry this many whatever we do.
+    // This is the ceiling on READING a source and on writing TS or Matroska, where there is no
+    // such limit, and 64 was simply the size of the array below. A release carrying every language
+    // runs past it: one report had 1 video, 22 audio and 47 subtitle tracks and could not be
+    // opened at all. The array holds pointers, so the cost of raising it is eight bytes a slot.
+    static constexpr int MAX_STREAMS = 256;
     Track* tracks[MAX_STREAMS];
     int num_tracks;
 

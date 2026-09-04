@@ -1300,9 +1300,11 @@ int MovDemuxer::mov_read_trex(MOVAtom atom)
 
 int MovDemuxer::mov_read_trak(MOVAtom atom)
 {
-    const auto sc = new MOVStreamContext();
+    // Check before allocating. The other order leaked the context every time the limit was hit,
+    // and said less than the Matroska path does about what went wrong.
     if (num_tracks >= MAX_STREAMS)
-        THROW(ERR_COMMON, "too many trak detected")
+        THROW(ERR_COMMON, "Too many tracks. Max supported tracks count: " << MAX_STREAMS)
+    const auto sc = new MOVStreamContext();
     Track* st = tracks[num_tracks] = sc;
     num_tracks++;
     st->type = IOContextTrackType::DATA;
