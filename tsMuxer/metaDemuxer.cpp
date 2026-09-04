@@ -1446,6 +1446,28 @@ void METADemuxer::addTrack(vector<CheckStreamRez>& rez, CheckStreamRez trackRez)
         rez.push_back(trackRez);
 }
 
+// A frame rate in a meta file may be written either way round: 23.976 or 24000/1001. Only the
+// decimal used to work. strToDouble stops at the slash, so the fraction became its numerator and
+// a disc asked for 24000/1001 was built at 24000 frames a second, silently.
+//
+// The window has always split the fraction itself, which is why this only ever caught a meta
+// written by hand.
+static double parseFpsValue(const std::string& text)
+{
+    const size_t slash = text.find('/');
+    if (slash == std::string::npos)
+        return strToDouble(text.c_str());
+
+    const double num = strToDouble(text.substr(0, slash).c_str());
+    const double den = strToDouble(text.substr(slash + 1).c_str());
+    if (den <= 0 || num <= 0)
+    {
+        LTRACE(LT_WARN, 2, "Ignoring fps=" << text << ": it is not a usable fraction");
+        return 0;
+    }
+    return num / den;
+}
+
 CheckStreamRez METADemuxer::detectTrackReader(uint8_t* tmpBuffer, int len,
                                               AbstractStreamReader::ContainerType containerType, int containerDataType,
                                               int containerStreamIndex)
@@ -1601,7 +1623,7 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
         auto itr = addParams.find("fps");
         if (itr != addParams.end())
         {
-            double fps = strToDouble(itr->second.c_str());
+            double fps = parseFpsValue(itr->second);
             fps = correctFps(fps);
             dynamic_cast<H264StreamReader*>(rez)->setFPS(fps);
         }
@@ -1641,7 +1663,7 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
         auto itr = addParams.find("fps");
         if (itr != addParams.end())
         {
-            double fps = strToDouble(itr->second.c_str());
+            double fps = parseFpsValue(itr->second);
             fps = correctFps(fps);
             dynamic_cast<HEVCStreamReader*>(rez)->setFPS(fps);
         }
@@ -1661,7 +1683,7 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
         auto itr = addParams.find("fps");
         if (itr != addParams.end())
         {
-            double fps = strToDouble(itr->second.c_str());
+            double fps = parseFpsValue(itr->second);
             fps = correctFps(fps);
             dynamic_cast<VVCStreamReader*>(rez)->setFPS(fps);
         }
@@ -1672,7 +1694,7 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
         auto itr = addParams.find("fps");
         if (itr != addParams.end())
         {
-            double fps = strToDouble(itr->second.c_str());
+            double fps = parseFpsValue(itr->second);
             fps = correctFps(fps);
             dynamic_cast<AV1StreamReader*>(rez)->setFPS(fps);
         }
@@ -1683,7 +1705,7 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
         auto itr = addParams.find("fps");
         if (itr != addParams.end())
         {
-            double fps = strToDouble(itr->second.c_str());
+            double fps = parseFpsValue(itr->second);
             fps = correctFps(fps);
             dynamic_cast<VC1StreamReader*>(rez)->setFPS(fps);
         }
@@ -1698,7 +1720,7 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
         auto itr = addParams.find("fps");
         if (itr != addParams.end())
         {
-            double fps = strToDouble(itr->second.c_str());
+            double fps = parseFpsValue(itr->second);
             fps = correctFps(fps);
             dynamic_cast<MPEG2StreamReader*>(rez)->setFPS(fps);
         }
@@ -1780,7 +1802,7 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
         uint16_t height = 0;
         itr = addParams.find("fps");
         if (itr != addParams.end())
-            fps = strToDouble(itr->second.c_str());
+            fps = parseFpsValue(itr->second);
         itr = addParams.find("video-width");
         if (itr != addParams.end())
             width = strToInt16u(itr->second.c_str());
@@ -1836,7 +1858,7 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
                 font.m_borderWidth = strToFloat(addParam.second.c_str());
             else if (addParam.first == "fps")
             {
-                fps = strToDouble(addParam.second.c_str());
+                fps = parseFpsValue(addParam.second);
             }
             else if (addParam.first == "video-width")
                 srtWidth = strToInt16u(addParam.second.c_str());
