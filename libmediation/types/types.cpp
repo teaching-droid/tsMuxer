@@ -312,6 +312,12 @@ void splitStr(vector<string>& rez, const char* str, const char splitter)
 
 string extractFileExt(const string& src)
 {
+    // size_t is unsigned, so an empty string made the loop below start at SIZE_MAX and read far
+    // past the end. That is how an empty output path became "Unknown exception" rather than a
+    // message: nothing threw, the read was simply undefined.
+    if (src.empty())
+        return "";
+
     for (size_t i = src.size() - 1; i > 0; i--)
         if (src[i] == '.')
         {
@@ -386,6 +392,18 @@ string closeDirPath(const string& src, char delimiter)
 // extract the filename from a path, check for invalid characters
 bool isValidFileName(const string& src)
 {
+    // A name with nothing in it is not a valid name. This used to pass, because the test below
+    // looks for characters that are not allowed and an empty string has none of them. The empty
+    // path then travelled all the way to the muxer and came back as an unknown exception, and a
+    // path of nothing but spaces was accepted outright.
+    //
+    // Only the whole path is tested here. extractFileName() below returns an empty string both for
+    // a name that has no directory part and for a path that ends in a separator, and neither of
+    // those is a fault: a bare name is an ordinary relative path, and demux and Blu-ray output are
+    // both given a folder.
+    if (trimStr(src).empty())
+        return false;
+
     const string filename = extractFileName(src);
 
     // invalidChars() returns a different regex pattern for Windows or Unix

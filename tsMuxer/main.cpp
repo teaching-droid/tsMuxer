@@ -1924,6 +1924,13 @@ int main(int argc, char** argv)
             showHelp();
             return -1;
         }
+        // Check the destination before anything reads it. It used to be checked further down,
+        // after several things had already taken it apart.
+        if (trimStr(unquoteStr(argv[2])).empty())
+        {
+            LTRACE(LT_ERROR, 2, "No output file or folder was given. It is the second argument.");
+            return -1;
+        }
         string fileExt = extractFileExt(argv[2]);
         fileExt = strToUpperCase(fileExt);
         auto startTime = std::chrono::steady_clock::now();
@@ -1946,7 +1953,9 @@ int main(int argc, char** argv)
 
             string dstFile = unquoteStr(argv[2]);
             if (!isValidFileName(dstFile))
-                throw runtime_error(string("Output filename is invalid: ") + dstFile);
+                throw runtime_error(string("The output file name is empty or contains characters that "
+                                           "cannot be used: \"") +
+                                    dstFile + "\"");
 
             if (muxerManager.getTrackCnt() == 0)
                 THROW(ERR_COMMON, "No tracks selected")
@@ -1978,7 +1987,9 @@ int main(int argc, char** argv)
             string dstFile = unquoteStr(argv[2]);
 
             if (!isValidFileName(dstFile))
-                throw runtime_error(string("Output filename is invalid: ") + dstFile);
+                throw runtime_error(string("The output file name is empty or contains characters that "
+                                           "cannot be used: \"") +
+                                    dstFile + "\"");
 
             // ** BEFORE THE DESTINATION IS CREATED, NOT AFTER. ** This stood below the block that
             // creates the output image, so a meta that selects no tracks replaced an existing .iso
@@ -2094,7 +2105,9 @@ int main(int argc, char** argv)
             string dstFile = unquoteStr(argv[2]);
 
             if (!isValidFileName(dstFile))
-                throw runtime_error(string("Output filename is invalid: ") + dstFile);
+                throw runtime_error(string("The output file name is empty or contains characters that "
+                                           "cannot be used: \"") +
+                                    dstFile + "\"");
 
             createDir(dstFile, true);
             sMuxer.doMux(dstFile, nullptr);
