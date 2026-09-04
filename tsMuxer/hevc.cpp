@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <vector>
 
 #include "tsMuxer.h"
 #include "vodCoreException.h"
@@ -72,40 +74,51 @@ bool HevcUnit::updateBits(const int bitOffset, const int bitLen, const unsigned 
         return false;
     }
 
-    // The BitStreamWriter needs bitLen/8 + 5 bytes from the start position,
-    // and flushBits() reads/writes a 4-byte word at the final position.
-    // Verify the entire write region fits within the NAL buffer.
+    // Only the bytes the field actually occupies have to be inside the NAL. An earlier version
+    // demanded five bytes of slack beyond them, because flushBits() reads and writes a whole
+    // 32 bit word wherever the writer stopped. That is true of flushBits, and it refused every
+    // real stream: the timing fields sit near the end of the VPS, so the word ran past the unit
+    // and the frame rate was silently left alone while the mux reported success.
+    //
+    // The write goes through a scratch buffer with room for that word instead. What belongs to
+    // the NAL is copied back; what flushBits touched beyond it is discarded with the scratch.
     const int startByte = bitOffset / 8;
-    const int requiredEnd = startByte + bitLen / 8 + 5;
-    if (requiredEnd > m_nalBufferLen)
+    const int lastByte = (bitOffset + bitLen) / 8;
+    if (lastByte >= m_nalBufferLen)
     {
         LTRACE(LT_WARN, 2,
-               "HEVC updateBits: write region [" << startByte << ", " << requiredEnd << ") exceeds NAL buffer size "
-                                                 << m_nalBufferLen);
+               "HEVC updateBits: the field at bit " << bitOffset << " ends past the NAL, which is " << m_nalBufferLen
+                                                    << " bytes");
         return false;
     }
 
-    uint8_t* ptr = m_reader.getBuffer() + startByte;
-    BitStreamWriter bitWriter{};
     const int byteOffset = bitOffset % 8;
-    bitWriter.setBuffer(ptr, ptr + (bitLen / 8 + 5));
-
-    const uint8_t* ptr_end = m_reader.getBuffer() + (bitOffset + bitLen) / 8;
     const int endBitsPostfix = 8 - ((bitOffset + bitLen) % 8);
+    const int touched = lastByte - startByte + 1;
+
+    // Four bytes would do for flushBits. Eight costs nothing and leaves no edge to reason about.
+    std::vector<uint8_t> scratch(static_cast<size_t>(touched) + 8, 0);
+    uint8_t* ptr = m_reader.getBuffer() + startByte;
+    memcpy(scratch.data(), ptr, static_cast<size_t>(touched));
+
+    BitStreamWriter bitWriter{};
+    bitWriter.setBuffer(scratch.data(), scratch.data() + scratch.size());
 
     if (byteOffset > 0)
     {
-        const int prefix = *ptr >> (8 - byteOffset);
+        const int prefix = scratch[0] >> (8 - byteOffset);
         bitWriter.putBits(byteOffset, prefix);
     }
     bitWriter.putBits(bitLen, value);
 
     if (endBitsPostfix < 8)
     {
-        const int postfix = *ptr_end & (1 << endBitsPostfix) - 1;
+        const int postfix = scratch[static_cast<size_t>(touched) - 1] & (1 << endBitsPostfix) - 1;
         bitWriter.putBits(endBitsPostfix, postfix);
     }
     bitWriter.flushBits();
+
+    memcpy(ptr, scratch.data(), static_cast<size_t>(touched));
     return true;
 }
 
