@@ -257,6 +257,10 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
 class MovParsedH264TrackData : public ParsedTrackPrivData
 {
    public:
+    // The largest NAL this reader will believe. newBufferSize measures the buffer and extractData
+    // fills it, so both have to stop at the same value or one writes more than the other reserved.
+    static constexpr uint32_t MAX_NAL_SIZE = 10 * 1024 * 1024;
+
     MovParsedH264TrackData(MovDemuxer* demuxer, MOVStreamContext* sc) : m_sc(sc), m_demuxer(demuxer), nal_length_size(4)
     {
     }
@@ -336,8 +340,16 @@ class MovParsedH264TrackData : public ParsedTrackPrivData
         const uint8_t* end = buff + size;
         while (buff < end)
         {
-            const uint32_t nalSize = getNalSize(buff);
+            // pkt->data was sized by newBufferSize, which stops as soon as a length stops making
+            // sense. This loop used to run on regardless and copy whatever it read, so one bad
+            // length wrote past the end of the buffer that had been reserved for the frame. The
+            // two walks have to give up in the same places.
+            if (static_cast<size_t>(end - buff) < nal_length_size)
+                break;
+            const auto nalSize = static_cast<uint32_t>(getNalSize(buff));
             buff += nal_length_size;
+            if (nalSize == 0 || nalSize > MAX_NAL_SIZE || nalSize > static_cast<size_t>(end - buff))
+                break;
             *dst++ = 0x00;
             *dst++ = 0x00;
             *dst++ = 0x00;
@@ -366,22 +378,22 @@ class MovParsedH264TrackData : public ParsedTrackPrivData
         unsigned nalCnt = 0;
         while (cur < end)
         {
-            if (cur + nal_length_size > end)
+            if (static_cast<size_t>(end - cur) < nal_length_size)
             {
                 LTRACE(LT_WARN, 2,
                        "MP4/MOV: truncated NAL length field at position " << m_demuxer->getProcessedBytes()
                                                                           << ", stopping parse");
                 break;
             }
-            const uint32_t nalSize = getNalSize(cur);
+            const auto nalSize = static_cast<uint32_t>(getNalSize(cur));
             cur += nal_length_size;
-            if (nalSize == 0 || nalSize > 10 * 1024 * 1024)
+            if (nalSize == 0 || nalSize > MAX_NAL_SIZE)
             {
                 LTRACE(LT_WARN, 2,
                        "MP4/MOV: suspicious NAL size " << nalSize << " at position " << m_demuxer->getProcessedBytes());
                 break;
             }
-            if (cur + nalSize > end)
+            if (nalSize > static_cast<size_t>(end - cur))
             {
                 LTRACE(LT_WARN, 2,
                        "MP4/MOV: NAL size " << nalSize << " exceeds frame boundary at position "
