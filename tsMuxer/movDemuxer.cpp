@@ -903,8 +903,18 @@ int MovDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepte
         else
         {
             next = m_mdat_size;
-            m_firstDemux = true;
-            m_mdat_pos = 0;
+            // A fragmented file carries a moof header before every mdat, so once this one is
+            // finished the next header has to be read and the first-demux path is armed again.
+            //
+            // A plain file has nothing after its last mdat. Arming it there sent the following
+            // call back into readHeaders at the end of the file, where it returned end of stream
+            // from above the code that asks the file list for the next name. Joining mp4 files
+            // therefore stopped after the first one and still reported success.
+            if (found_moof)
+            {
+                m_firstDemux = true;
+                m_mdat_pos = 0;
+            }
         }
         const auto chunkSize = static_cast<int>(found_moof ? m_mdat_data[m_curChunk].second : next - offset);
         const int trackId = static_cast<int>(chunks[m_curChunk].second);
