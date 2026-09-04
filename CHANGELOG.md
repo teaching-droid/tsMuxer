@@ -1,3 +1,62 @@
+## tsMuxeR 2.18.11
+
+Every issue carried over from the original tsMuxeR has been read through and tested against this
+version, to see which ones are still there and which are already gone. This release fixes the ones
+that are still there. The feature requests have not been looked at yet. Defects come first.
+
+### Fixed
+
+* **Joining mp4 files kept only the first one.** Four files went in, one came out, and tsMuxeR
+reported success and exited zero. Nothing in the output said a quarter of the film was missing.
+Joining `.264` or `.mkv` files was never affected. Five separate faults were behind it. One of
+them could crash while simply reading an mp4. Another made the same command work on one file and
+fail on another of a different length. Joining now gives the whole thing.
+
+* **A file that opened correctly could crash tsMuxeR at random.** It happened about twice in a
+hundred runs on one ordinary mp4. The buffer for a frame was measured by one piece of code and
+filled by another. Only one of them checked, so a bad length wrote past the end of the buffer.
+
+* **Asking for a different HEVC frame rate did nothing and said it had worked.** The rate was
+accepted and announced in the log. It was never written into the video. Every rate now lands in
+the file. This also fixes muxing HEVC with a changed frame rate producing an unreadable result.
+
+* **A frame rate written as a fraction was read as its first number.** `fps=24000/1001` was taken
+as 24000, so the disc was built at twenty four thousand frames a second. Only a meta file typed by
+hand could reach it, which is exactly what a recipe asks people to write.
+
+* **`--cut-end` was described as a trim.** It is not. It is the point to stop at, measured from
+the start, so `--cut-end=30s` keeps the first thirty seconds rather than removing the last thirty.
+The help now says so. A range that selects nothing used to write an empty file and report success.
+It is now refused, with both values named.
+
+* **An empty output path came back as an unknown exception.** A path of nothing but spaces was
+accepted outright and muxed as though it were a file name. Both are now refused with a clear
+message, and the underlying read past the end of an empty string is gone.
+
+* **A source with more than 64 tracks could not be opened.** The limit is now 256.
+
+* **Every mp4 opened leaked memory.** About 13 KB per file, and once more for each file of a join.
+
+### New
+
+* **tsMuxeR now says when a disc asks to be read faster than a player has to manage.** A Blu-ray
+drive only has to supply 48 Mbit/s, or 109 for UHD. A video whose average sits well inside that
+can still ask for far more in bursts. That happens when its peak rate was never capped at encoding
+time. Such a disc plays perfectly from a hard disk. On a standalone player it may stutter or
+refuse to start. Nothing in the output changes. The warning names the rate and the limit.
+
+* **The window opens where you last left it.** It is put back on a screen that still exists.
+
+### Changed
+
+* **The help for `--maxbitrate` no longer describes something it does not do.** It said the option
+sets the rate the stream is paced to. It does not pace anything, and on its own it changes nothing
+at all. Its one real use is to switch on the padding that `--minbitrate` asks for. For a fixed
+rate use `--bitrate`.
+
+* **The macOS packaging script no longer depends on where it is run from**, and the install
+instructions no longer point at an address that has gone.
+
 ## tsMuxeR 2.18.10
 
 The macOS app would not open on Apple Silicon. No arm64 build ever has.
