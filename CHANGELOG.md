@@ -1,3 +1,31 @@
+## tsMuxeR 2.18.10
+
+The macOS app would not open on Apple Silicon. No arm64 build ever has.
+
+### Fixed
+
+* **On Apple Silicon, macOS reported the app as damaged and refused to open it.** Every arm64
+build from 2.8.0 onwards was affected, and the x64 builds under Rosetta were not. It was not a
+security prompt that could be clicked past. Two faults in the packaging caused it, both silent:
+the build succeeded, the download worked, and the app would not start.
+
+The app bundle was never signed. Nothing wrote a signature for it, and on Apple Silicon that is
+what macOS objects to. It now carries an ad-hoc signature.
+
+The frameworks inside it were flattened. Packaging followed the symbolic links instead of storing
+them, so `Versions/Current` became a real folder and each Qt library a real file rather than a
+link. A framework in that shape is not valid, which is a second route to the same message. The
+links are now kept.
+
+The macOS download is also about half the size it was, 42 MB rather than 81 MB for arm64. Nothing
+has been left out. Every Qt library was previously stored three times over, once for the real file
+and once for each link that had been turned into a copy.
+
+An ad-hoc signature is not a Developer ID. macOS will still say the developer cannot be verified,
+which right-click and Open clears. Removing that as well needs notarisation.
+
+Reported by @FRtranslator.
+
 ## tsMuxeR 2.18.9
 
 Opening a Matroska file could take minutes, or look as though the program had stopped. That is
