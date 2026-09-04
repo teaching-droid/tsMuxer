@@ -257,6 +257,15 @@ void MuxerManager::checkTrackList(const vector<StreamInfo>& ci) const
 
 void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
 {
+    // Both cut values are positions from the start of the source, so an end at or before the
+    // start selects nothing. That used to produce an empty file and report success, which is the
+    // worst of the three possible outcomes. Refuse it and say what the two values were.
+    if (m_cutEnd > 0 && m_cutEnd <= m_cutStart)
+        THROW(ERR_COMMON, "Nothing to mux: --cut-end ("
+                              << m_cutEnd / INTERNAL_PTS_FREQ << "s) is not after --cut-start ("
+                              << m_cutStart / INTERNAL_PTS_FREQ
+                              << "s). Both are positions from the start of the source, so the end "
+                                 "must be the later of the two.")
     // Run the discovery phase: probe all tracks to collect metadata
     // (channels, sample rate, resolution, codec-private, etc.) before
     // the main mux pipeline starts.  This is self-contained -- all

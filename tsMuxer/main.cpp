@@ -651,10 +651,10 @@ All parameters in this group start with two dashes:
                       created directly as an image file.
 --blu-ray-v3          As above - except mux to UHD BD discs.
 --avchd               Mux to AVCHD disc.
---cut-start           Trim the beginning of the file. The value should be followed
-                      by the time unit : "ms" (milliseconds), "s" (seconds) or
-                      "min" (minutes).
---cut-end             Trim the end of the file. Same rules as --cut-start apply.
+--cut-start           Where to start, measured from the beginning of the file.
+                      Followed by "ms", "s" or "min".
+--cut-end             Where to STOP, measured from the beginning too, not from
+                      the end. --cut-end=30s keeps the first 30 seconds.
 --split-duration      Split the output into several files, with each of them being
                       <n> seconds long.
 --split-size          Split the output into several files, with each of them
