@@ -781,6 +781,7 @@ MovDemuxer::MovDemuxer(const BufferedReaderManager& readManager)
     isom = 0;
     m_curChunk = 0;
     m_firstDemux = true;
+    m_readerUsed = false;
     m_fileIterator = nullptr;
     m_firstHeaderSize = 0;
 }
@@ -824,6 +825,21 @@ void MovDemuxer::openFile(const std::string& streamName)
     // Free what the last file left behind BEFORE the count is cleared. The other order meant
     // readClose saw no tracks and released nothing, so reopening leaked the lot.
     readClose();
+
+    // Every file of a join is read by a reader of its own. Reopening the stream on the reader that
+    // had just finished the file before left that file's end of file behind, and the new one then
+    // read as though it were already finished: the mdat was skipped only part way and the moov
+    // atom after it was never reached. Whether that happened depended on where the read ahead had
+    // got to, so the same command worked on one file and failed on another of a different length.
+    //
+    // Both calls take the reader lock, and deleteReader leaves a reader alone until its
+    // outstanding request has been served, so this is safe while the muxer is running.
+    if (m_readerUsed)
+    {
+        m_bufferedReader->deleteReader(m_readerID);
+        m_readerID = m_bufferedReader->createReader(TS_FRAME_SIZE);
+    }
+    m_readerUsed = true;
 
     if (!m_bufferedReader->openStream(m_readerID, streamName.c_str()))
         THROW(ERR_FILE_NOT_FOUND, "Can't open stream " << streamName)
