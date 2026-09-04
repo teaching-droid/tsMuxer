@@ -155,6 +155,12 @@ class TSMuxer final : public AbstractMuxer
         m_m2tsDelayBlocks;  // postpone M2TS PCR processing (fill previous data on next PCR after several PES packets)
     int m_prevM2TSPCROffset;
     int64_t m_prevM2TSPCR;
+    // How hard the finished disc asks the player to read. Filled in while the arrival timestamps
+    // are written and reported once at the end. See reportReadRate.
+    double m_minAtsGap;
+    int64_t m_atsPackets;
+    int64_t m_atsOverLimit;
+    void reportReadRate() const;
     int64_t m_endStreamDTS;
     int m_lastTSIndex;
     int m_lastPesLen;
