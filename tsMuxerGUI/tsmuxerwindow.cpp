@@ -21,6 +21,7 @@
 #include <QFontDialog>
 #include <QGridLayout>
 #include <QGroupBox>
+#include <QGuiApplication>
 #include <QLabel>
 #include <QLibraryInfo>
 #include <QLineEdit>
@@ -30,6 +31,7 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
+#include <QScreen>
 #include <QSettings>
 #include <QSharedPointer>
 #include <QSignalBlocker>
@@ -4687,6 +4689,7 @@ void TsMuxerWindow::writeSettings()
     settings->setValue("outputToInputFolder", ui->radioButtonOutoutInInput->isChecked());
     settings->setValue("language", ui->languageSelectComboBox->currentText());
     settings->setValue("windowSize", size());
+    settings->setValue("windowPos", pos());
 
     settings->setValue("addSEIMethod", ui->comboBoxSEI->currentIndex());
     settings->setValue("addSPS", ui->checkBoxSPS->isChecked());
@@ -4749,6 +4752,27 @@ bool TsMuxerWindow::readGeneralSettings(const QString& prefix)
     if (size.isValid() && size.canConvert<QSize>())
     {
         resize(size.toSize());
+    }
+
+    // The size was remembered and the position was not, so the window came back where the system
+    // felt like putting it. Restoring a position blindly is worse than not restoring one: a
+    // position saved on a monitor that is no longer attached puts the window somewhere nobody can
+    // reach it. So it is only used if some screen still contains it.
+    auto storedPos = settings->value("windowPos");
+    if (storedPos.isValid() && storedPos.canConvert<QPoint>())
+    {
+        const QPoint p = storedPos.toPoint();
+        bool onAScreen = false;
+        for (const QScreen* screen : QGuiApplication::screens())
+        {
+            if (screen->availableGeometry().contains(p))
+            {
+                onAScreen = true;
+                break;
+            }
+        }
+        if (onAScreen)
+            move(p);
     }
 
     auto lang = settings->value("language");
