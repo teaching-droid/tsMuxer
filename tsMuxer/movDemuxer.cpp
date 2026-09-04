@@ -948,15 +948,21 @@ int MovDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepte
                 const unsigned readed = get_buffer(m_tmpChunkBuffer.data(), chunkSize);
                 if (readed == 0)
                     break;
+                // Parse what arrived, not what was asked for. get_buffer fills what it can and
+                // returns the count, and the branches below all check it. This one did not, so a
+                // chunk that ran past the end of the data was parsed together with whatever the
+                // shared buffer still held from the chunk before it, and those bytes were read as
+                // NAL lengths.
+                const auto usable = static_cast<int>(readed);
                 m_deliveredPacket.size =
-                    static_cast<int32_t>(st->parsed_priv_data->newBufferSize(m_tmpChunkBuffer.data(), chunkSize));
+                    static_cast<int32_t>(st->parsed_priv_data->newBufferSize(m_tmpChunkBuffer.data(), usable));
                 if (m_deliveredPacket.size)
                 {
                     if (filterItr != m_pidFilters.end())
                     {
                         m_filterBuffer.resize(m_deliveredPacket.size);
                         m_deliveredPacket.data = m_filterBuffer.data();
-                        st->parsed_priv_data->extractData(&m_deliveredPacket, m_tmpChunkBuffer.data(), chunkSize);
+                        st->parsed_priv_data->extractData(&m_deliveredPacket, m_tmpChunkBuffer.data(), usable);
                         const int demuxed =
                             filterItr->second->demuxPacket(demuxedData, acceptedPIDs, m_deliveredPacket);
                         discardSize += static_cast<int64_t>(chunkSize) - demuxed;
@@ -966,7 +972,7 @@ int MovDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepte
                         discardSize += static_cast<int64_t>(chunkSize) - m_deliveredPacket.size;
                         vect.grow(m_deliveredPacket.size);
                         m_deliveredPacket.data = vect.data() + oldSize;
-                        st->parsed_priv_data->extractData(&m_deliveredPacket, m_tmpChunkBuffer.data(), chunkSize);
+                        st->parsed_priv_data->extractData(&m_deliveredPacket, m_tmpChunkBuffer.data(), usable);
                     }
                 }
                 else
