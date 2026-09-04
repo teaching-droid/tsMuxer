@@ -2,6 +2,12 @@
 
 set -ex
 
+# Run from the repository root whatever directory this was invoked from. Without this the
+# script only works when the working directory happens to be the root: "mkdir build" lands
+# wherever you stood, and the "cmake .." below then points at a directory with no
+# CMakeLists.txt in it. Upstream issue 906 is that failure, reported as a wrong cmake call.
+cd "$(dirname "$0")/.."
+
 export MACOSX_DEPLOYMENT_TARGET=10.15
 
 if [ "${CMAKE_OSX_ARCHITECTURES:-}" = "x86_64" ]; then
