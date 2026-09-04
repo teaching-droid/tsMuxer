@@ -773,7 +773,24 @@ MovDemuxer::MovDemuxer(const BufferedReaderManager& readManager)
     m_firstHeaderSize = 0;
 }
 
-void MovDemuxer::readClose() {}
+void MovDemuxer::readClose()
+{
+    // Nothing used to free these. Every mp4 opened leaked its track contexts and the vectors
+    // inside them, which a sanitizer put at about 13 KB for a single file. On the probe path the
+    // process exits immediately afterwards so it never showed, but it leaked during a real mux
+    // too, and once per file in a join.
+    //
+    // Cast back to what was allocated rather than deleting through Track*. Track has no virtual
+    // destructor, so deleting through the base would be undefined and would leave the vectors
+    // inside MOVStreamContext untouched. Only mov_read_trak fills this array and it only ever
+    // puts MOVStreamContext in it.
+    for (int i = 0; i < num_tracks; ++i)
+    {
+        delete static_cast<MOVStreamContext*>(tracks[i]);
+        tracks[i] = nullptr;
+    }
+    num_tracks = 0;
+}
 
 void MovDemuxer::openFile(const std::string& streamName)
 {
@@ -791,8 +808,9 @@ void MovDemuxer::openFile(const std::string& streamName)
     m_curPos = m_bufEnd = nullptr;
     m_processedBytes = 0;
     m_isEOF = false;
-    num_tracks = 0;
 
+    // Free what the last file left behind BEFORE the count is cleared. The other order meant
+    // readClose saw no tracks and released nothing, so reopening leaked the lot.
     readClose();
 
     if (!m_bufferedReader->openStream(m_readerID, streamName.c_str()))
