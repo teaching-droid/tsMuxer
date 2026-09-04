@@ -786,6 +786,19 @@ MovDemuxer::MovDemuxer(const BufferedReaderManager& readManager)
     m_firstHeaderSize = 0;
 }
 
+// A reader with nothing in flight and no end of file behind it. Both calls take the reader lock,
+// and deleteReader leaves a reader alone until its outstanding request has been served, so this is
+// safe while the muxer is running. Reader ids are never reused.
+void MovDemuxer::takeFreshReader()
+{
+    if (m_readerUsed)
+    {
+        m_bufferedReader->deleteReader(m_readerID);
+        m_readerID = m_bufferedReader->createReader(TS_FRAME_SIZE);
+    }
+    m_readerUsed = true;
+}
+
 void MovDemuxer::readClose()
 {
     // Nothing used to free these. Every mp4 opened leaked its track contexts and the vectors
@@ -831,15 +844,7 @@ void MovDemuxer::openFile(const std::string& streamName)
     // read as though it were already finished: the mdat was skipped only part way and the moov
     // atom after it was never reached. Whether that happened depended on where the read ahead had
     // got to, so the same command worked on one file and failed on another of a different length.
-    //
-    // Both calls take the reader lock, and deleteReader leaves a reader alone until its
-    // outstanding request has been served, so this is safe while the muxer is running.
-    if (m_readerUsed)
-    {
-        m_bufferedReader->deleteReader(m_readerID);
-        m_readerID = m_bufferedReader->createReader(TS_FRAME_SIZE);
-    }
-    m_readerUsed = true;
+    takeFreshReader();
 
     if (!m_bufferedReader->openStream(m_readerID, streamName.c_str()))
         THROW(ERR_FILE_NOT_FOUND, "Can't open stream " << streamName)
@@ -853,7 +858,22 @@ void MovDemuxer::openFile(const std::string& streamName)
     m_isEOF = false;
     readHeaders();
     if (m_mdat_pos && m_processedBytes != m_mdat_pos)
+    {
+        // Reading the header walked to the end of the file, because a moov atom usually sits
+        // there, so this reader has a read of its own still in flight and is about to be told the
+        // file is finished. Seeking it back races with that: gotoByte clears the end of file, the
+        // late read lands afterwards and sets it again, and the pass that follows then stops after
+        // a single block. Measured on the same file, both ways round:
+        //
+        //   the read finished first   gotoByte saw atQueue=0 eof=1, cleared it, 1494 frames
+        //   the read was still going  gotoByte saw atQueue=1 eof=0, cleared nothing, 1207 frames
+        //
+        // A reader that has not been asked for anything yet has nothing in flight to come back.
+        takeFreshReader();
+        if (!m_bufferedReader->openStream(m_readerID, streamName.c_str()))
+            THROW(ERR_FILE_NOT_FOUND, "Can't open stream " << streamName)
         url_fseek(m_mdat_pos);
+    }
     buildIndex();
     m_firstHeaderSize = m_processedBytes;
 }

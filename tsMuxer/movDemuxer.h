@@ -110,6 +110,7 @@ class MovDemuxer final : public IOContextDemuxer
 
     void readHeaders();
     void buildIndex();
+    void takeFreshReader();
     int ParseTableEntry(MOVAtom atom);
     int mov_read_default(MOVAtom atom);
     int mov_read_extradata(MOVAtom atom);
