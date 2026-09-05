@@ -1235,7 +1235,7 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
                 try
                 {
                     tmpReader.reset(
-                        createCodec(si.m_codec, si.m_addParams, si.m_streamName, std::vector<MPLSPlayItem>()));
+                        createCodec(si.m_codec, si.m_addParams, si.m_streamName, std::vector<MPLSPlayItem>(), true));
                 }
                 catch (...)
                 {
@@ -1337,7 +1337,7 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
                 try
                 {
                     tmpReader.reset(
-                        createCodec(si.m_codec, si.m_addParams, si.m_streamName, std::vector<MPLSPlayItem>()));
+                        createCodec(si.m_codec, si.m_addParams, si.m_streamName, std::vector<MPLSPlayItem>(), true));
                 }
                 catch (...)
                 {
@@ -1767,7 +1767,8 @@ int pipScaleFromStr(const std::string& value)
 }
 
 AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const map<string, string>& addParams,
-                                               const std::string& codecStreamName, const vector<MPLSPlayItem>& mplsInfo)
+                                               const std::string& codecStreamName, const vector<MPLSPlayItem>& mplsInfo,
+                                               const bool quiet)
 {
     AbstractStreamReader* rez = nullptr;
     if (codecName == "V_MPEG4/ISO/AVC" || codecName == "V_MPEG4/ISO/MVC")
@@ -1909,7 +1910,7 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
         // option still yields a correct TrueHD track: exactly what the user already had,
         // because the option has always been a no-op on this codec. Failing would break
         // existing meta files for no gain. The defect was that it was ignored SILENTLY.
-        if (addParams.find("down-to-ac3") != addParams.end())
+        if (addParams.find("down-to-ac3") != addParams.end() && !quiet)
             LTRACE(LT_WARN, 2,
                    "Warning: down-to-ac3 has no effect on an A_MLP track and is being ignored. "
                    "A standalone TrueHD stream has no AC-3 core to keep, and tsMuxeR does not "

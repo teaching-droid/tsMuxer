@@ -220,10 +220,12 @@ class METADemuxer final : public AbstractDemuxer
 
     friend class ContainerToReaderWrapper;
 
+    // quiet suppresses advice meant for the user. discoverStreams builds a reader purely to look
+    // at a file and throws it away, so anything said there is said a second time by the real pass.
     static AbstractStreamReader* createCodec(const std::string& codecName,
                                              const std::map<std::string, std::string>& addParams,
                                              const std::string& codecStreamName,
-                                             const std::vector<MPLSPlayItem>& mplsInfo);
+                                             const std::vector<MPLSPlayItem>& mplsInfo, bool quiet = false);
     inline void updateReport(bool checkTime);
     void lineBack();
     static CheckStreamRez detectTrackReader(uint8_t* tmpBuffer, int len,
