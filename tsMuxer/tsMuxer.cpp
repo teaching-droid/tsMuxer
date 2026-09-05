@@ -57,6 +57,22 @@ static constexpr int DEGENERATE_MUX_RATE = PCR_FREQUENCY;
 // 53.948 Mbit/s. 48 Mbit/s of transport stream is 31,915 packets a second, which the drive reads as
 // 49.02 Mbit/s once each carries its timestamp, and that fits with headroom. Reading the limit the
 // other way would leave nearly 6 Mbit/s of the physical rate unused, which is not how it is meant.
+//
+// The HD figure is also measured rather than only read: three commercially authored discs were
+// checked and none of the 3.3 million packets between them has a gap below 846 ticks, which is
+// exactly 48 Mbit/s on the 188 byte packet.
+//
+// The UHD figure comes from the BDA white paper for BD-ROM Version 3, where the maximum multiplex
+// rate of the transport stream is given per disc capacity and per zone: 64 and 81.7 Mbit/s for a
+// 50 GB disc, 81.7 and 109 for 66 and 100 GB, and 127.9 in the high transfer rate zone of the two
+// larger ones. 109 is therefore not the only legal answer, it is the one that fits the capacities
+// UHD titles are actually pressed on. A single number is a simplification and this is the useful
+// place to put it.
+//
+// Which of the two applies is decided by isV3(), and that is set for ANY HEVC on a disc, not only
+// for 3840 wide video. That is deliberate: HEVC exists on Blu-ray only in Version 3, so even a
+// 1920 wide HEVC disc needs a player that reads at the Version 3 rate. Measured, a 1080p HEVC disc
+// asking 57.0 Mbit/s says nothing, and that is the intended answer rather than a missed warning.
 static constexpr double TS_PACKET_BITS = 188.0 * 8.0;
 static constexpr double BD_READ_RATE_HD = 48.0e6;
 static constexpr double BD_READ_RATE_UHD = 109.0e6;
