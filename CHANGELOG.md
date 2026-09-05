@@ -55,6 +55,12 @@ can still ask for far more in bursts. That happens when its peak rate was never 
 time. Such a disc plays perfectly from a hard disk. On a standalone player it may stutter or
 refuse to start. Nothing in the output changes. The warning names the rate and the limit.
 
+* **A track that produced no frames at all now says so.** The codec named on a meta line was taken
+as fact and never checked against the file, so naming the wrong one was silent. `A_AC3` on an H.264
+stream wrote nothing and said nothing, and a video codec on an audio file wrote a file of the
+expected size holding no frames and reported success. Any track that delivered nothing is now named
+at the end of the mux.
+
 * **The window opens where you last left it.** It is put back on a screen that still exists.
 
 ### Changed
