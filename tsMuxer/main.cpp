@@ -487,7 +487,7 @@ Common additional parameters for any type of track:
 - lang              track language. MUST contain exactly 3 letters.
 
 Additional parameters for audio tracks:
-- timeshift         Shift audio track by the given number of milliseconds.
+- timeshift         Shift a track by the given number of milliseconds. Video too, see below.
                     Can be negative.
 - down-to-dts       Available only for DTS-HD tracks. Filter out HD part.
 - down-to-ac3       For TRUE-HD and E-AC3 (DD+) tracks. Keep the AC-3 core, drop the HD part.
@@ -526,6 +526,8 @@ TrueHD + AC-3 core merge (elementary streams):
                     Example: A_MLP, "audio.thd", merge-ac3-file="compat.ac3"
 
 Additional parameters for video tracks:
+- timeshift         The same option listed under audio. It shifts a video track as well,
+                    which is what a stream taken from another source needs.
 - fps               The number of frames per second. If not defined, the value
                     is auto detected from the source stream or container
                     metadata (e.g. MKV default_duration, MP4 timescale). If
