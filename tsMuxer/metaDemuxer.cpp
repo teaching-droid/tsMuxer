@@ -169,6 +169,120 @@ using namespace std;
 static constexpr int MAX_DEMUX_BUFFER_SIZE = 1024 * 1024 * 192;
 static constexpr int MIN_READED_BLOCK = 16384;
 
+// ** THE FILE NAME DECIDES WHICH READER OPENS A FILE, AND A NAME CAN BE WRONG. **
+//
+// A broadcast capture called .mpg is very often a transport stream, and it was then handed to the
+// program stream reader. What came back was either an error phrased in that reader's own terms, or
+// for several combinations nothing at all: a banner, one blank line and exit 0, which reads as
+// "there is nothing in this file".
+//
+// Measured by copying one real file of each kind under every extension in turn. Every container is
+// chosen from the name this way, not only .mpg.
+//
+// So the name is checked against the first bytes. The rule is deliberately one sided: a file is
+// refused only when the content positively identifies a DIFFERENT container. When the content
+// cannot be identified, nothing is said and the old path runs, so an elementary stream, a format
+// without a signature and anything unusual are all left exactly as they were.
+static bool syncsAt(const uint8_t* buf, const int len, const int stride, const int offset)
+{
+    int seen = 0;
+    for (int i = offset; i < len; i += stride)
+    {
+        if (buf[i] != 0x47)
+            return false;
+        if (++seen >= 16)
+            return true;
+    }
+    return false;
+}
+
+// The families the name can put a file into. ctUnknown means the name says nothing useful, which
+// includes every elementary stream.
+enum class NamedAs
+{
+    ctUnknown,
+    ctTS,
+    ctPS,
+    ctMP4,
+    ctMKV
+};
+
+static NamedAs familyOfExt(const std::string& ext)
+{
+    if (ext == "ts" || ext == "m2ts" || ext == "mts" || ext == "m2t" || ext == "ssif")
+        return NamedAs::ctTS;
+    if (ext == "mpg" || ext == "mpeg" || ext == "vob" || ext == "evo")
+        return NamedAs::ctPS;
+    if (ext == "mp4" || ext == "mov" || ext == "m4v" || ext == "m4a")
+        return NamedAs::ctMP4;
+    if (ext == "mkv" || ext == "mka" || ext == "mks")
+        return NamedAs::ctMKV;
+    return NamedAs::ctUnknown;
+}
+
+static NamedAs familyOfContent(const uint8_t* buf, const int len, const char** name)
+{
+    if (len >= 192 * 17)
+    {
+        if (syncsAt(buf, len, 188, 0))
+        {
+            *name = "a transport stream, so rename it to .ts";
+            return NamedAs::ctTS;
+        }
+        if (syncsAt(buf, len, 192, 4))
+        {
+            *name = "a transport stream with arrival timestamps, so rename it to .m2ts";
+            return NamedAs::ctTS;
+        }
+    }
+    if (len >= 16)
+    {
+        // A pack header. An H.264 stream cannot begin this way: 0xBA sets the bit that H.264
+        // requires to be zero in the byte after a start code.
+        if (buf[0] == 0 && buf[1] == 0 && buf[2] == 1 && buf[3] == 0xBA)
+        {
+            *name = "an MPEG program stream, so rename it to .mpg";
+            return NamedAs::ctPS;
+        }
+        if (buf[0] == 0x1A && buf[1] == 0x45 && buf[2] == 0xDF && buf[3] == 0xA3)
+        {
+            *name = "a Matroska file, so rename it to .mkv";
+            return NamedAs::ctMKV;
+        }
+        if (!memcmp(buf + 4, "ftyp", 4))
+        {
+            *name = "an mp4 or QuickTime file, so rename it to .mp4";
+            return NamedAs::ctMP4;
+        }
+    }
+    return NamedAs::ctUnknown;
+}
+
+static void checkNameMatchesContent(const std::string& fileName, const std::string& ext)
+{
+    const NamedAs named = familyOfExt(ext);
+    if (named == NamedAs::ctUnknown)
+        return;
+
+    File file;
+    if (!file.open(fileName.c_str(), File::ofRead))
+        return;  // let whatever opens it next report that properly
+    uint8_t buf[192 * 20];
+    const int len = file.read(buf, sizeof(buf));
+    file.close();
+    if (len <= 0)
+        return;
+
+    const char* what = nullptr;
+    const NamedAs found = familyOfContent(buf, len, &what);
+    if (found == NamedAs::ctUnknown || found == named)
+        return;
+
+    THROW(ERR_COMMON, "The file " << fileName << " is named ." << ext
+                                  << ", and the name is what decides how it is read, but it is "
+                                  << what << " and try again.")
+}
+
 METADemuxer::METADemuxer(const BufferedReaderManager& readManager)
     : m_containerReader(*this, readManager), m_readManager(readManager)
 {
@@ -631,6 +745,8 @@ int METADemuxer::addStream(const string& codec, const string& codecStreamName, c
     AbstractReader* dataReader;
     string tmpname = strToLowerCase(fileList[0]);
     tmpname = unquoteStr(trimStr(tmpname));
+
+    checkNameMatchesContent(unquoteStr(trimStr(fileList[0])), strToLowerCase(extractFileExt(tmpname)));
 
     if (strEndWith(tmpname, ".h264") || strEndWith(tmpname, ".264") || strEndWith(tmpname, ".mvc"))
     {
@@ -1241,6 +1357,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
     std::unique_ptr<AbstractDemuxer> demuxer;
     auto unquoted = unquoteStr(fileName);
     string fileExt = strToLowerCase(extractFileExt(unquoted));
+    checkNameMatchesContent(unquoted, fileExt);
     AbstractStreamReader::ContainerType containerType = AbstractStreamReader::ContainerType::ctNone;
     CLPIParser clpi;
     bool clpiParsed = false;
