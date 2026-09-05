@@ -65,11 +65,13 @@ at the end of the mux.
 
 ### Changed
 
-* **The audio option once called "Downconvert" is now named for what it does.** It reads "Keep the
-AC-3 core, drop the TRUE-HD part", and the same for DTS-HD and DD+. tsMuxeR muxes, it does not
-convert. These formats carry a plain core inside the HD stream, and the option keeps that core and
-drops the HD part, so it is only offered where there is a core to keep. `down-to-ac3` and
-`down-to-dts` in a meta file are unchanged.
+* **The audio option called "Downconvert" is renamed, because the name can mislead.** tsMuxeR is a
+muxer and does not convert audio. TRUE-HD, DTS-HD and DD+ carry a plain core inside the HD stream,
+and all this option ever did was keep that core and drop the HD part. It has carried the old name
+for as long as this project's history goes back, and that name suggests something the program has
+never done. It now reads "Keep the AC-3 core, drop the TRUE-HD part", and the same for DTS-HD and
+DD+. It is also only offered where there is a core to keep. Nothing about what it does has changed,
+and `down-to-ac3` and `down-to-dts` in a meta file are unchanged.
 
 * **The help for `--maxbitrate` no longer describes something it does not do.** It said the option
 sets the rate the stream is paced to. It does not pace anything, and on its own it changes nothing
