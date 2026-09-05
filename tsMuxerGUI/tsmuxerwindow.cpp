@@ -2615,15 +2615,32 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
             if (codecInfo->displayName == "LPCM")
                 ui->tabWidgetTracks->addTab(ui->demuxLpcmOptions, TI_DEMUX_TAB_NAME());
 
+            // ** IT DOES NOT CONVERT ANYTHING. ** These tracks carry a plain core inside the HD
+            // stream, and all this does is keep the core and drop the HD part. Nothing is decoded
+            // and nothing is re-encoded. The old wording promised a conversion, so a track with no
+            // core inside it looked as though it should work, and ticking the box changed nothing.
             if (codecInfo->displayName == "DTS-HD")
-                ui->dtsDwnConvert->setText(tr("Downconvert DTS-HD to DTS"));
+                ui->dtsDwnConvert->setText(tr("Keep the DTS core, drop the HD part"));
             else if (codecInfo->displayName == "TRUE-HD")
-                ui->dtsDwnConvert->setText(tr("Downconvert TRUE-HD to AC3"));
+                ui->dtsDwnConvert->setText(tr("Keep the AC-3 core, drop the TRUE-HD part"));
             else if (codecInfo->displayName == "E-AC3 (DD+)")
-                ui->dtsDwnConvert->setText(tr("Downconvert E-AC3 to AC3"));
+                ui->dtsDwnConvert->setText(tr("Keep the AC-3 core, drop the DD+ part"));
             else
-                ui->dtsDwnConvert->setText(tr("Downconvert HD audio"));
-            ui->dtsDwnConvert->setEnabled(!codecInfo->descr.contains("(core 0Kbps)") &&
+                ui->dtsDwnConvert->setText(tr("Keep the core, drop the HD part"));
+
+            // ** AND IT IS ONLY OFFERED WHEN THERE IS A CORE TO KEEP. **
+            //
+            // The old test excluded only "(core 0Kbps)", which is what an E-AC3 track with no core
+            // reports. A TRUE-HD track that carries no core at all says nothing about a core, so it
+            // passed the test and the box was offered:
+            //
+            //   AC3 core + TRUE-HD. Peak bitrate: 5844Kbps (core 640Kbps)   has a core
+            //   TRUE-HD + ATMOS. Peak bitrate: 7626Kbps                     has none, box offered
+            //   EAC3 Bitrate: 640Kbps (core 0Kbps)                          has none, box refused
+            //
+            // Requiring the description to mention a core covers all three the same way.
+            ui->dtsDwnConvert->setEnabled(codecInfo->descr.contains("core") &&
+                                          !codecInfo->descr.contains("(core 0Kbps)") &&
                                           (codecInfo->displayName == "DTS-HD" || codecInfo->displayName == "TRUE-HD" ||
                                            codecInfo->displayName == "E-AC3 (DD+)"));
             ui->secondaryCheckBox->setEnabled(codecInfo->descr.contains("(DTS Express)") ||

@@ -759,7 +759,7 @@
                   <item>
                    <widget class="QCheckBox" name="dtsDwnConvert">
                     <property name="text">
-                     <string>Downconvert HD audio</string>
+                     <string>Keep the core, drop the HD part</string>
                     </property>
                    </widget>
                   </item>
