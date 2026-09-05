@@ -2751,8 +2751,8 @@ ISO trotzdem erstellen?</translation>
     <message>
         <location filename="../tsmuxerwindow.ui" line="747"/>
         <location filename="../tsmuxerwindow.cpp" line="1584"/>
-        <source>Downconvert HD audio</source>
-        <translation>HD-Audio herunterkonvertieren</translation>
+        <source>Keep the core, drop the HD part</source>
+        <translation>Kern behalten, HD-Teil verwerfen</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="754"/>
@@ -3721,18 +3721,18 @@ ISO trotzdem erstellen?</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1578"/>
-        <source>Downconvert DTS-HD to DTS</source>
-        <translation>DTS-HD zu DTS umwandeln</translation>
+        <source>Keep the DTS core, drop the HD part</source>
+        <translation>DTS-Kern behalten, HD-Teil verwerfen</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1580"/>
-        <source>Downconvert TRUE-HD to AC3</source>
-        <translation>TRUE-HD zu AC3 umwandeln</translation>
+        <source>Keep the AC-3 core, drop the TRUE-HD part</source>
+        <translation>AC-3-Kern behalten, TRUE-HD-Teil verwerfen</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1582"/>
-        <source>Downconvert E-AC3 to AC3</source>
-        <translation>E-AC3 zu AC3 umwandeln</translation>
+        <source>Keep the AC-3 core, drop the DD+ part</source>
+        <translation>AC-3-Kern behalten, DD+-Teil verwerfen</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1739"/>
