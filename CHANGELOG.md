@@ -39,6 +39,10 @@ read as a program stream. That gave either a message about the reader's own inte
 several combinations a banner and nothing else at all, at exit 0. The message now says what the
 file really is and what to rename it to. Correctly named files are unaffected.
 
+* **A changed HEVC frame rate reached only half of the file.** HEVC records its timing twice, and
+`fps=` rewrote one copy and not the other. The file then disagreed with itself: some tools read 25
+and others read the original rate from the same file. Both copies are now written.
+
 * **A source with more than 64 tracks could not be opened.** The limit is now 256.
 
 * **Every mp4 opened leaked memory.** About 13 KB per file, and once more for each file of a join.
