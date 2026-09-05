@@ -1650,6 +1650,24 @@ CheckStreamRez METADemuxer::detectTrackReader(uint8_t* tmpBuffer, int len,
     if (len == 0)
         return rez;
 
+    // The container says what the track is, and that was being thrown away. Every video probe
+    // below runs before the MPEG audio one, which is alone among the audio readers in sitting
+    // after them, so a track a PMT declares as stream type 0x04 reached the AV1 detector first.
+    // On a real broadcast capture that detector found a sequence header inside MP2 audio and
+    // answered "AV1, 68x28, Profile 1, Level 30": a confident wrong answer with a resolution
+    // attached, which is worse than refusing.
+    //
+    // Where the container names MPEG audio, ask that reader first. A declaration that turns out
+    // to be wrong still falls through to every probe below, so nothing found before is lost.
+    if (containerDataType == static_cast<int>(StreamType::AUDIO_MPEG1) ||
+        containerDataType == static_cast<int>(StreamType::AUDIO_MPEG2))
+    {
+        auto declaredMpegAudio = std::make_unique<MpegAudioStreamReader>();
+        rez = declaredMpegAudio->checkStream(tmpBuffer, len, containerType, containerDataType, containerStreamIndex);
+        if (rez.codecInfo.codecID)
+            return rez;
+    }
+
     auto lpcmReader = std::make_unique<LPCMStreamReader>();
     rez = lpcmReader->checkStream(tmpBuffer, len, containerType, containerDataType, containerStreamIndex);
     if (rez.codecInfo.codecID)
