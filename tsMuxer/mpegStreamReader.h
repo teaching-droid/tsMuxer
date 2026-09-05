@@ -100,6 +100,11 @@ class MPEGStreamReader : public AbstractStreamReader
     uint8_t* m_cachedMarker;
     uint8_t* m_scanHighWater;
     int m_totalFrameNum;
+
+   public:
+    [[nodiscard]] int64_t getDeliveredFrames() const override { return m_totalFrameNum; }
+
+   protected:
     virtual double getStreamFPS(void* curNalUnit) = 0;
     void updateFPS(void* curNALUnit, uint8_t* buff, uint8_t* nextNal, int oldSPSLen);
     virtual void updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* nextNal, int oldSpsLen) = 0;

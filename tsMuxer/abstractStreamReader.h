@@ -51,6 +51,11 @@ class AbstractStreamReader : public BaseAbstractStreamReader
 
     ~AbstractStreamReader() override = default;
     virtual int64_t getProcessedSize() = 0;
+
+    // How many frames this reader actually got out of the source. -1 means it does not count them,
+    // so nothing can be concluded. Zero means it read the file and recognised nothing in it, which
+    // is what a track named with the wrong codec looks like from here.
+    [[nodiscard]] virtual int64_t getDeliveredFrames() const { return -1; }
     virtual void setBuffer(uint8_t* data, const uint32_t dataLen, bool lastBlock = false)
     {
         m_curPos = m_buffer = data;

@@ -115,6 +115,10 @@ class SimplePacketizerReader : public AbstractStreamReader
     int64_t m_tagCredit;
     const uint8_t* m_tagProbePos;  // so one chain is not credited twice while the position is held
 
+   public:
+    [[nodiscard]] int64_t getDeliveredFrames() const override { return static_cast<int64_t>(m_frameNum); }
+
+   protected:
     uint64_t m_frameNum;
     bool m_needSync;
     double m_curPts;

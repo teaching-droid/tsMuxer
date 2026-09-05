@@ -1667,6 +1667,46 @@ static void reportSplitWithoutParameterSets(const MuxerManager& muxerManager)
     }
 }
 
+// ** A TRACK THAT PRODUCED NOTHING USED TO SAY NOTHING. **
+//
+// The codec on a meta line is taken as fact and nothing checks it against the file. Naming the
+// wrong one is quiet in every direction:
+//
+//   A_AC3 on an H.264 stream      exit 0, no output, no message
+//   A_DTS on an H.264 stream      exit 0, no output, no message
+//   V_MPEG4/ISO/AVC on a TRUE-HD  exit 0, a 17 MB file, "Processed 0 video frames"
+//
+// A coreless TRUE-HD named A_AC3 is the same fault wearing a disguise: the AC-3 reader scans a
+// stream that has no AC-3 in it, finds nothing, and takes minutes to find nothing, while the same
+// file named A_MLP muxes in two seconds.
+//
+// Nothing here guesses what the codec should have been. It reports what happened: this track was
+// read and no frame of the codec it was named as came out of it.
+static void reportEmptyTracks(const MuxerManager& muxerManager)
+{
+    for (const StreamInfo& si : muxerManager.getStreamInfo())
+    {
+        const AbstractStreamReader* reader = si.m_streamReader;
+        if (reader == nullptr)
+            continue;
+        const int64_t frames = reader->getDeliveredFrames();
+        if (frames != 0)  // -1 means this reader does not count, so nothing can be said
+            continue;
+
+        const auto trackParam = si.m_addParams.find("track");
+        std::ostringstream who;
+        if (trackParam != si.m_addParams.end() && !trackParam->second.empty())
+            who << "track " << trackParam->second << " of ";
+        who << (si.m_fullStreamName.empty() ? ("\"" + si.m_streamName + "\"") : si.m_fullStreamName);
+
+        LTRACE(LT_WARN, 2,
+               "Warning: " << who.str() << " produced no frames at all. It was read as " << si.m_codec
+                           << ", and nothing in it was recognised as that. The usual reason is that the "
+                              "codec on the meta line is not the codec the file holds. List the file on its "
+                              "own to see what tsMuxeR makes of it.");
+    }
+}
+
 static void reportLostData(const MuxerManager& muxerManager)
 {
     struct Entry
@@ -1968,6 +2008,7 @@ int main(int argc, char** argv)
             LTRACE(LT_INFO, 2, "Mux successful complete");
             reportSplitWithoutParameterSets(muxerManager);
             reportLostData(muxerManager);
+            reportEmptyTracks(muxerManager);
         }
         else if (muxMode)
         {
@@ -2092,6 +2133,7 @@ int main(int argc, char** argv)
             LTRACE(LT_INFO, 2, "Mux successful complete");
             reportSplitWithoutParameterSets(muxerManager);
             reportLostData(muxerManager);
+            reportEmptyTracks(muxerManager);
         }
         else
         {
@@ -2113,6 +2155,7 @@ int main(int argc, char** argv)
             sMuxer.doMux(dstFile, nullptr);
             LTRACE(LT_INFO, 2, "Demux complete.");
             reportLostData(sMuxer);
+            reportEmptyTracks(sMuxer);
         }
         auto endTime = std::chrono::steady_clock::now();
         auto totalTime = endTime - startTime;
