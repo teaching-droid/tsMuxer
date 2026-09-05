@@ -1,8 +1,9 @@
 ## tsMuxeR 2.18.11
 
-Every issue carried over from the original tsMuxeR has been read through and tested against this
-version, to see which ones are still there and which are already gone. This release fixes the ones
-that are still there. The feature requests have not been looked at yet. Defects come first.
+Every issue on the tracker of the original project, [justdan96/tsMuxer](https://github.com/justdan96/tsMuxer),
+has been read through and tested against this version, to see which ones are still there and which
+are already gone. This release fixes the ones that are still there. The feature requests have not
+been looked at yet. Defects come first.
 
 ### Fixed
 
@@ -67,9 +68,8 @@ at the end of the mux.
 
 * **The audio option called "Downconvert" is renamed, because the name can mislead.** tsMuxeR is a
 muxer and does not convert audio. TRUE-HD, DTS-HD and DD+ carry a plain core inside the HD stream,
-and all this option ever did was keep that core and drop the HD part. It has carried the old name
-for as long as this project's history goes back, and that name suggests something the program has
-never done. It now reads "Keep the AC-3 core, drop the TRUE-HD part", and the same for DTS-HD and
+and all this option ever did was keep that core and drop the HD part. It has had that name since before this project was
+forked, and it suggests something the program has never done. It now reads "Keep the AC-3 core, drop the TRUE-HD part", and the same for DTS-HD and
 DD+. It is also only offered where there is a core to keep. Nothing about what it does has changed,
 and `down-to-ac3` and `down-to-dts` in a meta file are unchanged.
 
