@@ -204,7 +204,8 @@ enum class NamedAs
     ctTS,
     ctPS,
     ctMP4,
-    ctMKV
+    ctMKV,
+    ctElementary
 };
 
 static NamedAs familyOfExt(const std::string& ext)
@@ -217,21 +218,40 @@ static NamedAs familyOfExt(const std::string& ext)
         return NamedAs::ctMP4;
     if (ext == "mkv" || ext == "mka" || ext == "mks")
         return NamedAs::ctMKV;
+    // The only elementary extensions the dispatch acts on. Every other unknown extension already
+    // reaches the reader that works the codec out from the bytes, so naming one would gain nothing.
+    if (ext == "264" || ext == "h264" || ext == "mvc")
+        return NamedAs::ctElementary;
     return NamedAs::ctUnknown;
 }
 
-static NamedAs familyOfContent(const uint8_t* buf, const int len, const char** name)
+// Within the transport family the two shapes are not interchangeable, and only one direction
+// sorts itself out. A file of 192 byte packets named .ts is detected by TSDemuxer::checkForRealM2ts,
+// which says so and carries on. The other way round there is no such check, because that one only
+// ever turns the mode on, so a file of plain 188 byte packets named .m2ts reached the reader as
+// though it carried timestamps and came back as "Invalid tsPacket->getHeaderSize".
+//
+// Making the reader symmetrical would change how every .m2ts file is opened, which is a large
+// blast radius for a small gain, so the mismatch is named here instead.
+static bool namedAsM2ts(const std::string& ext)
+{
+    return ext == "m2ts" || ext == "mts" || ext == "ssif";
+}
+
+static NamedAs familyOfContent(const uint8_t* buf, const int len, const char** name, bool* isM2ts)
 {
     if (len >= 192 * 17)
     {
         if (syncsAt(buf, len, 188, 0))
         {
-            *name = "a transport stream, so rename it to .ts";
+            *name = "a transport stream of plain 188 byte packets, so rename it to .ts";
+            *isM2ts = false;
             return NamedAs::ctTS;
         }
         if (syncsAt(buf, len, 192, 4))
         {
             *name = "a transport stream with arrival timestamps, so rename it to .m2ts";
+            *isM2ts = true;
             return NamedAs::ctTS;
         }
     }
@@ -254,6 +274,18 @@ static NamedAs familyOfContent(const uint8_t* buf, const int len, const char** n
             *name = "an mp4 or QuickTime file, so rename it to .mp4";
             return NamedAs::ctMP4;
         }
+        // A start code, so a raw stream rather than a container. This is tested last on purpose:
+        // the length field of the first mp4 box is four bytes and can itself read as 00 00 01 xx,
+        // so ftyp has to be ruled out first. A pack header is already handled above, and it is the
+        // one start code that does begin a container.
+        const bool startCode3 = buf[0] == 0 && buf[1] == 0 && buf[2] == 1;
+        const bool startCode4 = buf[0] == 0 && buf[1] == 0 && buf[2] == 0 && buf[3] == 1;
+        if (startCode3 || startCode4)
+        {
+            *name = "a raw stream and not a container at all, so give it a name that is not a "
+                    "container extension, for example .264";
+            return NamedAs::ctElementary;
+        }
     }
     return NamedAs::ctUnknown;
 }
@@ -274,9 +306,19 @@ static void checkNameMatchesContent(const std::string& fileName, const std::stri
         return;
 
     const char* what = nullptr;
-    const NamedAs found = familyOfContent(buf, len, &what);
-    if (found == NamedAs::ctUnknown || found == named)
+    bool contentIsM2ts = false;
+    const NamedAs found = familyOfContent(buf, len, &what, &contentIsM2ts);
+    if (found == NamedAs::ctUnknown)
         return;
+
+    if (found == named)
+    {
+        // Same family. Only the one direction the reader cannot sort out is worth naming: plain
+        // packets under a name that promises timestamps. The reverse is detected further down and
+        // already works, so it is left alone.
+        if (found != NamedAs::ctTS || contentIsM2ts || !namedAsM2ts(ext))
+            return;
+    }
 
     THROW(ERR_COMMON, "The file " << fileName << " is named ." << ext
                                   << ", and the name is what decides how it is read, but it is "
