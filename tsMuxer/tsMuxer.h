@@ -57,7 +57,15 @@ class TSMuxer final : public AbstractMuxer
     void setNewStyleAudioPES(const bool val) { m_useNewStyleAudioPES = val; }
     void setM2TSMode(const bool val) { m_m2tsMode = val; }
     void setPCROnVideoPID(const bool val) { m_pcrOnVideo = val; }
-    void setMaxBitrate(const int val) { m_cbrBitrate = val; }
+    // --bitrate feeds this. It drives the CBR clock and, with a minimum, the null padding.
+    void setMuxRate(const int val) { m_cbrBitrate = val; }
+    // --maxbitrate feeds this. It still sets the rate above, so everything that option did
+    // before it does now, and it additionally names a ceiling the pacing may not cross.
+    void setMaxBitrate(const int val)
+    {
+        m_cbrBitrate = val;
+        m_maxBitrate = val;
+    }
     void setMinBitrate(const int val) { m_minBitrate = val; }
     void openDstFile() override;
     void setVBVBufferLen(int value);
@@ -134,6 +142,7 @@ class TSMuxer final : public AbstractMuxer
     int64_t m_fixed_pcr_offset;
     bool m_pcrOnVideo;
     int m_cbrBitrate;
+    int m_maxBitrate;
     int m_minBitrate;
     int m_pcr_delta;    // how often write PCR
     int m_patPmtDelta;  // how often write PAT/PMT

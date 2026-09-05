@@ -610,10 +610,10 @@ All parameters in this group start with two dashes:
                       streams together come to less, null packets are inserted
                       to make up the difference. Has no effect unless --bitrate
                       or --maxbitrate is given as well.
---maxbitrate          Does not cap anything, despite the name. On its own it
-                      changes nothing at all. Its one use is to switch on
-                      --minbitrate, which pads the stream up to the rate given.
-                      For a fixed rate use --bitrate. Must be above 90.
+--maxbitrate          Set a ceiling on the muxing rate, in kbps. The stream is
+                      paced so it never asks to be read faster than that. The
+                      rate counts what is written. For a fixed rate use
+                      --bitrate instead. Must be above 90.
 --cbr                 Ask for a fixed bitrate. The rate comes from --bitrate, so
                       --cbr on its own does nothing. --vbr and --cbr must not be
                       used together.

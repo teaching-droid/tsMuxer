@@ -91,6 +91,7 @@ TSMuxer::TSMuxer(MuxerManager* owner) : AbstractMuxer(owner)
     m_vbvLen = DEFAULT_VBV_BUFFER_LEN * 90;
     m_lastPESDTS = -1;
     m_cbrBitrate = -1;  // mux CBR if bitrate specifed
+    m_maxBitrate = -1;  // the ceiling, from --maxbitrate only
     m_minBitrate = -1;
     m_pcrOnVideo = true;
     m_endStreamDTS = 0;
@@ -535,6 +536,17 @@ bool TSMuxer::doFlush()
         {
             const auto cbrPCR = llround(static_cast<double>(m_lastPCR + m_pcrBits) * 90000.0 / m_cbrBitrate);
             newPCR = FFMAX(newPCR, cbrPCR);
+        }
+        if (m_maxBitrate != -1 && m_lastPCR != -1)
+        {
+            // The ceiling. m_pcrBits counts the bits written since the last PCR, so
+            // m_pcrBits * 90000 / m_maxBitrate is the time those bits take to arrive at the rate
+            // asked for, and the PCR may not be earlier than that. This is deliberately NOT the
+            // expression above: that one adds a count of bits to a count of ticks before scaling,
+            // which makes it far too small to ever win the FFMAX, and it is read by the CBR clock
+            // as well, where waking it up would make the null padding count one interval twice.
+            const auto capPCR = m_lastPCR + llround(static_cast<double>(m_pcrBits) * 90000.0 / m_maxBitrate);
+            newPCR = FFMAX(newPCR, capPCR);
         }
     }
     return doFlush(newPCR, 0);
@@ -1429,6 +1441,13 @@ bool TSMuxer::muxPacket(AVPacket& avPacket)
         const auto cbrPCR = llround(static_cast<double>(m_lastPCR + m_pcrBits) * 90000.0 / m_cbrBitrate);
         newPCR = FFMAX(newPCR, cbrPCR);
     }
+    if (m_maxBitrate != -1 && m_lastPCR != -1)
+    {
+        // The ceiling, the same term as in doFlush. See the comment there for why it is not
+        // the expression just above.
+        const auto capPCR = m_lastPCR + llround(static_cast<double>(m_pcrBits) * 90000.0 / m_maxBitrate);
+        newPCR = FFMAX(newPCR, capPCR);
+    }
 
     if (newPES && m_canSwithBlock && isSplitPoint(avPacket))
     {
@@ -1908,7 +1927,7 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
         else if (paramPair[0] == "--bitrate" && paramPair.size() > 1)
         {
             const int rate = checkedMuxRate(paramPair[0], paramPair[1]);
-            setMaxBitrate(rate);
+            setMuxRate(rate);
             setMinBitrate(rate);
             rateGiven = true;
         }
