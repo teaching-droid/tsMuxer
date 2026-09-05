@@ -43,11 +43,13 @@ file really is and what to rename it to. Correctly named files are unaffected.
 `fps=` rewrote one copy and not the other. The file then disagreed with itself: some tools read 25
 and others read the original rate from the same file. Both copies are now written.
 
-* **The downconvert option said convert, and was offered on tracks where it does nothing.** It
-never converted anything. TRUE-HD, DTS-HD and DD+ carry a plain core inside the HD stream, and the
-option keeps that core and drops the HD part. A track with no core inside it cannot produce one.
-The option is now named for what it does, and it is only offered when there is a core to keep. What
-it does to a track that has one is unchanged.
+* **The audio option that used to be called "Downconvert" is renamed, because it never converted
+anything.** It now reads "Keep the AC-3 core, drop the TRUE-HD part", and the same for DTS-HD and
+DD+. These formats carry a plain core inside the HD stream, and the option keeps that core and
+drops the HD part. Nothing is re-encoded, so a track with no core cannot produce one. It is now
+only offered where there is a core to keep. It used to be offered on TRUE-HD tracks that had none,
+and ticking it did nothing. Behaviour on a track that has a core is unchanged, and `down-to-ac3`
+and `down-to-dts` in a meta file are unchanged.
 
 * **A source with more than 64 tracks could not be opened.** The limit is now 256.
 
