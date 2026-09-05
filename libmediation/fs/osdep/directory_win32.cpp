@@ -9,9 +9,14 @@ using namespace std;
 
 char getDirSeparator() { return '\\'; }
 
+// Windows accepts a forward slash everywhere it accepts a backslash, and the other two path helpers
+// in this project, extractFilePath and extractFileName, both take either. This one took only the
+// backslash, so a path written with forward slashes looked to it like a bare name with no directory.
+// Naming a playlist that way was enough to break it: the stream folder is derived from the playlist
+// folder, so it came out empty and the clip was looked for in the working directory.
 string extractFileDir(const string& fileName)
 {
-    const size_t index = fileName.find_last_of('\\');
+    const size_t index = fileName.find_last_of("\\/");
     if (index != string::npos)
         return fileName.substr(0, index + 1);
 
