@@ -4711,6 +4711,7 @@ void TsMuxerWindow::writeSettings()
     settings->setValue("blankPLNum", ui->BlackplaylistCombo->value());
 
     settings->setValue("outputToInputFolder", ui->radioButtonOutoutInInput->isChecked());
+    settings->setValue("outputMode", currentOutputMode());
     settings->setValue("language", ui->languageSelectComboBox->currentText());
     settings->setValue("windowSize", size());
     settings->setValue("windowPos", pos());
@@ -4766,6 +4767,43 @@ bool TsMuxerWindow::readSettings()
     settings->endGroup();
 
     return true;
+}
+
+// The output section, stored by name rather than by position so that adding an output later
+// cannot make an old setting select the wrong one.
+QString TsMuxerWindow::currentOutputMode() const
+{
+    if (ui->radioButtonM2TS->isChecked())
+        return QStringLiteral("m2ts");
+    if (ui->radioButtonMKV->isChecked())
+        return QStringLiteral("mkv");
+    if (ui->radioButtonBluRayISO->isChecked())
+        return QStringLiteral("iso");
+    if (ui->radioButtonBluRay->isChecked())
+        return QStringLiteral("bluray");
+    if (ui->radioButtonAVCHD->isChecked())
+        return QStringLiteral("avchd");
+    if (ui->radioButtonDemux->isChecked())
+        return QStringLiteral("demux");
+    return QStringLiteral("ts");
+}
+
+void TsMuxerWindow::setOutputMode(const QString& mode)
+{
+    if (mode == QLatin1String("m2ts"))
+        ui->radioButtonM2TS->setChecked(true);
+    else if (mode == QLatin1String("mkv"))
+        ui->radioButtonMKV->setChecked(true);
+    else if (mode == QLatin1String("iso"))
+        ui->radioButtonBluRayISO->setChecked(true);
+    else if (mode == QLatin1String("bluray"))
+        ui->radioButtonBluRay->setChecked(true);
+    else if (mode == QLatin1String("avchd"))
+        ui->radioButtonAVCHD->setChecked(true);
+    else if (mode == QLatin1String("demux"))
+        ui->radioButtonDemux->setChecked(true);
+    else if (mode == QLatin1String("ts"))
+        ui->radioButtonTS->setChecked(true);
 }
 
 bool TsMuxerWindow::readGeneralSettings(const QString& prefix)
@@ -4829,6 +4867,10 @@ bool TsMuxerWindow::readGeneralSettings(const QString& prefix)
 
     ui->radioButtonOutoutInInput->setChecked(settings->value("outputToInputFolder").toBool());
     ui->radioButtonStoreOutput->setChecked(!ui->radioButtonOutoutInInput->isChecked());
+
+    // Someone who always demuxes had to set that back on every start. Restored last, so it wins
+    // over anything above that also touches the output section.
+    setOutputMode(settings->value("outputMode").toString());
 
     ui->comboBoxSEI->setCurrentIndex(settings->value("addSEIMethod").toInt());
     ui->checkBoxSPS->setChecked(settings->value("addSPS").toBool());

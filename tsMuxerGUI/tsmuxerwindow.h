@@ -118,6 +118,8 @@ class TsMuxerWindow : public QWidget
 
     void writeSettings();
     bool readSettings();
+    [[nodiscard]] QString currentOutputMode() const;
+    void setOutputMode(const QString& mode);
     bool readGeneralSettings(const QString& prefix);
     QString getOutputDir() const;
 
