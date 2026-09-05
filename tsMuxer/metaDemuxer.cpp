@@ -233,10 +233,7 @@ static NamedAs familyOfExt(const std::string& ext)
 //
 // Making the reader symmetrical would change how every .m2ts file is opened, which is a large
 // blast radius for a small gain, so the mismatch is named here instead.
-static bool namedAsM2ts(const std::string& ext)
-{
-    return ext == "m2ts" || ext == "mts" || ext == "ssif";
-}
+static bool namedAsM2ts(const std::string& ext) { return ext == "m2ts" || ext == "mts" || ext == "ssif"; }
 
 static NamedAs familyOfContent(const uint8_t* buf, const int len, const char** name, bool* isM2ts)
 {
@@ -282,8 +279,9 @@ static NamedAs familyOfContent(const uint8_t* buf, const int len, const char** n
         const bool startCode4 = buf[0] == 0 && buf[1] == 0 && buf[2] == 0 && buf[3] == 1;
         if (startCode3 || startCode4)
         {
-            *name = "a raw stream and not a container at all, so give it a name that is not a "
-                    "container extension, for example .264";
+            *name =
+                "a raw stream and not a container at all, so give it a name that is not a "
+                "container extension, for example .264";
             return NamedAs::ctElementary;
         }
     }
@@ -321,8 +319,8 @@ static void checkNameMatchesContent(const std::string& fileName, const std::stri
     }
 
     THROW(ERR_COMMON, "The file " << fileName << " is named ." << ext
-                                  << ", and the name is what decides how it is read, but it is "
-                                  << what << " and try again.")
+                                  << ", and the name is what decides how it is read, but it is " << what
+                                  << " and try again.")
 }
 
 METADemuxer::METADemuxer(const BufferedReaderManager& readManager)

@@ -622,8 +622,8 @@ void TSMuxer::reportReadRate() const
 
     std::ostringstream msg;
     msg << "Warning: this disc asks to be read at " << doubleToStr(fastest, 1) << " Mbit/s at its fastest, and "
-        << doubleToStr(share, 1) << " per cent of its packets are above the limit. A "
-        << (isV3() ? "UHD" : "Blu-ray") << " drive only has to supply " << doubleToStr(limit / 1e6, 0)
+        << doubleToStr(share, 1) << " per cent of its packets are above the limit. A " << (isV3() ? "UHD" : "Blu-ray")
+        << " drive only has to supply " << doubleToStr(limit / 1e6, 0)
         << " Mbit/s. It will play from a hard disk, where the rate does not matter, and may stutter or refuse "
            "to start on a standalone player. The rate comes from the source, not from muxing, so the way to "
            "lower it is to encode the video again with its peak bitrate capped below the limit.";
