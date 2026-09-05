@@ -3620,7 +3620,14 @@ void TsMuxerWindow::snapMuxTimeToBdMinimum()
 void TsMuxerWindow::onLanguageComboBoxIndexChanged(int idx)
 {
     auto lang = ui->languageSelectComboBox->itemData(idx).toString();
-    (void)qtCoreTranslator.load(QString("qtbase_%1").arg(lang), QLibraryInfo::path(QLibraryInfo::TranslationsPath));
+    // Qt translates its own strings, the standard Yes, No, OK and Cancel buttons among them, and
+    // those live in qtbase_<lang>.qm. That file belongs to the qttranslations module, and the
+    // Windows build compiles Qt from qtbase alone so the module is not there and QLibraryInfo has
+    // nothing to point at. The result is a dialog whose title and text are translated and whose
+    // buttons are not. Look beside the executable first, which is where a package can put them,
+    // and keep the old path for a build against a full system Qt.
+    if (!qtCoreTranslator.load(QString("qtbase_%1").arg(lang), QCoreApplication::applicationDirPath()))
+        (void)qtCoreTranslator.load(QString("qtbase_%1").arg(lang), QLibraryInfo::path(QLibraryInfo::TranslationsPath));
     (void)tsMuxerTranslator.load(QString("tsmuxergui_%1").arg(lang), ":/i18n");
     QFile aboutContent(QString(":/about_%1.html").arg(lang));
     if (aboutContent.open(QIODevice::ReadOnly))
