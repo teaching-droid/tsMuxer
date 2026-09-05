@@ -43,14 +43,6 @@ file really is and what to rename it to. Correctly named files are unaffected.
 `fps=` rewrote one copy and not the other. The file then disagreed with itself: some tools read 25
 and others read the original rate from the same file. Both copies are now written.
 
-* **The audio option that used to be called "Downconvert" is renamed, because it never converted
-anything.** It now reads "Keep the AC-3 core, drop the TRUE-HD part", and the same for DTS-HD and
-DD+. These formats carry a plain core inside the HD stream, and the option keeps that core and
-drops the HD part. Nothing is re-encoded, so a track with no core cannot produce one. It is now
-only offered where there is a core to keep. It used to be offered on TRUE-HD tracks that had none,
-and ticking it did nothing. Behaviour on a track that has a core is unchanged, and `down-to-ac3`
-and `down-to-dts` in a meta file are unchanged.
-
 * **A source with more than 64 tracks could not be opened.** The limit is now 256.
 
 * **Every mp4 opened leaked memory.** About 13 KB per file, and once more for each file of a join.
@@ -66,6 +58,12 @@ refuse to start. Nothing in the output changes. The warning names the rate and t
 * **The window opens where you last left it.** It is put back on a screen that still exists.
 
 ### Changed
+
+* **The audio option once called "Downconvert" is now named for what it does.** It reads "Keep the
+AC-3 core, drop the TRUE-HD part", and the same for DTS-HD and DD+. tsMuxeR muxes, it does not
+convert. These formats carry a plain core inside the HD stream, and the option keeps that core and
+drops the HD part, so it is only offered where there is a core to keep. `down-to-ac3` and
+`down-to-dts` in a meta file are unchanged.
 
 * **The help for `--maxbitrate` no longer describes something it does not do.** It said the option
 sets the rate the stream is paced to. It does not pace anything, and on its own it changes nothing
