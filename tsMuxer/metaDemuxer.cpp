@@ -615,10 +615,13 @@ void METADemuxer::openFile(const string& streamName)
 std::string METADemuxer::mplsTrackToFullName(const std::string& mplsFileName, const std::string& mplsNum)
 {
     string path = toNativeSeparators(extractFilePath(mplsFileName));
+    // A bare name with no directory means the playlist is in the working directory, so the disc
+    // root is one above it. See getBlurayStreamDir in main.cpp, which had the same gap.
     const size_t tmp = path.find_last_of(getDirSeparator());
-    if (tmp == string::npos)
+    if (tmp == string::npos && !path.empty())
         return {};
-    path = path.substr(0, tmp + 1) + string("STREAM") + getDirSeparator();
+    path = (path.empty() ? string("..") + getDirSeparator() : path.substr(0, tmp + 1)) + string("STREAM") +
+           getDirSeparator();
 
     const string mplsExt = strToLowerCase(extractFileExt(mplsFileName));
     const string m2tsExt = (mplsExt == "mpls") ? "m2ts" : "mts";
@@ -629,10 +632,13 @@ std::string METADemuxer::mplsTrackToFullName(const std::string& mplsFileName, co
 std::string METADemuxer::mplsTrackToSSIFName(const std::string& mplsFileName, const std::string& mplsNum)
 {
     string path = toNativeSeparators(extractFilePath(mplsFileName));
+    // A bare name with no directory means the playlist is in the working directory, so the disc
+    // root is one above it. See getBlurayStreamDir in main.cpp, which had the same gap.
     const size_t tmp = path.find_last_of(getDirSeparator());
-    if (tmp == string::npos)
+    if (tmp == string::npos && !path.empty())
         return {};
-    path = path.substr(0, tmp + 1) + string("STREAM") + getDirSeparator() + string("SSIF") + getDirSeparator();
+    path = (path.empty() ? string("..") + getDirSeparator() : path.substr(0, tmp + 1)) + string("STREAM") +
+           getDirSeparator() + string("SSIF") + getDirSeparator();
 
     const string mplsExt = strToLowerCase(extractFileExt(mplsFileName));
     const string ssifExt = mplsExt == "mpls" ? "ssif" : "sif";

@@ -289,6 +289,16 @@ string getBlurayStreamDir(const string& mplsName)
 {
     string dirName = extractFileDir(mplsName);
     dirName = toNativeSeparators(dirName);
+    // A playlist named with no directory at all is in the working directory, so the folder that
+    // holds it is the working directory and the disc root is one above. The stream folder derived
+    // from that is a relative path, which opens exactly as well as an absolute one. Without this,
+    // naming a playlist from inside PLAYLIST looked for the clip in the working directory and
+    // failed, although everything needed to find it was there.
+    //
+    // The BACKUP case below cannot be recognised this way, because a bare name says nothing about
+    // which folder it sits in. A backup playlist still has to be named with its path.
+    if (dirName.empty())
+        return string("..") + getDirSeparator() + string("STREAM") + getDirSeparator();
     size_t tmp = dirName.substr(0, dirName.size() - 1).find_last_of(getDirSeparator());
     if (tmp != string::npos)
     {
