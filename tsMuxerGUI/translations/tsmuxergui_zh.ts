@@ -2751,8 +2751,8 @@ Build the ISO anyway?</source>
     <message>
         <location filename="../tsmuxerwindow.ui" line="747"/>
         <location filename="../tsmuxerwindow.cpp" line="1584"/>
-        <source>Downconvert HD audio</source>
-        <translation>降频高清音频</translation>
+        <source>Keep the core, drop the HD part</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="754"/>
@@ -3721,18 +3721,18 @@ Build the ISO anyway?</source>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1578"/>
-        <source>Downconvert DTS-HD to DTS</source>
-        <translation>降频转换DTS-HD为DTS</translation>
+        <source>Keep the DTS core, drop the HD part</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1580"/>
-        <source>Downconvert TRUE-HD to AC3</source>
-        <translation>降频转换TRUE-HD为AC3</translation>
+        <source>Keep the AC-3 core, drop the TRUE-HD part</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1582"/>
-        <source>Downconvert E-AC3 to AC3</source>
-        <translation>降频转换E-AC3为AC3</translation>
+        <source>Keep the AC-3 core, drop the DD+ part</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1739"/>

@@ -2751,8 +2751,8 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas, seleccionables como
     <message>
         <location filename="../tsmuxerwindow.ui" line="747"/>
         <location filename="../tsmuxerwindow.cpp" line="1584"/>
-        <source>Downconvert HD audio</source>
-        <translation>Eliminar datos de audio HD</translation>
+        <source>Keep the core, drop the HD part</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="754"/>
@@ -3721,18 +3721,18 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1578"/>
-        <source>Downconvert DTS-HD to DTS</source>
-        <translation>Convertir DTS-HD en DTS</translation>
+        <source>Keep the DTS core, drop the HD part</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1580"/>
-        <source>Downconvert TRUE-HD to AC3</source>
-        <translation>Convertir TRUE-HD en AC3</translation>
+        <source>Keep the AC-3 core, drop the TRUE-HD part</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1582"/>
-        <source>Downconvert E-AC3 to AC3</source>
-        <translation>Convertir E-AC3 en AC3</translation>
+        <source>Keep the AC-3 core, drop the DD+ part</source>
+        <translation type="unfinished"></translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1739"/>
