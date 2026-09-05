@@ -115,6 +115,7 @@ class TSMuxer final : public AbstractMuxer
     void writePESPacket();
     void processM2TSPCR(int64_t pcrVal, int64_t pcrGAP);
     [[nodiscard]] inline int calcM2tsFrameCnt() const;
+    [[nodiscard]] int64_t pcrForMaxRate(int64_t newPCR, int64_t extraFrames, int64_t pcrGAP) const;
     static void writeM2TSHeader(uint8_t* buffer, const int64_t m2tsPCR)
     {
         const auto cur = reinterpret_cast<uint32_t*>(buffer);

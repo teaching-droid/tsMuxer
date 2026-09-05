@@ -553,17 +553,6 @@ bool TSMuxer::doFlush()
             const auto cbrPCR = llround(static_cast<double>(m_lastPCR + m_pcrBits) * 90000.0 / m_cbrBitrate);
             newPCR = FFMAX(newPCR, cbrPCR);
         }
-        if (m_maxBitrate != -1 && m_lastPCR != -1)
-        {
-            // The ceiling. m_pcrBits counts the bits written since the last PCR, so
-            // m_pcrBits * 90000 / m_maxBitrate is the time those bits take to arrive at the rate
-            // asked for, and the PCR may not be earlier than that. This is deliberately NOT the
-            // expression above: that one adds a count of bits to a count of ticks before scaling,
-            // which makes it far too small to ever win the FFMAX, and it is read by the CBR clock
-            // as well, where waking it up would make the null padding count one interval twice.
-            const auto capPCR = m_lastPCR + llround(static_cast<double>(m_pcrBits) * 90000.0 / m_maxBitrate);
-            newPCR = FFMAX(newPCR, capPCR);
-        }
     }
     return doFlush(newPCR, 0);
 }
@@ -582,7 +571,7 @@ bool TSMuxer::doFlush(const int64_t newPCR, const int64_t pcrGAP)
     }
 
     if (m_m2tsMode)
-        processM2TSPCR(newPCR, pcrGAP);
+        processM2TSPCR(pcrForMaxRate(newPCR, 0, pcrGAP), pcrGAP);
 
     const int lastBlockSize = m_outBufLen & (MuxerManager::PHYSICAL_SECTOR_SIZE - 1);  // last 64K of data
     const int roundBufLen = m_outBufLen & ~(MuxerManager::PHYSICAL_SECTOR_SIZE - 1);
@@ -695,6 +684,31 @@ int TSMuxer::calcM2tsFrameCnt() const
     byteCnt += m_outBufLen;
     assert(byteCnt % 192 == 0);
     return byteCnt / 192;
+}
+
+// The arrival timestamp pass spreads every packet gathered since the previous pass evenly across
+// the span from that pass to this PCR, so the gap each packet is given is that span divided by
+// that count. A ceiling on the read rate is a floor under that gap, and this is the only place
+// where both numbers are known: the count is not final until the tables, any padding and the PCR
+// packet itself have been written. An earlier attempt counted bits since the last PCR instead and
+// was short by the two to four packets those add, every interval.
+//
+// extraFrames is what the caller is about to add and has not added yet.
+int64_t TSMuxer::pcrForMaxRate(const int64_t newPCR, const int64_t extraFrames, const int64_t pcrGAP) const
+{
+    if (m_maxBitrate == -1 || m_lastPCR == -1)
+        return newPCR;
+    // A plain transport stream carries no arrival timestamps, so there is no per packet gap to
+    // hold. What the ceiling means there is that the clock may not run ahead of the data: the
+    // bits written since the last PCR take a known time to arrive at the rate asked for.
+    if (!m_m2tsMode)
+        return FFMAX(newPCR, m_lastPCR + static_cast<int64_t>(std::ceil(m_pcrBits * 90000.0 / m_maxBitrate)));
+    const int64_t frames = calcM2tsFrameCnt() + extraFrames;
+    if (frames <= 0)
+        return newPCR;
+    const int64_t needed = m_prevM2TSPCR + pcrGAP + static_cast<int64_t>(std::ceil(frames * atsGapFloor(m_maxBitrate)));
+    const int64_t minPCR = (needed + 299) / 300;  // back to the 90 kHz clock, never downwards
+    return FFMAX(newPCR, minPCR);
 }
 
 void TSMuxer::processM2TSPCR(const int64_t pcrVal, const int64_t pcrGAP)
@@ -1315,10 +1329,14 @@ void TSMuxer::writePCR(const int64_t newPCR)
                 bitsRest = (tsFrames * m_frameSize * 8) - expectedBits;
         }
     }
+    // One more packet than the buffer holds, because writeEmptyPacketWithPCR is about to add the
+    // PCR packet and then run the arrival pass over the lot. Computed before m_pcrBits is cleared,
+    // because the transport stream branch of it reads that count.
+    const int64_t pcr = pcrForMaxRate(newPCR, 1, 0);
     m_pcrBits = bitsRest;
     // assert(m_pcrBits % 8 == 0);
-    writeEmptyPacketWithPCR(newPCR);
-    m_lastPCR = newPCR;
+    writeEmptyPacketWithPCR(pcr);
+    m_lastPCR = pcr;
 }
 
 void TSMuxer::flushTSBuffer()
@@ -1456,13 +1474,6 @@ bool TSMuxer::muxPacket(AVPacket& avPacket)
     {
         const auto cbrPCR = llround(static_cast<double>(m_lastPCR + m_pcrBits) * 90000.0 / m_cbrBitrate);
         newPCR = FFMAX(newPCR, cbrPCR);
-    }
-    if (m_maxBitrate != -1 && m_lastPCR != -1)
-    {
-        // The ceiling, the same term as in doFlush. See the comment there for why it is not
-        // the expression just above.
-        const auto capPCR = m_lastPCR + llround(static_cast<double>(m_pcrBits) * 90000.0 / m_maxBitrate);
-        newPCR = FFMAX(newPCR, capPCR);
     }
 
     if (newPES && m_canSwithBlock && isSplitPoint(avPacket))
