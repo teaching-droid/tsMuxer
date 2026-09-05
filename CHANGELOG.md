@@ -43,6 +43,12 @@ file really is and what to rename it to. Correctly named files are unaffected.
 `fps=` rewrote one copy and not the other. The file then disagreed with itself: some tools read 25
 and others read the original rate from the same file. Both copies are now written.
 
+* **The downconvert option said convert, and was offered on tracks where it does nothing.** It
+never converted anything. TRUE-HD, DTS-HD and DD+ carry a plain core inside the HD stream, and the
+option keeps that core and drops the HD part. A track with no core inside it cannot produce one.
+The option is now named for what it does, and it is only offered when there is a core to keep. What
+it does to a track that has one is unchanged.
+
 * **A source with more than 64 tracks could not be opened.** The limit is now 256.
 
 * **Every mp4 opened leaked memory.** About 13 KB per file, and once more for each file of a join.
