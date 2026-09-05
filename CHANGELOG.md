@@ -33,6 +33,12 @@ It is now refused, with both values named.
 accepted outright and muxed as though it were a file name. Both are now refused with a clear
 message, and the underlying read past the end of an empty string is gone.
 
+* **A file whose name does not match what is inside it is now refused.** The name is what decides
+which reader opens a file. A recording called `.mpg` is very often a transport stream, and it was
+read as a program stream. That gave either a message about the reader's own internals, or for
+several combinations a banner and nothing else at all, at exit 0. The message now says what the
+file really is and what to rename it to. Correctly named files are unaffected.
+
 * **A source with more than 64 tracks could not be opened.** The limit is now 256.
 
 * **Every mp4 opened leaked memory.** About 13 KB per file, and once more for each file of a join.
