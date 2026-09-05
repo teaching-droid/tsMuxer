@@ -1494,6 +1494,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
 
             if (dynamic_cast<TSDemuxer*>(demuxer.get()))
                 trackRez.containerStreamType = acceptedPidMap[itr.first].m_trackType;
+            trackRez.containerDvbDescriptor = acceptedPidMap[itr.first].m_dvbDescriptor;
 
             if (strStartWith(trackRez.codecInfo.programName, "A_") && dynamic_cast<TSDemuxer*>(demuxer.get()))
             {

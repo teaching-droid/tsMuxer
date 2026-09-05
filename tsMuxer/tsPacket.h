@@ -27,7 +27,9 @@ enum class TSDescriptorTag
     HEVC = 0x38,
     VVC = 0x39,
     DTS = 0x73,
-    DVB_EXTENSION = 0x7F,  // DVB extension_descriptor (used for opus_audio_descriptor)
+    DVB_TELETEXT = 0x56,    // EBU teletext_descriptor, EN 300 468
+    DVB_SUBTITLING = 0x59,  // subtitling_descriptor, the bitmap subtitles of EN 300 743
+    DVB_EXTENSION = 0x7F,   // DVB extension_descriptor (used for opus_audio_descriptor)
     LPCM = 0x80,
     AC3 = 0x81,
     EAC3 = 0xCC
@@ -240,7 +242,8 @@ struct PMTStreamInfo final
           isSecondary(false),
           m_codecReader(),
           m_mpegReader(),
-          m_audioReader()
+          m_audioReader(),
+          m_dvbDescriptor(0)
     {
     }
 
@@ -258,6 +261,7 @@ struct PMTStreamInfo final
         isSecondary = secondary;
         m_mpegReader = nullptr;
         m_audioReader = nullptr;
+        m_dvbDescriptor = 0;
     }
 
     StreamType m_streamType;
@@ -267,6 +271,10 @@ struct PMTStreamInfo final
     uint8_t m_esInfoData[128];
     char m_lang[4];
     bool isSecondary;
+    // Stream type 0x06 is "private data" and says nothing on its own. What it really carries is
+    // named by a descriptor: 0x59 is DVB bitmap subtitles, 0x56 is EBU teletext. Kept so a track
+    // no reader accepts can still be named instead of reported as an unknown number.
+    int m_dvbDescriptor;
 
     // ---------------------
     std::vector<PMTIndex> m_index;  // blu-ray seek index. key=number of tsFrame. value=information about key frame

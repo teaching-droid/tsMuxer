@@ -248,6 +248,15 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
             case StreamType::SUB_TGS:
                 known = "Text subtitles (Text-ST)";
                 break;
+            case StreamType::PRIVATE_DATA:
+                // 0x06 on its own says only "private data". The descriptor beside it says what
+                // that data really is, and without it this track was reported as an unknown
+                // number, which is what issue 878 describes as being ignored.
+                if (streams[i].containerDvbDescriptor == static_cast<int>(TSDescriptorTag::DVB_SUBTITLING))
+                    known = "DVB bitmap subtitles (EN 300 743)";
+                else if (streams[i].containerDvbDescriptor == static_cast<int>(TSDescriptorTag::DVB_TELETEXT))
+                    known = "EBU teletext (EN 300 468)";
+                break;
             default:
                 break;
             }

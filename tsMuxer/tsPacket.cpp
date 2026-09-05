@@ -377,6 +377,10 @@ uint32_t TS_program_map_section::extractDescriptors(uint8_t* curPos, const int e
         {
             for (int i = 0; i < 3; i++) pmtInfo.m_lang[i] = static_cast<char>(descrBuf[i]);
         }
+        else if (tag == TSDescriptorTag::DVB_SUBTITLING || tag == TSDescriptorTag::DVB_TELETEXT)
+        {
+            pmtInfo.m_dvbDescriptor = static_cast<int>(tag);
+        }
         else if (tag == TSDescriptorTag::REGISTRATION && len >= 4)
         {
             // format_identifier is 4 bytes (stored as-is, not byte-swapped)

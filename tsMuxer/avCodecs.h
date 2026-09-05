@@ -46,6 +46,7 @@ struct CheckStreamRez
         : trackID(0),
           delay(0),
           containerStreamType(0),
+          containerDvbDescriptor(0),
           multiSubStream(false),
           subTrack(0),
           isSecondary(false),
@@ -65,6 +66,8 @@ struct CheckStreamRez
     // stream_coding_type as declared by a TS/M2TS PMT, 0 for other containers. Kept so that a
     // track no reader accepts can still be named in diagnostics instead of just failing.
     int containerStreamType;
+    // 0x59 DVB bitmap subtitles, 0x56 EBU teletext, 0 when the container named neither
+    int containerDvbDescriptor;
 
     bool multiSubStream;
     // Which half of a combined track this entry is, as it appears in subTrack= on a meta line.

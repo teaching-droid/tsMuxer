@@ -135,8 +135,8 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                             m_nonMVCVideoFound = true;
                         pmtBufferLen = 0;
                         for (const auto& [fst, snd] : m_pmt.pidList)
-                            trackList.insert(std::make_pair(
-                                snd.m_pid, TrackInfo(static_cast<int>(snd.m_streamType), snd.m_lang, 0)));
+                            trackList.insert(std::make_pair(snd.m_pid, TrackInfo(static_cast<int>(snd.m_streamType),
+                                                                                 snd.m_lang, 0, snd.m_dvbDescriptor)));
                         nonProcPMTPid.erase(pid);
                         if (nonProcPMTPid.empty() && !mvcContinueExpected())
                         {  // all pmt pids processed
