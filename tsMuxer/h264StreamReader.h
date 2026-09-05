@@ -115,7 +115,6 @@ class H264StreamReader final : public MPEGStreamReader
     std::map<uint32_t, PPSUnit*> m_ppsMap;
     std::set<uint32_t> updatedSPSList;
     std::vector<uint8_t> m_lastSeiMvcHeader;
-    int m_lastPicStruct;
     int64_t m_lastDtsInc;
     bool orig_hrd_parameters_present_flag;
     bool orig_vcl_parameters_present_flag;

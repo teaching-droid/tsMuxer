@@ -46,7 +46,6 @@ H264StreamReader::H264StreamReader()
     m_lastIFrame = false;
     m_idrSliceCnt = 0;
     m_firstFileFrame = false;
-    m_lastPicStruct = -1;
     m_lastDtsInc = 0;
 
     m_mvcSubStream = false;
@@ -1199,11 +1198,17 @@ int H264StreamReader::processSliceNal(uint8_t* buff)
     }
     // LTRACE(LT_INFO, 2, "delta=" << fullPicOrder - m_frameNum << " m_lastDtsInc=" << m_lastDtsInc);
 
-    if (m_lastPicStruct == 5 || m_lastPicStruct == 6)  // 3 fields per frame. Used in pulldown
+    // How long this picture occupies. A pulldown flag says a picture is held on screen for longer
+    // than one frame, and the coded stream carries no extra picture for that time, so the time has
+    // to come from here or the file ends up short by the pulldown ratio.
+    //
+    // These three branches had never run. They tested a member one letter away from the one the
+    // parser fills in, and that member was set to -1 in the constructor and never written again.
+    if (m_lastPictStruct == 5 || m_lastPictStruct == 6)  // 3 fields per frame. Used in pulldown
         m_lastDtsInc = m_pcrIncPerFrame + m_pcrIncPerField;
-    else if (m_lastPicStruct == 7)  // frame doubling. Used in pulldown
+    else if (m_lastPictStruct == 7)  // frame doubling. Used in pulldown
         m_lastDtsInc = m_pcrIncPerFrame * 2;
-    else if (m_lastPicStruct == 8)  // frame tripling. Used in pulldown
+    else if (m_lastPictStruct == 8)  // frame tripling. Used in pulldown
         m_lastDtsInc = m_pcrIncPerFrame * 3;
     else
         m_lastDtsInc = m_pcrIncPerFrame;
