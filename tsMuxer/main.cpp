@@ -472,11 +472,14 @@ Additional parameters for audio tracks:
                     Can be negative.
 - down-to-dts       Available only for DTS-HD tracks. Filter out HD part.
 - down-to-ac3       For TRUE-HD and E-AC3 (DD+) tracks. Keep the AC-3 core, drop the HD part.
-- drop-ac3-core     MKV output only. A Blu-ray TrueHD stream carries a 448 kbps AC-3 core beside its
+- drop-ac3-core     A Blu-ray TrueHD stream carries a 448 kbps AC-3 core beside its
                     lossless part; Matroska cannot hold the two in one track, so the core is written
                     as a track of its own and merge-ac3-track= puts them back together when the file
                     is muxed to a disc again. Add this to leave the core out and keep the lossless
                     stream alone, at the cost of not being able to author a spec-legal disc from it.
+                    On a demux it does the same: the file holds the lossless stream on its own and
+                    is named .thd rather than .ac3+thd, which is what a decoder that cannot read
+                    the disc form needs. Without it the demux is unchanged.
 - secondary         Mux as secondary audio. Available for DD+ and DTS-Express.
 - default           Mark this track as the default. Used for Blu-ray, and written as the
                     Matroska default flag when the output is MKV. Without it the first track
@@ -594,7 +597,8 @@ coincide with HTML: <b>, <i>, <u>, <strike>, <font>. Default relative font size
 <font size= 4 color="#806040">colored</font>text</font>
 </b>
 
-Global additional parameters are placed in the first line of the META file,
+)help"
+                            R"help(Global additional parameters are placed in the first line of the META file,
 which must begin with the MUXOPT token.
 All parameters in this group start with two dashes:
 

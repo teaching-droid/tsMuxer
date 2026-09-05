@@ -34,6 +34,9 @@ class SingleFileMuxer final : public AbstractMuxer
         int m_bufLen;
         uint64_t m_totalWrited;
         AbstractStreamReader* m_codecReader;
+        // drop-ac3-core on a demux: the AC-3 compatibility core is left out and the file holds
+        // the lossless stream alone, which is what a decoder that cannot read the disc form wants.
+        bool m_dropAc3Core = false;
         StreamInfo(const int blockSize)
         {
             m_buffer = new uint8_t[blockSize + MAX_AV_PACKET_SIZE +

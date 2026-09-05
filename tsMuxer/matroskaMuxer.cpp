@@ -2426,9 +2426,7 @@ bool MatroskaMuxer::muxPacketInternal(AVPacket& avPacket)
         // claims something else entirely: the 351 byte core frame at the end of a stream reads as
         // 5870 bytes. So a packet is treated as the core only when it carries the AC-3 sync word
         // AND fails to describe itself as MLP, which no real lossless frame can do.
-        const int mlpLength = avPacket.size >= 2 ? ((((avPacket.data[0] & 0x0F) << 8) | avPacket.data[1]) * 2) : 0;
-        const bool isAc3Core =
-            avPacket.size >= 2 && avPacket.data[0] == 0x0B && avPacket.data[1] == 0x77 && mlpLength != avPacket.size;
+        const bool isAc3Core = isTrueHDCorePacket(avPacket.data, avPacket.size);
         if ((avPacket.flags & AVPacket::IS_CORE_PACKET) || isAc3Core)
         {
             if (track.ac3CoreStreamIndex < 0)

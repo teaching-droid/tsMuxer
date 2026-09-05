@@ -5,6 +5,7 @@
 #include <fs/textfile.h>
 
 #include "abstractMuxer.h"
+#include "ac3Codec.h"
 #include "ac3StreamReader.h"
 #include "lpcmStreamReader.h"
 #include "mpegAudioStreamReader.h"
@@ -85,7 +86,7 @@ void SingleFileMuxer::intAddStream(const std::string& streamName, const std::str
     {
         const auto ac3Reader = dynamic_cast<AC3StreamReader*>(codecReader);
         if (ac3Reader->isTrueHD() && !ac3Reader->getDownconvertToAC3())
-            fileExt = ".ac3+thd";
+            fileExt = params.find("drop-ac3-core") != params.end() ? ".thd" : ".ac3+thd";
         else if (ac3Reader->isEAC3() && !ac3Reader->getDownconvertToAC3())
         {
             if (ac3Reader->isAC3())
@@ -193,6 +194,7 @@ void SingleFileMuxer::intAddStream(const std::string& streamName, const std::str
     if (streamInfo->m_fileName.size() > 254)
         LTRACE(LT_ERROR, 2, "Error: File name too long.");
     streamInfo->m_codecReader = codecReader;
+    streamInfo->m_dropAc3Core = strEndWith(fileExt, string(".thd")) && codecName == "A_AC3";
     m_streamInfo[streamIndex] = streamInfo;
 }
 
@@ -272,6 +274,12 @@ bool SingleFileMuxer::muxPacket(AVPacket& avPacket)
     if (avPacket.data == nullptr || avPacket.size == 0)
         return true;
     StreamInfo* streamInfo = m_streamInfo[avPacket.stream_index];
+    // drop-ac3-core: the disc form of a TrueHD track interleaves an AC-3 core with the lossless
+    // frames, and a decoder handed the pair reports inconsistent timestamps or refuses the file
+    // outright. Leaving the core out gives a stream such a decoder can read.
+    if (streamInfo->m_dropAc3Core &&
+        ((avPacket.flags & AVPacket::IS_CORE_PACKET) || isTrueHDCorePacket(avPacket.data, avPacket.size)))
+        return true;
     if (avPacket.dts != streamInfo->m_dts || avPacket.pts != streamInfo->m_pts ||
         m_lastIndex != avPacket.stream_index || avPacket.flags & AVPacket::FORCE_NEW_FRAME)
     {

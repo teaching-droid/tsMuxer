@@ -136,4 +136,19 @@ class AC3Codec
     int64_t m_frameDuration;
 };
 
+// Is this packet the AC-3 compatibility core of a disc TrueHD track rather than a lossless
+// frame? An MLP frame states its own length in its first two bytes, as a count of 16 bit words,
+// so a genuine lossless frame's length field matches its size. An AC-3 frame read the same way
+// claims something else entirely: a 351 byte core frame reads as 5870. So a packet is the core
+// only when it carries the AC-3 sync word AND fails to describe itself as MLP, which no real
+// lossless frame can do. Two core frames arrive without any flag to help, the first and the
+// last, so position is not a safe test and the bytes are asked instead.
+inline bool isTrueHDCorePacket(const uint8_t* data, const int size)
+{
+    if (size < 2 || data[0] != 0x0B || data[1] != 0x77)
+        return false;
+    const int mlpLength = (((data[0] & 0x0F) << 8) | data[1]) * 2;
+    return mlpLength != size;
+}
+
 #endif
