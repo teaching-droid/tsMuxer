@@ -871,8 +871,27 @@ int HEVCStreamReader::getStreamHDR() const
     return (m_hdr->isDVRPU || m_hdr->isDVEL) ? 4 : (m_hdr->isHDR10plus ? 16 : (m_hdr->isHDR10 ? 2 : 1));
 }
 
+// ** ANSWER FOR THE UNIT THAT WAS ASKED ABOUT. **
+//
+// The VPS and the SPS each carry a copy of the timing, and updateFPS compares this answer with the
+// rate the user asked for to decide whether that unit needs rewriting. This ignored its argument
+// and always answered with the VPS.
+//
+// The VPS comes first in the stream, so by the time the SPS arrived the VPS had already been
+// rewritten to the new rate. The SPS was then compared against that new rate, matched it, and was
+// left alone. The file went out carrying two timings that disagreed: the VPS said 25 and the SPS
+// still said 23.976. ffmpeg reads the VPS and reported 25, tsMuxeR reads the SPS and reported
+// 23.976, and neither was wrong about what it had read.
+//
+// The fallback is kept for the other caller, which passes the SPS only as a formality and wants
+// whatever rate the stream has. Only a unit that has a rate of its own now answers with it.
 double HEVCStreamReader::getStreamFPS(void* curNalUnit)
 {
+    if (curNalUnit == m_vps && m_vps != nullptr && m_vps->getFPS() != 0.0)
+        return m_vps->getFPS();
+    if (curNalUnit == m_sps && m_sps != nullptr && m_sps->getFPS() != 0.0)
+        return m_sps->getFPS();
+
     double fps = 0;
     if (m_vps)
         fps = m_vps->getFPS();
