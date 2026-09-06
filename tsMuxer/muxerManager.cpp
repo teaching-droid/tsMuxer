@@ -80,6 +80,36 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
     }
 
     vector<StreamInfo>& ci = m_metaDemuxer.getCodecInfo();
+
+    // A negative timeshift moves a track EARLIER, and if it moves it past the start of the mux
+    // the timestamp goes below zero. A PTS field is 33 bits and has no sign, so what got written
+    // was the value wrapped round: an audio track asked for 827 ms early against a start time of
+    // zero came out at 8,589,860,162, which is 95,442 s, more than a day after the picture. The
+    // mux reported success.
+    //
+    // Move the start of the mux instead. Every track moves by the same amount, so the offset the
+    // user asked for between them is exactly what they get, and only the absolute start changes,
+    // which is the thing that could not be honoured in the first place.
+    int64_t mostNegativeShift = 0;
+    for (const StreamInfo& si : ci)
+        if (si.m_timeShift < mostNegativeShift)
+            mostNegativeShift = si.m_timeShift;
+    if (mostNegativeShift < 0)
+    {
+        static constexpr int64_t INTERNAL_PER_90KHZ = INTERNAL_PTS_FREQ / 90000;
+        const int64_t needed = (-mostNegativeShift + INTERNAL_PER_90KHZ - 1) / INTERNAL_PER_90KHZ;
+        if (m_ptsOffset < needed)
+        {
+            LTRACE(LT_WARN, 2,
+                   "Warning: a timeshift of " << (-mostNegativeShift * 1000 / INTERNAL_PTS_FREQ)
+                                              << " ms starts a track before the start of the mux, which cannot be "
+                                                 "written. Raising the start time from "
+                                              << m_ptsOffset << " to " << needed
+                                              << " (90 kHz clock) so it fits. Use --start-time to choose your own.");
+            m_ptsOffset = needed;
+        }
+    }
+
     bool mvcTrackFirst = false;
     bool firstH264Track = true;
     for (const StreamInfo& si : ci)
