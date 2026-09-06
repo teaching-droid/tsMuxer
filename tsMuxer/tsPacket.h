@@ -525,6 +525,15 @@ struct MPLSStreamInfo : M2TSStreamInfo
     PIPParams pipParams;
 };
 
+// One play item's STN table, kept per play item rather than only for the first. A playlist may
+// join clips that do not all carry the same streams, and the one that describes the playlist is
+// not necessarily the one that happens to be first. See MPLSParser::chooseRepresentativeStnTable.
+struct MPLSStnTable
+{
+    std::vector<MPLSStreamInfo> streams;
+    uint8_t counts[8]{};
+};
+
 struct MPLSPlayItem
 {
     uint32_t IN_time = 0;
@@ -600,6 +609,10 @@ struct MPLSParser
 
     std::vector<std::string> m_mvcFiles;
 
+    // Clips left out because their streams contradict the rest of the playlist, so a caller can
+    // say which ones and why. Empty for every playlist whose clips agree, which is nearly all.
+    std::vector<std::string> m_skippedClips;
+
    private:
     void composeSubPlayItem(BitStreamWriter& writer, size_t playItemNum, size_t subPathNum,
                             const std::vector<PMTIndex>& pmtIndexList) const;
@@ -632,6 +645,11 @@ struct MPLSParser
     static int calcPlayItemID(const MPLSStreamInfo& streamInfo, uint32_t pts);
     [[nodiscard]] int pgIndexToFullIndex(int value) const;
     void parseSubPathEntryExtension(uint8_t* data, uint32_t dataLen);
+    void chooseRepresentativeStnTable();
+    void dropContradictingPlayItems();
+
+    std::vector<MPLSStnTable> m_stnTables;
+    std::vector<size_t> m_playItemsToSkip;
 };
 
 #endif

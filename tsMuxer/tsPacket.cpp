@@ -5,8 +5,12 @@
 
 #include <fs/file.h>
 #include <fs/systemlog.h>
+#include <algorithm>
 #include <cmath>
+#include <map>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "bitStream.h"
 #include "crc32.h"
@@ -1339,11 +1343,15 @@ void MPLSParser::parse(uint8_t* buffer, const int len)
         AppInfoPlayList(reader);
         parsePlayList(buffer + playList_start_address, len - playList_start_address);
         parsePlayListMark(buffer + playListMark_start_address, len - playListMark_start_address);
+        // Before the extension data, which patches m_streamInfo in place for 3D playlists and so
+        // needs the final one, and after the marks, which the drop below has to renumber.
+        chooseRepresentativeStnTable();
 
         if (extensionData_start_address)
         {
             parseExtensionData(buffer + extensionData_start_address, buffer + len);
         }
+        dropContradictingPlayItems();
     }
     catch (BitStreamException&)
     {
@@ -1600,6 +1608,136 @@ void MPLSParser::parsePlayList(uint8_t* buffer, const int len)
     {
         // SubPath(); // not implemented now
     }
+}
+
+// A playlist joins clips, and nothing obliges those clips to carry the same streams. A short
+// intro or a distributor's logo is often a separate clip with its own audio, and the feature
+// follows it. Only the FIRST play item's STN table used to be kept, so such a playlist was
+// described by its intro: the feature's own tracks were never offered, and muxing what was
+// offered read the feature's payload through the wrong reader (upstream issue 724).
+//
+// Pick the stream set that the greatest amount of the playlist actually uses. Clips are grouped
+// by the streams they declare, the run time of each group is added up, and the largest wins. On
+// a playlist whose clips all agree, which is nearly every playlist, there is one group and this
+// changes nothing.
+void MPLSParser::chooseRepresentativeStnTable()
+{
+    if (m_stnTables.empty())
+        return;
+    m_stnTables.resize(m_playItems.size());
+
+    auto signatureOf = [](const MPLSStnTable& table)
+    {
+        std::vector<std::pair<int, int>> pairs;
+        pairs.reserve(table.streams.size());
+        for (const MPLSStreamInfo& stream : table.streams)
+            pairs.emplace_back(stream.streamPID, static_cast<int>(stream.stream_coding_type));
+        std::sort(pairs.begin(), pairs.end());
+        std::string rez;
+        for (const auto& [pid, codingType] : pairs) rez += int32ToStr(pid) + ':' + int32ToStr(codingType) + ',';
+        return rez;
+    };
+
+    std::map<std::string, int64_t> durationBySignature;
+    std::vector<std::string> signatures;
+    signatures.reserve(m_stnTables.size());
+    for (size_t i = 0; i < m_stnTables.size(); ++i)
+    {
+        signatures.push_back(signatureOf(m_stnTables[i]));
+        // OUT_time is not guaranteed to be past IN_time in a damaged playlist, and a negative
+        // span must not be allowed to vote.
+        const int64_t span = static_cast<int64_t>(m_playItems[i].OUT_time) - m_playItems[i].IN_time;
+        durationBySignature[signatures[i]] += span > 0 ? span : 0;
+    }
+
+    size_t best = 0;
+    int64_t bestDuration = -1;
+    for (size_t i = 0; i < signatures.size(); ++i)
+    {
+        const int64_t duration = durationBySignature[signatures[i]];
+        // Strictly greater, so an all-equal playlist keeps the first play item and behaves
+        // exactly as it did before.
+        if (duration > bestDuration)
+        {
+            bestDuration = duration;
+            best = i;
+        }
+    }
+
+    // swap rather than assign: MPLSStreamInfo owns its stereo PG halves and has a deep copy
+    // constructor but no copy assignment, so assigning a vector of them would share the pointers.
+    m_streamInfo.swap(m_stnTables[best].streams);
+    const MPLSStnTable& chosen = m_stnTables[best];
+    number_of_primary_video_stream_entries = chosen.counts[0];
+    number_of_primary_audio_stream_entries = chosen.counts[1];
+    number_of_PG_textST_stream_entries = chosen.counts[2];
+    number_of_IG_stream_entries = chosen.counts[3];
+    number_of_secondary_audio_stream_entries = chosen.counts[4];
+    number_of_secondary_video_stream_entries = chosen.counts[5];
+    number_of_PiP_PG_textST_stream_entries_plus = chosen.counts[6];
+    number_of_DolbyVision_video_stream_entries = chosen.counts[7];
+
+    // A clip that declares a DIFFERENT codec on a PID the chosen set also uses cannot be muxed
+    // into the same track: its payload would reach the wrong reader. A clip that merely carries
+    // fewer streams is left alone, because that costs nothing but a gap.
+    std::map<int, int> chosenCodingType;
+    for (const MPLSStreamInfo& stream : m_streamInfo)
+        chosenCodingType[stream.streamPID] = static_cast<int>(stream.stream_coding_type);
+
+    for (size_t i = 0; i < m_stnTables.size(); ++i)
+    {
+        if (i == best)
+            continue;
+        for (const MPLSStreamInfo& stream : m_stnTables[i].streams)
+        {
+            const auto itr = chosenCodingType.find(stream.streamPID);
+            if (itr != chosenCodingType.end() && itr->second != static_cast<int>(stream.stream_coding_type))
+            {
+                m_playItemsToSkip.push_back(i);
+                break;
+            }
+        }
+    }
+}
+
+// Applied after the extension data, because that is where a 3D playlist's MVC clip names arrive
+// and they are indexed the same way. Dropping a play item here keeps every consumer consistent
+// without any of them knowing: the file list, the chapter marks, the clip timing and the MVC
+// halves all come from m_playItems.
+void MPLSParser::dropContradictingPlayItems()
+{
+    if (m_playItemsToSkip.empty())
+        return;
+    const bool mvcAligned = m_mvcFiles.size() == m_playItems.size();
+
+    for (size_t k = m_playItemsToSkip.size(); k-- > 0;)
+    {
+        const size_t index = m_playItemsToSkip[k];
+        if (index >= m_playItems.size())
+            continue;
+        m_skippedClips.push_back(m_playItems[index].fileName);
+        m_playItems.erase(m_playItems.begin() + index);
+        if (mvcAligned)
+            m_mvcFiles.erase(m_mvcFiles.begin() + index);
+
+        // A mark belongs to a play item by index, so the marks of the dropped clip go with it and
+        // everything after it moves down one. Left alone, the chapters of a playlist whose intro
+        // was dropped would all be one clip late.
+        for (size_t m = m_marks.size(); m-- > 0;)
+        {
+            if (static_cast<size_t>(m_marks[m].m_playItemID) == index)
+                m_marks.erase(m_marks.begin() + m);
+            else if (static_cast<size_t>(m_marks[m].m_playItemID) > index)
+                m_marks[m].m_playItemID--;
+        }
+    }
+    std::reverse(m_skippedClips.begin(), m_skippedClips.end());
+
+    for (const std::string& clip : m_skippedClips)
+        LTRACE(LT_WARN, 2,
+               "Warning: clip " << clip
+                                << " is left out of this playlist. Its streams are not the ones the rest of the "
+                                   "playlist uses, and a single output cannot change codec part way through.");
 }
 
 MPLSStreamInfo& MPLSParser::getMainStream()
@@ -2409,14 +2547,27 @@ void MPLSParser::STN_table(BitStreamReader& reader, int PlayItem_id)
     number_of_DolbyVision_video_stream_entries = reader.getBits<uint8_t>(8);
     reader.skipBits(32);  // reserved_for_future_use
 
+    // Each play item has its own STN table and they need not agree. Keep them all, with the entry
+    // counts that belong to each, and decide afterwards which one describes the playlist.
+    if (m_stnTables.size() <= static_cast<size_t>(PlayItem_id))
+        m_stnTables.resize(static_cast<size_t>(PlayItem_id) + 1);
+    MPLSStnTable& stnTable = m_stnTables[PlayItem_id];
+    stnTable.counts[0] = number_of_primary_video_stream_entries;
+    stnTable.counts[1] = number_of_primary_audio_stream_entries;
+    stnTable.counts[2] = number_of_PG_textST_stream_entries;
+    stnTable.counts[3] = number_of_IG_stream_entries;
+    stnTable.counts[4] = number_of_secondary_audio_stream_entries;
+    stnTable.counts[5] = number_of_secondary_video_stream_entries;
+    stnTable.counts[6] = number_of_PiP_PG_textST_stream_entries_plus;
+    stnTable.counts[7] = number_of_DolbyVision_video_stream_entries;
+
     for (int primary_video_stream_id = 0; primary_video_stream_id < number_of_primary_video_stream_entries;
          primary_video_stream_id++)
     {
         MPLSStreamInfo streamInfo;
         streamInfo.parseStreamEntry(reader);
         streamInfo.parseStreamAttributes(reader);
-        if (PlayItem_id == 0)
-            m_streamInfo.push_back(streamInfo);
+        m_stnTables[PlayItem_id].streams.push_back(streamInfo);
     }
     for (int primary_audio_stream_id = 0; primary_audio_stream_id < number_of_primary_audio_stream_entries;
          primary_audio_stream_id++)
@@ -2424,8 +2575,7 @@ void MPLSParser::STN_table(BitStreamReader& reader, int PlayItem_id)
         MPLSStreamInfo streamInfo;
         streamInfo.parseStreamEntry(reader);
         streamInfo.parseStreamAttributes(reader);
-        if (PlayItem_id == 0)
-            m_streamInfo.push_back(streamInfo);
+        m_stnTables[PlayItem_id].streams.push_back(streamInfo);
     }
 
     for (int PG_textST_stream_id = 0;
@@ -2435,8 +2585,7 @@ void MPLSParser::STN_table(BitStreamReader& reader, int PlayItem_id)
         MPLSStreamInfo streamInfo;
         streamInfo.parseStreamEntry(reader);
         streamInfo.parseStreamAttributes(reader);
-        if (PlayItem_id == 0)
-            m_streamInfo.push_back(streamInfo);
+        m_stnTables[PlayItem_id].streams.push_back(streamInfo);
     }
 
     for (int IG_stream_id = 0; IG_stream_id < number_of_IG_stream_entries; IG_stream_id++)
@@ -2444,8 +2593,7 @@ void MPLSParser::STN_table(BitStreamReader& reader, int PlayItem_id)
         MPLSStreamInfo streamInfo;
         streamInfo.parseStreamEntry(reader);
         streamInfo.parseStreamAttributes(reader);
-        if (PlayItem_id == 0)
-            m_streamInfo.push_back(streamInfo);
+        m_stnTables[PlayItem_id].streams.push_back(streamInfo);
     }
 
     for (int secondary_audio_stream_id = 0; secondary_audio_stream_id < number_of_secondary_audio_stream_entries;
@@ -2455,8 +2603,7 @@ void MPLSParser::STN_table(BitStreamReader& reader, int PlayItem_id)
         streamInfo.isSecondary = true;
         streamInfo.parseStreamEntry(reader);
         streamInfo.parseStreamAttributes(reader);
-        if (PlayItem_id == 0)
-            m_streamInfo.push_back(streamInfo);
+        m_stnTables[PlayItem_id].streams.push_back(streamInfo);
 
         const auto number_of_primary_audio_ref_entries = reader.getBits<uint8_t>(8);
         reader.skipBits(8);  // reserved_for_word_align
@@ -2475,8 +2622,7 @@ void MPLSParser::STN_table(BitStreamReader& reader, int PlayItem_id)
         streamInfo.isSecondary = true;
         streamInfo.parseStreamEntry(reader);
         streamInfo.parseStreamAttributes(reader);
-        if (PlayItem_id == 0)
-            m_streamInfo.push_back(streamInfo);
+        m_stnTables[PlayItem_id].streams.push_back(streamInfo);
 
         const auto number_of_secondary_audio_ref_entries = reader.getBits<uint8_t>(8);
         reader.skipBits(8);  // reserved_for_word_align
@@ -2503,8 +2649,7 @@ void MPLSParser::STN_table(BitStreamReader& reader, int PlayItem_id)
         MPLSStreamInfo streamInfo;
         streamInfo.parseStreamEntry(reader);
         streamInfo.parseStreamAttributes(reader);
-        if (PlayItem_id == 0)
-            m_streamInfo.push_back(streamInfo);
+        m_stnTables[PlayItem_id].streams.push_back(streamInfo);
     }
 }
 

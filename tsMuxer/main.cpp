@@ -1887,8 +1887,15 @@ int main(int argc, char** argv)
                 std::string ssifExt = shortExt ? ".SIF" : ".ssif";
                 bool mode3D = mplsParser.isDependStreamExist;
                 bool switchToSsif = false;
+                for (const std::string& clip : mplsParser.m_skippedClips)
+                    LTRACE(LT_INFO, 2, "Skipped clip: " << clip << mediaExt);
+
                 if (!mplsParser.m_playItems.empty())
                 {
+                    // The parser has already dropped any clip whose streams contradict the rest,
+                    // so this is the first clip that DOES describe the playlist. It used to be
+                    // whatever happened to be first, which on a playlist that opens with an
+                    // intro of its own reported the intro's tracks and none of the feature's.
                     MPLSPlayItem& item = mplsParser.m_playItems[0];
                     string itemName = streamDir + item.fileName + mediaExt;
                     if (fileExists(itemName))
