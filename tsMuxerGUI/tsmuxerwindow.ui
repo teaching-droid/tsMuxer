@@ -1417,6 +1417,40 @@
              </widget>
            </item>
            <item>
+            <layout class="QHBoxLayout" name="horizontalLayoutRateLimit">
+             <item>
+             <widget class="QCheckBox" name="checkBoxRateLimit">
+               <property name="text">
+                 <string>Hold the disc to the rate a player can read</string>
+               </property>
+               <property name="toolTip">
+                 <string>A Blu-ray drive only has to supply 48 Mbit/s, and a UHD drive 109. Muxing can ask for more than that in bursts, even from a source that was itself a disc, and such an image plays from a hard disk but may stutter or refuse to start on a standalone player. This paces the disc to the limit, which is what a pressed disc does. Turn it off only if you know you want the image faster than a player can read.</string>
+               </property>
+               <property name="checked">
+                 <bool>true</bool>
+               </property>
+             </widget>
+             </item>
+             <item>
+              <widget class="QComboBox" name="comboRateLimit">
+               <property name="sizeAdjustPolicy">
+                <enum>QComboBox::AdjustToContents</enum>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="horizontalSpacerRateLimit">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size><width>40</width><height>20</height></size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+           <item>
             <layout class="QGridLayout" name="gridLayout_10">
              <item row="0" column="0">
               <widget class="QLabel" name="label">
@@ -3058,6 +3092,7 @@ p, li { white-space: pre-wrap; }
   <tabstop>dtsDwnConvert</tabstop>
   <tabstop>dropAc3CoreCheckBox</tabstop>
   <tabstop>splitAc3CoreCheckBox</tabstop>
+  <tabstop>checkBoxRateLimit</tabstop>
   <tabstop>checkBoxKeepFps</tabstop>
  <tabstop>radioButtonTS</tabstop>
  <tabstop>radioButtonM2TS</tabstop>

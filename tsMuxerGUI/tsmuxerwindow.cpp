@@ -600,6 +600,26 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->spinBoxM2tsNum, spinBoxValueChanged, this, &TsMuxerWindow::onGeneralCheckboxClicked);
     connect(ui->checkBoxBlankPL, &QPushButton::clicked, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->checkBoxV3, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::updateMetaLines);
+    connect(ui->checkBoxRateLimit, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::updateMetaLines);
+    // Which of the two controls applies depends on the other two boxes, so both have to settle the
+    // enabled state as well as rewrite the meta.
+    connect(ui->checkBoxV3, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::updateBluRayTabEnabled);
+    connect(ui->checkBoxRateLimit, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::updateBluRayTabEnabled);
+    // ** THE UHD LIMIT IS A TABLE, NOT A NUMBER. ** BD-ROM Version 3 gives a maximum multiplex rate
+    // per disc capacity and per zone, so which figure applies depends on the disc being made:
+    //
+    //   50 GB                                 64 Mbit/s and 81.7
+    //   66 GB and 100 GB                      81.7 and 109
+    //   the high transfer rate zone of those  127.9
+    //
+    // 109 is the default because it is what pressed UHD discs are mastered to: two were measured
+    // and both sit exactly on it. HD has one figure, 48, so the choice is offered only for V3.
+    // The value is kbit/s, which is what --maxbitrate takes.
+    ui->comboRateLimit->addItem(tr("109 Mbit/s (66 or 100 GB)"), 109000);
+    ui->comboRateLimit->addItem(tr("81.7 Mbit/s (50 GB, or the inner zone of a larger disc)"), 81700);
+    ui->comboRateLimit->addItem(tr("64 Mbit/s (the inner zone of a 50 GB disc)"), 64000);
+    ui->comboRateLimit->addItem(tr("127.9 Mbit/s (high transfer rate zone)"), 127900);
+    connect(ui->comboRateLimit, comboBoxIndexChanged, this, &TsMuxerWindow::updateMetaLines);
     connect(ui->BlackplaylistCombo, spinBoxValueChanged, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->checkBoxNewAudioPes, &QAbstractButton::clicked, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->checkBoxCrop, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onSavedParamChanged);
@@ -3338,6 +3358,15 @@ QString TsMuxerWindow::getMuxOpts()
     }
     else if (ui->radioButtonAVCHD->isChecked())
         rez += " --avchd";
+    // Muxing can ask for a higher read rate than a player has to supply, even from a source that
+    // was itself a disc, and such an image plays from a hard disk but may stutter or refuse to
+    // start on a standalone player. Paced to the limit it is what a pressed disc looks like.
+    if ((ui->radioButtonBluRay->isChecked() || ui->radioButtonBluRayISO->isChecked()) &&
+        ui->checkBoxRateLimit->isChecked())
+    {
+        const int kbps = ui->checkBoxV3->isChecked() ? ui->comboRateLimit->currentData().toInt() : 48000;
+        rez += " --maxbitrate=" + QString::number(kbps);
+    }
     else if (ui->radioButtonDemux->isChecked())
         rez += " --demux";
     else if (ui->radioButtonMKV->isChecked() && ui->comboBoxDvProfile->isVisible() &&
@@ -3982,7 +4011,16 @@ void TsMuxerWindow::updateBluRayTabEnabled()
 
     // The Options group is mixed and cannot be greyed as a whole: the mux start time applies to
     // EVERY output, and it lives in there beside options that do not.
-    ui->checkBoxV3->setEnabled(bd);         // --blu-ray-v3, and AVCHD has no V3
+    ui->checkBoxV3->setEnabled(bd);  // --blu-ray-v3, and AVCHD has no V3
+    // The read rate ceiling only means anything for a disc, and the limit it uses depends on
+    // whether that disc is V3, so it follows the same condition as the box above it.
+    ui->checkBoxRateLimit->setEnabled(bd);
+    // The choice exists only for V3. An HD Blu-ray has one figure, 48 Mbit/s, so there is nothing
+    // to choose and the box alone says everything.
+    ui->comboRateLimit->setEnabled(bd && ui->checkBoxRateLimit->isChecked() && ui->checkBoxV3->isChecked());
+    ui->checkBoxRateLimit->setText(ui->checkBoxV3->isChecked() && bd
+                                       ? tr("Hold the disc to the rate a player can read:")
+                                       : tr("Hold the disc to the rate a player can read (48 Mbit/s)"));
     ui->checkBoxBlankPL->setEnabled(disk);  // --insertBlankPL
     const bool blankPL = disk && ui->checkBoxBlankPL->isChecked();
     ui->BlackplaylistCombo->setEnabled(blankPL);
