@@ -9,6 +9,7 @@
 #include <cmath>
 #include <memory>
 #include <set>
+#include <sstream>
 
 static bool isKnownTrackParam(const std::string& name);
 
@@ -755,7 +756,21 @@ int METADemuxer::addStream(const string& codec, const string& codecStreamName, c
             m_processedTracks.insert(trackKey);
     }
     if (fileList.empty())
+    {
+        // Every file this line names has already been taken by an earlier line asking for the
+        // same track number, so this line adds nothing. It used to add nothing SILENTLY: a meta
+        // naming the same subtitle file twice produced one track and said so nowhere, and the
+        // second line simply was not there in the output.
+        std::ostringstream which;
+        which << codec << " from " << unquotedStreamName;
+        if (pid)
+            which << ", track " << pid;
+        LTRACE(LT_WARN, 2,
+               "Warning: " << which.str()
+                           << " is already muxed by an earlier line of the meta file, so this line is ignored. "
+                              "The same track cannot be muxed twice.");
         return -1;
+    }
 
     FileListIterator* listIterator = nullptr;
     if (fileList.size() > 1)
