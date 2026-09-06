@@ -61,6 +61,9 @@ struct Track
         delete[] name;
         delete[] codec_id;
         delete[] codec_name;
+        // codec_priv was left out of this list. Every mp4 with a glbl or an avcC atom leaked it,
+        // and it is allocated with new[] at all four sites that set it.
+        delete[] codec_priv;
         delete parsed_priv_data;
     }
 

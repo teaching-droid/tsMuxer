@@ -7,6 +7,12 @@ struct HevcUnit
 {
     HevcUnit() : nal_unit_type(), nuh_layer_id(0), nuh_temporal_id_plus1(0), m_nalBuffer(nullptr), m_nalBufferLen(0) {}
 
+    // decodeBuffer allocates m_nalBuffer and nothing ever released it. NALUnit, which is the
+    // same idea for H.264 and sits in the header this one includes, has had this destructor
+    // all along. Every unit built here leaked its buffer, which the detection probe alone
+    // does four times for any file it looks at, HEVC or not.
+    ~HevcUnit() { delete[] m_nalBuffer; }
+
     enum class NalType
     {
         TRAIL_N = 0,  // first slice
