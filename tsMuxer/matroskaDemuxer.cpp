@@ -1129,6 +1129,27 @@ void MatroskaDemuxer::applyStartCodeRule()
             "This file records how its source framed the video (" << rule << "), so it is framed the same way again.");
 }
 
+// A track is a block of characters that a Track was never constructed in, so ~Track never runs
+// and everything the type owns is left behind. The mp4 demuxer had the same shape and its half
+// was fixed for 2.18.11; this one was not. Measured on one small Matroska file, the codec
+// private data, the codec id and the parsed private data object all survived the demuxer.
+//
+// Calling ~Track() would be undefined here, because nothing was ever constructed in these
+// bytes. So what the type owns is released by hand, in the same order the destructor would
+// have used, and the vector is emptied by swapping a fresh one over it.
+void MatroskaDemuxer::freeTrack(MatroskaTrack* track)
+{
+    if (track == nullptr)
+        return;
+    delete[] track->name;
+    delete[] track->codec_id;
+    delete[] track->codec_name;
+    delete[] track->codec_priv;
+    delete track->parsed_priv_data;
+    std::vector<uint8_t>().swap(track->encodingAlgoPriv);
+    delete[] reinterpret_cast<char*>(track);
+}
+
 void MatroskaDemuxer::readClose()
 {
     delete[] writing_app;
@@ -1140,7 +1161,7 @@ void MatroskaDemuxer::readClose()
         delete pkt;
         packets.pop();
     }
-    for (int i = 0; i < num_tracks; i++) delete[] reinterpret_cast<char*>(tracks[i]);
+    for (int i = 0; i < num_tracks; i++) freeTrack(tracks[i]);
 }
 
 // --------------------------- refactored from ffmpeg matroska decoder -----------------------
@@ -1256,7 +1277,7 @@ int MatroskaDemuxer::readPacket(AVPacket& avPacket)
 
 int MatroskaDemuxer::matroska_read_header()
 {
-    for (int i = 0; i < num_tracks; i++) delete[] reinterpret_cast<char*>(tracks[i]);
+    for (int i = 0; i < num_tracks; i++) freeTrack(tracks[i]);
     num_tracks = 0;
 
     // MatroskaDemuxContext *matroska = s->priv_data;
@@ -1269,6 +1290,9 @@ int MatroskaDemuxer::matroska_read_header()
     /* First read the EBML header. */
     if ((res = ebml_read_header(&doctype, &version)) < 0)
         return res;
+    // ebml_read_header hands back a string it allocated, and it was never released on any path,
+    // including the two that throw just below. Nine bytes on every Matroska file opened.
+    const std::unique_ptr<char[]> doctypeOwner(doctype);
     if ((doctype == nullptr) || strcmp(doctype, "matroska") != 0)
     {
         THROW(ERR_MATROSKA_PARSE, "Wrong EBML doctype ('" << (doctype ? doctype : "(none)") << "' != 'matroska').")
@@ -2348,7 +2372,7 @@ int MatroskaDemuxer::matroska_add_stream()
     /* start with the master */
     if ((res = ebml_read_master(&id)) < 0)
     {
-        delete[] reinterpret_cast<char*>(track);
+        freeTrack(track);
         return res;
     }
 
