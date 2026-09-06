@@ -508,6 +508,12 @@ Additional parameters for audio tracks:
                     On a demux it does the same: the file holds the lossless stream on its own and
                     is named .thd rather than .ac3+thd, which is what a decoder that cannot read
                     the disc form needs. Without it the demux is unchanged.
+- split-ac3-core    On a demux only, and only for the disc form of a TrueHD track. Writes the
+                    two halves as files of their own, .thd and .ac3, beside the .ac3+thd holding
+                    the pair, in one pass over the source instead of three. The .ac3+thd file is
+                    the bytes exactly as the disc carries them; the other two are what a decoder
+                    that cannot read the pair wants. It costs twice the disk space of the one
+                    file, so ask for it when you want the halves rather than by habit.
 - secondary         Mux as secondary audio. Available for DD+ and DTS-Express.
 - default           Mark this track as the default. Used for Blu-ray, and written as the
                     Matroska default flag when the output is MKV. Without it the first track

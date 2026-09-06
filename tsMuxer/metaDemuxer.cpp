@@ -1055,7 +1055,7 @@ static bool isKnownTrackParam(const std::string& name)
         "fps", "ar", "level", "video-width", "video-height", "insertSEI", "forceSEI", "autoSEI", "contSPS",
         "delPulldown", "stretch", "3d-plane",
         // audio
-        "down-to-ac3", "down-to-dts", "merge-ac3-track", "merge-ac3-file", "drop-ac3-core",
+        "down-to-ac3", "down-to-dts", "merge-ac3-track", "merge-ac3-file", "drop-ac3-core", "split-ac3-core",
         // picture in picture
         "pipCorner", "pipHOffset", "pipVOffset", "pipScale", "pipLumma",
         // text subtitles

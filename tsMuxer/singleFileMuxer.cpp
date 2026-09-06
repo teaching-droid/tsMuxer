@@ -32,7 +32,8 @@ SingleFileMuxer::SingleFileMuxer(MuxerManager* owner) : AbstractMuxer(owner), m_
 
 SingleFileMuxer::~SingleFileMuxer()
 {
-    for (const auto& itr : m_streamInfo) delete itr.second;
+    for (const auto& [index, outputs] : m_streamInfo)
+        for (StreamInfo* si : outputs) delete si;
 }
 
 void SingleFileMuxer::intAddStream(const std::string& streamName, const std::string& codecName, int streamIndex,
@@ -194,8 +195,27 @@ void SingleFileMuxer::intAddStream(const std::string& streamName, const std::str
     if (streamInfo->m_fileName.size() > 254)
         LTRACE(LT_ERROR, 2, "Error: File name too long.");
     streamInfo->m_codecReader = codecReader;
-    streamInfo->m_dropAc3Core = strEndWith(fileExt, string(".thd")) && codecName == "A_AC3";
-    m_streamInfo[streamIndex] = streamInfo;
+    if (strEndWith(fileExt, string(".thd")) && codecName == "A_AC3")
+        streamInfo->m_part_of = StreamInfo::Part::LosslessOnly;
+    m_streamInfo[streamIndex].push_back(streamInfo);
+
+    // split-ac3-core: write the two halves as files of their own beside the pair, in the same
+    // pass. A disc TrueHD track is the only thing that has halves, and only when it really
+    // carries a core, which is what the .ac3+thd name means here.
+    if (fileExt == ".ac3+thd" && params.find("split-ac3-core") != params.end())
+    {
+        for (const auto& [part, ext] : {std::pair{StreamInfo::Part::LosslessOnly, string(".thd")},
+                                        std::pair{StreamInfo::Part::CoreOnly, string(".ac3")}})
+        {
+            auto extra = new StreamInfo(static_cast<unsigned>(DEFAULT_FILE_BLOCK_SIZE));
+            extra->m_fileName = fileName + ext;
+            if (extra->m_fileName.size() > 254)
+                LTRACE(LT_ERROR, 2, "Error: File name too long.");
+            extra->m_codecReader = codecReader;
+            extra->m_part_of = part;
+            m_streamInfo[streamIndex].push_back(extra);
+        }
+    }
 }
 
 void SingleFileMuxer::openDstFile()
@@ -208,12 +228,13 @@ void SingleFileMuxer::openDstFile()
     if (m_owner->isAsyncMode())
         systemFlags += FILE_FLAG_NO_BUFFERING;
 #endif
-    for (auto [index, si] : m_streamInfo)
-    {
-        si->m_fileName = dir + si->m_fileName;
-        if (!si->m_file.open(si->m_fileName.c_str(), File::ofWrite, systemFlags))
-            THROW(ERR_CANT_CREATE_FILE, "Can't create output file " << si->m_fileName)
-    }
+    for (auto& [index, outputs] : m_streamInfo)
+        for (StreamInfo* si : outputs)
+        {
+            si->m_fileName = dir + si->m_fileName;
+            if (!si->m_file.open(si->m_fileName.c_str(), File::ofWrite, systemFlags))
+                THROW(ERR_CANT_CREATE_FILE, "Can't create output file " << si->m_fileName)
+        }
 }
 
 void SingleFileMuxer::writeOutBuffer(StreamInfo* streamInfo)
@@ -273,13 +294,20 @@ bool SingleFileMuxer::muxPacket(AVPacket& avPacket)
 {
     if (avPacket.data == nullptr || avPacket.size == 0)
         return true;
-    StreamInfo* streamInfo = m_streamInfo[avPacket.stream_index];
-    // drop-ac3-core: the disc form of a TrueHD track interleaves an AC-3 core with the lossless
-    // frames, and a decoder handed the pair reports inconsistent timestamps or refuses the file
-    // outright. Leaving the core out gives a stream such a decoder can read.
-    if (streamInfo->m_dropAc3Core &&
-        ((avPacket.flags & AVPacket::IS_CORE_PACKET) || isTrueHDCorePacket(avPacket.data, avPacket.size)))
-        return true;
+    // The disc form of a TrueHD track interleaves an AC-3 core with the lossless frames, and a
+    // decoder handed the pair reports inconsistent timestamps or refuses the file outright. Each
+    // output of this track says which of the two it wants, so the same packet can go to the file
+    // holding the pair and to the file holding its own half, in one pass over the source.
+    const bool isCore = (avPacket.flags & AVPacket::IS_CORE_PACKET) || isTrueHDCorePacket(avPacket.data, avPacket.size);
+    bool rez = true;
+    for (StreamInfo* streamInfo : m_streamInfo[avPacket.stream_index])
+        if (streamInfo->takes(isCore))
+            rez = muxPacketTo(streamInfo, avPacket) && rez;
+    return rez;
+}
+
+bool SingleFileMuxer::muxPacketTo(StreamInfo* streamInfo, AVPacket& avPacket)
+{
     if (avPacket.dts != streamInfo->m_dts || avPacket.pts != streamInfo->m_pts ||
         m_lastIndex != avPacket.stream_index || avPacket.flags & AVPacket::FORCE_NEW_FRAME)
     {
@@ -327,64 +355,64 @@ bool SingleFileMuxer::muxPacket(AVPacket& avPacket)
 
 bool SingleFileMuxer::doFlush()
 {
-    for (const auto& [fst, snd] : m_streamInfo)
-    {
-        StreamInfo* streamInfo = snd;
-        const int lastBlockSize = streamInfo->m_bufLen & 0xffff;  // last 64K of data
-        const int roundBufLen = streamInfo->m_bufLen & 0x7fff0000;
-        if (m_owner->isAsyncMode())
+    for (const auto& [fst, outputs] : m_streamInfo)
+        for (StreamInfo* streamInfo : outputs)
         {
-            if (lastBlockSize > 0)
+            const int lastBlockSize = streamInfo->m_bufLen & 0xffff;  // last 64K of data
+            const int roundBufLen = streamInfo->m_bufLen & 0x7fff0000;
+            if (m_owner->isAsyncMode())
             {
-                const auto newBuff = new uint8_t[lastBlockSize];
-                memcpy(newBuff, streamInfo->m_buffer + roundBufLen, lastBlockSize);
-                m_owner->asyncWriteBuffer(this, streamInfo->m_buffer, roundBufLen, &streamInfo->m_file);
-                streamInfo->m_buffer = newBuff;
+                if (lastBlockSize > 0)
+                {
+                    const auto newBuff = new uint8_t[lastBlockSize];
+                    memcpy(newBuff, streamInfo->m_buffer + roundBufLen, lastBlockSize);
+                    m_owner->asyncWriteBuffer(this, streamInfo->m_buffer, roundBufLen, &streamInfo->m_file);
+                    streamInfo->m_buffer = newBuff;
+                }
+                else
+                {
+                    m_owner->asyncWriteBuffer(this, streamInfo->m_buffer, roundBufLen, &streamInfo->m_file);
+                    streamInfo->m_buffer = nullptr;
+                }
             }
             else
             {
-                m_owner->asyncWriteBuffer(this, streamInfo->m_buffer, roundBufLen, &streamInfo->m_file);
-                streamInfo->m_buffer = nullptr;
+                m_owner->syncWriteBuffer(this, streamInfo->m_buffer, roundBufLen, &streamInfo->m_file);
+                memmove(streamInfo->m_buffer, streamInfo->m_buffer + roundBufLen, lastBlockSize);
             }
+            streamInfo->m_bufLen = lastBlockSize;
         }
-        else
-        {
-            m_owner->syncWriteBuffer(this, streamInfo->m_buffer, roundBufLen, &streamInfo->m_file);
-            memmove(streamInfo->m_buffer, streamInfo->m_buffer + roundBufLen, lastBlockSize);
-        }
-        streamInfo->m_bufLen = lastBlockSize;
-    }
     return true;
 }
 
 bool SingleFileMuxer::close()
 {
-    for (const auto& [fst, snd] : m_streamInfo)
-    {
-        StreamInfo* streamInfo = snd;
-        if (!streamInfo->m_file.close())
-            return false;
-        if (streamInfo->m_bufLen > 0)
+    for (const auto& [fst, outputs] : m_streamInfo)
+        for (StreamInfo* streamInfo : outputs)
         {
-            if (!streamInfo->m_file.open(streamInfo->m_fileName.c_str(), File::ofWrite + File::ofAppend))
-                return false;
-            if (!streamInfo->m_file.write(streamInfo->m_buffer, streamInfo->m_bufLen))
-                return false;
-            if (streamInfo->m_codecReader)
-                if (!streamInfo->m_codecReader->beforeFileCloseEvent(streamInfo->m_file))
-                    return false;
             if (!streamInfo->m_file.close())
                 return false;
-
-            if (streamInfo->m_part > 1)
+            if (streamInfo->m_bufLen > 0)
             {
-                std::string newName = getNewName(streamInfo->m_fileName, streamInfo->m_part);
-                deleteFile(newName);
-                if (rename(streamInfo->m_fileName.c_str(), newName.c_str()) != 0)
-                    THROW(ERR_COMMON, "Can't rename file " << streamInfo->m_fileName << " to " << newName)
+                if (!streamInfo->m_file.open(streamInfo->m_fileName.c_str(), File::ofWrite + File::ofAppend))
+                    return false;
+                if (!streamInfo->m_file.write(streamInfo->m_buffer, streamInfo->m_bufLen))
+                    return false;
+                if (streamInfo->m_codecReader)
+                    if (!streamInfo->m_codecReader->beforeFileCloseEvent(streamInfo->m_file))
+                        return false;
+                if (!streamInfo->m_file.close())
+                    return false;
+
+                if (streamInfo->m_part > 1)
+                {
+                    std::string newName = getNewName(streamInfo->m_fileName, streamInfo->m_part);
+                    deleteFile(newName);
+                    if (rename(streamInfo->m_fileName.c_str(), newName.c_str()) != 0)
+                        THROW(ERR_COMMON, "Can't rename file " << streamInfo->m_fileName << " to " << newName)
+                }
             }
         }
-    }
     return true;
 }
 

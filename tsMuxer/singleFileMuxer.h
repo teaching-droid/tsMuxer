@@ -3,6 +3,10 @@
 
 #include <types/types.h>
 
+#include <map>
+#include <string>
+#include <vector>
+
 #include "abstractMuxer.h"
 #include "avPacket.h"
 
@@ -34,9 +38,20 @@ class SingleFileMuxer final : public AbstractMuxer
         int m_bufLen;
         uint64_t m_totalWrited;
         AbstractStreamReader* m_codecReader;
-        // drop-ac3-core on a demux: the AC-3 compatibility core is left out and the file holds
-        // the lossless stream alone, which is what a decoder that cannot read the disc form wants.
-        bool m_dropAc3Core = false;
+        // Which packets of its track this file takes. A disc TrueHD track is an AC-3 core
+        // interleaved with the lossless part, so one track can be written out as up to three
+        // files: the pair as they stand, the lossless part alone, and the core alone.
+        enum class Part
+        {
+            Everything,    // the disc form, .ac3+thd
+            LosslessOnly,  // drop-ac3-core, .thd
+            CoreOnly       // the core on its own, .ac3
+        };
+        Part m_part_of = Part::Everything;
+        [[nodiscard]] bool takes(const bool isCorePacket) const
+        {
+            return m_part_of == Part::Everything || (m_part_of == Part::CoreOnly) == isCorePacket;
+        }
         StreamInfo(const int blockSize)
         {
             m_buffer = new uint8_t[blockSize + MAX_AV_PACKET_SIZE +
@@ -54,8 +69,11 @@ class SingleFileMuxer final : public AbstractMuxer
     std::map<std::string, int> m_trackNameTmp;
     // std::map<int, std::string> m_fileNames;
     // std::map<int, File> m_file;
-    std::map<int, StreamInfo*> m_streamInfo;
+    // One track can write more than one file, so each index owns a list. Nearly every track has
+    // exactly one entry in its list and behaves as it always did.
+    std::map<int, std::vector<StreamInfo*>> m_streamInfo;
     void writeOutBuffer(StreamInfo* streamInfo);
+    bool muxPacketTo(StreamInfo* streamInfo, AVPacket& avPacket);
 };
 
 class SingleFileMuxerFactory final : public AbstractMuxerFactory
