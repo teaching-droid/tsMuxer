@@ -2469,30 +2469,6 @@
         <translation>No linguistic content; Not applicable</translation>
     </message>
     <message>
-        <source>Hold the disc to the rate a player can read:</source>
-        <translation>Hold the disc to the rate a player can read:</translation>
-    </message>
-    <message>
-        <source>Hold the disc to the rate a player can read (48 Mbit/s)</source>
-        <translation>Hold the disc to the rate a player can read (48 Mbit/s)</translation>
-    </message>
-    <message>
-        <source>109 Mbit/s (66 or 100 GB)</source>
-        <translation>109 Mbit/s (66 or 100 GB)</translation>
-    </message>
-    <message>
-        <source>81.7 Mbit/s (50 GB, or the inner zone of a larger disc)</source>
-        <translation>81.7 Mbit/s (50 GB, or the inner zone of a larger disc)</translation>
-    </message>
-    <message>
-        <source>64 Mbit/s (the inner zone of a 50 GB disc)</source>
-        <translation>64 Mbit/s (the inner zone of a 50 GB disc)</translation>
-    </message>
-    <message>
-        <source>127.9 Mbit/s (high transfer rate zone)</source>
-        <translation>127.9 Mbit/s (high transfer rate zone)</translation>
-    </message>
-    <message>
         <location filename="../lang_codes.cpp" line="572"/>
         <source>Zulu</source>
         <translation type="unfinished"></translation>
@@ -4005,6 +3981,39 @@ Build the ISO anyway?</source>
     <message>
         <source>%1 (stream type 0x%2). Muxing this stream type is not implemented.</source>
         <translation type="unfinished"></translation>
+    </message>
+
+    <message>
+        <source>Hold the disc to the rate a player can read:</source>
+        <translation>Hold the disc to the rate a player can read:</translation>
+    </message>
+    <message>
+        <source>Hold the disc to the rate a player can read</source>
+        <translation>Hold the disc to the rate a player can read</translation>
+    </message>
+    <message>
+        <source>Hold the disc to the rate a player can read (48 Mbit/s)</source>
+        <translation>Hold the disc to the rate a player can read (48 Mbit/s)</translation>
+    </message>
+    <message>
+        <source>109 Mbit/s (66 or 100 GB)</source>
+        <translation>109 Mbit/s (66 or 100 GB)</translation>
+    </message>
+    <message>
+        <source>81.7 Mbit/s (50 GB, or the inner zone of a larger disc)</source>
+        <translation>81.7 Mbit/s (50 GB, or the inner zone of a larger disc)</translation>
+    </message>
+    <message>
+        <source>64 Mbit/s (the inner zone of a 50 GB disc)</source>
+        <translation>64 Mbit/s (the inner zone of a 50 GB disc)</translation>
+    </message>
+    <message>
+        <source>127.9 Mbit/s (high transfer rate zone)</source>
+        <translation>127.9 Mbit/s (high transfer rate zone)</translation>
+    </message>
+    <message>
+        <source>A Blu-ray drive only has to supply 48 Mbit/s, and a UHD drive 109. Muxing can ask for more than that in bursts, even from a source that was itself a disc, and such an image plays from a hard disk but may stutter or refuse to start on a standalone player. This paces the disc to the limit, which is what a Blu-ray is authored to. Turn it off only if you know you want the image faster than a player can read.</source>
+        <translation>A Blu-ray drive only has to supply 48 Mbit/s, and a UHD drive 109. Muxing can ask for more than that in bursts, even from a source that was itself a disc, and such an image plays from a hard disk but may stutter or refuse to start on a standalone player. This paces the disc to the limit, which is what a Blu-ray is authored to. Turn it off only if you know you want the image faster than a player can read.</translation>
     </message>
 </context>
 <context>
