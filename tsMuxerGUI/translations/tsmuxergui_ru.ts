@@ -4056,6 +4056,14 @@ Build the ISO anyway?</source>
         <translation>В этом файле нет дорожек, которые можно мультиплексировать:</translation>
     </message>
     <message>
+        <source>DVB bitmap subtitles (EN 300 743)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>EBU teletext (EN 300 468)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Interactive Graphics, the disc menu overlay</source>
         <translation>Interactive Graphics, менюшный слой диска</translation>
     </message>

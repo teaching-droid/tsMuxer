@@ -261,11 +261,20 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                 break;
             }
             if (known)
+            {
+                // The descriptor goes in the line as well as the stream type. The window rebuilds
+                // this sentence in its own language from the numbers, and stream type 0x06 on its
+                // own says only "private data": the descriptor beside it is the whole difference
+                // between subtitles and teletext, so without it the window cannot translate them.
+                std::ostringstream codes;
+                codes << "stream type 0x" << std::hex << streams[i].containerStreamType << std::dec;
+                if (streams[i].containerDvbDescriptor)
+                    codes << ", descriptor 0x" << std::hex << streams[i].containerDvbDescriptor << std::dec;
                 LTRACE(LT_INFO, 2,
-                       "Not supported: " << known << " (stream type 0x" << std::hex << streams[i].containerStreamType
-                                         << std::dec
+                       "Not supported: " << known << " (" << codes.str()
                                          << "). Muxing this stream type is not implemented, "
                                             "so the track is skipped.");
+            }
             else if (streams[i].containerStreamType)
                 LTRACE(LT_INFO, 2,
                        "Can't detect stream type (the container declares stream type 0x"

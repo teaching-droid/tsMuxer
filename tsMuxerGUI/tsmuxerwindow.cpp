@@ -1949,15 +1949,21 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
             // line here, where it can be translated. Unknown types fall back to the original
             // text, which is still better than nothing.
             const QString what = QtCompat::strMid(procStdOutput[i], QString("Not supported: ").length());
-            int streamType = -1;
-            const int typeAt = what.indexOf("(stream type 0x");
-            if (typeAt >= 0)
+            // Reads "(stream type 0xNN)" and, for the types that need it, "(stream type 0xNN,
+            // descriptor 0xMM)". A number ends at the comma or at the bracket, whichever comes
+            // first, so a line carrying no descriptor reads exactly as it always did.
+            const auto codeAfter = [&what](const QString& marker)
             {
-                const int from = typeAt + QString("(stream type 0x").length();
-                const int to = what.indexOf(')', from);
-                if (to > from)
-                    streamType = QtCompat::strMid(what, from, to - from).toInt(nullptr, 16);
-            }
+                const int at = what.indexOf(marker);
+                if (at < 0)
+                    return -1;
+                const int from = at + marker.length();
+                int to = from;
+                while (to < what.length() && what[to] != ',' && what[to] != ')') ++to;
+                return to > from ? QtCompat::strMid(what, from, to - from).toInt(nullptr, 16) : -1;
+            };
+            const int streamType = codeAfter(QStringLiteral("(stream type 0x"));
+            const int dvbDescriptor = codeAfter(QStringLiteral("descriptor 0x"));
             QString description;
             switch (streamType)
             {
@@ -1966,6 +1972,14 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
                 break;
             case 0x92:
                 description = tr("Text subtitles (Text-ST)");
+                break;
+            case 0x06:
+                // 0x06 alone means only "private data". What the data actually is comes from the
+                // descriptor beside it, which is why this case needs the second number.
+                if (dvbDescriptor == 0x59)
+                    description = tr("DVB bitmap subtitles (EN 300 743)");
+                else if (dvbDescriptor == 0x56)
+                    description = tr("EBU teletext (EN 300 468)");
                 break;
             default:
                 break;

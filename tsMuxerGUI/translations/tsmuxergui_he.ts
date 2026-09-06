@@ -4055,6 +4055,14 @@ Build the ISO anyway?</source>
         <translation>קובץ זה אינו מכיל רצועות שניתן למזג:</translation>
     </message>
     <message>
+        <source>DVB bitmap subtitles (EN 300 743)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>EBU teletext (EN 300 468)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Interactive Graphics, the disc menu overlay</source>
         <translation>Interactive Graphics, שכבת התפריט של הדיסק</translation>
     </message>

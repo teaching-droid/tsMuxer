@@ -4056,6 +4056,14 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <translation>Este archivo no contiene pistas que se puedan multiplexar:</translation>
     </message>
     <message>
+        <source>DVB bitmap subtitles (EN 300 743)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>EBU teletext (EN 300 468)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Interactive Graphics, the disc menu overlay</source>
         <translation>Interactive Graphics, la superposición de menú del disco</translation>
     </message>

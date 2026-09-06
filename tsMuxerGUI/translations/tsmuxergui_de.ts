@@ -4055,6 +4055,14 @@ ISO trotzdem erstellen?</translation>
         <translation>Diese Datei enthält keine Spuren, die gemuxt werden können:</translation>
     </message>
     <message>
+        <source>DVB bitmap subtitles (EN 300 743)</source>
+        <translation>DVB-Bitmap-Untertitel (EN 300 743)</translation>
+    </message>
+    <message>
+        <source>EBU teletext (EN 300 468)</source>
+        <translation>EBU-Videotext (EN 300 468)</translation>
+    </message>
+    <message>
         <source>Interactive Graphics, the disc menu overlay</source>
         <translation>Interactive Graphics, das Menü-Overlay der Disc</translation>
     </message>

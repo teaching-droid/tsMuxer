@@ -3943,6 +3943,14 @@ Build the ISO anyway?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>DVB bitmap subtitles (EN 300 743)</source>
+        <translation>DVB bitmap subtitles (EN 300 743)</translation>
+    </message>
+    <message>
+        <source>EBU teletext (EN 300 468)</source>
+        <translation>EBU teletext (EN 300 468)</translation>
+    </message>
+    <message>
         <source>Interactive Graphics, the disc menu overlay</source>
         <translation type="unfinished"></translation>
     </message>
