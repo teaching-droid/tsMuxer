@@ -26,7 +26,7 @@ jobs:
 
     - name: Cache Qt6 Windows 7 Build
       id: cache-qt6
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ${{ runner.temp }}\qt6-install
         key: qt6-windows7-x64-6.8.3-ninja-p2-${{ hashFiles('.github/workflows/windows_64.yml') }}
@@ -244,7 +244,7 @@ jobs:
           7z a -y "$asset" tsMuxeR.exe
         }
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v6
       with:
         name: tsMuxer-w64
         path: bin/${{ env.ASSET }}
@@ -252,7 +252,7 @@ jobs:
 
     - name: Upload to Release
       if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v3
       with:
         files: bin/${{ env.ASSET }}
       env:

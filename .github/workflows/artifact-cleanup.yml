@@ -11,6 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+    # Left on v2 on purpose. v5 and v6 dropped the minCreatedAt input, so on any newer version
+    # this step would delete EVERY artifact each night rather than the ones over 30 days old,
+    # including a release build nobody has downloaded yet. v2 runs on an old Node and will
+    # stop working eventually; when it does, the answer is GitHub's own retention setting
+    # rather than a newer version of this action.
     - name: Delete artifacts older than 30 days
       uses: geekyeggo/delete-artifact@v2
       with:
