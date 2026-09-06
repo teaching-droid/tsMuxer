@@ -626,8 +626,18 @@ int TSMuxer::writeOutFile(const uint8_t* buffer, const int len) const
 // asks for half as much again as the drive has to give, in bursts. That is what an ordinary
 // encode looks like when its peak bitrate was never capped.
 //
-// This says so. It does not change a byte of the output: the rate comes from the source, and the
-// muxer cannot invent bandwidth the material does not leave room for.
+// This says so, and it does not change a byte of the output.
+//
+// ** IT IS NOT ALWAYS THE SOURCE. ** An earlier version of this warning said the rate came from the
+// source and not from muxing, and sent people off to re-encode. Measured on a pressed HD Blu-ray
+// whose own packets never go above the limit, 846 ticks and 0 of 2,399,999 over: remuxing two
+// minutes of it from its own playlist asks for 92.5 Mbit/s, with 28.2 per cent over. The muxer
+// computes arrival times from its own model rather than preserving the pace the disc was authored
+// at, so a perfectly conformant source can come out over the limit.
+//
+// --maxbitrate holds it: the same mux capped at 48,000 comes out at exactly 846 ticks with nothing
+// over, and the file is 0.01 per cent smaller. Only when the video's own peak exceeds the limit is
+// a re-encode the answer, and the warning now says both.
 void TSMuxer::reportReadRate() const
 {
     if (!m_bluRayMode || m_atsPackets == 0 || m_minAtsGap <= 0 || m_atsOverLimit == 0)
@@ -642,8 +652,11 @@ void TSMuxer::reportReadRate() const
         << doubleToStr(share, 1) << " per cent of its packets are above the limit. A " << (isV3() ? "UHD" : "Blu-ray")
         << " drive only has to supply " << doubleToStr(limit / 1e6, 0)
         << " Mbit/s. It will play from a hard disk, where the rate does not matter, and may stutter or refuse "
-           "to start on a standalone player. The rate comes from the source, not from muxing, so the way to "
-           "lower it is to encode the video again with its peak bitrate capped below the limit.";
+           "to start on a standalone player. Add --maxbitrate="
+        << doubleToStr(limit / 1e3, 0)
+        << " to hold it at the limit: the muxer then paces the disc to that rate, which is what a pressed "
+           "disc does. If the video's own peak is already above the limit the muxer cannot invent room for "
+           "it, and only a re-encode with the peak bitrate capped will help.";
     LTRACE(LT_WARN, 2, msg.str());
 }
 
