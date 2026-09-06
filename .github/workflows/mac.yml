@@ -45,6 +45,13 @@ jobs:
         mv build/bin/mac.zip "build/bin/${asset}"
         echo "ASSET=${asset}" >> "$GITHUB_ENV"
 
+    - name: Checksum the package
+      run: |
+        # macOS has shasum rather than sha256sum; the output format is the same one sha256sum -c reads.
+        cd build/bin
+        shasum -a 256 "$ASSET" > "$ASSET.sha256"
+        cat "$ASSET.sha256"
+
     - uses: actions/upload-artifact@v6
       with:
          name: tsMuxer-${{ matrix.arch }}
@@ -55,6 +62,8 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v3
       with:
-        files: build/bin/${{ env.ASSET }}
+        files: |
+          build/bin/${{ env.ASSET }}
+          build/bin/${{ env.ASSET }}.sha256
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

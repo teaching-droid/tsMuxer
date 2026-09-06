@@ -270,6 +270,17 @@ jobs:
           7z a -y "$asset" tsMuxeR.exe
         }
 
+    - name: Checksum the package
+      run: |
+        $ErrorActionPreference = "Stop"
+        # A published asset gets a .sha256 beside it so a download can be checked. The format is
+        # the one sha256sum and shasum -c read: the hash, two spaces, the file name, and a single
+        # LF, so the file works on every platform rather than only the one that made it.
+        $asset = $env:ASSET
+        $hash = (Get-FileHash -Algorithm SHA256 "bin\$asset").Hash.ToLower()
+        [System.IO.File]::WriteAllText("$PWD\bin\$asset.sha256", "$hash  $asset`n")
+        Get-Content "bin\$asset.sha256"
+
     - uses: actions/upload-artifact@v6
       with:
         name: tsMuxer-w64
@@ -280,6 +291,8 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v3
       with:
-        files: bin/${{ env.ASSET }}
+        files: |
+          bin/${{ env.ASSET }}
+          bin/${{ env.ASSET }}.sha256
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
