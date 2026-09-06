@@ -162,6 +162,23 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                 {
                     if (mplsStreamInfo.isSecondary)
                         streams[i].isSecondary = true;
+                    // A disc says what language a stream is in TWICE, in the playlist and in the
+                    // clip's CLPI, and a re-authored disc can have the two disagree. The language
+                    // came from the CLPI alone, so such a disc was reported in the language the
+                    // clip was originally in rather than the one the playlist offers.
+                    //
+                    // The playlist wins here, because it is what a player presents to the viewer
+                    // and what the disc's own navigation uses. A bare .m2ts opened on its own has
+                    // no playlist, so nothing changes there: the CLPI is still the only source.
+                    const std::string mplsLang = toIso639_2T(mplsStreamInfo.language_code);
+                    if (!mplsLang.empty() && mplsLang != "und" && mplsLang != streams[i].lang)
+                    {
+                        LTRACE(LT_INFO, 2,
+                               "Language for track " << streams[i].trackID << " taken from the playlist, " << mplsLang
+                                                     << ", where the clip says "
+                                                     << (streams[i].lang.empty() ? "nothing" : streams[i].lang));
+                        streams[i].lang = mplsLang;
+                    }
                 }
                 else
                 {

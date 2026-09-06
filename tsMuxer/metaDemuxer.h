@@ -169,6 +169,10 @@ struct DetectStreamRez
     int64_t fileDurationNano;
 };
 
+// ISO 639-2 gives twenty-four languages two codes, a bibliographic one and a terminological one,
+// German being "ger" and "deu". This returns the terminological form, and anything else unchanged.
+std::string toIso639_2T(const std::string& lang);
+
 class METADemuxer final : public AbstractDemuxer
 {
    public:

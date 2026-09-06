@@ -1410,6 +1410,26 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
 
 // ---------------------------------------------------------------------------
 
+// A language may be written either way round: ISO 639-2 has a bibliographic code and a
+// terminological one for twenty-four languages, German being "ger" and "deu". Everything here
+// speaks the terminological form, so a bibliographic code is converted on the way in.
+//
+// Three pairs were wrong until 6 September 2026: "may" gave Persian and "per" gave Malay, the two
+// being swapped, and "mol" gave "rom", which is Romany rather than Romanian.
+std::string toIso639_2T(const std::string& lang)
+{
+    static const std::pair<const char*, const char*> table[] = {
+        {"alb", "sqi"}, {"arm", "hye"}, {"baq", "eus"}, {"bur", "mya"}, {"cze", "ces"}, {"chi", "zho"},
+        {"dut", "nld"}, {"ger", "deu"}, {"gre", "ell"}, {"fre", "fra"}, {"geo", "kat"}, {"ice", "isl"},
+        {"jaw", "jav"}, {"mac", "mkd"}, {"mao", "mri"}, {"may", "msa"}, {"mol", "ron"}, {"per", "fas"},
+        {"rum", "ron"}, {"scc", "srp"}, {"scr", "hrv"}, {"slo", "slk"}, {"tib", "bod"}, {"wel", "cym"},
+    };
+    for (const auto& [bibliographic, terminological] : table)
+        if (lang == bibliographic)
+            return terminological;
+    return lang;
+}
+
 DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& readManager, const string& fileName,
                                                 bool calcDuration)
 {
@@ -1495,18 +1515,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
                 if (clpiStream != clpi.m_streamInfo.end())
                     trackRez.lang = clpiStream->second.language_code;
             }
-            // correct ISO 639-2/B codes to ISO 639-2/T
-            static const std::string langB[24] = {
-                "alb", "arm", "baq", "bur", "cze", "chi", "dut", "ger", "gre", "fre", "geo", "ice",
-                "jaw", "mac", "mao", "may", "mol", "per", "rum", "scc", "scr", "slo", "tib", "wel",
-            };
-            static const std::string langT[24] = {
-                "sqi", "hye", "eus", "mya", "ces", "zho", "nld", "deu", "ell", "fra", "kat", "isl",
-                "jav", "mkd", "mri", "fas", "rom", "msa", "ron", "srp", "hrv", "slk", "bod", "cym",
-            };
-            for (int i = 0; i < 24; i++)
-                if (trackRez.lang == langB[i])
-                    trackRez.lang = langT[i];
+            trackRez.lang = toIso639_2T(trackRez.lang);
 
             if (dynamic_cast<TSDemuxer*>(demuxer.get()))
                 trackRez.containerStreamType = acceptedPidMap[itr.first].m_trackType;
