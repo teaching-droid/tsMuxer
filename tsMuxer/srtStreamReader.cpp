@@ -54,12 +54,16 @@ bool SRTStreamReader::detectSrcFormat(const uint8_t* dataStart, const size_t len
     if (len < 4)
         return false;
     // detect UTF-8/UTF-16/UTF-32 format
-    if ((dataStart[0] == 0xEF && dataStart[1] == 0xBB && dataStart[2] == 0xBF) ||
-        convertUTF::isLegalUTF8String(dataStart, len))
+    const bool hasUtf8Bom = dataStart[0] == 0xEF && dataStart[1] == 0xBB && dataStart[2] == 0xBF;
+    if (hasUtf8Bom || convertUTF::isLegalUTF8String(dataStart, len))
     {
         m_charSize = 1;
         m_srcFormat = UtfConverter::SourceFormat::sfUTF8;
-        prefixLen = 3;
+        // Only skip the byte order mark when there IS one. This branch is also how a plain UTF-8
+        // file with no mark is recognised, and those three bytes were being thrown away from the
+        // front of it. Every other branch here already sets prefixLen only on a mark it matched.
+        if (hasUtf8Bom)
+            prefixLen = 3;
     }
     else if (dataStart[0] == 0 && dataStart[1] == 0 && dataStart[2] == 0xFE && dataStart[3] == 0xFF)
     {
