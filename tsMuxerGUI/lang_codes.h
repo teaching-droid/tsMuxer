@@ -22,11 +22,11 @@ class LangCodesModel : public QAbstractListModel
     };
 
     std::array<QtvLangCode, 13> m_shortLangList;
-    std::array<QtvLangCode, 502> m_fullLangList;
+    std::array<QtvLangCode, 486> m_fullLangList;
     QtvLangCode m_undLang;
 
     static std::array<QtvLangCode, 13> getShortLangList();
-    static std::array<QtvLangCode, 502> getFullLangList();
+    static std::array<QtvLangCode, 486> getFullLangList();
 
     static constexpr int UND_ROW_IDX = 0;
     static constexpr int COMMON_ROW_IDX = 1;

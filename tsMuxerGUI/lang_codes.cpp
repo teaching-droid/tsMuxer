@@ -84,7 +84,7 @@ std::array<LangCodesModel::QtvLangCode, 13> LangCodesModel::getShortLangList()
             QtvLangCode{"swe", LangCodesModel::tr("Swedish")}};
 }
 
-std::array<LangCodesModel::QtvLangCode, 502> LangCodesModel::getFullLangList()
+std::array<LangCodesModel::QtvLangCode, 486> LangCodesModel::getFullLangList()
 {
     return {QtvLangCode{"abk", LangCodesModel::tr("Abkhazian")},
             QtvLangCode{"ace", LangCodesModel::tr("Acehnese, Achinese")},
@@ -542,7 +542,7 @@ std::array<LangCodesModel::QtvLangCode, 502> LangCodesModel::getFullLangList()
             QtvLangCode{"uig", LangCodesModel::tr("Uighur; Uyghur")},
             QtvLangCode{"ukr", LangCodesModel::tr("Ukrainian")},
             QtvLangCode{"umb", LangCodesModel::tr("Umbundu")},
-            QtvLangCode{"umd", LangCodesModel::tr("Undetermined")},
+            QtvLangCode{"und", LangCodesModel::tr("Undetermined")},
             QtvLangCode{"urd", LangCodesModel::tr("Urdu")},
             QtvLangCode{"uzb", LangCodesModel::tr("Uzbek")},
             QtvLangCode{"vai", LangCodesModel::tr("Vai")},
@@ -569,6 +569,8 @@ std::array<LangCodesModel::QtvLangCode, 502> LangCodesModel::getFullLangList()
             QtvLangCode{"zap", LangCodesModel::tr("Zapotec")},
             QtvLangCode{"zen", LangCodesModel::tr("Zenaga")},
             QtvLangCode{"zha", LangCodesModel::tr("Zhuang; Chuang")},
+            QtvLangCode{"zbl", LangCodesModel::tr("Blissymbols; Blissymbolics; Bliss")},
             QtvLangCode{"zul", LangCodesModel::tr("Zulu")},
-            QtvLangCode{"zun", LangCodesModel::tr("Zuni'")}};
+            QtvLangCode{"zun", LangCodesModel::tr("Zuni")},
+            QtvLangCode{"zxx", LangCodesModel::tr("No linguistic content; Not applicable")}};
 }

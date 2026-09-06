@@ -2467,7 +2467,7 @@
     </message>
     <message>
         <location filename="../lang_codes.cpp" line="573"/>
-        <source>Zuni&apos;</source>
+        <source>Zuni</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
