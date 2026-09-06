@@ -256,6 +256,10 @@ bool isIso639_2(const std::string& code)
 // is worse than leaving a track untagged, so the token has to be three letters that appear in ISO
 // 639-2, and it has to be the last one before the extension. "Space Odyssey.ac3" holds "spa" but
 // not as a token of its own, and nothing here will find it.
+//
+// A BRACKETED code is the exception, and is looked for anywhere in the name. That is what
+// eac3to writes now, and it keeps describing the track afterwards, so the code is nowhere
+// near the end: "bigjoin - 2 - AC3, [dan], 2.0 channels, 192kbps, 48kHz.ac3".
 std::string langFromFileName(const std::string& fileName)
 {
     // extractFileName already drops the extension, and it returns nothing at all for a bare name
@@ -270,6 +274,33 @@ std::string langFromFileName(const std::string& fileName)
     }
     // the delay token sits after the language when both are present, so it goes first
     name = stripDelayToken(name);
+    // A BRACKETED CODE IS LOOKED FOR ANYWHERE, AND THE LAST ONE WINS. eac3to writes the code in
+    // brackets and then keeps describing the track, so the code is not the last token at all:
+    //   "bigjoin - 2 - AC3, [dan], 2.0 channels, 192kbps, 48kHz.ac3"
+    // That was read off a demux run here rather than taken from the report. Brackets are the
+    // whole reason this is safe to do away from the end of the name: nobody brackets three
+    // letters by accident, whereas an unbracketed "spa" is a syllable of an ordinary word.
+    {
+        std::string found;
+        for (size_t i = 0; i < name.size(); ++i)
+        {
+            if (name[i] != '[' && name[i] != '(')
+                continue;
+            const char close = name[i] == '[' ? ']' : ')';
+            const size_t end = name.find(close, i + 1);
+            if (end == std::string::npos)
+                continue;
+            std::string inner;
+            for (size_t j = i + 1; j < end; ++j)
+                inner += static_cast<char>(tolower(static_cast<unsigned char>(name[j])));
+            if (isIso639_2(inner))
+                found = inner;
+            i = end;
+        }
+        if (!found.empty())
+            return found;
+    }
+    // Unbracketed, the code still has to be the last token, where a wrong guess is far too easy.
     while (!name.empty() && (name.back() == ' ' || name.back() == '.')) name.pop_back();
     const size_t at = name.find_last_of("_-. ()[]");
     const std::string token = at == std::string::npos ? name : name.substr(at + 1);
