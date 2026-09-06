@@ -1,3 +1,167 @@
+## tsMuxeR 2.18.13
+
+Three reports arrived on this fork's own tracker while the older list was being worked through,
+and all three are answered here. The rest of the release comes from two long standing defects on
+the tracker of the original project, [justdan96/tsMuxer](https://github.com/justdan96/tsMuxer).
+Neither could be tested before, for want of a file that reaches them. Both files were built here,
+and each of them had four more faults standing behind the one it was built for.
+
+### Fixed
+
+* **A playlist was described by its first clip rather than by the film.** A playlist joins clips,
+and nothing obliges those clips to carry the same streams. A disc that opens with a short clip of
+its own and then plays the feature was described by that opening clip alone: its tracks were the
+ones offered, and muxing them read the feature's audio through the wrong reader, which fails with
+"AV frame too large" and no buffer size helps. Every play item's stream table is kept now, the
+playlist is described by the streams that the greatest part of its running time uses, and a clip
+that declares a different codec on a shared PID is left out and named. Checked against 228 real
+playlists: no clip left out of any of them, and all 228 listings byte identical to before.
+
+* **A track's language was taken from the clip and not from the playlist.** A Blu-ray writes the
+language of a stream in two places, in the playlist and in the clip info file, and a re-authored
+disc can have the two disagree. tsMuxeR read only the clip. On such a disc a Norwegian track was
+reported as English, where a player and BDInfo both say Norwegian. The playlist wins now, because
+that is what the disc's own navigation uses, and a line says where the language came from. A bare
+.m2ts opened on its own has no playlist, so the clip is still the only source there.
+
+* **Three of the language code pairs were wrong.** The table that converts the older three letter
+codes to the newer ones had Malay and Persian swapped, and pointed Moldavian at Romany. All twenty
+official pairs now agree with the list published by the registration authority.
+
+* **The read rate warning told people to re-encode when the muxer was the cause.** It ended by
+saying the rate comes from the source and not from muxing, so the only cure was to encode the
+video again. Measured on a pressed Blu-ray: the disc itself sits exactly on 48 Mbit/s and never
+goes past it, and two minutes of it remuxed came out at 92.5, with 28.2 per cent of packets over
+the limit. A conformant source comes out over the limit because the muxer computes arrival times
+from its own model rather than keeping the pace the disc was authored at. The warning now names
+`--maxbitrate` and the right number for the disc, and keeps the re-encode advice for the case
+where the video's own peak really is the problem.
+
+* **A subtitle error named neither the track nor the file.** Someone demuxing thirty two subtitle
+tracks got `Invalid SRT format. "" is invalid timing info` and could not tell which of the thirty
+two it was. It now names the track, the file and the line number, and says what a timing line
+looks like.
+
+* **A subtitle line shorter than two characters walked off the end of it.** The search for the
+`-->` counted to `length() - 2` on an unsigned length, so a line of one character or none wrapped
+the bound and read past the end of the string. A blank line where a timing line belongs is exactly
+that case. On a build where the read reached an unmapped page it came up as "Unknnown exception"
+and stood in front of the error the reporter was actually getting.
+
+* **Three bytes off the front of every subtitle file with no byte order mark.** The UTF-8 branch of
+the encoding detection skipped three bytes whether it had matched a mark or only found the file to
+be legal UTF-8. Usually those three bytes are an index line and one digit of the hour, and the hour
+still parses, which is why it went unnoticed. Not always: the same file without its mark put its
+first cue an hour early.
+
+* **Memory the subtitle renderer never gave back.** The 8 MB render buffer was allocated with
+`new[]` and released with `delete`, in two places. Every glyph rendered took a second glyph for its
+outline and never released it. A failing call left a pointer that had already been released, and
+the next line wrote through it. All three need a real font on the machine to reach, which is why a
+sanitizer sweep on a machine without one found nothing. Measured with the sanitizer, a subtitle mux
+went from 24,028 bytes leaked in 105 allocations to none.
+
+* **A meta line that is ignored now says so.** Naming the same file twice, as two tracks, produced
+one track and no message, so the output simply had a track missing. The behaviour is unchanged and
+deliberate, because a playlist line expands to one file per play item; what was wrong was doing it
+in silence.
+
+* **A negative timeshift wrapped the timestamp round.** Asking a track to move earlier by more than
+there is start time to absorb sent its timestamp below zero, and a PTS field is 33 bits with no
+sign. A track meant to lead the picture by 0.827 s came out more than a day after it, and the mux
+reported success. The start of the mux is raised by exactly what is needed instead, so every track
+moves together and the offset between them is the one that was asked for.
+
+* **Rejecting bytes that are not this codec cost quadratic time.** When the frame at a false sync
+word failed to decode, the reader advanced by one byte from where it had started looking, so the
+same false sync was still in front of it and was found and decoded again, once for every byte of
+the gap. This is the path a damaged file takes, and the path a wrong codec name on a meta line
+takes. 39 MB of TrueHD named as AC-3 went from 11 minutes 16 seconds to 0.9 seconds. The reader
+steps past the sync that failed, and the byte accounting, which decides what is reported as lost,
+is unchanged on every case measured.
+
+* **The window's language list had a typo, two gaps and eighteen blank rows.** The list is declared
+502 long and 484 entries were filled, so the last eighteen rows of the combo box read " ()". `umd`
+was a typo for `und`. Blissymbols and "No linguistic content" were missing, the second of which a
+real disc carries on a track with no dialogue. And one name had a stray apostrophe, which
+translators had been working around. The list is now exactly ISO 639-2, checked entry by entry, and
+the declared size and the list that fills it agree so it cannot drift again in silence.
+
+* **The window treated every command line argument as a file name.** `tsMuxerGUI --version` opened
+with a dialog complaining that the option is an unsupported format. A real file whose name begins
+with a dash is still opened as a file.
+
+* **The audio track boxes cut their own labels off.** With a third box added, all three were elided
+at the default window size and it had to be made wider to read any of them. They stack in a column
+of their own now, which also leaves room for the translations, every one of which is longer.
+
+### New
+
+* **`split-ac3-core`, a TrueHD track demuxed to all three of its forms at once.** A disc TrueHD
+track is an AC-3 core interleaved with the lossless part, and a demux could produce any one of its
+three forms but only one per run, so getting all three meant three passes over the source. This
+writes all three in one pass: the pair as the disc carries them, the lossless part alone, and the
+core alone. Checked against three separate runs and against an independent demuxer, byte identical
+in every case, and the combined file is the disc's own bytes. It is on the window's audio panel as
+well, offered when the output is a demux. It costs twice the disk of the single file, which the
+help says.
+
+* **A raw stream's language can come from its file name.** A raw elementary stream has nowhere to
+carry a language, so the file name is the only place it can be, and that is where a demux puts it:
+tsMuxeR's own writes `...track_4352_eng.ac3`. The delay has been read from the file name in the
+same way for a long time. Only the last part of the name is read, only three letters, and only if
+they really are an ISO 639-2 code, because tagging a track with the wrong language is worse than
+leaving it untagged. So `Movie_spa.ac3` is Spanish and `Space Odyssey.ac3` is not. A `lang=` on the
+meta line still wins.
+
+* **The window holds a disc to the rate a player can read.** An output that asks to be read faster
+than a drive has to supply is not a disc: it plays from a hard disk and may stutter or refuse to
+start on a standalone player. Blu-ray folder and Blu-ray ISO output are now paced to the limit by
+default, and the label and tooltip say why. The UHD limit is a table rather than a number, so the
+tick has a companion choice with the four figures BD-ROM Version 3 gives, defaulting to 109 Mbit/s
+because that is what pressed UHD discs are mastered to. An HD Blu-ray has one figure and no choice
+to make. The command line is deliberately left alone, because `--maxbitrate` has always been
+explicit there and scripts must not change behaviour under people.
+
+* **The window says when a playlist clip has been left out.** The command line has always named
+such a clip. The window showed one fewer file and said nothing, so there was no explanation for an
+output shorter than the disc. It now says so in a box of its own, because a clip is not a track.
+
+* **`drop-ac3-core` is reachable from the window.** It existed only for someone writing a meta file
+by hand, though it is the opposite operation to the box that was already there, on the same track.
+It is offered only for a TrueHD track that really has a core, and the two boxes clear each other.
+
+* **The window can name a DVB subtitle or teletext track in its own language.** 2.18.12 taught the
+command line to say what such a track is instead of printing a bare number. The window rebuilds
+that sentence so it can be translated, and could not tell the two apart, because the difference is
+in a descriptor it was never given. It is in the line now.
+
+### Changed
+
+* **The Windows packages carry Qt's own translations.** The Yes, No and Cancel of a standard dialog
+come from Qt, not from tsMuxeR, and Qt is built here from qtbase alone so that the result runs on
+Windows 7, which leaves those files out. They are built from source in both Windows workflows now,
+so those buttons follow the language the window is set to.
+
+* **Every published asset gets a SHA-256 beside it.** A release published five files and no way to
+tell whether a download arrived intact. Each asset now has a `.sha256` next to it, in the format
+`sha256sum -c` and `shasum -c` read.
+
+* The seven strings added in this release are in all eight translation files. German is filled in
+and the other six carry the English source until someone who speaks them fills them in.
+
+### Thanks
+
+Thanks to **@TexasChainsaw83** for two reports. The first was the read rate warning, and what made
+it answerable was going back and building the disc again from the original playlist to rule out the
+demuxed streams: that second test is what showed the muxer was the cause and not the source. The
+second asked for the language to be read from the file name, and turned out to be the reading side
+of something tsMuxeR's own demux was already writing.
+
+Thanks to **@Nemesh64** for the language report, and for naming what BDInfo showed alongside what
+tsMuxeR showed. Two programs disagreeing about the same disc is what pointed at the two places a
+Blu-ray keeps that field, and neither program was misreading its own source.
+
 ## tsMuxeR 2.18.12
 
 The issue list of the original project, [justdan96/tsMuxer](https://github.com/justdan96/tsMuxer),
