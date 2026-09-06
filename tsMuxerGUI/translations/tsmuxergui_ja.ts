@@ -2461,6 +2461,14 @@
         <translation>チワン語</translation>
     </message>
     <message>
+        <source>Blissymbols; Blissymbolics; Bliss</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>No linguistic content; Not applicable</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../lang_codes.cpp" line="572"/>
         <source>Zulu</source>
         <translation>ズールー語</translation>

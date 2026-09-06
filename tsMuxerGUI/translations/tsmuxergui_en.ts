@@ -2461,6 +2461,14 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Blissymbols; Blissymbolics; Bliss</source>
+        <translation>Blissymbols; Blissymbolics; Bliss</translation>
+    </message>
+    <message>
+        <source>No linguistic content; Not applicable</source>
+        <translation>No linguistic content; Not applicable</translation>
+    </message>
+    <message>
         <location filename="../lang_codes.cpp" line="572"/>
         <source>Zulu</source>
         <translation type="unfinished"></translation>

@@ -2461,6 +2461,14 @@
         <translation>Zhuang; Chuang</translation>
     </message>
     <message>
+        <source>Blissymbols; Blissymbolics; Bliss</source>
+        <translation>Bliss-Symbole; Blissymbolics; Bliss</translation>
+    </message>
+    <message>
+        <source>No linguistic content; Not applicable</source>
+        <translation>Kein sprachlicher Inhalt; nicht zutreffend</translation>
+    </message>
+    <message>
         <location filename="../lang_codes.cpp" line="572"/>
         <source>Zulu</source>
         <translation>Zulu</translation>
