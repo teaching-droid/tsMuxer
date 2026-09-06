@@ -65,6 +65,9 @@ class SRTStreamReader final : public AbstractStreamReader
     std::vector<uint8_t> m_tmpBuffer;
     std::queue<std::string> m_sourceText;
     std::queue<int32_t> m_origSize;
+    // Lines handed to the queue since the file was opened. The line at the front of the queue is
+    // therefore m_linesRead - m_sourceText.size() + 1, which is what a parse error should name.
+    int64_t m_linesRead;
     std::string m_renderedText;
     long m_splitterOfs;
     uint16_t m_short_R;

@@ -3,6 +3,8 @@
 
 #include <fs/file.h>
 
+#include <string>
+
 #include "avCodecs.h"
 #include "avPacket.h"
 #include "pesPacket.h"
@@ -69,6 +71,10 @@ class AbstractStreamReader : public BaseAbstractStreamReader
     virtual void writePESExtension(PESPacket* pesPacket, const AVPacket& avPacket) {}
     virtual void setStreamIndex(const int index) { m_streamIndex = index; }
     [[nodiscard]] int getStreamIndex() const { return m_streamIndex; }
+    // The source this reader was given, so a failure part way through a file can say WHICH file
+    // it was reading. A reader that is never told keeps an empty name and says nothing extra.
+    void setStreamName(const std::string& name) { m_streamName = name; }
+    [[nodiscard]] const std::string& getStreamName() const { return m_streamName; }
     virtual void setTimeOffset(const int64_t offset) { m_timeOffset = offset; }
     unsigned m_flags;
     virtual const CodecInfo& getCodecInfo() = 0;  // get codecInfo struct. (CodecID, codec name)
@@ -96,6 +102,7 @@ class AbstractStreamReader : public BaseAbstractStreamReader
     uint8_t* m_curPos;
     uint8_t* m_bufEnd;
     int m_streamIndex;
+    std::string m_streamName;
     int64_t m_tmpBufferLen;
     bool m_demuxMode;
     bool m_secondary;

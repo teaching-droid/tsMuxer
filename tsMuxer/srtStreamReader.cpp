@@ -1,5 +1,6 @@
 #include "srtStreamReader.h"
 
+#include <sstream>
 #include <string>
 
 #include "convertUTF.h"
@@ -23,6 +24,7 @@ SRTStreamReader::SRTStreamReader() : m_lastBlock(false), m_short_R(0), m_short_N
     m_srcFormat = UtfConverter::SourceFormat::sfUnknown;
     m_charSize = 1;
     m_splitterOfs = 0;
+    m_linesRead = 0;
 }
 
 SRTStreamReader::~SRTStreamReader()
@@ -143,6 +145,7 @@ int SRTStreamReader::parseText(uint8_t* dataStart, const size_t len)
             if (strOnlySpace(tmp))
                 tmp.clear();
 
+            m_linesRead++;
             m_origSize.push(static_cast<int32_t>(cur + m_charSize - lastProcessedLine + prefixLen));
             prefixLen = 0;
             lastProcessedLine = cur + m_charSize;
@@ -211,7 +214,23 @@ uint8_t* SRTStreamReader::renderNextMessage(uint32_t& renderedLen)
     if (m_state == ParseState::PARSE_TIME)
     {
         if (!parseTime(m_sourceText.front()))
-            THROW(ERR_COMMON, "Invalid SRT format. \"" << m_sourceText.front().c_str() << "\" is invalid timing info")
+        {
+            // Say WHICH track and WHICH file, and where in it. A demux of thirty two subtitle
+            // tracks used to end with nothing but the offending text, and when that text is a
+            // blank line the message quoted an empty string and named nothing at all.
+            const int64_t lineNumber = m_linesRead - static_cast<int64_t>(m_sourceText.size()) + 1;
+            std::ostringstream what;
+            what << "Invalid SRT format in track " << m_streamIndex;
+            if (!m_streamName.empty())
+                what << " (" << m_streamName << ")";
+            what << ", line " << lineNumber << ": expected a timing line and found ";
+            if (m_sourceText.front().empty())
+                what << "a blank one.";
+            else
+                what << "\"" << m_sourceText.front().c_str() << "\".";
+            what << " A timing line looks like 00:00:20,000 --> 00:00:24,400";
+            THROW(ERR_COMMON, what.str())
+        }
         m_state = ParseState::PARSE_TEXT;
         m_sourceText.pop();
         m_processedSize += m_origSize.front();

@@ -783,6 +783,7 @@ int METADemuxer::addStream(const string& codec, const string& codecStreamName, c
 
     AbstractStreamReader* codecReader = createCodec(codec, addParams, fileList[0], mergePlayItems(mplsInfoList));
     codecReader->setStreamIndex(static_cast<int>(m_codecInfo.size() + 1));
+    codecReader->setStreamName(fileList[0]);
     codecReader->setTimeOffset(m_timeOffset);
 
     if (m_codecInfo.empty())
