@@ -575,6 +575,8 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->dtsDwnConvert, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->dropAc3CoreCheckBox, &QCheckBox::checkStateChanged, this,
             &TsMuxerWindow::onAudioSubtitlesParamsChanged);
+    connect(ui->splitAc3CoreCheckBox, &QCheckBox::checkStateChanged, this,
+            &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->secondaryCheckBox, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->mergeAc3TrackSpinBox, spinBoxValueChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->mergeAc3FileLineEdit, &QLineEdit::textChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
@@ -2439,6 +2441,7 @@ void TsMuxerWindow::onAudioSubtitlesParamsChanged()
     codecInfo->bindFps = ui->checkBoxKeepFps->isChecked();
     codecInfo->dtsDownconvert = ui->dtsDwnConvert->isChecked();
     codecInfo->dropAc3Core = ui->dropAc3CoreCheckBox->isChecked();
+    codecInfo->splitAc3Core = ui->splitAc3CoreCheckBox->isChecked();
     codecInfo->isSecondary = ui->secondaryCheckBox->isChecked();
     // The two are opposite operations on the same track: one keeps the core and drops the
     // lossless part, the other drops the core and keeps it. Ticking either clears the other, and
@@ -2711,9 +2714,12 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
             // drop-ac3-core applies to the disc form of a TrueHD track, the one that carries an
             // AC-3 core beside the lossless part. A TrueHD track with no core has nothing to drop,
             // and the same description test the box above uses says which is which.
-            ui->dropAc3CoreCheckBox->setEnabled(codecInfo->displayName == "TRUE-HD" &&
-                                                codecInfo->descr.contains("core") &&
-                                                !codecInfo->descr.contains("(core 0Kbps)"));
+            const bool hasAc3Core = codecInfo->displayName == "TRUE-HD" && codecInfo->descr.contains("core") &&
+                                    !codecInfo->descr.contains("(core 0Kbps)");
+            ui->dropAc3CoreCheckBox->setEnabled(hasAc3Core);
+            // Writing three files out of one track only means anything when the output IS files.
+            // In every other mode there is one output and nothing to split it into.
+            ui->splitAc3CoreCheckBox->setEnabled(hasAc3Core && ui->radioButtonDemux->isChecked());
             ui->secondaryCheckBox->setEnabled(codecInfo->descr.contains("(DTS Express)") ||
                                               codecInfo->descr.contains("(DTS Express 24bit)") ||
                                               codecInfo->displayName == "E-AC3 (DD+)");
@@ -2726,6 +2732,7 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
             ui->dtsDwnConvert->setVisible(codecInfo->displayName != "PGS" && codecInfo->displayName != "SRT");
             ui->secondaryCheckBox->setVisible(ui->dtsDwnConvert->isVisible());
             ui->dropAc3CoreCheckBox->setVisible(ui->dtsDwnConvert->isVisible());
+            ui->splitAc3CoreCheckBox->setVisible(ui->dtsDwnConvert->isVisible());
             const bool isTrueHd = (codecInfo->programName == "A_MLP" && codecInfo->displayName == "TRUE-HD");
             const bool showMergeTrack = (isTrueHd && codecInfo->trackID != 0);
             const bool showMergeFile = isTrueHd;
@@ -2767,6 +2774,7 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
             ui->editDelay->setValue(codecInfo->delay);
             ui->dtsDwnConvert->setChecked(codecInfo->dtsDownconvert);
             ui->dropAc3CoreCheckBox->setChecked(codecInfo->dropAc3Core);
+            ui->splitAc3CoreCheckBox->setChecked(codecInfo->splitAc3Core);
             ui->secondaryCheckBox->setChecked(codecInfo->isSecondary);
             ui->checkBoxKeepFps->setChecked(codecInfo->bindFps);
             ui->editDelay->setEnabled(!ui->radioButtonDemux->isChecked());
@@ -3651,6 +3659,11 @@ QString TsMuxerWindow::getAudioMetaInfo(QtvCodecInfo* codecInfo)
         rezStr += ", down-to-ac3";
     else if (codecInfo->dropAc3Core && codecInfo->programName == "A_AC3")
         rezStr += ", drop-ac3-core";
+    // Not exclusive with the two above by accident but by meaning: this one asks for the pair AND
+    // both halves, so it only applies when neither of the others has already narrowed the track.
+    if (codecInfo->splitAc3Core && codecInfo->programName == "A_AC3" && !codecInfo->dropAc3Core &&
+        !codecInfo->dtsDownconvert)
+        rezStr += ", split-ac3-core";
     if (codecInfo->isSecondary)
         rezStr += ", secondary";
     return rezStr;
@@ -4343,6 +4356,12 @@ void TsMuxerWindow::RadioButtonMuxClick()
     // here too and not only when one of them is clicked. Same for the Blu-ray tab.
     onSplitCutParamsChanged();
     updateBluRayTabEnabled();
+    // Writing a track out as three files is a demux only thing, so the box that asks for it has
+    // to follow the output mode rather than only the selected track. Chosen in this order because
+    // a box that is disabled must not keep a tick that would still reach the meta file.
+    if (!ui->radioButtonDemux->isChecked() && ui->splitAc3CoreCheckBox->isChecked())
+        ui->splitAc3CoreCheckBox->setChecked(false);
+    ui->splitAc3CoreCheckBox->setEnabled(ui->dropAc3CoreCheckBox->isEnabled() && ui->radioButtonDemux->isChecked());
     outFileNameDisableChange = true;
     if (ui->radioButtonBluRay->isChecked() || ui->radioButtonDemux->isChecked() || ui->radioButtonAVCHD->isChecked())
     {

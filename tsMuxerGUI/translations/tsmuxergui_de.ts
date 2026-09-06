@@ -4071,6 +4071,10 @@ ISO trotzdem erstellen?</translation>
         <translation>Diese Clips gehören nicht zur Wiedergabeliste, so wie sie gemuxt wird, weil die Streams, die sie enthalten, nicht die sind, die der Rest der Wiedergabeliste verwendet. Eine einzelne Ausgabe kann den Codec nicht mittendrin wechseln:</translation>
     </message>
     <message>
+        <source>Write both parts as well (demux only)</source>
+        <translation>Beide Teile ebenfalls schreiben (nur beim Demuxen)</translation>
+    </message>
+    <message>
         <source>Interactive Graphics, the disc menu overlay</source>
         <translation>Interactive Graphics, das Menü-Overlay der Disc</translation>
     </message>

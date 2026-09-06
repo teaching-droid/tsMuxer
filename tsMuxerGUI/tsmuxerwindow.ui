@@ -771,6 +771,13 @@
                    </widget>
                   </item>
                   <item>
+                   <widget class="QCheckBox" name="splitAc3CoreCheckBox">
+                    <property name="text">
+                     <string>Write both parts as well (demux only)</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
                    <widget class="QCheckBox" name="secondaryCheckBox">
                     <property name="text">
                      <string>Secondary</string>
@@ -3046,6 +3053,7 @@ p, li { white-space: pre-wrap; }
   <tabstop>langComboBox</tabstop>
   <tabstop>dtsDwnConvert</tabstop>
   <tabstop>dropAc3CoreCheckBox</tabstop>
+  <tabstop>splitAc3CoreCheckBox</tabstop>
   <tabstop>checkBoxKeepFps</tabstop>
  <tabstop>radioButtonTS</tabstop>
  <tabstop>radioButtonM2TS</tabstop>

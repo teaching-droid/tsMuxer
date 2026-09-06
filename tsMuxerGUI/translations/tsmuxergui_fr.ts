@@ -4071,6 +4071,10 @@ Créer l'ISO malgré tout ?</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Write both parts as well (demux only)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Interactive Graphics, the disc menu overlay</source>
         <translation>Interactive Graphics, la surcouche de menu du disque</translation>
     </message>

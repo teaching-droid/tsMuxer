@@ -23,6 +23,9 @@ struct QtvCodecInfo
     // lossless part): adds drop-ac3-core to the meta line, leaving the core out. The opposite of
     // dtsDownconvert, which keeps the core and drops the lossless part, so only one can apply.
     bool dropAc3Core = false;
+    // For the same track, on a demux only: adds split-ac3-core, which writes the pair, the
+    // lossless part and the core as three files in one pass instead of three runs.
+    bool splitAc3Core = false;
     bool isSecondary = false;
     // For A_MLP (TrueHD) only: when set (>0), adds merge-ac3-track=<n> to the meta line
     // to interleave a separate AC-3 compatibility track from the same MKV.

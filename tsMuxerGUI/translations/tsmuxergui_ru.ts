@@ -4072,6 +4072,10 @@ Build the ISO anyway?</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Write both parts as well (demux only)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Interactive Graphics, the disc menu overlay</source>
         <translation>Interactive Graphics, менюшный слой диска</translation>
     </message>
