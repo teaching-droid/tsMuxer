@@ -121,13 +121,16 @@ void TextSubtitlesRenderFT::loadFontMap()
     }
 }
 
-TextSubtitlesRenderFT::~TextSubtitlesRenderFT() { delete m_pData; }
+// delete[], because the buffer below is new[]. Both sites had plain delete, which is the same
+// fault reported against the Matroska demuxer, at a place the sweep for it did not reach: it
+// needs a subtitle track AND a font the machine actually has, or the render never allocates.
+TextSubtitlesRenderFT::~TextSubtitlesRenderFT() { delete[] m_pData; }
 
 void TextSubtitlesRenderFT::setRenderSize(int width, int height)
 {
     m_width = width;
     m_height = height;
-    delete m_pData;
+    delete[] m_pData;
     const int size = width * height * 4;
     m_pData = new uint8_t[size];  // 32bpp ARGB buffer
 }
@@ -417,18 +420,25 @@ void RenderGlyph(const FT_Library& library, const uint32_t ch, const FT_Face& fa
         FT_Stroker_Done(strokerOut);  // Clean up afterwards.
         FT_Done_Glyph(glyph);
 
-        FT_Get_Glyph(face->glyph, &glyph);
-        FT_Stroker strokerIn;
-        FT_Stroker_New(library, &strokerIn);
-        FT_Stroker_Set(strokerIn, static_cast<int>(outlineWidth * 32), FT_STROKER_LINECAP_ROUND,
-                       FT_STROKER_LINEJOIN_ROUND, 0);
-        FT_Glyph_StrokeBorder(&glyph, strokerIn, 0, 1);
-        if (glyph->format == FT_GLYPH_FORMAT_OUTLINE)
+        // The second glyph was taken but never given back, so every glyph of every subtitle
+        // rendered leaked one, along with the outline it owns. And the result was not checked:
+        // on a failure glyph still held the pointer freed on the line above, which the stroker
+        // below would then have written through.
+        if (FT_Get_Glyph(face->glyph, &glyph) == 0)
         {
-            FT_Outline* o = &reinterpret_cast<FT_OutlineGlyph>(glyph)->outline;
-            RenderSpans(library, o, &outlineSpansIner);
+            FT_Stroker strokerIn;
+            FT_Stroker_New(library, &strokerIn);
+            FT_Stroker_Set(strokerIn, static_cast<int>(outlineWidth * 32), FT_STROKER_LINECAP_ROUND,
+                           FT_STROKER_LINEJOIN_ROUND, 0);
+            FT_Glyph_StrokeBorder(&glyph, strokerIn, 0, 1);
+            if (glyph->format == FT_GLYPH_FORMAT_OUTLINE)
+            {
+                FT_Outline* o = &reinterpret_cast<FT_OutlineGlyph>(glyph)->outline;
+                RenderSpans(library, o, &outlineSpansIner);
+            }
+            FT_Stroker_Done(strokerIn);
+            FT_Done_Glyph(glyph);
         }
-        FT_Stroker_Done(strokerIn);
 
         // Now we need to put it all together.
         if (!spans.empty())
