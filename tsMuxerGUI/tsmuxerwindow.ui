@@ -764,6 +764,13 @@
                    </widget>
                   </item>
                   <item>
+                   <widget class="QCheckBox" name="dropAc3CoreCheckBox">
+                    <property name="text">
+                     <string>Drop the AC-3 core, keep the lossless part</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
                    <widget class="QCheckBox" name="secondaryCheckBox">
                     <property name="text">
                      <string>Secondary</string>
@@ -3038,6 +3045,7 @@ p, li { white-space: pre-wrap; }
   <tabstop>editDelay</tabstop>
   <tabstop>langComboBox</tabstop>
   <tabstop>dtsDwnConvert</tabstop>
+  <tabstop>dropAc3CoreCheckBox</tabstop>
   <tabstop>checkBoxKeepFps</tabstop>
  <tabstop>radioButtonTS</tabstop>
  <tabstop>radioButtonM2TS</tabstop>

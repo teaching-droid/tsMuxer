@@ -19,6 +19,10 @@ struct QtvCodecInfo
     int delay = 0;
     int subTrack = 0;
     bool dtsDownconvert = false;
+    // For a disc TrueHD track (A_AC3 reported as TRUE-HD, which carries an AC-3 core beside the
+    // lossless part): adds drop-ac3-core to the meta line, leaving the core out. The opposite of
+    // dtsDownconvert, which keeps the core and drops the lossless part, so only one can apply.
+    bool dropAc3Core = false;
     bool isSecondary = false;
     // For A_MLP (TrueHD) only: when set (>0), adds merge-ac3-track=<n> to the meta line
     // to interleave a separate AC-3 compatibility track from the same MKV.

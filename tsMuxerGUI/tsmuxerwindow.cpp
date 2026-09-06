@@ -573,6 +573,8 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->videoLangComboBox, comboBoxIndexChanged, this, &TsMuxerWindow::onVideoComboBoxChanged);
     connect(ui->checkBoxKeepFps, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->dtsDwnConvert, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
+    connect(ui->dropAc3CoreCheckBox, &QCheckBox::checkStateChanged, this,
+            &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->secondaryCheckBox, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->mergeAc3TrackSpinBox, spinBoxValueChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->mergeAc3FileLineEdit, &QLineEdit::textChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
@@ -2399,7 +2401,23 @@ void TsMuxerWindow::onAudioSubtitlesParamsChanged()
         return;
     codecInfo->bindFps = ui->checkBoxKeepFps->isChecked();
     codecInfo->dtsDownconvert = ui->dtsDwnConvert->isChecked();
+    codecInfo->dropAc3Core = ui->dropAc3CoreCheckBox->isChecked();
     codecInfo->isSecondary = ui->secondaryCheckBox->isChecked();
+    // The two are opposite operations on the same track: one keeps the core and drops the
+    // lossless part, the other drops the core and keeps it. Ticking either clears the other, and
+    // the box has to be cleared as well as the flag or the window shows both of them ticked while
+    // only one reaches the meta file.
+    if (codecInfo->dtsDownconvert && codecInfo->dropAc3Core)
+    {
+        QCheckBox* const loser = sender() == ui->dropAc3CoreCheckBox ? ui->dtsDwnConvert : ui->dropAc3CoreCheckBox;
+        if (sender() == ui->dropAc3CoreCheckBox)
+            codecInfo->dtsDownconvert = false;
+        else
+            codecInfo->dropAc3Core = false;
+        const bool blocked = loser->blockSignals(true);
+        loser->setChecked(false);
+        loser->blockSignals(blocked);
+    }
     codecInfo->offsetId = ui->offsetsComboBox->currentIndex() - 1;
     QString addr = ui->langComboBox->itemData(ui->langComboBox->currentIndex()).toString();
     if (!addr.isEmpty())
@@ -2653,6 +2671,12 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
                                           !codecInfo->descr.contains("(core 0Kbps)") &&
                                           (codecInfo->displayName == "DTS-HD" || codecInfo->displayName == "TRUE-HD" ||
                                            codecInfo->displayName == "E-AC3 (DD+)"));
+            // drop-ac3-core applies to the disc form of a TrueHD track, the one that carries an
+            // AC-3 core beside the lossless part. A TrueHD track with no core has nothing to drop,
+            // and the same description test the box above uses says which is which.
+            ui->dropAc3CoreCheckBox->setEnabled(codecInfo->displayName == "TRUE-HD" &&
+                                                codecInfo->descr.contains("core") &&
+                                                !codecInfo->descr.contains("(core 0Kbps)"));
             ui->secondaryCheckBox->setEnabled(codecInfo->descr.contains("(DTS Express)") ||
                                               codecInfo->descr.contains("(DTS Express 24bit)") ||
                                               codecInfo->displayName == "E-AC3 (DD+)");
@@ -2664,6 +2688,7 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
             ui->offsetsComboBox->setCurrentIndex(codecInfo->offsetId + 1);
             ui->dtsDwnConvert->setVisible(codecInfo->displayName != "PGS" && codecInfo->displayName != "SRT");
             ui->secondaryCheckBox->setVisible(ui->dtsDwnConvert->isVisible());
+            ui->dropAc3CoreCheckBox->setVisible(ui->dtsDwnConvert->isVisible());
             const bool isTrueHd = (codecInfo->programName == "A_MLP" && codecInfo->displayName == "TRUE-HD");
             const bool showMergeTrack = (isTrueHd && codecInfo->trackID != 0);
             const bool showMergeFile = isTrueHd;
@@ -2704,6 +2729,7 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
 
             ui->editDelay->setValue(codecInfo->delay);
             ui->dtsDwnConvert->setChecked(codecInfo->dtsDownconvert);
+            ui->dropAc3CoreCheckBox->setChecked(codecInfo->dropAc3Core);
             ui->secondaryCheckBox->setChecked(codecInfo->isSecondary);
             ui->checkBoxKeepFps->setChecked(codecInfo->bindFps);
             ui->editDelay->setEnabled(!ui->radioButtonDemux->isChecked());
@@ -3586,6 +3612,8 @@ QString TsMuxerWindow::getAudioMetaInfo(QtvCodecInfo* codecInfo)
         rezStr += ", down-to-dts";
     else if (codecInfo->dtsDownconvert && codecInfo->programName == "A_AC3")
         rezStr += ", down-to-ac3";
+    else if (codecInfo->dropAc3Core && codecInfo->programName == "A_AC3")
+        rezStr += ", drop-ac3-core";
     if (codecInfo->isSecondary)
         rezStr += ", secondary";
     return rezStr;
