@@ -247,7 +247,10 @@ uint8_t* SRTStreamReader::renderNextMessage(uint32_t& renderedLen)
 
 bool SRTStreamReader::parseTime(const string& text)
 {
-    for (size_t i = 0; i < text.length() - 2; i++)
+    // length() - 2 is unsigned, so a line shorter than the arrow it is looking for wrapped the
+    // bound to SIZE_MAX and the loop walked off the end of the string. A blank line where a
+    // timing line belongs is exactly that case, and it is what a damaged subtitle file gives.
+    for (size_t i = 0; i + 2 < text.length(); i++)
     {
         if (text[i] == '-' && text[i + 1] == '-' && text[i + 2] == '>')
         {
