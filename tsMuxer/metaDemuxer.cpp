@@ -974,6 +974,18 @@ int METADemuxer::addStream(const string& codec, const string& codecStreamName, c
     itr = addParams.find("lang");
     if (itr != addParams.end())
         streamInfo.m_lang = itr->second;
+    else if (dataReader != &m_containerReader && !fileList.empty() && !langFromFileName(fileList[0]).empty())
+    {
+        // A raw elementary stream has nowhere to carry its language, so the file name is the only
+        // place it can be, and that is where a demux puts it: ours writes "...track_4352_eng.ac3",
+        // and the same convention is what people ask for after demuxing elsewhere. Read alongside
+        // the delay, which has been taken from the file name in the same way for a long time.
+        //
+        // Only the last token before the extension, and only if it really is an ISO 639-2 code, so
+        // a name that merely contains three such letters is not mistaken for a tagged one.
+        streamInfo.m_lang = langFromFileName(fileList[0]);
+        LTRACE(LT_INFO, 2, "Applying language " << streamInfo.m_lang << " taken from the file name");
+    }
     else if (dataReader == &m_containerReader)
     {
         // No explicit lang=, so ask the container, exactly as the FPS block above asks it for a

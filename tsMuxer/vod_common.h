@@ -139,6 +139,13 @@ int64_t parseTimeshiftToMs(const std::string& value);
 int64_t delayFromFileName(const std::string& fileName);
 std::string stripDelayToken(const std::string& fileName);
 
+// A language code carried in a file name, which is the only place a raw elementary stream can
+// keep one. Returns an empty string unless the LAST token before the extension is three letters
+// that really are an ISO 639-2 code, so a name that merely contains such letters is not mistaken
+// for a tagged one.
+bool isIso639_2(const std::string& code);
+std::string langFromFileName(const std::string& fileName);
+
 static int64_t internalClockToPts(const int64_t value) { return value / INT_FREQ_TO_TS_FREQ; }
 static int64_t ptsToInternalClock(const int64_t value) { return value * INT_FREQ_TO_TS_FREQ; }
 
