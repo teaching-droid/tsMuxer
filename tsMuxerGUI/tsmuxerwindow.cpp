@@ -530,6 +530,16 @@ TsMuxerWindow::TsMuxerWindow()
         ui->fontSettingsTableView->setRowHeight(i, 20);
     }
 
+    // The four rows are Name, Size, Color and Options, and the box was given a fixed maximum of
+    // 84 pixels for them. That is exact only if a row really is 20 pixels and the frame really is
+    // one pixel each side, and with this style and this display it is a little short. The fourth
+    // row was therefore cut off and a scroll bar appeared to reach it, which is what someone asked
+    // about. Ask the view how tall its own rows came out instead of assuming.
+    const int fontTableHeight =
+        ui->fontSettingsTableView->verticalHeader()->length() + 2 * ui->fontSettingsTableView->frameWidth();
+    ui->fontSettingsTableView->setMinimumHeight(fontTableHeight);
+    ui->fontSettingsTableView->setMaximumHeight(fontTableHeight);
+
     langCodesModel = new LangCodesModel(this);
     ui->langComboBox->setModel(langCodesModel);
     ui->videoLangComboBox->setModel(langCodesModel);
