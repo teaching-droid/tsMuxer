@@ -1,3 +1,91 @@
+## tsMuxeR 2.18.12
+
+The issue list of the original project, [justdan96/tsMuxer](https://github.com/justdan96/tsMuxer),
+was read through again for this release. This time the feature requests were read with it. Six of
+them turned out to be implemented here already. Two of the oldest defects could never be tested
+before, for want of a file that reaches them. Both are fixed.
+
+### Fixed
+
+* **Pulldown flags were read and then ignored, so such a file came out short.** A pulldown flag
+says a picture is held on screen for longer than one frame. The stream carries no extra picture for
+that time. tsMuxeR reported the right frame rate, then laid the pictures out one per frame at it.
+Six seconds of film came out as four point eight with 3:2 pulldown, and as three with frame
+doubling. All three kinds of flag now give the length the source really has.
+
+* **An audio track could be reported as video, with a resolution.** A track the container declares
+as MPEG audio was offered to six video detectors before its own. One accepted it and answered
+"AV1, 68x28". A confident wrong answer is worse than no answer. Where the container names the
+format, that reader is now asked first. A wrong declaration still falls through to everything
+else.
+
+* **`--maxbitrate` did nothing at all, despite its name.** Asking a disc to stay under a rate
+produced a byte identical file. It now paces the stream so that it never asks to be read faster
+than the rate given, which is what a source with bursts in it otherwise does. A fixed rate is still
+`--bitrate`, and that is unchanged.
+
+* **A playlist could not find its own streams.** A disc keeps playlists and clips in separate
+folders. tsMuxeR works out where the clips are from where the playlist is. Written with forward
+slashes, which Windows accepts everywhere, that came out empty and the clip was looked for in the
+wrong place. Written with no folder at all, the same. Both work now.
+
+* **Advice meant for the user was printed twice.** Every file is opened twice, once to see what is
+in it and once to mux it, and a pass that only looks at a file no longer talks.
+
+* **A track table was reported as an unknown number when the container had named it.** A DVB
+subtitle or teletext track is now named, along with the fact that it is skipped.
+
+* **The VC-1 level printed as a control character.** Level 3 came out as the byte 3, which shows as
+whatever the console makes of it. It prints as a number now.
+
+* **The font box on the Subtitles tab was a row too short.** The fourth row, Options, was cut off
+and a scroll bar appeared to reach it. All four rows are visible now.
+
+* **Memory that was never released.** Every Matroska file opened left behind what its tracks owned:
+the codec private data, the codec id, and the parsed private data object. Every HEVC or VVC unit
+built left behind its buffer, and the detection probe builds four of those for any file it looks
+at, whatever the codec. Every mp4 with a glbl or an avcC atom left behind its codec private data.
+Measured with a sanitizer over eight files of different kinds and five real muxes, all of which are
+now clean.
+
+### New
+
+* **A TrueHD track can be demuxed on its own.** A disc TrueHD track carries an AC-3 core
+interleaved with its lossless part. A demux has always written both to one file. A plain decoder
+reads that file as AC-3 and then fails on the rest. Add `drop-ac3-core` to leave the core out and
+get the lossless stream by itself, named `.thd`. Without it the demux is unchanged.
+
+* **A DVB subtitle or teletext track is now named.** Such a track used to be reported as an unknown
+number. It is now named from what the container says it is, along with the fact that it is skipped.
+Muxing them is still not implemented.
+
+* **The window remembers which output was last chosen.** Someone who always demuxes had to set that
+back on every start.
+
+### Changed
+
+* **`timeshift` also shifts video, and the help said audio only.** It has always worked on a video
+track. It is now documented in both places.
+
+* **Qt's own buttons can be translated.** The Yes and No of a standard dialog come from Qt, not
+from tsMuxeR. The Windows build has nothing to translate them with. The program now looks for
+those files beside itself, so they can be added.
+
+* The other seven translations follow the audio option renamed in the last release. They name the
+new wording and are marked for translation rather than carrying the old promise forward.
+
+* The build workflows moved off the actions that still run on Node 20, which every run had been
+warning about.
+
+### Thanks
+
+Particular thanks to **@Frank-Z7**, who reported an allocation mismatch in
+[justdan96/tsMuxer#778](https://github.com/justdan96/tsMuxer/issues/778) with a sanitizer log and
+screenshots of the code with the offending line marked. That mismatch had already been repaired,
+but the report was complete enough to find the rest of the job that repair had left undone, which
+is where most of the memory work in this release came from. A report that good is rare and it
+deserves saying.
+
 ## tsMuxeR 2.18.11
 
 Every issue on the tracker of the original project, [justdan96/tsMuxer](https://github.com/justdan96/tsMuxer),
