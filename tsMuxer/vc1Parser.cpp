@@ -77,7 +77,10 @@ string VC1SequenceHeader::getStreamDescr() const
         rez << "Complex";
         break;
     case Profile::ADVANCED:
-        rez << "Advanced@" << level;
+        // level is a uint8_t, and streaming one prints the CHARACTER with that code rather than
+        // the number. Advanced profile level 3 came out as "Advanced@" followed by a control
+        // character, which is what issue 883 reports as a cosmetic bug.
+        rez << "Advanced@" << static_cast<int>(level);
         break;
     }
 
