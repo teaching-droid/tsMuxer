@@ -111,8 +111,10 @@ carry a language, so the file name is the only place it can be, and that is wher
 tsMuxeR's own writes `...track_4352_eng.ac3`. The delay has been read from the file name in the
 same way for a long time. Only the last part of the name is read, only three letters, and only if
 they really are an ISO 639-2 code, because tagging a track with the wrong language is worse than
-leaving it untagged. So `Movie_spa.ac3` is Spanish and `Space Odyssey.ac3` is not. A `lang=` on the
-meta line still wins.
+leaving it untagged. So `Movie_spa.ac3` is Spanish and `Space Odyssey.ac3` is not. A bracketed code
+is the exception and is read wherever it sits, because eac3to writes one and then goes on
+describing the track, as in `... - AC3, [dan], 2.0 channels, 192kbps, 48kHz.ac3`. Nobody brackets
+three letters by accident. A `lang=` on the meta line still wins over anything in the name.
 
 * **The window holds a disc to the rate a player can read.** An output that asks to be read faster
 than a drive has to supply is not a disc: it plays from a hard disk and may stutter or refuse to
