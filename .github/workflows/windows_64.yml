@@ -181,6 +181,32 @@ jobs:
           # Qt is a shared build here, so gather the Windows 7 patched Qt DLLs and plugins next to the GUI.
           & "$QT_INSTALL_PATH\bin\windeployqt.exe" --release --no-translations --no-system-d3d-compiler --no-opengl-sw --no-compiler-runtime "../bin/tsMuxerGUI.exe"
           if ($LASTEXITCODE -ne 0) { throw "windeployqt failed" }
+          # ** QT'S OWN STRINGS, WHICH THIS BUILD CANNOT INHERIT. ** The standard button names,
+          # Yes, No, Cancel and the rest, come from qtbase_<lang>.qm in the qttranslations module.
+          # Qt is compiled here from qtbase alone so the result runs on Windows 7, so that module
+          # is not present and those buttons stay English whatever language the window is set to,
+          # while everything the window says itself is translated. Build the files from source,
+          # from the same tag and the same way qttools is built above, and put them beside the exe
+          # where the GUI looks for them.
+          $TR_ZIP = "${{ runner.temp }}\qttranslations.zip"
+          $TR_SRC = "${{ runner.temp }}\qttranslations-6.8.3\translations"
+          Invoke-WebRequest -Uri "https://github.com/qt/qttranslations/archive/refs/tags/v6.8.3.zip" -OutFile $TR_ZIP
+          Expand-Archive -Path $TR_ZIP -DestinationPath "${{ runner.temp }}" -Force
+          # The name on the left is Qt's, the name on the right is what the window asks for.
+          # QTranslator::load SHORTENS the name it is given and never lengthens it, so a request
+          # for qtbase_zh could never find qtbase_zh_CN.qm: the output name has to be ours.
+          $qtLangs = [ordered]@{ "de" = "de"; "ru" = "ru"; "fr" = "fr"; "zh_CN" = "zh"; "he" = "he"; "es" = "es"; "ja" = "ja" }
+          foreach ($pair in $qtLangs.GetEnumerator()) {
+            $ts = Join-Path $TR_SRC ("qtbase_" + $pair.Key + ".ts")
+            if (Test-Path $ts) {
+              & "$QT_INSTALL_PATH\bin\lrelease.exe" $ts -qm ("../bin/qtbase_" + $pair.Value + ".qm")
+              # A missing or unbuildable language costs those buttons their translation and
+              # nothing else, so it is reported and the package is still made.
+              if ($LASTEXITCODE -ne 0) { Write-Host "lrelease failed for qtbase_$($pair.Key), continuing without it" }
+            } else {
+              Write-Host "qtbase_$($pair.Key).ts is not in qttranslations 6.8.3, skipping"
+            }
+          }
           # LGPL compliance: ship the Qt (LGPLv3) license texts and notices next to the GUI.
           Copy-Item "$env:GITHUB_WORKSPACE\THIRD-PARTY-NOTICES.txt" "../bin/" -Force
           Copy-Item "$env:GITHUB_WORKSPACE\licenses" "../bin/licenses" -Recurse -Force
