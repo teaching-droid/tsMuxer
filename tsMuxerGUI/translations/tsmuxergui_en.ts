@@ -3951,6 +3951,14 @@ Build the ISO anyway?</source>
         <translation>EBU teletext (EN 300 468)</translation>
     </message>
     <message>
+        <source>Part of the playlist was left out</source>
+        <translation>Part of the playlist was left out</translation>
+    </message>
+    <message>
+        <source>These clips are not part of the playlist as it will be muxed, because the streams they carry are not the ones the rest of the playlist uses. A single output cannot change codec part way through:</source>
+        <translation>These clips are not part of the playlist as it will be muxed, because the streams they carry are not the ones the rest of the playlist uses. A single output cannot change codec part way through:</translation>
+    </message>
+    <message>
         <source>Interactive Graphics, the disc menu overlay</source>
         <translation type="unfinished"></translation>
     </message>

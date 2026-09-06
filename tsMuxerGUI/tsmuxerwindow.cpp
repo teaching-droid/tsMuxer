@@ -1870,6 +1870,10 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
     // offered as selectable, which previously meant they vanished from the GUI with no
     // explanation at all. Collect them and say so once, naming the stream.
     QStringList unsupportedTracks;
+    // Clips the playlist names that will not be muxed, because the streams they carry contradict
+    // the rest of it. The CLI leaves them out and says which; without this the window simply
+    // showed one fewer file in its playlist list and gave no reason for it.
+    QStringList skippedClips;
     codecList.clear();
     mplsFileList.clear();
     chapters.clear();
@@ -2012,6 +2016,10 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
                 unsupportedTracks << description;
             }
         }
+        else if (procStdOutput[i].startsWith("Skipped clip: "))
+        {
+            skippedClips << QtCompat::strMid(procStdOutput[i], QString("Skipped clip: ").length()).trimmed();
+        }
         else if (procStdOutput[i].startsWith("Error: "))
         {
             tmpStr = QtCompat::strMid(procStdOutput[i], QString("Error: ").length());
@@ -2114,6 +2122,21 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
         msgBox.setWindowTitle(tr("Some tracks were skipped"));
         msgBox.setText(tr("These tracks cannot be muxed and were not added:"));
         msgBox.setInformativeText(unsupportedTracks.join('\n'));
+        msgBox.setIcon(QMessageBox::Information);
+        msgBox.setStandardButtons(QMessageBox::Ok);
+        msgBox.exec();
+    }
+    if (!skippedClips.isEmpty())
+    {
+        // Clips rather than tracks, so its own box and its own words. The output will be shorter
+        // than the playlist, which is the part someone has to be told about.
+        QMessageBox msgBox(this);
+        msgBox.setWindowTitle(tr("Part of the playlist was left out"));
+        msgBox.setText(
+            tr("These clips are not part of the playlist as it will be muxed, because the streams "
+               "they carry are not the ones the rest of the playlist uses. A single output cannot "
+               "change codec part way through:"));
+        msgBox.setInformativeText(skippedClips.join('\n'));
         msgBox.setIcon(QMessageBox::Information);
         msgBox.setStandardButtons(QMessageBox::Ok);
         msgBox.exec();

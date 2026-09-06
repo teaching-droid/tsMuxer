@@ -4063,6 +4063,14 @@ Créer l'ISO malgré tout ?</translation>
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Part of the playlist was left out</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>These clips are not part of the playlist as it will be muxed, because the streams they carry are not the ones the rest of the playlist uses. A single output cannot change codec part way through:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>Interactive Graphics, the disc menu overlay</source>
         <translation>Interactive Graphics, la surcouche de menu du disque</translation>
     </message>

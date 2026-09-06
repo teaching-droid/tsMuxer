@@ -4063,6 +4063,14 @@ ISO trotzdem erstellen?</translation>
         <translation>EBU-Videotext (EN 300 468)</translation>
     </message>
     <message>
+        <source>Part of the playlist was left out</source>
+        <translation>Ein Teil der Wiedergabeliste wurde ausgelassen</translation>
+    </message>
+    <message>
+        <source>These clips are not part of the playlist as it will be muxed, because the streams they carry are not the ones the rest of the playlist uses. A single output cannot change codec part way through:</source>
+        <translation>Diese Clips gehören nicht zur Wiedergabeliste, so wie sie gemuxt wird, weil die Streams, die sie enthalten, nicht die sind, die der Rest der Wiedergabeliste verwendet. Eine einzelne Ausgabe kann den Codec nicht mittendrin wechseln:</translation>
+    </message>
+    <message>
         <source>Interactive Graphics, the disc menu overlay</source>
         <translation>Interactive Graphics, das Menü-Overlay der Disc</translation>
     </message>
