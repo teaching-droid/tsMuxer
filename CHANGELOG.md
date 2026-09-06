@@ -30,7 +30,7 @@ official pairs now agree with the list published by the registration authority.
 
 * **The read rate warning told people to re-encode when the muxer was the cause.** It ended by
 saying the rate comes from the source and not from muxing, so the only cure was to encode the
-video again. Measured on a pressed Blu-ray: the disc itself sits exactly on 48 Mbit/s and never
+video again. Measured on a conformant HD Blu-ray source: it sits exactly on 48 Mbit/s and never
 goes past it, and two minutes of it remuxed came out at 92.5, with 28.2 per cent of packets over
 the limit. A conformant source comes out over the limit because the muxer computes arrival times
 from its own model rather than keeping the pace the disc was authored at. The warning now names
@@ -119,7 +119,7 @@ than a drive has to supply is not a disc: it plays from a hard disk and may stut
 start on a standalone player. Blu-ray folder and Blu-ray ISO output are now paced to the limit by
 default, and the label and tooltip say why. The UHD limit is a table rather than a number, so the
 tick has a companion choice with the four figures BD-ROM Version 3 gives, defaulting to 109 Mbit/s
-because that is what pressed UHD discs are mastered to. An HD Blu-ray has one figure and no choice
+because that is what a UHD Blu-ray is mastered to. An HD Blu-ray has one figure and no choice
 to make. The command line is deliberately left alone, because `--maxbitrate` has always been
 explicit there and scripts must not change behaviour under people.
 

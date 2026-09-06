@@ -612,8 +612,8 @@ TsMuxerWindow::TsMuxerWindow()
     //   66 GB and 100 GB                      81.7 and 109
     //   the high transfer rate zone of those  127.9
     //
-    // 109 is the default because it is what pressed UHD discs are mastered to: two were measured
-    // and both sit exactly on it. HD has one figure, 48, so the choice is offered only for V3.
+    // 109 is the default because it is what a UHD Blu-ray is mastered to: two conformant UHD
+    // sources measured here sit exactly on it. HD has one figure, 48, so the choice is offered only for V3.
     // The value is kbit/s, which is what --maxbitrate takes.
     ui->comboRateLimit->addItem(tr("109 Mbit/s (66 or 100 GB)"), 109000);
     ui->comboRateLimit->addItem(tr("81.7 Mbit/s (50 GB, or the inner zone of a larger disc)"), 81700);
@@ -3360,7 +3360,7 @@ QString TsMuxerWindow::getMuxOpts()
         rez += " --avchd";
     // Muxing can ask for a higher read rate than a player has to supply, even from a source that
     // was itself a disc, and such an image plays from a hard disk but may stutter or refuse to
-    // start on a standalone player. Paced to the limit it is what a pressed disc looks like.
+    // start on a standalone player. Paced to the limit it is what a conformant disc looks like.
     if ((ui->radioButtonBluRay->isChecked() || ui->radioButtonBluRayISO->isChecked()) &&
         ui->checkBoxRateLimit->isChecked())
     {
