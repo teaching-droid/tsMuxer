@@ -757,25 +757,29 @@
                 <item>
                  <layout class="QHBoxLayout" name="horizontalLayout_11">
                   <item>
-                   <widget class="QCheckBox" name="dtsDwnConvert">
-                    <property name="text">
-                     <string>Keep the core, drop the HD part</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item>
-                   <widget class="QCheckBox" name="dropAc3CoreCheckBox">
-                    <property name="text">
-                     <string>Drop the AC-3 core, keep the lossless part</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item>
-                   <widget class="QCheckBox" name="splitAc3CoreCheckBox">
-                    <property name="text">
-                     <string>Write both parts as well (demux only)</string>
-                    </property>
-                   </widget>
+                   <layout class="QVBoxLayout" name="verticalLayoutAudioParts">
+                    <item>
+                     <widget class="QCheckBox" name="dtsDwnConvert">
+                      <property name="text">
+                       <string>Keep the core, drop the HD part</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QCheckBox" name="dropAc3CoreCheckBox">
+                      <property name="text">
+                       <string>Drop the AC-3 core, keep the lossless part</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QCheckBox" name="splitAc3CoreCheckBox">
+                      <property name="text">
+                       <string>Write both parts as well (demux only)</string>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
                   </item>
                   <item>
                    <widget class="QCheckBox" name="secondaryCheckBox">
