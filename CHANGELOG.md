@@ -1,3 +1,23 @@
+## tsMuxeR 2.18.14
+
+Six fixes, five of them found by people reporting something in 2.18.13 and staying with it until it made sense. Two of them are faults in things 2.18.13 itself introduced.
+
+### Fixed
+
+* **A short intro clip was naming the languages of the whole film.** A playlist that opens with a brief clip and then plays the feature has a stream table for each, and they do not have to agree. 2.18.13 began describing a playlist by the streams that most of its running time uses, which is right, but where two clips carried the same tracks it then took the details from the first of them. On a disc whose intro is tagged English and whose feature is tagged Norwegian, a seventeen second intro was naming the language of a one hour forty-nine minute film. The longest clip provides them now. Checked by listing every playlist on eight discs, 2,068 of them, with the old build and the new one: every listing identical, because this only reaches a playlist whose clips carry the same tracks and disagree about the language.
+
+* **The window showed no language for a file that was about to get one.** A raw stream carries its language and its delay in its file name, and both are read when the mux runs. Neither was reported before that, so the track list sat there empty and the only way to find out whether anything had been recognised was to mux the file and look afterwards. Both now appear as soon as the file is added. The delay rule has been in tsMuxeR for years, so this is old rather than new.
+
+* **The read rate ceiling could be written twice, and the wrong one won.** The tick on the Blu-ray tab and Restricted VBR on the General tab both wrote a maximum bitrate, and the muxer takes the last one it reads. A box on another tab could therefore override a tick whose own label promises to hold the disc to the rate a player can read. One ceiling is written now, and the lower of the two wins: the tick is a limit that must not be exceeded, and a smaller figure typed by hand is inside it and is yours to choose.
+
+* **The space bar did not tick or untick a track.** It only ever worked when the highlighted cell was the checkbox itself, and anyone selecting a track clicks its name or its codec, so the key appeared to do nothing at all. It now toggles the highlighted track whichever column has the focus.
+
+* **Nineteen strings had been left in English.** They appeared in the window untranslated in Spanish, French, Russian, Chinese, Japanese and Hebrew, including the whole read rate row added in the last release. Every one of them is translated now, so no language falls back to English any more.
+
+### New
+
+* **A subtitle file whose name says forced is marked as the forced track.** The tools that split the forced subtitles into a file of their own put the word in the name, and setting the same thing by hand before every disc is a step that can be skipped. A Blu-ray has no per track attribute for this: what a disc carries is an instruction at startup saying which subtitle a player selects and whether it shows only the forced parts, and that is what gets set. The word has to be the last one in the name, so `subs (forced).sup` and `movie_forced.sup` are recognised while a film whose title merely begins with the word is not. An explicit `default=` on the meta line always wins.
+
 ## tsMuxeR 2.18.13
 
 Three reports arrived on this fork's own tracker while the older list was being worked through,
