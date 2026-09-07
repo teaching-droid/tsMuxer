@@ -1650,7 +1650,9 @@ void MPLSParser::chooseRepresentativeStnTable()
         durationBySignature[signatures[i]] += span > 0 ? span : 0;
     }
 
-    size_t best = 0;
+    // Which SET of streams describes the playlist is decided by the total run time of each
+    // signature, so a short odd clip cannot outvote the feature.
+    std::string bestSignature;
     int64_t bestDuration = -1;
     for (size_t i = 0; i < signatures.size(); ++i)
     {
@@ -1660,6 +1662,26 @@ void MPLSParser::chooseRepresentativeStnTable()
         if (duration > bestDuration)
         {
             bestDuration = duration;
+            bestSignature = signatures[i];
+        }
+    }
+
+    // ** WHICH play item of that group provides the DETAILS is a separate question. ** Two
+    // items can share a signature, having the same PIDs and the same codecs, and still
+    // disagree about the languages. A disc that opens with a short intro and then plays the
+    // feature has exactly that, and taking the first item made a 17 second intro name the
+    // languages of a two hour film. The longest run of its own wins.
+    size_t best = 0;
+    int64_t bestOwnDuration = -1;
+    for (size_t i = 0; i < signatures.size(); ++i)
+    {
+        if (signatures[i] != bestSignature)
+            continue;
+        const int64_t span = static_cast<int64_t>(m_playItems[i].OUT_time) - m_playItems[i].IN_time;
+        const int64_t own = span > 0 ? span : 0;
+        if (own > bestOwnDuration)
+        {
+            bestOwnDuration = own;
             best = i;
         }
     }
