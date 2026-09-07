@@ -2462,11 +2462,11 @@
     </message>
     <message>
         <source>Blissymbols; Blissymbolics; Bliss</source>
-        <translation type="unfinished"></translation>
+        <translation>布列斯符号; Blissymbolics; Bliss</translation>
     </message>
     <message>
         <source>No linguistic content; Not applicable</source>
-        <translation type="unfinished"></translation>
+        <translation>无语言内容；不适用</translation>
     </message>
     <message>
         <location filename="../lang_codes.cpp" line="572"/>
@@ -2760,7 +2760,7 @@ Build the ISO anyway?</source>
         <location filename="../tsmuxerwindow.ui" line="747"/>
         <location filename="../tsmuxerwindow.cpp" line="1584"/>
         <source>Keep the core, drop the HD part</source>
-        <translation type="unfinished"></translation>
+        <translation>保留核心，舍弃 HD 部分</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="754"/>
@@ -3730,17 +3730,17 @@ Build the ISO anyway?</source>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1578"/>
         <source>Keep the DTS core, drop the HD part</source>
-        <translation type="unfinished"></translation>
+        <translation>保留 DTS 核心，舍弃 HD 部分</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1580"/>
         <source>Keep the AC-3 core, drop the TRUE-HD part</source>
-        <translation type="unfinished"></translation>
+        <translation>保留 AC-3 核心，舍弃 TRUE-HD 部分</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1582"/>
         <source>Keep the AC-3 core, drop the DD+ part</source>
-        <translation type="unfinished"></translation>
+        <translation>保留 AC-3 核心，舍弃 DD+ 部分</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1739"/>
@@ -4064,23 +4064,23 @@ Build the ISO anyway?</source>
     </message>
     <message>
         <source>DVB bitmap subtitles (EN 300 743)</source>
-        <translation type="unfinished"></translation>
+        <translation>DVB 位图字幕 (EN 300 743)</translation>
     </message>
     <message>
         <source>EBU teletext (EN 300 468)</source>
-        <translation type="unfinished"></translation>
+        <translation>EBU 图文电视 (EN 300 468)</translation>
     </message>
     <message>
         <source>Part of the playlist was left out</source>
-        <translation type="unfinished"></translation>
+        <translation>播放列表的一部分被略去</translation>
     </message>
     <message>
         <source>These clips are not part of the playlist as it will be muxed, because the streams they carry are not the ones the rest of the playlist uses. A single output cannot change codec part way through:</source>
-        <translation type="unfinished"></translation>
+        <translation>这些片段不属于将要合并的播放列表，因为它们所包含的流与播放列表其余部分所用的不同。单个输出无法在中途更换编解码器：</translation>
     </message>
     <message>
         <source>Write both parts as well (demux only)</source>
-        <translation type="unfinished"></translation>
+        <translation>同时写入两个部分（仅限分离）</translation>
     </message>
     <message>
         <source>Interactive Graphics, the disc menu overlay</source>
@@ -4097,35 +4097,35 @@ Build the ISO anyway?</source>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>
-        <translation type="unfinished"></translation>
+        <translation>将光盘限制在播放器可读取的速率：</translation>
     </message>
     <message>
         <source>Hold the disc to the rate a player can read</source>
-        <translation type="unfinished"></translation>
+        <translation>将光盘限制在播放器可读取的速率</translation>
     </message>
     <message>
         <source>Hold the disc to the rate a player can read (48 Mbit/s)</source>
-        <translation type="unfinished"></translation>
+        <translation>将光盘限制在播放器可读取的速率 (48 Mbit/s)</translation>
     </message>
     <message>
         <source>109 Mbit/s (66 or 100 GB)</source>
-        <translation type="unfinished"></translation>
+        <translation>109 Mbit/s（66 或 100 GB）</translation>
     </message>
     <message>
         <source>81.7 Mbit/s (50 GB, or the inner zone of a larger disc)</source>
-        <translation type="unfinished"></translation>
+        <translation>81.7 Mbit/s（50 GB，或更大光盘的内圈区域）</translation>
     </message>
     <message>
         <source>64 Mbit/s (the inner zone of a 50 GB disc)</source>
-        <translation type="unfinished"></translation>
+        <translation>64 Mbit/s（50 GB 光盘的内圈区域）</translation>
     </message>
     <message>
         <source>127.9 Mbit/s (high transfer rate zone)</source>
-        <translation type="unfinished"></translation>
+        <translation>127.9 Mbit/s（高传输速率区域）</translation>
     </message>
     <message>
         <source>A Blu-ray drive only has to supply 48 Mbit/s, and a UHD drive 109. Muxing can ask for more than that in bursts, even from a source that was itself a disc, and such an image plays from a hard disk but may stutter or refuse to start on a standalone player. This paces the disc to the limit, which is what a Blu-ray is authored to. Turn it off only if you know you want the image faster than a player can read.</source>
-        <translation type="unfinished"></translation>
+        <translation>蓝光驱动器只需提供 48 Mbit/s，UHD 驱动器为 109。合并时可能会突发式地要求更高速率，即使源本身就是光盘也一样，这样的镜像在硬盘上可以播放，但在独立播放器上可能卡顿或无法启动。此选项将光盘限制在蓝光制作所用的速率。只有当您确实希望镜像快于播放器可读取的速度时才关闭它。</translation>
     </message>
 </context>
 <context>

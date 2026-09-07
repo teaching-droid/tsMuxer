@@ -2462,11 +2462,11 @@
     </message>
     <message>
         <source>Blissymbols; Blissymbolics; Bliss</source>
-        <translation type="unfinished"></translation>
+        <translation>ブリスシンボル; Blissymbolics; Bliss</translation>
     </message>
     <message>
         <source>No linguistic content; Not applicable</source>
-        <translation type="unfinished"></translation>
+        <translation>言語内容なし；該当なし</translation>
     </message>
     <message>
         <location filename="../lang_codes.cpp" line="572"/>
@@ -2760,7 +2760,7 @@ Build the ISO anyway?</source>
         <location filename="../tsmuxerwindow.ui" line="747"/>
         <location filename="../tsmuxerwindow.cpp" line="1584"/>
         <source>Keep the core, drop the HD part</source>
-        <translation type="unfinished"></translation>
+        <translation>コアを残し、HD 部分を破棄</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="754"/>
@@ -3730,17 +3730,17 @@ Build the ISO anyway?</source>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1578"/>
         <source>Keep the DTS core, drop the HD part</source>
-        <translation type="unfinished"></translation>
+        <translation>DTS コアを残し、HD 部分を破棄</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1580"/>
         <source>Keep the AC-3 core, drop the TRUE-HD part</source>
-        <translation type="unfinished"></translation>
+        <translation>AC-3 コアを残し、TRUE-HD 部分を破棄</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1582"/>
         <source>Keep the AC-3 core, drop the DD+ part</source>
-        <translation type="unfinished"></translation>
+        <translation>AC-3 コアを残し、DD+ 部分を破棄</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1739"/>
@@ -4064,23 +4064,23 @@ Build the ISO anyway?</source>
     </message>
     <message>
         <source>DVB bitmap subtitles (EN 300 743)</source>
-        <translation type="unfinished"></translation>
+        <translation>DVB ビットマップ字幕 (EN 300 743)</translation>
     </message>
     <message>
         <source>EBU teletext (EN 300 468)</source>
-        <translation type="unfinished"></translation>
+        <translation>EBU テレテキスト (EN 300 468)</translation>
     </message>
     <message>
         <source>Part of the playlist was left out</source>
-        <translation type="unfinished"></translation>
+        <translation>プレイリストの一部が除外されました</translation>
     </message>
     <message>
         <source>These clips are not part of the playlist as it will be muxed, because the streams they carry are not the ones the rest of the playlist uses. A single output cannot change codec part way through:</source>
-        <translation type="unfinished"></translation>
+        <translation>これらのクリップは、多重化されるプレイリストには含まれません。含まれるストリームが、プレイリストの他の部分が使うものと異なるためです。単一の出力は途中でコーデックを変えられません:</translation>
     </message>
     <message>
         <source>Write both parts as well (demux only)</source>
-        <translation type="unfinished"></translation>
+        <translation>両方の部分も書き出す（Demux 時のみ）</translation>
     </message>
     <message>
         <source>Interactive Graphics, the disc menu overlay</source>
@@ -4097,35 +4097,35 @@ Build the ISO anyway?</source>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>
-        <translation type="unfinished"></translation>
+        <translation>プレーヤーが読めるレートにディスクを抑える:</translation>
     </message>
     <message>
         <source>Hold the disc to the rate a player can read</source>
-        <translation type="unfinished"></translation>
+        <translation>プレーヤーが読めるレートにディスクを抑える</translation>
     </message>
     <message>
         <source>Hold the disc to the rate a player can read (48 Mbit/s)</source>
-        <translation type="unfinished"></translation>
+        <translation>プレーヤーが読めるレートにディスクを抑える (48 Mbit/s)</translation>
     </message>
     <message>
         <source>109 Mbit/s (66 or 100 GB)</source>
-        <translation type="unfinished"></translation>
+        <translation>109 Mbit/s（66 または 100 GB）</translation>
     </message>
     <message>
         <source>81.7 Mbit/s (50 GB, or the inner zone of a larger disc)</source>
-        <translation type="unfinished"></translation>
+        <translation>81.7 Mbit/s（50 GB、または大きいディスクの内周ゾーン）</translation>
     </message>
     <message>
         <source>64 Mbit/s (the inner zone of a 50 GB disc)</source>
-        <translation type="unfinished"></translation>
+        <translation>64 Mbit/s（50 GB ディスクの内周ゾーン）</translation>
     </message>
     <message>
         <source>127.9 Mbit/s (high transfer rate zone)</source>
-        <translation type="unfinished"></translation>
+        <translation>127.9 Mbit/s（高転送レートゾーン）</translation>
     </message>
     <message>
         <source>A Blu-ray drive only has to supply 48 Mbit/s, and a UHD drive 109. Muxing can ask for more than that in bursts, even from a source that was itself a disc, and such an image plays from a hard disk but may stutter or refuse to start on a standalone player. This paces the disc to the limit, which is what a Blu-ray is authored to. Turn it off only if you know you want the image faster than a player can read.</source>
-        <translation type="unfinished"></translation>
+        <translation>Blu-ray ドライブが供給する必要があるのは 48 Mbit/s、UHD ドライブでは 109 だけです。多重化は、ソース自体がディスクであっても、バーストでそれ以上を要求することがあります。そのようなイメージはハードディスクからは再生できますが、単体プレーヤーでは引っかかったり起動しなかったりすることがあります。これは Blu-ray が作られるレートにディスクを抑えます。プレーヤーが読める速度を超えたイメージを承知で望む場合にのみオフにしてください。</translation>
     </message>
 </context>
 <context>

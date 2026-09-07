@@ -2462,11 +2462,11 @@
     </message>
     <message>
         <source>Blissymbols; Blissymbolics; Bliss</source>
-        <translation type="unfinished"></translation>
+        <translation>Símbolos Bliss; Blissymbolics; Bliss</translation>
     </message>
     <message>
         <source>No linguistic content; Not applicable</source>
-        <translation type="unfinished"></translation>
+        <translation>Sin contenido lingüístico; No aplicable</translation>
     </message>
     <message>
         <location filename="../lang_codes.cpp" line="572"/>
@@ -2760,7 +2760,7 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas, seleccionables como
         <location filename="../tsmuxerwindow.ui" line="747"/>
         <location filename="../tsmuxerwindow.cpp" line="1584"/>
         <source>Keep the core, drop the HD part</source>
-        <translation type="unfinished"></translation>
+        <translation>Conservar el núcleo, descartar la parte HD</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="754"/>
@@ -3730,17 +3730,17 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1578"/>
         <source>Keep the DTS core, drop the HD part</source>
-        <translation type="unfinished"></translation>
+        <translation>Conservar el núcleo DTS, descartar la parte HD</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1580"/>
         <source>Keep the AC-3 core, drop the TRUE-HD part</source>
-        <translation type="unfinished"></translation>
+        <translation>Conservar el núcleo AC-3, descartar la parte TRUE-HD</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1582"/>
         <source>Keep the AC-3 core, drop the DD+ part</source>
-        <translation type="unfinished"></translation>
+        <translation>Conservar el núcleo AC-3, descartar la parte DD+</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1739"/>
@@ -4065,23 +4065,23 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
     </message>
     <message>
         <source>DVB bitmap subtitles (EN 300 743)</source>
-        <translation type="unfinished"></translation>
+        <translation>Subtítulos de mapa de bits DVB (EN 300 743)</translation>
     </message>
     <message>
         <source>EBU teletext (EN 300 468)</source>
-        <translation type="unfinished"></translation>
+        <translation>Teletexto EBU (EN 300 468)</translation>
     </message>
     <message>
         <source>Part of the playlist was left out</source>
-        <translation type="unfinished"></translation>
+        <translation>Se ha omitido una parte de la lista de reproducción</translation>
     </message>
     <message>
         <source>These clips are not part of the playlist as it will be muxed, because the streams they carry are not the ones the rest of the playlist uses. A single output cannot change codec part way through:</source>
-        <translation type="unfinished"></translation>
+        <translation>Estos clips no forman parte de la lista de reproducción tal como se multiplexará, porque los flujos que contienen no son los que usa el resto de la lista. Una única salida no puede cambiar de códec a mitad de camino:</translation>
     </message>
     <message>
         <source>Write both parts as well (demux only)</source>
-        <translation type="unfinished"></translation>
+        <translation>Escribir también ambas partes (solo al desmultiplexar)</translation>
     </message>
     <message>
         <source>Interactive Graphics, the disc menu overlay</source>
@@ -4098,35 +4098,35 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>
-        <translation type="unfinished"></translation>
+        <translation>Limitar el disco a la velocidad que un reproductor puede leer:</translation>
     </message>
     <message>
         <source>Hold the disc to the rate a player can read</source>
-        <translation type="unfinished"></translation>
+        <translation>Limitar el disco a la velocidad que un reproductor puede leer</translation>
     </message>
     <message>
         <source>Hold the disc to the rate a player can read (48 Mbit/s)</source>
-        <translation type="unfinished"></translation>
+        <translation>Limitar el disco a la velocidad que un reproductor puede leer (48 Mbit/s)</translation>
     </message>
     <message>
         <source>109 Mbit/s (66 or 100 GB)</source>
-        <translation type="unfinished"></translation>
+        <translation>109 Mbit/s (66 o 100 GB)</translation>
     </message>
     <message>
         <source>81.7 Mbit/s (50 GB, or the inner zone of a larger disc)</source>
-        <translation type="unfinished"></translation>
+        <translation>81,7 Mbit/s (50 GB, o la zona interior de un disco mayor)</translation>
     </message>
     <message>
         <source>64 Mbit/s (the inner zone of a 50 GB disc)</source>
-        <translation type="unfinished"></translation>
+        <translation>64 Mbit/s (la zona interior de un disco de 50 GB)</translation>
     </message>
     <message>
         <source>127.9 Mbit/s (high transfer rate zone)</source>
-        <translation type="unfinished"></translation>
+        <translation>127,9 Mbit/s (zona de alta velocidad de transferencia)</translation>
     </message>
     <message>
         <source>A Blu-ray drive only has to supply 48 Mbit/s, and a UHD drive 109. Muxing can ask for more than that in bursts, even from a source that was itself a disc, and such an image plays from a hard disk but may stutter or refuse to start on a standalone player. This paces the disc to the limit, which is what a Blu-ray is authored to. Turn it off only if you know you want the image faster than a player can read.</source>
-        <translation type="unfinished"></translation>
+        <translation>Una unidad Blu-ray solo tiene que suministrar 48 Mbit/s, y una unidad UHD 109. La multiplexación puede pedir más que eso a ráfagas, incluso a partir de una fuente que era ella misma un disco, y una imagen así se reproduce desde el disco duro pero puede entrecortarse o no arrancar en un reproductor de sobremesa. Esto limita el disco a la velocidad para la que se crea un Blu-ray. Desactívelo solo si quiere a propósito la imagen más rápida de lo que un reproductor puede leer.</translation>
     </message>
 </context>
 <context>

@@ -2462,11 +2462,11 @@
     </message>
     <message>
         <source>Blissymbols; Blissymbolics; Bliss</source>
-        <translation type="unfinished"></translation>
+        <translation>Symboles Bliss ; Blissymbolics ; Bliss</translation>
     </message>
     <message>
         <source>No linguistic content; Not applicable</source>
-        <translation type="unfinished"></translation>
+        <translation>Aucun contenu linguistique ; sans objet</translation>
     </message>
     <message>
         <location filename="../lang_codes.cpp" line="572"/>
@@ -2760,7 +2760,7 @@ Créer l'ISO malgré tout ?</translation>
         <location filename="../tsmuxerwindow.ui" line="747"/>
         <location filename="../tsmuxerwindow.cpp" line="1584"/>
         <source>Keep the core, drop the HD part</source>
-        <translation type="unfinished"></translation>
+        <translation>Conserver le noyau, supprimer la partie HD</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="754"/>
@@ -3730,17 +3730,17 @@ Créer l'ISO malgré tout ?</translation>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1578"/>
         <source>Keep the DTS core, drop the HD part</source>
-        <translation type="unfinished"></translation>
+        <translation>Conserver le noyau DTS, supprimer la partie HD</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1580"/>
         <source>Keep the AC-3 core, drop the TRUE-HD part</source>
-        <translation type="unfinished"></translation>
+        <translation>Conserver le noyau AC-3, supprimer la partie TRUE-HD</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1582"/>
         <source>Keep the AC-3 core, drop the DD+ part</source>
-        <translation type="unfinished"></translation>
+        <translation>Conserver le noyau AC-3, supprimer la partie DD+</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="1739"/>
@@ -4064,23 +4064,23 @@ Créer l'ISO malgré tout ?</translation>
     </message>
     <message>
         <source>DVB bitmap subtitles (EN 300 743)</source>
-        <translation type="unfinished"></translation>
+        <translation>Sous-titres bitmap DVB (EN 300 743)</translation>
     </message>
     <message>
         <source>EBU teletext (EN 300 468)</source>
-        <translation type="unfinished"></translation>
+        <translation>Télétexte EBU (EN 300 468)</translation>
     </message>
     <message>
         <source>Part of the playlist was left out</source>
-        <translation type="unfinished"></translation>
+        <translation>Une partie de la playlist a été laissée de côté</translation>
     </message>
     <message>
         <source>These clips are not part of the playlist as it will be muxed, because the streams they carry are not the ones the rest of the playlist uses. A single output cannot change codec part way through:</source>
-        <translation type="unfinished"></translation>
+        <translation>Ces clips ne font pas partie de la playlist telle qu'elle sera muxée, car les flux qu'ils contiennent ne sont pas ceux qu'utilise le reste de la playlist. Une sortie unique ne peut pas changer de codec en cours de route :</translation>
     </message>
     <message>
         <source>Write both parts as well (demux only)</source>
-        <translation type="unfinished"></translation>
+        <translation>Écrire aussi les deux parties (démuxage uniquement)</translation>
     </message>
     <message>
         <source>Interactive Graphics, the disc menu overlay</source>
@@ -4097,35 +4097,35 @@ Créer l'ISO malgré tout ?</translation>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>
-        <translation type="unfinished"></translation>
+        <translation>Limiter le disque au débit qu'un lecteur peut lire :</translation>
     </message>
     <message>
         <source>Hold the disc to the rate a player can read</source>
-        <translation type="unfinished"></translation>
+        <translation>Limiter le disque au débit qu'un lecteur peut lire</translation>
     </message>
     <message>
         <source>Hold the disc to the rate a player can read (48 Mbit/s)</source>
-        <translation type="unfinished"></translation>
+        <translation>Limiter le disque au débit qu'un lecteur peut lire (48 Mbit/s)</translation>
     </message>
     <message>
         <source>109 Mbit/s (66 or 100 GB)</source>
-        <translation type="unfinished"></translation>
+        <translation>109 Mbit/s (66 ou 100 GB)</translation>
     </message>
     <message>
         <source>81.7 Mbit/s (50 GB, or the inner zone of a larger disc)</source>
-        <translation type="unfinished"></translation>
+        <translation>81,7 Mbit/s (50 GB, ou la zone intérieure d'un disque plus grand)</translation>
     </message>
     <message>
         <source>64 Mbit/s (the inner zone of a 50 GB disc)</source>
-        <translation type="unfinished"></translation>
+        <translation>64 Mbit/s (la zone intérieure d'un disque de 50 GB)</translation>
     </message>
     <message>
         <source>127.9 Mbit/s (high transfer rate zone)</source>
-        <translation type="unfinished"></translation>
+        <translation>127,9 Mbit/s (zone à haut débit de transfert)</translation>
     </message>
     <message>
         <source>A Blu-ray drive only has to supply 48 Mbit/s, and a UHD drive 109. Muxing can ask for more than that in bursts, even from a source that was itself a disc, and such an image plays from a hard disk but may stutter or refuse to start on a standalone player. This paces the disc to the limit, which is what a Blu-ray is authored to. Turn it off only if you know you want the image faster than a player can read.</source>
-        <translation type="unfinished"></translation>
+        <translation>Un lecteur Blu-Ray ne doit fournir que 48 Mbit/s, et un lecteur UHD 109. Le muxage peut en demander davantage par a-coups, même à partir d'une source qui était elle-même un disque, et une telle image se lit depuis un disque dur mais peut saccader ou refuser de démarrer sur un lecteur de salon. Ceci limite le disque au débit pour lequel un Blu-Ray est créé. Ne le désactivez que si vous voulez sciemment l'image plus rapide qu'un lecteur ne peut la lire.</translation>
     </message>
 </context>
 <context>
