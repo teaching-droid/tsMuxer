@@ -157,10 +157,6 @@ so those buttons follow the language the window is set to.
 tell whether a download arrived intact. Each asset now has a `.sha256` next to it, in the format
 `sha256sum -c` and `shasum -c` read.
 
-* The sixteen strings added in this release are in all eight translation files, each one checked
-against the class it is written in. German is filled in and the other six carry the English
-source until someone who speaks them fills them in.
-
 ## tsMuxeR 2.18.12
 
 The issue list of the original project, [justdan96/tsMuxer](https://github.com/justdan96/tsMuxer),
