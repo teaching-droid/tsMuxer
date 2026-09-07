@@ -30,10 +30,12 @@ official pairs now agree with the list published by the registration authority.
 
 * **The read rate warning told people to re-encode when the muxer was the cause.** It ended by
 saying the rate comes from the source and not from muxing, so the only cure was to encode the
-video again. Measured on a conformant HD Blu-ray source: it sits exactly on 48 Mbit/s and never
-goes past it, and two minutes of it remuxed came out at 92.5, with 28.2 per cent of packets over
-the limit. A conformant source comes out over the limit because the muxer computes arrival times
-from its own model rather than keeping the pace the disc was authored at. The warning now names
+video again. Measured on a conformant HD Blu-ray source, which sits exactly on 48 Mbit/s and never
+goes past it: remuxed whole, it asks for 118.0 Mbit/s at its fastest, with 22.7 per cent of its
+109.5 million packets above the limit. A conformant source comes out over the limit because the
+muxer computes arrival times from its own model rather than keeping the pace the disc was
+authored at. Capped, the same mux holds 48.0 Mbit/s with not one packet over, every elementary
+stream byte identical, for 0.006 per cent of the file size. The warning now names
 `--maxbitrate` and the right number for the disc, and keeps the re-encode advice for the case
 where the video's own peak really is the problem.
 
@@ -90,6 +92,12 @@ the declared size and the list that fills it agree so it cannot drift again in s
 * **The window treated every command line argument as a file name.** `tsMuxerGUI --version` opened
 with a dialog complaining that the option is an unsupported format. A real file whose name begins
 with a dash is still opened as a file.
+
+* **Some of the window's own strings never translated, whatever language it was set to.** Qt
+looks a string up by the class it was written in, and the strings of the read rate row had been
+filed under the class that holds the language names, so the lookup never found them and Qt fell
+back to the English source. The checkbox, its tooltip and the four rate figures now translate
+with the rest of the window.
 
 * **The audio track boxes cut their own labels off.** With a third box added, all three were elided
 at the default window size and it had to be made wider to read any of them. They stack in a column
@@ -149,8 +157,9 @@ so those buttons follow the language the window is set to.
 tell whether a download arrived intact. Each asset now has a `.sha256` next to it, in the format
 `sha256sum -c` and `shasum -c` read.
 
-* The seven strings added in this release are in all eight translation files. German is filled in
-and the other six carry the English source until someone who speaks them fills them in.
+* The sixteen strings added in this release are in all eight translation files, each one checked
+against the class it is written in. German is filled in and the other six carry the English
+source until someone who speaks them fills them in.
 
 ### Thanks
 
