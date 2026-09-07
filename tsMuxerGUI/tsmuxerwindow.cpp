@@ -3358,15 +3358,6 @@ QString TsMuxerWindow::getMuxOpts()
     }
     else if (ui->radioButtonAVCHD->isChecked())
         rez += " --avchd";
-    // Muxing can ask for a higher read rate than a player has to supply, even from a source that
-    // was itself a disc, and such an image plays from a hard disk but may stutter or refuse to
-    // start on a standalone player. Paced to the limit it is what a conformant disc looks like.
-    if ((ui->radioButtonBluRay->isChecked() || ui->radioButtonBluRayISO->isChecked()) &&
-        ui->checkBoxRateLimit->isChecked())
-    {
-        const int kbps = ui->checkBoxV3->isChecked() ? ui->comboRateLimit->currentData().toInt() : 48000;
-        rez += " --maxbitrate=" + QString::number(kbps);
-    }
     else if (ui->radioButtonDemux->isChecked())
         rez += " --demux";
     else if (ui->radioButtonMKV->isChecked() && ui->comboBoxDvProfile->isVisible() &&
@@ -3422,11 +3413,29 @@ QString TsMuxerWindow::getMuxOpts()
     {
         rez += " --vbr";
         if (ui->checkBoxRVBR->isChecked())
-        {
             rez += QString(" --minbitrate=") + QString::number(ui->editMinBitrate->value(), 'f', 3);
-            rez += QString(" --maxbitrate=") + QString::number(ui->editMaxBitrate->value(), 'f', 3);
-        }
     }
+
+    // ** THE CEILING IS WRITTEN ONCE. ** Two controls can ask for one: Restricted VBR here, and
+    // the tick on the Blu-ray tab that holds the disc to the rate a player has to supply. Both
+    // used to write their own --maxbitrate and the muxer takes the LAST one it reads, so
+    // Restricted VBR silently overrode a tick whose own label promises the opposite.
+    //
+    // The LOWER of the two wins. The tick is a ceiling that must not be exceeded; a smaller
+    // figure someone typed is still inside it and is theirs to choose. Restricted VBR is read
+    // only when it is live, which is VBR and not CBR, exactly as before.
+    double maxKbps = 0;
+    if (!ui->checkBoxCBR->isChecked() && ui->checkBoxRVBR->isChecked())
+        maxKbps = ui->editMaxBitrate->value();
+    if ((ui->radioButtonBluRay->isChecked() || ui->radioButtonBluRayISO->isChecked()) &&
+        ui->checkBoxRateLimit->isChecked())
+    {
+        const double limit = ui->checkBoxV3->isChecked() ? ui->comboRateLimit->currentData().toDouble() : 48000.0;
+        maxKbps = maxKbps > 0 ? qMin(maxKbps, limit) : limit;
+    }
+    if (maxKbps > 0)
+        rez += QString(" --maxbitrate=") + QString::number(maxKbps, 'f', 3);
+
     if (isDiskOutput())
     {
         if (ui->checkBoxBlankPL->isChecked() && isVideoCropped())
