@@ -22,6 +22,7 @@
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QGuiApplication>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLibraryInfo>
 #include <QLineEdit>
@@ -728,6 +729,7 @@ TsMuxerWindow::TsMuxerWindow()
     updateDvProfileVisible();
 
     ui->label_Donate->installEventFilter(this);
+    ui->trackLV->installEventFilter(this);
 
     trackLVItemSelectionChanged();
 
@@ -4816,10 +4818,25 @@ bool TsMuxerWindow::eventFilter(QObject* obj, QEvent* event)
         QDesktopServices::openUrl(QUrl("https://github.com/teaching-droid/tsMuxer"));
         return true;
     }
-    else
+    // The space bar ticks and unticks the highlighted track. Qt does this by itself only
+    // when the CURRENT CELL is the one holding the checkbox, and the checkbox is in column
+    // 0 while anyone selecting a track clicks its name in column 1. So the key appeared to
+    // do nothing, which is what was reported. Toggle column 0 of the current row whichever
+    // column has the focus.
+    if (obj == ui->trackLV && event->type() == QEvent::KeyPress &&
+        static_cast<QKeyEvent*>(event)->key() == Qt::Key_Space)
     {
-        return QWidget::eventFilter(obj, event);
+        const int row = ui->trackLV->currentRow();
+        QTableWidgetItem* const box = row >= 0 ? ui->trackLV->item(row, 0) : nullptr;
+        if (box)
+        {
+            // setCheckState raises itemChanged, which is what keeps the header's tri-state
+            // box and the meta line in step, so nothing else has to be told.
+            box->setCheckState(box->checkState() == Qt::Checked ? Qt::Unchecked : Qt::Checked);
+            return true;
+        }
     }
+    return QWidget::eventFilter(obj, event);
 }
 
 void TsMuxerWindow::at_sectionCheckstateChanged(Qt::CheckState state)
