@@ -145,8 +145,27 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
     bool ssifIsBaseView = false;
     const std::string ssifPartner = bdFindSsifForM2ts(fileName, ssifIsBaseView);
 
+    // A raw elementary stream has nowhere but its file name to carry a language or a delay,
+    // and the muxer reads both from there. THE LISTING NEVER SAID SO. The window builds its
+    // track table from these lines, so a file that was going to be tagged correctly showed an
+    // empty language, and the only way to find out was to mux it and look afterwards.
+    //
+    // trackID is 0 exactly when there is no container track numbering, which is the same
+    // condition the muxer uses to decide that the name is the only source there is.
+    const std::string nameLang = langFromFileName(fileName);
+    const int64_t nameDelay = delayFromFileName(fileName);
+
     for (unsigned i = 0; i < streams.size(); i++)
     {
+        if (streams[i].trackID == 0)
+        {
+            // Only ever fill a gap. Anything the stream itself declared wins, exactly as an
+            // explicit lang= or timeshift= wins over the name when the mux runs.
+            if (streams[i].lang.empty())
+                streams[i].lang = nameLang;
+            if (streams[i].delay == 0)
+                streams[i].delay = nameDelay;
+        }
         if (streams[i].trackID != 0)
         {
             if (i > 0)
