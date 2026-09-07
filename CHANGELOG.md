@@ -161,18 +161,6 @@ tell whether a download arrived intact. Each asset now has a `.sha256` next to i
 against the class it is written in. German is filled in and the other six carry the English
 source until someone who speaks them fills them in.
 
-### Thanks
-
-Thanks to **@TexasChainsaw83** for two reports. The first was the read rate warning, and what made
-it answerable was going back and building the disc again from the original playlist to rule out the
-demuxed streams: that second test is what showed the muxer was the cause and not the source. The
-second asked for the language to be read from the file name, and turned out to be the reading side
-of something tsMuxeR's own demux was already writing.
-
-Thanks to **@Nemesh64** for the language report, and for naming what BDInfo showed alongside what
-tsMuxeR showed. Two programs disagreeing about the same disc is what pointed at the two places a
-Blu-ray keeps that field, and neither program was misreading its own source.
-
 ## tsMuxeR 2.18.12
 
 The issue list of the original project, [justdan96/tsMuxer](https://github.com/justdan96/tsMuxer),
