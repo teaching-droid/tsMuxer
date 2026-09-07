@@ -1,5 +1,7 @@
 ## tsMuxeR 2.18.14
 
+As I said when this fork started, it gets attention when I have free time, which comes in bursts and sometimes not at all. One of those quiet stretches begins now: I will have no access to a machine, so this is the last release until I am back. Reports are still worth posting. Nothing goes missing while I am away, and I will read all of them when I return.
+
 Six fixes, five of them found by people reporting something in 2.18.13 and staying with it until it made sense. Two of them are faults in things 2.18.13 itself introduced.
 
 ### Fixed
