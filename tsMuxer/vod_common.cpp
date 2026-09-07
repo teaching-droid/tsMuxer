@@ -309,6 +309,31 @@ std::string langFromFileName(const std::string& fileName)
     return isIso639_2(lower) ? lower : std::string();
 }
 
+bool isForcedSubtitleName(const std::string& fileName)
+{
+    std::string name = extractFileName(fileName);
+    if (name.empty())
+    {
+        name = fileName;
+        const size_t dot = name.find_last_of('.');
+        if (dot != std::string::npos)
+            name = name.substr(0, dot);
+    }
+
+    // The LAST word, exactly as the language is the last token. Anything looser marks a film
+    // whose title merely begins with the word as the disc's forced subtitle track, which is
+    // a worse mistake than not recognising a name at all. The tools that split these files
+    // out put it at the end, bracketed or plain: "... fra (forced).sup", "movie_forced.sup".
+    while (!name.empty() && (name.back() == ' ' || name.back() == '.' || name.back() == ')' || name.back() == ']'))
+        name.pop_back();
+    const size_t at = name.find_last_of("_-. ()[]");
+    const std::string token = at == std::string::npos ? name : name.substr(at + 1);
+
+    std::string lower;
+    for (const char c : token) lower += static_cast<char>(tolower(static_cast<unsigned char>(c)));
+    return lower == "forced";
+}
+
 int64_t delayFromFileName(const std::string& fileName)
 {
     std::string name = extractFileName(fileName);

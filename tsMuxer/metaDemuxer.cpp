@@ -971,6 +971,21 @@ int METADemuxer::addStream(const string& codec, const string& codecStreamName, c
         }
     }
 
+    // A subtitle track whose file name says "forced" is the forced track. A Blu-ray has no
+    // per track attribute for this: the only thing a disc carries is the navigation command
+    // saying which subtitle a player selects at startup and whether it shows just the forced
+    // elements of it, which is what default=forced writes. The tools that split the forced
+    // pictures into a file of their own put the word in the name, so that is where it comes
+    // from, exactly as the language and the delay do.
+    //
+    // An explicit default= always wins, because that is the user saying it outright.
+    if (!codec.empty() && codec[0] == 'S' && addParams.find("default") == addParams.end() && !fileList.empty() &&
+        isForcedSubtitleName(fileList[0]))
+    {
+        streamInfo.m_addParams["default"] = "forced";
+        LTRACE(LT_INFO, 2, "Marking this subtitle as the forced track, taken from the file name");
+    }
+
     itr = addParams.find("lang");
     if (itr != addParams.end())
         streamInfo.m_lang = itr->second;

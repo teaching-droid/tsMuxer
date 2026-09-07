@@ -146,6 +146,11 @@ std::string stripDelayToken(const std::string& fileName);
 bool isIso639_2(const std::string& code);
 std::string langFromFileName(const std::string& fileName);
 
+// True when a subtitle file's name marks it as the forced track, as the tools that split
+// the forced pictures out write it: "... fra (forced).sup", "movie.forced.sup".
+// The word has to stand on its own, so a film whose title contains it is not caught.
+bool isForcedSubtitleName(const std::string& fileName);
+
 static int64_t internalClockToPts(const int64_t value) { return value / INT_FREQ_TO_TS_FREQ; }
 static int64_t ptsToInternalClock(const int64_t value) { return value * INT_FREQ_TO_TS_FREQ; }
 
