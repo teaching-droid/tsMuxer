@@ -75,7 +75,18 @@ struct Font
     static constexpr int UNDERLINE = 4;
     static constexpr int STRIKE_OUT = 8;
     static constexpr int FORCED = 16;
-    Font() : m_size(18), m_opts(0), m_borderWidth(0.0), m_charset(0), m_color(0x00ffffff), m_lineSpacing(1.0) {}
+    // The colour is ARGB and the alpha is NOT decoration: the Windows renderer fills the glyphs
+    // with a brush built straight from it, so an alpha of zero draws nothing at all and a subtitle
+    // track comes out with no pictures in it and nothing said. The default used to be 0x00ffffff,
+    // white at alpha zero, which is why an SRT muxed from a hand written meta file produced an
+    // empty subtitle stream on Windows while the same file rendered on Linux, where FreeType takes
+    // the glyph's own coverage as the alpha instead. The window was never affected because it
+    // always writes a font-color of its own.
+    //
+    // Two places already force the alpha opaque when a colour IS supplied without one,
+    // metaDemuxer.cpp and textSubtitlesRender.cpp, so the intent was settled long ago; only the
+    // default never passed through either of them.
+    Font() : m_size(18), m_opts(0), m_borderWidth(0.0), m_charset(0), m_color(0xffffffff), m_lineSpacing(1.0) {}
     bool operator!=(const Font& other) const
     {
         return m_name != other.m_name || m_size != other.m_size || m_opts != other.m_opts ||
