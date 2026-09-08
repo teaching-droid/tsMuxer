@@ -93,6 +93,7 @@ class MuxerManager final
 
    private:
     void preinitMux(const std::string& outFileName, FileFactory* fileFactory);
+    void writeChapterFile(const std::string& outDirName);
     std::unique_ptr<AbstractMuxer> createMuxer();
     void asyncWriteBlock(const WriterData& data) const;
     void checkTrackList(const std::vector<StreamInfo>& ci) const;

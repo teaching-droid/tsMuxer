@@ -285,6 +285,45 @@ void MuxerManager::checkTrackList(const vector<StreamInfo>& ci) const
               "Fatal error: MVC depended view track can't be muxed without AVC base view track")
 }
 
+// A demux already puts a track's language and its delay into the file name. The same request asked
+// for the chapters as well, and those cannot go in a file name, so they go in a text file beside
+// the tracks.
+//
+// One time per line, hh:mm:ss.mmm. That is deliberately the form --custom-chapters accepts and the
+// form the window's chapter box holds, so the file can be pasted straight back in and the marks
+// rebuilt on a new disc without anyone retyping them.
+//
+// The list itself is not new: METADemuxer::getChapters() already walks a playlist's marks, adding
+// each play item's own span as it goes, and falls back to the chapter list of a container such as
+// Matroska. The mux path has used it for a while; nothing asked for it on a demux until now.
+//
+// A source with no chapters writes no file rather than an empty one, and a file that cannot be
+// opened is a warning and not a failure: the tracks are the point of the run and they are already
+// on disk by then.
+void MuxerManager::writeChapterFile(const std::string& outDirName)
+{
+    const std::vector<AVChapter> chapters = m_metaDemuxer.getChapters();
+    if (chapters.empty())
+        return;
+
+    const std::string fileName = closeDirPath(toNativeSeparators(outDirName)) + "chapters.txt";
+    TextFile file;
+    if (!file.open(fileName.c_str(), File::ofWrite))
+    {
+        LTRACE(LT_WARN, 2, "Warning: can't write the chapter list to " << fileName);
+        return;
+    }
+    for (const auto& chapter : chapters)
+        if (!file.writeLine(floatToTime(static_cast<double>(chapter.start) / 1e9)))
+        {
+            LTRACE(LT_WARN, 2, "Warning: can't write the chapter list to " << fileName);
+            file.close();
+            return;
+        }
+    file.close();
+    LTRACE(LT_INFO, 2, "Chapters written to " << fileName << ", " << chapters.size() << " of them");
+}
+
 void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
 {
     // Both cut values are positions from the start of the source, so an end at or before the
@@ -303,6 +342,9 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     m_discoveryData = m_metaDemuxer.discoverStreams();
 
     preinitMux(outFileName, fileFactory);
+
+    if (m_demuxMode)
+        writeChapterFile(outFileName);
 
     m_fileWriter = std::make_unique<BufferedFileWriter>();
     AVPacket avPacket;
