@@ -2582,6 +2582,16 @@ void TsMuxerWindow::onAudioSubtitlesParamsChanged()
     ui->trackLV->item(ui->trackLV->currentRow(), 3)->setText(codecInfo->lang);
     colorizeCurrentRow(codecInfo);
 
+    // The two default track entries are built once, when the track is added, and carry the
+    // language as it stood then. A track read out of a container arrives with one and looks
+    // right; a subtitle file carries none, so its entry was made without one and kept saying
+    // nothing however often the language was changed afterwards. The same staleness could show
+    // an out of date language rather than none at all. Rebuilding the texts costs two loops
+    // over a handful of items, and setItemText leaves the current index alone, so nothing else
+    // is disturbed.
+    updateTracksComboBox(ui->defaultAudioTrackComboBox);
+    updateTracksComboBox(ui->defaultSubTrackComboBox);
+
     updateMetaLines();
 }
 
