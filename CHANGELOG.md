@@ -2,7 +2,7 @@
 
 Back at the machine, so this is the first release since 2.18.14. Thank you to everyone who posted while I was away; I have read all of it.
 
-Nine changes: three faults, and six things asked for on the tracker.
+Ten changes: three faults, and seven things asked for on the tracker.
 
 ## Fixed
 
@@ -13,6 +13,8 @@ Nine changes: three faults, and six things asked for on the tracker.
 * **Fonts outside one folder, and every .otf and .ttc, could not be used on Linux.** The search looked in `/usr/share/fonts` only, and only for `.ttf`, so a font you installed for yourself was invisible however you installed it. It now also looks in `/usr/local/share/fonts`, `~/.fonts` and `~/.local/share/fonts`, and it accepts `.otf` and `.ttc`. Naming a font by its full path works for those too. On macOS the user's own font folder was written with a tilde, which nothing here expands, so it had never been searched at all.
 
 ## New
+
+* **You can choose which form a language code is shown in.** Twenty languages have two codes in ISO 639-2: Greek is `ell` or `gre`, German `deu` or `ger`. Discs mostly carry the first kind and eac3to reports the second, which is where the request came from. There are three choices rather than two, because wanting a disc's own codes untouched is as reasonable as wanting eac3to's: as the source says, terminological, or bibliographic. Terminological is the default and is what earlier versions did, so nothing changes unless you ask. On the command line it is `--lang-codes=`, which unlike the other options is an argument rather than a MUXOPT entry so that it also applies when listing a file. In the window it is on the General tab and is remembered. A language you type into a file name is left exactly as you typed it.
 
 * **A demux writes the chapters to a text file.** `chapters.txt` appears beside the tracks, one time per line as `hh:mm:ss.mmm`. That is the form `--custom-chapters` accepts and the form the window's chapter box holds, so the file goes straight back in and rebuilds the same marks on a new disc. A Blu-ray playlist's marks and a Matroska's own chapter list are both used, and a source with neither writes no file.
 
