@@ -1,3 +1,29 @@
+## tsMuxeR 2.18.15
+
+Back at the machine, so this is the first release since 2.18.14. Thank you to everyone who posted while I was away; I have read all of it.
+
+Eight changes: two faults, and six things asked for on the tracker.
+
+## Fixed
+
+* **A subtitle built from an SRT file came out empty on Windows.** The track appeared in the output and carried nothing, and the mux still reported success. The default subtitle colour was fully transparent, and the Windows renderer honours that, so the text was drawn invisibly and no picture was produced. Naming a colour with `font-color` avoided it, which is why the window was never affected: it always writes one. This reaches meta files written by hand and run from the command line, and it is as old as this fork. The same fault also made a demux of a subtitle on its own write a file of zero bytes.
+
+* **A status label was hard to read once the window followed a dark theme.** The window takes its colours from the system, so every label here is painted on a light background and a dark one. The message about a read-only disc folder was the one that fell below the contrast a bold label needs on a dark window. The other ten colours in that part of the window were measured and left alone.
+
+## New
+
+* **A demux writes the chapters to a text file.** `chapters.txt` appears beside the tracks, one time per line as `hh:mm:ss.mmm`. That is the form `--custom-chapters` accepts and the form the window's chapter box holds, so the file goes straight back in and rebuilds the same marks on a new disc. A Blu-ray playlist's marks and a Matroska's own chapter list are both used, and a source with neither writes no file.
+
+* **`--split-chapters` cuts the output where the chapters are.** Each file begins at a chapter. It uses the same marks as above, and `--custom-chapters` overrides them. As with splitting on size or duration, the cut happens at the first key frame at or after the mark, so it never falls in the middle of a picture. On a disc, whose marks already sit on key frames, the cut lands exactly on the mark.
+
+* **A demuxed LPCM track can be written as Wave64.** Add `w64` to the track's line in a meta file and the audio comes out as one `.w64` instead of `.wav`. A WAV header states its sizes in 32 bits, so it cannot describe a file past 4 GiB and a long track had to come out as two, each valid and with nothing lost. Wave64 is the same audio with 64 bit sizes, and tsMuxeR has always been able to read it.
+
+* **A meta file can be opened and muxed from the window.** Until now one could only be handed to the command line version. The file is loaded into the Meta file box, and that box is what the muxer is given, so everything in the file is used exactly as written. The track list is not filled in from it and will not match; Reset meta to auto-generated goes back to building the meta from the list.
+
+* **A remove all button.** It empties both lists in one step. Removing files one at a time also stopped being slow: the meta file was rebuilt after every single removal, and it is now rebuilt once, which on forty files is the difference between about five seconds and about a tenth of one.
+
+* **Tick or untick every track of a type or a language at once.** Right click a track for it. Right clicking an English audio track offers every audio track, or every English track, in one step. A track with no language of its own does not offer the language entries.
+
 ## tsMuxeR 2.18.14
 
 As I said when this fork started, it gets attention when I have free time, which comes in bursts and sometimes not at all. One of those quiet stretches begins now: I will have no access to a machine, so this is the last release until I am back. Reports are still worth posting. Nothing goes missing while I am away, and I will read all of them when I return.
