@@ -1093,7 +1093,19 @@ TsMuxerWindow::TsMuxerWindow()
             }
             else if (QStorageInfo(folder).isReadOnly())
             {
-                folderStatusLabel->setStyleSheet(QStringLiteral("color:#1565c0; font-weight:bold;"));
+                // Was #1565c0, which is fine on a light window and only 2.87 to 1 against a dark
+                // one. The window follows the system theme, so every colour here is painted on
+                // both grounds, and this was the one that fell below the 3 to 1 a bold label
+                // needs. #1978e4 is the same hue lifted until it is balanced: 3.80 light, 3.81
+                // dark.
+                //
+                // Before changing any of the others, note that NO single colour can reach 4.5 on
+                // both grounds: that needs a luminance of at most 0.154 against the light one and
+                // at least 0.240 against the dark one, and those do not overlap. At 3 to 1 the
+                // band is 0.143 to 0.257, and the rest of these already sit inside it: the grey
+                // hint 3.05 and 4.74, the red 4.77 and 3.03, the amber 3.72 and 3.89, the green
+                // 4.50 and 3.21. Only this one did not.
+                folderStatusLabel->setStyleSheet(QStringLiteral("color:#1978e4; font-weight:bold;"));
                 folderStatusLabel->setText(
                     tr("BDMV disc detected (read-only). The output ISO cannot be written to the "
                        "disc, so choose a writable output location."));
