@@ -1438,23 +1438,71 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
 // ---------------------------------------------------------------------------
 
 // A language may be written either way round: ISO 639-2 has a bibliographic code and a
-// terminological one for twenty-four languages, German being "ger" and "deu". Everything here
-// speaks the terminological form, so a bibliographic code is converted on the way in.
+// terminological one for twenty-four languages, German being "ger" and "deu".
 //
 // Three pairs were wrong until 6 September 2026: "may" gave Persian and "per" gave Malay, the two
 // being swapped, and "mol" gave "rom", which is Romany rather than Romanian.
+//
+// The last column says whether the pair is still current. Four of these codes are DEPRECATED and
+// are accepted on the way in only so that an older disc or an older meta file still reads: jaw for
+// Javanese, mol for Moldavian, scc for Serbian and scr for Croatian. Twenty pairs remain, which is
+// the number the registration authority publishes, and only those twenty may be PRODUCED. Without
+// that distinction, asking for bibliographic codes would hand people codes that were withdrawn,
+// and "ron" would come back as "mol" purely because it sits earlier in the table than "rum".
+namespace
+{
+struct LangPair
+{
+    const char* bibliographic;
+    const char* terminological;
+    bool current;
+};
+
+const LangPair LANG_PAIRS[] = {
+    {"alb", "sqi", true},  {"arm", "hye", true},  {"baq", "eus", true},  {"bur", "mya", true}, {"cze", "ces", true},
+    {"chi", "zho", true},  {"dut", "nld", true},  {"ger", "deu", true},  {"gre", "ell", true}, {"fre", "fra", true},
+    {"geo", "kat", true},  {"ice", "isl", true},  {"jaw", "jav", false}, {"mac", "mkd", true}, {"mao", "mri", true},
+    {"may", "msa", true},  {"mol", "ron", false}, {"per", "fas", true},  {"rum", "ron", true}, {"scc", "srp", false},
+    {"scr", "hrv", false}, {"slo", "slk", true},  {"tib", "bod", true},  {"wel", "cym", true},
+};
+
+LangCodeStyle g_langCodeStyle = LangCodeStyle::Terminological;
+}  // namespace
+
+void setLangCodeStyle(const LangCodeStyle style) { g_langCodeStyle = style; }
+
+LangCodeStyle getLangCodeStyle() { return g_langCodeStyle; }
+
 std::string toIso639_2T(const std::string& lang)
 {
-    static const std::pair<const char*, const char*> table[] = {
-        {"alb", "sqi"}, {"arm", "hye"}, {"baq", "eus"}, {"bur", "mya"}, {"cze", "ces"}, {"chi", "zho"},
-        {"dut", "nld"}, {"ger", "deu"}, {"gre", "ell"}, {"fre", "fra"}, {"geo", "kat"}, {"ice", "isl"},
-        {"jaw", "jav"}, {"mac", "mkd"}, {"mao", "mri"}, {"may", "msa"}, {"mol", "ron"}, {"per", "fas"},
-        {"rum", "ron"}, {"scc", "srp"}, {"scr", "hrv"}, {"slo", "slk"}, {"tib", "bod"}, {"wel", "cym"},
-    };
-    for (const auto& [bibliographic, terminological] : table)
+    for (const auto& [bibliographic, terminological, current] : LANG_PAIRS)
         if (lang == bibliographic)
             return terminological;
     return lang;
+}
+
+std::string toIso639_2B(const std::string& lang)
+{
+    for (const auto& [bibliographic, terminological, current] : LANG_PAIRS)
+        if (current && lang == terminological)
+            return bibliographic;
+    return lang;
+}
+
+// What a language read out of a source is reported as. Nothing here touches what gets WRITTEN: a
+// lang= in a meta file reaches the disc exactly as typed whatever this is set to.
+std::string applyLangCodeStyle(const std::string& lang)
+{
+    switch (g_langCodeStyle)
+    {
+    case LangCodeStyle::Source:
+        return lang;
+    case LangCodeStyle::Bibliographic:
+        return toIso639_2B(toIso639_2T(lang));
+    case LangCodeStyle::Terminological:
+    default:
+        return toIso639_2T(lang);
+    }
 }
 
 DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& readManager, const string& fileName,
@@ -1542,7 +1590,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
                 if (clpiStream != clpi.m_streamInfo.end())
                     trackRez.lang = clpiStream->second.language_code;
             }
-            trackRez.lang = toIso639_2T(trackRez.lang);
+            trackRez.lang = applyLangCodeStyle(trackRez.lang);
 
             if (dynamic_cast<TSDemuxer*>(demuxer.get()))
                 trackRez.containerStreamType = acceptedPidMap[itr.first].m_trackType;

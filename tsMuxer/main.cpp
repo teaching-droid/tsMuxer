@@ -189,7 +189,7 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                     // The playlist wins here, because it is what a player presents to the viewer
                     // and what the disc's own navigation uses. A bare .m2ts opened on its own has
                     // no playlist, so nothing changes there: the CLPI is still the only source.
-                    const std::string mplsLang = toIso639_2T(mplsStreamInfo.language_code);
+                    const std::string mplsLang = applyLangCodeStyle(mplsStreamInfo.language_code);
                     if (!mplsLang.empty() && mplsLang != "und" && mplsLang != streams[i].lang)
                     {
                         LTRACE(LT_INFO, 2,
@@ -738,6 +738,15 @@ All parameters in this group start with two dashes:
                       the end. --cut-end=30s keeps the first 30 seconds.
 --split-duration      Split the output into several files, with each of them being
                       <n> seconds long.
+--lang-codes=<form>   Which form a language READ from a source is reported in.
+                      ISO 639-2 gives twenty languages two codes: terminological
+                      is ell, deu, nld, and bibliographic is gre, ger, dut, which
+                      is what eac3to shows. Takes source, terminological or
+                      bibliographic; terminological is the default and is what
+                      earlier versions did. This changes nothing about what gets
+                      WRITTEN: a lang= reaches the disc exactly as it is typed.
+                      Unlike the options below it is a command line argument, not
+                      a MUXOPT entry, so that it also applies when listing a file.
 --split-chapters      Split the output at the chapter marks the source carries,
                       so each file begins at a chapter. Takes no value. A
                       Blu-ray playlist's marks and a Matroska's own chapter
@@ -1908,6 +1917,34 @@ int main(int argc, char** argv)
     argv = argv_vec.data();
 #endif
     LTRACE(LT_INFO, 2, "tsMuxeR version " TSMUXER_VERSION << ". github.com/teaching-droid/tsMuxer");
+
+    // Which form a language read out of a source is reported in. It has to work when LISTING a
+    // file as well as when muxing one, and listing is invoked as "tsMuxeR <file>" with no meta
+    // file to carry an option, so this is an argument rather than a MUXOPT entry.
+    //
+    // It is taken OUT of the list before anything below counts the arguments, because the modes
+    // are chosen by how many there are: two means list, three means mux.
+    for (int i = 1; i < argc;)
+    {
+        const std::string arg = argv[i];
+        if (arg.compare(0, 13, "--lang-codes=") != 0)
+        {
+            ++i;
+            continue;
+        }
+        const std::string value = arg.substr(13);
+        if (value == "source")
+            setLangCodeStyle(LangCodeStyle::Source);
+        else if (value == "bibliographic")
+            setLangCodeStyle(LangCodeStyle::Bibliographic);
+        else if (value == "terminological")
+            setLangCodeStyle(LangCodeStyle::Terminological);
+        else
+            THROW(ERR_COMMON,
+                  "Unknown --lang-codes value \"" << value << "\". It takes source, terminological or bibliographic.")
+        for (int j = i; j + 1 < argc; ++j) argv[j] = argv[j + 1];
+        --argc;
+    }
     int firstMplsOffset = 0;
     int firstM2tsOffset = 0;
     int blankNum = 1900;

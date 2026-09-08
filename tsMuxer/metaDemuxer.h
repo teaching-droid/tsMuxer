@@ -170,8 +170,22 @@ struct DetectStreamRez
 };
 
 // ISO 639-2 gives twenty-four languages two codes, a bibliographic one and a terminological one,
-// German being "ger" and "deu". This returns the terminological form, and anything else unchanged.
+// German being "ger" and "deu". eac3to reports the first, tsMuxeR has reported the second, and a
+// disc may carry either. Which one is REPORTED is the user's to choose; what gets written is not
+// affected, because a lang= in a meta file reaches the disc exactly as typed.
+enum class LangCodeStyle
+{
+    Source,          // whatever the source says, converted neither way
+    Terminological,  // ell, deu, nld. The default, and what tsMuxeR has always done
+    Bibliographic    // gre, ger, dut. What eac3to shows
+};
+
+void setLangCodeStyle(LangCodeStyle style);
+LangCodeStyle getLangCodeStyle();
+
 std::string toIso639_2T(const std::string& lang);
+std::string toIso639_2B(const std::string& lang);
+std::string applyLangCodeStyle(const std::string& lang);
 
 class METADemuxer final : public AbstractDemuxer
 {
