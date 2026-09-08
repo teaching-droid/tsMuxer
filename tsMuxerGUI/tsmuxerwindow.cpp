@@ -664,6 +664,7 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->btnBrowse, &QAbstractButton::clicked, this, &TsMuxerWindow::saveFileDialog);
     connect(ui->buttonMux, &QAbstractButton::clicked, this, &TsMuxerWindow::startMuxing);
     connect(ui->buttonSaveMeta, &QAbstractButton::clicked, this, &TsMuxerWindow::saveMetaFileBtnClick);
+    connect(ui->buttonOpenMeta, &QAbstractButton::clicked, this, &TsMuxerWindow::openMetaFileBtnClick);
     connect(ui->buttonResetMeta, &QAbstractButton::clicked, this, &TsMuxerWindow::onResetMetaBtnClick);
     connect(ui->memoMeta, &QPlainTextEdit::textChanged, this, &TsMuxerWindow::onMetaTextChanged);
     connect(ui->radioButtonOutoutInInput, &QAbstractButton::clicked, this, &TsMuxerWindow::onSavedParamChanged);
@@ -721,6 +722,12 @@ TsMuxerWindow::TsMuxerWindow()
                    "without losing it, untick its box in the list instead: that can be "
                    "undone, this cannot, and the file has to be added again to get the "
                    "track back.")));
+    ui->buttonOpenMeta->setToolTip(
+        wrapTip(tr("Load a meta file and mux from it as it stands. The text appears in the Meta "
+                   "file box below, and that box is what is handed to the muxer, so anything in "
+                   "the file is used exactly as written. The track list is not filled in from it "
+                   "and will not match: use Reset meta to auto-generated to go back to building "
+                   "the meta from the list.")));
     ui->removeAllTracksBtn->setToolTip(
         wrapTip(tr("Empty the list: every input file and every track goes, and the output name "
                    "and the track settings go back to what they are for a fresh start. Removing "
@@ -1555,6 +1562,7 @@ TsMuxerWindow::TsMuxerWindow()
             ui->groupBox_2->setVisible(!onBdmv);       // Meta file
             ui->buttonMux->setVisible(!onBdmv);        // Start muxing
             ui->buttonSaveMeta->setVisible(!onBdmv);   // Save meta file
+            ui->buttonOpenMeta->setVisible(!onBdmv);   // Open meta file
             ui->buttonResetMeta->setVisible(!onBdmv);  // Reset meta to auto-generated
         };
         connect(ui->tabWidget, &QTabWidget::currentChanged, this, [updateBottomForTab](int) { updateBottomForTab(); });
@@ -4680,6 +4688,63 @@ void TsMuxerWindow::startMuxing()
     // QCoreApplication::dir
     runInMuxMode = true;
     tsMuxerExecute(QStringList() << metaName << quoteStr(ui->outFileName->text()));
+}
+
+// A meta file could only ever be handed to the command line version, and that is what blocks the
+// other thread: somebody worked out the right setting, wrote it into a meta, and then had nowhere
+// to put it. Nothing new is needed to run one. The text in the preview IS the meta the muxer is
+// given, and typing in that box already switches the window to using it verbatim, so opening a
+// file only has to put its contents there.
+//
+// What this does NOT do is fill the track list back in from the file. The list will still show
+// whatever was there before, or nothing, while the mux runs from the text. That is why the button
+// says what it does and why "Reset meta to auto-generated" beside it is the way back.
+void TsMuxerWindow::openMetaFileBtnClick()
+{
+    if (m_fileDialogOpen)
+        return;
+
+    auto* dialog = new QFileDialog(this, tr("Open project file"), getExistingDialogDir(QString()),
+                                   tr("tsMuxeR project file (*.meta);;All files (*)"));
+    dialog->setAcceptMode(QFileDialog::AcceptOpen);
+    dialog->setFileMode(QFileDialog::ExistingFile);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    m_fileDialogOpen = true;
+    connect(dialog, &QFileDialog::finished, this, [this](int) { m_fileDialogOpen = false; });
+    connect(dialog, &QFileDialog::fileSelected, this,
+            [this](const QString& metaName)
+            {
+                if (metaName.isEmpty())
+                    return;
+                QFile file(metaName);
+                if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+                {
+                    QMessageBox msgBox(this);
+                    msgBox.setWindowTitle(tr("Can't open meta file"));
+                    msgBox.setText(tr("Can't open meta file \"%1\"").arg(metaName));
+                    msgBox.setIcon(QMessageBox::Warning);
+                    msgBox.setStandardButtons(QMessageBox::Ok);
+                    msgBox.exec();
+                    return;
+                }
+                const QString text = QString::fromUtf8(file.readAll());
+                file.close();
+                if (text.trimmed().isEmpty())
+                {
+                    QMessageBox msgBox(this);
+                    msgBox.setWindowTitle(tr("Empty file"));
+                    msgBox.setText(tr("The meta file \"%1\" is empty.").arg(metaName));
+                    msgBox.setIcon(QMessageBox::Warning);
+                    msgBox.setStandardButtons(QMessageBox::Ok);
+                    msgBox.exec();
+                    return;
+                }
+                lastInputDir = QFileInfo(metaName).absolutePath();
+                // Deliberately NOT blocking signals: the text change is what tells the window to
+                // hand this over verbatim instead of rebuilding it from the track list.
+                ui->memoMeta->setPlainText(text);
+            });
+    dialog->open();
 }
 
 void TsMuxerWindow::saveMetaFileBtnClick()

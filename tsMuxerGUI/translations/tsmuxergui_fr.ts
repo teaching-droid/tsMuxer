@@ -4137,6 +4137,41 @@ Créer l'ISO malgré tout ?</translation>
         <source>Empty the list: every input file and every track goes, and the output name and the track settings go back to what they are for a fresh start. Removing them one at a time does the same thing, only slower, because the meta file is rebuilt after each one.</source>
         <translation>Vider la liste : chaque fichier source et chaque piste disparaissent, et le nom de sortie ainsi que les réglages de piste reviennent à ce qu'ils sont au départ. Les retirer un par un fait la même chose, en plus lent, parce que le fichier meta est reconstruit après chacun d'eux.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="3001"/>
+        <source>Open meta file</source>
+        <translation>Ouvrir un fichier meta</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="725"/>
+        <source>Load a meta file and mux from it as it stands. The text appears in the Meta file box below, and that box is what is handed to the muxer, so anything in the file is used exactly as written. The track list is not filled in from it and will not match: use Reset meta to auto-generated to go back to building the meta from the list.</source>
+        <translation>Charge un fichier meta et multiplexe à partir de lui tel quel. Le texte apparaît dans le cadre Fichier meta ci-dessous, et c&apos;est ce cadre qui est remis au multiplexeur : tout ce que contient le fichier est donc utilisé exactement tel qu&apos;il est écrit. La liste des pistes n&apos;est pas remplie à partir de lui et ne correspondra pas : utilisez Réinitialiser le meta pour revenir à un meta construit depuis la liste.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4707"/>
+        <source>Open project file</source>
+        <translation>Ouvrir un fichier de projet</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4722"/>
+        <source>Can&apos;t open meta file</source>
+        <translation>Impossible d&apos;ouvrir le fichier meta</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4723"/>
+        <source>Can&apos;t open meta file &quot;%1&quot;</source>
+        <translation>Impossible d&apos;ouvrir le fichier meta &quot;%1&quot;</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4733"/>
+        <source>Empty file</source>
+        <translation>Fichier vide</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4734"/>
+        <source>The meta file &quot;%1&quot; is empty.</source>
+        <translation>Le fichier meta &quot;%1&quot; est vide.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

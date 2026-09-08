@@ -4137,6 +4137,41 @@ Build the ISO anyway?</source>
         <source>Empty the list: every input file and every track goes, and the output name and the track settings go back to what they are for a fresh start. Removing them one at a time does the same thing, only slower, because the meta file is rebuilt after each one.</source>
         <translation>リストを空にします。入力ファイルとトラックがすべて削除され、出力ファイル名とトラック設定は最初の状態に戻ります。1 つずつ削除しても結果は同じですが、削除のたびに meta ファイルが作り直されるため時間がかかります。</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="3001"/>
+        <source>Open meta file</source>
+        <translation>meta ファイルを開く</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="725"/>
+        <source>Load a meta file and mux from it as it stands. The text appears in the Meta file box below, and that box is what is handed to the muxer, so anything in the file is used exactly as written. The track list is not filled in from it and will not match: use Reset meta to auto-generated to go back to building the meta from the list.</source>
+        <translation>meta ファイルを読み込み、その内容のまま多重化します。テキストは下の meta ファイル欄に表示され、多重化に渡されるのはこの欄の内容なので、ファイルに書かれていることがそのまま使われます。トラック一覧はこのファイルからは作られないため一致しません。一覧から meta を作り直すには「meta を自動生成に戻す」を使ってください。</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4707"/>
+        <source>Open project file</source>
+        <translation>プロジェクトファイルを開く</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4722"/>
+        <source>Can&apos;t open meta file</source>
+        <translation>meta ファイルを開けません</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4723"/>
+        <source>Can&apos;t open meta file &quot;%1&quot;</source>
+        <translation>meta ファイル &quot;%1&quot; を開けません</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4733"/>
+        <source>Empty file</source>
+        <translation>空のファイル</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4734"/>
+        <source>The meta file &quot;%1&quot; is empty.</source>
+        <translation>meta ファイル &quot;%1&quot; は空です。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

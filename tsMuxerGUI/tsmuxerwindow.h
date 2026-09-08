@@ -94,6 +94,7 @@ class TsMuxerWindow : public QWidget
     void startMuxing();
     void saveMetaFileBtnClick();
     void onResetMetaBtnClick();
+    void openMetaFileBtnClick();
     void onMetaTextChanged();
     void continueAppendFile();
     void continueAddFile();

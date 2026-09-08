@@ -4137,6 +4137,41 @@ Build the ISO anyway?</source>
         <source>Empty the list: every input file and every track goes, and the output name and the track settings go back to what they are for a fresh start. Removing them one at a time does the same thing, only slower, because the meta file is rebuilt after each one.</source>
         <translation>清空列表：所有输入文件和所有轨道都会移除，输出文件名和轨道设置也会恢复到最初的状态。逐个移除的结果相同，只是更慢，因为每移除一个都会重新生成 meta 文件。</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="3001"/>
+        <source>Open meta file</source>
+        <translation>打开 meta 文件</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="725"/>
+        <source>Load a meta file and mux from it as it stands. The text appears in the Meta file box below, and that box is what is handed to the muxer, so anything in the file is used exactly as written. The track list is not filled in from it and will not match: use Reset meta to auto-generated to go back to building the meta from the list.</source>
+        <translation>载入一个 meta 文件并按其原样进行混流。文本会显示在下方的 meta 文件框中，交给混流器的正是这个框，因此文件中的内容会被原样使用。轨道列表不会据此填充，也不会与之相符：使用“重置 meta 为自动生成”即可回到由列表生成 meta。</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4707"/>
+        <source>Open project file</source>
+        <translation>打开项目文件</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4722"/>
+        <source>Can&apos;t open meta file</source>
+        <translation>无法打开 meta 文件</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4723"/>
+        <source>Can&apos;t open meta file &quot;%1&quot;</source>
+        <translation>无法打开 meta 文件 &quot;%1&quot;</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4733"/>
+        <source>Empty file</source>
+        <translation>空文件</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4734"/>
+        <source>The meta file &quot;%1&quot; is empty.</source>
+        <translation>meta 文件 &quot;%1&quot; 为空。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
