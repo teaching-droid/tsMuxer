@@ -789,6 +789,13 @@
                       </property>
                      </widget>
                     </item>
+                    <item>
+                     <widget class="QCheckBox" name="w64CheckBox">
+                      <property name="text">
+                       <string>Write as Wave64 (demux only)</string>
+                      </property>
+                     </widget>
+                    </item>
                    </layout>
                   </item>
                   <item>
@@ -3135,6 +3142,7 @@ p, li { white-space: pre-wrap; }
   <tabstop>dtsDwnConvert</tabstop>
   <tabstop>dropAc3CoreCheckBox</tabstop>
   <tabstop>splitAc3CoreCheckBox</tabstop>
+  <tabstop>w64CheckBox</tabstop>
   <tabstop>checkBoxRateLimit</tabstop>
   <tabstop>checkBoxKeepFps</tabstop>
  <tabstop>radioButtonTS</tabstop>

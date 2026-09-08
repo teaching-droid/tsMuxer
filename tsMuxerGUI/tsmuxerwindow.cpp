@@ -580,6 +580,7 @@ TsMuxerWindow::TsMuxerWindow()
             &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->splitAc3CoreCheckBox, &QCheckBox::checkStateChanged, this,
             &TsMuxerWindow::onAudioSubtitlesParamsChanged);
+    connect(ui->w64CheckBox, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->secondaryCheckBox, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->mergeAc3TrackSpinBox, spinBoxValueChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->mergeAc3FileLineEdit, &QLineEdit::textChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
@@ -724,6 +725,12 @@ TsMuxerWindow::TsMuxerWindow()
                    "without losing it, untick its box in the list instead: that can be "
                    "undone, this cannot, and the file has to be added again to get the "
                    "track back.")));
+    ui->w64CheckBox->setToolTip(
+        wrapTip(tr("Write this track as Sony Wave64 rather than as a WAV. A WAV states its sizes "
+                   "in 32 bits, so it cannot describe a file past 4 GiB and a long track has to "
+                   "come out as two, each one playable and with nothing lost. Wave64 is the same "
+                   "audio with 64 bit sizes and stays a single file. tsMuxeR reads both, and so "
+                   "does most software that handles long recordings.")));
     ui->splitByChapters->setToolTip(
         wrapTip(tr("Start a new file at every chapter. The marks come from the source: a Blu-ray "
                    "playlist's own chapters, or a Matroska's chapter list. A list typed on the "
@@ -2501,6 +2508,7 @@ void TsMuxerWindow::onAudioSubtitlesParamsChanged()
     codecInfo->dtsDownconvert = ui->dtsDwnConvert->isChecked();
     codecInfo->dropAc3Core = ui->dropAc3CoreCheckBox->isChecked();
     codecInfo->splitAc3Core = ui->splitAc3CoreCheckBox->isChecked();
+    codecInfo->w64 = ui->w64CheckBox->isChecked();
     codecInfo->isSecondary = ui->secondaryCheckBox->isChecked();
     // The two are opposite operations on the same track: one keeps the core and drops the
     // lossless part, the other drops the core and keeps it. Ticking either clears the other, and
@@ -2779,6 +2787,10 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
             // Writing three files out of one track only means anything when the output IS files.
             // In every other mode there is one output and nothing to split it into.
             ui->splitAc3CoreCheckBox->setEnabled(hasAc3Core && ui->radioButtonDemux->isChecked());
+            // Wave64 is a container for the audio written out, so like the box above it only
+            // means anything when the output IS files, and only for LPCM.
+            const bool isLpcm = codecInfo->programName == QLatin1String("A_LPCM");
+            ui->w64CheckBox->setEnabled(isLpcm && ui->radioButtonDemux->isChecked());
             ui->secondaryCheckBox->setEnabled(codecInfo->descr.contains("(DTS Express)") ||
                                               codecInfo->descr.contains("(DTS Express 24bit)") ||
                                               codecInfo->displayName == "E-AC3 (DD+)");
@@ -2792,6 +2804,7 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
             ui->secondaryCheckBox->setVisible(ui->dtsDwnConvert->isVisible());
             ui->dropAc3CoreCheckBox->setVisible(ui->dtsDwnConvert->isVisible());
             ui->splitAc3CoreCheckBox->setVisible(ui->dtsDwnConvert->isVisible());
+            ui->w64CheckBox->setVisible(isLpcm);
             const bool isTrueHd = (codecInfo->programName == "A_MLP" && codecInfo->displayName == "TRUE-HD");
             const bool showMergeTrack = (isTrueHd && codecInfo->trackID != 0);
             const bool showMergeFile = isTrueHd;
@@ -2834,6 +2847,7 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
             ui->dtsDwnConvert->setChecked(codecInfo->dtsDownconvert);
             ui->dropAc3CoreCheckBox->setChecked(codecInfo->dropAc3Core);
             ui->splitAc3CoreCheckBox->setChecked(codecInfo->splitAc3Core);
+            ui->w64CheckBox->setChecked(codecInfo->w64);
             ui->secondaryCheckBox->setChecked(codecInfo->isSecondary);
             ui->checkBoxKeepFps->setChecked(codecInfo->bindFps);
             ui->editDelay->setEnabled(!ui->radioButtonDemux->isChecked());
@@ -3747,6 +3761,8 @@ QString TsMuxerWindow::getAudioMetaInfo(QtvCodecInfo* codecInfo)
     if (codecInfo->splitAc3Core && codecInfo->programName == "A_AC3" && !codecInfo->dropAc3Core &&
         !codecInfo->dtsDownconvert)
         rezStr += ", split-ac3-core";
+    if (codecInfo->w64 && codecInfo->programName == "A_LPCM")
+        rezStr += ", w64";
     if (codecInfo->isSecondary)
         rezStr += ", secondary";
     return rezStr;
@@ -4565,6 +4581,12 @@ void TsMuxerWindow::RadioButtonMuxClick()
     if (!ui->radioButtonDemux->isChecked() && ui->splitAc3CoreCheckBox->isChecked())
         ui->splitAc3CoreCheckBox->setChecked(false);
     ui->splitAc3CoreCheckBox->setEnabled(ui->dropAc3CoreCheckBox->isEnabled() && ui->radioButtonDemux->isChecked());
+    // Same for Wave64, and for the same reason. Without this the box only followed the SELECTED
+    // TRACK, so choosing Demux after picking the track left it greyed out with nothing to say why.
+    if (!ui->radioButtonDemux->isChecked() && ui->w64CheckBox->isChecked())
+        ui->w64CheckBox->setChecked(false);
+    if (const QtvCodecInfo* info = getCurrentCodec())
+        ui->w64CheckBox->setEnabled(info->programName == QLatin1String("A_LPCM") && ui->radioButtonDemux->isChecked());
     outFileNameDisableChange = true;
     if (ui->radioButtonBluRay->isChecked() || ui->radioButtonDemux->isChecked() || ui->radioButtonAVCHD->isChecked())
     {

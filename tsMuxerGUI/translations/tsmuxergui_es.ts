@@ -4203,6 +4203,16 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>Start a new file at every chapter. The marks come from the source: a Blu-ray playlist&apos;s own chapters, or a Matroska&apos;s chapter list. A list typed on the Blu-ray tab overrides them. A file always begins at a key frame, so a split lands on the first one at or after the mark; on a disc, whose marks already sit on key frames, that is the mark itself.</source>
         <translation>Empieza un archivo nuevo en cada capítulo. Las marcas vienen de la fuente: los capítulos de una lista de reproducción Blu-ray o la lista de capítulos de un Matroska. Una lista escrita en la pestaña Blu-ray tiene prioridad. Un archivo siempre empieza en un fotograma clave, así que el corte cae en el primero que haya en la marca o después de ella; en un disco, cuyas marcas ya están en fotogramas clave, es la marca misma.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="793"/>
+        <source>Write as Wave64 (demux only)</source>
+        <translation>Escribir como Wave64 (solo demux)</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="726"/>
+        <source>Write this track as Sony Wave64 rather than as a WAV. A WAV states its sizes in 32 bits, so it cannot describe a file past 4 GiB and a long track has to come out as two, each one playable and with nothing lost. Wave64 is the same audio with 64 bit sizes and stays a single file. tsMuxeR reads both, and so does most software that handles long recordings.</source>
+        <translation>Escribe esta pista como Sony Wave64 en lugar de WAV. Un WAV indica sus tamaños en 32 bits, así que no puede describir un archivo de más de 4 GiB y una pista larga tiene que salir como dos, cada una reproducible y sin pérdida. Wave64 es el mismo audio con tamaños de 64 bits y se queda en un solo archivo. tsMuxeR lee ambos, y también la mayoría del software que maneja grabaciones largas.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

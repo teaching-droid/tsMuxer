@@ -26,6 +26,10 @@ struct QtvCodecInfo
     // For the same track, on a demux only: adds split-ac3-core, which writes the pair, the
     // lossless part and the core as three files in one pass instead of three runs.
     bool splitAc3Core = false;
+
+    // On a demux only, and only for LPCM: write the audio as Sony Wave64 instead of RIFF
+    // WAVE, which has no 4 GiB ceiling so a long track stays one file.
+    bool w64 = false;
     bool isSecondary = false;
     // For A_MLP (TrueHD) only: when set (>0), adds merge-ac3-track=<n> to the meta line
     // to interleave a separate AC-3 compatibility track from the same MKV.

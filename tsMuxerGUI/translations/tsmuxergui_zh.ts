@@ -4202,6 +4202,16 @@ Build the ISO anyway?</source>
         <source>Start a new file at every chapter. The marks come from the source: a Blu-ray playlist&apos;s own chapters, or a Matroska&apos;s chapter list. A list typed on the Blu-ray tab overrides them. A file always begins at a key frame, so a split lands on the first one at or after the mark; on a disc, whose marks already sit on key frames, that is the mark itself.</source>
         <translation>在每个章节开始一个新文件。位置来自源文件：Blu-ray 播放列表自身的章节，或 Matroska 的章节列表。在 Blu-ray 选项卡中输入的列表优先。文件总是从关键帧开始，因此分割点落在该位置或其之后的第一个关键帧上；对于光盘，其位置本来就在关键帧上，也就是该位置本身。</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="793"/>
+        <source>Write as Wave64 (demux only)</source>
+        <translation>写为 Wave64 (仅用于解复用)</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="726"/>
+        <source>Write this track as Sony Wave64 rather than as a WAV. A WAV states its sizes in 32 bits, so it cannot describe a file past 4 GiB and a long track has to come out as two, each one playable and with nothing lost. Wave64 is the same audio with 64 bit sizes and stays a single file. tsMuxeR reads both, and so does most software that handles long recordings.</source>
+        <translation>将该轨道写为 Sony Wave64 而不是 WAV。WAV 用 32 位记录大小，因此无法描述超过 4 GiB 的文件，较长的轨道只能输出为两个文件，每个都可播放且没有任何丢失。Wave64 是同样的音频，只是大小改用 64 位，可以保持为一个文件。tsMuxeR 两者都能读取，处理长录音的大多数软件也是如此。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -4202,6 +4202,16 @@ Créer l'ISO malgré tout ?</translation>
         <source>Start a new file at every chapter. The marks come from the source: a Blu-ray playlist&apos;s own chapters, or a Matroska&apos;s chapter list. A list typed on the Blu-ray tab overrides them. A file always begins at a key frame, so a split lands on the first one at or after the mark; on a disc, whose marks already sit on key frames, that is the mark itself.</source>
         <translation>Commence un nouveau fichier à chaque chapitre. Les marques viennent de la source : les chapitres d&apos;une liste de lecture Blu-ray, ou la liste de chapitres d&apos;un Matroska. Une liste saisie dans l&apos;onglet Blu-ray a la priorité. Un fichier commence toujours sur une image clé, la coupure tombe donc sur la première située à la marque ou après elle ; sur un disque, dont les marques sont déjà sur des images clés, c&apos;est la marque elle-même.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="793"/>
+        <source>Write as Wave64 (demux only)</source>
+        <translation>Écrire en Wave64 (démux seulement)</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="726"/>
+        <source>Write this track as Sony Wave64 rather than as a WAV. A WAV states its sizes in 32 bits, so it cannot describe a file past 4 GiB and a long track has to come out as two, each one playable and with nothing lost. Wave64 is the same audio with 64 bit sizes and stays a single file. tsMuxeR reads both, and so does most software that handles long recordings.</source>
+        <translation>Écrit cette piste en Sony Wave64 plutôt qu&apos;en WAV. Un WAV indique ses tailles sur 32 bits : il ne peut donc pas décrire un fichier au-delà de 4 Gio, et une piste longue doit sortir en deux fichiers, chacun lisible et sans perte. Wave64 est le même audio avec des tailles sur 64 bits et reste un seul fichier. tsMuxeR lit les deux, comme la plupart des logiciels qui traitent de longs enregistrements.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
