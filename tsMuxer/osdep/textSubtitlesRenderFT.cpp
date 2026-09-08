@@ -84,18 +84,47 @@ TextSubtitlesRenderFT::TextSubtitlesRenderFT() : TextSubtitlesRender()
     italic_bold_matrix.yy = 1 * 0x10000L;
 }
 
+// Every place a font can be installed, and every extension one can arrive in.
+//
+// Only FONT_ROOT was searched before, and only for *.ttf, so a font a user installed for
+// themselves was invisible however they installed it, and so was every .otf and .ttc wherever it
+// sat. On a plain Ubuntu that is the difference between the thirty faces the distribution ships
+// and everything the user has added since.
+//
+// A tilde is not a path. The macOS entry here was written as "~/Library/Fonts/" and no part of
+// this code expands one, so that folder has never been searched at all; HOME is read instead.
+std::vector<std::string> TextSubtitlesRenderFT::fontFolders()
+{
+    std::vector<std::string> folders{FONT_ROOT};
+    const char* home = getenv("HOME");
+#if defined(__APPLE__) && defined(__MACH__)
+    folders.emplace_back("/Library/Fonts/");
+    if (home)
+        folders.emplace_back(std::string(home) + "/Library/Fonts/");
+#elif !defined(_WIN32)
+    folders.emplace_back("/usr/local/share/fonts/");
+    if (home)
+    {
+        folders.emplace_back(std::string(home) + "/.fonts/");
+        folders.emplace_back(std::string(home) + "/.local/share/fonts/");
+    }
+#endif
+    return folders;
+}
+
 void TextSubtitlesRenderFT::loadFontMap()
 {
     vector<string> fileList;
-    // sort(fileList.begin(), fileList.end());
-    findFilesRecursive(FONT_ROOT, "*.ttf", &fileList);
-#if defined(__APPLE__) && defined(__MACH__)
-    vector<string> fileList1;
-    findFilesRecursive("/Library/Fonts/", "*.ttf", &fileList1);
-    fileList.insert(fileList.end(), fileList1.begin(), fileList1.end());
-    findFilesRecursive("~/Library/Fonts/", "*.ttf", &fileList1);
-    fileList.insert(fileList.end(), fileList1.begin(), fileList1.end());
-#endif
+    // A .ttc holds several faces and only the first is taken, which is what happens for a .ttf
+    // with more than one face too. Better than the file being invisible.
+    static const char* masks[] = {"*.ttf", "*.otf", "*.ttc"};
+    for (const auto& folder : fontFolders())
+        for (const char* mask : masks)
+        {
+            vector<string> found;
+            findFilesRecursive(folder.c_str(), mask, &found);
+            fileList.insert(fileList.end(), found.begin(), found.end());
+        }
 
     for (auto& fontFile : fileList)
     {
@@ -222,14 +251,19 @@ void TextSubtitlesRenderFT::setFont(const Font& font)
     {
         m_font = font;
         string fontName = font.m_name;
-        if (!strEndWith(fontName, string(".ttf")))
+        // A name that ends in a font file's extension is a path and is used as it stands;
+        // anything else is a family name and is looked up. The test used to be ".ttf" alone and
+        // case sensitive, so a path ending .otf, .ttc or .TTF was taken for a family name and
+        // reported missing.
+        const std::string fontLower = strToLowerCase(fontName);
+        if (!strEndWith(fontLower, string(".ttf")) && !strEndWith(fontLower, string(".otf")) &&
+            !strEndWith(fontLower, string(".ttc")))
         {
-            std::string fontLower = strToLowerCase(fontName);
             auto itr = m_fontNameToFile.find(fontLower);
             if (itr != m_fontNameToFile.end())
                 fontName = itr->second;
             else
-                THROW(ERR_COMMON, "Can't find ttf file for font " << fontName)
+                THROW(ERR_COMMON, "Can't find a font file for " << fontName)
         }
         string fileExt = extractFileExt(fontName);
         if (fileExt.length() > 0)

@@ -4,6 +4,7 @@
 #include <ft2build.h>
 
 #include <map>
+#include <vector>
 
 #include "../textSubtitlesRender.h"
 
@@ -41,6 +42,7 @@ class TextSubtitlesRenderFT final : public TextSubtitlesRender
                                      bool isItalic);
     int loadFont(const std::string& fontName, FT_Face& face);
     static void loadFontMap();
+    static std::vector<std::string> fontFolders();
 
     std::map<std::string, FT_Face> m_fontMap;
 };
