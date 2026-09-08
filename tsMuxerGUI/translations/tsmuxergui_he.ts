@@ -4192,6 +4192,16 @@ Build the ISO anyway?</source>
         <source>Uncheck all tracks in this language</source>
         <translation>לבטל את הסימון של כל הרצועות בשפה זו</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1931"/>
+        <source>Split at chapters</source>
+        <translation>פיצול לפי פרקים</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="726"/>
+        <source>Start a new file at every chapter. The marks come from the source: a Blu-ray playlist&apos;s own chapters, or a Matroska&apos;s chapter list. A list typed on the Blu-ray tab overrides them. A file always begins at a key frame, so a split lands on the first one at or after the mark; on a disc, whose marks already sit on key frames, that is the mark itself.</source>
+        <translation>מתחיל קובץ חדש בכל פרק. הסימונים מגיעים מהמקור: הפרקים של רשימת השמעה של Blu-ray, או רשימת הפרקים של Matroska. רשימה שהוקלדה בלשונית Blu-ray גוברת עליהם. קובץ תמיד מתחיל בפריים מפתח, ולכן הפיצול נופל על הפריים הראשון בסימון או אחריו; בדיסק, שבו הסימונים כבר נמצאים על פריימי מפתח, זהו הסימון עצמו.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

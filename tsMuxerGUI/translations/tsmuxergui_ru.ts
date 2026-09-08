@@ -4193,6 +4193,16 @@ Build the ISO anyway?</source>
         <source>Uncheck all tracks in this language</source>
         <translation>Снять отметку со всех дорожек на этом языке</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1931"/>
+        <source>Split at chapters</source>
+        <translation>Делить по главам</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="726"/>
+        <source>Start a new file at every chapter. The marks come from the source: a Blu-ray playlist&apos;s own chapters, or a Matroska&apos;s chapter list. A list typed on the Blu-ray tab overrides them. A file always begins at a key frame, so a split lands on the first one at or after the mark; on a disc, whose marks already sit on key frames, that is the mark itself.</source>
+        <translation>Начинает новый файл на каждой главе. Метки берутся из источника: из глав плейлиста Blu-ray или из списка глав Matroska. Список, введённый на вкладке Blu-ray, имеет приоритет. Файл всегда начинается с ключевого кадра, поэтому разрез приходится на первый ключевой кадр на метке или после неё; на диске, где метки и так стоят на ключевых кадрах, это сама метка.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

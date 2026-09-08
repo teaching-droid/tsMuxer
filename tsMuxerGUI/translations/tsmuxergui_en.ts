@@ -4080,6 +4080,16 @@ Build the ISO anyway?</source>
         <source>Uncheck all tracks in this language</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1931"/>
+        <source>Split at chapters</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="726"/>
+        <source>Start a new file at every chapter. The marks come from the source: a Blu-ray playlist&apos;s own chapters, or a Matroska&apos;s chapter list. A list typed on the Blu-ray tab overrides them. A file always begins at a key frame, so a split lands on the first one at or after the mark; on a disc, whose marks already sit on key frames, that is the mark itself.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

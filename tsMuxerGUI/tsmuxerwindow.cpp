@@ -643,6 +643,7 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->noSplit, &QAbstractButton::clicked, this, &TsMuxerWindow::onSplitCutParamsChanged);
     connect(ui->splitByDuration, &QAbstractButton::clicked, this, &TsMuxerWindow::onSplitCutParamsChanged);
     connect(ui->splitBySize, &QAbstractButton::clicked, this, &TsMuxerWindow::onSplitCutParamsChanged);
+    connect(ui->splitByChapters, &QAbstractButton::clicked, this, &TsMuxerWindow::onSplitCutParamsChanged);
     connect(ui->spinEditSplitDuration, spinBoxValueChanged, this, &TsMuxerWindow::onSplitCutParamsChanged);
     connect(ui->editSplitSize, doubleSpinBoxValueChanged, this, &TsMuxerWindow::onSplitCutParamsChanged);
     connect(ui->comboBoxMeasure, comboBoxIndexChanged, this, &TsMuxerWindow::onSplitCutParamsChanged);
@@ -723,6 +724,12 @@ TsMuxerWindow::TsMuxerWindow()
                    "without losing it, untick its box in the list instead: that can be "
                    "undone, this cannot, and the file has to be added again to get the "
                    "track back.")));
+    ui->splitByChapters->setToolTip(
+        wrapTip(tr("Start a new file at every chapter. The marks come from the source: a Blu-ray "
+                   "playlist's own chapters, or a Matroska's chapter list. A list typed on the "
+                   "Blu-ray tab overrides them. A file always begins at a key frame, so a split "
+                   "lands on the first one at or after the mark; on a disc, whose marks already "
+                   "sit on key frames, that is the mark itself.")));
     ui->buttonOpenMeta->setToolTip(
         wrapTip(tr("Load a meta file and mux from it as it stands. The text appears in the Meta "
                    "file box below, and that box is what is handed to the muxer, so anything in "
@@ -3514,6 +3521,10 @@ QString TsMuxerWindow::getMuxOpts()
         if (ui->splitBySize->isChecked())
             rez += QString(" --split-size=") + QString::number(ui->editSplitSize->value(), 'f', 3) +
                    ui->comboBoxMeasure->currentData().toString();
+        // Takes no value: the marks come from the source, or from the chapter list on the
+        // Blu-ray tab, which is already written into the meta as --custom-chapters.
+        if (ui->splitByChapters->isChecked())
+            rez += QString(" --split-chapters");
     }
 
     int startCut = qTimeToMsec(ui->cutStartTimeEdit->time());
@@ -4107,6 +4118,7 @@ void TsMuxerWindow::onSplitCutParamsChanged()
     const bool canSplit = outputCanSplit();
     ui->splitByDuration->setEnabled(canSplit);
     ui->splitBySize->setEnabled(canSplit);
+    ui->splitByChapters->setEnabled(canSplit);
     ui->spinEditSplitDuration->setEnabled(canSplit && ui->splitByDuration->isChecked());
     ui->labelSplitByDur->setEnabled(canSplit && ui->splitByDuration->isChecked());
     ui->editSplitSize->setEnabled(canSplit && ui->splitBySize->isChecked());

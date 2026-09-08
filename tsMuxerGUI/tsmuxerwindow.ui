@@ -1926,6 +1926,13 @@
                </item>
               </widget>
              </item>
+             <item row="3" column="0">
+              <widget class="QRadioButton" name="splitByChapters">
+               <property name="text">
+                <string>Split at chapters</string>
+               </property>
+              </widget>
+             </item>
             </layout>
            </item>
            <item>
@@ -3154,6 +3161,7 @@ p, li { white-space: pre-wrap; }
   <tabstop>splitByDuration</tabstop>
   <tabstop>spinEditSplitDuration</tabstop>
   <tabstop>splitBySize</tabstop>
+  <tabstop>splitByChapters</tabstop>
   <tabstop>editSplitSize</tabstop>
   <tabstop>comboBoxMeasure</tabstop>
   <tabstop>checkBoxCut</tabstop>

@@ -4192,6 +4192,16 @@ Build the ISO anyway?</source>
         <source>Uncheck all tracks in this language</source>
         <translation>取消选中所有此语言的轨道</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1931"/>
+        <source>Split at chapters</source>
+        <translation>按章节分割</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="726"/>
+        <source>Start a new file at every chapter. The marks come from the source: a Blu-ray playlist&apos;s own chapters, or a Matroska&apos;s chapter list. A list typed on the Blu-ray tab overrides them. A file always begins at a key frame, so a split lands on the first one at or after the mark; on a disc, whose marks already sit on key frames, that is the mark itself.</source>
+        <translation>在每个章节开始一个新文件。位置来自源文件：Blu-ray 播放列表自身的章节，或 Matroska 的章节列表。在 Blu-ray 选项卡中输入的列表优先。文件总是从关键帧开始，因此分割点落在该位置或其之后的第一个关键帧上；对于光盘，其位置本来就在关键帧上，也就是该位置本身。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -4193,6 +4193,16 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>Uncheck all tracks in this language</source>
         <translation>Desmarcar todas las pistas en este idioma</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1931"/>
+        <source>Split at chapters</source>
+        <translation>Dividir en los capítulos</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="726"/>
+        <source>Start a new file at every chapter. The marks come from the source: a Blu-ray playlist&apos;s own chapters, or a Matroska&apos;s chapter list. A list typed on the Blu-ray tab overrides them. A file always begins at a key frame, so a split lands on the first one at or after the mark; on a disc, whose marks already sit on key frames, that is the mark itself.</source>
+        <translation>Empieza un archivo nuevo en cada capítulo. Las marcas vienen de la fuente: los capítulos de una lista de reproducción Blu-ray o la lista de capítulos de un Matroska. Una lista escrita en la pestaña Blu-ray tiene prioridad. Un archivo siempre empieza en un fotograma clave, así que el corte cae en el primero que haya en la marca o después de ella; en un disco, cuyas marcas ya están en fotogramas clave, es la marca misma.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -4192,6 +4192,16 @@ Créer l'ISO malgré tout ?</translation>
         <source>Uncheck all tracks in this language</source>
         <translation>Décocher toutes les pistes dans cette langue</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1931"/>
+        <source>Split at chapters</source>
+        <translation>Découper aux chapitres</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="726"/>
+        <source>Start a new file at every chapter. The marks come from the source: a Blu-ray playlist&apos;s own chapters, or a Matroska&apos;s chapter list. A list typed on the Blu-ray tab overrides them. A file always begins at a key frame, so a split lands on the first one at or after the mark; on a disc, whose marks already sit on key frames, that is the mark itself.</source>
+        <translation>Commence un nouveau fichier à chaque chapitre. Les marques viennent de la source : les chapitres d&apos;une liste de lecture Blu-ray, ou la liste de chapitres d&apos;un Matroska. Une liste saisie dans l&apos;onglet Blu-ray a la priorité. Un fichier commence toujours sur une image clé, la coupure tombe donc sur la première située à la marque ou après elle ; sur un disque, dont les marques sont déjà sur des images clés, c&apos;est la marque elle-même.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
