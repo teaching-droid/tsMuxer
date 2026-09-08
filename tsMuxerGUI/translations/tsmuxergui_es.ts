@@ -4128,6 +4128,16 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>A Blu-ray drive only has to supply 48 Mbit/s, and a UHD drive 109. Muxing can ask for more than that in bursts, even from a source that was itself a disc, and such an image plays from a hard disk but may stutter or refuse to start on a standalone player. This paces the disc to the limit, which is what a Blu-ray is authored to. Turn it off only if you know you want the image faster than a player can read.</source>
         <translation>Una unidad Blu-ray solo tiene que suministrar 48 Mbit/s, y una unidad UHD 109. La multiplexación puede pedir más que eso a ráfagas, incluso a partir de una fuente que era ella misma un disco, y una imagen así se reproduce desde el disco duro pero puede entrecortarse o no arrancar en un reproductor de sobremesa. Esto limita el disco a la velocidad para la que se crea un Blu-ray. Desactívelo solo si quiere a propósito la imagen más rápida de lo que un reproductor puede leer.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="278"/>
+        <source>remove all</source>
+        <translation>Eliminar todo</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="723"/>
+        <source>Empty the list: every input file and every track goes, and the output name and the track settings go back to what they are for a fresh start. Removing them one at a time does the same thing, only slower, because the meta file is rebuilt after each one.</source>
+        <translation>Vaciar la lista: se quitan todos los archivos de entrada y todas las pistas, y el nombre de salida y los ajustes de pista vuelven a como están al empezar. Quitarlos de uno en uno hace lo mismo, solo que más lento, porque el archivo meta se reconstruye después de cada uno.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

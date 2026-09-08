@@ -84,6 +84,8 @@ class TsMuxerWindow : public QWidget
     void onRemoveBtnClick();
     void onAppendButtonClick();
     void onRemoveTrackButtonClick();
+    void onRemoveAllTracksButtonClick();
+    void updateRemoveAllEnabled();
     void onMoveUpButtonCLick();
     void onMoveDownButtonCLick();
     void RadioButtonMuxClick();

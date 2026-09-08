@@ -274,6 +274,16 @@
                  </widget>
                 </item>
                 <item>
+                 <widget class="QPushButton" name="removeAllTracksBtn">
+                  <property name="enabled">
+                   <bool>false</bool>
+                  </property>
+                  <property name="text">
+                   <string>remove all</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
                  <spacer name="verticalSpacer_4">
                   <property name="orientation">
                    <enum>Qt::Vertical</enum>
@@ -3079,6 +3089,7 @@ p, li { white-space: pre-wrap; }
   <tabstop>moveupBtn</tabstop>
   <tabstop>movedownBtn</tabstop>
   <tabstop>removeTrackBtn</tabstop>
+  <tabstop>removeAllTracksBtn</tabstop>
   <tabstop>tabWidgetTracks</tabstop>
   <tabstop>checkFPS</tabstop>
   <tabstop>checkBoxLevel</tabstop>

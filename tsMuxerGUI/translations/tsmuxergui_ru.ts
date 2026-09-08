@@ -4128,6 +4128,16 @@ Build the ISO anyway?</source>
         <source>A Blu-ray drive only has to supply 48 Mbit/s, and a UHD drive 109. Muxing can ask for more than that in bursts, even from a source that was itself a disc, and such an image plays from a hard disk but may stutter or refuse to start on a standalone player. This paces the disc to the limit, which is what a Blu-ray is authored to. Turn it off only if you know you want the image faster than a player can read.</source>
         <translation>Привод Блюрей обязан выдавать лишь 48 Мбит/с, а привод UHD 109. Мультиплексирование может запросить больше всплесками, даже из источника, который сам был диском, и такой образ воспроизводится с жёсткого диска, но может подтормаживать или не запуститься на отдельном проигрывателе. Это ограничивает диск той скоростью, под которую создаётся Блюрей. Отключайте только если осознанно хотите образ быстрее, чем может прочитать проигрыватель.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="278"/>
+        <source>remove all</source>
+        <translation>удалить все</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="723"/>
+        <source>Empty the list: every input file and every track goes, and the output name and the track settings go back to what they are for a fresh start. Removing them one at a time does the same thing, only slower, because the meta file is rebuilt after each one.</source>
+        <translation>Очистить список: удаляются все исходные файлы и все дорожки, а имя выходного файла и настройки дорожек возвращаются к исходным. Удаление по одному даёт тот же результат, но медленнее, потому что meta-файл перестраивается после каждого удаления.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

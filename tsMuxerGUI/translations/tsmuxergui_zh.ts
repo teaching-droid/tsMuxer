@@ -4127,6 +4127,16 @@ Build the ISO anyway?</source>
         <source>A Blu-ray drive only has to supply 48 Mbit/s, and a UHD drive 109. Muxing can ask for more than that in bursts, even from a source that was itself a disc, and such an image plays from a hard disk but may stutter or refuse to start on a standalone player. This paces the disc to the limit, which is what a Blu-ray is authored to. Turn it off only if you know you want the image faster than a player can read.</source>
         <translation>蓝光驱动器只需提供 48 Mbit/s，UHD 驱动器为 109。合并时可能会突发式地要求更高速率，即使源本身就是光盘也一样，这样的镜像在硬盘上可以播放，但在独立播放器上可能卡顿或无法启动。此选项将光盘限制在蓝光制作所用的速率。只有当您确实希望镜像快于播放器可读取的速度时才关闭它。</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="278"/>
+        <source>remove all</source>
+        <translation>全部移除</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="723"/>
+        <source>Empty the list: every input file and every track goes, and the output name and the track settings go back to what they are for a fresh start. Removing them one at a time does the same thing, only slower, because the meta file is rebuilt after each one.</source>
+        <translation>清空列表：所有输入文件和所有轨道都会移除，输出文件名和轨道设置也会恢复到最初的状态。逐个移除的结果相同，只是更慢，因为每移除一个都会重新生成 meta 文件。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

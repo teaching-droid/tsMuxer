@@ -4131,6 +4131,16 @@ ISO trotzdem erstellen?</translation>
         <source>A Blu-ray drive only has to supply 48 Mbit/s, and a UHD drive 109. Muxing can ask for more than that in bursts, even from a source that was itself a disc, and such an image plays from a hard disk but may stutter or refuse to start on a standalone player. This paces the disc to the limit, which is what a Blu-ray is authored to. Turn it off only if you know you want the image faster than a player can read.</source>
         <translation>Ein Blu-ray-Laufwerk muss nur 48 Mbit/s liefern, ein UHD-Laufwerk 109. Das Muxen kann stoßweise mehr anfordern, selbst bei einer Quelle, die selbst eine Disc war, und ein solches Abbild läuft von der Festplatte, kann aber an einem Standalone-Player stocken oder gar nicht starten. Dies begrenzt die Disc auf die Rate, auf die eine Blu-ray gemastert wird. Nur abschalten, wenn das Abbild bewusst schneller sein soll, als ein Player lesen kann.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="278"/>
+        <source>remove all</source>
+        <translation>alle entfernen</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="723"/>
+        <source>Empty the list: every input file and every track goes, and the output name and the track settings go back to what they are for a fresh start. Removing them one at a time does the same thing, only slower, because the meta file is rebuilt after each one.</source>
+        <translation>Die Liste leeren: jede Eingabedatei und jede Spur wird entfernt, und der Name der Ausgabedatei sowie die Spureinstellungen stehen wieder so, wie sie am Anfang stehen. Einzeln zu entfernen bewirkt dasselbe, dauert aber länger, weil die Meta-Datei nach jedem Schritt neu aufgebaut wird.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

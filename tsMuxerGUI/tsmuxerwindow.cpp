@@ -555,6 +555,7 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->btnAppend, &QPushButton::clicked, this, &TsMuxerWindow::onAppendButtonClick);
     connect(ui->removeFile, &QPushButton::clicked, this, &TsMuxerWindow::onRemoveBtnClick);
     connect(ui->removeTrackBtn, &QPushButton::clicked, this, &TsMuxerWindow::onRemoveTrackButtonClick);
+    connect(ui->removeAllTracksBtn, &QPushButton::clicked, this, &TsMuxerWindow::onRemoveAllTracksButtonClick);
     connect(ui->moveupBtn, &QPushButton::clicked, this, &TsMuxerWindow::onMoveUpButtonCLick);
     connect(ui->movedownBtn, &QPushButton::clicked, this, &TsMuxerWindow::onMoveDownButtonCLick);
     connect(ui->checkFPS, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onVideoCheckBoxChanged);
@@ -720,6 +721,11 @@ TsMuxerWindow::TsMuxerWindow()
                    "without losing it, untick its box in the list instead: that can be "
                    "undone, this cannot, and the file has to be added again to get the "
                    "track back.")));
+    ui->removeAllTracksBtn->setToolTip(
+        wrapTip(tr("Empty the list: every input file and every track goes, and the output name "
+                   "and the track settings go back to what they are for a fresh start. Removing "
+                   "them one at a time does the same thing, only slower, because the meta file "
+                   "is rebuilt after each one.")));
 
     ui->DiskLabel->setVisible(false);
     ui->DiskLabelEdit->setVisible(false);
@@ -2820,6 +2826,7 @@ void TsMuxerWindow::trackLVItemChanged(QTableWidgetItem* item)
     ui->moveupBtn->setEnabled(ui->trackLV->currentItem() != 0);
     ui->movedownBtn->setEnabled(ui->trackLV->currentItem() != 0);
     ui->removeTrackBtn->setEnabled(ui->trackLV->currentItem() != 0);
+    updateRemoveAllEnabled();
     if (ui->trackLV->rowCount() == 0)
         oldFileName.clear();
 
@@ -3030,6 +3037,7 @@ void TsMuxerWindow::continueAddFile()
     ui->moveupBtn->setEnabled(ui->trackLV->currentRow() >= 0);
     ui->movedownBtn->setEnabled(ui->trackLV->currentRow() >= 0);
     ui->removeTrackBtn->setEnabled(ui->trackLV->currentRow() >= 0);
+    updateRemoveAllEnabled();
     if (!outFileNameModified)
     {
         modifyOutFileName(newFileName);
@@ -4134,6 +4142,7 @@ void TsMuxerWindow::onRemoveBtnClick()
 
     if (ui->inputFilesLV->count() > 0)
         ui->inputFilesLV->setCurrentRow(idx);
+    updateRemoveAllEnabled();
     updateCustomChapters();
 }
 
@@ -4203,6 +4212,7 @@ void TsMuxerWindow::deleteTrack(int idx)
     ui->moveupBtn->setEnabled(ui->trackLV->currentItem() != 0);
     ui->movedownBtn->setEnabled(ui->trackLV->currentItem() != 0);
     ui->removeTrackBtn->setEnabled(ui->trackLV->currentItem() != 0);
+    updateRemoveAllEnabled();
     disableUpdatesCnt--;
     trackLVItemSelectionChanged();
     updateTracksComboBox(ui->defaultAudioTrackComboBox);
@@ -4290,6 +4300,45 @@ void TsMuxerWindow::onRemoveTrackButtonClick()
 {
     if (ui->trackLV->currentItem())
         deleteTrack(ui->trackLV->currentRow());
+}
+
+// "remove all" is offered whenever there is anything to remove. That is NOT the same condition as
+// "remove", which needs a track selected: an input file whose tracks have all gone one by one
+// still leaves something to clear.
+void TsMuxerWindow::updateRemoveAllEnabled()
+{
+    ui->removeAllTracksBtn->setEnabled(ui->trackLV->rowCount() > 0 || ui->inputFilesLV->count() > 0);
+}
+
+// The thread that asked for this button also reported that removing things gets slower the more
+// files there are, and the reason is in deleteTrack: every call ends with the whole refresh chain,
+// and updateMetaLines rebuilds the meta text from nothing each time. Both that and
+// trackLVItemSelectionChanged return early while disableUpdatesCnt is up, so holding it up across
+// the whole loop leaves one refresh at the end instead of one per track.
+//
+// deleteTrack is used unchanged rather than reimplemented: it is what keeps the default track
+// combo boxes, the Dolby Vision selector and the output name in step, and the last call through it
+// is the one that resets the tabs and the output name when the list empties.
+void TsMuxerWindow::onRemoveAllTracksButtonClick()
+{
+    if (ui->trackLV->rowCount() == 0 && ui->inputFilesLV->count() == 0)
+        return;
+
+    disableUpdatesCnt++;
+    for (int i = ui->trackLV->rowCount() - 1; i >= 0; --i) deleteTrack(i);
+    ui->inputFilesLV->clear();
+    lastSourceDir.clear();
+    disableUpdatesCnt--;
+
+    ui->moveupBtn->setEnabled(false);
+    ui->movedownBtn->setEnabled(false);
+    ui->removeTrackBtn->setEnabled(false);
+    updateRemoveAllEnabled();
+    updateMaxOffsets();
+    updateDvProfileVisible();
+    updateCustomChapters();
+    updateMetaLines();
+    trackLVItemSelectionChanged();
 }
 
 void TsMuxerWindow::onMoveUpButtonCLick()
