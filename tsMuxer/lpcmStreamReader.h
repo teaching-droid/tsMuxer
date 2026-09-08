@@ -32,7 +32,14 @@ class LPCMStreamReader final : public SimplePacketizerReader
         m_needPCMHdr = true;
         m_openSizeWaveFormat = false;  // WAVE data size unknown and zero
         m_lastChannelRemapPos = nullptr;
+        m_demuxToW64 = false;
     }
+    // Write the demuxed audio as Sony Wave64 instead of RIFF WAVE. A RIFF header states its sizes
+    // in 32 bits, so it cannot describe a file past 4 GiB and a long LPCM track has to be written
+    // as two. Wave64 is the same audio with 16 byte chunk ids and 64 bit sizes, and tsMuxeR has
+    // always been able to READ it.
+    void setDemuxToW64(const bool value) { m_demuxToW64 = value; }
+    [[nodiscard]] bool isDemuxToW64() const { return m_demuxToW64; }
     void setNewStyleAudioPES(const bool value) { m_useNewStyleAudioPES = value; }
     int getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdmvDescriptors) override;
     int getFreq() override { return m_freq; }
@@ -78,6 +85,7 @@ class LPCMStreamReader final : public SimplePacketizerReader
     int64_t m_curChunkLen;
     bool m_openSizeWaveFormat;
     uint8_t* m_lastChannelRemapPos;
+    bool m_demuxToW64;
 
     bool detectLPCMType(uint8_t* buffer, int64_t len);
     int decodeLPCMHeader(const uint8_t* buff);

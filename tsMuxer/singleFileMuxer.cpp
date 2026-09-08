@@ -73,7 +73,18 @@ void SingleFileMuxer::intAddStream(const std::string& streamName, const std::str
     }
     else if (codecName == "A_LPCM")
     {
-        fileExt = ".wav";
+        // A RIFF header states its sizes in 32 bits, so it cannot describe a file past 4 GiB and a
+        // long track has to come out as two, each valid and with nothing lost. Wave64 is the same
+        // audio with 16 byte chunk ids and 64 bit sizes, and tsMuxeR has always been able to READ
+        // it: this is the writing side.
+        if (params.find("w64") != params.end())
+        {
+            fileExt = ".w64";
+            if (const auto lpcmReader = dynamic_cast<LPCMStreamReader*>(codecReader))
+                lpcmReader->setDemuxToW64(true);
+        }
+        else
+            fileExt = ".wav";
     }
     else if (codecName == "A_FLAC")
     {
@@ -259,8 +270,10 @@ void SingleFileMuxer::writeOutBuffer(StreamInfo* streamInfo)
         streamInfo->m_bufLen -= toFileLen;
     }
 
+    // Wave64 has no 4 GiB ceiling, so a track written in that form is never broken into parts.
+    // This is the whole reason the option exists.
     const auto lpcmReader = dynamic_cast<LPCMStreamReader*>(streamInfo->m_codecReader);
-    if (lpcmReader && streamInfo->m_totalWrited >= 0xffff0000ul - blockSize)
+    if (lpcmReader && !lpcmReader->isDemuxToW64() && streamInfo->m_totalWrited >= 0xffff0000ul - blockSize)
     // if (lpcmReader && streamInfo->m_totalWrited >= 0x0ffffffful)
     {
         if (m_owner->isAsyncMode())

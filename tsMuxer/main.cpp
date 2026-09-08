@@ -544,6 +544,11 @@ Additional parameters for audio tracks:
                     On a demux it does the same: the file holds the lossless stream on its own and
                     is named .thd rather than .ac3+thd, which is what a decoder that cannot read
                     the disc form needs. Without it the demux is unchanged.
+- w64               On a demux only, and only for an LPCM track. Writes the audio as
+                    Sony Wave64 instead of RIFF WAVE, with the extension .w64. A RIFF
+                    header states its sizes in 32 bits, so it cannot describe a file
+                    past 4 GiB and a long track comes out as two; Wave64 is the same
+                    audio with 64 bit sizes and stays one file. tsMuxeR reads both.
 - split-ac3-core    On a demux only, and only for the disc form of a TrueHD track. Writes the
                     two halves as files of their own, .thd and .ac3, beside the .ac3+thd holding
                     the pair, in one pass over the source instead of three. The .ac3+thd file is

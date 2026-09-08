@@ -17,6 +17,41 @@ uint32_t FOUR_CC(const char a, const char b, const char c, const char d)
 {
     return my_ntohl(static_cast<uint32_t>(a) << 24 | b << 16 | c << 8 | d);
 }
+
+// Sony Wave64. Every four character chunk id becomes a 16 byte GUID whose first four bytes are
+// that same ASCII id, and every 32 bit size becomes 64 bit. Two details are easy to get wrong and
+// are the whole reason a reader rejects a file: a chunk's size INCLUDES its own 24 byte header,
+// and chunks are padded to an 8 byte boundary.
+//
+// With a WAVEFORMATPCMEX of 40 bytes the header comes to exactly 128 bytes and needs no padding:
+//
+//   0    riff GUID           16
+//   16   size of the file     8   <- patched on close
+//   24   wave GUID           16
+//   40   fmt GUID            16
+//   56   size of fmt chunk    8   = 16 + 8 + 40
+//   64   WAVEFORMATPCMEX     40
+//   104  data GUID           16
+//   120  size of data chunk   8   <- patched on close
+//   128  the audio
+constexpr uint8_t W64_GUID_SUFFIX[12] = {0x2E, 0x91, 0xCF, 0x11, 0xA5, 0xD6, 0x28, 0xDB, 0x04, 0xC1, 0x00, 0x00};
+constexpr int64_t W64_HEADER_SIZE = 128;
+constexpr int64_t W64_RIFF_SIZE_OFFSET = 16;
+constexpr int64_t W64_DATA_SIZE_OFFSET = 120;
+constexpr int64_t W64_CHUNK_HEADER = 24;  // a 16 byte GUID and an 8 byte size
+
+uint8_t* writeW64Guid(uint8_t* dst, const char* fourcc)
+{
+    memcpy(dst, fourcc, 4);
+    memcpy(dst + 4, W64_GUID_SUFFIX, sizeof(W64_GUID_SUFFIX));
+    return dst + 16;
+}
+
+uint8_t* writeLE64(uint8_t* dst, const uint64_t value)
+{
+    for (int i = 0; i < 8; ++i) dst[i] = static_cast<uint8_t>(value >> (i * 8));
+    return dst + 8;
+}
 }  // namespace
 
 static constexpr int m2tsFreqs[] = {0, 48000, 0, 0, 96000, 192000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -668,14 +703,29 @@ int LPCMStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
     {
         if (m_firstFrame)
         {
-            if (static_cast<unsigned>(dstEnd - dstBuffer) < sizeof(WAVEFORMATPCMEX) + 8)
+            // The RIFF header is 68 bytes and the Wave64 one is 128. The check here used to ask
+            // for sizeof(WAVEFORMATPCMEX) + 8, which is 48, so it passed for a buffer that could
+            // not hold what was about to be written into it.
+            const int64_t headerSize = m_demuxToW64 ? W64_HEADER_SIZE : 68;
+            if (dstEnd - dstBuffer < headerSize)
                 THROW(ERR_COMMON, "LPCM stream error: Not enough buffer for writing headers")
-            // write wave header
-            for (const char c : "RIFF\xff\xff\xff\xffWAVEfmt ") *curPos++ = c;
-            curPos--;
-            const auto fmtSize = reinterpret_cast<uint32_t*>(curPos);
-            *fmtSize = sizeof(WAVEFORMATPCMEX);
-            curPos += 4;
+            if (m_demuxToW64)
+            {
+                curPos = writeW64Guid(curPos, "riff");
+                curPos = writeLE64(curPos, 0);  // the file size, patched when the file closes
+                curPos = writeW64Guid(curPos, "wave");
+                curPos = writeW64Guid(curPos, "fmt ");
+                curPos = writeLE64(curPos, W64_CHUNK_HEADER + sizeof(WAVEFORMATPCMEX));
+            }
+            else
+            {
+                // write wave header
+                for (const char c : "RIFF\xff\xff\xff\xffWAVEfmt ") *curPos++ = c;
+                curPos--;
+                const auto fmtSize = reinterpret_cast<uint32_t*>(curPos);
+                *fmtSize = sizeof(WAVEFORMATPCMEX);
+                curPos += 4;
+            }
             const auto waveFormatPCMEx = reinterpret_cast<WAVEFORMATPCMEX*>(curPos);
             waveFormatPCMEx->wFormatTag = WAVE_FORMAT_EXTENSIBLE;
             waveFormatPCMEx->nChannels = m_channels;
@@ -689,8 +739,17 @@ int LPCMStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
             waveFormatPCMEx->dwChannelMask = getWaveChannelMask(m_channels, m_lfeExists);  // Specify PCM
             waveFormatPCMEx->SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
             curPos += sizeof(WAVEFORMATPCMEX);
-            for (const char c : "data\xff\xff\xff\xff") *curPos++ = c;
-            curPos--;
+            if (m_demuxToW64)
+            {
+                curPos = writeW64Guid(curPos, "data");
+                curPos = writeLE64(curPos, 0);  // the data size, patched when the file closes
+                assert(curPos - dstBuffer == W64_HEADER_SIZE);
+            }
+            else
+            {
+                for (const char c : "data\xff\xff\xff\xff") *curPos++ = c;
+                curPos--;
+            }
         }
     }
     /*
@@ -765,6 +824,24 @@ bool LPCMStreamReader::beforeFileCloseEvent(File& file)
     file.sync();
     int64_t fileSize = 0;
     file.size(&fileSize);
+    if (m_demuxToW64)
+    {
+        // No ceiling to guard against here, which is the whole point of writing this form: both
+        // sizes are 64 bit. The data chunk's size includes its own 24 byte header, so it is the
+        // audio plus 24, not the audio.
+        uint8_t buf[8];
+        if (file.seek(W64_RIFF_SIZE_OFFSET, File::SeekMethod::smBegin) == -1)
+            return false;
+        writeLE64(buf, static_cast<uint64_t>(fileSize));
+        if (file.write(buf, 8) != 8)
+            return false;
+        if (file.seek(W64_DATA_SIZE_OFFSET, File::SeekMethod::smBegin) == -1)
+            return false;
+        writeLE64(buf, static_cast<uint64_t>(fileSize - W64_HEADER_SIZE + W64_CHUNK_HEADER));
+        if (file.write(buf, 8) != 8)
+            return false;
+        return true;
+    }
     if (fileSize <= UINT_MAX)
     {
         uint32_t dataSize = static_cast<uint32_t>(fileSize) - 8;
