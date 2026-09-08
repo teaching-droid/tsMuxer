@@ -733,6 +733,13 @@ All parameters in this group start with two dashes:
                       the end. --cut-end=30s keeps the first 30 seconds.
 --split-duration      Split the output into several files, with each of them being
                       <n> seconds long.
+--split-chapters      Split the output at the chapter marks the source carries,
+                      so each file begins at a chapter. Takes no value. A
+                      Blu-ray playlist's marks and a Matroska's own chapter
+                      list are both used; a source with neither splits nothing.
+                      As with the other two, a split happens at the first key
+                      frame at or after the mark, never in the middle of a
+                      picture.
 --split-size          Split the output into several files, with each of them
                       having a given maximum size. KB, KiB, MB, MiB, GB and GiB
                       are accepted as size units.
@@ -2100,6 +2107,16 @@ int main(int argc, char** argv)
             MuxerManager muxerManager(readManager, tsMuxerFactory);
             muxerManager.setAllowStereoMux(fileExt2 == "SSIF" || dt != DiskType::NONE);
             muxerManager.openMetaFile(argv[1]);
+            // The Matroska branch above hands this list over because Matroska WRITES chapters. A
+            // transport stream has nowhere to put them, so this branch never did, and the disc
+            // path passes the same list separately to createMPLSFile.
+            //
+            // --split-chapters needs them here as well, because splitting happens in the muxer.
+            // Handing them over changes nothing on its own: TSMuxer keeps the list and only looks
+            // at it when that option is on. A source that carries its own chapters, a playlist or
+            // a Matroska, is already covered by the fallback in preinitMux.
+            if (!customChapterList.empty())
+                muxerManager.setChapters(customChapterList);
             reportDvProfileIgnored(muxerManager, dt != DiskType::NONE ? "a disc" : "a transport stream");
             if (!isV3() && dt == DiskType::BLURAY && muxerManager.getHevcFound())
             {

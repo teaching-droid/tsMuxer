@@ -77,7 +77,12 @@ class TSMuxer final : public AbstractMuxer
     [[nodiscard]] size_t splitFileCnt() const { return m_fileNames.size(); }
     void setSplitDuration(const int64_t value) { m_splitDuration = value; }
     void setSplitSize(const int64_t value) { m_splitSize = value; }
-    [[nodiscard]] bool isSplitting() const { return m_splitSize > 0 || m_splitDuration > 0; }
+    [[nodiscard]] bool isSplitting() const
+    {
+        return m_splitSize > 0 || m_splitDuration > 0 || (m_splitByChapters && !m_chapterPts.empty());
+    }
+    void setSplitByChapters(const bool value) { m_splitByChapters = value; }
+    void setChapters(const std::vector<double>& chapters) override;
     void parseMuxOpt(const std::string& opts) override;
 
     void setFileName(const std::string& fileName, FileFactory* fileFactory) override;
@@ -155,6 +160,12 @@ class TSMuxer final : public AbstractMuxer
     // wrapped, so 4 GiB became 0 and turned splitting off, and 4.5 GB became 205 MB.
     int64_t m_splitSize;
     int64_t m_splitDuration;
+    // Splitting at chapter boundaries. The times arrive in seconds from the start of the film and
+    // are kept as internal clock ticks measured from the first packet, because that is what an
+    // AVPacket's pts is counted in and a transport stream does not start at zero.
+    bool m_splitByChapters;
+    std::vector<int64_t> m_chapterPts;
+    size_t m_nextChapter;
 
     bool m_useNewStyleAudioPES;
 

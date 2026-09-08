@@ -162,6 +162,8 @@ TSMuxer::TSMuxer(MuxerManager* owner) : AbstractMuxer(owner)
     m_curFileStartPts = 0;  // FIXED_PTS_OFFSET;
     m_splitSize = 0;
     m_splitDuration = 0;
+    m_splitByChapters = false;
+    m_nextChapter = 0;
     m_curFileNum = 0;
     m_bluRayMode = false;
     m_hdmvDescriptors = true;
@@ -945,8 +947,39 @@ bool TSMuxer::isSplitPoint(const AVPacket& avPacket) const
     {
         return (avPacket.pts - m_curFileStartPts) > m_splitDuration;
     }
+    if (m_splitByChapters && m_nextChapter < m_chapterPts.size())
+    {
+        // Measured from the first packet of the mux, not from the start of the current part: a
+        // chapter is a position in the film, and the parts before it have already been written.
+        // m_firstPts[0] is that first packet, and it is not zero, because a transport stream is
+        // given an offset before anything is muxed.
+        if (m_firstPts.empty() || m_firstPts[0] == -1)
+            return false;
+        return avPacket.pts - m_firstPts[0] >= m_chapterPts[m_nextChapter];
+    }
 
     return false;
+}
+
+// The chapter list arrives in seconds from the start of the film, the same list the Matroska muxer
+// writes and the same one a Blu-ray playlist's marks produce. Kept here as internal clock ticks so
+// that isSplitPoint can compare them against a packet's pts without dividing on every packet.
+//
+// A mark at zero is dropped: every file already starts at its own beginning, and splitting there
+// would write an empty first part. Duplicates go the same way, because two marks on one frame can
+// only produce one split.
+void TSMuxer::setChapters(const std::vector<double>& chapters)
+{
+    m_chapterPts.clear();
+    m_nextChapter = 0;
+    for (const double seconds : chapters)
+    {
+        if (seconds <= 0.0)
+            continue;
+        m_chapterPts.push_back(static_cast<int64_t>(seconds * INTERNAL_PTS_FREQ));
+    }
+    std::sort(m_chapterPts.begin(), m_chapterPts.end());
+    m_chapterPts.erase(std::unique(m_chapterPts.begin(), m_chapterPts.end()), m_chapterPts.end());
 }
 
 int TSMuxer::getFirstFileNum() const
@@ -968,7 +1001,7 @@ std::string TSMuxer::getNextName(const std::string curName)
         m_curFileNum++;
         result = closeDirPath(filePath) + strPadLeft(int32ToStr(origNum), 5, '0') + "." + fileExt;
     }
-    else if (m_splitSize > 0 || m_splitDuration > 0)
+    else if (isSplitting())
     {
         m_curFileNum++;
         const string fileExt = extractFileExt(m_origFileName);
@@ -980,6 +1013,13 @@ std::string TSMuxer::getNextName(const std::string curName)
 
 void TSMuxer::gotoNextFile(const int64_t newPts)
 {
+    // Step past every chapter this part has already reached. More than one can fall inside a
+    // single part when two marks sit closer together than the next key frame, and stepping past
+    // only one would split again immediately on the next frame.
+    if (m_splitByChapters && !m_firstPts.empty() && m_firstPts[0] != -1)
+        while (m_nextChapter < m_chapterPts.size() && newPts - m_firstPts[0] >= m_chapterPts[m_nextChapter])
+            m_nextChapter++;
+
     // 2. CloseCurrentFile
     if (m_owner->isAsyncMode())
         m_owner->waitForWriting();
@@ -1993,6 +2033,11 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
             if (paramPair.size() < 2)
                 THROW(ERR_COMMON, "Missing value for " << paramPair[0])
             setSplitSize(checkedSplitSize(paramPair[1]));
+            m_computeMuxStats = true;
+        }
+        else if (paramPair[0] == "--split-chapters")
+        {
+            m_splitByChapters = true;
             m_computeMuxStats = true;
         }
         else if (paramPair[0] == "--blu-ray" || paramPair[0] == "--blu-ray-v3" || paramPair[0] == "--avchd")

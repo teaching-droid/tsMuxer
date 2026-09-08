@@ -434,5 +434,10 @@ void SingleFileMuxer::parseMuxOpt(const std::string& opts)
             LTRACE(LT_WARN, 2,
                    "Warning! Splitting does not implemented for demux mode. Parameter " << paramPair[0] << " ignored.");
         }
+        if (paramPair[0] == "--split-chapters")
+        {
+            LTRACE(LT_WARN, 2,
+                   "Warning! Splitting does not implemented for demux mode. Parameter " << paramPair[0] << " ignored.");
+        }
     }
 }
