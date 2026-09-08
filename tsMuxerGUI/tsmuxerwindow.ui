@@ -1220,6 +1220,20 @@
                </property>
               </widget>
              </item>
+             <item>
+              <layout class="QHBoxLayout" name="langCodesLayout">
+               <item>
+                <widget class="QLabel" name="langCodesLabel">
+                 <property name="text">
+                  <string>Language codes:</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QComboBox" name="langCodesComboBox"/>
+               </item>
+              </layout>
+             </item>
             </layout>
            </widget>
           </item>
@@ -3160,6 +3174,7 @@ p, li { white-space: pre-wrap; }
   <tabstop>editCBRBitrate</tabstop>
   <tabstop>editVBVLen</tabstop>
   <tabstop>checkBoxCrop</tabstop>
+  <tabstop>langCodesComboBox</tabstop>
   <tabstop>radioButtonNoChapters</tabstop>
   <tabstop>radioButtonAutoChapter</tabstop>
   <tabstop>spinEditChapterLen</tabstop>

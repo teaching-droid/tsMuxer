@@ -493,6 +493,27 @@ TsMuxerWindow::TsMuxerWindow()
     QString path = QFileInfo(QApplication::arguments()[0]).absolutePath();
     QString iniName = QDir::toNativeSeparators(path) + QDir::separator() + QString("tsMuxerGUI.ini");
 
+    // BEFORE readSettings, not after. The stored choice is restored by looking the value up in
+    // this box, so an empty box means the lookup fails and the default wins. That is exactly the
+    // shape of the fault the interface language appears to have, and it was found here only
+    // because the restore was tested rather than assumed to work.
+    // Three positions, not a tick: wanting the source's own codes untouched is as reasonable as
+    // wanting the ones eac3to shows. The data is what reaches the muxer, so it stays English while
+    // the text beside it is translated.
+    auto fillLangCodes = [this]()
+    {
+        const QString keep = ui->langCodesComboBox->currentData().toString();
+        const QSignalBlocker block(ui->langCodesComboBox);
+        ui->langCodesComboBox->clear();
+        ui->langCodesComboBox->addItem(tr("As the source says"), "source");
+        ui->langCodesComboBox->addItem(tr("Terminological (ell, deu, nld)"), "terminological");
+        ui->langCodesComboBox->addItem(tr("Bibliographic (gre, ger, dut)"), "bibliographic");
+        const int idx = ui->langCodesComboBox->findData(keep.isEmpty() ? "terminological" : keep);
+        ui->langCodesComboBox->setCurrentIndex(idx < 0 ? 1 : idx);
+    };
+    fillLangCodes();
+    m_retranslateHooks.push_back(fillLangCodes);
+
     settings = new QSettings();
     readSettings();
 
@@ -587,6 +608,7 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->mergeAc3FileBrowseButton, &QPushButton::clicked, this, &TsMuxerWindow::onMergeAc3FileBrowseClicked);
     connect(ui->langComboBox, comboBoxIndexChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->offsetsComboBox, comboBoxIndexChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
+    connect(ui->langCodesComboBox, comboBoxIndexChanged, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->comboBoxPipCorner, comboBoxIndexChanged, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->comboBoxPipSize, comboBoxIndexChanged, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->spinBoxPipOffsetH, spinBoxValueChanged, this, &TsMuxerWindow::onSavedParamChanged);
@@ -731,6 +753,13 @@ TsMuxerWindow::TsMuxerWindow()
                    "come out as two, each one playable and with nothing lost. Wave64 is the same "
                    "audio with 64 bit sizes and stays a single file. tsMuxeR reads both, and so "
                    "does most software that handles long recordings.")));
+    ui->langCodesComboBox->setToolTip(
+        wrapTip(tr("Which form a language read from a disc or a container is shown in. Twenty "
+                   "languages have two codes in ISO 639-2: Greek is ell or gre, German deu or "
+                   "ger. Discs here carry the first kind and eac3to reports the second, so this "
+                   "chooses which you see. It also decides what a mux writes, because the meta "
+                   "file is built from what is shown. A language you type into a file name is "
+                   "left exactly as you typed it. The setting is remembered.")));
     ui->splitByChapters->setToolTip(
         wrapTip(tr("Start a new file at every chapter. The marks come from the source: a Blu-ray "
                    "playlist's own chapters, or a Matroska's chapter list. A list typed on the "
@@ -3313,12 +3342,21 @@ static QString getTsMuxerBinaryPath()
 void TsMuxerWindow::tsMuxerExecute(const QStringList& args)
 {
     const auto exePath = getTsMuxerBinaryPath();
+    // Carried on EVERY call, so what the track list shows and what the mux writes agree. The
+    // muxer takes it out of the argument list before it counts the arguments, so the modes are
+    // unaffected, the BDMV to ISO one included. Left off entirely at the default, which keeps
+    // the command line and the behaviour exactly as they were.
+    QStringList allArgs;
+    const QString langStyle = ui->langCodesComboBox->currentData().toString();
+    if (!langStyle.isEmpty() && langStyle != QLatin1String("terminological"))
+        allArgs << (QLatin1String("--lang-codes=") + langStyle);
+    allArgs << args;
     ui->buttonMux->setEnabled(false);
     procStdOutput.clear();
     procErrOutput.clear();
     processFinished = false;
     processExitCode = -1;
-    proc.start(exePath, args);
+    proc.start(exePath, allArgs);
     if (muxForm->isVisible())
         muxForm->setProcess(&proc);
 }
@@ -5104,6 +5142,7 @@ void TsMuxerWindow::writeSettings()
     settings->setValue("outputToInputFolder", ui->radioButtonOutoutInInput->isChecked());
     settings->setValue("outputMode", currentOutputMode());
     settings->setValue("language", ui->languageSelectComboBox->currentText());
+    settings->setValue("langCodes", ui->langCodesComboBox->currentData().toString());
     settings->setValue("windowSize", size());
     settings->setValue("windowPos", pos());
 
@@ -5236,6 +5275,16 @@ bool TsMuxerWindow::readGeneralSettings(const QString& prefix)
     else
     {
         ui->languageSelectComboBox->setCurrentIndex(0);
+    }
+
+    // Matched on the DATA and not on the visible text, which is translated: restoring by text
+    // would fail the moment the window was not in English.
+    const QVariant langCodes = settings->value("langCodes");
+    if (langCodes.isValid())
+    {
+        const int idx = ui->langCodesComboBox->findData(langCodes.toString());
+        if (idx >= 0)
+            ui->langCodesComboBox->setCurrentIndex(idx);
     }
 
     if (!settings->contains("outputDir"))

@@ -4213,6 +4213,31 @@ Build the ISO anyway?</source>
         <source>Write this track as Sony Wave64 rather than as a WAV. A WAV states its sizes in 32 bits, so it cannot describe a file past 4 GiB and a long track has to come out as two, each one playable and with nothing lost. Wave64 is the same audio with 64 bit sizes and stays a single file. tsMuxeR reads both, and so does most software that handles long recordings.</source>
         <translation>Записать эту дорожку как Sony Wave64, а не как WAV. WAV указывает свои размеры в 32 битах, поэтому он не может описать файл больше 4 ГиБ, и длинную дорожку приходится выводить двумя файлами, каждый воспроизводимый и без потерь. Wave64 это то же самое аудио с 64-битными размерами, и оно остаётся одним файлом. tsMuxeR читает оба, как и большинство программ для длинных записей.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1224"/>
+        <source>Language codes:</source>
+        <translation>Коды языков:</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="500"/>
+        <source>As the source says</source>
+        <translation>Как в источнике</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="501"/>
+        <source>Terminological (ell, deu, nld)</source>
+        <translation>Терминологические (ell, deu, nld)</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="502"/>
+        <source>Bibliographic (gre, ger, dut)</source>
+        <translation>Библиографические (gre, ger, dut)</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="727"/>
+        <source>Which form a language read from a disc or a container is shown in. Twenty languages have two codes in ISO 639-2: Greek is ell or gre, German deu or ger. Discs here carry the first kind and eac3to reports the second, so this chooses which you see. It also decides what a mux writes, because the meta file is built from what is shown. A language you type into a file name is left exactly as you typed it. The setting is remembered.</source>
+        <translation>В каком виде показывается язык, прочитанный с диска или из контейнера. У двадцати языков в ISO 639-2 два кода: греческий это ell или gre, немецкий deu или ger. Диски здесь несут первый вид, а eac3to сообщает второй, и здесь выбирается, что вы видите. Это же определяет и то, что запишет мультиплексирование, потому что meta-файл строится из показанного. Язык, который вы вписали в имя файла, остаётся ровно таким. Настройка запоминается.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

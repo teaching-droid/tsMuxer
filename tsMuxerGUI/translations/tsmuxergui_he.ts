@@ -4212,6 +4212,31 @@ Build the ISO anyway?</source>
         <source>Write this track as Sony Wave64 rather than as a WAV. A WAV states its sizes in 32 bits, so it cannot describe a file past 4 GiB and a long track has to come out as two, each one playable and with nothing lost. Wave64 is the same audio with 64 bit sizes and stays a single file. tsMuxeR reads both, and so does most software that handles long recordings.</source>
         <translation>כותב את הרצועה הזאת כ-Sony Wave64 במקום כ-WAV. קובץ WAV מציין את גדליו ב-32 סיביות, ולכן אינו יכול לתאר קובץ מעל 4 GiB, ורצועה ארוכה חייבת לצאת כשני קבצים, כל אחד מהם נגיש וללא אובדן. Wave64 הוא אותו אודיו עם גדלים של 64 סיביות ונשאר קובץ אחד. tsMuxeR קורא את שניהם, וכך גם רוב התוכנות שמטפלות בהקלטות ארוכות.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1224"/>
+        <source>Language codes:</source>
+        <translation>קודי שפה:</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="500"/>
+        <source>As the source says</source>
+        <translation>כפי שכתוב במקור</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="501"/>
+        <source>Terminological (ell, deu, nld)</source>
+        <translation>טרמינולוגי (ell, deu, nld)</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="502"/>
+        <source>Bibliographic (gre, ger, dut)</source>
+        <translation>ביבליוגרפי (gre, ger, dut)</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="727"/>
+        <source>Which form a language read from a disc or a container is shown in. Twenty languages have two codes in ISO 639-2: Greek is ell or gre, German deu or ger. Discs here carry the first kind and eac3to reports the second, so this chooses which you see. It also decides what a mux writes, because the meta file is built from what is shown. A language you type into a file name is left exactly as you typed it. The setting is remembered.</source>
+        <translation>באיזו צורה מוצגת שפה שנקראה מדיסק או ממכל. לעשרים שפות יש שני קודים ב-ISO 639-2: יוונית היא ell או gre, גרמנית deu או ger. הדיסקים כאן נושאים את הצורה הראשונה ו-eac3to מדווח על השנייה, וכאן בוחרים מה רואים. הבחירה גם קובעת מה נכתב במיזוג, מפני שקובץ המטא נבנה ממה שמוצג. שפה שהקלדתם בשם קובץ נשארת בדיוק כפי שהקלדתם. ההגדרה נשמרת.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

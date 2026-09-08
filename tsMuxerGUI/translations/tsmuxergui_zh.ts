@@ -4212,6 +4212,31 @@ Build the ISO anyway?</source>
         <source>Write this track as Sony Wave64 rather than as a WAV. A WAV states its sizes in 32 bits, so it cannot describe a file past 4 GiB and a long track has to come out as two, each one playable and with nothing lost. Wave64 is the same audio with 64 bit sizes and stays a single file. tsMuxeR reads both, and so does most software that handles long recordings.</source>
         <translation>将该轨道写为 Sony Wave64 而不是 WAV。WAV 用 32 位记录大小，因此无法描述超过 4 GiB 的文件，较长的轨道只能输出为两个文件，每个都可播放且没有任何丢失。Wave64 是同样的音频，只是大小改用 64 位，可以保持为一个文件。tsMuxeR 两者都能读取，处理长录音的大多数软件也是如此。</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1224"/>
+        <source>Language codes:</source>
+        <translation>语言代码：</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="500"/>
+        <source>As the source says</source>
+        <translation>与源一致</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="501"/>
+        <source>Terminological (ell, deu, nld)</source>
+        <translation>术语型 (ell, deu, nld)</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="502"/>
+        <source>Bibliographic (gre, ger, dut)</source>
+        <translation>书目型 (gre, ger, dut)</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="727"/>
+        <source>Which form a language read from a disc or a container is shown in. Twenty languages have two codes in ISO 639-2: Greek is ell or gre, German deu or ger. Discs here carry the first kind and eac3to reports the second, so this chooses which you see. It also decides what a mux writes, because the meta file is built from what is shown. A language you type into a file name is left exactly as you typed it. The setting is remembered.</source>
+        <translation>从光盘或容器中读取的语言以哪种形式显示。在 ISO 639-2 中有二十种语言拥有两个代码：希腊语是 ell 或 gre，德语是 deu 或 ger。这里的光盘使用前一种，而 eac3to 报告后一种，因此这里选择你看到的是哪一种。它同时决定混流写入的内容，因为 meta 文件是根据显示的内容生成的。你写在文件名中的语言会原样保留。该设置会被记住。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

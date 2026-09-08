@@ -4212,6 +4212,31 @@ Build the ISO anyway?</source>
         <source>Write this track as Sony Wave64 rather than as a WAV. A WAV states its sizes in 32 bits, so it cannot describe a file past 4 GiB and a long track has to come out as two, each one playable and with nothing lost. Wave64 is the same audio with 64 bit sizes and stays a single file. tsMuxeR reads both, and so does most software that handles long recordings.</source>
         <translation>このトラックを WAV ではなく Sony Wave64 で書き出します。WAV はサイズを 32 ビットで表すため 4 GiB を超えるファイルを表現できず、長いトラックは 2 つに分かれて出力されます。どちらも再生でき、失われるものはありません。Wave64 は同じ音声をサイズだけ 64 ビットにしたもので、1 つのファイルのままです。tsMuxeR は両方を読め、長時間収録を扱うソフトの多くも同様です。</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1224"/>
+        <source>Language codes:</source>
+        <translation>言語コード:</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="500"/>
+        <source>As the source says</source>
+        <translation>ソースのまま</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="501"/>
+        <source>Terminological (ell, deu, nld)</source>
+        <translation>用語 (ell, deu, nld)</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="502"/>
+        <source>Bibliographic (gre, ger, dut)</source>
+        <translation>書誌 (gre, ger, dut)</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="727"/>
+        <source>Which form a language read from a disc or a container is shown in. Twenty languages have two codes in ISO 639-2: Greek is ell or gre, German deu or ger. Discs here carry the first kind and eac3to reports the second, so this chooses which you see. It also decides what a mux writes, because the meta file is built from what is shown. A language you type into a file name is left exactly as you typed it. The setting is remembered.</source>
+        <translation>ディスクやコンテナーから読み取った言語をどの形式で表示するかです。ISO 639-2 では 20 の言語にコードが 2 つあります。ギリシャ語は ell または gre、ドイツ語は deu または ger です。ここのディスクは前者を持ち、eac3to は後者を報告するため、どちらを見るかをここで選びます。meta ファイルは表示された内容から作られるので、多重化で書き込まれる値もこれで決まります。ファイル名に書いた言語はそのまま残ります。設定は記憶されます。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
