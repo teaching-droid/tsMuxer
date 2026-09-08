@@ -2,13 +2,15 @@
 
 Back at the machine, so this is the first release since 2.18.14. Thank you to everyone who posted while I was away; I have read all of it.
 
-Eight changes: two faults, and six things asked for on the tracker.
+Nine changes: three faults, and six things asked for on the tracker.
 
 ## Fixed
 
 * **A subtitle built from an SRT file came out empty on Windows.** The track appeared in the output and carried nothing, and the mux still reported success. The default subtitle colour was fully transparent, and the Windows renderer honours that, so the text was drawn invisibly and no picture was produced. Naming a colour with `font-color` avoided it, which is why the window was never affected: it always writes one. This reaches meta files written by hand and run from the command line, and it is as old as this fork. The same fault also made a demux of a subtitle on its own write a file of zero bytes.
 
 * **A status label was hard to read once the window followed a dark theme.** The window takes its colours from the system, so every label here is painted on a light background and a dark one. The message about a read-only disc folder was the one that fell below the contrast a bold label needs on a dark window. The other ten colours in that part of the window were measured and left alone.
+
+* **Fonts outside one folder, and every .otf and .ttc, could not be used on Linux.** The search looked in `/usr/share/fonts` only, and only for `.ttf`, so a font you installed for yourself was invisible however you installed it. It now also looks in `/usr/local/share/fonts`, `~/.fonts` and `~/.local/share/fonts`, and it accepts `.otf` and `.ttc`. Naming a font by its full path works for those too. On macOS the user's own font folder was written with a tilde, which nothing here expands, so it had never been searched at all.
 
 ## New
 
