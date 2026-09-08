@@ -4060,6 +4060,26 @@ Build the ISO anyway?</source>
         <source>The meta file &quot;%1&quot; is empty.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4253"/>
+        <source>Check all tracks of this type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4254"/>
+        <source>Uncheck all tracks of this type</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4256"/>
+        <source>Check all tracks in this language</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4257"/>
+        <source>Uncheck all tracks in this language</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -4173,6 +4173,26 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>The meta file &quot;%1&quot; is empty.</source>
         <translation>El archivo meta &quot;%1&quot; está vacío.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4253"/>
+        <source>Check all tracks of this type</source>
+        <translation>Marcar todas las pistas de este tipo</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4254"/>
+        <source>Uncheck all tracks of this type</source>
+        <translation>Desmarcar todas las pistas de este tipo</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4256"/>
+        <source>Check all tracks in this language</source>
+        <translation>Marcar todas las pistas en este idioma</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4257"/>
+        <source>Uncheck all tracks in this language</source>
+        <translation>Desmarcar todas las pistas en este idioma</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

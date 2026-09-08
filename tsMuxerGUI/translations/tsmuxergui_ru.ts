@@ -4173,6 +4173,26 @@ Build the ISO anyway?</source>
         <source>The meta file &quot;%1&quot; is empty.</source>
         <translation>Meta-файл &quot;%1&quot; пуст.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4253"/>
+        <source>Check all tracks of this type</source>
+        <translation>Отметить все дорожки этого типа</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4254"/>
+        <source>Uncheck all tracks of this type</source>
+        <translation>Снять отметку со всех дорожек этого типа</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4256"/>
+        <source>Check all tracks in this language</source>
+        <translation>Отметить все дорожки на этом языке</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4257"/>
+        <source>Uncheck all tracks in this language</source>
+        <translation>Снять отметку со всех дорожек на этом языке</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

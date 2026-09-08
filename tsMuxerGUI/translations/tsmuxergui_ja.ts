@@ -4172,6 +4172,26 @@ Build the ISO anyway?</source>
         <source>The meta file &quot;%1&quot; is empty.</source>
         <translation>meta ファイル &quot;%1&quot; は空です。</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4253"/>
+        <source>Check all tracks of this type</source>
+        <translation>この種類のトラックをすべて選択</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4254"/>
+        <source>Uncheck all tracks of this type</source>
+        <translation>この種類のトラックの選択をすべて解除</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4256"/>
+        <source>Check all tracks in this language</source>
+        <translation>この言語のトラックをすべて選択</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4257"/>
+        <source>Uncheck all tracks in this language</source>
+        <translation>この言語のトラックの選択をすべて解除</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

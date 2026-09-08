@@ -86,6 +86,8 @@ class TsMuxerWindow : public QWidget
     void onRemoveTrackButtonClick();
     void onRemoveAllTracksButtonClick();
     void updateRemoveAllEnabled();
+    void onTrackContextMenu(const QPoint& pos);
+    void setChecksMatching(int refRow, bool byLanguage, bool checked);
     void onMoveUpButtonCLick();
     void onMoveDownButtonCLick();
     void RadioButtonMuxClick();

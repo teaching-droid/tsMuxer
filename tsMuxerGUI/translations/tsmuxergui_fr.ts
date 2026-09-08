@@ -4172,6 +4172,26 @@ Créer l'ISO malgré tout ?</translation>
         <source>The meta file &quot;%1&quot; is empty.</source>
         <translation>Le fichier meta &quot;%1&quot; est vide.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4253"/>
+        <source>Check all tracks of this type</source>
+        <translation>Cocher toutes les pistes de ce type</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4254"/>
+        <source>Uncheck all tracks of this type</source>
+        <translation>Décocher toutes les pistes de ce type</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4256"/>
+        <source>Check all tracks in this language</source>
+        <translation>Cocher toutes les pistes dans cette langue</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4257"/>
+        <source>Uncheck all tracks in this language</source>
+        <translation>Décocher toutes les pistes dans cette langue</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

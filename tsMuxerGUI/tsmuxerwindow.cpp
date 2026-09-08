@@ -27,6 +27,7 @@
 #include <QLibraryInfo>
 #include <QLineEdit>
 #include <QLocale>
+#include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
 #include <QPushButton>
@@ -743,6 +744,9 @@ TsMuxerWindow::TsMuxerWindow()
 
     ui->label_Donate->installEventFilter(this);
     ui->trackLV->installEventFilter(this);
+
+    ui->trackLV->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->trackLV, &QWidget::customContextMenuRequested, this, &TsMuxerWindow::onTrackContextMenu);
 
     trackLVItemSelectionChanged();
 
@@ -4320,6 +4324,75 @@ void TsMuxerWindow::onRemoveTrackButtonClick()
 {
     if (ui->trackLV->currentItem())
         deleteTrack(ui->trackLV->currentRow());
+}
+
+// Tick or untick every track that matches the one clicked on, by type or by language.
+//
+// The type comes from the first letter of the codec name, V, A or S, which is how the muxer
+// itself tells them apart, so no new idea of "type" is introduced here.
+//
+// Wrapped in the update guard for the same reason the remove all button is: updateMetaLines
+// rebuilds the meta text from nothing, and doing that once per row is what made removing
+// tracks one at a time slow.
+void TsMuxerWindow::setChecksMatching(const int refRow, const bool byLanguage, const bool checked)
+{
+    const QtvCodecInfo* ref = getCodecInfo(refRow);
+    if (!ref)
+        return;
+    const QChar refType = ref->programName.isEmpty() ? QChar() : ref->programName.at(0);
+    const QString refLang = ref->lang;
+
+    disableUpdatesCnt++;
+    for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+    {
+        const QtvCodecInfo* info = getCodecInfo(i);
+        if (!info)
+            continue;
+        const bool match =
+            byLanguage ? info->lang == refLang : (!info->programName.isEmpty() && info->programName.at(0) == refType);
+        if (match)
+            ui->trackLV->item(i, 0)->setCheckState(checked ? Qt::Checked : Qt::Unchecked);
+    }
+    disableUpdatesCnt--;
+
+    updateMetaLines();
+    trackLVItemChanged(nullptr);
+}
+
+// Asked for on the tracker together with the space bar, which shipped in 2.18.14. This acts on
+// whatever was clicked rather than offering a list of every type and every language, which keeps
+// it to four entries and needs no submenu: right click an English audio track and every English
+// track, or every audio track, follows it.
+void TsMuxerWindow::onTrackContextMenu(const QPoint& pos)
+{
+    const int row = ui->trackLV->rowAt(pos.y());
+    if (row < 0 || row >= ui->trackLV->rowCount())
+        return;
+    const QtvCodecInfo* info = getCodecInfo(row);
+    if (!info)
+        return;
+
+    QMenu menu(this);
+    QAction* checkType = menu.addAction(tr("Check all tracks of this type"));
+    QAction* uncheckType = menu.addAction(tr("Uncheck all tracks of this type"));
+    menu.addSeparator();
+    QAction* checkLang = menu.addAction(tr("Check all tracks in this language"));
+    QAction* uncheckLang = menu.addAction(tr("Uncheck all tracks in this language"));
+    // A track with no language of its own would otherwise match every other track that has none,
+    // which is not what anyone means by "this language".
+    const bool hasLang = !info->lang.isEmpty();
+    checkLang->setEnabled(hasLang);
+    uncheckLang->setEnabled(hasLang);
+
+    const QAction* chosen = menu.exec(ui->trackLV->viewport()->mapToGlobal(pos));
+    if (chosen == checkType)
+        setChecksMatching(row, false, true);
+    else if (chosen == uncheckType)
+        setChecksMatching(row, false, false);
+    else if (chosen == checkLang)
+        setChecksMatching(row, true, true);
+    else if (chosen == uncheckLang)
+        setChecksMatching(row, true, false);
 }
 
 // "remove all" is offered whenever there is anything to remove. That is NOT the same condition as

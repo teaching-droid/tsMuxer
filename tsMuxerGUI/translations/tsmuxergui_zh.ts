@@ -4145,7 +4145,7 @@ Build the ISO anyway?</source>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="725"/>
         <source>Load a meta file and mux from it as it stands. The text appears in the Meta file box below, and that box is what is handed to the muxer, so anything in the file is used exactly as written. The track list is not filled in from it and will not match: use Reset meta to auto-generated to go back to building the meta from the list.</source>
-        <translation>载入一个 meta 文件并按其原样进行混流。文本会显示在下方的 meta 文件框中，交给混流器的正是这个框，因此文件中的内容会被原样使用。轨道列表不会据此填充，也不会与之相符：使用“重置 meta 为自动生成”即可回到由列表生成 meta。</translation>
+        <translation>载入一个 meta 文件并按其原样进行混流。文本会显示在下方的 meta 文件框中，交给混流器的正是这个框，因此文件中的内容会被原样使用。轨道列表不会据此填充，也不会与之相符：使用&quot;重置 meta 为自动生成&quot;即可回到由列表生成 meta。</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="4707"/>
@@ -4171,6 +4171,26 @@ Build the ISO anyway?</source>
         <location filename="../tsmuxerwindow.cpp" line="4734"/>
         <source>The meta file &quot;%1&quot; is empty.</source>
         <translation>meta 文件 &quot;%1&quot; 为空。</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4253"/>
+        <source>Check all tracks of this type</source>
+        <translation>选中所有此类型的轨道</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4254"/>
+        <source>Uncheck all tracks of this type</source>
+        <translation>取消选中所有此类型的轨道</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4256"/>
+        <source>Check all tracks in this language</source>
+        <translation>选中所有此语言的轨道</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4257"/>
+        <source>Uncheck all tracks in this language</source>
+        <translation>取消选中所有此语言的轨道</translation>
     </message>
 </context>
 <context>

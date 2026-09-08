@@ -4176,6 +4176,26 @@ ISO trotzdem erstellen?</translation>
         <source>The meta file &quot;%1&quot; is empty.</source>
         <translation>Die Meta-Datei &quot;%1&quot; ist leer.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4253"/>
+        <source>Check all tracks of this type</source>
+        <translation>Alle Spuren dieser Art auswählen</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4254"/>
+        <source>Uncheck all tracks of this type</source>
+        <translation>Auswahl aller Spuren dieser Art aufheben</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4256"/>
+        <source>Check all tracks in this language</source>
+        <translation>Alle Spuren dieser Sprache auswählen</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4257"/>
+        <source>Uncheck all tracks in this language</source>
+        <translation>Auswahl aller Spuren dieser Sprache aufheben</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
