@@ -743,7 +743,7 @@ void MatroskaMuxer::parseMuxOpt(const std::string& opts)
     // on Matroska output used to produce ONE file and "Mux successful complete" with nothing said,
     // so a 421 MB source asked to split at 50 MB came back whole while the same meta aimed at .ts
     // gave nine parts. Say so, the way the demux path already does for the same reason.
-    for (const char* splitOpt : {"--split-size", "--split-duration"})
+    for (const char* splitOpt : {"--split-size", "--split-duration", "--split-chapters"})
         if (opts.find(splitOpt) != std::string::npos)
             LTRACE(LT_WARN, 2,
                    "Warning: splitting is not implemented for Matroska output. "
