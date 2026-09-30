@@ -538,7 +538,6 @@ TsMuxerWindow::TsMuxerWindow()
     /////////////////////////////////////////////////////////////
     for (int i = 0; i <= 3600; i += 5 * 60) ui->memoChapters->insertPlainText(floatToTime(i, '.') + '\n');
 
-    mSaveDialogFilter = TS_SAVE_DIALOG_FILTER();
     const static int colWidths[] = {31, 200, 62, 62, 10};
     for (unsigned i = 0u; i < sizeof(colWidths) / sizeof(int); ++i)
         ui->trackLV->horizontalHeader()->resizeSection(i, colWidths[i]);
@@ -4659,25 +4658,13 @@ void TsMuxerWindow::RadioButtonMuxClick()
             oldFileName.clear();
         }
         if (ui->radioButtonTS->isChecked())
-        {
             ui->outFileName->setText(changeFileExt(ui->outFileName->text(), "ts"));
-            mSaveDialogFilter = TS_SAVE_DIALOG_FILTER();
-        }
         else if (ui->radioButtonMKV->isChecked())
-        {
             ui->outFileName->setText(changeFileExt(ui->outFileName->text(), "mkv"));
-            mSaveDialogFilter = MKV_SAVE_DIALOG_FILTER();
-        }
         else if (ui->radioButtonBluRayISO->isChecked())
-        {
             ui->outFileName->setText(changeFileExt(ui->outFileName->text(), "iso"));
-            mSaveDialogFilter = ISO_SAVE_DIALOG_FILTER();
-        }
         else
-        {
             ui->outFileName->setText(changeFileExt(ui->outFileName->text(), "m2ts"));
-            mSaveDialogFilter = M2TS_SAVE_DIALOG_FILTER();
-        }
     }
     ui->DiskLabel->setVisible(ui->radioButtonBluRayISO->isChecked());
     ui->DiskLabelEdit->setVisible(ui->radioButtonBluRayISO->isChecked());
@@ -4751,7 +4738,7 @@ void TsMuxerWindow::saveFileDialog()
     {
         auto fileName = unquoteStr(ui->outFileName->text());
         auto startDir = getExistingDialogDir(fileName.isEmpty() ? getOutputDir() : fileName);
-        auto* dialog = new QFileDialog(this, tr("Select file for muxing"), startDir, mSaveDialogFilter);
+        auto* dialog = new QFileDialog(this, tr("Select file for muxing"), startDir, currentSaveDialogFilter());
         dialog->setAcceptMode(QFileDialog::AcceptSave);
         dialog->setFileMode(QFileDialog::AnyFile);
         dialog->setAttribute(Qt::WA_DeleteOnClose);
@@ -5211,6 +5198,21 @@ bool TsMuxerWindow::readSettings()
 
 // The output section, stored by name rather than by position so that adding an output later
 // cannot make an old setting select the wrong one.
+// Worked out when the dialog is about to open rather than kept in a member. The member was set
+// once at start up and then only from RadioButtonMuxClick, which is connected to clicked() and so
+// never runs when the output mode comes back from the settings: the window opened on Matroska and
+// offered to save a .ts. Asking the buttons at the moment the dialog opens cannot go stale.
+QString TsMuxerWindow::currentSaveDialogFilter() const
+{
+    if (ui->radioButtonMKV->isChecked())
+        return MKV_SAVE_DIALOG_FILTER();
+    if (ui->radioButtonBluRayISO->isChecked())
+        return ISO_SAVE_DIALOG_FILTER();
+    if (ui->radioButtonTS->isChecked())
+        return TS_SAVE_DIALOG_FILTER();
+    return M2TS_SAVE_DIALOG_FILTER();
+}
+
 QString TsMuxerWindow::currentOutputMode() const
 {
     if (ui->radioButtonM2TS->isChecked())

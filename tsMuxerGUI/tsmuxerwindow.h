@@ -124,6 +124,7 @@ class TsMuxerWindow : public QWidget
     void writeSettings();
     bool readSettings();
     [[nodiscard]] QString currentOutputMode() const;
+    [[nodiscard]] QString currentSaveDialogFilter() const;
     void setOutputMode(const QString& mode);
     bool readGeneralSettings(const QString& prefix);
     QString getOutputDir() const;
@@ -204,7 +205,6 @@ class TsMuxerWindow : public QWidget
     bool outFileNameModified;
     QString oldFileName;
     bool outFileNameDisableChange;
-    QString mSaveDialogFilter;
     MuxForm* muxForm;
     QString newFileName;
     QList<QtvCodecInfo> codecList;
