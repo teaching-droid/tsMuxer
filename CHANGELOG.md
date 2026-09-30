@@ -2,7 +2,7 @@
 
 Back at the machine, so this is the first release since 2.18.14. Thank you to everyone who posted while I was away; I have read all of it.
 
-Eleven changes: four faults, and seven things asked for on the tracker.
+Twelve changes: five faults, and seven things asked for on the tracker.
 
 ## Fixed
 
@@ -13,6 +13,8 @@ Eleven changes: four faults, and seven things asked for on the tracker.
 * **Fonts outside one folder, and every .otf and .ttc, could not be used on Linux.** The search looked in `/usr/share/fonts` only, and only for `.ttf`, so a font you installed for yourself was invisible however you installed it. It now also looks in `/usr/local/share/fonts`, `~/.fonts` and `~/.local/share/fonts`, and it accepts `.otf` and `.ttc`. Naming a font by its full path works for those too. On macOS the user's own font folder was written with a tilde, which nothing here expands, so it had never been searched at all.
 
 * **The Default tracks list on the Blu-ray tab kept showing the language a track had when it was added.** The two entries were built once and never rebuilt, so a subtitle file, which carries no language of its own, went on showing none however often you set one. A track that arrived with a language could go on showing the old one after you changed it, which is the worse half. Nothing about a mux changes: the language you set was always written to the disc correctly, and only the label was out of date.
+
+* **The Browse button offered the wrong file type until you clicked a radio button.** The window remembers the output you last used, but the filter in the save dialog was only set when one of those buttons was clicked, not when the setting was restored. So a window that opened on Matroska or on a disc image still offered to save a `.ts`. The filter is now worked out when the dialog opens, from the button that is actually selected. Reported on the tracker with a patch, and fixed a little differently so there is no second copy of the list to keep in step.
 
 ## New
 
