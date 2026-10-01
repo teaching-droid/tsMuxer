@@ -4,7 +4,7 @@ Back at the machine, so this is the first release since 2.18.14. Thank you to ev
 
 Twelve changes: five faults, and seven things asked for on the tracker.
 
-## Fixed
+### Fixed
 
 * **A subtitle built from an SRT file came out empty on Windows.** The track appeared in the output and carried nothing, and the mux still reported success. The default subtitle colour was fully transparent, and the Windows renderer honours that, so the text was drawn invisibly and no picture was produced. Naming a colour with `font-color` avoided it, which is why the window was never affected: it always writes one. This reaches meta files written by hand and run from the command line, and it is as old as this fork. The same fault also made a demux of a subtitle on its own write a file of zero bytes.
 
@@ -16,9 +16,9 @@ Twelve changes: five faults, and seven things asked for on the tracker.
 
 * **The Browse button offered the wrong file type until you clicked a radio button.** The window remembers the output you last used, but the filter in the save dialog was only set when one of those buttons was clicked, not when the setting was restored. So a window that opened on Matroska or on a disc image still offered to save a `.ts`. The filter is now worked out when the dialog opens, from the button that is actually selected. Reported on the tracker with a patch, and fixed a little differently so there is no second copy of the list to keep in step.
 
-## New
+### New
 
-* **You can choose which form a language code is shown in.** Twenty languages have two codes in ISO 639-2: Greek is `ell` or `gre`, German `deu` or `ger`. Discs mostly carry the first kind and eac3to reports the second, which is where the request came from. There are three choices rather than two, because wanting a disc's own codes untouched is as reasonable as wanting eac3to's: as the source says, terminological, or bibliographic. Terminological is the default and is what earlier versions did, so nothing changes unless you ask. On the command line it is `--lang-codes=`, which unlike the other options is an argument rather than a MUXOPT entry so that it also applies when listing a file. In the window it is on the General tab and is remembered. A language you type into a file name is left exactly as you typed it.
+* **You can choose which form a language code is shown in.** Twenty languages have two codes in ISO 639-2: Greek is `ell` or `gre`, German `deu` or `ger`. Discs mostly carry the first kind and eac3to reports the second, which is where the request came from. There are three choices rather than two, because wanting a disc's own codes untouched is as reasonable as wanting eac3to's: as the source says, terminological, or bibliographic. Terminological is the default and is what earlier versions did, so nothing changes unless you ask. On the command line it is `--lang-codes=`, which unlike the other options is an argument rather than a MUXOPT entry so that it also applies when listing a file. In the window it is on the General tab and is remembered. A language you type into a file name is left exactly as you typed it. One thing worth knowing if you use the window: because the meta file is built from what the track list shows, the choice there decides what a mux WRITES as well as what you see, so choosing bibliographic authors a disc carrying `ger`, `gre` and `dut`. As the source says is the most faithful remux of a disc.
 
 * **A demux writes the chapters to a text file.** `chapters.txt` appears beside the tracks, one time per line as `hh:mm:ss.mmm`. That is the form `--custom-chapters` accepts and the form the window's chapter box holds, so the file goes straight back in and rebuilds the same marks on a new disc. A Blu-ray playlist's marks and a Matroska's own chapter list are both used, and a source with neither writes no file.
 
@@ -28,7 +28,7 @@ Twelve changes: five faults, and seven things asked for on the tracker.
 
 * **A meta file can be opened and muxed from the window.** Until now one could only be handed to the command line version. The file is loaded into the Meta file box, and that box is what the muxer is given, so everything in the file is used exactly as written. The track list is not filled in from it and will not match; Reset meta to auto-generated goes back to building the meta from the list.
 
-* **A remove all button.** It empties both lists in one step. Removing files one at a time also stopped being slow: the meta file was rebuilt after every single removal, and it is now rebuilt once, which on forty files is the difference between about five seconds and about a tenth of one.
+* **A remove all button.** It empties both lists in one step, and on forty files that is about a tenth of a second against the five or so seconds the same clearance takes one file at a time, because the meta file is rebuilt once rather than after every removal. Removing them one at a time is unchanged and still rebuilds after each one.
 
 * **Tick or untick every track of a type or a language at once.** Right click a track for it. Right clicking an English audio track offers every audio track, or every English track, in one step. A track with no language of its own does not offer the language entries.
 
