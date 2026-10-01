@@ -2,7 +2,7 @@
 
 Back at the machine, so this is the first release since 2.18.14. Thank you to everyone who posted while I was away; I have read all of it.
 
-Twelve changes: five faults, and seven things asked for on the tracker.
+Thirteen changes: six faults, and seven things asked for on the tracker.
 
 **There is no Intel macOS build this time.** Homebrew has dropped support for Intel Macs, and the Intel build gets its font library from it, so that half of the macOS job no longer runs. Apple Silicon is unaffected and is here as usual. If you are on an Intel Mac, 2.18.14 is still available and still works; a way to build without Homebrew is being looked at.
 
@@ -17,6 +17,8 @@ Twelve changes: five faults, and seven things asked for on the tracker.
 * **The Default tracks list on the Blu-ray tab kept showing the language a track had when it was added.** The two entries were built once and never rebuilt, so a subtitle file, which carries no language of its own, went on showing none however often you set one. A track that arrived with a language could go on showing the old one after you changed it, which is the worse half. Nothing about a mux changes: the language you set was always written to the disc correctly, and only the label was out of date.
 
 * **The Browse button offered the wrong file type until you clicked a radio button.** The window remembers the output you last used, but the filter in the save dialog was only set when one of those buttons was clicked, not when the setting was restored. So a window that opened on Matroska or on a disc image still offered to save a `.ts`. The filter is now worked out when the dialog opens, from the button that is actually selected. Reported on the tracker with a patch, and fixed a little differently so there is no second copy of the list to keep in step.
+
+* **The macOS application showed no version.** The window's own title bar had it, but the bundle carried empty version fields, so Finder's Get Info showed a blank where every other application shows a number. It has been that way since before 2.18.14.
 
 ### New
 
