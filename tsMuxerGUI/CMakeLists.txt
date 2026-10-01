@@ -88,6 +88,14 @@ elseif (APPLE)
   set(MACOSX_BUNDLE_ICON_FILE tsMuxerGUI.icns)
   set(MACOSX_BUNDLE_GUI_IDENTIFIER "com.networkoptix.tsmuxergui")
   set(MACOSX_BUNDLE_BUNDLE_NAME "tsMuxerGUI")
+  # Info.plist.in interpolates these three and nothing set them, so CMake substituted empty
+  # strings and the shipped bundle carried no version at all: Finder's Get Info showed a blank
+  # where every other application shows a number, while the window's own title bar had it.
+  # Measured rather than assumed: CFBundleShortVersionString read out of a real built artefact
+  # was the empty string.
+  set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${VERSION_NUMBER}")
+  set(MACOSX_BUNDLE_BUNDLE_VERSION "${VERSION_NUMBER}")
+  set(MACOSX_BUNDLE_LONG_VERSION_STRING "${VERSION_NUMBER}")
   set_source_files_properties(tsMuxerGUI.icns PROPERTIES
          MACOSX_PACKAGE_LOCATION "Resources")
   add_executable(tsMuxerGUI MACOSX_BUNDLE ${tsmuxer_gui_sources} tsMuxerGUI.icns)

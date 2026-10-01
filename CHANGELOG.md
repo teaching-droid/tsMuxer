@@ -4,6 +4,8 @@ Back at the machine, so this is the first release since 2.18.14. Thank you to ev
 
 Twelve changes: five faults, and seven things asked for on the tracker.
 
+**There is no Intel macOS build this time.** Homebrew has dropped support for Intel Macs, and the Intel build gets its font library from it, so that half of the macOS job no longer runs. Apple Silicon is unaffected and is here as usual. If you are on an Intel Mac, 2.18.14 is still available and still works; a way to build without Homebrew is being looked at.
+
 ### Fixed
 
 * **A subtitle built from an SRT file came out empty on Windows.** The track appeared in the output and carried nothing, and the mux still reported success. The default subtitle colour was fully transparent, and the Windows renderer honours that, so the text was drawn invisibly and no picture was produced. Naming a colour with `font-color` avoided it, which is why the window was never affected: it always writes one. This reaches meta files written by hand and run from the command line, and it is as old as this fork. The same fault also made a demux of a subtitle on its own write a file of zero bytes. One other way into an empty subtitle track is still open and is being looked at: on Windows, a `font-name` that is not installed also produces an empty track and still reports success, where Linux says it cannot find the font and stops.
