@@ -61,7 +61,7 @@ build-x86_64/
 bld/
 climsvc/
 msvcbuild/
-guibuild/
+guibuild*/
 clibuild*/
 /build.ninja
 *.log

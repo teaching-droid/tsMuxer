@@ -4238,8 +4238,8 @@ ISO trotzdem erstellen?</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="727"/>
-        <source>Which form a language read from a disc or a container is shown in. Twenty languages have two codes in ISO 639-2: Greek is ell or gre, German deu or ger. Discs here carry the first kind and eac3to reports the second, so this chooses which you see. It also decides what a mux writes, because the meta file is built from what is shown. A language you type into a file name is left exactly as you typed it. The setting is remembered.</source>
-        <translation>In welcher Form eine aus einer Disc oder einem Container gelesene Sprache angezeigt wird. Zwanzig Sprachen haben in ISO 639-2 zwei Codes: Griechisch ist ell oder gre, Deutsch deu oder ger. Die Discs hier tragen die erste Form, eac3to meldet die zweite; hier wählst du, was du siehst. Es bestimmt auch, was beim Muxen geschrieben wird, denn die Meta-Datei entsteht aus dem Angezeigten. Eine Sprache, die du in einen Dateinamen schreibst, bleibt genau so stehen. Die Einstellung wird gespeichert.</translation>
+        <source>Which form a language read from a disc or a container is shown in. Twenty languages have two codes in ISO 639-2: Greek is ell or gre, German deu or ger. Discs mostly carry the first kind and eac3to reports the second, so this chooses which you see. It also decides what a mux writes, because the meta file is built from what is shown. A language you type into a file name is left exactly as you typed it. The setting is remembered.</source>
+        <translation>In welcher Form eine aus einer Disc oder einem Container gelesene Sprache angezeigt wird. Zwanzig Sprachen haben in ISO 639-2 zwei Codes: Griechisch ist ell oder gre, Deutsch deu oder ger. Die Discs tragen meist die erste Form, eac3to meldet die zweite; hier wählst du, was du siehst. Es bestimmt auch, was beim Muxen geschrieben wird, denn die Meta-Datei entsteht aus dem Angezeigten. Eine Sprache, die du in einen Dateinamen schreibst, bleibt genau so stehen. Die Einstellung wird gespeichert.</translation>
     </message>
 </context>
 <context>

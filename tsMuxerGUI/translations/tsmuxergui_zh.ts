@@ -4234,8 +4234,8 @@ Build the ISO anyway?</source>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="727"/>
-        <source>Which form a language read from a disc or a container is shown in. Twenty languages have two codes in ISO 639-2: Greek is ell or gre, German deu or ger. Discs here carry the first kind and eac3to reports the second, so this chooses which you see. It also decides what a mux writes, because the meta file is built from what is shown. A language you type into a file name is left exactly as you typed it. The setting is remembered.</source>
-        <translation>从光盘或容器中读取的语言以哪种形式显示。在 ISO 639-2 中有二十种语言拥有两个代码：希腊语是 ell 或 gre，德语是 deu 或 ger。这里的光盘使用前一种，而 eac3to 报告后一种，因此这里选择你看到的是哪一种。它同时决定混流写入的内容，因为 meta 文件是根据显示的内容生成的。你写在文件名中的语言会原样保留。该设置会被记住。</translation>
+        <source>Which form a language read from a disc or a container is shown in. Twenty languages have two codes in ISO 639-2: Greek is ell or gre, German deu or ger. Discs mostly carry the first kind and eac3to reports the second, so this chooses which you see. It also decides what a mux writes, because the meta file is built from what is shown. A language you type into a file name is left exactly as you typed it. The setting is remembered.</source>
+        <translation>从光盘或容器中读取的语言以哪种形式显示。在 ISO 639-2 中有二十种语言拥有两个代码：希腊语是 ell 或 gre，德语是 deu 或 ger。光盘多半使用前一种，而 eac3to 报告后一种，因此这里选择你看到的是哪一种。它同时决定混流写入的内容，因为 meta 文件是根据显示的内容生成的。你写在文件名中的语言会原样保留。该设置会被记住。</translation>
     </message>
 </context>
 <context>

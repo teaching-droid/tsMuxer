@@ -755,7 +755,7 @@ TsMuxerWindow::TsMuxerWindow()
     ui->langCodesComboBox->setToolTip(
         wrapTip(tr("Which form a language read from a disc or a container is shown in. Twenty "
                    "languages have two codes in ISO 639-2: Greek is ell or gre, German deu or "
-                   "ger. Discs here carry the first kind and eac3to reports the second, so this "
+                   "ger. Discs mostly carry the first kind and eac3to reports the second, so this "
                    "chooses which you see. It also decides what a mux writes, because the meta "
                    "file is built from what is shown. A language you type into a file name is "
                    "left exactly as you typed it. The setting is remembered.")));

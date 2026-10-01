@@ -4235,8 +4235,8 @@ Build the ISO anyway?</source>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="727"/>
-        <source>Which form a language read from a disc or a container is shown in. Twenty languages have two codes in ISO 639-2: Greek is ell or gre, German deu or ger. Discs here carry the first kind and eac3to reports the second, so this chooses which you see. It also decides what a mux writes, because the meta file is built from what is shown. A language you type into a file name is left exactly as you typed it. The setting is remembered.</source>
-        <translation>В каком виде показывается язык, прочитанный с диска или из контейнера. У двадцати языков в ISO 639-2 два кода: греческий это ell или gre, немецкий deu или ger. Диски здесь несут первый вид, а eac3to сообщает второй, и здесь выбирается, что вы видите. Это же определяет и то, что запишет мультиплексирование, потому что meta-файл строится из показанного. Язык, который вы вписали в имя файла, остаётся ровно таким. Настройка запоминается.</translation>
+        <source>Which form a language read from a disc or a container is shown in. Twenty languages have two codes in ISO 639-2: Greek is ell or gre, German deu or ger. Discs mostly carry the first kind and eac3to reports the second, so this chooses which you see. It also decides what a mux writes, because the meta file is built from what is shown. A language you type into a file name is left exactly as you typed it. The setting is remembered.</source>
+        <translation>В каком виде показывается язык, прочитанный с диска или из контейнера. У двадцати языков в ISO 639-2 два кода: греческий это ell или gre, немецкий deu или ger. Диски чаще всего несут первый вид, а eac3to сообщает второй, и здесь выбирается, что вы видите. Это же определяет и то, что запишет мультиплексирование, потому что meta-файл строится из показанного. Язык, который вы вписали в имя файла, остаётся ровно таким. Настройка запоминается.</translation>
     </message>
 </context>
 <context>

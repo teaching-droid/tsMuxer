@@ -4234,7 +4234,7 @@ Créer l'ISO malgré tout ?</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="727"/>
-        <source>Which form a language read from a disc or a container is shown in. Twenty languages have two codes in ISO 639-2: Greek is ell or gre, German deu or ger. Discs here carry the first kind and eac3to reports the second, so this chooses which you see. It also decides what a mux writes, because the meta file is built from what is shown. A language you type into a file name is left exactly as you typed it. The setting is remembered.</source>
+        <source>Which form a language read from a disc or a container is shown in. Twenty languages have two codes in ISO 639-2: Greek is ell or gre, German deu or ger. Discs mostly carry the first kind and eac3to reports the second, so this chooses which you see. It also decides what a mux writes, because the meta file is built from what is shown. A language you type into a file name is left exactly as you typed it. The setting is remembered.</source>
         <translation>Sous quelle forme est affichée une langue lue depuis un disque ou un conteneur. Vingt langues ont deux codes en ISO 639-2 : le grec est ell ou gre, l&apos;allemand deu ou ger. Les disques d&apos;ici portent la première forme et eac3to indique la seconde ; ceci choisit ce que vous voyez. Cela décide aussi de ce qu&apos;écrit un multiplexage, car le fichier meta est construit à partir de ce qui est affiché. Une langue que vous tapez dans un nom de fichier reste telle quelle. Le réglage est mémorisé.</translation>
     </message>
 </context>

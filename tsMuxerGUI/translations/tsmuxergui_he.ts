@@ -4234,8 +4234,8 @@ Build the ISO anyway?</source>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="727"/>
-        <source>Which form a language read from a disc or a container is shown in. Twenty languages have two codes in ISO 639-2: Greek is ell or gre, German deu or ger. Discs here carry the first kind and eac3to reports the second, so this chooses which you see. It also decides what a mux writes, because the meta file is built from what is shown. A language you type into a file name is left exactly as you typed it. The setting is remembered.</source>
-        <translation>באיזו צורה מוצגת שפה שנקראה מדיסק או ממכל. לעשרים שפות יש שני קודים ב-ISO 639-2: יוונית היא ell או gre, גרמנית deu או ger. הדיסקים כאן נושאים את הצורה הראשונה ו-eac3to מדווח על השנייה, וכאן בוחרים מה רואים. הבחירה גם קובעת מה נכתב במיזוג, מפני שקובץ המטא נבנה ממה שמוצג. שפה שהקלדתם בשם קובץ נשארת בדיוק כפי שהקלדתם. ההגדרה נשמרת.</translation>
+        <source>Which form a language read from a disc or a container is shown in. Twenty languages have two codes in ISO 639-2: Greek is ell or gre, German deu or ger. Discs mostly carry the first kind and eac3to reports the second, so this chooses which you see. It also decides what a mux writes, because the meta file is built from what is shown. A language you type into a file name is left exactly as you typed it. The setting is remembered.</source>
+        <translation>באיזו צורה מוצגת שפה שנקראה מדיסק או ממכל. לעשרים שפות יש שני קודים ב-ISO 639-2: יוונית היא ell או gre, גרמנית deu או ger. הדיסקים נושאים בדרככל את הצורה הראשונה ו-eac3to מדווח על השנייה, וכאן בוחרים מה רואים. הבחירה גם קובעת מה נכתב במיזוג, מפני שקובץ המטא נבנה ממה שמוצג. שפה שהקלדתם בשם קובץ נשארת בדיוק כפי שהקלדתם. ההגדרה נשמרת.</translation>
     </message>
 </context>
 <context>
