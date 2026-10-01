@@ -168,6 +168,7 @@ down-to-dts       | Available only for DTS-HD tracks. Filter out HD part.
 down-to-ac3       | For TRUE-HD and E-AC3 (DD+) tracks. Keep the AC-3 core, drop the HD part. 
 secondary         | Mux as secondary audio.  Available for DD+ and DTS-Express. 
 default           | Mark this track as the default when muxing to Blu-ray.
+w64               | **Demux only, LPCM only.** Write the track as Wave64 (`.w64`) instead of WAV. A WAV header states its sizes in 32 bits and so cannot describe a file past 4 GiB, which is why a long track is otherwise written as two; Wave64 is the same audio with 64 bit sizes and stays one file.
 stretch           | Stretch audio by a given factor. Can be a decimal value or a fraction (e.g. 25/24). Useful for fixing A/V sync issues caused by frame rate discrepancies.
 merge-ac3-track   | **MKV only, A_MLP only.** Matroska track number of a classic AC-3 stream to interleave with this TrueHD track for Blu-ray-style muxing. Requires `track=<TrueHD track number>`. Do not add the AC-3 track as a separate meta line.
 merge-ac3-file    | **A_MLP only.** Path to an external classic AC-3 (`.ac3`) file to interleave with a standalone TrueHD (`.thd`) stream for Blu-ray-style muxing.
@@ -274,7 +275,7 @@ Parameter           | Description
 --no-asyncio        | Do not  create  a separate thread  for writing. This option also disables the FILE_FLAG_NO_BUFFERING flag on Windows when writing. This option is deprecated. 
 --auto-chapters     | Insert a chapter every <n> minutes. Used only in BD/AVCHD mode. 
 --custom-chapters   | A semicolon delimited list of hh:mm:ss.zzz strings, representing the chapters' start times. 
---demux             | Run in demux mode : the selected audio and video tracks are stored as separate files. The output name must be a folder name. All selected effects (such as changing the level of a H264 stream) are processed. When demuxing, certain types of tracks are always changed : - Subtitles in a Presentation Graphic Stream are converted into sup format. - PCM audio is saved as WAV files. 
+--demux             | Run in demux mode : the selected audio and video tracks are stored as separate files. The output name must be a folder name. All selected effects (such as changing the level of a H264 stream) are processed. When demuxing, certain types of tracks are always changed : - Subtitles in a Presentation Graphic Stream are converted into sup format. - PCM audio is saved as WAV files. A chapters.txt is written beside the tracks when the source carries chapter marks, one time per line as hh:mm:ss.mmm, which is the form the GUI's chapter box takes. Note that --custom-chapters wants those same times separated by semicolons rather than by lines. 
 --blu-ray           | Mux as a BD disc. If the output file name is a folder, a Blu-Ray folder structure is created inside that folder. SSIF files for BD3D discs are not created in this case. If the output name has an .iso extension, then the disc is created directly as an image file. 
 --blu-ray-v3        | As above - except mux to UHD BD discs. If you're using the GUI, this will be automatically set if one of the streams is HEVC.
 --avchd             | Mux to AVCHD disc.
@@ -282,6 +283,8 @@ Parameter           | Description
 --cut-end           | Trim the end of the file. Same rules as --cut-start apply. 
 --split-duration    | Split the output into several files, with each of them being <n> seconds long. 
 --split-size        | Split the output into several files, with each of them having a given maximum size. KB, KiB, MB, MiB, GB and GiB are accepted as size units. 
+--split-chapters    | Split the output so that each file begins at a chapter. The marks come from a Blu-ray playlist, or from a Matroska's own chapters when those carry a name, and --custom-chapters overrides both. As with the other split options the cut lands on the first key frame at or after the mark. Splitting is not implemented for Matroska OUTPUT: there the option is ignored and says so. 
+--lang-codes        | Which form a language read from a disc or a container is reported in. Twenty languages have two codes in ISO 639-2, Greek being ell or gre. Takes source (no conversion either way), terminological (ell, deu, nld, the default and what earlier versions did) or bibliographic (gre, ger, dut, what eac3to shows). Unlike the other options this is an argument rather than a MUXOPT entry, so it also applies when simply listing a file. A language typed into a file name is left exactly as typed. 
 --right-eye         | Use base video stream for right eye. Used for 3DBD only.
 --start-time        | Timestamp of the first video frame. May be defined as 45Khz clock (just a number) or as time in hh:mm:ss.zzz format. If not set, muxing starts at 600 s (27000000 ticks). For every output except plain \*.ts, values below 524280 ticks (11.65 s) are raised to 524280: below that point Blu-ray players cannot navigate back to the start of the disc (their 32-bit 45 Khz registers underflow), and commercial discs never start lower.
 --mplsOffset        | The number of the first MPLS file. Used for BD disc mode.

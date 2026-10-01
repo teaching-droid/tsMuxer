@@ -1165,13 +1165,18 @@ TsMuxerWindow::TsMuxerWindow()
                 // the light window and 3.27 on the dark one, and it cost the light window the
                 // 4.5 the original #1565c0 already had.
                 //
-                // So the ground decides. Measured on the window as it actually paints, which is
-                // lighter than the #f0f0f0 the first attempt assumed:
+                // So the ground decides. There is no single "the light ground": the window paints
+                // about #fbfbfb, the Qt palette reports #f3f3f3, and the first attempt assumed
+                // #f0f0f0; the dark side likewise ranges over #1e1e1e to #2d2d2d. Rather than
+                // quote one of them, here is the WORST case for each colour across all six, so
+                // the figures hold whichever ground is really underneath:
                 //
-                //   #1565c0 on light   5.04      #1565c0 on dark   2.46
-                //   #4da3ff on light   2.30      #4da3ff on dark   5.39
+                //   #1565c0 on a light ground   5.04 at worst   (5.55 on what is painted)
+                //   #4da3ff on a dark ground    5.25 at worst   (6.35 on the palette value)
                 //
-                // Both chosen values clear 4.5 where they are used.
+                // Both clear 4.5 on every one of those grounds. The colour NOT chosen for a
+                // ground would read between 2.30 and 2.90 there, which is why one value cannot
+                // serve both.
                 folderStatusLabel->setStyleSheet(
                     QStringLiteral("color:%1; font-weight:bold;")
                         .arg(themedInk(folderStatusLabel, QLatin1String("#1565c0"), QLatin1String("#4da3ff"))));
