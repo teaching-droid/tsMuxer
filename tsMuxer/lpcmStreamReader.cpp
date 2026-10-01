@@ -34,7 +34,14 @@ uint32_t FOUR_CC(const char a, const char b, const char c, const char d)
 //   104  data GUID           16
 //   120  size of data chunk   8   <- patched on close
 //   128  the audio
-constexpr uint8_t W64_GUID_SUFFIX[12] = {0x2E, 0x91, 0xCF, 0x11, 0xA5, 0xD6, 0x28, 0xDB, 0x04, 0xC1, 0x00, 0x00};
+// Every chunk GUID begins with the four character id, and the remaining twelve bytes are NOT the
+// same for all of them. The riff chunk has its own suffix; wave, fmt and data share a different
+// one. Writing the riff suffix on all four produced a file that tsMuxeR itself read back happily,
+// because its own detector compares only the first sixteen bytes, while ffprobe and two versions
+// of libsndfile all refused it: "No 'data' chunk marker". The audio was never affected, only the
+// thirty six bytes of those three GUIDs.
+constexpr uint8_t W64_RIFF_SUFFIX[12] = {0x2E, 0x91, 0xCF, 0x11, 0xA5, 0xD6, 0x28, 0xDB, 0x04, 0xC1, 0x00, 0x00};
+constexpr uint8_t W64_CHUNK_SUFFIX[12] = {0xF3, 0xAC, 0xD3, 0x11, 0x8C, 0xD1, 0x00, 0xC0, 0x4F, 0x8E, 0xDB, 0x8A};
 constexpr int64_t W64_HEADER_SIZE = 128;
 constexpr int64_t W64_RIFF_SIZE_OFFSET = 16;
 constexpr int64_t W64_DATA_SIZE_OFFSET = 120;
@@ -42,8 +49,11 @@ constexpr int64_t W64_CHUNK_HEADER = 24;  // a 16 byte GUID and an 8 byte size
 
 uint8_t* writeW64Guid(uint8_t* dst, const char* fourcc)
 {
+    // The suffix is chosen here rather than at the call sites so that a chunk added later cannot
+    // quietly get the wrong one.
+    const bool isRiff = memcmp(fourcc, "riff", 4) == 0;
     memcpy(dst, fourcc, 4);
-    memcpy(dst + 4, W64_GUID_SUFFIX, sizeof(W64_GUID_SUFFIX));
+    memcpy(dst + 4, isRiff ? W64_RIFF_SUFFIX : W64_CHUNK_SUFFIX, 12);
     return dst + 16;
 }
 
