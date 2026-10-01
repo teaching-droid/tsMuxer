@@ -334,6 +334,18 @@ QString quoteStr(const QString& val)
 
 QString myUnquoteStr(const QString& val) { return unquoteStr(val); }
 
+// The window takes its colours from the system, so a label is painted on a light ground on one
+// machine and a dark one on another. Reaching the contrast that normal text needs on BOTH is not
+// possible with a single value, so the ground is asked and the colour chosen for it.
+//
+// The ground is read from the widget's own palette rather than from any platform theme call, so
+// it follows whatever the style actually paints and needs no Qt version test.
+QString themedInk(const QWidget* w, const QLatin1String& onLight, const QLatin1String& onDark)
+{
+    const QColor ground = w->palette().color(w->backgroundRole());
+    return QString(ground.lightness() < 128 ? onDark : onLight);
+}
+
 QString getComboBoxTrackText(int idx, const QtvCodecInfo& codecInfo)
 {
     auto text = QString("[%1] %2").arg(idx + 1).arg(codecInfo.displayName);
@@ -1146,19 +1158,23 @@ TsMuxerWindow::TsMuxerWindow()
             }
             else if (QStorageInfo(folder).isReadOnly())
             {
-                // Was #1565c0, which is fine on a light window and only 2.87 to 1 against a dark
-                // one. The window follows the system theme, so every colour here is painted on
-                // both grounds, and this was the one that fell below the 3 to 1 a bold label
-                // needs. #1978e4 is the same hue lifted until it is balanced: 3.80 light, 3.81
-                // dark.
+                // One colour cannot do this. Reaching 4.5 to 1 on both grounds needs a luminance
+                // of at most 0.154 against the light window and at least 0.240 against the dark
+                // one, and those do not overlap, so a single value can only be a compromise that
+                // fails on both. The first attempt here was exactly that: #1978e4 reads 3.80 on
+                // the light window and 3.27 on the dark one, and it cost the light window the
+                // 4.5 the original #1565c0 already had.
                 //
-                // Before changing any of the others, note that NO single colour can reach 4.5 on
-                // both grounds: that needs a luminance of at most 0.154 against the light one and
-                // at least 0.240 against the dark one, and those do not overlap. At 3 to 1 the
-                // band is 0.143 to 0.257, and the rest of these already sit inside it: the grey
-                // hint 3.05 and 4.74, the red 4.77 and 3.03, the amber 3.72 and 3.89, the green
-                // 4.50 and 3.21. Only this one did not.
-                folderStatusLabel->setStyleSheet(QStringLiteral("color:#1978e4; font-weight:bold;"));
+                // So the ground decides. Measured on the window as it actually paints, which is
+                // lighter than the #f0f0f0 the first attempt assumed:
+                //
+                //   #1565c0 on light   5.04      #1565c0 on dark   2.46
+                //   #4da3ff on light   2.30      #4da3ff on dark   5.39
+                //
+                // Both chosen values clear 4.5 where they are used.
+                folderStatusLabel->setStyleSheet(
+                    QStringLiteral("color:%1; font-weight:bold;")
+                        .arg(themedInk(folderStatusLabel, QLatin1String("#1565c0"), QLatin1String("#4da3ff"))));
                 folderStatusLabel->setText(
                     tr("BDMV disc detected (read-only). The output ISO cannot be written to the "
                        "disc, so choose a writable output location."));
