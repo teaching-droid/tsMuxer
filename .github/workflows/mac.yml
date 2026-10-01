@@ -18,6 +18,12 @@ jobs:
 
     runs-on: macos-15
     strategy:
+      # The two architectures are independent builds and one must not be allowed to kill the
+      # other. Homebrew dropped Intel macOS, so the x86_64 leg now fails while installing a
+      # second Intel Homebrew under Rosetta, and with the default fail-fast that cancelled the
+      # arm64 build before it had produced anything. Apple Silicon is the architecture most
+      # people are on, and it was being thrown away for a failure that has nothing to do with it.
+      fail-fast: false
       matrix:
         include:
           - arch: arm64
