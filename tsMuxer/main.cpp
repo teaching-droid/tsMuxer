@@ -1940,8 +1940,15 @@ int main(int argc, char** argv)
         else if (value == "terminological")
             setLangCodeStyle(LangCodeStyle::Terminological);
         else
-            THROW(ERR_COMMON,
-                  "Unknown --lang-codes value \"" << value << "\". It takes source, terminological or bibliographic.")
+        {
+            // This loop runs BEFORE the try block further down, so a THROW here escaped main
+            // altogether: the process died with 0xC0000409 and printed nothing but the version
+            // banner, while the sentence written for exactly this case was never seen. Report it
+            // here instead, the same way the handler at the end of main would have.
+            LTRACE(LT_ERROR, 2,
+                   "Unknown --lang-codes value \"" << value << "\". It takes source, terminological or bibliographic.");
+            return -2;
+        }
         for (int j = i; j + 1 < argc; ++j) argv[j] = argv[j + 1];
         --argc;
     }
