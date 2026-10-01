@@ -249,7 +249,7 @@ fadein-time       | Time in ms for smooth subtitle appearance.
 fadeout-time      | Time in ms for smooth subtitle disappearance. 
 line-spacing      | Interval between subtitle lines. Default value is 1.0.
 
-Currently tsMuxer only supports fonts in TTF format. It also will only load fonts from `/usr/share/fonts/` on Linux and `/Library/Fonts/` on Mac. As such our recommendation is to use font "FreeSans" on Linux and "OpenSans" on Mac.
+On Linux and Mac, a font can be named either by its family name or by the full path to the file. Named by family, tsMuxeR searches `/usr/share/fonts/`, `/usr/local/share/fonts/`, `~/.fonts` and `~/.local/share/fonts` on Linux, and `/Library/Fonts/` and `~/Library/Fonts` on Mac, and it accepts `.ttf`, `.otf` and `.ttc`. Note that the search is case sensitive on the extension, so a file copied from Windows as `Arial.TTF` is found only by its full path.
 
 tsMuxeR supports additional tags inside SRT tracks.  The syntax  and parameters coincide with HTML: `<b>, <i>, <u>, <strike>, <font>`. Default relative font size (used in these tags) is 3.  For example:
 ```

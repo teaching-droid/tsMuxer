@@ -169,10 +169,14 @@ struct DetectStreamRez
     int64_t fileDurationNano;
 };
 
-// ISO 639-2 gives twenty-four languages two codes, a bibliographic one and a terminological one,
+// ISO 639-2 gives twenty languages two codes, a bibliographic one and a terminological one,
 // German being "ger" and "deu". eac3to reports the first, tsMuxeR has reported the second, and a
 // disc may carry either. Which one is REPORTED is the user's to choose; what gets written is not
 // affected, because a lang= in a meta file reaches the disc exactly as typed.
+//
+// The table in metaDemuxer.cpp holds twenty-four rows, not twenty. Four of them are deprecated and
+// are accepted on the way IN only, so that an older disc still reads: jaw, mol, scc and scr. Those
+// four must never be produced, which is why each row carries a flag saying whether it is current.
 enum class LangCodeStyle
 {
     Source,          // whatever the source says, converted neither way
