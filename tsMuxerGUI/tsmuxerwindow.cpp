@@ -3698,7 +3698,11 @@ QString TsMuxerWindow::getSrtParams()
     if (font.underline())
         rez += ",font-underline";
     if (font.strikeOut())
-        rez += ",font-strikeout";
+        // The muxer spells it font-strike-out, and has since it was documented. The window wrote
+        // font-strikeout, which is not a name anything knows, so the tick warned and did nothing.
+        // Measured: with the muxer's spelling the rendered subtitle really changes, and with this
+        // one the output is identical to having the tick off apart from the random track UID.
+        rez += ",font-strike-out";
 
     rez += QString(",bottom-offset=") + QString::number(ui->spinEditOffset->value()) +
            ",font-border=" + QString::number(ui->spinEditBorder->value());
