@@ -307,6 +307,17 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
     const auto defaultParam = params.find("default");
     track.defaultExplicit = defaultParam != params.end();
     track.markedDefault = track.defaultExplicit && !defaultParamMeansNo(defaultParam->second);
+    if (!track.defaultExplicit)
+    {
+        // Nothing said in the meta, so the source container's own flag stands in. METADemuxer puts
+        // it here for a Matroska source, where it was previously parsed and discarded: a remux
+        // replaced the source's choice with the first track of each type.
+        if (const auto srcDefault = params.find("srcdefault"); srcDefault != params.end())
+        {
+            track.defaultExplicit = true;
+            track.markedDefault = srcDefault->second == "1";
+        }
+    }
     track.dropAc3Core = params.find("drop-ac3-core") != params.end();
 
     // Generate a random UID

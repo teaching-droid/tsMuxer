@@ -2376,6 +2376,11 @@ int MatroskaDemuxer::matroska_add_stream()
     auto* track = reinterpret_cast<MatroskaTrack*>(new char[MAX_TRACK_SIZE]{});
     track->encodingAlgo = -1;
     strcpy(track->language, "eng");
+    // FlagDefault's default VALUE in Matroska is 1, so a track that does not carry the element is
+    // the default one, and mkvmerge leaves it out exactly when it is true. The track is raw zeroed
+    // memory here, so without this an absent element read as "not the default", which is backwards.
+    // FlagEnabled defaults to 1 as well; nothing reads that one, so it is left alone.
+    track->flags |= MATROSKA_TRACK_DEFAULT;
 
     /* start with the master */
     if ((res = ebml_read_master(&id)) < 0)
@@ -2911,7 +2916,9 @@ bool MatroskaDemuxer::getAttachment(const std::string& name, std::vector<uint8_t
 
 void MatroskaDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
 {
-    for (int i = 0; i < num_tracks; i++) trackList[i + 1] = TrackInfo(getTrackType(tracks[i]), tracks[i]->language, 0);
+    for (int i = 0; i < num_tracks; i++)
+        trackList[i + 1] = TrackInfo(getTrackType(tracks[i]), tracks[i]->language, 0, 0,
+                                     (tracks[i]->flags & MATROSKA_TRACK_DEFAULT) ? 1 : 0);
 }
 
 double MatroskaDemuxer::getTrackFps(const uint32_t trackId)

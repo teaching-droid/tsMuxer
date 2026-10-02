@@ -88,9 +88,17 @@ struct TrackInfo
     // For stream type 0x06, which says nothing on its own: 0x59 is DVB bitmap subtitles and
     // 0x56 is EBU teletext. Zero when the container named neither.
     int m_dvbDescriptor;
-    TrackInfo() : m_trackType(0), m_delay(0), m_dvbDescriptor(0) {}
-    TrackInfo(const int trackType, const char* lang, const int64_t delay, const int dvbDescriptor = 0)
-        : m_trackType(trackType), m_lang(lang), m_delay(delay), m_dvbDescriptor(dvbDescriptor)
+    // Whether the container marked this track as its default one: -1 when it did not say, which is
+    // every container that has no such flag. Only Matroska has one.
+    int m_defaultFlag;
+    TrackInfo() : m_trackType(0), m_delay(0), m_dvbDescriptor(0), m_defaultFlag(-1) {}
+    TrackInfo(const int trackType, const char* lang, const int64_t delay, const int dvbDescriptor = 0,
+              const int defaultFlag = -1)
+        : m_trackType(trackType),
+          m_lang(lang),
+          m_delay(delay),
+          m_dvbDescriptor(dvbDescriptor),
+          m_defaultFlag(defaultFlag)
     {
     }
 };

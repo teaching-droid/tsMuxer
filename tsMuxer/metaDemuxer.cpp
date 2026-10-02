@@ -1027,7 +1027,17 @@ int METADemuxer::addStream(const string& codec, const string& codecStreamName, c
             std::map<int32_t, TrackInfo> trackList;
             demuxerIt->second.m_demuxer->getTrackList(trackList);
             if (const auto trackIt = trackList.find(pid); trackIt != trackList.end())
+            {
                 streamInfo.m_lang = trackIt->second.m_lang;
+
+                // The source's own default flag, under a key only the Matroska muxer reads. It was
+                // parsed and thrown away, so a remux replaced the source's choice with "the first
+                // track of each type". Not written as "default": that key also drives the disc
+                // navigation commands, and filling it would start selecting a default audio or
+                // subtitle on discs remuxed from a Matroska, which nobody asked for.
+                if (addParams.find("default") == addParams.end() && trackIt->second.m_defaultFlag >= 0)
+                    streamInfo.m_addParams["srcdefault"] = trackIt->second.m_defaultFlag ? "1" : "0";
+            }
         }
     }
     m_totalSize += fileSize;
@@ -1088,9 +1098,9 @@ static bool isKnownTrackParam(const std::string& name)
         // text subtitles
         "font-name", "font-size", "font-color", "font-bold", "font-italic", "font-underline", "font-strike-out",
         "font-border", "font-charset", "line-spacing", "bottom-offset", "fadein-time", "fadeout-time",
-        // set internally by muxerManager, never written by a user, but accepted so a round
-        // tripped meta does not warn
-        "srclang"};
+        // set internally, never written by a user, but accepted so a round tripped meta does
+        // not warn. srcdefault is the source container's own default track flag.
+        "srclang", "srcdefault"};
     return known.find(name) != known.end();
 }
 
