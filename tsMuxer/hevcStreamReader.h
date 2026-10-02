@@ -18,6 +18,9 @@ class HEVCStreamReader final : public MPEGStreamReader
     int setDoViDescriptor(uint8_t* dstBuff) const;
     // Shared derivation behind both the Blu-ray descriptor and the Matroska record.
     bool getDoViParams(int& profile, int& level, int& compatibility, bool& isDVBLOut) const;
+    // Said once per stream. doViProfileAndCompatibility is const and is called more than once, from
+    // the descriptor and from the Matroska configuration record.
+    mutable bool m_warnedDvProfile5 = false;
     // Writes 24 bytes and returns the Matroska BlockAddIDType (dvcC or dvvC), or 0 if not DV.
     [[nodiscard]] uint32_t buildDoViConfigRecord(uint8_t* dst) const;
     // The same 24 bytes for a MERGED dual layer track. Called on the BASE layer reader.
@@ -25,6 +28,9 @@ class HEVCStreamReader final : public MPEGStreamReader
     [[nodiscard]] uint32_t buildDoViConfigRecordProfile81(uint8_t* dst) const;
     // The profile / level tables, shared so there is exactly one copy of each.
     void doViProfileAndCompatibility(bool isEnhancementLayer, int& profile, int& compatibility) const;
+    // Says once, for a SINGLE LAYER Dolby Vision stream, whether it leaves a picture that a player
+    // without Dolby Vision can show. Profile 5 does not.
+    void warnIfDvHasNoFallback();
     static int doViLevelFor(unsigned width, uint32_t pixelRate);
     [[nodiscard]] uint32_t doViPixelRate() const;
     CheckStreamRez checkStream(uint8_t* buffer, int len);

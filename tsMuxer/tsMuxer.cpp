@@ -8,6 +8,7 @@
 #include "ac3StreamReader.h"
 #include "dtsStreamReader.h"
 #include "h264StreamReader.h"
+#include "hevcStreamReader.h"
 #include "mpegAudioStreamReader.h"
 #include "mpegStreamReader.h"
 #include "muxerManager.h"
@@ -542,6 +543,15 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
         // presence of Dolby Vision and so described a single layer stream as an enhancement layer: no
         // primary video entry at all, and a subpath for a layer that is not there.
         itPid->second.isDvEnhancement = isDvEnhancement;
+
+        // A single layer Dolby Vision stream may have no picture for a player that cannot read it.
+        // Asked here because this is where such a stream is known to BE single layer, and because the
+        // descriptor path that computes the profile is never reached by a Blu-ray mux at all.
+        if (!isDvEnhancement && codecReader != nullptr && codecReader->getStreamHDR() == 4)
+        {
+            if (const auto hevcReader = dynamic_cast<HEVCStreamReader*>(codecReader); hevcReader != nullptr)
+                hevcReader->warnIfDvHasNoFallback();
+        }
     }
 
     m_streamInfo[DEFAULT_PCR_PID].m_tsCnt = 0;

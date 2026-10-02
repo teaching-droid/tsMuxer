@@ -866,6 +866,41 @@ bool HEVCStreamReader::getColourDesc(uint8_t& primaries, uint8_t& transfer, uint
     return primaries != 2 || transfer != 2 || matrix != 2;
 }
 
+// Profiles 7, 8.1, 8.2 and 8.4 all leave a base layer that a plain player can show: HDR10, SDR or
+// HLG. Profile 5 leaves nothing of the kind, because its picture is coded in IPT, so a player that
+// does not understand Dolby Vision shows wrong colours rather than a plain picture. Nothing here can
+// change that; reporting success without a word about it leaves it to be discovered on a television.
+//
+// The profile comes from the same table the descriptors use rather than from a second copy of its
+// conditions. Its only side effect for profile 5 is V3_flags |= BL_NOTCOMPAT, which is true, and whose
+// one use at tsMuxer.cpp:420 is commented out and left that way.
+void HEVCStreamReader::warnIfDvHasNoFallback()
+{
+    if (m_warnedDvProfile5 || m_sps == nullptr || m_hdr == nullptr)
+        return;
+    // Only the RPU is asked about here. Whether there is an enhancement layer is the CALLER's question
+    // and it has already answered it: this is asked only for a stream being written as the primary
+    // video. Asking again was wrong as well as redundant, because a stream folded from a dual layer
+    // source still reports an enhancement layer to the reader while being muxed as a single one.
+    if (!m_hdr->isDVRPU)
+        return;
+
+    int profile = 0;
+    int compatibility = 0;
+    doViProfileAndCompatibility(false, profile, compatibility);
+    if (compatibility != 0)  // 1 is HDR10, 2 is SDR, 4 is HLG: there is a picture to fall back on
+        return;
+
+    m_warnedDvProfile5 = true;
+    LTRACE(LT_WARN, 2,
+           "Warning: this is Dolby Vision profile "
+               << profile
+               << ", which carries no HDR10 or SDR fallback. A player that understands Dolby Vision will "
+                  "be correct. A player that does not will show wrong colours rather than a plain "
+                  "picture, because the picture itself is coded in IPT. The mux is written as asked: "
+                  "nothing here can add a fallback that the stream does not have.");
+}
+
 int HEVCStreamReader::getStreamHDR() const
 {
     return (m_hdr->isDVRPU || m_hdr->isDVEL) ? 4 : (m_hdr->isHDR10plus ? 16 : (m_hdr->isHDR10 ? 2 : 1));
