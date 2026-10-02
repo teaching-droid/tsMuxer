@@ -3599,6 +3599,24 @@ QString TsMuxerWindow::getMuxOpts()
         for (int i = 0; i < lines.size(); ++i)
         {
             QString tmpStr = lines[i].trimmed();
+
+            // A simple text chapter file can be pasted in as it is. eac3to and MKVToolNix both write
+            // CHAPTER01=00:00:00.000 followed by CHAPTER01NAME=, and every one of those lines used to
+            // be rejected because this box wants a bare time. The time is taken from a CHAPTERnn=
+            // line and a CHAPTERnnNAME= line is skipped; the names are dropped because a disc has
+            // nowhere to put them and the meta line carries times only.
+            if (tmpStr.startsWith(QLatin1String("CHAPTER"), Qt::CaseInsensitive))
+            {
+                const int eq = tmpStr.indexOf(QLatin1Char('='));
+                if (eq > 0)
+                {
+                    const QString key = tmpStr.left(eq).trimmed();
+                    if (key.endsWith(QLatin1String("NAME"), Qt::CaseInsensitive))
+                        continue;
+                    tmpStr = QtCompat::strMid(tmpStr, eq + 1).trimmed();
+                }
+            }
+
             if (!tmpStr.isEmpty())
             {
                 if (!custChapStr.isEmpty())
