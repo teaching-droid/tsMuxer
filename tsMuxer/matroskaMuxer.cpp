@@ -1694,21 +1694,47 @@ void MatroskaMuxer::writeChapters()
     // timestamps, so it must not go through the cluster timestamp conversion.
     std::vector<uint8_t> atoms;
     uint64_t uid = 0x1000;
+    size_t chapterNo = 0;
     for (const double startSec : m_chapters)
     {
+        const size_t index = chapterNo++;
         if (startSec < 0)
             continue;
-        uint8_t atom[64];
+
+        // EVERY chapter gets a name. Without one this program cannot read its own output back:
+        // the Matroska reader keeps a chapter only if it has a title, so a nameless chapter
+        // survives one mux and disappears on the next. A source that named its chapters gets
+        // those names; anything else is numbered the way every other tool numbers them.
+        std::string name;
+        if (index < m_chapterNames.size())
+            name = m_chapterNames[index];
+        if (name.empty())
+            name = "Chapter " + std::to_string(index + 1);
+
+        // Sized from the string rather than fixed, because a source title has no length limit.
+        std::vector<uint8_t> display(name.size() + 64);
+        int d = 0;
+        d += ebml_write_string(display.data() + d, MATROSKA_ID_CHAPSTRING, name);
+        // The language the name is written in is not carried through the muxer, so say so rather
+        // than claim one. "und" is what tsMuxeR already uses for an unknown track language.
+        d += ebml_write_string(display.data() + d, MATROSKA_ID_CHAPTERLANGUAGE, "und");
+        uint8_t dispHdr[16];
+        const int dh = ebml_write_master_open(dispHdr, MATROSKA_ID_CHAPTERDISPLAY, d);
+
+        std::vector<uint8_t> atom(64);
         int p = 0;
-        p += ebml_write_uint(atom + p, MATROSKA_ID_CHAPTERUID, ++uid);
-        p += ebml_write_uint(atom + p, MATROSKA_ID_CHAPTERTIMESTART,
+        p += ebml_write_uint(atom.data() + p, MATROSKA_ID_CHAPTERUID, ++uid);
+        p += ebml_write_uint(atom.data() + p, MATROSKA_ID_CHAPTERTIMESTART,
                              static_cast<uint64_t>(startSec * 1000000000.0 + 0.5));
-        p += ebml_write_uint(atom + p, MATROSKA_ID_CHAPTERFLAGHIDDEN, 0);
+        p += ebml_write_uint(atom.data() + p, MATROSKA_ID_CHAPTERFLAGHIDDEN, 0);
+        atom.resize(p);
+        atom.insert(atom.end(), dispHdr, dispHdr + dh);
+        atom.insert(atom.end(), display.begin(), display.begin() + d);
 
         uint8_t hdr[16];
-        int h = ebml_write_master_open(hdr, MATROSKA_ID_CHAPTERATOM, p);
+        const int h = ebml_write_master_open(hdr, MATROSKA_ID_CHAPTERATOM, atom.size());
         atoms.insert(atoms.end(), hdr, hdr + h);
-        atoms.insert(atoms.end(), atom, atom + p);
+        atoms.insert(atoms.end(), atom.begin(), atom.end());
     }
     if (atoms.empty())
         return;

@@ -36,6 +36,7 @@ static constexpr uint16_t MATROSKA_ID_CHAPTERTIMESTART = 0x91;
 static constexpr uint16_t MATROSKA_ID_CHAPTERTIMEEND = 0x92;
 static constexpr uint16_t MATROSKA_ID_CHAPTERDISPLAY = 0x80;
 static constexpr uint16_t MATROSKA_ID_CHAPSTRING = 0x85;
+static constexpr uint16_t MATROSKA_ID_CHAPTERLANGUAGE = 0x437C;
 static constexpr uint16_t MATROSKA_ID_EDITIONUID = 0x45BC;
 static constexpr uint16_t MATROSKA_ID_EDITIONFLAGHIDDEN = 0x45BD;
 static constexpr uint16_t MATROSKA_ID_EDITIONFLAGDEFAULT = 0x45DB;

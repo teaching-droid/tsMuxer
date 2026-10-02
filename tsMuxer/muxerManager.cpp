@@ -151,11 +151,20 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
                 // own chapter list used to lose every mark on a remux.
                 if (m_chapters.empty())
                 {
+                    // The name comes along with the time. It used to be dropped here, and a
+                    // nameless chapter is one this program cannot read back: see
+                    // matroskaDemuxer.cpp, which requires a title before it keeps a chapter.
                     for (const auto& chapter : m_metaDemuxer.getChapters())
+                    {
                         m_chapters.push_back(static_cast<double>(chapter.start) / 1e9);
+                        m_chapterNames.push_back(chapter.cTitle);
+                    }
                 }
                 if (!m_chapters.empty())
+                {
                     m_mainMuxer->setChapters(m_chapters);
+                    m_mainMuxer->setChapterNames(m_chapterNames);
+                }
             }
         }
     }
