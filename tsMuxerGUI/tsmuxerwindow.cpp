@@ -3577,7 +3577,15 @@ QString TsMuxerWindow::getMuxOpts()
     // to the muxer whatever the output, and Matroska writes it, so MKV gets it as well.
     if (isDiskOutput() && ui->radioButtonAutoChapter->isChecked())
         rez += " --auto-chapters=" + QString::number(ui->spinEditChapterLen->value());
-    if ((isDiskOutput() || ui->radioButtonMKV->isChecked()) && ui->radioButtonCustomChapters->isChecked())
+    // A disc always gets the times: that is what the playlist is built from, and a playlist mark
+    // has no name to lose. Matroska is different. The meta line carries times and nothing else, so
+    // writing it REPLACES the source's chapter names with numbers, while writing nothing lets the
+    // muxer copy the source's own chapters, names included. Measured both ways on the same file.
+    // So an MKV output gets the list only when the user actually made one, which is what
+    // m_customChaptersUserOverride already records.
+    const bool customForThisOutput =
+        isDiskOutput() || (ui->radioButtonMKV->isChecked() && m_customChaptersUserOverride);
+    if (customForThisOutput && ui->radioButtonCustomChapters->isChecked())
     {
         QString custChapStr;
         QList<QString> lines;
