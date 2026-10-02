@@ -76,7 +76,8 @@ class MatroskaMuxer final : public AbstractMuxer
         uint8_t trackType;            // 1=video, 2=audio, 17=subtitle
         std::string language;         // ISO 639-2 code, empty means write "und"
         std::string name;             // track-name=, optional
-        bool markedDefault;           // the meta carried "default" on this track
+        bool defaultExplicit;         // the meta carried "default" on this track at all
+        bool markedDefault;           // and it did not say none, no, 0, false or off
         bool isDefault;               // resolved: exactly one per track type
         AbstractStreamReader* codecReader;
 
@@ -200,6 +201,7 @@ class MatroskaMuxer final : public AbstractMuxer
               fps(0),
               interlaced(false),
               streamAR(VideoAspectRatio::AR_KEEP_DEFAULT),
+              defaultExplicit(false),
               markedDefault(false),
               isDefault(false),
               hasColourDesc(false),

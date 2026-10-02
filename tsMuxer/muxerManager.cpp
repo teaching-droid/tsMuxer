@@ -28,7 +28,9 @@ int seekDefaultTrack(const std::vector<StreamInfo>& tracks, std::string& param, 
         {
             auto&& params = track.m_addParams;
             auto it = params.find("default");
-            if (it != std::end(params))
+            // A track that says default=none is NOT the default track. This used to return the first
+            // track that merely carried the key, so default=0 selected it.
+            if (it != std::end(params) && !defaultParamMeansNo(it->second))
             {
                 param = it->second;
                 return trackTypeIdx;

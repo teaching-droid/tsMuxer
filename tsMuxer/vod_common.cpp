@@ -334,6 +334,13 @@ bool isForcedSubtitleName(const std::string& fileName)
     return lower == "forced";
 }
 
+bool defaultParamMeansNo(const std::string& value)
+{
+    std::string lower;
+    for (const char c : value) lower += static_cast<char>(tolower(static_cast<unsigned char>(c)));
+    return lower == "none" || lower == "no" || lower == "0" || lower == "false" || lower == "off";
+}
+
 int64_t delayFromFileName(const std::string& fileName)
 {
     std::string name = extractFileName(fileName);

@@ -653,6 +653,10 @@ Additional parameters for PG and SRT tracks:
                     Allowed values are "all" which causes all subtitles to be
                     shown, and "forced" which shows only elements marked as
                     "forced" in the subtitle stream.
+                    "none", and also no, 0, false and off, mean this track is NOT
+                    the default. Put it on every track of a type to say that the
+                    type has no default at all: with nothing said either way, the
+                    first track of each type becomes the default.
 - fps               Video fps. It is recommended to define this parameter in
                     order to enable more careful timing processing.
 - 3d-plane          Defines the number of the '3D offset track' which is placed

@@ -151,6 +151,12 @@ std::string langFromFileName(const std::string& fileName);
 // The word has to stand on its own, so a film whose title contains it is not caught.
 bool isForcedSubtitleName(const std::string& fileName);
 
+// Does a "default" track parameter say NO? The parameter is a disc concept whose documented
+// values are "all" and "forced", so it was only ever tested for PRESENCE, and default=0 marked
+// a track as THE default: the opposite of what anyone writing that means. These values say no:
+// none, no, 0, false, off. Case does not matter.
+bool defaultParamMeansNo(const std::string& value);
+
 static int64_t internalClockToPts(const int64_t value) { return value / INT_FREQ_TO_TS_FREQ; }
 static int64_t ptsToInternalClock(const int64_t value) { return value * INT_FREQ_TO_TS_FREQ; }
 

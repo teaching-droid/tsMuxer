@@ -301,7 +301,12 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
     if (const auto nm = params.find("track-name"); nm != params.end())
         track.name = nm->second;
     // "default" already exists and is documented for Blu-ray; it just never reached Matroska.
-    track.markedDefault = params.find("default") != params.end();
+    // Its VALUE is read now. Testing only for presence meant default=0 marked the track as THE
+    // default, and it also meant "no default for this type" could not be said at all, because a
+    // type with nothing marked falls back to its first track.
+    const auto defaultParam = params.find("default");
+    track.defaultExplicit = defaultParam != params.end();
+    track.markedDefault = track.defaultExplicit && !defaultParamMeansNo(defaultParam->second);
     track.dropAc3Core = params.find("drop-ac3-core") != params.end();
 
     // Generate a random UID
@@ -1289,9 +1294,12 @@ void MatroskaMuxer::refreshTrackProperties()
     // writing nothing made every track claim to be the default, including two audio tracks at
     // once. Honour an explicit "default" where the meta gave one, otherwise the first track of
     // that type, and write the flag on every track so nothing is left to the spec default.
+    // A type counts as settled if ANY of its tracks carried the key, whatever the key said. That
+    // is what makes "no default" expressible: default=none on every track of a type leaves the type
+    // settled with nothing wanted, where before the key had to say yes to count at all.
     std::set<uint8_t> typeHasExplicit;
     for (auto& [streamIdx, track] : m_tracks)
-        if (track.markedDefault)
+        if (track.defaultExplicit)
             typeHasExplicit.insert(track.trackType);
     std::set<uint8_t> typeDone;
     for (auto& [streamIdx, track] : m_tracks)
