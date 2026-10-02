@@ -3706,12 +3706,15 @@ QString TsMuxerWindow::getSrtParams()
 
     rez += QString(",bottom-offset=") + QString::number(ui->spinEditOffset->value()) +
            ",font-border=" + QString::number(ui->spinEditBorder->value());
-    if (ui->rbhLeft->isChecked())
-        rez += ",text-align=left";
-    else if (ui->rbhRight->isChecked())
-        rez += ",text-align=right";
-    else
-        rez += ",text-align=center";
+    // text-align is NOT written. No build of the muxer has ever known the name, so every text
+    // subtitle line produced one "unknown track parameter" warning per mux and nothing else. The
+    // three radio buttons that chose it are disabled in the .ui and nothing enables them, so the
+    // value could only ever be center in any case.
+    //
+    // The muxer has no horizontal alignment at all: the accepted list in metaDemuxer.cpp has
+    // font, spacing, offset, border, charset and fade, and nothing for alignment. Adding it is a
+    // feature and would mean enabling those buttons as well. Until then the window does not ask
+    // for something that cannot happen.
 
     double animationTime = getRendererAnimationTime();
     if (animationTime > 0.0)
