@@ -5037,6 +5037,68 @@ void TsMuxerWindow::changeEvent(QEvent* event)
     QWidget::changeEvent(event);
 }
 
+// A chapter file dropped on the chapter list fills the list instead of being added as a track.
+// Reads both of the formats other tools write, told apart by what is in the file:
+//   CHAPTERnn= lines give up their time, CHAPTERnnNAME= lines are skipped
+//   Matroska XML gives up its ChapterTimeStart values
+// The box holds times and nothing else, so names are dropped here, which costs nothing for a disc. A
+// Matroska output that wants to keep the names should be given --chapters-file instead.
+bool TsMuxerWindow::loadChapterFileIntoBox(const QString& fileName)
+{
+    QFile f(fileName);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+        return false;
+    const QString text = QString::fromUtf8(f.readAll());
+    f.close();
+
+    QStringList times;
+    if (text.contains(QLatin1String("<ChapterTimeStart")))
+    {
+        const QRegularExpression re(QStringLiteral("<ChapterTimeStart>\\s*([0-9:.]+)\\s*</ChapterTimeStart>"));
+        auto it = re.globalMatch(text);
+        while (it.hasNext()) times << it.next().captured(1).trimmed();
+    }
+    else
+    {
+        QList<QString> lines;
+        splitLines(text, lines);
+        for (QString line : lines)
+        {
+            line = line.trimmed();
+            if (line.isEmpty())
+                continue;
+            if (line.startsWith(QLatin1String("CHAPTER"), Qt::CaseInsensitive))
+            {
+                const int eq = line.indexOf(QLatin1Char('='));
+                if (eq <= 0)
+                    continue;
+                if (QtCompat::strLeft(line, eq).trimmed().endsWith(QLatin1String("NAME"), Qt::CaseInsensitive))
+                    continue;
+                line = QtCompat::strMid(line, eq + 1).trimmed();
+            }
+            if (!line.isEmpty())
+                times << line;
+        }
+    }
+    if (times.isEmpty())
+        return false;
+
+    // A nine digit fraction, which Matroska XML uses, is cut to milliseconds: that is what this box
+    // and the meta line both carry.
+    for (QString& t : times)
+    {
+        const int dot = t.indexOf(QLatin1Char('.'));
+        if (dot > 0 && t.size() > dot + 4)
+            t = QtCompat::strLeft(t, dot + 4);
+    }
+
+    ui->radioButtonCustomChapters->setChecked(true);
+    ui->memoChapters->setPlainText(times.join(QLatin1Char('\n')) + QLatin1Char('\n'));
+    m_customChaptersUserOverride = true;
+    onChapterParamsChanged();
+    return true;
+}
+
 void TsMuxerWindow::dragEnterEvent(QDragEnterEvent* event)
 {
     if (event->mimeData()->hasFormat("text/plain") || event->mimeData()->hasFormat("text/uri-list"))
@@ -5073,6 +5135,19 @@ void TsMuxerWindow::dropEvent(QDropEvent* event)
     if (addFileList.isEmpty())
         return;
     auto w = childAt(event->position().toPoint());
+
+    // Dropped on the chapter list: load it as chapters rather than adding it as a track. The chapter
+    // box is a QPlainTextEdit, so childAt returns its viewport rather than the box itself.
+    const bool onChapterBox = w != nullptr && (w == ui->memoChapters || w->parentWidget() == ui->memoChapters);
+    if (onChapterBox && addFileList.size() == 1 && ui->memoChapters->isEnabled())
+    {
+        if (loadChapterFileIntoBox(addFileList.first().toLocalFile()))
+        {
+            addFileList.clear();
+            return;
+        }
+    }
+
     if (w && w == ui->btnAppend && w->isEnabled())
         appendFile();
     else if (ui->addBtn->isEnabled())

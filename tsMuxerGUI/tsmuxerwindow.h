@@ -230,6 +230,8 @@ class TsMuxerWindow : public QWidget
     QTranslator qtCoreTranslator;
     QTranslator tsMuxerTranslator;
 
+    // A chapter file dropped on the chapter list is loaded into it rather than added as a track.
+    bool loadChapterFileIntoBox(const QString& fileName);
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dropEvent(QDropEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;
