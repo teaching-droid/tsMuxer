@@ -34,9 +34,10 @@ class AbstractMuxer
      * same list through BlurayHelper::createMPLSFile instead, and every other muxer ignores them.
      */
     virtual void setChapters(const std::vector<double>& chapters) {}
-    // Names for those chapters, in the same order. Empty, or shorter than the chapter list,
-    // means the muxer names the rest itself. Only Matroska has anywhere to put them.
-    virtual void setChapterNames(const std::vector<std::string>& names) {}
+    // The chapters themselves, in the same order as setChapters, carrying whatever name and
+    // language the source gave them. Empty, or shorter than the list of times, means the muxer
+    // names the rest itself. Only Matroska has anywhere to put either.
+    virtual void setChapterInfo(const std::vector<AVChapter>& info) {}
 
     virtual void joinToMasterFile() {}
     virtual void setSubMode(AbstractMuxer* mainMuxer, bool flushInterleavedBlock) {}

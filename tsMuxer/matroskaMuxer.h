@@ -58,11 +58,11 @@ class MatroskaMuxer final : public AbstractMuxer
     void openDstFile() override;
     void parseMuxOpt(const std::string& opts) override;
     void setChapters(const std::vector<double>& chapters) override { m_chapters = chapters; }
-    void setChapterNames(const std::vector<std::string>& names) override { m_chapterNames = names; }
+    void setChapterInfo(const std::vector<AVChapter>& info) override { m_chapterInfo = info; }
 
    private:
     std::vector<double> m_chapters;  // start times in seconds
-    std::vector<std::string> m_chapterNames;  // parallel to m_chapters, may be short or empty
+    std::vector<AVChapter> m_chapterInfo;  // same order as m_chapters, may be short or empty
     void writeChapters();
 
     // ── Track information collected during intAddStream ──

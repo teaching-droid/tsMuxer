@@ -36,7 +36,7 @@ class MuxerManager final
     // Matroska writes these as a Chapters master; every other muxer ignores them, because the
     // Blu-ray path takes the same list a different way.
     void setChapters(const std::vector<double>& chapters) { m_chapters = chapters; }
-    void setChapterNames(const std::vector<std::string>& names) { m_chapterNames = names; }
+    void setChapterInfo(const std::vector<AVChapter>& info) { m_chapterInfo = info; }
 
     void setCutStart(const int64_t value) { m_cutStart = value; }
     [[nodiscard]] int64_t getCutStart() const { return m_cutStart; }
@@ -100,7 +100,7 @@ class MuxerManager final
     void checkTrackList(const std::vector<StreamInfo>& ci) const;
 
     std::vector<double> m_chapters;  // chapter start times in seconds, applied once the muxer exists
-    std::vector<std::string> m_chapterNames;  // their names, same order, empty when none are known
+    std::vector<AVChapter> m_chapterInfo;  // the same chapters with their names, when known
     std::unique_ptr<AbstractMuxer> m_mainMuxer;
     std::unique_ptr<AbstractMuxer> m_subMuxer;
 

@@ -1706,18 +1706,24 @@ void MatroskaMuxer::writeChapters()
         // survives one mux and disappears on the next. A source that named its chapters gets
         // those names; anything else is numbered the way every other tool numbers them.
         std::string name;
-        if (index < m_chapterNames.size())
-            name = m_chapterNames[index];
+        std::string language;
+        if (index < m_chapterInfo.size())
+        {
+            name = m_chapterInfo[index].cTitle;
+            language = m_chapterInfo[index].language;
+        }
         if (name.empty())
             name = "Chapter " + std::to_string(index + 1);
+        if (language.empty())
+            language = "und";
 
         // Sized from the string rather than fixed, because a source title has no length limit.
-        std::vector<uint8_t> display(name.size() + 64);
+        std::vector<uint8_t> display(name.size() + language.size() + 64);
         int d = 0;
         d += ebml_write_string(display.data() + d, MATROSKA_ID_CHAPSTRING, name);
-        // The language the name is written in is not carried through the muxer, so say so rather
-        // than claim one. "und" is what tsMuxeR already uses for an unknown track language.
-        d += ebml_write_string(display.data() + d, MATROSKA_ID_CHAPTERLANGUAGE, "und");
+        // The source's own language where it gave one. "und" otherwise, which is what tsMuxeR
+        // already uses for an unknown track language, rather than claiming a language it guessed.
+        d += ebml_write_string(display.data() + d, MATROSKA_ID_CHAPTERLANGUAGE, language);
         uint8_t dispHdr[16];
         const int dh = ebml_write_master_open(dispHdr, MATROSKA_ID_CHAPTERDISPLAY, d);
 

@@ -2031,6 +2031,7 @@ int MatroskaDemuxer::matroska_parse_chapters()
             int64_t uid = 0;
             bool uidFound = false;
             char* title = nullptr;
+            char* chapLanguage = nullptr;
             // if there is more than one chapter edition we take only the first one
             if (!chapters.empty())
             {
@@ -2105,6 +2106,11 @@ int MatroskaDemuxer::matroska_parse_chapters()
                                 case MATROSKA_ID_CHAPSTRING:
                                     res = ebml_read_utf8(&id, &title);
                                     break;
+                                case MATROSKA_ID_CHAPTERLANGUAGE:
+                                    // Kept so a remux can write the name back in the language the
+                                    // source gave it rather than marking everything undetermined.
+                                    res = ebml_read_ascii(&id, &chapLanguage);
+                                    break;
                                 case EBML_ID_VOID:
                                 case EBML_ID_CRC32:
                                     res = ebml_read_skip();
@@ -2147,10 +2153,12 @@ int MatroskaDemuxer::matroska_parse_chapters()
                     }
                     if (start != AV_NOPTS_VALUE && uidFound && title != nullptr)
                     {
-                        const AVChapter chapter(start, title);
+                        const AVChapter chapter(start, title,
+                                                chapLanguage != nullptr ? chapLanguage : "");
                         chapters[uid] = chapter;
                     }
                     delete[] title;
+                    delete[] chapLanguage;
                     break;
                 case MATROSKA_ID_EDITIONUID:
                 case MATROSKA_ID_EDITIONFLAGHIDDEN:

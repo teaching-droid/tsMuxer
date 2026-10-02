@@ -18,9 +18,16 @@ struct AVChapter
 {
     AVChapter() : start(0) {}
     AVChapter(const int64_t _start, std::string _cTitle) : start(_start), cTitle(std::move(_cTitle)) {}
+    AVChapter(const int64_t _start, std::string _cTitle, std::string _language)
+        : start(_start), cTitle(std::move(_cTitle)), language(std::move(_language))
+    {
+    }
     bool operator<(const AVChapter& other) const { return start < other.start; }
     int64_t start;
     std::string cTitle;
+    // The language the title is written in, as the source spelled it. Empty where the source did
+    // not say, which Matroska allows: ChapterLanguage has a default rather than being required.
+    std::string language;
 };
 typedef std::vector<AVChapter> AVChapters;
 
