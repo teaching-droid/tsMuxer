@@ -289,7 +289,25 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
     track.trackNumber = m_nextTrackNumber++;
     track.codecReader = codecReader;
     track.codecID = codecReader->getCodecInfo().codecID;
-    track.matroskaCodecID = codecNameToMatroskaID(codecName, track.codecID);
+
+    // The CodecID must describe what is IN the track, not what the meta line asked for. This used the
+    // META's name, and a text subtitle is drawn into PGS pictures before it is written, so a track
+    // said S_TEXT/UTF8 and held PGS segments: its blocks begin 0x16, 0x17, 0x14, which are PGS
+    // segment types and are not UTF-8 at all. Nothing could read it as text and the text was not
+    // recoverable from the file. The check in writeTracks cannot catch this, because both sides of
+    // its comparison come from the same reader.
+    //
+    // The name the reader gives is in the same form as a meta name, and the codec id goes with it, so
+    // E-AC3 and TrueHD, which both call themselves A_AC3, still come out right.
+    const std::string metaCodecID = codecNameToMatroskaID(codecName, track.codecID);
+    track.matroskaCodecID = codecNameToMatroskaID(codecReader->getCodecInfo().programName, track.codecID);
+    if (track.matroskaCodecID != metaCodecID)
+        LTRACE(LT_WARN, 2,
+               "Warning: the meta asks for " << codecName << " but the data is "
+                                             << codecReader->getCodecInfo().programName << ", so the track is written "
+                                                "as " << track.matroskaCodecID
+                                             << ". A text subtitle is drawn into pictures before it is written, so the "
+                                                "text itself is not kept in the file.");
 
     // Same parameter map the TS muxer reads the language from (tsMuxer.cpp). An explicit lang=
     // wins; "srclang" is the language muxerManager carried over from the source container.
