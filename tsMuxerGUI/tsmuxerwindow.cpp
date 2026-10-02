@@ -5139,7 +5139,12 @@ void TsMuxerWindow::dropEvent(QDropEvent* event)
     // Dropped on the chapter list: load it as chapters rather than adding it as a track. The chapter
     // box is a QPlainTextEdit, so childAt returns its viewport rather than the box itself.
     const bool onChapterBox = w != nullptr && (w == ui->memoChapters || w->parentWidget() == ui->memoChapters);
-    if (onChapterBox && addFileList.size() == 1 && ui->memoChapters->isEnabled())
+    // The gate is whether this OUTPUT offers chapters at all, which is what the custom radio's own
+    // enabled state says. It used to test whether the BOX was enabled, and the box is disabled until
+    // the custom radio is selected: so with "No chapters" chosen, which is how the window starts, a
+    // dropped chapter file did nothing whatever and said nothing either. The loader selects the radio
+    // itself, so there is nothing to select first.
+    if (onChapterBox && addFileList.size() == 1 && ui->radioButtonCustomChapters->isEnabled())
     {
         if (loadChapterFileIntoBox(addFileList.first().toLocalFile()))
         {
