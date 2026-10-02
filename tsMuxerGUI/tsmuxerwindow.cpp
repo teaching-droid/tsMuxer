@@ -3572,27 +3572,27 @@ QString TsMuxerWindow::getMuxOpts()
         if (ui->spinBoxM2tsNum->value() > 0)
             rez += " --m2tsOffset=" + QString::number(ui->spinBoxM2tsNum->value());
     }
-    if (isDiskOutput())
+    // Two different conditions, because the two options are not honoured in the same places.
+    // --auto-chapters becomes playlist marks and so is written for a disc only. A custom list goes
+    // to the muxer whatever the output, and Matroska writes it, so MKV gets it as well.
+    if (isDiskOutput() && ui->radioButtonAutoChapter->isChecked())
+        rez += " --auto-chapters=" + QString::number(ui->spinEditChapterLen->value());
+    if ((isDiskOutput() || ui->radioButtonMKV->isChecked()) && ui->radioButtonCustomChapters->isChecked())
     {
-        if (ui->radioButtonAutoChapter->isChecked())
-            rez += " --auto-chapters=" + QString::number(ui->spinEditChapterLen->value());
-        if (ui->radioButtonCustomChapters->isChecked())
+        QString custChapStr;
+        QList<QString> lines;
+        splitLines(ui->memoChapters->toPlainText(), lines);
+        for (int i = 0; i < lines.size(); ++i)
         {
-            QString custChapStr;
-            QList<QString> lines;
-            splitLines(ui->memoChapters->toPlainText(), lines);
-            for (int i = 0; i < lines.size(); ++i)
+            QString tmpStr = lines[i].trimmed();
+            if (!tmpStr.isEmpty())
             {
-                QString tmpStr = lines[i].trimmed();
-                if (!tmpStr.isEmpty())
-                {
-                    if (!custChapStr.isEmpty())
-                        custChapStr += ';';
-                    custChapStr += tmpStr;
-                }
+                if (!custChapStr.isEmpty())
+                    custChapStr += ';';
+                custChapStr += tmpStr;
             }
-            rez += QString(" --custom-chapters=") + custChapStr;
         }
+        rez += QString(" --custom-chapters=") + custChapStr;
     }
     // Only write these where they can be honoured. The tick is remembered either way, so choosing
     // an output that cannot split hides the option rather than discarding what was set.
@@ -4133,19 +4133,29 @@ void TsMuxerWindow::updateBluRayTabEnabled()
 {
     const bool disk = isDiskOutput();  // Blu-ray, Blu-ray ISO, AVCHD
     const bool bd = ui->radioButtonBluRay->isChecked() || ui->radioButtonBluRayISO->isChecked();
-    // Default track flags are written for Matroska too, not only for a disc: see getAudioMetaInfo
-    // and getSubMetaInfo, which both test isDiskOutput() OR MKV.
-    const bool defaults = disk || ui->radioButtonMKV->isChecked();
+    // Default track flags AND a chapter list are both written for Matroska, not only for a disc:
+    // see getAudioMetaInfo and getSubMetaInfo, which test isDiskOutput() OR MKV, and the muxer,
+    // which has written Matroska chapters since 2.16.0.
+    const bool mkvOrDisk = disk || ui->radioButtonMKV->isChecked();
 
     // Whole groups, because everything inside them shares one condition. Disabling the group leaves
     // each child's own enabled flag untouched, so the rules that govern them individually still
     // apply when the group comes back.
     if (auto* chapters = findChild<QGroupBox*>("groupBox_3"))
-        chapters->setEnabled(disk);  // --auto-chapters / --custom-chapters
+        chapters->setEnabled(mkvOrDisk);  // a custom list is written for MKV as well
     if (auto* threeD = findChild<QGroupBox*>("groupBox_11"))
         threeD->setEnabled(disk);  // --right-eye
     if (auto* defTracks = findChild<QGroupBox*>("defaultTracksGroupBox"))
-        defTracks->setEnabled(defaults);  // default= on the track lines
+        defTracks->setEnabled(mkvOrDisk);  // default= on the track lines
+
+    // Inside that group, the automatic chapters are a disc matter: --auto-chapters is turned into
+    // playlist marks by createMPLSFile and is read by nothing else, so for MKV its radio and its
+    // length are turned off rather than left looking live. The length also has a rule of its own in
+    // onChapterParamsChanged, which tests the same two things.
+    ui->radioButtonAutoChapter->setEnabled(disk);
+    if (auto* autoLenLabel = findChild<QLabel*>("label_4"))
+        autoLenLabel->setEnabled(disk);
+    ui->spinEditChapterLen->setEnabled(disk && ui->radioButtonAutoChapter->isChecked());
 
     // The Options group is mixed and cannot be greyed as a whole: the mux start time applies to
     // EVERY output, and it lives in there beside options that do not.
@@ -4176,7 +4186,8 @@ void TsMuxerWindow::onGeneralSpinboxValueChanged() { updateMetaLines(); }
 void TsMuxerWindow::onChapterParamsChanged()
 {
     ui->memoChapters->setEnabled(ui->radioButtonCustomChapters->isChecked());
-    ui->spinEditChapterLen->setEnabled(ui->radioButtonAutoChapter->isChecked());
+    // A length only means something where --auto-chapters is honoured, which is BD and AVCHD.
+    ui->spinEditChapterLen->setEnabled(ui->radioButtonAutoChapter->isChecked() && isDiskOutput());
     QObject* snd = sender();
     if (snd == ui->radioButtonNoChapters || snd == ui->radioButtonAutoChapter)
         m_customChaptersUserOverride = false;
