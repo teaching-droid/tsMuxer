@@ -15,6 +15,7 @@
 #include "bdSsifImport.h"
 #include "blank_patterns.h"
 #include "blurayHelper.h"
+#include "chapterFile.h"
 #include "convertUTF.h"
 #include "h264StreamReader.h"
 #include "iso_writer.h"
@@ -46,8 +47,8 @@ static constexpr char EXCEPTION_ERR_MSG[] =
     }                                         \
     }
 DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<double>& customChaptersList,
-                        int& firstMplsOffset, int& firstM2tsOffset, bool& insertBlankPL, int& blankNum,
-                        bool& stereoMode, std::string& isoDiskLabel)
+                        vector<AVChapter>& chapterInfo, int& firstMplsOffset, int& firstM2tsOffset,
+                        bool& insertBlankPL, int& blankNum, bool& stereoMode, std::string& isoDiskLabel)
 {
     autoChapterLen = 0;
     stereoMode = false;
@@ -81,6 +82,18 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                 {
                     vector<string> chapList = splitStr(paramPair[1].c_str(), ';');
                     for (const string& chap : chapList) customChaptersList.push_back(timeToFloat(chap));
+                }
+                else if (paramPair[0] == "--chapters-file")
+                {
+                    if (paramPair.size() < 2)
+                        THROW(ERR_COMMON, "Missing value for " << paramPair[0])
+                    // A list in a meta line is times only. A file carries the names as well, so the
+                    // chapters are kept whole here and the times are taken from them, rather than
+                    // the other way round.
+                    chapterInfo = readChapterFile(unquoteStr(paramPair[1]));
+                    customChaptersList.clear();
+                    for (const auto& chapter : chapterInfo)
+                        customChaptersList.push_back(static_cast<double>(chapter.start) / 1e9);
                 }
                 else if (paramPair[0] == "--mplsOffset")
                 {
@@ -717,6 +730,12 @@ All parameters in this group start with two dashes:
                       mode.
 --custom-chapters     A semicolon delimited list of hh:mm:ss.zzz strings,
                       representing the chapters' start times.
+--chapters-file       Read the chapter list from a file instead. Two formats are
+                      accepted and are told apart by what is in them: the simple
+                      text form, with CHAPTER01= and CHAPTER01NAME= lines, and
+                      Matroska XML as mkvextract writes it. Unlike
+                      --custom-chapters these carry the chapter NAMES, which
+                      Matroska output then keeps.
 --demux               Run in demux mode : the selected audio and video tracks are
                       stored as separate files. The output name must be a folder
                       name. All selected effects (such as changing the level of
@@ -2116,10 +2135,11 @@ int main(int argc, char** argv)
 
         int autoChapterLen = 0;
         vector<double> customChapterList;
+        vector<AVChapter> chapterInfo;
         bool stereoMode = false;
         string isoDiskLabel;
-        DiskType dt = checkBluRayMux(argv[1], autoChapterLen, customChapterList, firstMplsOffset, firstM2tsOffset,
-                                     insertBlankPL, blankNum, stereoMode, isoDiskLabel);
+        DiskType dt = checkBluRayMux(argv[1], autoChapterLen, customChapterList, chapterInfo, firstMplsOffset,
+                                     firstM2tsOffset, insertBlankPL, blankNum, stereoMode, isoDiskLabel);
         std::string fileExt2 = unquoteStr(fileExt);
         bool mkvMode = fileExt2 == "MKV" || fileExt2 == "MKA";
         bool muxMode =
@@ -2142,6 +2162,8 @@ int main(int argc, char** argv)
             // parsed --custom-chapters out of the meta above, whatever the output format is.
             if (!customChapterList.empty())
                 muxerManager.setChapters(customChapterList);
+            if (!chapterInfo.empty())
+                muxerManager.setChapterInfo(chapterInfo);
             muxerManager.doMux(dstFile, nullptr);
 
             LTRACE(LT_INFO, 2, "Mux successful complete");

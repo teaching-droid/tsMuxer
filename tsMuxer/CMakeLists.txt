@@ -14,6 +14,7 @@ add_executable (tsmuxer
   avCodecs.cpp
   bitStream.cpp
   blurayHelper.cpp
+  chapterFile.cpp
   bufferedFileReader.cpp
   bufferedFileWriter.cpp
   bufferedReader.cpp
