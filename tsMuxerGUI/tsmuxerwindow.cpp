@@ -5092,6 +5092,14 @@ bool TsMuxerWindow::loadChapterFileIntoBox(const QString& fileName)
             t = QtCompat::strLeft(t, dot + 4);
     }
 
+    // A chapter FILE is a set of positions and the order it lists them in means nothing, while
+    // the order of this box means everything: blurayHelper.cpp writes the marks straight out in
+    // list order without sorting them, so an unordered file would put unordered marks on the
+    // disc. Duplicates go for the same reason. Typed text is left exactly as typed: this is only
+    // for a loaded file, where the order carries no intent.
+    std::sort(times.begin(), times.end());
+    times.erase(std::unique(times.begin(), times.end()), times.end());
+
     ui->radioButtonCustomChapters->setChecked(true);
     ui->memoChapters->setPlainText(times.join(QLatin1Char('\n')) + QLatin1Char('\n'));
     m_customChaptersUserOverride = true;
