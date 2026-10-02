@@ -2193,6 +2193,12 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
             {
                 firstMark = false;
                 ui->radioButtonCustomChapters->setChecked(true);
+                // setChecked does not emit clicked(), so the slot that settles everything which
+                // depends on this radio never ran: the chapter list box stayed greyed out while
+                // the mux was using the list inside it. Calling the slot keeps the rule in one
+                // place. sender() is null here, so it leaves m_customChaptersUserOverride to the
+                // line below, which sets it deliberately.
+                onChapterParamsChanged();
             }
             m_customChaptersUserOverride = false;
             QStringList stringList = QtCompat::strMid(procStdOutput[i], 7).split(' ');
