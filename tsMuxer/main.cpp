@@ -1798,6 +1798,33 @@ static void reportSplitWithoutParameterSets(const MuxerManager& muxerManager)
 //
 // Nothing here guesses what the codec should have been. It reports what happened: this track was
 // read and no frame of the codec it was named as came out of it.
+// A mux that stops before it has read its sources used to print "Mux successful complete" and
+// exit 0. One report had 584 of 148368 frames written, no output file at all, that message, and a
+// progress line stuck at 87.3 percent. The figure was there the whole time and nothing asked it.
+//
+// getDemuxedSize over totalSize is exactly what the progress line shows. Measured on complete jobs
+// it reaches 100.0 percent, including a job that takes one track out of a container and a job whose
+// source file is truncated, because a short file is still read to its end.
+//
+// A deliberately partial job is left alone: --cut-start and --cut-end stop early because they were
+// asked to. Splitting is not excluded, since a split job reads everything it was given.
+static void checkSourceConsumed(MuxerManager& muxerManager)
+{
+    const int64_t total = muxerManager.totalSize();
+    if (total <= 0 || muxerManager.getCutStart() > 0 || muxerManager.getCutEnd() > 0)
+        return;
+    const int64_t done = muxerManager.getDemuxedSize();
+    if (done >= total)
+        return;
+    const double pct = static_cast<double>(done) / static_cast<double>(total) * 100.0;
+    if (pct >= 99.0)
+        return;
+    THROW(ERR_COMMON, "The mux stopped before the source was finished: " << doubleToStr(pct, 1)
+                          << " percent read, " << done << " bytes of " << total
+                          << ". The output is incomplete. This is not a warning: the job did not do "
+                             "what it was asked to do.")
+}
+
 static void reportEmptyTracks(const MuxerManager& muxerManager)
 {
     for (const StreamInfo& si : muxerManager.getStreamInfo())
@@ -2166,6 +2193,7 @@ int main(int argc, char** argv)
                 muxerManager.setChapterInfo(chapterInfo);
             muxerManager.doMux(dstFile, nullptr);
 
+            checkSourceConsumed(muxerManager);
             LTRACE(LT_INFO, 2, "Mux successful complete");
             reportSplitWithoutParameterSets(muxerManager);
             reportLostData(muxerManager);
@@ -2301,6 +2329,7 @@ int main(int argc, char** argv)
                 }
             }
 
+            checkSourceConsumed(muxerManager);
             LTRACE(LT_INFO, 2, "Mux successful complete");
             reportSplitWithoutParameterSets(muxerManager);
             reportLostData(muxerManager);

@@ -69,6 +69,9 @@ class MuxerManager final
 
     [[nodiscard]] bool isMvcBaseViewR() const { return m_mvcBaseViewR; }
     [[nodiscard]] int64_t totalSize() const { return m_metaDemuxer.totalSize(); }
+    // What has actually been read out of the sources. The ratio of this to totalSize() is the
+    // figure the progress line prints, and a finished mux must have consumed everything.
+    [[nodiscard]] int64_t getDemuxedSize() { return m_metaDemuxer.getDemuxedSize(); }
     [[nodiscard]] int getExtraISOBlocks() const { return m_extraIsoBlocks; }
 
     [[nodiscard]] bool useReproducibleIsoHeader() const { return m_reproducibleIsoHeader; }
