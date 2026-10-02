@@ -240,6 +240,10 @@ struct PMTStreamInfo final
           m_esInfoData(),
           m_lang(),
           isSecondary(false),
+          // Set where the PID is chosen, which is the only place that knows whether a base layer
+          // came first. Everything that writes the disc asks this instead of asking whether Dolby
+          // Vision is present, because the second question cannot tell a layer from a whole stream.
+          isDvEnhancement(false),
           m_codecReader(),
           m_mpegReader(),
           m_audioReader(),
@@ -259,6 +263,7 @@ struct PMTStreamInfo final
         memcpy(m_lang, lang.c_str(), lang.size() < 3 ? lang.size() : 3);
         m_pmtPID = -1;
         isSecondary = secondary;
+        isDvEnhancement = false;
         m_mpegReader = nullptr;
         m_audioReader = nullptr;
         m_dvbDescriptor = 0;
@@ -271,6 +276,7 @@ struct PMTStreamInfo final
     uint8_t m_esInfoData[128];
     char m_lang[4];
     bool isSecondary;
+    bool isDvEnhancement;
     // Stream type 0x06 is "private data" and says nothing on its own. What it really carries is
     // named by a descriptor: 0x59 is DVB bitmap subtitles, 0x56 is EBU teletext. Kept so a track
     // no reader accepts can still be named instead of reported as an unknown number.
@@ -346,6 +352,9 @@ struct M2TSStreamInfo
           width(0),
           height(0),
           HDR(0),
+          // Copied from the PMT entry. HDR == 4 says only that Dolby Vision is present, which is just
+          // as true of a single layer stream that has no enhancement layer at all.
+          isDvEnhancement(false),
           aspect_ratio_index(0),
           audio_presentation_type(0),
           sampling_frequency_index(0),
@@ -372,6 +381,7 @@ struct M2TSStreamInfo
     uint8_t character_code;
     char language_code[4];
     bool isSecondary;
+    bool isDvEnhancement;
     std::vector<PMTIndex> m_index;
 
     static void blurayStreamParams(double fps, bool interlaced, unsigned width, unsigned height, VideoAspectRatio ar,

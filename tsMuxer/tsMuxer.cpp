@@ -239,7 +239,12 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
     // never loses to a lower one whatever order the meta lists them in.
     const bool isVideo = codecName[0] == 'V';
     const bool isSecondary = codecReader != nullptr && codecReader->isSecondary();
-    const bool isDvEnhancement = codecReader != nullptr && codecReader->getStreamHDR() == 4;
+    // A stream carrying Dolby Vision is the ENHANCEMENT layer only when a base layer came before
+    // it. In profile 5 and profile 8 there is none: the RPU travels in the base, so the only video
+    // stream there is belongs on 0x1011 and IS the primary video. m_videoTrackCnt counts the base
+    // layers seen so far and has not been touched for this stream yet.
+    const bool isDvEnhancement =
+        codecReader != nullptr && codecReader->getStreamHDR() == 4 && m_videoTrackCnt > 0;
     const bool isPrimaryVideo = isVideo && !isSecondary && !isDvEnhancement;
 
     const int rank = isPrimaryVideo ? 3 : (isVideo ? 2 : (codecName[0] == 'A' ? 1 : 0));
@@ -283,7 +288,7 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
             // It also disagreed with itself. BL_TRACK is set only in the branch below, and
             // HEVCStreamReader derives isDVBL from BL_TRACK, so a single layer stream was
             // described as a base layer while being placed on the enhancement layer PID.
-            if (codecReader != nullptr && codecReader->getStreamHDR() == 4 && m_videoTrackCnt > 0)
+            if (isDvEnhancement)
             {
                 tsStreamIndex = 0x1015 + m_DVvideoTrackCnt * doubleMux;
                 m_DVvideoTrackCnt++;
@@ -533,6 +538,10 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
     {
         itPid->second.m_mpegReader = dynamic_cast<MPEGStreamReader*>(codecReader);
         itPid->second.m_audioReader = dynamic_cast<SimplePacketizerReader*>(codecReader);
+        // Carried to the playlist and the clip info, which used to decide this for themselves from the
+        // presence of Dolby Vision and so described a single layer stream as an enhancement layer: no
+        // primary video entry at all, and a subpath for a layer that is not there.
+        itPid->second.isDvEnhancement = isDvEnhancement;
     }
 
     m_streamInfo[DEFAULT_PCR_PID].m_tsCnt = 0;

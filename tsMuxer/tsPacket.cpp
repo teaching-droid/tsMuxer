@@ -1456,7 +1456,7 @@ int MPLSParser::compose(uint8_t* buffer, int bufferSize, const DiskType dt)
                 number_of_SubPaths++;
                 subPath_type = 7;  // PIP not fully implemented yet
             }
-            else if (si.HDR & 4)
+            else if (si.isDvEnhancement)
             {
                 number_of_SubPaths++;
                 subPath_type = 10;
@@ -2394,7 +2394,7 @@ void MPLSParser::composeSTN_table(BitStreamWriter& writer, const size_t PlayItem
         {
             if (i.isSecondary)
                 number_of_secondary_video_stream_entries++;
-            else if (i.HDR == 4)
+            else if (i.isDvEnhancement)
                 number_of_DolbyVision_video_stream_entries++;
             else
                 number_of_primary_video_stream_entries++;
@@ -2443,7 +2443,7 @@ void MPLSParser::composeSTN_table(BitStreamWriter& writer, const size_t PlayItem
     for (auto& i : streamInfo)
     {
         const StreamType stream_coding_type = i.stream_coding_type;
-        if (isVideoStreamType(stream_coding_type) && !i.isSecondary && i.HDR != 4)
+        if (isVideoStreamType(stream_coding_type) && !i.isSecondary && !i.isDvEnhancement)
         {
             i.composeStreamEntry(writer, PlayItem_id);
             i.composeStreamAttributes(writer);
@@ -2542,7 +2542,7 @@ void MPLSParser::composeSTN_table(BitStreamWriter& writer, const size_t PlayItem
     for (auto& i : streamInfo)
     {
         const StreamType stream_coding_type = i.stream_coding_type;
-        if (isVideoStreamType(stream_coding_type) && i.HDR == 4)
+        if (isVideoStreamType(stream_coding_type) && i.isDvEnhancement)
         {
             i.type = 4;
             i.composeStreamEntry(writer, PlayItem_id);
@@ -2726,6 +2726,7 @@ M2TSStreamInfo::M2TSStreamInfo(const PMTStreamInfo& pmtStreamInfo)
     stream_coding_type = pmtStreamInfo.m_streamType;
     m_index = pmtStreamInfo.m_index;
     isSecondary = pmtStreamInfo.isSecondary;
+    isDvEnhancement = pmtStreamInfo.isDvEnhancement;
     memset(&language_code, 0, 4);
     memcpy(language_code, pmtStreamInfo.m_lang, 3);
 
@@ -2809,6 +2810,7 @@ M2TSStreamInfo::M2TSStreamInfo(const M2TSStreamInfo& other)
     character_code = other.character_code;
     memcpy(language_code, other.language_code, sizeof(language_code));
     isSecondary = other.isSecondary;
+    isDvEnhancement = other.isDvEnhancement;
     m_index = other.m_index;
 }
 
