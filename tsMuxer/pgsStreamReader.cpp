@@ -27,7 +27,8 @@ PGSStreamReader::PGSStreamReader()
       m_palleteID(0),
       m_paletteVersion(0),
       m_objectWindowHeight(0),
-      m_objectWindowTop(0)
+      m_objectWindowTop(0),
+      m_renderedFromText(false)
 {
     m_curPos = m_buffer = nullptr;
     m_tmpBufferLen = 0;
@@ -462,9 +463,11 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
             m_render->setImageBuffer(m_scaledRgbBuffer);
         }
         LTRACE(LT_INFO, 2,
-               "Decoding PGS stream (track " << m_streamIndex << "): "
-                                             << " Resolution: " << m_video_width << ':' << m_video_height
-                                             << "  Frame rate: " << m_frame_rate);
+               (m_renderedFromText ? "Drawing text subtitles into pictures (track "
+                                   : "Decoding PGS stream (track ")
+                   << m_streamIndex << "): "
+                   << " Resolution: " << m_video_width << ':' << m_video_height
+                   << "  Frame rate: " << m_frame_rate);
         if (m_newFps != 0.0 && fabs(m_newFps - m_frame_rate) > 1e-4)
         {
             LTRACE(LT_INFO, 2,

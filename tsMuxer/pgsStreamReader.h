@@ -13,6 +13,10 @@
 class PGSStreamReader final : public AbstractStreamReader
 {
    public:
+    // Set by the SRT reader, which owns one of these to draw text into pictures. Without it the log
+    // announces a text subtitle as "Decoding PGS stream", which is where it ends up but not what the
+    // user handed over, and his report had three SRT tracks all described that way.
+    void setRenderedFromText(const bool value) { m_renderedFromText = value; }
     struct BitmapInfo
     {
         int Width;
@@ -120,6 +124,7 @@ class PGSStreamReader final : public AbstractStreamReader
     uint16_t m_scaled_width;
     uint16_t m_scaled_height;
     bool m_firstRenderedPacket;
+    bool m_renderedFromText;
 
     text_subtitles::TextToPGSConverter* m_render;
     uint8_t* m_renderedData;

@@ -16,7 +16,9 @@ using namespace text_subtitles;
 SRTStreamReader::SRTStreamReader() : m_lastBlock(false), m_short_R(0), m_short_N(0), m_long_R(0), m_long_N(0)
 {
     // in future version here must be case for destination subtitle format (DVB sub, DVD sub e.t.c)
-    m_dstSubCodec = new PGSStreamReader();
+    auto* pgsRender = new PGSStreamReader();
+    pgsRender->setRenderedFromText(true);
+    m_dstSubCodec = pgsRender;
     m_srtRender = new TextToPGSConverter(true);
     m_processedSize = 0;
     m_state = ParseState::PARSE_FIRST_LINE;
