@@ -157,6 +157,18 @@ bool isForcedSubtitleName(const std::string& fileName);
 // none, no, 0, false, off. Case does not matter.
 bool defaultParamMeansNo(const std::string& value);
 
+// Judge ONE --layer-break-lbn value, in one place, because the two paths that read the option had
+// drifted: the meta path refused a sector of zero or less and the --bdmv-to-iso command line
+// accepted anything std::stoi would swallow, including negative numbers.
+//
+// Returns an error message when the value cannot be a sector at all, or an empty string when it can.
+// Fills `warning` when the value IS a legal sector but is far too small to be a layer boundary on
+// any Blu-ray, which is what a number written with thousands separators turns into: a comma
+// separates VALUES here, so 12,219,392 arrives as 12, 219 and 392 and the guard lands inside the
+// payload. Warning rather than refusing, because plausibility is a judgement and a wrong refusal is
+// worse than a wrong guard.
+std::string checkLayerBreakLbn(int lbn, std::string& warning);
+
 static int64_t internalClockToPts(const int64_t value) { return value / INT_FREQ_TO_TS_FREQ; }
 static int64_t ptsToInternalClock(const int64_t value) { return value * INT_FREQ_TO_TS_FREQ; }
 

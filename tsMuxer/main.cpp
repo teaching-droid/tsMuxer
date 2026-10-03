@@ -833,10 +833,24 @@ All parameters in this group start with two dashes:
                       of the default small 4 MB margin, making the guard symmetric or custom.
                       Use when a disc is also defect-prone just before the layer break.
 --layer-break-lbn     Layer break sector(s) for --layer-break-guard, in 2048-byte LBA
-                      sectors = the disc's TOTAL sectors / number of layers. One value for
-                      BD-R/RE DL (default 12,219,392 = a 50GB disc, 25GB/layer); a COMMA-
-                      SEPARATED list for BDXL: 100GB has 2 breaks (Free/3, 2*Free/3), 128GB
-                      has 3. Read the total from the disc's FULL formatted capacity (ImgBurn
+                      sectors = the disc's TOTAL sectors / number of layers.
+                      WRITE THE NUMBER WITH NO GROUPING. A comma SEPARATES VALUES here and
+                      is NOT a thousands separator, so 12,219,392 is read as three breaks,
+                      at sectors 12, 219 and 392, and the guard then lands in the middle of
+                      your data. Write 12219392.
+                      One value for BD-R/RE DL, a list for BDXL: 100GB has 2 breaks
+                      (Free/3 and 2*Free/3), 128GB has 3. Examples, with the Free Sectors
+                      each was worked out from:
+                        --layer-break-lbn=12219392
+                              BD-R DL 50GB, 24438784 sectors, 2 layers. This is the default
+                        --layer-break-lbn=16292864,32585728
+                              BD-R XL 100GB, 48878592 sectors, 3 layers
+                        --layer-break-lbn=15625216,31250432,46875648
+                              BD-R XL 128GB, 62500864 sectors, 4 layers
+                      Those three are FULL capacities. A disc formatted with defect
+                      management reports less, 47305728 for 100GB say, and then the breaks
+                      are different: work them out from what your own disc reports.
+                      Read the total from the disc's FULL formatted capacity (ImgBurn
                       "Free Sectors"), NOT a partial/POW value (which gives a wrong break).
 --bdmv-to-iso         Separate mode: tsMuxeR --bdmv-to-iso [options] <BDMV_folder> <out.iso>
                       Wrap an existing BDMV folder into a UDF 2.50 BD-ROM ISO byte-for-byte
@@ -1067,7 +1081,20 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
             else if (a.rfind("--layer-break-lbn=", 0) == 0)
             {
                 layerBreakLbns.clear();
-                for (const auto& tok : splitStr(a.substr(18).c_str(), ',')) layerBreakLbns.push_back(std::stoi(tok));
+                for (const auto& tok : splitStr(a.substr(18).c_str(), ','))
+                {
+                    const int lbn = std::stoi(tok);
+                    std::string warning;
+                    const std::string err = checkLayerBreakLbn(lbn, warning);
+                    if (!err.empty())
+                    {
+                        LTRACE(LT_ERROR, 2, "--layer-break-lbn: " << err);
+                        return -1;
+                    }
+                    if (!warning.empty())
+                        LTRACE(LT_WARN, 2, "Warning: " << warning);
+                    layerBreakLbns.push_back(lbn);
+                }
             }
             else if (a.rfind("--disc-capacity=", 0) == 0)
                 discCapacitySectors = std::stoll(a.substr(16));

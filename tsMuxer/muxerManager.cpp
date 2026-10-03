@@ -663,10 +663,13 @@ void MuxerManager::parseMuxOpt(const string& opts)
             for (const auto& tok : splitStr(paramPair[1].c_str(), ','))
             {
                 const int lbn = strToInt32(trimStr(tok).c_str());
-                if (lbn <= 0)
-                    THROW(ERR_COMMON, "Invalid --layer-break-lbn value '" << paramPair[1]
-                                                                          << "'. Expected positive sector number(s), "
-                                                                             "comma-separated for BDXL.");
+                // one rule, shared with the --bdmv-to-iso path, which used to accept anything
+                std::string warning;
+                const std::string err = checkLayerBreakLbn(lbn, warning);
+                if (!err.empty())
+                    THROW(ERR_COMMON, "Invalid --layer-break-lbn value '" << paramPair[1] << "': " << err);
+                if (!warning.empty())
+                    LTRACE(LT_WARN, 2, "Warning: " << warning);
                 m_layerBreakLbns.push_back(lbn);
             }
         }

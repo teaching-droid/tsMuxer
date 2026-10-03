@@ -341,6 +341,26 @@ bool defaultParamMeansNo(const std::string& value)
     return lower == "none" || lower == "no" || lower == "0" || lower == "false" || lower == "off";
 }
 
+std::string checkLayerBreakLbn(const int lbn, std::string& warning)
+{
+    warning.clear();
+    if (lbn <= 0)
+        return "a layer break must be a sector number above zero, and this one is " + std::to_string(lbn) +
+               ". A comma separates VALUES here and is not a thousands separator, so write 12219392 and not "
+               "12,219,392.";
+    // 2 GiB in 2048-byte sectors. The smallest layer on any Blu-ray is a 25 GB one, about 12219392
+    // sectors, and a defect-managed disc still reports millions. So anything under this is not a
+    // layer boundary that exists, while the 12, 219 and 392 a grouped number turns into are five
+    // orders of magnitude below it.
+    const int smallestPlausibleLayer = 1048576;
+    if (lbn < smallestPlausibleLayer)
+        warning = "a layer break at sector " + std::to_string(lbn) +
+                  " is far too small to be a layer boundary on any Blu-ray, so the guard band will land inside "
+                  "your data rather than at the layer change. A comma separates VALUES in this option and is not "
+                  "a thousands separator: 12,219,392 is read as three breaks, at 12, 219 and 392. Write 12219392.";
+    return std::string();
+}
+
 int64_t delayFromFileName(const std::string& fileName)
 {
     std::string name = extractFileName(fileName);
