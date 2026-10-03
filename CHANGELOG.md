@@ -1,3 +1,45 @@
+## tsMuxeR 2.18.16
+
+Fifteen changes, close behind 2.18.15: twelve faults and three new things.
+
+Most of it comes from one report about Matroska output that turned out to hold six separate faults, and from a question about chapters added to the end of it.
+
+**There is no Intel macOS build this time either.** Homebrew has dropped support for Intel Macs, and the Intel build gets its font library from it, so that half of the macOS job still does not run. Apple Silicon is unaffected and is here as usual. If you are on an Intel Mac, 2.18.14 is still available and still works; a way to build without Homebrew is being looked at.
+
+### Fixed
+
+* **Matroska output timed AVC pictures at half rate.** An H.264 source came out reading 12.000 fps and a few seconds long, with the picture and the sound otherwise intact. Whether picture order counts by one or by two is a property of the stream, and the check that works it out only ever ran when writing a transport stream. It runs for every output now. Transport stream output is unchanged.
+
+* **A mux that stopped before its source was finished still reported success.** The log said the mux had completed even when most of the input had never been read. It now stops with an error saying how far it got. Cutting a mux short on purpose, with a start or an end time, is unaffected.
+
+* **Matroska chapters carried no names.** The writer put out the times and nothing else, so names were lost in every remux and came back as Chapter 01 and so on. Names are written now, each with the language it was written in. This closes the gap mentioned in the demux entry of 2.18.15.
+
+* **The window offered chapters only when the output was a disc.** Matroska holds chapters perfectly well, but the choices were greyed out for it, so the only way to set them was the command line. They are offered for a Matroska output now.
+
+* **The chapter list box could not be edited when the list came from the source.** A disc folder or an MKV filled the box in and then would not let you change it. You can edit it now, and what you leave in it is what gets written.
+
+* **The Strikethrough tick on a text subtitle did nothing.** The window and the muxer spelled the setting differently, so it was written and then ignored. The two agree now, and the tick works.
+
+* **The window wrote a subtitle setting that nothing has ever read.** It sent an alignment value no version of tsMuxeR understands. It is no longer written, and no output changes, because nothing was using it.
+
+* **A default track could not be turned off.** `default=` was read as present or absent, so any value at all meant yes and there was no way to say no. It is read for its value now, and `none`, `no`, `0`, `false` and `off` all mean no.
+
+* **A Matroska to Matroska remux did not keep the default track the source chose.** The flag the source carried was not carried through, so a different track could end up marked. It follows the source now.
+
+* **A subtitle drawn into pictures was declared in the file as text.** When an SRT is rendered to picture subtitles for a Matroska output, the track was still labelled as a text track, which players then read wrongly. A track is declared as what it holds now.
+
+* **The log called a text subtitle PGS.** While drawing an SRT into pictures the progress line named the wrong format. It says what it is really doing now.
+
+* **The playlist called a single layer Dolby Vision stream an enhancement layer.** A profile 8 or profile 5 stream was written into the playlist as though a base layer sat beside it, which is true only of profile 7. Single layer discs are described correctly now, and discs without Dolby Vision are unchanged.
+
+### New
+
+* **`--chapters-file` reads a chapter file, and a demux writes one.** It takes the simple text form that eac3to and MKVToolNix produce, and Matroska XML as mkvextract writes it, including a file with a byte order mark. A demux now also writes `chapters.xml`, which keeps the names; `chapters.txt` is still written as before.
+
+* **A chapter file can be dropped on the chapter list box, or pasted into it.** Drop it on the list of times on the Blu-ray tab: the times appear and the custom chapters choice is ticked for you. Pasting `CHAPTER01=` lines works as they stand, with nothing to strip by hand first. A list that came from a file is put in order and has repeats removed.
+
+* **A Dolby Vision stream with no picture for players that cannot read it now says so.** Profile 5 carries no fallback, so equipment without Dolby Vision shows nothing at all. The log warns when it sees one, instead of quietly writing a disc that plays on some players and not on others.
+
 ## tsMuxeR 2.18.15
 
 Back at the machine, so this is the first release since 2.18.14. Thank you to everyone who posted while I was away; I have read all of it.
