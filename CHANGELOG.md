@@ -1,6 +1,6 @@
 ## tsMuxeR 2.18.16
 
-Fifteen changes, close behind 2.18.15: twelve faults and three new things.
+Sixteen changes, close behind 2.18.15: thirteen faults and three new things.
 
 Most of it comes from one report about Matroska output that turned out to hold six separate faults, and from a question about chapters added to the end of it.
 
@@ -29,6 +29,8 @@ Most of it comes from one report about Matroska output that turned out to hold s
 * **A subtitle drawn into pictures was declared in the file as text.** When an SRT is rendered to picture subtitles for a Matroska output, the track was still labelled as a text track, which players then read wrongly. A track is declared as what it holds now.
 
 * **The log called a text subtitle PGS.** While drawing an SRT into pictures the progress line named the wrong format. It says what it is really doing now.
+
+* **The help for `--layer-break-lbn` offered a value that could not work.** It printed the default as `12,219,392`, but a comma separates values in that option, so pasting the help's own figure asked for three layer breaks, at sectors 12, 219 and 392, and the guard band was written into the middle of the disc instead of at the layer change. The run still reported success. The help now writes the number without grouping and gives a worked example for each disc size. A sector of zero or less is refused on the command line as well, which it was not before, and a break far too small to be a layer boundary now warns and names the comma as the likely cause.
 
 * **The playlist called a single layer Dolby Vision stream an enhancement layer.** A profile 8 or profile 5 stream was written into the playlist as though a base layer sat beside it, which is true only of profile 7. Single layer discs are described correctly now, and discs without Dolby Vision are unchanged.
 
