@@ -61,7 +61,7 @@ class MatroskaMuxer final : public AbstractMuxer
     void setChapterInfo(const std::vector<AVChapter>& info) override { m_chapterInfo = info; }
 
    private:
-    std::vector<double> m_chapters;  // start times in seconds
+    std::vector<double> m_chapters;        // start times in seconds
     std::vector<AVChapter> m_chapterInfo;  // same order as m_chapters, may be short or empty
     void writeChapters();
 

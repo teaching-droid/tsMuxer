@@ -2153,8 +2153,7 @@ int MatroskaDemuxer::matroska_parse_chapters()
                     }
                     if (start != AV_NOPTS_VALUE && uidFound && title != nullptr)
                     {
-                        const AVChapter chapter(start, title,
-                                                chapLanguage != nullptr ? chapLanguage : "");
+                        const AVChapter chapter(start, title, chapLanguage != nullptr ? chapLanguage : "");
                         chapters[uid] = chapter;
                     }
                     delete[] title;

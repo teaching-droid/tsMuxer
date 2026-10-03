@@ -102,7 +102,7 @@ class MuxerManager final
     void asyncWriteBlock(const WriterData& data) const;
     void checkTrackList(const std::vector<StreamInfo>& ci) const;
 
-    std::vector<double> m_chapters;  // chapter start times in seconds, applied once the muxer exists
+    std::vector<double> m_chapters;        // chapter start times in seconds, applied once the muxer exists
     std::vector<AVChapter> m_chapterInfo;  // the same chapters with their names, when known
     std::unique_ptr<AbstractMuxer> m_mainMuxer;
     std::unique_ptr<AbstractMuxer> m_subMuxer;

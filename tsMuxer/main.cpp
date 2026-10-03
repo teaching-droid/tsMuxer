@@ -47,8 +47,8 @@ static constexpr char EXCEPTION_ERR_MSG[] =
     }                                         \
     }
 DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<double>& customChaptersList,
-                        vector<AVChapter>& chapterInfo, int& firstMplsOffset, int& firstM2tsOffset,
-                        bool& insertBlankPL, int& blankNum, bool& stereoMode, std::string& isoDiskLabel)
+                        vector<AVChapter>& chapterInfo, int& firstMplsOffset, int& firstM2tsOffset, bool& insertBlankPL,
+                        int& blankNum, bool& stereoMode, std::string& isoDiskLabel)
 {
     autoChapterLen = 0;
     stereoMode = false;
@@ -1823,8 +1823,8 @@ static void checkSourceConsumed(MuxerManager& muxerManager)
     const double pct = static_cast<double>(done) / static_cast<double>(total) * 100.0;
     if (pct >= 99.0)
         return;
-    THROW(ERR_COMMON, "The mux stopped before the source was finished: " << doubleToStr(pct, 1)
-                          << " percent read, " << done << " bytes of " << total
+    THROW(ERR_COMMON, "The mux stopped before the source was finished: "
+                          << doubleToStr(pct, 1) << " percent read, " << done << " bytes of " << total
                           << ". The output is incomplete. This is not a warning: the job did not do "
                              "what it was asked to do.")
 }

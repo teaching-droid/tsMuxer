@@ -97,8 +97,7 @@ std::string escapeXml(const std::string& in)
 
 // The text between <tag> and </tag>, searched only between from and to. Attributes on the opening
 // tag are tolerated. Returns false when the tag is not in that range.
-bool tagText(const std::string& xml, const std::string& tag, const size_t from, const size_t to,
-             std::string& out)
+bool tagText(const std::string& xml, const std::string& tag, const size_t from, const size_t to, std::string& out)
 {
     const std::string open = "<" + tag;
     const std::string close = "</" + tag + ">";
@@ -231,8 +230,7 @@ std::vector<AVChapter> parseXml(const std::string& text, const std::string& file
         chapters.emplace_back(start, name, language);
     }
     if (chapters.empty())
-        THROW(ERR_COMMON, "No chapters found in " << fileName
-                                                  << ". A Matroska XML chapter file has a "
+        THROW(ERR_COMMON, "No chapters found in " << fileName << ". A Matroska XML chapter file has a "
                                                   << "ChapterAtom with a ChapterTimeStart in it")
     return chapters;
 }
@@ -251,19 +249,17 @@ std::vector<AVChapter> readChapterFile(const std::string& fileName)
 
     // UTF-16 is worth naming rather than failing to find chapters in. Several Windows tools write
     // it, and every search for text in such a file silently matches nothing.
-    if (text.size() >= 2 && ((static_cast<unsigned char>(text[0]) == 0xFF &&
-                              static_cast<unsigned char>(text[1]) == 0xFE) ||
-                             (static_cast<unsigned char>(text[0]) == 0xFE &&
-                              static_cast<unsigned char>(text[1]) == 0xFF)))
-        THROW(ERR_COMMON, "The chapter file " << fileName
-                                              << " is UTF-16. Save it as UTF-8 or plain text.")
+    if (text.size() >= 2 &&
+        ((static_cast<unsigned char>(text[0]) == 0xFF && static_cast<unsigned char>(text[1]) == 0xFE) ||
+         (static_cast<unsigned char>(text[0]) == 0xFE && static_cast<unsigned char>(text[1]) == 0xFF)))
+        THROW(ERR_COMMON, "The chapter file " << fileName << " is UTF-16. Save it as UTF-8 or plain text.")
 
     const std::string head = trimmed(text);
     const bool looksLikeXml = !head.empty() && head[0] == '<';
     std::vector<AVChapter> chapters = looksLikeXml ? parseXml(text, fileName) : parseOgm(text, fileName);
     LTRACE(LT_INFO, 2,
-           "Read " << chapters.size() << (looksLikeXml ? " chapters from the Matroska XML file "
-                                                       : " chapters from the text file ")
+           "Read " << chapters.size()
+                   << (looksLikeXml ? " chapters from the Matroska XML file " : " chapters from the text file ")
                    << fileName);
     return chapters;
 }
@@ -288,8 +284,7 @@ bool writeChapterXml(const std::string& fileName, const std::vector<AVChapter>& 
         if (language.empty())
             language = "und";
         ok = ok && file.writeLine("    <ChapterAtom>");
-        ok = ok && file.writeLine("      <ChapterTimeStart>" + floatToTime(seconds, '.') +
-                                  "000000</ChapterTimeStart>");
+        ok = ok && file.writeLine("      <ChapterTimeStart>" + floatToTime(seconds, '.') + "000000</ChapterTimeStart>");
         ok = ok && file.writeLine("      <ChapterDisplay>");
         ok = ok && file.writeLine("        <ChapterString>" + escapeXml(name) + "</ChapterString>");
         ok = ok && file.writeLine("        <ChapterLanguage>" + language + "</ChapterLanguage>");

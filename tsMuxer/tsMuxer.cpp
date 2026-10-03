@@ -244,8 +244,7 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
     // it. In profile 5 and profile 8 there is none: the RPU travels in the base, so the only video
     // stream there is belongs on 0x1011 and IS the primary video. m_videoTrackCnt counts the base
     // layers seen so far and has not been touched for this stream yet.
-    const bool isDvEnhancement =
-        codecReader != nullptr && codecReader->getStreamHDR() == 4 && m_videoTrackCnt > 0;
+    const bool isDvEnhancement = codecReader != nullptr && codecReader->getStreamHDR() == 4 && m_videoTrackCnt > 0;
     const bool isPrimaryVideo = isVideo && !isSecondary && !isDvEnhancement;
 
     const int rank = isPrimaryVideo ? 3 : (isVideo ? 2 : (codecName[0] == 'A' ? 1 : 0));

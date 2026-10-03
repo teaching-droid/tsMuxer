@@ -304,8 +304,10 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
     if (track.matroskaCodecID != metaCodecID)
         LTRACE(LT_WARN, 2,
                "Warning: the meta asks for " << codecName << " but the data is "
-                                             << codecReader->getCodecInfo().programName << ", so the track is written "
-                                                "as " << track.matroskaCodecID
+                                             << codecReader->getCodecInfo().programName
+                                             << ", so the track is written "
+                                                "as "
+                                             << track.matroskaCodecID
                                              << ". A text subtitle is drawn into pictures before it is written, so the "
                                                 "text itself is not kept in the file.");
 
