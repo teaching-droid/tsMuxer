@@ -126,7 +126,7 @@ Supported input containers:
 * TS/M2TS/MTS
 * EVO/VOB/MPG/MPEG
 * MKV
-* MOV/MP4
+* MOV/MP4/M4A/M4V
 * MPLS (Blu-ray media play list file)
 
 Names of codecs in the meta file:
@@ -141,7 +141,7 @@ V_MS/VFW/WVC1     | VC1
 V_MPEG-2          | MPEG2 
 V_AV1             | AV1 
 V_VP8             | VP8 (read from MKV, WebM and .ivf files; MKV output, or demuxed to an .ivf file)
-V_VP9             | VP9 (read from MKV, WebM and .ivf files; MKV output, or demuxed to an .ivf file)
+V_VP9             | VP9 (read from MKV, WebM, MP4 and .ivf files; MKV output, or demuxed to an .ivf file)
 A_AC3             | AC3/AC3+/TRUE-HD 
 A_AAC             | AAC 
 A_DTS             | DTS/DTS-Express/DTS-HD 
@@ -149,8 +149,8 @@ A_MP3             | MPEG audio layer 1/2/3
 A_LPCM            | raw pcm data or PCM WAV file 
 A_FLAC            | FLAC (MKV and demux output only)
 A_OPUS            | Opus (TS, MKV, and demux output only)
-A_VORBIS          | Vorbis (read from MKV and WebM; MKV output, or demuxed to an .ogg file)
-A_ALAC            | Apple Lossless (read from MKV; MKV output only)
+A_VORBIS          | Vorbis (read from MKV, WebM and MP4; MKV output, or demuxed to an .ogg file)
+A_ALAC            | Apple Lossless (read from MKV and MP4; MKV output only)
 S_HDMV/PGS        | Presentation graphic stream (BD subtitle format) 
 S_TEXT/UTF8       | SRT subtitle format.  Encoding MUST be  UTF-8/UTF-16/UTF-32 
 
