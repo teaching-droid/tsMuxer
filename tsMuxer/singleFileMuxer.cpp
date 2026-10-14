@@ -10,6 +10,7 @@
 #include "ac3Codec.h"
 #include "ac3StreamReader.h"
 #include "lpcmStreamReader.h"
+#include "mkvCopyStreamReader.h"
 #include "mpegAudioStreamReader.h"
 #include "muxerManager.h"
 #include "opusStreamReader.h"
@@ -127,9 +128,16 @@ void SingleFileMuxer::intAddStream(const std::string& streamName, const std::str
     }
     else if (codecName == "S_SUP" || codecName == "S_HDMV/PGS" || codecName == "S_TEXT/UTF8")
     {
-        // An SRT track kept as text is written back as an SRT file, every other one as pictures
+        // An SRT track kept as text is written back as an SRT file, every other one as pictures. ASS, SSA and WebVTT
+        // from a Matroska file, kept as text, are written in their own form.
         const auto srt = dynamic_cast<SRTStreamReader*>(codecReader);
-        fileExt = srt && srt->keepText() ? ".srt" : ".sup";
+        if (const auto copy = dynamic_cast<MatroskaCopyStreamReader*>(codecReader))
+        {
+            const std::string& id = copy->sourceCodecId();
+            fileExt = id == "S_TEXT/ASS" ? ".ass" : id == "S_TEXT/SSA" ? ".ssa" : ".vtt";
+        }
+        else
+            fileExt = srt && srt->keepText() ? ".srt" : ".sup";
     }
     else if (codecName[0] == 'V')
     {

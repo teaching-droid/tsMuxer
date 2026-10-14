@@ -253,7 +253,7 @@ font-border       | Outline width.
 fadein-time       | Time in seconds for smooth subtitle appearance, for example 0.25.
 fadeout-time      | Time in seconds for smooth subtitle disappearance, for example 0.25.
 line-spacing      | Interval between subtitle lines. Default value is 1.0.
-keep-text         | Keep the subtitles as text instead of drawing them into pictures. Each subtitle is copied into the track as text, with its tags and its own start and end, and the font and picture parameters are not needed. For Matroska output, and for a demux, which then writes an SRT file (UTF-8, numbered from 1). Other outputs draw the subtitles as usual, with a warning, which needs `video-width`, `video-height` and `fps`.
+keep-text         | Keep the subtitles as text instead of drawing them into pictures. Each subtitle is copied into the track as text, with its tags and its own start and end, and the font and picture parameters are not needed. For Matroska output, and for a demux, which then writes an SRT file (UTF-8, numbered from 1); ASS, SSA and WebVTT subtitles from a Matroska file are written as .ass, .ssa and .vtt files instead, in their own form. Other outputs draw the subtitles as usual, with a warning, which needs `video-width`, `video-height` and `fps`.
 
 On Linux and Mac, a font can be named either by its family name or by the full path to the file. Named by family, tsMuxeR searches `/usr/share/fonts/`, `/usr/local/share/fonts/`, `~/.fonts` and `~/.local/share/fonts` on Linux, and `/Library/Fonts/` and `~/Library/Fonts` on Mac, and it accepts `.ttf`, `.otf` and `.ttc`. Note that the search is case sensitive on the extension, so a file copied from Windows as `Arial.TTF` is found only by its full path.
 

@@ -958,8 +958,10 @@ int METADemuxer::addStream(const string& codec, const string& codecStreamName, c
     // its CodecPrivate, its BlockAdditions and its times. Text is copied only when it is kept as text: without
     // keep-text it is drawn into pictures, as asked. WebM holds subtitles only as WebVTT in its own form.
     AbstractStreamReader* codecReader = nullptr;
-    if (m_matroskaOutput && pid > 0 &&
-        (codec == "S_HDMV/PGS" || (codec == "S_TEXT/UTF8" && addParams.count("keep-text"))))
+    // A demux does the same for the text formats kept as text: they are written as .ass, .ssa or .vtt files instead
+    // of SRT, which lost the styles and positions of ASS and the cue settings of WebVTT.
+    if ((m_matroskaOutput || m_demuxOutput) && pid > 0 &&
+        ((m_matroskaOutput && codec == "S_HDMV/PGS") || (codec == "S_TEXT/UTF8" && addParams.count("keep-text"))))
     {
         const std::string srcExt = strToUpperCase(extractFileExt(unquoteStr(trimStr(fileList[0]))));
         if (srcExt == "MKV" || srcExt == "MKA" || srcExt == "MKS" || srcExt == "MK3D" || srcExt == "WEBM")
@@ -973,16 +975,20 @@ int METADemuxer::addStream(const string& codec, const string& codecStreamName, c
                 const bool text =
                     id == "S_TEXT/ASS" || id == "S_TEXT/SSA" || id == "S_TEXT/WEBVTT" || id == "D_WEBVTT/SUBTITLES";
                 const bool bitmap = id == "S_VOBSUB" || id == "S_DVBSUB";
-                const bool copy = m_matroskaOutput == 2
+                const bool copy = !m_matroskaOutput ? text && codec == "S_TEXT/UTF8"
+                                  : m_matroskaOutput == 2
                                       ? id == "D_WEBVTT/SUBTITLES"
                                       : (text && codec == "S_TEXT/UTF8") || (bitmap && codec == "S_HDMV/PGS");
                 if (copy)
                 {
                     LTRACE(LT_INFO, 2,
                            "Track " << pid << " of " << unquoteStr(fileList[0]) << " is " << id
-                                    << ", and is copied into the output as it is.");
-                    codecReader = new MatroskaCopyStreamReader(id, std::move(src.codecPrivate),
-                                                               std::move(src.addMappings), src.maxBlockAddId);
+                                    << (m_matroskaOutput ? ", and is copied into the output as it is."
+                                                         : ", and is written in that form."));
+                    auto* copyReader = new MatroskaCopyStreamReader(id, std::move(src.codecPrivate),
+                                                                    std::move(src.addMappings), src.maxBlockAddId);
+                    copyReader->setTextFileOutput(!m_matroskaOutput);
+                    codecReader = copyReader;
                 }
             }
         }

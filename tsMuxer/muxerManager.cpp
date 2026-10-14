@@ -649,6 +649,7 @@ bool MuxerManager::openMetaFile(const string& fileName)
     }
     file.close();
 
+    m_metaDemuxer.setDemuxOutput(m_demuxMode);
     m_metaDemuxer.openFile(fileName);
     return true;
 }

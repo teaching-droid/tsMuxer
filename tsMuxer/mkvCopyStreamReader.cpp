@@ -1,6 +1,10 @@
 #include "mkvCopyStreamReader.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <cstring>
+#include <iomanip>
 #include <sstream>
 
 #include "vodCoreException.h"
@@ -14,7 +18,214 @@ uint64_t readBe(const uint8_t* p, const int bytes)
     for (int i = 0; i < bytes; ++i) v = v << 8 | p[i];
     return v;
 }
+
+// An EBML number: the length from the first byte; with the marker bit kept for an element ID, cleared for a size
+bool readVint(const uint8_t*& p, const uint8_t* end, uint64_t& value, const bool keepMarker)
+{
+    if (p >= end || *p == 0)
+        return false;
+    int len = 1;
+    while (!(*p & (0x80 >> (len - 1)))) ++len;
+    if (end - p < len)
+        return false;
+    value = keepMarker ? *p : *p & (0xFF >> len);
+    for (int i = 1; i < len; ++i) value = value << 8 | p[i];
+    p += len;
+    return true;
+}
+
+// The BlockAdditional of BlockAddID 1 (the ID an absent BlockAddID stands for) in a BlockAdditions body
+std::string blockAdditional1(const uint8_t* p, const uint8_t* end)
+{
+    while (p < end)
+    {
+        uint64_t id = 0, size = 0;
+        if (!readVint(p, end, id, true) || !readVint(p, end, size, false) || size > static_cast<uint64_t>(end - p))
+            return {};
+        const uint8_t* body = p;
+        p += size;
+        if (id != 0xA6)  // BlockMore
+            continue;
+        uint64_t addId = 1;
+        std::string data;
+        for (const uint8_t* q = body; q < body + size;)
+        {
+            uint64_t cid = 0, csize = 0;
+            if (!readVint(q, body + size, cid, true) || !readVint(q, body + size, csize, false) ||
+                csize > static_cast<uint64_t>(body + size - q))
+                break;
+            if (cid == 0xEE)  // BlockAddID
+                addId = readBe(q, static_cast<int>((std::min)(csize, uint64_t{8})));
+            else if (cid == 0xA5)  // BlockAdditional
+                data.assign(reinterpret_cast<const char*>(q), static_cast<size_t>(csize));
+            q += csize;
+        }
+        if (addId == 1)
+            return data;
+    }
+    return {};
+}
+
+// h:mm:ss.cc (ASS and SSA) or hh:mm:ss.ttt (WebVTT), from a time in INTERNAL_PTS_FREQ units
+std::string clockText(int64_t t, const bool vtt)
+{
+    if (t < 0)
+        t = 0;
+    const int64_t unit = vtt ? 1000 : 100;
+    const int64_t n = (t * unit + INTERNAL_PTS_FREQ / 2) / INTERNAL_PTS_FREQ;
+    const int64_t frac = n % unit, s = n / unit % 60, m = n / unit / 60 % 60, h = n / unit / 3600;
+    std::ostringstream out;
+    out << std::setfill('0');
+    if (vtt)
+        out << std::setw(2) << h;
+    else
+        out << h;
+    out << ':' << std::setw(2) << m << ':' << std::setw(2) << s << '.' << std::setw(vtt ? 3 : 2) << frac;
+    return out.str();
+}
+
+// The timestamps inside a WebVTT cue (<00:00:01.500>), which Matroska keeps relative to the block, made absolute again
+std::string absoluteCueTimes(const std::string& text, const int64_t start)
+{
+    std::string out;
+    size_t i = 0;
+    while (i < text.size())
+    {
+        const size_t lt = text.find('<', i);
+        if (lt == std::string::npos)
+            break;
+        const size_t gt = text.find('>', lt);
+        if (gt == std::string::npos)
+            break;
+        const std::string inner = text.substr(lt + 1, gt - lt - 1);
+        int parts[4] = {0, 0, 0, 0};
+        int n = 0;
+        bool ok = !inner.empty() && isdigit(static_cast<unsigned char>(inner[0]));
+        size_t dot = inner.rfind('.');
+        if (ok && dot != std::string::npos && inner.size() - dot == 4)
+        {
+            std::string hms = inner.substr(0, dot);
+            size_t pos = 0;
+            while (ok && pos <= hms.size() && n < 3)
+            {
+                const size_t colon = hms.find(':', pos);
+                const std::string part = hms.substr(pos, colon == std::string::npos ? std::string::npos : colon - pos);
+                ok = !part.empty() && part.find_first_not_of("0123456789") == std::string::npos;
+                if (ok)
+                    parts[n++] = atoi(part.c_str());
+                if (colon == std::string::npos)
+                    break;
+                pos = colon + 1;
+            }
+            ok = ok && (n == 2 || n == 3) && inner.substr(dot + 1).find_first_not_of("0123456789") == std::string::npos;
+        }
+        else
+            ok = false;
+        out.append(text, i, lt - i);
+        if (ok)
+        {
+            const int64_t h = n == 3 ? parts[0] : 0, m = n == 3 ? parts[1] : parts[0], s = n == 3 ? parts[2] : parts[1];
+            const int64_t ms = ((h * 60 + m) * 60 + s) * 1000 + atoi(inner.substr(dot + 1).c_str());
+            out += '<' + clockText(start + ms * (INTERNAL_PTS_FREQ / 1000), true) + '>';
+        }
+        else
+            out.append(text, lt, gt - lt + 1);
+        i = gt + 1;
+    }
+    out.append(text, (std::min)(i, text.size()), std::string::npos);
+    return out;
+}
 }  // namespace
+
+// The text of the subtitle file for one block, its header in front of the first. ASS and SSA: the CodecPrivate (the
+// [Script Info] and styles sections), an [Events] section if it has none, and a Dialogue line for each block, from
+// the block's fields (ReadOrder, Layer, Style, Name, MarginL, MarginR, MarginV, Effect, Text) and times. WebVTT: the
+// CodecPrivate (the file up to its first cue), and for each block its comments, its identifier, its times with its
+// settings, and its text; S_TEXT/WEBVTT keeps the first three in BlockAdditional 1, a line each for the settings and
+// the identifier, then the comments; WebM's D_WEBVTT/SUBTITLES has the identifier and the settings as the first two
+// lines of the block. The lines come in the order of the blocks, which is the order of their start times.
+std::string MatroskaCopyStreamReader::textFor(const int64_t pts, const int64_t duration, const uint8_t* add,
+                                              const size_t addSize, const uint8_t* data, const size_t dataSize)
+{
+    const bool vtt = m_sourceCodecId == "S_TEXT/WEBVTT" || m_sourceCodecId == "D_WEBVTT/SUBTITLES";
+    const bool ssa = m_sourceCodecId == "S_TEXT/SSA";
+    std::string head(m_codecPrivate.begin(), m_codecPrivate.end());
+    while (!head.empty() && head.back() == '\0') head.pop_back();
+    const std::string nl = head.find("\r\n") != std::string::npos ? "\r\n" : "\n";
+    std::string out;
+    if (!m_headerWritten)
+    {
+        m_headerWritten = true;
+        if (vtt)
+        {
+            while (!head.empty() && (head.back() == '\n' || head.back() == '\r' || head.back() == ' ')) head.pop_back();
+            out = (head.empty() ? std::string("WEBVTT") : head) + nl + nl;
+        }
+        else
+        {
+            out = head;
+            if (!out.empty() && out.back() != '\n')
+                out += nl;
+            if (out.find("[Events]") == std::string::npos)
+                out += nl + "[Events]" + nl +
+                       (ssa ? "Format: Marked, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
+                            : "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text") +
+                       nl;
+        }
+    }
+    const int64_t end = pts + (duration > 0 ? duration : 0);
+    std::string body(reinterpret_cast<const char*>(data), dataSize);
+    if (vtt)
+    {
+        std::string settings, identifier, comments;
+        if (m_sourceCodecId == "D_WEBVTT/SUBTITLES")
+        {
+            for (std::string* line : {&identifier, &settings})
+            {
+                const size_t lf = body.find('\n');
+                *line = body.substr(0, lf);
+                body = lf == std::string::npos ? std::string() : body.substr(lf + 1);
+            }
+        }
+        else if (addSize > 0)
+        {
+            const std::string extra = blockAdditional1(add, add + addSize);
+            const size_t a = extra.find('\n');
+            settings = extra.substr(0, a);
+            if (a != std::string::npos)
+            {
+                const size_t b = extra.find('\n', a + 1);
+                identifier = extra.substr(a + 1, b == std::string::npos ? std::string::npos : b - a - 1);
+                if (b != std::string::npos)
+                    comments = extra.substr(b + 1);
+            }
+        }
+        for (std::string* s : {&settings, &identifier})
+            while (!s->empty() && (s->back() == '\r' || s->back() == '\n')) s->pop_back();
+        while (!comments.empty() && (comments.back() == '\r' || comments.back() == '\n')) comments.pop_back();
+        while (!body.empty() && (body.back() == '\r' || body.back() == '\n')) body.pop_back();
+        if (!comments.empty())
+            out += comments + nl + nl;
+        if (!identifier.empty())
+            out += identifier + nl;
+        out += clockText(pts, true) + " --> " + clockText(end, true) + (settings.empty() ? "" : " " + settings) + nl;
+        out += absoluteCueTimes(body, pts) + nl + nl;
+        return out;
+    }
+    // ReadOrder, Layer, then the fields a Dialogue line has after its times
+    const size_t c1 = body.find(',');
+    const size_t c2 = c1 == std::string::npos ? std::string::npos : body.find(',', c1 + 1);
+    std::string layer = c1 == std::string::npos ? std::string() : body.substr(c1 + 1, c2 - c1 - 1);
+    const std::string rest = c2 == std::string::npos ? body : body.substr(c2 + 1);
+    if (ssa)
+        layer = "Marked=0";
+    else if (layer.empty())
+        layer = "0";
+    std::string text = rest;
+    while (!text.empty() && (text.back() == '\r' || text.back() == '\n')) text.pop_back();
+    out += "Dialogue: " + layer + "," + clockText(pts, false) + "," + clockText(end, false) + "," + text + nl;
+    return out;
+}
 
 MatroskaCopyStreamReader::MatroskaCopyStreamReader(const std::string& codecId, std::vector<uint8_t> codecPrivate,
                                                    std::vector<std::vector<uint8_t>> addMappings,
@@ -68,12 +279,20 @@ int MatroskaCopyStreamReader::readPacket(AVPacket& avPacket)
     if (left < record)
         return NEED_MORE_DATA;
 
-    m_packet.resize(4 + addSize + dataSize);
-    for (int i = 0; i < 4; ++i) m_packet[i] = static_cast<uint8_t>(addSize >> (8 * (3 - i)));
-    if (addSize)
-        memcpy(m_packet.data() + 4, p + HEAD, addSize);
-    if (dataSize)
-        memcpy(m_packet.data() + 4 + addSize, p + HEAD + addSize + 4, dataSize);
+    if (m_textFile)
+    {
+        const std::string text = textFor(pts, duration, p + HEAD, addSize, p + HEAD + addSize + 4, dataSize);
+        m_packet.assign(text.begin(), text.end());
+    }
+    else
+    {
+        m_packet.resize(4 + addSize + dataSize);
+        for (int i = 0; i < 4; ++i) m_packet[i] = static_cast<uint8_t>(addSize >> (8 * (3 - i)));
+        if (addSize)
+            memcpy(m_packet.data() + 4, p + HEAD, addSize);
+        if (dataSize)
+            memcpy(m_packet.data() + 4 + addSize, p + HEAD + addSize + 4, dataSize);
+    }
 
     avPacket.pts = avPacket.dts = pts;
     avPacket.duration = duration > 0 ? duration : 0;

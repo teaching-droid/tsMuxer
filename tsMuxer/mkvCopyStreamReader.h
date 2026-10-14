@@ -35,6 +35,10 @@ class MatroskaCopyStreamReader final : public AbstractStreamReader
     [[nodiscard]] const std::vector<std::vector<uint8_t>>& addMappings() const { return m_addMappings; }
     [[nodiscard]] uint64_t maxBlockAddId() const { return m_maxBlockAddId; }
 
+    // For a demux of ASS, SSA or WebVTT: each packet is the text of the subtitle file instead, its header first, then
+    // one Dialogue line or one cue for each block (textFor)
+    void setTextFileOutput(const bool on) { m_textFile = on; }
+
    private:
     // Called S_MKVCOPY, a subtitle by the first letter as the code everywhere asks; the source's CodecID beside it
     CodecInfo m_codecInfo;
@@ -45,6 +49,10 @@ class MatroskaCopyStreamReader final : public AbstractStreamReader
     std::vector<uint8_t> m_input;   // records not yet turned into packets
     size_t m_inputPos = 0;          // where the next record starts in m_input
     std::vector<uint8_t> m_packet;  // the data of the packet last handed out
+    bool m_textFile = false;
+    bool m_headerWritten = false;
+    std::string textFor(int64_t pts, int64_t duration, const uint8_t* add, size_t addSize, const uint8_t* data,
+                        size_t dataSize);
     int64_t m_processedSize = 0;
     int64_t m_frames = 0;
 };

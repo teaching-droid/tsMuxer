@@ -222,6 +222,8 @@ class METADemuxer final : public AbstractDemuxer
     // The output is Matroska (1) or WebM (2), known before the meta is read: a subtitle of a Matroska source is then
     // copied in its own form (MatroskaCopyStreamReader) instead of being converted.
     void setMatroskaOutput(const int kind) { m_matroskaOutput = kind; }
+    // The output is a demux: ASS, SSA and WebVTT subtitles kept as text are written in their own form
+    void setDemuxOutput(const bool demux) { m_demuxOutput = demux; }
     [[nodiscard]] SourceEditions getSourceEditions() override;
     // The Chapters element of the one Matroska file the output takes its chapters from, as it stands; empty when
     // they come from anything else: a playlist, a join, an ordered edition's timeline, another container.
@@ -267,6 +269,7 @@ class METADemuxer final : public AbstractDemuxer
     std::set<std::string> m_timelinesReported;  // the Matroska files whose play timeline was said in the log
     bool m_keepEditions = false;                // --keep-editions (setKeepEditions)
     int m_matroskaOutput = 0;                   // setMatroskaOutput: 0 other, 1 Matroska, 2 WebM
+    bool m_demuxOutput = false;                 // setDemuxOutput
     double m_lastProgress = 0.0;                // the last value printed
     int64_t m_totalSize;
     bool m_flushDataMode;
