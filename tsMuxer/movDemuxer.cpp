@@ -312,6 +312,16 @@ class MovParsedH264TrackData : public ParsedTrackPrivData
                 for (int i = 0; i < nalSize; ++i, ++src) spsPpsList.rbegin()->push_back(*src);
             }
         }
+        // The count of picture parameter sets was read even where the configuration ended before it: the byte after
+        // the buffer decided whether the file was read or refused. A configuration that ends there has none, and the
+        // stream has to carry them.
+        if (src >= end)
+        {
+            LTRACE(LT_WARN, 2,
+                   "Warning: the H.264 configuration (avcC) of an MP4 track ends before its picture parameter sets; "
+                   "they are taken from the stream.");
+            return;
+        }
         int ppsCnt = *src++;
         for (; ppsCnt > 0; ppsCnt--)
         {
