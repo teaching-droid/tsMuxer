@@ -139,9 +139,13 @@ struct MOVStreamContext : Track
     uint32_t trackId = 0;       // tkhd track_ID
     bool isMp4v = false;        // an mp4v sample entry, whose esds says what it holds
     int64_t editMediaTime = 0;  // where the first edit of the track's edit list starts in its media (mov_read_moov)
-    std::string name;           // the track's name, from its hdlr, when it is not an encoder's generic one
-    std::string leftOut;        // why the track cannot be read, for a meta line that names it (getTrackList)
-    bool hasEditList = false;   // an elst was read for the track
+    // A fragmented file: the decode time and duration of each sample its runs (trun) give, after those of the moov,
+    // and where the next one starts (tfdt, then the durations)
+    std::vector<int64_t> fragDts, fragDur;
+    int64_t fragNextDts = 0;
+    std::string name;          // the track's name, from its hdlr, when it is not an encoder's generic one
+    std::string leftOut;       // why the track cannot be read, for a meta line that names it (getTrackList)
+    bool hasEditList = false;  // an elst was read for the track
     std::map<std::string, std::string> colour;  // srccolour items (m, t, p, r, cll, fall, rx ... lmin) of the entry
     uint32_t paspH = 0, paspV = 0;              // pasp: the shape of a pixel
     bool pcmBigEndian = false;                  // an LPCM sample entry: the byte order of its samples
@@ -540,7 +544,7 @@ class MovParsedH266TrackData final : public MovParsedH264TrackData
 
 // MPEG-4 Part 2 and ProRes, copied picture for picture into a Matroska output (VideoCopyStreamReader). Each sample
 // becomes a record with its display time (stts and ctts), its decode time and its key frame flag (stss), behind one
-// record with the picture size and the configuration. Plain files only: a fragmented file has no stts to time by.
+// record with the picture size and the configuration. A fragmented file is timed by its tfdt boxes and its runs.
 class MovParsedVideoCopyData final : public ParsedTrackPrivData
 {
    public:
@@ -636,6 +640,9 @@ class MovParsedVideoCopyData final : public ParsedTrackPrivData
                 m_dur.push_back(e.duration);
                 t += e.duration;
             }
+        // the samples of the fragments, after those of the moov: their times from tfdt and the runs
+        m_dts.insert(m_dts.end(), m_sc->fragDts.begin(), m_sc->fragDts.end());
+        m_dur.insert(m_dur.end(), m_sc->fragDur.begin(), m_sc->fragDur.end());
         for (const auto& e : m_sc->ctts_data)
             for (uint32_t i = 0; i < e.count && m_ctts.size() < m_dts.size(); ++i)
                 m_ctts.push_back(static_cast<int32_t>(static_cast<uint32_t>(e.duration)));
@@ -2151,8 +2158,10 @@ int MovDemuxer::mov_read_trun(MOVAtom atom)
     {
         unsigned sample_size = frag->size;
 
-        if (flags & 0x100)
-            get_be32();  // sample_duration
+        const unsigned duration = flags & 0x100 ? get_be32() : frag->duration;  // sample_duration
+        sc->fragDts.push_back(sc->fragNextDts);
+        sc->fragDur.push_back(duration);
+        sc->fragNextDts += duration;
         if (flags & 0x200)
             sample_size = get_be32();
         if (flags & 0x400)
@@ -2254,6 +2263,8 @@ int MovDemuxer::mov_read_tfdt(MOVAtom atom)
         m_firstTfdt.find(fragment.track_id) == m_firstTfdt.end() &&
         reinterpret_cast<MOVStreamContext*>(tracks[fragment.track_id - 1])->chunk_offsets.empty())
         m_firstTfdt[fragment.track_id] = baseMediaDecodeTime;
+    if (fragment.track_id > 0 && fragment.track_id <= num_tracks)
+        reinterpret_cast<MOVStreamContext*>(tracks[fragment.track_id - 1])->fragNextDts = baseMediaDecodeTime;
     return 0;
 }
 
