@@ -66,7 +66,9 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **At its smallest size, every tab stays readable.** The track list keeps at least four rows, the buttons beside it are no longer squashed, and a tab that needs more room scrolls. Rows of the Subtitles and Blu-ray tabs were drawn over each other there.
 
-* **The German texts** write "Metadatei" one way throughout, and the reset button is now in German: "Metadatei neu erzeugen".
+* **The window shows whether the meta file follows the settings.** Text typed into the Meta file box, or a meta file opened, stops the window from building the meta file from the settings, and nothing said so: a setting changed in a tab was then not in the mux. A box above the meta file, "Build the meta file from the settings", now shows it: it unticks itself when the text is edited by hand, the title of the box says so, a line says when a change in a tab is not applied, and ticking it builds the meta file from the settings again. It takes the place of the "Reset meta to auto-generated" button.
+
+* **The German texts** write "Metadatei" one way throughout.
 
 * **New options:** "Draw ASS and SSA subtitles as plain text, without their styles" and "Fonts folder for ASS and SSA subtitles" on the Subtitles tab, "Also save drawn SRT subtitles as .srt files", and "Mark as HDR10 on a UHD disc" on an HEVC track.
 
