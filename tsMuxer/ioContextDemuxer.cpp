@@ -47,6 +47,11 @@ int IOContextDemuxer::get_byte()
 {
     uint32_t readedBytes = 0;
     int readRez = 0;
+    if (m_curPos == m_bufEnd && m_memoryOnly)
+    {
+        m_isEOF = true;
+        return 0;
+    }
     if (m_curPos == m_bufEnd)
     {
         uint8_t* data = m_bufferedReader->readBlock(m_readerID, readedBytes, readRez);  // blocked read mode
@@ -98,7 +103,7 @@ unsigned IOContextDemuxer::get_buffer(uint8_t* binary, unsigned size)
         size -= copyLen;
     }
 
-    while (dst < dstEnd)
+    while (dst < dstEnd && !m_memoryOnly)
     {
         uint8_t* data = m_bufferedReader->readBlock(m_readerID, readedBytes, readRez);
         if (readedBytes > 0 && readRez == 0)
@@ -133,6 +138,8 @@ void IOContextDemuxer::skip_bytes(const uint64_t size)
         m_curPos += copyLen;
         m_processedBytes += copyLen;
     }
+    if (m_memoryOnly)
+        return;
     /*
     while (skipLeft > 4LL * m_fileBlockSize)
     {

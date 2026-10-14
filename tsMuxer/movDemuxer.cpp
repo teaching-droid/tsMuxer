@@ -23,6 +23,7 @@
 #include "vodCoreException.h"
 #include "vvc.h"
 #include "wave.h"
+#include "zlib.h"
 
 using namespace std;
 
@@ -1876,9 +1877,16 @@ int MovDemuxer::mov_read_default(MOVAtom atom)
                        "Warning: the MP4 box '" << std::string(reinterpret_cast<const char*>(&a.type), 4)
                                                 << "' at byte " << start_pos - 8 << " holds less than its contents; "
                                                 << "reading goes on where the box says it ends.");
-            seekOnFreshReader(start_pos + a.size);
+            if (m_memoryOnly)  // a compressed header: back to where the box ends, in memory
+            {
+                m_curPos -= m_processedBytes - (start_pos + a.size);
+                m_processedBytes = start_pos + a.size;
+            }
+            else
+                seekOnFreshReader(start_pos + a.size);
         }
-        else if (left > SEEK_RATHER_THAN_READ && m_fileSize > 0 && m_processedBytes + left < m_fileSize)
+        else if (left > SEEK_RATHER_THAN_READ && !m_memoryOnly && m_fileSize > 0 &&
+                 m_processedBytes + left < m_fileSize)
             seekOnFreshReader(m_processedBytes + left);
         else
             skip_bytes(left);
@@ -1940,8 +1948,75 @@ int MovDemuxer::mov_read_udta_string(MOVAtom atom)
     return 0;
 }
 
-// ReSharper disable once CppMemberFunctionMayBeStatic
-int MovDemuxer::mov_read_cmov(MOVAtom atom) { THROW(ERR_MOV_PARSE, "Compressed MOV not supported in current version") }
+// A compressed movie header (QuickTime): cmov holds dcom, the method, and cmvd, the size of the header and the header
+// compressed. Only zlib was ever used. It was refused; the header is now unpacked and read from memory as an ordinary
+// moov, which leaves the file where the cmov box ends.
+int MovDemuxer::mov_read_cmov(MOVAtom atom)
+{
+    const int64_t end = m_processedBytes + atom.size;
+    uint32_t method = 0;
+    std::vector<uint8_t> packed;
+    uint32_t unpackedSize = 0;
+    while (m_processedBytes + 8 <= end)
+    {
+        const uint32_t size = get_be32();
+        const uint32_t type = get_le32();
+        if (size < 8 || m_processedBytes - 8 + size > end)
+            break;
+        if (type == MKTAG('d', 'c', 'o', 'm') && size >= 12)
+        {
+            method = get_le32();
+            skip_bytes(size - 12);
+        }
+        else if (type == MKTAG('c', 'm', 'v', 'd') && size >= 12)
+        {
+            unpackedSize = get_be32();
+            packed.resize(size - 12);
+            get_buffer(packed.data(), static_cast<unsigned>(packed.size()));
+        }
+        else
+            skip_bytes(size - 8);
+    }
+    skip_bytes(end - m_processedBytes);
+    if (method != MKTAG('z', 'l', 'i', 'b'))
+        THROW(ERR_MOV_PARSE,
+              "MP4/MOV error: the movie header is compressed with a method other than zlib, which "
+              "tsMuxeR cannot unpack")
+    if (unpackedSize < 8 || unpackedSize > (256u << 20))
+        THROW(ERR_MOV_PARSE, "MP4/MOV error: the compressed movie header gives a size of " << unpackedSize)
+    std::vector<uint8_t> moov(unpackedSize);
+    uLongf outLen = unpackedSize;
+    if (uncompress(moov.data(), &outLen, packed.data(), static_cast<uLong>(packed.size())) != Z_OK ||
+        outLen != unpackedSize)
+        THROW(ERR_MOV_PARSE, "MP4/MOV error: the compressed movie header could not be unpacked")
+    const uint32_t boxSize = static_cast<uint32_t>(moov[0]) << 24 | moov[1] << 16 | moov[2] << 8 | moov[3];
+    if (memcmp(moov.data() + 4, "moov", 4) != 0 || boxSize < 8 || boxSize > unpackedSize)
+        THROW(ERR_MOV_PARSE, "MP4/MOV error: the unpacked movie header is not a moov box")
+
+    // Read it from memory, with offsets counted from its start, then go back to the file where the cmov box ended
+    uint8_t* const savedCur = m_curPos;
+    uint8_t* const savedEnd = m_bufEnd;
+    const int64_t savedProcessed = m_processedBytes;
+    const bool savedEof = m_isEOF;
+    const int64_t savedFileSize = m_fileSize;
+    m_curPos = moov.data() + 8;
+    m_bufEnd = moov.data() + boxSize;
+    m_processedBytes = 8;
+    m_fileSize = (std::max)(m_fileSize, static_cast<int64_t>(boxSize));
+    m_memoryOnly = true;
+    MOVAtom inner;
+    inner.type = MKTAG('m', 'o', 'o', 'v');
+    inner.offset = 8;
+    inner.size = boxSize - 8;
+    const int rez = mov_read_default(inner);
+    m_memoryOnly = false;
+    m_curPos = savedCur;
+    m_bufEnd = savedEnd;
+    m_processedBytes = savedProcessed;
+    m_isEOF = savedEof;
+    m_fileSize = savedFileSize;
+    return rez;
+}
 
 int MovDemuxer::mov_read_wide(MOVAtom atom)
 {
@@ -2412,7 +2487,7 @@ int MovDemuxer::mov_read_moov(MOVAtom atom)
             continue;
         const auto first = static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(st->ctts_data[0].duration)));
         if (first != 0)
-            m_firstTimecode[i + 1] += first * 1000 / static_cast<int64_t>(st->time_scale);
+            m_firstTimecode[i + 1] = first * 1000 / static_cast<int64_t>(st->time_scale);
     }
     return 0;
 }

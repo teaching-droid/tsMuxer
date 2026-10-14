@@ -140,6 +140,9 @@ class IOContextDemuxer : public AbstractDemuxer
     int m_lastReadRez;
     uint8_t* m_curPos;
     uint8_t* m_bufEnd;
+    // Reading from memory only (a compressed MOV header): at the end of m_curPos..m_bufEnd there is nothing more, and
+    // the file is not read to fill it
+    bool m_memoryOnly = false;
     bool m_isEOF;
     int64_t m_processedBytes;
     int64_t m_lastProcessedBytes;
