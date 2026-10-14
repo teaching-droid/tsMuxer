@@ -88,6 +88,8 @@ class MovDemuxer final : public IOContextDemuxer
     int64_t m_mdat_size;
     int64_t m_fileSize;
     int m_overreadWarnings = 0;  // boxes whose parser read past their end, warned once
+    int m_pastEndWarnings = 0;   // boxes whose size reaches past the end of the file, warned once
+    int64_t trailingBytesWithoutMedia(int64_t from) const;
     uint32_t m_timescale;
     std::map<int32_t, int64_t> m_firstTimecode;
     std::map<int32_t, int64_t> m_emptyEditUnits;  // leading empty edits per track, in movie units (mov_read_elst)

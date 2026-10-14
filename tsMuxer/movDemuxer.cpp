@@ -874,6 +874,45 @@ void MovDemuxer::openFile(const std::string& streamName)
     // it that is never read, and the count has to keep saying so.
     if (!found_moof && m_headerWalkEnd > m_mdat_pos + m_mdat_size)
         m_firstHeaderSize += m_headerWalkEnd - (m_mdat_pos + m_mdat_size);
+    // What follows the last box the walk read holds no media when it is only boxes such as free, skip or uuid. The
+    // demux never reaches them, and left out of the count they made a complete mux read as stopped early once they
+    // were over 1 % of the file (#43). A file with more media after the walk's end (a second mdat, a moof) keeps
+    // saying so.
+    if (!found_moof && m_headerWalkEnd > 0 && m_headerWalkEnd < m_fileSize)
+        m_firstHeaderSize += trailingBytesWithoutMedia(m_headerWalkEnd);
+}
+
+// The bytes from `from` to the end of the file when the top-level boxes there hold no media, read by their headers
+// alone; 0 when one of them is an mdat or a moof, or the headers do not reach the end of the file exactly.
+int64_t MovDemuxer::trailingBytesWithoutMedia(const int64_t from) const
+{
+    File f;
+    if (!f.open(m_fileName.c_str(), File::ofRead))
+        return 0;
+    int64_t pos = from;
+    while (pos < m_fileSize)
+    {
+        uint8_t h[16];
+        if (m_fileSize - pos < 8 || f.seek(pos, File::SeekMethod::smBegin) == -1 || f.read(h, 8) != 8)
+            return 0;
+        uint64_t size = static_cast<uint64_t>(h[0]) << 24 | static_cast<uint64_t>(h[1]) << 16 |
+                        static_cast<uint64_t>(h[2]) << 8 | h[3];
+        const uint32_t type = MKTAG(h[4], h[5], h[6], h[7]);
+        if (size == 1)
+        {
+            if (f.read(h + 8, 8) != 8)
+                return 0;
+            size = 0;
+            for (int i = 8; i < 16; ++i) size = size << 8 | h[i];
+        }
+        else if (size == 0)
+            size = static_cast<uint64_t>(m_fileSize - pos);
+        if (type == MKTAG('m', 'd', 'a', 't') || type == MKTAG('m', 'o', 'o', 'f') || size < 8 ||
+            size > static_cast<uint64_t>(m_fileSize - pos))
+            return 0;
+        pos += static_cast<int64_t>(size);
+    }
+    return pos == m_fileSize ? m_fileSize - from : 0;
 }
 
 // The byte size of each chunk of a track by its own tables: stsc gives the samples of each chunk, stsz the size of
@@ -1253,11 +1292,27 @@ int MovDemuxer::mov_read_default(MOVAtom atom)
             a.offset += 8;
             total_size += 8;
         }
+        // A size of 0 is a box that runs to the end of the file (ISO/IEC 14496-12, 4.2). At the top level the
+        // parent's size is "unknown" (LLONG_MAX), so it ran to there instead: the walk read past the end of the file,
+        // the reader was left at its end and the demux stopped part way through the media, and that box's end, far
+        // past the file, counted as read, so the stopped mux said it was complete (#42). The same for a size that
+        // reaches past the end. Both end where the file ends now.
+        const int64_t toFileEnd = m_fileSize > 0 ? m_fileSize - m_processedBytes + 8 : LLONG_MAX;
         if (a.size == 0)
         {
-            a.size = atom.size - total_size;
+            a.size = (std::min)(atom.size - total_size + 8, toFileEnd);
             if (a.size <= 8)
                 break;
+        }
+        else if (a.size > toFileEnd)
+        {
+            if (m_pastEndWarnings++ == 0)
+                LTRACE(LT_WARN, 2,
+                       "Warning: the MP4 box '" << std::string(reinterpret_cast<const char*>(&a.type), 4)
+                                                << "' at byte " << m_processedBytes - 8 << " says it is " << a.size
+                                                << " bytes long, " << a.size - toFileEnd
+                                                << " more than the file holds; it is read up to the end of the file.");
+            a.size = toFileEnd;
         }
         a.size -= 8;
         if (a.size < 0)
