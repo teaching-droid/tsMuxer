@@ -608,7 +608,7 @@ void CLPIStreamInfo::composeStreamCodingInfo(BitStreamWriter& writer) const
         else if (HDR == 4)
             writer.putBits(8, 0x22);  // DV
         else
-            writer.putBits(8, 0);
+            writer.putBits(8, colour_space);  // SDR: 0, or 2 for BT.2020
         if (HDR == 16)
             writer.putBits(8, 0x80);  // HDR10plus
         else
@@ -2786,6 +2786,15 @@ M2TSStreamInfo::M2TSStreamInfo(const PMTStreamInfo& pmtStreamInfo)
             width = vStream->getStreamWidth();
             height = vStream->getStreamHeight();
             HDR = vStream->getStreamHDR();
+            // The low four bits of the byte after the frame rate are the colour space (2 BT.2020), the high four the
+            // dynamic range. An HDR stream wrote 0x12 and Dolby Vision 0x22; an SDR stream wrote 0x00, BT.2020 or not.
+            // A UHD disc mastered in SDR with BT.2020 colours has 0x02 there, in every playlist and clip
+            // information file, for the same signalling in its stream (BT.2020 primaries, no HDR). H.264 has no such
+            // field; the disc writes 0 there.
+            uint8_t primaries = 0, transfer = 0, matrix = 0;
+            if (pmtStreamInfo.m_streamType == StreamType::VIDEO_H265 &&
+                vStream->getColourDesc(primaries, transfer, matrix) && primaries == 9)
+                colour_space = 2;
             const VideoAspectRatio ar = vStream->getStreamAR();
             blurayStreamParams(vStream->getFPS(), vStream->getInterlaced(), width, height, ar, &video_format,
                                &frame_rate_index, &aspect_ratio_index);
@@ -2844,6 +2853,7 @@ M2TSStreamInfo::M2TSStreamInfo(const M2TSStreamInfo& other)
     width = other.width;
     height = other.height;
     HDR = other.HDR;
+    colour_space = other.colour_space;
     aspect_ratio_index = other.aspect_ratio_index;
     audio_presentation_type = other.audio_presentation_type;
     sampling_frequency_index = other.sampling_frequency_index;
@@ -3020,7 +3030,7 @@ void MPLSStreamInfo::composeStreamAttributes(BitStreamWriter& writer)
         else if (HDR == 4)
             writer.putBits(8, 0x22);  // DV
         else
-            writer.putBits(8, 0);
+            writer.putBits(8, colour_space);  // SDR: 0, or 2 for BT.2020
         if (HDR == 16)
             writer.putBits(8, 0x40);  // HDR10plus
         else

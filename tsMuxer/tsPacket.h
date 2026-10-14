@@ -384,6 +384,9 @@ struct M2TSStreamInfo
     unsigned width;
     unsigned height;
     int HDR;
+    // The colour space of an HEVC video stream for its stream attributes: 2 where its colour primaries are BT.2020
+    // (see the M2TSStreamInfo constructor)
+    uint8_t colour_space = 0;
     uint8_t aspect_ratio_index;
     uint8_t audio_presentation_type;
     uint8_t sampling_frequency_index;
