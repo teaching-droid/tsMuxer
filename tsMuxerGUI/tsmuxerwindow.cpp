@@ -773,6 +773,7 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->comboBoxSEI, comboBoxIndexChanged, this, &TsMuxerWindow::onVideoCheckBoxChanged);
     connect(ui->checkBoxSecondaryVideo, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onVideoCheckBoxChanged);
     connect(ui->checkBoxSPS, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onVideoCheckBoxChanged);
+    connect(ui->checkBoxHdr10Override, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onVideoCheckBoxChanged);
     connect(ui->checkBoxRemovePulldown, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onPulldownCheckBoxChanged);
     connect(ui->comboBoxFPS, comboBoxIndexChanged, this, &TsMuxerWindow::onVideoComboBoxChanged);
     connect(ui->comboBoxLevel, comboBoxIndexChanged, this, &TsMuxerWindow::onVideoComboBoxChanged);
@@ -2843,6 +2844,8 @@ void TsMuxerWindow::onVideoCheckBoxChanged()
     codecInfo->checkLevel = ui->checkBoxLevel->isChecked();
     codecInfo->addSEIMethod = ui->comboBoxSEI->currentIndex();
     codecInfo->addSPS = ui->checkBoxSPS->isChecked();
+    if (ui->checkBoxHdr10Override->isEnabled())
+        codecInfo->hdr10Override = ui->checkBoxHdr10Override->isChecked();
     codecInfo->isSecondary = ui->checkBoxSecondaryVideo->isChecked();
     colorizeCurrentRow(codecInfo);
     updateMetaLines();
@@ -3342,6 +3345,8 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
             ui->comboBoxSEI->setCurrentIndex(codecInfo->addSEIMethod);
             ui->checkBoxSecondaryVideo->setChecked(codecInfo->isSecondary);
             ui->checkBoxSPS->setChecked(codecInfo->addSPS);
+            ui->checkBoxHdr10Override->setChecked(codecInfo->hdr10Override);
+            updateHdr10OverrideEnabled(codecInfo);
             ui->checkBoxRemovePulldown->setChecked(codecInfo->delPulldown == 1);
             ui->checkBoxRemovePulldown->setEnabled(codecInfo->delPulldown >= 0);
 
@@ -4525,6 +4530,9 @@ QString TsMuxerWindow::getVideoMetaInfo(QtvCodecInfo* codecInfo)
         rezStr += QString(", ") + "forceSEI";
     if (codecInfo->addSPS)
         rezStr += QString(", ") + "contSPS";
+    if (codecInfo->hdr10Override && codecInfo->programName == "V_MPEGH/ISO/HEVC" &&
+        (ui->radioButtonBluRay->isChecked() || ui->radioButtonBluRayISO->isChecked()))
+        rezStr += QString(", ") + "hdr10-override";
     if (codecInfo->delPulldown == 1)
         rezStr += QString(", ") + "delPulldown";
     if (!codecInfo->arText.isEmpty())
@@ -5524,9 +5532,18 @@ void TsMuxerWindow::RadioButtonMuxClick()
     updateMkvOutputOptions();
     ui->editDelay->setEnabled(!ui->radioButtonDemux->isChecked());
     updateMkvTrackOptionsEnabled();
+    updateHdr10OverrideEnabled(getCurrentCodec());
     colorizeAllRows();
     updateMetaLines();
     outFileNameDisableChange = false;
+}
+
+// hdr10-override is offered for an HEVC track when the output is a disc, the only output that carries the mark. A disc
+// with HEVC video is always a UHD one.
+void TsMuxerWindow::updateHdr10OverrideEnabled(const QtvCodecInfo* codecInfo)
+{
+    const bool disc = ui->radioButtonBluRay->isChecked() || ui->radioButtonBluRayISO->isChecked();
+    ui->checkBoxHdr10Override->setEnabled(codecInfo != nullptr && codecInfo->displayName == "HEVC" && disc);
 }
 
 void TsMuxerWindow::outFileNameChanged()

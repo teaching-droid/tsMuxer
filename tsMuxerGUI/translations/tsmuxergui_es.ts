@@ -4354,6 +4354,16 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>Keep a Matroska source's chapters exactly as they are, every edition and every link to another file, and its segment identity, so that ordered editions and linked files still work after the remux. The file is read as it is stored, not as its ordered edition plays it. Not with a join, a cut or a split.</source>
         <translation>Conserva los capítulos de una fuente Matroska tal como están, cada edición y cada enlace a otro archivo, y su identidad de segmento, para que las ediciones ordenadas y los archivos enlazados sigan funcionando tras el remux. El archivo se lee tal como está guardado, no como lo reproduce su edición ordenada. No con unión, corte ni división.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="629"/>
+        <source>Mark as HDR10 on a UHD disc</source>
+        <translation>Marcar como HDR10 en un disco UHD</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="626"/>
+        <source>For an HEVC track whose stream says SDR, on a UHD Blu-ray disc only: the disc marks it as HDR10. A player then switches the screen to HDR while the picture is coded for SDR, so check how it looks first.</source>
+        <translation>Para una pista HEVC cuyo flujo indica SDR, solo en un disco Blu-ray UHD: el disco la marca como HDR10. El reproductor pondrá la pantalla en modo HDR aunque la imagen esté codificada para SDR, así que compruebe primero cómo se ve.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

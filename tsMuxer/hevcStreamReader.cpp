@@ -955,7 +955,24 @@ void HEVCStreamReader::warnIfDvHasNoFallback()
 
 int HEVCStreamReader::getStreamHDR() const
 {
-    return (m_hdr->isDVRPU || m_hdr->isDVEL) ? 4 : (m_hdr->isHDR10plus ? 16 : (m_hdr->isHDR10 ? 2 : 1));
+    const int hdr = (m_hdr->isDVRPU || m_hdr->isDVEL) ? 4 : (m_hdr->isHDR10plus ? 16 : (m_hdr->isHDR10 ? 2 : 1));
+    // hdr10-override (#6): the stream says SDR, and the disc marks it as HDR10 all the same, in its playlist, its clip
+    // information and its index. Only for SDR: HDR10, HDR10+ and Dolby Vision streams are marked as they are. The
+    // picture is not changed: a player switches the screen to HDR, and the stream itself still says SDR.
+    if (!m_hdr10Override || hdr != 1)
+        return hdr;
+    static bool said = false;  // once a run: more than one reader of the track asks
+    if (!said)
+    {
+        said = true;
+        LTRACE(LT_WARN, 2,
+               "Warning: hdr10-override: the HEVC stream says SDR (transfer characteristics "
+                   << (m_sps ? static_cast<int>(m_sps->transfer_characteristics) : -1)
+                   << "), and the disc marks it as HDR10 as asked. A player will switch the screen to HDR while the "
+                      "picture is coded for SDR; check how it looks before using the disc.");
+    }
+    V3_flags |= HDR10;
+    return 2;
 }
 
 // ** ANSWER FOR THE UNIT THAT WAS ASKED ABOUT. **

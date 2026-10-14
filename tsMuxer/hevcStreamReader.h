@@ -13,6 +13,8 @@ class HEVCStreamReader final : public MPEGStreamReader
 
    public:
     HEVCStreamReader();
+    // hdr10-override: an SDR stream is marked as HDR10 on the disc (getStreamHDR), as asked for in the meta file
+    void setHdr10Override(const bool on) { m_hdr10Override = on; }
     ~HEVCStreamReader() override;
     int getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdmvDescriptors) override;
     int setDoViDescriptor(uint8_t* dstBuff) const;
@@ -87,6 +89,7 @@ class HEVCStreamReader final : public MPEGStreamReader
     HevcVpsUnit* m_elVps = nullptr;
     HevcSpsUnit* m_elSps = nullptr;
     int m_seiParseWarns = 0;
+    bool m_hdr10Override = false;  // setHdr10Override
     HevcSliceHeader* m_slice;
     bool m_firstFrame;
 

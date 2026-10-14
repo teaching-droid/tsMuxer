@@ -620,6 +620,16 @@
                 </property>
                </spacer>
               </item>
+              <item row="2" column="3" colspan="3">
+               <widget class="QCheckBox" name="checkBoxHdr10Override">
+                <property name="toolTip">
+                 <string>For an HEVC track whose stream says SDR, on a UHD Blu-ray disc only: the disc marks it as HDR10. A player then switches the screen to HDR while the picture is coded for SDR, so check how it looks first.</string>
+                </property>
+                <property name="text">
+                 <string>Mark as HDR10 on a UHD disc</string>
+                </property>
+               </widget>
+              </item>
               <item row="2" column="0">
                <widget class="QLabel" name="videoLangLabel">
                 <property name="text">

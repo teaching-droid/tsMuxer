@@ -166,6 +166,7 @@ class TsMuxerWindow : public QWidget
     bool isLangCodeForMeta(const QString& code);
     void showMkvTrackOptions(const QtvCodecInfo* codecInfo);
     void updateMkvTrackOptionsEnabled();
+    void updateHdr10OverrideEnabled(const QtvCodecInfo* codecInfo);
     void updateMkvOutputOptions();
     QString langForTrack(const QComboBox* box, const QString& current);
     void setComboBoxText(QComboBox* comboBox, const QString& text);

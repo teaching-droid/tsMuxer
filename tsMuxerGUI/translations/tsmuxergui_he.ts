@@ -4353,6 +4353,16 @@ Build the ISO anyway?</source>
         <source>Keep a Matroska source's chapters exactly as they are, every edition and every link to another file, and its segment identity, so that ordered editions and linked files still work after the remux. The file is read as it is stored, not as its ordered edition plays it. Not with a join, a cut or a split.</source>
         <translation>שומר את הפרקים של מקור Matroska בדיוק כפי שהם, כל מהדורה וכל קישור לקובץ אחר, ואת זהות המקטע שלו, כדי שמהדורות מסודרות וקבצים מקושרים ימשיכו לעבוד אחרי ה-remux. הקובץ נקרא כפי שהוא שמור, ולא כפי שהמהדורה המסודרת שלו מנגנת אותו. לא יחד עם חיבור, חיתוך או פיצול.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="629"/>
+        <source>Mark as HDR10 on a UHD disc</source>
+        <translation>סמן כ-HDR10 בדיסק UHD</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="626"/>
+        <source>For an HEVC track whose stream says SDR, on a UHD Blu-ray disc only: the disc marks it as HDR10. A player then switches the screen to HDR while the picture is coded for SDR, so check how it looks first.</source>
+        <translation>עבור מסלול HEVC שהזרם שלו מציין SDR, בדיסק Blu-ray UHD בלבד: הדיסק מסמן אותו כ-HDR10. הנגן יעביר אז את המסך למצב HDR בעוד שהתמונה מקודדת עבור SDR, לכן בדקו קודם איך היא נראית.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

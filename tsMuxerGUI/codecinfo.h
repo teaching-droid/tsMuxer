@@ -44,6 +44,7 @@ struct QtvCodecInfo
     bool checkLevel = false;
     int addSEIMethod = 1;
     bool addSPS = true;
+    bool hdr10Override = false;  // hdr10-override: an SDR HEVC track marked as HDR10 on a UHD disc
     int delPulldown = -1;
     QString fpsText;
     QString fpsTextOrig;

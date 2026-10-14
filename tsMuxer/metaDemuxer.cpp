@@ -43,6 +43,7 @@ static bool isKnownTrackParam(const std::string& name);
 #include "subTrackFilter.h"
 #include "trueHDAC3MergeReader.h"
 #include "tsDemuxer.h"
+#include "tsMuxer.h"
 #include "vc1StreamReader.h"
 #include "vodCoreException.h"
 #include "vod_common.h"
@@ -1405,7 +1406,7 @@ static bool isKnownTrackParam(const std::string& name)
         "track", "subTrack", "lang", "timeshift", "default", "secondary", "subClip", "track-name",
         // video
         "fps", "ar", "level", "video-width", "video-height", "insertSEI", "forceSEI", "autoSEI", "contSPS",
-        "delPulldown", "stretch", "3d-plane",
+        "delPulldown", "stretch", "3d-plane", "hdr10-override",
         // audio
         "down-to-ac3", "down-to-dts", "merge-ac3-track", "merge-ac3-file", "drop-ac3-core", "split-ac3-core", "w64",
         // picture in picture
@@ -2715,6 +2716,22 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
             if (level < 1.0 || level > 8.5)
                 THROW(ERR_COMMON, "Invalid HEVC level " << itr->second << ", expected a value like 5.1")
             dynamic_cast<HEVCStreamReader*>(rez)->setForceLevel(static_cast<uint8_t>(lround(level * 30.0)));
+        }
+        // Mark an SDR stream as HDR10 on a UHD disc (#6). Only a disc carries the mark; a disc with HEVC video is
+        // always a UHD one.
+        if (addParams.find("hdr10-override") != addParams.end())
+        {
+            if (V3_flags & BLURAY_OUT)
+                dynamic_cast<HEVCStreamReader*>(rez)->setHdr10Override(true);
+            else
+            {
+                static bool said = false;  // once a run: the track's reader is made more than once
+                if (!said)
+                    LTRACE(LT_WARN, 2,
+                           "Warning: hdr10-override applies to a UHD Blu-ray disc only, and is ignored for this "
+                           "output.");
+                said = true;
+            }
         }
     }
     else if (codecName == "V_MPEGI/ISO/VVC")
