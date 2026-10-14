@@ -4374,6 +4374,31 @@ Build the ISO anyway?</source>
         <source>While SRT subtitles are drawn into pictures, also write each SRT track as text, to an .srt file named after the output and the track's row in the list.</source>
         <translation>Пока субтитры SRT отрисовываются в изображения, каждая дорожка SRT также записывается как текст в файл .srt, названный по имени вывода и номеру строки дорожки в списке.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2225"/>
+        <source>Draw ASS and SSA subtitles as plain text, without their styles</source>
+        <translation>Отрисовывать субтитры ASS и SSA как простой текст, без их стилей</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2222"/>
+        <source>ASS and SSA subtitles from a Matroska file are drawn with libass, as their script says: with their styles, colours, positions and animations, and with the fonts attached to the file. Tick this to draw them as plain text with the font settings below instead.</source>
+        <translation>Субтитры ASS и SSA из файла Matroska отрисовываются с помощью libass так, как задано в их скрипте: с их стилями, цветами, положением и анимацией и со шрифтами, вложенными в файл. Отметьте, чтобы вместо этого отрисовывать их как простой текст с настройками шрифта ниже.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2234"/>
+        <source>Fonts folder for ASS and SSA subtitles:</source>
+        <translation>Папка шрифтов для субтитров ASS и SSA:</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2241"/>
+        <source>A folder of fonts that ASS and SSA subtitles may use, besides the fonts attached to the file and the fonts installed on this computer. Leave it empty for none.</source>
+        <translation>Папка со шрифтами, которые могут использовать субтитры ASS и SSA, в дополнение к шрифтам, вложенным в файл, и шрифтам, установленным на этом компьютере. Оставьте пустым, если не нужна.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="902"/>
+        <source>Fonts folder for ASS and SSA subtitles</source>
+        <translation>Папка шрифтов для субтитров ASS и SSA</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

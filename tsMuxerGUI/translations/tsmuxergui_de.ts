@@ -4377,6 +4377,31 @@ ISO trotzdem erstellen?</translation>
         <source>While SRT subtitles are drawn into pictures, also write each SRT track as text, to an .srt file named after the output and the track's row in the list.</source>
         <translation>Während SRT-Untertitel in Bilder gezeichnet werden, wird jede SRT-Spur zusätzlich als Text in eine .srt-Datei geschrieben, benannt nach der Ausgabe und der Zeile der Spur in der Liste.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2225"/>
+        <source>Draw ASS and SSA subtitles as plain text, without their styles</source>
+        <translation>ASS- und SSA-Untertitel als einfachen Text zeichnen, ohne ihre Stile</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2222"/>
+        <source>ASS and SSA subtitles from a Matroska file are drawn with libass, as their script says: with their styles, colours, positions and animations, and with the fonts attached to the file. Tick this to draw them as plain text with the font settings below instead.</source>
+        <translation>ASS- und SSA-Untertitel aus einer Matroska-Datei werden mit libass so gezeichnet, wie ihr Skript es vorgibt: mit ihren Stilen, Farben, Positionen und Animationen und mit den Schriften, die der Datei angehängt sind. Ankreuzen, um sie stattdessen als einfachen Text mit den Schrifteinstellungen unten zu zeichnen.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2234"/>
+        <source>Fonts folder for ASS and SSA subtitles:</source>
+        <translation>Schriftenordner für ASS- und SSA-Untertitel:</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2241"/>
+        <source>A folder of fonts that ASS and SSA subtitles may use, besides the fonts attached to the file and the fonts installed on this computer. Leave it empty for none.</source>
+        <translation>Ein Ordner mit Schriften, die ASS- und SSA-Untertitel verwenden dürfen, zusätzlich zu den Schriften, die der Datei angehängt sind, und den auf diesem Computer installierten Schriften. Leer lassen für keinen.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="902"/>
+        <source>Fonts folder for ASS and SSA subtitles</source>
+        <translation>Schriftenordner für ASS- und SSA-Untertitel</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

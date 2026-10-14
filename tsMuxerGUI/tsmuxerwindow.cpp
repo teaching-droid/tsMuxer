@@ -887,6 +887,22 @@ TsMuxerWindow::TsMuxerWindow()
                 onSavedParamChanged();
             });
     connect(ui->saveSrtCheckBox, &QCheckBox::toggled, this, &TsMuxerWindow::onSavedParamChanged);
+    connect(ui->assAsSrtCheckBox, &QCheckBox::toggled, this,
+            [this]
+            {
+                updateKeepTextControls();
+                onSavedParamChanged();
+            });
+    connect(ui->fontsDirLineEdit, &QLineEdit::textChanged, this, &TsMuxerWindow::onSavedParamChanged);
+    connect(ui->fontsDirBrowseButton, &QAbstractButton::clicked, this,
+            [this]
+            {
+                const QString current = ui->fontsDirLineEdit->text().trimmed();
+                const QString dir = QFileDialog::getExistingDirectory(
+                    this, tr("Fonts folder for ASS and SSA subtitles"), current.isEmpty() ? lastInputDir : current);
+                if (!dir.isEmpty())
+                    ui->fontsDirLineEdit->setText(QDir::toNativeSeparators(dir));
+            });
     connect(ui->radioButtonTS, &QAbstractButton::clicked, this, &TsMuxerWindow::RadioButtonMuxClick);
     connect(ui->radioButtonM2TS, &QAbstractButton::clicked, this, &TsMuxerWindow::RadioButtonMuxClick);
     connect(ui->radioButtonMKV, &QAbstractButton::clicked, this, &TsMuxerWindow::RadioButtonMuxClick);
@@ -4779,6 +4795,12 @@ void TsMuxerWindow::updateMetaLines()
             postfix += getSrtParams();
             if (!keepTextApplies() && ui->saveSrtCheckBox->isChecked())
                 postfix += QString(", save-srt=\"%1\"").arg(saveSrtFileName(codecInfo, i));
+            // ASS and SSA from Matroska are drawn with libass; a track of another text format takes no notice of these
+            if (!keepTextApplies() && ui->assAsSrtCheckBox->isChecked())
+                postfix += ", ass-as-srt";
+            else if (!keepTextApplies() && !ui->fontsDirLineEdit->text().trimmed().isEmpty())
+                postfix +=
+                    QString(", fonts-dir=\"%1\"").arg(QDir::toNativeSeparators(ui->fontsDirLineEdit->text().trimmed()));
             if (bluray3D && codecInfo->offsetId >= 0)
                 postfix += QString(", offset=%1").arg(codecInfo->offsetId);
         }
@@ -5507,6 +5529,12 @@ void TsMuxerWindow::updateKeepTextControls()
     const bool asText = keepTextApplies();
     // save-srt is for subtitles that are drawn: kept as text, the output or the demux holds the text already
     ui->saveSrtCheckBox->setEnabled(!asText);
+    // libass draws only what is drawn, and a fonts folder is for libass alone
+    ui->assAsSrtCheckBox->setEnabled(!asText);
+    const bool libass = !asText && !ui->assAsSrtCheckBox->isChecked();
+    ui->fontsDirLabel->setEnabled(libass);
+    ui->fontsDirLineEdit->setEnabled(libass);
+    ui->fontsDirBrowseButton->setEnabled(libass);
     ui->groupBox_8->setEnabled(!asText);
     ui->groupBox_9->setEnabled(!asText);
     ui->groupBox_10->setEnabled(!asText);
@@ -6244,6 +6272,8 @@ void TsMuxerWindow::writeSettings()
     settings->setValue("fadeTime", getRendererAnimationTime());
     settings->setValue("keepText", ui->keepTextCheckBox->isChecked());
     settings->setValue("saveSrt", ui->saveSrtCheckBox->isChecked());
+    settings->setValue("assAsSrt", ui->assAsSrtCheckBox->isChecked());
+    settings->setValue("assFontsDir", ui->fontsDirLineEdit->text().trimmed());
     settings->endGroup();
     if (fontSettingsModel)  // writeSettings also runs before the model exists, when an empty ini is first filled
         fontSettingsModel->save(*settings);
@@ -6295,6 +6325,8 @@ bool TsMuxerWindow::readSettingsBody()
     // On unless it was turned off: Matroska carries text subtitles itself, and text stays sharp, small and editable.
     ui->keepTextCheckBox->setChecked(settings->value("keepText", true).toBool());
     ui->saveSrtCheckBox->setChecked(settings->value("saveSrt", false).toBool());
+    ui->assAsSrtCheckBox->setChecked(settings->value("assAsSrt", false).toBool());
+    ui->fontsDirLineEdit->setText(settings->value("assFontsDir", QString()).toString());
     settings->endGroup();
 
     settings->beginGroup("pip");

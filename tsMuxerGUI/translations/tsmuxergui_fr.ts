@@ -4373,6 +4373,31 @@ Créer l'ISO malgré tout ?</translation>
         <source>While SRT subtitles are drawn into pictures, also write each SRT track as text, to an .srt file named after the output and the track's row in the list.</source>
         <translation>Pendant que les sous-titres SRT sont dessinés en images, chaque piste SRT est aussi écrite en texte dans un fichier .srt nommé d'après la sortie et la ligne de la piste dans la liste.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2225"/>
+        <source>Draw ASS and SSA subtitles as plain text, without their styles</source>
+        <translation>Dessiner les sous-titres ASS et SSA en texte simple, sans leurs styles</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2222"/>
+        <source>ASS and SSA subtitles from a Matroska file are drawn with libass, as their script says: with their styles, colours, positions and animations, and with the fonts attached to the file. Tick this to draw them as plain text with the font settings below instead.</source>
+        <translation>Les sous-titres ASS et SSA d'un fichier Matroska sont dessinés avec libass comme leur script le dit : avec leurs styles, couleurs, positions et animations, et avec les polices jointes au fichier. Cochez cette case pour les dessiner plutôt en texte simple avec les réglages de police ci-dessous.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2234"/>
+        <source>Fonts folder for ASS and SSA subtitles:</source>
+        <translation>Dossier de polices pour les sous-titres ASS et SSA :</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2241"/>
+        <source>A folder of fonts that ASS and SSA subtitles may use, besides the fonts attached to the file and the fonts installed on this computer. Leave it empty for none.</source>
+        <translation>Un dossier de polices que les sous-titres ASS et SSA peuvent utiliser, en plus des polices jointes au fichier et des polices installées sur cet ordinateur. Laissez vide pour aucun.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="902"/>
+        <source>Fonts folder for ASS and SSA subtitles</source>
+        <translation>Dossier de polices pour les sous-titres ASS et SSA</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -4373,6 +4373,31 @@ Build the ISO anyway?</source>
         <source>While SRT subtitles are drawn into pictures, also write each SRT track as text, to an .srt file named after the output and the track's row in the list.</source>
         <translation>SRT字幕を画像に描画する間、各SRTトラックをテキストとして.srtファイルにも書き出します。ファイル名は出力名とリスト内のトラックの行番号から付けられます。</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2225"/>
+        <source>Draw ASS and SSA subtitles as plain text, without their styles</source>
+        <translation>ASS・SSA字幕をスタイルなしのプレーンテキストとして描画する</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2222"/>
+        <source>ASS and SSA subtitles from a Matroska file are drawn with libass, as their script says: with their styles, colours, positions and animations, and with the fonts attached to the file. Tick this to draw them as plain text with the font settings below instead.</source>
+        <translation>MatroskaファイルのASS・SSA字幕は、スクリプトのとおりにlibassで描画されます。スタイル、色、位置、アニメーション、そしてファイルに添付されたフォントがそのまま使われます。チェックすると、代わりに下のフォント設定でプレーンテキストとして描画します。</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2234"/>
+        <source>Fonts folder for ASS and SSA subtitles:</source>
+        <translation>ASS・SSA字幕用のフォントフォルダー:</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2241"/>
+        <source>A folder of fonts that ASS and SSA subtitles may use, besides the fonts attached to the file and the fonts installed on this computer. Leave it empty for none.</source>
+        <translation>ASS・SSA字幕が使用できるフォントのフォルダーです。ファイルに添付されたフォントとこのコンピューターにインストールされたフォントに加えて使われます。不要な場合は空のままにします。</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="902"/>
+        <source>Fonts folder for ASS and SSA subtitles</source>
+        <translation>ASS・SSA字幕用のフォントフォルダー</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

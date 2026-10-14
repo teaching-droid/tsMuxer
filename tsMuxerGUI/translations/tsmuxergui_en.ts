@@ -4261,6 +4261,31 @@ Build the ISO anyway?</source>
         <source>While SRT subtitles are drawn into pictures, also write each SRT track as text, to an .srt file named after the output and the track's row in the list.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2225"/>
+        <source>Draw ASS and SSA subtitles as plain text, without their styles</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2222"/>
+        <source>ASS and SSA subtitles from a Matroska file are drawn with libass, as their script says: with their styles, colours, positions and animations, and with the fonts attached to the file. Tick this to draw them as plain text with the font settings below instead.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2234"/>
+        <source>Fonts folder for ASS and SSA subtitles:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2241"/>
+        <source>A folder of fonts that ASS and SSA subtitles may use, besides the fonts attached to the file and the fonts installed on this computer. Leave it empty for none.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="902"/>
+        <source>Fonts folder for ASS and SSA subtitles</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

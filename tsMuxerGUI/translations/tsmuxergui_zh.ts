@@ -4373,6 +4373,31 @@ Build the ISO anyway?</source>
         <source>While SRT subtitles are drawn into pictures, also write each SRT track as text, to an .srt file named after the output and the track's row in the list.</source>
         <translation>在将SRT字幕绘制为图像的同时，也将每条SRT轨道以文本形式写入.srt文件，文件名取自输出名称和该轨道在列表中的行号。</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2225"/>
+        <source>Draw ASS and SSA subtitles as plain text, without their styles</source>
+        <translation>将ASS和SSA字幕绘制为纯文本，不使用其样式</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2222"/>
+        <source>ASS and SSA subtitles from a Matroska file are drawn with libass, as their script says: with their styles, colours, positions and animations, and with the fonts attached to the file. Tick this to draw them as plain text with the font settings below instead.</source>
+        <translation>Matroska文件中的ASS和SSA字幕使用libass按其脚本绘制：包括样式、颜色、位置和动画，并使用文件附带的字体。勾选此项则改为使用下方的字体设置将其绘制为纯文本。</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2234"/>
+        <source>Fonts folder for ASS and SSA subtitles:</source>
+        <translation>ASS和SSA字幕的字体文件夹：</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2241"/>
+        <source>A folder of fonts that ASS and SSA subtitles may use, besides the fonts attached to the file and the fonts installed on this computer. Leave it empty for none.</source>
+        <translation>ASS和SSA字幕可以使用的字体文件夹，作为文件附带字体和本机已安装字体之外的补充。不需要时请留空。</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="902"/>
+        <source>Fonts folder for ASS and SSA subtitles</source>
+        <translation>ASS和SSA字幕的字体文件夹</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

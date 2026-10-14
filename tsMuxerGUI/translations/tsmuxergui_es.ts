@@ -4374,6 +4374,31 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>While SRT subtitles are drawn into pictures, also write each SRT track as text, to an .srt file named after the output and the track's row in the list.</source>
         <translation>Mientras los subtítulos SRT se dibujan en imágenes, cada pista SRT se escribe también como texto en un archivo .srt con el nombre de la salida y la fila de la pista en la lista.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2225"/>
+        <source>Draw ASS and SSA subtitles as plain text, without their styles</source>
+        <translation>Dibujar los subtítulos ASS y SSA como texto simple, sin sus estilos</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2222"/>
+        <source>ASS and SSA subtitles from a Matroska file are drawn with libass, as their script says: with their styles, colours, positions and animations, and with the fonts attached to the file. Tick this to draw them as plain text with the font settings below instead.</source>
+        <translation>Los subtítulos ASS y SSA de un archivo Matroska se dibujan con libass tal como dice su guion: con sus estilos, colores, posiciones y animaciones, y con las fuentes adjuntas al archivo. Marque esta casilla para dibujarlos en su lugar como texto simple con los ajustes de fuente de abajo.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2234"/>
+        <source>Fonts folder for ASS and SSA subtitles:</source>
+        <translation>Carpeta de fuentes para subtítulos ASS y SSA:</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2241"/>
+        <source>A folder of fonts that ASS and SSA subtitles may use, besides the fonts attached to the file and the fonts installed on this computer. Leave it empty for none.</source>
+        <translation>Una carpeta de fuentes que los subtítulos ASS y SSA pueden usar, además de las fuentes adjuntas al archivo y las fuentes instaladas en este equipo. Déjela vacía para ninguna.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="902"/>
+        <source>Fonts folder for ASS and SSA subtitles</source>
+        <translation>Carpeta de fuentes para subtítulos ASS y SSA</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
