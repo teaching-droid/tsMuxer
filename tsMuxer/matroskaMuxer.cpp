@@ -41,6 +41,7 @@ extern "C"
 #include "trueHDAC3MergeReader.h"
 #include "tsMuxer.h"  // HDR10_metadata, filled from the HEVC SEI while parsing
 #include "vc1StreamReader.h"
+#include "videoCopyStreamReader.h"
 #include "vodCoreException.h"
 #include "vorbisStreamReader.h"
 #include "vpxStreamReader.h"
@@ -970,6 +971,11 @@ void MatroskaMuxer::buildCodecPrivate(MkvTrackInfo& track)
     case CODEC_V_VP9:
         // Optional for VP9, and kept as the source wrote it; VP8 has none.
         track.codecPrivate = track.srcVpxPrivate;
+        break;
+    case CODEC_V_PRORES:
+        // The FourCC of the sample entry, as the codec specifications of Matroska ask
+        if (const auto* copy = dynamic_cast<const VideoCopyStreamReader*>(track.codecReader))
+            for (int i = 3; i >= 0; --i) track.codecPrivate.push_back(static_cast<uint8_t>(copy->fourcc() >> (8 * i)));
         break;
     case CODEC_S_MKVCOPY:
         // The source's own, as it stands: the ASS or SSA script header, the VobSub .idx, the DVB page ids
@@ -1913,6 +1919,13 @@ void MatroskaMuxer::refreshTrackProperties()
 
         if (track.trackType == 1)  // video
         {
+            // MPEG-4 Part 2 and ProRes copied from an MP4 file: the size the MP4 gave, read with the first record
+            if (const auto copy = dynamic_cast<const VideoCopyStreamReader*>(track.codecReader))
+            {
+                track.width = copy->width();
+                track.height = copy->height();
+                track.fps = copy->fps();
+            }
             const auto mpegReader = dynamic_cast<MPEGStreamReader*>(track.codecReader);
             if (mpegReader)
             {

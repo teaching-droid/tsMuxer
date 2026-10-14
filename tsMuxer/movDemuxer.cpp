@@ -136,6 +136,8 @@ struct MOVStreamContext : Track
 
     int containerDataType = 0;  // TRACKTYPE_VP8 etc. for the codecs nothing in their data identifies (getTrackList)
     uint32_t trackId = 0;       // tkhd track_ID
+    bool isMp4v = false;        // an mp4v sample entry, whose esds says what it holds
+    int64_t editMediaTime = 0;  // where the first edit of the track's edit list starts in its media (mov_read_moov)
     std::string name;           // the track's name, from its hdlr, when it is not an encoder's generic one
     std::string leftOut;        // why the track cannot be read, for a meta line that names it (getTrackList)
     bool hasEditList = false;   // an elst was read for the track
@@ -509,6 +511,119 @@ class MovParsedH266TrackData final : public MovParsedH264TrackData
     {
         spsPpsList = vvc_extract_priv_data(buff, size, &nal_length_size);
     }
+};
+
+// MPEG-4 Part 2 and ProRes, copied picture for picture into a Matroska output (VideoCopyStreamReader). Each sample
+// becomes a record with its display time (stts and ctts), its decode time and its key frame flag (stss), behind one
+// record with the picture size and the configuration. Plain files only: a fragmented file has no stts to time by.
+class MovParsedVideoCopyData final : public ParsedTrackPrivData
+{
+   public:
+    MovParsedVideoCopyData(MOVStreamContext* sc, const uint32_t fourcc) : m_sc(sc), m_fourcc(fourcc) {}
+
+    void setPrivData(uint8_t* buff, const int size) override
+    {
+        if (buff && size > 0)
+            m_config.assign(buff, buff + size);
+    }
+
+    unsigned newBufferSize(uint8_t* buff, const unsigned size) override
+    {
+        times();
+        m_out.clear();
+        if (!m_configSent)
+        {
+            put("VCFG", 4);
+            be(m_sc->width, 2);
+            be(m_sc->height, 2);
+            be(m_fourcc, 4);
+            be(m_config.size(), 4);
+            m_out.insert(m_out.end(), m_config.begin(), m_config.end());
+        }
+        size_t indexCur = m_sc->m_indexCur;
+        uint32_t used = 0;
+        while (used < size)
+        {
+            uint32_t sampleSize = size - used;
+            if (m_sc->sample_size)
+                sampleSize = m_sc->sample_size;
+            else if (indexCur < m_sc->m_index.size())
+                sampleSize = m_sc->m_index[indexCur];
+            sampleSize = (std::min)(sampleSize, size - used);
+            if (sampleSize == 0)
+                break;
+            const size_t n = indexCur;
+            // The track starts where its edit list says: with pictures reordered, its first picture is shown after
+            // its first decode time, and the edit list moves it back to the start
+            const int64_t dts =
+                (n < m_dts.size() ? m_dts[n] : (m_dts.empty() ? 0 : m_dts.back())) - m_sc->editMediaTime;
+            const int64_t pts = dts + (n < m_ctts.size() ? m_ctts[n] : 0);
+            const int64_t dur = n < m_dur.size() ? m_dur[n] : 0;
+            const bool key =
+                m_sc->keyframes.empty() ||
+                std::binary_search(m_sc->keyframes.begin(), m_sc->keyframes.end(), static_cast<uint32_t>(n + 1));
+            put("VCPY", 4);
+            be(static_cast<uint64_t>(internal(pts)), 8);
+            be(static_cast<uint64_t>(internal(dts)), 8);
+            be(static_cast<uint64_t>(internal(dur)), 8);
+            m_out.push_back(key ? 1 : 0);
+            be(sampleSize, 4);
+            m_out.insert(m_out.end(), buff + used, buff + used + sampleSize);
+            used += sampleSize;
+            ++indexCur;
+        }
+        m_indexAfter = indexCur;
+        return static_cast<unsigned>(m_out.size());
+    }
+
+    void extractData(AVPacket* pkt, uint8_t* /*buff*/, const int /*size*/) override
+    {
+        if (!m_out.empty())
+            memcpy(pkt->data, m_out.data(), m_out.size());
+        pkt->size = static_cast<int>(m_out.size());
+        m_sc->m_indexCur = m_indexAfter;
+        m_configSent = true;
+    }
+
+   private:
+    void put(const char* s, const size_t n) { m_out.insert(m_out.end(), s, s + n); }
+    void be(const uint64_t v, const int bytes)
+    {
+        for (int i = bytes - 1; i >= 0; --i) m_out.push_back(static_cast<uint8_t>(v >> (8 * i)));
+    }
+    // a count of the track's time scale in INTERNAL_PTS_FREQ units, without overflowing for a fine time scale
+    [[nodiscard]] int64_t internal(const int64_t t) const
+    {
+        const int64_t ts = m_sc->time_scale ? m_sc->time_scale : 1;
+        return t / ts * INTERNAL_PTS_FREQ + t % ts * INTERNAL_PTS_FREQ / ts;
+    }
+    // The decode time, duration and composition offset of every sample, from stts and ctts
+    void times()
+    {
+        if (m_timesDone)
+            return;
+        m_timesDone = true;
+        int64_t t = 0;
+        for (const auto& e : m_sc->stts_data)
+            for (uint32_t i = 0; i < e.count && m_dts.size() < (1u << 26); ++i)
+            {
+                m_dts.push_back(t);
+                m_dur.push_back(e.duration);
+                t += e.duration;
+            }
+        for (const auto& e : m_sc->ctts_data)
+            for (uint32_t i = 0; i < e.count && m_ctts.size() < m_dts.size(); ++i)
+                m_ctts.push_back(static_cast<int32_t>(static_cast<uint32_t>(e.duration)));
+    }
+
+    MOVStreamContext* m_sc;
+    uint32_t m_fourcc;
+    std::vector<uint8_t> m_config;
+    std::vector<uint8_t> m_out;
+    std::vector<int64_t> m_dts, m_dur, m_ctts;
+    bool m_timesDone = false;
+    bool m_configSent = false;
+    size_t m_indexAfter = 0;
 };
 
 // AV1 in an MP4 file (AV1 Codec ISO Media File Format Binding, 2.4): each sample is one temporal unit, its OBUs in the
@@ -2275,6 +2390,8 @@ int MovDemuxer::mov_read_moov(MOVAtom atom)
     // was not read, so the priming came out as sound at the start of the track.
     for (const auto& [track, mediaTime] : m_editMediaTime)
     {
+        if (track > 0 && track <= num_tracks)
+            reinterpret_cast<MOVStreamContext*>(tracks[track - 1])->editMediaTime = mediaTime;
         if (track > 0 && track <= num_tracks && tracks[track - 1]->type == IOContextTrackType::VIDEO)
             m_videoMediaTime[track] = mediaTime;
         if (track <= 0 || track > num_tracks || tracks[track - 1]->type != IOContextTrackType::AUDIO)
@@ -2478,6 +2595,23 @@ int MovDemuxer::mov_read_stsd(MOVAtom atom)
         case MKTAG('t', 'x', '3', 'g'):
             st->type = IOContextTrackType::SUBTITLE;
             st->parsed_priv_data = new MovParsedSRTTrackData(this, st);
+            break;
+        case MKTAG('a', 'p', '4', 'x'):  // ProRes, copied into a Matroska output only (VideoCopyStreamReader)
+        case MKTAG('a', 'p', '4', 'h'):
+        case MKTAG('a', 'p', 'c', 'h'):
+        case MKTAG('a', 'p', 'c', 'n'):
+        case MKTAG('a', 'p', 'c', 's'):
+        case MKTAG('a', 'p', 'c', 'o'):
+            st->type = IOContextTrackType::VIDEO;
+            st->containerDataType = TRACKTYPE_PRORES;
+            st->parsed_priv_data = new MovParsedVideoCopyData(
+                st, static_cast<uint32_t>(format & 0xFF) << 24 | static_cast<uint32_t>(format >> 8 & 0xFF) << 16 |
+                        static_cast<uint32_t>(format >> 16 & 0xFF) << 8 | static_cast<uint32_t>(format >> 24));
+            break;
+        case MKTAG('m', 'p', '4', 'v'):
+            // MPEG-4 Part 2, or MPEG-1 or MPEG-2 video found by its start codes as before: its esds says which
+            st->type = IOContextTrackType::VIDEO;
+            st->isMp4v = true;
             break;
         case MKTAG('w', 'v', 't', 't'):  // WebVTT, ISO/IEC 14496-30
             st->type = IOContextTrackType::SUBTITLE;
@@ -3108,6 +3242,15 @@ int MovDemuxer::mov_read_esds(MOVAtom atom)
             st->codec_priv = new unsigned char[len];
             st->codec_priv_size = len;
             get_buffer(st->codec_priv, len);
+            // MPEG-4 Part 2 (Visual, object type 0x20): no reader of tsMuxeR understands it, and it is copied into a
+            // Matroska output as it is, its VOS and VOL headers, the decoder specific information, in front
+            if (object_type_id == 0x20 && st->isMp4v && !st->parsed_priv_data)
+            {
+                st->containerDataType = TRACKTYPE_MP4V;
+                st->parsed_priv_data = new MovParsedVideoCopyData(st, 0x6D703476);  // 'mp4v'
+                st->parsed_priv_data->setPrivData(st->codec_priv, st->codec_priv_size);
+                return 0;
+            }
             // Vorbis, object type 0xDD: its three headers, Xiph laced as in a Matroska CodecPrivate, are the decoder
             // specific information
             if (object_type_id == 0xDD && dynamic_cast<MovParsedAudioTrackData*>(st->parsed_priv_data))

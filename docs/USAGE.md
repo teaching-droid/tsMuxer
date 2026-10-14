@@ -142,6 +142,8 @@ V_MPEG-2          | MPEG2
 V_AV1             | AV1 
 V_VP8             | VP8 (read from MKV, WebM and .ivf files; MKV output, or demuxed to an .ivf file)
 V_VP9             | VP9 (read from MKV, WebM, MP4 and .ivf files; MKV output, or demuxed to an .ivf file)
+V_MPEG4/ISO/ASP   | MPEG-4 Part 2 video (read from MP4 and MOV; copied into MKV output only)
+V_PRORES          | Apple ProRes (read from MOV; copied into MKV output only)
 A_AC3             | AC3/AC3+/TRUE-HD 
 A_AAC             | AAC 
 A_DTS             | DTS/DTS-Express/DTS-HD 

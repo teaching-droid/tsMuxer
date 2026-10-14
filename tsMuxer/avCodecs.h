@@ -32,6 +32,9 @@ static constexpr int CODEC_A_ALAC = 24;
 // A Matroska track copied block for block into a Matroska output, in its own form: ASS, SSA, WebVTT, VobSub and DVB
 // subtitles, which tsMuxeR otherwise converts. Its CodecID is the source's (MatroskaCopyStreamReader).
 static constexpr int CODEC_S_MKVCOPY = 25;
+// MPEG-4 Part 2 and ProRes, copied picture for picture into a Matroska output (VideoCopyStreamReader)
+static constexpr int CODEC_V_MPEG4_ASP = 26;
+static constexpr int CODEC_V_PRORES = 27;
 
 struct CodecInfo
 {
@@ -120,5 +123,7 @@ const static CodecInfo vp8CodecInfo(CODEC_V_VP8, "VP8", "V_VP8");
 const static CodecInfo vp9CodecInfo(CODEC_V_VP9, "VP9", "V_VP9");
 const static CodecInfo vorbisCodecInfo(CODEC_A_VORBIS, "Vorbis", "A_VORBIS");
 const static CodecInfo alacCodecInfo(CODEC_A_ALAC, "ALAC", "A_ALAC");
+const static CodecInfo mpeg4AspCodecInfo(CODEC_V_MPEG4_ASP, "MPEG-4 ASP", "V_MPEG4/ISO/ASP");
+const static CodecInfo proresCodecInfo(CODEC_V_PRORES, "ProRes", "V_PRORES");
 
 #endif

@@ -282,7 +282,7 @@ bool isVideoCodec(const QString& displayName)
 {
     return displayName == "H.264" || displayName == "MVC" || displayName == "VC-1" || displayName == "MPEG-2" ||
            displayName == "HEVC" || displayName == "VVC" || displayName == "AV1" || displayName == "VP8" ||
-           displayName == "VP9";
+           displayName == "VP9" || displayName == "MPEG-4 ASP" || displayName == "ProRes";
 }
 
 QString floatToTime(double time, char msSeparator = '.')
@@ -2876,7 +2876,7 @@ bool TsMuxerWindow::isCodecIncompatibleWithFormat(const QString& programName) co
 
     // ALAC: MKV output only. VP8, VP9 and Vorbis: MKV, or a demux into an IVF or an Ogg file. None has a form in a
     // transport stream or on a disc.
-    if (programName == "A_ALAC")
+    if (programName == "A_ALAC" || programName == "V_MPEG4/ISO/ASP" || programName == "V_PRORES")
         return !ui->radioButtonMKV->isChecked();
     if (programName == "V_VP8" || programName == "V_VP9" || programName == "A_VORBIS")
         return !(ui->radioButtonMKV->isChecked() || ui->radioButtonDemux->isChecked());
@@ -2910,7 +2910,8 @@ void TsMuxerWindow::colorizeCurrentRow(const QtvCodecInfo* codecInfo, int rowInd
 
         // Set a tooltip on the whole row, codec-specific message
         QString tip;
-        if (codecInfo->programName == "A_ALAC")
+        if (codecInfo->programName == "A_ALAC" || codecInfo->programName == "V_MPEG4/ISO/ASP" ||
+            codecInfo->programName == "V_PRORES")
             tip = tr("%1 is only supported for MKV output. "
                      "This track will be ignored for the selected output format.")
                       .arg(codecInfo->displayName);

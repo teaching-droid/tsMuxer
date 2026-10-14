@@ -45,6 +45,7 @@ static bool isKnownTrackParam(const std::string& name);
 #include "tsDemuxer.h"
 #include "tsMuxer.h"
 #include "vc1StreamReader.h"
+#include "videoCopyStreamReader.h"
 #include "vodCoreException.h"
 #include "vod_common.h"
 #include "vorbisStreamReader.h"
@@ -2481,6 +2482,10 @@ CheckStreamRez METADemuxer::detectTrackReader(uint8_t* tmpBuffer, int len,
         return VorbisStreamReader().checkStream(tmpBuffer, len, containerType, containerDataType, containerStreamIndex);
     if (containerDataType == TRACKTYPE_ALAC)
         return AlacStreamReader().checkStream(tmpBuffer, len, containerType, containerDataType, containerStreamIndex);
+    // MPEG-4 Part 2 and ProRes from an MP4 file: the MP4 reader says what they are, and their data has no mark of
+    // its own another probe could take for something else
+    if (containerDataType == TRACKTYPE_MP4V || containerDataType == TRACKTYPE_PRORES)
+        return VideoCopyStreamReader::checkStream(tmpBuffer, len, containerDataType == TRACKTYPE_PRORES);
 
     // The container says what the track is, and that was being thrown away. Every video probe
     // below runs before the MPEG audio one, which is alone among the audio readers in sitting
@@ -2844,6 +2849,8 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
         rez = new VorbisStreamReader();
     else if (codecName == "A_ALAC")
         rez = new AlacStreamReader();
+    else if (codecName == "V_MPEG4/ISO/ASP" || codecName == "V_PRORES")
+        rez = new VideoCopyStreamReader(codecName == "V_PRORES");
     else if (codecName == "A_DTS")
     {
         rez = new DTSStreamReader();

@@ -10,6 +10,7 @@ add_executable (tsmuxer
   vorbisStreamReader.cpp
   alacStreamReader.cpp
   mkvCopyStreamReader.cpp
+  videoCopyStreamReader.cpp
   bdSsifImport.cpp
   abstractDemuxer.cpp
   abstractMuxer.cpp
