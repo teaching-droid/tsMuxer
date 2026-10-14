@@ -394,7 +394,9 @@ class MovParsedH264TrackData : public ParsedTrackPrivData
                 break;
             const auto nalSize = static_cast<uint32_t>(getNalSize(buff));
             buff += nal_length_size;
-            if (nalSize == 0 || nalSize > MAX_NAL_SIZE || nalSize > static_cast<size_t>(end - buff))
+            if (nalSize == 0)
+                continue;  // an empty NAL (see newBufferSize)
+            if (nalSize > MAX_NAL_SIZE || nalSize > static_cast<size_t>(end - buff))
                 break;
             *dst++ = 0x00;
             *dst++ = 0x00;
@@ -438,7 +440,11 @@ class MovParsedH264TrackData : public ParsedTrackPrivData
             }
             const auto nalSize = static_cast<uint32_t>(getNalSize(cur));
             cur += nal_length_size;
-            if (nalSize == 0 || nalSize > MAX_NAL_SIZE)
+            // A length field of 0 is an empty NAL, which holds nothing. It ended the walk: the rest of the chunk was
+            // dropped, every picture after it in the same chunk included. It is stepped over now, in both walks.
+            if (nalSize == 0)
+                continue;
+            if (nalSize > MAX_NAL_SIZE)
             {
                 LTRACE(LT_WARN, 2,
                        "MP4/MOV: suspicious NAL size " << nalSize << " at position " << m_demuxer->getProcessedBytes());
