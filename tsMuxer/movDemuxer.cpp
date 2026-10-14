@@ -405,114 +405,152 @@ class MovParsedH264TrackData : public ParsedTrackPrivData
         THROW(ERR_MOV_PARSE, "MP4/MOV error: Unsupported H.264/AVC frame length field value " << nal_length_size)
     }
 
-    void extractData(AVPacket* pkt, uint8_t* buff, const int size) override
+    void extractData(AVPacket* pkt, uint8_t* /*buff*/, const int /*size*/) override
     {
-        uint8_t* dst = pkt->data;
-        if (!spsPpsList.empty())
-        {
-            for (auto& i : spsPpsList)
-            {
-                *dst++ = 0x0;
-                *dst++ = 0x0;
-                *dst++ = 0x0;
-                *dst++ = 0x1;
-
-                memcpy(dst, i.data(), i.size());
-                dst += i.size();
-            }
-            spsPpsList.clear();
-        }
-        const uint8_t* end = buff + size;
-        while (buff < end)
-        {
-            // pkt->data was sized by newBufferSize, which stops as soon as a length stops making
-            // sense. This loop used to run on regardless and copy whatever it read, so one bad
-            // length wrote past the end of the buffer that had been reserved for the frame. The
-            // two walks have to give up in the same places.
-            if (static_cast<size_t>(end - buff) < nal_length_size)
-                break;
-            const auto nalSize = static_cast<uint32_t>(getNalSize(buff));
-            buff += nal_length_size;
-            if (nalSize == 0)
-                continue;  // an empty NAL (see newBufferSize)
-            if (nalSize > MAX_NAL_SIZE || nalSize > static_cast<size_t>(end - buff))
-                break;
-            *dst++ = 0x00;
-            *dst++ = 0x00;
-            *dst++ = 0x00;
-            *dst++ = 0x01;
-            memcpy(dst, buff, nalSize);
-            dst += nalSize;
-            buff += nalSize;
-        }
+        if (!m_out.empty())
+            memcpy(pkt->data, m_out.data(), m_out.size());
+        m_sc->m_indexCur = m_indexAfter;
+        spsPpsList.clear();
     }
 
+    // The chunk, sample by sample as the track's sample sizes give them, each NAL with a 4 byte start code in place of
+    // its length field; extractData copies what this builds. The chunk was walked as one run of NALs, by a second
+    // walk in extractData as well: where a length made no sense, both gave up on the rest of the chunk, so damage in
+    // one picture, as zero bytes filled into a file that was cut off, took every picture after it in the chunk with
+    // it, hundreds of kilobytes. Each sample is walked on its own now, and the next one starts afresh. A chunk whose
+    // samples the tables do not give is walked as one, as before.
     unsigned newBufferSize(uint8_t* buff, const unsigned size) override
     {
+        m_out.clear();
         if (!buff || size == 0)
             return 0;
 
         if (nal_length_size < 1 || nal_length_size > 4)
-        {
-            LTRACE(LT_WARN, 2,
-                   "MP4/MOV: invalid nal_length_size " << static_cast<int>(nal_length_size)
-                                                       << ", using conservative estimate");
-            return size * 2;
-        }
+            LTRACE(LT_WARN, 2, "MP4/MOV: invalid nal_length_size " << static_cast<int>(nal_length_size));
 
-        // The size of exactly what extractData writes: each NAL that passes, with a 4 byte start code in place of its
-        // length field. It used to be the size of the whole sample plus the start code overhead, so where the walk
-        // stopped early, as it does in a sample cut off by the end of the file, the packet kept the bytes behind the
-        // last NAL that was written, and whatever the reused buffer held there went into the stream. Where the walk
-        // reaches the end of the sample the two sizes are the same.
-        const uint8_t* cur = buff;
-        const uint8_t* end = buff + size;
-        uint64_t nalBytes = 0;
+        for (const auto& ps : spsPpsList)
+        {
+            startCode();
+            m_out.insert(m_out.end(), ps.begin(), ps.end());
+        }
+        size_t indexCur = m_sc->m_indexCur;
+        const uint8_t* p = buff;
+        const uint8_t* chunkEnd = buff + size;
+        while (p < chunkEnd)
+        {
+            auto sampleSize = static_cast<size_t>(chunkEnd - p);
+            if (m_sc->sample_size)
+                sampleSize = m_sc->sample_size;
+            else if (indexCur < m_sc->m_index.size())
+                sampleSize = m_sc->m_index[indexCur];
+            if (sampleSize == 0 || sampleSize > static_cast<size_t>(chunkEnd - p))
+                sampleSize = static_cast<size_t>(chunkEnd - p);
+            ++indexCur;
+            // A sample whose length fields fill it exactly is whole. In the first that does not, the NALs before the
+            // fault are kept, as they were. While samples go on failing, as where the sizes of the tables do not
+            // match the data, nothing of them is kept: a length that happens to fit there brings no picture.
+            m_nals.clear();
+            const SampleWalk walk = walkSample(p, p + sampleSize, !m_faulty);
+            if (walk == SampleWalk::Whole || !m_faulty)
+                m_out.insert(m_out.end(), m_nals.begin(), m_nals.end());
+            m_faulty = walk != SampleWalk::Whole;
+            p += sampleSize;
+        }
+        m_indexAfter = indexCur;
+        // extractData is not called for a chunk that gives nothing, and the next chunk starts after its samples all
+        // the same
+        if (m_out.empty())
+            m_sc->m_indexCur = m_indexAfter;
+        if (m_out.size() > UINT_MAX)
+            THROW(ERR_MOV_PARSE, "MP4/MOV: a chunk of video too large to be read (" << m_out.size() << " bytes)")
+        return static_cast<unsigned>(m_out.size());
+    }
+
+   private:
+    void startCode()
+    {
+        m_out.push_back(0);
+        m_out.push_back(0);
+        m_out.push_back(0);
+        m_out.push_back(1);
+    }
+
+    enum class SampleWalk
+    {
+        Whole,  // the length fields fill the sample exactly
+        Zeros,  // from a length of 0 on, nothing but zero bytes
+        Broken  // a length that does not fit
+    };
+
+    // The NALs of one sample, from its length fields, into m_nals. tell: a fault is named (the first of a run).
+    SampleWalk walkSample(const uint8_t* cur, const uint8_t* end, const bool tell)
+    {
+        const auto put = [this](const uint8_t* nal, const uint32_t n)
+        {
+            m_nals.push_back(0);
+            m_nals.push_back(0);
+            m_nals.push_back(0);
+            m_nals.push_back(1);
+            m_nals.insert(m_nals.end(), nal, nal + n);
+        };
         while (cur < end)
         {
             if (static_cast<size_t>(end - cur) < nal_length_size)
             {
-                LTRACE(LT_WARN, 2,
-                       "MP4/MOV: truncated NAL length field at position " << m_demuxer->getProcessedBytes()
-                                                                          << ", stopping parse");
-                break;
+                if (tell)
+                    LTRACE(LT_WARN, 2,
+                           "MP4/MOV: truncated NAL length field at position " << m_demuxer->getProcessedBytes()
+                                                                              << ", stopping parse");
+                return SampleWalk::Broken;
             }
             const auto nalSize = static_cast<uint32_t>(getNalSize(cur));
             cur += nal_length_size;
-            // A length field of 0 is an empty NAL, which holds nothing. It ended the walk: the rest of the chunk was
-            // dropped, every picture after it in the same chunk included. It is stepped over now, in both walks.
+            // A length field of 0 is an empty NAL, which holds nothing, and is stepped over.
             if (nalSize == 0)
+            {
+                // Zero bytes from here to the end of the sample are no empty NALs but the data of a file that was cut
+                // off and filled up with zeros. Its pictures, which hold nothing, were left out with no word but a
+                // line about a truncated length field at the end of the file (#715).
+                const uint8_t* zeroStart = cur - nal_length_size;
+                if (end - zeroStart >= 16 && std::all_of(zeroStart, end, [](const uint8_t b) { return b == 0; }))
+                {
+                    static std::set<std::pair<std::string, int>> told;  // the file is opened more than once in a job
+                    if (told.emplace(m_demuxer->fileName(), m_sc->ffindex).second)
+                        LTRACE(LT_WARN, 2,
+                               "Warning: video track #"
+                                   << m_sc->ffindex << " of " << m_demuxer->fileName()
+                                   << ": part of its data is nothing but zero bytes, as in a file that was cut off "
+                                      "and filled up. Pictures made of zero bytes hold nothing and are left out.");
+                    return SampleWalk::Zeros;
+                }
                 continue;
+            }
             if (nalSize > MAX_NAL_SIZE)
             {
-                LTRACE(LT_WARN, 2,
-                       "MP4/MOV: suspicious NAL size " << nalSize << " at position " << m_demuxer->getProcessedBytes());
-                break;
+                if (tell)
+                    LTRACE(LT_WARN, 2,
+                           "MP4/MOV: suspicious NAL size " << nalSize << " at position "
+                                                           << m_demuxer->getProcessedBytes());
+                return SampleWalk::Broken;
             }
             if (nalSize > static_cast<size_t>(end - cur))
             {
-                LTRACE(LT_WARN, 2,
-                       "MP4/MOV: NAL size " << nalSize << " exceeds frame boundary at position "
-                                            << m_demuxer->getProcessedBytes());
-                break;
+                if (tell)
+                    LTRACE(LT_WARN, 2,
+                           "MP4/MOV: NAL size " << nalSize << " exceeds frame boundary at position "
+                                                << m_demuxer->getProcessedBytes());
+                return SampleWalk::Broken;
             }
+            put(cur, nalSize);
             cur += nalSize;
-            nalBytes += 4 + static_cast<uint64_t>(nalSize);
         }
-        unsigned spsPpsSize = 0;
-        for (const auto& i : spsPpsList)
-        {
-            const auto entrySize = static_cast<unsigned>(i.size() + 4);
-            if (spsPpsSize > UINT_MAX - entrySize)
-                return size * 2;  // overflow protection
-            spsPpsSize += entrySize;
-        }
-
-        if (nalBytes > UINT_MAX - spsPpsSize)
-            return size * 2;  // overflow protection
-
-        return static_cast<unsigned>(nalBytes) + spsPpsSize;
+        return SampleWalk::Whole;
     }
+
+    std::vector<uint8_t> m_out;   // the chunk as extractData hands it on (newBufferSize)
+    std::vector<uint8_t> m_nals;  // the NALs of one sample (walkSample)
+    size_t m_indexAfter = 0;      // the sample after the chunk
+    bool m_faulty = false;        // the last sample walked was not whole
 
    protected:
     MOVStreamContext* m_sc;

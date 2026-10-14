@@ -15,6 +15,8 @@ class MovDemuxer final : public IOContextDemuxer
     MovDemuxer(const BufferedReaderManager& readManager);
     ~MovDemuxer() override { readClose(); }
     void openFile(const std::string& streamName) override;
+    // The file open now (for a reader's messages)
+    [[nodiscard]] const std::string& fileName() const { return m_fileName; }
     std::string getTitle() override;
     std::vector<AVChapter> getChapters() override;
     std::vector<std::vector<uint8_t>> getPassThroughAttachments() override;
