@@ -15,9 +15,11 @@
 #include "avPacket.h"
 #include "bitStream.h"
 #include "hevc.h"
+#include "nalUnits.h"
 #include "subTrackFilter.h"
 #include "vodCoreException.h"
 #include "vvc.h"
+#include "wave.h"
 
 using namespace std;
 
@@ -120,6 +122,11 @@ struct MOVStreamContext : Track
     }
 
     ~MOVStreamContext() = default;
+
+    int containerDataType = 0;  // TRACKTYPE_VP8 etc. for the codecs nothing in their data identifies (getTrackList)
+    bool pcmBigEndian = false;  // an LPCM sample entry: the byte order of its samples
+    bool pcmFloat = false;
+    uint32_t lpcmFlags = 0;  // the format flags of a QuickTime 'lpcm' sample entry (version 2)
 
     vector<int64_t> chunk_offsets;
     vector<uint32_t> m_index;
@@ -548,6 +555,201 @@ class MovParsedAV1TrackData final : public ParsedTrackPrivData
     std::vector<uint8_t> m_out;  // the start code form of the chunk newBufferSize was given
     size_t m_indexAfter = 0;
     bool m_configSent = false;
+};
+
+// One MP4 sample is one packet of these codecs, and each is handed on in the form their reader takes from Matroska
+// (matroskaParser.cpp): Opus with its OpusHead in front of the first packet and a 4 byte length in front of each;
+// Vorbis and ALAC with a mark and the CodecPrivate in front of the first and a 4 byte length in front of each; VP8
+// and VP9 each frame behind a start code, escaped, with a stop byte. The samples of a chunk are told apart by their
+// sizes in stsz. newBufferSize works out the bytes, extractData hands them over.
+class MovParsedFramedTrackData final : public ParsedTrackPrivData
+{
+   public:
+    enum class Form
+    {
+        Opus,
+        Vorbis,
+        Alac,
+        Vpx
+    };
+    MovParsedFramedTrackData(MOVStreamContext* sc, const Form form) : m_sc(sc), m_form(form) {}
+
+    void setPrivData(uint8_t* buff, const int size) override
+    {
+        m_head.clear();
+        if (!buff || size <= 0)
+            return;
+        if (m_form == Form::Opus)
+        {
+            // OpusSpecificBox (Encapsulation of Opus in ISO BMFF, 4.3.2): big endian, no magic. OpusHead (RFC 7845,
+            // 5.1): the magic, version 1, little endian.
+            if (size < 11)
+                return;
+            const auto le = [this](const uint32_t v, const int bytes)
+            {
+                for (int i = 0; i < bytes; ++i) m_head.push_back(static_cast<uint8_t>(v >> (8 * i)));
+            };
+            m_head.assign({'O', 'p', 'u', 's', 'H', 'e', 'a', 'd', 1, buff[1]});
+            le(static_cast<uint32_t>(buff[2]) << 8 | buff[3], 2);  // pre-skip
+            le(static_cast<uint32_t>(buff[4]) << 24 | static_cast<uint32_t>(buff[5]) << 16 |
+                   static_cast<uint32_t>(buff[6]) << 8 | buff[7],
+               4);                                                 // input sample rate
+            le(static_cast<uint32_t>(buff[8]) << 8 | buff[9], 2);  // output gain
+            m_head.insert(m_head.end(), buff + 10, buff + size);   // mapping family and table
+        }
+        else if (m_form == Form::Alac)
+        {
+            // The alac box inside the sample entry, header, version and flags included, then the 24 byte
+            // ALACSpecificConfig, which is what Matroska stores as its CodecPrivate
+            const uint8_t* cfg = buff;
+            int n = size;
+            if (n >= 12 && memcmp(buff + 4, "alac", 4) == 0)
+            {
+                cfg += 12;
+                n -= 12;
+            }
+            m_head.assign(cfg, cfg + n);
+        }
+        else
+            m_head.assign(buff, buff + size);
+    }
+
+    unsigned newBufferSize(uint8_t* buff, const unsigned size) override
+    {
+        m_out.clear();
+        size_t indexCur = m_sc->m_indexCur;
+        if (!m_headSent)
+        {
+            if (m_form == Form::Opus)
+                m_out.insert(m_out.end(), m_head.begin(), m_head.end());
+            else if (m_form == Form::Vorbis || m_form == Form::Alac)
+            {
+                const char* mark = m_form == Form::Vorbis ? "VORBISCP" : "ALACCPRV";
+                m_out.insert(m_out.end(), mark, mark + 8);
+                be32(static_cast<uint32_t>(m_head.size()));
+                m_out.insert(m_out.end(), m_head.begin(), m_head.end());
+            }
+        }
+        uint32_t used = 0;
+        while (used < size)
+        {
+            uint32_t sampleSize = size - used;
+            if (m_sc->sample_size)
+                sampleSize = m_sc->sample_size;
+            else if (indexCur < m_sc->m_index.size())
+                sampleSize = m_sc->m_index[indexCur++];
+            sampleSize = (std::min)(sampleSize, size - used);
+            if (sampleSize == 0)
+                break;
+            const uint8_t* s = buff + used;
+            if (m_form == Form::Vpx)
+            {
+                m_out.insert(m_out.end(), {0x00, 0x00, 0x01});
+                const size_t at = m_out.size();
+                m_out.resize(at + sampleSize * 2 + 4);
+                const int n = NALUnit::encodeNAL(s, s + sampleSize, m_out.data() + at, sampleSize * 2 + 4);
+                m_out.resize(at + (n > 0 ? n : 0));
+                m_out.push_back(0x80);
+            }
+            else
+            {
+                be32(sampleSize);
+                m_out.insert(m_out.end(), s, s + sampleSize);
+            }
+            used += sampleSize;
+        }
+        m_indexAfter = indexCur;
+        return static_cast<unsigned>(m_out.size());
+    }
+
+    void extractData(AVPacket* pkt, uint8_t* /*buff*/, const int /*size*/) override
+    {
+        if (!m_out.empty())
+            memcpy(pkt->data, m_out.data(), m_out.size());
+        pkt->size = static_cast<int>(m_out.size());
+        m_sc->m_indexCur = m_indexAfter;
+        m_headSent = true;
+    }
+
+   private:
+    void be32(const uint32_t v)
+    {
+        for (int i = 3; i >= 0; --i) m_out.push_back(static_cast<uint8_t>(v >> (8 * i)));
+    }
+    MOVStreamContext* m_sc;
+    Form m_form;
+    std::vector<uint8_t> m_head;  // OpusHead, or the CodecPrivate of Vorbis and ALAC
+    std::vector<uint8_t> m_out;
+    size_t m_indexAfter = 0;
+    bool m_headSent = false;
+};
+
+// Linear PCM, as the LPCM reader takes it from Matroska: a WAVE header in front of the first chunk, then the samples
+// little endian. Floating point samples are not read, as from Matroska.
+class MovParsedPCMTrackData final : public ParsedTrackPrivData
+{
+   public:
+    MovParsedPCMTrackData(MOVStreamContext* sc, const uint32_t format) : m_sc(sc), m_format(format) {}
+
+    void setPrivData(uint8_t* buff, const int size) override
+    {
+        // pcmC (ISO/IEC 23003-5, 5.2): version and flags, format_flags (bit 0: little endian), PCM_sample_size
+        if (m_format == MKTAG('i', 'p', 'c', 'm') && buff && size >= 6)
+        {
+            m_sc->pcmBigEndian = (buff[4] & 1) == 0;
+            m_sc->bits_per_coded_sample = buff[5];
+        }
+    }
+
+    unsigned newBufferSize(uint8_t* /*buff*/, const unsigned size) override
+    {
+        prepare();
+        return size + static_cast<unsigned>(m_wave.size());
+    }
+
+    void extractData(AVPacket* pkt, uint8_t* buff, const int size) override
+    {
+        prepare();
+        uint8_t* dst = pkt->data;
+        if (!m_wave.isEmpty())
+        {
+            memcpy(dst, m_wave.data(), m_wave.size());
+            dst += m_wave.size();
+            m_wave.clear();
+            m_waveSent = true;
+        }
+        if (m_sc->pcmBigEndian && m_bits > 8)
+            wave_format::toLittleEndian(dst, buff, size, m_bits);
+        else
+            memcpy(dst, buff, size);
+        pkt->size = static_cast<int>(dst - pkt->data) + size;
+    }
+
+   private:
+    void prepare()
+    {
+        if (m_waveSent || !m_wave.isEmpty())
+            return;
+        m_bits = static_cast<uint16_t>(m_sc->bits_per_coded_sample);
+        if (m_format == MKTAG('i', 'n', '2', '4'))
+            m_bits = 24;
+        else if (m_format == MKTAG('i', 'n', '3', '2'))
+            m_bits = 32;
+        if (m_format == MKTAG('l', 'p', 'c', 'm'))
+        {
+            m_sc->pcmFloat = m_sc->lpcmFlags & 1;
+            m_sc->pcmBigEndian = (m_sc->lpcmFlags & 2) != 0;
+        }
+        if (m_sc->pcmFloat)
+            THROW(ERR_MOV_PARSE, "MP4/MOV: floating point PCM is not supported")
+        const auto channels = static_cast<uint16_t>(m_sc->channels);
+        wave_format::buildWaveHeader(m_wave, m_sc->sample_rate, channels, channels >= 6, m_bits);
+    }
+    MOVStreamContext* m_sc;
+    uint32_t m_format;
+    uint16_t m_bits = 16;
+    MemoryBlock m_wave;
+    bool m_waveSent = false;
 };
 
 class MovParsedSRTTrackData final : public ParsedTrackPrivData
@@ -1153,7 +1355,9 @@ void MovDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
         if (tracks[i]->type != IOContextTrackType::CONTROL)
         {
             trackList.insert(
-                std::make_pair(i + 1, TrackInfo(tracks[i]->type == IOContextTrackType::SUBTITLE ? TRACKTYPE_SRT : 0,
+                std::make_pair(i + 1, TrackInfo(tracks[i]->type == IOContextTrackType::SUBTITLE
+                                                    ? TRACKTYPE_SRT
+                                                    : reinterpret_cast<MOVStreamContext*>(tracks[i])->containerDataType,
                                                 tracks[i]->language, 0)));
             if (const auto delay = m_codecDelayNs.find(i + 1); delay != m_codecDelayNs.end() && delay->second > 0)
                 trackList[i + 1].m_srcParams["srccodecdelay"] = std::to_string(delay->second);
@@ -1215,6 +1419,17 @@ int MovDemuxer::ParseTableEntry(MOVAtom atom)
         return mov_read_glbl(atom);
     case MKTAG('v', 'v', 'c', 'C'):
         return mov_read_vvcc(atom);
+    case MKTAG('d', 'O', 'p', 's'):  // OpusSpecificBox
+    case MKTAG('p', 'c', 'm', 'C'):  // PCMConfigurationBox, ISO/IEC 23003-5
+        return mov_read_glbl(atom);
+    case MKTAG('e', 'n', 'd', 'a'):  // QuickTime: the byte order of in24 and in32
+    {
+        if (num_tracks < 1 || atom.size < 2)
+            return 0;
+        const auto st = reinterpret_cast<MOVStreamContext*>(tracks[num_tracks - 1]);
+        st->pcmBigEndian = get_be16() == 0;
+        return 0;
+    }
     case MKTAG('h', 'd', 'l', 'r'):
         return mov_read_hdlr(atom);
     case MKTAG('m', 'd', 'a', 't'):
@@ -1938,6 +2153,35 @@ int MovDemuxer::mov_read_stsd(MOVAtom atom)
             st->type = IOContextTrackType::AUDIO;
             st->parsed_priv_data = new MovParsedAudioTrackData(this, st);
             break;
+        // Codecs whose samples carry nothing a reader could find them by: each sample is handed on in the form the
+        // reader of that codec takes from a Matroska file (MovParsedFramedTrackData). They were not recognised.
+        case MKTAG('O', 'p', 'u', 's'):
+            st->type = IOContextTrackType::AUDIO;
+            st->parsed_priv_data = new MovParsedFramedTrackData(st, MovParsedFramedTrackData::Form::Opus);
+            break;
+        case MKTAG('a', 'l', 'a', 'c'):
+            st->type = IOContextTrackType::AUDIO;
+            st->containerDataType = TRACKTYPE_ALAC;
+            st->parsed_priv_data = new MovParsedFramedTrackData(st, MovParsedFramedTrackData::Form::Alac);
+            break;
+        case MKTAG('v', 'p', '0', '8'):
+        case MKTAG('v', 'p', '0', '9'):
+            st->type = IOContextTrackType::VIDEO;
+            st->containerDataType = format == MKTAG('v', 'p', '0', '8') ? TRACKTYPE_VP8 : TRACKTYPE_VP9;
+            st->parsed_priv_data = new MovParsedFramedTrackData(st, MovParsedFramedTrackData::Form::Vpx);
+            break;
+        // Linear PCM: QuickTime's sowt (16 bit little endian), twos (16 bit big endian), in24 and in32 (big endian
+        // unless an enda box says otherwise) and lpcm (its flags say), and ISO/IEC 23003-5's ipcm (its pcmC box says)
+        case MKTAG('s', 'o', 'w', 't'):
+        case MKTAG('t', 'w', 'o', 's'):
+        case MKTAG('i', 'n', '2', '4'):
+        case MKTAG('i', 'n', '3', '2'):
+        case MKTAG('l', 'p', 'c', 'm'):
+        case MKTAG('i', 'p', 'c', 'm'):
+            st->type = IOContextTrackType::AUDIO;
+            st->pcmBigEndian = format != MKTAG('s', 'o', 'w', 't');
+            st->parsed_priv_data = new MovParsedPCMTrackData(st, format);
+            break;
         case MKTAG('t', 'x', '3', 'g'):
             st->type = IOContextTrackType::SUBTITLE;
             st->parsed_priv_data = new MovParsedSRTTrackData(this, st);
@@ -1992,7 +2236,7 @@ int MovDemuxer::mov_read_stsd(MOVAtom atom)
                     st->channels = get_be32();
                     get_be32();                              // always 0x7F000000
                     st->bits_per_coded_sample = get_be32();  // bits per channel if sound is uncompressed
-                    get_be32();                              // lcpm format specific flag
+                    st->lpcmFlags = get_be32();              // lpcm format specific flags
                     st->bytes_per_frame = get_be32();        // bytes per audio packet if constant
                     st->samples_per_frame = get_be32();      // lpcm frames per audio packet if constant
                     // if (format == MKTAG('l','p','c','m'))
@@ -2207,6 +2451,16 @@ int MovDemuxer::mov_read_esds(MOVAtom atom)
             st->codec_priv = new unsigned char[len];
             st->codec_priv_size = len;
             get_buffer(st->codec_priv, len);
+            // Vorbis, object type 0xDD: its three headers, Xiph laced as in a Matroska CodecPrivate, are the decoder
+            // specific information
+            if (object_type_id == 0xDD && dynamic_cast<MovParsedAudioTrackData*>(st->parsed_priv_data))
+            {
+                delete st->parsed_priv_data;
+                st->containerDataType = TRACKTYPE_VORBIS;
+                st->parsed_priv_data = new MovParsedFramedTrackData(st, MovParsedFramedTrackData::Form::Vorbis);
+                st->parsed_priv_data->setPrivData(st->codec_priv, st->codec_priv_size);
+                return 0;
+            }
             if (st->parsed_priv_data)
             {
                 // object_type_id 0x40 = Audio ISO/IEC 14496-3 (AAC)
