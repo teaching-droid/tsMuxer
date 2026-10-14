@@ -250,6 +250,18 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
         int i = 0;
         for (; left > 4; ++i)
         {
+            // One size for every sample (AC-3, for instance): a chunk is read up to the next chunk, and bytes between
+            // the two that are not a whole sample were taken off all the same. The unsigned count went round and the
+            // loop never ended: the file could not even be listed. They are left out now, as extractData leaves them.
+            if (m_sc->sample_size != 0 && m_sc->sample_size > left)
+            {
+                if (!m_tailWarned)
+                    LTRACE(LT_WARN, 2,
+                           "Warning: audio track #" << m_sc->ffindex << " of the MP4 file has " << left
+                                                    << " bytes after the samples of a chunk; they are left out.");
+                m_tailWarned = true;
+                break;
+            }
             left -= m_sc->sample_size;
             if (m_sc->sample_size == 0)
             {
@@ -259,7 +271,7 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
                 left -= m_sc->m_index[m_sc->m_indexCur + i];
             }
         }
-        if (left > 4)
+        if (left > 4 && m_sc->sample_size == 0)
             THROW(ERR_MOV_PARSE,
                   "Invalid AAC frame for track #" << m_sc->ffindex << " at position " << m_demuxer->getProcessedBytes())
         if (!isAAC)
@@ -270,6 +282,7 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
     bool isAAC;
 
    private:
+    bool m_tailWarned = false;
     uint8_t* m_buff;
     int m_size;
     MovDemuxer* m_demuxer;
