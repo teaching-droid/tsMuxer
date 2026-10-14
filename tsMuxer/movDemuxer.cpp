@@ -1214,6 +1214,8 @@ int MovDemuxer::ParseTableEntry(MOVAtom atom)
     case MKTAG('m', 'v', 'c', 'C'):
     case MKTAG('h', 'v', 'c', 'C'):
         return mov_read_glbl(atom);
+    case MKTAG('v', 'v', 'c', 'C'):
+        return mov_read_vvcc(atom);
     case MKTAG('h', 'd', 'l', 'r'):
         return mov_read_hdlr(atom);
     case MKTAG('m', 'd', 'a', 't'):
@@ -1914,6 +1916,13 @@ int MovDemuxer::mov_read_stsd(MOVAtom atom)
             st->parsed_priv_data = new MovParsedH265TrackData(this, st);
             st->type = IOContextTrackType::VIDEO;
             break;
+        // VVC (ISO/IEC 14496-15, 11): its track was not recognised and was listed as Opus with a sample rate of 0, and
+        // a mux of it gave no video
+        case MKTAG('v', 'v', 'c', '1'):
+        case MKTAG('v', 'v', 'i', '1'):
+            st->parsed_priv_data = new MovParsedH266TrackData(this, st);
+            st->type = IOContextTrackType::VIDEO;
+            break;
         case MKTAG('a', 'v', '0', '1'):
             st->parsed_priv_data = new MovParsedAV1TrackData(this, st);
             st->type = IOContextTrackType::VIDEO;
@@ -2109,6 +2118,17 @@ int MovDemuxer::mov_read_glbl(MOVAtom atom)
     if (st->parsed_priv_data)
         st->parsed_priv_data->setPrivData(st->codec_priv, st->codec_priv_size);
     return 0;
+}
+
+// The VVC configuration box is a full box: a version and flags come before the VvcDecoderConfigurationRecord (ISO/IEC
+// 14496-15, 11.2.4.2), which an avcC or hvcC does not have
+int MovDemuxer::mov_read_vvcc(MOVAtom atom)
+{
+    if (atom.size < 4)
+        return -1;
+    get_be32();  // version and flags
+    atom.size -= 4;
+    return mov_read_glbl(atom);
 }
 
 int MovDemuxer::mov_read_hdlr(MOVAtom atom)

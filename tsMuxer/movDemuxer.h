@@ -148,6 +148,7 @@ class MovDemuxer final : public IOContextDemuxer
     int mov_read_stsd(MOVAtom atom);
     int mov_read_stco(MOVAtom atom);
     int mov_read_glbl(MOVAtom atom);
+    int mov_read_vvcc(MOVAtom atom);
     int mov_read_ftyp(MOVAtom atom);
     int mov_read_hdlr(MOVAtom atom);
     int mov_read_esds(MOVAtom atom);
