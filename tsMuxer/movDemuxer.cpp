@@ -2188,6 +2188,14 @@ int MovDemuxer::mov_read_esds(MOVAtom atom)
     if (tag == MP4DecConfigDescrTag)
     {
         const uint8_t object_type_id = get_byte();
+        // The object type says what the track holds (ISO/IEC 14496-1, 7.2.6.6.2, and the MP4 registration
+        // authority's list). Only AAC carries the decoder specific information below, and the track was left marked as
+        // AAC whenever that was missing: MP3, MP2 and DTS in an mp4a sample entry got an ADTS header on every frame,
+        // were listed as AAC and muxed to nothing. Anything that is not AAC goes on as it is stored, framed by its own
+        // headers, and the codec readers find it by those.
+        if (auto* audioData = dynamic_cast<MovParsedAudioTrackData*>(st->parsed_priv_data))
+            audioData->isAAC =
+                object_type_id == 0x40 || object_type_id == 0x66 || object_type_id == 0x67 || object_type_id == 0x68;
         get_byte();  // stream type
         get_be24();  // buffer size db
         get_be32();  // max bitrate
