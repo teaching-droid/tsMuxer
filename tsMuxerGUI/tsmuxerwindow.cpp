@@ -23,6 +23,7 @@
 #include <QGroupBox>
 #include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLibraryInfo>
@@ -35,6 +36,7 @@
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
 #include <QScreen>
+#include <QScrollArea>
 #include <QSettings>
 #include <QSharedPointer>
 #include <QShowEvent>
@@ -640,6 +642,18 @@ static QList<qint64> discBreaks(qint64 freeSectors, int layers)
         for (int k = 1; k < layers; ++k) breaks << freeSectors * k / layers;
     return breaks;
 }
+
+namespace
+{
+// The content of a tab, in the scroll area of its page: as high as its layout needs, which scrolls when the window is
+// lower, and as wide as the window, as the tab was before. Scrolled sideways, the buttons beside the track list went
+// out of sight.
+class TabContent final : public QWidget
+{
+   public:
+    [[nodiscard]] QSize minimumSizeHint() const override { return {0, QWidget::minimumSizeHint().height()}; }
+};
+}  // namespace
 
 TsMuxerWindow::TsMuxerWindow()
     : ui(new Ui::TsMuxerWindow),
@@ -2261,6 +2275,47 @@ TsMuxerWindow::TsMuxerWindow()
                                "the selected disc.")));
             });
     }
+
+    // ** A TAB SCROLLS WHEN THE WINDOW IS TOO SMALL FOR IT. ** The window may be made as small as 800 x 650, so that it
+    // fits a small screen, and its tabs need more than that: at the smallest size the track list showed one row, the
+    // buttons beside it were squashed, and rows of the Subtitles and Blu-ray tabs were drawn over each other. The
+    // content of every tab now sits in a scroll area inside its page. The page itself stays, so its title and
+    // everything that finds a tab by its page are as they were. The track list keeps at least four rows.
+    ui->trackLV->setMinimumHeight(ui->trackLV->horizontalHeader()->sizeHint().height() +
+                                  4 * ui->trackLV->verticalHeader()->defaultSectionSize() +
+                                  2 * ui->trackLV->frameWidth());
+    for (int i = 0; i < ui->tabWidget->count(); ++i)
+    {
+        QWidget* page = ui->tabWidget->widget(i);
+        QLayout* content = page->layout();
+        if (content == nullptr)
+            continue;
+        auto* inner = new TabContent;
+        inner->setLayout(content);  // the layout, and the widgets in it, move to inner
+        // the layout no longer fixes the smallest size of the content: TabContent says it, its height only
+        content->setSizeConstraint(QLayout::SetNoConstraint);
+        auto* area = new QScrollArea(page);
+        area->setFrameShape(QFrame::NoFrame);
+        area->setWidgetResizable(true);
+        area->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        area->setWidget(inner);
+        // the page's own background shows through, as before
+        area->viewport()->setAutoFillBackground(false);
+        inner->setAutoFillBackground(false);
+        auto* pageLayout = new QVBoxLayout(page);
+        pageLayout->setContentsMargins(0, 0, 0, 0);
+        pageLayout->addWidget(area);
+    }
+
+    // "Reset meta to auto-generated" was cut off at the smallest width, its room fixed at less than its text needs. It
+    // keeps room for its text now, in every language, up to its largest width.
+    const auto fitResetMeta = [this]
+    {
+        ui->buttonResetMeta->setMinimumWidth(
+            (std::min)(ui->buttonResetMeta->sizeHint().width(), ui->buttonResetMeta->maximumWidth()));
+    };
+    fitResetMeta();
+    m_retranslateHooks.push_back(fitResetMeta);
 
     // Settle everything that follows from the output once at start up as well, as a click on it does.
     // RadioButtonMuxClick does it on every later change, but the remembered output is restored by
