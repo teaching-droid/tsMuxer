@@ -46,6 +46,56 @@ Qt's own bundled third-party components:
         https://doc.qt.io/qt-6/licenses-used-in-qt.html
 
 ================================================================================
+libass and the libraries it uses  (Windows packages: draw ASS and SSA subtitles)
+================================================================================
+
+tsMuxeR.exe draws ASS and SSA subtitles with libass. libass and the libraries it
+needs are shipped as separate dynamic-link libraries placed next to tsMuxeR.exe.
+tsMuxeR.exe is not linked against them: it loads ass-9.dll when an ASS or SSA
+track is drawn, and works without it (the subtitles are then drawn as plain
+text). You may replace any of them with your own build of a compatible version.
+
+    File               Library      Version  License                 License text
+    ass-9.dll          libass       0.17.5   ISC                     licenses/libass-ISC.txt
+    freetype.dll       FreeType     2.14.3   FreeType License (FTL)  licenses/FreeType-FTL.txt
+    harfbuzz.dll       HarfBuzz     14.2.1   "Old MIT"               licenses/HarfBuzz-MIT.txt
+    fribidi-0.dll      GNU FriBidi  1.0.16   LGPL 2.1 or later       licenses/LGPL-2.1.txt
+    libpng16.dll       libpng       1.6.58   libpng License          licenses/libpng.txt
+    z.dll              zlib         1.3.2    zlib License            licenses/zlib.txt
+    bz2.dll            bzip2        1.0.8    bzip2 License           licenses/bzip2.txt
+    brotlidec.dll,     Brotli       1.2.0    MIT                     licenses/Brotli-MIT.txt
+    brotlicommon.dll
+
+Project pages:
+    libass       https://github.com/libass/libass
+    FreeType     https://freetype.org
+    HarfBuzz     https://github.com/harfbuzz/harfbuzz
+    GNU FriBidi  https://github.com/fribidi/fribidi
+    libpng       http://www.libpng.org/pub/png/libpng.html
+    zlib         https://zlib.net
+    bzip2        https://sourceware.org/bzip2/
+    Brotli       https://github.com/google/brotli
+
+Portions of this software are copyright (C) 2026 The FreeType Project
+(https://freetype.org). All rights reserved.
+
+How they are built:
+    The libraries are built by vcpkg (https://github.com/microsoft/vcpkg) from
+    packaging/libass/vcpkg.json in this repository, whose builtin-baseline
+    fixes every version above, with the build configuration recorded in
+    .github/workflows/windows_64.yml (and windows_32.yml).
+
+Complete corresponding source of GNU FriBidi (LGPL):
+    fribidi-0.dll is built from the upstream source at tag v1.0.16,
+        https://github.com/fribidi/fribidi
+    with the vcpkg port of that version, which changes only the build files
+    (meson-crosscompile.patch: tables may be pregenerated and are installed;
+    no change to the library's own code):
+        https://github.com/microsoft/vcpkg/tree/03e366fb91e38b9432ebd5f8cc79f7c8f55e96ab/ports/fribidi
+    If these sources ever become unavailable, the maintainer will provide the
+    exact source and build configuration on request; open an issue.
+
+================================================================================
 tsMuxeR
 ================================================================================
 

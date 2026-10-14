@@ -1,0 +1,7 @@
+{
+  "name": "tsmuxer-libass-runtime",
+  "version-string": "1.0",
+  "description": "libass and the libraries it needs, shipped beside tsMuxeR.exe on Windows to draw ASS and SSA subtitles. tsMuxeR loads it at run time and is not linked against it.",
+  "builtin-baseline": "03e366fb91e38b9432ebd5f8cc79f7c8f55e96ab",
+  "dependencies": ["libass"]
+}

@@ -140,6 +140,22 @@ jobs:
         cmake --install $TT_BUILD
         if ($LASTEXITCODE -ne 0) { throw "qttools install failed" }
 
+    # ** LIBASS, FOR ASS AND SSA SUBTITLES. ** tsMuxeR.exe draws them with libass when ass-9.dll and the
+    # libraries it needs are beside it, and is not linked against them. They are built by vcpkg at the commit
+    # packaging/libass/vcpkg.json names, so every version is fixed; the licenses are in THIRD-PARTY-NOTICES.txt.
+    - name: Cache libass
+      id: cache-libass
+      uses: actions/cache@v6
+      with:
+        path: ${{ runner.temp }}\libass-dlls
+        key: libass-x86-windows-${{ hashFiles('packaging/libass/**') }}
+
+    - name: Build libass
+      if: steps.cache-libass.outputs.cache-hit != 'true'
+      run: |
+        & "$env:GITHUB_WORKSPACE\packaging\libass\build_libass.ps1" -Triplet x86-windows -Work "${{ runner.temp }}\libass-work" -Out "${{ runner.temp }}\libass-dlls"
+        if (-not $?) { throw "libass build failed" }
+
     - name: Build zlib (static, x86)
       run: |
         $ErrorActionPreference = "Stop"
@@ -176,6 +192,11 @@ jobs:
 
         if (!(Test-Path "../bin")) { mkdir "../bin" }
         Copy-Item -Path "tsMuxer/tsmuxer.exe" -Destination "../bin/tsMuxeR.exe" -Force
+        # libass beside tsMuxeR.exe, and the notices and license texts of everything the package holds: libass and
+        # its libraries, and Qt (LGPLv3) for the GUI.
+        Copy-Item "${{ runner.temp }}\libass-dlls\*.dll" "../bin/" -Force
+        Copy-Item "$env:GITHUB_WORKSPACE\THIRD-PARTY-NOTICES.txt" "../bin/" -Force
+        Copy-Item "$env:GITHUB_WORKSPACE\licenses" "../bin/licenses" -Recurse -Force
         if (Test-Path "tsMuxerGUI/tsmuxergui.exe") {
           Copy-Item -Path "tsMuxerGUI/tsmuxergui.exe" -Destination "../bin/tsMuxerGUI.exe" -Force
           # Qt is a shared build here, so gather the Windows 7 patched Qt DLLs and plugins next to the GUI.
@@ -207,9 +228,7 @@ jobs:
               Write-Host "qtbase_$($pair.Key).ts is not in qttranslations 6.8.3, skipping"
             }
           }
-          # LGPL compliance: ship the Qt (LGPLv3) license texts and notices next to the GUI.
-          Copy-Item "$env:GITHUB_WORKSPACE\THIRD-PARTY-NOTICES.txt" "../bin/" -Force
-          Copy-Item "$env:GITHUB_WORKSPACE\licenses" "../bin/licenses" -Recurse -Force
+          # LGPL compliance: the Qt (LGPLv3) license texts and notices were put beside the GUI above.
           # A QWidget app never loads the Direct3D shader compiler; drop it (large, Windows 10 oriented).
           Remove-Item "../bin/dxcompiler.dll","../bin/dxil.dll","../bin/vc_redist.x86.exe" -Force -ErrorAction SilentlyContinue
           # Bundle the actual VC++ runtime DLLs so the package is portable (no installer needed).
@@ -267,7 +286,7 @@ jobs:
           7z a -y "..\$asset" *
           Move-Item "..\$asset" ".\$asset" -Force
         } else {
-          7z a -y "$asset" tsMuxeR.exe
+          7z a -y "$asset" tsMuxeR.exe *.dll THIRD-PARTY-NOTICES.txt licenses
         }
 
     - name: Checksum the package
