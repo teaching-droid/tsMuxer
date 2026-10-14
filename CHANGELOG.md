@@ -66,6 +66,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **At its smallest size, every tab stays readable.** The track list keeps at least four rows, the buttons beside it are no longer squashed, and a tab that needs more room scrolls. Rows of the Subtitles and Blu-ray tabs were drawn over each other there.
 
+* **The German texts** write "Metadatei" one way throughout, and the reset button is now in German: "Metadatei neu erzeugen".
+
 * **New options:** "Draw ASS and SSA subtitles as plain text, without their styles" and "Fonts folder for ASS and SSA subtitles" on the Subtitles tab, "Also save drawn SRT subtitles as .srt files", and "Mark as HDR10 on a UHD disc" on an HEVC track.
 
 ### Other
