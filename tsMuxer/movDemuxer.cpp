@@ -1095,7 +1095,12 @@ void MovDemuxer::openFile(const std::string& streamName)
 
     m_processedBytes = 0;
     m_isEOF = false;
+    m_firstTfdt.clear();
+    m_firstCompositionOffset.clear();
+    m_videoMediaTime.clear();
     readHeaders();
+    if (found_moof)
+        fragmentStartDelays();
     if (m_mdat_pos && m_processedBytes != m_mdat_pos)
     {
         // Reading the header walked to the end of the file, because a moov atom usually sits
@@ -1542,6 +1547,8 @@ int MovDemuxer::ParseTableEntry(MOVAtom atom)
         return mov_read_default(atom);
     case MKTAG('c', 'h', 'a', 'p'):
         return mov_read_tref_chap(atom);
+    case MKTAG('t', 'f', 'd', 't'):
+        return mov_read_tfdt(atom);
     case MKTAG('c', 'o', 'l', 'r'):
     case MKTAG('m', 'd', 'c', 'v'):
     case MKTAG('c', 'l', 'l', 'i'):
@@ -1834,7 +1841,7 @@ int MovDemuxer::mov_read_trun(MOVAtom atom)
     const auto sc = reinterpret_cast<MOVStreamContext*>(st);
     if (sc->pseudo_stream_id + 1 != frag->stsd_id)
         return 0;
-    get_byte();  // version
+    const int version = get_byte();  // 1: the composition offsets are signed
     const unsigned flags = get_be24();
     const unsigned entries = get_be32();
     if (flags & 0x001)
@@ -1858,6 +1865,12 @@ int MovDemuxer::mov_read_trun(MOVAtom atom)
             sc->ctts_data.emplace_back();
             sc->ctts_data[sc->ctts_count].count = 1;
             sc->ctts_data[sc->ctts_count].duration = get_be32();
+            if (i == 0 && m_firstTfdt.find(frag->track_id) != m_firstTfdt.end() &&
+                m_firstCompositionOffset.find(frag->track_id) == m_firstCompositionOffset.end())
+                m_firstCompositionOffset[frag->track_id] =
+                    version == 0 ? static_cast<int64_t>(static_cast<uint32_t>(sc->ctts_data[sc->ctts_count].duration))
+                                 : static_cast<int64_t>(static_cast<int32_t>(
+                                       static_cast<uint32_t>(sc->ctts_data[sc->ctts_count].duration)));
             sc->ctts_count++;
         }
 
@@ -1923,6 +1936,53 @@ int MovDemuxer::mov_read_trak(MOVAtom atom)
         st->type = IOContextTrackType::DATA;
     }
     return result;
+}
+
+// tfdt: where the track fragment starts on its track's timeline, in the track's time scale. Only the first of each
+// track is kept: it is where the track starts.
+int MovDemuxer::mov_read_tfdt(MOVAtom atom)
+{
+    if (atom.size < 8)
+        return 0;
+    const int version = get_byte();
+    get_be24();  // flags
+    if (version == 1 && atom.size < 12)
+        return 0;
+    const int64_t baseMediaDecodeTime =
+        version == 1 ? static_cast<int64_t>(get_be64()) : static_cast<int64_t>(get_be32());
+    // A track whose samples begin in the moov (a file whose moov describes its first fragment) starts there, as an
+    // ordinary file does; its first tfdt is that of its second fragment.
+    if (fragment.track_id > 0 && fragment.track_id <= num_tracks &&
+        m_firstTfdt.find(fragment.track_id) == m_firstTfdt.end() &&
+        reinterpret_cast<MOVStreamContext*>(tracks[fragment.track_id - 1])->chunk_offsets.empty())
+        m_firstTfdt[fragment.track_id] = baseMediaDecodeTime;
+    return 0;
+}
+
+// The start of each track of a fragmented file, for the delays the listing gives (getTrackDelay). A fragmented file
+// says where each track starts in its tfdt boxes rather than in an edit list. They were not read, so a track that
+// starts later than the others (audio that begins half a second after the picture, as a recording cut from a live
+// stream has it) was muxed as starting with them, and its sound was early by that much. A track starts where its
+// first sample is shown: its first tfdt, plus the composition offset of that sample, less the start of a video edit
+// list (an audio edit list start is the priming, which is taken off on its own).
+void MovDemuxer::fragmentStartDelays()
+{
+    for (const auto& [track, tfdt] : m_firstTfdt)
+    {
+        if (track <= 0 || track > num_tracks)
+            continue;
+        const auto st = reinterpret_cast<MOVStreamContext*>(tracks[track - 1]);
+        if (st->time_scale == 0)
+            continue;
+        int64_t start = tfdt;
+        if (const auto ct = m_firstCompositionOffset.find(track); ct != m_firstCompositionOffset.end())
+            start += ct->second;
+        if (const auto mt = m_videoMediaTime.find(track); mt != m_videoMediaTime.end())
+            start -= mt->second;
+        m_firstTimecode[track] += start * 1000 / static_cast<int64_t>(st->time_scale);
+    }
+    m_firstTfdt.clear();
+    m_firstCompositionOffset.clear();
 }
 
 int MovDemuxer::mov_read_tfhd(MOVAtom atom)
@@ -2156,6 +2216,8 @@ int MovDemuxer::mov_read_moov(MOVAtom atom)
     // was not read, so the priming came out as sound at the start of the track.
     for (const auto& [track, mediaTime] : m_editMediaTime)
     {
+        if (track > 0 && track <= num_tracks && tracks[track - 1]->type == IOContextTrackType::VIDEO)
+            m_videoMediaTime[track] = mediaTime;
         if (track <= 0 || track > num_tracks || tracks[track - 1]->type != IOContextTrackType::AUDIO)
             continue;
         const auto st = reinterpret_cast<MOVStreamContext*>(tracks[track - 1]);

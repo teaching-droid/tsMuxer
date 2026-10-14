@@ -99,6 +99,13 @@ class MovDemuxer final : public IOContextDemuxer
     std::map<int32_t, int64_t> m_emptyEditUnits;  // leading empty edits per track, in movie units (mov_read_elst)
     std::map<int32_t, int64_t> m_editMediaTime;   // where a track's first edit starts in its media (mov_read_elst)
     std::map<int32_t, int64_t> m_codecDelayNs;    // an audio track's edit list start, as CodecDelay for Matroska
+    // A fragmented file: where each track's first fragment starts (tfdt) and the composition offset of its first
+    // sample, in the track's own time scale, and the edit list start of a video track (fragmentStartDelays)
+    std::map<int32_t, int64_t> m_firstTfdt;
+    std::map<int32_t, int64_t> m_firstCompositionOffset;
+    std::map<int32_t, int64_t> m_videoMediaTime;
+    int mov_read_tfdt(MOVAtom atom);
+    void fragmentStartDelays();
     // List<chunk offset, chunk size>
     std::vector<std::pair<int64_t, int64_t>> m_mdat_data;
     // The size of the chunk of a fragmented file at offset (from the first mdat at mdatPos) whose successor is at next.
