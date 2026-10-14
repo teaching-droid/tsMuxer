@@ -79,11 +79,19 @@ int ff_mov_lang_to_iso639(unsigned code, char* to)
     // see http://www.geocities.com/xhelmboyx/quicktime/formats/mp4-layout.txt
     if (code > 138)
     {
+        // Three letters of ISO 639-2/T, five bits each. QuickTime writes 0x7FFF for "not given", which made three DEL
+        // characters (0x7F): the listing printed them, and a Matroska output wrote them as the track's language. Only
+        // a to z make a language.
+        char letters[3];
         for (int i = 2; i >= 0; i--)
         {
-            to[i] = static_cast<char>(0x60 + (code & 0x1f));
+            letters[i] = static_cast<char>(0x60 + (code & 0x1f));
             code >>= 5;
         }
+        for (const char c : letters)
+            if (c < 'a' || c > 'z')
+                return 0;
+        memcpy(to, letters, 3);
         return 1;
     }
     // old fashion apple lang code
