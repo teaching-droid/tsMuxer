@@ -33,6 +33,7 @@ class MLPStreamReader : public SimplePacketizerReader, public MLPCodec
    protected:
     int m_demuxedTHDSamples;
     int64_t m_totalTHDSamples;
+    bool m_coreSaid = false;  // the AC-3 core left out was named once
 
    private:
 };

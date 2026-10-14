@@ -1,4 +1,7 @@
 #include "mlpStreamReader.h"
+
+#include <fs/systemlog.h>
+
 #include "nalUnits.h"
 #include "tsPacket.h"
 #include "vodCoreException.h"
@@ -42,6 +45,30 @@ const std::string MLPStreamReader::getStreamInfo()
     return str.str();
 }
 
+// The size of the AC-3 or E-AC-3 frame whose header starts at buf (ATSC A/52, 5.4.1 and E.1.2), or 0 when none does
+static int coreFrameSize(const uint8_t* buf)
+{
+    if (buf[0] != 0x0B || buf[1] != 0x77)
+        return 0;
+    const int bsid = buf[5] >> 3;
+    if (bsid > 10 && bsid <= 16)
+        return ((((buf[2] & 7) << 8) | buf[3]) + 1) * 2;  // E-AC-3: frmsiz, in 16-bit words less one
+    if (bsid > 8)
+        return 0;
+    const int fscod = buf[4] >> 6;
+    const int frmsizecod = buf[4] & 0x3F;
+    if (fscod == 3 || frmsizecod > 37)
+        return 0;
+    static constexpr int KBPS[19] = {32,  40,  48,  56,  64,  80,  96,  112, 128, 160,
+                                     192, 224, 256, 320, 384, 448, 512, 576, 640};
+    const int kbps = KBPS[frmsizecod >> 1];
+    if (fscod == 0)
+        return kbps * 4;  // 48 kHz: 1536 samples
+    if (fscod == 2)
+        return kbps * 6;                               // 32 kHz
+    return (kbps * 320 / 147 + (frmsizecod & 1)) * 2;  // 44.1 kHz, in 16-bit words, the odd codes one word longer
+}
+
 int MLPStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, int& skipBeforeBytes)
 {
     skipBytes = 0;
@@ -52,6 +79,30 @@ int MLPStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, in
     // so ask for more data instead and let the access unit be carried into the next block.
     if (end - buff < MLP_FULL_HEADER_LEN)
         return NOT_ENOUGH_BUFFER;
+    // A Blu-ray TrueHD track carries an AC-3 core: an AC-3 frame before every few access units (#804). Read as plain
+    // TrueHD (A_MLP), each core frame was taken for a broken access unit, the stream was searched for the next major
+    // sync, and the access units on the way were lost: 84 % of a measured track, under "Mux successful". The core
+    // frames are left out now, as drop-ac3-core leaves them out, and every access unit is kept. A frame counts as core
+    // only when the stream goes on after it with an access unit or another core frame.
+    int core = 0;
+    for (int n; (n = coreFrameSize(buff + core)) > 0;)
+    {
+        core += n;
+        if (end - (buff + core) < MLP_FULL_HEADER_LEN)
+            return NOT_ENOUGH_BUFFER;
+    }
+    if (core > 0 && MLPCodec::decodeFrame(buff + core, end))
+    {
+        if (!m_coreSaid)
+            LTRACE(LT_INFO, 2,
+                   getCodecInfo().displayName
+                       << " stream (track " << m_streamIndex
+                       << "): it holds an AC-3 core besides its TrueHD, as a Blu-ray TrueHD track does. A_MLP keeps "
+                          "the TrueHD only, which is what drop-ac3-core gives on an A_AC3 line; A_AC3 keeps both.");
+        m_coreSaid = true;
+        skipBeforeBytes = core;
+        return getFrameSize(buff + core);
+    }
     if (MLPCodec::decodeFrame(buff, end))
         return getFrameSize(buff);
     return 0;
