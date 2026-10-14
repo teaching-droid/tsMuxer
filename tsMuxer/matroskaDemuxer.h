@@ -4,6 +4,7 @@
 #include <map>
 #include <set>
 
+#include "assRender.h"
 #include "bufferedFileReader.h"
 #include "ioContextDemuxer.h"
 #include "matroskaParser.h"
@@ -100,6 +101,8 @@ class MatroskaDemuxer final : public IOContextDemuxer
     bool getCopySource(int pid, CopySource& out) const;
     // From now on, and in every later file of a join, hand the track on block for block (ParsedCopyTrackData).
     void setTrackCopy(int pid);
+    // From now on, and in every later file of a join, draw the ASS or SSA track with libass into PGS (AssDecoder).
+    void setAssDrawing(int pid, const ass_render::Drawing& drawing);
     bool getBlockAdditionInfo(int pid, uint64_t& maxId, std::vector<std::vector<uint8_t>>& mappings) const override;
     bool takeBlockAdditions(int pid, int64_t pts, std::vector<uint8_t>& out) override;
     void keepBlockAdditions(const int pid) override { m_keepAdditionPids.insert(pid); }
@@ -108,6 +111,7 @@ class MatroskaDemuxer final : public IOContextDemuxer
     typedef Track MatroskaTrack;
     // setTrackCopy's tracks, and every track's BlockAdditionMapping bodies, by the pid of getTrackList (index + 1).
     std::set<int> m_copyPids;
+    std::map<int, ass_render::Drawing> m_assPids;  // setAssDrawing's tracks
     std::map<int, std::vector<std::vector<uint8_t>>> m_addMappings;
     std::map<const Track*, std::vector<std::vector<uint8_t>>> m_addMappingsByTrack;  // while the header is read
     std::map<int, uint64_t> m_maxAddIds;                                             // MaxBlockAdditionID by pid
@@ -117,6 +121,7 @@ class MatroskaDemuxer final : public IOContextDemuxer
     std::map<int, std::map<int64_t, std::vector<uint8_t>>> m_blockAddLog;
     std::set<int> m_keepAdditionPids;  // keepBlockAdditions
     void applyTrackCopy();
+    void applyAssDrawing();
     typedef IOContextTrackType MatroskaTrackType;
 
     typedef struct MatroskaLevel

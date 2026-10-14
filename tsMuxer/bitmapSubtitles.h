@@ -55,7 +55,7 @@ class BitmapSubDecoder
     virtual ~BitmapSubDecoder() = default;
     // One block, at pts (internal clock), that lasts duration, or -1 when it does not say.
     virtual void decode(const uint8_t* data, int size, int64_t pts, int64_t duration, std::vector<uint8_t>& out) = 0;
-    void finish(std::vector<uint8_t>& out) { m_pgs.finish(out); }
+    virtual void finish(std::vector<uint8_t>& out) { m_pgs.finish(out); }
     // The frame rate was not known from a video track and was taken from the picture size.
     [[nodiscard]] bool rateGuessed() const { return m_rateGuessed; }
 

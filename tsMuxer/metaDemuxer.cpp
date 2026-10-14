@@ -757,8 +757,12 @@ std::vector<MPLSPlayItem> METADemuxer::mergePlayItems(const std::vector<MPLSPars
     return result;
 }
 
-int METADemuxer::addStream(const string& codec, const string& codecStreamName, const map<string, string>& addParams)
+static double parseFpsValue(const std::string& text);
+
+int METADemuxer::addStream(const string& codecName, const string& codecStreamName, const map<string, string>& addParams)
 {
+    // the reader's codec: the one asked for, or PGS for an ASS or SSA track drawn with libass
+    string codec = codecName;
     int32_t pid = 0;
     auto tmpitr = addParams.find("track");
     if (tmpitr != addParams.end())
@@ -991,6 +995,55 @@ int METADemuxer::addStream(const string& codec, const string& codecStreamName, c
                                                                     std::move(src.addMappings), src.maxBlockAddId);
                     copyReader->setTextFileOutput(!m_matroskaOutput);
                     codecReader = copyReader;
+                }
+            }
+        }
+    }
+    // ** ASS AND SSA ARE DRAWN WITH LIBASS. ** Drawn as SRT text, a track lost its styles, colours, positions and
+    // animations, and its own fonts. libass draws it as the script says, with the fonts attached to the file, and its
+    // pictures become PGS as DVD and DVB subtitles do. Without libass, or with ass-as-srt, it is drawn as before.
+    if (codecReader == nullptr && codec == "S_TEXT/UTF8" && pid > 0 && !addParams.count("keep-text") &&
+        !addParams.count("ass-as-srt") && !SubTrackFilter::isSubTrack(pid))
+    {
+        const std::string srcExt = strToUpperCase(extractFileExt(unquoteStr(trimStr(fileList[0]))));
+        if (srcExt == "MKV" || srcExt == "MKS" || srcExt == "MK3D")
+        {
+            MatroskaDemuxer probe(m_readManager);
+            probe.openFile(fileList[0]);
+            MatroskaDemuxer::CopySource src;
+            if (probe.getCopySource(pid, src) && (src.codecId == "S_TEXT/ASS" || src.codecId == "S_TEXT/SSA"))
+            {
+                ass_render::Drawing drawing;
+                if (const auto it = readerParams.find("video-width"); it != readerParams.end())
+                    drawing.width = strToInt32(it->second.c_str());
+                if (const auto it = readerParams.find("video-height"); it != readerParams.end())
+                    drawing.height = strToInt32(it->second.c_str());
+                if (const auto it = readerParams.find("fps"); it != readerParams.end())
+                    drawing.fps = parseFpsValue(it->second);
+                if (const auto it = readerParams.find("fonts-dir"); it != readerParams.end())
+                    drawing.fontsDir = unquoteStr(it->second);
+                std::string why;
+                if (drawing.width <= 0 || drawing.height <= 0 || drawing.fps <= 0)
+                    ;  // the SRT reader says what is missing
+                else if (!ass_render::available(&why))
+                    LTRACE(LT_WARN, 2,
+                           "Warning: track " << pid << " of " << unquoteStr(fileList[0]) << " is " << src.codecId
+                                             << " and is drawn as plain text, without its styles: " << why
+                                             << ". libass draws it as the script says (see the documentation).");
+                else
+                {
+                    if (const auto it = readerParams.find("save-srt"); it != readerParams.end())
+                    {
+                        drawing.saveSrt = unquoteStr(it->second);
+                        if (drawing.saveSrt.empty())
+                            THROW(ERR_COMMON,
+                                  "save-srt needs the name of the SRT file to write, as save-srt=\"name.srt\"")
+                    }
+                    LTRACE(LT_INFO, 2,
+                           "Track " << pid << " of " << unquoteStr(fileList[0]) << " is " << src.codecId
+                                    << ", and is drawn with libass.");
+                    codec = "S_HDMV/PGS";
+                    m_containerReader.m_assDrawing[{fileList[0], pid}] = drawing;
                 }
             }
         }
@@ -1433,6 +1486,7 @@ static bool isKnownTrackParam(const std::string& name)
         // text subtitles
         "font-name", "font-size", "font-color", "font-bold", "font-italic", "font-underline", "font-strike-out",
         "font-border", "font-charset", "line-spacing", "bottom-offset", "fadein-time", "fadeout-time", "keep-text",
+        "fonts-dir", "ass-as-srt",
         // set internally, never written by a user, but accepted so a round tripped meta does
         // not warn. srcdefault is the source container's own default track flag.
         "forced", "hearing-impaired", "visual-impaired", "text-descriptions", "original", "commentary", "srclang",
@@ -3488,6 +3542,9 @@ bool ContainerToReaderWrapper::openStream(int readerID, const char* streamName, 
     if (codecInfo && codecInfo->codecID == CODEC_S_MKVCOPY)
         if (auto* mkv = dynamic_cast<MatroskaDemuxer*>(demuxer))
             mkv->setTrackCopy(pid);
+    if (const auto ass = m_assDrawing.find({streamName, pid}); ass != m_assDrawing.end())
+        if (auto* mkv = dynamic_cast<MatroskaDemuxer*>(demuxer))
+            mkv->setAssDrawing(pid, ass->second);
 
     if (codecInfo && (codecInfo->codecID == CODEC_S_PGS || codecInfo->codecID == CODEC_S_SUP ||
                       codecInfo->codecID == CODEC_S_SRT || codecInfo->codecID == CODEC_S_MKVCOPY))

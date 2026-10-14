@@ -26,7 +26,7 @@ Some of the major features include:
 * Output/Author to compliant Blu-ray Disc or AVCHD
 * Matroska (MKV/MKA) output, with track names and flags, chapters and ordered editions, attachments and tags, and splitting by size, duration or chapters
 * WebM output, for VP8, VP9 and AV1 video, Opus and Vorbis audio, and text subtitles as WebVTT
-* Subtitles from Matroska in SRT, ASS, SSA, WebVTT, DVD (VobSub) and DVB form, kept in their own form in a Matroska output, or turned into PGS for a disc. DVB subtitles from a TS recording become PGS as well
+* Subtitles from Matroska in SRT, ASS, SSA, WebVTT, DVD (VobSub) and DVB form, kept in their own form in a Matroska output, or turned into PGS for a disc. ASS and SSA are drawn with libass, with their styles, positions and animations and the fonts attached to the file (the Windows packages include libass; on Linux and Mac it is the system's). DVB subtitles from a TS recording become PGS as well
 * A remux of a Matroska file into a Matroska file keeps the tags about each track, the data stored beside each frame (BlockAdditions, such as HDR10+ metadata), and every edition and chapter of a single file that is not played as an ordered edition
 * Blu-ray 3D support
 

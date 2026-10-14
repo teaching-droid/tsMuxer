@@ -9,6 +9,7 @@
 
 #include "abstractDemuxer.h"
 #include "abstractStreamReader.h"
+#include "assRender.h"
 #include "avPacket.h"
 #include "bufferedReaderManager.h"
 #include "streamDiscoveryData.h"
@@ -144,6 +145,8 @@ class ContainerToReaderWrapper final : public AbstractReader
     bool gotoByte(int readerID, int64_t seekDist) override { return false; }
     void terminate();
     std::map<std::string, DemuxerData> m_demuxers;
+    // ASS and SSA tracks drawn with libass, by file and pid: handed to the Matroska reader when the track is opened
+    std::map<std::pair<std::string, int>, ass_render::Drawing> m_assDrawing;
 
     /// Retrieve the track's codec-private blob via the underlying demuxer.
     /// @param readerID  The reader ID used when the stream was registered.

@@ -534,7 +534,7 @@ void ParsedAC3TrackData::extractData(AVPacket* pkt, uint8_t* buff, const int siz
 // in braces turn italic, bold and underline on and off, which SRT has as <i>, <b> and <u>; the others (position,
 // colour, karaoke and the like) are dropped, and so is the text of a drawing (\p1 up to \p0). \N and \n are line
 // breaks and \h a hard space.
-static std::string assToSrtText(const std::string& event)
+std::string assToSrtText(const std::string& event)
 {
     size_t start = 0;
     for (int comma = 0; comma < 8 && start != std::string::npos; ++comma)

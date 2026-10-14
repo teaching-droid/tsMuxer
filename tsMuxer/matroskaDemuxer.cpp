@@ -1750,8 +1750,10 @@ int MatroskaDemuxer::matroska_read_header()
             if (const auto it = m_maxAddIdsByTrack.find(tracks[i]); it != m_maxAddIdsByTrack.end())
                 m_maxAddIds[i + 1] = it->second;
         m_maxAddIdsByTrack.clear();
-        // A track to be copied stays copied in every later file of a join, whose header is read again
+        // A track to be copied stays copied in every later file of a join, whose header is read again, and so does a
+        // track drawn with libass
         applyTrackCopy();
+        applyAssDrawing();
         res = 0;
     }
 
@@ -1829,6 +1831,41 @@ void MatroskaDemuxer::applyTrackCopy()
             continue;
         delete track->parsed_priv_data;
         track->parsed_priv_data = new ParsedCopyTrackData();
+    }
+}
+
+void MatroskaDemuxer::setAssDrawing(const int pid, const ass_render::Drawing& drawing)
+{
+    m_assPids[pid] = drawing;
+    applyAssDrawing();
+}
+
+void MatroskaDemuxer::applyAssDrawing()
+{
+    if (m_assPids.empty())
+        return;
+    std::vector<ass_render::Font> fonts;
+    bool fontsRead = false;
+    for (const auto& [pid, drawing] : m_assPids)
+    {
+        if (pid < 1 || pid > num_tracks || tracks[pid - 1] == nullptr)
+            continue;
+        MatroskaTrack* track = tracks[pid - 1];
+        if (dynamic_cast<ParsedBitmapSubTrackData*>(track->parsed_priv_data))
+            continue;
+        // the fonts attached to the file, read once for all its ASS tracks
+        if (!fontsRead)
+        {
+            fonts = ass_render::fontsFromAttachments(getPassThroughAttachments());
+            fontsRead = true;
+            LTRACE(LT_INFO, 2,
+                   "ASS subtitles are drawn with libass, with " << fonts.size() << " font(s) attached to the file"
+                                                                << (drawing.fontsDir.empty() ? "" : ", the fonts in ")
+                                                                << drawing.fontsDir << " and the system's fonts.");
+        }
+        delete track->parsed_priv_data;
+        track->parsed_priv_data =
+            new ParsedBitmapSubTrackData(new AssDecoder(track->codec_priv, track->codec_priv_size, drawing, fonts));
     }
 }
 

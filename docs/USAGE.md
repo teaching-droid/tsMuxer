@@ -258,8 +258,22 @@ fadeout-time      | Time in seconds for smooth subtitle disappearance, for examp
 line-spacing      | Interval between subtitle lines. Default value is 1.0.
 keep-text         | Keep the subtitles as text instead of drawing them into pictures. Each subtitle is copied into the track as text, with its tags and its own start and end, and the font and picture parameters are not needed. For Matroska output, and for a demux, which then writes an SRT file (UTF-8, numbered from 1); ASS, SSA and WebVTT subtitles from a Matroska file are written as .ass, .ssa and .vtt files instead, in their own form. Other outputs draw the subtitles as usual, with a warning, which needs `video-width`, `video-height` and `fps`.
 save-srt          | `save-srt="name.srt"`: while the subtitles are drawn into pictures, also write them as text to that SRT file (UTF-8, numbered from 1), as a demux with `keep-text` would write them. Ignored, with a warning, on a line with `keep-text`. In the window: "Also save drawn SRT subtitles as .srt files" on the Subtitles tab.
+fonts-dir         | `fonts-dir="folder"`: a folder of fonts that ASS and SSA subtitles drawn with libass may use, besides the fonts attached to the file and the fonts installed in the system (see below). In the window: "Fonts folder for ASS and SSA subtitles" on the Subtitles tab.
+ass-as-srt        | Draw ASS and SSA subtitles as plain text with the font parameters above, as SRT subtitles are drawn, instead of with libass. In the window: "Draw ASS and SSA subtitles as plain text, without their styles" on the Subtitles tab.
 
 On Linux and Mac, a font can be named either by its family name or by the full path to the file. Named by family, tsMuxeR searches `/usr/share/fonts/`, `/usr/local/share/fonts/`, `~/.fonts` and `~/.local/share/fonts` on Linux, and `/Library/Fonts/` and `~/Library/Fonts` on Mac, and it accepts `.ttf`, `.otf` and `.ttc`. Note that the search is case sensitive on the extension, so a file copied from Windows as `Arial.TTF` is found only by its full path.
+
+#### ASS and SSA subtitles drawn with libass
+
+ASS and SSA subtitles from a Matroska file are listed as `S_TEXT/UTF8`. Whenever they are drawn into pictures, that is unless `keep-text` keeps them as text in a Matroska output or a demux, tsMuxeR draws them with [libass](https://github.com/libass/libass), as their script says: with their styles, colours, positions, rotations, fades, moves and karaoke, at the picture size given by `video-width` and `video-height`, and frame by frame at `fps` wherever the picture changes. The pictures become a PGS track, as DVD and DVB subtitles do. libass uses the fonts attached to the Matroska file, the fonts in the script's own `[Fonts]` section, the fonts in `fonts-dir`, and the fonts installed in the system. `save-srt` writes the text of every subtitle as well, without its styles.
+
+libass is not built into tsMuxeR. It is loaded when such a track is drawn:
+
+* Windows: the packages hold `ass-9.dll` and the libraries it needs beside `tsMuxeR.exe`. Their licenses are in `THIRD-PARTY-NOTICES.txt` and the `licenses` folder.
+* Linux: the distribution's libass package (`libass9` on Debian and Ubuntu, `libass` on Fedora and Arch).
+* Mac: libass from Homebrew (`brew install libass`).
+
+Without libass, or with `ass-as-srt`, the subtitles are drawn as plain text with the font parameters above, without their styles, and tsMuxeR says so in a warning when libass is missing.
 
 tsMuxeR supports additional tags inside SRT tracks.  The syntax  and parameters coincide with HTML: `<b>, <i>, <u>, <strike>, <font>`. Default relative font size (used in these tags) is 3.  For example:
 ```
