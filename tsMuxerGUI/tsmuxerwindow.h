@@ -104,6 +104,8 @@ class TsMuxerWindow : public QWidget
     void startMuxing();
     void saveMetaFileBtnClick();
     void onResetMetaBtnClick();
+    void updateMetaState();
+    QString buildMetaText();
     void openMetaFileBtnClick();
     void onMetaTextChanged();
     void continueAppendFile();
@@ -261,6 +263,7 @@ class TsMuxerWindow : public QWidget
     bool m_customChaptersUserOverride;
     /// When true, meta file was edited by the user; do not auto-regenerate.
     bool m_metaUserOverride;
+    QString m_lastBuiltMeta;  // the meta file last built from the settings
     QnCheckBoxedHeaderView* m_header;
     QString lastSourceDir;
 

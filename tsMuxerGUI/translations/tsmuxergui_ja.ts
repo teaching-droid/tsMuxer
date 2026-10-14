@@ -4398,6 +4398,30 @@ Build the ISO anyway?</source>
         <source>Fonts folder for ASS and SSA subtitles</source>
         <translation>ASS・SSA字幕用のフォントフォルダー</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="3122"/>
+        <source>Build the meta file from the settings</source>
+        <translation>設定からメタファイルを作成する</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="3119"/>
+        <source>Ticked, the meta file below is built from the settings of the tabs, and every change there goes into it. Editing the text by hand, or opening a meta file, unticks it: the text is then muxed as it stands, and changes in the tabs are not applied. Tick it again to build the meta file from the settings once more; the text edited by hand is replaced.</source>
+        <translation>チェックすると、下のメタファイルは各タブの設定から作成され、そこでの変更はすべて反映されます。テキストを手で編集するか、メタファイルを開くとチェックが外れます。このときテキストはそのまま多重化され、タブでの変更は反映されません。もう一度チェックすると、設定からメタファイルを作り直します。手で編集したテキストは置き換えられます。</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="3132"/>
+        <source>This change is not in the meta file, because the meta file was edited by hand. Tick the box above to build it from the settings again.</source>
+        <translation>メタファイルが手で編集されているため、この変更はメタファイルに反映されていません。上のチェックボックスをオンにすると、設定から作り直します。</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="6020"/>
+        <source>Meta file (edited by hand: changes in the tabs are not applied)</source>
+        <translation>メタファイル(手で編集済み: タブでの変更は反映されません)</translation>
+    </message>
+    <message>
+        <source>Load a meta file and mux from it as it stands. The text appears in the Meta file box below, and that box is what is handed to the muxer, so anything in the file is used exactly as written. The track list is not filled in from it and will not match: tick Build the meta file from the settings to go back to building the meta from the list.</source>
+        <translation>meta ファイルを読み込み、その内容のまま多重化します。テキストは下の meta ファイル欄に表示され、多重化に渡されるのはこの欄の内容なので、ファイルに書かれていることがそのまま使われます。トラック一覧はこのファイルからは作られないため一致しません。一覧から meta を作り直すには「設定からメタファイルを作成する」をチェックしてください。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

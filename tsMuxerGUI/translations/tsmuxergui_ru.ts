@@ -4399,6 +4399,30 @@ Build the ISO anyway?</source>
         <source>Fonts folder for ASS and SSA subtitles</source>
         <translation>Папка шрифтов для субтитров ASS и SSA</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="3122"/>
+        <source>Build the meta file from the settings</source>
+        <translation>Собирать meta-файл из настроек</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="3119"/>
+        <source>Ticked, the meta file below is built from the settings of the tabs, and every change there goes into it. Editing the text by hand, or opening a meta file, unticks it: the text is then muxed as it stands, and changes in the tabs are not applied. Tick it again to build the meta file from the settings once more; the text edited by hand is replaced.</source>
+        <translation>Когда флажок установлен, meta-файл ниже собирается из настроек вкладок, и каждое изменение там попадает в него. Правка текста вручную или открытие meta-файла снимает флажок: текст тогда мультиплексируется как есть, а изменения на вкладках не применяются. Установите флажок снова, чтобы снова собрать meta-файл из настроек; текст, исправленный вручную, будет заменён.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="3132"/>
+        <source>This change is not in the meta file, because the meta file was edited by hand. Tick the box above to build it from the settings again.</source>
+        <translation>Это изменение не попало в meta-файл, потому что meta-файл был изменён вручную. Установите флажок выше, чтобы снова собрать его из настроек.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="6020"/>
+        <source>Meta file (edited by hand: changes in the tabs are not applied)</source>
+        <translation>Meta-файл (изменён вручную: изменения на вкладках не применяются)</translation>
+    </message>
+    <message>
+        <source>Load a meta file and mux from it as it stands. The text appears in the Meta file box below, and that box is what is handed to the muxer, so anything in the file is used exactly as written. The track list is not filled in from it and will not match: tick Build the meta file from the settings to go back to building the meta from the list.</source>
+        <translation>Загружает meta-файл и мультиплексирует по нему как есть. Текст появляется в поле meta-файла ниже, и именно это поле передаётся мультиплексору, поэтому всё, что есть в файле, используется ровно так, как записано. Список дорожек из него не заполняется и не будет ему соответствовать: чтобы вернуться к meta, собираемому из списка, установите флажок Собирать meta-файл из настроек.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

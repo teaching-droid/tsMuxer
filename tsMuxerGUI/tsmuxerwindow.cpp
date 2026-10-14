@@ -930,7 +930,17 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->buttonMux, &QAbstractButton::clicked, this, &TsMuxerWindow::startMuxing);
     connect(ui->buttonSaveMeta, &QAbstractButton::clicked, this, &TsMuxerWindow::saveMetaFileBtnClick);
     connect(ui->buttonOpenMeta, &QAbstractButton::clicked, this, &TsMuxerWindow::openMetaFileBtnClick);
-    connect(ui->buttonResetMeta, &QAbstractButton::clicked, this, &TsMuxerWindow::onResetMetaBtnClick);
+    connect(ui->metaAutoCheckBox, &QAbstractButton::clicked, this,
+            [this](const bool on)
+            {
+                if (on)
+                    onResetMetaBtnClick();
+                else
+                {
+                    m_metaUserOverride = true;
+                    updateMetaState();
+                }
+            });
     connect(ui->memoMeta, &QPlainTextEdit::textChanged, this, &TsMuxerWindow::onMetaTextChanged);
     connect(ui->radioButtonOutoutInInput, &QAbstractButton::clicked, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->defaultAudioTrackComboBox, comboBoxIndexChanged, this, &TsMuxerWindow::updateMetaLines);
@@ -1010,8 +1020,8 @@ TsMuxerWindow::TsMuxerWindow()
         wrapTip(tr("Load a meta file and mux from it as it stands. The text appears in the Meta "
                    "file box below, and that box is what is handed to the muxer, so anything in "
                    "the file is used exactly as written. The track list is not filled in from it "
-                   "and will not match: use Reset meta to auto-generated to go back to building "
-                   "the meta from the list.")));
+                   "and will not match: tick Build the meta file from the settings to go back to "
+                   "building the meta from the list.")));
     ui->removeAllTracksBtn->setToolTip(
         wrapTip(tr("Empty the list: every input file and every track goes, and the output name "
                    "and the track settings go back to what they are for a fresh start. Removing "
@@ -1906,12 +1916,11 @@ TsMuxerWindow::TsMuxerWindow()
         auto updateBottomForTab = [this, bdmvTab]()
         {
             const bool onBdmv = ui->tabWidget->currentWidget() == bdmvTab;
-            ui->groupBox_4->setVisible(!onBdmv);       // Output (type radios + File name)
-            ui->groupBox_2->setVisible(!onBdmv);       // Meta file
-            ui->buttonMux->setVisible(!onBdmv);        // Start muxing
-            ui->buttonSaveMeta->setVisible(!onBdmv);   // Save meta file
-            ui->buttonOpenMeta->setVisible(!onBdmv);   // Open meta file
-            ui->buttonResetMeta->setVisible(!onBdmv);  // Reset meta to auto-generated
+            ui->groupBox_4->setVisible(!onBdmv);      // Output (type radios + File name)
+            ui->groupBox_2->setVisible(!onBdmv);      // Meta file
+            ui->buttonMux->setVisible(!onBdmv);       // Start muxing
+            ui->buttonSaveMeta->setVisible(!onBdmv);  // Save meta file
+            ui->buttonOpenMeta->setVisible(!onBdmv);  // Open meta file
         };
         connect(ui->tabWidget, &QTabWidget::currentChanged, this, [updateBottomForTab](int) { updateBottomForTab(); });
         updateBottomForTab();
@@ -2307,15 +2316,14 @@ TsMuxerWindow::TsMuxerWindow()
         pageLayout->addWidget(area);
     }
 
-    // "Reset meta to auto-generated" was cut off at the smallest width, its room fixed at less than its text needs. It
-    // keeps room for its text now, in every language, up to its largest width.
-    const auto fitResetMeta = [this]
-    {
-        ui->buttonResetMeta->setMinimumWidth(
-            (std::min)(ui->buttonResetMeta->sizeHint().width(), ui->buttonResetMeta->maximumWidth()));
-    };
-    fitResetMeta();
-    m_retranslateHooks.push_back(fitResetMeta);
+    // ** WHETHER THE META FILE FOLLOWS THE SETTINGS IS SHOWN. ** Text typed into the Meta file box, even by accident,
+    // or a meta file opened, stopped the window from rebuilding the meta, and nothing said so: a setting changed in a
+    // tab went nowhere, and the mux ran without it, until "Reset meta to auto-generated" was found and clicked. The box
+    // above the text says now whether the meta file is built from the settings, the box's title says when it is not,
+    // a line says so when a change in a tab is not applied, and ticking the box again builds it once more.
+    ui->metaHintLabel->setStyleSheet(QStringLiteral("color: #c0392b;"));
+    updateMetaState();
+    m_retranslateHooks.push_back([this] { updateMetaState(); });
 
     // Settle everything that follows from the output once at start up as well, as a click on it does.
     // RadioButtonMuxClick does it on every later change, but the remembered output is restored by
@@ -4774,10 +4782,24 @@ void TsMuxerWindow::updateMetaLines()
         return;
 
     if (m_metaUserOverride)
+    {
+        // The meta file edited by hand does not take the settings of the tabs: the line says so while they would give
+        // another meta file than the one built before the edit, and not for a click that changes nothing
+        if (m_wasShown)
+            ui->metaHintLabel->setVisible(buildMetaText() != m_lastBuiltMeta);
         return;
+    }
 
+    const QString metaContent = buildMetaText();
+    m_lastBuiltMeta = metaContent;
     bool wasBlocked = ui->memoMeta->blockSignals(true);
-    ui->memoMeta->clear();
+    ui->memoMeta->setPlainText(metaContent);
+    ui->memoMeta->blockSignals(wasBlocked);
+}
+
+// The meta file the settings of the tabs give
+QString TsMuxerWindow::buildMetaText()
+{
     QString metaContent;
     metaContent.append(getMuxOpts() + '\n');
     QString tmpFps;
@@ -4916,8 +4938,7 @@ void TsMuxerWindow::updateMetaLines()
             metaContent.append(prefix + getAudioMetaInfo(codecInfo) + postfix + '\n');
         }
     }
-    ui->memoMeta->setPlainText(metaContent);
-    ui->memoMeta->blockSignals(wasBlocked);
+    return metaContent;
 }
 
 void TsMuxerWindow::onFontBtnClicked()
@@ -5981,12 +6002,33 @@ bool TsMuxerWindow::saveMetaFile(const QString& metaName)
     return true;
 }
 
-void TsMuxerWindow::onMetaTextChanged() { m_metaUserOverride = true; }
+void TsMuxerWindow::onMetaTextChanged()
+{
+    if (m_metaUserOverride)
+        return;
+    m_metaUserOverride = true;
+    updateMetaState();
+}
 
+// The meta file built from the settings again: what was edited by hand is replaced
 void TsMuxerWindow::onResetMetaBtnClick()
 {
     m_metaUserOverride = false;
     updateMetaLines();
+    updateMetaState();
+}
+
+// The box above the meta file, the title of its group and the line about changes not applied, as the meta file stands
+void TsMuxerWindow::updateMetaState()
+{
+    {
+        const QSignalBlocker block(ui->metaAutoCheckBox);
+        ui->metaAutoCheckBox->setChecked(!m_metaUserOverride);
+    }
+    ui->groupBox_2->setTitle(m_metaUserOverride ? tr("Meta file (edited by hand: changes in the tabs are not applied)")
+                                                : tr("Meta file"));
+    if (!m_metaUserOverride)
+        ui->metaHintLabel->setVisible(false);
 }
 
 void TsMuxerWindow::closeEvent(QCloseEvent* event)

@@ -3114,6 +3114,29 @@ p, li { white-space: pre-wrap; }
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_6">
           <item>
+           <widget class="QCheckBox" name="metaAutoCheckBox">
+            <property name="toolTip">
+             <string>Ticked, the meta file below is built from the settings of the tabs, and every change there goes into it. Editing the text by hand, or opening a meta file, unticks it: the text is then muxed as it stands, and changes in the tabs are not applied. Tick it again to build the meta file from the settings once more; the text edited by hand is replaced.</string>
+            </property>
+            <property name="text">
+             <string>Build the meta file from the settings</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="metaHintLabel">
+            <property name="text">
+             <string>This change is not in the meta file, because the meta file was edited by hand. Tick the box above to build it from the settings again.</string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QPlainTextEdit" name="memoMeta">
             <property name="undoRedoEnabled">
              <bool>true</bool>
@@ -3227,31 +3250,6 @@ p, li { white-space: pre-wrap; }
        </property>
        <property name="text">
         <string>Open meta file</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="buttonResetMeta">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>128</width>
-         <height>0</height>
-        </size>
-       </property>
-       <property name="maximumSize">
-        <size>
-         <width>256</width>
-         <height>16777215</height>
-        </size>
-       </property>
-       <property name="text">
-        <string>Reset meta to auto-generated</string>
        </property>
       </widget>
      </item>
@@ -3382,7 +3380,6 @@ p, li { white-space: pre-wrap; }
   <tabstop>buttonMux</tabstop>
   <tabstop>buttonSaveMeta</tabstop>
   <tabstop>buttonOpenMeta</tabstop>
-  <tabstop>buttonResetMeta</tabstop>
   <tabstop>radioButton_6</tabstop>
   <tabstop>radioButton_4</tabstop>
   <tabstop>radioButton_5</tabstop>

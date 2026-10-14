@@ -4398,6 +4398,30 @@ Build the ISO anyway?</source>
         <source>Fonts folder for ASS and SSA subtitles</source>
         <translation>ASS和SSA字幕的字体文件夹</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="3122"/>
+        <source>Build the meta file from the settings</source>
+        <translation>根据设置生成 meta 文件</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="3119"/>
+        <source>Ticked, the meta file below is built from the settings of the tabs, and every change there goes into it. Editing the text by hand, or opening a meta file, unticks it: the text is then muxed as it stands, and changes in the tabs are not applied. Tick it again to build the meta file from the settings once more; the text edited by hand is replaced.</source>
+        <translation>勾选时，下方的 meta 文件根据各标签页的设置生成，那里的每个更改都会写入其中。手动编辑文本或打开 meta 文件会取消勾选：此时文本按原样混流，标签页中的更改不会生效。再次勾选即可重新根据设置生成 meta 文件；手动编辑的文本将被替换。</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="3132"/>
+        <source>This change is not in the meta file, because the meta file was edited by hand. Tick the box above to build it from the settings again.</source>
+        <translation>此更改不在 meta 文件中，因为 meta 文件已被手动编辑。勾选上方的复选框即可重新根据设置生成。</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="6020"/>
+        <source>Meta file (edited by hand: changes in the tabs are not applied)</source>
+        <translation>meta 文件（已手动编辑：标签页中的更改不会生效）</translation>
+    </message>
+    <message>
+        <source>Load a meta file and mux from it as it stands. The text appears in the Meta file box below, and that box is what is handed to the muxer, so anything in the file is used exactly as written. The track list is not filled in from it and will not match: tick Build the meta file from the settings to go back to building the meta from the list.</source>
+        <translation>载入一个 meta 文件并按其原样进行混流。文本会显示在下方的 meta 文件框中，交给混流器的正是这个框，因此文件中的内容会被原样使用。轨道列表不会据此填充，也不会与之相符：勾选"根据设置生成 meta 文件"即可回到由列表生成 meta。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

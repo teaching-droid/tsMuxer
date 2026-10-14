@@ -4398,6 +4398,30 @@ Créer l'ISO malgré tout ?</translation>
         <source>Fonts folder for ASS and SSA subtitles</source>
         <translation>Dossier de polices pour les sous-titres ASS et SSA</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="3122"/>
+        <source>Build the meta file from the settings</source>
+        <translation>Construire le fichier meta à partir des réglages</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="3119"/>
+        <source>Ticked, the meta file below is built from the settings of the tabs, and every change there goes into it. Editing the text by hand, or opening a meta file, unticks it: the text is then muxed as it stands, and changes in the tabs are not applied. Tick it again to build the meta file from the settings once more; the text edited by hand is replaced.</source>
+        <translation>Cochée, le fichier meta ci-dessous est construit à partir des réglages des onglets, et chaque changement y entre. Modifier le texte à la main, ou ouvrir un fichier meta, la décoche : le texte est alors multiplexé tel quel, et les changements dans les onglets ne sont pas appliqués. Cochez-la de nouveau pour construire à nouveau le fichier meta à partir des réglages ; le texte modifié à la main est remplacé.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="3132"/>
+        <source>This change is not in the meta file, because the meta file was edited by hand. Tick the box above to build it from the settings again.</source>
+        <translation>Ce changement n'est pas dans le fichier meta, car le fichier meta a été modifié à la main. Cochez la case ci-dessus pour le construire de nouveau à partir des réglages.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="6020"/>
+        <source>Meta file (edited by hand: changes in the tabs are not applied)</source>
+        <translation>Fichier meta (modifié à la main : les changements dans les onglets ne sont pas appliqués)</translation>
+    </message>
+    <message>
+        <source>Load a meta file and mux from it as it stands. The text appears in the Meta file box below, and that box is what is handed to the muxer, so anything in the file is used exactly as written. The track list is not filled in from it and will not match: tick Build the meta file from the settings to go back to building the meta from the list.</source>
+        <translation>Charge un fichier meta et multiplexe à partir de lui tel quel. Le texte apparaît dans le cadre Fichier meta ci-dessous, et c'est ce cadre qui est remis au multiplexeur : tout ce que contient le fichier est donc utilisé exactement tel qu'il est écrit. La liste des pistes n'est pas remplie à partir de lui et ne correspondra pas : cochez Construire le fichier meta à partir des réglages pour revenir à un meta construit depuis la liste.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
