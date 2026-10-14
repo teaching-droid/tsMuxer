@@ -136,6 +136,7 @@ struct MOVStreamContext : Track
     int containerDataType = 0;  // TRACKTYPE_VP8 etc. for the codecs nothing in their data identifies (getTrackList)
     uint32_t trackId = 0;       // tkhd track_ID
     std::string name;           // the track's name, from its hdlr, when it is not an encoder's generic one
+    bool hasEditList = false;   // an elst was read for the track
     std::map<std::string, std::string> colour;  // srccolour items (m, t, p, r, cll, fall, rx ... lmin) of the entry
     uint32_t paspH = 0, paspV = 0;              // pasp: the shape of a pixel
     bool pcmBigEndian = false;                  // an LPCM sample entry: the byte order of its samples
@@ -2225,6 +2226,19 @@ int MovDemuxer::mov_read_moov(MOVAtom atom)
             m_codecDelayNs[track] = mediaTime * 1000000000LL / st->time_scale;
     }
     m_editMediaTime.clear();
+    // A track with no edit list is shown from the composition time of its first sample (ISO/IEC 14496-12, 8.6.6): a
+    // video track whose pictures are reordered starts that much after a track that has no reordering. That was not
+    // counted, so the sound of such a file, 80 to 120 ms in the files measured, came early. A track whose edit list
+    // starts it is timed by that list, as before; a fragmented track's samples are timed in fragmentStartDelays.
+    for (int i = 0; i < num_tracks; ++i)
+    {
+        const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
+        if (st->hasEditList || st->ctts_data.empty() || st->time_scale == 0 || st->chunk_offsets.empty())
+            continue;
+        const auto first = static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(st->ctts_data[0].duration)));
+        if (first != 0)
+            m_firstTimecode[i + 1] += first * 1000 / static_cast<int64_t>(st->time_scale);
+    }
     return 0;
 }
 
@@ -3138,6 +3152,8 @@ if (st->codec->codec_id == CODEC_ID_QDM2) {
 // header may come after the tracks, which the format allows, and in a join the next file's header was not read yet.
 int MovDemuxer::mov_read_elst(MOVAtom atom)
 {
+    if (num_tracks > 0)
+        reinterpret_cast<MOVStreamContext*>(tracks[num_tracks - 1])->hasEditList = true;
     const int version = get_byte();
     get_be24();                              // flags
     const unsigned edit_count = get_be32();  // entries
