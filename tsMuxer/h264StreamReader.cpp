@@ -1,6 +1,7 @@
 #include "h264StreamReader.h"
 
 #include <fs/systemlog.h>
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -1528,12 +1529,28 @@ int H264StreamReader::processSPS(uint8_t* buff)
             return NOT_ENOUGH_BUFFER;
         const int seq_parameter_set_id = static_cast<int>(NALUnit::extractUEGolombCode(buff + 4, m_bufEnd));
         if (updatedSPSList.find(seq_parameter_set_id) != updatedSPSList.end())
-            return 0;  // already processed
+        {
+            // The same SPS again is passed over: ours is written in its place. One with the same id and other
+            // content, from a part of the stream encoded again, as a cutting tool does with the start of a file, was
+            // passed over as well, and every picture after it was decoded with the first one's settings: the picture
+            // broke up from there on (#813). It is read now, and ours follows it.
+            const uint8_t* end = NALUnit::findNALWithStartCode(buff, m_bufEnd, true);
+            const auto known = m_spsSource.find(seq_parameter_set_id);
+            if (known != m_spsSource.end() && known->second.size() == static_cast<size_t>(end - buff) &&
+                std::equal(known->second.begin(), known->second.end(), buff))
+                return 0;
+            if (!m_spsChangeSaid)
+                LTRACE(LT_INFO, 2,
+                       "H264 stream (track " << m_streamIndex
+                                             << "): its SPS changes within the stream; the SPS written follows it.");
+            m_spsChangeSaid = true;
+        }
     }
 
     auto* sps = new SPSUnit();
     uint8_t* nextNal = NALUnit::findNALWithStartCode(buff, m_bufEnd, true);
     const int oldSpsLen = static_cast<int>(nextNal - buff);
+    std::vector<uint8_t> source(buff, nextNal);  // as it came, before the frame rate and HRD are written into it
     sps->decodeBuffer(buff, nextNal);
     const int nalRez = sps->deserialize();
     // A damaged SPS asked for more data for ever, and the job ended with "Not enough buffer" after the pictures before
@@ -1601,6 +1618,7 @@ int H264StreamReader::processSPS(uint8_t* buff)
 
     delete m_spsMap[sps->seq_parameter_set_id];
     m_spsMap[sps->seq_parameter_set_id] = sps;
+    m_spsSource[sps->seq_parameter_set_id] = std::move(source);
 
     double sarAR = 1.0;
     m_sampleAR = 0;

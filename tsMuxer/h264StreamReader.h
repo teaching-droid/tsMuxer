@@ -3,6 +3,7 @@
 
 #include <map>
 #include <set>
+#include <vector>
 
 #include "avPacket.h"
 #include "mpegStreamReader.h"
@@ -115,6 +116,9 @@ class H264StreamReader final : public MPEGStreamReader
     std::map<uint32_t, SPSUnit*> m_spsMap;
     std::map<uint32_t, PPSUnit*> m_ppsMap;
     std::set<uint32_t> updatedSPSList;
+    // Each SPS as it came in the stream, by its id: a later one with the same id and other content is read again
+    std::map<uint32_t, std::vector<uint8_t>> m_spsSource;
+    bool m_spsChangeSaid = false;
     std::vector<uint8_t> m_lastSeiMvcHeader;
     // The SPS of the last IDR, as stored in m_spsMap. An IDR with a different one begins a new stream,
     // and processSliceNal decides the picture order count step again there.
