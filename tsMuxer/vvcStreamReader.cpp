@@ -305,7 +305,7 @@ void VVCStreamReader::updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* nex
     if (m_bufEnd && newSpsLen != oldNalSize)
     {
         m_vpsSizeDiff = newSpsLen - oldNalSize;
-        if (m_bufEnd + m_vpsSizeDiff > m_tmpBuffer + TMP_BUFFER_SIZE)
+        if (m_bufEnd + m_vpsSizeDiff > m_tmpBuffer + m_tmpBufferSize)
             THROW(ERR_COMMON, "Not enough buffer")
         memmove(nextNal + m_vpsSizeDiff, nextNal, m_bufEnd - nextNal);
         m_bufEnd += m_vpsSizeDiff;

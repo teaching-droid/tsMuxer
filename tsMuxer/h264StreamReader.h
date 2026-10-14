@@ -70,6 +70,7 @@ class H264StreamReader final : public MPEGStreamReader
 
     bool isPriorityData(AVPacket* packet) override;
     void onShiftBuffer(int offset) override;
+    void onMoveBuffer(std::ptrdiff_t delta) override;
     bool skipNal(uint8_t* nal) override;
 
    private:

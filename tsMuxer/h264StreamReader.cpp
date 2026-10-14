@@ -513,7 +513,7 @@ void H264StreamReader::updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* ne
     if (newSpsLen != oldSpsLen)
     {
         const int sizeDiff = newSpsLen - oldSpsLen;
-        if (m_bufEnd + sizeDiff > m_tmpBuffer + TMP_BUFFER_SIZE)
+        if (m_bufEnd + sizeDiff > m_tmpBuffer + m_tmpBufferSize)
             THROW(ERR_COMMON, "Not enough buffer")
         memmove(nextNal + sizeDiff, nextNal, m_bufEnd - nextNal);
         m_bufEnd += sizeDiff;
@@ -1081,7 +1081,7 @@ int H264StreamReader::processSEI(uint8_t* buff)
             int sizeDiff = newSize - oldSize;
             if (sizeDiff != 0)
             {
-                if (m_bufEnd + sizeDiff > m_tmpBuffer + TMP_BUFFER_SIZE)
+                if (m_bufEnd + sizeDiff > m_tmpBuffer + m_tmpBufferSize)
                     THROW(ERR_COMMON, "Not enough buffer")
                 memmove(nextNal + sizeDiff, nextNal, m_bufEnd - nextNal);
                 m_bufEnd += sizeDiff;
@@ -1652,6 +1652,14 @@ unsigned H264StreamReader::getStreamHeight() const
 bool H264StreamReader::getInterlaced()
 {
     return !m_spsMap.empty() ? !m_spsMap.begin()->second->frame_mbs_only_flag : true;
+}
+
+void H264StreamReader::onMoveBuffer(const std::ptrdiff_t delta)
+{
+    if (m_priorityNalAddr)
+        m_priorityNalAddr += delta;
+    if (m_OffsetMetadataPtsAddr)
+        m_OffsetMetadataPtsAddr += delta;
 }
 
 void H264StreamReader::onShiftBuffer(const int offset)

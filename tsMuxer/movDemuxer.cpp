@@ -296,7 +296,10 @@ class MovParsedH264TrackData : public ParsedTrackPrivData
    public:
     // The largest NAL this reader will believe. newBufferSize measures the buffer and extractData
     // fills it, so both have to stop at the same value or one writes more than the other reserved.
-    static constexpr uint32_t MAX_NAL_SIZE = 10 * 1024 * 1024;
+    // It was 10 MiB, which dropped every picture larger than that, as an 8K picture coded without loss (42 MiB) is.
+    // It is now the limit of the video readers (MAX_TMP_BUFFER_SIZE); a NAL also has to fit in its chunk, which is
+    // what keeps a damaged length from reading past the data.
+    static constexpr uint32_t MAX_NAL_SIZE = 256 * 1024 * 1024;
 
     MovParsedH264TrackData(MovDemuxer* demuxer, MOVStreamContext* sc) : m_sc(sc), m_demuxer(demuxer), nal_length_size(4)
     {

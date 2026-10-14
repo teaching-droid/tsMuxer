@@ -112,7 +112,7 @@ int HEVCStreamReader::repeatHdrSeiAtIrap(uint8_t* slicePos)
     uint8_t* at = slicePos - 3;
     if (at > m_tmpBuffer && at[-1] == 0)
         at--;
-    if (at < m_tmpBuffer || m_bufEnd + need > m_tmpBuffer + TMP_BUFFER_SIZE)
+    if (at < m_tmpBuffer || m_bufEnd + need > m_tmpBuffer + m_tmpBufferSize)
         return 0;  // nowhere to put it, or no room: leave the stream exactly as it is
 
     memmove(at + need, at, m_bufEnd - at);
@@ -882,7 +882,7 @@ void HEVCStreamReader::updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* ne
     if (m_bufEnd && newSpsLen != oldNalSize)
     {
         m_vpsSizeDiff = newSpsLen - oldNalSize;
-        if (m_bufEnd + m_vpsSizeDiff > m_tmpBuffer + TMP_BUFFER_SIZE)
+        if (m_bufEnd + m_vpsSizeDiff > m_tmpBuffer + m_tmpBufferSize)
             THROW(ERR_COMMON, "Not enough buffer")
         memmove(nextNal + m_vpsSizeDiff, nextNal, m_bufEnd - nextNal);
         m_bufEnd += m_vpsSizeDiff;

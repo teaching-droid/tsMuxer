@@ -3,6 +3,7 @@
 
 #include <fs/systemlog.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <iostream>
@@ -25,9 +26,33 @@ void MPEGStreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const bo
     if (lastBlock)
         m_eof = true;
 
-    if (m_tmpBufferLen + dataLen > TMP_BUFFER_SIZE)
-        THROW(ERR_COMMON_SMALL_BUFFER,
-              "Not enough buffer for parse video stream. Current frame num " << m_totalFrameNum)
+    if (m_tmpBufferLen + dataLen > m_tmpBufferSize)
+    {
+        // What is kept and the new block do not fit: a bigger buffer, with room to spare for the next block and for
+        // the few bytes the readers insert in place (a rewritten SPS or VPS, a repeated SEI)
+        const int64_t need = m_tmpBufferLen + dataLen;
+        if (need + 1024 * 1024 > MAX_TMP_BUFFER_SIZE)
+            THROW(ERR_COMMON_SMALL_BUFFER,
+                  "A picture of the video track, with the data that follows it, is larger than "
+                      << MAX_TMP_BUFFER_SIZE / (1024 * 1024) << " MiB (picture " << m_totalFrameNum
+                      << "). tsMuxeR cannot read pictures that large.")
+        const int64_t newSize = (std::min)(MAX_TMP_BUFFER_SIZE, (std::max)(m_tmpBufferSize * 2, need + 1024 * 1024));
+        auto* grown = new uint8_t[static_cast<size_t>(newSize)];
+        if (m_tmpBufferLen > 0)
+            memcpy(grown, m_tmpBuffer, static_cast<size_t>(m_tmpBufferLen));
+        const std::ptrdiff_t delta = grown - m_tmpBuffer;
+        onMoveBuffer(delta);
+        if (m_lastDecodedPos)
+            m_lastDecodedPos += delta;
+        if (m_cachedMarker)
+            m_cachedMarker += delta;
+        if (m_scanHighWater)
+            m_scanHighWater += delta;
+        delete[] m_retiredBuffer;
+        m_retiredBuffer = m_tmpBuffer;
+        m_tmpBuffer = grown;
+        m_tmpBufferSize = newSize;
+    }
     memcpy(m_tmpBuffer + m_tmpBufferLen, data + MAX_AV_PACKET_SIZE, dataLen);
     m_tmpBufferLen += dataLen;
 

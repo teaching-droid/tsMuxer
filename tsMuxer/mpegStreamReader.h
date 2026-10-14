@@ -1,12 +1,18 @@
 #ifndef MPEG_STREAM_READER_H_
 #define MPEG_STREAM_READER_H_
 
+#include <cstddef>
+
 #include "abstractStreamReader.h"
 #include "limits.h"
 #include "streamDiscoveryData.h"
 #include "vod_common.h"
 
+// The buffer a video reader collects its input in starts at TMP_BUFFER_SIZE and grows, up to MAX_TMP_BUFFER_SIZE, when
+// one picture with what comes after it does not fit (setBuffer). A fixed 8 MiB lost every picture larger than that: an
+// 8K picture coded without loss is about 42 MiB. The limit is above an 8K 4:4:4 picture of 16 bits before coding.
 static constexpr int TMP_BUFFER_SIZE = 1024 * 1024 * 8;
+static constexpr int64_t MAX_TMP_BUFFER_SIZE = 256ll * 1024 * 1024;
 
 class MPEGStreamReader : public AbstractStreamReader
 {
@@ -18,6 +24,7 @@ class MPEGStreamReader : public AbstractStreamReader
         m_eof = false;
         m_lastDecodeOffset = LONG_MAX;
         m_tmpBuffer = new uint8_t[TMP_BUFFER_SIZE];
+        m_tmpBufferSize = TMP_BUFFER_SIZE;
         m_lastDecodedPos = nullptr;
         m_cachedMarker = nullptr;
         m_scanHighWater = nullptr;
@@ -35,7 +42,11 @@ class MPEGStreamReader : public AbstractStreamReader
         m_streamAR = m_ar = VideoAspectRatio::AR_KEEP_DEFAULT;
         m_spsPpsFound = false;
     }
-    ~MPEGStreamReader() override { delete[] m_tmpBuffer; }
+    ~MPEGStreamReader() override
+    {
+        delete[] m_tmpBuffer;
+        delete[] m_retiredBuffer;
+    }
     void setFPS(const double fps)
     {
         m_fps = fps;
@@ -92,6 +103,8 @@ class MPEGStreamReader : public AbstractStreamReader
     virtual void fillVideoDiscoveryData(StreamDiscoveryData& data);
 
     virtual void onShiftBuffer(int offset);
+    // The buffer was moved to a bigger one (setBuffer): every pointer kept into it moves by delta
+    virtual void onMoveBuffer(std::ptrdiff_t delta) {}
 
    protected:
     VideoAspectRatio m_ar;
@@ -135,6 +148,9 @@ class MPEGStreamReader : public AbstractStreamReader
     int64_t m_testPulldownDts;
     void checkPulldownSync();
     uint8_t* m_tmpBuffer;
+    int64_t m_tmpBufferSize;  // the size of m_tmpBuffer, TMP_BUFFER_SIZE until it grows
+    // The buffer before the last growth, freed at the next: a packet handed out just before may still point into it
+    uint8_t* m_retiredBuffer = nullptr;
     bool m_spsPpsFound;
 
    private:
