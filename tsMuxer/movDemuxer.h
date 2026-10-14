@@ -117,6 +117,7 @@ class MovDemuxer final : public IOContextDemuxer
     int mov_read_covr(MOVAtom atom);
     int mov_read_chpl(MOVAtom atom);
     int mov_read_tref_chap(MOVAtom atom);
+    int mov_read_colour(MOVAtom atom);  // colr, mdcv, clli, CoLL and pasp of a video sample entry
     std::vector<AVChapter> chapterTrackChapters() const;
     MOVFragment fragment;  ///< current fragment in moof atom
     std::vector<MOVTrackExt> trex_data;

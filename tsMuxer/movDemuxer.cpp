@@ -6,6 +6,7 @@
 #include <climits>
 #include <cmath>
 #include <map>
+#include <sstream>
 
 #include <fs/systemlog.h>
 
@@ -127,7 +128,9 @@ struct MOVStreamContext : Track
     int containerDataType = 0;  // TRACKTYPE_VP8 etc. for the codecs nothing in their data identifies (getTrackList)
     uint32_t trackId = 0;       // tkhd track_ID
     std::string name;           // the track's name, from its hdlr, when it is not an encoder's generic one
-    bool pcmBigEndian = false;  // an LPCM sample entry: the byte order of its samples
+    std::map<std::string, std::string> colour;  // srccolour items (m, t, p, r, cll, fall, rx ... lmin) of the entry
+    uint32_t paspH = 0, paspV = 0;              // pasp: the shape of a pixel
+    bool pcmBigEndian = false;                  // an LPCM sample entry: the byte order of its samples
     bool pcmFloat = false;
     uint32_t lpcmFlags = 0;  // the format flags of a QuickTime 'lpcm' sample entry (version 2)
 
@@ -1370,6 +1373,15 @@ void MovDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                 trackList[i + 1].m_srcParams["srccodecdelay"] = std::to_string(delay->second);
             if (!mst->name.empty())
                 trackList[i + 1].m_srcParams["srcname"] = mst->name;
+            std::string colour;
+            for (const auto& [key, value] : mst->colour) colour += (colour.empty() ? "" : ";") + key + "=" + value;
+            if (!colour.empty())
+                trackList[i + 1].m_srcParams["srccolour"] = colour;
+            // A pixel that is not square: the size to show the picture at, as a Matroska source gives it
+            if (mst->paspH && mst->paspV && mst->paspH != mst->paspV && mst->width > 0 && mst->height > 0)
+                trackList[i + 1].m_srcParams["srcdisplay"] =
+                    std::to_string((static_cast<uint64_t>(mst->width) * mst->paspH + mst->paspV / 2) / mst->paspV) +
+                    "x" + std::to_string(mst->height);
         }
     }
 }
@@ -1440,6 +1452,13 @@ int MovDemuxer::ParseTableEntry(MOVAtom atom)
         return mov_read_default(atom);
     case MKTAG('c', 'h', 'a', 'p'):
         return mov_read_tref_chap(atom);
+    case MKTAG('c', 'o', 'l', 'r'):
+    case MKTAG('m', 'd', 'c', 'v'):
+    case MKTAG('c', 'l', 'l', 'i'):
+    case MKTAG('C', 'o', 'L', 'L'):
+    case MKTAG('p', 'a', 's', 'p'):
+    case MKTAG('v', 'p', 'c', 'C'):
+        return mov_read_colour(atom);
     case MKTAG('d', 'O', 'p', 's'):  // OpusSpecificBox
     case MKTAG('p', 'c', 'm', 'C'):  // PCMConfigurationBox, ISO/IEC 23003-5
         return mov_read_glbl(atom);
@@ -2244,13 +2263,13 @@ int MovDemuxer::mov_read_stsd(MOVAtom atom)
 
         if (st->type == IOContextTrackType::VIDEO)
         {
-            get_be16();                              // version
-            get_be16();                              // revision level
-            get_be32();                              // vendor
-            get_be32();                              // temporal quality
-            get_be32();                              // spatial quality
-            get_be16();                              // width
-            get_be16();                              // height
+            get_be16();  // version
+            get_be16();  // revision level
+            get_be32();  // vendor
+            get_be32();  // temporal quality
+            get_be32();  // spatial quality
+            st->width = get_be16();
+            st->height = get_be16();
             get_be32();                              // horiz resolution
             get_be32();                              // vert resolution
             get_be32();                              // data size, always 0
@@ -2552,6 +2571,143 @@ int MovDemuxer::mov_read_tref_chap(MOVAtom atom)
     for (int64_t i = 0; i + 4 <= atom.size; i += 4) m_chapterTrackIds.push_back(get_be32());
     skip_bytes(atom.size % 4);
     return 0;
+}
+
+// What a video sample entry says about its colours and its pixels, for a Matroska output: the muxer takes it where the
+// stream itself says nothing (srccolour, srcdisplay, as from a Matroska source).
+//   colr nclx (ISO/IEC 14496-12): primaries, transfer and matrix (16 bits each), then the full range flag
+//   colr nclc (QuickTime): the same without the flag; an ICC profile (prof, rICC) is not read
+//   mdcv: three display primaries (x, y in units of 0.00002), the white point, the most and the least luminance
+//         (units of 0.0001 cd/m2), as in the mastering display SEI
+//   clli, and QuickTime's CoLL with a version and flags first: the most and the average light level
+//   pasp: the horizontal and vertical spacing of the pixels
+//   vpcC (VP codec configuration, version 1): profile, level, bit depth, chroma subsampling and the full range flag,
+//         then primaries, transfer and matrix (8 bits each); a VP9 stream itself carries no primaries or transfer
+int MovDemuxer::mov_read_colour(MOVAtom atom)
+{
+    if (num_tracks < 1)
+        return 0;
+    const auto st = reinterpret_cast<MOVStreamContext*>(tracks[num_tracks - 1]);
+    if (st->type != IOContextTrackType::VIDEO)
+        return 0;
+    auto& c = st->colour;
+    const auto put = [&c](const char* key, const double value)
+    {
+        std::ostringstream text;  // six significant digits
+        text << value;
+        c[key] = text.str();
+    };
+    switch (atom.type)
+    {
+    case MKTAG('c', 'o', 'l', 'r'):
+    {
+        if (atom.size < 10)
+            return 0;
+        const uint32_t type = get_le32();
+        if (type != MKTAG('n', 'c', 'l', 'x') && type != MKTAG('n', 'c', 'l', 'c'))
+            return 0;
+        const int primaries = get_be16();
+        const int transfer = get_be16();
+        const int matrix = get_be16();
+        // 2 (unspecified) says nothing, and Matroska takes the same numbers (ISO/IEC 23091-2)
+        if (primaries != 2)
+            put("p", primaries);
+        if (transfer != 2)
+            put("t", transfer);
+        if (matrix != 2)
+            put("m", matrix);
+        if (type == MKTAG('n', 'c', 'l', 'x') && atom.size >= 11)
+            put("r", get_byte() & 0x80 ? 2 : 1);  // Matroska: 1 limited (broadcast), 2 full
+        return 0;
+    }
+    case MKTAG('m', 'd', 'c', 'v'):
+    {
+        if (atom.size < 24)
+            return 0;
+        std::pair<double, double> xy[3];
+        for (auto& [x, y] : xy)
+        {
+            x = get_be16() / 50000.0;
+            y = get_be16() / 50000.0;
+        }
+        const double wx = get_be16() / 50000.0;
+        const double wy = get_be16() / 50000.0;
+        const double lmax = get_be32() / 10000.0;
+        const double lmin = get_be32() / 10000.0;
+        if (lmax <= 0)
+            return 0;
+        // The order of the three primaries is the writer's (the SEI suggests green, blue, red); told apart by where
+        // they lie: red has the largest x, green the largest y of the other two
+        int r = 0;
+        for (int i = 1; i < 3; ++i)
+            if (xy[i].first > xy[r].first)
+                r = i;
+        int g = r == 0 ? 1 : 0;
+        for (int i = 0; i < 3; ++i)
+            if (i != r && xy[i].second > xy[g].second)
+                g = i;
+        const int b = 3 - r - g;
+        put("rx", xy[r].first);
+        put("ry", xy[r].second);
+        put("gx", xy[g].first);
+        put("gy", xy[g].second);
+        put("bx", xy[b].first);
+        put("by", xy[b].second);
+        put("wx", wx);
+        put("wy", wy);
+        put("lmax", lmax);
+        put("lmin", lmin);
+        return 0;
+    }
+    case MKTAG('C', 'o', 'L', 'L'):
+    case MKTAG('c', 'l', 'l', 'i'):
+    {
+        if (atom.type == MKTAG('C', 'o', 'L', 'L'))
+        {
+            if (atom.size < 8)
+                return 0;
+            get_be32();  // version, flags
+        }
+        else if (atom.size < 4)
+            return 0;
+        const int cll = get_be16();
+        const int fall = get_be16();
+        if (cll)
+            put("cll", cll);
+        if (fall)
+            put("fall", fall);
+        return 0;
+    }
+    case MKTAG('p', 'a', 's', 'p'):
+        if (atom.size < 8)
+            return 0;
+        st->paspH = get_be32();
+        st->paspV = get_be32();
+        return 0;
+    case MKTAG('v', 'p', 'c', 'C'):
+    {
+        if (atom.size < 10 || get_byte() != 1)
+            return 0;
+        get_be24();  // flags
+        get_byte();  // profile
+        get_byte();  // level
+        const int depthChromaRange = get_byte();
+        const int primaries = get_byte();
+        const int transfer = get_byte();
+        const int matrix = get_byte();
+        if (c.find("p") == c.end() && primaries != 2)  // a colr box says it too, and says more (the range)
+            put("p", primaries);
+        if (c.find("t") == c.end() && transfer != 2)
+            put("t", transfer);
+        if (c.find("m") == c.end() && matrix != 2)
+            put("m", matrix);
+        if (c.find("r") == c.end())
+            put("r", depthChromaRange & 1 ? 2 : 1);
+        return 0;
+    }
+    default:
+        return 0;
+    }
 }
 
 std::string MovDemuxer::getTitle()
