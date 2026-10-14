@@ -150,6 +150,37 @@ int MLPStreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdm
     return 6;  // total descriptor length
 }
 
+// A TrueHD stream that does not begin with a major sync, as after a cut: its access units up to the first one cannot be
+// decoded and are left out. The time of the stream was counted from the first access unit handed on, so all the audio
+// after them moved forward by their length: 81 ms in a measured cut, 98 ms in a reported one (#600). Each access unit
+// says its length, so the units before the major sync are counted here, from the start of the stream, and the time
+// starts after them. Where they do not lead exactly to the major sync, nothing is counted, as before.
+uint8_t* MLPStreamReader::findFrame(uint8_t* buff, uint8_t* end)
+{
+    uint8_t* frame = MLPCodec::findFrame(buff, end);
+    if (m_started)
+        return frame;
+    if (frame == nullptr)
+    {
+        m_preSyncUnits = -1;  // the search goes on in the next block: the units there are not counted
+        return frame;
+    }
+    if (m_preSyncUnits < 0)
+        return frame;
+    int units = 0;
+    const uint8_t* p = buff;
+    while (p < frame && frame - p >= 4)
+    {
+        const int len = getFrameSize(p);
+        if (len < 4)
+            break;
+        p += len;
+        ++units;
+    }
+    m_preSyncUnits = p == frame ? units : -1;
+    return frame;
+}
+
 int MLPStreamReader::readPacket(AVPacket& avPacket)
 {
     while (true)
@@ -158,6 +189,21 @@ int MLPStreamReader::readPacket(AVPacket& avPacket)
         if (rez != 0)
             return rez;
 
+        if (!m_started)
+        {
+            m_started = true;
+            if (m_preSyncUnits > 0 && m_samples > 0)
+            {
+                m_totalTHDSamples = static_cast<int64_t>(m_preSyncUnits) * m_samples;
+                if (m_samplerate)
+                    LTRACE(LT_INFO, 2,
+                           getCodecInfo().displayName
+                               << " stream (track " << m_streamIndex << "): it begins with " << m_preSyncUnits
+                               << " access units before its first major sync, which cannot be decoded and are left "
+                                  "out; the audio after them keeps its time ("
+                               << m_totalTHDSamples * 1000 / m_samplerate << " ms from the start of the track).");
+            }
+        }
         // thg packet
         // m_samplerate stays 0 until a major sync decodes; a stream that never produces one
         // must not divide by it.
