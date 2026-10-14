@@ -1,3 +1,91 @@
+## tsMuxeR 2.21.0
+
+This release is about MP4 and MOV. tsMuxeR now reads much more of what these files can hold: more codecs, track names, chapters, cover pictures and colour data, fragmented files, joins, and damaged or unusual files. It still does not write MP4. ASS and SSA subtitles are now drawn with libass, with their styles and animations. The changes are grouped below by area.
+
+**Mac users are still asked to test.** The Intel macOS build has been built and checked, but it has not been run on an Intel Mac, because no Mac is available here. If you have an Intel Mac, please try it and report whether it works. On any Mac, please also report whether ASS subtitles are drawn with libass after `brew install libass`, and what happens when you change the subtitle font and colour in the window.
+
+**If something goes wrong, please report it** with the bug report form on GitHub, and include as much as you can: the version line and the full log, the meta file (the text in the Meta file box of the window), what you expected and what happened instead, and the player you used. A short sample of the source helps most.
+
+### Worth acting on
+
+* **TrueHD with its AC-3 core, muxed as plain TrueHD, lost most of its audio.** A demuxed .ac3+thd file renamed to .thd and muxed as A_MLP had every core frame taken for a damaged frame, and the mux still said it was complete. The core frames are now left out, as drop-ac3-core does, and all of the TrueHD is kept. A_AC3 keeps both, as before.
+
+* **TrueHD that does not begin with a full sync frame played early,** as in a Matroska file after a cut. The frames before the first full sync frame cannot be played and are left out, and the rest of the audio moved forward by their length: 97 ms in a measured file. The audio now keeps its time.
+
+* **H.264 whose start was encoded again by a cutting tool could break up from the cut on.** When SEI and VUI data were inserted (the window's default, "Insert SEI and VUI data if absent"), the first SPS was written for the whole file. The SPS written now follows each change in the stream.
+
+* **The sound of an MP4 came late.** An audio encoder puts start-up samples in front of the sound, and the MP4 says in its edit list to skip them. Only a Matroska output of AAC did. Everywhere else the sound came late against the picture: 21 ms for AAC at 48 kHz, 5 ms for AC-3, 23 ms for MP3. It now starts where the edit list says.
+
+* **In a join of MP4 files, the AAC sound fell further behind the picture at every joint.** It now stays within half an AAC frame of the picture, however many files are joined.
+
+* **An MP4 whose last box has 0 in its size field was muxed only in part,** and since 2.19.4 the mux still said it was complete. Such a file is now read to its end. A complete mux of an MP4 with a free, skip or uuid box at its end said "The output is incomplete"; it now ends as a complete mux.
+
+### MP4 and MOV input
+
+* **More codecs.** VVC, AV1, Opus, ALAC, Vorbis, VP8, VP9 and linear PCM are read. MP3, MP2 and DTS in an mp4a track are read as what they are: they used to be taken for AAC and gave an output that decodes to nothing. A VVC track used to be listed as Opus.
+
+* **MPEG-4 Part 2 video, and ProRes from MOV,** are copied picture for picture into a Matroska output, with the times of the source. Like ALAC, Vorbis, VP8 and VP9, they go into a Matroska output only.
+
+* **WebVTT subtitles** in an MP4 file are read, as SRT text with italic, bold and underline.
+
+* **What the file says about itself** goes into a Matroska output: the track names, the title, the chapters (Nero chapters, or a QuickTime chapter track), the cover picture as an attachment, and the colour, HDR mastering and light level data and the pixel shape of the video, where the video stream does not say them itself.
+
+* **Start times.** The tracks of a fragmented MP4 keep their start times, and a video track without an edit list starts when its first picture is shown: the sound of such files came early, by 80 to 120 ms in the files measured.
+
+* **Joins of MP4 files** keep their AAC sound with the picture (see above).
+
+* **Unusual files** are read: media in more than one mdat box, a MOV with a compressed movie header, a fragmented file with MPEG-4 Part 2 or ProRes, and an H.264 configuration that ends before its picture parameter sets.
+
+* **Damaged files.** An audio track with bytes between its chunks made tsMuxeR run without end; those bytes are now left out with a warning. An empty NAL in a video sample, or damage in one picture, used to lose the pictures after it in the same chunk; only the damaged pictures are lost now. A file that was cut off and filled up with zeros gets a warning.
+
+* **A MOV track with no language** gets none, instead of three control characters.
+
+### Subtitles
+
+* **ASS and SSA subtitles are drawn with libass** wherever they are drawn into pictures: with their styles, colours, positions, rotations, fades, moves and karaoke. libass uses the fonts attached to the Matroska file, a fonts folder given with the new track parameter fonts-dir, and the fonts of the system. The Windows packages include libass and the libraries it needs, with their licenses in THIRD-PARTY-NOTICES.txt and the licenses folder. On Linux and Mac, install the system's libass. Without libass, or with the new parameter ass-as-srt, they are drawn as plain text, as before.
+
+* **save-srt** writes subtitles that are drawn into pictures to an .srt file as well.
+
+* **A demux writes ASS, SSA and WebVTT in their own form,** as .ass, .ssa and .vtt files, when they are kept as text. They used to become SRT.
+
+### Blu-ray and transport stream
+
+* **hdr10-override** marks an SDR HEVC track as HDR10 on a UHD disc. In the window: "Mark as HDR10 on a UHD disc" on the HEVC track.
+
+* **SDR HEVC video with BT.2020 colours** is marked as BT.2020 in the playlist and the clip information, as on a UHD disc mastered in SDR.
+
+* **MPEG-2 video** declares its real picture format in the PMT: a 1080i or 1080p stream was declared 720p. With --no-hdmv-descriptors it gets the video stream descriptor of the transport stream standard.
+
+* **Audio at a sample rate a disc cannot carry,** such as AC-3 at 44.1 kHz, gets a warning. A Blu-ray disc carries audio at 48, 96 or 192 kHz only.
+
+### Matroska output
+
+* **The display size follows the pixel shape** the H.264 or HEVC video gives. Square pixels at 720x576 or 720x480 were shown at 4:3, and HEVC at 1440x1080 with 4:3 pixels was shown at 4:3 instead of 16:9.
+
+### Window
+
+* **At its smallest size, every tab stays readable.** The track list keeps at least four rows, the buttons beside it are no longer squashed, and a tab that needs more room scrolls. Rows of the Subtitles and Blu-ray tabs were drawn over each other there.
+
+* **New options:** "Draw ASS and SSA subtitles as plain text, without their styles" and "Fonts folder for ASS and SSA subtitles" on the Subtitles tab, "Also save drawn SRT subtitles as .srt files", and "Mark as HDR10 on a UHD disc" on an HEVC track.
+
+### Other
+
+* **Pictures larger than 8 MiB** are read, as in video coded without loss in 4K or 8K, up to 256 MiB. From a Matroska file the mux stopped with "Not enough buffer", and from an MP4 file every such picture was left out.
+
+* **A meta line naming a track a Matroska, MP4 or MOV file does not have** stops the job before anything is written, with the tracks the file has. It gave an empty output that was called successful.
+
+* **A track refused for its output** leaves no empty folders behind.
+
+* **A tab on the MUXOPT line** is read as a space. It joined the texts on either side of it: a tab after --cut-end=5s kept only one picture.
+
+### What is still converted or left out
+
+* **MP4 is not written.**
+
+* **WebVTT from an MP4 file** goes into a Matroska output as SRT text, without its cue settings.
+
+* **Floating point PCM** in an MP4 or MOV file is not read, and 32 bit PCM is refused, as from Matroska.
+
 ## tsMuxeR 2.20.0
 
 This release is about Matroska. tsMuxeR now reads and writes it much more completely, as RFC 9559 describes it: subtitles in ASS, SSA, WebVTT, DVD (VobSub) and DVB form, ordered editions and linked files, track names and flags, chapters with every title and edition, attachments, tags, splitting, WebM, and new codecs. A remux into a Matroska file keeps each track in the form the source has it. The changes are grouped below by area.
