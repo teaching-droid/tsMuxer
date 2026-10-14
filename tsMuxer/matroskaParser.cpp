@@ -607,7 +607,7 @@ static std::string assToSrtText(const std::string& event)
 
 // The text of a WebVTT cue as SRT text: <i>, <b> and <u> kept, the other tags (classes, voices, languages, ruby,
 // timestamps) dropped with their text kept, the character references of the format turned into their characters.
-static std::string webVttToSrtText(const std::string& cue)
+std::string webVttToSrtText(const std::string& cue)
 {
     std::string out;
     for (size_t i = 0; i < cue.size(); ++i)

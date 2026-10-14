@@ -16,6 +16,7 @@
 #include "avPacket.h"
 #include "bitStream.h"
 #include "hevc.h"
+#include "matroskaParser.h"
 #include "nalUnits.h"
 #include "subTrackFilter.h"
 #include "utf8Converter.h"
@@ -803,8 +804,9 @@ class MovParsedPCMTrackData final : public ParsedTrackPrivData
 class MovParsedSRTTrackData final : public ParsedTrackPrivData
 {
    public:
-    MovParsedSRTTrackData(MovDemuxer* demuxer, MOVStreamContext* sc)
-        : m_buff(), m_size(0), m_demuxer(demuxer), m_sc(sc), sttsCnt(0)
+    // wvtt: the samples are WebVTT in ISO BMFF (ISO/IEC 14496-30) instead of 3GPP timed text (tx3g)
+    MovParsedSRTTrackData(MovDemuxer* demuxer, MOVStreamContext* sc, const bool wvtt = false)
+        : m_buff(), m_size(0), m_demuxer(demuxer), m_sc(sc), sttsCnt(0), m_wvtt(wvtt)
     {
         m_packetCnt = 0;
         sttsPos = 0;
@@ -882,7 +884,9 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
             sampleSize = (std::min)(sampleSize, size - used);
             const int64_t startTime = timeOffset;
             const int64_t endTime = startTime + getSttsVal();
-            std::string cue = cueFor(buff + used, buff + used + sampleSize, startTime, endTime, counter + 1);
+            std::string cue = m_wvtt
+                                  ? webVttCueFor(buff + used, buff + used + sampleSize, startTime, endTime, counter + 1)
+                                  : cueFor(buff + used, buff + used + sampleSize, startTime, endTime, counter + 1);
             if (!cue.empty())
             {
                 if (counter == 0)
@@ -907,6 +911,52 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
             sttsCnt = savedSttsCnt;
         }
         return out;
+    }
+
+    // One WebVTT sample as an SRT cue: a sample is either a vtte box (no cue for that time) or one or more vttc boxes
+    // that are shown together, each with its text in a payl box. Their texts become one cue, a line each; the cue
+    // settings (sttg), identifiers (iden) and comments (vtta) have no place in SRT, and the times inside a cue are
+    // dropped with the other tags SRT does not have. A cue that overlaps another is split by the format into samples
+    // that do not, so it comes out as more than one cue with the same text.
+    static std::string webVttCueFor(const uint8_t* buff, const uint8_t* end, const int64_t startTime,
+                                    const int64_t endTime, const int counter)
+    {
+        const auto be32 = [](const uint8_t* p)
+        { return static_cast<uint32_t>(p[0]) << 24 | static_cast<uint32_t>(p[1]) << 16 | p[2] << 8 | p[3]; };
+        std::string text;
+        for (const uint8_t* p = buff; end - p >= 8;)
+        {
+            const uint32_t len = be32(p);
+            if (len < 8 || len > static_cast<uint32_t>(end - p))
+                break;
+            if (be32(p + 4) == 0x76747463)  // 'vttc'
+                for (const uint8_t* q = p + 8; p + len - q >= 8;)
+                {
+                    const uint32_t clen = be32(q);
+                    if (clen < 8 || clen > static_cast<uint32_t>(p + len - q))
+                        break;
+                    if (be32(q + 4) == 0x7061796C)  // 'payl'
+                    {
+                        std::string line = webVttToSrtText(std::string(reinterpret_cast<const char*>(q + 8), clen - 8));
+                        while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
+                        if (!line.empty())
+                            text += (text.empty() ? "" : "\n") + line;
+                    }
+                    q += clen;
+                }
+            p += len;
+        }
+        if (text.empty())
+            return {};
+        std::string cue = int32ToStr(counter);
+        cue += "\n";
+        cue += floatToTime(static_cast<double>(startTime) / 1000.0, ',');
+        cue += " --> ";
+        cue += floatToTime(static_cast<double>(endTime) / 1000.0, ',');
+        cue += "\n";
+        cue += text;
+        cue += "\n\n";
+        return cue;
     }
 
     // One sample as an SRT cue with the styles it carries, or nothing for a sample without text
@@ -992,6 +1042,7 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
     int64_t sttsPos;
     int64_t sttsCnt;
     int64_t m_timeOffset;
+    bool m_wvtt;
 };
 
 MovDemuxer::MovDemuxer(const BufferedReaderManager& readManager)
@@ -2427,6 +2478,10 @@ int MovDemuxer::mov_read_stsd(MOVAtom atom)
         case MKTAG('t', 'x', '3', 'g'):
             st->type = IOContextTrackType::SUBTITLE;
             st->parsed_priv_data = new MovParsedSRTTrackData(this, st);
+            break;
+        case MKTAG('w', 'v', 't', 't'):  // WebVTT, ISO/IEC 14496-30
+            st->type = IOContextTrackType::SUBTITLE;
+            st->parsed_priv_data = new MovParsedSRTTrackData(this, st, true);
             break;
         case MKTAG('t', 'm', 'c', 'd'):
             st->type = IOContextTrackType::CONTROL;

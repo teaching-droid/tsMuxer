@@ -405,6 +405,10 @@ class ParsedLPCMTrackData final : public ParsedTrackPrivData
     MemoryBlock m_waveBuffer;
 };
 
+// The text of a WebVTT cue as SRT text: <i>, <b> and <u> kept, the other tags dropped with their text kept, the
+// character references turned into their characters (Matroska S_TEXT/WEBVTT, and WebVTT in an MP4 file)
+std::string webVttToSrtText(const std::string& cue);
+
 class ParsedSRTTrackData final : public ParsedTrackPrivData
 {
    public:
