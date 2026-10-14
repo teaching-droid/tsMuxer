@@ -1,6 +1,7 @@
 #include "blurayHelper.h"
 
 #include <memory>
+#include <type_traits>
 
 #include <fs/directory.h>
 #include <fs/systemlog.h>
@@ -63,7 +64,8 @@ void push_back_raw(std::vector<std::uint8_t>& byteVector, const PODType& value, 
 template <typename T>
 void push_back_raw(std::vector<std::uint8_t>& byteVector, const T& value)
 {
-    push_back_raw(byteVector, value, std::is_pod<T>{});
+    // What std::is_pod said, which C++20 deprecates: trivial, and standard layout
+    push_back_raw(byteVector, value, std::bool_constant < std::is_trivial_v<T> && std::is_standard_layout_v < T >> {});
 }
 using NavigationCommand = std::array<std::uint8_t, 12>;
 struct MovieObject

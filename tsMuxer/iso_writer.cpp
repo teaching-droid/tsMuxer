@@ -398,7 +398,10 @@ void ByteFileWriter::doPadding(const int padSize)
 
 void ByteFileWriter::writeCharSpecString(const char* value, const int len)
 {
-    strcpy(reinterpret_cast<char*>(m_curPos) + 1, value);
+    // The text and its terminating zero after the first byte of the field, as strcpy wrote them, but never past the
+    // end of the field
+    const size_t room = len > 1 ? static_cast<size_t>(len - 1) : 0;
+    memcpy(m_curPos + 1, value, (std::min)(strlen(value) + 1, room));
     m_curPos += len;
 }
 
@@ -1058,7 +1061,10 @@ void IsoWriter::allocateMetadata()
     constexpr size_t MAPPING_HEADER_SIZE = 48;
     constexpr size_t MAPPING_ENTRY_SIZE = 16;
     const size_t mappingSize = MAPPING_HEADER_SIZE + MAPPING_ENTRY_SIZE * m_mappingEntries.size();
-    std::vector<uint8_t> buffer(static_cast<size_t>(roundUp64(mappingSize, ALLOC_BLOCK_SIZE)), 0);
+    // At least one block, which the rounding always gives: said so the compiler can see the strings below fit
+    std::vector<uint8_t> buffer((std::max)(static_cast<size_t>(roundUp64(mappingSize, ALLOC_BLOCK_SIZE)),
+                                           static_cast<size_t>(ALLOC_BLOCK_SIZE)),
+                                0);
     ByteFileWriter writer;
     writer.setBuffer(buffer.data(), static_cast<int>(buffer.size()));
 

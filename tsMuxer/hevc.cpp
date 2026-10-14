@@ -95,6 +95,8 @@ bool HevcUnit::updateBits(const int bitOffset, const int bitLen, const unsigned 
     const int byteOffset = bitOffset % 8;
     const int endBitsPostfix = 8 - ((bitOffset + bitLen) % 8);
     const int touched = lastByte - startByte + 1;
+    if (touched <= 0)  // never, with the checks above; said here so the copy below has a size the compiler can bound
+        return false;
 
     // Four bytes would do for flushBits. Eight costs nothing and leaves no edge to reason about.
     std::vector<uint8_t> scratch(static_cast<size_t>(touched) + 8, 0);

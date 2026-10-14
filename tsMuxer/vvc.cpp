@@ -87,6 +87,8 @@ bool VvcUnit::updateBits(const int bitOffset, const int bitLen, const unsigned v
     const int byteOffset = bitOffset % 8;
     const int endBitsPostfix = 8 - ((bitOffset + bitLen) % 8);
     const int touched = lastByte - startByte + 1;
+    if (touched <= 0)  // never, with the checks above; said here so the copy below has a size the compiler can bound
+        return false;
 
     std::vector<uint8_t> scratch(static_cast<size_t>(touched) + 8, 0);
     uint8_t* ptr = m_reader.getBuffer() + startByte;
