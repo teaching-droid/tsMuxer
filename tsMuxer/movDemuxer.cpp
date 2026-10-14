@@ -224,6 +224,9 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
         }
     }
 
+    // The first frames of the track are left out: the encoder's priming of a later file of a join
+    void setDropFrames(const int frames) { m_dropLeft = frames; }
+
     void extractData(AVPacket* pkt, uint8_t* buff, const int size) override
     {
         uint8_t* dst = pkt->data;
@@ -235,6 +238,12 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
                 frameSize = m_sc->m_index[m_sc->m_indexCur++];
             if (buff + frameSize > srcEnd)
                 break;
+            if (m_dropLeft > 0)
+            {
+                --m_dropLeft;
+                buff += frameSize;
+                continue;
+            }
             if (isAAC)
             {
                 m_aacRaw.buildADTSHeader(dst, frameSize + AAC_HEADER_LEN);
@@ -280,14 +289,29 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
         if (left > 4 && m_sc->sample_size == 0)
             THROW(ERR_MOV_PARSE,
                   "Invalid AAC frame for track #" << m_sc->ffindex << " at position " << m_demuxer->getProcessedBytes())
+        // the frames extractData leaves out: neither their bytes nor their headers
+        unsigned dropped = 0;
+        const int drop = (std::min)(m_dropLeft, i);
+        for (int k = 0; k < drop; ++k)
+            dropped += m_sc->sample_size ? m_sc->sample_size : m_sc->m_index[m_sc->m_indexCur + k];
+        const int frames = i;
         if (!isAAC)
             i = 0;
-        return (size - left) + i * AAC_HEADER_LEN;
+        const unsigned out = (size - left) - dropped + (i - (isAAC ? drop : 0)) * AAC_HEADER_LEN;
+        // A chunk of nothing but dropped frames gives nothing, and extractData is then not called for it: its frames
+        // are consumed here
+        if (out == 0 && drop > 0 && m_sc->sample_size == 0)
+        {
+            m_sc->m_indexCur += frames;
+            m_dropLeft -= drop;
+        }
+        return out;
     }
 
     bool isAAC;
 
    private:
+    int m_dropLeft = 0;
     bool m_tailWarned = false;
     uint8_t* m_buff;
     int m_size;
@@ -1612,13 +1636,38 @@ int MovDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepte
         const std::string nextName = m_fileIterator->getNextName();
         if (!nextName.empty())
         {
+            ++m_joinPart;
             openFile(nextName);
+            dropJoinPriming();
             return 0;
         }
     }
 
     m_lastReadRez = BufferedReader::DATA_EOF;
     return m_lastReadRez;
+}
+
+// A later file of a join: its AAC sound begins with the encoder's priming, which its edit list starts after. The sound
+// of a join runs on from file to file, so the priming came out at every joint, 21 ms of AAC-LC at 48 kHz each time, and
+// the sound fell behind the picture by that much more at each joint. Its whole frames are left out now.
+void MovDemuxer::dropJoinPriming()
+{
+    for (int i = 0; i < num_tracks; ++i)
+    {
+        const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
+        auto* audio = dynamic_cast<MovParsedAudioTrackData*>(st->parsed_priv_data);
+        if (!audio || !audio->isAAC || st->editMediaTime <= 0 || st->stts_data.empty() ||
+            st->stts_data[0].duration <= 0)
+            continue;
+        const auto frames = static_cast<int>(st->editMediaTime / st->stts_data[0].duration);
+        if (frames <= 0)
+            continue;
+        audio->setDropFrames(frames);
+        LTRACE(
+            LT_INFO, 2,
+            "Part " << m_joinPart + 1 << " of the join, track " << i + 1 << ": its first " << frames
+                    << " AAC frame(s), the encoder's priming its edit list starts after, are left out at the joint.");
+    }
 }
 
 void MovDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)

@@ -93,6 +93,8 @@ class MovDemuxer final : public IOContextDemuxer
     int m_overreadWarnings = 0;  // boxes whose parser read past their end, warned once
     int m_pastEndWarnings = 0;   // boxes whose size reaches past the end of the file, warned once
     int64_t trailingBytesWithoutMedia(int64_t from) const;
+    int m_joinPart = 0;  // which file of a join is open: 0 the first
+    void dropJoinPriming();
     std::vector<std::pair<int64_t, int64_t>> topLevelMdats() const;
     uint32_t m_timescale;
     std::map<int32_t, int64_t> m_firstTimecode;

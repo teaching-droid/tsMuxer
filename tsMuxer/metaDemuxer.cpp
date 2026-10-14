@@ -1343,6 +1343,24 @@ int METADemuxer::addStream(const string& codec, const string& codecStreamName, c
     // and the sound came that much late against the picture, 21 ms for AAC. The track's times are now moved back by it,
     // as a timeshift would move them, so the start-up samples come before the first picture, where the MP4 has them. A
     // Matroska output of AAC says it with CodecDelay instead (MatroskaMuxer), and so is left alone here.
+    // A join of MP4 files ("a.mp4"+"b.mp4") is not asked about its tracks (see above), so its first file's edit list
+    // start was not known and the sound of the join began with the encoder's priming. The first file is read on its
+    // own for it; the priming of every later file is left out at its joint by the MP4 reader (MovDemuxer::openFile).
+    if (fileList.size() > 1 && pid > 0 && !codec.empty() && codec[0] == 'A' &&
+        streamInfo.m_addParams.find("srccodecdelay") == streamInfo.m_addParams.end())
+    {
+        const std::string ext = strToLowerCase(extractFileExt(unquoteStr(trimStr(fileList[0]))));
+        if (ext == "mp4" || ext == "mov" || ext == "m4a" || ext == "m4v")
+        {
+            MovDemuxer probe(m_readManager);
+            probe.openFile(unquoteStr(trimStr(fileList[0])));
+            std::map<int32_t, TrackInfo> firstTracks;
+            probe.getTrackList(firstTracks);
+            if (const auto t = firstTracks.find(pid); t != firstTracks.end())
+                if (const auto d = t->second.m_srcParams.find("srccodecdelay"); d != t->second.m_srcParams.end())
+                    streamInfo.m_addParams["srccodecdelay"] = d->second;
+        }
+    }
     if (const auto delay = streamInfo.m_addParams.find("srccodecdelay"); delay != streamInfo.m_addParams.end() &&
                                                                          !codec.empty() && codec[0] == 'A' &&
                                                                          !(m_matroskaOutput && codec == "A_AAC"))
