@@ -240,6 +240,22 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
     if (codecReader != nullptr)
         descriptorLen = codecReader->getTSDescriptor(descrBuffer, m_bluRayMode, m_hdmvDescriptors);
 
+    // A Blu-ray disc carries audio at 48, 96 or 192 kHz, and its stream information has a value for those rates only
+    // (M2TSStreamInfo). Audio at any other rate, such as AC-3 at 44.1 kHz from a CD or a video file, went onto the
+    // disc without a word, with no valid rate in its stream information. The rate is read from the frames themselves.
+    if (m_bluRayMode && !codecName.empty() && codecName[0] == 'A')
+        if (auto* audio = dynamic_cast<SimplePacketizerReader*>(codecReader))
+        {
+            const int freq = audio->getFreq();
+            if (freq > 0 && freq != 48000 && freq != 96000 && freq != 192000)
+                LTRACE(LT_WARN, 2,
+                       "Warning: track " << streamIndex << " (" << audio->getCodecInfo().displayName
+                                         << ") has a sample rate of " << freq
+                                         << " Hz. A Blu-ray disc carries audio at 48, 96 or 192 kHz only, and "
+                                         << "the disc's stream information has no value for this rate, so a player may "
+                                            "refuse the track. Convert the audio to 48 kHz before muxing.");
+        }
+
     // Which stream is the main one settles the split points, the interleaving and, until this was
     // fixed, the entire title length. The original test was unguarded for video, so the LAST video
     // track added won it, and since only the main stream advanced the running duration the playlist
