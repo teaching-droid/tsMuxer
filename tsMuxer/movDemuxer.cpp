@@ -455,100 +455,99 @@ class MovParsedH266TrackData final : public MovParsedH264TrackData
     }
 };
 
+// AV1 in an MP4 file (AV1 Codec ISO Media File Format Binding, 2.4): each sample is one temporal unit, its OBUs in the
+// low overhead form with their sizes, and the temporal delimiters left out. The track had no newBufferSize, so the
+// MP4 reader took every chunk to give no data at all: the track was listed as "Can't detect stream type" and could not
+// be muxed. Each sample is now turned into the start code form the AV1 reader takes, behind a temporal delimiter as a
+// Matroska block is, the configuration OBUs of av1C in front of the first. The samples of a chunk are told apart by
+// their sizes in stsz, as for audio; newBufferSize works out the bytes and extractData hands them over.
 class MovParsedAV1TrackData final : public ParsedTrackPrivData
 {
    public:
-    MovParsedAV1TrackData(MovDemuxer* /*demuxer*/, MOVStreamContext* /*sc*/) : m_firstExtract(true) {}
+    MovParsedAV1TrackData(MovDemuxer* /*demuxer*/, MOVStreamContext* sc) : m_sc(sc) {}
 
-    void setPrivData(uint8_t* buff, const int size) override
+    void setPrivData(uint8_t* buff, const int size) override { m_configOBUs = av1_extract_priv_data(buff, size); }
+
+    unsigned newBufferSize(uint8_t* buff, const unsigned size) override
     {
-        // Parse AV1CodecConfigurationRecord from av1C box
-        m_configOBUs = av1_extract_priv_data(buff, size);
+        m_out.clear();
+        size_t indexCur = m_sc->m_indexCur;
+        if (!m_configSent)
+            for (const auto& obu : m_configOBUs) m_out.insert(m_out.end(), obu.begin(), obu.end());
+        uint32_t used = 0;
+        while (used < size)
+        {
+            uint32_t sampleSize = size - used;
+            if (m_sc->sample_size)
+                sampleSize = m_sc->sample_size;
+            else if (indexCur < m_sc->m_index.size())
+                sampleSize = m_sc->m_index[indexCur++];
+            sampleSize = (std::min)(sampleSize, size - used);
+            if (sampleSize == 0)
+                break;
+            static constexpr uint8_t TD_START[4] = {0x00, 0x00, 0x01, 0x10};
+            m_out.insert(m_out.end(), TD_START, TD_START + 4);
+            convertSample(buff + used, buff + used + sampleSize);
+            used += sampleSize;
+        }
+        m_indexAfter = indexCur;
+        return static_cast<unsigned>(m_out.size());
     }
 
-    void extractData(AVPacket* pkt, uint8_t* buff, const int size) override
+    void extractData(AVPacket* pkt, uint8_t* /*buff*/, const int /*size*/) override
     {
-        // AV1 in MP4 uses low-overhead OBU format, same as MKV.
-        // Convert to start-code-prefixed format for TS output.
+        if (!m_out.empty())
+            memcpy(pkt->data, m_out.data(), m_out.size());
+        pkt->size = static_cast<int>(m_out.size());
+        m_sc->m_indexCur = m_indexAfter;
+        m_configSent = true;
+    }
 
-        // Estimate output size
-        size_t configSize = 0;
-        if (m_firstExtract)
-        {
-            for (const auto& obu : m_configOBUs) configSize += obu.size();
-        }
-        const size_t totalSize = configSize + size * 2 + 16;
-
-        pkt->data = new uint8_t[totalSize];
-        uint8_t* dst = pkt->data;
-
-        // Insert config OBUs before first frame
-        if (m_firstExtract)
-        {
-            for (const auto& obu : m_configOBUs)
-            {
-                memcpy(dst, obu.data(), obu.size());
-                dst += obu.size();
-            }
-            m_firstExtract = false;
-        }
-
-        // Convert each OBU
-        const uint8_t* src = buff;
-        const uint8_t* end = buff + size;
-
+   private:
+    // The OBUs of one sample: a start code, the header without its size field, the payload with emulation prevention.
+    // A temporal delimiter the sample carries after all is left out, as one is put in front of every sample.
+    void convertSample(const uint8_t* src, const uint8_t* end)
+    {
         while (src < end)
         {
             Av1ObuHeader obuHdr;
             const int hdrLen = obuHdr.parse(src, end);
-            if (hdrLen < 0)
+            if (hdrLen < 0 || !obuHdr.obu_has_size_field)
                 break;
-
-            if (!obuHdr.obu_has_size_field)
-                break;
-
             int leb128Bytes = 0;
-            const int64_t obuPayloadSize = decodeLeb128(src + hdrLen, end, leb128Bytes);
-            if (obuPayloadSize < 0)
-                break;
-
+            const int64_t payloadSize = decodeLeb128(src + hdrLen, end, leb128Bytes);
             const uint8_t* payload = src + hdrLen + leb128Bytes;
-            if (payload + obuPayloadSize > end)
+            if (payloadSize < 0 || payload + payloadSize > end)
                 break;
-
-            // Start code
-            *dst++ = 0x00;
-            *dst++ = 0x00;
-            *dst++ = 0x01;
-
-            // OBU header with obu_has_size_field cleared
-            *dst++ = src[0] & ~0x02;
-            if (obuHdr.obu_extension_flag)
-                *dst++ = src[1];
-
-            // Payload with emulation prevention
-            if (obuPayloadSize > 0)
+            if (obuHdr.obu_type != Av1ObuType::TEMPORAL_DELIMITER)
             {
-                const int encoded =
-                    av1_add_emulation_prevention(payload, payload + obuPayloadSize, dst, totalSize - (dst - pkt->data));
-                if (encoded > 0)
-                    dst += encoded;
-                else
+                m_out.insert(m_out.end(), {0x00, 0x00, 0x01, static_cast<uint8_t>(src[0] & ~0x02)});
+                if (obuHdr.obu_extension_flag)
+                    m_out.push_back(src[1]);
+                if (payloadSize > 0)
                 {
-                    memcpy(dst, payload, obuPayloadSize);
-                    dst += obuPayloadSize;
+                    const size_t at = m_out.size();
+                    m_out.resize(at + static_cast<size_t>(payloadSize) * 2 + 16);
+                    const int encoded = av1_add_emulation_prevention(payload, payload + payloadSize, m_out.data() + at,
+                                                                     m_out.size() - at);
+                    if (encoded > 0)
+                        m_out.resize(at + encoded);
+                    else
+                    {
+                        m_out.resize(at);
+                        m_out.insert(m_out.end(), payload, payload + payloadSize);
+                    }
                 }
             }
-
-            src = payload + obuPayloadSize;
+            src = payload + payloadSize;
         }
-
-        pkt->size = static_cast<int>(dst - pkt->data);
     }
 
-   private:
+    MOVStreamContext* m_sc;
     std::vector<std::vector<uint8_t>> m_configOBUs;
-    bool m_firstExtract;
+    std::vector<uint8_t> m_out;  // the start code form of the chunk newBufferSize was given
+    size_t m_indexAfter = 0;
+    bool m_configSent = false;
 };
 
 class MovParsedSRTTrackData final : public ParsedTrackPrivData
