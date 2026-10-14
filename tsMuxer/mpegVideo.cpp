@@ -146,7 +146,7 @@ uint8_t* MPEGSequenceHeader::deserialize(uint8_t* buf, const int64_t buf_size)
 
 uint8_t* MPEGSequenceHeader::deserializeExtension(BitStreamReader& bitReader)
 {
-    bitReader.skipBit(); /* profile and level esc*/
+    profile_escape = bitReader.getBit(); /* profile and level esc*/
     profile = bitReader.getBits<int8_t>(3);
     level = bitReader.getBits<int8_t>(4);
 

@@ -100,6 +100,7 @@ class MPEGSequenceHeader final : public MPEGRawDataHeader
     uint8_t non_intra_matrix[64];
 
     // sequence extension
+    bool profile_escape = false;  // the escape bit of profile_and_level_indication
     int8_t profile;
     int8_t level;
     uint8_t progressive_sequence;

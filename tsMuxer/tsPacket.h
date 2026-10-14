@@ -19,6 +19,7 @@ enum class TSDescriptorTag
     COPY_CONTROL = 0x88,  // ATSC_CA_descriptor
 
     // IUT Rec. H.222
+    VIDEO_STREAM = 0x02,  // video_stream_descriptor (MPEG-1 and MPEG-2 video)
     REGISTRATION = 0x05,  // registration_descriptor
     CAS = 0x09,           // CA_descriptor
     LANG = 0x0A,          // ISO_639_language_descriptor

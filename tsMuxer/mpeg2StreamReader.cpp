@@ -52,6 +52,27 @@ int MPEG2StreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool h
         m_streamAR = m_ar;
     }
 
+    // Without HDMV descriptors (--no-hdmv-descriptors), the video stream descriptor of Rec. ITU-T H.222.0 (2.6.2,
+    // Table 2-46), as H.264 and HEVC write their own standard descriptor then. The HDMV descriptor was written all the
+    // same, so the option did nothing for MPEG-2 video.
+    if (!hdmvDescriptors)
+    {
+        const bool mpeg1Only = m_sequence.profile < 0;  // no sequence extension: MPEG-1 video
+        *dstBuff++ = static_cast<uint8_t>(TSDescriptorTag::VIDEO_STREAM);
+        *dstBuff++ = mpeg1Only ? 1 : 3;
+        // multiple_frame_rate_flag 0, frame_rate_code, MPEG_1_only_flag, constrained_parameter_flag (1 for MPEG-2
+        // video, as the standard requires), still_picture_flag 0
+        *dstBuff++ = static_cast<uint8_t>((m_sequence.frame_rate_index & 0x0f) << 3 | (mpeg1Only ? 1 : 0) << 2 |
+                                          (mpeg1Only ? (m_sequence.constParameterFlag ? 1 : 0) : 1) << 1);
+        if (mpeg1Only)
+            return 3;
+        *dstBuff++ = static_cast<uint8_t>((m_sequence.profile_escape ? 0x80 : 0) | (m_sequence.profile & 0x07) << 4 |
+                                          (m_sequence.level & 0x0f));
+        const bool rateExtension = m_sequence.frame_rate_ext.num != 1 || m_sequence.frame_rate_ext.den != 1;
+        *dstBuff = static_cast<uint8_t>((m_sequence.chroma_format & 0x03) << 6 | (rateExtension ? 1 : 0) << 5 | 0x1f);
+        return 5;
+    }
+
     // HDMV registration descriptor
     *dstBuff++ = static_cast<uint8_t>(TSDescriptorTag::HDMV);  // registration descriptor tag
     *dstBuff++ = 8;                                            // descriptor length
