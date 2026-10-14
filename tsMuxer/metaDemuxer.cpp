@@ -1307,6 +1307,26 @@ int METADemuxer::addStream(const string& codec, const string& codecStreamName, c
             }
         }
     }
+    // ** THE SOUND OF AN MP4 STARTS WHERE ITS EDIT LIST SAYS. ** An encoder puts start-up samples in front of the sound
+    // (1024 for AAC, 256 for AC-3, about 1100 for a LAME MP3), and the MP4 says in its edit list to start that much
+    // into the track. That was ignored: the first frame, start-up samples and all, was placed with the first picture,
+    // and the sound came that much late against the picture, 21 ms for AAC. The track's times are now moved back by it,
+    // as a timeshift would move them, so the start-up samples come before the first picture, where the MP4 has them. A
+    // Matroska output of AAC says it with CodecDelay instead (MatroskaMuxer), and so is left alone here.
+    if (const auto delay = streamInfo.m_addParams.find("srccodecdelay"); delay != streamInfo.m_addParams.end() &&
+                                                                         !codec.empty() && codec[0] == 'A' &&
+                                                                         !(m_matroskaOutput && codec == "A_AAC"))
+    {
+        const int64_t ns = strtoll(delay->second.c_str(), nullptr, 10);
+        if (ns > 0)
+        {
+            streamInfo.m_timeShift -= static_cast<int64_t>(static_cast<double>(ns) * INTERNAL_PTS_FREQ / 1e9 + 0.5);
+            LTRACE(LT_INFO, 2,
+                   "Track " << pid << " of " << unquoteStr(fileList[0]) << ": its edit list starts the sound "
+                            << doubleToStr(static_cast<double>(ns) / 1e6, 3)
+                            << " ms into the track, so its times are moved back by that much.");
+        }
+    }
     m_totalSize += fileSize;
 
     if (auto* mergeReader = dynamic_cast<TrueHDAC3MergeReader*>(codecReader))
