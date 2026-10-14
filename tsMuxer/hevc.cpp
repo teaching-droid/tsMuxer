@@ -452,8 +452,17 @@ int HevcSpsUnit::vui_parameters()
     const bool aspect_ratio_info_present_flag = m_reader.getBit();
     if (aspect_ratio_info_present_flag)
     {
-        if (m_reader.getBits(8) == EXTENDED_SAR)  // aspect_ratio_idc
-            m_reader.skipBits(32);                // sar_width, sar_height
+        // Table E-1 is the one of H.264
+        const unsigned aspect_ratio_idc = m_reader.getBits(8);
+        if (aspect_ratio_idc == EXTENDED_SAR)
+        {
+            const unsigned sar_width = m_reader.getBits(16);
+            const unsigned sar_height = m_reader.getBits(16);
+            if (sar_width && sar_height)
+                sar = sar_width / static_cast<double>(sar_height);
+        }
+        else if (aspect_ratio_idc >= 1 && aspect_ratio_idc < std::size(h264_ar_coeff))
+            sar = h264_ar_coeff[aspect_ratio_idc];
     }
 
     if (m_reader.getBit())   // overscan_info_present_flag

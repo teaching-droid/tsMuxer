@@ -157,6 +157,7 @@ struct HevcSpsUnit : HevcUnitWithProfile
     uint8_t colour_primaries;
     uint8_t transfer_characteristics;
     uint8_t matrix_coeffs;
+    double sar = 0;  // the VUI sample aspect ratio, 0 where the stream gives none
     unsigned chroma_sample_loc_type_top_field;
     unsigned chroma_sample_loc_type_bottom_field;
 

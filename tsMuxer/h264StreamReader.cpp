@@ -1603,12 +1603,13 @@ int H264StreamReader::processSPS(uint8_t* buff)
     m_spsMap[sps->seq_parameter_set_id] = sps;
 
     double sarAR = 1.0;
+    m_sampleAR = 0;
     if (sps->aspect_ratio_info_present_flag)
     {
         if (sps->aspect_ratio_idc >= 1 && sps->aspect_ratio_idc <= 16)
-            sarAR = h264_ar_coeff[sps->aspect_ratio_idc];
-        else if (sps->aspect_ratio_idc == Extended_SAR)
-            sarAR = sps->sar_width / static_cast<double>(sps->sar_height);
+            m_sampleAR = sarAR = h264_ar_coeff[sps->aspect_ratio_idc];
+        else if (sps->aspect_ratio_idc == Extended_SAR && sps->sar_width && sps->sar_height)
+            m_sampleAR = sarAR = sps->sar_width / static_cast<double>(sps->sar_height);
     }
     fillAspectBySAR(sarAR);
 

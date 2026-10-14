@@ -60,6 +60,11 @@ class MPEGStreamReader : public AbstractStreamReader
         return m_ar != VideoAspectRatio::AR_KEEP_DEFAULT ? m_ar : m_streamAR;
     }
     void setAspectRatio(const VideoAspectRatio ar) { m_ar = ar; }
+    // The aspect ratio the meta line gave (ar=), which comes before what the stream says
+    [[nodiscard]] bool aspectRatioForced() const { return m_ar != VideoAspectRatio::AR_KEEP_DEFAULT; }
+    // The shape of a pixel as the stream gives it (width / height), 0 where it gives none. getStreamAR is the nearest
+    // of the few a Blu-ray disc can say; a Matroska output can say this one.
+    [[nodiscard]] virtual double getSampleAspectRatio() const { return m_sampleAR; }
     int64_t getProcessedSize() override;
     void setBuffer(uint8_t* data, uint32_t dataLen, bool lastBlock = false) override;
     int readPacket(AVPacket& avPacket) override;
@@ -91,6 +96,7 @@ class MPEGStreamReader : public AbstractStreamReader
    protected:
     VideoAspectRatio m_ar;
     VideoAspectRatio m_streamAR;
+    double m_sampleAR = 0;
     bool m_shortStartCodes;
     int64_t m_curPts;
     int64_t m_curDts;

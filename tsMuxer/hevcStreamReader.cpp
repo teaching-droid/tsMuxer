@@ -899,6 +899,8 @@ void HEVCStreamReader::updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* ne
 // video_format is chosen from the WIDTH for anything above SD, so it is unaffected.
 //
 // Offsets are in chroma units, hence the subsampling factors.
+double HEVCStreamReader::getSampleAspectRatio() const { return m_sps ? m_sps->sar : 0; }
+
 unsigned HEVCStreamReader::getStreamWidth() const { return m_sps ? m_sps->getDisplayWidth() : 0; }
 
 unsigned HEVCStreamReader::getStreamHeight() const { return m_sps ? m_sps->getDisplayHeight() : 0; }

@@ -1425,6 +1425,29 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track, i
             vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEODISPLAYWIDTH, track.srcDisplayWidth);
             vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEODISPLAYHEIGHT, track.srcDisplayHeight);
         }
+        else if (!track.arForced && track.sampleAR > 0 && track.width && track.height)
+        {
+            // The pixel shape the stream gives. It was rounded to the nearest of the aspect ratios a Blu-ray disc can
+            // say, so square pixels of 720x576 (5:4) and 720x480 (3:2) were shown at 4:3, and the pixel shape of HEVC
+            // was not read at all: 1440x1080 at 4:3 pixels (16:9) was shown at 4:3. Square pixels are shown at their
+            // size. A shape within 3 % of 4:3, 16:9 or 2.21:1 keeps that ratio: the pixel shapes of standard
+            // definition (12:11, 16:11, 40:33 ...) make the 704 wide picture inside a 720 wide frame 4:3 or 16:9.
+            unsigned displayWidth = track.width;
+            if (std::fabs(track.sampleAR - 1.0) > 1e-6)
+            {
+                const double dar = track.width * track.sampleAR / track.height;
+                displayWidth = static_cast<unsigned>(std::lround(track.width * track.sampleAR));
+                for (const auto& [ratio, num, den] :
+                     {std::tuple{4.0 / 3.0, 4u, 3u}, std::tuple{16.0 / 9.0, 16u, 9u}, std::tuple{2.21, 221u, 100u}})
+                    if (std::fabs(dar / ratio - 1.0) <= 0.03)
+                        displayWidth = (track.height * num + den / 2) / den;
+            }
+            if (displayWidth != track.width)
+            {
+                vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEODISPLAYWIDTH, displayWidth);
+                vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEODISPLAYHEIGHT, track.height);
+            }
+        }
         else if (track.streamAR != VideoAspectRatio::AR_KEEP_DEFAULT && track.streamAR != VideoAspectRatio::AR_VGA)
         {
             unsigned displayWidth = track.width;
@@ -1898,6 +1921,8 @@ void MatroskaMuxer::refreshTrackProperties()
                 track.fps = mpegReader->getFPS();
                 track.interlaced = mpegReader->getInterlaced();
                 track.streamAR = mpegReader->getStreamAR();
+                track.sampleAR = mpegReader->getSampleAspectRatio();
+                track.arForced = mpegReader->aspectRatioForced();
                 track.hasColourDesc =
                     mpegReader->getColourDesc(track.colourPrimaries, track.colourTransfer, track.colourMatrix);
                 // getStreamHDR: 1 SDR, 2 HDR10, 4 Dolby Vision, 16 HDR10+. Everything except

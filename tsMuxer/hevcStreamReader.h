@@ -48,6 +48,7 @@ class HEVCStreamReader final : public MPEGStreamReader
 
     double getStreamFPS(void* curNalUnit) override;
     [[nodiscard]] unsigned getStreamWidth() const override;
+    [[nodiscard]] double getSampleAspectRatio() const override;
     [[nodiscard]] unsigned getStreamHeight() const override;
     [[nodiscard]] int getStreamHDR() const override;
     [[nodiscard]] bool getColourDesc(uint8_t& primaries, uint8_t& transfer, uint8_t& matrix) const override;

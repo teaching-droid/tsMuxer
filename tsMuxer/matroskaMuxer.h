@@ -117,6 +117,8 @@ class MatroskaMuxer final : public AbstractMuxer
         double fps;
         bool interlaced;
         VideoAspectRatio streamAR;
+        double sampleAR = 0;    // the stream's own pixel shape, 0 where it gives none
+        bool arForced = false;  // ar= in the meta
 
         // Colour description from the bitstream, and HDR10 mastering data when the stream has it.
         bool hasColourDesc;
