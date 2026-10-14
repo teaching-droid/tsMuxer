@@ -10,7 +10,6 @@
 
 int MPEG2StreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdmvDescriptors)
 {
-    m_sequence.video_format = 5;  // Unspecified video format
     try
     {
         for (uint8_t* nal = MPEGHeader::findNextMarker(m_buffer, m_bufEnd); nal <= m_bufEnd - 32;
@@ -63,7 +62,16 @@ int MPEG2StreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool h
     *dstBuff++ = 0xff;
 
     *dstBuff++ = static_cast<uint8_t>(StreamType::VIDEO_MPEG2);  // stream_coding_type
-    *dstBuff++ = static_cast<uint8_t>(m_sequence.video_format << 4 | m_sequence.frame_rate_index);
+    // The video format here is the Blu-ray code for the picture size and scan (1 480i, 2 576i, 4 1080i, 6 1080p and so
+    // on), the one the clip information file carries and H.264 and HEVC write here too. The video_format of the MPEG-2
+    // display extension (PAL, NTSC and the like) was written instead, or 5 where that extension is missing, so a 1080
+    // line stream was declared 720p while the clip information file said 1080. The frame rate and aspect ratio codes
+    // of MPEG-2 are the ones Blu-ray uses.
+    uint8_t video_format = 0, frame_rate_index = 0, aspect_ratio_index = 0;
+    const double fps = getFPS() > 0 ? getFPS() : m_sequence.getFrameRate();
+    M2TSStreamInfo::blurayStreamParams(fps, getInterlaced(), getStreamWidth(), getStreamHeight(), getStreamAR(),
+                                       &video_format, &frame_rate_index, &aspect_ratio_index);
+    *dstBuff++ = static_cast<uint8_t>(video_format << 4 | m_sequence.frame_rate_index);
     *dstBuff = static_cast<uint8_t>(m_sequence.aspect_ratio_info << 4 | 0xf);
 
     return 10;  // total descriptor length
