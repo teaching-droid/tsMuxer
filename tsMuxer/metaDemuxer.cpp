@@ -1407,7 +1407,7 @@ static bool isKnownTrackParam(const std::string& name)
         "track", "subTrack", "lang", "timeshift", "default", "secondary", "subClip", "track-name",
         // video
         "fps", "ar", "level", "video-width", "video-height", "insertSEI", "forceSEI", "autoSEI", "contSPS",
-        "delPulldown", "stretch", "3d-plane", "hdr10-override",
+        "delPulldown", "stretch", "3d-plane", "hdr10-override", "save-srt",
         // audio
         "down-to-ac3", "down-to-dts", "merge-ac3-track", "merge-ac3-file", "drop-ac3-core", "split-ac3-core", "w64",
         // picture in picture
@@ -2951,6 +2951,17 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
                 animation.fadeOutDuration = strToFloat(addParam.second.c_str());
             else if (addParam.first == "keep-text")
                 srtReader->setKeepText(true);
+        }
+        // save-srt (#643): an SRT copy of the subtitles beside an output that gets them as pictures. Kept as text, the
+        // output itself holds the text, and a demux writes the .srt.
+        if (const auto saveSrt = addParams.find("save-srt"); saveSrt != addParams.end() && !quiet)
+        {
+            if (srtReader->keepText())
+                LTRACE(LT_WARN, 2, "Warning: save-srt is ignored on a line with keep-text: the subtitles stay text.");
+            else if (unquoteStr(saveSrt->second).empty())
+                THROW(ERR_COMMON, "save-srt needs the name of the SRT file to write, as save-srt=\"name.srt\"")
+            else
+                srtReader->setSaveSrt(unquoteStr(saveSrt->second));
         }
         // The picture size and frame rate are only needed to draw the subtitles. Kept as text they
         // are not drawn, unless the output cannot carry text, and that output says so when it is.

@@ -4367,6 +4367,16 @@ ISO trotzdem erstellen?</translation>
         <source>For an HEVC track whose stream says SDR, on a UHD Blu-ray disc only: the disc marks it as HDR10. A player then switches the screen to HDR while the picture is coded for SDR, so check how it looks first.</source>
         <translation>Für eine HEVC-Spur, deren Stream SDR angibt, nur auf einer UHD-Blu-ray: Die Disc kennzeichnet sie als HDR10. Ein Player schaltet den Bildschirm dann auf HDR, obwohl das Bild für SDR kodiert ist; prüfen Sie daher zuerst, wie es aussieht.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2215"/>
+        <source>Also save drawn SRT subtitles as .srt files</source>
+        <translation>Gezeichnete SRT-Untertitel auch als .srt-Dateien speichern</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2212"/>
+        <source>While SRT subtitles are drawn into pictures, also write each SRT track as text, to an .srt file named after the output and the track's row in the list.</source>
+        <translation>Während SRT-Untertitel in Bilder gezeichnet werden, wird jede SRT-Spur zusätzlich als Text in eine .srt-Datei geschrieben, benannt nach der Ausgabe und der Zeile der Spur in der Liste.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

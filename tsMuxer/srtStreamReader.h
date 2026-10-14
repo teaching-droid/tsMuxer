@@ -2,11 +2,14 @@
 #define SRT_STREAM_READER_
 
 #include <deque>
+#include <memory>
 #include <queue>
+#include <string>
 
 #include "abstractStreamReader.h"
 #include "avCodecs.h"
 #include "avPacket.h"
+#include "fs/file.h"
 #include "pgsStreamReader.h"
 #include "textSubtitles.h"
 #include "utf8Converter.h"
@@ -28,6 +31,8 @@ class SRTStreamReader final : public AbstractStreamReader
     // them into pictures. Only a muxer that can carry text leaves it on; the others turn it off. In a
     // demux each subtitle is handed over as an SRT record, so the file written is an SRT file.
     void setKeepText(const bool value) { m_keepText = value; }
+    // save-srt: while the subtitles are drawn into pictures, each one is also written to an SRT file there (#643)
+    void setSaveSrt(const std::string& fileName);
     [[nodiscard]] bool keepText() const { return m_keepText; }
     [[nodiscard]] bool hasVideoInfo() const { return m_hasVideoInfo; }
     void setStreamIndex(const int index) override
@@ -72,6 +77,13 @@ class SRTStreamReader final : public AbstractStreamReader
     double m_outTime;
     bool m_untilNext = false;  // the timing line has no end: shown until the next subtitle
     bool m_keepText = false;
+    // save-srt: the SRT file, the subtitle waiting for the next one when it has no end, and the count written
+    std::unique_ptr<File> m_saveSrt;
+    std::string m_saveSrtName;
+    std::deque<std::pair<std::string, std::pair<int64_t, int64_t>>> m_saveSrtPending;
+    int m_saveSrtCount = 0;
+    void saveSrtCue(const std::string& text, double inTime, double outTime, bool untilNext);
+    void saveSrtWrite(const std::string& text, int64_t inMs, int64_t outMs);
     mutable bool m_hasVideoInfo = false;
     struct TextCue
     {

@@ -4364,6 +4364,16 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>For an HEVC track whose stream says SDR, on a UHD Blu-ray disc only: the disc marks it as HDR10. A player then switches the screen to HDR while the picture is coded for SDR, so check how it looks first.</source>
         <translation>Para una pista HEVC cuyo flujo indica SDR, solo en un disco Blu-ray UHD: el disco la marca como HDR10. El reproductor pondrá la pantalla en modo HDR aunque la imagen esté codificada para SDR, así que compruebe primero cómo se ve.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2215"/>
+        <source>Also save drawn SRT subtitles as .srt files</source>
+        <translation>Guardar también los subtítulos SRT dibujados como archivos .srt</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2212"/>
+        <source>While SRT subtitles are drawn into pictures, also write each SRT track as text, to an .srt file named after the output and the track's row in the list.</source>
+        <translation>Mientras los subtítulos SRT se dibujan en imágenes, cada pista SRT se escribe también como texto en un archivo .srt con el nombre de la salida y la fila de la pista en la lista.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

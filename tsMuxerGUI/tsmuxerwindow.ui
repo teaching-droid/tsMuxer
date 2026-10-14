@@ -2207,6 +2207,16 @@
          </widget>
         </item>
         <item>
+         <widget class="QCheckBox" name="saveSrtCheckBox">
+          <property name="toolTip">
+           <string>While SRT subtitles are drawn into pictures, also write each SRT track as text, to an .srt file named after the output and the track's row in the list.</string>
+          </property>
+          <property name="text">
+           <string>Also save drawn SRT subtitles as .srt files</string>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QGroupBox" name="groupBox_8">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">

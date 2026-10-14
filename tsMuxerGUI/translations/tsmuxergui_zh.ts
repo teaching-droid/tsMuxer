@@ -4363,6 +4363,16 @@ Build the ISO anyway?</source>
         <source>For an HEVC track whose stream says SDR, on a UHD Blu-ray disc only: the disc marks it as HDR10. A player then switches the screen to HDR while the picture is coded for SDR, so check how it looks first.</source>
         <translation>仅适用于UHD蓝光光盘上码流标示为SDR的HEVC轨道：光盘会将其标记为HDR10。播放器随后会将屏幕切换到HDR，但画面是按SDR编码的，因此请先检查显示效果。</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2215"/>
+        <source>Also save drawn SRT subtitles as .srt files</source>
+        <translation>同时将绘制的SRT字幕保存为.srt文件</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2212"/>
+        <source>While SRT subtitles are drawn into pictures, also write each SRT track as text, to an .srt file named after the output and the track's row in the list.</source>
+        <translation>在将SRT字幕绘制为图像的同时，也将每条SRT轨道以文本形式写入.srt文件，文件名取自输出名称和该轨道在列表中的行号。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

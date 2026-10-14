@@ -886,6 +886,7 @@ TsMuxerWindow::TsMuxerWindow()
                 updateKeepTextControls();
                 onSavedParamChanged();
             });
+    connect(ui->saveSrtCheckBox, &QCheckBox::toggled, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->radioButtonTS, &QAbstractButton::clicked, this, &TsMuxerWindow::RadioButtonMuxClick);
     connect(ui->radioButtonM2TS, &QAbstractButton::clicked, this, &TsMuxerWindow::RadioButtonMuxClick);
     connect(ui->radioButtonMKV, &QAbstractButton::clicked, this, &TsMuxerWindow::RadioButtonMuxClick);
@@ -4776,6 +4777,8 @@ void TsMuxerWindow::updateMetaLines()
         if (codecInfo->displayName == "SRT")
         {
             postfix += getSrtParams();
+            if (!keepTextApplies() && ui->saveSrtCheckBox->isChecked())
+                postfix += QString(", save-srt=\"%1\"").arg(saveSrtFileName(codecInfo, i));
             if (bluray3D && codecInfo->offsetId >= 0)
                 postfix += QString(", offset=%1").arg(codecInfo->offsetId);
         }
@@ -5466,6 +5469,30 @@ void TsMuxerWindow::applyOutputMode(const bool resetAudioPes)
     updateKeepTextControls();
 }
 
+// The .srt file save-srt writes for a track: beside the output file, named after it, or in the output folder of a disc
+// or a demux, named after the source; the row of the track in the list keeps two tracks apart, and never gives the name
+// of an .srt source in the same folder
+QString TsMuxerWindow::saveSrtFileName(const QtvCodecInfo* codecInfo, const int row) const
+{
+    const QString out = unquoteStr(ui->outFileName->text().trimmed());
+    QString base;
+    if (isDiskOutput() || ui->radioButtonDemux->isChecked())
+    {
+        QString dir = QDir::fromNativeSeparators(out);
+        if (!dir.endsWith('/'))
+            dir += '/';
+        base =
+            dir +
+            QFileInfo(codecInfo->fileList.isEmpty() ? QString("subtitles") : codecInfo->fileList[0]).completeBaseName();
+    }
+    else
+    {
+        const QFileInfo fi(QDir::fromNativeSeparators(out));
+        base = fi.path() + '/' + fi.completeBaseName();
+    }
+    return QDir::toNativeSeparators(base + QString(".track%1.srt").arg(row + 1));
+}
+
 bool TsMuxerWindow::keepTextApplies() const
 {
     return ui->keepTextCheckBox->isChecked() && (ui->radioButtonMKV->isChecked() || ui->radioButtonDemux->isChecked());
@@ -5478,6 +5505,8 @@ void TsMuxerWindow::updateKeepTextControls()
 {
     ui->keepTextCheckBox->setEnabled(ui->radioButtonMKV->isChecked() || ui->radioButtonDemux->isChecked());
     const bool asText = keepTextApplies();
+    // save-srt is for subtitles that are drawn: kept as text, the output or the demux holds the text already
+    ui->saveSrtCheckBox->setEnabled(!asText);
     ui->groupBox_8->setEnabled(!asText);
     ui->groupBox_9->setEnabled(!asText);
     ui->groupBox_10->setEnabled(!asText);
@@ -6214,6 +6243,7 @@ void TsMuxerWindow::writeSettings()
     settings->setValue("offset", ui->spinEditOffset->value());
     settings->setValue("fadeTime", getRendererAnimationTime());
     settings->setValue("keepText", ui->keepTextCheckBox->isChecked());
+    settings->setValue("saveSrt", ui->saveSrtCheckBox->isChecked());
     settings->endGroup();
     if (fontSettingsModel)  // writeSettings also runs before the model exists, when an empty ini is first filled
         fontSettingsModel->save(*settings);
@@ -6264,6 +6294,7 @@ bool TsMuxerWindow::readSettingsBody()
     ui->spinEditOffset->setValue(settings->value("offset", ui->spinEditOffset->value()).toInt());
     // On unless it was turned off: Matroska carries text subtitles itself, and text stays sharp, small and editable.
     ui->keepTextCheckBox->setChecked(settings->value("keepText", true).toBool());
+    ui->saveSrtCheckBox->setChecked(settings->value("saveSrt", false).toBool());
     settings->endGroup();
 
     settings->beginGroup("pip");

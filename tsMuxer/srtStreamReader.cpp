@@ -35,10 +35,68 @@ SRTStreamReader::SRTStreamReader() : m_lastBlock(false), m_short_R(0), m_short_N
     m_linesRead = 0;
 }
 
+static std::string srtTime(int64_t ms);
+
 SRTStreamReader::~SRTStreamReader()
 {
+    // save-srt: the last subtitle without an end is given an hour, as a demux of the track gives it
+    if (m_saveSrt)
+    {
+        for (const auto& [text, times] : m_saveSrtPending)
+            saveSrtWrite(text, times.first, times.second < 0 ? times.first + 3600000 : times.second);
+        m_saveSrt->close();
+        LTRACE(LT_INFO, 2,
+               "The subtitles of track " << m_streamIndex << " were also written as text to " << m_saveSrtName << " ("
+                                         << m_saveSrtCount << " subtitles).");
+    }
     delete m_dstSubCodec;
     delete m_srtRender;
+}
+
+void SRTStreamReader::setSaveSrt(const std::string& fileName)
+{
+    m_saveSrt = std::make_unique<File>();
+    if (!m_saveSrt->open(fileName.c_str(), File::ofWrite))
+        THROW(ERR_COMMON, "save-srt: the file " << fileName << " cannot be written.")
+    m_saveSrtName = fileName;
+}
+
+// One subtitle of save-srt as an SRT record, written the way a demux of the track writes it
+void SRTStreamReader::saveSrtWrite(const std::string& text, const int64_t inMs, const int64_t outMs)
+{
+    if (outMs <= inMs)
+        return;  // never on screen
+    std::string rec;
+    if (m_saveSrtCount == 0)
+        rec = "\xEF\xBB\xBF";
+    rec += std::to_string(++m_saveSrtCount) + "\r\n" + srtTime(inMs) + " --> " + srtTime(outMs) + "\r\n";
+    for (const char c : text)
+        if (c == 10)
+            rec += "\r\n";
+        else
+            rec += c;
+    rec += "\r\n\r\n";
+    m_saveSrt->write(rec.data(), static_cast<uint32_t>(rec.size()));
+}
+
+// A subtitle for save-srt: one without an end waits for the next one, whose start is its end
+void SRTStreamReader::saveSrtCue(const std::string& text, const double inTime, const double outTime,
+                                 const bool untilNext)
+{
+    const int64_t inMs = llround(inTime * 1000.0);
+    while (!m_saveSrtPending.empty())
+    {
+        const auto& [ptext, times] = m_saveSrtPending.front();
+        saveSrtWrite(ptext, times.first, times.second < 0 ? inMs : times.second);
+        m_saveSrtPending.pop_front();
+    }
+    if (text.empty())
+        return;
+    const int64_t outMs = untilNext ? -1 : llround(outTime * 1000.0);
+    if (untilNext)
+        m_saveSrtPending.emplace_back(text, std::make_pair(inMs, outMs));
+    else
+        saveSrtWrite(text, inMs, outMs);
 }
 
 void SRTStreamReader::setAnimation(const TextAnimation& animation) { m_animation = animation; }
@@ -831,6 +889,8 @@ static bool hasVisibleText(const std::string& text)
 void SRTStreamReader::addCue(const std::string& text, const double inTime, const double outTime)
 {
     ++m_cuesRead;
+    if (m_saveSrt && !m_keepText)
+        saveSrtCue(text, inTime, outTime, m_untilNext);
     // Kept as text, each subtitle goes out as it was written, overlaps and all: Matroska carries
     // subtitles that overlap as they are, so nothing is grouped or drawn. A subtitle with no text
     // at all has nothing to carry.
