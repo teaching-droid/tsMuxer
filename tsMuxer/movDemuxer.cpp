@@ -17,6 +17,7 @@
 #include "hevc.h"
 #include "nalUnits.h"
 #include "subTrackFilter.h"
+#include "utf8Converter.h"
 #include "vodCoreException.h"
 #include "vvc.h"
 #include "wave.h"
@@ -124,6 +125,8 @@ struct MOVStreamContext : Track
     ~MOVStreamContext() = default;
 
     int containerDataType = 0;  // TRACKTYPE_VP8 etc. for the codecs nothing in their data identifies (getTrackList)
+    uint32_t trackId = 0;       // tkhd track_ID
+    std::string name;           // the track's name, from its hdlr, when it is not an encoder's generic one
     bool pcmBigEndian = false;  // an LPCM sample entry: the byte order of its samples
     bool pcmFloat = false;
     uint32_t lpcmFlags = 0;  // the format flags of a QuickTime 'lpcm' sample entry (version 2)
@@ -1352,6 +1355,10 @@ void MovDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
 {
     for (int i = 0; i < num_tracks; i++)
     {
+        const auto mst = reinterpret_cast<MOVStreamContext*>(tracks[i]);
+        if (mst->trackId &&
+            std::find(m_chapterTrackIds.begin(), m_chapterTrackIds.end(), mst->trackId) != m_chapterTrackIds.end())
+            continue;  // chapter titles (tref chap), read as chapters
         if (tracks[i]->type != IOContextTrackType::CONTROL)
         {
             trackList.insert(
@@ -1361,6 +1368,8 @@ void MovDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                                                 tracks[i]->language, 0)));
             if (const auto delay = m_codecDelayNs.find(i + 1); delay != m_codecDelayNs.end() && delay->second > 0)
                 trackList[i + 1].m_srcParams["srccodecdelay"] = std::to_string(delay->second);
+            if (!mst->name.empty())
+                trackList[i + 1].m_srcParams["srcname"] = mst->name;
         }
     }
 }
@@ -1419,6 +1428,18 @@ int MovDemuxer::ParseTableEntry(MOVAtom atom)
         return mov_read_glbl(atom);
     case MKTAG('v', 'v', 'c', 'C'):
         return mov_read_vvcc(atom);
+    case MKTAG('m', 'e', 't', 'a'):
+        return mov_read_meta(atom);
+    case MKTAG('i', 'l', 's', 't'):
+        return mov_read_ilst(atom);
+    case MKTAG('c', 'o', 'v', 'r'):
+        return m_inIlst ? mov_read_covr(atom) : 0;
+    case MKTAG('c', 'h', 'p', 'l'):
+        return mov_read_chpl(atom);
+    case MKTAG('t', 'r', 'e', 'f'):
+        return mov_read_default(atom);
+    case MKTAG('c', 'h', 'a', 'p'):
+        return mov_read_tref_chap(atom);
     case MKTAG('d', 'O', 'p', 's'):  // OpusSpecificBox
     case MKTAG('p', 'c', 'm', 'C'):  // PCMConfigurationBox, ISO/IEC 23003-5
         return mov_read_glbl(atom);
@@ -1618,6 +1639,14 @@ int MovDemuxer::mov_read_udta_string(MOVAtom atom)
     str_size = static_cast<uint16_t>(FFMIN(FFMIN((int)(sizeof(str) - 1), str_size), atom.size));
     get_buffer(reinterpret_cast<uint8_t*>(str), str_size);
     str[str_size] = 0;
+    // The title of a track (trak/udta) is that track's name when its handler gave none, not the title of the file
+    if (m_inTrak)
+    {
+        if (num_tracks > 0 && strcmp(key, "nam") == 0 && str[0])
+            if (const auto st = reinterpret_cast<MOVStreamContext*>(tracks[num_tracks - 1]); st->name.empty())
+                st->name = str;
+        return 0;
+    }
     metaData[key] = str;
     return 0;
 }
@@ -1766,7 +1795,9 @@ int MovDemuxer::mov_read_trak(MOVAtom atom)
     num_tracks++;
     st->type = IOContextTrackType::DATA;
     sc->ffindex = num_tracks;  // st->index;
+    m_inTrak = true;
     const int result = mov_read_default(atom);
+    m_inTrak = false;
     // Every subtitle time of a text track is a count of its media header's time scale, so a text track whose scale
     // is 0, or that has no media header, cannot be timed. It refused the whole file, even when the track was left
     // out of the mux and when the file was only listed, and the arm64 build, where a division by 0 does not stop
@@ -1828,8 +1859,27 @@ int MovDemuxer::mov_read_tfhd(MOVAtom atom)
     return 0;
 }
 
-// ReSharper disable once CppMemberFunctionMayBeStatic
-int MovDemuxer::mov_read_tkhd(MOVAtom atom) { return 0; }
+int MovDemuxer::mov_read_tkhd(MOVAtom atom)
+{
+    if (num_tracks < 1 || atom.size < 24)
+        return 0;
+    const auto st = reinterpret_cast<MOVStreamContext*>(tracks[num_tracks - 1]);
+    const int version = get_byte();
+    get_be24();  // flags
+    if (version == 1)
+    {
+        get_be64();  // creation time
+        get_be64();  // modification time
+    }
+    else
+    {
+        get_be32();
+        get_be32();
+    }
+    st->trackId = get_be32();
+    skip_bytes(atom.size - (m_processedBytes - atom.offset));
+    return 0;
+}
 
 int MovDemuxer::mov_read_ctts(MOVAtom atom)
 {
@@ -2384,13 +2434,236 @@ int MovDemuxer::mov_read_hdlr(MOVAtom atom)
     if (!ctype)
         isom = 1;
 
-    get_le32();  // component subtype
-    get_be32();  // component  manufacture
-    get_be32();  // component flags
-    get_be32();  // component flags mask
+    const uint32_t subtype = get_le32();  // component subtype, the handler type
+    get_be32();                           // component  manufacture
+    get_be32();                           // component flags
+    get_be32();                           // component flags mask
 
-    skip_bytes(atom.size - (m_processedBytes - atom.offset));
+    // The name of a media track. ISO/IEC 14496-12 has it as a string ending in a zero byte, QuickTime as a counted
+    // one; many encoders write a generic one there, which names nothing and is left out.
+    const int64_t left = atom.size - (m_processedBytes - atom.offset);
+    if (num_tracks > 0 && left > 0 && left < 1024 &&
+        (subtype == MKTAG('v', 'i', 'd', 'e') || subtype == MKTAG('s', 'o', 'u', 'n') ||
+         subtype == MKTAG('s', 'u', 'b', 't') || subtype == MKTAG('t', 'e', 'x', 't') ||
+         subtype == MKTAG('s', 'b', 't', 'l')))
+    {
+        std::string raw(static_cast<size_t>(left), '\0');
+        get_buffer(reinterpret_cast<uint8_t*>(raw.data()), static_cast<int>(left));
+        std::string name = static_cast<uint8_t>(raw[0]) == raw.size() - 1 ? raw.substr(1) : raw;
+        name = name.substr(0, name.find('\0'));
+        while (!name.empty() && static_cast<unsigned char>(name.back()) <= ' ') name.pop_back();
+        const bool generic = name.empty() || strEndWith(name, "Handler") || strStartWith(name, "Core Media") ||
+                             strStartWith(name, "ISO Media");
+        if (!generic)
+            reinterpret_cast<MOVStreamContext*>(tracks[num_tracks - 1])->name = name;
+        return 0;
+    }
+    skip_bytes(left);
     return 0;
+}
+
+// An ISO meta box: a full box holding a handler and, for iTunes style metadata, an ilst. QuickTime's own meta box,
+// with no version and flags, holds keys this reader does not use and is stepped over.
+int MovDemuxer::mov_read_meta(MOVAtom atom)
+{
+    if (atom.size < 4)
+        return 0;
+    if (get_be32() != 0)
+    {
+        skip_bytes(atom.size - 4);
+        return 0;
+    }
+    MOVAtom inner = atom;
+    inner.offset += 4;
+    inner.size -= 4;
+    // Its handler (mdir) has a component type of 0, which mov_read_hdlr takes for an ISO file; a QuickTime file
+    // holding an ISO meta box stays a QuickTime file
+    const int wasIsom = isom;
+    const int rez = mov_read_default(inner);
+    isom = wasIsom;
+    return rez;
+}
+
+int MovDemuxer::mov_read_ilst(MOVAtom atom)
+{
+    m_inIlst = true;
+    itunes_metadata = 1;
+    const int rez = mov_read_default(atom);
+    itunes_metadata = 0;
+    m_inIlst = false;
+    return rez;
+}
+
+// ilst covr: a data box (size, 'data', type, locale) with the picture
+int MovDemuxer::mov_read_covr(MOVAtom atom)
+{
+    if (atom.size < 16 || atom.size > (64 << 20))
+    {
+        skip_bytes(atom.size);
+        return 0;
+    }
+    const uint32_t size = get_be32();
+    const uint32_t tag = get_le32();
+    if (tag != MKTAG('d', 'a', 't', 'a') || size < 16 || size > atom.size)
+    {
+        skip_bytes(atom.size - 8);
+        return 0;
+    }
+    m_coverType = get_be32();
+    get_be32();  // locale
+    m_cover.resize(size - 16);
+    get_buffer(m_cover.data(), static_cast<int>(m_cover.size()));
+    skip_bytes(atom.size - size);
+    return 0;
+}
+
+// Nero chapters (udta/chpl): version, flags, for version 1 four more bytes, a count, then for each chapter its start in
+// units of 100 ns and its title, counted
+int MovDemuxer::mov_read_chpl(MOVAtom atom)
+{
+    const int64_t end = m_processedBytes + atom.size;
+    if (atom.size < 5)
+    {
+        skip_bytes(atom.size);
+        return 0;
+    }
+    const int version = get_byte();
+    get_be24();
+    if (version == 1)
+        get_be32();
+    const int count = get_byte();
+    for (int i = 0; i < count && m_processedBytes + 9 <= end; ++i)
+    {
+        const int64_t start = static_cast<int64_t>(get_be64());
+        const int len = get_byte();
+        if (m_processedBytes + len > end)
+            break;
+        std::string title(static_cast<size_t>(len), '\0');
+        get_buffer(reinterpret_cast<uint8_t*>(title.data()), len);
+        m_chplChapters.emplace_back(start * 100, title);
+    }
+    skip_bytes(end - m_processedBytes);
+    return 0;
+}
+
+// tref/chap: the tracks that hold this track's chapters as text samples. They are chapter titles, not a subtitle track.
+int MovDemuxer::mov_read_tref_chap(MOVAtom atom)
+{
+    for (int64_t i = 0; i + 4 <= atom.size; i += 4) m_chapterTrackIds.push_back(get_be32());
+    skip_bytes(atom.size % 4);
+    return 0;
+}
+
+std::string MovDemuxer::getTitle()
+{
+    const auto it = metaData.find("nam");
+    return it != metaData.end() ? it->second : std::string();
+}
+
+std::vector<AVChapter> MovDemuxer::getChapters()
+{
+    std::vector<AVChapter> out = m_chplChapters.empty() ? chapterTrackChapters() : m_chplChapters;
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+// The chapters of a QuickTime chapter track (tref chap), for a file without Nero chapters: each sample is one chapter,
+// starting at the sample's time, its title a 16-bit length and the text (QuickTime text and 3GPP timed text alike).
+// Read by the sample tables with a reader of its own, as the demux may be under way.
+std::vector<AVChapter> MovDemuxer::chapterTrackChapters() const
+{
+    const MOVStreamContext* sc = nullptr;
+    for (int i = 0; i < num_tracks && !sc; ++i)
+    {
+        const auto st = reinterpret_cast<const MOVStreamContext*>(tracks[i]);
+        if (st->trackId &&
+            std::find(m_chapterTrackIds.begin(), m_chapterTrackIds.end(), st->trackId) != m_chapterTrackIds.end())
+            sc = st;
+    }
+    if (!sc || sc->time_scale == 0 || sc->chunk_offsets.empty() || sc->stsc_data.empty())
+        return {};
+    File f;
+    if (!f.open(m_fileName.c_str(), File::ofRead))
+        return {};
+    std::vector<AVChapter> out;
+    size_t sample = 0;
+    size_t sttsIndex = 0;
+    uint32_t sttsUsed = 0;
+    int64_t time = 0;
+    size_t samples = sc->m_index.size();  // a size for every sample, or for all of them, and the count from stts
+    if (sc->sample_size)
+    {
+        samples = 0;
+        for (const auto& e : sc->stts_data) samples += e.count;
+    }
+    for (size_t chunk = 0; chunk < sc->chunk_offsets.size() && sample < samples && out.size() < 10000; ++chunk)
+    {
+        size_t entry = 0;  // the stsc entry this chunk falls under (chunks count from 1)
+        while (entry + 1 < sc->stsc_data.size() && sc->stsc_data[entry + 1].first <= chunk + 1) ++entry;
+        int64_t pos = sc->chunk_offsets[chunk];
+        for (unsigned n = 0; n < sc->stsc_data[entry].count && sample < samples; ++n, ++sample)
+        {
+            const uint32_t size = sc->sample_size ? sc->sample_size : sc->m_index[sample];
+            uint8_t buf[2 + 1024];
+            const auto want = static_cast<int>((std::min)(size, static_cast<uint32_t>(sizeof(buf))));
+            std::string title;
+            if (size >= 2 && f.seek(pos, File::SeekMethod::smBegin) != -1 && f.read(buf, want) == want)
+            {
+                const int len = (std::min)(buf[0] << 8 | buf[1], want - 2);
+                if (len >= 2 && buf[2] == 0xFE && buf[3] == 0xFF)  // UTF-16, big endian by its byte order mark
+                    title = UtfConverter::toUtf8(buf + 4, static_cast<size_t>(len - 2) & ~size_t{1},
+                                                 UtfConverter::SourceFormat::sfUTF16be);
+                else
+                    title.assign(reinterpret_cast<const char*>(buf + 2), static_cast<size_t>(len));
+            }
+            out.emplace_back(time * 1000000000LL / sc->time_scale, title);
+            pos += size;
+            while (sttsIndex < sc->stts_data.size() && sttsUsed >= sc->stts_data[sttsIndex].count)
+            {
+                ++sttsIndex;
+                sttsUsed = 0;
+            }
+            if (sttsIndex < sc->stts_data.size())
+            {
+                time += sc->stts_data[sttsIndex].duration;
+                ++sttsUsed;
+            }
+        }
+    }
+    return out;
+}
+
+// The cover picture of an ilst, as a Matroska AttachedFile element (RFC 9559, 5.1.6), the form a Matroska output takes
+// the attachments of its sources in
+std::vector<std::vector<uint8_t>> MovDemuxer::getPassThroughAttachments()
+{
+    if (m_cover.empty())
+        return {};
+    // By the data type of the covr, or by the picture's own first bytes where the type says nothing
+    const bool png = m_coverType == 14 || (m_cover.size() > 4 && memcmp(m_cover.data(), "\x89PNG", 4) == 0);
+    const bool bmp = !png && (m_coverType == 27 || (m_cover.size() > 2 && memcmp(m_cover.data(), "BM", 2) == 0));
+    const auto element = [](std::vector<uint8_t>& out, const uint32_t id, const uint8_t* data, const size_t size)
+    {
+        for (int i = id > 0xFFFFFF ? 3 : id > 0xFFFF ? 2 : id > 0xFF ? 1 : 0; i >= 0; --i)
+            out.push_back(static_cast<uint8_t>(id >> (8 * i)));
+        out.push_back(0x01);  // an eight byte size
+        for (int i = 6; i >= 0; --i) out.push_back(static_cast<uint8_t>(static_cast<uint64_t>(size) >> (8 * i)));
+        out.insert(out.end(), data, data + size);
+    };
+    std::vector<uint8_t> body;
+    const std::string name = png ? "cover.png" : bmp ? "cover.bmp" : "cover.jpg";
+    const std::string mime = png ? "image/png" : bmp ? "image/bmp" : "image/jpeg";
+    element(body, 0x466E, reinterpret_cast<const uint8_t*>(name.data()), name.size());  // FileName
+    element(body, 0x4660, reinterpret_cast<const uint8_t*>(mime.data()), mime.size());  // FileMediaType
+    element(body, 0x465C, m_cover.data(), m_cover.size());                              // FileData
+    uint64_t uid = 1469598103934665603ULL;  // FNV-1a of the picture: the same file gives the same UID
+    for (const uint8_t c : m_cover) uid = (uid ^ c) * 1099511628211ULL;
+    uint8_t uidBytes[8];
+    for (int i = 0; i < 8; ++i) uidBytes[i] = static_cast<uint8_t>(uid >> (8 * (7 - i)));
+    element(body, 0x46AE, uidBytes, 8);  // FileUID
+    std::vector<uint8_t> attached;
+    element(attached, 0x61A7, body.data(), body.size());  // AttachedFile
+    return {attached};
 }
 
 int MovDemuxer::mov_read_ftyp(MOVAtom atom)

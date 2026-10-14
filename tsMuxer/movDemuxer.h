@@ -15,6 +15,9 @@ class MovDemuxer final : public IOContextDemuxer
     MovDemuxer(const BufferedReaderManager& readManager);
     ~MovDemuxer() override { readClose(); }
     void openFile(const std::string& streamName) override;
+    std::string getTitle() override;
+    std::vector<AVChapter> getChapters() override;
+    std::vector<std::vector<uint8_t>> getPassThroughAttachments() override;
     void readClose() override;
     int simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& acceptedPIDs, int64_t& discardSize) override;
     void getTrackList(std::map<int32_t, TrackInfo>& trackList) override;
@@ -102,6 +105,19 @@ class MovDemuxer final : public IOContextDemuxer
     int itunes_metadata;  ///< metadata are itunes style
     int64_t moof_offset;
     std::map<std::string, std::string> metaData;
+    // Metadata a Matroska output can carry (getTitle, getChapters, getPassThroughAttachments, the track names)
+    std::vector<AVChapter> m_chplChapters;    // Nero chapters (udta/chpl)
+    std::vector<uint32_t> m_chapterTrackIds;  // tracks a tref 'chap' names: QuickTime chapter text, not media
+    std::vector<uint8_t> m_cover;             // ilst covr: the picture
+    uint32_t m_coverType = 0;                 // its data type: 13 JPEG, 14 PNG, 27 BMP
+    bool m_inIlst = false;
+    bool m_inTrak = false;  // a udta string inside a trak names that track, not the movie
+    int mov_read_meta(MOVAtom atom);
+    int mov_read_ilst(MOVAtom atom);
+    int mov_read_covr(MOVAtom atom);
+    int mov_read_chpl(MOVAtom atom);
+    int mov_read_tref_chap(MOVAtom atom);
+    std::vector<AVChapter> chapterTrackChapters() const;
     MOVFragment fragment;  ///< current fragment in moof atom
     std::vector<MOVTrackExt> trex_data;
     int64_t fileDuration;
