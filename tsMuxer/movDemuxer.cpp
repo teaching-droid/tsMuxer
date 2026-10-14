@@ -6,6 +6,7 @@
 #include <climits>
 #include <cmath>
 #include <map>
+#include <set>
 #include <sstream>
 
 #include <fs/systemlog.h>
@@ -1937,7 +1938,9 @@ int MovDemuxer::mov_read_default(MOVAtom atom)
         }
         else if (a.size > toFileEnd)
         {
-            if (m_pastEndWarnings++ == 0)
+            // A job opens a file more than once (its tracks are asked for, then read): the warning comes once a box
+            static std::set<std::pair<std::string, int64_t>> warned;
+            if (m_pastEndWarnings++ == 0 && warned.emplace(m_fileName, m_processedBytes - 8).second)
                 LTRACE(LT_WARN, 2,
                        "Warning: the MP4 box '" << std::string(reinterpret_cast<const char*>(&a.type), 4)
                                                 << "' at byte " << m_processedBytes - 8 << " says it is " << a.size
