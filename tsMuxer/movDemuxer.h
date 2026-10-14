@@ -94,12 +94,25 @@ class MovDemuxer final : public IOContextDemuxer
     int m_pastEndWarnings = 0;   // boxes whose size reaches past the end of the file, warned once
     int64_t trailingBytesWithoutMedia(int64_t from) const;
     int m_joinPart = 0;  // which file of a join is open: 0 the first
+    // An AAC track of a join, in its samples: where the sound handed on so far ends, and where the content of the
+    // parts so far ends, which is where the picture of the next part begins (dropJoinPriming)
+    struct JoinAudio
+    {
+        int64_t audioEnd = 0;
+        int64_t contentEnd = 0;
+        int64_t timeScale = 0;
+        int64_t frameLen = 0;
+        int dropped = 0;  // frames left out at the start of the open part
+    };
+    std::map<int, JoinAudio> m_joinAudio;
+    void accountJoinPart();
     void dropJoinPriming();
     std::vector<std::pair<int64_t, int64_t>> topLevelMdats() const;
     uint32_t m_timescale;
     std::map<int32_t, int64_t> m_firstTimecode;
     std::map<int32_t, int64_t> m_emptyEditUnits;  // leading empty edits per track, in movie units (mov_read_elst)
     std::map<int32_t, int64_t> m_editMediaTime;   // where a track's first edit starts in its media (mov_read_elst)
+    std::map<int32_t, int64_t> m_editDuration;    // how long that edit plays, in the movie's time scale
     std::map<int32_t, int64_t> m_codecDelayNs;    // an audio track's edit list start, as CodecDelay for Matroska
     // A fragmented file: where each track's first fragment starts (tfdt) and the composition offset of its first
     // sample, in the track's own time scale, and the edit list start of a video track (fragmentStartDelays)

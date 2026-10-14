@@ -139,6 +139,7 @@ struct MOVStreamContext : Track
     uint32_t trackId = 0;       // tkhd track_ID
     bool isMp4v = false;        // an mp4v sample entry, whose esds says what it holds
     int64_t editMediaTime = 0;  // where the first edit of the track's edit list starts in its media (mov_read_moov)
+    int64_t editDuration = 0;   // how long that edit plays, in the track's time scale (0: no edit list)
     // A fragmented file: the decode time and duration of each sample its runs (trun) give, after those of the moov,
     // and where the next one starts (tfdt, then the durations)
     std::vector<int64_t> fragDts, fragDur;
@@ -1643,6 +1644,7 @@ int MovDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepte
         const std::string nextName = m_fileIterator->getNextName();
         if (!nextName.empty())
         {
+            accountJoinPart();
             ++m_joinPart;
             openFile(nextName);
             dropJoinPriming();
@@ -1654,26 +1656,72 @@ int MovDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepte
     return m_lastReadRez;
 }
 
-// A later file of a join: its AAC sound begins with the encoder's priming, which its edit list starts after. The sound
-// of a join runs on from file to file, so the priming came out at every joint, 21 ms of AAC-LC at 48 kHz each time, and
-// the sound fell behind the picture by that much more at each joint. Its whole frames are left out now.
+// The AAC tracks of the part of a join that has just been read: how far their sound and their content reach. The
+// content of a part is what its edit list plays; without one, all of its samples less the priming.
+void MovDemuxer::accountJoinPart()
+{
+    for (int i = 0; i < num_tracks; ++i)
+    {
+        const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
+        const auto* audio = dynamic_cast<MovParsedAudioTrackData*>(st->parsed_priv_data);
+        if (!audio || !audio->isAAC || st->stts_data.empty() || st->stts_data[0].duration <= 0)
+            continue;
+        JoinAudio& j = m_joinAudio[i + 1];
+        const int64_t frameLen = st->stts_data[0].duration;
+        const auto frames = static_cast<int64_t>(st->m_index.size());
+        const int64_t content = st->editDuration > 0 ? st->editDuration : frames * frameLen - st->editMediaTime;
+        if (m_joinPart == 0)
+        {
+            // the first part's sound starts its content at 0: its edit list start moves it back (METADemuxer)
+            j.timeScale = st->time_scale;
+            j.frameLen = frameLen;
+            j.audioEnd = frames * frameLen - st->editMediaTime;
+            j.contentEnd = content;
+        }
+        else if (j.timeScale == st->time_scale && j.frameLen == frameLen)
+        {
+            j.audioEnd += (frames - j.dropped) * frameLen;
+            j.contentEnd += content;
+        }
+        else
+            j.timeScale = 0;  // a part with another sample rate or frame length: not kept in step
+    }
+}
+
+// A later file of a join. The sound of a join runs on from file to file, frame after frame, and each file's AAC sound
+// begins with the encoder's priming, which its edit list starts after, and ends with the rest of its last frame,
+// which its edit list stops before. Both came out at every joint, so the sound fell behind the picture at each joint,
+// by more each time: 15, 19 and 29 ms after the first three joints of 10 s AAC-LC parts. As many whole frames are left
+// out at the start of each later file as bring the start of its content nearest to where its picture starts: the
+// priming, and one more whenever the rest of the parts before reaches half a frame. The sound then stays within half a
+// frame of the picture however many files are joined; to the sample it cannot be without decoding the sound.
 void MovDemuxer::dropJoinPriming()
 {
     for (int i = 0; i < num_tracks; ++i)
     {
         const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
         auto* audio = dynamic_cast<MovParsedAudioTrackData*>(st->parsed_priv_data);
-        if (!audio || !audio->isAAC || st->editMediaTime <= 0 || st->stts_data.empty() ||
-            st->stts_data[0].duration <= 0)
+        if (!audio || !audio->isAAC || st->stts_data.empty() || st->stts_data[0].duration <= 0)
             continue;
-        const auto frames = static_cast<int>(st->editMediaTime / st->stts_data[0].duration);
-        if (frames <= 0)
+        const int64_t frameLen = st->stts_data[0].duration;
+        const auto frames = static_cast<int64_t>(st->m_index.size());
+        int64_t drop = st->editMediaTime / frameLen;  // the priming, whole frames
+        const auto j = m_joinAudio.find(i + 1);
+        if (j != m_joinAudio.end() && j->second.timeScale == st->time_scale && j->second.frameLen == frameLen)
+        {
+            // content start = sound end so far + priming - dropped frames; nearest to the content end so far
+            const int64_t late = j->second.audioEnd + st->editMediaTime - j->second.contentEnd;
+            drop = late >= 0 ? (late + frameLen / 2) / frameLen : 0;
+        }
+        drop = (std::min)(drop, frames);
+        if (j != m_joinAudio.end())
+            j->second.dropped = static_cast<int>(drop);
+        if (drop <= 0)
             continue;
-        audio->setDropFrames(frames);
-        LTRACE(
-            LT_INFO, 2,
-            "Part " << m_joinPart + 1 << " of the join, track " << i + 1 << ": its first " << frames
-                    << " AAC frame(s), the encoder's priming its edit list starts after, are left out at the joint.");
+        audio->setDropFrames(static_cast<int>(drop));
+        LTRACE(LT_INFO, 2,
+               "Part " << m_joinPart + 1 << " of the join, track " << i + 1 << ": its first " << drop
+                       << " AAC frame(s) are left out at the joint, to keep the sound with the picture.");
     }
 }
 
@@ -2536,6 +2584,13 @@ int MovDemuxer::mov_read_moov(MOVAtom atom)
             m_codecDelayNs[track] = mediaTime * 1000000000LL / st->time_scale;
     }
     m_editMediaTime.clear();
+    for (const auto& [track, duration] : m_editDuration)
+        if (track > 0 && track <= num_tracks && m_timescale > 0)
+        {
+            const auto st = reinterpret_cast<MOVStreamContext*>(tracks[track - 1]);
+            st->editDuration = duration * st->time_scale / m_timescale;
+        }
+    m_editDuration.clear();
     // A track with no edit list is shown from the composition time of its first sample (ISO/IEC 14496-12, 8.6.6): a
     // video track whose pictures are reordered starts that much after a track that has no reordering. That was not
     // counted, so the sound of such a file, 80 to 120 ms in the files measured, came early. A track whose edit list
@@ -3538,6 +3593,8 @@ int MovDemuxer::mov_read_elst(MOVAtom atom)
             // encoder put in front, 1024 or 2112 samples, which a player skips.
             if (leading && mediaTime > 0)
                 m_editMediaTime[num_tracks] = mediaTime;
+            if (leading)
+                m_editDuration[num_tracks] = duration;
             leading = false;
         }
     }
