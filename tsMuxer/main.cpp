@@ -63,7 +63,7 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
         // MuxerManager's looked at the raw line, while the track reader trims it and then skips it as MUXOPT.
         if (strStartWith(str.substr((std::min)(str.find_first_not_of(" 	"), str.size())), "MUXOPT"))
         {
-            vector<string> params = splitQuotedStr(str.c_str(), ' ');
+            vector<string> params = splitQuotedStr(MuxerManager::muxOptLine(str).c_str(), ' ');
             for (const auto& param : params)
             {
                 vector<string> paramPair = splitStr(trimStr(param).c_str(), '=');

@@ -647,7 +647,7 @@ bool MuxerManager::openMetaFile(const string& fileName)
         const size_t start = str.find_first_not_of(" 	");
         if (start != string::npos && strStartWith(str.substr(start), "MUXOPT"))
         {
-            m_muxOpts = str.substr(start);
+            m_muxOpts = muxOptLine(str);
             warnUnknownMuxOpts(m_muxOpts);
             // Refuse a bad option HERE, while the meta is still being read and no destination
             // exists. Raised any later it replaced the user existing output image with a stub.
@@ -773,6 +773,24 @@ int64_t parseDiscSizeValue(const string& raw)
 // An option this program does not know was ignored without a word, so a misspelt one (--no-pcr-on-vide-pid) changed
 // nothing and nobody was told. Each option of a MUXOPT line is checked against the ones a meta file can carry; one
 // that is not among them is named. Options of --bdmv-to-iso and --lang-codes belong on the command line.
+// The options of a MUXOPT line were split at spaces only, so a tab joined the texts on either side of it: after an
+// option with a value, such as --cut-end=5s, the tab and what followed became part of that value without a word, and
+// elsewhere the joined options were not recognised. A tab inside quotes, in a disc label for instance, is kept.
+string MuxerManager::muxOptLine(const string& line)
+{
+    string out = line;
+    bool quoted = false;
+    for (char& c : out)
+    {
+        if (c == '"')
+            quoted = !quoted;
+        else if (c == '\t' && !quoted)
+            c = ' ';
+    }
+    const size_t start = out.find_first_not_of(' ');
+    return start == string::npos ? string() : out.substr(start);
+}
+
 void MuxerManager::warnUnknownMuxOpts(const string& opts)
 {
     static const std::set<std::string> metaOptions = {"--allow-oversize",

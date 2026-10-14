@@ -54,6 +54,9 @@ class MuxerManager final
 
     void parseMuxOpt(const std::string& opts);
     static void warnUnknownMuxOpts(const std::string& opts);
+    // A MUXOPT line with every tab outside quotes made a space, and nothing before MUXOPT: the options are separated
+    // by spaces, and a tab joined the texts on either side of it into one option
+    static std::string muxOptLine(const std::string& line);
     int getTrackCnt() { return static_cast<int>(m_metaDemuxer.getCodecInfo().size()); }
 
     /// The tracks and their readers, for a caller that wants to ask them what they did.

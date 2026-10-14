@@ -569,7 +569,8 @@ void METADemuxer::openFile(const string& streamName)
             file.readLine(str);
             continue;
         }
-        if (strStartWith(str.substr((std::min)(str.find_first_not_of('	'), str.size())), "MUXOPT"))
+        // A MUXOPT line indented with a tab and then spaces was taken for a track line and stopped the job
+        if (strStartWith(str.substr((std::min)(str.find_first_not_of(" \t"), str.size())), "MUXOPT"))
         {
             file.readLine(str);
             continue;
