@@ -1107,6 +1107,42 @@ void MovDemuxer::openFile(const std::string& streamName)
         m_firstHeaderSize += trailingBytesWithoutMedia(m_headerWalkEnd);
 }
 
+// Every mdat at the top level of the file, as the position and size of its contents, read by the box headers alone.
+std::vector<std::pair<int64_t, int64_t>> MovDemuxer::topLevelMdats() const
+{
+    std::vector<std::pair<int64_t, int64_t>> out;
+    File f;
+    if (!f.open(m_fileName.c_str(), File::ofRead))
+        return out;
+    int64_t pos = 0;
+    while (pos + 8 <= m_fileSize)
+    {
+        uint8_t h[16];
+        if (f.seek(pos, File::SeekMethod::smBegin) == -1 || f.read(h, 8) != 8)
+            break;
+        uint64_t size = static_cast<uint64_t>(h[0]) << 24 | static_cast<uint64_t>(h[1]) << 16 |
+                        static_cast<uint64_t>(h[2]) << 8 | h[3];
+        int header = 8;
+        if (size == 1)
+        {
+            if (f.read(h + 8, 8) != 8)
+                break;
+            size = 0;
+            for (int i = 8; i < 16; ++i) size = size << 8 | h[i];
+            header = 16;
+        }
+        else if (size == 0)
+            size = static_cast<uint64_t>(m_fileSize - pos);
+        if (size < static_cast<uint64_t>(header))
+            break;
+        size = (std::min)(size, static_cast<uint64_t>(m_fileSize - pos));  // a box past the end ends there (#42)
+        if (MKTAG(h[4], h[5], h[6], h[7]) == MKTAG('m', 'd', 'a', 't'))
+            out.emplace_back(pos + header, static_cast<int64_t>(size) - header);
+        pos += static_cast<int64_t>(size);
+    }
+    return out;
+}
+
 // The bytes from `from` to the end of the file when the top-level boxes there hold no media, read by their headers
 // alone; 0 when one of them is an mdat or a moof, or the headers do not reach the end of the file exactly.
 int64_t MovDemuxer::trailingBytesWithoutMedia(const int64_t from) const
@@ -1183,6 +1219,14 @@ void MovDemuxer::buildIndex()
     else
     {
         std::map<std::pair<int64_t, int64_t>, int64_t> ownBytes;
+        // A file may keep its media in more than one mdat, one for each track for instance (#388). Only the first was
+        // known: a chunk in any other stopped the file with "Invalid chunk offset", and the walk does not even reach a
+        // second mdat that follows a moov at the start. Every mdat at the top level is known now, a chunk has to lie
+        // in one of them, and the media is read from the first mdat to the end of the last chunk; what lies between
+        // the chunks (the header of the next mdat) is stepped over as before.
+        const std::vector<std::pair<int64_t, int64_t>> mdats =
+            found_moof ? std::vector<std::pair<int64_t, int64_t>>() : topLevelMdats();
+        int64_t mediaEnd = m_mdat_pos + m_mdat_size;
         for (int i = 0; i < num_tracks; ++i)
         {
             const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
@@ -1190,14 +1234,23 @@ void MovDemuxer::buildIndex()
             for (size_t k = 0; k < st->chunk_offsets.size(); ++k)
             {
                 const int64_t j = st->chunk_offsets[k];
-                if (!found_moof)
-                    if (j < m_mdat_pos || j > m_mdat_pos + m_mdat_size)
+                if (!found_moof && (j < m_mdat_pos || j > m_mdat_pos + m_mdat_size))
+                {
+                    const auto in = std::find_if(mdats.begin(), mdats.end(), [j](const auto& m)
+                                                 { return j >= m.first && j <= m.first + m.second; });
+                    if (in == mdats.end())
                         THROW(ERR_MOV_PARSE, "Invalid chunk offset " << j)
+                    // where its own samples end, or its mdat where its tables do not say (-1: all samples one size)
+                    const int64_t own = k < bytes.size() && bytes[k] >= 0 ? bytes[k] : in->second;
+                    mediaEnd = (std::max)(mediaEnd, (std::min)(in->first + in->second, j + own));
+                }
                 chunks.emplace_back(j - m_mdat_pos, i);
                 if (k < bytes.size())
                     ownBytes[chunks.back()] = bytes[k];
             }
         }
+        if (!found_moof)
+            m_mdat_size = mediaEnd - m_mdat_pos;
         sort(chunks.begin(), chunks.end());
         for (const auto& c : chunks)
         {
