@@ -119,7 +119,15 @@ class MuxerManager final
     std::unique_ptr<AbstractMuxer> createMuxer();
     void asyncWriteBlock(const WriterData& data) const;
     void checkTrackList(const std::vector<StreamInfo>& ci) const;
+    void checkMatroskaOnlyCodecs(const std::vector<StreamInfo>& ci, bool notMatroska) const;
+    void checkOtherTracks(const std::vector<StreamInfo>& ci) const;
 
+   public:
+    // The codecs only a Matroska output carries, checked before anything is written for an output that is not one: a
+    // demux made its output folder first, and a disc its folder tree, and a refused track left them there empty
+    void checkTracksBeforeOutput() const { checkMatroskaOnlyCodecs(m_metaDemuxer.getStreamInfo(), true); }
+
+   private:
     std::vector<double> m_chapters;        // chapter start times in seconds, applied once the muxer exists
     std::vector<AVChapter> m_chapterInfo;  // the same chapters with their names, when known
     std::unique_ptr<AbstractMuxer> m_mainMuxer;

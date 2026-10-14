@@ -314,10 +314,18 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
 
 void MuxerManager::checkTrackList(const vector<StreamInfo>& ci) const
 {
-    // VP8, VP9, Vorbis and ALAC have no form in a transport stream or on a Blu-ray disc, and tsMuxeR writes no file of
-    // their own for a demux: a Matroska output is the only one that can carry them.
-    // A demux writes VP8 and VP9 into an IVF file and Vorbis into an Ogg file; only ALAC has no file of its own.
-    if (m_demuxMode || !dynamic_cast<MatroskaMuxer*>(m_mainMuxer.get()))
+    checkMatroskaOnlyCodecs(ci, m_demuxMode || !dynamic_cast<MatroskaMuxer*>(m_mainMuxer.get()));
+    if (m_demuxMode)
+        return;
+    checkOtherTracks(ci);
+}
+
+// VP8, VP9, Vorbis and ALAC have no form in a transport stream or on a Blu-ray disc, and tsMuxeR writes no file of
+// their own for a demux: a Matroska output is the only one that can carry them.
+// A demux writes VP8 and VP9 into an IVF file and Vorbis into an Ogg file; only ALAC has no file of its own.
+void MuxerManager::checkMatroskaOnlyCodecs(const vector<StreamInfo>& ci, const bool notMatroska) const
+{
+    if (notMatroska)
         for (const StreamInfo& si : ci)
             for (const CodecInfo* only :
                  {&vp8CodecInfo, &vp9CodecInfo, &vorbisCodecInfo, &alacCodecInfo, &mpeg4AspCodecInfo, &proresCodecInfo})
@@ -327,10 +335,10 @@ void MuxerManager::checkTrackList(const vector<StreamInfo>& ci) const
                                           << " can only be muxed into a Matroska file (.mkv). It has no form in a "
                                              "transport stream or on a Blu-ray disc, and a demux has no file to write "
                                              "it to. Choose MKV output, or leave the track out.")
+}
 
-    if (m_demuxMode)
-        return;
-
+void MuxerManager::checkOtherTracks(const vector<StreamInfo>& ci) const
+{
     bool avcFound = false;
     bool mvcFound = false;
     bool aacFound = false;

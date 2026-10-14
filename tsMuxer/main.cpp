@@ -1026,7 +1026,7 @@ All parameters in this group start with two dashes:
                       hard error to a warning and build the (oversized) image anyway.
 --layer-break-guard   Dual-layer safety padding for ISO output: place <n> megabytes
                       of zero-filler AFTER the BD-R/RE DL layer break (the start of
-                      layer 1, where real discs are defect-prone), plus a small 4 MB
+                      layer 1, where physical discs are defect-prone), plus a small 4 MB
                       margin before it, so no file data sits on those sectors. The
                       crossing file (usually the movie) stays logically contiguous
                       and plays seamlessly. Real-hardware data shows the layer-1
@@ -2566,6 +2566,7 @@ int main(int argc, char** argv)
                                "Capacity guard: estimated image ~" << estGb << " GB fits the " << capGb
                                                                    << " GB target disc.");
                 }
+                muxerManager.checkTracksBeforeOutput();  // before the folders are made, as for a demux
                 if (!blurayHelper.open(dstFile, dt, muxerManager.totalSize(), muxerManager.getExtraISOBlocks(),
                                        muxerManager.useReproducibleIsoHeader(), muxerManager.getLayerBreakGuardMB(),
                                        muxerManager.getLayerBreakLbns(), muxerManager.getLayerBreakGuardBeforeMB()))
@@ -2652,6 +2653,7 @@ int main(int argc, char** argv)
                                            "cannot be used: \"") +
                                     dstFile + "\"");
 
+            sMuxer.checkTracksBeforeOutput();  // before the folder is made, so a refusal leaves nothing behind
             createDir(dstFile, true);
             sMuxer.doMux(dstFile, nullptr);
             LTRACE(LT_INFO, 2, "Demux complete.");
