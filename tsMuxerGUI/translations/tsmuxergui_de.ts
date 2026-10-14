@@ -3372,7 +3372,7 @@ ISO trotzdem erstellen?</translation>
     <message>
         <location filename="../tsmuxerwindow.ui" line="2895"/>
         <source>Reset meta to auto-generated</source>
-        <translation>Meta auf Auto-Generated zurücksetzen</translation>
+        <translation>Metadatei neu erzeugen</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="98"/>
@@ -4179,17 +4179,17 @@ ISO trotzdem erstellen?</translation>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="723"/>
         <source>Empty the list: every input file and every track goes, and the output name and the track settings go back to what they are for a fresh start. Removing them one at a time does the same thing, only slower, because the meta file is rebuilt after each one.</source>
-        <translation>Die Liste leeren: jede Eingabedatei und jede Spur wird entfernt, und der Name der Ausgabedatei sowie die Spureinstellungen stehen wieder so, wie sie am Anfang stehen. Einzeln zu entfernen bewirkt dasselbe, dauert aber länger, weil die Meta-Datei nach jedem Schritt neu aufgebaut wird.</translation>
+        <translation>Die Liste leeren: jede Eingabedatei und jede Spur wird entfernt, und der Name der Ausgabedatei sowie die Spureinstellungen stehen wieder so, wie sie am Anfang stehen. Einzeln zu entfernen bewirkt dasselbe, dauert aber länger, weil die Metadatei nach jedem Schritt neu aufgebaut wird.</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="3001"/>
         <source>Open meta file</source>
-        <translation>Meta-Datei öffnen</translation>
+        <translation>Metadatei öffnen</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="725"/>
         <source>Load a meta file and mux from it as it stands. The text appears in the Meta file box below, and that box is what is handed to the muxer, so anything in the file is used exactly as written. The track list is not filled in from it and will not match: use Reset meta to auto-generated to go back to building the meta from the list.</source>
-        <translation>Eine Meta-Datei laden und genau so muxen, wie sie ist. Der Text erscheint unten im Feld Meta-Datei, und dieses Feld ist das, was an den Muxer übergeben wird; alles in der Datei wird also genau so verwendet, wie es dort steht. Die Spurliste wird daraus nicht gefüllt und passt nicht dazu: mit Meta auf automatisch zurücksetzen geht es zurück zur Meta-Datei aus der Liste.</translation>
+        <translation>Eine Metadatei laden und genau so muxen, wie sie ist. Der Text erscheint unten im Feld Metadatei, und dieses Feld ist das, was an den Muxer übergeben wird; alles in der Datei wird also genau so verwendet, wie es dort steht. Die Spurliste wird daraus nicht gefüllt und passt nicht dazu: mit Metadatei neu erzeugen geht es zurück zur Metadatei aus der Liste.</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="4707"/>
@@ -4199,12 +4199,12 @@ ISO trotzdem erstellen?</translation>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="4722"/>
         <source>Can&apos;t open meta file</source>
-        <translation>Meta-Datei kann nicht geöffnet werden</translation>
+        <translation>Metadatei kann nicht geöffnet werden</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="4723"/>
         <source>Can&apos;t open meta file &quot;%1&quot;</source>
-        <translation>Meta-Datei &quot;%1&quot; kann nicht geöffnet werden</translation>
+        <translation>Metadatei &quot;%1&quot; kann nicht geöffnet werden</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="4733"/>
@@ -4214,7 +4214,7 @@ ISO trotzdem erstellen?</translation>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="4734"/>
         <source>The meta file &quot;%1&quot; is empty.</source>
-        <translation>Die Meta-Datei &quot;%1&quot; ist leer.</translation>
+        <translation>Die Metadatei &quot;%1&quot; ist leer.</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="4253"/>
@@ -4279,7 +4279,7 @@ ISO trotzdem erstellen?</translation>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="727"/>
         <source>Which form a language read from a disc or a container is shown in. Twenty languages have two codes in ISO 639-2: Greek is ell or gre, German deu or ger. Discs mostly carry the first kind and eac3to reports the second, so this chooses which you see. It also decides what a mux writes, because the meta file is built from what is shown. A language you type into a file name is left exactly as you typed it. The setting is remembered.</source>
-        <translation>In welcher Form eine aus einer Disc oder einem Container gelesene Sprache angezeigt wird. Zwanzig Sprachen haben in ISO 639-2 zwei Codes: Griechisch ist ell oder gre, Deutsch deu oder ger. Die Discs tragen meist die erste Form, eac3to meldet die zweite; hier wählst du, was du siehst. Es bestimmt auch, was beim Muxen geschrieben wird, denn die Meta-Datei entsteht aus dem Angezeigten. Eine Sprache, die du in einen Dateinamen schreibst, bleibt genau so stehen. Die Einstellung wird gespeichert.</translation>
+        <translation>In welcher Form eine aus einer Disc oder einem Container gelesene Sprache angezeigt wird. Zwanzig Sprachen haben in ISO 639-2 zwei Codes: Griechisch ist ell oder gre, Deutsch deu oder ger. Die Discs tragen meist die erste Form, eac3to meldet die zweite; hier wählst du, was du siehst. Es bestimmt auch, was beim Muxen geschrieben wird, denn die Metadatei entsteht aus dem Angezeigten. Eine Sprache, die du in einen Dateinamen schreibst, bleibt genau so stehen. Die Einstellung wird gespeichert.</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="2108"/>
