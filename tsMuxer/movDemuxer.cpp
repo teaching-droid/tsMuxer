@@ -136,6 +136,7 @@ struct MOVStreamContext : Track
     int containerDataType = 0;  // TRACKTYPE_VP8 etc. for the codecs nothing in their data identifies (getTrackList)
     uint32_t trackId = 0;       // tkhd track_ID
     std::string name;           // the track's name, from its hdlr, when it is not an encoder's generic one
+    std::string leftOut;        // why the track cannot be read, for a meta line that names it (getTrackList)
     bool hasEditList = false;   // an elst was read for the track
     std::map<std::string, std::string> colour;  // srccolour items (m, t, p, r, cll, fall, rx ... lmin) of the entry
     uint32_t paspH = 0, paspV = 0;              // pasp: the shape of a pixel
@@ -1472,6 +1473,8 @@ void MovDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                 trackList[i + 1].m_srcParams["srccodecdelay"] = std::to_string(delay->second);
             if (!mst->name.empty())
                 trackList[i + 1].m_srcParams["srcname"] = mst->name;
+            if (!mst->leftOut.empty())
+                trackList[i + 1].m_srcParams["srcleftout"] = mst->leftOut;
             std::string colour;
             for (const auto& [key, value] : mst->colour) colour += (colour.empty() ? "" : ";") + key + "=" + value;
             if (!colour.empty())
@@ -1938,6 +1941,7 @@ int MovDemuxer::mov_read_trak(MOVAtom atom)
         delete sc->parsed_priv_data;
         sc->parsed_priv_data = nullptr;
         st->type = IOContextTrackType::DATA;
+        sc->leftOut = "it is a text track with no time scale in its media header, so its subtitles cannot be timed";
     }
     return result;
 }

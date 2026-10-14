@@ -1283,6 +1283,28 @@ int METADemuxer::addStream(const string& codec, const string& codecStreamName, c
         {
             std::map<int32_t, TrackInfo> trackList;
             demuxerIt->second.m_demuxer->getTrackList(trackList);
+            // A line naming a track the file does not have, or one its reader leaves out, made an empty output: the
+            // job went on, said it was successful, and warned that the codec on the line was not the codec of the
+            // track. It stops here, before anything is written. Only for Matroska and MP4, whose headers list every
+            // track; a transport or program stream is listed from its first part only, and a track may start later.
+            AbstractDemuxer* const fileDemuxer = demuxerIt->second.m_demuxer;
+            if (pid > 0 && !SubTrackFilter::isSubTrack(pid) && !trackList.empty() &&
+                (dynamic_cast<MatroskaDemuxer*>(fileDemuxer) || dynamic_cast<MovDemuxer*>(fileDemuxer)))
+            {
+                const auto named = trackList.find(pid);
+                if (named == trackList.end())
+                {
+                    std::string tracks;
+                    for (const auto& [id, info] : trackList)
+                        tracks += (tracks.empty() ? "" : ", ") + std::to_string(id);
+                    THROW(ERR_COMMON, unquoteStr(fileList[0]) << " has no track " << pid << " (its tracks are "
+                                                              << tracks << "). Nothing was written.")
+                }
+                if (const auto why = named->second.m_srcParams.find("srcleftout");
+                    why != named->second.m_srcParams.end())
+                    THROW(ERR_COMMON, "Track " << pid << " of " << unquoteStr(fileList[0])
+                                               << " cannot be read: " << why->second << ". Nothing was written.")
+            }
             if (const auto trackIt = trackList.find(pid); trackIt != trackList.end())
             {
                 // An encrypted track cannot be read without its key, which no file carries (RFC 9559, 14). Its blocks
