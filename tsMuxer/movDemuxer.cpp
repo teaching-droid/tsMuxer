@@ -772,10 +772,13 @@ class MovParsedAV1TrackData final : public ParsedTrackPrivData
         {
             Av1ObuHeader obuHdr;
             const int hdrLen = obuHdr.parse(src, end);
-            if (hdrLen < 0 || !obuHdr.obu_has_size_field)
+            if (hdrLen < 0)
                 break;
+            // The last OBU of a sample may leave out its size field and run to the end of the sample (AV1 in
+            // ISOBMFF, 2.4); it was dropped, and with it the picture.
             int leb128Bytes = 0;
-            const int64_t payloadSize = decodeLeb128(src + hdrLen, end, leb128Bytes);
+            const int64_t payloadSize =
+                obuHdr.obu_has_size_field ? decodeLeb128(src + hdrLen, end, leb128Bytes) : end - (src + hdrLen);
             const uint8_t* payload = src + hdrLen + leb128Bytes;
             if (payloadSize < 0 || payload + payloadSize > end)
                 break;

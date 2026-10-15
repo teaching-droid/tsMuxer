@@ -329,14 +329,11 @@ void ParsedAV1TrackData::extractData(AVPacket* pkt, uint8_t* buff, const int siz
         if (hdrLen < 0)
             break;
 
-        if (!obuHdr.obu_has_size_field)
-        {
-            // Can't determine OBU boundaries without size field
-            break;
-        }
-
+        // The last OBU of a block may leave out its size field (Matroska AV1 mapping, as the ISOBMFF one): it runs
+        // to the end of the block. It was dropped, and with it the picture of every block that ended so.
         int leb128Bytes = 0;
-        const int64_t obuPayloadSize = decodeLeb128(src + hdrLen, end, leb128Bytes);
+        const int64_t obuPayloadSize =
+            obuHdr.obu_has_size_field ? decodeLeb128(src + hdrLen, end, leb128Bytes) : end - (src + hdrLen);
         if (obuPayloadSize < 0)
             break;
 
