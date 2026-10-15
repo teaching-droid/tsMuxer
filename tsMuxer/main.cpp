@@ -2445,7 +2445,9 @@ int main(int argc, char** argv)
         DiskType dt = checkBluRayMux(argv[1], autoChapterLen, customChapterList, chapterInfo, firstMplsOffset,
                                      firstM2tsOffset, insertBlankPL, blankNum, stereoMode, isoDiskLabel);
         std::string fileExt2 = unquoteStr(fileExt);
-        bool mkvMode = fileExt2 == "MKV" || fileExt2 == "MKA" || fileExt2 == "WEBM";
+        // .mks (subtitles only) and .mk3d (stereoscopic) are Matroska files too: they went to a demux folder
+        bool mkvMode =
+            fileExt2 == "MKV" || fileExt2 == "MKA" || fileExt2 == "MKS" || fileExt2 == "MK3D" || fileExt2 == "WEBM";
         bool muxMode =
             fileExt2 == "M2TS" || fileExt2 == "TS" || fileExt2 == "SSIF" || fileExt2 == "ISO" || dt != DiskType::NONE;
 

@@ -93,7 +93,7 @@ Supported output formats:
 * **ISO** - Blu-ray disc image
 * **Blu-ray folder structure** - BDMV directory layout
 
-The output format is determined by the file extension of the output file name (e.g. `.ts`, `.m2ts`, `.mkv`, `.mka`, `.webm`, `.iso`).
+The output format is determined by the file extension of the output file name (e.g. `.ts`, `.m2ts`, `.mkv`, `.mka`, `.mks`, `.mk3d`, `.webm`, `.iso`).
 
 The output of the program is encoded in UTF-8, which means that non-ASCII characters will not show up properly in the Windows console by default. If you want to see the output properly, run `chcp 65001` before running tsMuxeR.
 
@@ -120,7 +120,7 @@ MUXOPT --vbr
 V_MPEG4/ISO/AVC, D:/media/test/stream.h264, fps=25
 A_AC3, D:/media/test/stream.ac3, timeshift=-10000ms
 ```
-When the output file has an `.mkv`, `.mka` or `.webm` extension, tsMuxeR automatically uses the Matroska muxer. A `.webm` output is WebM, the subset of Matroska that web browsers play: it takes VP8, VP9 and AV1 video and Opus and Vorbis audio only, and holds no attachments. Most MUXOPT parameters related to TS/Blu-ray (such as `--blu-ray`, `--new-audio-pes`, `--pcr-on-video-pid`) are not applicable to MKV output and will be ignored.
+When the output file has an `.mkv`, `.mka`, `.mks`, `.mk3d` or `.webm` extension, tsMuxeR automatically uses the Matroska muxer. A `.webm` output is WebM, the subset of Matroska that web browsers play: it takes VP8, VP9 and AV1 video and Opus and Vorbis audio only, and holds no attachments. Most MUXOPT parameters related to TS/Blu-ray (such as `--blu-ray`, `--new-audio-pes`, `--pcr-on-video-pid`) are not applicable to MKV output and will be ignored.
 
 Supported input containers:
 * TS/M2TS/MTS
