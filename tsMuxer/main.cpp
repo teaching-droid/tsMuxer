@@ -1302,6 +1302,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     bool singleCopy3d = false;
     bool innerOnly = false;
     bool allowOversize = false;
+    int extraIsoSpace = 0;  // --extra-iso-space, in 64K blocks, on top of the estimate
     string discLabel;
     vector<string> positional;
     for (int i = 2; i < argc; ++i)
@@ -1347,6 +1348,17 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                 allowOversize = true;
             else if (a.rfind("--label=", 0) == 0)
                 discLabel = a.substr(8);
+            // The refusal of an image whose metadata does not fit advises this option, which was not taken here.
+            else if (a.rfind("--extra-iso-space=", 0) == 0)
+            {
+                const string v = a.substr(18);
+                if (v.empty() || v.find_first_not_of("0123456789") != string::npos || v.size() > 6)
+                {
+                    LTRACE(LT_ERROR, 2, "Invalid value in " << a << ": a number of 64K blocks.");
+                    return -1;
+                }
+                extraIsoSpace = static_cast<int>(strToInt32(v.c_str()));
+            }
             else
                 positional.push_back(a);
         }
@@ -1362,6 +1374,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                "Usage: tsMuxeR --bdmv-to-iso [--layer-break-guard=<MB>] [--layer-break-guard-before=<MB>] "
                "[--layer-break-lbn=<sector>] [--disc-capacity=<sectors>] [--original-order] [--no-layer-fit] "
                "[--keep-extra-files] [--3d-single-copy] [--inner-only] [--allow-oversize] [--label=<string>] "
+               "[--extra-iso-space=<64K blocks>] "
                "<BDMV_folder> <out.iso>");
         return -1;
     }
@@ -1644,7 +1657,14 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
 
     // the metadata partition must hold ~1 File Entry per file + directory content; size it from the count
     // Each folded 3D group is one entry in `items` but still three files in the image.
-    const int extraISOBlocks = static_cast<int>(items.size() + 2 * interleavedGroups) / 32 + 16;
+    // A folder takes two sectors, its entry and its contents, and a file one: a tree of some 300 folders of one file
+    // each was refused, its metadata did not fit, as only the files were counted.
+    std::set<string> folders;
+    for (const auto& it : items)
+        for (size_t s = it.rel.find_first_of("/\\"); s != string::npos; s = it.rel.find_first_of("/\\", s + 1))
+            folders.insert(strToUpperCase(it.rel.substr(0, s)));
+    const int extraISOBlocks =
+        static_cast<int>(items.size() + 2 * folders.size() + 2 * interleavedGroups) / 32 + 16 + extraIsoSpace;
 
     LTRACE(
         LT_INFO, 2,
