@@ -164,6 +164,8 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
                 // --keep-editions: the source's chapters, every edition of them, and its segment identity, as they
                 // stand. They are times on the file's own timeline, which a cut would move, and they replace the
                 // chapters the output would otherwise get.
+                if (auto* const mkv = dynamic_cast<MatroskaMuxer*>(m_mainMuxer.get()))
+                    mkv->setRightEyeFirst(isMvcBaseViewR());
                 if (m_keepEditions)
                 {
                     auto* const mkv = dynamic_cast<MatroskaMuxer*>(m_mainMuxer.get());

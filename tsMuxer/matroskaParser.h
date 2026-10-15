@@ -144,6 +144,7 @@ static constexpr uint16_t MATROSKA_ID_VIDEOSTEREOMODE = 0x53B9;
 // one block, left eye first, which is what a folded 3D track is.
 static constexpr uint16_t MATROSKA_ID_VIDEOSTEREOMODE_CURRENT = 0x53B8;
 static constexpr uint64_t MATROSKA_STEREO_BOTH_EYES_LEFT_FIRST = 13;
+static constexpr uint64_t MATROSKA_STEREO_BOTH_EYES_RIGHT_FIRST = 14;
 static constexpr uint16_t MATROSKA_ID_VIDEOASPECTRATIO = 0x54B3;
 static constexpr uint32_t MATROSKA_ID_VIDEOCOLOURSPACE = 0x2EB524;
 

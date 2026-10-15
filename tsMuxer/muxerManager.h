@@ -81,7 +81,9 @@ class MuxerManager final
         return m_metaDemuxer.takeBlockAdditions(streamIndex, pts, out);
     }
 
-    [[nodiscard]] bool isMvcBaseViewR() const { return m_mvcBaseViewR; }
+    // --right-eye, or a source playlist that says its base view is the right eye: a disc made from such a playlist was
+    // written with the left eye as the base view
+    [[nodiscard]] bool isMvcBaseViewR() const { return m_mvcBaseViewR || m_metaDemuxer.mplsBaseViewRight(); }
     [[nodiscard]] int64_t totalSize() const { return m_metaDemuxer.totalSize(); }
     // What has actually been read out of the sources. The ratio of this to totalSize() is the
     // figure the progress line prints, and a finished mux must have consumed everything.

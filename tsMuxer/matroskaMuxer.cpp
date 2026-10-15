@@ -1510,10 +1510,12 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track, i
 
         // 3D: both views travel in one block, so the track has to say so or a player has no
         // reason to look for a second one. 13 is "both eyes laced in one block, left eye first",
-        // which is how a reference 3D file describes exactly this arrangement.
+        // which is how a reference 3D file describes exactly this arrangement; 14 the same with the right eye first,
+        // where the base view is the right eye. 13 was written for both, and a player showed each eye the other's view.
         if (track.foldKind == MkvTrackInfo::FoldKind::MvcDependent)
-            vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEOSTEREOMODE_CURRENT,
-                                    MATROSKA_STEREO_BOTH_EYES_LEFT_FIRST);
+            vPos += ebml_write_uint(
+                videoBuf + vPos, MATROSKA_ID_VIDEOSTEREOMODE_CURRENT,
+                m_rightEyeFirst ? MATROSKA_STEREO_BOTH_EYES_RIGHT_FIRST : MATROSKA_STEREO_BOTH_EYES_LEFT_FIRST);
 
         // Write Video master
         pos += ebml_write_master_open(inner.data() + pos, MATROSKA_ID_TRACKVIDEO, vPos);

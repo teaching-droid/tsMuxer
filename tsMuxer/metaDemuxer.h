@@ -302,6 +302,17 @@ class METADemuxer final : public AbstractDemuxer
                                       const std::string& requestFile);
     std::vector<MPLSParser> getMplsInfo(const std::string& mplsFileName);
 
+   public:
+    // A playlist read as a source says its 3D base view is the right eye
+    [[nodiscard]] bool mplsBaseViewRight() const
+    {
+        for (const auto& [name, parser] : m_mplsStreamMap)
+            if (parser.mvc_base_view_r)
+                return true;
+        return false;
+    }
+
+   private:
     int addPGSubStream(const std::string& codec, const std::string& _codecStreamName,
                        const std::map<std::string, std::string>& addParams, const MPLSStreamInfo* subStream);
     static void addTrack(std::vector<CheckStreamRez>& rez, CheckStreamRez trackRez);

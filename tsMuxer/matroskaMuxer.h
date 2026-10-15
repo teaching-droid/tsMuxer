@@ -362,9 +362,12 @@ class MatroskaMuxer final : public AbstractMuxer
     int64_t m_treeCutEndNs = INT64_MAX;
     bool m_writingPart = false;  // writePartChapters is writing the chapters of one part of a split
     double m_partStartSec = 0, m_partEndSec = 0;
+    bool m_rightEyeFirst = false;
     bool writeChapterTree();
 
    public:
+    // The base view of a 3D track is the right eye (--right-eye, or a playlist that says so): StereoMode 14.
+    void setRightEyeFirst(const bool value) { m_rightEyeFirst = value; }
     void setSourceEditions(const AbstractDemuxer::SourceEditions& editions)
     {
         m_keepEditions = true;
