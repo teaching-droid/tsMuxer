@@ -1217,8 +1217,15 @@ bool SRTStreamReader::parseTime(const string& text)
     {
         if (text[i] == '-' && text[i + 1] == '-' && text[i + 2] == '>')
         {
-            string first = trimStr(text.substr(0, i));
-            string second = trimStr(text.substr(i + 3, text.length() - i - 3));
+            // Tabs around the arrow are white space as well: trimStr keeps them, and a tab after the arrow left the
+            // end time empty below, so the subtitle stayed on until the next one.
+            const auto trim = [](const string& part)
+            {
+                const size_t b = part.find_first_not_of(" \t\r\n");
+                return b == string::npos ? string() : part.substr(b, part.find_last_not_of(" \t\r\n") - b + 1);
+            };
+            string first = trim(text.substr(0, i));
+            string second = trim(text.substr(i + 3, text.length() - i - 3));
             // Some writers put display coordinates after the end time, "X1:100 X2:600 Y1:50 Y2:100".
             // The end time is read by splitting at colons from the right, so those numbers were read
             // as the time: a subtitle due to end at 3 s ended at 600 hours. Only the first word after
