@@ -798,6 +798,46 @@ int H264StreamReader::getIdrPrevFrames(uint8_t* buff, const uint8_t* bufEnd)
     return -1;
 }
 
+// The pictures after the I picture that begins a stream without an IDR (a cut, an open GOP) that are shown before
+// it: they follow it in decode order with a lower order count. Counted up to the first picture shown after it, as
+// getIdrPrevFrames does after an IDR. Returns -1 when more data is needed and can come.
+int H264StreamReader::leadingPicturesOfFirstI(const SliceUnit& iSlice, uint8_t* buff)
+{
+    const int maxLsb = 1 << iSlice.getSPS()->log2_max_pic_order_cnt_lsb;
+    int leading = 0;
+    for (uint8_t* nal = NALUnit::findNextNAL(buff + 4, m_bufEnd); nal < m_bufEnd;
+         nal = NALUnit::findNextNAL(nal, m_bufEnd))
+    {
+        const auto type = static_cast<NALUnit::NALType>(*nal & 0x1f);
+        if (type == NALUnit::NALType::nuSliceIDR)
+            return leading;
+        if (type != NALUnit::NALType::nuSliceNonIDR && type != NALUnit::NALType::nuSliceA)
+            continue;
+        SliceUnit slice;
+        const int rez = deserializeSliceHeader(slice, nal, m_bufEnd);
+        if (rez == UNIT_DAMAGED)
+            continue;
+        if (rez == NOT_ENOUGH_BUFFER && !m_eof)
+            return -1;
+        if (rez != 0)
+            return leading;
+        if (slice.first_mb_in_slice != 0)
+            continue;
+        if (slice.m_field_pic_flag && slice.frame_num == iSlice.frame_num)
+            continue;  // the other field of the I picture
+        int diff = static_cast<int>(slice.pic_order_cnt_lsb) - static_cast<int>(iSlice.pic_order_cnt_lsb);
+        if (diff >= maxLsb / 2)
+            diff -= maxLsb;
+        else if (diff < -maxLsb / 2)
+            diff += maxLsb;
+        if (diff >= 0)
+            return leading;
+        if (slice.bottom_field_flag == 0)
+            leading++;
+    }
+    return m_eof ? leading : -1;
+}
+
 // The picture order count step of the IDR period that begins with idrSlice (its NAL at buff), read from
 // that period's own pictures by the rule additionalStreamCheck applies at the start of a track: 1 (halve
 // the counts) for coded fields and for frames whose counts are all even, 0 when a coded frame has an odd
@@ -1306,6 +1346,19 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
 
     ////////////////////////////
 
+    // A stream that begins with an I picture that is not an IDR, as a cut does, can have pictures after it in decode
+    // order that are shown before it (an open GOP). The I picture took the first time before they were seen, the first
+    // of them got the same time, and a Matroska output wrote the two as one block. The I picture now comes after
+    // them, and every picture from it on takes its time from its own order count, as after an IDR.
+    int firstILeading = -1;
+    if (m_totalFrameNum == 0 && m_idrSliceCnt == 0 && !guessOrder && !damaged && slice.isIFrame() && !slice.isIDR() &&
+        slice.getSPS()->pic_order_cnt_type == 0)
+    {
+        firstILeading = leadingPicturesOfFirstI(slice, buff);
+        if (firstILeading == -1)
+            return NOT_ENOUGH_BUFFER;
+    }
+
     // A guessed order is set below from the GOP before; calcPicOrder would take the stand-in count as the stream's own.
     int fullPicOrder = 0;
     if (!guessOrder)
@@ -1327,6 +1380,8 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
         if (m_iFramePtsOffset == -1)
             return NOT_ENOUGH_BUFFER;
     }
+    else if (firstILeading >= 0)
+        m_frameNum = 0;  // counted from the I picture as from an IDR: its leading pictures then need no more delay
     else
     {
         m_frameNum++;
@@ -1347,6 +1402,11 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     }
     if (m_idrSliceCnt == 0)
     {
+        if (firstILeading >= 0)
+        {
+            m_bSliceFound = true;
+            m_picOrderOffset = firstILeading - fullPicOrder;
+        }
         if (!m_bSliceFound && slice.slice_type == SliceUnit::B_TYPE)
         {
             m_bSliceFound = true;

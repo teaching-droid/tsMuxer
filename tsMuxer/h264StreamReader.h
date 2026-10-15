@@ -134,6 +134,7 @@ class H264StreamReader final : public MPEGStreamReader
     void additionalStreamCheck(uint8_t* buff, uint8_t* end);
     int calcPicOrder(const SliceUnit& slice);
     int getIdrPrevFrames(uint8_t* buff, const uint8_t* bufEnd);
+    int leadingPicturesOfFirstI(const SliceUnit& iSlice, uint8_t* buff);
     int lsbDivOfIdrPeriod(const SliceUnit& idrSlice, uint8_t* buff);
     // auFirst: the slice follows the delimiter, SPS, PPS or SEI that began its access unit, so it is the first slice of
     // its picture whatever its header says.
