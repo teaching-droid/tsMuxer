@@ -968,19 +968,16 @@ void MuxerManager::parseMuxOpt(const string& opts)
         {
             if (paramPair.size() < 2)
                 THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
-            m_layerBreakGuardMB = strToInt32(paramPair[1]);
-            if (m_layerBreakGuardMB < 0 || m_layerBreakGuardMB > 1024)
-                THROW(ERR_COMMON,
-                      "Invalid --layer-break-guard value '" << paramPair[1] << "'. Expected 0..1024 (megabytes).");
+            if (const std::string err = parseGuardMB(paramPair[0], paramPair[1], m_layerBreakGuardMB); !err.empty())
+                THROW(ERR_COMMON, err);
         }
         else if (paramPair[0] == "--layer-break-guard-before")
         {
             if (paramPair.size() < 2)
                 THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
-            m_layerBreakGuardBeforeMB = strToInt32(paramPair[1]);
-            if (m_layerBreakGuardBeforeMB < 0 || m_layerBreakGuardBeforeMB > 1024)
-                THROW(ERR_COMMON, "Invalid --layer-break-guard-before value '" << paramPair[1]
-                                                                               << "'. Expected 0..1024 (megabytes).");
+            if (const std::string err = parseGuardMB(paramPair[0], paramPair[1], m_layerBreakGuardBeforeMB);
+                !err.empty())
+                THROW(ERR_COMMON, err);
         }
         else if (paramPair[0] == "--no-chapters")
             m_noChapters = true;
@@ -990,19 +987,11 @@ void MuxerManager::parseMuxOpt(const string& opts)
                 THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
             // One sector for BD-R/RE DL, or a comma-separated list for BDXL (100 GB = 2 breaks,
             // 128 GB = 3): e.g. --layer-break-lbn=15768576,31537152
-            m_layerBreakLbns.clear();
-            for (const auto& tok : splitStr(paramPair[1].c_str(), ','))
-            {
-                const int lbn = strToInt32(trimStr(tok).c_str());
-                // one rule, shared with the --bdmv-to-iso path, which used to accept anything
-                std::string warning;
-                const std::string err = checkLayerBreakLbn(lbn, warning);
-                if (!err.empty())
-                    THROW(ERR_COMMON, "Invalid --layer-break-lbn value '" << paramPair[1] << "': " << err);
-                if (!warning.empty())
-                    LTRACE(LT_WARN, 2, "Warning: " << warning);
-                m_layerBreakLbns.push_back(lbn);
-            }
+            // one reading, shared with the --bdmv-to-iso path
+            std::vector<std::string> warnings;
+            if (const std::string err = parseLayerBreakList(paramPair[1], m_layerBreakLbns, warnings); !err.empty())
+                THROW(ERR_COMMON, "Invalid --layer-break-lbn value '" << paramPair[1] << "': " << err);
+            for (const auto& warning : warnings) LTRACE(LT_WARN, 2, "Warning: " << warning);
         }
     }
 }

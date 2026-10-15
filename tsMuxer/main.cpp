@@ -1306,27 +1306,27 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
         const string a = argv[i];
         try
         {
-            if (a.rfind("--layer-break-guard-before=", 0) == 0)
-                layerBreakGuardBeforeMB = std::stoi(a.substr(27));
-            else if (a.rfind("--layer-break-guard=", 0) == 0)
-                layerBreakGuardMB = std::stoi(a.substr(20));
+            // The guard sizes had no limit here, while a meta file refuses more than 1024 MB: 2000 built an image
+            // with 2000 MB of zeros on this route and was refused on the other. One reading for both now.
+            if (a.rfind("--layer-break-guard-before=", 0) == 0 || a.rfind("--layer-break-guard=", 0) == 0)
+            {
+                const size_t eq = a.find('=');
+                int& mb = a.rfind("--layer-break-guard-before=", 0) == 0 ? layerBreakGuardBeforeMB : layerBreakGuardMB;
+                if (const std::string err = parseGuardMB(a.substr(0, eq), a.substr(eq + 1), mb); !err.empty())
+                {
+                    LTRACE(LT_ERROR, 2, err);
+                    return -1;
+                }
+            }
             else if (a.rfind("--layer-break-lbn=", 0) == 0)
             {
-                layerBreakLbns.clear();
-                for (const auto& tok : splitStr(a.substr(18).c_str(), ','))
+                std::vector<std::string> warnings;
+                if (const std::string err = parseLayerBreakList(a.substr(18), layerBreakLbns, warnings); !err.empty())
                 {
-                    const int lbn = std::stoi(tok);
-                    std::string warning;
-                    const std::string err = checkLayerBreakLbn(lbn, warning);
-                    if (!err.empty())
-                    {
-                        LTRACE(LT_ERROR, 2, "--layer-break-lbn: " << err);
-                        return -1;
-                    }
-                    if (!warning.empty())
-                        LTRACE(LT_WARN, 2, "Warning: " << warning);
-                    layerBreakLbns.push_back(lbn);
+                    LTRACE(LT_ERROR, 2, "--layer-break-lbn: " << err);
+                    return -1;
                 }
+                for (const auto& warning : warnings) LTRACE(LT_WARN, 2, "Warning: " << warning);
             }
             else if (a.rfind("--disc-capacity=", 0) == 0)
                 discCapacitySectors = std::stoll(a.substr(16));

@@ -470,6 +470,44 @@ std::string checkLayerBreakLbn(const int lbn, std::string& warning)
     return std::string();
 }
 
+// The meta route read each sector with strtol, so 12.219.392 was sector 12 with only a warning and 4294967296 became
+// 2147483647 on Windows in silence; --bdmv-to-iso read it with std::stoi, which stopped at the dots in the same way
+// and refused the large one. One reading for both, which refuses what is not a sector number.
+std::string parseLayerBreakList(const std::string& value, std::vector<int>& lbns, std::vector<std::string>& warnings)
+{
+    lbns.clear();
+    warnings.clear();
+    for (const auto& raw : splitStr(value.c_str(), ','))
+    {
+        const std::string tok = trimStr(raw);
+        if (tok.empty() || tok.find_first_not_of("0123456789") != std::string::npos)
+            return "\"" + tok +
+                   "\" is not a sector number. A layer break is written in digits alone, without dots, spaces or "
+                   "other grouping, such as 12219392; a comma separates two breaks.";
+        if (tok.size() > 10 || strToInt64(tok.c_str()) > INT_MAX)
+            return "sector " + tok + " is past the end of any Blu-ray.";
+        const int lbn = static_cast<int>(strToInt64(tok.c_str()));
+        std::string warning;
+        const std::string err = checkLayerBreakLbn(lbn, warning);
+        if (!err.empty())
+            return err;
+        if (!warning.empty())
+            warnings.push_back(warning);
+        lbns.push_back(lbn);
+    }
+    return std::string();
+}
+
+std::string parseGuardMB(const std::string& option, const std::string& value, int& mb)
+{
+    const std::string t = trimStr(value);
+    if (t.empty() || t.find_first_not_of("0123456789") != std::string::npos || t.size() > 4 ||
+        strToInt32(t.c_str()) > 1024)
+        return "Invalid " + option + " value '" + value + "'. Expected 0..1024 (megabytes).";
+    mb = strToInt32(t.c_str());
+    return std::string();
+}
+
 int64_t delayFromFileName(const std::string& fileName)
 {
     std::string name = extractFileName(fileName);

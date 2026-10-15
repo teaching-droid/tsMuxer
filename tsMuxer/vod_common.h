@@ -176,6 +176,12 @@ bool defaultParamMeansNo(const std::string& value);
 // payload. Warning rather than refusing, because plausibility is a judgement and a wrong refusal is
 // worse than a wrong guard.
 std::string checkLayerBreakLbn(int lbn, std::string& warning);
+// The value of --layer-break-lbn, on a MUXOPT line and for --bdmv-to-iso alike: sectors, digits only, separated by
+// commas. Returns an error text, or an empty one with lbns filled and any warnings in warnings.
+std::string parseLayerBreakList(const std::string& value, std::vector<int>& lbns, std::vector<std::string>& warnings);
+// The value of --layer-break-guard and --layer-break-guard-before: whole megabytes from 0 to 1024, on both routes.
+// Returns an error text, or an empty one with mb set.
+std::string parseGuardMB(const std::string& option, const std::string& value, int& mb);
 
 static int64_t internalClockToPts(const int64_t value) { return value / INT_FREQ_TO_TS_FREQ; }
 
