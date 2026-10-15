@@ -1234,6 +1234,12 @@ std::string TSMuxer::getNextName(const std::string curName)
         int origNum = strToInt32(fileName.c_str());
         origNum += m_curFileNum;
         m_curFileNum++;
+        // A clip name has five digits, and a playlist names a clip by them. A split that went past 99999 wrote a part
+        // named 100000.m2ts, and the playlist pointed at clip 10000, which does not exist.
+        if (origNum > 99999)
+            THROW(ERR_COMMON, "The split needs clip number " << origNum
+                                                             << ", and a disc clip has five digits at most. Give a "
+                                                                "lower --m2tsOffset or larger parts.")
         result = closeDirPath(filePath) + strPadLeft(int32ToStr(origNum), 5, '0') + "." + fileExt;
     }
     else if (isSplitting())
