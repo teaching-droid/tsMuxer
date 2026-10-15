@@ -138,6 +138,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A split of sound without video** is decided by the sound, not by a subtitle line listed first.
 
+* **A cut moves the chapters of --custom-chapters and --chapters-file** as it moves the source's own: the chapter playing at the cut start opens the output at 0. A disc had no mark at its start, and a Matroska output kept the chapters at their old times.
+
 ### Window
 
 * **At its smallest size, every tab stays readable.** The track list keeps at least four rows, the buttons beside it are no longer squashed, and a tab that needs more room scrolls. Rows of the Subtitles and Blu-ray tabs were drawn over each other there.
