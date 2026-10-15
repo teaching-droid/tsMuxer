@@ -565,21 +565,36 @@ int FLACStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, i
     // pattern 77,801 bytes into a frame of 192,515 cut it at 5.46 s, the decoder dropped the pieces, 8,192 samples a
     // channel, and the times after it moved. So a header counts as the next frame only where the frame's own CRC-16,
     // its last two bytes, matches in front of it, as testFrameLength already asks while a track is identified. A
-    // damaged frame whose CRC-16 never matches is still ended at the first header after it, as before, once a whole
-    // frame's worth of bytes has been searched.
+    // damaged frame whose CRC-16 never matches is ended at the first header after it that carries the next frame's
+    // number and the same stream fields; failing that, at the first header, once a whole frame's worth of bytes has
+    // been searched or the stream has ended. Waiting for a whole frame's worth alone meant a damaged frame in the last
+    // 2 MB of a stream was never ended: every frame after it was lost with it.
     uint8_t* firstHeader = nullptr;
+    uint8_t* firstFollowing = nullptr;
+    const uint64_t nextNumber =
+        fields.variableBlocks ? fields.number + static_cast<uint64_t>(fields.blockSize) : fields.number + 1;
     for (uint8_t* p = buff + 4; p + 2 <= end && p - buff <= MAX_FRAME_BYTES; p++)
     {
         const uint16_t sync = (p[0] << 8) | p[1];
-        if ((sync != FLAC_SYNC_FIXED && sync != FLAC_SYNC_VARIABLE) || parseFrameHeader(p, end) == 0)
+        if (sync != FLAC_SYNC_FIXED && sync != FLAC_SYNC_VARIABLE)
+            continue;
+        FrameFields next;
+        if (parseFrameHeader(p, end, &next) == 0)
             continue;
         if (!firstHeader)
             firstHeader = p;
         const auto stored = static_cast<uint16_t>((p[-2] << 8) | p[-1]);
         if (flac_crc16(buff, static_cast<size_t>(p - 2 - buff)) == stored)
             return static_cast<int>(p - buff);
+        if (!firstFollowing && next.number == nextNumber && next.variableBlocks == fields.variableBlocks &&
+            next.sampleRateCode == fields.sampleRateCode && next.channels == fields.channels &&
+            next.sampleSizeCode == fields.sampleSizeCode)
+            firstFollowing = p;
     }
-    if (firstHeader && end - buff > MAX_FRAME_BYTES)
+    const bool searchedAll = end - buff > MAX_FRAME_BYTES || m_lastBlock;
+    if (firstFollowing && searchedAll)
+        return static_cast<int>(firstFollowing - buff);
+    if (firstHeader && searchedAll)
         return static_cast<int>(firstHeader - buff);
 
     // No next frame found: need more data
