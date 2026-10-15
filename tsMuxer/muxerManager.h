@@ -38,6 +38,7 @@ class MuxerManager final
     // Matroska writes these as a Chapters master; every other muxer ignores them, because the
     // Blu-ray path takes the same list a different way.
     void setChapters(const std::vector<double>& chapters) { m_chapters = chapters; }
+    void moveChaptersByCut(std::vector<double>& times, std::vector<AVChapter>& info) const;
     void setChapterInfo(const std::vector<AVChapter>& info) { m_chapterInfo = info; }
 
     void setCutStart(const int64_t value) { m_cutStart = value; }

@@ -2543,6 +2543,7 @@ int main(int argc, char** argv)
                 THROW(ERR_COMMON, "No tracks selected")
             // Same list the Blu-ray path hands to createMPLSFile. checkBluRayMux() has already
             // parsed --custom-chapters out of the meta above, whatever the output format is.
+            muxerManager.moveChaptersByCut(customChapterList, chapterInfo);
             if (!customChapterList.empty())
                 muxerManager.setChapters(customChapterList);
             if (!chapterInfo.empty())
@@ -2569,7 +2570,9 @@ int main(int argc, char** argv)
             // --split-chapters needs them here as well, because splitting happens in the muxer.
             // Handing them over changes nothing on its own: TSMuxer keeps the list and only looks
             // at it when that option is on. A source that carries its own chapters, a playlist or
-            // a Matroska, is already covered by the fallback in preinitMux.
+            // a Matroska, is already covered by the fallback in preinitMux. A cut moves them as it moves the
+            // source's own, here for the split and for the disc's playlist marks alike.
+            muxerManager.moveChaptersByCut(customChapterList, chapterInfo);
             if (!customChapterList.empty())
                 muxerManager.setChapters(customChapterList);
             reportDvProfileIgnored(muxerManager, dt != DiskType::NONE ? "a disc" : "a transport stream");
@@ -2692,9 +2695,6 @@ int main(int argc, char** argv)
                         }
                     }
                 }
-
-                for (auto& i : customChapterList)
-                    i -= static_cast<double>(muxerManager.getCutStart()) / INTERNAL_PTS_FREQ;
 
                 if (subMuxer)
                     mainMuxer->alignPTS(subMuxer);

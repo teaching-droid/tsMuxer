@@ -464,6 +464,55 @@ std::vector<AVChapter> MuxerManager::sourceChapters()
     return *m_sourceChapters;
 }
 
+// --custom-chapters and --chapters-file are times on the source's timeline, as the source's own chapters are, and a cut
+// moves them the same way: the window writes a disc's chapters from the source's as --custom-chapters. A disc moved
+// them back by the cut start and dropped those before it, so it had no mark at its start; a Matroska output did not
+// move them at all, and kept chapters past its end. Both now keep the chapters inside the cut, moved back, with the one
+// playing at the cut start opening the output at 0.
+void MuxerManager::moveChaptersByCut(std::vector<double>& times, std::vector<AVChapter>& info) const
+{
+    if (m_cutStart <= 0 && m_cutEnd <= 0)
+        return;
+    const double start = m_cutStart > 0 ? static_cast<double>(m_cutStart) / INTERNAL_PTS_FREQ : 0.0;
+    const double end = m_cutEnd > 0 ? static_cast<double>(m_cutEnd) / INTERNAL_PTS_FREQ : 1e300;
+    std::vector<double> keptTimes;
+    std::vector<AVChapter> keptInfo;
+    int playing = -1;
+    for (size_t i = 0; i < times.size(); ++i)
+    {
+        if (times[i] <= start)
+        {
+            if (playing < 0 || times[i] > times[playing])
+                playing = static_cast<int>(i);
+        }
+        else if (times[i] < end)
+        {
+            keptTimes.push_back(times[i] - start);
+            if (i < info.size())
+            {
+                AVChapter moved = info[i];
+                moved.start = llround(keptTimes.back() * 1e9);
+                moved.end = moved.end >= 0 ? moved.end - llround(start * 1e9) : -1;
+                keptInfo.push_back(std::move(moved));
+            }
+        }
+    }
+    if (playing >= 0)
+    {
+        keptTimes.insert(keptTimes.begin(), 0.0);
+        if (static_cast<size_t>(playing) < info.size())
+        {
+            AVChapter first = info[playing];
+            first.start = 0;
+            first.end = first.end > llround(start * 1e9) ? first.end - llround(start * 1e9) : -1;
+            keptInfo.insert(keptInfo.begin(), std::move(first));
+        }
+    }
+    times = keptTimes;
+    if (!info.empty())
+        info = keptInfo;
+}
+
 std::vector<AVChapter> MuxerManager::readSourceChapters()
 {
     // Asked for an output without the source's chapters. Nothing else said so: with no chapter option at all the
