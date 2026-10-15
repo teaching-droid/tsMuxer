@@ -369,6 +369,40 @@ bool isIso639_2(const std::string& code)
 // A BRACKETED code is the exception, and is looked for anywhere in the name. That is what
 // eac3to writes now, and it keeps describing the track afterwards, so the code is nowhere
 // near the end: "bigjoin - 2 - AC3, [dan], 2.0 channels, 192kbps, 48kHz.ac3".
+// The last word of a name and the character in front of it (0 when the word is the whole name), after any trailing
+// spaces, dots and closing brackets.
+static std::string lastNameToken(std::string& name, char& separator)
+{
+    while (!name.empty() && (name.back() == ' ' || name.back() == '.' || name.back() == ')' || name.back() == ']'))
+        name.pop_back();
+    const size_t at = name.find_last_of("_-. ()[]");
+    separator = at == std::string::npos ? 0 : name[at];
+    std::string token = at == std::string::npos ? name : name.substr(at + 1);
+    name = at == std::string::npos ? std::string() : name.substr(0, at);
+    return token;
+}
+
+static std::string lowerCase(const std::string& s)
+{
+    std::string lower;
+    for (const char c : s) lower += static_cast<char>(tolower(static_cast<unsigned char>(c)));
+    return lower;
+}
+
+// ** AN UNBRACKETED CODE COMES AFTER "_" OR ".", AND IS NOT A WORD OF A TITLE. ** Ordinary English words are ISO
+// 639-2 codes: "Iron Man.ac3" was Mandingo, "Holy War" Waray and "X-Men" Mende. The tools that write a code into a
+// name join it with an underscore or a dot (Movie_spa.ac3, movie.eng.srt), and a capital followed by small letters is
+// a word of the title.
+static bool unbracketedCode(const std::string& token, const char separator)
+{
+    if (separator != 0 && separator != '_' && separator != '.')
+        return false;
+    if (token.size() == 3 && isupper(static_cast<unsigned char>(token[0])) &&
+        islower(static_cast<unsigned char>(token[1])) && islower(static_cast<unsigned char>(token[2])))
+        return false;
+    return isIso639_2(lowerCase(token));
+}
+
 std::string langFromFileName(const std::string& fileName)
 {
     // extractFileName already drops the extension. It returned nothing for a bare name with no
@@ -409,13 +443,13 @@ std::string langFromFileName(const std::string& fileName)
         if (!found.empty())
             return found;
     }
-    // Unbracketed, the code still has to be the last token, where a wrong guess is far too easy.
-    while (!name.empty() && (name.back() == ' ' || name.back() == '.')) name.pop_back();
-    const size_t at = name.find_last_of("_-. ()[]");
-    const std::string token = at == std::string::npos ? name : name.substr(at + 1);
-    std::string lower;
-    for (const char c : token) lower += static_cast<char>(tolower(static_cast<unsigned char>(c)));
-    return isIso639_2(lower) ? lower : std::string();
+    // Unbracketed, the code still has to be the last token, where a wrong guess is far too easy; or the one before a
+    // last "forced", as a forced subtitle file is named (movie_eng_forced.srt), which read as no language at all.
+    char separator = 0;
+    std::string token = lastNameToken(name, separator);
+    if (lowerCase(token) == "forced" && !name.empty())
+        token = lastNameToken(name, separator);
+    return unbracketedCode(token, separator) ? lowerCase(token) : std::string();
 }
 
 bool isForcedSubtitleName(const std::string& fileName)
@@ -433,14 +467,12 @@ bool isForcedSubtitleName(const std::string& fileName)
     // whose title merely begins with the word as the disc's forced subtitle track, which is
     // a worse mistake than not recognising a name at all. The tools that split these files
     // out put it at the end, bracketed or plain: "... fra (forced).sup", "movie_forced.sup".
-    while (!name.empty() && (name.back() == ' ' || name.back() == '.' || name.back() == ')' || name.back() == ']'))
-        name.pop_back();
-    const size_t at = name.find_last_of("_-. ()[]");
-    const std::string token = at == std::string::npos ? name : name.substr(at + 1);
-
-    std::string lower;
-    for (const char c : token) lower += static_cast<char>(tolower(static_cast<unsigned char>(c)));
-    return lower == "forced";
+    // Or the word before a language code at the end (movie_forced_eng.srt), which was read as the language only.
+    char separator = 0;
+    std::string token = lastNameToken(name, separator);
+    if (lowerCase(token) != "forced" && !name.empty() && unbracketedCode(token, separator))
+        token = lastNameToken(name, separator);
+    return lowerCase(token) == "forced";
 }
 
 bool defaultParamMeansNo(const std::string& value)
