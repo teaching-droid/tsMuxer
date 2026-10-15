@@ -217,6 +217,8 @@ TextSubtitlesRender::TextSubtitlesRender() : m_width(0), m_height(0)
 
 TextSubtitlesRender::~TextSubtitlesRender() = default;
 
+// The value after the '=' of a font attribute: up to the next space, or, in quotes of either kind, up to the closing
+// quote, so face="Times New Roman" is a name of three words. With its quotes; unquoteArg takes them off.
 string findFontArg(const string& text, const size_t pos)
 {
     bool delFound = false;
@@ -227,6 +229,11 @@ string findFontArg(const string& text, const size_t pos)
             delFound = true;
         else if (delFound)
         {
+            if (firstPos == 0 && (text[i] == '"' || text[i] == '\''))
+            {
+                const size_t close = text.find(text[i], i + 1);
+                return close == string::npos ? text.substr(i) : text.substr(i, close - i + 1);
+            }
             if (text[i] == ' ')
             {
                 if (firstPos != 0)
@@ -239,6 +246,17 @@ string findFontArg(const string& text, const size_t pos)
     if (firstPos != 0)
         return text.substr(firstPos, text.size() - firstPos);
     return "";
+}
+
+// A value in double or single quotes, without them: color='red' was taken as the colour 'red', with its quotes, and
+// left the colour as it was.
+string unquoteArg(const string& value)
+{
+    if (value.size() >= 2 && (value[0] == '"' || value[0] == '\'') && value.back() == value[0])
+        return value.substr(1, value.size() - 2);
+    if (!value.empty() && (value[0] == '"' || value[0] == '\''))
+        return value.substr(1);
+    return value;
 }
 
 uint32_t rgbSwap(uint32_t color)
@@ -320,7 +338,7 @@ vector<pair<Font, string>> TextSubtitlesRender::processTxtLine(const std::string
             }
             else if ((ltagStr == "/i" || ltagStr == "/italic") || (ltagStr == "/b" || ltagStr == "/bold") ||
                      (ltagStr == "/u" || ltagStr == "/underline") || (ltagStr == "/f" || ltagStr == "/force") ||
-                     ltagStr == "/strike" || strStartWith(tagStr, "/font"))
+                     ltagStr == "/strike" || strStartWith(ltagStr, "/font"))  // </FONT> as well
             {
                 endTag = true;
             }
@@ -330,7 +348,7 @@ vector<pair<Font, string>> TextSubtitlesRender::processTxtLine(const std::string
                 if (fontNamePos == string::npos)
                     fontNamePos = findUnquotedStr(ltagStr, "face");
                 if (fontNamePos != string::npos)
-                    curFont.m_name = unquoteStr(findFontArg(tagStr, fontNamePos /*, lastIndexPos*/));
+                    curFont.m_name = unquoteArg(findFontArg(tagStr, fontNamePos /*, lastIndexPos*/));
 
                 size_t colorPos = findUnquotedStr(ltagStr, "color");
                 if (colorPos != string::npos)
@@ -339,7 +357,10 @@ vector<pair<Font, string>> TextSubtitlesRender::processTxtLine(const std::string
                     // value was a known name, and then replaced the name's colour: color="red" drew black, and
                     // color="#806040", the form the help shows, was never read at all. A value that is none of these
                     // leaves the colour as it was.
-                    const auto arg = unquoteStr(findFontArg(ltagStr, colorPos));
+                    auto arg = unquoteArg(findFontArg(ltagStr, colorPos));
+                    // #RGB stands for #RRGGBB, as in HTML: #f00 was read as 0x000f00, a dark green.
+                    if (arg.size() == 4 && arg[0] == '#' && isNumber(arg.substr(1), true))
+                        arg = std::string("#") + arg[1] + arg[1] + arg[2] + arg[2] + arg[3] + arg[3];
                     const auto it = defaultPallette.find(arg);
                     if (it != std::end(defaultPallette))
                         curFont.m_color = it->second;
@@ -355,7 +376,7 @@ vector<pair<Font, string>> TextSubtitlesRender::processTxtLine(const std::string
                 size_t fontSizePos = findUnquotedStr(ltagStr, "size");
                 if (fontSizePos != string::npos)
                 {
-                    string arg = unquoteStr(findFontArg(tagStr, fontSizePos));
+                    string arg = unquoteArg(findFontArg(tagStr, fontSizePos));
                     if (!arg.empty())
                     {
                         // In 64 bits and held to the int range: a relative size such as +2147483647
