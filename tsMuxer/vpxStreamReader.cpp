@@ -57,17 +57,19 @@ bool VpxStreamReader::readIvfHeader(const uint8_t* data, const int size, bool& v
         return true;
     // The time base is not the frame rate: one writer counts frames, another milliseconds. The rate is the mean spacing
     // of the first frames' times, snapped to a standard rate as for a Matroska track without DefaultDuration.
-    int at = static_cast<int>(le(6, 2));
+    // The frame sizes are 32 bit: added as an int, a damaged one of 2 GB or more made the position negative, and the
+    // next frame's time was read before the buffer.
+    uint64_t at = le(6, 2);
     int frames = 0;
     uint64_t first = 0, last = 0;
-    while (frames < 240 && at + 12 <= size)
+    while (frames < 240 && at + 12 <= static_cast<uint64_t>(size))
     {
-        const uint64_t t = le(at + 4, 8);
+        const uint64_t t = le(static_cast<int>(at) + 4, 8);
         if (frames == 0)
             first = t;
         last = t;
         ++frames;
-        at += 12 + static_cast<int>(le(at, 4));
+        at += 12 + le(static_cast<int>(at), 4);
     }
     if (frames >= 2 && last > first)
         fps = den / num / (static_cast<double>(last - first) / (frames - 1));
