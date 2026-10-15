@@ -131,6 +131,9 @@ struct FileEntryInfo
 
     int32_t write(const uint8_t* data, int32_t len);
     bool setName(const std::string& name);
+    [[nodiscard]] const std::string& name() const { return m_name; }
+    void checkNameIsUnique(const FileEntryInfo* entry);
+    void claimIdentifier(const FileEntryInfo* entry);
     void close();
     void setSubMode(bool value);
     void addExtent(const Extent& extent);
@@ -156,6 +159,7 @@ struct FileEntryInfo
 
     std::vector<FileEntryInfo*> m_subDirs;
     std::vector<FileEntryInfo*> m_files;
+    std::map<std::vector<uint8_t>, std::string> m_childIdentifiers;  // UDF identifier -> name, of the children
     IsoWriter* m_owner;
     FileEntryInfo* m_parent;
     int m_sectorNum;
@@ -296,6 +300,7 @@ class IsoWriter
     int m_partitionStartAddress;
     int m_partitionEndAddress;
     int m_metadataFileLen;
+    int m_mappingReserve = ALLOC_BLOCK_SIZE;  // bytes kept for the UDF ID mapping file after the metadata
     int m_systemStreamLBN;
 
     int m_metadataLBN;  // where to allocate data

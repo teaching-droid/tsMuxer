@@ -468,9 +468,27 @@ bool FileEntryInfo::setName(const std::string& name)
     return true;
 }
 
-void FileEntryInfo::addSubDir(FileEntryInfo* dir) { m_subDirs.push_back(dir); }
+// Two names in one folder that are the same as far as a UDF file identifier holds them (setName shortens a longer one)
+// would be two entries of one name on the image, and a reader finds only one of them: refused, with both names.
+void FileEntryInfo::claimIdentifier(const FileEntryInfo* entry)
+{
+    const auto [it, isNew] = m_childIdentifiers.emplace(serializeFileIdentifier(entry->name(), nullptr), entry->name());
+    if (!isNew)
+        throw std::runtime_error("ISO: the names \"" + it->second + "\" and \"" + entry->name() +
+                                 "\" in one folder are the same as far as a UDF file identifier holds a name. "
+                                 "Shorten one of them.");
+}
+
+void FileEntryInfo::addSubDir(FileEntryInfo* dir)
+{
+    claimIdentifier(dir);
+    m_subDirs.push_back(dir);
+}
 
 void FileEntryInfo::addFile(FileEntryInfo* file) { m_files.push_back(file); }
+
+// A file is named after it is added (createFileEntry), so its name is checked here, once it has one
+void FileEntryInfo::checkNameIsUnique(const FileEntryInfo* entry) { claimIdentifier(entry); }
 
 void FileEntryInfo::writeEntity(ByteFileWriter& writer, const FileEntryInfo* subDir) const
 {
@@ -902,9 +920,14 @@ bool IsoWriter::open(const std::string& fileName, const int64_t diskSize, const 
     const int64_t currentFileSizeLBN = m_file.size() / SECTOR_SIZE;
     for (int64_t i = currentFileSizeLBN; i < requiredFileSizeLBN; ++i) m_file.write(m_buffer, SECTOR_SIZE);
 
-    // reserve space for metadata mapping file
-
-    for (int i = 0; i < ALLOC_BLOCK_SIZE / SECTOR_SIZE; ++i) m_file.write(m_buffer, SECTOR_SIZE);
+    // reserve space for metadata mapping file: 48 bytes and 16 for every file and folder. It was always one 64 KB
+    // block, which holds 4093 entries; the mapping of a larger tree was written over the start of the first file of
+    // the image. Every entry takes at least a sector of the metadata partition, which is sized for the tree, so the
+    // partition bounds the mapping. One block remains for every image up to 8 MB of metadata, as before.
+    m_mappingReserve =
+        (std::max)(ALLOC_BLOCK_SIZE, static_cast<int>(roundUp64(48 + 16LL * (m_metadataFileLen / SECTOR_SIZE),
+                                                                static_cast<uint64_t>(ALLOC_BLOCK_SIZE))));
+    for (int i = 0; i < m_mappingReserve / SECTOR_SIZE; ++i) m_file.write(m_buffer, SECTOR_SIZE);
 
     m_opened = true;
     return true;
@@ -1017,6 +1040,7 @@ FileEntryInfo* IsoWriter::getEntryByName(const std::string& name, const FileType
         if (!fileEntry)
             return nullptr;
         fileEntry->setName(fileName);
+        entry->checkNameIsUnique(fileEntry);
     }
 
     return fileEntry;
@@ -1065,6 +1089,10 @@ void IsoWriter::allocateMetadata()
     std::vector<uint8_t> buffer((std::max)(static_cast<size_t>(roundUp64(mappingSize, ALLOC_BLOCK_SIZE)),
                                            static_cast<size_t>(ALLOC_BLOCK_SIZE)),
                                 0);
+    if (mappingSize > static_cast<size_t>(m_mappingReserve))
+        throw std::runtime_error("ISO error: the UDF ID mapping of " + std::to_string(m_mappingEntries.size()) +
+                                 " files and folders does not fit the space reserved for it. Use --extra-iso-space "
+                                 "to enlarge the metadata, in units of 64K.");
     ByteFileWriter writer;
     writer.setBuffer(buffer.data(), static_cast<int>(buffer.size()));
 
