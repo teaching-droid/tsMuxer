@@ -1436,6 +1436,43 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             }
         }
     }
+    // A playlist source: the language the playlist gives the stream, as the listing shows it. The mux took the clip's,
+    // so a disc whose playlist and clip disagree was listed in one language and muxed in the other.
+    if (!mplsInfoList.empty() && pid > 0 && addParams.find("lang") == addParams.end())
+    {
+        const MPLSStreamInfo fromPlaylist = mplsInfoList[0].getStreamByPID(pid);
+        const std::string lang = fromPlaylist.streamPID ? applyLangCodeStyle(fromPlaylist.language_code) : "";
+        if (!lang.empty() && lang != "und" && lang != streamInfo.m_lang)
+        {
+            LTRACE(LT_INFO, 2, "Language for track " << pid << " taken from the playlist, " << lang << ".");
+            streamInfo.m_lang = lang;
+        }
+    }
+    // A join: every Matroska or MP4 file of it is asked whether it has the track, as a single file is above. A join
+    // naming a track the files do not have was not checked, and made an empty output.
+    if (fileList.size() > 1 && pid > 0 && !SubTrackFilter::isSubTrack(pid))
+        for (const auto& name : fileList)
+        {
+            const std::string file = unquoteStr(trimStr(name));
+            const std::string ext = strToUpperCase(extractFileExt(file));
+            std::unique_ptr<AbstractDemuxer> probe;
+            if (ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM")
+                probe = std::make_unique<MatroskaDemuxer>(m_readManager);
+            else if (ext == "MP4" || ext == "M4A" || ext == "M4V" || ext == "MOV")
+                probe = std::make_unique<MovDemuxer>(m_readManager);
+            else
+                continue;
+            probe->openFile(file);
+            std::map<int32_t, TrackInfo> tracks;
+            probe->getTrackList(tracks);
+            if (!tracks.empty() && tracks.find(pid) == tracks.end())
+            {
+                std::string list;
+                for (const auto& [id, info] : tracks) list += (list.empty() ? "" : ", ") + std::to_string(id);
+                THROW(ERR_COMMON, file << ", a file of the join, has no track " << pid << " (its tracks are " << list
+                                       << "). Nothing was written.")
+            }
+        }
     // A join of Matroska files with Opus sound: each file is asked for the padding at its end (the DiscardPadding of
     // its last block). The reader leaves the samples it and the next file's pre-skip make out at each joint, and the
     // padding at the end of the join is the last file's. A join was not asked about its tracks at all, so the end

@@ -179,6 +179,19 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
                         THROW(ERR_COMMON,
                               "--keep-editions keeps the source's own chapters, and cannot be used with "
                               "--custom-chapters or --chapters-file.")
+                    // An MP4 source was taken: the option kept nothing, and its chapters were left out as well.
+                    bool fromMatroska = false;
+                    for (const auto& si : m_metaDemuxer.getStreamInfo())
+                    {
+                        const std::string ext = strToUpperCase(
+                            extractFileExt(unquoteStr(trimStr(splitQuotedStr(si.m_fullStreamName.c_str(), '+')[0]))));
+                        fromMatroska = fromMatroska || ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" ||
+                                       ext == "WEBM";
+                    }
+                    if (!fromMatroska)
+                        THROW(ERR_COMMON,
+                              "--keep-editions keeps the editions of a Matroska source, and no track "
+                              "here comes from a Matroska file. Leave it out.")
                     mkv->setSourceEditions(m_metaDemuxer.getSourceEditions());
                 }
                 // Now that the muxer exists it can be given the chapter list main() supplied.
