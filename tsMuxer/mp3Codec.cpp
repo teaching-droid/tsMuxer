@@ -83,7 +83,7 @@ uint8_t* MP3Codec::mp3FindFrame(uint8_t* buff, const uint8_t* end)
     // header
     for (uint8_t* cur = buff; cur < end - 4; cur++)
     {
-        const uint32_t header = my_ntohl(*reinterpret_cast<uint32_t*>(cur));
+        const uint32_t header = my_ntohl(loadUnaligned<uint32_t>(cur));
         if ((header & 0xffe00000) != 0xffe00000)
             continue;
         // layer check
@@ -113,7 +113,7 @@ uint8_t* MP3Codec::mp3FindFrame(uint8_t* buff, const uint8_t* end)
             continue;
         if (cur + frameSize + 4 <= end)
         {
-            const uint32_t next = my_ntohl(*reinterpret_cast<uint32_t*>(cur + frameSize));
+            const uint32_t next = my_ntohl(loadUnaligned<uint32_t>(cur + frameSize));
             if ((next & MP3_CONSTANT_FIELDS) != (header & MP3_CONSTANT_FIELDS))
                 continue;
         }
@@ -131,7 +131,7 @@ int MP3Codec::mp3DecodeFrame(uint8_t* buff, const uint8_t* end)
     int mpeg25, lsf;
     if (end - buff < 4)
         return 0;
-    const uint32_t header = my_ntohl(*reinterpret_cast<uint32_t*>(buff));
+    const uint32_t header = my_ntohl(loadUnaligned<uint32_t>(buff));
 
     // ** THE ELEVEN SYNC BITS, WHICH THIS NEVER CHECKED. **
     //

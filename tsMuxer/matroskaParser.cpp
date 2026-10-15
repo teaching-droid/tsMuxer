@@ -904,7 +904,7 @@ void ParsedPGTrackData::extractData(AVPacket* pkt, uint8_t* buff, const int size
 
         dst[0] = 'P';
         dst[1] = 'G';
-        const auto ptsDts = reinterpret_cast<uint32_t*>(dst + 2);
+        const auto ptsDts = UnalignedPtr<uint32_t>(dst + 2);
         ptsDts[0] = my_htonl(static_cast<uint32_t>(internalClockToPts(pkt->pts)));
         ptsDts[1] = 0;
         dst += PG_HEADER_SIZE;

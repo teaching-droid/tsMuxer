@@ -135,7 +135,7 @@ class TSMuxer final : public AbstractMuxer
     [[nodiscard]] bool nextPCRChanceTooLate(int tsIndex, int64_t dts) const;
     static void writeM2TSHeader(uint8_t* buffer, const int64_t m2tsPCR)
     {
-        const auto cur = reinterpret_cast<uint32_t*>(buffer);
+        const auto cur = UnalignedPtr<uint32_t>(buffer);
         *cur = my_htonl(m2tsPCR & 0x3fffffff);
     }
     void writePATPMT(int64_t pcr, bool force = false);

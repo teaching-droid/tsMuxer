@@ -232,7 +232,7 @@ int LPCMStreamReader::convertWavToPCM(uint8_t* start, uint8_t* end)
     // 1. convert byte order to little endian
     if (m_bitsPerSample == 16)
     {
-        for (auto curPos = reinterpret_cast<uint16_t*>(start); curPos < reinterpret_cast<uint16_t*>(end); ++curPos)
+        for (auto curPos = UnalignedPtr<uint16_t>(start); curPos < UnalignedPtr<uint16_t>(end); ++curPos)
             *curPos = my_htons(*curPos);
     }
     else if (m_bitsPerSample > 16)
@@ -354,7 +354,7 @@ int LPCMStreamReader::convertLPCMToWAV(uint8_t* start, uint8_t* end)
         // 1. convert byte order to little endian
         if (m_bitsPerSample == 16)
         {
-            for (auto curPos = reinterpret_cast<uint16_t*>(start); curPos < reinterpret_cast<uint16_t*>(end); ++curPos)
+            for (auto curPos = UnalignedPtr<uint16_t>(start); curPos < UnalignedPtr<uint16_t>(end); ++curPos)
                 *curPos = my_ntohs(*curPos);
         }
         else if (m_bitsPerSample > 16)
@@ -448,7 +448,7 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
             if (curPos == nullptr || curPos + sizeof(GUID) + 8 >= end)
                 return NOT_ENOUGH_BUFFER;
             uint8_t* tmpPos = curPos + sizeof(GUID);
-            fmtSize = *reinterpret_cast<uint64_t*>(tmpPos);
+            fmtSize = loadUnaligned<uint64_t>(tmpPos);
             if (curPos + fmtSize >= end)
                 return NOT_ENOUGH_BUFFER;
             waveFormatPCMEx = reinterpret_cast<WAVEFORMATPCMEX*>(tmpPos + 8);
@@ -458,7 +458,7 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
             curPos = findSubstr("fmt ", buff, end);
             if (curPos == nullptr || curPos + 8 >= end)
                 return NOT_ENOUGH_BUFFER;
-            fmtSize = *reinterpret_cast<uint32_t*>(curPos + 4);
+            fmtSize = loadUnaligned<uint32_t>(curPos + 4);
             if (curPos + 8 + fmtSize >= end)
                 return NOT_ENOUGH_BUFFER;
             curPos += 8;
@@ -572,14 +572,14 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
         uint64_t chunkSize;  // the whole chunk, its header included
         if (wave64)
         {
-            chunkSize = *reinterpret_cast<uint64_t*>(curPos + sizeof(GUID));
+            chunkSize = loadUnaligned<uint64_t>(curPos + sizeof(GUID));
             if (chunkSize < static_cast<uint64_t>(chunkHeaderSize))
                 break;
             chunkSize = (chunkSize + 7) & ~static_cast<uint64_t>(7);
         }
         else
         {
-            const uint32_t bodySize = *reinterpret_cast<uint32_t*>(curPos + 4);
+            const uint32_t bodySize = loadUnaligned<uint32_t>(curPos + 4);
             chunkSize = 8 + static_cast<uint64_t>(bodySize) + (bodySize & 1);
         }
         if (chunkSize > static_cast<uint64_t>(DEFAULT_FILE_BLOCK_SIZE))
@@ -606,7 +606,7 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
         if (curPos + 8 >= end)
             return NOT_ENOUGH_BUFFER;
         curPos += 4;  // skip 'data' identifier
-        m_curChunkLen = *reinterpret_cast<uint32_t*>(curPos);
+        m_curChunkLen = loadUnaligned<uint32_t>(curPos);
         if (m_curChunkLen == 0)
             m_openSizeWaveFormat = true;
         curPos += 4;
@@ -617,7 +617,7 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
             return NOT_ENOUGH_BUFFER;
         curPos += sizeof(GUID);
         // For w64, data length includes data metadata (16 bytes) and size (8 bytes)
-        m_curChunkLen = *reinterpret_cast<int64_t*>(curPos) - 24;
+        m_curChunkLen = loadUnaligned<int64_t>(curPos) - 24;
         curPos += 8;
     }
     return static_cast<int>(curPos - buff);
@@ -646,7 +646,7 @@ int LPCMStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, i
         if (end - buff < 4)
             return NOT_ENOUGH_BUFFER;
 
-        const auto curPtr32 = reinterpret_cast<uint32_t*>(buff);
+        const auto curPtr32 = UnalignedPtr<uint32_t>(buff);
         if (m_curChunkLen == 0 && (*curPtr32 == RIFF_SMALL || *curPtr32 == RIFF_LARGE))
         {
             if (end - buff < 8)
@@ -768,8 +768,8 @@ int LPCMStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
                 // write wave header
                 for (const char c : "RIFF\xff\xff\xff\xffWAVEfmt ") *curPos++ = c;
                 curPos--;
-                const auto fmtSize = reinterpret_cast<uint32_t*>(curPos);
-                *fmtSize = sizeof(WAVEFORMATPCMEX);
+                const auto fmtSize = UnalignedPtr<uint32_t>(curPos);
+                *fmtSize = static_cast<uint32_t>(sizeof(WAVEFORMATPCMEX));
                 curPos += 4;
             }
             const auto waveFormatPCMEx = reinterpret_cast<WAVEFORMATPCMEX*>(curPos);

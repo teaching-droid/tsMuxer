@@ -1,7 +1,9 @@
 #ifndef T_TYPES_H_
 #define T_TYPES_H_
 
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <regex>
 #include <string>
 #include <vector>
@@ -106,6 +108,69 @@ uint64_t roundDown64(const uint64_t& value, const uint64_t& roundVal);
 uint64_t roundUp64(const uint64_t& value, const uint64_t& roundVal);
 
 uint32_t random32();
+
+// Reads and writes of a 16-, 32- or 64-bit value at any byte address. In a stream or a file buffer such a value is
+// rarely on a multiple of its size, and C++ does not allow it to be read or written through a T* there; memcpy is
+// allowed, and compilers turn it into the same single load or store.
+template <typename T>
+T loadUnaligned(const void* p)
+{
+    T v;
+    std::memcpy(&v, p, sizeof v);
+    return v;
+}
+
+template <typename T>
+void storeUnaligned(void* p, const T v)
+{
+    std::memcpy(p, &v, sizeof v);
+}
+
+// A pointer to such values, for code written with a T*: *p, p[i], p++ and p < q as with a T*, each read and write
+// through memcpy. The bytes read and written are the same as through a T*.
+template <typename T>
+class UnalignedPtr
+{
+   public:
+    class Ref
+    {
+       public:
+        explicit Ref(uint8_t* p) : m_p(p) {}
+        Ref(const Ref&) = default;
+        operator T() const { return loadUnaligned<T>(m_p); }
+        Ref& operator=(const T v)
+        {
+            storeUnaligned<T>(m_p, v);
+            return *this;
+        }
+        Ref& operator=(const Ref& r) { return *this = static_cast<T>(r); }
+        Ref& operator+=(const T v) { return *this = static_cast<T>(static_cast<T>(*this) + v); }
+
+       private:
+        uint8_t* m_p;
+    };
+
+    UnalignedPtr() : m_p(nullptr) {}
+    explicit UnalignedPtr(void* p) : m_p(static_cast<uint8_t*>(p)) {}
+    Ref operator*() const { return Ref(m_p); }
+    Ref operator[](const std::ptrdiff_t i) const { return Ref(m_p + i * static_cast<std::ptrdiff_t>(sizeof(T))); }
+    UnalignedPtr& operator++()
+    {
+        m_p += sizeof(T);
+        return *this;
+    }
+    UnalignedPtr operator++(int)
+    {
+        const UnalignedPtr prev = *this;
+        m_p += sizeof(T);
+        return prev;
+    }
+    bool operator<(const UnalignedPtr& other) const { return m_p < other.m_p; }
+    [[nodiscard]] uint8_t* bytes() const { return m_p; }
+
+   private:
+    uint8_t* m_p;
+};
 
 #ifdef _WIN32
 std::vector<wchar_t> fromAcp(const char*, int sz);

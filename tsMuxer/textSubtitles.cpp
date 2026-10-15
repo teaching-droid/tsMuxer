@@ -662,7 +662,7 @@ long TextToPGSConverter::writePGHeader(uint8_t* buff, const int64_t pts, int64_t
         dts = pts;
     *buff++ = 'P';
     *buff++ = 'G';
-    auto data = reinterpret_cast<uint32_t*>(buff);
+    auto data = UnalignedPtr<uint32_t>(buff);
     *data++ = my_htonl(static_cast<uint32_t>(pts));
     if (dts != pts)
         *data = my_htonl(static_cast<uint32_t>(dts));

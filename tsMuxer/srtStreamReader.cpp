@@ -260,9 +260,9 @@ int SRTStreamReader::parseText(uint8_t* dataStart, const size_t len)
     const auto isChar = [this](const uint8_t* p, const bool lineFeed)
     {
         if (m_charSize == 2)
-            return *reinterpret_cast<const uint16_t*>(p) == (lineFeed ? m_short_N : m_short_R);
+            return loadUnaligned<uint16_t>(p) == (lineFeed ? m_short_N : m_short_R);
         if (m_charSize == 4)
-            return *reinterpret_cast<const uint32_t*>(p) == (lineFeed ? m_long_N : m_long_R);
+            return loadUnaligned<uint32_t>(p) == (lineFeed ? m_long_N : m_long_R);
         return *p == (lineFeed ? '\n' : '\r');
     };
     // A line ends with an LF, a CR LF, or a CR alone, which is how files from the classic Mac OS end their lines: such

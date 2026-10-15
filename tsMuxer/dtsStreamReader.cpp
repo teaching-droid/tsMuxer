@@ -178,7 +178,7 @@ void DTSStreamReader::checkIfOnlyHDDataExists(uint8_t* buff, const uint8_t* end)
 {
     for (int i = 0; i < 2 && buff < end - 4; ++i)
     {
-        const bool isHDData = *reinterpret_cast<uint32_t*>(buff) == my_htonl(DTS_HD_PREFIX);
+        const bool isHDData = loadUnaligned<uint32_t>(buff) == my_htonl(DTS_HD_PREFIX);
         if (!isHDData)
             return;
 
@@ -206,7 +206,7 @@ uint8_t* DTSStreamReader::findFrame(uint8_t* buff, uint8_t* end)
     // check for DTS-HD headers
     while (end - buff >= 16)
     {
-        const auto ptr = reinterpret_cast<int64_t*>(buff);
+        const auto ptr = UnalignedPtr<int64_t>(buff);
         const uint64_t hdrType = my_ntohll(ptr[0]);
         const uint64_t hdrSize = my_ntohll(ptr[1]) + 16;
 
@@ -314,7 +314,7 @@ int DTSStreamReader::decodeHdInfo(uint8_t* buff, const uint8_t* end)
         {
             if (buff + headerSize + 4 > end)
                 return NOT_ENOUGH_BUFFER;
-            const auto hdAudioData = reinterpret_cast<uint32_t*>(buff + headerSize);
+            const auto hdAudioData = UnalignedPtr<uint32_t>(buff + headerSize);
             switch (my_ntohl(*hdAudioData))
             {
             case 0x41A29547:  // XLL
@@ -955,7 +955,7 @@ int DTSStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, in
     if (m_isCoreExists)
     {
         skipBeforeBytes = skipBytes = 0;
-        if (m_state == DTSDecodeState::stDecodeHD && *reinterpret_cast<uint32_t*>(buff) == my_htonl(DTS_HD_PREFIX))
+        if (m_state == DTSDecodeState::stDecodeHD && loadUnaligned<uint32_t>(buff) == my_htonl(DTS_HD_PREFIX))
         {
             m_state = DTSDecodeState::stDecodeHD2;
             return m_hdFrameLen;
@@ -1101,13 +1101,13 @@ int DTSStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, in
 
         if (m_testMode && m_dtsEsChannels == 0)
         {
-            auto curPtr32 = reinterpret_cast<uint32_t*>(buff + 16);
+            auto curPtr32 = UnalignedPtr<uint32_t>(buff + 16);
             const int findSize = FFMIN((int)(end - buff), i_frame_size) / 4 - 4;
             for (int i = 0; i < findSize; ++i)
             {
                 if (*curPtr32++ == 0x5a5a5a5a)
                 {
-                    const auto exHeader = reinterpret_cast<uint8_t*>(curPtr32);
+                    const auto exHeader = curPtr32.bytes();
                     const int dataRest = static_cast<int>(buff + i_frame_size - exHeader);
                     const int frameSize = (exHeader[0] << 2) + (exHeader[1] >> 6) - 4;  // remove 4 bytes of ext world
                     if (dataRest - frameSize == 0 || dataRest - frameSize == 1)
@@ -1119,7 +1119,7 @@ int DTSStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, in
         }
     }
 
-    if (*reinterpret_cast<uint32_t*>(afterFrameData) == my_htonl(DTS_HD_PREFIX))
+    if (loadUnaligned<uint32_t>(afterFrameData) == my_htonl(DTS_HD_PREFIX))
     {
         m_dts_hd_mode = true;
 

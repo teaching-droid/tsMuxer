@@ -968,7 +968,7 @@ void TSMuxer::writeEmptyPacketWithPCRTest(const int64_t pcrVal)
     }
     uint8_t* curBuf = m_outBuf + m_outBufLen;
     const auto tsPacket = reinterpret_cast<TSPacket*>(curBuf);
-    const auto initTS = reinterpret_cast<uint32_t*>(curBuf);
+    const auto initTS = UnalignedPtr<uint32_t>(curBuf);
     *initTS = TSPacket::TS_FRAME_SYNC_BYTE;
     initTS[1] = 0x07 + TSPacket::PCR_BIT_VAL;
     tsPacket->setPID(m_pmt.pcr_pid);
@@ -994,7 +994,7 @@ void TSMuxer::writeEmptyPacketWithPCR(const int64_t pcrVal)
     }
     uint8_t* curBuf = m_outBuf + m_outBufLen;
     const auto tsPacket = reinterpret_cast<TSPacket*>(curBuf);
-    const auto initTS = reinterpret_cast<uint32_t*>(curBuf);
+    const auto initTS = UnalignedPtr<uint32_t>(curBuf);
     *initTS = TSPacket::TS_FRAME_SYNC_BYTE;
     initTS[1] = 0x07 + TSPacket::PCR_BIT_VAL;
     tsPacket->setPID(m_pmt.pcr_pid);
@@ -1129,7 +1129,8 @@ void TSMuxer::addData(const uint8_t pesStreamID, const int pid, AVPacket& avPack
     m_pesData.grow(avPacket.size /*+ additionDataSize*/);
     uint8_t* dst = m_pesData.data() + oldLen;
     // memcpy(dst, tmpBuffer, additionDataSize);
-    memcpy(dst /*+ additionDataSize*/, avPacket.data, avPacket.size);
+    if (avPacket.size > 0)
+        memcpy(dst /*+ additionDataSize*/, avPacket.data, avPacket.size);
     if (avPacket.flags & AVPacket::PRIORITY_DATA)
     {
         if (!m_priorityData.empty() && m_priorityData.rbegin()->first + m_priorityData.rbegin()->second == beforePesLen)
@@ -1323,7 +1324,7 @@ void TSMuxer::emitInplacePacket(const uint8_t* payload, const int payloadLen, co
         m_processedBlockSize += 4;
         m_pcrBits += 4 * 8;
     }
-    const auto initTS = reinterpret_cast<uint32_t*>(m_outBuf + m_outBufLen);
+    const auto initTS = UnalignedPtr<uint32_t>(m_outBuf + m_outBufLen);
     *initTS = TSPacket::TS_FRAME_SYNC_BYTE + TSPacket::DATA_EXIST_BIT_VAL;
     const auto tsPacket = reinterpret_cast<TSPacket*>(m_outBuf + m_outBufLen);
     int64_t capacity = TS_FRAME_SIZE - tsPacket->getHeaderSize();
@@ -1972,7 +1973,7 @@ int TSMuxer::writeTSFrames(const int pid, const uint8_t* buffer, const int64_t l
             m_pcrBits += 4 * 8;
         }
         const int64_t tmpBufferLen = end - curPos;
-        const auto initTS = reinterpret_cast<uint32_t*>(m_outBuf + m_outBufLen);
+        const auto initTS = UnalignedPtr<uint32_t>(m_outBuf + m_outBufLen);
         *initTS = TSPacket::TS_FRAME_SYNC_BYTE + TSPacket::DATA_EXIST_BIT_VAL;
         const auto tsPacket = reinterpret_cast<TSPacket*>(m_outBuf + m_outBufLen);
         int64_t payloadLen = TS_FRAME_SIZE - tsPacket->getHeaderSize();
@@ -2018,7 +2019,7 @@ int TSMuxer::writeTSFrames(const int pid, const uint8_t* buffer, const int64_t l
 
 void TSMuxer::buildNULL()
 {
-    *reinterpret_cast<uint32_t*>(m_nullBuffer) = TSPacket::TS_FRAME_SYNC_BYTE;
+    storeUnaligned<uint32_t>(m_nullBuffer, TSPacket::TS_FRAME_SYNC_BYTE);
     const auto tsPacket = reinterpret_cast<TSPacket*>(m_nullBuffer);
     tsPacket->setPID(NULL_PID);
     tsPacket->dataExists = 1;
@@ -2027,7 +2028,7 @@ void TSMuxer::buildNULL()
 
 void TSMuxer::buildPAT()
 {
-    *reinterpret_cast<uint32_t*>(m_patBuffer) = TSPacket::TS_FRAME_SYNC_BYTE + TSPacket::DATA_EXIST_BIT_VAL;
+    storeUnaligned<uint32_t>(m_patBuffer, TSPacket::TS_FRAME_SYNC_BYTE + TSPacket::DATA_EXIST_BIT_VAL);
     const auto tsPacket = reinterpret_cast<TSPacket*>(m_patBuffer);
     tsPacket->setPID(PAT_PID);
     tsPacket->dataExists = 1;
@@ -2042,7 +2043,7 @@ void TSMuxer::buildPAT()
 
 void TSMuxer::buildPMT()
 {
-    *reinterpret_cast<uint32_t*>(m_pmtBuffer) = TSPacket::TS_FRAME_SYNC_BYTE + TSPacket::DATA_EXIST_BIT_VAL;
+    storeUnaligned<uint32_t>(m_pmtBuffer, TSPacket::TS_FRAME_SYNC_BYTE + TSPacket::DATA_EXIST_BIT_VAL);
     const auto tsPacket = reinterpret_cast<TSPacket*>(m_pmtBuffer);
     tsPacket->setPID(DEFAULT_PMT_PID);
     tsPacket->dataExists = 1;
@@ -2055,7 +2056,7 @@ void TSMuxer::buildPMT()
     {
         memmove(curPos + 4, curPos, pmtEnd - curPos);
         pmtEnd += 4;
-        *reinterpret_cast<uint32_t*>(curPos) = TSPacket::TS_FRAME_SYNC_BYTE + TSPacket::DATA_EXIST_BIT_VAL;
+        storeUnaligned<uint32_t>(curPos, TSPacket::TS_FRAME_SYNC_BYTE + TSPacket::DATA_EXIST_BIT_VAL);
         const auto tsPacket2 = reinterpret_cast<TSPacket*>(curPos);
         tsPacket2->setPID(DEFAULT_PMT_PID);
         tsPacket2->dataExists = 1;

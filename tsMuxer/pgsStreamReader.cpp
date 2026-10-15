@@ -890,7 +890,7 @@ int PGSStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPa
     {
         *dstBuffer++ = 'P';
         *dstBuffer++ = 'G';
-        auto data = reinterpret_cast<uint32_t*>(dstBuffer);
+        auto data = UnalignedPtr<uint32_t>(dstBuffer);
         *data++ = my_htonl(static_cast<uint32_t>(internalClockToPts(m_lastPTS)));
         *data = my_htonl(static_cast<uint32_t>(internalClockToPts(m_lastDTS)));
         return 10;

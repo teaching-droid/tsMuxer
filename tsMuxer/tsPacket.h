@@ -128,21 +128,21 @@ struct AdaptiveField
 
     unsigned getPCR32()
     {
-        const auto pcr = reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(this) + ADAPTIVE_FIELD_LEN);
+        const auto pcr = UnalignedPtr<uint32_t>(reinterpret_cast<uint8_t*>(this) + ADAPTIVE_FIELD_LEN);
         return my_ntohl(*pcr);
         // return my_ntohl(*pcr) * 0.95;
     }
 
     int64_t getPCR33()
     {
-        const auto pcr = reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(this) + ADAPTIVE_FIELD_LEN);
+        const auto pcr = UnalignedPtr<uint32_t>(reinterpret_cast<uint8_t*>(this) + ADAPTIVE_FIELD_LEN);
         const auto pcrLo = reinterpret_cast<uint8_t*>(this) + ADAPTIVE_FIELD_LEN + sizeof(uint32_t);
         return (static_cast<int64_t>(my_ntohl(*pcr)) << 1) + (*pcrLo >> 7);
     }
 
     void setPCR33(const int64_t value)
     {
-        const auto pcr = reinterpret_cast<uint32_t*>(reinterpret_cast<uint8_t*>(this) + ADAPTIVE_FIELD_LEN);
+        const auto pcr = UnalignedPtr<uint32_t>(reinterpret_cast<uint8_t*>(this) + ADAPTIVE_FIELD_LEN);
         *pcr = my_htonl(static_cast<uint32_t>(value >> 1));
         const auto pcrLo = reinterpret_cast<uint8_t*>(this) + ADAPTIVE_FIELD_LEN + sizeof(uint32_t);
         pcrLo[0] = static_cast<uint8_t>((value & 1) << 7 | 0x7e);

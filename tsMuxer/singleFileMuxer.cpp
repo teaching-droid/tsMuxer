@@ -404,7 +404,8 @@ bool SingleFileMuxer::muxPacketTo(StreamInfo* streamInfo, AVPacket& avPacket)
         }
     }
 
-    memcpy(streamInfo->m_buffer + streamInfo->m_bufLen, outData, outSize);
+    if (outSize > 0)
+        memcpy(streamInfo->m_buffer + streamInfo->m_bufLen, outData, outSize);
     streamInfo->m_bufLen += outSize;
     writeOutBuffer(streamInfo);
     return true;

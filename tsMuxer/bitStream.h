@@ -64,6 +64,8 @@ class BitStreamReader : public BitStream
     {
         if (num > INT_BIT || m_totalBits < num)
             THROW_BITSTREAM_ERR;
+        if (num == 0)
+            return 0;  // right after a refill the shift below would be by 32
         unsigned prevVal = 0;
         if (num <= m_bitLeft)
             m_bitLeft -= num;
@@ -164,7 +166,7 @@ class BitStreamReader : public BitStream
     {
         const auto tmpBuf = reinterpret_cast<uint8_t*>(buff);
         if (m_totalBits - m_bitLeft >= 32)
-            return my_ntohl(*buff);
+            return my_ntohl(loadUnaligned<uint32_t>(buff));
         if (m_totalBits - m_bitLeft >= 24)
             return (tmpBuf[0] << 24) + (tmpBuf[1] << 16) + (tmpBuf[2] << 8);
         if (m_totalBits - m_bitLeft >= 16)
@@ -215,7 +217,7 @@ class BitStreamWriter : public BitStream
             }
             m_bitWrited += num - INT_BIT;
             m_curVal += value >> m_bitWrited;
-            *m_buffer++ = my_htonl(m_curVal);
+            storeUnaligned<uint32_t>(m_buffer++, my_htonl(m_curVal));
             m_curVal = value & m_masks[m_bitWrited];
         }
         m_totalBits -= num;
@@ -229,10 +231,10 @@ class BitStreamWriter : public BitStream
         {
             m_curVal <<= (INT_BIT - m_bitWrited);
         }
-        unsigned prevVal = my_ntohl(*m_buffer);
+        unsigned prevVal = my_ntohl(loadUnaligned<uint32_t>(m_buffer));
         prevVal &= m_masks[INT_BIT - m_bitWrited];
         prevVal |= m_curVal;
-        *m_buffer = my_htonl(prevVal);
+        storeUnaligned<uint32_t>(m_buffer, my_htonl(prevVal));
     }
 
     [[nodiscard]] int getBitsCount() const

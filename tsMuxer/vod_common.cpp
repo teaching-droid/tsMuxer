@@ -27,8 +27,8 @@ std::string toNativeSeparators(const std::string& dirName)
 
 bool isFillerNullPacket(uint8_t* curBuf)
 {
-    const auto endPos = reinterpret_cast<uint32_t*>(curBuf + TS_FRAME_SIZE);
-    for (auto curBuf32 = reinterpret_cast<uint32_t*>(curBuf + 4); curBuf32 < endPos; curBuf32++)
+    const auto endPos = UnalignedPtr<uint32_t>(curBuf + TS_FRAME_SIZE);
+    for (auto curBuf32 = UnalignedPtr<uint32_t>(curBuf + 4); curBuf32 < endPos; curBuf32++)
         if (*curBuf32 != UINT_MAX && *curBuf32 != 0)
             return false;
     return true;
@@ -82,10 +82,10 @@ std::vector<std::string> extractFileList(const std::string& val)
 }
 
 uint16_t AV_RB16(const uint8_t* buffer) { return static_cast<uint16_t>(*buffer << 8 | buffer[1]); }
-uint32_t AV_RB32(uint8_t* buffer) { return my_ntohl(*reinterpret_cast<uint32_t*>(buffer)); }
+uint32_t AV_RB32(uint8_t* buffer) { return my_ntohl(loadUnaligned<uint32_t>(buffer)); }
 uint32_t AV_RB24(const uint8_t* buffer) { return buffer[0] << 16 | buffer[1] << 8 | buffer[2]; }
 
-void AV_WB16(uint8_t* buffer, const uint16_t value) { *reinterpret_cast<uint16_t*>(buffer) = my_htons(value); }
+void AV_WB16(uint8_t* buffer, const uint16_t value) { storeUnaligned<uint16_t>(buffer, my_htons(value)); }
 
 void AV_WB24(uint8_t* buffer, const uint32_t value)
 {
@@ -93,8 +93,8 @@ void AV_WB24(uint8_t* buffer, const uint32_t value)
     buffer[1] = static_cast<uint8_t>(value >> 8);
     buffer[2] = static_cast<uint8_t>(value);
 }
-void AV_WB32(uint8_t* buffer, const uint32_t value) { *reinterpret_cast<uint32_t*>(buffer) = my_htonl(value); }
-void AV_WB64(uint8_t* buffer, const uint64_t value) { *reinterpret_cast<uint64_t*>(buffer) = my_htonll(value); }
+void AV_WB32(uint8_t* buffer, const uint32_t value) { storeUnaligned<uint32_t>(buffer, my_htonl(value)); }
+void AV_WB64(uint8_t* buffer, const uint64_t value) { storeUnaligned<uint64_t>(buffer, my_htonll(value)); }
 
 std::string floatToTime(const double time, const char msSeparator)
 {

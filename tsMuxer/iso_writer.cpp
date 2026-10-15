@@ -56,8 +56,8 @@ unsigned short crc16(const unsigned char* pcBlock, unsigned short len)
 
 void writeDescriptorTag(uint8_t* buffer, DescriptorTag tag, const uint32_t tagLocation)
 {
-    const auto buff16 = reinterpret_cast<uint16_t*>(buffer);
-    const auto buff32 = reinterpret_cast<uint32_t*>(buffer);
+    const auto buff16 = UnalignedPtr<uint16_t>(buffer);
+    const auto buff32 = UnalignedPtr<uint32_t>(buffer);
     buff16[0] = static_cast<uint16_t>(tag);
     buff16[1] = 0x03;  // version
     // skip check sum and reserved byte here
@@ -81,7 +81,7 @@ std::string toIsoSeparator(const std::string& path)
 
 void calcDescriptorCRC(uint8_t* buffer, const uint16_t len)
 {
-    const auto buff16 = reinterpret_cast<uint16_t*>(buffer);
+    const auto buff16 = UnalignedPtr<uint16_t>(buffer);
 
     // calc crc
     buff16[4] = crc16(buffer + 16, len - 16);
@@ -95,7 +95,7 @@ void calcDescriptorCRC(uint8_t* buffer, const uint16_t len)
 
 void writeTimestamp(uint8_t* buffer, const time_t time)
 {
-    const auto buff16 = reinterpret_cast<uint16_t*>(buffer);
+    const auto buff16 = UnalignedPtr<uint16_t>(buffer);
 
     const tm* parts = localtime(&time);
 
@@ -277,8 +277,8 @@ void writeUDFString(uint8_t* buffer, const char* str, const int len)
 void writeLongAD(uint8_t* buffer, const uint32_t lenBytes, const uint32_t pos, const uint16_t partition,
                  const uint32_t id)
 {
-    const auto buff32 = reinterpret_cast<uint32_t*>(buffer);
-    const auto buff16 = reinterpret_cast<uint16_t*>(buffer);
+    const auto buff32 = UnalignedPtr<uint32_t>(buffer);
+    const auto buff16 = UnalignedPtr<uint16_t>(buffer);
 
     buff32[0] = lenBytes;   // len
     buff32[1] = pos;        // location, block number
@@ -317,7 +317,7 @@ void ByteFileWriter::writeLE8(const uint8_t value)
 void ByteFileWriter::writeLE16(const uint16_t value)
 {
     checkRoom(2);
-    const auto pos16 = reinterpret_cast<uint16_t*>(m_curPos);
+    const auto pos16 = UnalignedPtr<uint16_t>(m_curPos);
     *pos16 = value;
     m_curPos += 2;
 }
@@ -325,7 +325,7 @@ void ByteFileWriter::writeLE16(const uint16_t value)
 void ByteFileWriter::writeLE32(const uint32_t value)
 {
     checkRoom(4);
-    const auto pos32 = reinterpret_cast<uint32_t*>(m_curPos);
+    const auto pos32 = UnalignedPtr<uint32_t>(m_curPos);
     *pos32 = value;
     m_curPos += 4;
 }
@@ -345,8 +345,8 @@ void ByteFileWriter::closeDescriptorTag(const int dataSize) const
 
 void ByteFileWriter::writeIcbTag(const uint8_t fileType)
 {
-    const auto buff32 = reinterpret_cast<uint32_t*>(m_curPos);
-    const auto buff16 = reinterpret_cast<uint16_t*>(m_curPos);
+    const auto buff32 = UnalignedPtr<uint32_t>(m_curPos);
+    const auto buff16 = UnalignedPtr<uint16_t>(m_curPos);
 
     // icb tag
     buff32[0] = 0;  // Prior Recorded Number of Direct Entries
@@ -1245,7 +1245,7 @@ int IsoWriter::allocateEntity(FileEntryInfo* entity, int sectorNum)
 
 void IsoWriter::writeAllocationExtentDescriptor(const ExtentList* extents, const size_t start, const size_t indexEnd)
 {
-    const auto buff32 = reinterpret_cast<uint32_t*>(m_buffer);
+    const auto buff32 = UnalignedPtr<uint32_t>(m_buffer);
     memset(m_buffer, 0, sizeof(m_buffer));
     writeDescriptorTag(m_buffer, DescriptorTag::AllocationExtent, absoluteSectorNum());
 
@@ -1275,9 +1275,9 @@ int IsoWriter::writeExtendedFileEntryDescriptor(const bool namedStream, const ui
     memset(m_buffer, 0, sizeof(m_buffer));
     writeDescriptorTag(m_buffer, DescriptorTag::ExtendedFileEntry, absoluteSectorNum());
 
-    const auto buff32 = reinterpret_cast<uint32_t*>(m_buffer);
-    const auto buff16 = reinterpret_cast<uint16_t*>(m_buffer);
-    const auto buff64 = reinterpret_cast<uint64_t*>(m_buffer);
+    const auto buff32 = UnalignedPtr<uint32_t>(m_buffer);
+    const auto buff16 = UnalignedPtr<uint16_t>(m_buffer);
+    const auto buff64 = UnalignedPtr<uint64_t>(m_buffer);
 
     writeIcbTag(namedStream, m_buffer + 16, fileType);
 
@@ -1383,8 +1383,8 @@ int IsoWriter::writeExtendedFileEntryDescriptor(const bool namedStream, const ui
 
 void IsoWriter::writeIcbTag(const bool namedStream, uint8_t* buffer, FileTypes fileType)
 {
-    const auto buff32 = reinterpret_cast<uint32_t*>(buffer);
-    const auto buff16 = reinterpret_cast<uint16_t*>(buffer);
+    const auto buff32 = UnalignedPtr<uint32_t>(buffer);
+    const auto buff16 = UnalignedPtr<uint16_t>(buffer);
 
     // icb tag
     buff32[0] = 0;  // Prior Recorded Number of Direct Entries
@@ -1494,7 +1494,7 @@ void IsoWriter::writeImpUseDescriptor()
     memset(m_buffer, 0, sizeof(m_buffer));
     writeDescriptorTag(m_buffer, DescriptorTag::ImplUseVol, absoluteSectorNum());
 
-    const auto buff32 = reinterpret_cast<uint32_t*>(m_buffer);
+    const auto buff32 = UnalignedPtr<uint32_t>(m_buffer);
     buff32[4] = 0x01;  // Descriptor Sequence Number
 
     const std::string impId = std::string("*UDF LV Info");
@@ -1520,8 +1520,8 @@ void IsoWriter::writePartitionDescriptor()
     memset(m_buffer, 0, sizeof(m_buffer));
     writeDescriptorTag(m_buffer, DescriptorTag::Partition, absoluteSectorNum());
 
-    const auto buff32 = reinterpret_cast<uint32_t*>(m_buffer);
-    const auto buff16 = reinterpret_cast<uint16_t*>(m_buffer);
+    const auto buff32 = UnalignedPtr<uint32_t>(m_buffer);
+    const auto buff16 = UnalignedPtr<uint16_t>(m_buffer);
     buff32[4] = 0x02;                                          // Descriptor Sequence Number
     buff16[10] = 0x01;                                         // partition flags
     buff16[11] = 0x00;                                         // Partition Number
@@ -1542,8 +1542,8 @@ void IsoWriter::writeLogicalVolumeDescriptor()
 {
     memset(m_buffer, 0, sizeof(m_buffer));
     writeDescriptorTag(m_buffer, DescriptorTag::LogicalVol, absoluteSectorNum());
-    const auto buff32 = reinterpret_cast<uint32_t*>(m_buffer);
-    const auto buff16 = reinterpret_cast<uint16_t*>(m_buffer);
+    const auto buff32 = UnalignedPtr<uint32_t>(m_buffer);
+    const auto buff16 = UnalignedPtr<uint16_t>(m_buffer);
 
     buff32[4] = 0x03;                                                           // Volume Descriptor Sequence Number
     strcpy(reinterpret_cast<char*>(m_buffer) + 21, "OSTA Compressed Unicode");  // Descriptor Character Set
@@ -1607,7 +1607,7 @@ void IsoWriter::writeUnallocatedSpaceDescriptor()
     memset(m_buffer, 0, sizeof(m_buffer));
     writeDescriptorTag(m_buffer, DescriptorTag::UnallocSpace, absoluteSectorNum());
 
-    const auto buff32 = reinterpret_cast<uint32_t*>(m_buffer);
+    const auto buff32 = UnalignedPtr<uint32_t>(m_buffer);
 
     buff32[4] = 0x04;  // sequence number
 
@@ -1629,8 +1629,8 @@ void IsoWriter::writeLogicalVolumeIntegrityDescriptor()
     memset(m_buffer, 0, sizeof(m_buffer));
     writeDescriptorTag(m_buffer, DescriptorTag::LogicalVolIntegrity, absoluteSectorNum());
 
-    const auto buff32 = reinterpret_cast<uint32_t*>(m_buffer);
-    const auto buff16 = reinterpret_cast<uint16_t*>(m_buffer);
+    const auto buff32 = UnalignedPtr<uint32_t>(m_buffer);
+    const auto buff16 = UnalignedPtr<uint16_t>(m_buffer);
 
     writeTimestamp(m_buffer + 16, m_currentTime);
     buff32[7] = 0x01;              // Integrity Type
@@ -1664,7 +1664,7 @@ void IsoWriter::writeAnchorVolumeDescriptor(const uint32_t endPartitionAddr)
     memset(m_buffer, 0, sizeof(m_buffer));
     writeDescriptorTag(m_buffer, DescriptorTag::AnchorVolPtr, absoluteSectorNum());
 
-    const auto buff32 = reinterpret_cast<uint32_t*>(m_buffer);
+    const auto buff32 = UnalignedPtr<uint32_t>(m_buffer);
     buff32[4] = 0x8000;  // point of the main volume descriptor
     buff32[5] = 0x20;
     buff32[6] = 0x8000;

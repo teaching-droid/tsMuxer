@@ -2569,7 +2569,8 @@ int MovDemuxer::mov_read_extradata(MOVAtom atom)
 
     const int64_t oldSize = st->codec_priv_size;
     const auto tmp = new uint8_t[oldSize];
-    memcpy(tmp, st->codec_priv, oldSize);
+    if (oldSize > 0)
+        memcpy(tmp, st->codec_priv, oldSize);
     delete[] st->codec_priv;
     st->codec_priv = new uint8_t[newSize];
     memcpy(st->codec_priv, tmp, oldSize);
