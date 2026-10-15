@@ -609,6 +609,13 @@ void METADemuxer::openFile(const string& streamName)
             const size_t eq = params[i].find('=');
             const string paramName = trimStr(params[i].substr(0, eq));
             addParams[paramName] = trimStr(eq == string::npos ? "" : params[i].substr(eq + 1));
+            // Digits alone, with no name: the part after a decimal comma, as the parameters are parted at commas.
+            // fps=23,976 became fps=23, and timeshift=1,5s timeshift=1, with only a warning about "976".
+            if (eq == string::npos && i > 0 && !paramName.empty() &&
+                paramName.find_first_not_of("0123456789") == string::npos)
+                THROW(ERR_COMMON, "\"" << trimStr(params[i - 1]) << "," << paramName
+                                       << "\" on a track line: a decimal comma parts the value in two, as the "
+                                          "parameters are parted at commas. Write it with a point, such as 23.976.")
             if (!isKnownTrackParam(paramName))
             {
                 // A misspelled parameter used to be accepted in silence and simply do nothing,
@@ -2558,20 +2565,38 @@ void METADemuxer::addTrack(vector<CheckStreamRez>& rez, CheckStreamRez trackRez)
 //
 // The window has always split the fraction itself, which is why this only ever caught a meta
 // written by hand.
+//
+// The same was still true of every other way to write it: fps=24000:1001 was 24000 frames a second, fps=23,976 was 23,
+// and fps=abc was 0, all without a word. A frame rate is now a number with an optional decimal point, or a fraction
+// written with "/" or ":", above 0 and up to 1000; anything else is refused.
 static double parseFpsValue(const std::string& text)
 {
-    const size_t slash = text.find('/');
-    if (slash == std::string::npos)
-        return strToDouble(text.c_str());
-
-    const double num = strToDouble(text.substr(0, slash).c_str());
-    const double den = strToDouble(text.substr(slash + 1).c_str());
-    if (den <= 0 || num <= 0)
+    const std::string t = trimStr(text);
+    auto number = [](const std::string& s, double& value)
     {
-        LTRACE(LT_WARN, 2, "Ignoring fps=" << text << ": it is not a usable fraction");
-        return 0;
+        if (s.empty() || s.find_first_not_of("0123456789.") != std::string::npos ||
+            std::count(s.begin(), s.end(), '.') > 1 || s.find_first_of("0123456789") == std::string::npos)
+            return false;
+        value = strToDouble(s.c_str());
+        return true;
+    };
+    double fps = 0;
+    const size_t bar = t.find_first_of("/:");
+    bool ok;
+    if (bar == std::string::npos)
+        ok = number(t, fps);
+    else
+    {
+        double num = 0, den = 0;
+        ok = number(t.substr(0, bar), num) && number(t.substr(bar + 1), den) && den > 0;
+        if (ok)
+            fps = num / den;
     }
-    return num / den;
+    if (!ok || !(fps > 0) || fps > 1000)
+        THROW(ERR_COMMON, "fps=" << text
+                                 << " is not a frame rate. Write it as a number such as 25 or 23.976, or as a fraction "
+                                    "such as 24000/1001, above 0 and up to 1000.")
+    return fps;
 }
 
 CheckStreamRez METADemuxer::detectTrackReader(uint8_t* tmpBuffer, int len,
