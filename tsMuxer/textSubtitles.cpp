@@ -14,6 +14,7 @@
 #include <cassert>
 #include <cmath>
 
+#include <fs/systemlog.h>
 #include "pgsStreamReader.h"
 #include "vodCoreException.h"
 #include "vod_common.h"
@@ -421,13 +422,28 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
     curPos += composeObjectDefinition(curPos, odfPTS, dts, m_minLine, m_maxLine, true);
     curPos += composeEnd(curPos, odfPTS, odfPTS);
 
+    // Each fade step is a presentation segment, a palette of up to 256 colours and an end: under 1.4 KB. A fade of
+    // minutes on a long subtitle, at 59.94 fps, wrote past the end of the buffer (only a debug check looked). The fade
+    // now stops where the next step would not fit, with room left for hiding the text.
+    static constexpr ptrdiff_t FADE_STEP_MAX = 2048;
+    static constexpr ptrdiff_t HIDE_RESERVE = 1024;
+    const auto stepFits = [&]
+    {
+        if (curPos - m_pgsBuffer + FADE_STEP_MAX <= PG_BUFFER_SIZE - HIDE_RESERVE)
+            return true;
+        if (!m_fadeCutSaid)
+            LTRACE(LT_WARN, 2, "Warning: a fade of a subtitle is too long to be drawn in full; it is shortened.");
+        m_fadeCutSaid = true;
+        return false;
+    };
+
     // 2.1 fade in palette
     const double fpsPts = 90000.0 / m_videoFps;
     double updateTime = alignToGrid(inTimePTS + fpsPts);
 
     const double lastAnimateTime = alignToGrid(outTimePTS - fpsPts);
     opacity += opacityInDelta;
-    while (updateTime <= lastAnimateTime + FLOAT_EPS && opacity <= 1.0 + FLOAT_EPS)
+    while (updateTime <= lastAnimateTime + FLOAT_EPS && opacity <= 1.0 + FLOAT_EPS && stepFits())
     {
         palette_update_flag = true;
         m_paletteVersion++;
@@ -445,7 +461,7 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
     //     outTimeSec by the next composition must stay fully visible until then
     updateTime = alignToGrid(FFMAX(updateTime, outTimePTS - (fadeOutFrames - 1) * fpsPts));
     opacity = 1.0f - opacityOutDelta;
-    while (hide && updateTime < outTimePTS - FLOAT_EPS)
+    while (hide && updateTime < outTimePTS - FLOAT_EPS && stepFits())
     {
         palette_update_flag = true;
         m_paletteVersion++;

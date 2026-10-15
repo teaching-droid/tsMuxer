@@ -77,6 +77,7 @@ class TextToPGSConverter  //: public TextSubtitlesRenderWin32
     uint16_t m_videoHeight;
     double m_videoFps;
     uint8_t* m_pgsBuffer;
+    bool m_fadeCutSaid = false;  // the warning that a fade was shortened, once
     uint8_t* m_imageBuffer;
     long composePresentationSegment(uint8_t* buff, CompositionMode mode, int64_t pts, int64_t dts, uint16_t top,
                                     bool needPgHeader, bool forced);
