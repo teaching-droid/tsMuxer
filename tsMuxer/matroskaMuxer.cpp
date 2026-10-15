@@ -48,9 +48,9 @@ extern "C"
 #include "vvc.h"
 #include "vvcStreamReader.h"
 
-// The Matroska TrackType values this muxer writes. Only the video and subtitle ones are asked about
-// away from where the tracks are built, so only they are named.
+// The Matroska TrackType values this muxer writes, those that are asked about away from where the tracks are built.
 static constexpr uint8_t MKV_TRACK_TYPE_VIDEO = 1;
+static constexpr uint8_t MKV_TRACK_TYPE_AUDIO = 2;
 static constexpr uint8_t MKV_TRACK_TYPE_SUBTITLE = 17;
 static constexpr uint8_t PGS_SEGMENT_PCS = 0x16;  // presentation composition, opens a display set
 static constexpr uint8_t PGS_SEGMENT_END = 0x80;  // closes it
@@ -2365,10 +2365,12 @@ void MatroskaMuxer::writeDeferredHeader()
             if (seconds > 0.0)
                 m_chapterSplitPts.push_back(static_cast<int64_t>(seconds * INTERNAL_PTS_FREQ));
         std::sort(m_chapterSplitPts.begin(), m_chapterSplitPts.end());
-        // The lowest numbered video track, or the lowest numbered track when there is no video.
-        for (const bool videoOnly : {true, false})
+        // The lowest numbered video track, or audio track when there is no video, or the lowest numbered track. A
+        // subtitle track first in the meta decided the split of a sound-only output, so parts were cut where a
+        // subtitle began, and a part could be as long as the gap between two subtitles.
+        for (const int wanted : {static_cast<int>(MKV_TRACK_TYPE_VIDEO), static_cast<int>(MKV_TRACK_TYPE_AUDIO), -1})
             for (const auto& [streamIdx, track] : m_tracks)
-                if (m_mainTrackNumber == 0 && (!videoOnly || track.trackType == MKV_TRACK_TYPE_VIDEO))
+                if (m_mainTrackNumber == 0 && (wanted < 0 || static_cast<int>(track.trackType) == wanted))
                     m_mainTrackNumber = track.trackNumber;
     }
     else
