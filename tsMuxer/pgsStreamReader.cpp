@@ -473,7 +473,13 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
 
     if (m_video_height == 0)
     {
-        intDecodeStream(m_curPos, m_bufEnd - m_curPos);
+        // A .sup with bytes in front of its first marker: the size was looked for in those bytes, never found, and the
+        // reader waited for it without reading anything.
+        uint8_t* from = m_curPos;
+        if (m_containerType == ContainerType::ctSUP && m_bufEnd - from >= 2 && !(from[0] == 'P' && from[1] == 'G'))
+            if (uint8_t* next = findSupMarker(from))
+                from = next;
+        intDecodeStream(from, m_bufEnd - from);
         if (m_video_height == 0)
             return NEED_MORE_DATA;
 
@@ -829,10 +835,24 @@ CheckStreamRez PGSStreamReader::checkStream(uint8_t* buffer, int len, ContainerT
         rez.streamDescr = "Presentation Graphic Stream";
         rez.streamDescr += std::string(" #") + int32ToStr(containerStreamIndex);
     }
-    else if (containerType == ContainerType::ctSUP && len > 2 && buffer[0] == 'P' && buffer[1] == 'G')
+    else if (containerType == ContainerType::ctSUP && len > 2)
     {
-        rez.codecInfo = pgsCodecInfo;
-        rez.streamDescr = std::string("Presentation Graphic Stream");
+        // A few bytes in front of the first "PG" marker: the file was not taken for a .sup at all, and nothing was
+        // muxed. The first marker within 16 bytes whose segment type is one of PGS counts, as the reader finds it.
+        for (int k = 0; k < 16 && k + 13 <= len; ++k)
+        {
+            const uint8_t type = buffer[k + 10];
+            if (buffer[k] == 'P' && buffer[k + 1] == 'G' &&
+                (type == PALETTE_DEF_SEGMENT || type == OBJECT_DEF_SEGMENT || type == PCS_DEF_SEGMENT ||
+                 type == WINDOWS_DEF_SEGMENT || type == 0x80))
+            {
+                rez.codecInfo = pgsCodecInfo;
+                rez.streamDescr = std::string("Presentation Graphic Stream");
+                buffer += k;
+                len -= k;
+                break;
+            }
+        }
     }
     intDecodeStream(buffer, len);
     if (m_video_height != 0)
