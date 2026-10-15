@@ -3,6 +3,7 @@
 #include <fs/textfile.h>
 
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -2104,6 +2105,27 @@ static void reportSplitWithoutParameterSets(const MuxerManager& muxerManager)
 //
 // A deliberately partial job is left alone: --cut-start and --cut-end stop early because they were
 // asked to. Splitting is not excluded, since a split job reads everything it was given.
+// ** AN OUTPUT THAT IS ONE OF THE SOURCES IS REFUSED BEFORE ANYTHING IS WRITTEN. ** The output was opened for writing,
+// which empties it, while the same file was still to be read: a transport stream given as its own output kept 4 of its
+// 25 MB and a Matroska file was cut at 6 MB, and both runs ended with an error over a source that was gone. Names are
+// compared as the system does, so another case, other slashes or a relative path are the same file.
+static void refuseSourceAsOutput(const MuxerManager& muxerManager, const std::string& dstFile)
+{
+    std::error_code ec;
+    const std::filesystem::path out(std::u8string(dstFile.begin(), dstFile.end()));
+    if (!std::filesystem::exists(out, ec))
+        return;
+    for (const auto& si : muxerManager.getStreamInfo())
+        for (const std::string& part : splitQuotedStr(si.m_fullStreamName.c_str(), '+'))
+        {
+            const std::string name = unquoteStr(trimStr(part));
+            const std::filesystem::path src(std::u8string(name.begin(), name.end()));
+            if (std::filesystem::equivalent(src, out, ec) && !ec)
+                throw runtime_error("The output " + dstFile + " is one of the source files (" + name +
+                                    "), and writing it would destroy that source. Choose another output name.");
+        }
+}
+
 static void checkSourceConsumed(MuxerManager& muxerManager)
 {
     const int64_t total = muxerManager.totalSize();
@@ -2491,6 +2513,7 @@ int main(int argc, char** argv)
                 throw runtime_error(string("The output file name is empty or contains characters that "
                                            "cannot be used: \"") +
                                     dstFile + "\"");
+            refuseSourceAsOutput(muxerManager, dstFile);
 
             if (muxerManager.getTrackCnt() == 0)
                 THROW(ERR_COMMON, "No tracks selected")
@@ -2557,6 +2580,8 @@ int main(int argc, char** argv)
                 throw runtime_error(string("The output file name is empty or contains characters that "
                                            "cannot be used: \"") +
                                     dstFile + "\"");
+
+            refuseSourceAsOutput(muxerManager, dstFile);
 
             // ** BEFORE THE DESTINATION IS CREATED, NOT AFTER. ** This stood below the block that
             // creates the output image, so a meta that selects no tracks replaced an existing .iso
