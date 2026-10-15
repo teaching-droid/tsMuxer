@@ -499,6 +499,17 @@ int METADemuxer::readPacket(AVPacket& avPacket)
             {
                 if (m_codecInfo[minDtsIndex].lastReadRez != BufferedFileReader::DATA_EOF2)
                 {
+                    // ** THE PACKET STARTS AT THIS STREAM'S OWN POSITION. ** A reader that asks for more data
+                    // without saying where its stream stands (the PGS, SRT, Matroska copy and video copy readers)
+                    // left the packet as the stream before had it: the time of another track, or this one's with
+                    // the timeshift added, and the timeshift was added again below. With timeshift=5000ms 57 of 95
+                    // subtitles of a disc came up to 10 s after they were due. A reader that does say keeps its
+                    // own word; one that does not leaves its stream where it stood.
+                    avPacket.data = nullptr;
+                    avPacket.size = 0;
+                    avPacket.duration = 0;
+                    avPacket.dts = avPacket.pts =
+                        m_codecInfo[minDtsIndex].m_lastDTS - m_codecInfo[minDtsIndex].m_timeShift;
                     const int res = m_codecInfo[minDtsIndex].m_streamReader->readPacket(avPacket);
                     m_codecInfo[minDtsIndex].m_lastAVRez = res;
                 }
