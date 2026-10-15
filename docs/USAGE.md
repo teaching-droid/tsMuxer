@@ -173,7 +173,7 @@ timeshift         | Shift the track by the given time: a number followed by ns, 
 down-to-dts       | Available only for DTS-HD tracks. Filter out HD part. 
 down-to-ac3       | For TRUE-HD and E-AC3 (DD+) tracks. Keep the AC-3 core, drop the HD part. 
 secondary         | Mux as secondary audio.  Available for DD+ and DTS-Express. 
-default           | Mark this track as the default when muxing to Blu-ray.
+default           | Mark this track as the default one. `none`, `no`, `0`, `false` or `off` say that it is not.
 w64               | **Demux only, LPCM only.** Write the track as Wave64 (`.w64`) instead of WAV. A WAV header states its sizes in 32 bits and so cannot describe a file past 4 GiB, which is why a long track is otherwise written as two; Wave64 is the same audio with 64 bit sizes and stays one file.
 stretch           | Stretch audio by a given factor. Can be a decimal value or a fraction (e.g. 25/24). Useful for fixing A/V sync issues caused by frame rate discrepancies.
 merge-ac3-track   | **MKV only, A_MLP only.** Matroska track number of a classic AC-3 stream to interleave with this TrueHD track for Blu-ray-style muxing. Requires `track=<TrueHD track number>`. Do not add the AC-3 track as a separate meta line.
@@ -235,7 +235,7 @@ Parameter         | Description
 ---               | ---
 video-width       | The width of the video in pixels. 
 video-height      | The height of the video in pixels. 
-default           | Mark this track as the default when muxing to Blu-ray. Allowed values are `all` which causes all subtitles to be shown, and `forced` which shows only elements marked as "forced" in the subtitle stream.
+default           | Mark this track as the default one. `all` (or `yes`, `1`, `true`, `on`) shows all subtitles, and `forced` shows only elements marked as "forced" in the subtitle stream; in a Matroska output the track is then marked forced as well. `none`, `no`, `0`, `false` or `off` say that it is not the default. The values are read in any case, and any other value is refused.
 fps               | Video fps. It is recommended to define this parameter in order to enable more careful timing processing. 
 3d-plane          | Defines the number of the '3D offset track' which is placed inside the MVC track. Each message has an individual 3D offset. This information is stored inside 3D offset track.
 
@@ -291,7 +291,7 @@ Parameter           | Description
 --no-hdmv-descriptors | Use ITU-T H.222.0 / ISO/IEC 13818-1 descriptors instead of HDMV descriptors. Not activated for BD or AVCHD muxing.
 --vbr               | Use variable bitrate. This is the default mode, so on its own the word changes nothing.
 --minbitrate        | Sets the lower limit of the muxing rate, in kbps. If the streams together come to less, NULL packets are inserted to make up the difference. Has no effect unless --bitrate or --maxbitrate is given as well.
---maxbitrate        | Sets the rate, in kbps, that the transport stream is paced to. It is not a ceiling: nothing is dropped or delayed if the streams need more, so a value below what they need does not make the output any smaller. Must be above 90.
+--maxbitrate        | Sets a ceiling on the muxing rate, in kbps: the stream is paced so that it never asks to be read faster than that. Nothing is dropped, so the output is no smaller: where the video needs more than the ceiling, its pictures reach the player after they are due, and a warning says how many and by how much. For a fixed rate use --bitrate. Must be above 90.
 --cbr               | Ask for a fixed bitrate. The rate comes from --bitrate, so --cbr on its own does nothing. --vbr and --cbr must not be used together. 
 --bitrate           | Set a fixed bitrate in kbps, so --bitrate=35000 means 35 Mbps. This sets both the minimum and the maximum to that value. Where the streams need less, NULL packets pad the difference; where they need more they are still written in full, so the output can come out above the figure asked for. Must be above 90.
 --vbv-len           | The  length  of the  virtual  buffer  in milliseconds.  The default value  is 500.  Typically, this  option  is used together with --cbr. The parameter is similar to  the value of  vbv-buffer-size  in  the  x264  codec,  but  defined in milliseconds instead of kbit. 
@@ -306,8 +306,8 @@ Parameter           | Description
 --avchd             | Mux to AVCHD disc.
 --cut-start         | Trim the beginning of the file. The value is a number followed by the time unit "ms" (milliseconds), "s" (seconds) or "min" (minutes), such as 90s, or a clock time such as 00:01:30. A start at or past the end of the sources is an error. 
 --cut-end           | Trim the end of the file. Same rules as --cut-start apply. 
---split-duration    | Split the output into several files, with each of them being <n> seconds long. 
---split-size        | Split the output into several files, with each of them having a given maximum size. KB, KiB, MB, MiB, GB and GiB are accepted as size units. 
+--split-duration    | Split the output into several files, with each of them being <n> seconds long. A unit may follow: ms, s, min or h, such as 10min. The length must be above zero. 
+--split-size        | Split the output into several files, with each of them having a given maximum size. KB, KiB, MB, MiB, GB, GiB, TB and TiB are accepted as size units, and K, M, G and T as KB, MB, GB and TB; a number alone is in bytes. Any other unit is refused. 
 --split-chapters    | Split the output so that each file begins at a chapter. The marks come from a Blu-ray playlist or from a Matroska's own chapters, and --custom-chapters overrides both. As with the other split options the cut lands on the first key frame at or after the mark. A Matroska output is split by all three options the same way, into name.split.1.mkv, name.split.2.mkv and on. 
 --keep-editions     | Matroska output only, from one Matroska file: keep its chapters exactly as they are, every edition of them and every link to another file, and its segment identity (SegmentUID, PrevUUID, NextUUID), so that ordered editions and linked files still work after a remux. The file is read as it is stored, not as its ordered edition plays it. Remux each file of a linked set this way. Not with a join, a cut, a split, --custom-chapters, --chapters-file or a .webm output.
 --title             | Matroska output: the title of the file. Without it a Matroska source's own title is kept.

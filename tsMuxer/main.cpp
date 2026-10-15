@@ -843,9 +843,10 @@ Additional parameters for PG and SRT tracks:
 - default           Mark this track as the default. Used for Blu-ray, and written as the
                     Matroska default flag when the output is MKV. Without it the first track
                     of each type is the default.
-                    Allowed values are "all" which causes all subtitles to be
-                    shown, and "forced" which shows only elements marked as
-                    "forced" in the subtitle stream.
+                    Allowed values are "all" (or yes, 1, true, on) which causes
+                    all subtitles to be shown, and "forced" which shows only
+                    elements marked as "forced" in the subtitle stream. They
+                    are read in any case; any other value is refused.
                     "none", and also no, 0, false and off, mean this track is NOT
                     the default. Put it on every track of a type to say that the
                     type has no default at all: with nothing said either way, the
@@ -973,7 +974,7 @@ All parameters in this group start with two dashes:
 --cut-end             Where to STOP, measured from the beginning too, not from
                       the end. --cut-end=30s keeps the first 30 seconds.
 --split-duration      Split the output into several files, with each of them being
-                      <n> seconds long.
+                      <n> seconds long. A unit may follow: ms, s, min or h.
 --lang-codes=<form>   Which form a language READ from a source is reported in.
                       ISO 639-2 gives twenty languages two codes: terminological
                       is ell, deu, nld, and bibliographic is gre, ger, dut, which
@@ -1001,8 +1002,9 @@ All parameters in this group start with two dashes:
                       frame at or after the mark, never in the middle of a
                       picture.
 --split-size          Split the output into several files, with each of them
-                      having a given maximum size. KB, KiB, MB, MiB, GB and GiB
-                      are accepted as size units.
+                      having a given maximum size. KB, KiB, MB, MiB, GB, GiB, TB
+                      and TiB are accepted as size units, and K, M, G and T as
+                      KB, MB, GB and TB.
                       Matroska output is split by all three the same way, into
                       name.split.1.mkv, name.split.2.mkv and on. Each part starts
                       at time zero and carries the chapters that fall into it.
