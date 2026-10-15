@@ -2550,11 +2550,30 @@ static double fpsFromStts(const std::vector<MOVStts>& stts, const int64_t timeSc
     static constexpr double standardRates[] = {
         24000.0 / 1001, 24.0, 25.0,  30000.0 / 1001,  30.0, 48000.0 / 1001, 48.0, 50.0,
         60000.0 / 1001, 60.0, 100.0, 120000.0 / 1001, 120.0};
-    double nearest = standardRates[0];
-    for (const double rate : standardRates)
-        if (std::fabs(average - rate) < std::fabs(average - nearest))
-            nearest = rate;
-    return std::fabs(average - nearest) <= nearest * 0.001 ? nearest : average;
+    const auto snap = [&](const double rate)
+    {
+        double nearest = standardRates[0];
+        for (const double r : standardRates)
+            if (std::fabs(rate - r) < std::fabs(rate - nearest))
+                nearest = r;
+        return std::fabs(rate - nearest) <= nearest * 0.001 ? nearest : 0.0;
+    };
+    if (const double standard = snap(average); standard > 0)
+        return standard;
+    // Not one rate on average, as with one picture held for 2 s in a 25 fps file: the average, 20.83, retimed every
+    // picture, and the pictures drifted from the sound by up to 1.9 s. The duration most pictures have gives the rate
+    // when it is a standard one; the pictures of other lengths are warned about (MovDemuxer::mov_read_stts).
+    std::map<int64_t, uint64_t> byDuration;
+    for (const MOVStts& e : stts)
+        if (e.duration > 0)
+            byDuration[e.duration] += e.count;
+    const auto mostCommon = std::max_element(byDuration.begin(), byDuration.end(),
+                                             [](const auto& a, const auto& b) { return a.second < b.second; });
+    if (mostCommon != byDuration.end() && mostCommon->second * 2 > total)
+        if (const double standard = snap(static_cast<double>(timeScale) / static_cast<double>(mostCommon->first));
+            standard > 0)
+            return standard;
+    return average;
 }
 
 int MovDemuxer::mov_read_stts(MOVAtom atom)
@@ -2573,6 +2592,23 @@ int MovDemuxer::mov_read_stts(MOVAtom atom)
     // not the rate wherever the durations alternate: the first entry of a 90 kHz 23.976 track gave 23.9808 or
     // 23.9744, and a 29.97 track at 16000 gave 30.303, and every picture was retimed by it, 80 s over two hours.
     st->fps = fpsFromStts(st->stts_data, st->time_scale);
+    // Video is timed at one rate. A picture that lasts much longer than one frame time, a still or a pause, is shown
+    // for one frame time, and the pictures after it come early against the sound: said here, once a track.
+    if (st->type == IOContextTrackType::VIDEO && st->fps > 0 && st->time_scale > 0)
+    {
+        int64_t longest = 0;
+        for (size_t i = 0; i < st->stts_data.size(); ++i)  // the last picture alone is left out, as for the rate
+            if (st->stts_data[i].count > (i + 1 == st->stts_data.size() ? 1u : 0u))
+                longest = std::max<int64_t>(longest, st->stts_data[i].duration);
+        const double frameTicks = static_cast<double>(st->time_scale) / st->fps;
+        if (static_cast<double>(longest) > 1.5 * frameTicks)
+            LTRACE(LT_WARN, 2,
+                   "Warning: video track " << num_tracks << " of the MP4 file has pictures of different lengths, up "
+                                           << "to " << longest * 1000 / st->time_scale
+                                           << " ms. Its pictures are timed at " << doubleToStr(st->fps, 3)
+                                           << " fps, so after a longer picture the video comes early against the "
+                                              "sound.");
+    }
     return 0;
 }
 
@@ -3369,7 +3405,11 @@ std::string MovDemuxer::getTitle()
 
 std::vector<AVChapter> MovDemuxer::getChapters()
 {
-    std::vector<AVChapter> out = m_chplChapters.empty() ? chapterTrackChapters() : m_chplChapters;
+    // Nero chapters count in one byte, so a writer that writes both lists cuts them at 255 and the chapter track holds
+    // them all: of 300 chapters 255 were kept. The longer list is taken.
+    std::vector<AVChapter> out = m_chplChapters;
+    if (std::vector<AVChapter> track = chapterTrackChapters(); track.size() > out.size())
+        out = std::move(track);
     std::sort(out.begin(), out.end());
     return out;
 }
