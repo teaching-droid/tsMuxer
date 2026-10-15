@@ -467,7 +467,10 @@ int AC3Codec::decodeFrame(uint8_t* buf, uint8_t* end, int& skipBytes)
             }
             uint8_t* nextFrame = trueHDData + trueHDFrameLen;
 
-            if (nextFrame[0] == 0x0B && nextFrame[1] == 0x77 && testDecodeTestFrame(nextFrame, end))
+            // A TrueHD frame that ends where the data read so far ends has nothing behind it yet: the two bytes of a
+            // sync word were read beyond the data
+            if (end - nextFrame >= 2 && nextFrame[0] == 0x0B && nextFrame[1] == 0x77 &&
+                testDecodeTestFrame(nextFrame, end))
                 m_waitMoreData = false;
 
             if (m_downconvertToAC3)
