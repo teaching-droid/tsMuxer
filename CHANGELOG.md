@@ -84,6 +84,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A MOV track with no language** gets none, instead of three control characters.
 
+* **Video with one long still picture** keeps the rate most of its pictures have: one picture held for 2 s in a 25 fps file retimed every picture to 20.83 fps. Video is timed at one rate, so a warning now says when the pictures of a track have different lengths.
+
+* **More than 255 chapters** are kept: a file with both lists has its Nero chapters cut at 255, and the chapter track is taken when it holds more.
+
 ### Subtitles
 
 * **ASS and SSA subtitles are drawn with libass** wherever they are drawn into pictures: with their styles, colours, positions, rotations, fades, moves and karaoke. libass uses the fonts attached to the Matroska file, a fonts folder given with the new track parameter fonts-dir, and the fonts of the system. The Windows packages include libass and the libraries it needs, with their licenses in THIRD-PARTY-NOTICES.txt and the licenses folder. On Linux and Mac, install the system's libass. Without libass, or with the new parameter ass-as-srt, they are drawn as plain text, as before.
@@ -97,6 +101,14 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **An SRT timing line with a tab after the arrow** keeps its end time. The subtitle stayed on screen until the next one.
 
 * **Words of a title are no longer read as a language.** "Iron Man.ac3" was Mandingo and "X-Men.srt" Mende. Without brackets, a code in a file name is read after "_" or "." (Movie_spa.ac3, movie.eng.srt). A name with both a language and "forced" (movie_eng_forced.srt) gives both.
+
+* **SRT:** a number alone after an empty line inside a subtitle, as a year, is kept as text; it was lost without a word. A block whose timing line has a mistyped arrow is skipped with a warning; it was drawn inside the subtitle before it.
+
+* **Font tags:** colours in single quotes, #RGB and an upper case </FONT> are read. #f00 was drawn dark green.
+
+* **A .sup with a few bytes in front of its first segment** is muxed whole, with a warning. With one or two bytes nothing was muxed.
+
+* **save-srt** makes its file with the first subtitle written: a track that was refused left an empty .srt behind.
 
 * **Subtitles drawn for video up to 720 pixels wide at 25 or 50 frames per second, such as 720x576, were drawn for 720x480.** The canvas of their PGS was the size of NTSC video, and each subtitle was placed for 480 lines. They now get the canvas of 720x576 a disc has for such video, whether they come from SRT, ASS, SSA or WebVTT. A PGS track already drawn at 720x576 is no longer scaled down to 720x480 when its line names the size and the frame rate of the video.
 
@@ -119,6 +131,12 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **The display size follows the pixel shape** the H.264 or HEVC video gives. Square pixels at 720x576 or 720x480 were shown at 4:3, and HEVC at 1440x1080 with 4:3 pixels was shown at 4:3 instead of 16:9.
 
 * **Chapters:** a list edited in the window keeps the names of the source's chapters at the same times, and a list emptied in the window gives no chapters. A Matroska XML chapter file gives characters written by their number (&#233;), and a chapter language that is not a language code is written as und, with a warning.
+
+* **A 3D track whose base view is the right eye** is marked so (StereoMode 14), with --right-eye or from a playlist that says so. It was marked left eye first.
+
+* **20 bit LPCM** says BitDepth 24, as its samples take 3 bytes; it played as noise in other players. A LanguageBCP47 of 40 characters or more is kept. The DURATION tags of a source made by ffmpeg are left out, as they give the source's length.
+
+* **A split of sound without video** is decided by the sound, not by a subtitle line listed first.
 
 ### Window
 
@@ -167,6 +185,14 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **A damaged frame size in an IVF file** made the frame rate probe read before its data.
 
 * **Values that were read as something else are read whole now, or refused with a message:** --cut-start and --cut-end without a unit (--cut-end=5 kept one picture), as a clock time (00:01:30 switched the cut off; it is read now) or with a decimal comma; timeshift= in microseconds (us) or in S (500us was 500 s); fps=24000:1001 (24000 frames a second); --split-size=4G (4 bytes); --split-duration=0 (no split on a transport stream) and 1min (1 s); a level= a codec does not have (level=26 was 4); --layer-break-lbn=12.219.392 (sector 12); default=Forced, yes or 1 on a disc (no default subtitle); a chapter time with a comma or a unit. A decimal comma on a track line, as in fps=23,976, is refused with a message, as the values there are parted at commas.
+
+* **An output named .mts or .m2t** is a transport stream. It became a folder of demuxed tracks.
+
+* **A join naming a track its files do not have** stops before anything is written, as a single file does. **--keep-editions with no Matroska source** is refused; it kept nothing.
+
+* **A playlist source** is muxed in the languages its playlist gives, as it is listed.
+
+* **--bdmv-to-iso** counts folders when it makes room for the image's metadata, and takes --extra-iso-space: a disc folder with 400 extra folders was refused after the whole copy.
 
 * **Reads outside the data, and reads at addresses C++ does not allow, are gone.** The search for the start codes of a video stream read up to 15 bytes before and after its buffer, the check for the next TrueHD frame could read two bytes past the data, and many fields of two, four and eight bytes were read and written through pointers the language does not allow at their addresses. None of them was seen to change an output.
 
