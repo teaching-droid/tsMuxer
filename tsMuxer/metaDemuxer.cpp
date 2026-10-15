@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <filesystem>
 #include <memory>
 #include <set>
 #include <sstream>
@@ -564,6 +565,16 @@ void METADemuxer::openFile(const string& streamName)
     file.readLine(str);
     while (str.length() > 0)
     {
+        // A tab outside quotes is a space, as on the MUXOPT line: a tab between the fields of a track line, or a
+        // line holding only a tab, stopped the job
+        bool quoted = false;
+        for (char& c : str)
+        {
+            if (c == '"')
+                quoted = !quoted;
+            else if (c == '\t' && !quoted)
+                c = ' ';
+        }
         str = trimStr(str);
         if (str.length() == 0 || str[0] == '#')
         {
@@ -2738,6 +2749,15 @@ int pipScaleFromStr(const std::string& value)
     return 1;  // default
 }
 
+// Whether two names are one existing file, also when they differ in case, slashes or a relative part
+static bool sameExistingFile(const std::string& a, const std::string& b)
+{
+    std::error_code ec;
+    const std::filesystem::path pa(std::u8string(a.begin(), a.end()));
+    const std::filesystem::path pb(std::u8string(b.begin(), b.end()));
+    return std::filesystem::equivalent(pa, pb, ec) && !ec;
+}
+
 AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const map<string, string>& addParams,
                                                const std::string& codecStreamName, const vector<MPLSPlayItem>& mplsInfo,
                                                const bool quiet)
@@ -3045,6 +3065,10 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
                 LTRACE(LT_WARN, 2, "Warning: save-srt is ignored on a line with keep-text: the subtitles stay text.");
             else if (unquoteStr(saveSrt->second).empty())
                 THROW(ERR_COMMON, "save-srt needs the name of the SRT file to write, as save-srt=\"name.srt\"")
+            // The file is opened for writing here, before the source is read: naming the source emptied it.
+            else if (sameExistingFile(unquoteStr(saveSrt->second), codecStreamName))
+                THROW(ERR_COMMON, "save-srt names the subtitle file the track is read from: "
+                                      << unquoteStr(saveSrt->second) << ". Give it another name.")
             else
                 srtReader->setSaveSrt(unquoteStr(saveSrt->second));
         }

@@ -33,6 +33,10 @@ class TextFile final : public File
             else
                 break;
         }
+        // A UTF-8 byte order mark in front of the first line, as many editors write it, made a meta file "Invalid
+        // codec format" or hid the MUXOPT line it stood in front of
+        if (line.compare(0, 3, "\xEF\xBB\xBF") == 0)
+            line.erase(0, 3);
         return readCnt == 1 || !line.empty();
     }
     bool writeLine(const std::string& line)
