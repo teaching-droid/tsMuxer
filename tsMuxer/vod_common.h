@@ -138,6 +138,12 @@ double correctFps(double fps);
 // delayFromFileName returns 0 when there is no token; it matches the LAST one so that a
 // stale token earlier in the name cannot win over the current one.
 int64_t parseTimeshiftToMs(const std::string& value);
+
+// A time written as a number and a unit (ns, us, ms, s, min or h, in any case), such as 90s or 1.5min, or as a
+// clock time, such as 1:30, 00:01:30 or 00:01:30.500. A sign is allowed in front. defaultUnit, when given, is the unit
+// of a number written without one; without it a unit is required. Returns false for anything else, a decimal comma
+// included (1,5s could be meant as 1.5 s or as 15 s), and for more than 100,000,000 seconds.
+bool parseTimeToTicks(const std::string& text, const char* defaultUnit, int64_t* ticks);
 int64_t delayFromFileName(const std::string& fileName);
 std::string stripDelayToken(const std::string& fileName);
 

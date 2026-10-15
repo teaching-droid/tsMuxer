@@ -704,7 +704,8 @@ Common additional parameters for any type of track:
                     or deu, or a BCP 47 tag such as de, pt-BR or zh-Hant.
 
 Additional parameters for audio tracks:
-- timeshift         Shift a track by the given number of milliseconds. Video too, see below.
+- timeshift         Shift a track by the given time: 120ms, 1.5s, 500us or 2000ns.
+                    A number alone is in milliseconds. Video too, see below.
                     Can be negative.
 - down-to-dts       Available only for DTS-HD tracks. Filter out HD part.
 - down-to-ac3       For TRUE-HD and E-AC3 (DD+) tracks. Keep the AC-3 core, drop the HD part.
@@ -939,7 +940,8 @@ All parameters in this group start with two dashes:
 --blu-ray-v3          As above - except mux to UHD BD discs.
 --avchd               Mux to AVCHD disc.
 --cut-start           Where to start, measured from the beginning of the file.
-                      Followed by "ms", "s" or "min".
+                      Followed by "ms", "s" or "min" (90s, 1.5min), or a clock
+                      time (00:01:30).
 --cut-end             Where to STOP, measured from the beginning too, not from
                       the end. --cut-end=30s keeps the first 30 seconds.
 --split-duration      Split the output into several files, with each of them being

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <set>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -562,6 +563,7 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
 
     m_fileWriter = std::make_unique<BufferedFileWriter>();
     AVPacket avPacket;
+    bool anyMuxed = false;
 
     while (true)
     {
@@ -585,6 +587,7 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
             break;
         }
 
+        anyMuxed = true;
         if (m_subStreamIndex.find(avPacket.stream_index) != m_subStreamIndex.end())
             m_subMuxer->muxPacket(avPacket);
         else
@@ -620,6 +623,14 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     m_fileWriter.reset();
     if (!closed)
         throw std::runtime_error("Failed to write the end of the output (disk full or I/O error)");
+    // A start past the end of the sources dropped every packet, and the empty output was reported as a finished mux.
+    if (m_cutStart > 0 && !anyMuxed)
+    {
+        std::ostringstream msg;
+        msg << "--cut-start (" << static_cast<double>(m_cutStart) / INTERNAL_PTS_FREQ
+            << "s) is at or past the end of the sources: the output holds no media.";
+        throw std::runtime_error(msg.str());
+    }
 }
 
 int MuxerManager::addStream(const string& codecName, const string& fileName, const map<string, string>& addParams)
@@ -893,28 +904,13 @@ void MuxerManager::parseMuxOpt(const string& opts)
         {
             if (paramPair.size() < 2)
                 THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
-            int64_t coeff = 1;
-            string postfix;
-            for (const auto j : paramPair[1])
-            {
-                if (!((j >= '0' && j <= '9') || j == '.'))
-                    postfix += j;
-            }
-
-            postfix = strToUpperCase(postfix);
-
-            if (postfix == "MS")
-                coeff = INTERNAL_PTS_FREQ / 1000;
-            else if (postfix == "S")
-                coeff = INTERNAL_PTS_FREQ;
-            else if (postfix == "MIN")
-                coeff = 60 * INTERNAL_PTS_FREQ;
-            string prefix = paramPair[1].substr(0, paramPair[1].size() - postfix.size());
-            // A fraction (--cut-start=1.5s) was cut off: the number was read as a whole one. A whole number is still
-            // read exactly; a fraction is rounded to the clock.
-            const int64_t cut = prefix.find('.') == string::npos
-                                    ? strToInt64(prefix.c_str()) * coeff
-                                    : llround(strToDouble(prefix.c_str()) * static_cast<double>(coeff));
+            // A value without a unit was taken in the internal clock's ticks, 5,292,000,000 a second, and a clock
+            // time such as 00:01:30 as 0, which switched the cut off; both in silence.
+            int64_t cut = 0;
+            if (!parseTimeToTicks(paramPair[1], nullptr, &cut) || cut < 0)
+                THROW(ERR_COMMON, paramPair[0] << "=" << paramPair[1]
+                                               << " is not a time. Write a number followed by ms, s or min, such as "
+                                                  "90s or 1.5min, or a clock time such as 00:01:30.")
             if (paramPair[0] == "--cut-start")
                 setCutStart(cut);
             else

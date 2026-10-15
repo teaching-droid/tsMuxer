@@ -169,7 +169,7 @@ Additional parameters for audio tracks:
 
 Parameter         | Description 
 ---               | --- 
-timeshift         | Shift audio track by the given number of milliseconds. Can be negative. 
+timeshift         | Shift the track by the given time: a number followed by ns, us, ms or s, such as -120ms or 1.5s. A number alone is in milliseconds. Can be negative. 
 down-to-dts       | Available only for DTS-HD tracks. Filter out HD part. 
 down-to-ac3       | For TRUE-HD and E-AC3 (DD+) tracks. Keep the AC-3 core, drop the HD part. 
 secondary         | Mux as secondary audio.  Available for DD+ and DTS-Express. 
@@ -304,7 +304,7 @@ Parameter           | Description
 --blu-ray           | Mux as a BD disc. If the output file name is a folder, a Blu-Ray folder structure is created inside that folder. SSIF files for BD3D discs are not created in this case. If the output name has an .iso extension, then the disc is created directly as an image file. 
 --blu-ray-v3        | As above - except mux to UHD BD discs. If you're using the GUI, this will be automatically set if one of the streams is HEVC.
 --avchd             | Mux to AVCHD disc.
---cut-start         | Trim the beginning of the file. The value should be followed by the time unit : "ms" (milliseconds), "s" (seconds) or "min" (minutes). 
+--cut-start         | Trim the beginning of the file. The value is a number followed by the time unit "ms" (milliseconds), "s" (seconds) or "min" (minutes), such as 90s, or a clock time such as 00:01:30. A start at or past the end of the sources is an error. 
 --cut-end           | Trim the end of the file. Same rules as --cut-start apply. 
 --split-duration    | Split the output into several files, with each of them being <n> seconds long. 
 --split-size        | Split the output into several files, with each of them having a given maximum size. KB, KiB, MB, MiB, GB and GiB are accepted as size units. 

@@ -172,16 +172,118 @@ static const char DELAY_TOKEN[] = " DELAY ";
 
 int64_t parseTimeshiftToMs(const std::string& value)
 {
-    // Order matters: "ns" contains "s", so it must be tested before the bare "s" case, and
-    // "ms" likewise. Mirrors the parsing order used for the timeshift meta parameter.
-    size_t pos;
-    if ((pos = value.find("ns")) != std::string::npos)
-        return strToInt64(value.substr(0, pos).c_str()) / 1000000;
-    if ((pos = value.find("ms")) != std::string::npos)
-        return strToInt64(value.substr(0, pos).c_str());
-    if ((pos = value.find('s')) != std::string::npos)
-        return strToInt64(value.substr(0, pos).c_str()) * 1000;
-    return strToInt64(value.c_str());
+    // The same reading as the meta timeshift parameter: a number without a unit is in ms.
+    int64_t ticks = 0;
+    if (!parseTimeToTicks(value, "ms", &ticks))
+        return 0;
+    return ticks >= 0 ? (ticks + INTERNAL_PTS_PER_MS / 2) / INTERNAL_PTS_PER_MS
+                      : -((-ticks + INTERNAL_PTS_PER_MS / 2) / INTERNAL_PTS_PER_MS);
+}
+
+// Each value used to be read by its own few lines, and they disagreed: "500us" was 500 s (the "s" was found), "2S"
+// was 2 ms (no "s" in it), a fraction of a timeshift was cut off, a cut value without a unit was taken in the
+// internal clock's ticks (5,292,000,000 a second), "00:01:30" as 0, and a timeshift over 1742.9 s ran over 64 bits.
+bool parseTimeToTicks(const std::string& text, const char* defaultUnit, int64_t* ticks)
+{
+    size_t i = 0;
+    while (i < text.size() && (text[i] == ' ' || text[i] == '\t')) ++i;
+    size_t e = text.size();
+    while (e > i && (text[e - 1] == ' ' || text[e - 1] == '\t')) --e;
+    std::string t = text.substr(i, e - i);
+    bool negative = false;
+    if (!t.empty() && (t[0] == '-' || t[0] == '+'))
+    {
+        negative = t[0] == '-';
+        t.erase(0, 1);
+    }
+    // digits, then an optional fraction; at least one digit
+    auto readNumber = [](const std::string& s, size_t& p, long double& value)
+    {
+        const size_t start = p;
+        long double v = 0;
+        while (p < s.size() && s[p] >= '0' && s[p] <= '9') v = v * 10 + (s[p++] - '0');
+        bool digits = p > start;
+        if (p < s.size() && s[p] == '.')
+        {
+            ++p;
+            long double scale = 0.1L;
+            const size_t fracStart = p;
+            while (p < s.size() && s[p] >= '0' && s[p] <= '9')
+            {
+                v += (s[p++] - '0') * scale;
+                scale /= 10;
+            }
+            digits = digits || p > fracStart;
+        }
+        value = v;
+        return digits;
+    };
+    long double seconds = 0;
+    size_t p = 0;
+    if (t.find(':') != std::string::npos)
+    {
+        // h:mm:ss or m:ss, each part after the first below 60, a fraction on the seconds only
+        std::vector<long double> parts;
+        while (true)
+        {
+            const size_t start = p;
+            while (p < t.size() && t[p] >= '0' && t[p] <= '9') ++p;
+            if (p == start)
+                return false;
+            if (p < t.size() && t[p] == ':')
+            {
+                parts.push_back(static_cast<long double>(strToInt64(t.substr(start, p - start).c_str())));
+                ++p;
+                continue;
+            }
+            p = start;
+            long double last = 0;
+            if (!readNumber(t, p, last) || p != t.size())
+                return false;
+            parts.push_back(last);
+            break;
+        }
+        if (parts.size() > 3)
+            return false;
+        for (size_t k = 1; k < parts.size(); ++k)
+            if (parts[k] >= 60)
+                return false;
+        for (const long double part : parts) seconds = seconds * 60 + part;
+    }
+    else
+    {
+        long double value = 0;
+        if (!readNumber(t, p, value))
+            return false;
+        std::string unit = strToLowerCase(t.substr(p));
+        if (unit.empty())
+        {
+            if (defaultUnit == nullptr)
+                return false;
+            unit = defaultUnit;
+        }
+        long double perUnit;
+        if (unit == "ns")
+            perUnit = 1e-9L;
+        else if (unit == "us")
+            perUnit = 1e-6L;
+        else if (unit == "ms")
+            perUnit = 1e-3L;
+        else if (unit == "s")
+            perUnit = 1;
+        else if (unit == "min")
+            perUnit = 60;
+        else if (unit == "h")
+            perUnit = 3600;
+        else
+            return false;
+        seconds = value * perUnit;
+    }
+    if (seconds > 100000000)
+        return false;
+    const auto value = static_cast<int64_t>(llroundl(seconds * INTERNAL_PTS_FREQ));
+    *ticks = negative ? -value : value;
+    return true;
 }
 
 // Locate the last " DELAY <n>ms" that sits immediately before the extension. Returns the

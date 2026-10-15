@@ -1229,32 +1229,13 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     auto itr = addParams.find("timeshift");
     if (itr != addParams.end())
     {
-        string timeShift = itr->second;
-        size_t pos = 0;
-        int64_t coeff = 1;
+        // A number without a unit is in ms. "500us" used to be 500 s, "2S" 2 ms, a fraction was cut off and a value
+        // over 1742.9 s ran over 64 bits.
         int64_t value = 0;
-        // "ns" is tested before "s": the other order read 500ns as 500 seconds.
-        if ((pos = timeShift.find("ms")) != std::string::npos)
-        {
-            coeff = 1000000;
-            value = strToInt32(timeShift.substr(0, pos).c_str());
-        }
-        else if ((pos = timeShift.find("ns")) != std::string::npos)
-        {
-            coeff = 1;
-            value = strToInt32(timeShift.substr(0, pos).c_str());
-        }
-        else if ((pos = timeShift.find('s')) != std::string::npos)
-        {
-            coeff = 1000000000;
-            value = strToInt32(timeShift.substr(0, pos).c_str());
-        }
-        else
-        {
-            coeff = 1000000;
-            value = strToInt32(timeShift.c_str());
-        }
-        value = value * coeff / 1000 * INTERNAL_PTS_FREQ / 1000000;
+        if (!parseTimeToTicks(itr->second, "ms", &value))
+            THROW(ERR_COMMON, "timeshift=" << itr->second
+                                           << " is not a time. Write a number followed by ns, us, ms or s, such as "
+                                              "-120ms or 1.5s; a number alone is in ms.")
         streamInfo.m_timeShift = value;
         if (value > 0)
             streamInfo.m_lastDTS = value;
