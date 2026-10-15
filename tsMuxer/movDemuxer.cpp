@@ -237,13 +237,22 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
     {
         uint8_t* dst = pkt->data;
         const uint8_t* srcEnd = buff + size;
-        while (buff < srcEnd - 4)
+        // Every whole frame of the chunk, however small: AAC encodes digital silence in 4 bytes a frame, and a loop
+        // that stopped 4 bytes before the end left those frames out, the index lost its place and the mux stopped
+        // with "Out of index". The index moves on only for a frame that is taken.
+        while (buff < srcEnd)
         {
             unsigned frameSize = m_sc->sample_size;
             if (frameSize == 0)
-                frameSize = m_sc->m_index[m_sc->m_indexCur++];
-            if (buff + frameSize > srcEnd)
+            {
+                if (m_sc->m_indexCur >= m_sc->m_index.size())
+                    break;
+                frameSize = m_sc->m_index[m_sc->m_indexCur];
+            }
+            if (frameSize == 0 || buff + frameSize > srcEnd)
                 break;
+            if (m_sc->sample_size == 0)
+                ++m_sc->m_indexCur;
             if (m_dropLeft > 0)
             {
                 --m_dropLeft;
@@ -269,7 +278,7 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
     {
         unsigned left = size;
         int i = 0;
-        for (; left > 4; ++i)
+        for (; left > 0; ++i)
         {
             // One size for every sample (AC-3, for instance): a chunk is read up to the next chunk, and bytes between
             // the two that are not a whole sample were taken off all the same. The unsigned count went round and the
@@ -286,10 +295,16 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
             left -= m_sc->sample_size;
             if (m_sc->sample_size == 0)
             {
+                if (m_sc->m_indexCur + i >= m_sc->m_index.size() && left <= 4)
+                    break;  // a few bytes after the last sample, left out as before
                 if (m_sc->m_indexCur + i >= m_sc->m_index.size())
                     THROW(ERR_MOV_PARSE, "Out of index for AAC track #" << m_sc->ffindex << " at position "
                                                                         << m_demuxer->getProcessedBytes())
-                left -= m_sc->m_index[m_sc->m_indexCur + i];
+                // a frame that is not whole in the chunk is not taken (extractData stops at it too)
+                const unsigned frameSize = m_sc->m_index[m_sc->m_indexCur + i];
+                if (frameSize == 0 || frameSize > left)
+                    break;
+                left -= frameSize;
             }
         }
         if (left > 4 && m_sc->sample_size == 0)
@@ -305,10 +320,12 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
             i = 0;
         const unsigned out = (size - left) - dropped + (i - (isAAC ? drop : 0)) * AAC_HEADER_LEN;
         // A chunk of nothing but dropped frames gives nothing, and extractData is then not called for it: its frames
-        // are consumed here
-        if (out == 0 && drop > 0 && m_sc->sample_size == 0)
+        // are consumed here. For a track of one sample size too: its count of frames still to drop stayed where it
+        // was, and every chunk after it was dropped, to the end of the part.
+        if (out == 0 && drop > 0)
         {
-            m_sc->m_indexCur += frames;
+            if (m_sc->sample_size == 0)
+                m_sc->m_indexCur += frames;
             m_dropLeft -= drop;
         }
         return out;
@@ -1716,19 +1733,32 @@ int MovDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepte
     return m_lastReadRez;
 }
 
-// The AAC tracks of the part of a join that has just been read: how far their sound and their content reach. The
-// content of a part is what its edit list plays; without one, all of its samples less the priming.
+// The samples of a track. A track whose samples all have one size (AC-3, for instance) has no table of their sizes,
+// and its samples are counted from its table of times.
+static int64_t sampleCount(const MOVStreamContext* st)
+{
+    if (!st->m_index.empty())
+        return static_cast<int64_t>(st->m_index.size());
+    int64_t n = 0;
+    for (const auto& e : st->stts_data) n += e.count;
+    return n;
+}
+
+// The audio tracks of the part of a join that has just been read: how far their sound and their content reach. The
+// content of a part is what its edit list plays; without one, all of its samples less the priming. Each sample of
+// these tracks is one frame (AAC, AC-3, E-AC-3, MPEG audio, DTS); the correction was made for AAC only, and AC-3 or
+// MP3 sound still fell behind the picture at every joint, by its priming each time.
 void MovDemuxer::accountJoinPart()
 {
     for (int i = 0; i < num_tracks; ++i)
     {
         const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
         const auto* audio = dynamic_cast<MovParsedAudioTrackData*>(st->parsed_priv_data);
-        if (!audio || !audio->isAAC || st->stts_data.empty() || st->stts_data[0].duration <= 0)
+        if (!audio || st->stts_data.empty() || st->stts_data[0].duration <= 0)
             continue;
         JoinAudio& j = m_joinAudio[i + 1];
         const int64_t frameLen = st->stts_data[0].duration;
-        const auto frames = static_cast<int64_t>(st->m_index.size());
+        const int64_t frames = sampleCount(st);
         const int64_t content = st->editDuration > 0 ? st->editDuration : frames * frameLen - st->editMediaTime;
         if (m_joinPart == 0)
         {
@@ -1748,7 +1778,7 @@ void MovDemuxer::accountJoinPart()
     }
 }
 
-// A later file of a join. The sound of a join runs on from file to file, frame after frame, and each file's AAC sound
+// A later file of a join. The sound of a join runs on from file to file, frame after frame, and each file's sound
 // begins with the encoder's priming, which its edit list starts after, and ends with the rest of its last frame,
 // which its edit list stops before. Both came out at every joint, so the sound fell behind the picture at each joint,
 // by more each time: 15, 19 and 29 ms after the first three joints of 10 s AAC-LC parts. As many whole frames are left
@@ -1761,10 +1791,10 @@ void MovDemuxer::dropJoinPriming()
     {
         const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
         auto* audio = dynamic_cast<MovParsedAudioTrackData*>(st->parsed_priv_data);
-        if (!audio || !audio->isAAC || st->stts_data.empty() || st->stts_data[0].duration <= 0)
+        if (!audio || st->stts_data.empty() || st->stts_data[0].duration <= 0)
             continue;
         const int64_t frameLen = st->stts_data[0].duration;
-        const auto frames = static_cast<int64_t>(st->m_index.size());
+        const int64_t frames = sampleCount(st);
         int64_t drop = st->editMediaTime / frameLen;  // the priming, whole frames
         const auto j = m_joinAudio.find(i + 1);
         if (j != m_joinAudio.end() && j->second.timeScale == st->time_scale && j->second.frameLen == frameLen)
@@ -1781,7 +1811,7 @@ void MovDemuxer::dropJoinPriming()
         audio->setDropFrames(static_cast<int>(drop));
         LTRACE(LT_INFO, 2,
                "Part " << m_joinPart + 1 << " of the join, track " << i + 1 << ": its first " << drop
-                       << " AAC frame(s) are left out at the joint, to keep the sound with the picture.");
+                       << " audio frame(s) are left out at the joint, to keep the sound with the picture.");
     }
 }
 
@@ -2813,6 +2843,9 @@ int MovDemuxer::mov_read_stsd(MOVAtom atom)
             break;
         }
         case MKTAG('a', 'c', '-', '3'):
+        // E-AC-3 was read as raw bytes without a sample entry of its own, and so its frames could not be counted:
+        // the join of MP4 files kept its priming at every joint
+        case MKTAG('e', 'c', '-', '3'):
             st->type = IOContextTrackType::AUDIO;
             st->parsed_priv_data = new MovParsedAudioTrackData(this, st);
             break;

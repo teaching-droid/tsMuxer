@@ -96,7 +96,7 @@ class MovDemuxer final : public IOContextDemuxer
     int m_pastEndWarnings = 0;   // boxes whose size reaches past the end of the file, warned once
     int64_t trailingBytesWithoutMedia(int64_t from) const;
     int m_joinPart = 0;  // which file of a join is open: 0 the first
-    // An AAC track of a join, in its samples: where the sound handed on so far ends, and where the content of the
+    // An audio track of a join, in its samples: where the sound handed on so far ends, and where the content of the
     // parts so far ends, which is where the picture of the next part begins (dropJoinPriming)
     struct JoinAudio
     {
