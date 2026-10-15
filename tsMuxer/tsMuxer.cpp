@@ -1786,6 +1786,22 @@ bool TSMuxer::muxPacket(AVPacket& avPacket)
 
     m_lastTSIndex = tsIndex;
 
+    // ** THE CLOCK GOES ON BETWEEN TWO PACKETS FAR APART. ** A PCR was only ever written at a packet of a stream, so
+    // where two came more than 0.1 s apart, so did two PCRs: every step was 125 ms for video at 8 fps, and a stream
+    // of subtitles alone went 12 s without one. Packets that carry only a PCR now fill such a gap, each at most 0.09 s
+    // after the one before.
+    if (newPES && m_lastPCR != -1 && !m_inplacePending &&
+        (m_interliaveBlockSize == 0 || avPacket.stream_index == m_mainStreamIndex))
+    {
+        constexpr int64_t PCR_FILL_STEP = PCR_MAX_INTERVAL - PCR_MAX_INTERVAL / 10;
+        while (newPCR - m_lastPCR > PCR_MAX_INTERVAL)
+        {
+            const int64_t step = m_lastPCR + PCR_FILL_STEP;
+            writePATPMT(step);
+            writePCR(step);
+        }
+    }
+
     if (m_cbrBitrate != -1 && m_lastPCR != -1)
     {
         const auto cbrPCR = llround(static_cast<double>(m_lastPCR + m_pcrBits) * 90000.0 / m_cbrBitrate);
