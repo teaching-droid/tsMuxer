@@ -10,6 +10,9 @@ class AC3Codec
 {
    public:
     static constexpr int AC3_HEADER_SIZE = 7;
+    // The length of the AC-3 or E-AC-3 frame whose sync word is at p, from its header alone; 0 when p does not hold
+    // one or the header is not all there.
+    static int frameSizeAt(const uint8_t* p, const uint8_t* end);
 
     enum class AC3State
     {

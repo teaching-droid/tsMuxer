@@ -385,6 +385,22 @@ AC3Codec::AC3ParseError AC3Codec::parseHeader(uint8_t* buf, const uint8_t* end)
 }
 
 // returns frame length, or zero (error), or NOT_ENOUGH_BUFFER
+int AC3Codec::frameSizeAt(const uint8_t* p, const uint8_t* end)
+{
+    if (end - p < 6 || p[0] != 0x0B || p[1] != 0x77)
+        return 0;
+    const int bsid = p[5] >> 3;
+    if (bsid > 16)
+        return 0;
+    if (bsid > 10)  // E-AC-3: frmsiz, in 16 bit words less one
+        return (((p[2] & 0x07) << 8 | p[3]) + 1) * 2;
+    const int fscod = p[4] >> 6;
+    const int frmsizecod = p[4] & 0x3f;
+    if (fscod == 3 || frmsizecod > 37)
+        return 0;
+    return ff_ac3_frame_sizes[frmsizecod][fscod] * 2;
+}
+
 int AC3Codec::decodeFrame(uint8_t* buf, uint8_t* end, int& skipBytes)
 {
     try

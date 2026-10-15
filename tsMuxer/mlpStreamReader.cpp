@@ -1,7 +1,10 @@
 #include "mlpStreamReader.h"
 
+#include <functional>
+
 #include <fs/systemlog.h>
 
+#include "ac3Codec.h"
 #include "nalUnits.h"
 #include "tsPacket.h"
 #include "vodCoreException.h"
@@ -167,17 +170,30 @@ uint8_t* MLPStreamReader::findFrame(uint8_t* buff, uint8_t* end)
     }
     if (m_preSyncUnits < 0)
         return frame;
-    int units = 0;
-    const uint8_t* p = buff;
-    while (p < frame && frame - p >= 4)
+    // A Blu-ray TrueHD track carries its AC-3 core frames between its access units. Read as an access unit, a core
+    // frame's sync word gave a length that led anywhere but the major sync, nothing was counted, and the audio of such
+    // a cut played early again: 50 ms in a measured one. Where an AC-3 sync word stands, both readings are tried, and
+    // the one that leads exactly to the major sync is taken; a core frame is not counted as an access unit.
+    const std::function<int(const uint8_t*, int)> walk = [&](const uint8_t* p, const int depth) -> int
     {
-        const int len = getFrameSize(p);
-        if (len < 4)
-            break;
-        p += len;
-        ++units;
-    }
-    m_preSyncUnits = p == frame ? units : -1;
+        int units = 0;
+        while (p < frame && frame - p >= 4)
+        {
+            if (const int core = AC3Codec::frameSizeAt(p, frame); core > 0 && p + core <= frame && depth < 16)
+            {
+                const int rest = walk(p + core, depth + 1);
+                if (rest >= 0)
+                    return units + rest;
+            }
+            const int len = getFrameSize(p);
+            if (len < 4)
+                return -1;
+            p += len;
+            ++units;
+        }
+        return p == frame ? units : -1;
+    };
+    m_preSyncUnits = walk(buff, 0);
     return frame;
 }
 
