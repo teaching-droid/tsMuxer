@@ -544,6 +544,10 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
         }
         else
             THROW(ERR_COMMON, "Unsupported WAVE format. wFormatTag: " << waveFormatPCMEx->wFormatTag)
+        // A Wave64 chunk is padded to 8 bytes: an 18 byte format (42 with its header) has 6 pad bytes,
+        // and the chunks after it were looked for from inside them.
+        if (m_headerType == LPCMHeaderType::htWAVE64)
+            fmtSize = (fmtSize + 7) & ~static_cast<uint64_t>(7);
         curPos += fmtSize;
     }
 
@@ -581,6 +585,10 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
         {
             const uint32_t bodySize = loadUnaligned<uint32_t>(curPos + 4);
             chunkSize = 8 + static_cast<uint64_t>(bodySize) + (bodySize & 1);
+            // A chunk of odd size is followed by a pad byte of 0, but some writers leave it out:
+            // the next chunk's name then begins where the pad byte would be.
+            if ((bodySize & 1) && chunkSize <= static_cast<uint64_t>(end - curPos) && curPos[chunkSize - 1] != 0)
+                --chunkSize;
         }
         if (chunkSize > static_cast<uint64_t>(DEFAULT_FILE_BLOCK_SIZE))
             THROW(ERR_COMMON, "WAVE header: the chunk '" << std::string(reinterpret_cast<char*>(curPos), 4)
@@ -606,9 +614,12 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
         if (curPos + 8 >= end)
             return NOT_ENOUGH_BUFFER;
         curPos += 4;  // skip 'data' identifier
-        m_curChunkLen = loadUnaligned<uint32_t>(curPos);
-        if (m_curChunkLen == 0)
+        const uint32_t dataSize = loadUnaligned<uint32_t>(curPos);
+        if (dataSize == 0)
             m_openSizeWaveFormat = true;
+        // 0 and 0xFFFFFFFF are written when the size is not known yet, by a stream writer or for
+        // a file past 4 GB: the audio then runs to the end of the file.
+        setDataChunkSize(dataSize, dataSize != 0 && dataSize != UINT32_MAX);
         curPos += 4;
     }
     else
@@ -617,10 +628,88 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
             return NOT_ENOUGH_BUFFER;
         curPos += sizeof(GUID);
         // For w64, data length includes data metadata (16 bytes) and size (8 bytes)
-        m_curChunkLen = loadUnaligned<int64_t>(curPos) - 24;
+        const int64_t dataSize = loadUnaligned<int64_t>(curPos) - 24;
+        setDataChunkSize(dataSize, dataSize > 0);
         curPos += 8;
     }
     return static_cast<int>(curPos - buff);
+}
+
+void LPCMStreamReader::setDataChunkSize(const int64_t size, const bool known)
+{
+    m_curChunkLen = size > 0 ? size : 0;
+    m_chunkSizeKnown = known && size > 0;
+    m_afterData = false;
+    if (m_headerType == LPCMHeaderType::htWAVE64)
+        m_dataPad = static_cast<int>((8 - (m_curChunkLen + 24) % 8) % 8);
+    else
+        m_dataPad = static_cast<int>(m_curChunkLen & 1);
+}
+
+// The data chunk has ended. A WAV can go on with a chunk of tags (LIST, id3, bext, JUNK and more),
+// with another data chunk, or with another whole file joined to it. Each of these used to be read
+// as audio: the counter of the data chunk's bytes reaching 0 also meant "size unknown", so a 1 MB
+// JUNK chunk after 10 s of audio became 5 s of noise. Returns the bytes to step over now (a pad
+// byte or a chunk header), with a chunk's body left in m_skipRest; 0 when audio or a file header
+// follows; NOT_ENOUGH_BUFFER when more bytes are needed to tell.
+int LPCMStreamReader::stepAfterData(uint8_t* buff, uint8_t* end)
+{
+    const bool wave64 = m_headerType == LPCMHeaderType::htWAVE64;
+    if (m_dataPad > 0)
+    {
+        // A writer may leave out the pad byte; it is stepped over only where it is 0, as written.
+        if (end - buff < m_dataPad)
+            return NOT_ENOUGH_BUFFER;
+        int n = 0;
+        while (n < m_dataPad && buff[n] == 0) ++n;
+        m_dataPad = 0;
+        return n;
+    }
+    if (end - buff < 4)
+        return NOT_ENOUGH_BUFFER;
+    const uint32_t id = loadUnaligned<uint32_t>(buff);
+    if (id == RIFF_SMALL || id == RIFF_LARGE)
+    {
+        m_afterData = false;  // another file: its header is read as at the start
+        return 0;
+    }
+    const int chunkHeaderSize = wave64 ? static_cast<int>(sizeof(GUID)) + 8 : 8;
+    if (end - buff < chunkHeaderSize)
+        return NOT_ENOUGH_BUFFER;
+    if (memcmp(buff, "data", 4) == 0)
+    {
+        if (wave64)
+        {
+            const int64_t dataSize = loadUnaligned<int64_t>(buff + sizeof(GUID)) - 24;
+            setDataChunkSize(dataSize, dataSize > 0);
+        }
+        else
+        {
+            const uint32_t dataSize = loadUnaligned<uint32_t>(buff + 4);
+            setDataChunkSize(dataSize, dataSize != 0 && dataSize != UINT32_MAX);
+        }
+        return chunkHeaderSize;
+    }
+    // A chunk name is four letters, digits, spaces or underscores. Anything else, or a chunk
+    // claiming more than 256 MB, is taken for audio as before: the data size may have been
+    // written wrongly, and losing audio is worse than keeping a tag as sound.
+    bool name = true;
+    for (int i = 0; i < 4; ++i) name = name && (isalnum(buff[i]) || buff[i] == ' ' || buff[i] == '_');
+    // The chunk's own size without its pad, which is stepped over like the data chunk's.
+    const uint64_t chunkSize = wave64 ? loadUnaligned<uint64_t>(buff + sizeof(GUID))
+                                      : 8 + static_cast<uint64_t>(loadUnaligned<uint32_t>(buff + 4));
+    if (!name || chunkSize < static_cast<uint64_t>(chunkHeaderSize) || chunkSize > (256ull << 20))
+    {
+        m_afterData = false;
+        m_chunkSizeKnown = false;
+        return 0;
+    }
+    LTRACE(LT_INFO, 2,
+           "WAVE: the chunk '" << std::string(reinterpret_cast<char*>(buff), 4) << "' after the audio (" << chunkSize
+                               << " bytes) is not audio and is skipped.");
+    m_skipRest = static_cast<int64_t>(chunkSize) - chunkHeaderSize;
+    m_dataPad = static_cast<int>(wave64 ? (8 - chunkSize % 8) % 8 : chunkSize & 1);
+    return chunkHeaderSize;
 }
 
 int LPCMStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, int& skipBeforeBytes)
@@ -658,7 +747,12 @@ int LPCMStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, i
                     return NOT_ENOUGH_BUFFER;
                 skipBeforeBytes = hdrSize;
                 if (m_needSync)
-                    m_curChunkLen = 0;  // decode header again
+                {
+                    // decode header again. A data size of 0 (open) sets the flag below on this first
+                    // read, and the second read then took the header for audio.
+                    m_curChunkLen = 0;
+                    m_openSizeWaveFormat = false;
+                }
             }
         }
         if (m_frameRest == 0)
@@ -983,6 +1077,33 @@ int LPCMStreamReader::readPacket(AVPacket& avPacket)
         m_needSync = false;
     }
     avPacket.dts = avPacket.pts = llround(m_curPts * m_stretch) + m_timeOffset;
+    while (m_skipRest > 0 || m_afterData)
+    {
+        if (m_skipRest > 0)
+        {
+            const int64_t n = FFMIN(m_skipRest, m_bufEnd - m_curPos);
+            m_curPos += n;
+            m_processedBytes += n;
+            m_skipRest -= n;
+            if (m_curPos == m_bufEnd)
+                return NEED_MORE_DATA;
+            continue;
+        }
+        const int n = stepAfterData(m_curPos, m_bufEnd);
+        if (n == NOT_ENOUGH_BUFFER)
+        {
+            memmove(m_tmpBuffer.data(), m_curPos, m_bufEnd - m_curPos);
+            m_tmpBufferLen = m_bufEnd - m_curPos;
+            m_curPos = m_bufEnd;
+            return NEED_MORE_DATA;
+        }
+        m_curPos += n;
+        m_processedBytes += n;
+        if (n == 0 && m_skipRest == 0 && !m_afterData)
+            break;
+    }
+    if (m_curPos == m_bufEnd)
+        return NEED_MORE_DATA;
     if (m_bufEnd - m_curPos < getHeaderLen())
     {
         memmove(m_tmpBuffer.data(), m_curPos, m_bufEnd - m_curPos);
@@ -1016,7 +1137,11 @@ int LPCMStreamReader::readPacket(AVPacket& avPacket)
     avPacket.data = m_curPos;
     avPacket.data += skipBeforeBytes;
     if (m_curChunkLen)
+    {
         m_curChunkLen -= frameLen;
+        if (m_curChunkLen == 0 && m_chunkSizeKnown)
+            m_afterData = true;
+    }
     if (frameLen > MAX_AV_PACKET_SIZE)
         THROW(ERR_AV_FRAME_TOO_LARGE, "AV frame too large (" << frameLen << " bytes). Increase AV buffer.")
     avPacket.size = frameLen;
@@ -1050,6 +1175,12 @@ int LPCMStreamReader::flushPacket(AVPacket& avPacket)
     avPacket.codec = this;
     int skipBytes = 0;
     int skipBeforeBytes = 0;
+    if (m_afterData || m_skipRest > 0)
+    {
+        // What is left after the end of the data chunk is a part of a chunk, not audio.
+        m_processedBytes += m_tmpBufferLen;
+        m_tmpBufferLen = 0;
+    }
     if (m_tmpBufferLen >= getHeaderLen())
     {
         const int size =

@@ -84,6 +84,16 @@ class LPCMStreamReader final : public SimplePacketizerReader
     bool m_lfeExists;
     int64_t m_curChunkLen;
     bool m_openSizeWaveFormat;
+    // The data chunk's size was given, so m_curChunkLen reaching 0 is the end of the audio and not
+    // "size unknown". m_afterData is set at that end: the bytes that follow are a pad byte, a chunk
+    // of tags, another data chunk or another file, and are looked at before any is taken for audio.
+    bool m_chunkSizeKnown = false;
+    bool m_afterData = false;
+    int m_dataPad = 0;       // pad bytes after the data chunk (an odd size in WAV; to 8 bytes in W64)
+    int64_t m_skipRest = 0;  // bytes of a chunk after the audio still to step over
+
+    void setDataChunkSize(int64_t size, bool known);
+    int stepAfterData(uint8_t* buff, uint8_t* end);
     uint8_t* m_lastChannelRemapPos;
     bool m_demuxToW64;
 
