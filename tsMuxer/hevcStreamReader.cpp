@@ -374,7 +374,11 @@ CheckStreamRez HEVCStreamReader::checkStream(uint8_t* buffer, const int len)
             else if (r)
                 return rez;  // not enough buffer or error
             else
+            {
+                if (!m_picOrderStarted && nalType < HevcUnit::NalType::BLA_W_LP)
+                    m_firstLeading = (std::max)(0, picturesShownBeforeFirst(nal, end));
                 m_fullPicOrder = toFullPicOrder(m_slice, m_sps->log2_max_pic_order_cnt_lsb);
+            }
             incTimings();
         }
     }
@@ -1062,6 +1066,40 @@ void HEVCStreamReader::incTimings()
     }
 }
 
+// The pictures after the first picture of a stream that does not begin with an IRAP picture (a cut inside a run of B
+// pictures) that are shown before it: they follow it in decode order with a lower order count. Counted up to the
+// first picture shown after it. Returns -1 when more data is needed and can come.
+int HEVCStreamReader::picturesShownBeforeFirst(uint8_t* nal, uint8_t* end) const
+{
+    const int range = 1 << m_sps->log2_max_pic_order_cnt_lsb;
+    const int firstLsb = m_slice->pic_order_cnt_lsb;
+    HevcSliceHeader slice;
+    int leading = 0;
+    for (uint8_t* cur = NALUnit::findNextNAL(nal, end); cur < end - 4; cur = NALUnit::findNextNAL(cur, end))
+    {
+        const auto type = static_cast<HevcUnit::NalType>((*cur >> 1) & 0x3f);
+        if (!isSlice(type) || !(cur[2] & 0x80))
+            continue;  // not the first slice of a picture
+        if (type >= HevcUnit::NalType::BLA_W_LP)
+            return leading;  // a random access picture: the count goes on from it
+        uint8_t* next = NALUnit::findNALWithStartCode(cur, end, true);
+        if (next == end && !m_eof)
+            return -1;
+        slice.decodeBuffer(cur, FFMIN(cur + MAX_SLICE_HEADER, next));
+        if (slice.deserialize(m_sps, m_pps) != 0)
+            return leading;
+        int diff = static_cast<int>(slice.pic_order_cnt_lsb) - firstLsb;
+        if (diff >= range / 2)
+            diff -= range;
+        else if (diff < -range / 2)
+            diff += range;
+        if (diff >= 0)
+            return leading;
+        leading++;
+    }
+    return m_eof ? leading : -1;
+}
+
 // The picture order count, on a scale where the first picture of the stream is at its own position. The count starts
 // again at an IDR picture, whose count is 0, and at a BLA picture, whose count is its pic_order_cnt_lsb alone. It
 // used to start only at an IDR, so a stream that begins on another picture, as a broadcast capture that begins on a
@@ -1078,20 +1116,26 @@ int HEVCStreamReader::toFullPicOrder(const HevcSliceHeader* slice, const unsigne
         // enhancement layer sat one picture early: matched with the wrong base layer picture, all of the second file
         // of a join. The next IDR now goes where the pictures before it end, one past the latest place given, and
         // the decoding times skip the same gap. For a stream that lacks nothing that place is the count itself.
-        if (m_picOrderStarted && m_hdr->isDVRPU && m_maxFullPicOrder + 1 > m_frameNum)
+        // The same holds for any stream that lacks pictures, as a cut does: a recording that begins after its I
+        // picture lacks the pictures that came before in decode order, a hole in the order shown, and the next IDR
+        // was given a time a picture before it already had.
+        if (m_picOrderStarted && m_maxFullPicOrder + 1 > m_frameNum)
         {
             const int gap = m_maxFullPicOrder + 1 - m_frameNum;
             if (!m_dvGapReported)
                 LTRACE(LT_INFO, 2,
-                       "Dolby Vision: the stream lacks " << gap << (gap == 1 ? " picture" : " pictures")
-                                                         << " before picture " << m_totalFrameNum
-                                                         << "; the pictures after it keep their place in time.");
+                       (m_hdr->isDVRPU ? "Dolby Vision: the stream lacks " : "HEVC: the stream lacks ")
+                           << gap << (gap == 1 ? " picture" : " pictures") << " before picture " << m_totalFrameNum
+                           << "; the pictures after it keep their place in time.");
             m_dvGapReported = true;
             m_frameNum += gap;
             m_curDts += static_cast<int64_t>(gap) * m_pcrIncPerFrame;
         }
+        // a first picture that is not IRAP goes after the pictures shown before it (picturesShownBeforeFirst)
+        const int leading =
+            !m_picOrderStarted && slice->nal_unit_type < HevcUnit::NalType::BLA_W_LP ? m_firstLeading : 0;
         m_picOrderStarted = true;
-        m_picOrderBase = m_frameNum - static_cast<int>(slice->pic_order_cnt_lsb);
+        m_picOrderBase = m_frameNum + leading - static_cast<int>(slice->pic_order_cnt_lsb);
         m_picOrderMsb = 0;
         m_prevPicOrder = static_cast<int>(slice->pic_order_cnt_lsb);
     }
@@ -1257,6 +1301,13 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                     if (m_slice->slice_type <= 2 &&
                         (m_auMinSliceType < 0 || static_cast<int>(m_slice->slice_type) < m_auMinSliceType))
                         m_auMinSliceType = static_cast<int>(m_slice->slice_type);
+                    if (!m_picOrderStarted && nalType < HevcUnit::NalType::BLA_W_LP)
+                    {
+                        const int leading = picturesShownBeforeFirst(curPos, m_bufEnd);
+                        if (leading == -1)
+                            return NOT_ENOUGH_BUFFER;
+                        m_firstLeading = leading;
+                    }
                     m_fullPicOrder = toFullPicOrder(m_slice, m_sps->log2_max_pic_order_cnt_lsb);
                 }
                 notePicOrder(nalType);

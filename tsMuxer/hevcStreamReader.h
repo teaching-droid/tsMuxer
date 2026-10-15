@@ -72,6 +72,7 @@ class HEVCStreamReader final : public MPEGStreamReader
     void readElParameterSet(const uint8_t* nal, const uint8_t* nextNal);
     void incTimings();
     int toFullPicOrder(const HevcSliceHeader* slice, unsigned pic_bits);
+    int picturesShownBeforeFirst(uint8_t* nal, uint8_t* end) const;
     static void storeBuffer(MemoryBlock& dst, const uint8_t* data, const uint8_t* dataEnd);
     uint8_t* writeBuffer(MemoryBlock& srcData, uint8_t* dstBuffer, const uint8_t* dstEnd) const;
     uint8_t* writeNalPrefix(uint8_t* curPos) const;
@@ -103,6 +104,7 @@ class HEVCStreamReader final : public MPEGStreamReader
     int m_picOrderMsb;
     int m_prevPicOrder;
     bool m_picOrderStarted = false;  // the first picture of the stream has set m_picOrderBase
+    int m_firstLeading = 0;          // picturesShownBeforeFirst of the first picture, when it is not IRAP
     bool m_lastIFrame;
 
     MemoryBlock m_vpsBuffer;
