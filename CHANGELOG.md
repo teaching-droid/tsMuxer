@@ -20,6 +20,18 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **An MP4 whose last box has 0 in its size field was muxed only in part,** and since 2.19.4 the mux still said it was complete. Such a file is now read to its end. A complete mux of an MP4 with a free, skip or uuid box at its end said "The output is incomplete"; it now ends as a complete mux.
 
+* **An ISO image of a folder with more than 4093 files and folders had its first file damaged,** with --bdmv-to-iso and --keep-extra-files: the table that maps the files was written over the start of it. The table now has the room it needs.
+
+* **A job that was refused could empty an existing ISO image of the same name.** A cut whose end is not after its start, --keep-editions and a FLAC track are refused for a disc, but only after the image had been opened for writing. They are now refused before any output exists.
+
+* **A subtitle with a long fade could end the mux with a crash,** as at 59.94 fps. The steps of a fade are written into a buffer of fixed size, and a fade of minutes on a long subtitle ran past its end. A fade that does not fit is now shortened, with a warning.
+
+* **H.264 with pulldown and B pictures got times that were out of order or used twice,** and a Matroska output joined pictures that had the same time: with frame doubling, 60 of 144 times were used twice. Each picture now comes when the pictures before it in the order shown have been shown for their own time.
+
+* **H.264 with a deep B pyramid could be decoded after it was due,** in a transport stream and on a disc, as with the 16 B pictures in a row Quick Sync encodes. The decoding times were moved back by 3 pictures at most, and such a stream needs 5. They now move back as far as the pictures need, up to the 16 pictures a decoder holds.
+
+* **A cut stream that does not begin with an IDR picture could get two pictures with one time,** and a Matroska output wrote the two as one block: H.264 that begins with an I picture of an open GOP, a P or a B picture, H.264 and HEVC that begin inside a run of B pictures, and the IDR after such a start. Each picture now gets its own time, in the order the stream gives. H.264 coded as fields is muxed as before.
+
 ### MP4 and MOV input
 
 * **More codecs.** VVC, AV1, Opus, ALAC, Vorbis, VP8, VP9 and linear PCM are read. MP3, MP2 and DTS in an mp4a track are read as what they are: they used to be taken for AAC and gave an output that decodes to nothing. A VVC track used to be listed as Opus.
@@ -48,6 +60,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A demux writes ASS, SSA and WebVTT in their own form,** as .ass, .ssa and .vtt files, when they are kept as text. They used to become SRT.
 
+* **MP4 text subtitles (tx3g)** keep their times: each was rounded down to the millisecond and the errors added up, so in a file measured the 1200th subtitle came 479 ms early. Their bold, italic and underline go on the right letters, and text outside ASCII is no longer broken by them.
+
+* **An SRT timing line with a tab after the arrow** keeps its end time. The subtitle stayed on screen until the next one.
+
 * **Subtitles drawn for video up to 720 pixels wide at 25 or 50 frames per second, such as 720x576, were drawn for 720x480.** The canvas of their PGS was the size of NTSC video, and each subtitle was placed for 480 lines. They now get the canvas of 720x576 a disc has for such video, whether they come from SRT, ASS, SSA or WebVTT. A PGS track already drawn at 720x576 is no longer scaled down to 720x480 when its line names the size and the frame rate of the video.
 
 ### Blu-ray and transport stream
@@ -72,6 +88,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **The German texts** write "Metadatei" one way throughout.
 
+* **The output can no longer be one of the sources.** With the output in the source folder, a source named 00000.M2TS was offered as its own output, as the names were compared with their case, and "Start muxing" now refuses an output that is a source.
+
+* **An output named .mks or .mk3d** is a Matroska output, in the window and on the command line. It became a folder of demuxed tracks.
+
 * **A WebM output can be muxed from the window.** A .webm name chooses MKV output, but "Start muxing" refused it, a click on "MKV muxing" turned it into .mkv, and the Browse dialog had no WebM type and added .mkv to it. A .webm name is now kept and muxed as WebM, and the Browse dialog offers "WebM (*.webm)".
 
 * **New options:** "Draw ASS and SSA subtitles as plain text, without their styles" and "Fonts folder for ASS and SSA subtitles" on the Subtitles tab, "Also save drawn SRT subtitles as .srt files", and "Mark as HDR10 on a UHD disc" on an HEVC track.
@@ -85,6 +105,14 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **A track refused for its output** leaves no empty folders behind.
 
 * **A tab on the MUXOPT line** is read as a space. It joined the texts on either side of it: a tab after --cut-end=5s kept only one picture.
+
+* **Every MUXOPT line counts.** With two of them, the muxers took the options of the last one only.
+
+* **A WebM output** no longer carries the BCP 47 language and the track flags that WebM does not have, such as "hearing impaired". A Matroska output keeps them.
+
+* **An ISO image whose folder holds two names that are the same in the first 127 characters** is refused, with both names. One of the two files was lost on the image.
+
+* **A damaged frame size in an IVF file** made the frame rate probe read before its data.
 
 * **Reads outside the data, and reads at addresses C++ does not allow, are gone.** The search for the start codes of a video stream read up to 15 bytes before and after its buffer, the check for the next TrueHD frame could read two bytes past the data, and many fields of two, four and eight bytes were read and written through pointers the language does not allow at their addresses. None of them was seen to change an output.
 
