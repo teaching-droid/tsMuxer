@@ -236,7 +236,7 @@ class METADemuxer final : public AbstractDemuxer
     [[nodiscard]] std::map<int, std::vector<SourceTrackTag>> getTrackTagsByStream();
     // The BlockAdditions of the source tracks that carry them, by stream index (see AbstractDemuxer)
     [[nodiscard]] std::map<int, std::pair<uint64_t, std::vector<std::vector<uint8_t>>>> getBlockAdditionInfoByStream();
-    bool takeBlockAdditions(int streamIndex, int64_t pts, std::vector<uint8_t>& out);
+    bool takeBlockAdditions(int streamIndex, int64_t pts, std::vector<uint8_t>& out) override;
     // How long the sources say they run, without reading them: a playlist by its play items, a container by the
     // length it states. A join counts its first file only and an elementary stream states nothing, so this can fall
     // short or be 0. It is only used to reckon how many parts a --split-duration makes.
