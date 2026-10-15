@@ -1685,6 +1685,11 @@ int MovDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepte
             discardSize += next - offset - chunkSize;
             skip_bytes(next - offset - chunkSize);
         }
+        // After the last chunk the mdat may still hold bytes no sample uses, which a writer can leave there. They are
+        // never read, and left out of the count they made a complete mux read as stopped early once they were over
+        // 1 % of the file.
+        else if (!found_moof && m_curChunk == chunks.size() - 1 && next - offset > chunkSize)
+            discardSize += next - offset - chunkSize;
         m_curChunk++;
         // What follows the last chunk of a fragmented file (an mfra) holds no media when the walk read every box up to
         // the end of the file, so it counts as read. A walk that stopped short leaves it out.
