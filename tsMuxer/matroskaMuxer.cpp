@@ -1051,6 +1051,14 @@ void MatroskaMuxer::parseMuxOpt(const std::string& opts)
         //
         // Checked HERE rather than when the first RPU turns up, because that would be most of the
         // way through a mux of a feature. The message names the library and what to do about it.
+        // When the file IS there, telling the user to go and get it would be wrong: the reason is all
+        // they need.
+        if (!DoviLib::instance().available() && DoviLib::instance().fileFound())
+        {
+            THROW(ERR_COMMON, "--dv-profile=8.1 needs "
+                                  << DoviLib::libraryName() << ", which converts the Dolby Vision metadata, and "
+                                  << DoviLib::instance().loadError() << ". Or leave --dv-profile at 7.")
+        }
         if (!DoviLib::instance().available())
         {
             THROW(ERR_COMMON, "--dv-profile=8.1 needs "

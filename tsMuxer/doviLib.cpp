@@ -2,6 +2,8 @@
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
+// After windows.h, which it needs.
+#include <VersionHelpers.h>
 #else
 #include <dlfcn.h>
 #endif
@@ -41,6 +43,31 @@ void closeLib(void* h)
 #endif
 }
 
+// LoadLibrary fails with the same error for a file that is missing and for a file that is there but
+// needs something this Windows does not have. The published dovi.dll is the second case on
+// Windows 7: it uses functions that came with Windows 8. Searching for the file tells the two apart,
+// so the message does not send a user to fetch a file that is already beside tsMuxeR.
+#if defined(_WIN32) || defined(_WIN64)
+std::string foundPath(const char* name)
+{
+    char path[MAX_PATH];
+    const DWORD n = SearchPathA(nullptr, name, nullptr, MAX_PATH, path, nullptr);
+    return n > 0 && n < MAX_PATH ? std::string(path) : std::string();
+}
+
+std::string unloadableReason(const std::string& path, const DWORD err)
+{
+    std::string reason = "was found at " + path + " but Windows could not load it (error " + std::to_string(err) + ")";
+    if (!IsWindows8OrGreater())
+        reason +=
+            ". The published dovi.dll needs Windows 8 or newer, so on Windows 7 this feature may not work. That is a "
+            "limit of the library build, not of tsMuxeR";
+    else
+        reason += ". It may be damaged, or built for another platform";
+    return reason;
+}
+#endif
+
 void* symbol(void* h, const char* name)
 {
 #if defined(_WIN32) || defined(_WIN64)
@@ -69,9 +96,20 @@ DoviLib::DoviLib()
     }
     if (!m_handle)
     {
+#if defined(_WIN32) || defined(_WIN64)
+        // Asked straight away, before anything else can change the last error.
+        const DWORD err = GetLastError();
+        if (const std::string path = foundPath(libraryName()); !path.empty())
+        {
+            m_fileFound = true;
+            m_loadError = std::string(libraryName()) + ' ' + unloadableReason(path, err);
+            return;
+        }
+#endif
         m_loadError = std::string(libraryName()) + " was not found";
         return;
     }
+    m_fileFound = true;
 
     // All six or none: a partial bind would fail later, in the middle of a mux, which is a much
     // worse place to discover it than here.

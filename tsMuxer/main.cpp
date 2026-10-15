@@ -1023,7 +1023,9 @@ All parameters in this group start with two dashes:
                       8.1 needs the libdovi library (dovi.dll on Windows) beside
                       tsMuxeR. It is published for 64 bit Windows; other platforms
                       build it from source. Without it the option is refused before
-                      muxing starts.
+                      muxing starts. The published dovi.dll needs Windows 8 or
+                      newer, so on Windows 7 this option may not work; that is a
+                      limit of the library build, not of tsMuxeR.
 )help"
                             R"help(--start-time          Timestamp of the first video frame. May be defined as 45Khz
                       clock (just a number) or as time in hh:mm:ss.zzz format.

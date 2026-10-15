@@ -32,6 +32,10 @@ class DoviLib
     // Why the library is unavailable, for a message that tells the user what to do about it.
     [[nodiscard]] const std::string& loadError() const { return m_loadError; }
 
+    // True when the file is there but could not be used, so a message does not send the user to
+    // fetch a file they already have.
+    [[nodiscard]] bool fileFound() const { return m_fileFound; }
+
     // The name looked for, so a message can say exactly what is missing.
     static const char* libraryName();
 
@@ -64,6 +68,7 @@ class DoviLib
 
     void* m_handle = nullptr;
     bool m_ok = false;
+    bool m_fileFound = false;
     std::string m_loadError;
 
     ParseUnspec62Fn m_parse = nullptr;
