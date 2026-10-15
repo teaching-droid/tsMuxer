@@ -81,7 +81,7 @@ uint8_t* MP3Codec::mp3FindFrame(uint8_t* buff, const uint8_t* end)
     if (buff == nullptr)
         return nullptr;
     // header
-    for (uint8_t* cur = buff; cur < end - 4; cur++)
+    for (uint8_t* cur = buff; cur + 4 <= end; cur++)  // a header in the last 4 bytes is tested too
     {
         const uint32_t header = my_ntohl(loadUnaligned<uint32_t>(cur));
         if ((header & 0xffe00000) != 0xffe00000)

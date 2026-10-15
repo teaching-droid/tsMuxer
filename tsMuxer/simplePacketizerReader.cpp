@@ -684,6 +684,7 @@ void SimplePacketizerReader::setBuffer(uint8_t* data, const uint32_t dataLen, bo
     // getProcessedSize is deliberately LEFT ALONE. metaDemuxer.cpp uses it to drive the progress
     // display, where "how far have we got" is the right question and this is not the answer.
     m_readBytes += dataLen;
+    m_lastBlock = lastBlock;
 
     if (static_cast<size_t>(m_tmpBufferLen + dataLen) > m_tmpBuffer.size())
         m_tmpBuffer.resize(m_tmpBufferLen + dataLen);
@@ -713,6 +714,16 @@ int SimplePacketizerReader::flushPacket(AVPacket& avPacket)
     avPacket.codec = this;
     int skipBytes = 0;
     int skipBeforeBytes = 0;
+    if (m_needSync && m_tmpBufferLen > 0 &&
+        findFrame(m_tmpBuffer.data(), m_tmpBuffer.data() + m_tmpBufferLen) != m_tmpBuffer.data())
+    {
+        // Held while a frame was being looked for, and no frame begins with them: the end of a
+        // tag or junk after the last frame, or junk and the start of a frame cut off by the end
+        // of the file. None of it is sound, and it used to be written out as a last frame.
+        m_processedBytes += m_tmpBufferLen;
+        m_tmpBufferLen = 0;
+        return 0;
+    }
     if (m_tmpBufferLen >= getHeaderLen())
     {
         const int size =
@@ -809,8 +820,15 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                     m_curPos = m_bufEnd;
                     return NEED_MORE_DATA;
                 }
+                // ** AND THE LAST BYTES OF A LONG RUN ARE CARRIED TOO. ** A frame's sync can begin
+                // in the last few bytes of the block, where the searches cannot test it: AC-3 needs
+                // its second sync byte, MPEG audio its four header bytes, ADTS its second byte. With
+                // nothing carried the next block began after them and the frame was lost: one AC-3
+                // or MP3 frame after a tag that ended just before a 2 MB boundary, or the first AAC
+                // frame of a file with 2,097,151 bytes in front of it, in silence.
+                uint8_t* const keepFrom = m_bufEnd - LONGEST_TAG_HEADER;
 
-                m_processedBytes += m_bufEnd - m_curPos;
+                m_processedBytes += keepFrom - m_curPos;
                 // Nothing recognisable is left in this buffer. HELD BACK, not counted: if a frame
                 // turns up later this really was a hole and it is promoted to lost; if none ever
                 // does, these were the trailing bytes of the file and a file is entitled to carry
@@ -823,12 +841,15 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                 // same bytes moved into the middle of the same stream are reported exactly.
                 if (m_everSynced)
                 {
-                    const int64_t region = m_bufEnd - m_curPos;
+                    const int64_t region = keepFrom - m_curPos;
                     const int64_t paid = m_tagCredit < region ? m_tagCredit : region;
                     m_tagCredit -= paid;
-                    const int64_t held = region - paid - tagBytesAt(m_curPos + paid, m_bufEnd);
+                    const int64_t held = region - paid - tagBytesAt(m_curPos + paid, keepFrom);
                     m_pendingLost += held > 0 ? held : 0;
                 }
+                memmove(m_tmpBuffer.data(), keepFrom, static_cast<size_t>(LONGEST_TAG_HEADER));
+                m_tmpBufferLen = static_cast<int>(LONGEST_TAG_HEADER);
+                m_curPos = m_bufEnd;
                 return NEED_MORE_DATA;
             }
             int decodeRez = decodeFrame(frame, m_bufEnd, skipBytes, skipBeforeBytes);
@@ -868,6 +889,41 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                 if (m_everSynced)
                     m_lostBytes += skipped - paid;
                 return 0;
+            }
+            if (frame + decodeRez + skipBytes + skipBeforeBytes > m_bufEnd)
+            {
+                // ** A SYNC FOUND WHILE SEARCHING WHOSE FRAME RUNS PAST THE BLOCK IS NOT YET A FRAME. **
+                // A search can only confirm a candidate by the header after it, and near the end of
+                // a block there is none to read, so it is accepted unconfirmed. Taken as the stream's
+                // sync at once, it could not be rejected later: a UTF-16 byte order mark in a tag
+                // 100 bytes before a 2 MB boundary became 128 bytes of sound. The search now goes on
+                // from it in the next block, where its successor can be read. At the end of the
+                // stream there is no more to read, and a frame cut off by the end is not one either:
+                // the same mark in a tag at the end of a file became the last 40 bytes of sound.
+                if (m_lastBlock)
+                {
+                    const int64_t skipped = frame + 1 - m_curPos;
+                    m_curPos = frame + 1;
+                    m_processedBytes += skipped;
+                    const int64_t paid = m_tagCredit < skipped ? m_tagCredit : skipped;
+                    m_tagCredit -= paid;
+                    if (m_everSynced)
+                        m_pendingLost += skipped - paid;
+                    return 0;
+                }
+                m_processedBytes += frame - m_curPos;
+                if (m_everSynced)
+                {
+                    const int64_t region = frame - m_curPos;
+                    const int64_t paid = m_tagCredit < region ? m_tagCredit : region;
+                    m_tagCredit -= paid;
+                    const int64_t held = region - paid - tagBytesAt(m_curPos + paid, frame);
+                    m_pendingLost += held > 0 ? held : 0;
+                }
+                memmove(m_tmpBuffer.data(), frame, m_bufEnd - frame);
+                m_tmpBufferLen = m_bufEnd - frame;
+                m_curPos = m_bufEnd;
+                return NEED_MORE_DATA;
             }
             m_processedBytes += frame - m_curPos;
             // The bytes stepped over to reach this frame. On the FIRST sync they are the leading

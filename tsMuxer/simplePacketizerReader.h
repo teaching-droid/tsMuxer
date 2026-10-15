@@ -101,6 +101,7 @@ class SimplePacketizerReader : public AbstractStreamReader
     // current search position, or the position itself when there is none. A frame search may
     // disbelieve a sync below this and nowhere else. See oneTagCeiling for why.
     const uint8_t* m_tagCeilingEnd;
+    bool m_lastBlock = false;  // the block being read is the last of the stream
     // Bytes abandoned with no frame found, held back rather than counted as lost until a frame IS
     // found again. TRAILING DATA IS, BY DEFINITION, DATA AFTER WHICH NO FRAME EVER FOLLOWS, so a
     // gap that is never closed was the tail and a gap that is closed was a real hole. An
