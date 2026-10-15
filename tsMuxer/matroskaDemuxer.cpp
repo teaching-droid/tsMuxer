@@ -798,8 +798,10 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
 
                 matroska_queue_packet(pkt);
 
+                // the next lace is a duration later; a block with no duration (AV_NOPTS_VALUE, which is not 0)
+                // leaves it without a time, where adding the marker gave a time near the most negative one
                 if (timecode != AV_NOPTS_VALUE)
-                    timecode = duration ? timecode + duration : AV_NOPTS_VALUE;
+                    timecode = duration && duration != AV_NOPTS_VALUE ? timecode + duration : AV_NOPTS_VALUE;
             }
             data += lace_size[n];
             size -= lace_size[n];
