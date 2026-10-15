@@ -1419,9 +1419,9 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                     streamInfo.m_addParams["srccodecdelay"] = d->second;
         }
     }
-    if (const auto delay = streamInfo.m_addParams.find("srccodecdelay"); delay != streamInfo.m_addParams.end() &&
-                                                                         !codec.empty() && codec[0] == 'A' &&
-                                                                         !(m_matroskaOutput && codec == "A_AAC"))
+    if (const auto delay = streamInfo.m_addParams.find("srccodecdelay");
+        delay != streamInfo.m_addParams.end() && !codec.empty() && codec[0] == 'A' &&
+        !(m_matroskaOutput && (codec == "A_AAC" || codec == "A_OPUS" || codec == "A_VORBIS")))
     {
         const int64_t ns = strtoll(delay->second.c_str(), nullptr, 10);
         if (ns > 0)
