@@ -48,6 +48,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A demux writes ASS, SSA and WebVTT in their own form,** as .ass, .ssa and .vtt files, when they are kept as text. They used to become SRT.
 
+* **Subtitles drawn for video up to 720 pixels wide at 25 or 50 frames per second, such as 720x576, were drawn for 720x480.** The canvas of their PGS was the size of NTSC video, and each subtitle was placed for 480 lines. They now get the canvas of 720x576 a disc has for such video, whether they come from SRT, ASS, SSA or WebVTT. A PGS track already drawn at 720x576 is no longer scaled down to 720x480 when its line names the size and the frame rate of the video.
+
 ### Blu-ray and transport stream
 
 * **hdr10-override** marks an SDR HEVC track as HDR10 on a UHD disc. In the window: "Mark as HDR10 on a UHD disc" on the HEVC track.
@@ -70,6 +72,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **The German texts** write "Metadatei" one way throughout.
 
+* **A WebM output can be muxed from the window.** A .webm name chooses MKV output, but "Start muxing" refused it, a click on "MKV muxing" turned it into .mkv, and the Browse dialog had no WebM type and added .mkv to it. A .webm name is now kept and muxed as WebM, and the Browse dialog offers "WebM (*.webm)".
+
 * **New options:** "Draw ASS and SSA subtitles as plain text, without their styles" and "Fonts folder for ASS and SSA subtitles" on the Subtitles tab, "Also save drawn SRT subtitles as .srt files", and "Mark as HDR10 on a UHD disc" on an HEVC track.
 
 ### Other
@@ -81,6 +85,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **A track refused for its output** leaves no empty folders behind.
 
 * **A tab on the MUXOPT line** is read as a space. It joined the texts on either side of it: a tab after --cut-end=5s kept only one picture.
+
+* **Reads outside the data, and reads at addresses C++ does not allow, are gone.** The search for the start codes of a video stream read up to 15 bytes before and after its buffer, the check for the next TrueHD frame could read two bytes past the data, and many fields of two, four and eight bytes were read and written through pointers the language does not allow at their addresses. None of them was seen to change an output.
 
 ### What is still converted or left out
 
