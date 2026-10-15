@@ -53,6 +53,7 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
 {
     autoChapterLen = 0;
     stereoMode = false;
+    bool fromChapterFile = false;
     TextFile file(metaFileName, File::ofRead);
     string str;
     file.readLine(str);
@@ -104,9 +105,7 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                     // chapters are kept whole here and the times are taken from them, rather than
                     // the other way round.
                     chapterInfo = readChapterFile(unquoteStr(paramPair[1]));
-                    customChaptersList.clear();
-                    for (const auto& chapter : chapterInfo)
-                        customChaptersList.push_back(static_cast<double>(chapter.start) / 1e9);
+                    fromChapterFile = true;
                 }
                 else if (paramPair[0] == "--mplsOffset")
                 {
@@ -159,6 +158,34 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
 
         file.readLine(str);
     }
+
+    // ** ONE LIST OF CHAPTERS, IN TIME ORDER, WHATEVER ORDER THE OPTIONS AND THE FILE GAVE. ** --chapters-file
+    // replaced the --custom-chapters before it on the line and was added to by those after it, so the two orders gave
+    // two results; and a chapter file is keyed by its chapter numbers, so a file whose numbers were not in time order,
+    // or a typed list out of order, put marks on a disc out of order and twice at one time. The chapters of the file
+    // and the typed times are now one list, sorted by time, with one chapter at each time (the first given, a named
+    // one before a typed one).
+    if (fromChapterFile)
+    {
+        for (const double t : customChaptersList) chapterInfo.emplace_back(llround(t * 1e9), std::string());
+        std::stable_sort(chapterInfo.begin(), chapterInfo.end());
+        chapterInfo.erase(std::unique(chapterInfo.begin(), chapterInfo.end(),
+                                      [](const AVChapter& a, const AVChapter& b) { return a.start == b.start; }),
+                          chapterInfo.end());
+        customChaptersList.clear();
+        for (const auto& chapter : chapterInfo) customChaptersList.push_back(static_cast<double>(chapter.start) / 1e9);
+    }
+    else
+    {
+        std::sort(customChaptersList.begin(), customChaptersList.end());
+        customChaptersList.erase(std::unique(customChaptersList.begin(), customChaptersList.end()),
+                                 customChaptersList.end());
+    }
+    // A Blu-ray playlist holds at most 999 marks. More were written into a buffer of fixed size at the end of the
+    // mux, which stopped there with "Bitstream exception", after all the work; 1000 were written in silence.
+    if (result != DiskType::NONE && customChaptersList.size() > 999)
+        THROW(ERR_COMMON, "A Blu-ray playlist holds at most 999 chapter marks, and the chapters given are "
+                              << customChaptersList.size() << ". Give fewer chapters.")
 
     // The blank playlist is written under its number twice: as a playlist and as the clip it plays. The same number as
     // the main playlist, or as the main title's first clip, replaced that file without a word (in an image, the blank

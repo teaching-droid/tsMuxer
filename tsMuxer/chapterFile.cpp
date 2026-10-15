@@ -11,6 +11,8 @@
 #include "vodCoreException.h"
 #include "vod_common.h"
 
+std::string iso639FromBcp47(const std::string& tag);  // metaDemuxer.cpp
+
 namespace
 {
 std::string trimmed(const std::string& s)
@@ -26,6 +28,22 @@ std::string upperCase(std::string s)
 {
     for (char& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
     return s;
+}
+
+// A ChapterLanguage is an ISO 639-2 code. Whatever the file said went into the output as it stood, "english" or a
+// piece of markup included. A BCP 47 tag (de, pt-BR) gives the code it stands for; anything else is "und", with a
+// warning.
+static std::string chapterLanguage(const std::string& value, const std::string& fileName)
+{
+    const std::string lower = strToLowerCase(value);
+    if (lower.size() == 3 && isIso639_2(lower))
+        return lower;
+    if (const std::string code = iso639FromBcp47(value); !code.empty())
+        return code;
+    LTRACE(LT_WARN, 2,
+           "Warning: " << fileName << ": the chapter language \"" << value
+                       << "\" is not a language code; the chapter is marked und.");
+    return "und";
 }
 
 std::string unescapeXml(const std::string& in)
@@ -56,6 +74,37 @@ std::string unescapeXml(const std::string& in)
             out += '"';
         else if (entity == "&apos;")
             out += '\'';
+        else if (entity.size() > 3 && entity[1] == '#')
+        {
+            // A character by its number, &#233; or &#xE9;, written as UTF-8. It was kept as written, and the name of
+            // the chapter showed "Caf&#233;".
+            const bool hex = entity[2] == 'x' || entity[2] == 'X';
+            const std::string digits = entity.substr(hex ? 3 : 2, entity.size() - (hex ? 4 : 3));
+            char* stop = nullptr;
+            const unsigned long cp = digits.empty() ? 0 : strtoul(digits.c_str(), &stop, hex ? 16 : 10);
+            if (digits.empty() || *stop != '\0' || cp == 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF))
+                out += entity;
+            else if (cp < 0x80)
+                out += static_cast<char>(cp);
+            else if (cp < 0x800)
+            {
+                out += static_cast<char>(0xC0 | cp >> 6);
+                out += static_cast<char>(0x80 | (cp & 0x3F));
+            }
+            else if (cp < 0x10000)
+            {
+                out += static_cast<char>(0xE0 | cp >> 12);
+                out += static_cast<char>(0x80 | (cp >> 6 & 0x3F));
+                out += static_cast<char>(0x80 | (cp & 0x3F));
+            }
+            else
+            {
+                out += static_cast<char>(0xF0 | cp >> 18);
+                out += static_cast<char>(0x80 | (cp >> 12 & 0x3F));
+                out += static_cast<char>(0x80 | (cp >> 6 & 0x3F));
+                out += static_cast<char>(0x80 | (cp & 0x3F));
+            }
+        }
         else
         {
             out += entity;  // not one we know: leave it alone rather than mangle the name
@@ -256,7 +305,7 @@ std::vector<AVChapter> parseXml(const std::string& text, const std::string& file
             if (tagText(display, "ChapterString", 0, display.size(), value))
                 name = unescapeXml(trimmed(value));
             if (tagText(display, "ChapterLanguage", 0, display.size(), value))
-                language = trimmed(value);
+                language = chapterLanguage(trimmed(value), fileName);
         }
         const int64_t start = static_cast<int64_t>(chapterTimeToSeconds(timeStr, fileName) * 1e9 + 0.5);
         chapters.emplace_back(start, name, language);
@@ -273,7 +322,8 @@ double chapterTimeToSeconds(const std::string& text, const std::string& where)
     // The reader below skips whatever it does not understand, so "abc" became a chapter at 0:00 and
     // "-00:00:05" one at 0:05, while a negative, endless or very large time vanished from the output
     // although it was counted among the chapters read. So every part between the colons has to start
-    // with a digit, and there is no minus sign anywhere.
+    // with a digit, and there is no minus sign anywhere. Nor anything else but digits and one decimal point in the
+    // seconds: "00:00:01,500" was read as 1 s and "00:00:05min" as 5 s, in silence.
     const std::string t = trimmed(text);
     if (t.empty())
         return 0.0;
@@ -283,10 +333,13 @@ double chapterTimeToSeconds(const std::string& text, const std::string& where)
     {
         if (i == t.size() || t[i] == ':')
         {
-            ok = i > partStart && std::isdigit(static_cast<unsigned char>(t[partStart]));
+            const std::string part = t.substr(partStart, i - partStart);
+            const bool last = i == t.size();
+            ok = !part.empty() && std::isdigit(static_cast<unsigned char>(part[0])) &&
+                 std::count(part.begin(), part.end(), '.') <= (last ? 1 : 0);
             partStart = i + 1;
         }
-        else if (t[i] == '-')
+        else if (!std::isdigit(static_cast<unsigned char>(t[i])) && t[i] != '.')
             ok = false;
     }
     const double seconds = ok ? timeToFloat(t) : 0.0;

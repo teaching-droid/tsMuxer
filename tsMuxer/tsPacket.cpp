@@ -2392,6 +2392,16 @@ void MPLSParser::composePlayListMark(BitStreamWriter& writer)
             // never stopped coming.
             const int64_t step = static_cast<int64_t>(m_chapterLen) * 45000;
             for (int64_t t = IN_time; t < OUT_time; t += step) m_marks.emplace_back(-1, static_cast<uint32_t>(t));
+            // A playlist holds at most 999 marks; a short step on a long title gave more, and the playlist outgrew
+            // the room it is written into at the end of the mux.
+            if (m_marks.size() > 999)
+            {
+                LTRACE(LT_WARN, 2,
+                       "Warning: --auto-chapters gives " << m_marks.size()
+                                                         << " chapter marks, and a Blu-ray playlist holds at most "
+                                                            "999. The first 999 are kept.");
+                m_marks.erase(m_marks.begin() + 999, m_marks.end());
+            }
         }
     }
     writer.putBits(16, static_cast<unsigned>(m_marks.size()));
