@@ -205,6 +205,30 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
                                                   m_cutEnd > 0 ? toNano(m_cutEnd) : INT64_MAX);
                     }
                 }
+                // Times typed or edited without names (--custom-chapters) where the source names its chapters: a time
+                // that is one of the source's keeps that chapter's name and language. Editing the window's list of a
+                // source's chapters, even to add one, turned every name into "Chapter n".
+                else if (m_chapterInfo.empty())
+                {
+                    const std::vector<AVChapter> source = sourceChapters();
+                    std::vector<AVChapter> named(m_chapters.size());
+                    bool anyNamed = false;
+                    for (size_t i = 0; i < m_chapters.size(); ++i)
+                    {
+                        const auto at = llround(m_chapters[i] * 1e9);
+                        named[i].start = at;
+                        for (const auto& chapter : source)
+                            if (std::llabs(chapter.start - at) <= 1000000 && !chapter.cTitle.empty())
+                            {
+                                named[i] = chapter;
+                                named[i].start = at;
+                                anyNamed = true;
+                                break;
+                            }
+                    }
+                    if (anyNamed)
+                        m_chapterInfo = named;
+                }
                 if (!m_chapters.empty())
                 {
                     m_mainMuxer->setChapters(m_chapters);
@@ -980,6 +1004,10 @@ void MuxerManager::parseMuxOpt(const string& opts)
                 THROW(ERR_COMMON, err);
         }
         else if (paramPair[0] == "--no-chapters")
+            m_noChapters = true;
+        // An empty list is a list: the window writes it when every line of its chapter box was deleted. It was read as
+        // no list at all, and the source's chapters came back.
+        else if (paramPair[0] == "--custom-chapters" && (paramPair.size() < 2 || trimStr(paramPair[1]).empty()))
             m_noChapters = true;
         else if (paramPair[0] == "--layer-break-lbn")
         {
