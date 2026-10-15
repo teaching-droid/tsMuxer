@@ -232,7 +232,19 @@ QString M2TS_SAVE_DIALOG_FILTER()
 
 QString ISO_SAVE_DIALOG_FILTER() { return makeFileFilter({{TsMuxerWindow::tr("Disk image"), {"iso"}}}); }
 
-QString MKV_SAVE_DIALOG_FILTER() { return makeFileFilter({{TsMuxerWindow::tr("Matroska"), {"mkv", "mka"}}}); }
+// A .webm name writes WebM, the Matroska subset of the web; the dialog offered no such type (#44)
+QString MKV_SAVE_DIALOG_FILTER()
+{
+    return makeFileFilter({{TsMuxerWindow::tr("Matroska"), {"mkv", "mka"}}, {TsMuxerWindow::tr("WebM"), {"webm"}}});
+}
+
+// A name for a Matroska output that tsMuxeR writes as it is: .mkv, .mka, and .webm, which it writes as WebM. A click on
+// "MKV muxing", even when it was chosen already, turned .webm and .mka into .mkv, and "Start muxing" refused .webm.
+bool isMatroskaOutputName(const QString& name)
+{
+    const QString suffix = QFileInfo(name).suffix().toLower();
+    return suffix == QLatin1String("mkv") || suffix == QLatin1String("mka") || suffix == QLatin1String("webm");
+}
 
 QSettings* settings = nullptr;
 
@@ -5655,7 +5667,10 @@ void TsMuxerWindow::RadioButtonMuxClick()
         if (ui->radioButtonTS->isChecked())
             ui->outFileName->setText(changeFileExt(ui->outFileName->text(), "ts"));
         else if (ui->radioButtonMKV->isChecked())
-            ui->outFileName->setText(changeFileExt(ui->outFileName->text(), "mkv"));
+        {
+            if (!isMatroskaOutputName(ui->outFileName->text()))
+                ui->outFileName->setText(changeFileExt(ui->outFileName->text(), "mkv"));
+        }
         else if (ui->radioButtonBluRayISO->isChecked())
             ui->outFileName->setText(changeFileExt(ui->outFileName->text(), "iso"));
         else
@@ -5778,21 +5793,29 @@ void TsMuxerWindow::saveFileDialog()
         dialog->setAttribute(Qt::WA_DeleteOnClose);
         m_fileDialogOpen = true;
         connect(dialog, &QFileDialog::finished, this, [this](int) { m_fileDialogOpen = false; });
+        // Matroska and WebM: a name typed with no extension gets the one of the file type chosen in the dialog
+        if (outputExt == QLatin1String("mkv"))
+            connect(dialog, &QFileDialog::filterSelected, dialog, [dialog](const QString& filter)
+                    { dialog->setDefaultSuffix(filter.contains(QLatin1String("*.webm")) ? "webm" : "mkv"); });
         connect(dialog, &QFileDialog::fileSelected, this,
-                [this, outputExt](const QString& selected)
+                [this, outputExt, dialog](const QString& selected)
                 {
                     if (selected.isEmpty())
                         return;
+                    const QString chosenExt = outputExt == QLatin1String("mkv") &&
+                                                      dialog->selectedNameFilter().contains(QLatin1String("*.webm"))
+                                                  ? QStringLiteral("webm")
+                                                  : outputExt;
                     // A default suffix is only added to a name with no dot at all, so "My.Movie.2020"
                     // still came back without one. A name that does not end in an output's own
                     // extension gets the selected output's, so the output stays what was chosen. A
                     // name ending in another output's extension is left alone: it names the output wanted.
                     QString fileName = selected;
-                    static const QStringList outputExts = {QStringLiteral("ts"), QStringLiteral("m2ts"),
-                                                           QStringLiteral("mkv"), QStringLiteral("mka"),
-                                                           QStringLiteral("iso")};
+                    static const QStringList outputExts = {QStringLiteral("ts"),   QStringLiteral("m2ts"),
+                                                           QStringLiteral("mkv"),  QStringLiteral("mka"),
+                                                           QStringLiteral("webm"), QStringLiteral("iso")};
                     if (!outputExts.contains(QFileInfo(fileName).suffix(), Qt::CaseInsensitive))
-                        fileName += (fileName.endsWith(QLatin1Char('.')) ? QString() : QStringLiteral(".")) + outputExt;
+                        fileName += (fileName.endsWith(QLatin1Char('.')) ? QString() : QStringLiteral(".")) + chosenExt;
                     auto native = QDir::toNativeSeparators(fileName);
                     ui->outFileName->setText(native);
                     lastOutputDir = QFileInfo(native).absolutePath();
@@ -5830,7 +5853,7 @@ void TsMuxerWindow::startMuxing()
     else if (ui->radioButtonTS->isChecked() || ui->radioButtonMKV->isChecked())
     {
         const QString suffix = QFileInfo(ui->outFileName->text()).suffix().toUpper();
-        const bool ok = ui->radioButtonTS->isChecked() ? suffix == "TS" : (suffix == "MKV" || suffix == "MKA");
+        const bool ok = ui->radioButtonTS->isChecked() ? suffix == "TS" : isMatroskaOutputName(ui->outFileName->text());
         if (!ok)
         {
             QMessageBox msgBox(this);

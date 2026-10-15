@@ -4422,6 +4422,10 @@ Build the ISO anyway?</source>
         <source>Load a meta file and mux from it as it stands. The text appears in the Meta file box below, and that box is what is handed to the muxer, so anything in the file is used exactly as written. The track list is not filled in from it and will not match: tick Build the meta file from the settings to go back to building the meta from the list.</source>
         <translation>meta ファイルを読み込み、その内容のまま多重化します。テキストは下の meta ファイル欄に表示され、多重化に渡されるのはこの欄の内容なので、ファイルに書かれていることがそのまま使われます。トラック一覧はこのファイルからは作られないため一致しません。一覧から meta を作り直すには「設定からメタファイルを作成する」をチェックしてください。</translation>
     </message>
+    <message>
+        <source>WebM</source>
+        <translation>WebM</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

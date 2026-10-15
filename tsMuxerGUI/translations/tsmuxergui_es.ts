@@ -4423,6 +4423,10 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>Load a meta file and mux from it as it stands. The text appears in the Meta file box below, and that box is what is handed to the muxer, so anything in the file is used exactly as written. The track list is not filled in from it and will not match: tick Build the meta file from the settings to go back to building the meta from the list.</source>
         <translation>Carga un archivo meta y multiplexa a partir de él tal cual. El texto aparece abajo en el cuadro Archivo meta, y ese cuadro es lo que se entrega al multiplexor, así que todo lo que haya en el archivo se usa exactamente como está escrito. La lista de pistas no se rellena a partir de él y no coincidirá: marca Construir el archivo meta a partir de los ajustes para volver a construir el meta desde la lista.</translation>
     </message>
+    <message>
+        <source>WebM</source>
+        <translation>WebM</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

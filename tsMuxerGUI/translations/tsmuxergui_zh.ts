@@ -4422,6 +4422,10 @@ Build the ISO anyway?</source>
         <source>Load a meta file and mux from it as it stands. The text appears in the Meta file box below, and that box is what is handed to the muxer, so anything in the file is used exactly as written. The track list is not filled in from it and will not match: tick Build the meta file from the settings to go back to building the meta from the list.</source>
         <translation>载入一个 meta 文件并按其原样进行混流。文本会显示在下方的 meta 文件框中，交给混流器的正是这个框，因此文件中的内容会被原样使用。轨道列表不会据此填充，也不会与之相符：勾选"根据设置生成 meta 文件"即可回到由列表生成 meta。</translation>
     </message>
+    <message>
+        <source>WebM</source>
+        <translation>WebM</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

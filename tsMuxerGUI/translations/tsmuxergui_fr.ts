@@ -4422,6 +4422,10 @@ Créer l'ISO malgré tout ?</translation>
         <source>Load a meta file and mux from it as it stands. The text appears in the Meta file box below, and that box is what is handed to the muxer, so anything in the file is used exactly as written. The track list is not filled in from it and will not match: tick Build the meta file from the settings to go back to building the meta from the list.</source>
         <translation>Charge un fichier meta et multiplexe à partir de lui tel quel. Le texte apparaît dans le cadre Fichier meta ci-dessous, et c'est ce cadre qui est remis au multiplexeur : tout ce que contient le fichier est donc utilisé exactement tel qu'il est écrit. La liste des pistes n'est pas remplie à partir de lui et ne correspondra pas : cochez Construire le fichier meta à partir des réglages pour revenir à un meta construit depuis la liste.</translation>
     </message>
+    <message>
+        <source>WebM</source>
+        <translation>WebM</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

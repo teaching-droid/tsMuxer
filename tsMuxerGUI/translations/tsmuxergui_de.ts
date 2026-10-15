@@ -4426,6 +4426,10 @@ ISO trotzdem erstellen?</translation>
         <source>Load a meta file and mux from it as it stands. The text appears in the Meta file box below, and that box is what is handed to the muxer, so anything in the file is used exactly as written. The track list is not filled in from it and will not match: tick Build the meta file from the settings to go back to building the meta from the list.</source>
         <translation>Eine Metadatei laden und genau so muxen, wie sie ist. Der Text erscheint unten im Feld Metadatei, und dieses Feld ist das, was an den Muxer übergeben wird; alles in der Datei wird also genau so verwendet, wie es dort steht. Die Spurliste wird daraus nicht gefüllt und passt nicht dazu: mit einem Häkchen bei Metadatei aus den Einstellungen erzeugen geht es zurück zur Metadatei aus der Liste.</translation>
     </message>
+    <message>
+        <source>WebM</source>
+        <translation>WebM</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
