@@ -32,6 +32,38 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A cut stream that does not begin with an IDR picture could get two pictures with one time,** and a Matroska output wrote the two as one block: H.264 that begins with an I picture of an open GOP, a P or a B picture, H.264 and HEVC that begin inside a run of B pictures, and the IDR after such a start. Each picture now gets its own time, in the order the stream gives. H.264 coded as fields is muxed as before.
 
+* **On the command line, an output that is one of the sources destroyed that source.** The output was opened for writing, which empties it, while the same file was still to be read. Such an output is now refused before anything is written, also when its name is written in another case or with other slashes.
+
+* **An MP4 whose AAC sound starts with silence could not be muxed.** AAC writes digital silence in frames of 4 bytes, and such frames stopped the mux with "Out of index for AAC track". Every frame is read now.
+
+* **A chunk after the audio of a WAV file was muxed as sound,** such as a LIST, id3 or JUNK chunk: 1 MB of JUNK became 5 s of noise. The header became sound as well in a WAV whose chunk before the audio has no pad byte, in a WAV whose data size is 0, and in a Wave64 file with an 18 byte format chunk. Only the audio is muxed now.
+
+* **An audio frame at the end of a 2 MB read block could be lost** after bytes that are not sound, such as a tag: one AC-3 or MP3 frame, or the first AAC frame of a file. A mark inside a tag could also become a short frame of sound. Every frame is kept now.
+
+* **One damaged FLAC frame near the end lost every frame after it.** One changed byte in a file of 30 s kept 30 of its 1292 frames. The frames after it are kept now.
+
+* **A complete mux of an MP4 with unused bytes in its mdat ended with exit -2,** saying the mux stopped before the source was finished. It ends as a complete mux now.
+
+* **In a join of MP4 files, AC-3, E-AC-3 and MP3 sound fell further behind the picture at every joint,** by 16 ms for AC-3 and 32 ms for MP3 each time. They now stay within half a frame of the picture, as AAC does. E-AC-3 from a single MP4 file started 5 ms late as well.
+
+* **Opus and Vorbis from an MP4 into Matroska came early,** 7 ms for Opus: the start of the sound was moved back twice.
+
+* **A join of Opus files played what each file leaves out,** and the sound of each later file came about 20 ms late. The padding of each file and the start-up samples of the next are left out at the joint now, and the end of the join is trimmed by the last file's padding.
+
+* **TrueHD with its AC-3 core, cut before a full sync frame and muxed as A_MLP, still played 50 ms early.** It keeps its time now.
+
+* **A timeshift sent subtitles late.** With timeshift=5000ms on the subtitles of a Matroska file, more than half of them came up to 10 s after they were due. Their times were right, and they are now sent in time.
+
+* **The time between two clock references could still pass 0.1 s,** with video under 10 frames a second or with subtitles alone: 125 ms and 12 s. Packets that carry only the clock fill such gaps now.
+
+* **Chapters on a disc came out of order, or twice at one time,** when a chapter file was not in time order. The chapters of a file and of --custom-chapters are now one list in time order, whichever option comes first. More than 999 chapters, which a disc cannot hold, stopped the job after the whole mux; they are refused before it now.
+
+* **A Blu-ray split past clip 99999 wrote clip names of six digits** that the playlist could not name. Such a split now stops with a message.
+
+* **--cut-start at or past the end of the sources wrote an empty file** and reported success. It ends with an error now.
+
+* **AV1 from Matroska lost every picture** when the last OBU of each block had no size field. Such an OBU is read to the end of its block now.
+
 ### MP4 and MOV input
 
 * **More codecs.** VVC, AV1, Opus, ALAC, Vorbis, VP8, VP9 and linear PCM are read. MP3, MP2 and DTS in an mp4a track are read as what they are: they used to be taken for AAC and gave an output that decodes to nothing. A VVC track used to be listed as Opus.
@@ -64,6 +96,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **An SRT timing line with a tab after the arrow** keeps its end time. The subtitle stayed on screen until the next one.
 
+* **Words of a title are no longer read as a language.** "Iron Man.ac3" was Mandingo and "X-Men.srt" Mende. Without brackets, a code in a file name is read after "_" or "." (Movie_spa.ac3, movie.eng.srt). A name with both a language and "forced" (movie_eng_forced.srt) gives both.
+
 * **Subtitles drawn for video up to 720 pixels wide at 25 or 50 frames per second, such as 720x576, were drawn for 720x480.** The canvas of their PGS was the size of NTSC video, and each subtitle was placed for 480 lines. They now get the canvas of 720x576 a disc has for such video, whether they come from SRT, ASS, SSA or WebVTT. A PGS track already drawn at 720x576 is no longer scaled down to 720x480 when its line names the size and the frame rate of the video.
 
 ### Blu-ray and transport stream
@@ -76,9 +110,15 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **Audio at a sample rate a disc cannot carry,** such as AC-3 at 44.1 kHz, gets a warning. A Blu-ray disc carries audio at 48, 96 or 192 kHz only.
 
+* **HEVC level=** reaches the HEVC descriptor of a transport stream as well: it kept the level of the source.
+
+* **A layer break guard of up to 9999 MB** is read from a meta file and by --bdmv-to-iso, as the window offers it. A meta file refused more than 1024.
+
 ### Matroska output
 
 * **The display size follows the pixel shape** the H.264 or HEVC video gives. Square pixels at 720x576 or 720x480 were shown at 4:3, and HEVC at 1440x1080 with 4:3 pixels was shown at 4:3 instead of 16:9.
+
+* **Chapters:** a list edited in the window keeps the names of the source's chapters at the same times, and a list emptied in the window gives no chapters. A Matroska XML chapter file gives characters written by their number (&#233;), and a chapter language that is not a language code is written as und, with a warning.
 
 ### Window
 
@@ -95,6 +135,18 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **A WebM output can be muxed from the window.** A .webm name chooses MKV output, but "Start muxing" refused it, a click on "MKV muxing" turned it into .mkv, and the Browse dialog had no WebM type and added .mkv to it. A .webm name is now kept and muxed as WebM, and the Browse dialog offers "WebM (*.webm)".
 
 * **New options:** "Draw ASS and SSA subtitles as plain text, without their styles" and "Fonts folder for ASS and SSA subtitles" on the Subtitles tab, "Also save drawn SRT subtitles as .srt files", and "Mark as HDR10 on a UHD disc" on an HEVC track.
+
+* **The Merge AC-3 box follows its track** when rows are moved or removed. It merged another track.
+
+* **An existing MKV or WebM output** is no longer replaced without the question a TS, M2TS or ISO output gets.
+
+* **The level list of an HEVC track holds HEVC's levels.** It offered the H.264 ones, without 5.2.
+
+* **"Keep the DTS core"** is offered for DTS-HD High Resolution, which always has a core.
+
+* **"Forced only" on the default subtitle** no longer marks a whole Matroska subtitle track as forced.
+
+* **"Remove all"** builds the meta file from the settings again after it was edited by hand, and --keep-editions is not written for a .webm name. A dropped chapter file is put in time order, and the open dialog lists .m2t files. An empty tsMuxerGUI.ini takes over settings that are only under the old company name.
 
 ### Other
 
@@ -113,6 +165,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **An ISO image whose folder holds two names that are the same in the first 127 characters** is refused, with both names. One of the two files was lost on the image.
 
 * **A damaged frame size in an IVF file** made the frame rate probe read before its data.
+
+* **Values that were read as something else are read whole now, or refused with a message:** --cut-start and --cut-end without a unit (--cut-end=5 kept one picture), as a clock time (00:01:30 switched the cut off; it is read now) or with a decimal comma; timeshift= in microseconds (us) or in S (500us was 500 s); fps=24000:1001 (24000 frames a second); --split-size=4G (4 bytes); --split-duration=0 (no split on a transport stream) and 1min (1 s); a level= a codec does not have (level=26 was 4); --layer-break-lbn=12.219.392 (sector 12); default=Forced, yes or 1 on a disc (no default subtitle); a chapter time with a comma or a unit. A decimal comma on a track line, as in fps=23,976, is refused with a message, as the values there are parted at commas.
 
 * **Reads outside the data, and reads at addresses C++ does not allow, are gone.** The search for the start codes of a video stream read up to 15 bytes before and after its buffer, the check for the next TrueHD frame could read two bytes past the data, and many fields of two, four and eight bytes were read and written through pointers the language does not allow at their addresses. None of them was seen to change an output.
 
