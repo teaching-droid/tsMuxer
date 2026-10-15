@@ -226,7 +226,7 @@ int VC1SequenceHeader::decode_sequence_header_adv()
 {
     level = bitReader.getBits<uint8_t>(3);
     if (level >= 5)
-        LTRACE(LT_WARN, 0, "Reserved LEVEL " << level);
+        LTRACE(LT_WARN, 0, "Reserved LEVEL " << static_cast<int>(level));
     bitReader.skipBits(11);  // chromaformat, frmrtq_postproc, bitrtq_postproc, postprocflag
     coded_width = (bitReader.getBits<uint16_t>(12) + 1) * 2;
     coded_height = (bitReader.getBits<uint16_t>(12) + 1) * 2;
