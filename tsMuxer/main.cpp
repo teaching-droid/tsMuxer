@@ -2501,8 +2501,10 @@ int main(int argc, char** argv)
         // .mks (subtitles only) and .mk3d (stereoscopic) are Matroska files too: they went to a demux folder
         bool mkvMode =
             fileExt2 == "MKV" || fileExt2 == "MKA" || fileExt2 == "MKS" || fileExt2 == "MK3D" || fileExt2 == "WEBM";
-        bool muxMode =
-            fileExt2 == "M2TS" || fileExt2 == "TS" || fileExt2 == "SSIF" || fileExt2 == "ISO" || dt != DiskType::NONE;
+        // .mts and .m2t are muxed as the muxer has always read them (setMuxFormat); they went to a demux folder, and
+        // the job said it had finished
+        bool muxMode = fileExt2 == "M2TS" || fileExt2 == "MTS" || fileExt2 == "M2T" || fileExt2 == "TS" ||
+                       fileExt2 == "SSIF" || fileExt2 == "ISO" || dt != DiskType::NONE;
 
         if (mkvMode)
         {

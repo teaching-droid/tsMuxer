@@ -93,7 +93,7 @@ Supported output formats:
 * **ISO** - Blu-ray disc image
 * **Blu-ray folder structure** - BDMV directory layout
 
-The output format is determined by the file extension of the output file name (e.g. `.ts`, `.m2ts`, `.mkv`, `.mka`, `.mks`, `.mk3d`, `.webm`, `.iso`).
+The output format is determined by the file extension of the output file name (e.g. `.ts`, `.m2ts`, `.mts`, `.m2t`, `.mkv`, `.mka`, `.mks`, `.mk3d`, `.webm`, `.iso`).
 
 The output of the program is encoded in UTF-8, which means that non-ASCII characters will not show up properly in the Windows console by default. If you want to see the output properly, run `chcp 65001` before running tsMuxeR.
 
