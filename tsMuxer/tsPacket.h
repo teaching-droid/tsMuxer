@@ -111,6 +111,9 @@ enum class StreamType
     SUB_DVB = 0x06,  // DVB Subtitles
 };
 
+// A transport stream packet header and its adaptation field, laid over the bytes of a packet. A packet is found at any
+// byte offset when a stream has lost its sync, so the two are packed: read at any address, with the same bit layout.
+#pragma pack(push, 1)
 struct AdaptiveField
 {
     static constexpr unsigned ADAPTIVE_FIELD_LEN = 2;
@@ -207,6 +210,8 @@ struct TSPacket
 
     AdaptiveField adaptiveField;
 };
+#pragma pack(pop)
+static_assert(offsetof(TSPacket, adaptiveField) == TSPacket::TS_HEADER_SIZE, "the adaptation field follows the header");
 
 class AbstractStreamReader;
 class MPEGStreamReader;
