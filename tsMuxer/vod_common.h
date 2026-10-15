@@ -164,6 +164,9 @@ bool isForcedSubtitleName(const std::string& fileName);
 // a track as THE default: the opposite of what anyone writing that means. These values say no:
 // none, no, 0, false, off. Case does not matter.
 bool defaultParamMeansNo(const std::string& value);
+// What default= says, in any case: 0 no (none, no, 0, false, off), 1 the default track (all, yes, 1, true, on), 2 the
+// forced one (forced), -1 none of these.
+int defaultParamKind(const std::string& value);
 
 // Judge ONE --layer-break-lbn value, in one place, because the two paths that read the option had
 // drifted: the meta path refused a sector of zero or less and the --bdmv-to-iso command line

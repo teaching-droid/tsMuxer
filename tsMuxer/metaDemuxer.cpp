@@ -616,6 +616,10 @@ void METADemuxer::openFile(const string& streamName)
                 THROW(ERR_COMMON, "\"" << trimStr(params[i - 1]) << "," << paramName
                                        << "\" on a track line: a decimal comma parts the value in two, as the "
                                           "parameters are parted at commas. Write it with a point, such as 23.976.")
+            if (paramName == "default" && defaultParamKind(addParams[paramName]) < 0)
+                THROW(ERR_COMMON, "default=" << addParams[paramName]
+                                             << " is not a value of default. Write all (or yes) for the default track, "
+                                                "forced for the forced subtitles only, or none (or no).")
             if (!isKnownTrackParam(paramName))
             {
                 // A misspelled parameter used to be accepted in silence and simply do nothing,

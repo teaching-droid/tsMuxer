@@ -1079,19 +1079,9 @@ int MuxerManager::getDefaultSubTrackIdx(SubTrackMode& mode) const
                                       [](auto&& streamInfo) { return streamInfo.m_codec[0] == 'S'; });
     if (idx != -1)
     {
-        if (paramVal == "all")
-        {
-            mode = SubTrackMode::All;
-        }
-        else if (paramVal == "forced")
-        {
-            mode = SubTrackMode::Forced;
-        }
-        else
-        {
-            LTRACE(LT_WARN, 2, "Invalid 'default' parameter value for subtitle track " << idx << ", ignoring");
-            return -1;
-        }
+        // Read as the Matroska output reads it: default=Forced, yes and 1 gave a disc no default subtitle, with only
+        // a warning, while a Matroska output marked the track. A value that is none of them is refused with the track.
+        mode = defaultParamKind(paramVal) == 2 ? SubTrackMode::Forced : SubTrackMode::All;
     }
     return idx;
 }

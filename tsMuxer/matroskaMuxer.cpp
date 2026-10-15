@@ -436,7 +436,7 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
     track.markedDefault = track.defaultExplicit && !defaultParamMeansNo(defaultParam->second);
     // default=forced, also set from a subtitle file named "forced", is the forced track. Matroska has a flag for that,
     // FlagForced, and it was not written: the track came out as the default one and nothing more.
-    if (track.defaultExplicit && strToLowerCase(defaultParam->second) == "forced")
+    if (track.defaultExplicit && defaultParamKind(defaultParam->second) == 2)
         track.flags[MATROSKA_ID_TRACKFLAGFORCED] = 1;
     if (!track.defaultExplicit)
     {

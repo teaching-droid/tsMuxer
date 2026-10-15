@@ -475,6 +475,18 @@ bool isForcedSubtitleName(const std::string& fileName)
     return lowerCase(token) == "forced";
 }
 
+int defaultParamKind(const std::string& value)
+{
+    const std::string lower = lowerCase(trimStr(value));
+    if (defaultParamMeansNo(lower))
+        return 0;
+    if (lower == "forced")
+        return 2;
+    if (lower == "all" || lower == "yes" || lower == "1" || lower == "true" || lower == "on")
+        return 1;
+    return -1;
+}
+
 bool defaultParamMeansNo(const std::string& value)
 {
     std::string lower;
