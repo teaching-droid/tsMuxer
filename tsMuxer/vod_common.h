@@ -179,6 +179,9 @@ int defaultParamKind(const std::string& value);
 // payload. Warning rather than refusing, because plausibility is a judgement and a wrong refusal is
 // worse than a wrong guard.
 std::string checkLayerBreakLbn(int lbn, std::string& warning);
+// The layer breaks of a disc of discBytes: its sectors split evenly over its layers, as the window's disc table has
+// them (25 GB one layer, none; 50 GB two; 100 GB three; 128 GB four). Without a size, the break of a BD-R DL.
+std::vector<int> defaultLayerBreaks(int64_t discBytes);
 // The value of --layer-break-lbn, on a MUXOPT line and for --bdmv-to-iso alike: sectors, digits only, separated by
 // commas. Returns an error text, or an empty one with lbns filled and any warnings in warnings.
 std::string parseLayerBreakList(const std::string& value, std::vector<int>& lbns, std::vector<std::string>& warnings);

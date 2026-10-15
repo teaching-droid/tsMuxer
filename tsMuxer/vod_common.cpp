@@ -551,6 +551,16 @@ std::string parseGuardMB(const std::string& option, const std::string& value, in
     return std::string();
 }
 
+std::vector<int> defaultLayerBreaks(const int64_t discBytes)
+{
+    const int64_t bytes = discBytes > 0 ? discBytes : BD50_CAPACITY;
+    const int layers = bytes <= BD25_CAPACITY ? 1 : bytes <= BD50_CAPACITY ? 2 : bytes <= BD100_CAPACITY ? 3 : 4;
+    const int64_t sectors = bytes / 2048;
+    std::vector<int> breaks;
+    for (int k = 1; k < layers; ++k) breaks.push_back(static_cast<int>(sectors * k / layers));
+    return breaks;
+}
+
 int64_t delayFromFileName(const std::string& fileName)
 {
     std::string name = extractFileName(fileName);

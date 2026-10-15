@@ -310,7 +310,8 @@ void BlurayHelper::close()
 
 bool BlurayHelper::open(const string& dst, const DiskType dt, const int64_t diskSize, const int extraISOBlocks,
                         const bool useReproducibleIsoHeader, const int layerBreakGuardMB,
-                        const std::vector<int>& layerBreakLbns, const int layerBreakGuardBeforeMB)
+                        const std::vector<int>& layerBreakLbns, const int layerBreakGuardBeforeMB,
+                        const int64_t discBytes)
 {
     m_dstPath = toNativeSeparators(dst);
 
@@ -320,17 +321,36 @@ bool BlurayHelper::open(const string& dst, const DiskType dt, const int64_t disk
     if (fileExt == "ISO")
     {
         m_isoWriter = new IsoWriter(useReproducibleIsoHeader ? IsoHeaderData::reproducible() : IsoHeaderData::normal());
-        if (layerBreakGuardMB >= 0)
+        // --layer-break-guard-before on its own asks for a guard too: one that is only before the break. It was
+        // ignored without a word, as only --layer-break-guard switched the guard on.
+        const int afterMB = layerBreakGuardMB < 0 && layerBreakGuardBeforeMB >= 0 ? 0 : layerBreakGuardMB;
+        // Layer break(s) in absolute image sectors: the ones given, or those of the disc --disc-size names (its
+        // sectors split over its layers, as the window's disc table has them), or the break of a BD-R DL. With
+        // --disc-size=bd100 and no breaks given the guard went at half a BD50, which is not a layer change on a
+        // 100 GB disc.
+        std::vector<int> breaks = layerBreakLbns;
+        if (afterMB >= 0 && breaks.empty())
         {
-            // Layer break(s) in absolute image sectors. Default (none given) = one break at half a
-            // BD-R/RE DL disc. For BDXL pass the real breaks via --layer-break-lbn: 100 GB (3 layers)
-            // has 2 breaks, 128 GB (4 layers) has 3 - compute them as (disc Free Sectors / layers * k).
-            std::vector<int> breaks = layerBreakLbns;
+            breaks = defaultLayerBreaks(discBytes);
+            std::string list;
+            for (const int b : breaks) list += (list.empty() ? "" : ",") + std::to_string(b);
             if (breaks.empty())
-                breaks.push_back(static_cast<int>(BD50_CAPACITY / 2 / SECTOR_SIZE));
+                LTRACE(LT_WARN, 2,
+                       "Warning: a single layer disc has no layer break, so --layer-break-guard is not applied.");
+            else
+                LTRACE(LT_INFO, 2,
+                       "Layer break guard at sector(s) " << list
+                                                         << (discBytes > 0 ? ", the break(s) of the disc size"
+                                                                           : ", the break of a BD-R DL (50 GB); "
+                                                                             "give --disc-size or "
+                                                                             "--layer-break-lbn for another "
+                                                                             "disc")
+                                                         << ".");
+        }
+        if (afterMB >= 0 && !breaks.empty())
+        {
             m_isoWriter->setLayerBreakPoints(breaks);
-            const int afterSectors =
-                static_cast<int>(static_cast<int64_t>(layerBreakGuardMB) * 1024 * 1024 / SECTOR_SIZE);
+            const int afterSectors = static_cast<int>(static_cast<int64_t>(afterMB) * 1024 * 1024 / SECTOR_SIZE);
             if (layerBreakGuardBeforeMB >= 0)
                 m_isoWriter->setLayerBreakGuard(
                     static_cast<int>(static_cast<int64_t>(layerBreakGuardBeforeMB) * 1024 * 1024 / SECTOR_SIZE),

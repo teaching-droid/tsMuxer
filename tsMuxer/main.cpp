@@ -1622,6 +1622,21 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     // cannot be made to jump early; instead we widen the layer-break guard symmetrically to (free space)/2
     // per break, which pushes the movie toward both hubs and fills the outer/rim third with zeros. The
     // worst-burned outer tracks then carry no data. Needs the disc capacity to know the free space.
+    // --layer-break-guard-before on its own is a guard before the break only; it was ignored. Without breaks given, the
+    // breaks are those of the disc --disc-capacity names (its sectors split over its layers), or the break of a
+    // BD-R DL: a 100 GB disc got the guard at half a BD50.
+    if (layerBreakGuardMB < 0 && layerBreakGuardBeforeMB >= 0)
+        layerBreakGuardMB = 0;
+    if ((layerBreakGuardMB >= 0 || innerOnly) && layerBreakLbns.empty())
+    {
+        layerBreakLbns = defaultLayerBreaks(discCapacitySectors > 0 ? discCapacitySectors * 2048 : 0);
+        if (layerBreakLbns.empty())
+        {
+            LTRACE(LT_WARN, 2, "Warning: a single layer disc has no layer break, so the guard is not applied.");
+            layerBreakGuardMB = -1;
+            layerBreakGuardBeforeMB = -1;
+        }
+    }
     if (innerOnly)
     {
         if (discCapacitySectors <= 0)
@@ -1732,9 +1747,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
             if (beforeSectors > afterSectors)
                 beforeSectors = afterSectors;
         }
-        std::vector<int> breaks = layerBreakLbns;
-        if (breaks.empty())
-            breaks.push_back(static_cast<int>(BD50_CAPACITY / 2 / 2048));  // BlurayHelper's default break
+        const std::vector<int>& breaks = layerBreakLbns;  // filled above, as BlurayHelper fills them
         for (const int bp : breaks)
         {
             // A zone the payload never reaches costs nothing, so counting it would refuse builds
@@ -2655,7 +2668,8 @@ int main(int argc, char** argv)
                 muxerManager.checkTracksBeforeOutput();  // before the folders are made, as for a demux
                 if (!blurayHelper.open(dstFile, dt, muxerManager.totalSize(), muxerManager.getExtraISOBlocks(),
                                        muxerManager.useReproducibleIsoHeader(), muxerManager.getLayerBreakGuardMB(),
-                                       muxerManager.getLayerBreakLbns(), muxerManager.getLayerBreakGuardBeforeMB()))
+                                       muxerManager.getLayerBreakLbns(), muxerManager.getLayerBreakGuardBeforeMB(),
+                                       muxerManager.getDiscSizeLimit()))
                     throw runtime_error(string("Can't create output file ") + dstFile);
                 blurayHelper.setVolumeLabel(isoDiskLabel);
                 blurayHelper.createBluRayDirs();
