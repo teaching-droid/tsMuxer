@@ -179,13 +179,13 @@ QString fileDialogFilter()
     // Keep filters simple and extension-only to avoid silent failures.
     FileFilterVec filters = {
         {TsMuxerWindow::tr("All supported media files"),
-         {"ac3",  "ddp", "ec3",  "eac3",  "aac",   "avc", "mvc",    "264", "h264", "hevc", "265",  "h265",
-          "obu",  "ivf", "dts",  "dtshd", "dtsma", "thd", "truehd", "mpv", "m1v",  "m2v",  "mpa",  "ts",
-          "m2ts", "mts", "ssif", "mpg",   "mpeg",  "vob", "evo",    "mkv", "mka",  "mks",  "mk3d", "webm",
-          "mp4",  "m4a", "m4v",  "mov",   "mpls",  "mpl", "sup",    "srt", "wav",  "w64",  "pcm"}},
+         {"ac3",  "ddp", "ec3", "eac3",  "aac",   "avc",  "mvc",    "264", "h264", "hevc", "265", "h265",
+          "obu",  "ivf", "dts", "dtshd", "dtsma", "thd",  "truehd", "mpv", "m1v",  "m2v",  "mpa", "ts",
+          "m2ts", "mts", "m2t", "ssif",  "mpg",   "mpeg", "vob",    "evo", "mkv",  "mka",  "mks", "mk3d",
+          "webm", "mp4", "m4a", "m4v",   "mov",   "mpls", "mpl",    "sup", "srt",  "wav",  "w64", "pcm"}},
         {TsMuxerWindow::tr("Container files (TS, MKV, MP4, MOV, etc.)"),
-         {"ts", "m2ts", "mts", "ssif", "mpg", "mpeg", "vob", "evo", "mkv", "mka", "mks", "mk3d", "webm", "mp4", "m4a",
-          "m4v", "mov"}},
+         {"ts", "m2ts", "mts", "m2t", "ssif", "mpg", "mpeg", "vob", "evo", "mkv", "mka", "mks", "mk3d", "webm", "mp4",
+          "m4a", "m4v", "mov"}},
         {TsMuxerWindow::tr("Video elementary streams"),
          {"avc", "mvc", "264", "h264", "hevc", "265", "h265", "obu", "ivf", "mpv", "m1v", "m2v"}},
         {TsMuxerWindow::tr("Audio files"),
@@ -194,14 +194,14 @@ QString fileDialogFilter()
         {TsMuxerWindow::tr("Blu-ray playlist"), {"mpls", "mpl"}}};
 #else
     FileFilterVec filters = {{TsMuxerWindow::tr("All supported media files"),
-                              {"ac3",     "ddp",  "ec3",  "eac3", "aac", "avc",   "mvc",   "264",  "h264",   "hevc",
-                               "265",     "h265", "obu",  "ivf",  "dts", "dtshd", "dtsma", "thd",  "truehd", "ac3+thd",
-                               "thd+ac3", "mpv",  "m1v",  "m2v",  "mpa", "ts",    "m2ts",  "mts",  "ssif",   "mpg",
-                               "mpeg",    "vob",  "evo",  "mkv",  "mka", "mks",   "mk3d",  "webm", "mp4",    "m4a",
-                               "m4v",     "mov",  "mpls", "mpl",  "sup", "srt",   "wav",   "w64",  "pcm"}},
+                              {"ac3",     "ddp",  "ec3", "eac3", "aac", "avc",   "mvc",   "264",  "h264",   "hevc",
+                               "265",     "h265", "obu", "ivf",  "dts", "dtshd", "dtsma", "thd",  "truehd", "ac3+thd",
+                               "thd+ac3", "mpv",  "m1v", "m2v",  "mpa", "ts",    "m2ts",  "mts",  "m2t",    "ssif",
+                               "mpg",     "mpeg", "vob", "evo",  "mkv", "mka",   "mks",   "mk3d", "webm",   "mp4",
+                               "m4a",     "m4v",  "mov", "mpls", "mpl", "sup",   "srt",   "wav",  "w64",    "pcm"}},
                              {TsMuxerWindow::tr("Container files (TS, MKV, MP4, MOV, etc.)"),
-                              {"ts", "m2ts", "mts", "ssif", "mpg", "mpeg", "vob", "evo", "mkv", "mka", "mks", "mk3d",
-                               "webm", "mp4", "m4a", "m4v", "mov"}},
+                              {"ts", "m2ts", "mts", "m2t", "ssif", "mpg", "mpeg", "vob", "evo", "mkv", "mka", "mks",
+                               "mk3d", "webm", "mp4", "m4a", "m4v", "mov"}},
                              {TsMuxerWindow::tr("Video elementary streams"),
                               {"avc", "mvc", "264", "h264", "hevc", "265", "h265", "obu", "ivf", "mpv", "m1v", "m2v"}},
                              {TsMuxerWindow::tr("Audio files"),
@@ -733,6 +733,13 @@ TsMuxerWindow::TsMuxerWindow()
         {
             QSettings* ini = settings;
             settings = m_seedSettings = new QSettings();
+            // Settings left by a version before the name change are only under the old company name, and the copy
+            // to the new name (main.cpp) is not made while an ini exists: the empty ini took over nothing.
+            if (m_seedSettings->allKeys().isEmpty())
+            {
+                delete m_seedSettings;
+                settings = m_seedSettings = new QSettings(QStringLiteral("Network Optix"), QStringLiteral("tsMuxeR"));
+            }
             readSettings();
             settings = ini;
         }
@@ -3465,10 +3472,29 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
             // offering them there would promise something that cannot happen.
             const bool isAvcTrack = codecInfo->displayName == "H.264" || codecInfo->displayName == "MVC";
             ui->checkBoxLevel->setEnabled(isAvcTrack || codecInfo->displayName == "HEVC");
-            if (ui->checkBoxLevel->isEnabled())
-                setComboBoxText(ui->comboBoxLevel, codecInfo->levelText);
-            else
-                ui->comboBoxLevel->setCurrentIndex(0);
+            // The list holds the levels of the track's own codec. It held the H.264 levels for both, without 5.2,
+            // so an HEVC track was offered 1.1, 1.2, 1.3, 2.2, 3.2 and 4.2, which HEVC does not have, and the
+            // muxer refuses them now. HEVC's are those of H.265 Table A.8.
+            {
+                static const QStringList avcLevels = {"1.0", "1.1", "1.2", "1.3", "2.0", "2.1", "2.2",
+                                                      "3.0", "3.1", "3.2", "4.0", "4.1", "4.2", "5.0",
+                                                      "5.1", "5.2", "6.0", "6.1", "6.2"};
+                static const QStringList hevcLevels = {"1.0", "2.0", "2.1", "3.0", "3.1", "4.0", "4.1", "5.0", "5.1",
+                                                       "5.2", "6.0", "6.1", "6.2", "6.3", "7.0", "7.1", "7.2"};
+                const QStringList& levels = codecInfo->displayName == "HEVC" ? hevcLevels : avcLevels;
+                QStringList shown;
+                for (int k = 0; k < ui->comboBoxLevel->count(); ++k) shown << ui->comboBoxLevel->itemText(k);
+                if (shown != levels)
+                {
+                    const QSignalBlocker block(ui->comboBoxLevel);
+                    ui->comboBoxLevel->clear();
+                    ui->comboBoxLevel->addItems(levels);
+                }
+                if (ui->checkBoxLevel->isEnabled() && levels.contains(codecInfo->levelText))
+                    setComboBoxText(ui->comboBoxLevel, codecInfo->levelText);
+                else
+                    ui->comboBoxLevel->setCurrentIndex(0);
+            }
             ui->comboBoxSEI->setEnabled(isAvcTrack);
             ui->checkBoxSPS->setEnabled(isAvcTrack);
             ui->comboBoxAR->setEnabled(codecInfo->displayName == "MPEG-2");
@@ -3507,11 +3533,13 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
             //   TRUE-HD + ATMOS. Peak bitrate: 7626Kbps                     has none, box offered
             //   EAC3 Bitrate: 640Kbps (core 0Kbps)                          has none, box refused
             //
-            // Requiring the description to mention a core covers all three the same way.
-            ui->dtsDwnConvert->setEnabled(codecInfo->descr.contains("core") &&
-                                          !codecInfo->descr.contains("(core 0Kbps)") &&
-                                          (codecInfo->displayName == "DTS-HD" || codecInfo->displayName == "TRUE-HD" ||
-                                           codecInfo->displayName == "E-AC3 (DD+)"));
+            // Requiring the description to mention a core covers all three the same way. DTS-HD High Resolution
+            // always carries a core, but its description does not say so, and the box was greyed for it.
+            ui->dtsDwnConvert->setEnabled(
+                (codecInfo->descr.contains("core") && !codecInfo->descr.contains("(core 0Kbps)") &&
+                 (codecInfo->displayName == "DTS-HD" || codecInfo->displayName == "TRUE-HD" ||
+                  codecInfo->displayName == "E-AC3 (DD+)")) ||
+                (codecInfo->displayName == "DTS-HD" && codecInfo->descr.contains("High Resolution")));
             // drop-ac3-core applies to the disc form of a TrueHD track, the one that carries an
             // AC-3 core beside the lossless part. A TrueHD track with no core has nothing to drop,
             // and the same description test the box above uses says which is which.
@@ -4277,7 +4305,10 @@ QString TsMuxerWindow::getMuxOpts()
         title.remove(QLatin1Char('"'));
         if (!title.isEmpty())
             rez += QString(" --title=\"%1\"").arg(title);
-        if (ui->mkvKeepEditionsCheck->isChecked())
+        // Matroska only: WebM has no editions, and the muxer refuses the option for a .webm name, so the tick that
+        // was offered stopped the mux.
+        if (ui->mkvKeepEditionsCheck->isChecked() &&
+            !ui->outFileName->text().trimmed().endsWith(QLatin1String(".webm"), Qt::CaseInsensitive))
             rez += " --keep-editions";
     }
     // dual-layer guard options (Blu-ray / Blu-ray ISO output; the layer-break guard only takes effect
@@ -4782,6 +4813,35 @@ int TsMuxerWindow::mergeAc3TrackIdForRow(const int row) const
     return info != nullptr && info->trackID != 0 ? info->trackID : row;
 }
 
+// The merge box of a TrueHD row holds a row number, and a row that is moved or removed takes its number with it: the
+// merge went on naming the number, so after Move up, Move down or Remove another track was merged and the chosen one
+// was muxed on its own. from and to are row numbers counted from 1; to is 0 when the row is removed, and a merge into
+// it is then cleared.
+void TsMuxerWindow::followMergeRows(const int from, const int to)
+{
+    for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+    {
+        QtvCodecInfo* info = getCodecInfo(i);
+        if (info == nullptr || info->programName != "A_MLP" || info->mergeAc3Track <= 0)
+            continue;
+        int& merge = info->mergeAc3Track;
+        if (to == 0)
+            merge = merge == from ? 0 : merge > from ? merge - 1 : merge;
+        else if (merge == from)
+            merge = to;
+        else if (merge == to)
+            merge = from;
+    }
+    const int current = ui->trackLV->currentRow();
+    if (current >= 0)
+        if (const QtvCodecInfo* info = getCodecInfo(current); info != nullptr && info->programName == "A_MLP")
+        {
+            const QSignalBlocker block(ui->mergeAc3TrackSpinBox);
+            ui->mergeAc3TrackSpinBox->setValue(info->mergeAc3Track);
+            updateMergeAc3Suffix();
+        }
+}
+
 // True when this row is the one some TrueHD track is folding into itself.
 bool TsMuxerWindow::isRowMergedIntoTrueHd(const int row) const
 {
@@ -4872,11 +4932,11 @@ QString TsMuxerWindow::buildMetaText()
                 ui->defaultSubTrackComboBox->currentData().toInt() == i)
             {
                 // The forced/all distinction is a disc concept: on a disc it selects which subtitle
-                // the player shows by default, and Matroska has no equivalent of "forced only" in
-                // this field. The muxer only asks whether the key is present, so either value marks
-                // the track as the default one in an .mkv, and the disc meaning is unchanged.
-                postfix +=
-                    QString(", default=") + (ui->defaultSubTrackForcedOnlyCheckBox->isChecked() ? "forced" : "all");
+                // the player shows by default. A Matroska output reads default=forced as the forced track
+                // (FlagForced), so "forced only" marked a whole subtitle track forced, and a player showed it to
+                // everyone. The track's own Forced box says that; here an .mkv gets the default track only.
+                postfix += QString(", default=") +
+                           (isDiskOutput() && ui->defaultSubTrackForcedOnlyCheckBox->isChecked() ? "forced" : "all");
             }
         }
         if (codecInfo->displayName == "PGS")
@@ -5187,6 +5247,7 @@ void TsMuxerWindow::delTracksByFileName(const QString& fileName)
 void TsMuxerWindow::deleteTrack(int idx)
 {
     disableUpdatesCnt++;
+    followMergeRows(idx + 1, 0);
     removeTrackFromDefaultComboBox(idx);
     delete getCodecInfo(idx);
     int lastItemIndex = idx;  // trackLV.items[idx].index;
@@ -5431,6 +5492,10 @@ void TsMuxerWindow::onRemoveAllTracksButtonClick()
     ui->inputFilesLV->clear();
     lastSourceDir.clear();
     disableUpdatesCnt--;
+    // A fresh start, as its tooltip says: a meta file edited by hand kept naming the old files, and the next mux
+    // muxed them instead of the tracks added afterwards.
+    m_metaUserOverride = false;
+    updateMetaState();
 
     ui->moveupBtn->setEnabled(false);
     ui->movedownBtn->setEnabled(false);
@@ -5451,6 +5516,7 @@ void TsMuxerWindow::onMoveUpButtonCLick()
     auto preMoveRow = ui->trackLV->currentRow();
     moveRow(preMoveRow, preMoveRow - 1);
     moveTrackInDefaultComboBox(preMoveRow, preMoveRow - 1);
+    followMergeRows(preMoveRow + 1, preMoveRow);
     disableUpdatesCnt--;
     updateMetaLines();
     updateNum();
@@ -5465,6 +5531,7 @@ void TsMuxerWindow::onMoveDownButtonCLick()
     auto preMoveRow = ui->trackLV->currentRow();
     moveRow(preMoveRow, preMoveRow + 2);
     moveTrackInDefaultComboBox(preMoveRow, preMoveRow + 1);
+    followMergeRows(preMoveRow + 1, preMoveRow + 2);
     disableUpdatesCnt--;
     updateMetaLines();
     updateNum();
@@ -5910,8 +5977,9 @@ void TsMuxerWindow::startMuxing()
         }
     }
 
-    bool isFile =
-        ui->radioButtonM2TS->isChecked() || ui->radioButtonTS->isChecked() || ui->radioButtonBluRayISO->isChecked();
+    // A Matroska or WebM output is a file too, and an existing one was replaced without the question the others ask.
+    bool isFile = ui->radioButtonM2TS->isChecked() || ui->radioButtonTS->isChecked() ||
+                  ui->radioButtonBluRayISO->isChecked() || ui->radioButtonMKV->isChecked();
     if (isFile && QFile::exists(ui->outFileName->text()))
     {
         //: Used in expressions "Overwrite existing %1" and "The output %1 already exists".
@@ -6122,8 +6190,16 @@ bool TsMuxerWindow::loadChapterFileIntoBox(const QString& fileName)
     QStringList times;
     if (text.contains(QLatin1String("<ChapterTimeStart")))
     {
+        // The first edition only, as the command line reads a chapter file (chapterFile.cpp). Every edition of
+        // the file was taken, so a file with two gave the times of both.
+        QString edition = text;
+        if (const int ed = text.indexOf(QLatin1String("<EditionEntry")); ed >= 0)
+        {
+            const int edEnd = text.indexOf(QLatin1String("</EditionEntry>"), ed);
+            edition = edEnd > ed ? QtCompat::strMid(text, ed, edEnd - ed) : QtCompat::strMid(text, ed);
+        }
         const QRegularExpression re(QStringLiteral("<ChapterTimeStart>\\s*([0-9:.]+)\\s*</ChapterTimeStart>"));
-        auto it = re.globalMatch(text);
+        auto it = re.globalMatch(edition);
         while (it.hasNext()) times << it.next().captured(1).trimmed();
     }
     else
@@ -6165,8 +6241,19 @@ bool TsMuxerWindow::loadChapterFileIntoBox(const QString& fileName)
     // list order without sorting them, so an unordered file would put unordered marks on the
     // disc. Duplicates go for the same reason. Typed text is left exactly as typed: this is only
     // for a loaded file, where the order carries no intent.
-    std::sort(times.begin(), times.end());
-    times.erase(std::unique(times.begin(), times.end()), times.end());
+    // Sorted as times, not as text: "00:..." came before "0:...", so 0:00 and 0:09:00 landed after 00:02:00, and
+    // 00:00:30.5 and 00:00:30.500 were two chapters.
+    const auto seconds = [](const QString& t)
+    {
+        double s = 0;
+        for (const QString& part : t.split(QLatin1Char(':'))) s = s * 60 + part.toDouble();
+        return s;
+    };
+    std::stable_sort(times.begin(), times.end(),
+                     [&](const QString& a, const QString& b) { return seconds(a) < seconds(b); });
+    times.erase(std::unique(times.begin(), times.end(),
+                            [&](const QString& a, const QString& b) { return qAbs(seconds(a) - seconds(b)) < 0.0005; }),
+                times.end());
 
     ui->radioButtonCustomChapters->setChecked(true);
     ui->memoChapters->setPlainText(times.join(QLatin1Char('\n')) + QLatin1Char('\n'));
