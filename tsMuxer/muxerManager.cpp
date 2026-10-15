@@ -320,15 +320,16 @@ void MuxerManager::checkTrackList(const vector<StreamInfo>& ci) const
     checkOtherTracks(ci);
 }
 
-// VP8, VP9, Vorbis and ALAC have no form in a transport stream or on a Blu-ray disc, and tsMuxeR writes no file of
-// their own for a demux: a Matroska output is the only one that can carry them.
-// A demux writes VP8 and VP9 into an IVF file and Vorbis into an Ogg file; only ALAC has no file of its own.
+// VP8, VP9, Vorbis, FLAC and ALAC have no form in a transport stream or on a Blu-ray disc: a Matroska output is the
+// only one that can carry them. A demux writes VP8 and VP9 into an IVF file, Vorbis into an Ogg file and FLAC into a
+// .flac file; only ALAC has no file of its own. FLAC was refused by the transport stream writer, after the folders
+// of a disc or an ISO image of the same name had been made.
 void MuxerManager::checkMatroskaOnlyCodecs(const vector<StreamInfo>& ci, const bool notMatroska) const
 {
     if (notMatroska)
         for (const StreamInfo& si : ci)
-            for (const CodecInfo* only :
-                 {&vp8CodecInfo, &vp9CodecInfo, &vorbisCodecInfo, &alacCodecInfo, &mpeg4AspCodecInfo, &proresCodecInfo})
+            for (const CodecInfo* only : {&vp8CodecInfo, &vp9CodecInfo, &vorbisCodecInfo, &flacCodecInfo,
+                                          &alacCodecInfo, &mpeg4AspCodecInfo, &proresCodecInfo})
                 if (si.m_codec == only->programName &&
                     !(m_demuxMode && only != &alacCodecInfo && only != &mpeg4AspCodecInfo && only != &proresCodecInfo))
                     THROW(ERR_COMMON, only->displayName
@@ -548,15 +549,6 @@ void MuxerManager::writeChapterFile(const std::string& outDirName)
 
 void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
 {
-    // Both cut values are positions from the start of the source, so an end at or before the
-    // start selects nothing. That used to produce an empty file and report success, which is the
-    // worst of the three possible outcomes. Refuse it and say what the two values were.
-    if (m_cutEnd > 0 && m_cutEnd <= m_cutStart)
-        THROW(ERR_COMMON, "Nothing to mux: --cut-end ("
-                              << m_cutEnd / INTERNAL_PTS_FREQ << "s) is not after --cut-start ("
-                              << m_cutStart / INTERNAL_PTS_FREQ
-                              << "s). Both are positions from the start of the source, so the end "
-                                 "must be the later of the two.")
     // Run the discovery phase: probe all tracks to collect metadata
     // (channels, sample rate, resolution, codec-private, etc.) before
     // the main mux pipeline starts.  This is self-contained -- all
@@ -640,6 +632,7 @@ bool MuxerManager::openMetaFile(const string& fileName)
 {
     TextFile file(fileName.c_str(), File::ofRead);
     std::string str;
+    std::string allMuxOpts;  // every MUXOPT line of the meta, for the muxers
     file.readLine(str);
     while (str.length() > 0)
     {
@@ -647,12 +640,30 @@ bool MuxerManager::openMetaFile(const string& fileName)
         const size_t start = str.find_first_not_of(" 	");
         if (start != string::npos && strStartWith(str.substr(start), "MUXOPT"))
         {
-            m_muxOpts = muxOptLine(str);
-            warnUnknownMuxOpts(m_muxOpts);
+            const string line = muxOptLine(str);
+            // Every MUXOPT line counts. The muxers were given the last one only, so the options of an earlier line
+            // (--no-pcr-on-video-pid, --vbr, --vbv-len...) were lost without a word, while the rest of the program
+            // read them all.
+            allMuxOpts = allMuxOpts.empty()
+                             ? line
+                             : allMuxOpts + line.substr(line.find(' ') == string::npos ? line.size() : line.find(' '));
+            warnUnknownMuxOpts(line);
             // Refuse a bad option HERE, while the meta is still being read and no destination
             // exists. Raised any later it replaced the user existing output image with a stub.
-            validateMuxOptsEarly(m_muxOpts);
-            parseMuxOpt(m_muxOpts);
+            validateMuxOptsEarly(line);
+            parseMuxOpt(line);
+            m_muxOpts = allMuxOpts;  // parseMuxOpt set it to this line alone
+            // Both cut values are positions from the start of the source, so an end at or before the
+            // start selects nothing. That used to produce an empty file and report success, which is the
+            // worst of the three possible outcomes. Refuse it and say what the two values were. It is
+            // refused here, before an output exists: refused when muxing began, an existing ISO image of
+            // the same name had already been emptied.
+            if (m_cutEnd > 0 && m_cutEnd <= m_cutStart)
+                THROW(ERR_COMMON, "Nothing to mux: --cut-end ("
+                                      << m_cutEnd / INTERNAL_PTS_FREQ << "s) is not after --cut-start ("
+                                      << m_cutStart / INTERNAL_PTS_FREQ
+                                      << "s). Both are positions from the start of the source, so the end "
+                                         "must be the later of the two.")
             m_mvcBaseViewR = m_muxOpts.find("right-eye") != string::npos;
         }
         file.readLine(str);

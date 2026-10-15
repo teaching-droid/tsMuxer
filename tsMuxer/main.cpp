@@ -2532,6 +2532,9 @@ int main(int argc, char** argv)
             // with a stub and then refused. The capacity guard just below already had this right.
             if (muxerManager.getTrackCnt() == 0)
                 THROW(ERR_COMMON, "No tracks selected")
+            // Refused when the muxer was set up, which an ISO image of the same name did not survive
+            if (muxerManager.keepEditions())
+                THROW(ERR_COMMON, "--keep-editions applies to a Matroska output (.mkv) only.")
 
             if (dt != DiskType::NONE)
             {

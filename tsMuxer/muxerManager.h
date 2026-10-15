@@ -128,6 +128,7 @@ class MuxerManager final
    public:
     // The codecs only a Matroska output carries, checked before anything is written for an output that is not one: a
     // demux made its output folder first, and a disc its folder tree, and a refused track left them there empty
+    [[nodiscard]] bool keepEditions() const { return m_keepEditions; }
     void checkTracksBeforeOutput() const { checkMatroskaOnlyCodecs(m_metaDemuxer.getStreamInfo(), true); }
 
    private:
