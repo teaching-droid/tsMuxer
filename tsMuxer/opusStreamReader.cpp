@@ -340,10 +340,51 @@ int OpusStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, i
     if (end - buff < FRAME_PREFIX_LEN + frameLen)
         return NOT_ENOUGH_BUFFER;
 
+    // In a join whose paddings are known, whether the next file's OpusHead follows this packet: then it is the last
+    // packet of its file, and readPacket may leave it out.
+    m_nextPreSkip = -1;
+    if (!m_joinEndPadNs.empty() && m_joinFile + 1 < m_joinEndPadNs.size())
+    {
+        const uint8_t* after = buff + FRAME_PREFIX_LEN + frameLen;
+        if (end - after >= 12 && memcmp(after, OPUS_HEAD_MAGIC, 8) == 0)
+            m_nextPreSkip = after[10] | after[11] << 8;
+        else if (end - after < 12 && !m_lastBlock)
+            return NOT_ENOUGH_BUFFER;
+    }
+
     // Parse the Opus packet to determine frame duration
     m_curFrameSamples = parseFrameSamples(buff + FRAME_PREFIX_LEN, frameLen);
 
     return frameLen;  // the actual Opus packet size (without prefix)
+}
+
+// ** A JOIN OF OPUS FILES PLAYED WHAT EACH FILE TRIMS. ** A file ends with padding that only fills its last packet,
+// and the next one begins with its pre-skip, the encoder's start-up samples; a single file says to drop both, but in a
+// join they sat between the two files as sound, and the sound of every later file came that much late against its
+// picture: 19.5 ms after the first joint of two files of a usual encoder. Whole packets are left out at each joint, the
+// last of the file before, as long as that brings the sound nearer to its picture, so that it stays within half a
+// packet of it however many files are joined. The packets of the next file follow on without a gap.
+int OpusStreamReader::readPacket(AVPacket& avPacket)
+{
+    while (true)
+    {
+        const int rez = SimplePacketizerReader::readPacket(avPacket);
+        if (rez != 0 || avPacket.size <= 0 || m_nextPreSkip < 0)
+            return rez;
+        const int64_t pad = (m_joinEndPadNs[m_joinFile] * 48000 + 500000000) / 1000000000;
+        m_joinExcess += pad + m_nextPreSkip;
+        m_nextPreSkip = -1;
+        ++m_joinFile;
+        if (m_curFrameSamples <= 0 || m_joinExcess * 2 < m_curFrameSamples)
+            return rez;
+        m_joinExcess -= m_curFrameSamples;
+        m_curPts -= getFrameDuration();
+        if (m_frameNum > 0)
+            --m_frameNum;
+        LTRACE(LT_INFO, 2,
+               "Opus join: the last packet of file " << m_joinFile << " is left out at the joint, as its end padding "
+                                                     << "and the next file's pre-skip are not sound.");
+    }
 }
 
 // ---------------------------------------------------------------------------

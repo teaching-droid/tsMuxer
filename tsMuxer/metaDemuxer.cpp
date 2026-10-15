@@ -1395,12 +1395,50 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             }
         }
     }
+    // A join of Matroska files with Opus sound: each file is asked for the padding at its end (the DiscardPadding of
+    // its last block). The reader leaves the samples it and the next file's pre-skip make out at each joint, and the
+    // padding at the end of the join is the last file's. A join was not asked about its tracks at all, so the end
+    // of the last file played its padding.
+    if (fileList.size() > 1 && pid > 0 && codec == "A_OPUS")
+    {
+        if (auto* opus = dynamic_cast<OpusStreamReader*>(codecReader))
+        {
+            std::vector<int64_t> paddings;
+            for (const auto& name : fileList)
+            {
+                const std::string file = unquoteStr(trimStr(name));
+                const std::string ext = strToUpperCase(extractFileExt(file));
+                if (ext != "MKV" && ext != "MKA" && ext != "WEBM")
+                {
+                    paddings.clear();
+                    break;
+                }
+                MatroskaDemuxer probe(m_readManager);
+                probe.openFile(file);
+                std::map<int32_t, TrackInfo> tracks;
+                probe.getTrackList(tracks);
+                int64_t ns = 0;
+                if (const auto t = tracks.find(pid); t != tracks.end())
+                    if (const auto d = t->second.m_srcParams.find("srcendpadding"); d != t->second.m_srcParams.end())
+                        ns = strtoll(d->second.c_str(), nullptr, 10);
+                paddings.push_back(ns);
+            }
+            if (!paddings.empty())
+            {
+                if (paddings.back() > 0 && addParams.find("srcendpadding") == addParams.end())
+                    streamInfo.m_addParams["srcendpadding"] = std::to_string(paddings.back());
+                opus->setJoinEndPadding(paddings);
+            }
+        }
+    }
     // ** THE SOUND OF AN MP4 STARTS WHERE ITS EDIT LIST SAYS. ** An encoder puts start-up samples in front of the sound
     // (1024 for AAC, 256 for AC-3, about 1100 for a LAME MP3), and the MP4 says in its edit list to start that much
     // into the track. That was ignored: the first frame, start-up samples and all, was placed with the first picture,
     // and the sound came that much late against the picture, 21 ms for AAC. The track's times are now moved back by it,
     // as a timeshift would move them, so the start-up samples come before the first picture, where the MP4 has them. A
-    // Matroska output of AAC says it with CodecDelay instead (MatroskaMuxer), and so is left alone here.
+    // Matroska output of AAC says it with CodecDelay instead (MatroskaMuxer), and so is left alone here. So does a
+    // Matroska output of Opus (the pre-skip of its OpusHead) and of Vorbis (its first packet): moved back as well, the
+    // sound came early by both, 7 ms for Opus.
     // A join of MP4 files ("a.mp4"+"b.mp4") is not asked about its tracks (see above), so its first file's edit list
     // start was not known and the sound of the join began with the encoder's priming. The first file is read on its
     // own for it; the priming of every later file is left out at its joint by the MP4 reader (MovDemuxer::openFile).

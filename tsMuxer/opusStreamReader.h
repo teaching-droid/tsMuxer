@@ -40,6 +40,11 @@ class OpusStreamReader final : public SimplePacketizerReader
     // from the end of its last packet (its DiscardPadding, setEndTrim).
     bool beforeFileCloseEvent(File& file) override;
     void setEndTrim(const int64_t nanoseconds) { m_endTrimNs = nanoseconds; }
+    // A join: the end padding of each file, in nanoseconds, in the order of the join (the DiscardPadding of its last
+    // block). At each joint the end padding of the file before and the pre-skip of the file after add up to samples
+    // that are not sound; whole packets of them are left out (readPacket).
+    void setJoinEndPadding(std::vector<int64_t> nanoseconds) { m_joinEndPadNs = std::move(nanoseconds); }
+    int readPacket(AVPacket& avPacket) override;
 
    protected:
     void fillDiscoveryData(StreamDiscoveryData& data) override;
@@ -77,6 +82,10 @@ class OpusStreamReader final : public SimplePacketizerReader
     std::vector<uint8_t> m_lastPage;  // the last packet's page, header and packet, rewritten at the end
     int m_lastPageHeader = 0;
     int64_t m_endTrimNs = 0;
+    std::vector<int64_t> m_joinEndPadNs;
+    size_t m_joinFile = 0;     // the file of the join being read
+    int64_t m_joinExcess = 0;  // samples at the joints so far that are not sound and are still played
+    int m_nextPreSkip = -1;    // decodeFrame: the packet just decoded is the last of its file; the next file's pre-skip
 
     /// Raw CodecPrivate data (OpusHead).
     std::vector<uint8_t> m_codecPrivate;
