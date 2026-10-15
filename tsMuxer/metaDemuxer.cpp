@@ -41,6 +41,7 @@ static bool isKnownTrackParam(const std::string& name);
 #include "programStreamDemuxer.h"
 #include "srtStreamReader.h"
 #include "subTrackFilter.h"
+#include "textSubtitles.h"
 #include "trueHDAC3MergeReader.h"
 #include "tsDemuxer.h"
 #include "tsMuxer.h"
@@ -1023,6 +1024,17 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                     drawing.fps = parseFpsValue(it->second);
                 if (const auto it = readerParams.find("fonts-dir"); it != readerParams.end())
                     drawing.fontsDir = unquoteStr(it->second);
+                // drawn at the standard size a subtitle of that video has, as an SRT track is: 704x576 is drawn at
+                // 720x576, which a disc carries
+                if (drawing.width > 0 && drawing.height > 0 && drawing.fps > 0)
+                {
+                    uint16_t w = 0, h = 0;
+                    text_subtitles::TextToPGSConverter::enlargeCrop(static_cast<uint16_t>(drawing.width),
+                                                                    static_cast<uint16_t>(drawing.height), drawing.fps,
+                                                                    &w, &h);
+                    drawing.width = w;
+                    drawing.height = h;
+                }
                 std::string why;
                 if (drawing.width <= 0 || drawing.height <= 0 || drawing.fps <= 0)
                     ;  // the SRT reader says what is missing

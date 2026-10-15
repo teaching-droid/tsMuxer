@@ -67,8 +67,8 @@ TextToPGSConverter::~TextToPGSConverter()
     delete m_textRender;
 }
 
-void TextToPGSConverter::enlargeCrop(const uint16_t width, const uint16_t height, uint16_t* newWidth,
-                                     uint16_t* newHeight) const
+void TextToPGSConverter::enlargeCrop(const uint16_t width, const uint16_t height, const double fps, uint16_t* newWidth,
+                                     uint16_t* newHeight)
 {
     *newWidth = width;
     *newHeight = height;
@@ -82,7 +82,7 @@ void TextToPGSConverter::enlargeCrop(const uint16_t width, const uint16_t height
         *newWidth = 1280;
         *newHeight = 720;
     }
-    else if (fabs(m_videoFps - 25.0) < 0.1 || fabs(m_videoFps - 50.0) < 0.1)
+    else if (fabs(fps - 25.0) < 0.1 || fabs(fps - 50.0) < 0.1)
     {
         *newWidth = 720;
         *newHeight = 576;
@@ -94,9 +94,11 @@ void TextToPGSConverter::enlargeCrop(const uint16_t width, const uint16_t height
     }
 }
 
+// The frame rate decides the size for a width of 720 or less. It was stored only after the size had been chosen, so
+// that the size was chosen at a rate of 0: video of 720x576 at 25 or 50 fps had its subtitles drawn for 720x480.
 void TextToPGSConverter::setVideoInfo(const uint16_t width, const uint16_t height, const double fps)
 {
-    enlargeCrop(width, height, &m_videoWidth, &m_videoHeight);
+    enlargeCrop(width, height, fps, &m_videoWidth, &m_videoHeight);
     m_videoFps = fps;
     if (m_textRender)
         m_textRender->setRenderSize(m_videoWidth, m_videoHeight);

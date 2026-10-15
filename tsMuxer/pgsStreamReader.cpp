@@ -479,7 +479,10 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
 
         uint16_t tmpWidth;
         uint16_t tmpHeight;
-        m_render->enlargeCrop(m_video_width, m_video_height, &tmpWidth, &tmpHeight);
+        // the stream's own size at the frame rate its target was chosen at, so that a stream already at the size the
+        // line asks for is left as it is
+        TextToPGSConverter::enlargeCrop(m_video_width, m_video_height, m_newFps != 0.0 ? m_newFps : m_frame_rate,
+                                        &tmpWidth, &tmpHeight);
         m_needRescale =
             (m_scaled_width && m_scaled_width != tmpWidth) || (m_scaled_height && m_scaled_height != tmpHeight);
         if (m_needRescale)
@@ -900,7 +903,9 @@ void PGSStreamReader::setVideoInfo(const uint16_t width, const uint16_t height, 
     m_scaled_width = width;
     m_scaled_height = height;
     m_newFps = fps;
+    // the size at the frame rate of the line: it was chosen before the rate was known, so that a line for video of
+    // 720x576 at 25 fps asked for 720x480, and a PGS stream at 720x576 was scaled down to it
     if (width && height)
-        m_render->enlargeCrop(width, height, &m_scaled_width, &m_scaled_height);
+        TextToPGSConverter::enlargeCrop(width, height, fps, &m_scaled_width, &m_scaled_height);
     m_render->setVideoInfo(m_scaled_width, m_scaled_height, m_newFps);
 }
