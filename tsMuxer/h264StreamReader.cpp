@@ -539,12 +539,79 @@ void H264StreamReader::updateHRDParam(SPSUnit* sps) const
 
 // All the remaining checks of the stream, executed at start
 
+// The fields a picture is shown for, by its pic_struct: a frame 2, three fields (pulldown) 3, frame doubling 4,
+// frame tripling 6
+static int fieldsShownOf(const int picStruct)
+{
+    switch (picStruct)
+    {
+    case 5:
+    case 6:
+        return 3;
+    case 7:
+        return 4;
+    case 8:
+        return 6;
+    default:
+        return 2;
+    }
+}
+
+// The pictures after this one in decode order, up to 32 and until the next IDR, as (order relative to this picture,
+// fields shown). A picture's pic_struct is in the SEI that comes before its first slice.
+void H264StreamReader::pulldownFieldsAhead(const SliceUnit& slice, uint8_t* buff)
+{
+    m_fieldsAhead.clear();
+    if (m_spsMap.empty())
+        return;
+    const int maxLsb = 1 << slice.getSPS()->log2_max_pic_order_cnt_lsb;
+    int picStruct = -1;
+    for (uint8_t* nal = NALUnit::findNextNAL(buff + 4, m_bufEnd); nal < m_bufEnd && m_fieldsAhead.size() < 32;
+         nal = NALUnit::findNextNAL(nal, m_bufEnd))
+    {
+        const auto type = static_cast<NALUnit::NALType>(*nal & 0x1f);
+        if (type == NALUnit::NALType::nuSEI)
+        {
+            uint8_t* next = NALUnit::findNALWithStartCode(nal, m_bufEnd, true);
+            SEIUnit sei;
+            sei.pic_struct = -1;
+            sei.decodeBuffer(nal, next);
+            sei.deserialize(*(m_spsMap.begin()->second),
+                            orig_hrd_parameters_present_flag || orig_vcl_parameters_present_flag);
+            if (sei.hasProcessedMessage(SEI_MSG_PIC_TIMING))
+                picStruct = sei.pic_struct;
+            continue;
+        }
+        if (type == NALUnit::NALType::nuSliceIDR)
+            return;
+        if (type != NALUnit::NALType::nuSliceNonIDR)
+            continue;
+        SliceUnit next;
+        if (deserializeSliceHeader(next, nal, m_bufEnd) != 0)
+            return;
+        if (next.first_mb_in_slice != 0)
+            continue;
+        int diff = static_cast<int>(next.pic_order_cnt_lsb) - static_cast<int>(slice.pic_order_cnt_lsb);
+        if (diff >= maxLsb / 2)
+            diff -= maxLsb;
+        else if (diff < -maxLsb / 2)
+            diff += maxLsb;
+        m_fieldsAhead.emplace_back(diff >> m_forceLsbDiv, fieldsShownOf(picStruct));
+        picStruct = -1;
+    }
+}
+
 void H264StreamReader::checkPyramid(const int frameNum, int* fullPicOrder, const bool nextFrameFound)
 {
+    // How far a picture is shown before it would be decoded, which is how far the decoding times are moved back. It
+    // was held at 3 frames, and B pictures in a deeper pyramid were shown before they were decoded: with 16 B pictures
+    // between two references, a picture needs 5. 16 is the most pictures an H.264 decoder holds, as for HEVC. Coded
+    // fields stay at 3: each field counts as a picture against an order count per frame, so the difference grows with
+    // the GOP and is not a depth (a 1080i disc stream gave 16 and moved every decoding time back 16 frames).
     int depth = frameNum - *fullPicOrder;
-    if (depth > 3)
-        depth = 3;  // prevent large delay. It is not to be happend in normanl stream, but this protection for invalid
-                    // streams.
+    const int maxDepth = m_fieldPicturesSeen ? 3 : 16;
+    if (depth > maxDepth)
+        depth = maxDepth;
     if (depth > m_frameDepth)
     {
         if (nextFrameFound)
@@ -622,6 +689,8 @@ void H264StreamReader::additionalStreamCheck(uint8_t* buff, uint8_t* end)
                 {
                     SEIFound = true;
                 }
+                if (sei.hasProcessedMessage(SEI_MSG_PIC_TIMING) && !m_removePulldown)
+                    m_pulldownMaxFields = (std::max)(m_pulldownMaxFields, fieldsShownOf(sei.pic_struct));
 
                 if (sei.number_of_offset_sequences >= 0)
                 {
@@ -687,6 +756,21 @@ void H264StreamReader::additionalStreamCheck(uint8_t* buff, uint8_t* end)
         m_forceLsbDiv = 1;
 
     int frameNum = -1;
+    // As in the mux: before the first IDR, a stream that begins with another picture counts from it, and that picture
+    // comes after the pictures shown before it. Without this the depth found here was too small for such a stream,
+    // grew in the mux after the first pictures were written, and two decoding times came out the same.
+    int orderOffset = 0;
+    bool firstPicture = true;
+    // Whether the stream has coded fields at all, known before the first picture: a stream can begin with a frame
+    // (MBAFF) and code fields later, and the rules for a first picture without an IDR are for frames only.
+    for (uint8_t* nal = NALUnit::findNextNAL(buff, end); nal != end && !m_fieldPicturesSeen;
+         nal = NALUnit::findNextNAL(nal, end))
+    {
+        const auto type = static_cast<NALUnit::NALType>(*nal & 0x1f);
+        if ((type == NALUnit::NALType::nuSliceIDR || type == NALUnit::NALType::nuSliceNonIDR) &&
+            deserializeSliceHeader(slice, nal, end) == 0 && slice.m_field_pic_flag)
+            m_fieldPicturesSeen = true;
+    }
     for (uint8_t* nal = NALUnit::findNextNAL(buff, end); nal != end; nal = NALUnit::findNextNAL(nal, end))
     {
         switch (static_cast<NALUnit::NALType>(*nal & 0x1f))
@@ -702,9 +786,22 @@ void H264StreamReader::additionalStreamCheck(uint8_t* buff, uint8_t* end)
             {
                 int picOrder = calcPicOrder(slice);
                 if (slice.isIDR())
+                {
                     frameNum = -1;
+                    orderOffset = 0;
+                }
+                else if (firstPicture && !m_fieldPicturesSeen)
+                {
+                    const int leading = leadingPicturesOfFirst(slice, nal);
+                    if (leading >= 0)
+                        orderOffset = leading - picOrder;
+                }
+                firstPicture = false;
+                picOrder += orderOffset;
                 if (slice.isIFrame())
                     m_fieldFirst = slice.bottom_field_flag;
+                if (slice.m_field_pic_flag)
+                    m_fieldPicturesSeen = true;
                 checkPyramid(++frameNum, &picOrder, true);
             }
             break;
@@ -798,12 +895,13 @@ int H264StreamReader::getIdrPrevFrames(uint8_t* buff, const uint8_t* bufEnd)
     return -1;
 }
 
-// The pictures after the I picture that begins a stream without an IDR (a cut, an open GOP) that are shown before
-// it: they follow it in decode order with a lower order count. Counted up to the first picture shown after it, as
-// getIdrPrevFrames does after an IDR. Returns -1 when more data is needed and can come.
-int H264StreamReader::leadingPicturesOfFirstI(const SliceUnit& iSlice, uint8_t* buff)
+// The pictures after the first picture of a stream that does not begin with an IDR (a cut) that are shown before
+// it: they follow it in decode order with a lower order count. -2 when a coded field follows: not for such a stream.
+// Counted up to the first picture shown after it, as getIdrPrevFrames does after an IDR. Returns -1 when more data is
+// needed and can come.
+int H264StreamReader::leadingPicturesOfFirst(const SliceUnit& firstSlice, uint8_t* buff)
 {
-    const int maxLsb = 1 << iSlice.getSPS()->log2_max_pic_order_cnt_lsb;
+    const int maxLsb = 1 << firstSlice.getSPS()->log2_max_pic_order_cnt_lsb;
     int leading = 0;
     for (uint8_t* nal = NALUnit::findNextNAL(buff + 4, m_bufEnd); nal < m_bufEnd;
          nal = NALUnit::findNextNAL(nal, m_bufEnd))
@@ -823,9 +921,9 @@ int H264StreamReader::leadingPicturesOfFirstI(const SliceUnit& iSlice, uint8_t* 
             return leading;
         if (slice.first_mb_in_slice != 0)
             continue;
-        if (slice.m_field_pic_flag && slice.frame_num == iSlice.frame_num)
-            continue;  // the other field of the I picture
-        int diff = static_cast<int>(slice.pic_order_cnt_lsb) - static_cast<int>(iSlice.pic_order_cnt_lsb);
+        if (slice.m_field_pic_flag)
+            return -2;  // coded fields: the two fields of a frame share one time, the rule is for frames only
+        int diff = static_cast<int>(slice.pic_order_cnt_lsb) - static_cast<int>(firstSlice.pic_order_cnt_lsb);
         if (diff >= maxLsb / 2)
             diff -= maxLsb;
         else if (diff < -maxLsb / 2)
@@ -1346,18 +1444,27 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
 
     ////////////////////////////
 
-    // A stream that begins with an I picture that is not an IDR, as a cut does, can have pictures after it in decode
-    // order that are shown before it (an open GOP). The I picture took the first time before they were seen, the first
-    // of them got the same time, and a Matroska output wrote the two as one block. The I picture now comes after
-    // them, and every picture from it on takes its time from its own order count, as after an IDR.
-    int firstILeading = -1;
-    if (m_totalFrameNum == 0 && m_idrSliceCnt == 0 && !guessOrder && !damaged && slice.isIFrame() && !slice.isIDR() &&
-        slice.getSPS()->pic_order_cnt_type == 0)
+    // A stream that does not begin with an IDR, as a cut does, can have pictures after its first one in decode order
+    // that are shown before it: the B pictures of an open GOP behind an I picture, or the B pictures behind a P
+    // picture. The first picture took the first time before they were seen, the first of them got the same time, and
+    // a Matroska output wrote the two as one block. The first picture now comes after them, and every picture from it
+    // on takes its time from its own order count, as after an IDR.
+    int firstLeading = -1;
+    // Frame pictures only: the two fields of a frame share one time, which a Matroska block needs, and this count
+    // placed them apart (a 1080i capture cut mid stream got its first field pair in two blocks).
+    if (m_totalFrameNum == 0 && m_idrSliceCnt == 0 && !guessOrder && !damaged && !slice.isIDR() &&
+        !slice.m_field_pic_flag && !m_fieldPicturesSeen && slice.getSPS()->pic_order_cnt_type == 0)
     {
-        firstILeading = leadingPicturesOfFirstI(slice, buff);
-        if (firstILeading == -1)
+        firstLeading = leadingPicturesOfFirst(slice, buff);
+        if (firstLeading == -1)
             return NOT_ENOUGH_BUFFER;
+        if (firstLeading == -2)
+            firstLeading = -1;  // coded fields follow: as before
     }
+
+    // Pulldown: the pictures shown before this one that come later in decode order, read before anything changes
+    if (m_pulldownMaxFields > 2 && !slice.m_field_pic_flag && slice.getSPS()->pic_order_cnt_type == 0)
+        pulldownFieldsAhead(slice, buff);
 
     // A guessed order is set below from the GOP before; calcPicOrder would take the stand-in count as the stream's own.
     int fullPicOrder = 0;
@@ -1380,8 +1487,8 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
         if (m_iFramePtsOffset == -1)
             return NOT_ENOUGH_BUFFER;
     }
-    else if (firstILeading >= 0)
-        m_frameNum = 0;  // counted from the I picture as from an IDR: its leading pictures then need no more delay
+    else if (firstLeading >= 0)
+        m_frameNum = 0;  // counted from the first picture as from an IDR, so the pictures shown before it fit the delay
     else
     {
         m_frameNum++;
@@ -1402,10 +1509,10 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     }
     if (m_idrSliceCnt == 0)
     {
-        if (firstILeading >= 0)
+        if (firstLeading >= 0)
         {
             m_bSliceFound = true;
-            m_picOrderOffset = firstILeading - fullPicOrder;
+            m_picOrderOffset = firstLeading - fullPicOrder;
         }
         if (!m_bSliceFound && slice.slice_type == SliceUnit::B_TYPE)
         {
@@ -1444,14 +1551,63 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     }
 
     // check b-pyramid
+    if (slice.m_field_pic_flag)
+        m_fieldPicturesSeen = true;
     checkPyramid(m_frameNum, &fullPicOrder, m_nextFrameFound);
 
     // increase PTS/DTS
     m_curDts += m_lastDtsInc;
     m_curPts = m_curDts + (fullPicOrder - m_frameNum) * m_pcrIncPerFrame;
+    // Pulldown: a picture is shown when the pictures before it in the order shown have been shown for their own
+    // number of fields. Taking the reordering in whole frames, as without pulldown, gave pictures the same times
+    // and put them out of order: with frame doubling, 60 of 144 times were taken twice.
+    if (m_pulldownMaxFields > 2 && !slice.m_field_pic_flag && slice.getSPS()->pic_order_cnt_type == 0)
+    {
+        if (slice.isIDR() || m_fieldsShown.empty())
+        {
+            m_fieldsShown.clear();
+            int leading = 0;
+            for (const auto& [rel, fields] : m_fieldsAhead)
+                if (rel < 0)
+                    ++leading;
+            m_pulldownFirstOrder = fullPicOrder - leading;
+            m_pulldownOrigin = m_curDts + (m_pulldownFirstOrder - m_frameNum) * m_pcrIncPerFrame;
+        }
+        m_fieldsShown[fullPicOrder] = fieldsShownOf(m_lastPictStruct);
+        for (const auto& [rel, fields] : m_fieldsAhead) m_fieldsShown.emplace(fullPicOrder + rel, fields);
+        int64_t fieldsBefore = 0;
+        for (int order = m_pulldownFirstOrder; order < fullPicOrder; ++order)
+        {
+            const auto it = m_fieldsShown.find(order);
+            fieldsBefore += it != m_fieldsShown.end() ? it->second : 2;
+        }
+        m_curPts = m_pulldownOrigin + fieldsBefore * m_pcrIncPerField;
+    }
 
+    // The last picture before an IDR (or of the stream) is held to its decoding time, but never onto a time a picture
+    // before it already has: a cut stream lacks pictures, has a hole in the order shown, and the picture held back
+    // took the time of another one.
+    // Coded fields keep the old rule: the two fields of a frame share one time, and a picture here is a field.
     if (m_curPts > m_curDts && (!m_nextFrameFound || m_nextFrameIdr))
-        m_curPts = m_curDts;
+        m_curPts =
+            (std::max)(m_curDts, m_ptsGiven && !m_fieldPicturesSeen ? (std::min)(m_curPts, m_maxPts + m_pcrIncPerFrame)
+                                                                    : m_curDts);
+
+    // A new IDR period begins after the latest time already given. A stream that lacks pictures, as a cut does (the
+    // pictures before its first one in decode order), has a hole in the order shown, and the IDR, placed by the count
+    // of pictures decoded, took a time a picture before it already had. The decoding times skip the same gap.
+    if (slice.isIDR() && m_ptsGiven && !m_fieldPicturesSeen)
+    {
+        const int64_t periodStart = m_curPts - static_cast<int64_t>(m_iFramePtsOffset) * m_pcrIncPerFrame;
+        if (periodStart <= m_maxPts)
+        {
+            const int64_t gap = m_maxPts + m_pcrIncPerFrame - periodStart;
+            m_curDts += gap;
+            m_curPts += gap;
+        }
+    }
+    m_maxPts = m_ptsGiven ? (std::max)(m_maxPts, m_curPts) : m_curPts;
+    m_ptsGiven = true;
 
     if (m_OffsetMetadataPtsAddr)
     {

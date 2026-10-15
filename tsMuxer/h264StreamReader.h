@@ -61,7 +61,9 @@ class H264StreamReader final : public MPEGStreamReader
 
     int writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPacket& avPacket,
                           PriorityDataInfo* priorityData) override;
-    int getFrameDepth() override { return m_frameDepth; }
+    // With pulldown a picture is shown for up to 3 frames, and the decoding times have to be moved back by as much
+    // time as the pictures shown before them in the order shown take, not by as many frames.
+    int getFrameDepth() override { return (m_frameDepth * m_pulldownMaxFields + 1) / 2; }
     [[nodiscard]] unsigned getStreamWidth() const override;
     [[nodiscard]] unsigned getStreamHeight() const override;
     [[nodiscard]] int getStreamHDR() const override { return 0; }
@@ -134,7 +136,19 @@ class H264StreamReader final : public MPEGStreamReader
     void additionalStreamCheck(uint8_t* buff, uint8_t* end);
     int calcPicOrder(const SliceUnit& slice);
     int getIdrPrevFrames(uint8_t* buff, const uint8_t* bufEnd);
-    int leadingPicturesOfFirstI(const SliceUnit& iSlice, uint8_t* buff);
+    int leadingPicturesOfFirst(const SliceUnit& firstSlice, uint8_t* buff);
+    int64_t m_maxPts = 0;  // the latest presentation time given, for the start of the next IDR period
+    // Pulldown with pictures shown out of decode order (B pictures): a picture is shown for 2 to 6 fields, so its
+    // presentation time is the time the pictures shown before it take. pulldownFieldsAhead reads the ones that
+    // come later in decode order.
+    int m_pulldownMaxFields = 2;       // the most fields one picture is shown for, from the start of the stream
+    std::map<int, int> m_fieldsShown;  // full order -> fields shown, in the current IDR period
+    std::vector<std::pair<int, int>> m_fieldsAhead;  // (order relative to this picture, fields) read ahead
+    int64_t m_pulldownOrigin = 0;                    // presentation time of the first picture shown in the period
+    int m_pulldownFirstOrder = 0;                    // the full order of that picture
+    void pulldownFieldsAhead(const SliceUnit& slice, uint8_t* buff);
+    bool m_ptsGiven = false;
+    bool m_fieldPicturesSeen = false;  // coded fields: the depth from checkPyramid is held at 3
     int lsbDivOfIdrPeriod(const SliceUnit& idrSlice, uint8_t* buff);
     // auFirst: the slice follows the delimiter, SPS, PPS or SEI that began its access unit, so it is the first slice of
     // its picture whatever its header says.
