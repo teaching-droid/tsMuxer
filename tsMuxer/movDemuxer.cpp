@@ -1017,7 +1017,7 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
         if (m_sc->time_scale == 0)
             THROW(ERR_MOV_PARSE,
                   "MP4/MOV error: text track #" << m_sc->ffindex << " has a time scale of 0 in its media header (mdhd)")
-        return m_sc->stts_data[sttsPos].duration * 1000 / m_sc->time_scale;
+        return m_sc->stts_data[sttsPos].duration;  // in the track's time scale
     }
 
     void setPrivData(uint8_t* buff, const int size) override
@@ -1069,8 +1069,14 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
             else if (indexCur < m_sc->m_index.size())
                 sampleSize = m_sc->m_index[indexCur++];
             sampleSize = (std::min)(sampleSize, size - used);
-            const int64_t startTime = timeOffset;
-            const int64_t endTime = startTime + getSttsVal();
+            // The times are added up in the track's own time scale and only each cue's time is rounded to
+            // milliseconds: every duration was cut to whole milliseconds and then added, so the cues came earlier
+            // and earlier (480 ms by the 1200th subtitle at a time scale of 600).
+            const int64_t endUnits = timeOffset + getSttsVal();
+            const auto toMs = [this](const int64_t units)
+            { return (units * 1000 + m_sc->time_scale / 2) / m_sc->time_scale; };
+            const int64_t startTime = toMs(timeOffset);
+            const int64_t endTime = toMs(endUnits);
             std::string cue = m_wvtt
                                   ? webVttCueFor(buff + used, buff + used + sampleSize, startTime, endTime, counter + 1)
                                   : cueFor(buff + used, buff + used + sampleSize, startTime, endTime, counter + 1);
@@ -1081,7 +1087,7 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
                 out += cue;
                 ++counter;
             }
-            timeOffset = endTime;
+            timeOffset = endUnits;
             used += sampleSize;
             if (sampleSize == 0 && m_sc->sample_size == 0 && indexCur >= m_sc->m_index.size())
                 break;  // a zero size with no table left cannot advance
@@ -1213,8 +1219,18 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
         }
         if (!tags.empty())
         {
+            // The styl positions count characters, not bytes: with any letter outside ASCII the tags were put inside
+            // a character, which broke it, and onto the wrong letters. Each position becomes the byte where its
+            // character begins in the UTF-8 text.
+            std::vector<size_t> charStart;
+            for (size_t i = 0; i < text.size(); ++i)
+                if ((static_cast<uint8_t>(text[i]) & 0xC0) != 0x80)
+                    charStart.push_back(i);
+            charStart.push_back(text.size());
+            for (auto& [pos, tag] : tags)
+                pos = static_cast<int>((std::min)(static_cast<size_t>(pos), charStart.size() - 1));
             sort(tags.begin(), tags.end(), greater<>());
-            for (const auto& [pos, tag] : tags) text.insert((std::min)(static_cast<size_t>(pos), text.size()), tag);
+            for (const auto& [pos, tag] : tags) text.insert(charStart[pos], tag);
         }
         return int32ToStr(counter) + "\n" + floatToTime(static_cast<double>(startTime) / 1e3, ',') + " --> " +
                floatToTime(static_cast<double>(endTime) / 1e3, ',') + "\n" + text + "\n\n";
@@ -1228,7 +1244,7 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
     int m_packetCnt;
     int64_t sttsPos;
     int64_t sttsCnt;
-    int64_t m_timeOffset;
+    int64_t m_timeOffset;  // in the track's time scale
     bool m_wvtt;
 };
 
