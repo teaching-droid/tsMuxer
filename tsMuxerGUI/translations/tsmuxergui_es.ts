@@ -4427,6 +4427,10 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>WebM</source>
         <translation>WebM</translation>
     </message>
+    <message>
+        <source>The output file &quot;%1&quot; is one of the source files. Please choose another name.</source>
+        <translation>El archivo de salida &quot;%1&quot; es uno de los archivos de origen. Elija otro nombre.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

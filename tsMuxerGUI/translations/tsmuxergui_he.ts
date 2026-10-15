@@ -4426,6 +4426,10 @@ Build the ISO anyway?</source>
         <source>WebM</source>
         <translation>WebM</translation>
     </message>
+    <message>
+        <source>The output file &quot;%1&quot; is one of the source files. Please choose another name.</source>
+        <translation>קובץ הפלט &quot;%1&quot; הוא אחד מקובצי המקור. נא לבחור שם אחר.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -4426,6 +4426,10 @@ Créer l'ISO malgré tout ?</translation>
         <source>WebM</source>
         <translation>WebM</translation>
     </message>
+    <message>
+        <source>The output file &quot;%1&quot; is one of the source files. Please choose another name.</source>
+        <translation>Le fichier de sortie &quot;%1&quot; est l'un des fichiers source. Veuillez choisir un autre nom.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

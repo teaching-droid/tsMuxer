@@ -235,16 +235,23 @@ QString ISO_SAVE_DIALOG_FILTER() { return makeFileFilter({{TsMuxerWindow::tr("Di
 // A .webm name writes WebM, the Matroska subset of the web; the dialog offered no such type (#44)
 QString MKV_SAVE_DIALOG_FILTER()
 {
-    return makeFileFilter({{TsMuxerWindow::tr("Matroska"), {"mkv", "mka"}}, {TsMuxerWindow::tr("WebM"), {"webm"}}});
+    return makeFileFilter(
+        {{TsMuxerWindow::tr("Matroska"), {"mkv", "mka", "mks", "mk3d"}}, {TsMuxerWindow::tr("WebM"), {"webm"}}});
 }
 
-// A name for a Matroska output that tsMuxeR writes as it is: .mkv, .mka, and .webm, which it writes as WebM. A click on
-// "MKV muxing", even when it was chosen already, turned .webm and .mka into .mkv, and "Start muxing" refused .webm.
+// A name for a Matroska output that tsMuxeR writes as it is: .mkv, .mka, .mks, .mk3d, and .webm, which it writes as
+// WebM. A click on "MKV muxing", even when it was chosen already, turned .webm and .mka into .mkv, and "Start muxing"
+// refused .webm.
 bool isMatroskaOutputName(const QString& name)
 {
     const QString suffix = QFileInfo(name).suffix().toLower();
-    return suffix == QLatin1String("mkv") || suffix == QLatin1String("mka") || suffix == QLatin1String("webm");
+    return suffix == QLatin1String("mkv") || suffix == QLatin1String("mka") || suffix == QLatin1String("mks") ||
+           suffix == QLatin1String("mk3d") || suffix == QLatin1String("webm");
 }
+
+// Whether two names are one file. QFileInfo compares them as the system does, without regard to case on Windows, so
+// "00000.M2TS" and "00000.m2ts", or a name with each kind of slash, are the same file.
+bool isSameFile(const QString& a, const QString& b) { return QFileInfo(a) == QFileInfo(b); }
 
 QSettings* settings = nullptr;
 
@@ -3664,7 +3671,7 @@ void TsMuxerWindow::modifyOutFileName(const QString fileName)
             ui->outFileName->setText(dir + name + ".iso");
         else
             ui->outFileName->setText(dstPath);
-        if (ui->outFileName->text() == fileName)
+        if (isSameFile(ui->outFileName->text(), fileName))
             ui->outFileName->setText(dir + name + "_new." + fi.suffix());
     }
 }
@@ -5581,12 +5588,13 @@ void TsMuxerWindow::applyOutputMode(const bool resetAudioPes)
 
 // The .srt file save-srt writes for a track: beside the output file, named after it, or in the output folder of a disc
 // or a demux, named after the source; the row of the track in the list keeps two tracks apart, and never gives the name
-// of an .srt source in the same folder
+// of an .srt source in the same folder. An ISO image is a file: its name was taken for a folder, which the .srt made,
+// and then the image of that name could not be written.
 QString TsMuxerWindow::saveSrtFileName(const QtvCodecInfo* codecInfo, const int row) const
 {
     const QString out = unquoteStr(ui->outFileName->text().trimmed());
     QString base;
-    if (isDiskOutput() || ui->radioButtonDemux->isChecked())
+    if ((isDiskOutput() && !ui->radioButtonBluRayISO->isChecked()) || ui->radioButtonDemux->isChecked())
     {
         QString dir = QDir::fromNativeSeparators(out);
         if (!dir.endsWith('/'))
@@ -5724,7 +5732,7 @@ void TsMuxerWindow::outFileNameChanged()
     // starts, with a message that names the extension it needs.
     if (ext == "M2TS")
         ui->radioButtonM2TS->setChecked(true);
-    else if (ext == "MKV" || ext == "MKA" || ext == "WEBM")
+    else if (ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM")
         ui->radioButtonMKV->setChecked(true);
     else if (ext == "ISO")
         ui->radioButtonBluRayISO->setChecked(true);
@@ -5745,6 +5753,9 @@ void TsMuxerWindow::outFileNameChanged()
         colorizeAllRows();
         updateMetaLines();
     }
+    // save-srt names its file after the output: a new name of the same output left the old name in the meta
+    else if (ui->saveSrtCheckBox->isChecked())
+        updateMetaLines();
     outFileNameDisableChange = false;
 }
 
@@ -5811,9 +5822,9 @@ void TsMuxerWindow::saveFileDialog()
                     // extension gets the selected output's, so the output stays what was chosen. A
                     // name ending in another output's extension is left alone: it names the output wanted.
                     QString fileName = selected;
-                    static const QStringList outputExts = {QStringLiteral("ts"),   QStringLiteral("m2ts"),
-                                                           QStringLiteral("mkv"),  QStringLiteral("mka"),
-                                                           QStringLiteral("webm"), QStringLiteral("iso")};
+                    static const QStringList outputExts = {
+                        QStringLiteral("ts"),  QStringLiteral("m2ts"), QStringLiteral("mkv"),  QStringLiteral("mka"),
+                        QStringLiteral("mks"), QStringLiteral("mk3d"), QStringLiteral("webm"), QStringLiteral("iso")};
                     if (!outputExts.contains(QFileInfo(fileName).suffix(), Qt::CaseInsensitive))
                         fileName += (fileName.endsWith(QLatin1Char('.')) ? QString() : QStringLiteral(".")) + chosenExt;
                     auto native = QDir::toNativeSeparators(fileName);
@@ -5831,6 +5842,22 @@ void TsMuxerWindow::startMuxing()
     ui->outFileName->setText(outputName);
     lastOutputDir = QFileInfo(outputName).absolutePath();
     writeSettings();
+    // The output is never one of the sources: the writer empties its file before the source is read. With the output
+    // in the source folder, 00000.M2TS could be proposed as its own output, as the names were compared with case.
+    for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+        if (const QtvCodecInfo* info = getCodecInfo(i))
+            for (const QString& source : info->fileList)
+                if (isSameFile(source, outputName))
+                {
+                    QMessageBox msgBox(this);
+                    msgBox.setWindowTitle(tr("Invalid file name"));
+                    msgBox.setText(tr("The output file \"%1\" is one of the source files. Please choose another name.")
+                                       .arg(outputName));
+                    msgBox.setIcon(QMessageBox::Warning);
+                    msgBox.setStandardButtons(QMessageBox::Ok);
+                    msgBox.exec();
+                    return;
+                }
     if (ui->radioButtonM2TS->isChecked())
     {
         QFileInfo fi(ui->outFileName->text());

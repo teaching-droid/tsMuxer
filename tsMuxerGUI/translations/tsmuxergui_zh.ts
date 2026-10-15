@@ -4426,6 +4426,10 @@ Build the ISO anyway?</source>
         <source>WebM</source>
         <translation>WebM</translation>
     </message>
+    <message>
+        <source>The output file &quot;%1&quot; is one of the source files. Please choose another name.</source>
+        <translation>输出文件 &quot;%1&quot; 是源文件之一。请选择其他名称。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

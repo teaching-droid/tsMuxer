@@ -4430,6 +4430,10 @@ ISO trotzdem erstellen?</translation>
         <source>WebM</source>
         <translation>WebM</translation>
     </message>
+    <message>
+        <source>The output file &quot;%1&quot; is one of the source files. Please choose another name.</source>
+        <translation>Die Ausgabedatei &quot;%1&quot; ist eine der Quelldateien. Bitte einen anderen Namen wählen.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
