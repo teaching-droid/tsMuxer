@@ -124,6 +124,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **HEVC level=** reaches the HEVC descriptor of a transport stream as well: it kept the level of the source.
 
+* **Single layer Dolby Vision on a disc** gets a warning that it plays as HDR10: a UHD Blu-ray player takes Dolby Vision from two layers only. The disc is written as before.
+
+* **The layer break guard goes at the breaks of the disc size** given with --disc-size, or --disc-capacity for --bdmv-to-iso: on a 100 GB disc it went at half a 50 GB disc, inside the first layer. --layer-break-guard-before on its own gives a guard before the break; it was ignored.
+
 * **A layer break guard of up to 9999 MB** is read from a meta file and by --bdmv-to-iso, as the window offers it. A meta file refused more than 1024.
 
 ### Matroska output
