@@ -484,7 +484,9 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
         const auto lpcmReader = dynamic_cast<LPCMStreamReader*>(codecReader);
         if (lpcmReader)
         {
-            track.bitDepth = lpcmReader->m_bitsPerSample;
+            // 20 bit samples are carried in 3 bytes each, and A_PCM/INT/LIT has no other field to give the size of a
+            // sample: BitDepth 20 over 3 byte samples was read as 20 bit samples, noise at 1.5 times the length.
+            track.bitDepth = lpcmReader->m_bitsPerSample == 20 ? 24 : lpcmReader->m_bitsPerSample;
             // A_PCM/INT/LIT is plain little endian PCM in WAV channel order. Left to itself the
             // reader produces Blu-ray LPCM: a 4 byte header on every 5 ms frame, big endian samples,
             // Blu-ray channel order and a silent extra channel when the count is odd. Every other
@@ -1969,7 +1971,7 @@ void MatroskaMuxer::refreshTrackProperties()
                 track.channels = ac3->getChannels() + 2;
             const auto lpcmReader = dynamic_cast<LPCMStreamReader*>(track.codecReader);
             if (lpcmReader)
-                track.bitDepth = lpcmReader->m_bitsPerSample;
+                track.bitDepth = lpcmReader->m_bitsPerSample == 20 ? 24 : lpcmReader->m_bitsPerSample;
             // BitDepth for the lossless codecs whose readers know it: FLAC from its STREAMINFO, DTS-HD from its
             // extension. It was written for LPCM alone.
             // An MP3's LAME delay and padding (muxPacket), in samples, with the 529 samples an MP3 decoder itself puts

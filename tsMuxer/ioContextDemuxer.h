@@ -95,7 +95,9 @@ struct Track
     char language[4];
     // The Matroska LanguageBCP47 element as it stands (pt-BR, es-419, zh-Hant), empty without one. Plain arrays and no
     // std::string, because a Matroska track is zeroed memory that no constructor ever runs on.
-    char languageBCP47[40];
+    // 40 characters held a tag such as de-CH, but a tag with its extensions and private parts can be longer, and one
+    // of 40 or more was dropped without a word.
+    char languageBCP47[256];
     bool hasLanguageElement;  // the Language element was there, rather than its default
 
     char* codec_id;

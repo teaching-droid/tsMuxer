@@ -3620,8 +3620,12 @@ std::map<uint64_t, std::vector<AbstractDemuxer::SourceTrackTag>> MatroskaDemuxer
                     if (sid == MATROSKA_ID_TAGNAME)
                         name.assign(d.begin() + static_cast<std::ptrdiff_t>(sb),
                                     d.begin() + static_cast<std::ptrdiff_t>(se));
+                // Also the statistics a writer leaves without naming them in _STATISTICS_TAGS, as ffmpeg writes a
+                // DURATION for each track: kept, it gave the source's length to a cut output.
                 const bool isStatistics = name.rfind("_STATISTICS_", 0) == 0 ||
-                                          (!name.empty() && statistics.find(" " + name + " ") != std::string::npos);
+                                          (!name.empty() && statistics.find(" " + name + " ") != std::string::npos) ||
+                                          name == "DURATION" || name == "BPS" || name == "NUMBER_OF_FRAMES" ||
+                                          name == "NUMBER_OF_BYTES";
                 if (!isStatistics)
                     tag.simpleTags.insert(tag.simpleTags.end(), d.begin() + static_cast<std::ptrdiff_t>(start),
                                           d.begin() + static_cast<std::ptrdiff_t>(ce));
@@ -4623,6 +4627,9 @@ int MatroskaDemuxer::matroska_add_stream()
             const size_t len = strlen(text);
             if (len > 0 && len < sizeof(track->languageBCP47))
                 memcpy(track->languageBCP47, text, len + 1);
+            else if (len > 0)
+                LTRACE(LT_WARN, 2,
+                       "Warning: a track's LanguageBCP47 of " << len << " characters is too long and is left out.");
             delete[] text;
             break;
         }
