@@ -53,27 +53,28 @@ inline uint8_t* findStartCodeMarker(uint8_t* buffer, uint8_t* end)
     uint8_t* const last = end - 1;      // highest valid 01 position
 
 #ifdef TSMUXER_STARTCODE_SSE2
-    // Aligned loads only: the block containing a valid byte never crosses a page
-    // boundary, so reading its tail past `end` is safe; out-of-range candidates are
-    // rejected below.
+    // Blocks of 16 bytes, all inside [first, end), then the rest byte by byte. The blocks were aligned loads that
+    // began before `first` and ran past `end`: they could not fault, an aligned block never crossing a page, and the
+    // bytes outside were rejected, but they were read all the same, outside the buffer. An address sanitizer reported
+    // it as an overflow of the buffer on every call near its end, which hid any real fault behind it. The unaligned
+    // load is as fast, and the first match is the same.
     const __m128i ones = _mm_set1_epi8(1);
-    auto* q = reinterpret_cast<uint8_t*>(reinterpret_cast<uintptr_t>(first) & ~static_cast<uintptr_t>(15));
-    for (; q <= last; q += 16)
+    uint8_t* q = first;
+    for (; end - q >= 16; q += 16)
     {
         unsigned mask = static_cast<unsigned>(
-            _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_load_si128(reinterpret_cast<const __m128i*>(q)), ones)));
+            _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i*>(q)), ones)));
         while (mask)
         {
             uint8_t* c = q + startcode_detail::ctz32(mask);
             mask &= mask - 1;
-            if (c < first)
-                continue;
-            if (c > last)
-                return nullptr;
             if (c[-1] == 0 && c[-2] == 0)
                 return c;
         }
     }
+    for (; q <= last; ++q)
+        if (*q == 1 && q[-1] == 0 && q[-2] == 0)
+            return q;
     return nullptr;
 #elif defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
     // Big endian: the SWAR bit order would visit candidates out of order; use the
