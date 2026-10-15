@@ -44,6 +44,7 @@ void validateMuxOptsEarly(const std::string& opts);
 
 // The size a --split-size value works out at in bytes, or a refusal (tsMuxer.cpp).
 int64_t checkedSplitSize(const std::string& value);
+int64_t checkedSplitDuration(const std::string& value);
 
 class TSMuxer final : public AbstractMuxer
 {

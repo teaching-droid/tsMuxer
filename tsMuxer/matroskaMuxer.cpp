@@ -1008,9 +1008,7 @@ void MatroskaMuxer::parseMuxOpt(const std::string& opts)
             m_splitSize = checkedSplitSize(value);
         else if (key == "--split-duration")
         {
-            m_splitDuration = strToInt64(value.c_str()) * INTERNAL_PTS_FREQ;
-            if (m_splitDuration <= 0)
-                THROW(ERR_COMMON, "Invalid --split-duration value \"" << value << "\": it must be above zero.")
+            m_splitDuration = checkedSplitDuration(value);
         }
         else if (key == "--split-chapters")
             m_splitByChapters = true;

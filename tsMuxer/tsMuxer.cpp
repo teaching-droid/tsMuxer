@@ -2259,31 +2259,57 @@ int checkedMuxRate(const std::string& option, const std::string& value);  // def
 // The size a --split-size value works out at, or a refusal. A size of zero or less can only be a
 // typo, and accepting it would turn splitting off without a word, which is what asking for 4 GiB
 // used to do before the option was widened to 64 bit.
+// Any unit it did not know was read as bytes: --split-size=4G gave parts of 4 bytes, one per key frame, and 4.5e9
+// the same. The units of --disc-size are read here too (G as GB, Gi as GiB), and anything else is refused.
 int64_t checkedSplitSize(const std::string& value)
 {
-    int64_t coeff = 1;
-    string postfix;
-    for (const auto& j : value)
-        if (!((j >= '0' && j <= '9') || j == '.'))
-            postfix += j;
-    postfix = strToUpperCase(postfix);
-    if (postfix == "GB")
-        coeff = 1000LL * 1000 * 1000;
-    else if (postfix == "GIB")
-        coeff = 1024LL * 1024 * 1024;
-    else if (postfix == "MB")
-        coeff = 1000LL * 1000;
-    else if (postfix == "MIB")
-        coeff = 1024LL * 1024;
-    else if (postfix == "KB")
-        coeff = 1000;
-    else if (postfix == "KIB")
-        coeff = 1024;
-    const string prefix = value.substr(0, value.size() - postfix.size());
-    const int64_t splitBytes = static_cast<int64_t>(strToDouble(prefix.c_str()) * static_cast<double>(coeff));
+    const string s = strToUpperCase(trimStr(value));
+    size_t i = 0;
+    while (i < s.size() && ((s[i] >= '0' && s[i] <= '9') || s[i] == '.')) ++i;
+    const string number = s.substr(0, i);
+    const string unit = s.substr(i);
+    double coeff = 0;
+    if (unit.empty() || unit == "B")
+        coeff = 1;
+    else if (unit == "K" || unit == "KB")
+        coeff = 1e3;
+    else if (unit == "KI" || unit == "KIB")
+        coeff = 1024.0;
+    else if (unit == "M" || unit == "MB")
+        coeff = 1e6;
+    else if (unit == "MI" || unit == "MIB")
+        coeff = 1024.0 * 1024;
+    else if (unit == "G" || unit == "GB")
+        coeff = 1e9;
+    else if (unit == "GI" || unit == "GIB")
+        coeff = 1024.0 * 1024 * 1024;
+    else if (unit == "T" || unit == "TB")
+        coeff = 1e12;
+    else if (unit == "TI" || unit == "TIB")
+        coeff = 1024.0 * 1024 * 1024 * 1024;
+    if (coeff == 0 || number.find_first_of("0123456789") == string::npos ||
+        std::count(number.begin(), number.end(), '.') > 1)
+        THROW(ERR_COMMON, "Invalid --split-size value \""
+                              << value
+                              << "\": write a number and a unit, such as 4GB, 4G, 700MiB or "
+                                 "500MB (KB, MB, GB, TB, and KiB, MiB, GiB, TiB).")
+    const auto splitBytes = static_cast<int64_t>(strToDouble(number.c_str()) * coeff);
     if (splitBytes <= 0)
         THROW(ERR_COMMON, "Invalid --split-size value \"" << value << "\": it must be above zero.")
     return splitBytes;
+}
+
+// The length of each part, in seconds when no unit is given. A transport stream read it as a whole number of
+// seconds and took 0, 0.5 and -10 as "no split" without a word, and "1min" as 1 s; a Matroska output refused the
+// first three. Both read it here now.
+int64_t checkedSplitDuration(const std::string& value)
+{
+    int64_t ticks = 0;
+    if (!parseTimeToTicks(value, "s", &ticks) || ticks <= 0)
+        THROW(ERR_COMMON, "Invalid --split-duration value \"" << value
+                                                              << "\": write a length above zero, in seconds such as "
+                                                                 "600, or with a unit such as 10min or 1h.")
+    return ticks;
 }
 
 // ** A REFUSAL AFTER THE DESTINATION IS OPENED DESTROYS THE USER'S FILE, AND THE USER ASKED THE
@@ -2317,6 +2343,8 @@ void validateMuxOptsEarly(const std::string& opts)
             checkedMuxRate(paramPair[0], paramPair[1]);
         else if (paramPair[0] == "--split-size")
             checkedSplitSize(paramPair[1]);
+        else if (paramPair[0] == "--split-duration")
+            checkedSplitDuration(paramPair[1]);
     }
 }
 
@@ -2373,7 +2401,7 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
         {
             if (paramPair.size() < 2)
                 THROW(ERR_COMMON, "Missing value for " << paramPair[0])
-            setSplitDuration(strToInt64(paramPair[1].c_str()) * INTERNAL_PTS_FREQ);
+            setSplitDuration(checkedSplitDuration(paramPair[1]));
             m_computeMuxStats = true;
         }
         else if (paramPair[0] == "--split-size")
