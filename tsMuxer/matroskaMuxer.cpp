@@ -1348,7 +1348,11 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track, i
     pos += ebml_write_uint(inner.data() + pos, MATROSKA_ID_TRACKTYPE, track.trackType);
     pos += ebml_write_uint(inner.data() + pos, MATROSKA_ID_TRACKFLAGLACING, 0);
     pos += ebml_write_uint(inner.data() + pos, MATROSKA_ID_TRACKFLAGDEFAULT, track.isDefault ? 1 : 0);
-    for (const auto& [flagId, value] : track.flags) pos += ebml_write_uint(inner.data() + pos, flagId, value);
+    // WebM has FlagForced but not the flags RFC 9559 added (hearing and visual impaired, text descriptions, original,
+    // commentary): a .webm output carries only the elements of the WebM subset
+    for (const auto& [flagId, value] : track.flags)
+        if (!m_webm || flagId == MATROSKA_ID_TRACKFLAGFORCED)
+            pos += ebml_write_uint(inner.data() + pos, flagId, value);
     if (!track.name.empty())
         pos += ebml_write_string(inner.data() + pos, MATROSKA_ID_TRACKNAME, track.name);
     // Text subtitles in WebM are WebVTT, whose blocks hold the cue text as a Matroska text track's do.
@@ -1362,7 +1366,8 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track, i
                              track.language.empty() ? std::string("und") : track.language);
     // The source's BCP 47 tag, so that pt-BR stays pt-BR and is not reduced to the three letters of Language. A reader
     // that knows the element takes it and ignores Language (RFC 9559, 12); one that does not still finds Language.
-    if (!track.languageBCP47.empty())
+    // Not a WebM element: a .webm output has Language only.
+    if (!track.languageBCP47.empty() && !m_webm)
         pos += ebml_write_string(inner.data() + pos, MATROSKA_ID_TRACKLANGUAGEBCP47, track.languageBCP47);
 
     if (!track.codecPrivate.empty())
