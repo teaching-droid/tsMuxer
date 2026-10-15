@@ -40,26 +40,33 @@ static std::string srtTime(int64_t ms);
 SRTStreamReader::~SRTStreamReader()
 {
     // save-srt: the last subtitle without an end is given an hour, as a demux of the track gives it
-    if (m_saveSrt)
+    if (!m_saveSrtName.empty())
     {
-        for (const auto& [text, times] : m_saveSrtPending)
-            saveSrtWrite(text, times.first, times.second < 0 ? times.first + 3600000 : times.second);
-        m_saveSrt->close();
-        LTRACE(LT_INFO, 2,
-               "The subtitles of track " << m_streamIndex << " were also written as text to " << m_saveSrtName << " ("
-                                         << m_saveSrtCount << " subtitles).");
+        try
+        {
+            for (const auto& [text, times] : m_saveSrtPending)
+                saveSrtWrite(text, times.first, times.second < 0 ? times.first + 3600000 : times.second);
+        }
+        catch (...)
+        {
+        }
+        if (m_saveSrt)
+        {
+            m_saveSrt->close();
+            LTRACE(LT_INFO, 2,
+                   "The subtitles of track " << m_streamIndex << " were also written as text to " << m_saveSrtName
+                                             << " (" << m_saveSrtCount << " subtitles).");
+        }
+        else
+            LTRACE(LT_INFO, 2, "No subtitle of track " << m_streamIndex << " was written to " << m_saveSrtName << ".");
     }
     delete m_dstSubCodec;
     delete m_srtRender;
 }
 
-void SRTStreamReader::setSaveSrt(const std::string& fileName)
-{
-    m_saveSrt = std::make_unique<File>();
-    if (!m_saveSrt->open(fileName.c_str(), File::ofWrite))
-        THROW(ERR_COMMON, "save-srt: the file " << fileName << " cannot be written.")
-    m_saveSrtName = fileName;
-}
+// The file is made with its first subtitle. Made at once, a track that was refused afterwards left an empty .srt, and
+// the folder made for it, behind.
+void SRTStreamReader::setSaveSrt(const std::string& fileName) { m_saveSrtName = fileName; }
 
 // One subtitle of save-srt as an SRT record, written the way a demux of the track writes it
 void SRTStreamReader::saveSrtWrite(const std::string& text, const int64_t inMs, const int64_t outMs)
@@ -76,6 +83,15 @@ void SRTStreamReader::saveSrtWrite(const std::string& text, const int64_t inMs, 
         else
             rec += c;
     rec += "\r\n\r\n";
+    if (!m_saveSrt)
+    {
+        m_saveSrt = std::make_unique<File>();
+        if (!m_saveSrt->open(m_saveSrtName.c_str(), File::ofWrite))
+        {
+            m_saveSrt.reset();
+            THROW(ERR_COMMON, "save-srt: the file " << m_saveSrtName << " cannot be written.")
+        }
+    }
     m_saveSrt->write(rec.data(), static_cast<uint32_t>(rec.size()));
 }
 
@@ -1148,8 +1164,15 @@ static bool looksLikeTimingLine(const std::string& line)
         while (p < line.size() && line[p] >= '0' && line[p] <= '9' && n < maxN) ++p, ++n;
         return n >= minN;
     };
-    return digits(1, 2) && p < line.size() && line[p++] == ':' && digits(2, 2) && p < line.size() && line[p++] == ':' &&
-           digits(2, 2) && p < line.size() && (line[p] == ',' || line[p] == '.' || line[p] == ':');
+    const size_t start = p;
+    if (digits(1, 2) && p < line.size() && line[p++] == ':' && digits(2, 2) && p < line.size() && line[p++] == ':' &&
+        digits(2, 2) && p < line.size() && (line[p] == ',' || line[p] == '.' || line[p] == ':'))
+        return true;
+    // Or a time without its hours, "01:00,000 --> 01:03,000": only digits, colons, commas, dots and spaces in front of
+    // an arrow. Its block was drawn inside the subtitle before it without a word.
+    const size_t arrow = line.find("->", start);
+    return arrow != std::string::npos && arrow > start && line.find_first_not_of("0123456789:,. \t", start) >= arrow &&
+           line.find(':', start) < arrow;
 }
 
 int SRTStreamReader::blankLineEndsCue() const
@@ -1166,6 +1189,10 @@ int SRTStreamReader::blankLineEndsCue() const
     // A counter can stand apart from its timing line, written twice or with a blank line after it, so the
     // counters and blank lines that follow are looked past: a timing line behind them ends the subtitle,
     // any other text means the blank line belongs to it.
+    // A number alone that is followed by another number before the timing line is not the counter: the subtitle
+    // "The year was", a blank line and "1985" lost its "1985" in silence, taken for the counter of the next one.
+    std::string firstNumber;
+    bool otherNumber = false;
     for (; i < m_sourceText.size(); ++i)
     {
         // A counter that carries a byte order mark, left by two files joined byte for byte, is still a counter.
@@ -1173,7 +1200,15 @@ int SRTStreamReader::blankLineEndsCue() const
         if (next.size() >= 3 && next.compare(0, 3, "\xEF\xBB\xBF") == 0)
             next.erase(0, 3);
         if (isTimingLine(next))
-            return 1;
+            return otherNumber ? 0 : 1;
+        if (const std::string number = trimStr(next);
+            !number.empty() && number.find_first_not_of("0123456789") == std::string::npos)
+        {
+            if (firstNumber.empty())
+                firstNumber = number;
+            else if (number != firstNumber)
+                otherNumber = true;
+        }
         // A timing line that cannot be read (a mistyped arrow, a colon for the comma) used to make the blank line part
         // of the subtitle, and the broken block, its counter and its text were drawn inside the subtitle before it
         // without a word. The subtitle ends here instead; the broken block is then skipped and named in a warning.
