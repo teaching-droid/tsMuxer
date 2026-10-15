@@ -514,6 +514,10 @@ int HEVCStreamReader::getTSDescriptor(uint8_t* dstBuff, const bool blurayMode, c
         *dstBuff++ = static_cast<int>(TSDescriptorTag::HEVC);
         *dstBuff++ = 13;  // descriptor length
         memcpy(dstBuff, tmpBuffer + 3, 12);
+        // The last of the 12 is the level. A level given with level= is written into the stream only as it is muxed,
+        // after this descriptor is made, and the descriptor kept the source's level.
+        if (m_forcedLevel)
+            dstBuff[11] = m_forcedLevel;
         dstBuff += 12;
         // flags temporal_layer_subset, HEVC_still_present,
         // HEVC_24hr_picture_present, HDR_WCG unspecified

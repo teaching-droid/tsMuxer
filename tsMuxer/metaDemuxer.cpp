@@ -790,6 +790,25 @@ std::vector<MPLSPlayItem> METADemuxer::mergePlayItems(const std::vector<MPLSPars
 
 static double parseFpsValue(const std::string& text);
 
+// level= as the codec counts it (H.264 in tenths, HEVC in thirtieths), when it is one of the codec's levels; anything
+// else is refused with the levels there are.
+static int checkedLevel(const std::string& text, const char* codec, const int scale, std::initializer_list<int> levels)
+{
+    const std::string t = trimStr(text);
+    const bool number = !t.empty() && t.find_first_not_of("0123456789.") == std::string::npos &&
+                        std::count(t.begin(), t.end(), '.') <= 1 && t.find_first_of("0123456789") != std::string::npos;
+    const long idc = number ? lround(strToDouble(t.c_str()) * scale) : -1;
+    if (std::find(levels.begin(), levels.end(), idc) == levels.end())
+    {
+        std::string list;
+        for (const int l : levels)
+            list += (list.empty() ? "" : ", ") +
+                    (l % scale ? doubleToStr(static_cast<double>(l) / scale, 1) : std::to_string(l / scale));
+        THROW(ERR_COMMON, "level=" << text << " is not a " << codec << " level. The levels are " << list << ".")
+    }
+    return static_cast<int>(idc);
+}
+
 int METADemuxer::addStream(const string& codecName, const string& codecStreamName, const map<string, string>& addParams)
 {
     // the reader's codec: the one asked for, or PGS for an ASS or SSA track drawn with libass
@@ -2839,9 +2858,11 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
 
         itr = addParams.find("level");
         if (itr != addParams.end())
-            // Rounded after the x10: the cast came first, so level=4.1 gave 4.0 and 5.1 gave 5.0.
-            dynamic_cast<H264StreamReader*>(rez)->setForceLevel(
-                static_cast<uint8_t>(lround(strToDouble(itr->second.c_str()) * 10)));
+            // Rounded after the x10: the cast came first, so level=4.1 gave 4.0 and 5.1 gave 5.0. Only a level H.264
+            // defines is taken (Table A-1): level=26 was written as level_idc 260 in a byte, which is 4.
+            dynamic_cast<H264StreamReader*>(rez)->setForceLevel(static_cast<uint8_t>(
+                checkedLevel(itr->second, "H.264", 10,
+                             {10, 11, 12, 13, 20, 21, 22, 30, 31, 32, 40, 41, 42, 50, 51, 52, 60, 61, 62})));
         itr = addParams.find("insertSEI");
         if (itr != addParams.end())
         {
@@ -2876,11 +2897,11 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
         itr = addParams.find("level");
         if (itr != addParams.end())
         {
-            // HEVC counts levels in thirtieths, unlike H.264's tenths: level 5.1 is 153, not 51.
-            const double level = strToDouble(itr->second.c_str());
-            if (level < 1.0 || level > 8.5)
-                THROW(ERR_COMMON, "Invalid HEVC level " << itr->second << ", expected a value like 5.1")
-            dynamic_cast<HEVCStreamReader*>(rez)->setForceLevel(static_cast<uint8_t>(lround(level * 30.0)));
+            // HEVC counts levels in thirtieths, unlike H.264's tenths: level 5.1 is 153, not 51. Only a level HEVC
+            // defines is taken (Table A.8, and 8.5 for a stream without limits): 2.7 was written as 81.
+            dynamic_cast<HEVCStreamReader*>(rez)->setForceLevel(static_cast<uint8_t>(
+                checkedLevel(itr->second, "HEVC", 30,
+                             {30, 60, 63, 90, 93, 120, 123, 150, 153, 156, 180, 183, 186, 189, 210, 213, 216, 255})));
         }
         // Mark an SDR stream as HDR10 on a UHD disc (#6). Only a disc carries the mark; a disc with HEVC video is
         // always a UHD one.
