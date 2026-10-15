@@ -182,7 +182,8 @@ std::string checkLayerBreakLbn(int lbn, std::string& warning);
 // The value of --layer-break-lbn, on a MUXOPT line and for --bdmv-to-iso alike: sectors, digits only, separated by
 // commas. Returns an error text, or an empty one with lbns filled and any warnings in warnings.
 std::string parseLayerBreakList(const std::string& value, std::vector<int>& lbns, std::vector<std::string>& warnings);
-// The value of --layer-break-guard and --layer-break-guard-before: whole megabytes from 0 to 1024, on both routes.
+// The value of --layer-break-guard and --layer-break-guard-before: whole megabytes from 0 to 9999, on both routes
+// and in the window's boxes; a meta file refused more than 1024, which the window offers for defects near 1.5 GB.
 // Returns an error text, or an empty one with mb set.
 std::string parseGuardMB(const std::string& option, const std::string& value, int& mb);
 

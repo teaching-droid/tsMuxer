@@ -545,9 +545,8 @@ std::string parseLayerBreakList(const std::string& value, std::vector<int>& lbns
 std::string parseGuardMB(const std::string& option, const std::string& value, int& mb)
 {
     const std::string t = trimStr(value);
-    if (t.empty() || t.find_first_not_of("0123456789") != std::string::npos || t.size() > 4 ||
-        strToInt32(t.c_str()) > 1024)
-        return "Invalid " + option + " value '" + value + "'. Expected 0..1024 (megabytes).";
+    if (t.empty() || t.find_first_not_of("0123456789") != std::string::npos || t.size() > 4)
+        return "Invalid " + option + " value '" + value + "'. Expected 0..9999 (megabytes).";
     mb = strToInt32(t.c_str());
     return std::string();
 }
