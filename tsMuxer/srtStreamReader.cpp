@@ -905,7 +905,8 @@ static bool hasVisibleText(const std::string& text)
 void SRTStreamReader::addCue(const std::string& text, const double inTime, const double outTime)
 {
     ++m_cuesRead;
-    if (m_saveSrt && !m_keepText)
+    // save-srt is asked for by its file name: the file itself is made with the first subtitle written
+    if (!m_saveSrtName.empty() && !m_keepText)
         saveSrtCue(text, inTime, outTime, m_untilNext);
     // Kept as text, each subtitle goes out as it was written, overlaps and all: Matroska carries
     // subtitles that overlap as they are, so nothing is grouped or drawn. A subtitle with no text
