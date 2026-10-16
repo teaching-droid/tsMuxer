@@ -90,6 +90,10 @@ bool AC3Codec::crc32(const uint8_t* buf, const int length)
 // returns NO_ERROR, or type of error
 AC3Codec::AC3ParseError AC3Codec::parseHeader(uint8_t* buf, const uint8_t* end)
 {
+    // The syncword and the four bytes up to bsid are read before anything else; a frame that starts in the last bytes
+    // of a read block was read past the block's end.
+    if (end - buf < 6)
+        return AC3ParseError::NOT_ENOUGH_BUFFER;
     if (*buf++ != 0x0B || *buf++ != 0x77)
         return AC3ParseError::SYNC;
 
