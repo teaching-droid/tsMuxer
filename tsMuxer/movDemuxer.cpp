@@ -248,8 +248,15 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
                 if (m_sc->m_indexCur >= m_sc->m_index.size())
                     break;
                 frameSize = m_sc->m_index[m_sc->m_indexCur];
+                // An empty sample in the table has nothing to carry: it is passed over, as 2.20.0 did. Stopping at it
+                // left the rest of the chunk unread and the mux stopped with "Invalid AAC frame".
+                if (frameSize == 0)
+                {
+                    ++m_sc->m_indexCur;
+                    continue;
+                }
             }
-            if (frameSize == 0 || buff + frameSize > srcEnd)
+            if (buff + frameSize > srcEnd)
                 break;
             if (m_sc->sample_size == 0)
                 ++m_sc->m_indexCur;
@@ -278,6 +285,7 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
     {
         unsigned left = size;
         int i = 0;
+        int empties = 0;  // empty samples among the i entries of the table: no frame, no header
         for (; left > 0; ++i)
         {
             // One size for every sample (AC-3, for instance): a chunk is read up to the next chunk, and bytes between
@@ -302,7 +310,12 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
                                                                         << m_demuxer->getProcessedBytes())
                 // a frame that is not whole in the chunk is not taken (extractData stops at it too)
                 const unsigned frameSize = m_sc->m_index[m_sc->m_indexCur + i];
-                if (frameSize == 0 || frameSize > left)
+                if (frameSize == 0)
+                {
+                    ++empties;  // passed over, as extractData passes over it
+                    continue;
+                }
+                if (frameSize > left)
                     break;
                 left -= frameSize;
             }
@@ -310,12 +323,19 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
         if (left > 4 && m_sc->sample_size == 0)
             THROW(ERR_MOV_PARSE,
                   "Invalid AAC frame for track #" << m_sc->ffindex << " at position " << m_demuxer->getProcessedBytes())
-        // the frames extractData leaves out: neither their bytes nor their headers
+        // the frames extractData leaves out: neither their bytes nor their headers. Empty samples are no frames.
         unsigned dropped = 0;
-        const int drop = (std::min)(m_dropLeft, i);
-        for (int k = 0; k < drop; ++k)
-            dropped += m_sc->sample_size ? m_sc->sample_size : m_sc->m_index[m_sc->m_indexCur + k];
+        const int drop = (std::min)(m_dropLeft, i - empties);
+        for (int k = 0, taken = 0; taken < drop && k < i; ++k)
+        {
+            const unsigned sz = m_sc->sample_size ? m_sc->sample_size : m_sc->m_index[m_sc->m_indexCur + k];
+            if (sz == 0)
+                continue;
+            dropped += sz;
+            ++taken;
+        }
         const int frames = i;
+        i -= empties;
         if (!isAAC)
             i = 0;
         const unsigned out = (size - left) - dropped + (i - (isAAC ? drop : 0)) * AAC_HEADER_LEN;
