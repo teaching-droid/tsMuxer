@@ -63,6 +63,7 @@ struct StreamInfo
     uint8_t* m_data;
     std::string m_streamName;
     std::string m_fullStreamName;
+    std::vector<std::string> m_sourceFiles;  // every file read for this track: the clips of a playlist, each joined file
     int lastReadRez;
     int m_pid;
     bool m_flushed;

@@ -1242,6 +1242,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     }
 
     m_codecInfo.emplace_back(dataReader, codecReader, fileList[0], codecStreamName, pid, isSubStream);
+    m_codecInfo.back().m_sourceFiles = fileList;
     if (listIterator)
     {
         auto fileReader = dynamic_cast<BufferedFileReader*>(dataReader);

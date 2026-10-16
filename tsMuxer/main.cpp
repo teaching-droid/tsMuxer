@@ -2214,21 +2214,65 @@ static void reportSplitWithoutParameterSets(const MuxerManager& muxerManager)
 // which empties it, while the same file was still to be read: a transport stream given as its own output kept 4 of its
 // 25 MB and a Matroska file was cut at 6 MB, and both runs ended with an error over a source that was gone. Names are
 // compared as the system does, so another case, other slashes or a relative path are the same file.
+// The sources are every file a track reads, not only the names on its line: a playlist line names the .mpls, and
+// its clips were not compared, so an M2TS output named as one of them, or a disc written into the folder of the
+// disc it reads, wrote over a clip while it was being read. A disc output writes into its BDMV and CERTIFICATE
+// folders, so a source inside those is refused as well.
+static bool pathIsInside(const std::filesystem::path& child, const std::filesystem::path& parent)
+{
+    std::error_code ec;
+    const std::filesystem::path c = std::filesystem::weakly_canonical(child, ec);
+    if (ec)
+        return false;
+    const std::filesystem::path p = std::filesystem::weakly_canonical(parent, ec);
+    if (ec)
+        return false;
+    auto ci = c.begin();
+    for (auto pi = p.begin(); pi != p.end(); ++pi, ++ci)
+    {
+        if (pi->empty())
+            continue;
+        if (ci == c.end())
+            return false;
+#ifdef _WIN32
+        if (strToLowerCase(pi->string()) != strToLowerCase(ci->string()))
+            return false;
+#else
+        if (*pi != *ci)
+            return false;
+#endif
+    }
+    return true;
+}
+
 static void refuseSourceAsOutput(const MuxerManager& muxerManager, const std::string& dstFile)
 {
     std::error_code ec;
     const std::filesystem::path out(std::u8string(dstFile.begin(), dstFile.end()));
     if (!std::filesystem::exists(out, ec))
         return;
+    const bool outIsFolder = std::filesystem::is_directory(out, ec) && !ec;
     for (const auto& si : muxerManager.getStreamInfo())
+    {
+        std::vector<std::string> names;
         for (const std::string& part : splitQuotedStr(si.m_fullStreamName.c_str(), '+'))
+            names.push_back(unquoteStr(trimStr(part)));
+        names.insert(names.end(), si.m_sourceFiles.begin(), si.m_sourceFiles.end());
+        for (const std::string& name : names)
         {
-            const std::string name = unquoteStr(trimStr(part));
             const std::filesystem::path src(std::u8string(name.begin(), name.end()));
             if (std::filesystem::equivalent(src, out, ec) && !ec)
                 throw runtime_error("The output " + dstFile + " is one of the source files (" + name +
                                     "), and writing it would destroy that source. Choose another output name.");
+            if (outIsFolder)
+                for (const char* sub : {"BDMV", "CERTIFICATE"})
+                    if (pathIsInside(src, out / sub))
+                        throw runtime_error("The output folder " + dstFile + " holds the source " + name +
+                                            " in its " + sub +
+                                            " folder, and writing the disc there would destroy that source. Choose "
+                                            "another output folder.");
         }
+    }
 }
 
 static void checkSourceConsumed(MuxerManager& muxerManager)
