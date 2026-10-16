@@ -11,6 +11,7 @@
 #include <fs/systemlog.h>
 #include "fs/textfile.h"
 
+#include "ac3StreamReader.h"
 #include "chapterFile.h"
 #include "h264StreamReader.h"
 #include "hevcStreamReader.h"
@@ -348,6 +349,22 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
         {
             si.m_streamReader->applyDiscoveryData(m_discoveryData[i]);
         }
+    }
+
+    // drop-ac3-core leaves the AC-3 core out of a TrueHD track. On AC-3 or Dolby Digital Plus it did nothing, and said
+    // nothing: the E-AC-3 part of a disc's Dolby Digital Plus only adds to its core and cannot be played without it.
+    // TrueHD is known from the probe here; the reader finds it out only as it reads on.
+    for (size_t i = 0; i < ci.size(); ++i)
+    {
+        const StreamInfo& si = ci[i];
+        const bool trueHD = i < m_discoveryData.size() && m_discoveryData[i].discovered && m_discoveryData[i].isTrueHD;
+        if (si.m_addParams.count("drop-ac3-core") && !trueHD)
+            if (const auto* ac3 = dynamic_cast<AC3StreamReader*>(si.m_streamReader); ac3 != nullptr && !ac3->isTrueHD())
+                LTRACE(LT_WARN, 2,
+                       "Warning: drop-ac3-core applies to TrueHD only, and track "
+                           << si.m_streamReader->getStreamIndex()
+                           << " is not TrueHD, so it is kept whole. The E-AC-3 part of Dolby Digital Plus cannot be "
+                              "played without its AC-3 core; to keep the core alone, use down-to-ac3.");
     }
 
     std::vector<size_t> order(ci.size());
