@@ -80,33 +80,42 @@ MuxerManager::~MuxerManager() = default;
 // Dolby Vision data, the enhancement layer does, and it is never larger than its base. When the first primary
 // HEVC video carries Dolby Vision and a later one carries none and is at least as wide, that later one goes first.
 // Every other stream keeps its place, and a meta file in the usual order is muxed exactly as before.
-static std::vector<size_t> transportStreamAddOrder(const std::vector<StreamInfo>& ci)
+static std::vector<size_t> transportStreamAddOrder(const std::vector<StreamInfo>& ci,
+                                                   const std::vector<StreamDiscoveryData>& dd)
 {
     std::vector<size_t> order(ci.size());
     for (size_t i = 0; i < ci.size(); ++i)
         order[i] = i;
 
-    size_t dv = ci.size();
-    size_t base = ci.size();
-    for (size_t i = 0; i < ci.size(); ++i)
-    {
+    // The base is the first later primary HEVC video that is WIDER than the first Dolby Vision one, with or without
+    // Dolby Vision data of its own (a base whose RPU was not taken out still carries it). One only as wide is no base
+    // of it: a profile 8.1 picture listed before a plain one of the same size went to the enhancement layer PID.
+    const auto primaryHevc = [&](const size_t i) {
         AbstractStreamReader* reader = ci[i].m_streamReader;
-        if (dynamic_cast<HEVCStreamReader*>(reader) == nullptr || reader->isSecondary() || ci[i].m_isSubStream)
-            continue;
-        if (reader->getStreamHDR() == 4)
+        return dynamic_cast<HEVCStreamReader*>(reader) != nullptr && !reader->isSecondary() && !ci[i].m_isSubStream;
+    };
+    // The width the probe found: the readers have not parsed a picture yet when the order is decided, so theirs was 0
+    // here and a test on it never held. Through the base class: the HEVC reader keeps its own protected.
+    const auto width = [&](const size_t i) -> int64_t {
+        if (i < dd.size() && dd[i].discovered && dd[i].width > 0)
+            return dd[i].width;
+        return dynamic_cast<MPEGStreamReader*>(ci[i].m_streamReader)->getStreamWidth();
+    };
+    size_t dv = ci.size();
+    for (size_t i = 0; i < ci.size() && dv == ci.size(); ++i)
+        if (primaryHevc(i))
         {
-            if (dv == ci.size() && base == ci.size())
-                dv = i;
+            if (ci[i].m_streamReader->getStreamHDR() != 4)
+                return order;  // a primary video without Dolby Vision comes first: the usual order
+            dv = i;
         }
-        else if (base == ci.size())
-            base = i;
-    }
-    if (dv == ci.size() || base == ci.size() || base < dv)
+    if (dv == ci.size())
         return order;
-    // Through the base class: the HEVC reader keeps these protected.
-    const auto* el = dynamic_cast<MPEGStreamReader*>(ci[dv].m_streamReader);
-    const auto* bl = dynamic_cast<MPEGStreamReader*>(ci[base].m_streamReader);
-    if (bl->getStreamWidth() < el->getStreamWidth())
+    size_t base = ci.size();
+    for (size_t i = dv + 1; i < ci.size() && base == ci.size(); ++i)
+        if (primaryHevc(i) && width(i) > width(dv))
+            base = i;
+    if (base == ci.size())
         return order;
 
     order.erase(order.begin() + static_cast<std::ptrdiff_t>(base));
@@ -394,7 +403,7 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
     for (size_t i = 0; i < ci.size(); ++i)
         order[i] = i;
     if (dynamic_cast<TSMuxer*>(m_mainMuxer.get()) != nullptr)
-        order = transportStreamAddOrder(ci);
+        order = transportStreamAddOrder(ci, m_discoveryData);
 
     for (const size_t i : order)
     {

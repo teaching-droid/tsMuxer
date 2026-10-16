@@ -269,6 +269,7 @@ class TSMuxer final : public AbstractMuxer
     bool m_beforePCRDataWrited;
     std::map<int, int> m_extIndexToTSIndex;
     uint16_t m_videoTrackCnt;
+    int m_firstBaseWidth = 0;  // the width of the first primary video: an enhancement layer is never wider
     uint16_t m_DVvideoTrackCnt;
     uint16_t m_videoSecondTrackCnt;
     uint16_t m_audioTrackCnt;
