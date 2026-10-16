@@ -3068,7 +3068,7 @@ void MatroskaDemuxer::loadChapters(const std::string& fileName)
 // of its own, keyed by track number, as strings the muxers take or leave:
 //   srcflags    forced=1,hearing=1,visual=1,descriptions=1,original=1,commentary=1 (the flags present, with their
 //   value) srccolour   m=,r=,t=,p=,cll=,fall= and rx= ry= gx= gy= bx= by= wx= wy= lmax= lmin= (the elements present)
-//   srcdisplay  WIDTHxHEIGHT, when DisplayUnit is pixels and the size differs from the picture's
+//   srcdisplay  WIDTHxHEIGHT, when DisplayUnit is pixels and the file gives a display size
 void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
 {
     m_trackExtras.clear();
@@ -3337,8 +3337,10 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
                     }
                 }
             }
-            if (displayUnit == 0 && displayWidth && displayHeight &&
-                (displayWidth != pixelWidth || displayHeight != pixelHeight))
+            // Also when it equals the picture's size. That is a file saying "square pixels" over a stream that says
+            // otherwise, and in Matroska the file's display size is the one shown: it was left out, and the output
+            // then showed the stream's shape, a 720x576 file made to be shown at 5:4 came out 16:9.
+            if (displayUnit == 0 && displayWidth && displayHeight)
                 display = std::to_string(displayWidth) + "x" + std::to_string(displayHeight);
             if (cropTop || cropBottom || cropLeft || cropRight)
                 crop = std::to_string(cropTop) + "," + std::to_string(cropBottom) + "," + std::to_string(cropLeft) +
