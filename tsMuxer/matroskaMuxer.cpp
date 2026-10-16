@@ -4251,12 +4251,11 @@ static std::string fourCcToString(const uint32_t fourCc)
 // manifest is what keeps it honest: it says what the file really is, in text, so a person and a
 // tool can both find out without reverse engineering the video track.
 // The start code section, shared by both manifests so the two say the same thing the same way.
-static std::string startCodeSection(const std::string& rule)
+static std::string startCodeSection(const std::string& rule, const std::string& trackLines)
 {
     if (rule.empty())
         return {};
-    return "  start-code            " + rule +
-           "\r\n"
+    return "  start-code            " + rule + "\r\n" + trackLines +
            "\r\n"
            "start-code\r\n"
            "----------\r\n"
@@ -4324,7 +4323,7 @@ std::string MatroskaMuxer::buildDvManifest(const uint64_t rpuBytes, const uint32
       << "  declared-config       " << declared << "\r\n"
       << "  original-config       " << original << "\r\n";
     if (!scRule.empty())
-        s << startCodeSection(scRule);
+        s << startCodeSection(scRule, m_startCodeTrackLines);
     else
         s << "\r\n";
 
@@ -4381,7 +4380,7 @@ void MatroskaMuxer::writeStartCodeOnlyManifest(const std::string& scRule)
          "This file records how its source framed the video, so that a disc built from it can be\r\n"
          "framed the same way. Nothing here changes how the file plays.\r\n"
          "\r\n";
-    s << startCodeSection(scRule);
+    s << startCodeSection(scRule, m_startCodeTrackLines);
     const std::string manifest = s.str();
 
     const uint32_t crc = static_cast<uint32_t>(crc32(
@@ -4430,12 +4429,20 @@ void MatroskaMuxer::writeAttachments()
     // The start code rule of the video track, if the source used anything other than the four byte
     // form this muxer writes. Taken from the merged Dolby Vision track when there is one, since
     // that is the track a disc gets rebuilt from, otherwise from the first video track.
+    //
+    // That one line served every track of the file, and a reader applied it to every track: with two video tracks
+    // framed differently, or H.264 beside HEVC, one of them came back framed the other's way. So each video track's
+    // own rule is written as well, on a line of its own, and a reader that finds such lines uses those. The line for
+    // the whole file stays, for a reader that knows only that one.
     std::string scRule;
+    m_startCodeTrackLines.clear();
     for (const auto& [streamIdx, track] : m_tracks)
     {
         if (track.trackType != 1 || track.foldedIntoStream >= 0)
             continue;
         const std::string rule = startCodeRule(track);
+        if (!rule.empty())
+            m_startCodeTrackLines += "  start-code-track-" + std::to_string(track.trackNumber) + "  " + rule + "\r\n";
         if (!rule.empty())
         {
             scRule = rule;

@@ -1192,16 +1192,29 @@ void MatroskaDemuxer::applyStartCodeRule()
     if (!getAttachment(MANIFEST_ATTACHMENT_NAME, manifestBytes))
         return;
 
-    const std::string rule = dvManifestValue(std::string(manifestBytes.begin(), manifestBytes.end()), "start-code");
+    const std::string manifest(manifestBytes.begin(), manifestBytes.end());
+    const std::string rule = dvManifestValue(manifest, "start-code");
     if (rule.empty())
         return;
+
+    // Each video track's own rule when the file gives one per track; a file from before that gives one for the file
+    // only, and that one goes to every track as it did (see MatroskaMuxer::writeAttachments).
+    const auto ownRule = [&](const Track* t) {
+        return dvManifestValue(manifest, "start-code-track-" + std::to_string(t->num));
+    };
+    bool perTrack = false;
+    for (int i = 0; i < num_tracks && !perTrack; i++)
+        perTrack = tracks[i] != nullptr && !ownRule(tracks[i]).empty();
 
     int applied = 0;
     for (int i = 0; i < num_tracks; i++)
     {
         if (tracks[i] != nullptr && tracks[i]->parsed_priv_data != nullptr)
         {
-            tracks[i]->parsed_priv_data->setStartCodeRule(rule);
+            const std::string own = perTrack ? ownRule(tracks[i]) : rule;
+            if (own.empty())
+                continue;
+            tracks[i]->parsed_priv_data->setStartCodeRule(own);
             applied++;
         }
     }
