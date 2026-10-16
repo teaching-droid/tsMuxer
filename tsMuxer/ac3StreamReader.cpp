@@ -129,6 +129,20 @@ int AC3StreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdm
     }
     m_state = AC3State::stateDecodeAC3;
     AC3Codec::setTestMode(false);
+
+    // A Blu-ray player has to decode AC-3 but not E-AC-3. That is why Dolby Digital Plus on a disc is
+    // an AC-3 core with the E-AC-3 part beside it: a player without an E-AC-3 decoder plays the core.
+    // A stream that is E-AC-3 from its first frame has no core to fall back on. Secondary audio is E-AC-3 without a core by design, so it is left alone. Said
+    // once, because the descriptor is built more than once.
+    if (blurayMode && !m_eac3NoCoreReported && !isTrueHD() && !isSecondary() && isEAC3() && !isAC3())
+    {
+        m_eac3NoCoreReported = true;
+        LTRACE(LT_ERROR, 2,
+               "Warning! The E-AC-3 track " << m_streamIndex
+                                            << " has no AC-3 core. A Blu-ray player has to decode AC-3 but not "
+                                               "E-AC-3, so a player without an E-AC-3 decoder plays no sound from "
+                                               "this track.");
+    }
     BitStreamWriter bitWriter{};
 
     if (isAC3())
