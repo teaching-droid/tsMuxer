@@ -10,7 +10,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **TrueHD with its AC-3 core, muxed as plain TrueHD, lost most of its audio.** A demuxed .ac3+thd file renamed to .thd and muxed as A_MLP had every core frame taken for a damaged frame, and the mux still said it was complete. The core frames are now left out, as drop-ac3-core does, and all of the TrueHD is kept. A_AC3 keeps both, as before.
 
-* **TrueHD that does not begin with a full sync frame played early,** as in a Matroska file after a cut. The frames before the first full sync frame cannot be played and are left out, and the rest of the audio moved forward by their length: 97 ms in a measured file. The audio now keeps its time.
+* **TrueHD that does not begin with a full sync frame played early,** as in a Matroska file after a cut. The frames before the first full sync frame cannot be played and are left out, and the rest of the audio moved forward by their length: 97 ms in a measured file. The audio now keeps its time, also when it is muxed with its AC-3 core (A_MLP).
 
 * **H.264 whose start was encoded again by a cutting tool could break up from the cut on.** When SEI and VUI data were inserted (the window's default, "Insert SEI and VUI data if absent"), the first SPS was written for the whole file. The SPS written now follows each change in the stream.
 
@@ -24,7 +24,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A job that was refused could empty an existing ISO image of the same name.** A cut whose end is not after its start, --keep-editions and a FLAC track are refused for a disc, but only after the image had been opened for writing, and --keep-editions on a demux left an empty folder. They are now refused before any output exists. Some faults can only be found during the mux, such as a cut that starts after the end of the sources: when the output exists already, the new one is now written under a temporary name beside it and replaces the old one only when the job has succeeded. A job that fails leaves an existing TS, M2TS, Matroska file, ISO image or disc folder as it was. While such a job runs, the drive needs room for both.
 
-* **A subtitle with a long fade could end the mux with a crash,** as at 59.94 fps. The steps of a fade are written into a buffer of fixed size, and a fade of minutes on a long subtitle ran past its end. A fade that does not fit is now shortened, with a warning.
+* **A subtitle with a long fade could end the mux with a crash,** for example at 59.94 fps. The steps of a fade are written into a buffer of fixed size, and a fade of minutes on a long subtitle ran past its end. A fade that does not fit is now shortened, with a warning.
 
 * **H.264 with pulldown and B pictures got times that were out of order or used twice,** and a Matroska output joined pictures that had the same time: with frame doubling, 60 of 144 times were used twice. Each picture now comes when the pictures before it in the order shown have been shown for their own time.
 
@@ -38,25 +38,21 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A chunk after the audio of a WAV file was muxed as sound,** such as a LIST, id3 or JUNK chunk: 1 MB of JUNK became 5 s of noise. The header became sound as well in a WAV whose chunk before the audio has no pad byte, in a WAV whose data size is 0, and in a Wave64 file with an 18 byte format chunk. Only the audio is muxed now.
 
-* **An audio frame at the end of a 2 MB read block could be lost** after bytes that are not sound, such as a tag: one AC-3 or MP3 frame, or the first AAC frame of a file. A mark inside a tag could also become a short frame of sound. Every frame is kept now.
+* **An audio frame at the end of a 2 MB read block could be lost** after bytes that are not sound, such as a tag: one AC-3 or MP3 frame, or the first AAC frame of a file. A byte order mark inside a tag could also become a short frame of sound. Every frame is kept now.
 
-* **One damaged FLAC frame near the end lost every frame after it.** One changed byte in a file of 30 s kept 30 of its 1292 frames. The frames after it are kept now.
+* **One damaged FLAC frame in the last 2 MB of a file lost every frame after it.** One changed byte in a file of 30 s kept 30 of its 1292 frames. The frames after it are kept now.
 
-* **A complete mux of an MP4 with unused bytes in its mdat ended with exit -2,** saying the mux stopped before the source was finished. It ends as a complete mux now.
+* **A complete mux of an MP4 with unused bytes at the end of its mdat, more than 1 % of the file, ended with exit -2,** saying the mux stopped before the source was finished. It ends as a complete mux now.
 
-* **In a join of MP4 files, AC-3, E-AC-3 and MP3 sound fell further behind the picture at every joint,** by 16 ms for AC-3 and 32 ms for MP3 each time. They now stay within half a frame of the picture, as AAC does. E-AC-3 from a single MP4 file started 5 ms late as well.
-
-* **Opus and Vorbis from an MP4 into Matroska came early,** 7 ms for Opus: the start of the sound was moved back twice.
+* **In a join of MP4 files, AC-3, E-AC-3 and MP3 sound fell further behind the picture at every joint,** by the encoder's delay each time: 16 ms for AC-3 and 32 ms for MP3 in the files measured. They now stay within half a frame of the picture, as AAC does. E-AC-3 from a single MP4 file started 5 ms late as well.
 
 * **A join of Opus files played what each file leaves out,** and the sound of each later file came about 20 ms late. The padding of each file and the start-up samples of the next are left out at the joint now, and the end of the join is trimmed by the last file's padding.
 
-* **TrueHD with its AC-3 core, cut before a full sync frame and muxed as A_MLP, still played 50 ms early.** It keeps its time now.
-
-* **A timeshift sent subtitles late.** With timeshift=5000ms on the subtitles of a Matroska file, more than half of them came up to 10 s after they were due. Their times were right, and they are now sent in time.
+* **A timeshift sent subtitles late.** With timeshift=5000ms on the subtitles of a Matroska file, more than half of them came about 10 s after they were due. Their times were right, and they are now sent in time.
 
 * **The time between two clock references could still pass 0.1 s,** with video under 10 frames a second or with subtitles alone: 125 ms and 12 s. Packets that carry only the clock fill such gaps now.
 
-* **Chapters on a disc came out of order, or twice at one time,** when a chapter file was not in time order. The chapters of a file and of --custom-chapters are now one list in time order, whichever option comes first. More than 999 chapters, which a disc cannot hold, stopped the job after the whole mux; they are refused before it now.
+* **Chapters on a disc came out of order, or twice at one time,** when a chapter file was not in time order. The chapters of a file and of --custom-chapters are now one list in time order, whichever option comes first. More than 999 chapters, which a disc cannot hold, were written without a word, or stopped the job after the whole mux when there were thousands; they are refused before it now.
 
 * **A Blu-ray split past clip 99999 wrote clip names of six digits** that the playlist could not name. Such a split now stops with a message.
 
@@ -94,7 +90,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **Video with one long still picture** keeps the rate most of its pictures have: one picture held for 2 s in a 25 fps file retimed every picture to 20.83 fps. Video is timed at one rate, so a warning now says when the pictures of a track have different lengths.
 
-* **More than 255 chapters** are kept: a file with both lists has its Nero chapters cut at 255, and the chapter track is taken when it holds more.
+* **More than 255 chapters** are kept: the Nero chapter list holds at most 255, and a file's chapter track is now taken when it holds more.
 
 ### Subtitles
 
@@ -118,7 +114,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **Subtitles drawn for video up to 720 pixels wide at 25 or 50 frames per second, such as 720x576, were drawn for 720x480.** The canvas of their PGS was the size of NTSC video, and each subtitle was placed for 480 lines. They now get the canvas of 720x576 a disc has for such video, whether they come from SRT, ASS, SSA or WebVTT. A PGS track already drawn at 720x576 is no longer scaled down to 720x480 when its line names the size and the frame rate of the video.
 
-* **WebVTT captions and descriptions in a WebM or Matroska file** are read, as subtitles. Only the WebVTT kind SUBTITLES was. WebVTT metadata is not text to show and is still not read.
+* **WebVTT captions and descriptions in a WebM or Matroska file** are read, as subtitles. Of the WebM forms, only the kind SUBTITLES was. WebVTT metadata is not text to show and is still not read.
 
 * **The track list names ASS, SSA and WebVTT subtitles from a Matroska file as what they are.** Each was listed as "SRT text subtitles".
 
@@ -132,9 +128,9 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **Audio at a sample rate a disc cannot carry,** such as AC-3 at 44.1 kHz, gets a warning. A Blu-ray disc carries audio at 48, 96 or 192 kHz only.
 
-* **HEVC level=** reaches the HEVC descriptor of a transport stream as well: it kept the level of the source.
+* **HEVC level=** reaches the HEVC descriptor of a transport stream made with --no-hdmv-descriptors as well: the descriptor kept the level of the source.
 
-* **Single layer Dolby Vision on a disc** gets a warning that it plays as HDR10: a UHD Blu-ray player takes Dolby Vision from two layers only. The disc is written as before.
+* **Single layer Dolby Vision on a disc** gets a warning that it plays without Dolby Vision, as its HDR10, SDR or HLG base: a UHD Blu-ray player takes Dolby Vision from two layers only. The disc is written as before.
 
 * **The layer break guard goes at the breaks of the disc size** given with --disc-size, or --disc-capacity for --bdmv-to-iso: on a 100 GB disc it went at half a 50 GB disc, inside the first layer. --layer-break-guard-before on its own gives a guard before the break; it was ignored.
 
@@ -146,9 +142,9 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **E-AC-3 without an AC-3 core** gets a warning on a disc: a Blu-ray player has to decode AC-3 but not E-AC-3, so a player without an E-AC-3 decoder plays no sound from it.
 
-* **More than 32 tracks of one kind on a disc** are refused before it is written, with the number to leave out. A 33rd audio track took PID 0x1120, outside the audio range. A transport stream whose tracks need a program map table longer than the 1021 bytes the format allows is refused as well.
+* **More than 32 tracks of one kind on a disc** are refused before it is written, with the number to leave out. A 33rd audio track took PID 0x1120, outside the audio range. A transport stream whose tracks need a program map table longer than the 1021 bytes a transport stream allows is refused as well.
 
-* **--maxbitrate no longer takes over the clock of --bitrate.** A constant bitrate disc with the read rate limit, as the window writes it, came out slightly larger. It is now the same as without --maxbitrate.
+* **--maxbitrate no longer replaces the rate of --bitrate.** A constant bitrate disc with the read rate limit, as the window writes it, came out slightly larger. With --maxbitrate at or above --bitrate it is now the same as without it.
 
 * **The finished disc is measured against --disc-size,** as the window says: a warning when the image, or the files of a disc folder, are larger than the disc. Only an estimate was checked, before the mux.
 
@@ -160,7 +156,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A 3D track whose base view is the right eye** is marked so (StereoMode 14), with --right-eye, or from a playlist or a Matroska source that says so, on a disc as well. It was marked left eye first, which swapped the eyes.
 
-* **20 bit LPCM** says BitDepth 24, as its samples take 3 bytes; it played as noise in other players. A LanguageBCP47 of 40 characters or more is kept. The DURATION tags of a source made by ffmpeg are left out, as they give the source's length.
+* **20 bit LPCM** says BitDepth 24, as its samples take 3 bytes; it played as noise in other players. A LanguageBCP47 of 40 to 255 characters is kept; a longer one is left out with a warning. The DURATION tags of a source made by ffmpeg are left out, as they give the source's length.
 
 * **A split of sound without video** is decided by the sound, not by a subtitle line listed first.
 
@@ -182,9 +178,9 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **The German texts** write "Metadatei" one way throughout.
 
-* **The output can no longer be one of the sources.** With the output in the source folder, a source named 00000.M2TS was offered as its own output, as the names were compared with their case, and "Start muxing" now refuses an output that is a source.
+* **The output can no longer be one of the sources.** With the output in the source folder, a source named 00000.M2TS was offered as its own output, as the names were compared with their case. "Start muxing" now also refuses an output that is one of the sources.
 
-* **An output named .mks or .mk3d** is a Matroska output, in the window and on the command line. It became a folder of demuxed tracks.
+* **An output named .mks or .mk3d** is a Matroska output, in the window and on the command line. On the command line it became a folder of demuxed tracks, and the window refused the name.
 
 * **A WebM output can be muxed from the window.** A .webm name chooses MKV output, but "Start muxing" refused it, a click on "MKV muxing" turned it into .mkv, and the Browse dialog had no WebM type and added .mkv to it. A .webm name is now kept and muxed as WebM, and the Browse dialog offers "WebM (*.webm)".
 
@@ -194,7 +190,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **An existing MKV or WebM output** is no longer replaced without the question a TS, M2TS or ISO output gets.
 
-* **The level list of an HEVC track holds HEVC's levels.** It offered the H.264 ones, without 5.2.
+* **The level list of an HEVC track holds HEVC's levels.** It offered the H.264 ones. Both lists now hold 5.2, which neither had.
 
 * **"Keep the DTS core"** is offered for DTS-HD High Resolution, which always has a core.
 
