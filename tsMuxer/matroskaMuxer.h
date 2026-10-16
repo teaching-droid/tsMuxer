@@ -338,7 +338,7 @@ class MatroskaMuxer final : public AbstractMuxer
                                               const std::string& scRule) const;
     // A manifest carrying only the start code rule, for a file that is not a profile 8.1 carrier.
     void writeStartCodeOnlyManifest(const std::string& scRule);
-    // "  start-code-track-N   rule" for each video track whose source used a framing of its own
+    // "  start-code-track-uid-<TrackUID>   rule" for each video track whose source used a framing of its own
     std::string m_startCodeTrackLines;
     // Build the SeekHead element, header included, so it can be written in both places.
     [[nodiscard]] std::vector<uint8_t> buildSeekHead() const;

@@ -4447,7 +4447,7 @@ void MatroskaMuxer::writeAttachments()
             continue;
         const std::string rule = startCodeRule(track);
         if (!rule.empty())
-            m_startCodeTrackLines += "  start-code-track-" + std::to_string(track.trackNumber) + "  " + rule + "\r\n";
+            m_startCodeTrackLines += "  start-code-track-uid-" + std::to_string(track.trackUID) + "  " + rule + "\r\n";
         if (!rule.empty())
         {
             scRule = rule;

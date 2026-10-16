@@ -1197,10 +1197,12 @@ void MatroskaDemuxer::applyStartCodeRule()
     if (rule.empty())
         return;
 
-    // Each video track's own rule when the file gives one per track; a file from before that gives one for the file
-    // only, and that one goes to every track as it did (see MatroskaMuxer::writeAttachments).
+    // Each video track's own rule when the file gives one per track, found by the track's TrackUID: a tool that rewrites
+    // the file may number its tracks anew (mkvmerge does, with --track-order or a track left out), and a rule found by
+    // number went to another track. A file from before, or one whose tracks were given new UIDs, has no line for its
+    // tracks, and the line for the whole file goes to every track as it did (see MatroskaMuxer::writeAttachments).
     const auto ownRule = [&](const Track* t) {
-        return dvManifestValue(manifest, "start-code-track-" + std::to_string(t->num));
+        return dvManifestValue(manifest, "start-code-track-uid-" + std::to_string(static_cast<uint64_t>(t->uid)));
     };
     bool perTrack = false;
     for (int i = 0; i < num_tracks && !perTrack; i++)
