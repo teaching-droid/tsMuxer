@@ -712,6 +712,7 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     m_fileWriter = std::make_unique<BufferedFileWriter>();
     AVPacket avPacket;
     bool anyMuxed = false;
+    std::set<int> endedByCut;  // streams that have reached --cut-end
 
     while (true)
     {
@@ -724,15 +725,29 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
             if (avPacket.pts < m_cutStart || !keptAfterCutStart(avPacket))
                 continue;
         }
-        if (m_cutEnd > 0 && avPacket.pts >= m_cutEnd)
+        if (m_cutEnd > 0)
         {
             // A subtitle packet past the cut is dropped, but it does not end the cut. Its timestamp
             // can run more than a second ahead of the pictures still being read, so stopping at it
             // cut the video and audio short: 213 pictures of a 10 second cut instead of 240.
-            if (avPacket.codecID == CODEC_S_PGS || avPacket.codecID == CODEC_S_SRT || avPacket.codecID == CODEC_S_SUP ||
-                avPacket.codecID == CODEC_S_MKVCOPY)
+            const bool subtitle = avPacket.codecID == CODEC_S_PGS || avPacket.codecID == CODEC_S_SRT ||
+                                  avPacket.codecID == CODEC_S_SUP || avPacket.codecID == CODEC_S_MKVCOPY;
+            // The packets come in the order of their decoding times, and a picture is shown at or after it
+            // is decoded. Once that time reaches the cut, nothing of any stream can still be shown before
+            // it, and the mux ends there.
+            //
+            // Before that, a stream ends at its first packet that is shown at or after the cut: a B
+            // picture that follows such a picture refers to it and cannot be kept without it. The mux used
+            // to end for every stream at that first packet of ANY stream. Video comes in decoding order,
+            // so the picture of another stream decoded at nearly the same time was lost: the two layers
+            // of a Dolby Vision disc ended with different pictures, and the last audio before the cut was
+            // lost as well.
+            if (!subtitle && avPacket.dts >= m_cutEnd)
+                break;
+            if (avPacket.pts >= m_cutEnd)
+                endedByCut.insert(avPacket.stream_index);
+            if (endedByCut.count(avPacket.stream_index) != 0)
                 continue;
-            break;
         }
 
         anyMuxed = true;
