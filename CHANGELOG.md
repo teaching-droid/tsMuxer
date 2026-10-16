@@ -116,8 +116,6 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A .sup with a few bytes in front of its first segment** is muxed whole, with a warning. With one or two bytes nothing was muxed.
 
-* **save-srt** makes its file with the first subtitle written: a track that was refused left an empty .srt behind.
-
 * **Subtitles drawn for video up to 720 pixels wide at 25 or 50 frames per second, such as 720x576, were drawn for 720x480.** The canvas of their PGS was the size of NTSC video, and each subtitle was placed for 480 lines. They now get the canvas of 720x576 a disc has for such video, whether they come from SRT, ASS, SSA or WebVTT. A PGS track already drawn at 720x576 is no longer scaled down to 720x480 when its line names the size and the frame rate of the video.
 
 * **WebVTT captions and descriptions in a WebM or Matroska file** are read, as subtitles. Only the WebVTT kind SUBTITLES was. WebVTT metadata is not text to show and is still not read.
