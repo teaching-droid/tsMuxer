@@ -212,7 +212,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A tab on the MUXOPT line** is read as a space. It joined the texts on either side of it: a tab after --cut-end=5s kept only one picture.
 
-* **Every MUXOPT line counts.** With two of them, the muxers took the options of the last one only.
+* **Every MUXOPT line counts.** With two of them, the muxers took the options of the last one only. --blu-ray or --avchd on the first of two lines gave a transport stream named .iso, or a folder of demuxed tracks where a disc folder was asked for. Lines that ask for both a Blu-ray and an AVCHD disc are refused.
 
 * **A WebM output** no longer carries the BCP 47 language and the track flags that WebM does not have, such as "hearing impaired". A Matroska output keeps them.
 
