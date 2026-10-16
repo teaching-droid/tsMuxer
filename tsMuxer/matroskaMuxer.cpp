@@ -2059,6 +2059,11 @@ void MatroskaMuxer::refreshTrackProperties()
         const auto elReader = dynamic_cast<HEVCStreamReader*>(track.codecReader);
         if (blReader == nullptr || elReader == nullptr)
             continue;
+        // An enhancement layer is never larger than its base: a 4K profile 8.1 track listed after a 1080p one was
+        // folded into it, and the output showed only the 1080p picture. Such a track stays a track of its own.
+        if (dynamic_cast<MPEGStreamReader*>(elReader)->getStreamWidth() >
+            dynamic_cast<MPEGStreamReader*>(blReader)->getStreamWidth())
+            continue;
 
         // In profile 8.1 mode the pairing still happens, because the enhancement layer is still
         // folded into the one track, but the track is DESCRIBED as single layer 8.1: that is what
