@@ -3123,7 +3123,7 @@ void MatroskaDemuxer::loadChapters(const std::string& fileName)
 // of its own, keyed by track number, as strings the muxers take or leave:
 //   srcflags    forced=1,hearing=1,visual=1,descriptions=1,original=1,commentary=1 (the flags present, with their
 //   value) srccolour   m=,r=,t=,p=,cll=,fall= and rx= ry= gx= gy= bx= by= wx= wy= lmax= lmin= (the elements present)
-//   srcdisplay  WIDTHxHEIGHT, when DisplayUnit is pixels and the file gives a display size
+//   srcdisplay  WIDTHxHEIGHT, when the file gives a display size: in pixels, or as a shape at the picture's height
 void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
 {
     m_trackExtras.clear();
@@ -3397,6 +3397,12 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
             // then showed the stream's shape, a 720x576 file made to be shown at 5:4 came out 16:9.
             if (displayUnit == 0 && displayWidth && displayHeight)
                 display = std::to_string(displayWidth) + "x" + std::to_string(displayHeight);
+            // In centimetres, inches or as an aspect ratio (DisplayUnit 1, 2 and 3), the two numbers give the shape
+            // only, and a current ffmpeg writes the ratio. It was left out, so such a file's shape was lost the same
+            // way. It goes on as the display size at the picture's height.
+            else if (displayUnit >= 1 && displayUnit <= 3 && displayWidth && displayHeight && pixelHeight)
+                display = std::to_string((pixelHeight * displayWidth + displayHeight / 2) / displayHeight) + "x" +
+                          std::to_string(pixelHeight);
             if (cropTop || cropBottom || cropLeft || cropRight)
                 crop = std::to_string(cropTop) + "," + std::to_string(cropBottom) + "," + std::to_string(cropLeft) +
                        "," + std::to_string(cropRight);
