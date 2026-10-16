@@ -980,18 +980,23 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         }
     }
 
-    // delPulldown on MPEG-2 promises that the frame rate goes from 30 to 24 when pulldown is present.
+    // delPulldown promises that the frame rate goes from 30 to 24 when pulldown is present.
     // Only the window kept that promise, by writing fps=24000/1001 into the meta itself. A meta
     // written by hand, or the command line, cleared the repeat flags and kept 29.97, so film played
     // a quarter too fast. Ask the stream, as the listing does, and supply the rate when it is
-    // pulldown and nobody chose one.
+    // pulldown and nobody chose one. The same holds for H.264 and VC-1, whose readers remove the
+    // pulldown as well: 144 pictures of H.264 film played in 4.8 s instead of 6.0.
     map<string, string> readerParams = addParams;
-    if (codec == "V_MPEG-2" && addParams.count("delPulldown") && !addParams.count("fps"))
+    const int pulldownCodec = codec == "V_MPEG-2"           ? CODEC_V_MPEG2
+                              : codec == "V_MPEG4/ISO/AVC" ? CODEC_V_MPEG4_H264
+                              : codec == "V_MS/VFW/WVC1"   ? CODEC_V_VC1
+                                                           : 0;
+    if (pulldownCodec != 0 && addParams.count("delPulldown") && !addParams.count("fps"))
     {
         const DetectStreamRez probe = DetectStreamReader(m_readManager, fileList[0], false);
         for (const CheckStreamRez& s : probe.streams)
         {
-            if (s.codecInfo.codecID != CODEC_V_MPEG2 || (pid && s.trackID != pid))
+            if (s.codecInfo.codecID != pulldownCodec || (pid && s.trackID != pid))
                 continue;
             const size_t at = s.streamDescr.find("Frame rate: ");
             if (s.streamDescr.find("(pulldown)") == string::npos || at == string::npos)
@@ -1004,8 +1009,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             {
                 readerParams["fps"] = filmFps;
                 LTRACE(LT_INFO, 2,
-                       "delPulldown: the MPEG-2 stream carries pulldown at " << streamFps << " fps, so it is muxed at "
-                                                                             << filmFps << " fps.");
+                       "delPulldown: the " << s.codecInfo.displayName << " stream carries pulldown at " << streamFps
+                                           << " fps, so it is muxed at " << filmFps << " fps.");
             }
             break;
         }
