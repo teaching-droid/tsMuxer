@@ -1681,9 +1681,12 @@ std::vector<uint8_t> METADemuxer::getPlainMatroskaChapters()
             return {};
     for (auto& [name, demuxerData] : m_containerReader.m_demuxers)
     {
-        if (!demuxerData.m_demuxer || demuxerData.m_demuxer->getChapters().empty())
+        if (!demuxerData.m_demuxer)
             continue;
         auto* mkv = dynamic_cast<MatroskaDemuxer*>(demuxerData.m_demuxer);
+        // A Matroska file counts by its chapters as stored, also when its default edition shows none of them
+        if (mkv ? mkv->getSourceEditions().chapters.empty() : demuxerData.m_demuxer->getChapters().empty())
+            continue;
         const auto* join = dynamic_cast<const FileListIterator*>(demuxerData.m_iterator);
         if (!mkv || (join && (join->getFiles().size() > 1 ||
                               (!join->getRanges().empty() && join->getRanges().front().startNs >= 0))))

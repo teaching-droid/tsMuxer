@@ -255,9 +255,9 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
                     for (const auto& chapter : m_chapterInfo)
                         m_chapters.push_back(static_cast<double>(chapter.start) / 1e9);
                     // A Matroska output also gets every edition of a Matroska source, and its hidden and nested
-                    // chapters, moved by the cut the same way (MatroskaMuxer::setSourceChapterTree)
-                    if (auto* const mkv = dynamic_cast<MatroskaMuxer*>(m_mainMuxer.get());
-                        mkv && !m_chapterInfo.empty())
+                    // chapters, moved by the cut the same way (MatroskaMuxer::setSourceChapterTree). Also when the
+                    // default edition shows nothing: its chapters all hidden, the other editions were lost with it.
+                    if (auto* const mkv = dynamic_cast<MatroskaMuxer*>(m_mainMuxer.get()); mkv && !m_noChapters)
                     {
                         const auto toNano = [](const int64_t pts) {
                             return static_cast<int64_t>(
