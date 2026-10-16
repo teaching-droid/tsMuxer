@@ -2365,6 +2365,7 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
     bool cbrAsked = false;
     bool vbrAsked = false;
     bool rateGiven = false;
+    int maxRate = -1;
     for (auto& i : params)
     {
         vector<string> paramPair = splitStr(trimStr(i).c_str(), '=');
@@ -2388,7 +2389,7 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
             rateGiven = true;
         }
         else if (paramPair[0] == "--maxbitrate" && paramPair.size() > 1)
-            setMaxBitrate(checkedMuxRate(paramPair[0], paramPair[1]));
+            maxRate = checkedMuxRate(paramPair[0], paramPair[1]);
         else if (paramPair[0] == "--minbitrate" && paramPair.size() > 1)
             setMinBitrate(static_cast<int>(strToDouble(paramPair[1].c_str()) * 1000.0));
         else if (paramPair[0] == "--vbv-len" && paramPair.size() > 1)
@@ -2425,6 +2426,17 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
         {
             m_computeMuxStats = true;
         }
+    }
+    // --maxbitrate also sets the rate the muxing clock runs at, and it did so over --bitrate when it came after it, as
+    // the window writes it for a constant bitrate disc with the read rate tick. The size stayed the rate of --bitrate,
+    // which the padding follows, but the remainder that padding carries from one PCR to the next was dropped. --bitrate
+    // now keeps the clock whatever order the two come in; --maxbitrate stays the ceiling.
+    if (maxRate != -1)
+    {
+        const int cbrRate = m_cbrBitrate;
+        setMaxBitrate(maxRate);
+        if (rateGiven)
+            setMuxRate(cbrRate);
     }
     // Neither --cbr nor --vbr is a switch. Nothing anywhere reads them, the rate comes from
     // --bitrate alone, and until now both words fell out of the bottom of this loop without a
