@@ -150,6 +150,7 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
     // Move the start of the mux instead. Every track moves by the same amount, so the offset the
     // user asked for between them is exactly what they get, and only the absolute start changes,
     // which is the thing that could not be honoured in the first place.
+    checkTimeshiftFitsClock();  // also here, for an output that is not a disc
     int64_t mostNegativeShift = 0;
     for (const StreamInfo& si : ci)
         if (si.m_timeShift < mostNegativeShift)
@@ -418,6 +419,31 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
 // refuses a track with no enhancement layer at its first packets (hevcDolbyVisionFilter.cpp). The first block of every
 // stream is read when the mux begins (preinitMux), which for a disc is after its folders are made, so a refusal left
 // an empty folder tree. When such a line is there, the first blocks are read here instead, before anything is made.
+void MuxerManager::checkTimeshiftFitsClock()
+{
+    const std::vector<StreamInfo>& ci = m_metaDemuxer.getStreamInfo();
+    // A negative timeshift raises the start of the mux by what it needs (preinitMux). The 90 kHz clock of a transport
+    // stream wraps after 2^33 ticks, about 26.5 hours, and the raise had no bound: a timeshift of -95440 s put the start
+    // so high that the times of a 10 s clip wrapped round halfway through it, and went backwards there.
+    int64_t mostNegativeShift = 0;
+    for (const StreamInfo& si : ci)
+        mostNegativeShift = std::min(mostNegativeShift, si.m_timeShift);
+    if (mostNegativeShift < 0)
+    {
+        static constexpr int64_t CLOCK_WRAP = 1LL << 33;  // 90 kHz ticks
+        const int64_t needed = -mostNegativeShift / (INTERNAL_PTS_FREQ / 90000) + 1;
+        // The length of the sources where their containers say it; a raw stream does not, and then the start alone
+        // may not pass half the clock, which leaves more than 13 hours for the mux itself.
+        const int64_t length = m_metaDemuxer.statedDurationNano() / 1000000 * 90 / 1000;  // 90 kHz ticks
+        if (std::max(needed, m_ptsOffset) + (length > 0 ? length : CLOCK_WRAP / 2) >= CLOCK_WRAP)
+            THROW(ERR_COMMON, "A timeshift of " << (-mostNegativeShift * 1000 / INTERNAL_PTS_FREQ)
+                                                << " ms needs the start of the mux raised so far that the times would "
+                                                   "pass the clock's limit of about 26.5 hours and wrap round. Use a "
+                                                   "smaller timeshift.")
+    }
+
+}
+
 void MuxerManager::checkTracksBeforeOutput()
 {
     std::vector<StreamInfo>& ci = m_metaDemuxer.getCodecInfo();
@@ -450,6 +476,8 @@ void MuxerManager::checkTracksBeforeOutput()
                                                                      << " were given. Leave out "
                                                                      << count - 32 << " of them.")
     }
+    checkTimeshiftFitsClock();
+
     const bool hevcSplit = std::any_of(ci.begin(), ci.end(), [](const StreamInfo& si) {
         return SubTrackFilter::isSubTrack(si.m_pid) && si.m_codec == hevcCodecInfo.programName;
     });

@@ -134,6 +134,7 @@ class MuxerManager final
     [[nodiscard]] bool keepEditions() const { return m_keepEditions; }
     // Also a subTrack= split of an HEVC track that has no enhancement layer to split off.
     void checkTracksBeforeOutput();
+    void checkTimeshiftFitsClock();
 
    private:
     std::vector<double> m_chapters;        // chapter start times in seconds, applied once the muxer exists
