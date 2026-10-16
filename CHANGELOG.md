@@ -158,7 +158,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **Chapters:** a list edited in the window keeps the names of the source's chapters at the same times, and a list emptied in the window gives no chapters. A Matroska XML chapter file gives characters written by their number (&#233;), and a chapter language that is not a language code is written as und, with a warning.
 
-* **A 3D track whose base view is the right eye** is marked so (StereoMode 14), with --right-eye or from a playlist that says so. It was marked left eye first.
+* **A 3D track whose base view is the right eye** is marked so (StereoMode 14), with --right-eye, or from a playlist or a Matroska source that says so, on a disc as well. It was marked left eye first, which swapped the eyes.
 
 * **20 bit LPCM** says BitDepth 24, as its samples take 3 bytes; it played as noise in other players. A LanguageBCP47 of 40 characters or more is kept. The DURATION tags of a source made by ffmpeg are left out, as they give the source's length.
 
