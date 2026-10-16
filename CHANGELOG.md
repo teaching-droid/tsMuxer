@@ -64,6 +64,12 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **AV1 from Matroska lost every picture** when the last OBU of each block had no size field. Such an OBU is read to the end of its block now.
 
+* **--cut-end lost the end of the other tracks.** The mux ended for every track at the first packet of any track that reached the cut: the sound before the cut that had not been read yet was lost, 272 ms in a measured 10 s cut, and the two layers of a Dolby Vision disc ended with different pictures. Each track now ends at its own first packet past the cut.
+
+* **H.264 film with pulldown played a quarter too fast with delPulldown.** The marks were removed and the rate stayed at 29.97, as only MPEG-2 got the film rate. H.264 and VC-1 now get 24000/1001 or 24 as well, when no fps= is given.
+
+* **A Matroska file whose track list follows its clusters was not read at all.** Matroska allows it, and a current ffmpeg writes it there when its codec data did not fit the room it kept. The listing showed no tracks, and a mux wrote an empty file and called it successful. The track list is found where the file says it is.
+
 ### MP4 and MOV input
 
 * **More codecs.** VVC, AV1, Opus, ALAC, Vorbis, VP8, VP9 and linear PCM are read. MP3, MP2 and DTS in an mp4a track are read as what they are: they used to be taken for AAC and gave an output that decodes to nothing. A VVC track used to be listed as Opus.
@@ -112,6 +118,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **Subtitles drawn for video up to 720 pixels wide at 25 or 50 frames per second, such as 720x576, were drawn for 720x480.** The canvas of their PGS was the size of NTSC video, and each subtitle was placed for 480 lines. They now get the canvas of 720x576 a disc has for such video, whether they come from SRT, ASS, SSA or WebVTT. A PGS track already drawn at 720x576 is no longer scaled down to 720x480 when its line names the size and the frame rate of the video.
 
+* **WebVTT captions and descriptions in a WebM or Matroska file** are read, as subtitles. Only the WebVTT kind SUBTITLES was. WebVTT metadata is not text to show and is still not read.
+
 ### Blu-ray and transport stream
 
 * **hdr10-override** marks an SDR HEVC track as HDR10 on a UHD disc. In the window: "Mark as HDR10 on a UHD disc" on the HEVC track.
@@ -130,6 +138,18 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A layer break guard of up to 9999 MB** is read from a meta file and by --bdmv-to-iso, as the window offers it. A meta file refused more than 1024.
 
+* **A Dolby Vision enhancement layer listed before its base layer** stays the enhancement layer. It took the PID of the primary video, 0x1011, and the 4K base the PID after it. The base is now told by its content, and the disc is the same as with the base listed first.
+
+* **subTrack= on HEVC without an enhancement layer is refused,** before anything is written: single layer Dolby Vision or plain HEVC has nothing to split off. The split wrote an empty second track, and every RPU was moved out of the base, so a profile 8 disc lost its Dolby Vision.
+
+* **E-AC-3 without an AC-3 core** gets a warning on a disc: a Blu-ray player has to decode AC-3 but not E-AC-3, so a player without an E-AC-3 decoder plays no sound from it.
+
+* **More than 32 tracks of one kind on a disc** are refused before it is written, with the number to leave out. A 33rd audio track took PID 0x1120, outside the audio range. A transport stream whose tracks need a program map table longer than the 1021 bytes the format allows is refused as well.
+
+* **--maxbitrate no longer takes over the clock of --bitrate.** A constant bitrate disc with the read rate limit, as the window writes it, came out slightly larger. It is now the same as without --maxbitrate.
+
+* **The finished disc is measured against --disc-size,** as the window says: a warning when the image, or the files of a disc folder, are larger than the disc. Only an estimate was checked, before the mux.
+
 ### Matroska output
 
 * **The display size follows the pixel shape** the H.264 or HEVC video gives. Square pixels at 720x576 or 720x480 were shown at 4:3, and HEVC at 1440x1080 with 4:3 pixels was shown at 4:3 instead of 16:9.
@@ -143,6 +163,14 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **A split of sound without video** is decided by the sound, not by a subtitle line listed first.
 
 * **A cut moves the chapters of --custom-chapters and --chapters-file** as it moves the source's own: the chapter playing at the cut start opens the output at 0. A disc had no mark at its start, and a Matroska output kept the chapters at their old times.
+
+* **The display size a Matroska source gives is kept also when it equals the picture size,** which says that the pixels are square, and also when it is given as an aspect ratio. Such a file over a stream with another pixel shape came out in the stream's shape: 5:4 became 16:9.
+
+* **Every edition is kept when the default edition shows no chapter.** When all its chapters were hidden, the chapters of every edition were lost.
+
+* **Each video track keeps its own start code framing.** With two video tracks framed differently, one came back from the file framed the other's way and no longer matched its source.
+
+* **--dv-profile=8.1:** a dovi.dll that is there but cannot be loaded is no longer reported as missing. The message names the file and the Windows error. The published dovi.dll needs Windows 8 or newer, so on Windows 7 this option may not work; that is a limit of the library build, not of tsMuxeR.
 
 ### Window
 
@@ -186,7 +214,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A WebM output** no longer carries the BCP 47 language and the track flags that WebM does not have, such as "hearing impaired". A Matroska output keeps them.
 
-* **An ISO image whose folder holds two names that are the same in the first 127 characters** is refused, with both names. One of the two files was lost on the image.
+* **An ISO image whose folder holds two names that are the same in the first 127 characters** is refused before it is written, with both names. One of the two files was lost on the image.
 
 * **A damaged frame size in an IVF file** made the frame rate probe read before its data.
 
@@ -201,6 +229,14 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **--bdmv-to-iso** counts folders when it makes room for the image's metadata, and takes --extra-iso-space: a disc folder with 400 extra folders was refused after the whole copy.
 
 * **Reads outside the data, and reads at addresses C++ does not allow, are gone.** The search for the start codes of a video stream read up to 15 bytes before and after its buffer, the check for the next TrueHD frame could read two bytes past the data, and many fields of two, four and eight bytes were read and written through pointers the language does not allow at their addresses. None of them was seen to change an output.
+
+* **A playlist is found by every path that names it:** PLAYLIST/00000.mpls from inside BDMV gave no tracks, and a playlist in BACKUP could not be muxed.
+
+* **A chapter file with more than one edition** uses the edition a Matroska file would: the one marked as the default, without its hidden chapters. It used the first edition with them.
+
+* **A meta line that shares some files with an earlier line for the same track** is refused, with the file it shares. Those files were left out without a word.
+
+* **A negative timeshift so large that the times would wrap round** the 26.5 hour limit of the clock is refused before anything is written. The times went backwards.
 
 ### What is still converted or left out
 
