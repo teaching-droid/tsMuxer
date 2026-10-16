@@ -148,12 +148,19 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
             if (str.find("--blu-ray-v3") != string::npos)
                 V3_flags |= HDMV_V3;
 
-            if (str.find("--blu-ray") != string::npos)
-                result = DiskType::BLURAY;
-            else if (str.find("--avchd") != string::npos)
-                result = DiskType::AVCHD;
-            else
-                result = DiskType::NONE;
+            // Every MUXOPT line counts, as it does for the muxers: a line without a disc option keeps the disc a
+            // line before it asked for. Only the last line decided, so --blu-ray on the first of two lines wrote no
+            // image and reported success, or a demux folder where a disc folder was asked for.
+            const DiskType lineType = str.find("--blu-ray") != string::npos ? DiskType::BLURAY
+                                      : str.find("--avchd") != string::npos ? DiskType::AVCHD
+                                                                            : DiskType::NONE;
+            if (lineType != DiskType::NONE)
+            {
+                if (result != DiskType::NONE && result != lineType)
+                    THROW(ERR_COMMON, "The MUXOPT lines ask for both a Blu-ray disc and an AVCHD disc. Give one of "
+                                      "--blu-ray and --avchd.")
+                result = lineType;
+            }
         }
         else if (strStartWith(str, "V_MPEG4/ISO/MVC"))
             stereoMode = true;
