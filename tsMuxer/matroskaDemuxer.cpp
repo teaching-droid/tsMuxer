@@ -1629,6 +1629,9 @@ int MatroskaDemuxer::matroska_read_header()
         }
     }
 
+    if (num_tracks == 0 && ebml_peek_id(nullptr) == MATROSKA_ID_CLUSTER)
+        readTracksAfterClusters();
+
     /* Have we found a cluster? */
     if (ebml_peek_id(nullptr) == MATROSKA_ID_CLUSTER)
     {
@@ -2435,6 +2438,58 @@ static bool findTopLevelElement(EbmlScan& scan, const int64_t fileSize, const ui
     scan.pos = segmentData + wantedAt;
     uint32_t id = 0;
     return scan.readElement(id, size, bodyPos) && id == wanted && bodyPos + size <= fileSize;
+}
+
+// RFC 9559 (6.1) lets the Tracks follow the clusters when a SeekHead before them says where they are, and a current
+// ffmpeg writes them there when the codec data did not fit the room it kept for them in the head. The header was read
+// up to the first cluster only, so such a file had no tracks at all: the listing showed none, and a mux of its track
+// wrote an empty output and called it successful. The Tracks element is found through the SeekHead now and read from
+// memory, as if the reader stood there, and the reader then goes on at the first cluster where it was.
+void MatroskaDemuxer::readTracksAfterClusters()
+{
+    File f;
+    if (!f.open(m_sourceName.c_str(), File::ofRead))
+        return;
+    const int64_t fileSize = f.size();
+    EbmlScan scan(f);
+    int64_t body = 0, size = 0;
+    if (!findTopLevelElement(scan, fileSize, MATROSKA_ID_TRACKS, body, size) || size <= 0 || size > (16 << 20))
+        return;
+    std::vector<uint8_t> data(static_cast<size_t>(size));
+    f.seek(body);
+    if (f.read(data.data(), static_cast<uint32_t>(size)) != static_cast<int>(size))
+        return;
+
+    uint8_t* const savedCur = m_curPos;
+    uint8_t* const savedEnd = m_bufEnd;
+    const int64_t savedProcessed = m_processedBytes;
+    const bool savedEof = m_isEOF;
+    const int savedLevels = num_levels;
+    const int savedLevelUp = level_up;
+    const int savedPeek = peek_id;
+    m_curPos = data.data();
+    m_bufEnd = data.data() + size;
+    m_processedBytes = body;  // file offsets, so the levels around it still hold
+    m_memoryOnly = true;
+    peek_id = 0;
+    level_up = 0;
+    if (num_levels < EBML_MAX_DEPTH)
+    {
+        MatroskaLevel* level = &levels[num_levels++];
+        level->start = body;
+        level->length = size;
+        matroska_parse_tracks();
+    }
+    m_memoryOnly = false;
+    m_curPos = savedCur;
+    m_bufEnd = savedEnd;
+    m_processedBytes = savedProcessed;
+    m_isEOF = savedEof;
+    num_levels = savedLevels;
+    level_up = savedLevelUp;
+    peek_id = savedPeek;
+    if (num_tracks > 0)
+        LTRACE(LT_INFO, 2, "Matroska: the track list of " << m_sourceName << " follows the clusters, and is read there.");
 }
 
 // The chapters of a Matroska file, read wherever the Chapters element is. They used to be read only while the header

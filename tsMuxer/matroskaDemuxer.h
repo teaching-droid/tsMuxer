@@ -223,6 +223,7 @@ class MatroskaDemuxer final : public IOContextDemuxer
     int matroska_parse_metadata();
     int ebml_read_seek(int64_t offset);
     int matroska_parse_tracks();
+    void readTracksAfterClusters();
     int matroska_add_stream();
     static int getTrackType(const MatroskaTrack* track);
 
