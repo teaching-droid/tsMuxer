@@ -32,7 +32,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A cut stream that does not begin with an IDR picture could get two pictures with one time,** and a Matroska output wrote the two as one block: H.264 that begins with an I picture of an open GOP, a P or a B picture, H.264 and HEVC that begin inside a run of B pictures, and the IDR after such a start. Each picture now gets its own time, in the order the stream gives. H.264 coded as fields is muxed as before.
 
-* **On the command line, an output that is one of the sources destroyed that source.** The output was opened for writing, which empties it, while the same file was still to be read. Such an output is now refused before anything is written, also when its name is written in another case or with other slashes. This includes the clips a playlist plays, and a Blu-ray folder written over the disc it reads.
+* **On the command line, an output that is one of the sources destroyed that source.** The output was opened for writing, which empties it, while the same file was still to be read. Such an output is now refused before anything is written, also when its name is written in another case or with other slashes. This includes the clips a playlist plays, a Blu-ray folder written over the disc it reads, and a source named as a part of a split output. A demux of a raw stream into its own folder wrote the stream over itself and said it was complete; it is refused as well.
 
 * **An MP4 whose AAC sound starts with silence could not be muxed.** AAC writes digital silence in frames of 4 bytes, and such frames stopped the mux with "Out of index for AAC track". Every frame is read now.
 
