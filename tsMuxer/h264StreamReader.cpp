@@ -1911,6 +1911,10 @@ void H264StreamReader::onShiftBuffer(const int offset)
 
 bool H264StreamReader::isPriorityData(AVPacket* packet)
 {
+    // A packet with no data is never the priority NAL. Adding to its null pointer, as the test below does, is
+    // undefined behaviour, and a build that checks for it stopped there.
+    if (packet->data == nullptr || m_priorityNalAddr == nullptr)
+        return false;
     if (packet->data + 3 == m_priorityNalAddr || packet->data + 4 == m_priorityNalAddr)
     {
         m_priorityNalAddr = nullptr;
