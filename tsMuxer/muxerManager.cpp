@@ -17,6 +17,7 @@
 #include "iso_writer.h"
 #include "matroskaMuxer.h"
 #include "mpegStreamReader.h"
+#include "subTrackFilter.h"
 #include "tsMuxer.h"
 #include "vodCoreException.h"
 
@@ -335,7 +336,8 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
     for (size_t i = 0; i < ci.size(); ++i)
     {
         StreamInfo& si = ci[i];
-        si.read();
+        if (!m_firstBlocksRead)
+            si.read();
 
         // Apply discovery-phase metadata to the stream reader so that
         // getTSDescriptor(), getStreamInfo(), etc. have correct values
@@ -410,6 +412,23 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
         else
             m_subMuxer->joinToMasterFile();  // direct ssif writing
     }
+}
+
+// subTrack= on HEVC splits a merged dual layer Dolby Vision track into its base and enhancement layer, and the split
+// refuses a track with no enhancement layer at its first packets (hevcDolbyVisionFilter.cpp). The first block of every
+// stream is read when the mux begins (preinitMux), which for a disc is after its folders are made, so a refusal left
+// an empty folder tree. When such a line is there, the first blocks are read here instead, before anything is made.
+void MuxerManager::checkTracksBeforeOutput()
+{
+    std::vector<StreamInfo>& ci = m_metaDemuxer.getCodecInfo();
+    checkMatroskaOnlyCodecs(ci, true);
+    const bool hevcSplit = std::any_of(ci.begin(), ci.end(), [](const StreamInfo& si) {
+        return SubTrackFilter::isSubTrack(si.m_pid) && si.m_codec == hevcCodecInfo.programName;
+    });
+    if (!hevcSplit || m_firstBlocksRead)
+        return;
+    for (StreamInfo& si : ci) si.read();
+    m_firstBlocksRead = true;
 }
 
 void MuxerManager::checkTrackList(const vector<StreamInfo>& ci) const

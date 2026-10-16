@@ -18,7 +18,6 @@ HevcDolbyVisionFilter::HevcDolbyVisionFilter(const int demuxedPID)
       m_elStreamIndex(-1),
       m_unwrapped(0),
       m_rpu(0),
-      m_warnedNoWrappers(false),
       m_haveOriginals(false),
       m_restored(0)
 {
@@ -181,16 +180,21 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
         curNal = NALUnit::findNextNAL(nextNal, dataEnd);
     }
 
-    // A track with an RPU but no wrappers is a SINGLE layer Dolby Vision file, profile 5 or 8. It
-    // has no enhancement layer to separate out, so splitting it produces an empty second track and
-    // a base layer that has lost its RPU. Say so once, loudly, rather than writing a broken disc.
-    if (!m_warnedNoWrappers && m_rpu > 32 && m_unwrapped == 0)
-    {
-        m_warnedNoWrappers = true;
-        LTRACE(LT_WARN, 2,
-               "Dolby Vision: this track carries an RPU but no enhancement layer, so it is single "
-               "layer and cannot be split into two. Mux it as ONE track instead of using subTrack.");
-    }
+    // A merged dual layer track carries the enhancement layer's wrapped NALs in the same access unit as
+    // its RPU. A track with an RPU and no wrapper is a SINGLE layer Dolby Vision file, profile 5 or 8,
+    // and one with neither is plain HEVC: there is no enhancement layer to separate out. Splitting such
+    // a track wrote an empty second track and moved every RPU out of the base layer, so a profile 8
+    // disc lost its Dolby Vision, with no more than a warning after 33 RPUs. It is refused instead.
+    // The first packets are read before any output is opened, so nothing has been written yet.
+    ++m_packets;
+    const bool singleLayer = m_rpu > 0 && m_unwrapped == 0;
+    const bool noDolbyVision = m_packets > 32 && m_rpu == 0 && m_unwrapped == 0;
+    if (singleLayer || noDolbyVision)
+        THROW(ERR_COMMON, (singleLayer ? "Dolby Vision: this track carries an RPU but no enhancement layer, so it is "
+                                         "single layer and cannot be split into two."
+                                       : "This HEVC track carries no Dolby Vision enhancement layer, so it cannot be "
+                                         "split into two.")
+                              << " Mux it as ONE track, without subTrack=.")
 
     return avPacket.size - static_cast<int>(discardSize);
 }

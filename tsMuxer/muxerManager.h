@@ -132,7 +132,8 @@ class MuxerManager final
     // The codecs only a Matroska output carries, checked before anything is written for an output that is not one: a
     // demux made its output folder first, and a disc its folder tree, and a refused track left them there empty
     [[nodiscard]] bool keepEditions() const { return m_keepEditions; }
-    void checkTracksBeforeOutput() const { checkMatroskaOnlyCodecs(m_metaDemuxer.getStreamInfo(), true); }
+    // Also a subTrack= split of an HEVC track that has no enhancement layer to split off.
+    void checkTracksBeforeOutput();
 
    private:
     std::vector<double> m_chapters;        // chapter start times in seconds, applied once the muxer exists
@@ -184,6 +185,7 @@ class MuxerManager final
 
     /// Results of the discovery (probe) phase, indexed by stream index.
     std::vector<StreamDiscoveryData> m_discoveryData;
+    bool m_firstBlocksRead = false;  // every stream has read its first block (preinitMux, or early for a check)
 };
 
 #endif  // _MUXER_MANAGER_H_

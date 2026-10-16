@@ -79,7 +79,7 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
     int m_elStreamIndex;
     int64_t m_unwrapped;  // enhancement NALs whose type 63 wrapper was removed
     int64_t m_rpu;        // RPU NALs passed through unchanged
-    bool m_warnedNoWrappers;
+    int64_t m_packets = 0;  // packets seen, to tell a track without any Dolby Vision
 
     DvOriginalRpus m_originals;
     bool m_haveOriginals;
