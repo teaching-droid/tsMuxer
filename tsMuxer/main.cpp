@@ -2131,6 +2131,36 @@ static void reportSingleLayerDvOnDisc(const MuxerManager& muxerManager)
                << base << ".");
 }
 
+// --disc-size is checked before the mux against an estimate, the sources and five per cent, which counts neither a
+// layer break guard, nor the null packets of a constant bitrate, nor the file system. The window promises that the
+// finished size is checked against the disc and that it warns when it does not fit, and nothing did. The finished image
+// is measured now, or for a disc folder the files in it; a folder becomes slightly larger as an image, by its file
+// system.
+static void reportFinishedDiscSize(const std::string& outputRoot, const int64_t discLimit)
+{
+    if (discLimit <= 0)
+        return;
+    int64_t size = 0;
+    const bool image = strEndWith(strToLowerCase(outputRoot), ".iso");
+    if (image)
+        size = static_cast<int64_t>(getFileSize(outputRoot));
+    else
+    {
+        std::vector<std::string> files;
+        findFilesRecursive(outputRoot + getDirSeparator(), "*", &files);  // the path ends with a separator, as elsewhere
+        for (const std::string& f : files) size += static_cast<int64_t>(getFileSize(f));
+    }
+    const char* what = image ? "the finished image is " : "the files of the finished disc folder come to ";
+    if (size > discLimit)
+        LTRACE(LT_WARN, 2,
+               "Warning: " << what << size << " bytes, more than the " << discLimit
+                           << " bytes of --disc-size, so it does not fit that disc.");
+    else
+        LTRACE(LT_INFO, 2,
+               (image ? "The finished image is " : "The files of the finished disc folder come to ")
+                   << size << " bytes, within the " << discLimit << " bytes of --disc-size.");
+}
+
 static void reportSplitWithoutParameterSets(const MuxerManager& muxerManager)
 {
     const auto mainMuxer = dynamic_cast<TSMuxer*>(muxerManager.getMainMuxer());
@@ -2662,6 +2692,7 @@ int main(int argc, char** argv)
                                     dstFile + "\"");
 
             refuseSourceAsOutput(muxerManager, dstFile);
+            const string outputRoot = dstFile;  // the image or the disc folder, before dstFile names its first clip
 
             // ** BEFORE THE DESTINATION IS CREATED, NOT AFTER. ** This stood below the block that
             // creates the output image, so a meta that selects no tracks replaced an existing .iso
@@ -2767,6 +2798,8 @@ int main(int argc, char** argv)
             // area is full, and it used to happen in the destructor after "Mux successful complete", which ended the
             // program without a message.
             blurayHelper.close();
+            if (dt != DiskType::NONE)
+                reportFinishedDiscSize(outputRoot, muxerManager.getDiscSizeLimit());
 
             checkSourceConsumed(muxerManager);
             LTRACE(LT_INFO, 2, "Mux successful complete");
