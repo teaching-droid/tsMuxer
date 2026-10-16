@@ -11,6 +11,7 @@
 #include "avPacket.h"
 #include "bitStream.h"
 #include "nalUnits.h"
+#include "vodCoreException.h"
 #include "vod_common.h"
 
 VpxStreamReader::VpxStreamReader(const bool vp9)
@@ -105,6 +106,19 @@ void VpxStreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const boo
         MPEGStreamReader::setBuffer(data, dataLen, lastBlock);
         return;
     }
+    if (m_ivfDamagedSize != 0)
+    {
+        m_ivfLeftOut += dataLen;
+        if (lastBlock)
+            LTRACE(LT_WARN, 2,
+                   "Warning: IVF: a frame gives its size as "
+                       << m_ivfDamagedSize
+                       << " bytes, more than any frame can have, so the file is damaged there. The frames before it "
+                          "are kept; the rest of the file, "
+                       << m_ivfLeftOut << " bytes, is left out.");
+        MPEGStreamReader::setBuffer(data, 0, lastBlock);
+        return;
+    }
     m_pending.insert(m_pending.end(), block, block + dataLen);
     size_t at = 0;
     if (m_ivfHeaderLeft > 0)
@@ -118,6 +132,17 @@ void VpxStreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const boo
     {
         const uint32_t frameSize = m_pending[at] | m_pending[at + 1] << 8 | m_pending[at + 2] << 16 |
                                    static_cast<uint32_t>(m_pending[at + 3]) << 24;
+        // A damaged size field asked for up to 4 GB: the reader kept every later block while it waited for a
+        // frame that never came, so a large file was held in memory to its end and then left out. No frame is
+        // that large; such a size ends the reading of frames at once, and the rest of the file is counted, not kept.
+        constexpr uint32_t maxIvfFrameSize = 256u * 1024 * 1024;
+        if (frameSize > maxIvfFrameSize)
+        {
+            m_ivfDamagedSize = frameSize;
+            m_ivfLeftOut += static_cast<int64_t>(m_pending.size() - at);
+            at = m_pending.size();
+            break;
+        }
         if (at + 12 + frameSize > m_pending.size())
             break;
         const size_t start = framed.size();
@@ -135,6 +160,13 @@ void VpxStreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const boo
         at += 12 + frameSize;
     }
     m_pending.erase(m_pending.begin(), m_pending.begin() + static_cast<std::ptrdiff_t>(at));
+    if (lastBlock && m_ivfDamagedSize != 0)
+        LTRACE(LT_WARN, 2,
+               "Warning: IVF: a frame gives its size as "
+                   << m_ivfDamagedSize
+                   << " bytes, more than any frame can have, so the file is damaged there. The frames before it are "
+                      "kept; the rest of the file, "
+                   << m_ivfLeftOut << " bytes, is left out.");
     if (lastBlock && !m_pending.empty())
     {
         LTRACE(LT_WARN, 2, "IVF: the file ends inside a frame, " << m_pending.size() << " bytes left out");

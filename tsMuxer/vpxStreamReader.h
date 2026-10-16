@@ -72,6 +72,8 @@ class VpxStreamReader final : public MPEGStreamReader
     std::vector<uint8_t> m_pending;     // bytes of the file not yet framed, a frame may span blocks
     std::vector<uint8_t> m_convBuffer;  // front pad plus the framed frames handed to the base
     int m_ivfHeaderLeft = 0;            // bytes of the file header still to skip
+    uint32_t m_ivfDamagedSize = 0;      // a frame size no frame can have: the file is damaged from there
+    int64_t m_ivfLeftOut = 0;           // the bytes of the file left out after that
     // demux: an IVF file
     std::vector<uint8_t> m_demuxBuffer;
     bool m_ivfHeaderWritten = false;
