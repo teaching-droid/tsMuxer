@@ -440,7 +440,11 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
     uint8_t* curPos = buff;
     // if (m_channels == 0)
     {
-        WAVEFORMATPCMEX* waveFormatPCMEx;
+        // The format chunk can sit at any address, as in two WAV files joined: it is copied into an aligned struct
+        // rather than read through a pointer cast to it, which reads misaligned fields (undefined behaviour).
+        alignas(WAVEFORMATPCMEX) uint8_t fmtCopy[sizeof(WAVEFORMATPCMEX)] = {};
+        const auto* waveFormatPCMEx = reinterpret_cast<const WAVEFORMATPCMEX*>(fmtCopy);
+        const uint8_t* fmtPos;
         uint64_t fmtSize;
         if (m_headerType == LPCMHeaderType::htWAVE64)
         {
@@ -451,7 +455,7 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
             fmtSize = loadUnaligned<uint64_t>(tmpPos);
             if (curPos + fmtSize >= end)
                 return NOT_ENOUGH_BUFFER;
-            waveFormatPCMEx = reinterpret_cast<WAVEFORMATPCMEX*>(tmpPos + 8);
+            fmtPos = tmpPos + 8;
         }
         else
         {
@@ -462,8 +466,9 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
             if (curPos + 8 + fmtSize >= end)
                 return NOT_ENOUGH_BUFFER;
             curPos += 8;
-            waveFormatPCMEx = reinterpret_cast<WAVEFORMATPCMEX*>(curPos);
+            fmtPos = curPos;
         }
+        memcpy(fmtCopy, fmtPos, std::min<size_t>(sizeof(fmtCopy), static_cast<size_t>(end - fmtPos)));
 
         m_channels = static_cast<uint8_t>(waveFormatPCMEx->nChannels);
         if (m_channels > 8)
