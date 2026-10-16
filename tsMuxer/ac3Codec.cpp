@@ -500,8 +500,8 @@ int AC3Codec::decodeFrame(uint8_t* buf, uint8_t* end, int& skipBytes)
         {
             // Extracting the core means dropping the E-AC-3 frames and keeping the AC-3 ones
             // that are interleaved with them. A Dolby Digital Plus stream that has no AC-3 core
-            // at all, which is what you normally get from a streaming source, therefore loses
-            // EVERY frame and used to produce a 0 byte file while still reporting success.
+            // at all therefore loses EVERY frame and used to produce a 0 byte file while still
+            // reporting success.
             // On the Blu-ray layout the core frame always precedes its extension, so reaching an
             // E-AC-3 frame with no core parsed yet means there is none. m_testMode excludes the
             // detection pass, which must stay non-fatal.
