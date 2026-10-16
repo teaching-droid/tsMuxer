@@ -29,9 +29,12 @@ class TextSubtitlesRenderFT final : public TextSubtitlesRender
    private:
     static FT_Library library;
     static std::map<std::string, std::string> m_fontNameToFile;
-    FT_Face m_face;
-    bool m_emulateItalic;
-    bool m_emulateBold;
+    FT_Face m_face = nullptr;
+    bool m_emulateItalic = false;
+    bool m_emulateBold = false;
+    // The font m_face was loaded for. m_font is set and restored by others (textFits) without loading anything, so a
+    // font equal to m_font is not necessarily the one loaded.
+    Font m_loadedFont;
     int m_underline_position;
     int m_line_thickness;
     FT_Matrix italic_matrix;
