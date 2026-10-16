@@ -1112,6 +1112,8 @@ All parameters in this group start with two dashes:
 
 #ifdef _WIN32
 #include <shellapi.h>
+#else
+#include <unistd.h>
 #endif
 
 // Wrap an existing BDMV folder into a burnable UDF 2.50 BD-ROM ISO byte-for-byte (works with any
@@ -2252,6 +2254,162 @@ static bool pathIsInside(const std::filesystem::path& child, const std::filesyst
     return true;
 }
 
+// ** AN EXISTING OUTPUT IS KEPT UNTIL THE NEW ONE IS COMPLETE. ** Some refusals can only come during the mux: a
+// cut past the end of the sources, a split that runs out of clip numbers, a disc whose PMT is too long, a track
+// that turns out not to be what its line says. An output of the same name had been opened by then, so a refused
+// job left an empty image, or a disc folder with an empty clip, where a finished one had been. When the output
+// already exists, the new one is written under a temporary name beside it and takes its place only when the job
+// has succeeded; a job that fails removes what it wrote and leaves the old output as it was. An output that does
+// not exist yet is written in place, as before.
+class KeepOldOutput
+{
+   public:
+    KeepOldOutput() = default;
+    KeepOldOutput(const KeepOldOutput&) = delete;
+    KeepOldOutput& operator=(const KeepOldOutput&) = delete;
+    ~KeepOldOutput()
+    {
+        if (!m_armed || m_committed)
+            return;
+        std::error_code ec;
+        if (m_folder)
+            std::filesystem::remove_all(m_tmp, ec);
+        else
+            for (const auto& p : ownFiles())
+                std::filesystem::remove(p, ec);
+    }
+
+    // A file output (TS, M2TS, ISO, Matroska): returns the name to write. Its split parts are name.split.n.ext.
+    std::string forFile(const std::string& dst, const int64_t estimate)
+    {
+        const std::filesystem::path out = u8path(dst);
+        const std::filesystem::path dir = out.has_parent_path() ? out.parent_path() : std::filesystem::path(".");
+        const std::string stem = pathStr(out.stem());
+        const std::string ext = pathStr(out.extension());
+        std::error_code ec;
+        bool exists = std::filesystem::exists(out, ec);
+        for (const auto& e : std::filesystem::directory_iterator(dir, ec))
+            if (startsWithName(pathStr(e.path().filename()), stem + ".split."))
+                exists = true;
+        if (!exists)
+            return dst;
+        m_dir = dir;
+        m_oldPrefix = stem + ".";
+        m_newPrefix = stem + ".tsmuxer-new-" + std::to_string(processId()) + ".";
+        m_armed = true;
+        warnRoom(dir, estimate);
+        if (ext.empty())
+            return pathStr(dir / u8path(m_newPrefix.substr(0, m_newPrefix.size() - 1)));
+        return pathStr(dir / u8path(m_newPrefix + ext.substr(1)));
+    }
+
+    // A Blu-ray or AVCHD folder: the disc is written into a folder beside it, and its BDMV and CERTIFICATE folders
+    // replace the old ones. Anything else in the folder is not touched.
+    std::string forDiscFolder(const std::string& dst, const int64_t estimate)
+    {
+        const std::filesystem::path out = u8path(dst);
+        std::error_code ec;
+        if (!std::filesystem::exists(out / "BDMV", ec) && !std::filesystem::exists(out / "CERTIFICATE", ec))
+            return dst;
+        std::filesystem::path base = out;
+        if (!base.has_filename())
+            base = base.parent_path();
+        m_dir = out;
+        m_tmp = base;
+        m_tmp += u8path(".tsmuxer-new-" + std::to_string(processId()));
+        m_folder = true;
+        m_armed = true;
+        warnRoom(base.has_parent_path() ? base.parent_path() : std::filesystem::path("."), estimate);
+        return pathStr(m_tmp);
+    }
+
+    // The job has succeeded: the new output takes the old one's place.
+    void commit()
+    {
+        if (!m_armed || m_committed)
+            return;
+        std::error_code ec;
+        if (m_folder)
+        {
+            for (const char* sub : {"BDMV", "CERTIFICATE"})
+            {
+                std::filesystem::remove_all(m_dir / sub, ec);
+                if (std::filesystem::exists(m_tmp / sub))
+                {
+                    std::filesystem::rename(m_tmp / sub, m_dir / sub, ec);
+                    if (ec)
+                        throw runtime_error("The new disc is complete in " + pathStr(m_tmp) + ", but its " + sub +
+                                            " folder could not be moved into " + pathStr(m_dir) + ": " + ec.message());
+                }
+            }
+            std::filesystem::remove_all(m_tmp, ec);
+        }
+        else
+            for (const auto& p : ownFiles())
+            {
+                const std::string name = pathStr(p.filename());
+                const std::filesystem::path to = m_dir / u8path(m_oldPrefix + name.substr(m_newPrefix.size()));
+                std::filesystem::rename(p, to, ec);
+                if (ec)
+                    throw runtime_error("The new output is complete as " + pathStr(p) + ", but it could not replace " +
+                                        pathStr(to) + ": " + ec.message());
+            }
+        m_committed = true;
+    }
+
+   private:
+    static std::filesystem::path u8path(const std::string& s) { return {std::u8string(s.begin(), s.end())}; }
+    static std::string pathStr(const std::filesystem::path& p)
+    {
+        const std::u8string u = p.u8string();
+        return {u.begin(), u.end()};
+    }
+    static bool startsWithName(const std::string& name, const std::string& prefix)
+    {
+#ifdef _WIN32
+        return strStartWith(strToLowerCase(name), strToLowerCase(prefix));
+#else
+        return strStartWith(name, prefix);
+#endif
+    }
+    static unsigned long processId()
+    {
+#ifdef _WIN32
+        return static_cast<unsigned long>(GetCurrentProcessId());
+#else
+        return static_cast<unsigned long>(getpid());
+#endif
+    }
+    std::vector<std::filesystem::path> ownFiles() const
+    {
+        std::vector<std::filesystem::path> files;
+        std::error_code ec;
+        for (const auto& e : std::filesystem::directory_iterator(m_dir, ec))
+            if (startsWithName(pathStr(e.path().filename()), m_newPrefix))
+                files.push_back(e.path());
+        return files;
+    }
+    static void warnRoom(const std::filesystem::path& dir, const int64_t estimate)
+    {
+        std::error_code ec;
+        const auto space = std::filesystem::space(dir, ec);
+        if (!ec && estimate > 0 && static_cast<int64_t>(space.available) < estimate)
+            LTRACE(LT_WARN, 2,
+                   "Warning: the output exists already. It is kept until the new one is complete, so the drive needs "
+                   "room for both: about "
+                       << space.available / 1000000 << " MB are free, and the new output may need about "
+                       << estimate / 1000000 << " MB. If the drive fills up, the job stops and the old output stays.");
+    }
+
+    bool m_armed = false;
+    bool m_committed = false;
+    bool m_folder = false;
+    std::filesystem::path m_dir;
+    std::filesystem::path m_tmp;
+    std::string m_oldPrefix;
+    std::string m_newPrefix;
+};
+
 static void refuseSourceAsOutput(const MuxerManager& muxerManager, const std::string& dstFile)
 {
     std::error_code ec;
@@ -2662,6 +2820,7 @@ int main(int argc, char** argv)
 
         if (mkvMode)
         {
+            KeepOldOutput keepOld;  // made first, so it is ended last: the muxers have closed their files by then
             MuxerManager muxerManager(readManager, matroskaMuxerFactory);
             muxerManager.setMatroskaOutput(fileExt2 == "WEBM" ? 2 : 1);
             muxerManager.openMetaFile(argv[1]);
@@ -2682,9 +2841,10 @@ int main(int argc, char** argv)
                 muxerManager.setChapters(customChapterList);
             if (!chapterInfo.empty())
                 muxerManager.setChapterInfo(chapterInfo);
-            muxerManager.doMux(dstFile, nullptr);
+            muxerManager.doMux(keepOld.forFile(dstFile, muxerManager.totalSize()), nullptr);
 
             checkSourceConsumed(muxerManager);
+            keepOld.commit();
             LTRACE(LT_INFO, 2, "Mux successful complete");
             reportSplitWithoutParameterSets(muxerManager);
             reportLostData(muxerManager);
@@ -2692,6 +2852,7 @@ int main(int argc, char** argv)
         }
         else if (muxMode)
         {
+            KeepOldOutput keepOld;  // made first, so it is ended last: the image and the muxers are closed by then
             BlurayHelper blurayHelper;
 
             MuxerManager muxerManager(readManager, tsMuxerFactory);
@@ -2788,6 +2949,9 @@ int main(int argc, char** argv)
                                                                    << " GB target disc.");
                 }
                 muxerManager.checkTracksBeforeOutput();  // before the folders are made, as for a demux
+                dstFile = strToUpperCase(extractFileExt(dstFile)) == "ISO"
+                              ? keepOld.forFile(dstFile, muxerManager.totalSize())
+                              : keepOld.forDiscFolder(dstFile, muxerManager.totalSize());
                 if (!blurayHelper.open(dstFile, dt, muxerManager.totalSize(), muxerManager.getExtraISOBlocks(),
                                        muxerManager.useReproducibleIsoHeader(), muxerManager.getLayerBreakGuardMB(),
                                        muxerManager.getLayerBreakLbns(), muxerManager.getLayerBreakGuardBeforeMB(),
@@ -2797,6 +2961,8 @@ int main(int argc, char** argv)
                 blurayHelper.createBluRayDirs();
                 dstFile = blurayHelper.m2tsFileName(firstM2tsOffset);
             }
+            else
+                dstFile = keepOld.forFile(dstFile, muxerManager.totalSize());
             muxerManager.doMux(dstFile, dt != DiskType::NONE ? &blurayHelper : nullptr);
             if (dt != DiskType::NONE)
             {
@@ -2849,10 +3015,10 @@ int main(int argc, char** argv)
             // area is full, and it used to happen in the destructor after "Mux successful complete", which ended the
             // program without a message.
             blurayHelper.close();
+            checkSourceConsumed(muxerManager);
+            keepOld.commit();
             if (dt != DiskType::NONE)
                 reportFinishedDiscSize(outputRoot, muxerManager.getDiscSizeLimit());
-
-            checkSourceConsumed(muxerManager);
             LTRACE(LT_INFO, 2, "Mux successful complete");
             reportSplitWithoutParameterSets(muxerManager);
             reportLostData(muxerManager);
