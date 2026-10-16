@@ -952,6 +952,10 @@ int DTSStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, in
 {
     uint8_t* afterFrameData = buff;
     i_frame_size = 0;
+    // The sync word, and for a core its 14 byte header, are read before anything else; a frame that starts in the
+    // last bytes of a read block was read past the block's end (as the AC-3 header was)
+    if (end - buff < 4 || (m_isCoreExists && end - buff < static_cast<int>(DTS_HEADER_SIZE)))
+        return NOT_ENOUGH_BUFFER;
     if (m_isCoreExists)
     {
         skipBeforeBytes = skipBytes = 0;
