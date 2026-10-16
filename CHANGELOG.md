@@ -122,6 +122,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **WebVTT captions and descriptions in a WebM or Matroska file** are read, as subtitles. Only the WebVTT kind SUBTITLES was. WebVTT metadata is not text to show and is still not read.
 
+* **The track list names ASS, SSA and WebVTT subtitles from a Matroska file as what they are.** Each was listed as "SRT text subtitles".
+
 ### Blu-ray and transport stream
 
 * **hdr10-override** marks an SDR HEVC track as HDR10 on a UHD disc. In the window: "Mark as HDR10 on a UHD disc" on the HEVC track.
