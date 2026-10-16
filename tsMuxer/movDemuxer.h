@@ -116,6 +116,7 @@ class MovDemuxer final : public IOContextDemuxer
     std::map<int32_t, int64_t> m_editMediaTime;   // where a track's first edit starts in its media (mov_read_elst)
     std::map<int32_t, int64_t> m_editDuration;    // how long that edit plays, in the movie's time scale
     std::map<int32_t, int64_t> m_codecDelayNs;    // an audio track's edit list start, as CodecDelay for Matroska
+    int64_t m_videoLeadNs = 0;  // what the first video track's edit list skips beyond its first composition offset
     // A fragmented file: where each track's first fragment starts (tfdt) and the composition offset of its first
     // sample, in the track's own time scale, and the edit list start of a video track (fragmentStartDelays)
     std::map<int32_t, int64_t> m_firstTfdt;

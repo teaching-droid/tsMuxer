@@ -1568,22 +1568,51 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             std::map<int32_t, TrackInfo> firstTracks;
             probe.getTrackList(firstTracks);
             if (const auto t = firstTracks.find(pid); t != firstTracks.end())
-                if (const auto d = t->second.m_srcParams.find("srccodecdelay"); d != t->second.m_srcParams.end())
-                    streamInfo.m_addParams["srccodecdelay"] = d->second;
+                for (const char* key : {"srccodecdelay", "srcvideolead", "srcopusskip"})
+                    if (const auto d = t->second.m_srcParams.find(key); d != t->second.m_srcParams.end())
+                        streamInfo.m_addParams[key] = d->second;
         }
     }
-    if (const auto delay = streamInfo.m_addParams.find("srccodecdelay");
-        delay != streamInfo.m_addParams.end() && !codec.empty() && codec[0] == 'A' &&
-        !(m_matroskaOutput && (codec == "A_AAC" || codec == "A_OPUS" || codec == "A_VORBIS")))
+    // A cut file's video keeps the pictures before the cut (srcvideolead, see MovDemuxer::mov_read_moov), so the sound
+    // is moved back by its edit list start less that pre-roll. A Matroska output of AAC says the edit list start as
+    // CodecDelay, and one of Opus says the pre-skip of its OpusHead (srcopusskip): only the rest is moved.
+    if (!codec.empty() && codec[0] == 'A')
     {
-        const int64_t ns = strtoll(delay->second.c_str(), nullptr, 10);
-        if (ns > 0)
+        const auto paramNs = [&](const char* key) -> int64_t
         {
-            streamInfo.m_timeShift -= static_cast<int64_t>(static_cast<double>(ns) * INTERNAL_PTS_FREQ / 1e9 + 0.5);
-            LTRACE(LT_INFO, 2,
-                   "Track " << pid << " of " << unquoteStr(fileList[0]) << ": its edit list starts the sound "
-                            << doubleToStr(static_cast<double>(ns) / 1e6, 3)
-                            << " ms into the track, so its times are moved back by that much.");
+            const auto it = streamInfo.m_addParams.find(key);
+            return it == streamInfo.m_addParams.end() ? 0 : strtoll(it->second.c_str(), nullptr, 10);
+        };
+        const int64_t editNs = paramNs("srccodecdelay");
+        const int64_t leadNs = paramNs("srcvideolead");
+        int64_t backNs = editNs - leadNs;
+        if (m_matroskaOutput && codec == "A_AAC")
+            backNs = -leadNs;  // CodecDelay is the whole edit list start
+        else if (m_matroskaOutput && codec == "A_OPUS")
+        {
+            const int64_t skipNs = paramNs("srcopusskip");
+            backNs = (skipNs > 0 && editNs > skipNs ? editNs - skipNs : 0) - leadNs;  // CodecDelay is the pre-skip
+        }
+        else if (m_matroskaOutput && codec == "A_VORBIS")
+            backNs = -leadNs;  // CodecDelay is the first packet
+        if (backNs != 0)
+        {
+            streamInfo.m_timeShift -=
+                static_cast<int64_t>(static_cast<double>(backNs) * INTERNAL_PTS_FREQ / 1e9 + (backNs > 0 ? 0.5 : -0.5));
+            if (leadNs > 0)
+                LTRACE(LT_INFO, 2,
+                       "Track " << pid << " of " << unquoteStr(fileList[0]) << ": its edit list starts the sound "
+                                << doubleToStr(static_cast<double>(editNs) / 1e6, 3)
+                                << " ms into the track and the video keeps "
+                                << doubleToStr(static_cast<double>(leadNs) / 1e6, 3)
+                                << " ms before the cut, so its times are moved "
+                                << (backNs > 0 ? "back" : "on") << " by "
+                                << doubleToStr(static_cast<double>(backNs > 0 ? backNs : -backNs) / 1e6, 3) << " ms.");
+            else
+                LTRACE(LT_INFO, 2,
+                       "Track " << pid << " of " << unquoteStr(fileList[0]) << ": its edit list starts the sound "
+                                << doubleToStr(static_cast<double>(editNs) / 1e6, 3)
+                                << " ms into the track, so its times are moved back by that much.");
         }
     }
     m_totalSize += fileSize;
@@ -1649,7 +1678,7 @@ static bool isKnownTrackParam(const std::string& name)
         // not warn. srcdefault is the source container's own default track flag.
         "forced", "hearing-impaired", "visual-impaired", "text-descriptions", "original", "commentary", "srclang",
         "srclangbcp47", "srcdefault", "srcname", "srcflags", "srccolour", "srcdisplay", "srcendpadding", "srcpgsrate",
-        "srccrop", "srcfieldorder", "srcprojection", "srccodecdelay", "langbcp47", "srcvpxprivate", "srccodecid"};
+        "srccrop", "srcfieldorder", "srcprojection", "srccodecdelay", "srcvideolead", "srcopusskip", "langbcp47", "srcvpxprivate", "srccodecid"};
     return known.find(name) != known.end();
 }
 

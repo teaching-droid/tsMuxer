@@ -148,6 +148,7 @@ struct MOVStreamContext : Track
     std::string name;          // the track's name, from its hdlr, when it is not an encoder's generic one
     std::string leftOut;       // why the track cannot be read, for a meta line that names it (getTrackList)
     bool hasEditList = false;  // an elst was read for the track
+    bool isOpus = false;       // an Opus sample entry: its dOps (codec_priv) gives the pre-skip
     std::map<std::string, std::string> colour;  // srccolour items (m, t, p, r, cll, fall, rx ... lmin) of the entry
     uint32_t paspH = 0, paspV = 0;              // pasp: the shape of a pixel
     bool pcmBigEndian = false;                  // an LPCM sample entry: the byte order of its samples
@@ -1855,6 +1856,14 @@ void MovDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                                                 tracks[i]->language, 0)));
             if (const auto delay = m_codecDelayNs.find(i + 1); delay != m_codecDelayNs.end() && delay->second > 0)
                 trackList[i + 1].m_srcParams["srccodecdelay"] = std::to_string(delay->second);
+            if (tracks[i]->type == IOContextTrackType::AUDIO && m_videoLeadNs > 0)
+                trackList[i + 1].m_srcParams["srcvideolead"] = std::to_string(m_videoLeadNs);
+            if (mst->isOpus && mst->codec_priv && mst->codec_priv_size >= 4)
+            {
+                const auto* p = reinterpret_cast<const uint8_t*>(mst->codec_priv);
+                const int64_t preSkip = static_cast<int64_t>(p[2]) << 8 | p[3];  // dOps: big endian, 48 kHz
+                trackList[i + 1].m_srcParams["srcopusskip"] = std::to_string(preSkip * 1000000000LL / 48000);
+            }
             if (!mst->name.empty())
                 trackList[i + 1].m_srcParams["srcname"] = mst->name;
             if (!mst->leftOut.empty())
@@ -2736,6 +2745,25 @@ int MovDemuxer::mov_read_moov(MOVAtom atom)
             m_codecDelayNs[track] = mediaTime * 1000000000LL / st->time_scale;
     }
     m_editMediaTime.clear();
+    // ** THE PRE-ROLL OF A CUT FILE'S VIDEO. ** A file cut without re-encoding starts its video at the key frame before
+    // the cut, and its edit lists start every track at the cut: the video's edit list skips the pictures before it, and
+    // the sound's edit list skips the sound before it and the encoder's priming. The video reader times the pictures
+    // from the first one in the file, so it keeps those pictures, and moving the sound back by its whole edit list
+    // start put it that far early against them (500 ms for a cut 0.5 s after a key frame). What the video's edit list
+    // skips beyond its own first composition offset (which the video reader's timing already accounts for) is that
+    // pre-roll: the sound is moved back by its edit list start less the pre-roll.
+    m_videoLeadNs = 0;
+    for (int i = 0; i < num_tracks; ++i)
+    {
+        const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
+        if (st->type != IOContextTrackType::VIDEO || st->editMediaTime <= 0 || st->time_scale <= 0)
+            continue;
+        const int64_t firstOffset = st->ctts_data.empty() ? 0 : st->ctts_data[0].duration;
+        const int64_t lead = st->editMediaTime - firstOffset;
+        if (lead > 0)
+            m_videoLeadNs = lead * 1000000000LL / st->time_scale;
+        break;  // the first video track times the file
+    }
     for (const auto& [track, duration] : m_editDuration)
         if (track > 0 && track <= num_tracks && m_timescale > 0)
         {
@@ -2912,6 +2940,7 @@ int MovDemuxer::mov_read_stsd(MOVAtom atom)
         // reader of that codec takes from a Matroska file (MovParsedFramedTrackData). They were not recognised.
         case MKTAG('O', 'p', 'u', 's'):
             st->type = IOContextTrackType::AUDIO;
+            st->isOpus = true;
             st->parsed_priv_data = new MovParsedFramedTrackData(st, MovParsedFramedTrackData::Form::Opus);
             break;
         case MKTAG('a', 'l', 'a', 'c'):
