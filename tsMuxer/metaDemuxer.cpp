@@ -2482,6 +2482,19 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
                 if (const auto id = srcParams.find("srccodecid"); id != srcParams.end())
                     trackRez.codecId = id->second;
             }
+            // ASS, SSA and WebVTT from a Matroska file go through the SRT reader, which called every one of them
+            // "SRT text subtitles". The listing names what the file holds. Stream type and Stream ID stay SRT and
+            // S_TEXT/UTF8: the window and the meta file take the track by those.
+            if (trackRez.codecInfo.codecID == CODEC_S_SRT)
+            {
+                const std::string& id = trackRez.codecId;
+                if (id == MATROSKA_CODEC_ID_TEXT_ASS)
+                    trackRez.streamDescr = "ASS text subtitles";
+                else if (id == MATROSKA_CODEC_ID_TEXT_SSA)
+                    trackRez.streamDescr = "SSA text subtitles";
+                else if (id == MATROSKA_CODEC_ID_TEXT_WEBVTT || isWebmVttText(id))
+                    trackRez.streamDescr = "WebVTT text subtitles";
+            }
             if (clpiParsed)
             {
                 map<int, CLPIStreamInfo>::const_iterator clpiStream = clpi.m_streamInfo.find(itr.first);
