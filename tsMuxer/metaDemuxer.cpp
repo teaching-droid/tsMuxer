@@ -1443,6 +1443,13 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                     THROW(ERR_COMMON, "Track " << pid << " of " << unquoteStr(fileList[0])
                                                << " cannot be read: " << why->second << ". Nothing was written.")
             }
+            // A 3D track is taken by its views (subTrack=), under a number of its own: of its source track only the
+            // base view's eye is carried over, for the disc's playlist and a Matroska output's StereoMode
+            if (SubTrackFilter::isSubTrack(pid))
+                if (const auto base = trackList.find(pid >> 16); base != trackList.end())
+                    if (const auto eye = base->second.m_srcParams.find("srcrighteye");
+                        eye != base->second.m_srcParams.end() && addParams.find("srcrighteye") == addParams.end())
+                        streamInfo.m_addParams["srcrighteye"] = eye->second;
             if (const auto trackIt = trackList.find(pid); trackIt != trackList.end())
             {
                 // An encrypted track cannot be read without its key, which no file carries (RFC 9559, 14). Its blocks
@@ -1678,7 +1685,7 @@ static bool isKnownTrackParam(const std::string& name)
         // not warn. srcdefault is the source container's own default track flag.
         "forced", "hearing-impaired", "visual-impaired", "text-descriptions", "original", "commentary", "srclang",
         "srclangbcp47", "srcdefault", "srcname", "srcflags", "srccolour", "srcdisplay", "srcendpadding", "srcpgsrate",
-        "srccrop", "srcfieldorder", "srcprojection", "srccodecdelay", "srcvideolead", "srcopusskip", "langbcp47", "srcvpxprivate", "srccodecid"};
+        "srccrop", "srcfieldorder", "srcprojection", "srccodecdelay", "srcvideolead", "srcopusskip", "srcrighteye", "langbcp47", "srcvpxprivate", "srccodecid"};
     return known.find(name) != known.end();
 }
 

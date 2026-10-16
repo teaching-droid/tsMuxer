@@ -3317,6 +3317,7 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
         std::string colour;
         std::string display;
         std::string crop, fieldOrder, projection;
+        bool rightEyeFirst = false;
         bool encrypted = false;
         for (const auto& [id, b, len] : elementsOf(entryBody, entrySize))
         {
@@ -3353,6 +3354,11 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
                     cropRight = readUInt(vb, vlen);
                 else if (vid == MATROSKA_ID_VIDEOFIELDORDER)
                     fieldOrder = std::to_string(readUInt(vb, vlen));
+                // A 3D track that says its base view is the right eye: a remux wrote it as left first, which swaps
+                // the eyes, because only the old stereo element was read
+                else if (vid == MATROSKA_ID_VIDEOSTEREOMODE_CURRENT &&
+                         readUInt(vb, vlen) == MATROSKA_STEREO_BOTH_EYES_RIGHT_FIRST)
+                    rightEyeFirst = true;
                 else if (vid == MATROSKA_ID_VIDEOPROJECTION && vlen > 0 && vlen <= 256)
                 {
                     // the whole element body as it stands, as hex
@@ -3440,6 +3446,8 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
             extras["srcfieldorder"] = fieldOrder;
         if (!projection.empty())
             extras["srcprojection"] = projection;
+        if (rightEyeFirst)
+            extras["srcrighteye"] = "1";
     }
 }
 

@@ -306,11 +306,15 @@ class METADemuxer final : public AbstractDemuxer
     std::vector<MPLSParser> getMplsInfo(const std::string& mplsFileName);
 
    public:
-    // A playlist read as a source says its 3D base view is the right eye
+    // A playlist read as a source says its 3D base view is the right eye, or a Matroska source's 3D track does
+    // (StereoMode 14, srcrighteye)
     [[nodiscard]] bool mplsBaseViewRight() const
     {
         for (const auto& [name, parser] : m_mplsStreamMap)
             if (parser.mvc_base_view_r)
+                return true;
+        for (const auto& si : m_codecInfo)
+            if (const auto it = si.m_addParams.find("srcrighteye"); it != si.m_addParams.end() && it->second == "1")
                 return true;
         return false;
     }
