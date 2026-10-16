@@ -422,6 +422,34 @@ void MuxerManager::checkTracksBeforeOutput()
 {
     std::vector<StreamInfo>& ci = m_metaDemuxer.getCodecInfo();
     checkMatroskaOnlyCodecs(ci, true);
+
+    // A disc has 32 PIDs for each kind of stream: primary audio 0x1100 to 0x111F, subtitles 32 from 0x1200 (0x12A0 on
+    // a UHD disc), secondary audio from 0x1A00 and secondary video from 0x1B00. The 33rd took the next PID without a
+    // word, outside its range, where no player looks for that kind of stream: a 33rd primary audio track got 0x1120.
+    if (m_bluRayMode)
+    {
+        int audio = 0, secondaryAudio = 0, subtitles = 0, secondaryVideo = 0;
+        for (const StreamInfo& si : ci)
+        {
+            const bool secondary = si.m_addParams.find("secondary") != si.m_addParams.end();
+            if (si.m_codec.empty() || si.m_isSubStream)
+                continue;
+            if (si.m_codec[0] == 'A')
+                ++(secondary ? secondaryAudio : audio);
+            else if (si.m_codec[0] == 'S')
+                ++subtitles;
+            else if (si.m_codec[0] == 'V' && secondary)
+                ++secondaryVideo;
+        }
+        for (const auto& [count, kind] : {std::pair<int, const char*>{audio, "audio"},
+                                          {secondaryAudio, "secondary audio"},
+                                          {subtitles, "subtitle"},
+                                          {secondaryVideo, "secondary video"}})
+            if (count > 32)
+                THROW(ERR_COMMON, "A Blu-ray disc holds at most 32 " << kind << " tracks, and " << count
+                                                                     << " were given. Leave out "
+                                                                     << count - 32 << " of them.")
+    }
     const bool hevcSplit = std::any_of(ci.begin(), ci.end(), [](const StreamInfo& si) {
         return SubTrackFilter::isSubTrack(si.m_pid) && si.m_codec == hevcCodecInfo.programName;
     });

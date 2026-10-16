@@ -2072,6 +2072,16 @@ void TSMuxer::buildPMT()
     tsPacket->payloadStart = 1;
     const uint32_t size =
         m_pmt.serialize(m_pmtBuffer + TSPacket::TS_HEADER_SIZE, 3864, m_bluRayMode, m_hdmvDescriptors);
+    // H.222.0 2.4.4.9: the section of a PMT is at most 1021 bytes long. About 43 AC-3 tracks fill it, and with more the
+    // stream was written with a longer section, which a reader that follows the standard rejects. The table is built
+    // as each track is added, before the output is opened, so the mux stops here before anything is written.
+    const uint8_t* section = m_pmtBuffer + TSPacket::TS_HEADER_SIZE + 1;  // after the pointer field
+    const int sectionLength = ((section[1] & 0x0f) << 8) | section[2];
+    if (sectionLength > 1021)
+        THROW(ERR_COMMON, "With " << m_pmt.pidList.size() << " tracks the program map table already needs "
+                                  << sectionLength
+                                  << " bytes, and a transport stream holds at most 1021 in one, so the tracks do not "
+                                     "fit into one transport stream. Leave some out.")
     uint8_t* pmtEnd = m_pmtBuffer + TSPacket::TS_HEADER_SIZE + size;
     uint8_t* curPos = m_pmtBuffer + TS_FRAME_SIZE;
     for (; curPos < pmtEnd; curPos += TS_FRAME_SIZE)
