@@ -70,6 +70,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A Matroska file whose track list follows its clusters was not read at all.** Matroska allows it, and a current ffmpeg writes it there when its codec data did not fit the room it kept. The listing showed no tracks, and a mux wrote an empty file and called it successful. The track list is found where the file says it is.
 
+* **Drawing text subtitles crashed on Linux and macOS,** at the first subtitle that was measured to see whether it fits the picture: no font was loaded yet. A track line without font-name= now ends with a message asking for one. Windows was not affected.
+
 ### MP4 and MOV input
 
 * **More codecs.** VVC, AV1, Opus, ALAC, Vorbis, VP8, VP9 and linear PCM are read. MP3, MP2 and DTS in an mp4a track are read as what they are: they used to be taken for AAC and gave an output that decodes to nothing. A VVC track used to be listed as Opus.
@@ -237,6 +239,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **A meta line that shares some files with an earlier line for the same track** is refused, with the file it shares. Those files were left out without a word.
 
 * **A negative timeshift so large that the times would wrap round** the 26.5 hour limit of the clock is refused before anything is written. The times went backwards.
+
+* **An AC-3 frame at the end of a 2 MB read block** was read past the end of the block before more data was asked for.
+
+* **drop-ac3-core on a track that is not TrueHD** says that it applies to TrueHD only, and that down-to-ac3 keeps the AC-3 core of Dolby Digital Plus alone. The track was kept whole without a word.
 
 ### What is still converted or left out
 
