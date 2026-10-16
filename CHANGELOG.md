@@ -22,7 +22,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **An ISO image of a folder with more than 4093 files and folders had its first file damaged,** with --bdmv-to-iso and --keep-extra-files: the table that maps the files was written over the start of it. The table now has the room it needs.
 
-* **A job that was refused could empty an existing ISO image of the same name.** A cut whose end is not after its start, --keep-editions and a FLAC track are refused for a disc, but only after the image had been opened for writing. They are now refused before any output exists.
+* **A job that was refused could empty an existing ISO image of the same name.** A cut whose end is not after its start, --keep-editions and a FLAC track are refused for a disc, but only after the image had been opened for writing. They are now refused before any output exists. Some faults can only be found during the mux, such as a cut that starts after the end of the sources: when the output exists already, the new one is now written under a temporary name beside it and replaces the old one only when the job has succeeded. A job that fails leaves an existing TS, M2TS, Matroska file, ISO image or disc folder as it was. While such a job runs, the drive needs room for both.
 
 * **A subtitle with a long fade could end the mux with a crash,** as at 59.94 fps. The steps of a fade are written into a buffer of fixed size, and a fade of minutes on a long subtitle ran past its end. A fade that does not fit is now shortened, with a warning.
 
