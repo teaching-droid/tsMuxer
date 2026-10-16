@@ -266,18 +266,32 @@ std::vector<AVChapter> parseOgm(const std::string& text, const std::string& file
 
 std::vector<AVChapter> parseXml(const std::string& text, const std::string& fileName)
 {
-    // Only the first edition, which is what the Matroska reader here does as well. A nested chapter
-    // is read as one more entry in a flat list: that is all a mux can express.
+    // One edition, the one the Matroska reader takes from a file (matroskaDemuxer.cpp, readChapters): the first marked
+    // EditionFlagDefault, or the first when none is, with its hidden chapters left out (RFC 9559, 20.1.2 and 20.2.5).
+    // This took the first edition with its hidden chapters, so the same chapters gave other marks from a chapter file
+    // than from the file they came from. A nested chapter is read as one more entry in a flat list: that is all a mux
+    // can express.
     size_t scanFrom = 0;
     size_t scanTo = text.size();
-    const size_t ed = text.find("<EditionEntry");
-    if (ed != std::string::npos)
+    bool chosenDefault = false;
+    for (size_t ed = text.find("<EditionEntry"); ed != std::string::npos; ed = text.find("<EditionEntry", ed + 1))
     {
-        scanFrom = ed;
         const size_t edEnd = text.find("</EditionEntry>", ed);
-        if (edEnd != std::string::npos)
-            scanTo = edEnd;
+        const size_t end = edEnd == std::string::npos ? text.size() : edEnd;
+        // The edition's own flag only: the one before its first chapter
+        const size_t firstAtom = std::min(text.find("<ChapterAtom", ed), end);
+        std::string flag;
+        const bool isDefault = tagText(text, "EditionFlagDefault", ed, firstAtom, flag) && trimmed(flag) == "1";
+        if (ed == text.find("<EditionEntry") || (isDefault && !chosenDefault))
+        {
+            scanFrom = ed;
+            scanTo = end;
+            chosenDefault = isDefault;
+        }
+        if (chosenDefault)
+            break;
     }
+    int hiddenLeftOut = 0;
 
     std::vector<AVChapter> chapters;
     size_t pos = scanFrom;
@@ -296,6 +310,11 @@ std::vector<AVChapter> parseXml(const std::string& text, const std::string& file
         std::string timeStr;
         if (!tagText(text, "ChapterTimeStart", atom, atomEnd, timeStr))
             continue;
+        if (std::string hidden; tagText(text, "ChapterFlagHidden", atom, atomEnd, hidden) && trimmed(hidden) == "1")
+        {
+            ++hiddenLeftOut;
+            continue;
+        }
         std::string name;
         std::string language;
         std::string display;
@@ -310,6 +329,9 @@ std::vector<AVChapter> parseXml(const std::string& text, const std::string& file
         const int64_t start = static_cast<int64_t>(chapterTimeToSeconds(timeStr, fileName) * 1e9 + 0.5);
         chapters.emplace_back(start, name, language);
     }
+    if (chapters.empty() && hiddenLeftOut > 0)
+        THROW(ERR_COMMON, "Every chapter of the edition used in " << fileName << " is hidden (ChapterFlagHidden), so "
+                                                                  << "there is no chapter to show.")
     if (chapters.empty())
         THROW(ERR_COMMON, "No chapters found in " << fileName << ". A Matroska XML chapter file has a "
                                                   << "ChapterAtom with a ChapterTimeStart in it")
