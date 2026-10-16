@@ -3065,6 +3065,9 @@ int main(int argc, char** argv)
                                     dstFile + "\"");
 
             sMuxer.checkTracksBeforeOutput();  // before the folder is made, so a refusal leaves nothing behind
+            // Refused when the muxer was set up, after the demux folder had been made, which was left empty
+            if (sMuxer.keepEditions())
+                THROW(ERR_COMMON, "--keep-editions applies to a Matroska output (.mkv) only.")
             createDir(dstFile, true);
             sMuxer.doMux(dstFile, nullptr);
             LTRACE(LT_INFO, 2, "Demux complete.");
