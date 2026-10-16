@@ -392,8 +392,8 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
     fadeInFrames++;
     fadeOutFrames++;
 
-    const float opacityInDelta = 1.0F / static_cast<float>(fadeInFrames);
-    const float opacityOutDelta = 1.0F / static_cast<float>(fadeOutFrames);
+    float opacityInDelta = 1.0F / static_cast<float>(fadeInFrames);
+    float opacityOutDelta = 1.0F / static_cast<float>(fadeOutFrames);
     float opacity = opacityInDelta;
 
     const double decodedObjectSize = (m_maxLine - m_minLine + 1) * m_videoWidth;
@@ -424,12 +424,28 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
 
     // Each fade step is a presentation segment, a palette of up to 256 colours and an end: under 1.4 KB. A fade of
     // minutes on a long subtitle, at 59.94 fps, wrote past the end of the buffer (only a debug check looked). The fade
-    // now stops where the next step would not fit, with room left for hiding the text.
+    // now stops where the next step would not fit, with room left for hiding the text. The size of one step is
+    // measured by writing one into the free space, which is then written over: the steps are counted with it.
     static constexpr ptrdiff_t FADE_STEP_MAX = 2048;
     static constexpr ptrdiff_t HIDE_RESERVE = 1024;
+    ptrdiff_t stepBytes = FADE_STEP_MAX;
+    if (curPos - m_pgsBuffer + FADE_STEP_MAX <= PG_BUFFER_SIZE - HIDE_RESERVE)
+    {
+        const auto savedNumber = m_composition_number;
+        const bool savedFlag = palette_update_flag;
+        palette_update_flag = true;
+        uint8_t* p = curPos;
+        p += composePresentationSegment(p, CompositionMode::Update, pts, dts, objectWindowTop, true, forced);
+        p += composePaletteDefinition(buildPalette(toCurve(1.0F)), p, dts, dts);
+        p += composeEnd(p, pts - 90, pts - 90);
+        m_composition_number = savedNumber;
+        palette_update_flag = savedFlag;
+        if (p - curPos > 0 && p - curPos <= FADE_STEP_MAX)
+            stepBytes = p - curPos;
+    }
     const auto stepFits = [&]
     {
-        if (curPos - m_pgsBuffer + FADE_STEP_MAX <= PG_BUFFER_SIZE - HIDE_RESERVE)
+        if (curPos - m_pgsBuffer + stepBytes <= PG_BUFFER_SIZE - HIDE_RESERVE)
             return true;
         if (!m_fadeCutSaid)
             LTRACE(LT_WARN, 2, "Warning: a fade of a subtitle is too long to be drawn in full; it is shortened.");
@@ -442,6 +458,40 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
     double updateTime = alignToGrid(inTimePTS + fpsPts);
 
     const double lastAnimateTime = alignToGrid(outTimePTS - fpsPts);
+
+    // ** A FADE THAT DOES NOT FIT IS SHORTENED, NOT CUT OFF. ** The loops below stopped where the next step did not
+    // fit, so a long fade-in left the text at the opacity it had reached (alpha 5 of 255 for a fade of minutes) and a
+    // long fade-out never reached nothing. The steps that fit are counted first and shared between the two fades;
+    // each fade then takes fewer, larger steps, so it still ends at full opacity, or at none.
+    {
+        const ptrdiff_t room = PG_BUFFER_SIZE - HIDE_RESERVE - (curPos - m_pgsBuffer);
+        const int budget = room > 0 ? static_cast<int>(room / stepBytes) : 0;
+        const int framesShown =
+            lastAnimateTime + FLOAT_EPS >= updateTime ? static_cast<int>((lastAnimateTime - updateTime) / fpsPts + 1.5)
+                                                      : 0;
+        const int wantIn = FFMIN(fadeInFrames - 1, framesShown);
+        const int wantOut = hide ? FFMIN(fadeOutFrames - 1, framesShown) : 0;
+        if (wantIn + wantOut > budget)
+        {
+            if (!m_fadeCutSaid)
+                LTRACE(LT_WARN, 2, "Warning: a fade of a subtitle is too long to be drawn in full; it is shortened.");
+            m_fadeCutSaid = true;
+            const int inSteps = wantIn > 0 ? FFMAX(1, static_cast<int>(static_cast<int64_t>(budget) * wantIn /
+                                                                       (wantIn + wantOut)))
+                                           : 0;
+            const int outSteps = FFMAX(0, budget - inSteps);
+            if (wantIn > inSteps)
+            {
+                fadeInFrames = inSteps + 1;
+                opacityInDelta = 1.0F / static_cast<float>(fadeInFrames);
+            }
+            if (wantOut > outSteps)
+            {
+                fadeOutFrames = outSteps + 1;
+                opacityOutDelta = 1.0F / static_cast<float>(fadeOutFrames);
+            }
+        }
+    }
     opacity += opacityInDelta;
     while (updateTime <= lastAnimateTime + FLOAT_EPS && opacity <= 1.0 + FLOAT_EPS && stepFits())
     {
