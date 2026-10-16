@@ -1437,14 +1437,13 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track, i
         else if (track.codecID == CODEC_V_MPEG2 || track.codecID == CODEC_V_MPEG4_H264 || track.codecID == CODEC_V_VC1)
             vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEOFLAGINTERLACED, 2);
 
-        // Write DisplayWidth / DisplayHeight for non-square-pixel content. The size the source container gave comes
-        // first: a picture shown 4:3 by its container came out shown at its pixel size.
-        if (track.srcDisplayWidth && track.srcDisplayHeight)
-        {
-            vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEODISPLAYWIDTH, track.srcDisplayWidth);
-            vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEODISPLAYHEIGHT, track.srcDisplayHeight);
-        }
-        else if (!track.arForced && track.sampleAR > 0 && track.width && track.height)
+        // DisplayWidth / DisplayHeight, written when the picture is not shown at its pixel size. The shape the stream
+        // gives first, then the size the source container gave over it: a picture shown 4:3 by its container came out
+        // shown at its pixel size. A container size equal to the picture over a stream that is square too adds
+        // nothing and is not written, so such a remux keeps the bytes it had.
+        unsigned displayW = track.width;
+        unsigned displayH = track.height;
+        if (!track.arForced && track.sampleAR > 0 && track.width && track.height)
         {
             // The pixel shape the stream gives. It was rounded to the nearest of the aspect ratios a Blu-ray disc can
             // say, so square pixels of 720x576 (5:4) and 720x480 (3:2) were shown at 4:3, and the pixel shape of HEVC
@@ -1461,11 +1460,7 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track, i
                     if (std::fabs(dar / ratio - 1.0) <= 0.03)
                         displayWidth = (track.height * num + den / 2) / den;
             }
-            if (displayWidth != track.width)
-            {
-                vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEODISPLAYWIDTH, displayWidth);
-                vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEODISPLAYHEIGHT, track.height);
-            }
+            displayW = displayWidth;
         }
         else if (track.streamAR != VideoAspectRatio::AR_KEEP_DEFAULT && track.streamAR != VideoAspectRatio::AR_VGA)
         {
@@ -1485,11 +1480,21 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track, i
             default:
                 break;
             }
-            if (displayWidth != track.width || displayHeight != track.height)
-            {
-                vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEODISPLAYWIDTH, displayWidth);
-                vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEODISPLAYHEIGHT, displayHeight);
-            }
+            displayW = displayWidth;
+            displayH = displayHeight;
+        }
+        // Written when it is not the picture size, or when the container's size overrules a shape of the stream's own:
+        // left out, a player would take the stream's.
+        const bool streamShaped = displayW != track.width || displayH != track.height;
+        if (track.srcDisplayWidth && track.srcDisplayHeight)
+        {
+            displayW = track.srcDisplayWidth;
+            displayH = track.srcDisplayHeight;
+        }
+        if (streamShaped || displayW != track.width || displayH != track.height)
+        {
+            vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEODISPLAYWIDTH, displayW);
+            vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEODISPLAYHEIGHT, displayH);
         }
 
         // Colour description, and HDR10 mastering metadata when the stream carries it.
