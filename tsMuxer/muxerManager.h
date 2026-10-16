@@ -67,6 +67,8 @@ class MuxerManager final
     // then ignored because it does not apply to the chosen output.
     [[nodiscard]] const std::string& getMuxOpts() const { return m_muxOpts; }
     [[nodiscard]] const std::vector<StreamInfo>& getStreamInfo() const { return m_metaDemuxer.getStreamInfo(); }
+    // The source file the given name is the same file as, or an empty string: every file a track reads counts
+    [[nodiscard]] std::string sourceSameAs(const std::string& fileName) const;
     [[nodiscard]] bool getHevcFound() const { return m_metaDemuxer.m_HevcFound; }
     [[nodiscard]] bool getMvcFound() const { return m_metaDemuxer.m_MvcFound; }
     [[nodiscard]] AbstractMuxer* getMainMuxer() const;

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <limits>
 #include <set>
 #include <sstream>
@@ -116,6 +117,28 @@ static std::vector<size_t> transportStreamAddOrder(const std::vector<StreamInfo>
                                                          << ci[base].m_streamReader->getStreamIndex()
                                                          << "). The base layer is muxed as the primary video.");
     return order;
+}
+
+std::string MuxerManager::sourceSameAs(const std::string& fileName) const
+{
+    std::error_code ec;
+    const std::filesystem::path out(std::u8string(fileName.begin(), fileName.end()));
+    if (!std::filesystem::exists(out, ec))
+        return {};
+    for (const auto& si : getStreamInfo())
+    {
+        std::vector<std::string> names;
+        for (const std::string& part : splitQuotedStr(si.m_fullStreamName.c_str(), '+'))
+            names.push_back(unquoteStr(trimStr(part)));
+        names.insert(names.end(), si.m_sourceFiles.begin(), si.m_sourceFiles.end());
+        for (const std::string& name : names)
+        {
+            const std::filesystem::path src(std::u8string(name.begin(), name.end()));
+            if (std::filesystem::equivalent(src, out, ec) && !ec)
+                return name;
+        }
+    }
+    return {};
 }
 
 void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileFactory)

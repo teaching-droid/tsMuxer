@@ -2414,6 +2414,28 @@ static void refuseSourceAsOutput(const MuxerManager& muxerManager, const std::st
 {
     std::error_code ec;
     const std::filesystem::path out(std::u8string(dstFile.begin(), dstFile.end()));
+    // A split writes name.split.n.ext beside the name it was given, so a source named so is written over as well
+    {
+        const std::u8string stemU = out.stem().u8string();
+        const std::u8string extU = out.extension().u8string();
+        const std::string prefix = strToLowerCase(std::string(stemU.begin(), stemU.end()) + ".split.");
+        const std::string ext = strToLowerCase(std::string(extU.begin(), extU.end()));
+        const std::filesystem::path outDir = out.has_parent_path() ? out.parent_path() : std::filesystem::path(".");
+        for (const auto& si : muxerManager.getStreamInfo())
+            for (const std::string& name : si.m_sourceFiles)
+            {
+                const std::filesystem::path src(std::u8string(name.begin(), name.end()));
+                const std::u8string fn = src.filename().u8string();
+                const std::u8string se = src.extension().u8string();
+                const std::filesystem::path srcDir = src.has_parent_path() ? src.parent_path() : std::filesystem::path(".");
+                if (strStartWith(strToLowerCase(std::string(fn.begin(), fn.end())), prefix) &&
+                    strToLowerCase(std::string(se.begin(), se.end())) == ext &&
+                    std::filesystem::equivalent(srcDir, outDir, ec) && !ec)
+                    throw runtime_error("The source " + name + " has the name of a part of the split output " +
+                                        dstFile + ", and writing that part would destroy it. Choose another output "
+                                        "name.");
+            }
+    }
     if (!std::filesystem::exists(out, ec))
         return;
     const bool outIsFolder = std::filesystem::is_directory(out, ec) && !ec;
