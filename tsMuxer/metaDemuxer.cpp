@@ -932,6 +932,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         }
     }
 
+    std::vector<string> taken;  // files of this line whose track an earlier line already reads
     for (int i = static_cast<int>(fileList.size()) - 1; i >= 0; --i)
     {
         string trackKey = fileList[i] + string("_#") + int32ToStr(i) + string("_");
@@ -942,12 +943,28 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         trackKey += int32ToStr(pid);
         if (m_processedTracks.find(trackKey) != m_processedTracks.end())
         {
+            taken.insert(taken.begin(), fileList[i]);
             fileList.erase(fileList.begin() + i);
             if (static_cast<size_t>(i) < timelineRanges.size())
                 timelineRanges.erase(timelineRanges.begin() + i);
         }
         else
             m_processedTracks.insert(trackKey);
+    }
+    // A track of a file is read once, so a line that names some of the files of an earlier line for the same track
+    // cannot have them. They were left out without a word, and the track started where the first remaining file does:
+    // a join of two files of 10 s, after a line with the first one, gave the second file only, 10 s late.
+    if (!taken.empty() && !fileList.empty())
+    {
+        std::ostringstream which;
+        which << codec << " from " << unquotedStreamName;
+        if (pid)
+            which << ", track " << pid;
+        THROW(ERR_COMMON, which.str() << " uses " << taken.front()
+                                      << (taken.size() > 1 ? " and other files" : "")
+                                      << " for a track an earlier line of the meta file already muxes, and the same "
+                                         "track of a file can be muxed only once. The line would lose that part. "
+                                         "Give each file to one line only.")
     }
     if (fileList.empty())
     {
