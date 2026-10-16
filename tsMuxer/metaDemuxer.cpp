@@ -738,16 +738,37 @@ void METADemuxer::openFile(const string& streamName)
     }
 }
 
+// The folder above the one that holds the playlist is the disc's BDMV folder, and STREAM is in it; for a playlist of
+// BACKUP, one more folder up. A bare name means the working directory holds the playlist, so BDMV is one above it.
+// The listing and the meta path each had their own copy of this, and both took a playlist named with exactly one
+// folder, PLAYLIST/00000.mpls from inside BDMV, for one with no BDMV at all: the listing showed no stream folder and the
+// meta path gave every clip an empty name. The meta path also looked for the streams of a BACKUP playlist inside
+// BACKUP, where there are none.
+std::string METADemuxer::playlistStreamDir(const std::string& mplsFileName)
+{
+    const char sep = getDirSeparator();
+    const string dir = toNativeSeparators(extractFileDir(mplsFileName));
+    if (dir.empty())
+        return string("..") + sep + string("STREAM") + sep;
+    // Both take a folder path that ends with a separator.
+    const auto parentOf = [sep](const string& d) {
+        const size_t pos = d.substr(0, d.size() - 1).find_last_of(sep);
+        return pos == string::npos ? string() : d.substr(0, pos + 1);
+    };
+    const auto nameOf = [sep](const string& d) {
+        const string t = d.substr(0, d.size() - 1);
+        const size_t pos = t.find_last_of(sep);
+        return pos == string::npos ? t : t.substr(pos + 1);
+    };
+    string bdmv = parentOf(dir);  // empty when the playlist's folder is named on its own: BDMV is the working directory
+    if (!bdmv.empty() && strToUpperCase(nameOf(bdmv)) == "BACKUP")
+        bdmv = parentOf(bdmv);
+    return bdmv + string("STREAM") + sep;
+}
+
 std::string METADemuxer::mplsTrackToFullName(const std::string& mplsFileName, const std::string& mplsNum)
 {
-    string path = toNativeSeparators(extractFilePath(mplsFileName));
-    // A bare name with no directory means the playlist is in the working directory, so the disc
-    // root is one above it. See getBlurayStreamDir in main.cpp, which had the same gap.
-    const size_t tmp = path.find_last_of(getDirSeparator());
-    if (tmp == string::npos && !path.empty())
-        return {};
-    path = (path.empty() ? string("..") + getDirSeparator() : path.substr(0, tmp + 1)) + string("STREAM") +
-           getDirSeparator();
+    const string path = playlistStreamDir(mplsFileName);
 
     const string mplsExt = strToLowerCase(extractFileExt(mplsFileName));
     const string m2tsExt = (mplsExt == "mpls") ? "m2ts" : "mts";
@@ -757,14 +778,7 @@ std::string METADemuxer::mplsTrackToFullName(const std::string& mplsFileName, co
 
 std::string METADemuxer::mplsTrackToSSIFName(const std::string& mplsFileName, const std::string& mplsNum)
 {
-    string path = toNativeSeparators(extractFilePath(mplsFileName));
-    // A bare name with no directory means the playlist is in the working directory, so the disc
-    // root is one above it. See getBlurayStreamDir in main.cpp, which had the same gap.
-    const size_t tmp = path.find_last_of(getDirSeparator());
-    if (tmp == string::npos && !path.empty())
-        return {};
-    path = (path.empty() ? string("..") + getDirSeparator() : path.substr(0, tmp + 1)) + string("STREAM") +
-           getDirSeparator() + string("SSIF") + getDirSeparator();
+    const string path = playlistStreamDir(mplsFileName) + string("SSIF") + getDirSeparator();
 
     const string mplsExt = strToLowerCase(extractFileExt(mplsFileName));
     const string ssifExt = mplsExt == "mpls" ? "ssif" : "sif";

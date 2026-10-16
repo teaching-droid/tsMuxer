@@ -258,6 +258,8 @@ class METADemuxer final : public AbstractDemuxer
 
     int getLastReadRez() override { return m_lastReadRez; }
     [[nodiscard]] int64_t totalSize() const { return m_totalSize; }
+    // The STREAM folder of the disc a playlist belongs to, with a separator at its end; empty when there is none.
+    static std::string playlistStreamDir(const std::string& mplsFileName);
     static std::string mplsTrackToFullName(const std::string& mplsFileName, const std::string& mplsNum);
     static std::string mplsTrackToSSIFName(const std::string& mplsFileName, const std::string& mplsNum);
     bool m_HevcFound;
