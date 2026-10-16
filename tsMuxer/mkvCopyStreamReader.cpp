@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <sstream>
 
+#include "matroskaParser.h"
 #include "vodCoreException.h"
 #include "vod_common.h"
 
@@ -147,7 +148,7 @@ std::string absoluteCueTimes(const std::string& text, const int64_t start)
 std::string MatroskaCopyStreamReader::textFor(const int64_t pts, const int64_t duration, const uint8_t* add,
                                               const size_t addSize, const uint8_t* data, const size_t dataSize)
 {
-    const bool vtt = m_sourceCodecId == "S_TEXT/WEBVTT" || m_sourceCodecId == "D_WEBVTT/SUBTITLES";
+    const bool vtt = m_sourceCodecId == "S_TEXT/WEBVTT" || isWebmVttText(m_sourceCodecId);
     const bool ssa = m_sourceCodecId == "S_TEXT/SSA";
     std::string head(m_codecPrivate.begin(), m_codecPrivate.end());
     while (!head.empty() && head.back() == '\0') head.pop_back();
@@ -178,7 +179,7 @@ std::string MatroskaCopyStreamReader::textFor(const int64_t pts, const int64_t d
     if (vtt)
     {
         std::string settings, identifier, comments;
-        if (m_sourceCodecId == "D_WEBVTT/SUBTITLES")
+        if (isWebmVttText(m_sourceCodecId))
         {
             for (std::string* line : {&identifier, &settings})
             {

@@ -1771,7 +1771,7 @@ void MatroskaMuxer::openDstFile()
         for (const auto& [index, track] : m_tracks)
             if (track.codecID != CODEC_V_VP8 && track.codecID != CODEC_V_VP9 && track.codecID != CODEC_V_AV1 &&
                 track.codecID != CODEC_A_OPUS && track.codecID != CODEC_A_VORBIS && track.codecID != CODEC_S_SRT &&
-                !(track.codecID == CODEC_S_MKVCOPY && track.matroskaCodecID == MATROSKA_CODEC_ID_WEBM_WEBVTT))
+                !(track.codecID == CODEC_S_MKVCOPY && isWebmVttText(track.matroskaCodecID)))
                 THROW(ERR_COMMON,
                       (track.codecReader ? track.codecReader->getCodecInfo().displayName : std::string("A track"))
                           << " cannot go into a WebM file, which holds VP8, VP9 and AV1 video, Opus and "
@@ -2289,7 +2289,7 @@ void MatroskaMuxer::writeDeferredHeader()
     if (m_webm)
         for (const auto& [index, track] : m_tracks)
             if (track.trackType == MKV_TRACK_TYPE_SUBTITLE && track.matroskaCodecID != MATROSKA_CODEC_ID_SRT &&
-                track.matroskaCodecID != MATROSKA_CODEC_ID_WEBM_WEBVTT)
+                !isWebmVttText(track.matroskaCodecID))
                 THROW(ERR_COMMON,
                       "A WebM file holds subtitles as text only, and this one is drawn into pictures. "
                       "Keep the subtitles as text, give the output an .mkv name, or leave the track out.")

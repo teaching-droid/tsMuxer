@@ -1069,11 +1069,11 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             {
                 const std::string& id = src.codecId;
                 const bool text =
-                    id == "S_TEXT/ASS" || id == "S_TEXT/SSA" || id == "S_TEXT/WEBVTT" || id == "D_WEBVTT/SUBTITLES";
+                    id == "S_TEXT/ASS" || id == "S_TEXT/SSA" || id == "S_TEXT/WEBVTT" || isWebmVttText(id);
                 const bool bitmap = id == "S_VOBSUB" || id == "S_DVBSUB";
                 const bool copy = !m_matroskaOutput ? text && codec == "S_TEXT/UTF8"
                                   : m_matroskaOutput == 2
-                                      ? id == "D_WEBVTT/SUBTITLES"
+                                      ? isWebmVttText(id)
                                       : (text && codec == "S_TEXT/UTF8") || (bitmap && codec == "S_HDMV/PGS");
                 if (copy)
                 {
