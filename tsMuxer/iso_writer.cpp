@@ -288,6 +288,8 @@ void writeLongAD(uint8_t* buffer, const uint32_t lenBytes, const uint32_t pos, c
 
 }  // namespace
 
+std::vector<std::uint8_t> udfFileIdentifier(const std::string& name) { return serializeFileIdentifier(name, nullptr); }
+
 // --------------------- ByteFileWriter ---------------------
 
 ByteFileWriter::ByteFileWriter() : m_buffer(nullptr), m_bufferEnd(nullptr), m_curPos(nullptr), m_tagPos(nullptr) {}

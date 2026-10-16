@@ -186,6 +186,10 @@ struct IsoHeaderData
     static IsoHeaderData reproducible();
 };
 
+// The bytes a name has as a UDF file identifier, where a long name is cut. Two names of one folder with the same
+// bytes are one name on an image, and one of the two files is lost.
+std::vector<std::uint8_t> udfFileIdentifier(const std::string& name);
+
 class IsoWriter
 {
    public:

@@ -1433,6 +1433,33 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     for (const auto& s : skippedTop)
         LTRACE(LT_INFO, 2, "  skipping \"" << s << "\" (not part of the BDMV disc structure)");
 
+    // Two names of one folder that a UDF file identifier cannot tell apart: a name in 16 bit characters keeps only
+    // its first 127. The writer refused them only when it finished the image, so a refused image was left behind,
+    // 43 MB in the case measured. Every level of every path is checked here, before the image is opened.
+    {
+        std::map<std::pair<string, std::vector<uint8_t>>, string> seen;
+        for (const auto& item : items)
+        {
+            string parent;
+            size_t from = 0;
+            while (from <= item.rel.size())
+            {
+                const size_t slash = item.rel.find('/', from);
+                const string part = item.rel.substr(from, slash == string::npos ? string::npos : slash - from);
+                const auto [it, isNew] = seen.emplace(std::make_pair(parent, udfFileIdentifier(part)), part);
+                if (!isNew && it->second != part)
+                    THROW(ERR_COMMON, "bdmv-to-iso: the names \"" << it->second << "\" and \"" << part << "\" in "
+                                          << (parent.empty() ? string("the disc folder") : parent)
+                                          << " are the same as far as a UDF file identifier holds a name. "
+                                             "Shorten one of them.")
+                if (slash == string::npos)
+                    break;
+                parent += part + "/";
+                from = slash + 1;
+            }
+        }
+    }
+
     // A 3D disc stores its video ONCE and names it three times: the .ssif and the two .m2ts are
     // views over the same sectors. Copying all three by name writes the video twice and roughly
     // doubles the image. --3d-single-copy writes it once instead, the way the disc itself does.
