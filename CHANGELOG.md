@@ -240,7 +240,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A negative timeshift so large that the times would wrap round** the 26.5 hour limit of the clock is refused before anything is written. The times went backwards.
 
-* **An AC-3 frame at the end of a 2 MB read block** was read past the end of the block before more data was asked for.
+* **An AC-3 or DTS frame at the end of a 2 MB read block** was read past the end of the block before more data was asked for.
 
 * **drop-ac3-core on a track that is not TrueHD** says that it applies to TrueHD only, and that down-to-ac3 keeps the AC-3 core of Dolby Digital Plus alone. The track was kept whole without a word.
 
