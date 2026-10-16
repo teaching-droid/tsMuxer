@@ -218,7 +218,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **An ISO image whose folder holds two names that are the same in the first 127 characters** is refused before it is written, with both names. One of the two files was lost on the image.
 
-* **A damaged frame size in an IVF file** made the frame rate probe read before its data.
+* **A damaged frame size in an IVF file** made the frame rate probe read before its data, and the reader kept the rest of the file in memory while it waited for a frame of that size. A size no frame can have now ends the reading there: the frames before it are kept, and a warning says how much of the file was left out.
 
 * **Values that were read as something else are read whole now, or refused with a message:** --cut-start and --cut-end without a unit (--cut-end=5 kept one picture), as a clock time (00:01:30 switched the cut off; it is read now) or with a decimal comma; timeshift= in microseconds (us) or in S (500us was 500 s); fps=24000:1001 (24000 frames a second); --split-size=4G (4 bytes); --split-duration=0 (no split on a transport stream) and 1min (1 s); a level= a codec does not have (level=26 was 4); --layer-break-lbn=12.219.392 (sector 12); default=Forced, yes or 1 on a disc (no default subtitle); a chapter time with a comma or a unit. A decimal comma on a track line, as in fps=23,976, is refused with a message, as the values there are parted at commas.
 
