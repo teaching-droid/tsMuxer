@@ -140,7 +140,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A layer break guard of up to 9999 MB** is read from a meta file and by --bdmv-to-iso, as the window offers it. A meta file refused more than 1024.
 
-* **A Dolby Vision enhancement layer listed before its base layer** stays the enhancement layer. It took the PID of the primary video, 0x1011, and the 4K base the PID after it. The base is now told by its content, and the disc is the same as with the base listed first.
+* **A Dolby Vision enhancement layer listed before its base layer** stays the enhancement layer. It took the PID of the primary video, 0x1011, and the 4K base the PID after it. The base is now told by its size: an enhancement layer is never larger than its base. Each track of the disc is then the same as with the base listed first, also when the base still carries its own Dolby Vision data. A Dolby Vision picture larger than the video listed before it is no longer taken for that video's enhancement layer.
 
 * **subTrack= on HEVC without an enhancement layer is refused,** before anything is written: single layer Dolby Vision or plain HEVC has nothing to split off. The split wrote an empty second track, and every RPU was moved out of the base, so a profile 8 disc lost its Dolby Vision.
 
