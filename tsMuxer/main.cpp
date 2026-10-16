@@ -2096,26 +2096,23 @@ static void reportDvProfileIgnored(const MuxerManager& muxerManager, const char*
 
 // A single layer Dolby Vision stream (profile 8) on a disc: the Dolby Vision data travels inside the HDR10 picture,
 // and a UHD Blu-ray player takes Dolby Vision from two layers only, so the disc plays as its HDR10, SDR or HLG base.
-// The disc is written as asked; this only says so, which was left to be found out on a television. A Dolby Vision
-// stream that comes after another video is the enhancement layer of a dual layer disc (tsMuxer.cpp, the same rule
-// as its PID), and then nothing is said: that includes a minimal enhancement layer made from a profile 8 file.
-// Profile 5 has no such base and is warned about by the reader itself.
+// The disc is written as asked; this only says so, which was left to be found out on a television. A disc with a
+// second primary video is a dual layer disc, whichever of the two is listed first, and then nothing is said: that
+// includes a minimal enhancement layer made from a profile 8 file. Profile 5 has no such base and is warned about by
+// the reader itself.
 static void reportSingleLayerDvOnDisc(const MuxerManager& muxerManager)
 {
     const StreamInfo* first = nullptr;
     int videos = 0;
-    bool laterDv = false;
     for (const StreamInfo& si : muxerManager.getStreamInfo())
     {
         if (si.m_codec.empty() || si.m_codec[0] != 'V' || si.m_streamReader == nullptr ||
-            si.m_streamReader->isSecondary())
+            si.m_streamReader->isSecondary() || si.m_isSubStream)
             continue;
         if (videos++ == 0)
             first = &si;
-        else if (si.m_streamReader->getStreamHDR() == 4)
-            laterDv = true;
     }
-    if (first == nullptr || laterDv)
+    if (first == nullptr || videos != 1)
         return;
     const auto* hevc = dynamic_cast<const HEVCStreamReader*>(first->m_streamReader);
     if (hevc == nullptr || first->m_streamReader->getStreamHDR() != 4)

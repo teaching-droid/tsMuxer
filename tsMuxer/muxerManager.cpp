@@ -13,6 +13,7 @@
 
 #include "chapterFile.h"
 #include "h264StreamReader.h"
+#include "hevcStreamReader.h"
 #include "iso_writer.h"
 #include "matroskaMuxer.h"
 #include "mpegStreamReader.h"
@@ -68,6 +69,52 @@ MuxerManager::MuxerManager(const BufferedReaderManager& readManager, AbstractMux
 }
 
 MuxerManager::~MuxerManager() = default;
+
+// The order in which the streams go to a transport stream muxer. The muxer takes a Dolby Vision stream for the
+// enhancement layer only when a base layer came before it (tsMuxer.cpp, the PID rule), so a meta file that lists
+// the enhancement layer first put the 1080p layer on 0x1011, where a player looks for the primary video, and the
+// 4K base after it. The layers are told apart by what they ARE: the base layer of a dual layer disc carries no
+// Dolby Vision data, the enhancement layer does, and it is never larger than its base. When the first primary
+// HEVC video carries Dolby Vision and a later one carries none and is at least as wide, that later one goes first.
+// Every other stream keeps its place, and a meta file in the usual order is muxed exactly as before.
+static std::vector<size_t> transportStreamAddOrder(const std::vector<StreamInfo>& ci)
+{
+    std::vector<size_t> order(ci.size());
+    for (size_t i = 0; i < ci.size(); ++i)
+        order[i] = i;
+
+    size_t dv = ci.size();
+    size_t base = ci.size();
+    for (size_t i = 0; i < ci.size(); ++i)
+    {
+        AbstractStreamReader* reader = ci[i].m_streamReader;
+        if (dynamic_cast<HEVCStreamReader*>(reader) == nullptr || reader->isSecondary() || ci[i].m_isSubStream)
+            continue;
+        if (reader->getStreamHDR() == 4)
+        {
+            if (dv == ci.size() && base == ci.size())
+                dv = i;
+        }
+        else if (base == ci.size())
+            base = i;
+    }
+    if (dv == ci.size() || base == ci.size() || base < dv)
+        return order;
+    // Through the base class: the HEVC reader keeps these protected.
+    const auto* el = dynamic_cast<MPEGStreamReader*>(ci[dv].m_streamReader);
+    const auto* bl = dynamic_cast<MPEGStreamReader*>(ci[base].m_streamReader);
+    if (bl->getStreamWidth() < el->getStreamWidth())
+        return order;
+
+    order.erase(order.begin() + static_cast<std::ptrdiff_t>(base));
+    order.insert(order.begin() + static_cast<std::ptrdiff_t>(dv), base);
+    LTRACE(LT_INFO, 2,
+           "Dolby Vision: the enhancement layer (track " << ci[dv].m_streamReader->getStreamIndex()
+                                                         << ") is listed before its base layer (track "
+                                                         << ci[base].m_streamReader->getStreamIndex()
+                                                         << "). The base layer is muxed as the primary video.");
+    return order;
+}
 
 void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileFactory)
 {
@@ -283,6 +330,8 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
         m_mainMuxer->setMasterMode(m_subMuxer.get(), !mvcTrackFirst);
     }
 
+    // Every stream is read before any is given to a muxer, so that the order they are given in can depend on what
+    // each one is (transportStreamAddOrder).
     for (size_t i = 0; i < ci.size(); ++i)
     {
         StreamInfo& si = ci[i];
@@ -296,6 +345,17 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
         {
             si.m_streamReader->applyDiscoveryData(m_discoveryData[i]);
         }
+    }
+
+    std::vector<size_t> order(ci.size());
+    for (size_t i = 0; i < ci.size(); ++i)
+        order[i] = i;
+    if (dynamic_cast<TSMuxer*>(m_mainMuxer.get()) != nullptr)
+        order = transportStreamAddOrder(ci);
+
+    for (const size_t i : order)
+    {
+        StreamInfo& si = ci[i];
 
         // A player seeks a disc through the EP map of its clips, and an H.264 picture gets an entry there only where
         // its group carries the parameter sets (TSMuxer, needSPSForSplit). A stream from MP4 or Matroska holds them
