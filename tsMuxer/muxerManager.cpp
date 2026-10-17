@@ -324,6 +324,20 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
                             {
                                 named[i] = chapter;
                                 named[i].start = at;
+                                // The end is where the edited list goes on, not where the source's chapter ended:
+                                // 0;4;6;8 over chapters 0-4, 4-8 and 8-10 gave 4-8 and a chapter at 6 inside it, and
+                                // 0;8 a gap from 4 to 8. The last one keeps its end only where it was the source's
+                                // last, which ends with the title.
+                                named[i].end = -1;
+                                if (i + 1 < m_chapters.size())
+                                {
+                                    const auto next = llround(m_chapters[i + 1] * 1e9);
+                                    if (next > at)
+                                        named[i].end = next;
+                                }
+                                else if (std::none_of(source.begin(), source.end(), [&](const AVChapter& later)
+                                                      { return later.start > chapter.start; }))
+                                    named[i].end = chapter.end;
                                 anyNamed = true;
                                 break;
                             }
