@@ -104,6 +104,7 @@ class MovDemuxer final : public IOContextDemuxer
     std::map<int32_t, int64_t> m_trackStartNs;
     [[nodiscard]] int64_t trackStartFromVideoNs(int32_t pid) const;
     void longFirstSamples();
+    void pictureLengths();
     std::map<int32_t, int64_t> m_emptyEditUnits;  // leading empty edits per track, in movie units (mov_read_elst)
     std::map<int32_t, int64_t> m_editMediaTime;   // where a track's first edit starts in its media (mov_read_elst)
     std::map<int32_t, int64_t> m_editDuration;    // how long that edit plays, in the movie's time scale

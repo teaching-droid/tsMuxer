@@ -6,6 +6,7 @@
 #include <climits>
 #include <cmath>
 #include <map>
+#include <mutex>
 #include <set>
 #include <sstream>
 
@@ -1411,6 +1412,7 @@ void MovDemuxer::openFile(const std::string& streamName)
     if (found_moof)
         fragmentStartDelays();
     longFirstSamples();
+    pictureLengths();
     if (m_mdat_pos && m_processedBytes != m_mdat_pos)
     {
         // Reading the header walked to the end of the file, because a moov atom usually sits
@@ -2711,14 +2713,17 @@ static double fpsFromStts(const std::vector<MOVStts>& stts, const int64_t timeSc
         return standard;
     // Not one rate on average, as with one picture held for 2 s in a 25 fps file: the average, 20.83, retimed every
     // picture, and the pictures drifted from the sound by up to 1.9 s. The duration most pictures have gives the rate
-    // when it is a standard one; the pictures of other lengths are warned about (MovDemuxer::mov_read_stts).
+    // when it is a standard one; the pictures of other lengths are warned about (MovDemuxer::pictureLengths). Only
+    // when the others are LONGER (stills, pauses): with a burst of shorter pictures, 100 at 50 fps in a 25 fps file,
+    // the common rate put every picture after the burst 2 s late, to the end of the file; the average, as
+    // 2.20.0 took it, keeps the end in place.
     std::map<int64_t, uint64_t> byDuration;
-    for (const MOVStts& e : stts)
-        if (e.duration > 0)
-            byDuration[e.duration] += e.count;
+    for (size_t i = 0; i < stts.size(); ++i)
+        if (stts[i].duration > 0 && (i + 1 < stts.size() || stts[i].count > 1))  // the last picture alone left out
+            byDuration[stts[i].duration] += stts[i].count;
     const auto mostCommon = std::max_element(byDuration.begin(), byDuration.end(),
                                              [](const auto& a, const auto& b) { return a.second < b.second; });
-    if (mostCommon != byDuration.end() && mostCommon->second * 2 > total)
+    if (mostCommon != byDuration.end() && mostCommon->second * 2 > total && mostCommon == byDuration.begin())
         if (const double standard = snap(static_cast<double>(timeScale) / static_cast<double>(mostCommon->first));
             standard > 0)
             return standard;
@@ -2741,24 +2746,72 @@ int MovDemuxer::mov_read_stts(MOVAtom atom)
     // not the rate wherever the durations alternate: the first entry of a 90 kHz 23.976 track gave 23.9808 or
     // 23.9744, and a 29.97 track at 16000 gave 30.303, and every picture was retimed by it, 80 s over two hours.
     st->fps = fpsFromStts(st->stts_data, st->time_scale);
-    // Video is timed at one rate. A picture that lasts much longer than one frame time, a still or a pause, is shown
-    // for one frame time, and the pictures after it come early against the sound: said here, once a track.
-    if (st->type == IOContextTrackType::VIDEO && st->fps > 0 && st->time_scale > 0)
-    {
-        int64_t longest = 0;
-        for (size_t i = 0; i < st->stts_data.size(); ++i)  // the last picture alone is left out, as for the rate
-            if (st->stts_data[i].count > (i + 1 == st->stts_data.size() ? 1u : 0u))
-                longest = std::max<int64_t>(longest, st->stts_data[i].duration);
-        const double frameTicks = static_cast<double>(st->time_scale) / st->fps;
-        if (static_cast<double>(longest) > 1.5 * frameTicks)
-            LTRACE(LT_WARN, 2,
-                   "Warning: video track " << num_tracks << " of the MP4 file has pictures of different lengths, up "
-                                           << "to " << longest * 1000 / st->time_scale
-                                           << " ms. Its pictures are timed at " << doubleToStr(st->fps, 3)
-                                           << " fps, so after a longer picture the video comes early against the "
-                                              "sound.");
-    }
     return 0;
+}
+
+// ** VIDEO IS TIMED AT ONE RATE. ** A picture much longer than one frame time, a still or a pause, is shown for one
+// frame time, and the pictures after it come early against the sound; pictures much shorter, a burst at a higher
+// rate, make the pictures after them late. The warning was given for longer pictures only, not for a fragmented
+// file (whose moov has no table of times, so its runs were not looked at), and once for each reading
+// of the moov: twice for one file, five times for a join of two. A fragmented track now takes
+// its rate from its runs as a plain one does from its table, and the warning comes once for each file and track.
+// The first picture of a track without an edit list is left out: a long one is a start offset (longFirstSamples).
+void MovDemuxer::pictureLengths()
+{
+    static std::mutex warnedMtx;
+    static std::set<std::string> warned;
+    for (int i = 0; i < num_tracks; ++i)
+    {
+        const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
+        if (st->type != IOContextTrackType::VIDEO || st->time_scale == 0)
+            continue;
+        std::vector<MOVStts> runs = st->stts_data;
+        if (runs.empty())
+        {
+            for (const int64_t d : st->fragDur)
+                if (!runs.empty() && runs.back().duration == d)
+                    ++runs.back().count;
+                else
+                    runs.push_back({1, d});
+            if (st->fps == 0)
+                st->fps = fpsFromStts(runs, st->time_scale);
+        }
+        if (st->fps <= 0)
+            continue;
+        uint64_t total = 0;
+        for (const auto& e : runs) total += e.count;
+        int64_t longest = 0, shortest = INT64_MAX;
+        uint64_t first = 0;  // the place of the first picture of the run
+        for (const auto& e : runs)
+        {
+            uint64_t from = first, to = first + e.count;  // the pictures of the run that count
+            if (from == 0 && !st->hasEditList)
+                from = 1;
+            if (to == total)
+                to = total - 1;
+            if (to > from)
+            {
+                longest = (std::max)(longest, e.duration);
+                shortest = (std::min)(shortest, e.duration);
+            }
+            first += e.count;
+        }
+        const double frameTicks = static_cast<double>(st->time_scale) / st->fps;
+        if (shortest == INT64_MAX ||
+            (static_cast<double>(longest) <= 1.25 * frameTicks && static_cast<double>(shortest) >= 0.8 * frameTicks))
+            continue;
+        {
+            const std::lock_guard<std::mutex> lock(warnedMtx);
+            if (!warned.insert(m_fileName + "|" + std::to_string(i + 1)).second)
+                continue;
+        }
+        LTRACE(LT_WARN, 2,
+               "Warning: video track " << i + 1 << " of " << m_fileName << " has pictures of different lengths, from "
+                                       << shortest * 1000 / st->time_scale << " to " << longest * 1000 / st->time_scale
+                                       << " ms. Its pictures are timed at " << doubleToStr(st->fps, 3)
+                                       << " fps, so where their lengths differ from that, the video does not keep in "
+                                          "step with the sound.");
+    }
 }
 
 int MovDemuxer::mov_read_stsz(MOVAtom atom)
