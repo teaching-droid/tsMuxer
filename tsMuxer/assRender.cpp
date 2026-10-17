@@ -170,8 +170,14 @@ SaveSrtFile::~SaveSrtFile()
         LTRACE(LT_INFO, 2, "No ASS subtitle was written to " << m_name << ".");
 }
 
-void SaveSrtFile::write(const std::string& text, const int64_t inMs, const int64_t outMs)
+void SaveSrtFile::write(const std::string& text, int64_t inMs, int64_t outMs)
 {
+    // At the times of the pictures: with timeshift=2000ms the pictures came 2 s after the times written here. A
+    // subtitle moved to before the start begins at 0, as its picture is shown from the start.
+    inMs = (std::max)(int64_t{0}, inMs + m_shiftMs);
+    outMs += m_shiftMs;
+    if (outMs <= inMs)
+        return;
     if (!m_file)
     {
         m_file = std::make_unique<File>();

@@ -69,8 +69,12 @@ SRTStreamReader::~SRTStreamReader()
 void SRTStreamReader::setSaveSrt(const std::string& fileName) { m_saveSrtName = fileName; }
 
 // One subtitle of save-srt as an SRT record, written the way a demux of the track writes it
-void SRTStreamReader::saveSrtWrite(const std::string& text, const int64_t inMs, const int64_t outMs)
+void SRTStreamReader::saveSrtWrite(const std::string& text, int64_t inMs, int64_t outMs)
 {
+    // At the times of the pictures: with timeshift=2000ms they came 2 s after the times written here. A subtitle
+    // moved to before the start begins at 0, as its picture is shown from the start.
+    inMs = (std::max)(int64_t{0}, inMs + m_saveSrtShiftMs);
+    outMs += m_saveSrtShiftMs;
     if (outMs <= inMs)
         return;  // never on screen
     std::string rec;

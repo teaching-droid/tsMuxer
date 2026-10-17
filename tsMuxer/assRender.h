@@ -38,12 +38,15 @@ class SaveSrtFile
     ~SaveSrtFile();
     SaveSrtFile(const SaveSrtFile&) = delete;
     SaveSrtFile& operator=(const SaveSrtFile&) = delete;
+    // The timeshift of the track, by which its pictures are moved
+    void setShiftMs(const int64_t ms) { m_shiftMs = ms; }
     void write(const std::string& text, int64_t inMs, int64_t outMs);
 
    private:
     std::string m_name;
     std::unique_ptr<File> m_file;
     int m_count = 0;
+    int64_t m_shiftMs = 0;
 };
 
 // How an ASS or SSA track is drawn: the picture size and frame rate of the video, a folder of fonts besides those

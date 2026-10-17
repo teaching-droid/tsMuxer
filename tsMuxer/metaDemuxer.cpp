@@ -1371,6 +1371,17 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             LTRACE(LT_INFO, 2, "Applying delay " << delayMs << " ms taken from the file name");
         }
     }
+    // save-srt writes the subtitles at the times of their pictures, which the timeshift moves
+    if (streamInfo.m_timeShift != 0)
+    {
+        const int64_t shiftMs =
+            llround(static_cast<double>(streamInfo.m_timeShift) * 1000.0 / static_cast<double>(INTERNAL_PTS_FREQ));
+        if (auto* srtReader = dynamic_cast<SRTStreamReader*>(codecReader))
+            srtReader->setSaveSrtShiftMs(shiftMs);
+        if (const auto ass = m_containerReader.m_assDrawing.find({fileList[0], pid});
+            ass != m_containerReader.m_assDrawing.end() && ass->second.srtFile)
+            ass->second.srtFile->setShiftMs(shiftMs);
+    }
 
     // A subtitle track whose file name says "forced" is the forced track. A Blu-ray has no
     // per track attribute for this: the only thing a disc carries is the navigation command
