@@ -582,6 +582,8 @@ void H264StreamReader::pulldownFieldsAhead(const SliceUnit& slice, uint8_t* buff
     if (m_spsMap.empty())
         return;
     const int maxLsb = 1 << slice.getSPS()->log2_max_pic_order_cnt_lsb;
+    int prevLsb = static_cast<int>(slice.pic_order_cnt_lsb);
+    int order = 0;  // the order count from this picture's, in steps of the picture before
     int picStruct = -1;
     for (uint8_t* nal = NALUnit::findNextNAL(buff + 4, m_bufEnd); nal < m_bufEnd && m_fieldsAhead.size() < 32;
          nal = NALUnit::findNextNAL(nal, m_bufEnd))
@@ -608,12 +610,17 @@ void H264StreamReader::pulldownFieldsAhead(const SliceUnit& slice, uint8_t* buff
             return;
         if (next.first_mb_in_slice != 0)
             continue;
-        int diff = static_cast<int>(next.pic_order_cnt_lsb) - static_cast<int>(slice.pic_order_cnt_lsb);
+        // Each step from the picture before, as calcPicOrder counts: taken from this picture alone, a picture more
+        // than half the count's range ahead was read as one shown before it, so an IDR seemed to have pictures shown
+        // before it, and a 3:2 stream began 4 frames after its start time.
+        int diff = static_cast<int>(next.pic_order_cnt_lsb) - prevLsb;
         if (diff >= maxLsb / 2)
             diff -= maxLsb;
         else if (diff < -maxLsb / 2)
             diff += maxLsb;
-        m_fieldsAhead.emplace_back(diff >> m_forceLsbDiv, fieldsShownOf(picStruct));
+        prevLsb = static_cast<int>(next.pic_order_cnt_lsb);
+        order += diff;
+        m_fieldsAhead.emplace_back(order >> m_forceLsbDiv, fieldsShownOf(picStruct));
         picStruct = -1;
     }
 }
