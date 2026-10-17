@@ -112,6 +112,9 @@ int BufferedReader::createReader(const int readBuffOffset)
 
 void BufferedReader::deleteReader(const int readerID)
 {
+    // The reading thread may be inside this reader's block right now, using its file iterator, which the caller frees
+    // once this returns: a refused join freed it while the next part was being opened. The block in hand ends first.
+    std::lock_guard busy(m_processMtx);
     {
         std::lock_guard lock(m_readersMtx);
         const auto iterator = m_readers.find(readerID);
@@ -209,6 +212,8 @@ void BufferedReader::thread_main()
             if (data)
             {
                 uint8_t* buffer = data->m_nextBlock[data->m_bufferIndex] + data->m_readOffset;
+                // Held while this reader's block is read, which may use its file iterator: deleteReader waits for it.
+                std::unique_lock busy(m_processMtx);
                 if (!data->m_deleted)
                 {
                     int bytesReaded = data->readBlock(buffer, data->m_blockSize);
@@ -312,6 +317,7 @@ void BufferedReader::thread_main()
                         m_readCond.notify_one();
                     }
                 }
+                busy.unlock();
 
                 {
                     std::lock_guard lock(m_readersMtx);

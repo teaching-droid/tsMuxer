@@ -114,6 +114,7 @@ class BufferedReader : public AbstractReader, TerminatableThread
    private:
     uint32_t m_id;
     std::mutex m_readersMtx;
+    std::mutex m_processMtx;  // held by the reading thread while it reads a reader's block (see deleteReader)
     std::map<int, ReaderData*> m_readers;
     static int m_newReaderID;
     static int createNewReaderID();

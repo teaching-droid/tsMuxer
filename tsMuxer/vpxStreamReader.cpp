@@ -173,7 +173,8 @@ void VpxStreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const boo
         m_pending.clear();
     }
     m_convBuffer.resize(MAX_AV_PACKET_SIZE + framed.size());
-    memcpy(m_convBuffer.data() + MAX_AV_PACKET_SIZE, framed.data(), framed.size());
+    if (!framed.empty())  // an empty vector may have no data pointer, which memcpy must not get even for 0 bytes
+        memcpy(m_convBuffer.data() + MAX_AV_PACKET_SIZE, framed.data(), framed.size());
     MPEGStreamReader::setBuffer(m_convBuffer.data(), static_cast<uint32_t>(framed.size()), lastBlock);
 }
 
