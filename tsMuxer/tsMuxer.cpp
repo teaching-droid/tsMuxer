@@ -820,15 +820,16 @@ bool TSMuxer::close()
     if (m_sectorSize)
         return true;
 
-    if (m_outBufLen > 0)
-    {
-        if (!m_muxFile->open(m_outFileName.c_str(), AbstractOutputStream::ofWrite + AbstractOutputStream::ofAppend))
-            return false;
-        if (!writeOutFile(m_outBuf, m_outBufLen))
-            return false;
-    }
-    const bool bRes = m_muxFile->close();
-    return bRes;
+    // The file is opened again only for what is left in the buffer. With nothing left, the file closed above was
+    // closed a second time, which fails, and a complete output was reported as one whose end could not be written
+    // (a --cut-end whose last packet filled the buffer exactly).
+    if (m_outBufLen == 0)
+        return true;
+    if (!m_muxFile->open(m_outFileName.c_str(), AbstractOutputStream::ofWrite + AbstractOutputStream::ofAppend))
+        return false;
+    if (!writeOutFile(m_outBuf, m_outBufLen))
+        return false;
+    return m_muxFile->close();
 }
 
 int TSMuxer::calcM2tsFrameCnt() const
