@@ -845,7 +845,8 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     m_fileWriter = std::make_unique<BufferedFileWriter>();
     AVPacket avPacket;
     bool anyMuxed = false;
-    std::set<int> endedByCut;  // streams that have reached --cut-end
+    std::set<int> endedByCut;   // streams that have reached --cut-end
+    std::set<int> withPackets;  // streams that have given a packet, subtitles left out (--cut-end)
 
     while (true)
     {
@@ -865,20 +866,28 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
             // cut the video and audio short: 213 pictures of a 10 second cut instead of 240.
             const bool subtitle = avPacket.codecID == CODEC_S_PGS || avPacket.codecID == CODEC_S_SRT ||
                                   avPacket.codecID == CODEC_S_SUP || avPacket.codecID == CODEC_S_MKVCOPY;
-            // The packets come in the order of their decoding times, and a picture is shown at or after it
-            // is decoded. Once that time reaches the cut, nothing of any stream can still be shown before
-            // it, and the mux ends there.
+            // A stream ends at its first packet that is shown at or after the cut: a B picture that follows
+            // such a picture refers to it and cannot be kept without it. The mux used to end for every stream
+            // at that first packet of ANY stream. Video comes in decoding order, so the picture of another
+            // stream decoded at nearly the same time was lost: the two layers of a Dolby Vision disc ended
+            // with different pictures, and the last audio before the cut was lost as well.
             //
-            // Before that, a stream ends at its first packet that is shown at or after the cut: a B
-            // picture that follows such a picture refers to it and cannot be kept without it. The mux used
-            // to end for every stream at that first packet of ANY stream. Video comes in decoding order,
-            // so the picture of another stream decoded at nearly the same time was lost: the two layers
-            // of a Dolby Vision disc ended with different pictures, and the last audio before the cut was
-            // lost as well.
-            if (!subtitle && avPacket.dts >= m_cutEnd)
-                break;
+            // The mux ends when every stream that has given a packet has ended. The packets come nearly,
+            // not exactly, in the order of their decoding times: the mux used to end at the first packet
+            // decoded at or after the cut, and the sound read a little later than the pictures lost its
+            // last frames before the cut, 2 AC-3 frames (64 ms) at a cut on an I picture. A stream that gives nothing
+            // more ends the mux 2 s of decoding time past the cut, as nothing of it can be that late.
+            if (!subtitle)
+                withPackets.insert(avPacket.stream_index);
             if (avPacket.pts >= m_cutEnd)
                 endedByCut.insert(avPacket.stream_index);
+            if (!subtitle && avPacket.dts >= m_cutEnd)
+            {
+                const bool allEnded = std::all_of(withPackets.begin(), withPackets.end(),
+                                                  [&](const int stream) { return endedByCut.count(stream) != 0; });
+                if (allEnded || avPacket.dts >= m_cutEnd + 2 * INTERNAL_PTS_FREQ)
+                    break;
+            }
             if (endedByCut.count(avPacket.stream_index) != 0)
                 continue;
         }
