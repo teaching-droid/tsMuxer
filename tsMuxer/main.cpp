@@ -96,6 +96,9 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                                                   : paramPair[0] == "--extra-iso-space" ? "--extra-iso-space=64"
                                                                                         : "--auto-chapters=5")
                                               << ".")
+                    // strtol held a larger --vbv-len at 2147483647 ms without a word
+                    if (paramPair[0] == "--vbv-len" && (v.size() > 10 || strtoll(v.c_str(), nullptr, 10) > INT_MAX))
+                        THROW(ERR_COMMON, "--vbv-len=" << v << " is too large: the most is 2147483647 (ms).")
                     if (paramPair[0] == "--extra-iso-space")
                         if (const std::string why = IsoWriter::tooManyExtraBlocks(
                                 v.size() > 18 ? INT64_MAX : strtoll(v.c_str(), nullptr, 10));
