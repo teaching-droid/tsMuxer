@@ -5980,15 +5980,34 @@ void TsMuxerWindow::startMuxing()
     // A Matroska or WebM output is a file too, and an existing one was replaced without the question the others ask.
     bool isFile = ui->radioButtonM2TS->isChecked() || ui->radioButtonTS->isChecked() ||
                   ui->radioButtonBluRayISO->isChecked() || ui->radioButtonMKV->isChecked();
-    if (isFile && QFile::exists(ui->outFileName->text()))
+    // A split writes name.split.1.ext, name.split.2.ext and on, never the name itself, so the question did not come
+    // and the parts of an earlier split were replaced without a word. The meta text is what is run, so a split typed
+    // into it counts as well. The number of parts is known only at the end, so any part there is asked about.
+    QString existingOutput = ui->outFileName->text();
+    if (isFile && !ui->radioButtonBluRayISO->isChecked() &&
+        ui->memoMeta->toPlainText().contains(QRegularExpression("^MUXOPT\\b[^\\n]*--split-(duration|size|chapters)",
+                                                                QRegularExpression::MultilineOption)))
+    {
+        const QFileInfo out(ui->outFileName->text());
+        const QRegularExpression partName("^" + QRegularExpression::escape(out.completeBaseName() + ".split.") +
+                                              "[0-9]+\\." + QRegularExpression::escape(out.suffix()) + "$",
+                                          QRegularExpression::CaseInsensitiveOption);
+        existingOutput.clear();
+        for (const QString& name : out.absoluteDir().entryList(QDir::Files, QDir::Name))
+            if (partName.match(name).hasMatch())
+            {
+                existingOutput = QDir::toNativeSeparators(out.absoluteDir().filePath(name));
+                break;
+            }
+    }
+    if (isFile && !existingOutput.isEmpty() && QFile::exists(existingOutput))
     {
         //: Used in expressions "Overwrite existing %1" and "The output %1 already exists".
         auto fileOrDir = isFile ? tr("file") : tr("directory");
         QMessageBox msgBox(this);
         msgBox.setWindowTitle(tr("Overwrite existing %1?").arg(fileOrDir));
-        msgBox.setText(tr("The output %1 \"%2\" already exists. Do you want to overwrite it?")
-                           .arg(fileOrDir)
-                           .arg(ui->outFileName->text()));
+        msgBox.setText(
+            tr("The output %1 \"%2\" already exists. Do you want to overwrite it?").arg(fileOrDir).arg(existingOutput));
         msgBox.setIcon(QMessageBox::Question);
         msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
         if (msgBox.exec() != QMessageBox::Yes)
