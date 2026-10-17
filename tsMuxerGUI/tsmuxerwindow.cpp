@@ -5756,6 +5756,18 @@ void TsMuxerWindow::RadioButtonMuxClick()
             ui->outFileName->setText(changeFileExt(ui->outFileName->text(), "iso"));
         else
             ui->outFileName->setText(changeFileExt(ui->outFileName->text(), "m2ts"));
+        // The new extension could make the name one of the sources: x.m2ts with M2TS chosen, x.mkv with Matroska, and
+        // the window offered the source as its own output. As when a file is added, such a name gets "_new".
+        const QFileInfo proposed(ui->outFileName->text());
+        bool isSource = false;
+        for (int i = 0; i < ui->trackLV->rowCount() && !isSource; ++i)
+            if (const QtvCodecInfo* info = getCodecInfo(i))
+                for (const QString& source : info->fileList)
+                    if (isSameFile(unquoteStr(source), proposed.filePath()))
+                        isSource = true;
+        if (isSource)
+            ui->outFileName->setText(QDir::toNativeSeparators(closeDirPath(proposed.absolutePath())) +
+                                     proposed.completeBaseName() + "_new." + proposed.suffix());
     }
     ui->DiskLabel->setVisible(ui->radioButtonBluRayISO->isChecked());
     ui->DiskLabelEdit->setVisible(ui->radioButtonBluRayISO->isChecked());
