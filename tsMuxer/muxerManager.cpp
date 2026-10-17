@@ -107,6 +107,11 @@ static std::vector<size_t> transportStreamAddOrder(const std::vector<StreamInfo>
         {
             if (ci[i].m_streamReader->getStreamHDR() != 4)
                 return order;  // a primary video without Dolby Vision comes first: the usual order
+            // A first stream whose RPU says single layer (profile 8.1: HevcDvRpuUnit) is a picture of its own, not an
+            // enhancement layer listed early.
+            if (const auto* hevc = dynamic_cast<HEVCStreamReader*>(ci[i].m_streamReader);
+                hevc != nullptr && hevc->dvRpuElPresent() == 0)
+                return order;
             dv = i;
         }
     if (dv == ci.size())

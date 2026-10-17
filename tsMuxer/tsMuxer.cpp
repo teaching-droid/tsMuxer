@@ -277,9 +277,14 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
     // layers seen so far and has not been touched for this stream yet.
     // An enhancement layer is never larger than its base: a Dolby Vision picture wider than the base before it is a
     // picture of its own (a 4K profile 8.1 listed after a 1080p video was put on 0x1015 as that video's layer).
+    // Nor is a stream whose RPU says it is a single layer (profile 8.1: HevcDvRpuUnit) anyone's layer: a 4K profile 8.1
+    // listed after a plain 4K video went to 0x1015.
     const auto* mpegReader = dynamic_cast<MPEGStreamReader*>(codecReader);
-    const bool isDvEnhancement = codecReader != nullptr && codecReader->getStreamHDR() == 4 && m_videoTrackCnt > 0 &&
-                                 !(mpegReader && m_firstBaseWidth > 0 && mpegReader->getStreamWidth() > m_firstBaseWidth);
+    const auto* hevcReader = dynamic_cast<HEVCStreamReader*>(codecReader);
+    const bool isDvEnhancement =
+        codecReader != nullptr && codecReader->getStreamHDR() == 4 && m_videoTrackCnt > 0 &&
+        !(mpegReader && m_firstBaseWidth > 0 && mpegReader->getStreamWidth() > m_firstBaseWidth) &&
+        !(hevcReader && hevcReader->dvRpuElPresent() == 0);
     const bool isPrimaryVideo = isVideo && !isSecondary && !isDvEnhancement;
 
     const int rank = isPrimaryVideo ? 3 : (isVideo ? 2 : (codecName[0] == 'A' ? 1 : 0));
