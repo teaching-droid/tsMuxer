@@ -32,13 +32,14 @@ std::string upperCase(std::string s)
 
 // A ChapterLanguage is an ISO 639-2 code. Whatever the file said went into the output as it stood, "english" or a
 // piece of markup included. A BCP 47 tag (de, pt-BR) gives the code it stands for; anything else is "und", with a
-// warning.
+// warning. A tag's three letter language is a code only where ISO 639-2 has it: "xyz" and "123" passed as their own
+// codes, without a word.
 static std::string chapterLanguage(const std::string& value, const std::string& fileName)
 {
     const std::string lower = strToLowerCase(value);
     if (lower.size() == 3 && isIso639_2(lower))
         return lower;
-    if (const std::string code = iso639FromBcp47(value); !code.empty())
+    if (const std::string code = iso639FromBcp47(value); !code.empty() && isIso639_2(code))
         return code;
     LTRACE(LT_WARN, 2,
            "Warning: " << fileName << ": the chapter language \"" << value
