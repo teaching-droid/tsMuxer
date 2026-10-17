@@ -469,6 +469,9 @@ class MatroskaMuxer final : public AbstractMuxer
     std::vector<double> m_allChapters;  // a split output's chapters, seconds from the start of the mux
     std::vector<AVChapter> m_allChapterInfo;
     uint64_t m_mainTrackNumber = 0;  // the track whose key frames a split may start at
+    bool m_splitByAnyAudio = false;  // an output without video: every audio track's frames may start a part
+    bool m_startingPart = false;     // startNextPart is writing what belongs to the part that ends
+    [[nodiscard]] bool drivesSplit(const MkvTrackInfo& track) const;
     [[nodiscard]] bool isSplitting() const { return m_splitSize > 0 || m_splitDuration > 0 || m_splitByChapters; }
     [[nodiscard]] std::string partFileName(int part) const;
     bool splitDue(int64_t pts);

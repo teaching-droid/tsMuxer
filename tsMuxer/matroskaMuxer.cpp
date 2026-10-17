@@ -2405,7 +2405,13 @@ void MatroskaMuxer::writeDeferredHeader()
         for (const int wanted : {static_cast<int>(MKV_TRACK_TYPE_VIDEO), static_cast<int>(MKV_TRACK_TYPE_AUDIO), -1})
             for (const auto& [streamIdx, track] : m_tracks)
                 if (m_mainTrackNumber == 0 && (wanted < 0 || static_cast<int>(track.trackType) == wanted))
+                {
                     m_mainTrackNumber = track.trackNumber;
+                    // Without video every audio track drives the split (drivesSplit): the first one alone did, and
+                    // where it was the shorter the split stopped with it. A 2 s track listed before a 6 s one gave
+                    // a part of 1.5 s and one of 5 s for --split-duration=1s.
+                    m_splitByAnyAudio = wanted == static_cast<int>(MKV_TRACK_TYPE_AUDIO);
+                }
     }
     else
         writeChapters();
@@ -3518,7 +3524,7 @@ void MatroskaMuxer::writeBlock(MkvTrackInfo& track, const uint8_t* frameData, in
         // keyframe's, so a part started a frame early and its first picture showed at 42 ms instead of 0.
         const bool reorders =
             track.codecID != CODEC_V_VP8 && track.codecID != CODEC_V_VP9 && track.codecID != CODEC_V_AV1;
-        if (track.trackNumber == m_mainTrackNumber && (pendingFlags & AVPacket::IS_IFRAME) && m_clusterOpen &&
+        if (!m_startingPart && drivesSplit(track) && (pendingFlags & AVPacket::IS_IFRAME) && m_clusterOpen &&
             splitDue(pts))
             startNextPart(track, (std::min)(pts, track.hasPendingFrame && reorders ? track.pendingDts : pts));
     }
@@ -3564,7 +3570,7 @@ void MatroskaMuxer::writeBlock(MkvTrackInfo& track, const uint8_t* frameData, in
                                                  (track.trackType == 2 && audioCueDue(track, relMs))))
         addCue(track, relMs, -1);
 
-    if (m_partOriginPending && track.trackNumber == m_mainTrackNumber)
+    if (m_partOriginPending && drivesSplit(track))
         m_partMinRelMs = (std::min)(m_partMinRelMs, relMs);
     const int16_t relTimeMs = static_cast<int16_t>(relMs - m_clusterTimecodeMs);
 
@@ -4873,6 +4879,13 @@ std::string MatroskaMuxer::partFileName(const int part) const
     return m_origFileName.substr(0, m_origFileName.size() - ext.size() - 1) + ".split." + int32ToStr(part) + "." + ext;
 }
 
+// Whether a track's key frames may start a part: the main track's, and in an output without video every audio
+// track's (m_splitByAnyAudio).
+bool MatroskaMuxer::drivesSplit(const MkvTrackInfo& track) const
+{
+    return track.trackNumber == m_mainTrackNumber || (m_splitByAnyAudio && track.trackType == MKV_TRACK_TYPE_AUDIO);
+}
+
 // Whether the block about to be written starts a new part: a key frame of the main track once the part is as large
 // or as long as asked, or has reached the next chapter.
 bool MatroskaMuxer::splitDue(const int64_t pts)
@@ -4896,10 +4909,14 @@ bool MatroskaMuxer::splitDue(const int64_t pts)
 // Close the part being written and open the next, at origin, which becomes its time zero.
 void MatroskaMuxer::startNextPart(MkvTrackInfo& current, const int64_t origin)
 {
-    // What came before the cut belongs to the part that ends here.
+    // What came before the cut belongs to the part that ends here. Those frames do not start a part themselves: with
+    // every audio track driving the split (drivesSplit), the frame of the other track started the next part, whose
+    // flush started the next, without end.
+    m_startingPart = true;
     for (auto& [streamIdx, track] : m_tracks)
         if (&track != &current)
             flushPendingFrame(track);
+    m_startingPart = false;
     flushHeldText(origin);
     finishPart(origin);
 
