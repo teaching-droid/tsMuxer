@@ -9,6 +9,7 @@
 #include <climits>
 #include <cmath>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <set>
 #include <sstream>
@@ -751,29 +752,61 @@ void METADemuxer::openFile(const string& streamName)
 // The folder above the one that holds the playlist is the disc's BDMV folder, and STREAM is in it; for a playlist of
 // BACKUP, one more folder up. A bare name means the working directory holds the playlist, so BDMV is one above it.
 // The listing and the meta path each had their own copy of this, and both took a playlist named with exactly one
-// folder, PLAYLIST/00000.mpls from inside BDMV, for one with no BDMV at all: the listing showed no stream folder and the
-// meta path gave every clip an empty name. The meta path also looked for the streams of a BACKUP playlist inside
+// folder, PLAYLIST/00000.mpls from inside BDMV, for one with no BDMV at all: the listing showed no stream folder and
+// the meta path gave every clip an empty name. The meta path also looked for the streams of a BACKUP playlist inside
 // BACKUP, where there are none.
+//
+// The folders are looked at, not only their names: a disc folder whose BDMV folder is itself named BACKUP has its
+// STREAM beside that BACKUP's PLAYLIST, and was sent one folder too high. A name relative to the working
+// directory says nothing of the folders above it, so ./00000.mpls, a bare name in BACKUP/PLAYLIST
+// and PLAYLIST/00000.mpls from inside BACKUP took STREAM from the wrong folder.
 std::string METADemuxer::playlistStreamDir(const std::string& mplsFileName)
 {
     const char sep = getDirSeparator();
-    const string dir = toNativeSeparators(extractFileDir(mplsFileName));
-    if (dir.empty())
-        return string("..") + sep + string("STREAM") + sep;
-    // Both take a folder path that ends with a separator.
-    const auto parentOf = [sep](const string& d) {
-        const size_t pos = d.substr(0, d.size() - 1).find_last_of(sep);
-        return pos == string::npos ? string() : d.substr(0, pos + 1);
-    };
-    const auto nameOf = [sep](const string& d) {
+    const string up = string("..") + sep;
+    // The folder above a folder path that ends with a separator (an empty path is the working directory), as a path
+    // that ends with a separator again; empty for the working directory.
+    std::function<string(const string&)> parentOf = [&](const string& d) -> string
+    {
+        if (d.empty())
+            return up;
         const string t = d.substr(0, d.size() - 1);
         const size_t pos = t.find_last_of(sep);
-        return pos == string::npos ? t : t.substr(pos + 1);
+        const string rest = pos == string::npos ? string() : t.substr(0, pos + 1);
+        const string last = pos == string::npos ? t : t.substr(pos + 1);
+        if (last == ".")
+            return parentOf(rest);
+        if (last == "..")
+            return d + up;
+        return rest;
     };
-    string bdmv = parentOf(dir);  // empty when the playlist's folder is named on its own: BDMV is the working directory
-    if (!bdmv.empty() && strToUpperCase(nameOf(bdmv)) == "BACKUP")
-        bdmv = parentOf(bdmv);
-    return bdmv + string("STREAM") + sep;
+    const auto toPath = [](const string& d)
+    {
+        const string s = d.empty() ? string(".") : d;
+        return std::filesystem::path(std::u8string(s.begin(), s.end()));
+    };
+    // A folder that holds something: an empty STREAM folder elsewhere is not the disc's
+    const auto isFolder = [&](const string& d)
+    {
+        std::error_code ec;
+        return std::filesystem::is_directory(toPath(d), ec) && !std::filesystem::is_empty(toPath(d), ec) && !ec;
+    };
+    const auto nameOf = [&](const string& d)
+    {
+        std::error_code ec;
+        std::filesystem::path p = std::filesystem::absolute(toPath(d), ec).lexically_normal();
+        if (!p.has_filename())
+            p = p.parent_path();
+        const std::u8string u = p.filename().u8string();
+        return strToUpperCase(string(u.begin(), u.end()));
+    };
+    const string bdmv = parentOf(toNativeSeparators(extractFileDir(mplsFileName)));
+    const string stream = bdmv + "STREAM" + sep;
+    if (isFolder(stream))
+        return stream;
+    if (nameOf(bdmv) == "BACKUP")
+        return parentOf(bdmv) + "STREAM" + sep;
+    return stream;
 }
 
 std::string METADemuxer::mplsTrackToFullName(const std::string& mplsFileName, const std::string& mplsNum)
