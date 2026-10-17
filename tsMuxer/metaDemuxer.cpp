@@ -1764,7 +1764,18 @@ std::vector<uint8_t> METADemuxer::getPlainMatroskaChapters()
         const auto* join = dynamic_cast<const FileListIterator*>(demuxerData.m_iterator);
         if (!mkv || (join && (join->getFiles().size() > 1 ||
                               (!join->getRanges().empty() && join->getRanges().front().startNs >= 0))))
+        {
+            // A join, or a cut of one file, keeps the chapters the default editions show, and no other edition. Where
+            // the default edition shows none, its chapters all hidden, the output had no chapters, without a word.
+            if (mkv && join && mkv->getChapters().empty())
+                LTRACE(LT_WARN, 2,
+                       "Warning: the default edition of "
+                           << join->getFiles().front() << " shows no chapter (they are all hidden). "
+                           << (join->getFiles().size() > 1 ? "A join" : "A cut")
+                           << " keeps only the chapters of the default editions, so the output has none of them. The "
+                              "other editions are kept only from a single file that is not cut.");
             return {};
+        }
         return mkv->getSourceEditions().chapters;
     }
     return {};
