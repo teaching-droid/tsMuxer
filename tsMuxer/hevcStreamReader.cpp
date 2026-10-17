@@ -166,6 +166,8 @@ void HEVCStreamReader::applyDiscoveryData(const StreamDiscoveryData& data)
         if (data.isDVEL)
             m_hdr->isDVEL = true;
     }
+    if (m_dvRpuElPresent < 0)
+        m_dvRpuElPresent = data.dvRpuElPresent;
 }
 
 void HEVCStreamReader::fillVideoDiscoveryData(StreamDiscoveryData& data)
@@ -176,6 +178,7 @@ void HEVCStreamReader::fillVideoDiscoveryData(StreamDiscoveryData& data)
         data.isDVRPU = m_hdr->isDVRPU;
         data.isDVEL = m_hdr->isDVEL;
     }
+    data.dvRpuElPresent = m_dvRpuElPresent;
 }
 
 // A merged dual layer track carries the enhancement layer's NALs inside wrapper NALs. Two bytes
@@ -347,7 +350,16 @@ CheckStreamRez HEVCStreamReader::checkStream(uint8_t* buffer, const int len)
                     readElParameterSet(nal, nextNal);
                 }
                 else
+                {
                     m_hdr->isDVRPU = true;
+                    if (m_dvRpuElPresent < 0)
+                    {
+                        HevcDvRpuUnit rpu;
+                        rpu.decodeBuffer(nal, nextNal);
+                        if (rpu.deserialize() == 0)
+                            m_dvRpuElPresent = rpu.elPresent ? 1 : 0;
+                    }
+                }
                 V3_flags |= DV;
             }
             break;

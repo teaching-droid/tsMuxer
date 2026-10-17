@@ -39,6 +39,9 @@ struct StreamDiscoveryData
     // muxer writes its header the reader has not necessarily seen one yet.
     bool isDVRPU = false;
     bool isDVEL = false;
+    // What the stream's first readable RPU says: 1 an enhancement layer is part of the picture (profile 7), 0 a
+    // single layer, -1 no RPU read.
+    int dvRpuElPresent = -1;
     int profile = 0;
     int level = 0;
 

@@ -201,6 +201,16 @@ struct HevcHdrUnit : HevcUnit
     bool isDVEL;
 };
 
+// The head of a Dolby Vision RPU (NAL type 62), as far as it says whether the picture it describes is built from a base
+// and an enhancement layer. The RPU of a profile 7 disc's enhancement layer sets el_spatial_resampling_filter_flag and
+// clears disable_residual_flag; the RPU of a single layer track (profile 5 or 8) does neither.
+struct HevcDvRpuUnit : HevcUnit
+{
+    int deserialize();
+
+    bool elPresent = false;
+};
+
 struct HevcSliceHeader : HevcUnit
 {
     HevcSliceHeader();

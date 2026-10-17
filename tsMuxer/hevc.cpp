@@ -933,6 +933,48 @@ int HevcHdrUnit::deserialize()
     }
 }
 
+// -----------------------  HevcDvRpuUnit() -------------------------------------
+
+// rpu_data_header up to disable_residual_flag. Returns 0 when it was read, 1 when the unit is no RPU of the kind that
+// has these fields (rpu_type 2 with its sequence info), NOT_ENOUGH_BUFFER when it ends early.
+int HevcDvRpuUnit::deserialize()
+{
+    const int rez = HevcUnit::deserialize();
+    if (rez)
+        return rez;
+    try
+    {
+        if (m_reader.getBits(8) != 0x19)  // rpu_nal_prefix
+            return 1;
+        const unsigned rpuType = m_reader.getBits(6);
+        const unsigned rpuFormat = m_reader.getBits(11);
+        if (rpuType != 2)
+            return 1;
+        const unsigned vdrRpuProfile = m_reader.getBits(4);
+        m_reader.skipBits(4);    // vdr_rpu_level
+        if (!m_reader.getBit())  // vdr_seq_info_present_flag
+            return 1;
+        m_reader.skipBits(1);          // chroma_resampling_explicit_filter_flag
+        if (m_reader.getBits(2) == 0)  // coefficient_data_type 0: fixed point
+            extractUEGolombCode();     // coefficient_log2_denom
+        m_reader.skipBits(3);          // vdr_rpu_normalized_idc, bl_video_full_range_flag
+        if ((rpuFormat & 0x700) != 0)
+            return 1;
+        extractUEGolombCode();  // bl_bit_depth_minus8
+        extractUEGolombCode();  // el_bit_depth_minus8
+        extractUEGolombCode();  // vdr_bit_depth_minus8
+        m_reader.skipBits(4);   // spatial_resampling_filter_flag, reserved_zero_3bits
+        const bool elSpatialResampling = m_reader.getBit();
+        const bool disableResidual = m_reader.getBit();
+        elPresent = vdrRpuProfile == 1 && elSpatialResampling && !disableResidual;
+        return 0;
+    }
+    catch (BitStreamException&)
+    {
+        return NOT_ENOUGH_BUFFER;
+    }
+}
+
 // -----------------------  HevcSliceHeader() -------------------------------------
 
 HevcSliceHeader::HevcSliceHeader() : first_slice(false), pps_id(-1), slice_type(-1), pic_order_cnt_lsb(0) {}

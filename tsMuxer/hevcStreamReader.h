@@ -42,6 +42,9 @@ class HEVCStreamReader final : public MPEGStreamReader
     void setForceLevel(const uint8_t value) { m_forcedLevel = value; }
     void applyDiscoveryData(const StreamDiscoveryData& data) override;
     void fillVideoDiscoveryData(StreamDiscoveryData& data) override;
+    // What the stream's first readable RPU says of the layers: 1 the picture is built with an enhancement layer (the
+    // RPU of a profile 7 disc's enhancement layer), 0 a single layer (profile 5 or 8), -1 no RPU read (HevcDvRpuUnit).
+    [[nodiscard]] int dvRpuElPresent() const { return m_dvRpuElPresent; }
     [[nodiscard]] bool needSPSForSplit() const override { return false; }
 
    protected:
@@ -89,6 +92,7 @@ class HEVCStreamReader final : public MPEGStreamReader
     // enhancement layer, so describing both rows from m_sps reported the wrong picture for one.
     HevcVpsUnit* m_elVps = nullptr;
     HevcSpsUnit* m_elSps = nullptr;
+    int m_dvRpuElPresent = -1;  // dvRpuElPresent
     int m_seiParseWarns = 0;
     bool m_hdr10Override = false;  // setHdr10Override
     HevcSliceHeader* m_slice;

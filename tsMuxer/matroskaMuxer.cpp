@@ -2061,8 +2061,16 @@ void MatroskaMuxer::refreshTrackProperties()
             continue;
         // An enhancement layer is never larger than its base: a 4K profile 8.1 track listed after a 1080p one was
         // folded into it, and the output showed only the 1080p picture. Such a track stays a track of its own.
-        if (dynamic_cast<MPEGStreamReader*>(elReader)->getStreamWidth() >
-            dynamic_cast<MPEGStreamReader*>(blReader)->getStreamWidth())
+        const unsigned elWidth = dynamic_cast<MPEGStreamReader*>(elReader)->getStreamWidth();
+        const unsigned blWidth = dynamic_cast<MPEGStreamReader*>(blReader)->getStreamWidth();
+        if (elWidth > blWidth)
+            continue;
+        // Nor is every track with an RPU an enhancement layer: a single layer profile 8.1 track carries one too. Its
+        // RPU says which it is (HevcDvRpuUnit), and a track whose RPU says single layer is a picture of its own. A
+        // plain 4K track followed by a 4K profile 8.1 one was folded: 36 of its 60 pictures were left out, and the one
+        // track left was described as profile 6. Where no RPU could be read, only a smaller track is taken for a layer,
+        // as the enhancement layer of a disc is a quarter of its base.
+        if (elReader->dvRpuElPresent() == 0 || (elReader->dvRpuElPresent() < 0 && elWidth >= blWidth))
             continue;
 
         // In profile 8.1 mode the pairing still happens, because the enhancement layer is still
@@ -2128,6 +2136,10 @@ void MatroskaMuxer::refreshTrackProperties()
                 continue;
             const auto blReader = dynamic_cast<HEVCStreamReader*>(track.codecReader);
             if (blReader == nullptr || elReader == nullptr)
+                continue;
+            // A first track whose RPU says single layer (a 1080p profile 8.1 picture before a plain 4K one) is no
+            // enhancement layer, whatever its size.
+            if (elReader->dvRpuElPresent() == 0)
                 continue;
             if (blReader->getStreamWidth() > elReader->getStreamWidth() &&
                 blReader->getStreamHeight() > elReader->getStreamHeight())
