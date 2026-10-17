@@ -483,6 +483,14 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
         if (m_video_height == 0)
             return NEED_MORE_DATA;
 
+        if (m_newFps == 0.0 && m_scaled_width && m_scaled_height)
+        {
+            // a line with the size and no fps=: the size is chosen at the stream's own rate, now that it is known,
+            // and a picture drawn again is written at that rate (see setVideoInfo)
+            TextToPGSConverter::enlargeCrop(m_scaled_width, m_scaled_height, m_frame_rate, &m_scaled_width,
+                                            &m_scaled_height);
+            m_render->setVideoInfo(m_scaled_width, m_scaled_height, m_frame_rate);
+        }
         uint16_t tmpWidth;
         uint16_t tmpHeight;
         // the stream's own size at the frame rate its target was chosen at, so that a stream already at the size the
@@ -924,8 +932,11 @@ void PGSStreamReader::setVideoInfo(const uint16_t width, const uint16_t height, 
     m_scaled_height = height;
     m_newFps = fps;
     // the size at the frame rate of the line: it was chosen before the rate was known, so that a line for video of
-    // 720x576 at 25 fps asked for 720x480, and a PGS stream at 720x576 was scaled down to it
-    if (width && height)
+    // 720x576 at 25 fps asked for 720x480, and a PGS stream at 720x576 was scaled down to it. Without a rate on the
+    // line the size is chosen in readPacket at the stream's own rate: chosen at a rate of 0, video-width=720,
+    // video-height=576 without fps= asked for 720x480 as well, and a 720x576 stream at 25 fps was scaled down to it
+    // and written with frame rate code 0 in every PCS.
+    if (width && height && fps != 0.0)
         TextToPGSConverter::enlargeCrop(width, height, fps, &m_scaled_width, &m_scaled_height);
     m_render->setVideoInfo(m_scaled_width, m_scaled_height, m_newFps);
 }
