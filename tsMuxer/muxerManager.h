@@ -72,6 +72,8 @@ class MuxerManager final
     // A demux into a folder that exists is written into a temporary folder inside it first (KeepOldOutput in main):
     // the names a demux writes are compared with the sources by the folder they end up in, set here
     void setDemuxFolder(const std::string& folder) { m_demuxFolder = folder; }
+    // --split-duration, --split-size or --split-chapters was given with a value the split takes
+    [[nodiscard]] bool splitAsked() const { return m_isoSplitBytes > 0 || m_isoSplitTicks > 0 || m_isoSplitChapters; }
     [[nodiscard]] const std::string& demuxFolder() const { return m_demuxFolder; }
     [[nodiscard]] bool getHevcFound() const { return m_metaDemuxer.m_HevcFound; }
     [[nodiscard]] bool getMvcFound() const { return m_metaDemuxer.m_MvcFound; }

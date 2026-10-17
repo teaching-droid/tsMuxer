@@ -2532,7 +2532,9 @@ static void refuseSourceAsOutput(const MuxerManager& muxerManager, const std::st
 {
     std::error_code ec;
     const std::filesystem::path out(std::u8string(dstFile.begin(), dstFile.end()));
-    // A split writes name.split.n.ext beside the name it was given, so a source named so is written over as well
+    // A split writes name.split.n.ext beside the name it was given, so a source named so is written over as well. A
+    // job without a split writes no such name, and was refused all the same.
+    if (muxerManager.splitAsked())
     {
         const std::u8string stemU = out.stem().u8string();
         const std::u8string extU = out.extension().u8string();
