@@ -410,10 +410,10 @@ int64_t getTimeValueNano(const int64_t pts)
 }
 
 // The next "PG" marker at or after `from` that begins a plausible segment: a known segment type, and a length that
-// ends at another "PG" or where the buffered data ends. Nothing when the buffer holds none.
-uint8_t* PGSStreamReader::findSupMarker(uint8_t* from) const
+// ends at another "PG" or where the data ends. Nothing when the data holds none.
+static uint8_t* supMarkerIn(uint8_t* from, const uint8_t* end)
 {
-    for (uint8_t* p = from; p + 13 <= m_bufEnd; ++p)
+    for (uint8_t* p = from; p + 13 <= end; ++p)
     {
         if (p[0] != 'P' || p[1] != 'G')
             continue;
@@ -422,11 +422,13 @@ uint8_t* PGSStreamReader::findSupMarker(uint8_t* from) const
             type != WINDOWS_DEF_SEGMENT && type != 0x80)
             continue;
         const uint8_t* next = p + 13 + AV_RB16(p + 11);
-        if (next + 2 > m_bufEnd || (next[0] == 'P' && next[1] == 'G'))
+        if (next + 2 > end || (next[0] == 'P' && next[1] == 'G'))
             return p;
     }
     return nullptr;
 }
+
+uint8_t* PGSStreamReader::findSupMarker(uint8_t* from) const { return supMarkerIn(from, m_bufEnd); }
 
 void PGSStreamReader::warnSupDamage()
 {
@@ -474,9 +476,10 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
     if (m_video_height == 0)
     {
         // A .sup with bytes in front of its first marker: the size was looked for in those bytes, never found, and the
-        // reader waited for it without reading anything.
+        // reader waited for it without reading anything. Bytes in front that begin with "PG" themselves are no marker
+        // either: the first plausible segment is looked for in every case.
         uint8_t* from = m_curPos;
-        if (m_containerType == ContainerType::ctSUP && m_bufEnd - from >= 2 && !(from[0] == 'P' && from[1] == 'G'))
+        if (m_containerType == ContainerType::ctSUP && m_bufEnd - from >= 2)
             if (uint8_t* next = findSupMarker(from))
                 from = next;
         intDecodeStream(from, m_bufEnd - from);
@@ -562,8 +565,10 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
     }
     bool pgStartCode = m_curPos[0] == 'P' && m_curPos[1] == 'G';
     // .sup input: a segment is followed by the next "PG" marker. When it is not, the bytes before the next marker are
-    // skipped, with a warning.
-    if (m_containerType == ContainerType::ctSUP && m_supExpectMarker && !pgStartCode)
+    // skipped, with a warning. In front of the first segment, bytes that begin with "PG" ("PGPG...", "PGx") were taken
+    // for its marker, and nothing of the file was muxed: there the marker has to begin a plausible segment.
+    if (m_containerType == ContainerType::ctSUP && m_supExpectMarker &&
+        (!pgStartCode || (!m_supStarted && findSupMarker(m_curPos) != m_curPos)))
     {
         uint8_t* next = findSupMarker(m_curPos);
         if (next == nullptr)
@@ -586,6 +591,7 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
     if (pgStartCode)
     {
         m_supExpectMarker = false;
+        m_supStarted = true;
         if (m_bufEnd - m_curPos < 10)
         {
             m_tmpBufferLen = m_bufEnd - m_curPos;
@@ -846,20 +852,14 @@ CheckStreamRez PGSStreamReader::checkStream(uint8_t* buffer, int len, ContainerT
     else if (containerType == ContainerType::ctSUP && len > 2)
     {
         // A few bytes in front of the first "PG" marker: the file was not taken for a .sup at all, and nothing was
-        // muxed. The first marker within 16 bytes whose segment type is one of PGS counts, as the reader finds it.
-        for (int k = 0; k < 16 && k + 13 <= len; ++k)
+        // muxed. The first plausible segment counts, as the reader finds it: within 16 bytes only, a file with 16 or more
+        // bytes in front, or one that begins inside a segment, was not listed, though the reader muxes it.
+        if (uint8_t* first = supMarkerIn(buffer, buffer + len))
         {
-            const uint8_t type = buffer[k + 10];
-            if (buffer[k] == 'P' && buffer[k + 1] == 'G' &&
-                (type == PALETTE_DEF_SEGMENT || type == OBJECT_DEF_SEGMENT || type == PCS_DEF_SEGMENT ||
-                 type == WINDOWS_DEF_SEGMENT || type == 0x80))
-            {
-                rez.codecInfo = pgsCodecInfo;
-                rez.streamDescr = std::string("Presentation Graphic Stream");
-                buffer += k;
-                len -= k;
-                break;
-            }
+            rez.codecInfo = pgsCodecInfo;
+            rez.streamDescr = std::string("Presentation Graphic Stream");
+            len -= static_cast<int>(first - buffer);
+            buffer = first;
         }
     }
     intDecodeStream(buffer, len);

@@ -165,6 +165,7 @@ class PGSStreamReader final : public AbstractStreamReader
     // way back after a damaged segment.
     // A .sup begins with a marker as well: with one or two bytes in front of it, the first subtitle was lost.
     bool m_supExpectMarker = true;
+    bool m_supStarted = false;  // the first segment of a .sup has been found
     int m_supDamagedSegments = 0;
     [[nodiscard]] uint8_t* findSupMarker(uint8_t* from) const;
     void warnSupDamage();
