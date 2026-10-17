@@ -3,6 +3,8 @@
 #include <gdiplus.h>
 #include <cmath>
 
+#include <fs/systemlog.h>
+
 #include "../vodCoreException.h"
 #include "../vod_common.h"
 #include "types/types.h"
@@ -99,6 +101,34 @@ void TextSubtitlesRenderWin32::setFont(const Font& font)
 #endif
 }
 
+#ifndef OLD_WIN32_RENDERER
+// GDI+ draws nothing with a family it does not have. A track line without font-name=, or naming a font that is not
+// installed, gave a subtitle track without pictures, a warning that the font size was too large and "Mux successful":
+// the FontFamily of such a name fails, AddString adds no path, and GetEmHeight gives 0, which the line spacing is
+// divided by. Such a name is drawn with the system's sans serif font instead, and a warning names it once.
+const wchar_t* TextSubtitlesRenderWin32::family()
+{
+    auto it = m_families.find(m_font.m_name);
+    if (it == m_families.end())
+    {
+        std::vector<wchar_t> name = toWide(m_font.m_name);
+        if (const FontFamily wanted(name.data()); m_font.m_name.empty() || wanted.GetLastStatus() != Ok)
+        {
+            WCHAR fallback[LF_FACESIZE] = {};
+            FontFamily::GenericSansSerif()->GetFamilyName(fallback);
+            name.assign(fallback, fallback + wcslen(fallback) + 1);
+            LTRACE(
+                LT_WARN, 2,
+                "Warning: " << (m_font.m_name.empty() ? std::string("no font is named for the subtitles (font-name=)")
+                                                      : "the font \"" + m_font.m_name + "\" is not installed")
+                            << ", and the subtitles are drawn with " << toUtf8(fallback) << ".");
+        }
+        it = m_families.emplace(m_font.m_name, std::move(name)).first;
+    }
+    return it->second.data();
+}
+#endif
+
 void TextSubtitlesRenderWin32::drawText(const std::string& text, RECT* rect)
 {
 #ifdef OLD_WIN32_RENDERER
@@ -108,7 +138,7 @@ void TextSubtitlesRenderWin32::drawText(const std::string& text, RECT* rect)
     graphics.SetSmoothingMode(SmoothingModeHighQuality);
     graphics.SetInterpolationMode(InterpolationModeHighQualityBicubic);
 
-    const FontFamily fontFamily(toWide(m_font.m_name).data());
+    const FontFamily fontFamily(family());
     const StringFormat strformat;
     GraphicsPath path;
 
@@ -137,7 +167,7 @@ void TextSubtitlesRenderWin32::getTextSize(const std::string& text, SIZE* mSize)
     ::GetTextExtentPoint32(m_dc, text.c_str(), text.size(), mSize);
 #else
     const int opts = m_font.m_opts & 0xf;
-    const FontFamily fontFamily(toWide(m_font.m_name).data());
+    const FontFamily fontFamily(family());
     const ::Font font(&fontFamily, static_cast<float>(m_font.m_size), opts, UnitPoint);
 
     const int lineSpacing = fontFamily.GetLineSpacing(FontStyleRegular);
@@ -168,7 +198,7 @@ int TextSubtitlesRenderWin32::getTextAdvance(const std::string& text)
     return TextSubtitlesRender::getTextAdvance(text);
 #else
     const int opts = m_font.m_opts & 0xf;
-    const FontFamily fontFamily(toWide(m_font.m_name).data());
+    const FontFamily fontFamily(family());
     const StringFormat strformat;
     const auto rightEdge = [&](const std::string& s)
     {
@@ -192,7 +222,7 @@ int TextSubtitlesRenderWin32::getLineSpacing()
     return tm.tmAscent;
 #else
     const int opts = m_font.m_opts & 0xf;
-    const FontFamily fontFamily(toWide(m_font.m_name).data());
+    const FontFamily fontFamily(family());
     const ::Font font(&fontFamily, static_cast<float>(m_font.m_size), opts, UnitPoint);
 
     const int lineSpacing = fontFamily.GetLineSpacing(opts);
@@ -210,7 +240,7 @@ int TextSubtitlesRenderWin32::getBaseline()
     return tm.tmAscent;
 #else
     const int opts = m_font.m_opts & 0xf;
-    const FontFamily fontFamily(toWide(m_font.m_name).data());
+    const FontFamily fontFamily(family());
     const ::Font font(&fontFamily, static_cast<float>(m_font.m_size), opts, UnitPoint);
 
     const int descentOffset = fontFamily.GetCellDescent(opts);

@@ -1,6 +1,10 @@
 #ifndef TEXT_SUBTITLES_RENDER_WIN_H_
 #define TEXT_SUBTITLES_RENDER_WIN_H_
 
+#include <map>
+#include <string>
+#include <vector>
+
 #include "../textSubtitlesRender.h"
 #include "windows.h"
 
@@ -30,6 +34,10 @@ class TextSubtitlesRenderWin32 final : public TextSubtitlesRender
     HFONT m_hfont;
 #ifndef OLD_WIN32_RENDERER
     GdiPlusPriv* m_gdiPriv;
+    // The family GDI+ draws the font of m_font with, by font name: the name itself, or the system's sans serif font
+    // when GDI+ has no family of that name
+    std::map<std::string, std::vector<wchar_t>> m_families;
+    const wchar_t* family();
 #else
 #endif
 };
