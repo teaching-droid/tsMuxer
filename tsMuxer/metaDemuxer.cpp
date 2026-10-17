@@ -1042,6 +1042,20 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             const char* filmFps = fabs(streamFps - 29.97) < 0.01  ? "24000/1001"
                                   : fabs(streamFps - 30.0) < 0.01 ? "24"
                                                                   : nullptr;
+            // H.264 says how long each picture is shown: the rate follows from that, at 59.94 and 60 as well (720p
+            // film, its pictures doubled and tripled). A cadence that gives no standard rate keeps the rule above.
+            double nearest = 0.003;  // of the rate: a probe of a few dozen pictures may end inside a cadence
+            if (s.filmFps > 0.0)
+                for (const auto& [rate, name] : {std::pair<double, const char*>{24000.0 / 1001, "24000/1001"},
+                                                 {24.0, "24"},
+                                                 {25.0, "25"},
+                                                 {30000.0 / 1001, "30000/1001"},
+                                                 {30.0, "30"}})
+                    if (fabs(s.filmFps - rate) / rate < nearest)
+                    {
+                        nearest = fabs(s.filmFps - rate) / rate;
+                        filmFps = name;
+                    }
             if (filmFps)
             {
                 readerParams["fps"] = filmFps;

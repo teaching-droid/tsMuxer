@@ -75,6 +75,8 @@ void H264StreamReader::applyDiscoveryData(const StreamDiscoveryData& data)
         setFPS(data.fps);
 }
 
+static int fieldsShownOf(int picStruct);
+
 CheckStreamRez H264StreamReader::checkStream(uint8_t* buffer, int len)
 {
     SEIUnit lastSEI;
@@ -84,6 +86,8 @@ CheckStreamRez H264StreamReader::checkStream(uint8_t* buffer, int len)
     std::string tmpDescr;
     bool pulldownInserted = false;
     bool offsetsInserted = false;
+    int64_t timedFrames = 0;  // frame pictures with a pic_struct, and the fields they are shown for
+    int64_t fieldsShown = 0;
 
     for (uint8_t* nal = NALUnit::findNextNAL(buffer, end); nal < end - 4; nal = NALUnit::findNextNAL(nal, end))
     {
@@ -148,6 +152,12 @@ CheckStreamRez H264StreamReader::checkStream(uint8_t* buffer, int len)
                 SPSUnit* sps = m_spsMap.begin()->second;
                 lastSEI.decodeBuffer(nal, nextNal);
                 lastSEI.deserialize(*sps, sps->nalHrdParams.isPresent || sps->vclHrdParams.isPresent);
+                if (lastSEI.hasProcessedMessage(SEI_MSG_PIC_TIMING) && lastSEI.pic_struct >= 0 &&
+                    lastSEI.pic_struct != 1 && lastSEI.pic_struct != 2)  // a frame, not a field
+                {
+                    ++timedFrames;
+                    fieldsShown += fieldsShownOf(lastSEI.pic_struct);
+                }
                 if (lastSEI.pic_struct == 5 || lastSEI.pic_struct == 6 || lastSEI.pic_struct == 7 ||
                     lastSEI.pic_struct == 8)
                 {
@@ -201,6 +211,11 @@ CheckStreamRez H264StreamReader::checkStream(uint8_t* buffer, int len)
     }
     if (m_mvcSubStream && m_mvcPrimaryStream)
         rez.multiSubStream = true;
+    // The rate without the pulldown: delPulldown shows each picture once. Taken as 23.976 for any 29.97 stream, and
+    // left at the stream's rate for 720p59.94 film, whose pictures are doubled and tripled: it played 2.5 times fast.
+    if (pulldownInserted && timedFrames >= 8 && !m_spsMap.empty())
+        rez.filmFps = m_spsMap.begin()->second->getFPS() * 2.0 * static_cast<double>(timedFrames) /
+                      static_cast<double>(fieldsShown);
 
     return rez;
 }

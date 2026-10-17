@@ -91,6 +91,9 @@ struct CheckStreamRez
     int subTrack;
     bool isSecondary;
     bool unused;
+    // H.264 with pulldown: the rate of its pictures shown once each, from the fields its pic_struct values show them
+    // for (3:2 on 29.97 or 2:3 frame doubling and tripling on 59.94 both give 23.976). 0 when not known.
+    double filmFps = 0.0;
     // A Matroska source's own track name and flags (srcname, srcflags), for the listing. Empty for other containers.
     std::string name;
     std::string flags;
