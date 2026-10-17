@@ -1186,6 +1186,10 @@ int H264StreamReader::processSEI(uint8_t* buff)
             {
                 timingSEI = true;
                 m_lastPictStruct = lastSEI.pic_struct;
+                // Pulldown that begins after the first block read: additionalStreamCheck sees only that block, and
+                // such a stream kept its times in whole frames (180 times for 234 pictures).
+                if (!m_removePulldown)
+                    m_pulldownPendingFields = (std::max)(m_pulldownPendingFields, fieldsShownOf(m_lastPictStruct));
             }
             else if (msg == SEI_MSG_MVC_SCALABLE_NESTING)
             {
@@ -1486,6 +1490,17 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
             firstLeading = -1;  // coded fields follow: as before
     }
 
+    // Times by fields begin at the next IDR, where a period begins anyway: begun at once, mid period, the pictures
+    // timed by frames before and those after left a hole of 17 frames. The decoding times are moved back
+    // further for the longer pictures (else 6 pictures came before their decoding time), and everything
+    // from here on is moved later by as much, so the decoding times do not go back: the one hole left, 2 frames there.
+    if (slice.isIDR() && m_pulldownPendingFields > m_pulldownMaxFields)
+    {
+        const int depthBefore = getFrameDepth();
+        m_pulldownMaxFields = m_pulldownPendingFields;
+        const int64_t later = static_cast<int64_t>(getFrameDepth() - depthBefore) * m_pcrIncPerFrame;
+        m_curDts += later;
+    }
     // Pulldown: the pictures shown before this one that come later in decode order, read before anything changes
     if (m_pulldownMaxFields > 2 && !slice.m_field_pic_flag && slice.getSPS()->pic_order_cnt_type == 0)
         pulldownFieldsAhead(slice, buff);

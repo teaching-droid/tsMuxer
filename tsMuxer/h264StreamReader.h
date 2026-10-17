@@ -148,6 +148,7 @@ class H264StreamReader final : public MPEGStreamReader
     // presentation time is the time the pictures shown before it take. pulldownFieldsAhead reads the ones that
     // come later in decode order.
     int m_pulldownMaxFields = 2;       // the most fields one picture is shown for, from the start of the stream
+    int m_pulldownPendingFields = 2;   // the same for every picture read so far: taken at the next IDR
     std::map<int, int> m_fieldsShown;  // full order -> fields shown, in the current IDR period
     std::vector<std::pair<int, int>> m_fieldsAhead;  // (order relative to this picture, fields) read ahead
     int64_t m_pulldownOrigin = 0;                    // presentation time of the first picture shown in the period
