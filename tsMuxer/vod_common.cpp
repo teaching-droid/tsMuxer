@@ -392,16 +392,31 @@ static std::string lowerCase(const std::string& s)
 
 // ** AN UNBRACKETED CODE COMES AFTER "_" OR ".", AND IS NOT A WORD OF A TITLE. ** Ordinary English words are ISO
 // 639-2 codes: "Iron Man.ac3" was Mandingo, "Holy War" Waray and "X-Men" Mende. The tools that write a code into a
-// name join it with an underscore or a dot (Movie_spa.ac3, movie.eng.srt), and a capital followed by small letters is
-// a word of the title.
+// name join it with an underscore or a dot (Movie_spa.ac3, movie.eng.srt). Joined that way, a word of a title looks
+// the same as a code ("IRON.MAN", "iron_man", "x.men", "holy_war"), and a capital does not tell them apart either:
+// "Movie.Eng" and "Movie_Ger" are codes. So the codes that are English words are read only in brackets ([man]), and
+// the codes of languages that tracks are made in keep their place even where they are words too (cat, may, nor, per).
+static bool isTitleWord(const std::string& lower)
+{
+    static const char* const WORDS =
+        " ace art bad ban bat bin car day den din fan fat gay got hat her him hit kin lad "
+        "mad man map mar men min mis nap new pal pap pro rap run sad sag sam sat son sun "
+        "ton war was wen yap zen ";
+    return lower.size() == 3 && strstr(WORDS, (" " + lower + " ").c_str()) != nullptr;
+}
+
 static bool unbracketedCode(const std::string& token, const char separator)
 {
     if (separator != 0 && separator != '_' && separator != '.')
         return false;
-    if (token.size() == 3 && isupper(static_cast<unsigned char>(token[0])) &&
-        islower(static_cast<unsigned char>(token[1])) && islower(static_cast<unsigned char>(token[2])))
-        return false;
-    return isIso639_2(lowerCase(token));
+    const std::string lower = lowerCase(token);
+    return isIso639_2(lower) && !isTitleWord(lower);
+}
+
+// A code in brackets at the end of a name, as "Movie (forced) [eng]"
+static bool bracketedCode(const std::string& token, const char separator)
+{
+    return (separator == '[' || separator == '(') && isIso639_2(lowerCase(token));
 }
 
 std::string langFromFileName(const std::string& fileName)
@@ -468,10 +483,12 @@ bool isForcedSubtitleName(const std::string& fileName)
     // whose title merely begins with the word as the disc's forced subtitle track, which is
     // a worse mistake than not recognising a name at all. The tools that split these files
     // out put it at the end, bracketed or plain: "... fra (forced).sup", "movie_forced.sup".
-    // Or the word before a language code at the end (movie_forced_eng.srt), which was read as the language only.
+    // Or the word before a language code at the end (movie_forced_eng.srt), which was read as the language only, and
+    // before a code in brackets ("Movie (forced) [eng]"), which was not forced.
     char separator = 0;
     std::string token = lastNameToken(name, separator);
-    if (lowerCase(token) != "forced" && !name.empty() && unbracketedCode(token, separator))
+    if (lowerCase(token) != "forced" && !name.empty() &&
+        (unbracketedCode(token, separator) || bracketedCode(token, separator)))
         token = lastNameToken(name, separator);
     return lowerCase(token) == "forced";
 }
