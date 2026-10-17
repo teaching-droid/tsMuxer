@@ -409,13 +409,26 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
     {
         const StreamInfo& si = ci[i];
         const bool trueHD = i < m_discoveryData.size() && m_discoveryData[i].discovered && m_discoveryData[i].isTrueHD;
-        if (si.m_addParams.count("drop-ac3-core") && !trueHD)
-            if (const auto* ac3 = dynamic_cast<AC3StreamReader*>(si.m_streamReader); ac3 != nullptr && !ac3->isTrueHD())
-                LTRACE(LT_WARN, 2,
-                       "Warning: drop-ac3-core applies to TrueHD only, and track "
-                           << si.m_streamReader->getStreamIndex()
-                           << " is not TrueHD, so it is kept whole. The E-AC-3 part of Dolby Digital Plus cannot be "
-                              "played without its AC-3 core; to keep the core alone, use down-to-ac3.");
+        // Every track that is not TrueHD is told so: only AC-3 and Dolby Digital Plus were, and DTS, AAC or LPCM
+        // took the parameter without a word. With down-to-ac3 the track is not kept
+        // whole, as the warning said: the core is kept alone.
+        if (!si.m_addParams.count("drop-ac3-core") || trueHD || si.m_codec == "A_MLP")
+            continue;
+        const auto* ac3 = dynamic_cast<AC3StreamReader*>(si.m_streamReader);
+        if (ac3 != nullptr && ac3->isTrueHD())
+            continue;
+        std::string rest;
+        if (ac3 == nullptr)
+            rest = " It is ignored.";
+        else if (si.m_addParams.count("down-to-ac3"))
+            rest = " It is ignored; down-to-ac3 keeps the AC-3 core alone.";
+        else
+            rest =
+                " It is ignored, and the track is kept whole. The E-AC-3 part of Dolby Digital Plus cannot be "
+                "played without its AC-3 core; to keep the core alone, use down-to-ac3.";
+        LTRACE(LT_WARN, 2,
+               "Warning: drop-ac3-core applies to TrueHD only, and track " << si.m_streamReader->getStreamIndex()
+                                                                           << " is not TrueHD." << rest);
     }
 
     std::vector<size_t> order(ci.size());
