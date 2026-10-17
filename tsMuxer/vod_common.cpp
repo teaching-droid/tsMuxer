@@ -521,6 +521,26 @@ std::string parseLayerBreakList(const std::string& value, std::vector<int>& lbns
 {
     lbns.clear();
     warnings.clear();
+    // Groups of three digits after the first part, which together make a real layer boundary: a number written with
+    // thousands separators. It became three breaks of 12, 219 and 392 sectors with only a warning, while the same
+    // number written with points was refused.
+    {
+        const std::vector<std::string> parts = splitStr(value.c_str(), ',');
+        bool grouped = parts.size() > 1;
+        std::string joined;
+        for (size_t k = 0; k < parts.size() && grouped; ++k)
+        {
+            const std::string p = trimStr(parts[k]);
+            grouped = !p.empty() && p.find_first_not_of("0123456789") == std::string::npos &&
+                      (k == 0 ? p.size() <= 3 : p.size() == 3);
+            joined += p;
+        }
+        if (grouped && joined.size() <= 10 && strToInt64(joined.c_str()) >= 1048576)
+            return "\"" + trimStr(value) +
+                   "\" is a number written with thousands separators, and a comma separates "
+                   "two breaks here. Write " +
+                   joined + ".";
+    }
     for (const auto& raw : splitStr(value.c_str(), ','))
     {
         const std::string tok = trimStr(raw);

@@ -349,8 +349,11 @@ double chapterTimeToSeconds(const std::string& text, const std::string& where)
     const std::string t = trimmed(text);
     if (t.empty())
         return 0.0;
+    // The minutes and the seconds are below 60, as a cut time's are: 00:75:00 was read as 1:15:00, while
+    // --cut-start refused it.
     bool ok = true;
     size_t partStart = 0;
+    int partCount = 0;
     for (size_t i = 0; ok && i <= t.size(); ++i)
     {
         if (i == t.size() || t[i] == ':')
@@ -359,6 +362,11 @@ double chapterTimeToSeconds(const std::string& text, const std::string& where)
             const bool last = i == t.size();
             ok = !part.empty() && std::isdigit(static_cast<unsigned char>(part[0])) &&
                  std::count(part.begin(), part.end(), '.') <= (last ? 1 : 0);
+            ++partCount;
+            if (ok && partCount > 1 && strtod(part.c_str(), nullptr) >= 60.0)
+                ok = false;
+            if (partCount > 3)
+                ok = false;
             partStart = i + 1;
         }
         else if (!std::isdigit(static_cast<unsigned char>(t[i])) && t[i] != '.')

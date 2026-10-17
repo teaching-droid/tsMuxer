@@ -609,10 +609,14 @@ void METADemuxer::openFile(const string& streamName)
             const size_t eq = params[i].find('=');
             const string paramName = trimStr(params[i].substr(0, eq));
             addParams[paramName] = trimStr(eq == string::npos ? "" : params[i].substr(eq + 1));
-            // Digits alone, with no name: the part after a decimal comma, as the parameters are parted at commas.
-            // fps=23,976 became fps=23, and timeshift=1,5s timeshift=1, with only a warning about "976".
-            if (eq == string::npos && i > 0 && !paramName.empty() &&
-                paramName.find_first_not_of("0123456789") == string::npos)
+            // Digits alone, or digits and a unit, with no name: the part after a decimal comma, as the parameters are
+            // parted at commas. fps=23,976 became fps=23, and timeshift=1,5s timeshift=1 (1 ms), with only a warning
+            // about "976" or "5s".
+            const size_t digitsEnd = paramName.find_first_not_of("0123456789");
+            const std::string unit =
+                digitsEnd == string::npos ? std::string() : strToLowerCase(paramName.substr(digitsEnd));
+            if (eq == string::npos && i > 0 && !paramName.empty() && digitsEnd != 0 &&
+                (digitsEnd == string::npos || unit == "ms" || unit == "s" || unit == "min" || unit == "h"))
                 THROW(ERR_COMMON, "\"" << trimStr(params[i - 1]) << "," << paramName
                                        << "\" on a track line: a decimal comma parts the value in two, as the "
                                           "parameters are parted at commas. Write it with a point, such as 23.976.")
@@ -815,7 +819,9 @@ static int checkedLevel(const std::string& text, const char* codec, const int sc
     const std::string t = trimStr(text);
     const bool number = !t.empty() && t.find_first_not_of("0123456789.") == std::string::npos &&
                         std::count(t.begin(), t.end(), '.') <= 1 && t.find_first_of("0123456789") != std::string::npos;
-    const long idc = number ? lround(strToDouble(t.c_str()) * scale) : -1;
+    // The value must BE a level: it was rounded first, so 4.15 was taken as 4.2 and 3.95 as 4.0 without a word
+    const double scaled = number ? strToDouble(t.c_str()) * scale : -1.0;
+    const long idc = number && std::fabs(scaled - std::round(scaled)) < 1e-6 ? lround(scaled) : -1;
     if (std::find(levels.begin(), levels.end(), idc) == levels.end())
     {
         std::string list;

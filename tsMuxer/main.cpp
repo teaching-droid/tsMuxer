@@ -72,6 +72,29 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                 vector<string> paramPair = splitStr(trimStr(param).c_str(), '=');
                 if (paramPair.empty())
                     continue;
+                // ** A NUMBER IS READ WHOLE OR REFUSED. ** These were read up to their first other character, so
+                // --start-time=10s was 10 ticks of 45 kHz, --vbv-len=0.5s was 0, --extra-iso-space=64K was 64 and -50
+                // stayed -50, and --auto-chapters=5,5 was 5, each without a word. They are checked here, before
+                // anything is written; the muxers read them as before.
+                if (paramPair.size() > 1)
+                {
+                    const std::string v = trimStr(paramPair[1]);
+                    const bool digits = !v.empty() && v.find_first_not_of("0123456789") == std::string::npos;
+                    if (paramPair[0] == "--start-time" && v.find(':') == std::string::npos && !digits)
+                        THROW(ERR_COMMON, "--start-time=" << v
+                                                          << " is neither a number of 45 kHz ticks nor a time written "
+                                                             "hh:mm:ss.zzz, such as --start-time=00:10:00.")
+                    if ((paramPair[0] == "--vbv-len" || paramPair[0] == "--extra-iso-space" ||
+                         paramPair[0] == "--auto-chapters") &&
+                        !digits)
+                        THROW(ERR_COMMON, paramPair[0]
+                                              << "=" << v
+                                              << " is not a whole number of 0 or more. Write digits alone, such as "
+                                              << (paramPair[0] == "--vbv-len"           ? "--vbv-len=500 (ms)"
+                                                  : paramPair[0] == "--extra-iso-space" ? "--extra-iso-space=64"
+                                                                                        : "--auto-chapters=5")
+                                              << ".")
+                }
                 // ** AN OPTION WRITTEN WITH A SPACE INSTEAD OF AN EQUALS SIGN READ PAST THE END OF THE
                 // VECTOR. ** splitStr on "--auto-chapters" alone yields one element, and every branch
                 // below reached for the second. That is undefined behaviour, so it crashed on some
@@ -105,7 +128,9 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                         THROW(ERR_COMMON, "Missing value for " << paramPair[0])
                     // A list in a meta line is times only. A file carries the names as well, so the
                     // chapters are kept whole here and the times are taken from them, rather than
-                    // the other way round.
+                    // the other way round. A second file replaced the first without a word: one is taken.
+                    if (fromChapterFile)
+                        THROW(ERR_COMMON, "--chapters-file is given more than once. Give one chapter file.")
                     chapterInfo = readChapterFile(unquoteStr(paramPair[1]));
                     fromChapterFile = true;
                 }
