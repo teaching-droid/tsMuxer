@@ -2234,11 +2234,12 @@ static void reportSingleLayerDvOnDisc(const MuxerManager& muxerManager)
 // finished size is checked against the disc and that it warns when it does not fit, and nothing did. The finished image
 // is measured now, or for a disc folder the files in it; a folder becomes slightly larger as an image, by its file
 // system.
-static void reportFinishedDiscSize(const std::string& outputRoot, const int64_t discLimit)
+static void reportFinishedDiscSize(const std::string& outputRoot, const int64_t discLimit, const int64_t extraIsoBlocks)
 {
     if (discLimit <= 0)
         return;
     int64_t size = 0;
+    int64_t sectorBytes = 0;  // each file in whole sectors, as an image holds it
     const bool image = strEndWith(strToLowerCase(outputRoot), ".iso");
     if (image)
         size = static_cast<int64_t>(getFileSize(outputRoot));
@@ -2250,18 +2251,45 @@ static void reportFinishedDiscSize(const std::string& outputRoot, const int64_t 
         {
             std::vector<std::string> files;
             findFilesRecursive(outputRoot + getDirSeparator() + sub + getDirSeparator(), "*", &files);
-            for (const std::string& f : files) size += static_cast<int64_t>(getFileSize(f));
+            for (const std::string& f : files)
+            {
+                const auto bytes = static_cast<int64_t>(getFileSize(f));
+                size += bytes;
+                sectorBytes += static_cast<int64_t>(roundUp64(static_cast<uint64_t>(bytes), SECTOR_SIZE));
+            }
         }
     }
-    const char* what = image ? "the finished image is " : "the files of the finished disc folder come to ";
-    if (size > discLimit)
+    if (image)
+    {
+        if (size > discLimit)
+            LTRACE(LT_WARN, 2,
+                   "Warning: the finished image is " << size << " bytes, more than the " << discLimit
+                                                     << " bytes of --disc-size, so it does not fit that disc.");
+        else
+            LTRACE(LT_INFO, 2,
+                   "The finished image is " << size << " bytes, within the " << discLimit << " bytes of --disc-size.");
+        return;
+    }
+    // A disc is burnt from an image, which adds its file system to the files: a folder of 39,618,392 bytes was
+    // "within" 40,000,000 while the image of the same job is 41,353,216. The image is reckoned as IsoWriter lays
+    // it out: 640 KB in front, the metadata area and its mirror, the files in whole sectors, a 64 KB block to align,
+    // and 576 KB at the end, in whole blocks of 64 KB. It is the size of an .iso output of the same job; an image made
+    // from the folder with --bdmv-to-iso reserves more metadata and is somewhat larger.
+    const int64_t meta = IsoWriter::metadataBlocks(size, extraIsoBlocks) * ALLOC_BLOCK_SIZE;
+    const int64_t imageEstimate = static_cast<int64_t>(
+        roundUp64(static_cast<uint64_t>(static_cast<int64_t>(METADATA_START_ADDR) * SECTOR_SIZE + 2 * meta +
+                                        sectorBytes + ALLOC_BLOCK_SIZE + 1024 * 512 + ALLOC_BLOCK_SIZE),
+                  ALLOC_BLOCK_SIZE));
+    if (imageEstimate > discLimit)
         LTRACE(LT_WARN, 2,
-               "Warning: " << what << size << " bytes, more than the " << discLimit
-                           << " bytes of --disc-size, so it does not fit that disc.");
+               "Warning: the files of the finished disc folder come to "
+                   << size << " bytes, and an image of them, with its file system, to about " << imageEstimate
+                   << " bytes, more than the " << discLimit << " bytes of --disc-size, so it does not fit that disc.");
     else
         LTRACE(LT_INFO, 2,
-               (image ? "The finished image is " : "The files of the finished disc folder come to ")
-                   << size << " bytes, within the " << discLimit << " bytes of --disc-size.");
+               "The files of the finished disc folder come to "
+                   << size << " bytes, and an image of them, with its file system, to about " << imageEstimate
+                   << " bytes, within the " << discLimit << " bytes of --disc-size.");
 }
 
 static void reportSplitWithoutParameterSets(const MuxerManager& muxerManager)
@@ -3285,7 +3313,7 @@ int main(int argc, char** argv)
             checkSourcesCutOff(muxerManager);
             keepOld.commit();
             if (dt != DiskType::NONE)
-                reportFinishedDiscSize(outputRoot, muxerManager.getDiscSizeLimit());
+                reportFinishedDiscSize(outputRoot, muxerManager.getDiscSizeLimit(), muxerManager.getExtraISOBlocks());
             LTRACE(LT_INFO, 2, "Mux successful complete");
             reportSplitWithoutParameterSets(muxerManager);
             reportLostData(muxerManager);
