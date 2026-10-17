@@ -526,7 +526,22 @@ void MuxerManager::checkTimeshiftFitsClock()
                                                    "pass the clock's limit of about 26.5 hours and wrap round. Use a "
                                                    "smaller timeshift.")
     }
-
+    // --start-time and a positive timeshift move the times up as well, and had no bound at all: --start-time=26:30:40
+    // and a timeshift of 95440 s wrapped round within the first seconds. The same rule as
+    // above: the start, the largest shift and the stated length, or half the clock for a raw stream, stay below it.
+    int64_t mostPositiveShift = 0;
+    for (const StreamInfo& si : ci) mostPositiveShift = std::max(mostPositiveShift, si.m_timeShift);
+    {
+        static constexpr int64_t CLOCK_WRAP = 1LL << 33;  // 90 kHz ticks
+        const int64_t shift = mostPositiveShift / (INTERNAL_PTS_FREQ / 90000);
+        const int64_t length = m_metaDemuxer.statedDurationNano() / 1000000 * 90 / 1000;  // 90 kHz ticks
+        if (m_ptsOffset >= CLOCK_WRAP || shift >= CLOCK_WRAP ||
+            m_ptsOffset + shift + (length > 0 ? length : CLOCK_WRAP / 2) >= CLOCK_WRAP)
+            THROW(ERR_COMMON, "--start-time (" << m_ptsOffset / 90000 << " s) and a timeshift of "
+                                               << mostPositiveShift * 1000 / INTERNAL_PTS_FREQ
+                                               << " ms put the times of the mux past the clock's limit of about 26.5 "
+                                                  "hours, where they wrap round. Use a smaller start or timeshift.")
+    }
 }
 
 void MuxerManager::checkTracksBeforeOutput()

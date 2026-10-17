@@ -96,6 +96,12 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                         THROW(ERR_COMMON, "--start-time=" << v
                                                           << " is neither a number of 45 kHz ticks nor a time written "
                                                              "hh:mm:ss.zzz, such as --start-time=00:10:00.")
+                    // A clock time is read as a chapter time is, minutes and seconds below 60: 99:99:99 was taken as
+                    // 100:40:39 and 00:00:10s as 10 s. Ticks beyond 15 digits did not fit when doubled to 90 kHz.
+                    if (paramPair[0] == "--start-time" && v.find(':') != std::string::npos)
+                        chapterTimeToSeconds(v, "--start-time");
+                    if (paramPair[0] == "--start-time" && digits && v.size() > 15)
+                        THROW(ERR_COMMON, "--start-time=" << v << " is past the clock's limit of about 26.5 hours.")
                     if ((paramPair[0] == "--vbv-len" || paramPair[0] == "--extra-iso-space" ||
                          paramPair[0] == "--auto-chapters") &&
                         !digits)
