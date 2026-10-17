@@ -2284,9 +2284,30 @@ int MovDemuxer::mov_read_default(MOVAtom atom)
     return err;
 }
 
+// The length of the first n bytes of s without a UTF-8 character at their end that lacks its last bytes: a string cut
+// to a count of bytes ends inside a character as often as not, and the half character went out as invalid UTF-8.
+static size_t wholeUtf8(const char* s, const size_t n)
+{
+    size_t i = n;
+    int follow = 0;  // continuation bytes at the end
+    while (i > 0 && follow < 3 && (static_cast<uint8_t>(s[i - 1]) & 0xC0) == 0x80)
+    {
+        --i;
+        ++follow;
+    }
+    if (i == 0)
+        return n;
+    const auto lead = static_cast<uint8_t>(s[i - 1]);
+    const int need = lead >= 0xF0 ? 3 : lead >= 0xE0 ? 2 : lead >= 0xC0 ? 1 : 0;
+    return lead >= 0xC0 && need > follow ? i - 1 : n;
+}
+
 int MovDemuxer::mov_read_udta_string(MOVAtom atom)
 {
-    char str[1024]{}, key[4]{0}, language[4]{0};
+    // A string is read whole up to 64 KB: 1023 bytes were kept, which cut a long title, in the middle of a character
+    // as often as not.
+    std::vector<char> str(65536);
+    char key[4]{0}, language[4]{0};
     unsigned str_size;
 
     if (itunes_metadata)
@@ -2316,18 +2337,19 @@ int MovDemuxer::mov_read_udta_string(MOVAtom atom)
     key[1] = static_cast<char>(atom.type >> 16);
     key[2] = static_cast<char>(atom.type >> 24);
 
-    str_size = static_cast<uint16_t>(FFMIN(FFMIN((int)(sizeof(str) - 1), str_size), atom.size));
-    get_buffer(reinterpret_cast<uint8_t*>(str), str_size);
-    str[str_size] = 0;
+    const bool cut = str_size > str.size() - 1;
+    str_size = static_cast<unsigned>(FFMIN(FFMIN(static_cast<int64_t>(str.size() - 1), str_size), atom.size));
+    get_buffer(reinterpret_cast<uint8_t*>(str.data()), str_size);
+    str[cut ? wholeUtf8(str.data(), str_size) : str_size] = 0;
     // The title of a track (trak/udta) is that track's name when its handler gave none, not the title of the file
     if (m_inTrak)
     {
         if (num_tracks > 0 && strcmp(key, "nam") == 0 && str[0])
             if (const auto st = reinterpret_cast<MOVStreamContext*>(tracks[num_tracks - 1]); st->name.empty())
-                st->name = str;
+                st->name = str.data();
         return 0;
     }
-    metaData[key] = str;
+    metaData[key] = str.data();
     return 0;
 }
 
@@ -3570,6 +3592,8 @@ int MovDemuxer::mov_read_chpl(MOVAtom atom)
             break;
         std::string title(static_cast<size_t>(len), '\0');
         get_buffer(reinterpret_cast<uint8_t*>(title.data()), len);
+        // A title holds at most 255 bytes, and a writer cuts a longer one there, inside a character or not
+        title.resize(wholeUtf8(title.data(), title.size()));
         m_chplChapters.emplace_back(start * 100, title);
     }
     skip_bytes(end - m_processedBytes);
@@ -3781,11 +3805,15 @@ std::vector<AVChapter> MovDemuxer::chapterTrackChapters() const
             if (size >= 2 && f.seek(pos, File::SeekMethod::smBegin) != -1 && f.read(buf, want) == want)
             {
                 const int len = (std::min)(buf[0] << 8 | buf[1], want - 2);
+                // a title over 1024 bytes is cut to a whole character
+                const bool cut = (buf[0] << 8 | buf[1]) > len;
                 if (len >= 2 && buf[2] == 0xFE && buf[3] == 0xFF)  // UTF-16, big endian by its byte order mark
                     title = UtfConverter::toUtf8(buf + 4, static_cast<size_t>(len - 2) & ~size_t{1},
                                                  UtfConverter::SourceFormat::sfUTF16be);
                 else
-                    title.assign(reinterpret_cast<const char*>(buf + 2), static_cast<size_t>(len));
+                    title.assign(reinterpret_cast<const char*>(buf + 2),
+                                 cut ? wholeUtf8(reinterpret_cast<const char*>(buf + 2), static_cast<size_t>(len))
+                                     : static_cast<size_t>(len));
             }
             out.emplace_back(time * 1000000000LL / sc->time_scale, title);
             pos += size;
