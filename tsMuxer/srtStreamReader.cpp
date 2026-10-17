@@ -1174,10 +1174,13 @@ static bool looksLikeTimingLine(const std::string& line)
         digits(2, 2) && p < line.size() && (line[p] == ',' || line[p] == '.' || line[p] == ':'))
         return true;
     // Or a time without its hours, "01:00,000 --> 01:03,000": only digits, colons, commas, dots and spaces in front of
-    // an arrow. Its block was drawn inside the subtitle before it without a word.
+    // an arrow. Its block was drawn inside the subtitle before it without a word. The time has its milliseconds after
+    // a comma or a point, as every SRT time does: a line of dialogue such as "10:30 -> 11:00 the night crew" was
+    // taken for a mistyped timing line and skipped.
     const size_t arrow = line.find("->", start);
+    const size_t colon = line.find(':', start);
     return arrow != std::string::npos && arrow > start && line.find_first_not_of("0123456789:,. \t", start) >= arrow &&
-           line.find(':', start) < arrow;
+           colon < arrow && line.find_first_of(",.", colon) < arrow;
 }
 
 int SRTStreamReader::blankLineEndsCue() const
