@@ -1056,6 +1056,10 @@ TsMuxerWindow::TsMuxerWindow()
 
     ui->DiskLabel->setVisible(false);
     ui->DiskLabelEdit->setVisible(false);
+    // The ISO label is written quoted in the meta as well: a double quote ended it there, and the options after it on
+    // the MUXOPT line were lost. It cannot be typed, as in the Matroska names.
+    ui->DiskLabelEdit->setValidator(
+        new QRegularExpressionValidator(QRegularExpression(QStringLiteral("[^\"]*")), ui->DiskLabelEdit));
     // The Matroska output's title and --keep-editions, shown for MKV output only. A double quote would end the quoted
     // title in the meta, so it cannot be typed.
     ui->mkvTitleEdit->setValidator(
