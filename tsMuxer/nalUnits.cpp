@@ -640,9 +640,13 @@ int SPSUnit::deserializeVuiParameters()
         bitReader.skipBit();  // overscan_appropriate_flag
     if (bitReader.getBit())   // video_signal_type_present_flag
     {
-        bitReader.skipBits(4);       // video_format, video_full_range_flag
-        if (bitReader.getBit())      // colour_description_present_flag
-            bitReader.skipBits(24);  // colour_primaries, transfer_characteristics, matrix_coefficients
+        bitReader.skipBits(4);   // video_format, video_full_range_flag
+        if (bitReader.getBit())  // colour_description_present_flag
+        {
+            colour_primaries = bitReader.getBits<uint8_t>(8);
+            transfer_characteristics = bitReader.getBits<uint8_t>(8);
+            matrix_coefficients = bitReader.getBits<uint8_t>(8);
+        }
     }
     if (bitReader.getBit())  // chroma_loc_info_present_flag
     {

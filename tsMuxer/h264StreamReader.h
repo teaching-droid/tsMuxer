@@ -72,6 +72,7 @@ class H264StreamReader final : public MPEGStreamReader
     [[nodiscard]] unsigned getStreamWidth() const override;
     [[nodiscard]] unsigned getStreamHeight() const override;
     [[nodiscard]] int getStreamHDR() const override { return 0; }
+    [[nodiscard]] bool getColourDesc(uint8_t& primaries, uint8_t& transfer, uint8_t& matrix) const override;
     bool getInterlaced() override;
     bool isIFrame() override { return m_lastIFrame; }
     // virtual bool isIFrame() { return m_lastSliceIDR; }

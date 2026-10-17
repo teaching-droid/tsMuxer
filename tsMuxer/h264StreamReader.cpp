@@ -1953,6 +1953,20 @@ unsigned H264StreamReader::getStreamHeight() const
     return !m_spsMap.empty() ? m_spsMap.begin()->second->getHeight() : 0;
 }
 
+// The colour the stream's VUI gives. It said none for H.264, so the colour box of an MP4 decided all three values,
+// also where the stream gives its own: a VUI with matrix 1 (BT.709) went out with the container's 9 (BT.2020). As for
+// HEVC, all 2 (unspecified) is no description; a single 2 is filled from the container (writeColourInfo).
+bool H264StreamReader::getColourDesc(uint8_t& primaries, uint8_t& transfer, uint8_t& matrix) const
+{
+    if (m_spsMap.empty())
+        return false;
+    const SPSUnit* sps = m_spsMap.begin()->second;
+    primaries = sps->colour_primaries;
+    transfer = sps->transfer_characteristics;
+    matrix = sps->matrix_coefficients;
+    return primaries != 2 || transfer != 2 || matrix != 2;
+}
+
 bool H264StreamReader::getInterlaced()
 {
     return !m_spsMap.empty() ? !m_spsMap.begin()->second->frame_mbs_only_flag : true;

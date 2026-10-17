@@ -1252,9 +1252,15 @@ int MatroskaMuxer::writeColourInfo(uint8_t* dst, const MkvTrackInfo& track)
     int p = 0;
     if (track.hasColourDesc)
     {
-        p += ebml_write_uint(body + p, MATROSKA_ID_COLOURMATRIXCOEFF, track.colourMatrix);
-        p += ebml_write_uint(body + p, MATROSKA_ID_COLOURTRANSFERCHARACTER, track.colourTransfer);
-        p += ebml_write_uint(body + p, MATROSKA_ID_COLOURPRIMARIES, track.colourPrimaries);
+        // The stream's own value wins where it gives one; where it says 2 (unspecified), the container's fills in
+        const auto value = [&src, &track](const char* key, const uint8_t own)
+        {
+            const auto it = src(key);
+            return own == 2 && it != track.srcColour.end() ? static_cast<uint64_t>(it->second) : own;
+        };
+        p += ebml_write_uint(body + p, MATROSKA_ID_COLOURMATRIXCOEFF, value("m", track.colourMatrix));
+        p += ebml_write_uint(body + p, MATROSKA_ID_COLOURTRANSFERCHARACTER, value("t", track.colourTransfer));
+        p += ebml_write_uint(body + p, MATROSKA_ID_COLOURPRIMARIES, value("p", track.colourPrimaries));
     }
     else if (srcColourDesc)
     {

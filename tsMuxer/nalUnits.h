@@ -193,6 +193,10 @@ class SPSUnit final : public NALUnit
     bool m_ready;
     uint16_t sar_width;
     uint16_t sar_height;
+    // The colour description of the VUI, as the coded values of ISO/IEC 23091-4; 2 (unspecified) where it has none
+    uint8_t colour_primaries = 2;
+    uint8_t transfer_characteristics = 2;
+    uint8_t matrix_coefficients = 2;
     uint32_t num_units_in_tick;
     uint32_t time_scale;
     int fixed_frame_rate_flag;
