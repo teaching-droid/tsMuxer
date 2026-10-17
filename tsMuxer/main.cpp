@@ -326,7 +326,13 @@ static void addTracksFromLaterClips(vector<CheckStreamRez>& streams, const MPLSP
 void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSubMode,
                         const vector<LaterClip>* laterClips = nullptr)
 {
-    DetectStreamRez streamInfo = METADemuxer::DetectStreamReader(readManager, fileName, mplsParser == nullptr);
+    // The later clips of a playlist also give a frame rate that a short first clip cannot give: the listing shows the
+    // rate the mux takes, and the window writes it
+    std::vector<std::string> laterFiles;
+    if (mplsParser && laterClips)
+        for (const LaterClip& clip : *laterClips) laterFiles.push_back(clip.media);
+    DetectStreamRez streamInfo =
+        METADemuxer::DetectStreamReader(readManager, fileName, mplsParser == nullptr, laterFiles);
     vector<CheckStreamRez>& streams = streamInfo.streams;
     if (mplsParser && laterClips && !laterClips->empty())
         addTracksFromLaterClips(streams, *mplsParser, fileName, *laterClips);

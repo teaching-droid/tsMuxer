@@ -9,6 +9,7 @@
 
 #include "abstractStreamReader.h"
 #include "bitmapSubtitles.h"
+#include "bufferedFileReader.h"
 #include "matroskaParser.h"
 #include "vodCoreException.h"
 #include "vod_common.h"
@@ -629,6 +630,9 @@ int64_t TSDemuxer::getDemuxedSize() { return m_dataProcessed; }
 
 void TSDemuxer::setFileIterator(FileNameIterator* itr)
 {
+    // The files of a join or a playlist, for getTrackPacketFps: a first clip may be too short to give a rate
+    if (const auto* list = dynamic_cast<const FileListIterator*>(itr))
+        m_joinFiles = list->getFiles();
     const auto br = dynamic_cast<BufferedFileReader*>(m_bufferedReader);
     if (br)
         br->setFileIterator(itr, m_readerID);
@@ -728,37 +732,137 @@ int64_t getTSDuration(const char* fileName)
 
 int64_t TSDemuxer::getFileDurationNano() const { return getTSDuration(m_streamName.c_str()) * 1000000000ll / 90000ll; }
 
-// A video stream may name no frame rate of its own: HEVC, H.264 or VVC without timing information, AV1 without a timing
-// info, which an encoder is free to leave out. In a transport stream the PES header of each picture still carries its
-// time, so the rate is the spacing of those times. It was taken to be 25, and a 23.976 film played 4 % fast. The times
-// of the track's first pictures are read on a handle of their own, sorted, since pictures come in decoding order, and
-// the usual step between them gives the rate: a picture still to come leaves a hole in the order shown, and a later
-// clip of a join a jump, and neither is a step. Nothing is said when a PES start in the window carries no time (H.222.0
-// asks for one only every 0.7 s), or when the steps vary.
-double TSDemuxer::getTrackPacketFps(const uint32_t trackId)
+namespace
 {
-    if (const auto known = m_packetFps.find(trackId); known != m_packetFps.end())
-        return known->second;
-    m_packetFps[trackId] = 0.0;
-    File f;
-    if (trackId == 0 || trackId >= 0x1fff || m_streamName.empty() ||
-        !f.open(unquoteStr(m_streamName).c_str(), File::ofRead))
-        return 0.0;
+// Counts the pictures that begin in each PES of a video stream, from the NAL unit (or VC-1 start code) after each
+// start code: the first slice of a picture, or a VVC picture header. A start code split between two TS packets is
+// still found, as the bytes run on through one counter.
+class PictureStarts
+{
+   public:
+    explicit PictureStarts(const StreamType type)
+    {
+        switch (type)
+        {
+        case StreamType::VIDEO_H264:
+            m_need = 2;
+            break;
+        case StreamType::VIDEO_H265:
+        case StreamType::VIDEO_H266:
+            m_need = 3;
+            break;
+        case StreamType::VIDEO_VC1:
+            m_need = 1;
+            break;
+        default:
+            m_need = 0;  // not counted
+        }
+        m_type = type;
+    }
+    void newPes()
+    {
+        m_inPes = 0;
+        m_last = 0xffffffff;
+        m_have = -1;
+    }
+    void feed(const uint8_t* p, const uint8_t* end)
+    {
+        if (m_need == 0)
+            return;
+        for (; p < end; ++p)
+        {
+            if (m_have >= 0)
+            {
+                m_header[m_have++] = *p;
+                if (m_have == m_need)
+                {
+                    m_have = -1;
+                    if (isPictureStart())
+                        ++m_inPes;
+                }
+            }
+            m_last = m_last << 8 | *p;
+            if ((m_last & 0xffffff) == 1)
+                m_have = 0;
+        }
+    }
+    [[nodiscard]] int inPes() const { return m_inPes; }
 
-    static constexpr size_t PICTURES = 240;
+   private:
+    [[nodiscard]] bool isPictureStart() const
+    {
+        const uint8_t* h = m_header;
+        switch (m_type)
+        {
+        case StreamType::VIDEO_H264:  // a slice with first_mb_in_slice 0
+        {
+            const int type = h[0] & 0x1f;
+            return (type == 1 || type == 5) && h[1] & 0x80;
+        }
+        case StreamType::VIDEO_H265:  // a slice of layer 0 with first_slice_segment_in_pic_flag
+        {
+            const int type = h[0] >> 1 & 0x3f;
+            const int layer = (h[0] & 1) << 5 | h[1] >> 3;
+            return type < 32 && layer == 0 && h[2] & 0x80;
+        }
+        case StreamType::VIDEO_H266:  // a picture header, or a slice of layer 0 that carries one
+        {
+            const int layer = h[0] & 0x3f;
+            const int type = h[1] >> 3;
+            return layer == 0 && (type == 19 || (type < 12 && h[2] & 0x80));
+        }
+        case StreamType::VIDEO_VC1:  // a frame start code
+            return h[0] == 0x0d;
+        default:
+            return false;
+        }
+    }
+    StreamType m_type;
+    int m_need;
+    int m_inPes = 0;
+    uint32_t m_last = 0xffffffff;
+    uint8_t m_header[3]{};
+    int m_have = -1;  // -1: no start code just read
+};
+
+// The times in the PES headers of one PID in one file, in file order, with what stops them giving the rate.
+struct PesTimes
+{
+    std::vector<int64_t> times;
+    int64_t bytes = 0;
+    bool withoutTime = false;   // a PES start without a time
+    bool manyPictures = false;  // a PES that carries more than one picture
+    bool unreadable = false;    // not a transport stream
+};
+
+PesTimes readPesTimes(const std::string& name, const uint32_t pid, const StreamType type, const size_t maxTimes,
+                      const int64_t maxBytes)
+{
+    PesTimes r;
+    File f;
+    if (!f.open(name.c_str(), File::ofRead))
+    {
+        r.unreadable = true;
+        return r;
+    }
     static constexpr int CHUNK = 4 * 1024 * 1024;
     std::vector<uint8_t> buf(CHUNK + 2 * 192);
-    std::vector<int64_t> times;
-    int stride = 0;    // 188, or 192 for an M2TS: found from the first packets
-    size_t have = 0;   // bytes in buf
-    int64_t read = 0;  // bytes read from the file
-    bool withoutTime = false;
-    while (times.size() < PICTURES && !withoutTime && read < DETECT_STREAM_BUFFER_SIZE)
+    PictureStarts pictures(type);
+    bool inPes = false;
+    int stride = 0;   // 188, or 192 for an M2TS: found from the first packets
+    size_t have = 0;  // bytes in buf
+    // The PES in progress when the window is full is counted too: its pictures so far are all it can hold.
+    const auto endPes = [&]
+    {
+        if (inPes && pictures.inPes() > 1)
+            r.manyPictures = true;
+    };
+    while (r.times.size() < maxTimes && !r.withoutTime && !r.manyPictures && r.bytes < maxBytes)
     {
         const int len = f.read(buf.data() + have, CHUNK);
         if (len <= 0)
             break;
-        read += len;
+        r.bytes += len;
         have += len;
         size_t pos = 0;
         if (stride == 0)
@@ -779,11 +883,14 @@ double TSDemuxer::getTrackPacketFps(const uint32_t trackId)
                 }
             }
             if (stride == 0)
-                return 0.0;
+            {
+                r.unreadable = true;
+                return r;
+            }
         }
         else
             pos = stride - 188;
-        while (pos + stride <= have && times.size() < PICTURES)
+        while (pos + stride <= have && r.times.size() < maxTimes && !r.manyPictures)
         {
             const uint8_t* pk = buf.data() + pos;
             if (pk[0] != 0x47)
@@ -795,27 +902,41 @@ double TSDemuxer::getTrackPacketFps(const uint32_t trackId)
                 continue;
             }
             pos += stride;
-            const uint32_t pid = (pk[1] & 0x1f) << 8 | pk[2];
+            const uint32_t packetPid = (pk[1] & 0x1f) << 8 | pk[2];
             const int afc = pk[3] >> 4 & 3;
-            if (pid != trackId || !(pk[1] & 0x40) || !(afc & 1))
+            if (packetPid != pid || !(afc & 1))
                 continue;
             const int off = afc & 2 ? 5 + pk[4] : 4;
+            if (off >= 188)
+                continue;
+            if (!(pk[1] & 0x40))
+            {
+                if (inPes)
+                    pictures.feed(pk + off, pk + 188);
+                continue;
+            }
             if (off + 14 > 188)
                 continue;
             const uint8_t* pes = pk + off;
             if (pes[0] != 0 || pes[1] != 0 || pes[2] != 1)
                 continue;
+            endPes();
             if (!(pes[7] & 0x80))
             {
-                withoutTime = true;
+                r.withoutTime = true;
                 break;
             }
             int64_t pts = static_cast<int64_t>(pes[9] & 0x0e) << 29 | static_cast<int64_t>(pes[10]) << 22 |
                           static_cast<int64_t>(pes[11] & 0xfe) << 14 | static_cast<int64_t>(pes[12]) << 7 |
                           pes[13] >> 1;
-            if (!times.empty() && pts < times.front() - (1ll << 32))
+            if (!r.times.empty() && pts < r.times.front() - (1ll << 32))
                 pts += 1ll << 33;  // the 33-bit clock wrapped
-            times.push_back(pts);
+            r.times.push_back(pts);
+            inPes = true;
+            pictures.newPes();
+            const int payload = off + 9 + pes[8];
+            if (payload < 188)
+                pictures.feed(pk + payload, pk + 188);
         }
         // The packet not yet complete goes to the front for the next read, an M2TS one with its 4-byte header, so
         // that its sync byte is again where the next round starts.
@@ -825,14 +946,60 @@ double TSDemuxer::getTrackPacketFps(const uint32_t trackId)
             memmove(buf.data(), buf.data() + from, keep);
         have = keep;
     }
-    if (withoutTime)
+    if (!r.withoutTime)
+        endPes();
+    return r;
+}
+}  // namespace
+
+// A video stream may name no frame rate of its own: HEVC, H.264 or VVC without timing information, AV1 without a timing
+// info, which an encoder is free to leave out. In a transport stream the PES header of each picture still carries its
+// time, so the rate is the spacing of those times. It was taken to be 25, and a 23.976 film played 4 % fast. The times
+// of the track's first pictures are read on a handle of their own, sorted, since pictures come in decoding order, and
+// the usual step between them gives the rate: a picture still to come leaves a hole in the order shown, and a jump
+// inside a file is not a step. Each clip of a join or a playlist is sorted on its own, and a first clip with fewer
+// pictures than the rate needs is followed by the next ones. Nothing is said, and the stream keeps the default, when a
+// PES start in the window carries no time (H.222.0 asks for one only every 0.7 s), when a PES carries more than one
+// picture, when the steps vary, or when the rate they give is no standard one: a stream without B pictures that put
+// two pictures in each PES stepped two pictures at a time and was muxed at 11.988, at half its speed.
+double TSDemuxer::getTrackPacketFps(const uint32_t trackId)
+{
+    if (const auto known = m_packetFps.find(trackId); known != m_packetFps.end())
+        return known->second;
+    m_packetFps[trackId] = 0.0;
+    if (trackId == 0 || trackId >= 0x1fff || m_streamName.empty())
         return 0.0;
-    std::sort(times.begin(), times.end());
-    times.erase(std::unique(times.begin(), times.end()), times.end());
-    if (times.size() < 8)
-        return 0.0;
+
+    std::vector<std::string> files{unquoteStr(m_streamName)};
+    if (!m_joinFiles.empty() && unquoteStr(m_joinFiles.front()) == files.front())
+        for (size_t i = 1; i < m_joinFiles.size(); ++i) files.push_back(unquoteStr(m_joinFiles[i]));
+    else
+        for (const std::string& later : m_laterFiles) files.push_back(unquoteStr(later));
+    const auto info = m_pmt.pidList.find(static_cast<int>(trackId));
+    const StreamType type = info != m_pmt.pidList.end() ? info->second.m_streamType : StreamType::RESERVED;
+
+    static constexpr size_t PICTURES = 240;
     std::vector<int64_t> steps;
-    for (size_t i = 1; i < times.size(); ++i) steps.push_back(times[i] - times[i - 1]);
+    size_t timed = 0;
+    int64_t read = 0;
+    for (const std::string& name : files)
+    {
+        if (timed >= PICTURES || read >= DETECT_STREAM_BUFFER_SIZE)
+            break;
+        PesTimes clip = readPesTimes(name, trackId, type, PICTURES - timed, DETECT_STREAM_BUFFER_SIZE - read);
+        if (clip.unreadable && name == files.front())
+            return 0.0;
+        if (clip.withoutTime || clip.manyPictures)
+            return 0.0;
+        read += clip.bytes;
+        timed += clip.times.size();
+        std::vector<int64_t>& times = clip.times;
+        std::sort(times.begin(), times.end());
+        times.erase(std::unique(times.begin(), times.end()), times.end());
+        for (size_t i = 1; i < times.size(); ++i) steps.push_back(times[i] - times[i - 1]);
+    }
+    if (steps.size() < 7)
+        return 0.0;
     std::vector<int64_t> sorted = steps;
     std::nth_element(sorted.begin(), sorted.begin() + sorted.size() / 2, sorted.end());
     const int64_t median = sorted[sorted.size() / 2];
@@ -846,13 +1013,13 @@ double TSDemuxer::getTrackPacketFps(const uint32_t trackId)
         }
     if (median <= 0 || count * 4 < steps.size() * 3)
         return 0.0;  // the steps vary: no one rate
-    double fps = 90000.0 * static_cast<double>(count) / static_cast<double>(sum);
+    const double fps = 90000.0 * static_cast<double>(count) / static_cast<double>(sum);
     for (const double standard : {12.5, 15000.0 / 1001, 15.0, 24000.0 / 1001, 24.0, 25.0, 30000.0 / 1001, 30.0,
                                   48000.0 / 1001, 48.0, 50.0, 60000.0 / 1001, 60.0, 100.0, 120000.0 / 1001, 120.0})
         if (std::fabs(fps - standard) < standard * 0.0004)
-            fps = standard;
-    if (fps < 1.0 || fps > 300.0)
-        return 0.0;
-    m_packetFps[trackId] = fps;
-    return fps;
+        {
+            m_packetFps[trackId] = standard;
+            return standard;
+        }
+    return 0.0;  // no standard rate: the steps are not those of single pictures
 }

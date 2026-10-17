@@ -2448,7 +2448,7 @@ std::string applyLangCodeStyle(const std::string& lang)
 }
 
 DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& readManager, const string& fileName,
-                                                bool calcDuration)
+                                                bool calcDuration, const std::vector<std::string>& laterFiles)
 {
     AVChapters chapters;
     int64_t fileDuration = 0;
@@ -2499,6 +2499,8 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
     {
         uint32_t fileBlockSize = demuxer->getFileBlockSize();
 
+        if (const auto ts = dynamic_cast<TSDemuxer*>(demuxer.get()))
+            ts->setLaterFiles(laterFiles);
         demuxer->openFile(fileName);
         int64_t discardedSize = 0;
         DemuxedData demuxedData;

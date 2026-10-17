@@ -5,6 +5,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "aac.h"
 #include "abstractDemuxer.h"
@@ -64,6 +65,9 @@ class TSDemuxer final : public AbstractDemuxer
         return start->second;
     }
     double getTrackPacketFps(uint32_t trackId) override;
+    // The clips that follow the one opened, when a playlist is listed: read by getTrackPacketFps when the first clip
+    // holds too few pictures. A join or a playlist that is muxed gives them through setFileIterator.
+    void setLaterFiles(const std::vector<std::string>& files) { m_laterFiles = files; }
     void setMPLSInfo(const std::vector<MPLSPlayItem>& mplsInfo) { m_mplsInfo = mplsInfo; }
     [[nodiscard]] int64_t getFileDurationNano() const override;
 
@@ -103,6 +107,8 @@ class TSDemuxer final : public AbstractDemuxer
     std::map<int, int64_t> m_fullPtsTime;
     std::map<int, int64_t> m_fullDtsTime;
     std::map<uint32_t, double> m_packetFps;  // getTrackPacketFps, once per track
+    std::vector<std::string> m_joinFiles;    // the files of a join or a playlist, the first one included
+    std::vector<std::string> m_laterFiles;   // see setLaterFiles
     AbstractReader* m_bufferedReader;
     int m_readerID;
     uint8_t* m_curPos;

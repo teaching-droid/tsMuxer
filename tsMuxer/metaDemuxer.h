@@ -247,8 +247,9 @@ class METADemuxer final : public AbstractDemuxer
                   const std::map<std::string, std::string>& addParams);
     void openFile(const std::string& streamName) override;
     [[nodiscard]] const std::vector<StreamInfo>& getStreamInfo() const { return m_codecInfo; }
+    // laterFiles: the clips that follow fileName in a playlist, read for a frame rate when fileName is too short
     static DetectStreamRez DetectStreamReader(const BufferedReaderManager& readManager, const std::string& fileName,
-                                              bool calcDuration);
+                                              bool calcDuration, const std::vector<std::string>& laterFiles = {});
     std::vector<StreamInfo>& getCodecInfo() { return m_codecInfo; }
 
     /// Run a self-contained discovery pass: for every track in m_codecInfo,
