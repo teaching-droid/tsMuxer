@@ -43,6 +43,7 @@ static constexpr uint16_t MATROSKA_ID_EDITIONFLAGHIDDEN = 0x45BD;
 static constexpr uint16_t MATROSKA_ID_EDITIONFLAGDEFAULT = 0x45DB;
 static constexpr uint16_t MATROSKA_ID_CHAPTERUID = 0x73C4;
 static constexpr uint16_t MATROSKA_ID_CHAPTERFLAGHIDDEN = 0x98;
+static constexpr uint16_t MATROSKA_ID_CHAPTERFLAGENABLED = 0x4598;
 static constexpr uint16_t MATROSKA_ID_CHAPLANGUAGEBCP47 = 0x437D;
 static constexpr uint16_t MATROSKA_ID_EDITIONFLAGORDERED = 0x45DD;
 

@@ -2605,8 +2605,10 @@ void MatroskaMuxer::setSourceChapterTree(const std::vector<uint8_t>& chapters, c
             {
                 if (depth > 0)
                     hiddenOrNested = true;
+                // A disabled chapter too: the flat list leaves it out, and the tree keeps it with its flag.
                 for (const EbmlNode& c : n.children)
-                    if (c.id == MATROSKA_ID_CHAPTERFLAGHIDDEN && uintOf(c.body) != 0)
+                    if ((c.id == MATROSKA_ID_CHAPTERFLAGHIDDEN && uintOf(c.body) != 0) ||
+                        (c.id == MATROSKA_ID_CHAPTERFLAGENABLED && uintOf(c.body) == 0))
                         hiddenOrNested = true;
                 look(n.children, depth + 1);
             }

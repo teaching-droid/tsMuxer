@@ -316,6 +316,13 @@ std::vector<AVChapter> parseXml(const std::string& text, const std::string& file
             ++hiddenLeftOut;
             continue;
         }
+        // A disabled chapter is skipped by a player as a hidden one is; it was taken as a
+        // chapter like any other.
+        if (std::string enabled; tagText(text, "ChapterFlagEnabled", atom, atomEnd, enabled) && trimmed(enabled) == "0")
+        {
+            ++hiddenLeftOut;
+            continue;
+        }
         std::string name;
         std::string language;
         std::string display;
@@ -331,8 +338,9 @@ std::vector<AVChapter> parseXml(const std::string& text, const std::string& file
         chapters.emplace_back(start, name, language);
     }
     if (chapters.empty() && hiddenLeftOut > 0)
-        THROW(ERR_COMMON, "Every chapter of the edition used in " << fileName << " is hidden (ChapterFlagHidden), so "
-                                                                  << "there is no chapter to show.")
+        THROW(ERR_COMMON, "Every chapter of the edition used in "
+                              << fileName << " is hidden (ChapterFlagHidden) or disabled (ChapterFlagEnabled 0), so "
+                              << "there is no chapter to show.")
     if (chapters.empty())
         THROW(ERR_COMMON, "No chapters found in " << fileName << ". A Matroska XML chapter file has a "
                                                   << "ChapterAtom with a ChapterTimeStart in it")

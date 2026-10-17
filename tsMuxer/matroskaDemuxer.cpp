@@ -3121,6 +3121,7 @@ void MatroskaDemuxer::loadChapters(const std::string& fileName)
         int64_t start = -1;
         int64_t end = -1;
         bool hidden = false;
+        bool enabled = true;
         std::vector<AVChapter::Name> names;
         std::vector<std::pair<int64_t, int64_t>> nested;
         scan.pos = atomBody;
@@ -3138,6 +3139,8 @@ void MatroskaDemuxer::loadChapters(const std::string& fileName)
                 end = static_cast<int64_t>(readUInt(b, len));
             else if (id == MATROSKA_ID_CHAPTERFLAGHIDDEN)
                 hidden = readUInt(b, len) != 0;
+            else if (id == MATROSKA_ID_CHAPTERFLAGENABLED)
+                enabled = readUInt(b, len) != 0;
             else if (id == MATROSKA_ID_CHAPTERATOM)
                 nested.emplace_back(b, len);
             else if (id == MATROSKA_ID_CHAPTERDISPLAY)
@@ -3166,7 +3169,9 @@ void MatroskaDemuxer::loadChapters(const std::string& fileName)
             }
             scan.pos = b + len;
         }
-        if (start >= 0 && !hidden)
+        // A disabled chapter (ChapterFlagEnabled 0) is one a player skips, as it skips a
+        // hidden one: it was taken as a chapter like any other, a mark on a disc and an enabled chapter in Matroska.
+        if (start >= 0 && !hidden && enabled)
         {
             AVChapter chapter(start, names.empty() ? "" : names.front().title,
                               names.empty() ? "" : names.front().language);
