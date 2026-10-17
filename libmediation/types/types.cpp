@@ -293,6 +293,19 @@ vector<string> splitStr(const string& str, const string& splitter)
     return res;
 }
 
+// A path or a disc label may hold '=': split at every '=', --label="Disc=1" was read as the label "Disc" and
+// --chapters-file="D:/x=y/ch.txt" as the file D:/x. An empty value gives the name alone, as splitStr does.
+vector<string> splitOption(const string& option)
+{
+    const size_t eq = option.find('=');
+    if (eq == string::npos)
+        return option.empty() ? vector<string>() : vector<string>{option};
+    vector<string> rez{option.substr(0, eq)};
+    if (eq + 1 < option.size())
+        rez.push_back(option.substr(eq + 1));
+    return rez;
+}
+
 void splitStr(vector<string>& rez, const char* str, const char splitter)
 {
     rez.clear();

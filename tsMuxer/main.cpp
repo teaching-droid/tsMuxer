@@ -70,7 +70,7 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
             vector<string> params = splitQuotedStr(MuxerManager::muxOptLine(str).c_str(), ' ');
             for (const auto& param : params)
             {
-                vector<string> paramPair = splitStr(trimStr(param).c_str(), '=');
+                vector<string> paramPair = splitOption(trimStr(param));
                 if (paramPair.empty())
                     continue;
                 // ** A NUMBER IS READ WHOLE OR REFUSED. ** These were read up to their first other character, so

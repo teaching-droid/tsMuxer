@@ -41,6 +41,8 @@ std::string strPadRight(const std::string& str, size_t newSize, char filler);
 std::vector<std::string> splitStr(const char* str, char splitter);
 std::vector<std::string> splitStr(const std::string& str, const std::string& splitter);
 void splitStr(std::vector<std::string>& rez, const char* str, char splitter);
+// An option "name=value" split at its first '=' only, so a value may hold '=' itself
+std::vector<std::string> splitOption(const std::string& option);
 
 std::string trimStr(const std::string& value);
 

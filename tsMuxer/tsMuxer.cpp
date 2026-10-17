@@ -2360,7 +2360,7 @@ void validateMuxOptsEarly(const std::string& opts)
     const vector<string> params = splitQuotedStr(opts.c_str(), ' ');
     for (auto& i : params)
     {
-        vector<string> paramPair = splitStr(trimStr(i).c_str(), '=');
+        vector<string> paramPair = splitOption(trimStr(i));
         if (paramPair.size() < 2)
             continue;
         if (paramPair[0] == "--bitrate" || paramPair[0] == "--maxbitrate")
@@ -2392,7 +2392,7 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
     int maxRate = -1;
     for (auto& i : params)
     {
-        vector<string> paramPair = splitStr(trimStr(i).c_str(), '=');
+        vector<string> paramPair = splitOption(trimStr(i));
         if (paramPair.empty())
             continue;
         if (paramPair[0] == "--no-pcr-on-video-pid")

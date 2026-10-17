@@ -1206,7 +1206,7 @@ void MuxerManager::parseMuxOpt(const string& opts)
     const vector<string> params = splitQuotedStr(opts.c_str(), ' ');
     for (auto& i : params)
     {
-        vector<string> paramPair = splitStr(trimStr(i).c_str(), '=');
+        vector<string> paramPair = splitOption(trimStr(i));
         if (paramPair.empty())
             continue;
 
