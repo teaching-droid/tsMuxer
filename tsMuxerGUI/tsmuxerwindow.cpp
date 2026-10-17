@@ -4312,9 +4312,31 @@ QString TsMuxerWindow::getMuxOpts()
         if (!title.isEmpty())
             rez += QString(" --title=\"%1\"").arg(title);
         // Matroska only: WebM has no editions, and the muxer refuses the option for a .webm name, so the tick that
-        // was offered stopped the mux.
-        if (ui->mkvKeepEditionsCheck->isChecked() &&
-            !ui->outFileName->text().trimmed().endsWith(QLatin1String(".webm"), Qt::CaseInsensitive))
+        // was offered stopped the mux. It refuses it as well for a source that is no Matroska file (an MP4), a join,
+        // a cut, a split and chapters given in the window, so the tick is greyed and not written there.
+        bool keepEditionsPossible =
+            !ui->outFileName->text().trimmed().endsWith(QLatin1String(".webm"), Qt::CaseInsensitive);
+        bool fromMatroska = false;
+        for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+        {
+            const QtvCodecInfo* info = getCodecInfo(i);
+            if (!info || info->fileList.isEmpty() || ui->trackLV->item(i, 0)->checkState() != Qt::Checked)
+                continue;
+            if (info->fileList.size() > 1)
+                keepEditionsPossible = false;
+            const QString ext = QFileInfo(unquoteStr(info->fileList[0])).suffix().toUpper();
+            fromMatroska =
+                fromMatroska || ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM";
+        }
+        if (!fromMatroska || (ui->checkBoxCut->isChecked() && (qTimeToMsec(ui->cutStartTimeEdit->time()) > 0 ||
+                                                               qTimeToMsec(ui->cutEndTimeEdit->time()) > 0)))
+            keepEditionsPossible = false;
+        if (ui->splitByDuration->isChecked() || ui->splitBySize->isChecked() || ui->splitByChapters->isChecked())
+            keepEditionsPossible = false;
+        if (m_customChaptersUserOverride && ui->radioButtonCustomChapters->isChecked())
+            keepEditionsPossible = false;
+        ui->mkvKeepEditionsCheck->setEnabled(keepEditionsPossible);
+        if (ui->mkvKeepEditionsCheck->isChecked() && keepEditionsPossible)
             rez += " --keep-editions";
     }
     // dual-layer guard options (Blu-ray / Blu-ray ISO output; the layer-break guard only takes effect
