@@ -882,8 +882,9 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     m_fileWriter = std::make_unique<BufferedFileWriter>();
     AVPacket avPacket;
     bool anyMuxed = false;
-    std::set<int> endedByCut;   // streams that have reached --cut-end
-    std::set<int> withPackets;  // streams that have given a packet, subtitles left out (--cut-end)
+    bool anyAfterCutStart = false;  // a packet of the sources at or after --cut-start, kept or not
+    std::set<int> endedByCut;       // streams that have reached --cut-end
+    std::set<int> withPackets;      // streams that have given a packet, subtitles left out (--cut-end)
 
     while (true)
     {
@@ -893,6 +894,8 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
             break;
         if (m_cutStart > 0)
         {
+            if (avPacket.pts >= m_cutStart)
+                anyAfterCutStart = true;
             if (avPacket.pts < m_cutStart || !keptAfterCutStart(avPacket))
                 continue;
         }
@@ -966,11 +969,18 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     if (!closed)
         throw std::runtime_error("Failed to write the end of the output (disk full or I/O error)");
     // A start past the end of the sources dropped every packet, and the empty output was reported as a finished mux.
+    // The sources can go on past the start and still give nothing: a video track starts at a key picture, and an
+    // 8 s stream with one every 8 s cut at 7.5 s has none after the cut. That was reported as a start at or past
+    // the end.
     if (m_cutStart > 0 && !anyMuxed)
     {
         std::ostringstream msg;
-        msg << "--cut-start (" << static_cast<double>(m_cutStart) / INTERNAL_PTS_FREQ
-            << "s) is at or past the end of the sources: the output holds no media.";
+        msg << "--cut-start (" << static_cast<double>(m_cutStart) / INTERNAL_PTS_FREQ << "s) ";
+        if (anyAfterCutStart)
+            msg << "leaves nothing to mux: the sources go on after it, but a video track starts at a key picture, and "
+                   "there is none after the cut. The output holds no media. Choose an earlier start.";
+        else
+            msg << "is at or past the end of the sources: the output holds no media.";
         throw std::runtime_error(msg.str());
     }
 }
