@@ -1921,6 +1921,18 @@ void MovDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             if (tracks[i]->type == IOContextTrackType::AUDIO || tracks[i]->type == IOContextTrackType::VIDEO)
                 if (const int64_t start = trackStartFromVideoNs(i + 1); start != 0)
                     trackList[i + 1].m_srcParams["srcstartdelay"] = std::to_string(start);
+            // The samples after the end of the edit list, which only fill the last frame of an Opus or Vorbis track
+            // (srcendpadding, as a Matroska source's DiscardPadding gives them). They were not passed on, and a
+            // Matroska output played them: 648 samples of Opus, 256 of Vorbis, and a join of Opus files
+            // from MP4 played each file's.
+            if ((mst->isOpus || mst->containerDataType == TRACKTYPE_VORBIS) && mst->editDuration > 0)
+            {
+                int64_t media = 0;
+                for (const auto& e : mst->stts_data) media += static_cast<int64_t>(e.count) * e.duration;
+                for (const int64_t d : mst->fragDur) media += d;
+                if (const int64_t pad = media - mst->editMediaTime - mst->editDuration; pad > 0)
+                    trackList[i + 1].m_srcParams["srcendpadding"] = std::to_string(ticksToNs(pad, mst->time_scale));
+            }
             if (mst->isOpus && mst->codec_priv && mst->codec_priv_size >= 4)
             {
                 const auto* p = reinterpret_cast<const uint8_t*>(mst->codec_priv);

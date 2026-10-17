@@ -1590,15 +1590,21 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             {
                 const std::string file = unquoteStr(trimStr(name));
                 const std::string ext = strToUpperCase(extractFileExt(file));
-                if (ext != "MKV" && ext != "MKA" && ext != "WEBM")
+                // .mks and .mk3d are Matroska as well, and an MP4 gives the padding by the end of its edit list: a
+                // join of such files got no correction, and each later file came 20 ms later
+                std::unique_ptr<AbstractDemuxer> probe;
+                if (ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM")
+                    probe = std::make_unique<MatroskaDemuxer>(m_readManager);
+                else if (ext == "MP4" || ext == "M4A" || ext == "M4V" || ext == "MOV")
+                    probe = std::make_unique<MovDemuxer>(m_readManager);
+                else
                 {
                     paddings.clear();
                     break;
                 }
-                MatroskaDemuxer probe(m_readManager);
-                probe.openFile(file);
+                probe->openFile(file);
                 std::map<int32_t, TrackInfo> tracks;
-                probe.getTrackList(tracks);
+                probe->getTrackList(tracks);
                 int64_t ns = 0;
                 if (const auto t = tracks.find(pid); t != tracks.end())
                     if (const auto d = t->second.m_srcParams.find("srcendpadding"); d != t->second.m_srcParams.end())
