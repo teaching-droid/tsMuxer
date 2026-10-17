@@ -6,6 +6,9 @@
 #include <VersionHelpers.h>
 #else
 #include <dlfcn.h>
+#if !defined(__APPLE__)
+#include <link.h>  // dlinfo, where a library was found
+#endif
 #endif
 
 namespace
@@ -57,6 +60,11 @@ std::string foundPath(const char* name)
 
 std::string unloadableReason(const std::string& path, const DWORD err)
 {
+    // A folder of that name is found as well, and then failed with "access denied" (5) and the guess that the file
+    // was damaged or built for another platform.
+    const DWORD attributes = GetFileAttributesA(path.c_str());
+    if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        return "was found at " + path + ", but that is a folder, not the library file";
     std::string reason = "was found at " + path + " but Windows could not load it (error " + std::to_string(err) + ")";
     if (!IsWindows8OrGreater())
         reason +=
@@ -88,11 +96,15 @@ DoviLib& DoviLib::instance()
 
 DoviLib::DoviLib()
 {
+    const char* openedName = LIB_NAMES[0];
     for (const char* name : LIB_NAMES)
     {
         m_handle = openLib(name);
         if (m_handle)
+        {
+            openedName = name;
             break;
+        }
     }
     if (!m_handle)
     {
@@ -125,7 +137,23 @@ DoviLib::DoviLib()
         m_ok = true;
         return;
     }
-    m_loadError = std::string(libraryName()) + " was found but does not export the expected functions";
+    // Where it was found, so that the file can be told from the right one: it is another library of that name, or an
+    // old one, and the right one is to be fetched. The message named no file and no longer said where to get it.
+    std::string where = openedName;
+#if defined(_WIN32) || defined(_WIN64)
+    char path[MAX_PATH];
+    const DWORD n = GetModuleFileNameA(static_cast<HMODULE>(m_handle), path, MAX_PATH);
+    if (n > 0 && n < MAX_PATH)
+        where = path;
+#elif !defined(__APPLE__)
+    const link_map* map = nullptr;
+    if (dlinfo(m_handle, RTLD_DI_LINKMAP, &map) == 0 && map != nullptr && map->l_name != nullptr && *map->l_name)
+        where = map->l_name;
+#endif
+    m_wrongLibrary = true;
+    m_loadError = std::string(libraryName()) + " was found at " + where +
+                  " but does not export the functions of the library this needs, so it is another file of that name "
+                  "or an old one";
     closeLib(m_handle);
     m_handle = nullptr;
 }

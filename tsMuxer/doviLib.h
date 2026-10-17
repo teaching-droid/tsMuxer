@@ -36,6 +36,9 @@ class DoviLib
     // fetch a file they already have.
     [[nodiscard]] bool fileFound() const { return m_fileFound; }
 
+    // True when the file found is not the library (it lacks its functions): the right one is to be fetched.
+    [[nodiscard]] bool wrongLibrary() const { return m_wrongLibrary; }
+
     // The name looked for, so a message can say exactly what is missing.
     static const char* libraryName();
 
@@ -69,6 +72,7 @@ class DoviLib
     void* m_handle = nullptr;
     bool m_ok = false;
     bool m_fileFound = false;
+    bool m_wrongLibrary = false;
     std::string m_loadError;
 
     ParseUnspec62Fn m_parse = nullptr;

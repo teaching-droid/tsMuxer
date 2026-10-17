@@ -1052,8 +1052,8 @@ void MatroskaMuxer::parseMuxOpt(const std::string& opts)
         // Checked HERE rather than when the first RPU turns up, because that would be most of the
         // way through a mux of a feature. The message names the library and what to do about it.
         // When the file IS there, telling the user to go and get it would be wrong: the reason is all
-        // they need.
-        if (!DoviLib::instance().available() && DoviLib::instance().fileFound())
+        // they need. Unless it is not the library at all (wrongLibrary): then the right one is fetched.
+        if (!DoviLib::instance().available() && DoviLib::instance().fileFound() && !DoviLib::instance().wrongLibrary())
         {
             THROW(ERR_COMMON, "--dv-profile=8.1 needs "
                                   << DoviLib::libraryName() << ", which converts the Dolby Vision metadata, and "
@@ -1064,7 +1064,9 @@ void MatroskaMuxer::parseMuxOpt(const std::string& opts)
             THROW(ERR_COMMON, "--dv-profile=8.1 needs "
                                   << DoviLib::libraryName() << ", which converts the Dolby Vision metadata, and "
                                   << DoviLib::instance().loadError()
-                                  << ". Put it beside tsMuxeR. On 64 bit Windows take "
+                                  << (DoviLib::instance().wrongLibrary() ? ". Put the library itself there instead"
+                                                                         : ". Put it beside tsMuxeR")
+                                  << ". On 64 bit Windows take "
                                      "libdovi-<version>-x86_64-pc-windows-msvc.zip from the dovi_tool releases page "
                                      "and use the dovi.dll inside it. Do NOT take dovi_tool-<version>.zip from the "
                                      "same page: that is the command line tool and this cannot use it. Other "
