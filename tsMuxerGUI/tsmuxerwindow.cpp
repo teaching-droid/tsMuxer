@@ -4885,6 +4885,9 @@ bool TsMuxerWindow::isRowMergedIntoTrueHd(const int row) const
 
 void TsMuxerWindow::updateMetaLines()
 {
+    // "Forced only" is a disc's choice (default=forced); a Matroska output gets default=all, so the tick did nothing
+    // there and is greyed.
+    ui->defaultSubTrackForcedOnlyCheckBox->setEnabled(isDiskOutput() && ui->defaultSubTrackCheckBox->isChecked());
     if (!m_updateMeta || disableUpdatesCnt > 0)
         return;
 
