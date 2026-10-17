@@ -1352,6 +1352,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     //
 
     auto itr = addParams.find("timeshift");
+    bool timeShiftGiven = itr != addParams.end();  // by the meta or by the file name: the source's start is not used
     if (itr != addParams.end())
     {
         // A number without a unit is in ms. "500us" used to be 500 s, "2S" 2 ms, a fraction was cut off and a value
@@ -1377,6 +1378,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             streamInfo.m_timeShift = value;
             if (value > 0)
                 streamInfo.m_lastDTS = value;
+            timeShiftGiven = true;
             LTRACE(LT_INFO, 2, "Applying delay " << delayMs << " ms taken from the file name");
         }
     }
@@ -1633,11 +1635,36 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             std::map<int32_t, TrackInfo> firstTracks;
             probe.getTrackList(firstTracks);
             if (const auto t = firstTracks.find(pid); t != firstTracks.end())
-                for (const char* key : {"srccodecdelay", "srcvideolead", "srcopusskip"})
+                for (const char* key : {"srccodecdelay", "srcvideolead", "srcopusskip", "srcstartdelay"})
                     if (const auto d = t->second.m_srcParams.find(key); d != t->second.m_srcParams.end())
                         streamInfo.m_addParams[key] = d->second;
         }
     }
+    // ** AN MP4 TRACK STARTS WHERE THE FILE SAYS, ALSO ON THE COMMAND LINE. ** A track that starts after the first
+    // video track (its leading empty edits, a fragmented track's first tfdt, the composition time of its first sample
+    // without an edit list, a start offset written as a long first sample) was given that start only in the listing,
+    // as its Stream delay, which the window writes as timeshift=. A meta written by hand muxed every track from the
+    // same moment: the sound of a file whose sound starts 0.5 s after its picture came 0.5 s early. The start is
+    // applied where the meta gives no timeshift= (and the file name no delay), so a meta from the window, which
+    // carries it as timeshift=, gets it once, as before.
+    if (!timeShiftGiven)
+        if (const auto start = streamInfo.m_addParams.find("srcstartdelay"); start != streamInfo.m_addParams.end())
+        {
+            const int64_t ns = strtoll(start->second.c_str(), nullptr, 10);
+            const auto ticks =
+                static_cast<int64_t>(static_cast<double>(ns) * INTERNAL_PTS_FREQ / 1e9 + (ns > 0 ? 0.5 : -0.5));
+            if (ticks != 0)
+            {
+                streamInfo.m_timeShift += ticks;
+                if (streamInfo.m_timeShift > 0)
+                    streamInfo.m_lastDTS = FFMAX(streamInfo.m_lastDTS, streamInfo.m_timeShift);
+                LTRACE(LT_INFO, 2,
+                       "Track " << pid << " of " << unquoteStr(fileList[0]) << " starts "
+                                << doubleToStr(static_cast<double>(ns > 0 ? ns : -ns) / 1e6, 3) << " ms "
+                                << (ns > 0 ? "after" : "before")
+                                << " the first video track of the file, so its times are moved by that much.");
+            }
+        }
     // A cut file's video keeps the pictures before the cut (srcvideolead, see MovDemuxer::mov_read_moov), so the sound
     // is moved back by its edit list start less that pre-roll. A Matroska output of AAC says the edit list start as
     // CodecDelay, and one of Opus says the pre-skip of its OpusHead (srcopusskip): only the rest is moved.
@@ -1743,7 +1770,8 @@ static bool isKnownTrackParam(const std::string& name)
         // not warn. srcdefault is the source container's own default track flag.
         "forced", "hearing-impaired", "visual-impaired", "text-descriptions", "original", "commentary", "srclang",
         "srclangbcp47", "srcdefault", "srcname", "srcflags", "srccolour", "srcdisplay", "srcendpadding", "srcpgsrate",
-        "srccrop", "srcfieldorder", "srcprojection", "srccodecdelay", "srcvideolead", "srcopusskip", "srcrighteye", "langbcp47", "srcvpxprivate", "srccodecid"};
+        "srccrop", "srcfieldorder", "srcprojection", "srccodecdelay", "srcvideolead", "srcopusskip", "srcrighteye",
+        "langbcp47", "srcvpxprivate", "srccodecid", "srcstartdelay"};
     return known.find(name) != known.end();
 }
 

@@ -49,6 +49,14 @@ static constexpr int MP4ESDescrTag = 0x03;
 static constexpr int MP4DecConfigDescrTag = 0x04;
 static constexpr int MP4DecSpecificDescrTag = 0x05;
 
+// A count of a time scale in nanoseconds, without running over 64 bits for a fine scale or a late start
+static int64_t ticksToNs(const int64_t ticks, const int64_t timeScale)
+{
+    if (timeScale <= 0)
+        return 0;
+    return ticks / timeScale * 1000000000LL + ticks % timeScale * 1000000000LL / timeScale;
+}
+
 #define MKTAG(a, b, c, d) ((a) | (b) << 8 | (c) << 16 | (d) << 24)
 
 struct MOVStts
@@ -1398,9 +1406,11 @@ void MovDemuxer::openFile(const std::string& streamName)
     m_firstTfdt.clear();
     m_firstCompositionOffset.clear();
     m_videoMediaTime.clear();
+    m_trackStartNs.clear();  // each file of a join starts its tracks on its own
     readHeaders();
     if (found_moof)
         fragmentStartDelays();
+    longFirstSamples();
     if (m_mdat_pos && m_processedBytes != m_mdat_pos)
     {
         // Reading the header walked to the end of the file, because a moov atom usually sits
@@ -1858,6 +1868,11 @@ void MovDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                 trackList[i + 1].m_srcParams["srccodecdelay"] = std::to_string(delay->second);
             if (tracks[i]->type == IOContextTrackType::AUDIO && m_videoLeadNs > 0)
                 trackList[i + 1].m_srcParams["srcvideolead"] = std::to_string(m_videoLeadNs);
+            // Where the track starts against the first video track (the listing's Stream delay), for the mux
+            // (METADemuxer::addStream). A text track's times are moved by its reader (MovParsedSRTTrackData).
+            if (tracks[i]->type == IOContextTrackType::AUDIO || tracks[i]->type == IOContextTrackType::VIDEO)
+                if (const int64_t start = trackStartFromVideoNs(i + 1); start != 0)
+                    trackList[i + 1].m_srcParams["srcstartdelay"] = std::to_string(start);
             if (mst->isOpus && mst->codec_priv && mst->codec_priv_size >= 4)
             {
                 const auto* p = reinterpret_cast<const uint8_t*>(mst->codec_priv);
@@ -2460,10 +2475,74 @@ void MovDemuxer::fragmentStartDelays()
             start += ct->second;
         if (const auto mt = m_videoMediaTime.find(track); mt != m_videoMediaTime.end())
             start -= mt->second;
-        m_firstTimecode[track] += start * 1000 / static_cast<int64_t>(st->time_scale);
+        m_trackStartNs[track] += ticksToNs(start, st->time_scale);
     }
     m_firstTfdt.clear();
     m_firstCompositionOffset.clear();
+}
+
+// The durations of a track's first samples, at most n: those of its table of times, then those of its fragments
+static std::vector<int64_t> firstDurations(const MOVStreamContext* st, const size_t n)
+{
+    std::vector<int64_t> d;
+    for (const auto& e : st->stts_data)
+        for (uint32_t i = 0; i < e.count && d.size() < n; ++i) d.push_back(e.duration);
+    for (size_t i = 0; i < st->fragDur.size() && d.size() < n; ++i) d.push_back(st->fragDur[i]);
+    return d;
+}
+
+// The length most of a track's samples have, from its first ones, the first and the last left out (the first may
+// hold a start offset, the last is often only what was left); 0 when there are too few to tell
+static int64_t usualDuration(const MOVStreamContext* st)
+{
+    const std::vector<int64_t> d = firstDurations(st, 64);
+    std::map<int64_t, int> counts;
+    for (size_t i = 1; i + 1 < d.size(); ++i)
+        if (d[i] > 0)
+            ++counts[d[i]];
+    if (counts.empty())
+        return d.size() == 2 && d[1] > 0 ? d[1] : 0;
+    return std::max_element(counts.begin(), counts.end(),
+                            [](const auto& a, const auto& b) { return a.second < b.second; })
+        ->first;
+}
+
+// ** A START OFFSET WRITTEN AS A LONG FIRST SAMPLE. ** Where a writer does not use an edit list (a fragmented file,
+// or ffmpeg with -use_editlist 0), it puts a track that starts later than the others at time 0 all the same, and
+// makes its first sample longer by the difference: an AAC track whose sound starts 0.5 s after the picture has a
+// first sample of 27840 at 48000 instead of 1024. The readers time a track by its usual sample length, so the start
+// was lost: the sound came 500 ms early, the picture 520 ms early, and the priming of AAC that
+// such a file writes the same way played in front of the picture (+21.4 ms). What the first sample lasts
+// beyond the usual length is where the rest of the track starts, and so where the track starts.
+void MovDemuxer::longFirstSamples()
+{
+    for (int i = 0; i < num_tracks; ++i)
+    {
+        const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
+        if (st->hasEditList || st->time_scale == 0 ||
+            (st->type != IOContextTrackType::AUDIO && st->type != IOContextTrackType::VIDEO))
+            continue;
+        const std::vector<int64_t> d = firstDurations(st, 1);
+        const int64_t usual = usualDuration(st);
+        if (d.empty() || usual <= 0 || d[0] <= usual)
+            continue;
+        m_trackStartNs[i + 1] += ticksToNs(d[0] - usual, st->time_scale);
+    }
+}
+
+// A track's start against the first video track's (itself when there is none), in ns
+int64_t MovDemuxer::trackStartFromVideoNs(const int32_t pid) const
+{
+    int64_t videoStart = 0;
+    for (int i = 0; i < num_tracks; i++)
+        if (tracks[i]->type == IOContextTrackType::VIDEO)
+        {
+            if (const auto it = m_trackStartNs.find(i + 1); it != m_trackStartNs.end())
+                videoStart = it->second;
+            break;
+        }
+    const auto it = m_trackStartNs.find(pid);
+    return (it != m_trackStartNs.end() ? it->second : 0) - videoStart;
 }
 
 int MovDemuxer::mov_read_tfhd(MOVAtom atom)
@@ -2727,7 +2806,7 @@ int MovDemuxer::mov_read_moov(MOVAtom atom)
         if (m_timescale == 0)
             THROW(ERR_MOV_PARSE, "MP4/MOV error: an edit list (elst) delays track #"
                                      << track << ", but the movie has no movie header (mvhd) to time it with")
-        m_firstTimecode[track] = units * 1000 / m_timescale;
+        m_trackStartNs[track] = ticksToNs(units, m_timescale);
     }
     m_emptyEditUnits.clear();
     // An audio track's edit list start in its own time scale, in nanoseconds, for a Matroska output's CodecDelay. It
@@ -2787,7 +2866,7 @@ int MovDemuxer::mov_read_moov(MOVAtom atom)
             continue;
         const auto first = static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(st->ctts_data[0].duration)));
         if (first != 0)
-            m_firstTimecode[i + 1] = first * 1000 / static_cast<int64_t>(st->time_scale);
+            m_trackStartNs[i + 1] = ticksToNs(first, st->time_scale);
     }
     return 0;
 }

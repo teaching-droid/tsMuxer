@@ -25,26 +25,9 @@ class MovDemuxer final : public IOContextDemuxer
     void getTrackList(std::map<int32_t, TrackInfo>& trackList) override;
     int64_t getTrackDelay(const int32_t pid) override
     {
-        // Find the video track's edit list delay as the reference point,
-        // then return this track's delay relative to video (in ms).
-        // This matches TS/PS demuxer behavior and ensures audio tracks
-        // get the correct timeshift (e.g. -1000ms) instead of video
-        // getting an absolute delay that is never applied.
-        int64_t videoDelay = 0;
-        for (int i = 0; i < num_tracks; i++)
-        {
-            if (tracks[i]->type == IOContextTrackType::VIDEO)
-            {
-                const auto it = m_firstTimecode.find(i + 1);
-                if (it != m_firstTimecode.end())
-                    videoDelay = it->second;
-                break;
-            }
-        }
-
-        const auto it = m_firstTimecode.find(pid);
-        const int64_t trackDelay = (it != m_firstTimecode.end()) ? it->second : 0;
-        return trackDelay - videoDelay;
+        // This track's start relative to the first video track's, in ms (rounded), as the TS and PS demuxers give it.
+        const int64_t ns = trackStartFromVideoNs(pid);
+        return (ns >= 0 ? ns + 500000 : ns - 500000) / 1000000;
     }
     double getTrackFps(uint32_t trackId) override;
     static int readPacket(AVPacket&) { return 0; }
@@ -111,7 +94,13 @@ class MovDemuxer final : public IOContextDemuxer
     void dropJoinPriming();
     std::vector<std::pair<int64_t, int64_t>> topLevelMdats() const;
     uint32_t m_timescale;
-    std::map<int32_t, int64_t> m_firstTimecode;
+    // Where each track starts on the movie's timeline, in ns: its leading empty edits, or without an edit list the
+    // composition time of its first sample, a fragmented track's first tfdt, and a start offset written as a long
+    // first sample (longFirstSamples). The listing gives it as the Stream delay against the first video track, and
+    // the mux applies it where the meta gives no timeshift= (srcstartdelay).
+    std::map<int32_t, int64_t> m_trackStartNs;
+    [[nodiscard]] int64_t trackStartFromVideoNs(int32_t pid) const;
+    void longFirstSamples();
     std::map<int32_t, int64_t> m_emptyEditUnits;  // leading empty edits per track, in movie units (mov_read_elst)
     std::map<int32_t, int64_t> m_editMediaTime;   // where a track's first edit starts in its media (mov_read_elst)
     std::map<int32_t, int64_t> m_editDuration;    // how long that edit plays, in the movie's time scale
