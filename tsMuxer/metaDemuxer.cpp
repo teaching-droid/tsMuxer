@@ -1165,6 +1165,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                         if (drawing.saveSrt.empty())
                             THROW(ERR_COMMON,
                                   "save-srt needs the name of the SRT file to write, as save-srt=\"name.srt\"")
+                        drawing.srtFile = std::make_shared<ass_render::SaveSrtFile>(drawing.saveSrt);
                     }
                     LTRACE(LT_INFO, 2,
                            "Track " << pid << " of " << unquoteStr(fileList[0]) << " is " << src.codecId

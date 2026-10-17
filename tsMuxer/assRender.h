@@ -2,10 +2,13 @@
 #define ASS_RENDER_H_
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "bitmapSubtitles.h"
+
+class File;
 
 // ASS and SSA subtitles drawn with libass (https://github.com/libass/libass, ISC licence) into pictures, and those
 // redrawn as PGS display sets as a DVD or DVB subtitle track is: styles, colours, positions, rotations and the
@@ -24,6 +27,25 @@ struct Font
     std::vector<uint8_t> data;
 };
 
+// The SRT file save-srt writes the text of an ASS or SSA track to. One for the whole track: each file of a join gets a
+// decoder of its own, and each opened the file anew, so that only the last file's subtitles were left in it. It is
+// made with the first subtitle written, so that a job refused before the mux leaves none, and it is closed when the
+// last drawing that holds it ends.
+class SaveSrtFile
+{
+   public:
+    explicit SaveSrtFile(std::string name);
+    ~SaveSrtFile();
+    SaveSrtFile(const SaveSrtFile&) = delete;
+    SaveSrtFile& operator=(const SaveSrtFile&) = delete;
+    void write(const std::string& text, int64_t inMs, int64_t outMs);
+
+   private:
+    std::string m_name;
+    std::unique_ptr<File> m_file;
+    int m_count = 0;
+};
+
 // How an ASS or SSA track is drawn: the picture size and frame rate of the video, a folder of fonts besides those
 // attached to the file (empty: none), and the SRT file save-srt writes the text to (empty: none)
 struct Drawing
@@ -33,6 +55,7 @@ struct Drawing
     double fps = 0;
     std::string fontsDir;
     std::string saveSrt;
+    std::shared_ptr<SaveSrtFile> srtFile;  // the file of saveSrt, shared by the copies of the drawing
 };
 
 // The fonts among the attachments of a Matroska file (whole AttachedFile elements, as getPassThroughAttachments gives

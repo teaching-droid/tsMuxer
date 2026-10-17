@@ -156,6 +156,45 @@ std::string lower(std::string s)
 
 namespace ass_render
 {
+SaveSrtFile::SaveSrtFile(std::string name) : m_name(std::move(name)) {}
+
+SaveSrtFile::~SaveSrtFile()
+{
+    if (m_file)
+    {
+        m_file->close();
+        LTRACE(LT_INFO, 2,
+               "The ASS subtitles were also written as text to " << m_name << " (" << m_count << " subtitles).");
+    }
+    else
+        LTRACE(LT_INFO, 2, "No ASS subtitle was written to " << m_name << ".");
+}
+
+void SaveSrtFile::write(const std::string& text, const int64_t inMs, const int64_t outMs)
+{
+    if (!m_file)
+    {
+        m_file = std::make_unique<File>();
+        if (!m_file->open(m_name.c_str(), File::ofWrite))
+        {
+            m_file.reset();
+            THROW(ERR_COMMON, "save-srt: the file " << m_name << " cannot be written.")
+        }
+    }
+    const auto clock = [](const int64_t ms)
+    {
+        const auto two = [](const int64_t v)
+        { return std::string(1, static_cast<char>('0' + v / 10 % 10)) + static_cast<char>('0' + v % 10); };
+        return two(ms / 3600000) + ":" + two(ms / 60000 % 60) + ":" + two(ms / 1000 % 60) + "," +
+               std::to_string(ms % 1000 / 100) + std::to_string(ms % 100 / 10) + std::to_string(ms % 10);
+    };
+    std::string rec = m_count == 0 ? "\xEF\xBB\xBF" : "";
+    rec += std::to_string(++m_count) + "\r\n" + clock(inMs) + " --> " + clock(outMs) + "\r\n";
+    for (const char c : text) rec += c == '\n' ? std::string("\r\n") : std::string(1, c);
+    rec += "\r\n\r\n";
+    m_file->write(rec.data(), static_cast<uint32_t>(rec.size()));
+}
+
 bool available(std::string* why)
 {
     const Lib& l = lib();
@@ -235,9 +274,7 @@ struct AssDecoder::Impl
     bool shown = false;
     int64_t pictures = 0;
     // save-srt: the text of every event, as an SRT file
-    std::unique_ptr<File> srt;
-    std::string srtName;
-    int srtCount = 0;
+    std::shared_ptr<ass_render::SaveSrtFile> srt;
 
     // The frame a time falls on, as the PGS display sets are timed (TextToPGSConverter::alignToGrid)
     [[nodiscard]] int64_t frameOf(const int64_t ms) const
@@ -260,16 +297,7 @@ AssDecoder::AssDecoder(const uint8_t* header, const int headerSize, const ass_re
         delete m;
         THROW(ERR_COMMON, "libass cannot be used: " << l.why)
     }
-    if (!drawing.saveSrt.empty())
-    {
-        m->srt = std::make_unique<File>();
-        if (!m->srt->open(drawing.saveSrt.c_str(), File::ofWrite))
-        {
-            delete m;
-            THROW(ERR_COMMON, "save-srt: the file " << drawing.saveSrt << " cannot be written.")
-        }
-        m->srtName = drawing.saveSrt;
-    }
+    m->srt = drawing.srtFile;
     setUp(drawing.width, drawing.height, drawing.fps, drawing.fps);
     m->width = drawing.width;
     m->height = drawing.height;
@@ -294,13 +322,6 @@ AssDecoder::AssDecoder(const uint8_t* header, const int headerSize, const ass_re
 
 AssDecoder::~AssDecoder()
 {
-    if (m->srt)
-    {
-        m->srt->close();
-        LTRACE(
-            LT_INFO, 2,
-            "The ASS subtitles were also written as text to " << m->srtName << " (" << m->srtCount << " subtitles).");
-    }
     const Lib& l = lib();
     if (m->track)
         l.free_track(m->track);
@@ -325,18 +346,7 @@ void AssDecoder::decode(const uint8_t* data, const int size, const int64_t pts, 
         const std::string text = assToSrtText(std::string(reinterpret_cast<const char*>(data), size));
         if (text.find_first_not_of(" \n") == std::string::npos)
             return;  // a drawing or an effect without text
-        const auto clock = [](const int64_t ms)
-        {
-            const auto two = [](const int64_t v)
-            { return std::string(1, static_cast<char>('0' + v / 10 % 10)) + static_cast<char>('0' + v % 10); };
-            return two(ms / 3600000) + ":" + two(ms / 60000 % 60) + ":" + two(ms / 1000 % 60) + "," +
-                   std::to_string(ms % 1000 / 100) + std::to_string(ms % 100 / 10) + std::to_string(ms % 10);
-        };
-        std::string rec = m->srtCount == 0 ? "\xEF\xBB\xBF" : "";
-        rec += std::to_string(++m->srtCount) + "\r\n" + clock(startMs) + " --> " + clock(startMs + durMs) + "\r\n";
-        for (const char c : text) rec += c == '\n' ? std::string("\r\n") : std::string(1, c);
-        rec += "\r\n\r\n";
-        m->srt->write(rec.data(), static_cast<uint32_t>(rec.size()));
+        m->srt->write(text, startMs, startMs + durMs);
     }
 }
 
