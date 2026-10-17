@@ -3755,9 +3755,25 @@ std::vector<AVChapter> MovDemuxer::getChapters()
 {
     // Nero chapters count in one byte, so a writer that writes both lists cuts them at 255 and the chapter track holds
     // them all: of 300 chapters 255 were kept. The longer list is taken.
+    //
+    // At equal counts the Nero list was taken, also where its titles were cut at 255 bytes and the chapter track holds
+    // them whole. The chapter track is taken now where it holds the same chapters: each Nero title is the start of the
+    // chapter track's title at the same place. The times stay those of the Nero list for the chapters it holds: a
+    // chapter track has no gap before its first sample, and a writer stretches that sample back to 0, so a first
+    // chapter at 5 s came out at 0 once the chapter track was the longer list.
     std::vector<AVChapter> out = m_chplChapters;
-    if (std::vector<AVChapter> track = chapterTrackChapters(); track.size() > out.size())
+    std::vector<AVChapter> track = chapterTrackChapters();
+    const auto sameChapter = [](const AVChapter& nero, const AVChapter& t)
+    { return t.cTitle.compare(0, nero.cTitle.size(), nero.cTitle) == 0; };
+    if (!track.empty() &&
+        (track.size() > out.size() ||
+         (track.size() == out.size() && std::equal(out.begin(), out.end(), track.begin(), sameChapter))))
+    {
+        for (size_t i = 0; i < out.size(); ++i)
+            if (sameChapter(out[i], track[i]))
+                track[i].start = out[i].start;
         out = std::move(track);
+    }
     std::sort(out.begin(), out.end());
     return out;
 }
