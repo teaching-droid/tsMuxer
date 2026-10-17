@@ -2084,11 +2084,13 @@ void TSMuxer::buildPMT()
     // as each track is added, before the output is opened, so the mux stops here before anything is written.
     const uint8_t* section = m_pmtBuffer + TSPacket::TS_HEADER_SIZE + 1;  // after the pointer field
     const int sectionLength = ((section[1] & 0x0f) << 8) | section[2];
+    // The table is checked as it grows, so the count is of the tracks added so far, not of all of them: "With 59
+    // tracks" was said of 65.
     if (sectionLength > 1021)
-        THROW(ERR_COMMON, "With " << m_pmt.pidList.size() << " tracks the program map table already needs "
-                                  << sectionLength
-                                  << " bytes, and a transport stream holds at most 1021 in one, so the tracks do not "
-                                     "fit into one transport stream. Leave some out.")
+        THROW(ERR_COMMON, "The tracks do not fit into one transport stream: with "
+                              << m_pmt.pidList.size() << " of them the program map table already needs "
+                              << sectionLength
+                              << " bytes, and a transport stream holds at most 1021 in one. Leave some out.")
     uint8_t* pmtEnd = m_pmtBuffer + TSPacket::TS_HEADER_SIZE + size;
     uint8_t* curPos = m_pmtBuffer + TS_FRAME_SIZE;
     for (; curPos < pmtEnd; curPos += TS_FRAME_SIZE)
