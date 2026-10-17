@@ -128,6 +128,7 @@ class MatroskaDemuxer final : public IOContextDemuxer
     {
         int64_t start;
         int64_t length;
+        bool unknownSize;  // the size field has all its value bits set (RFC 8794, 6.2)
     } MatroskaLevel;
 
     typedef struct MatroskaDemuxIndex

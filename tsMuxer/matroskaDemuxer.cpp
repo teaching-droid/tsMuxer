@@ -39,6 +39,29 @@ static constexpr int COMPRESSION_ZLIB = 0;
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
+// An element that cannot be inside a Cluster: a top level element of the Segment, or the start of the next file of a
+// join. It ends the Cluster before it when that Cluster's size is unknown (RFC 8794, 6.2: a live writer leaves it so)
+// or runs past where its data really ends.
+static bool endsCluster(const uint32_t id)
+{
+    switch (id)
+    {
+    case MATROSKA_ID_CLUSTER:
+    case MATROSKA_ID_CUES:
+    case MATROSKA_ID_TAGS:
+    case MATROSKA_ID_CHAPTERS:
+    case MATROSKA_ID_ATTACHMENTS:
+    case MATROSKA_ID_SEEKHEAD:
+    case MATROSKA_ID_INFO:
+    case MATROSKA_ID_TRACKS:
+    case MATROSKA_ID_SEGMENT:
+    case EBML_ID_HEADER:
+        return true;
+    default:
+        return false;
+    }
+}
+
 static constexpr int MAX_TRACK_SIZE =
     (MAX(MAX(sizeof(MatroskaVideoTrack), sizeof(MatroskaAudioTrack)), sizeof(MatroskaSubtitleTrack)));
 
@@ -999,6 +1022,7 @@ int MatroskaDemuxer::ebml_read_master(uint32_t* id)
 
     if ((res = ebml_read_element_id(id, nullptr)) < 0 || (res = ebml_read_element_length(&length)) < 0)
         return res;
+    const bool unknownSize = res >= 1 && res <= 8 && length == (static_cast<int64_t>(1) << (7 * res)) - 1;
 
     /* protect... (Heaven forbids that the '>' is true) */
     if (num_levels >= EBML_MAX_DEPTH)
@@ -1010,6 +1034,7 @@ int MatroskaDemuxer::ebml_read_master(uint32_t* id)
     MatroskaLevel* level = &levels[num_levels++];
     level->start = m_processedBytes;
     level->length = length;
+    level->unknownSize = unknownSize;
     return 0;
 }
 
@@ -1055,6 +1080,7 @@ int MatroskaDemuxer::matroska_parse_cluster()
     uint8_t* data;
     int64_t pos;
     int size;
+    const int clusterLevels = num_levels;  // the Cluster's own level is the last of them
 
     while (res == 0)
     {
@@ -1067,6 +1093,29 @@ int MatroskaDemuxer::matroska_parse_cluster()
         {
             level_up--;
             break;
+        }
+
+        // A Cluster of unknown size, as a live writer leaves every one, ends where the next Cluster or another top
+        // level element begins, and so does one whose size runs past where it really ends. Its level was kept open:
+        // each Cluster of a live file took one more of the 16 levels, and the 17th refused the file ("beyond max.
+        // allowed depth"); and in a join, "a"+"b", the next file's EBML header and Segment fell inside the first
+        // file's last Cluster, were stepped over as unknown entries, and the whole second file was lost while the mux
+        // said it was successful. The Cluster's level is closed here and the element is left for the top level.
+        if (endsCluster(id))
+        {
+            if (clusterLevels > 0 && num_levels >= clusterLevels)
+            {
+                // Said once per file: the file is opened for the track list and again for the mux.
+                static std::set<std::string> reportedPast;
+                const std::string& file = m_joinPart < m_joinFiles.size() ? m_joinFiles[m_joinPart] : m_sourceName;
+                if (!levels[clusterLevels - 1].unknownSize && reportedPast.insert(file).second)
+                    LTRACE(LT_WARN, 2,
+                           "Warning: a Cluster of " << file
+                                                    << " gives a size that runs past its data. It is read up to where "
+                                                       "the next element begins.");
+                num_levels = clusterLevels - 1;
+            }
+            return 0;
         }
 
         switch (id)
@@ -1099,12 +1148,6 @@ int MatroskaDemuxer::matroska_parse_cluster()
         case EBML_ID_CRC32:
             res = ebml_read_skip();
             break;
-        // Some files contain a new cluster without a proper level-up signal (likely a muxing error).
-        // Returning 0 lets the caller re-detect this cluster at the top level and parse it normally;
-        // skipping it would lose the data it contains.
-        case MATROSKA_ID_CLUSTER:
-            LTRACE(LT_WARN, 0, "Unexpected cluster element inside cluster data (no level-up); resuming at top level");
-            return 0;
         default:
             LTRACE(LT_WARN, 0, "Unknown entry " << id << " in cluster data");
             res = ebml_read_skip();
@@ -1429,7 +1472,11 @@ int MatroskaDemuxer::readPacket(AVPacket& avPacket)
                     res = 1;  // Parsed one cluster, let's get out.
                 break;
             case EBML_ID_HEADER:
-                // The next file of a join: what the tracks of this one still hold comes first.
+                // The next file of a join: what the tracks of this one still hold comes first. Nothing of this file
+                // is open any more, also not a Segment of unknown size or one whose size runs past its end, whose
+                // level stayed open under the next file's Segment.
+                num_levels = 0;
+                level_up = 0;
                 queueFinalPackets();
                 matroska_read_header();
                 nextJoinPart();
@@ -2076,6 +2123,7 @@ struct EbmlScan
 {
     File& f;
     int64_t pos = 0;
+    bool sizeUnknown = false;  // the size of the last element read has all its value bits set (RFC 8794, 6.2)
 
     explicit EbmlScan(File& file) : f(file) {}
 
@@ -2120,6 +2168,7 @@ struct EbmlScan
         id = static_cast<uint32_t>(rawId);
         if (!readNumber(size, false, width))
             return false;
+        sizeUnknown = size == (static_cast<int64_t>(1) << (7 * width)) - 1;
         bodyPos = pos;
         return true;
     }
@@ -2247,7 +2296,8 @@ void readSeekPositions(EbmlScan& scan, const int64_t body, const int64_t size, i
 // clusters, read through their headers alone: no picture is read. onBlock gets the timestamp and the BlockDuration in
 // the file's own units (-1 where the block has none), whether it is a keyframe, and how many frames are laced into it,
 // and returns false to stop. What is not a cluster is stepped over. The walk ends quietly where the file stops making
-// sense, and at a cluster of unknown size, which only a file written live has, and such a file is rarely indexed.
+// sense. A cluster of unknown size, as a live writer leaves every one, ends where an element begins that cannot be in
+// it; the walk stopped at the first one, and a track without DefaultDuration in such a file was taken to be 25 fps.
 template <typename OnBlock>
 void walkTrackBlocks(EbmlScan& scan, const int64_t from, const int64_t segmentEnd, int maxClusters, const int64_t track,
                      OnBlock onBlock)
@@ -2257,16 +2307,26 @@ void walkTrackBlocks(EbmlScan& scan, const int64_t from, const int64_t segmentEn
     {
         uint32_t id = 0;
         int64_t size = 0, body = 0;
-        if (!scan.readElement(id, size, body) || size > segmentEnd - body ||
-            (id == MATROSKA_ID_CLUSTER && maxClusters-- <= 0))
+        if (!scan.readElement(id, size, body))
             return;
-        const int64_t elementEnd = body + size;
+        const bool openCluster = id == MATROSKA_ID_CLUSTER && scan.sizeUnknown;
+        if ((!openCluster && size > segmentEnd - body) || (id == MATROSKA_ID_CLUSTER && maxClusters-- <= 0))
+            return;
+        const int64_t elementEnd = openCluster ? segmentEnd : body + size;
         uint64_t clusterTime = 0;
         while (id == MATROSKA_ID_CLUSTER && scan.pos < elementEnd)
         {
+            const int64_t childAt = scan.pos;
             uint32_t child = 0;
             int64_t childSize = 0, childBody = 0;
-            if (!scan.readElement(child, childSize, childBody) || childSize > elementEnd - childBody)
+            if (!scan.readElement(child, childSize, childBody))
+                return;
+            if (openCluster && endsCluster(child))
+            {
+                scan.pos = childAt;
+                break;
+            }
+            if (childSize > elementEnd - childBody)
                 return;
             const int64_t childEnd = childBody + childSize;
             int64_t blockAt = child == MATROSKA_ID_SIMPLEBLOCK ? childBody : -1;
@@ -2313,7 +2373,8 @@ void walkTrackBlocks(EbmlScan& scan, const int64_t from, const int64_t segmentEn
             }
             scan.pos = childEnd;
         }
-        scan.pos = elementEnd;
+        if (!openCluster)
+            scan.pos = elementEnd;
     }
 }
 }  // namespace
@@ -2492,6 +2553,7 @@ void MatroskaDemuxer::readTracksAfterClusters()
         MatroskaLevel* level = &levels[num_levels++];
         level->start = body;
         level->length = size;
+        level->unknownSize = false;
         matroska_parse_tracks();
     }
     m_memoryOnly = false;
