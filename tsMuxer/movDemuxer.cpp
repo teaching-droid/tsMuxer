@@ -392,6 +392,8 @@ class MovParsedH264TrackData : public ParsedTrackPrivData
         if (size < 6)
             THROW(ERR_MOV_PARSE, "Invalid H.264/AVC extra data format")
         nal_length_size = (buff[4] & 0x03) + 1;
+        // Until a picture parameter set is found, here or in the stream (walkSample)
+        m_ppsMissing = true;
         int spsCnt = buff[5] & 0x1f;
         if (spsCnt == 0)
             return;
@@ -418,7 +420,7 @@ class MovParsedH264TrackData : public ParsedTrackPrivData
         {
             LTRACE(LT_WARN, 2,
                    "Warning: the H.264 configuration (avcC) of an MP4 track ends before its picture parameter sets; "
-                   "they are taken from the stream.");
+                   "the stream itself has to carry them.");
             return;
         }
         int ppsCnt = *src++;
@@ -434,6 +436,7 @@ class MovParsedH264TrackData : public ParsedTrackPrivData
             {
                 spsPpsList.emplace_back();
                 for (int i = 0; i < nalSize; ++i, ++src) spsPpsList.rbegin()->push_back(*src);
+                m_ppsMissing = false;
             }
         }
     }
@@ -588,6 +591,20 @@ class MovParsedH264TrackData : public ParsedTrackPrivData
                                                 << m_demuxer->getProcessedBytes());
                 return SampleWalk::Broken;
             }
+            // A configuration without picture parameter sets leaves them to the stream. Where the stream has none
+            // either, no picture can be decoded, and such a file was muxed into an output with no picture at all
+            // that said "Mux successful". 2.20.0 refused the configuration itself.
+            if (m_ppsMissing && nalSize > 0)
+            {
+                const int nalType = cur[0] & 0x1f;
+                if (nalType == 8)
+                    m_ppsMissing = false;
+                else if (nalType == 5)
+                    THROW(ERR_MOV_PARSE, "Track " << m_sc->ffindex << " of " << m_demuxer->fileName()
+                                                  << ": the H.264 configuration (avcC) holds no picture parameter "
+                                                     "sets, and the stream has none before its first IDR picture "
+                                                     "either. Its pictures cannot be decoded.")
+            }
             put(cur, nalSize);
             cur += nalSize;
         }
@@ -605,6 +622,7 @@ class MovParsedH264TrackData : public ParsedTrackPrivData
 
     vector<vector<uint8_t>> spsPpsList;
     uint8_t nal_length_size;
+    bool m_ppsMissing = false;  // H.264: no picture parameter set yet, in the avcC or the stream
 };
 
 class MovParsedH265TrackData final : public MovParsedH264TrackData
