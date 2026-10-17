@@ -166,7 +166,9 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                 {
                     if (paramPair.size() < 2)
                         THROW(ERR_COMMON, "Missing value for " << paramPair[0])
-                    isoDiskLabel = paramPair[1];
+                    // The whole text after the first '=': a label with '=' in it ("Rock=Roll") was cut to "Rock".
+                    const std::string whole = trimStr(param);
+                    isoDiskLabel = whole.substr(whole.find('=') + 1);
                 }
             }
 
