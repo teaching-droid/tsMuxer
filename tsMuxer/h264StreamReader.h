@@ -151,6 +151,8 @@ class H264StreamReader final : public MPEGStreamReader
     std::vector<std::pair<int, int>> m_fieldsAhead;  // (order relative to this picture, fields) read ahead
     int64_t m_pulldownOrigin = 0;                    // presentation time of the first picture shown in the period
     int m_pulldownFirstOrder = 0;                    // the full order of that picture
+    int m_pulldownSumOrder = 0;                      // m_pulldownSumFields counts the orders before this one
+    int64_t m_pulldownSumFields = 0;                 // the fields shown from m_pulldownFirstOrder to m_pulldownSumOrder
     void pulldownFieldsAhead(const SliceUnit& slice, uint8_t* buff);
     bool m_ptsGiven = false;
     bool m_fieldPicturesSeen = false;  // coded fields: the depth from checkPyramid is held at 3

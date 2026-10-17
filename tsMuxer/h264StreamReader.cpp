@@ -1589,16 +1589,34 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
                     ++leading;
             m_pulldownFirstOrder = fullPicOrder - leading;
             m_pulldownOrigin = m_curDts + (m_pulldownFirstOrder - m_frameNum) * m_pcrIncPerFrame;
+            m_pulldownSumOrder = m_pulldownFirstOrder;
+            m_pulldownSumFields = 0;
         }
-        m_fieldsShown[fullPicOrder] = fieldsShownOf(m_lastPictStruct);
-        for (const auto& [rel, fields] : m_fieldsAhead) m_fieldsShown.emplace(fullPicOrder + rel, fields);
-        int64_t fieldsBefore = 0;
-        for (int order = m_pulldownFirstOrder; order < fullPicOrder; ++order)
-        {
+        // The fields shown before a picture are kept as a running sum up to m_pulldownSumOrder, moved to each picture's
+        // order. Adding them up from the first picture of the period for every picture took 17 s for 30000 pictures
+        // after one IDR, and a film with one IDR would have taken far longer.
+        const auto setFields = [this](const int order, const int fields, const bool replace) {
+            const auto [it, added] = m_fieldsShown.emplace(order, fields);
+            const int before = added ? 2 : it->second;  // an order not yet seen counts as a frame
+            if (!added)
+            {
+                if (!replace)
+                    return;
+                it->second = fields;
+            }
+            if (order >= m_pulldownFirstOrder && order < m_pulldownSumOrder)
+                m_pulldownSumFields += fields - before;
+        };
+        setFields(fullPicOrder, fieldsShownOf(m_lastPictStruct), true);
+        for (const auto& [rel, fields] : m_fieldsAhead) setFields(fullPicOrder + rel, fields, false);
+        const auto fieldsAt = [this](const int order) {
             const auto it = m_fieldsShown.find(order);
-            fieldsBefore += it != m_fieldsShown.end() ? it->second : 2;
-        }
-        m_curPts = m_pulldownOrigin + fieldsBefore * m_pcrIncPerField;
+            return it != m_fieldsShown.end() ? it->second : 2;
+        };
+        const int sumTo = (std::max)(fullPicOrder, m_pulldownFirstOrder);
+        for (; m_pulldownSumOrder < sumTo; ++m_pulldownSumOrder) m_pulldownSumFields += fieldsAt(m_pulldownSumOrder);
+        while (m_pulldownSumOrder > sumTo) m_pulldownSumFields -= fieldsAt(--m_pulldownSumOrder);
+        m_curPts = m_pulldownOrigin + m_pulldownSumFields * m_pcrIncPerField;
     }
 
     // The last picture before an IDR (or of the stream) is held to its decoding time, but never onto a time a picture
