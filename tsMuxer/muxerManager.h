@@ -69,6 +69,10 @@ class MuxerManager final
     [[nodiscard]] const std::vector<StreamInfo>& getStreamInfo() const { return m_metaDemuxer.getStreamInfo(); }
     // The source file the given name is the same file as, or an empty string: every file a track reads counts
     [[nodiscard]] std::string sourceSameAs(const std::string& fileName) const;
+    // A demux into a folder that exists is written into a temporary folder inside it first (KeepOldOutput in main):
+    // the names a demux writes are compared with the sources by the folder they end up in, set here
+    void setDemuxFolder(const std::string& folder) { m_demuxFolder = folder; }
+    [[nodiscard]] const std::string& demuxFolder() const { return m_demuxFolder; }
     [[nodiscard]] bool getHevcFound() const { return m_metaDemuxer.m_HevcFound; }
     [[nodiscard]] bool getMvcFound() const { return m_metaDemuxer.m_MvcFound; }
     [[nodiscard]] AbstractMuxer* getMainMuxer() const;
@@ -178,6 +182,7 @@ class MuxerManager final
     std::optional<std::vector<AVChapter>> m_sourceChapters;
     bool m_bluRayMode;
     bool m_demuxMode;
+    std::string m_demuxFolder;
     bool m_reproducibleIsoHeader = false;
     int64_t m_discSizeLimit = 0;         // --disc-size: target disc capacity in bytes (0 = guard off)
     bool m_allowOversize = false;        // --allow-oversize: warn instead of abort on an over-capacity image

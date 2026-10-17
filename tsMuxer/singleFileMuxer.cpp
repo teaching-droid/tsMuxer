@@ -271,12 +271,15 @@ void SingleFileMuxer::openDstFile()
 #endif
     // A demux names each file after its source, so a raw stream demuxed into its own folder (the window proposes the
     // source's folder) was the source itself: opened for writing, it was emptied while it was read, and the demux
-    // still said it was complete. Every name is compared with the sources before any file is opened.
+    // still said it was complete. Every name is compared with the sources before any file is opened, in the folder the
+    // files end up in when they are written into a temporary folder first.
+    const string finalDir =
+        m_owner->demuxFolder().empty() ? dir : closeDirPath(toNativeSeparators(m_owner->demuxFolder()));
     for (auto& [index, outputs] : m_streamInfo)
         for (StreamInfo* si : outputs)
-            if (const std::string src = m_owner->sourceSameAs(dir + si->m_fileName); !src.empty())
-                THROW(ERR_CANT_CREATE_FILE, "The demux would write " << dir + si->m_fileName << ", which is the source "
-                                                                     << src
+            if (const std::string src = m_owner->sourceSameAs(finalDir + si->m_fileName); !src.empty())
+                THROW(ERR_CANT_CREATE_FILE, "The demux would write " << finalDir + si->m_fileName
+                                                                     << ", which is the source " << src
                                                                      << " itself, and destroy it. Choose another "
                                                                         "output folder.")
     for (auto& [index, outputs] : m_streamInfo)

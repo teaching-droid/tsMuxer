@@ -2302,7 +2302,9 @@ static bool pathIsInside(const std::filesystem::path& child, const std::filesyst
 // job left an empty image, or a disc folder with an empty clip, where a finished one had been. When the output
 // already exists, the new one is written under a temporary name beside it and takes its place only when the job
 // has succeeded; a job that fails removes what it wrote and leaves the old output as it was. An output that does
-// not exist yet is written in place, as before.
+// not exist yet is written in place, as before. A demux into a folder that exists is written into a temporary folder
+// inside it: a demux refused at its end (a cut past the end of the sources) had emptied the files of an earlier demux
+// of the same sources.
 class KeepOldOutput
 {
    public:
@@ -2316,7 +2318,7 @@ class KeepOldOutput
         if (!m_armed || m_committed)
             return;
         std::error_code ec;
-        if (m_folder)
+        if (m_folder || m_demux)
             std::filesystem::remove_all(m_tmp, ec);
         else
             for (const auto& p : ownFiles())
@@ -2371,6 +2373,23 @@ class KeepOldOutput
         return pathStr(m_tmp);
     }
 
+    // A demux folder: the files are written into a folder inside it, and replace the files of the same names there.
+    // Every other file in the folder is not touched.
+    std::string forDemuxFolder(const std::string& dst, const int64_t estimate)
+    {
+        const std::filesystem::path out = u8path(dst);
+        std::error_code ec;
+        if (!std::filesystem::is_directory(out, ec))
+            return dst;
+        m_dir = out;
+        m_tmp = out / u8path(".tsmuxer-new-" + std::to_string(processId()));
+        std::filesystem::remove_all(m_tmp, ec);  // left by a job of an earlier process with the same number
+        m_demux = true;
+        m_armed = true;
+        warnRoom(out, estimate);
+        return pathStr(m_tmp);
+    }
+
     // The job has succeeded: the new output takes the old one's place.
     void commit()
     {
@@ -2380,7 +2399,25 @@ class KeepOldOutput
             return;
         }
         std::error_code ec;
-        if (m_folder)
+        if (m_demux)
+        {
+            std::vector<std::filesystem::path> files;
+            for (const auto& e : std::filesystem::directory_iterator(m_tmp, ec)) files.push_back(e.path());
+            if (ec)
+                throw runtime_error("The new demux is complete in " + pathStr(m_tmp) +
+                                    ", but its files could not be moved into " + pathStr(m_dir) + ": " + ec.message());
+            for (const auto& p : files)
+            {
+                const std::filesystem::path to = m_dir / p.filename();
+                std::filesystem::rename(p, to, ec);
+                if (ec)
+                    throw runtime_error("The new demux is complete in " + pathStr(m_tmp) + ", but " +
+                                        pathStr(p.filename()) + " could not replace " + pathStr(to) + ": " +
+                                        ec.message());
+            }
+            std::filesystem::remove_all(m_tmp, ec);
+        }
+        else if (m_folder)
         {
             for (const char* sub : {"BDMV", "CERTIFICATE"})
             {
@@ -2474,6 +2511,7 @@ class KeepOldOutput
     bool m_folder = false;
     std::filesystem::path m_fresh;  // a disc folder written in place (forDiscFolder), for removeEmptySkeleton
     bool m_freshFolderExisted = false;
+    bool m_demux = false;
     std::filesystem::path m_dir;
     std::filesystem::path m_tmp;
     std::string m_oldPrefix;
@@ -3190,6 +3228,7 @@ int main(int argc, char** argv)
         }
         else
         {
+            KeepOldOutput keepOld;  // made first, so it is ended last: the demux has closed its files by then
             MuxerManager sMuxer(readManager, singleFileMuxerFactory);
             sMuxer.openMetaFile(argv[1]);
             reportDvProfileIgnored(sMuxer, "a demux");
@@ -3209,8 +3248,11 @@ int main(int argc, char** argv)
             // Refused when the muxer was set up, after the demux folder had been made, which was left empty
             if (sMuxer.keepEditions())
                 THROW(ERR_COMMON, "--keep-editions applies to a Matroska output (.mkv) only.")
-            createDir(dstFile, true);
-            sMuxer.doMux(dstFile, nullptr);
+            sMuxer.setDemuxFolder(dstFile);
+            const std::string demuxDir = keepOld.forDemuxFolder(dstFile, sMuxer.totalSize());
+            createDir(demuxDir, true);
+            sMuxer.doMux(demuxDir, nullptr);
+            keepOld.commit();
             LTRACE(LT_INFO, 2, "Demux complete.");
             reportLostData(sMuxer);
             reportEmptyTracks(sMuxer);
