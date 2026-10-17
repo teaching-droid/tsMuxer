@@ -135,16 +135,26 @@ Lib& lib()
     return l;
 }
 
-// libass reports problems through this; only errors are passed on, each different one once
+// libass reports problems through this; errors are passed on, each different one once, and of its warnings the font
+// it could not find. A style whose font was neither attached, in fonts-dir nor installed was drawn with another font
+// without a word: libass says so only as a warning ("fontselect: Using default font family: (Liberation Mono, 400, 0)
+// -> ...DejaVuSans.ttf").
 void onMessage(const int level, const char* fmt, va_list va, void*)
 {
-    if (level > 1)
+    if (level > 2)
         return;
     char text[512];
     vsnprintf(text, sizeof(text), fmt, va);
+    const bool fontMissing = strncmp(text, "fontselect:", 11) == 0;
+    if (level == 2 && !fontMissing)
+        return;
     static std::set<std::string> told;
     if (told.insert(text).second)
-        LTRACE(LT_WARN, 2, "libass: " << text);
+        LTRACE(LT_WARN, 2,
+               (fontMissing ? "Warning: a font of the ASS subtitles is not attached to the file, in fonts-dir or "
+                              "installed, and libass draws with another one. libass: "
+                            : "libass: ")
+                   << text);
 }
 
 std::string lower(std::string s)
