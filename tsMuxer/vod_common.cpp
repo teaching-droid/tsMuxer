@@ -566,7 +566,10 @@ std::string parseLayerBreakList(const std::string& value, std::vector<int>& lbns
 std::string parseGuardMB(const std::string& option, const std::string& value, int& mb)
 {
     const std::string t = trimStr(value);
-    if (t.empty() || t.find_first_not_of("0123456789") != std::string::npos || t.size() > 4)
+    // Leading zeros are not counted as digits: 09999 is 9999 MB, and was refused for its five digits
+    const size_t first = t.find_first_not_of('0');
+    const size_t digits = first == std::string::npos ? 1 : t.size() - first;
+    if (t.empty() || t.find_first_not_of("0123456789") != std::string::npos || digits > 4)
         return "Invalid " + option + " value '" + value + "'. Expected 0..9999 (megabytes).";
     mb = strToInt32(t.c_str());
     return std::string();
