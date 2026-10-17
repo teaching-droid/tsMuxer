@@ -469,7 +469,9 @@ int H264StreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, const b
         *dstBuff++ = 0xff;  // stuffing byte
 
         uint8_t video_format, frame_rate_index, aspect_ratio_index;
-        M2TSStreamInfo::blurayStreamParams(getFPS(), getInterlaced(), getStreamWidth(), getStreamHeight(),
+        // the rate the mux will take: before updateFPS has run, getFPS() is still 0 for a stream that names none
+        const double streamFps = m_spsMap.empty() ? 0.0 : correctFps(m_spsMap.begin()->second->getFPS());
+        M2TSStreamInfo::blurayStreamParams(headerFps(streamFps), getInterlaced(), getStreamWidth(), getStreamHeight(),
                                            getStreamAR(), &video_format, &frame_rate_index, &aspect_ratio_index);
         *dstBuff++ = !m_mvcSubStream ? static_cast<uint8_t>(StreamType::VIDEO_H264)
                                      : static_cast<uint8_t>(StreamType::VIDEO_MVC);  // stream_coding_type

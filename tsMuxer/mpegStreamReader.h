@@ -2,6 +2,7 @@
 #define MPEG_STREAM_READER_H_
 
 #include <cstddef>
+#include <functional>
 
 #include "abstractStreamReader.h"
 #include "limits.h"
@@ -64,6 +65,10 @@ class MPEGStreamReader : public AbstractStreamReader
         setFPS(fps);
         m_fpsFromContainer = true;
     }
+
+    // Where the rate comes from for a stream that names none, when no fps= and no container rate is given either: the
+    // times of its packets in a transport stream. Asked only then, since it reads the file; without it, 25.
+    void setPacketFpsSource(std::function<double()> source) { m_packetFpsSource = std::move(source); }
 
     [[nodiscard]] double getFPS() const { return m_fps; }
     [[nodiscard]] VideoAspectRatio getStreamAR() const
@@ -135,6 +140,15 @@ class MPEGStreamReader : public AbstractStreamReader
    protected:
     virtual double getStreamFPS(void* curNalUnit) = 0;
     void updateFPS(void* curNALUnit, uint8_t* buff, uint8_t* nextNal, int oldSPSLen);
+    // The rate updateFPS takes when neither the stream nor anything else names one: the packet times, else 25. The
+    // unit is the parameter set being read, for a reader that keeps it only after updateFPS.
+    double fallbackFps(void* curNalUnit = nullptr);
+    // Whether the stream is field coded, as the parameter set being read says (see fallbackFps)
+    virtual bool interlacedBy(void* curNalUnit) { return getInterlaced(); }
+    // The rate a descriptor written before updateFPS has run must carry: the one updateFPS will take
+    double headerFps(double streamFps);
+    std::function<double()> m_packetFpsSource;
+    double m_packetFps = -1.0;  // -1: not asked yet
     virtual void updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* nextNal, int oldSpsLen) = 0;
     virtual void updateStreamAR(void* nalUnit, uint8_t* buff, uint8_t* nextNal, int oldSpsLen) {}
     void fillAspectBySAR(double sar);

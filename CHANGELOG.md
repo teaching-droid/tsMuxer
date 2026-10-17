@@ -18,6 +18,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **In a join of MP4 files, the AAC sound fell further behind the picture at every joint.** It now stays within half an AAC frame of the picture, however many files are joined.
 
+* **Video that names no frame rate of its own was muxed at 25 fps from a TS, an M2TS or a Blu-ray playlist,** as HEVC, H.264, VVC or AV1 may be encoded: a 23.976 film played 4 % too fast and ended before its sound. Without fps= on the track, the rate now comes from the times of its pictures in the file, as it does from Matroska and MP4, when they keep one step; interlaced H.264, whose times may be those of its fields, still gets 25. The listing shows the rate, so the window writes it too: it wrote 23.976 for every such track. The HDMV descriptor of HEVC, VVC and H.264 now gives the rate the track is muxed at; without fps= it gave 0. Mux such files again.
+
 * **An MP4 whose last box has 0 in its size field was muxed only in part,** and since 2.19.4 the mux still said it was complete. Such a file is now read to its end. A complete mux of an MP4 with a free, skip or uuid box at its end said "The output is incomplete"; it now ends as a complete mux.
 
 * **An ISO image of a folder with more than 4093 files and folders had its first file damaged,** with --bdmv-to-iso and --keep-extra-files: the table that maps the files was written over the start of it. The table now has the room it needs.

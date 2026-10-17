@@ -205,8 +205,10 @@ int VVCStreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, const bo
 
         *dstBuff++ = static_cast<int>(StreamType::VIDEO_H266);  // stream_coding_type
         uint8_t video_format, frame_rate_index, aspect_ratio_index;
-        M2TSStreamInfo::blurayStreamParams(getFPS(), getInterlaced(), getStreamWidth(), getStreamHeight(),
-                                           getStreamAR(), &video_format, &frame_rate_index, &aspect_ratio_index);
+        // the rate the mux will take: before updateFPS has run, getFPS() is still 0 for a stream that names none
+        M2TSStreamInfo::blurayStreamParams(headerFps(correctFps(getStreamFPS(nullptr))), getInterlaced(),
+                                           getStreamWidth(), getStreamHeight(), getStreamAR(), &video_format,
+                                           &frame_rate_index, &aspect_ratio_index);
 
         *dstBuff++ = static_cast<uint8_t>(video_format << 4 | frame_rate_index);
         *dstBuff = static_cast<uint8_t>(aspect_ratio_index << 4 | 0xf);

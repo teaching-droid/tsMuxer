@@ -2,6 +2,11 @@
 
 #include <fs/systemlog.h>
 
+#include <algorithm>
+#include <cstdlib>
+#include <cstring>
+#include <vector>
+
 #include "abstractStreamReader.h"
 #include "bitmapSubtitles.h"
 #include "matroskaParser.h"
@@ -722,3 +727,132 @@ int64_t getTSDuration(const char* fileName)
 }
 
 int64_t TSDemuxer::getFileDurationNano() const { return getTSDuration(m_streamName.c_str()) * 1000000000ll / 90000ll; }
+
+// A video stream may name no frame rate of its own: HEVC, H.264 or VVC without timing information, AV1 without a timing
+// info, which an encoder is free to leave out. In a transport stream the PES header of each picture still carries its
+// time, so the rate is the spacing of those times. It was taken to be 25, and a 23.976 film played 4 % fast. The times
+// of the track's first pictures are read on a handle of their own, sorted, since pictures come in decoding order, and
+// the usual step between them gives the rate: a picture still to come leaves a hole in the order shown, and a later
+// clip of a join a jump, and neither is a step. Nothing is said when a PES start in the window carries no time (H.222.0
+// asks for one only every 0.7 s), or when the steps vary.
+double TSDemuxer::getTrackPacketFps(const uint32_t trackId)
+{
+    if (const auto known = m_packetFps.find(trackId); known != m_packetFps.end())
+        return known->second;
+    m_packetFps[trackId] = 0.0;
+    File f;
+    if (trackId == 0 || trackId >= 0x1fff || m_streamName.empty() ||
+        !f.open(unquoteStr(m_streamName).c_str(), File::ofRead))
+        return 0.0;
+
+    static constexpr size_t PICTURES = 240;
+    static constexpr int CHUNK = 4 * 1024 * 1024;
+    std::vector<uint8_t> buf(CHUNK + 2 * 192);
+    std::vector<int64_t> times;
+    int stride = 0;    // 188, or 192 for an M2TS: found from the first packets
+    size_t have = 0;   // bytes in buf
+    int64_t read = 0;  // bytes read from the file
+    bool withoutTime = false;
+    while (times.size() < PICTURES && !withoutTime && read < DETECT_STREAM_BUFFER_SIZE)
+    {
+        const int len = f.read(buf.data() + have, CHUNK);
+        if (len <= 0)
+            break;
+        read += len;
+        have += len;
+        size_t pos = 0;
+        if (stride == 0)
+        {
+            for (const int s : {192, 188})
+            {
+                const size_t first = s - 188;  // the sync byte follows the 4-byte M2TS header
+                if (have >= first + 8 * static_cast<size_t>(s))
+                {
+                    bool all = true;
+                    for (int k = 0; k < 8 && all; ++k) all = buf[first + k * s] == 0x47;
+                    if (all)
+                    {
+                        stride = s;
+                        pos = first;
+                        break;
+                    }
+                }
+            }
+            if (stride == 0)
+                return 0.0;
+        }
+        else
+            pos = stride - 188;
+        while (pos + stride <= have && times.size() < PICTURES)
+        {
+            const uint8_t* pk = buf.data() + pos;
+            if (pk[0] != 0x47)
+            {
+                // lost the packet rhythm: find the next sync byte that has another one a packet later
+                size_t next = pos + 1;
+                while (next + stride < have && !(buf[next] == 0x47 && buf[next + stride] == 0x47)) ++next;
+                pos = next;
+                continue;
+            }
+            pos += stride;
+            const uint32_t pid = (pk[1] & 0x1f) << 8 | pk[2];
+            const int afc = pk[3] >> 4 & 3;
+            if (pid != trackId || !(pk[1] & 0x40) || !(afc & 1))
+                continue;
+            const int off = afc & 2 ? 5 + pk[4] : 4;
+            if (off + 14 > 188)
+                continue;
+            const uint8_t* pes = pk + off;
+            if (pes[0] != 0 || pes[1] != 0 || pes[2] != 1)
+                continue;
+            if (!(pes[7] & 0x80))
+            {
+                withoutTime = true;
+                break;
+            }
+            int64_t pts = static_cast<int64_t>(pes[9] & 0x0e) << 29 | static_cast<int64_t>(pes[10]) << 22 |
+                          static_cast<int64_t>(pes[11] & 0xfe) << 14 | static_cast<int64_t>(pes[12]) << 7 |
+                          pes[13] >> 1;
+            if (!times.empty() && pts < times.front() - (1ll << 32))
+                pts += 1ll << 33;  // the 33-bit clock wrapped
+            times.push_back(pts);
+        }
+        // The packet not yet complete goes to the front for the next read, an M2TS one with its 4-byte header, so
+        // that its sync byte is again where the next round starts.
+        const size_t from = pos - (stride - 188);
+        const size_t keep = from < have ? have - from : 0;
+        if (keep)
+            memmove(buf.data(), buf.data() + from, keep);
+        have = keep;
+    }
+    if (withoutTime)
+        return 0.0;
+    std::sort(times.begin(), times.end());
+    times.erase(std::unique(times.begin(), times.end()), times.end());
+    if (times.size() < 8)
+        return 0.0;
+    std::vector<int64_t> steps;
+    for (size_t i = 1; i < times.size(); ++i) steps.push_back(times[i] - times[i - 1]);
+    std::vector<int64_t> sorted = steps;
+    std::nth_element(sorted.begin(), sorted.begin() + sorted.size() / 2, sorted.end());
+    const int64_t median = sorted[sorted.size() / 2];
+    int64_t sum = 0;
+    size_t count = 0;
+    for (const int64_t step : steps)
+        if (std::llabs(step - median) * 8 <= median)
+        {
+            sum += step;
+            ++count;
+        }
+    if (median <= 0 || count * 4 < steps.size() * 3)
+        return 0.0;  // the steps vary: no one rate
+    double fps = 90000.0 * static_cast<double>(count) / static_cast<double>(sum);
+    for (const double standard : {12.5, 15000.0 / 1001, 15.0, 24000.0 / 1001, 24.0, 25.0, 30000.0 / 1001, 30.0,
+                                  48000.0 / 1001, 48.0, 50.0, 60000.0 / 1001, 60.0, 100.0, 120000.0 / 1001, 120.0})
+        if (std::fabs(fps - standard) < standard * 0.0004)
+            fps = standard;
+    if (fps < 1.0 || fps > 300.0)
+        return 0.0;
+    m_packetFps[trackId] = fps;
+    return fps;
+}

@@ -144,6 +144,9 @@ class AbstractDemuxer
     [[nodiscard]] virtual int64_t getTrackClipStart(int32_t pid) { return 0; }
     [[nodiscard]] virtual std::vector<AVChapter> getChapters() { return {}; }
     [[nodiscard]] virtual double getTrackFps(uint32_t trackId) { return 0.0; }
+    // The rate the times of a video track's packets give, for a stream that names no rate of its own: asked only then,
+    // in place of the default of 25. A transport stream answers from its PES times; the other demuxers say 0.
+    [[nodiscard]] virtual double getTrackPacketFps(uint32_t trackId) { return 0.0; }
 
     /// Return a pointer to the track's codec-private (extradata) blob and its
     /// size.  The default implementation returns nullptr/0 for demuxers that do

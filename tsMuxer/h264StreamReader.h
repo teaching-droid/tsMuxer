@@ -58,6 +58,11 @@ class H264StreamReader final : public MPEGStreamReader
         const auto sps = static_cast<SPSUnit*>(curNalUnit);
         return sps->getFPS();
     }
+    // updateFPS runs before the SPS is kept, so getInterlaced does not know it yet
+    bool interlacedBy(void* curNalUnit) override
+    {
+        return curNalUnit ? !static_cast<SPSUnit*>(curNalUnit)->frame_mbs_only_flag : getInterlaced();
+    }
 
     int writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPacket& avPacket,
                           PriorityDataInfo* priorityData) override;

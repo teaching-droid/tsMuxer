@@ -343,11 +343,18 @@ void MPEGStreamReader::updateFPS(void* curNALUnit, uint8_t* buff, uint8_t* nextN
     spsFps = correctFps(spsFps);
     if (spsFps == 0.0 && m_fps == 0.0)
     {
-        setFPS(25.0);
-        LTRACE(LT_INFO, 2,
-               "This " << getCodecInfo().displayName
-                       << " stream doesn't contain fps value. Muxing fps is absent too. Set muxing FPS to default 25.0 "
-                          "value.");
+        setFPS(fallbackFps(curNALUnit));
+        if (m_packetFps > 0.0)
+            LTRACE(LT_INFO, 2,
+                   "This " << getCodecInfo().displayName
+                           << " stream doesn't contain fps value. Muxing fps is absent too. Set muxing FPS to " << m_fps
+                           << ", the rate the times of its pictures in the container give. fps= on the "
+                           << "track's line sets another.");
+        else
+            LTRACE(LT_INFO, 2,
+                   "This " << getCodecInfo().displayName
+                           << " stream doesn't contain fps value. Muxing fps is absent too. Set muxing FPS to default "
+                              "25.0 value.");
     }
     else if (m_fps == 0.0)
     {
@@ -385,6 +392,25 @@ void MPEGStreamReader::updateFPS(void* curNALUnit, uint8_t* buff, uint8_t* nextN
         }
     }
     updateStreamAR(curNALUnit, buff, nextNal, oldSPSLen);
+}
+
+double MPEGStreamReader::fallbackFps(void* curNalUnit)
+{
+    if (m_packetFps < 0.0)
+    {
+        m_packetFps = 0.0;
+        // A field coded stream may carry a PES for each field, whose times give the field rate: it keeps the default.
+        if (m_packetFpsSource && !interlacedBy(curNalUnit))
+            m_packetFps = correctFps(m_packetFpsSource());
+    }
+    return m_packetFps > 0.0 ? m_packetFps : 25.0;
+}
+
+double MPEGStreamReader::headerFps(const double streamFps)
+{
+    if (m_fps != 0.0)
+        return m_fps;
+    return streamFps > 0.0 ? streamFps : fallbackFps();
 }
 
 void MPEGStreamReader::checkPulldownSync()

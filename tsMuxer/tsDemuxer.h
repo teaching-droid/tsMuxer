@@ -63,6 +63,7 @@ class TSDemuxer final : public AbstractDemuxer
             return 0;
         return start->second;
     }
+    double getTrackPacketFps(uint32_t trackId) override;
     void setMPLSInfo(const std::vector<MPLSPlayItem>& mplsInfo) { m_mplsInfo = mplsInfo; }
     [[nodiscard]] int64_t getFileDurationNano() const override;
 
@@ -101,6 +102,7 @@ class TSDemuxer final : public AbstractDemuxer
     std::map<int, int64_t> m_clipStartOfPid;  // see getTrackClipStart
     std::map<int, int64_t> m_fullPtsTime;
     std::map<int, int64_t> m_fullDtsTime;
+    std::map<uint32_t, double> m_packetFps;  // getTrackPacketFps, once per track
     AbstractReader* m_bufferedReader;
     int m_readerID;
     uint8_t* m_curPos;

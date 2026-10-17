@@ -1287,6 +1287,17 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                 if (containerFps > 0.0)
                     mpegReader->setContainerFPS(containerFps);
             }
+            // For a stream that turns out to name no rate either: the times of its packets, asked from the demuxer of
+            // the file when it is needed, not before
+            const int packetPid = SubTrackFilter::isSubTrack(pid) ? pid >> 16 : pid;
+            mpegReader->setPacketFpsSource(
+                [this, file = fileList[0], packetPid]
+                {
+                    const auto it = m_containerReader.m_demuxers.find(file);
+                    return it != m_containerReader.m_demuxers.end() && it->second.m_demuxer
+                               ? it->second.m_demuxer->getTrackPacketFps(packetPid)
+                               : 0.0;
+                });
         }
     }
 
@@ -2557,7 +2568,15 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
                 const bool hasFpsField = trackRez.streamDescr.find("Frame rate:") != string::npos;
                 if (fpsNotFoundPos != string::npos || !hasFpsField)
                 {
-                    const double containerFps = correctFps(demuxer->getTrackFps(itr.first));
+                    double containerFps = correctFps(demuxer->getTrackFps(itr.first));
+                    // A stream that names no rate in a transport stream: the times of its pictures, as the mux takes
+                    // them. Not for a field coded stream, whose times may be those of its fields.
+                    const size_t res = trackRez.streamDescr.find("Resolution: ");
+                    const size_t scan =
+                        res == string::npos ? res : trackRez.streamDescr.find_first_not_of("0123456789:x", res + 12);
+                    const bool interlaced = scan != string::npos && trackRez.streamDescr[scan] == 'i';
+                    if (containerFps <= 0.0 && !interlaced)
+                        containerFps = correctFps(demuxer->getTrackPacketFps(itr.first));
                     if (containerFps > 0.0)
                     {
                         if (fpsNotFoundPos != string::npos)
