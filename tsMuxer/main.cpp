@@ -52,9 +52,10 @@ static constexpr char EXCEPTION_ERR_MSG[] =
     }
 DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<double>& customChaptersList,
                         vector<AVChapter>& chapterInfo, int& firstMplsOffset, int& firstM2tsOffset, bool& insertBlankPL,
-                        int& blankNum, bool& stereoMode, std::string& isoDiskLabel)
+                        int& blankNum, bool& stereoMode, std::string& isoDiskLabel, bool& demux)
 {
     autoChapterLen = 0;
+    demux = false;
     stereoMode = false;
     bool fromChapterFile = false;
     TextFile file(metaFileName, File::ofRead);
@@ -171,6 +172,8 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                     const std::string whole = trimStr(param);
                     isoDiskLabel = whole.substr(whole.find('=') + 1);
                 }
+                else if (paramPair[0] == "--demux")
+                    demux = true;
 
                 // Every MUXOPT line counts, as it does for the muxers: a line without a disc option keeps the disc a
                 // line before it asked for. Only the last line decided, so --blu-ray on the first of two lines wrote
@@ -3010,16 +3013,24 @@ int main(int argc, char** argv)
         vector<AVChapter> chapterInfo;
         bool stereoMode = false;
         string isoDiskLabel;
+        bool demuxAsked = false;
         DiskType dt = checkBluRayMux(argv[1], autoChapterLen, customChapterList, chapterInfo, firstMplsOffset,
-                                     firstM2tsOffset, insertBlankPL, blankNum, stereoMode, isoDiskLabel);
+                                     firstM2tsOffset, insertBlankPL, blankNum, stereoMode, isoDiskLabel, demuxAsked);
+        // --demux asks for a folder of tracks whatever the output is named, as --help says: the name decided, so
+        // --demux with a name ending .ts, .m2ts, .mts, .m2t, .mkv or .iso wrote that file instead. A disc
+        // and a demux in one job cannot both be made.
+        if (demuxAsked && dt != DiskType::NONE)
+            THROW(ERR_COMMON, "The MUXOPT lines ask for both a demux and a disc. Give one of --demux and "
+                                  << (dt == DiskType::AVCHD ? "--avchd" : "--blu-ray") << ".")
         std::string fileExt2 = unquoteStr(fileExt);
         // .mks (subtitles only) and .mk3d (stereoscopic) are Matroska files too: they went to a demux folder
-        bool mkvMode =
-            fileExt2 == "MKV" || fileExt2 == "MKA" || fileExt2 == "MKS" || fileExt2 == "MK3D" || fileExt2 == "WEBM";
+        bool mkvMode = !demuxAsked && (fileExt2 == "MKV" || fileExt2 == "MKA" || fileExt2 == "MKS" ||
+                                       fileExt2 == "MK3D" || fileExt2 == "WEBM");
         // .mts and .m2t are muxed as the muxer has always read them (setMuxFormat); they went to a demux folder, and
         // the job said it had finished
-        bool muxMode = fileExt2 == "M2TS" || fileExt2 == "MTS" || fileExt2 == "M2T" || fileExt2 == "TS" ||
-                       fileExt2 == "SSIF" || fileExt2 == "ISO" || dt != DiskType::NONE;
+        bool muxMode =
+            !demuxAsked && (fileExt2 == "M2TS" || fileExt2 == "MTS" || fileExt2 == "M2T" || fileExt2 == "TS" ||
+                            fileExt2 == "SSIF" || fileExt2 == "ISO" || dt != DiskType::NONE);
 
         if (mkvMode)
         {
