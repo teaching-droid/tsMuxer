@@ -613,14 +613,24 @@ void METADemuxer::openFile(const string& streamName)
             // Digits alone, or digits and a unit, with no name: the part after a decimal comma, as the parameters are
             // parted at commas. fps=23,976 became fps=23, and timeshift=1,5s timeshift=1 (1 ms), with only a warning
             // about "976" or "5s".
+            // Every unit a time takes, and a space before it: timeshift=1,500us and timeshift=1,5 s were read as 1 ms.
             const size_t digitsEnd = paramName.find_first_not_of("0123456789");
             const std::string unit =
-                digitsEnd == string::npos ? std::string() : strToLowerCase(paramName.substr(digitsEnd));
+                digitsEnd == string::npos ? std::string() : strToLowerCase(trimStr(paramName.substr(digitsEnd)));
             if (eq == string::npos && i > 0 && !paramName.empty() && digitsEnd != 0 &&
-                (digitsEnd == string::npos || unit == "ms" || unit == "s" || unit == "min" || unit == "h"))
+                (digitsEnd == string::npos || unit == "ns" || unit == "us" || unit == "ms" || unit == "s" ||
+                 unit == "min" || unit == "h"))
                 THROW(ERR_COMMON, "\"" << trimStr(params[i - 1]) << "," << paramName
                                        << "\" on a track line: a decimal comma parts the value in two, as the "
                                           "parameters are parted at commas. Write it with a point, such as 23.976.")
+            // A track number is digits alone: track=1.5 was read as track 1, and track=-1 as no track, which skipped
+            // the check that the track is in the file and made an empty output that said it was successful
+            if (paramName == "track" &&
+                (addParams[paramName].empty() || addParams[paramName].find_first_not_of("0123456789") != string::npos ||
+                 addParams[paramName].size() > 9))
+                THROW(ERR_COMMON, "track=" << addParams[paramName]
+                                           << " is not a track number. Write the number the listing gives, digits "
+                                              "alone, such as track=1 or track=4113.")
             if (paramName == "default" && defaultParamKind(addParams[paramName]) < 0)
                 THROW(ERR_COMMON, "default=" << addParams[paramName]
                                              << " is not a value of default. Write all (or yes) for the default track, "
@@ -2966,10 +2976,12 @@ static double parseFpsValue(const std::string& text)
         if (ok)
             fps = num / den;
     }
-    if (!ok || !(fps > 0) || fps > 1000)
+    // At least one picture a second: fps=0.001 was taken, and a picture every 1000 s passes the 26.5 hour clock of a
+    // transport stream after 96 pictures, where the times wrap round
+    if (!ok || !(fps >= 1) || fps > 1000)
         THROW(ERR_COMMON, "fps=" << text
                                  << " is not a frame rate. Write it as a number such as 25 or 23.976, or as a fraction "
-                                    "such as 24000/1001, above 0 and up to 1000.")
+                                    "such as 24000/1001, from 1 up to 1000.")
     return fps;
 }
 
