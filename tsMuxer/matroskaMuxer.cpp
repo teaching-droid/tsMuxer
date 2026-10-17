@@ -2757,7 +2757,7 @@ void MatroskaMuxer::writeChapters()
             int d = 0;
             d += ebml_write_string(display.data() + d, MATROSKA_ID_CHAPSTRING, title);
             d += ebml_write_string(display.data() + d, MATROSKA_ID_CHAPTERLANGUAGE, lang);
-            if (!tag.empty())
+            if (!tag.empty() && !m_webm)  // not a WebM element
                 d += ebml_write_string(display.data() + d, MATROSKA_ID_CHAPLANGUAGEBCP47, tag);
             uint8_t dispHdr[16];
             const int dh = ebml_write_master_open(dispHdr, MATROSKA_ID_CHAPTERDISPLAY, d);
@@ -4710,6 +4710,63 @@ void MatroskaMuxer::writeSourceAttachments()
         LTRACE(LT_INFO, 2, "Matroska: " << m_sourceAttachments.size() << " attachment(s) of the source carried over.");
 }
 
+namespace
+{
+// One EBML number at p, an element ID with its marker kept, a size without; false where it does not end before end.
+bool readEbmlNumber(const uint8_t*& p, const uint8_t* end, uint64_t& value, const bool keepMarker)
+{
+    if (p >= end || *p == 0)
+        return false;
+    int width = 1;
+    uint8_t mask = 0x80;
+    while (!(*p & mask))
+    {
+        mask >>= 1;
+        width++;
+    }
+    if (end - p < width)
+        return false;
+    value = keepMarker ? *p : (*p & (mask - 1));
+    for (int i = 1; i < width; ++i) value = (value << 8) | p[i];
+    p += width;
+    return true;
+}
+
+// Tag elements as the source had them, without TagLanguageBCP47, which is not a WebM element: the source's tags
+// went into a .webm file with it. Tag and SimpleTag (which may hold SimpleTags) are rebuilt around what is left;
+// whatever cannot be read is kept as it is.
+std::vector<uint8_t> withoutTagBcp47(const uint8_t* p, const uint8_t* end)
+{
+    std::vector<uint8_t> out;
+    while (p < end)
+    {
+        const uint8_t* at = p;
+        uint64_t id = 0, size = 0;
+        if (!readEbmlNumber(p, end, id, true) || !readEbmlNumber(p, end, size, false) ||
+            size > static_cast<uint64_t>(end - p))
+        {
+            out.insert(out.end(), at, end);
+            break;
+        }
+        const uint8_t* body = p;
+        p += size;
+        if (id == MATROSKA_ID_TAGLANGBCP47)
+            continue;
+        if (id == MATROSKA_ID_TAG || id == MATROSKA_ID_SIMPLETAG)
+        {
+            const std::vector<uint8_t> inner = withoutTagBcp47(body, p);
+            uint8_t header[16];
+            const int headerLen = ebml_write_master_open(header, static_cast<uint32_t>(id), inner.size());
+            out.insert(out.end(), header, header + headerLen);
+            out.insert(out.end(), inner.begin(), inner.end());
+        }
+        else
+            out.insert(out.end(), at, p);
+    }
+    return out;
+}
+}  // namespace
+
 // The source's file-wide tags, before the clusters as RFC 9559 (25.3.1) lays a file out.
 void MatroskaMuxer::writeTags()
 {
@@ -4741,15 +4798,19 @@ void MatroskaMuxer::writeTags()
     }
     if (m_sourceTags.empty() && trackTags.empty())
         return;
+    std::vector<std::vector<uint8_t>> globalTags = m_sourceTags;
+    if (m_webm)
+        for (auto* list : {&globalTags, &trackTags})
+            for (auto& raw : *list) raw = withoutTagBcp47(raw.data(), raw.data() + raw.size());
     uint64_t total = 0;
-    for (const auto& raw : m_sourceTags) total += raw.size();
+    for (const auto& raw : globalTags) total += raw.size();
     for (const auto& raw : trackTags) total += raw.size();
     m_tagsPos = m_file.pos() - m_segmentStartPos;
     uint8_t header[16];
     const int hdrLen = ebml_write_master_open(header, MATROSKA_ID_TAGS, total + CRC_ELEMENT_BYTES);
     writeToFile(header, hdrLen);
     beginCrc();
-    for (const auto& raw : m_sourceTags) writeToFile(raw);
+    for (const auto& raw : globalTags) writeToFile(raw);
     for (const auto& raw : trackTags) writeToFile(raw);
     endCrc();
 }

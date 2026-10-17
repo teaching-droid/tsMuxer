@@ -206,6 +206,7 @@ static constexpr uint16_t MATROSKA_ID_SIMPLETAG = 0x67C8;
 static constexpr uint16_t MATROSKA_ID_TAGNAME = 0x45A3;
 static constexpr uint16_t MATROSKA_ID_TAGSTRING = 0x4487;
 static constexpr uint16_t MATROSKA_ID_TAGLANG = 0x447A;
+static constexpr uint16_t MATROSKA_ID_TAGLANGBCP47 = 0x447B;
 
 /* IDs in the seekhead master */
 static constexpr uint16_t MATROSKA_ID_SEEKENTRY = 0x4DBB;
