@@ -1227,6 +1227,11 @@ int SRTStreamReader::blankLineEndsCue() const
         if (!counterOrBlank)
             return 0;
     }
+    // The text ends without a timing line behind the number: no subtitle follows, so the number is text of this one.
+    // "1985" after an empty line in the last subtitle of a file, or in a subtitle from a Matroska file, which arrives
+    // whole in its block, was taken for a counter and lost without a word.
+    if (!firstNumber.empty() && (m_lastBlock || m_containerType != ContainerType::ctNone))
+        return 0;
     return m_lastBlock ? 1 : -1;
 }
 
