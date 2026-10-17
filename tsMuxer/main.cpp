@@ -69,11 +69,21 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
         if (strStartWith(str.substr((std::min)(str.find_first_not_of(" 	"), str.size())), "MUXOPT"))
         {
             vector<string> params = splitQuotedStr(MuxerManager::muxOptLine(str).c_str(), ' ');
+            std::string previous;  // the option before, when it had a value
             for (const auto& param : params)
             {
                 vector<string> paramPair = splitOption(trimStr(param));
                 if (paramPair.empty())
                     continue;
+                // Digits standing alone after an option with a value are the rest of that value, written with spaces:
+                // --layer-break-lbn=12 219 392 was read as sector 12, and 219 and 392 were ignored as unknown options
+                // with a warning (LBN spaces)
+                if (!previous.empty() && paramPair.size() == 1 &&
+                    paramPair[0].find_first_not_of("0123456789") == std::string::npos)
+                    THROW(ERR_COMMON, previous << " is followed by " << paramPair[0]
+                                               << " on the MUXOPT line: a value is written without spaces, such as "
+                                                  "--layer-break-lbn=12219392.")
+                previous = paramPair.size() > 1 ? trimStr(param) : std::string();
                 // ** A NUMBER IS READ WHOLE OR REFUSED. ** These were read up to their first other character, so
                 // --start-time=10s was 10 ticks of 45 kHz, --vbv-len=0.5s was 0, --extra-iso-space=64K was 64 and -50
                 // stayed -50, and --auto-chapters=5,5 was 5, each without a word. They are checked here, before
