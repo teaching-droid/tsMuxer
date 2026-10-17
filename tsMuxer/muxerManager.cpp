@@ -566,7 +566,16 @@ void MuxerManager::checkTracksBeforeOutput()
     const bool hevcSplit = std::any_of(ci.begin(), ci.end(), [](const StreamInfo& si) {
         return SubTrackFilter::isSubTrack(si.m_pid) && si.m_codec == hevcCodecInfo.programName;
     });
-    if (!hevcSplit || m_firstBlocksRead)
+    // PCM of an MP4 or MOV file is found to be floating point, which is refused, at its first packet: a disc or a
+    // demux had made its folders by then, and left them empty. Its first block is read here as well.
+    const bool movPcm =
+        std::any_of(ci.begin(), ci.end(),
+                    [](const StreamInfo& si)
+                    {
+                        const std::string ext = strToLowerCase(extractFileExt(si.m_streamName));
+                        return si.m_codec == "A_LPCM" && (ext == "mp4" || ext == "mov" || ext == "m4a" || ext == "m4v");
+                    });
+    if ((!hevcSplit && !movPcm) || m_firstBlocksRead)
         return;
     // The probe refuses a split of a track that holds no enhancement layer, by what the track holds; the first
     // blocks below are refused by the subTrack filter only after 32 pictures without one.
