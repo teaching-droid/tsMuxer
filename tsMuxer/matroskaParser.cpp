@@ -2,6 +2,7 @@
 #include "matroskaParser.h"
 
 #include <algorithm>
+#include <cctype>
 
 #include <fs/systemlog.h>
 
@@ -642,6 +643,49 @@ std::string webVttToSrtText(const std::string& cue)
                 }
             if (done)
                 continue;
+            // A numeric reference, &#233; or &#x263A; (WebVTT 4.5, as HTML), was kept as written
+            if (i + 1 < cue.size() && cue[i + 1] == '#')
+            {
+                const bool hex = i + 2 < cue.size() && (cue[i + 2] == 'x' || cue[i + 2] == 'X');
+                size_t j = i + (hex ? 3 : 2);
+                uint32_t code = 0;
+                const size_t first = j;
+                for (; j < cue.size() && j - first < 8 && isxdigit(static_cast<unsigned char>(cue[j])); ++j)
+                {
+                    if (!hex && !isdigit(static_cast<unsigned char>(cue[j])))
+                        break;
+                    const auto c = static_cast<unsigned char>(cue[j]);
+                    code =
+                        code * (hex ? 16U : 10U) + static_cast<uint32_t>(isdigit(c) ? c - '0' : tolower(c) - 'a' + 10);
+                }
+                if (j > first && j < cue.size() && cue[j] == ';')
+                {
+                    if (code == 0 || code > 0x10FFFF || (code >= 0xD800 && code <= 0xDFFF))
+                        code = 0xFFFD;  // as HTML takes a reference to no character
+                    if (code < 0x80)
+                        out += static_cast<char>(code);
+                    else if (code < 0x800)
+                    {
+                        out += static_cast<char>(0xC0 | code >> 6);
+                        out += static_cast<char>(0x80 | (code & 0x3F));
+                    }
+                    else if (code < 0x10000)
+                    {
+                        out += static_cast<char>(0xE0 | code >> 12);
+                        out += static_cast<char>(0x80 | (code >> 6 & 0x3F));
+                        out += static_cast<char>(0x80 | (code & 0x3F));
+                    }
+                    else
+                    {
+                        out += static_cast<char>(0xF0 | code >> 18);
+                        out += static_cast<char>(0x80 | (code >> 12 & 0x3F));
+                        out += static_cast<char>(0x80 | (code >> 6 & 0x3F));
+                        out += static_cast<char>(0x80 | (code & 0x3F));
+                    }
+                    i = j;
+                    continue;
+                }
+            }
         }
         out += cue[i];
     }
