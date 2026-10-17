@@ -1578,7 +1578,9 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     // Pulldown: a picture is shown when the pictures before it in the order shown have been shown for their own
     // number of fields. Taking the reordering in whole frames, as without pulldown, gave pictures the same times
     // and put them out of order: with frame doubling, 60 of 144 times were taken twice.
-    if (m_pulldownMaxFields > 2 && !slice.m_field_pic_flag && slice.getSPS()->pic_order_cnt_type == 0)
+    const bool pulldownTimes =
+        m_pulldownMaxFields > 2 && !slice.m_field_pic_flag && slice.getSPS()->pic_order_cnt_type == 0;
+    if (pulldownTimes)
     {
         if (slice.isIDR() || m_fieldsShown.empty())
         {
@@ -1595,7 +1597,8 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
         // The fields shown before a picture are kept as a running sum up to m_pulldownSumOrder, moved to each picture's
         // order. Adding them up from the first picture of the period for every picture took 17 s for 30000 pictures
         // after one IDR, and a film with one IDR would have taken far longer.
-        const auto setFields = [this](const int order, const int fields, const bool replace) {
+        const auto setFields = [this](const int order, const int fields, const bool replace)
+        {
             const auto [it, added] = m_fieldsShown.emplace(order, fields);
             const int before = added ? 2 : it->second;  // an order not yet seen counts as a frame
             if (!added)
@@ -1609,7 +1612,8 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
         };
         setFields(fullPicOrder, fieldsShownOf(m_lastPictStruct), true);
         for (const auto& [rel, fields] : m_fieldsAhead) setFields(fullPicOrder + rel, fields, false);
-        const auto fieldsAt = [this](const int order) {
+        const auto fieldsAt = [this](const int order)
+        {
             const auto it = m_fieldsShown.find(order);
             return it != m_fieldsShown.end() ? it->second : 2;
         };
@@ -1623,10 +1627,11 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     // before it already has: a cut stream lacks pictures, has a hole in the order shown, and the picture held back
     // took the time of another one.
     // Coded fields keep the old rule: the two fields of a frame share one time, and a picture here is a field.
+    // With pulldown the picture before it is shown for its own number of fields, not one frame: the last picture of a
+    // 720p59.94 stream with frame doubling came 1/59.94 s early, on the second half of the picture before it.
     if (m_curPts > m_curDts && (!m_nextFrameFound || m_nextFrameIdr))
-        m_curPts =
-            (std::max)(m_curDts, m_ptsGiven && !m_fieldPicturesSeen ? (std::min)(m_curPts, m_maxPts + m_pcrIncPerFrame)
-                                                                    : m_curDts);
+        m_curPts = (std::max)(
+            m_curDts, m_ptsGiven && !m_fieldPicturesSeen ? (std::min)(m_curPts, m_maxPts + m_maxPtsShown) : m_curDts);
 
     // A new IDR period begins after the latest time already given. A stream that lacks pictures, as a cut does (the
     // pictures before its first one in decode order), has a hole in the order shown, and the IDR, placed by the count
@@ -1636,12 +1641,20 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
         const int64_t periodStart = m_curPts - static_cast<int64_t>(m_iFramePtsOffset) * m_pcrIncPerFrame;
         if (periodStart <= m_maxPts)
         {
-            const int64_t gap = m_maxPts + m_pcrIncPerFrame - periodStart;
+            const int64_t gap = m_maxPts + m_maxPtsShown - periodStart;
             m_curDts += gap;
             m_curPts += gap;
+            // With pulldown the pictures after the IDR take their times from m_pulldownOrigin: moved with the IDR
+            // alone, they came before it (a cut 3:2 stream: PTS below DTS).
+            if (pulldownTimes)
+                m_pulldownOrigin += gap;
         }
     }
-    m_maxPts = m_ptsGiven ? (std::max)(m_maxPts, m_curPts) : m_curPts;
+    if (!m_ptsGiven || m_curPts >= m_maxPts)
+    {
+        m_maxPts = m_curPts;
+        m_maxPtsShown = pulldownTimes ? fieldsShownOf(m_lastPictStruct) * m_pcrIncPerField : m_pcrIncPerFrame;
+    }
     m_ptsGiven = true;
 
     if (m_OffsetMetadataPtsAddr)
