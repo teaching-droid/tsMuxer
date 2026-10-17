@@ -87,6 +87,10 @@ File::~File()
 bool File::open(const char* fName, unsigned int oflag, unsigned int systemDependentFlags)
 {
     m_name = fName;
+    // The position counts from the start of THIS file, as on Windows. It ran on from the file opened before, so a split
+    // Matroska output, which opens each part with the same File, wrote the sizes and the index of every part after the
+    // first at the wrong places.
+    m_pos = 0;
 
     if (isOpen())
         close();
