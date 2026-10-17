@@ -6252,17 +6252,55 @@ bool TsMuxerWindow::loadChapterFileIntoBox(const QString& fileName)
     QStringList times;
     if (text.contains(QLatin1String("<ChapterTimeStart")))
     {
-        // The first edition only, as the command line reads a chapter file (chapterFile.cpp). Every edition of
-        // the file was taken, so a file with two gave the times of both.
-        QString edition = text;
-        if (const int ed = text.indexOf(QLatin1String("<EditionEntry")); ed >= 0)
+        // One edition, as --chapters-file reads the file (chapterFile.cpp, parseXml): the first marked
+        // EditionFlagDefault, or the first when none is, without its hidden chapters. Every edition of the file was
+        // taken once, so a file with two gave the times of both; then the first edition with its hidden chapters,
+        // where --chapters-file took the default one.
+        int scanFrom = 0;
+        int scanTo = static_cast<int>(text.size());
+        const QRegularExpression flagOn(QStringLiteral("^\\s*1\\s*$"));
+        const auto tagIsOne = [&text, &flagOn](const QString& tag, const int from, const int to)
+        {
+            const int open = text.indexOf(QLatin1Char('<') + tag + QLatin1Char('>'), from);
+            if (open < 0 || open >= to)
+                return false;
+            const int valueAt = open + static_cast<int>(tag.size()) + 2;
+            const int close = text.indexOf(QLatin1String("</") + tag, valueAt);
+            return close >= 0 && close <= to &&
+                   flagOn.match(QtCompat::strMid(text, valueAt, close - valueAt)).hasMatch();
+        };
+        const int firstEdition = text.indexOf(QLatin1String("<EditionEntry"));
+        for (int ed = firstEdition; ed >= 0; ed = text.indexOf(QLatin1String("<EditionEntry"), ed + 1))
         {
             const int edEnd = text.indexOf(QLatin1String("</EditionEntry>"), ed);
-            edition = edEnd > ed ? QtCompat::strMid(text, ed, edEnd - ed) : QtCompat::strMid(text, ed);
+            const int end = edEnd < 0 ? static_cast<int>(text.size()) : edEnd;
+            int firstAtom = text.indexOf(QLatin1String("<ChapterAtom"), ed);
+            if (firstAtom < 0 || firstAtom > end)
+                firstAtom = end;
+            const bool isDefault = tagIsOne(QStringLiteral("EditionFlagDefault"), ed, firstAtom);
+            if (ed == firstEdition || isDefault)
+            {
+                scanFrom = ed;
+                scanTo = end;
+            }
+            if (isDefault)
+                break;
         }
         const QRegularExpression re(QStringLiteral("<ChapterTimeStart>\\s*([0-9:.]+)\\s*</ChapterTimeStart>"));
-        auto it = re.globalMatch(edition);
-        while (it.hasNext()) times << it.next().captured(1).trimmed();
+        for (int atom = text.indexOf(QLatin1String("<ChapterAtom"), scanFrom); atom >= 0 && atom < scanTo;
+             atom = text.indexOf(QLatin1String("<ChapterAtom"), atom + 1))
+        {
+            int atomEnd = text.indexOf(QLatin1String("<ChapterAtom"), atom + 1);
+            const int atomClose = text.indexOf(QLatin1String("</ChapterAtom>"), atom);
+            if (atomEnd < 0 || (atomClose >= 0 && atomClose < atomEnd))
+                atomEnd = atomClose < 0 ? scanTo : atomClose;
+            atomEnd = (std::min)(atomEnd, scanTo);
+            if (tagIsOne(QStringLiteral("ChapterFlagHidden"), atom, atomEnd))
+                continue;
+            const QRegularExpressionMatch m = re.match(QtCompat::strMid(text, atom, atomEnd - atom));
+            if (m.hasMatch())
+                times << m.captured(1).trimmed();
+        }
     }
     else
     {
