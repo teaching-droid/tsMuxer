@@ -2300,6 +2300,8 @@ class KeepOldOutput
     KeepOldOutput& operator=(const KeepOldOutput&) = delete;
     ~KeepOldOutput()
     {
+        if (!m_committed && !m_fresh.empty())
+            removeEmptySkeleton();
         if (!m_armed || m_committed)
             return;
         std::error_code ec;
@@ -2341,7 +2343,11 @@ class KeepOldOutput
         const std::filesystem::path out = u8path(dst);
         std::error_code ec;
         if (!std::filesystem::exists(out / "BDMV", ec) && !std::filesystem::exists(out / "CERTIFICATE", ec))
+        {
+            m_fresh = out;
+            m_freshFolderExisted = std::filesystem::exists(out, ec);
             return dst;
+        }
         std::filesystem::path base = out;
         if (!base.has_filename())
             base = base.parent_path();
@@ -2358,7 +2364,10 @@ class KeepOldOutput
     void commit()
     {
         if (!m_armed || m_committed)
+        {
+            m_committed = true;
             return;
+        }
         std::error_code ec;
         if (m_folder)
         {
@@ -2420,6 +2429,23 @@ class KeepOldOutput
                 files.push_back(e.path());
         return files;
     }
+    // A disc folder written in place whose job failed before any of its files had a byte in it: the BDMV and
+    // CERTIFICATE folders made for it, and the folder itself when this job made it, go again. A refusal that can come
+    // only during the mux, a program map table longer than 1021 bytes, left an empty disc skeleton. A failure after
+    // anything was written leaves the output as it is, as before.
+    void removeEmptySkeleton() const
+    {
+        std::error_code ec;
+        for (const char* sub : {"BDMV", "CERTIFICATE"})
+            for (auto it = std::filesystem::recursive_directory_iterator(m_fresh / sub, ec);
+                 !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec))
+                if (it->is_regular_file(ec) && it->file_size(ec) > 0)
+                    return;
+        for (const char* sub : {"BDMV", "CERTIFICATE"}) std::filesystem::remove_all(m_fresh / sub, ec);
+        if (!m_freshFolderExisted && std::filesystem::is_empty(m_fresh, ec) && !ec)
+            std::filesystem::remove(m_fresh, ec);
+    }
+
     static void warnRoom(const std::filesystem::path& dir, const int64_t estimate)
     {
         std::error_code ec;
@@ -2435,6 +2461,8 @@ class KeepOldOutput
     bool m_armed = false;
     bool m_committed = false;
     bool m_folder = false;
+    std::filesystem::path m_fresh;  // a disc folder written in place (forDiscFolder), for removeEmptySkeleton
+    bool m_freshFolderExisted = false;
     std::filesystem::path m_dir;
     std::filesystem::path m_tmp;
     std::string m_oldPrefix;
