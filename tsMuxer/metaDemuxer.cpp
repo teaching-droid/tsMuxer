@@ -177,7 +177,10 @@ static void loadDvOriginalRpus(AbstractDemuxer* demuxer, HevcDolbyVisionFilter* 
 
 using namespace std;
 
-static constexpr int MAX_DEMUX_BUFFER_SIZE = 1024 * 1024 * 192;
+// What one track of a container may hold waiting to be muxed. It was 192 MiB, below the 256 MiB a video reader takes a
+// picture up to (MAX_TMP_BUFFER_SIZE): a 250 MiB picture from Matroska was refused here, with a message about
+// the frame rate. The room above 256 MiB is for the data of the track that follows such a picture.
+static constexpr int MAX_DEMUX_BUFFER_SIZE = 1024 * 1024 * (256 + 16);
 static constexpr int MIN_READED_BLOCK = 16384;
 
 // ** THE FILE NAME DECIDES WHICH READER OPENS A FILE, AND A NAME CAN BE WRONG. **
@@ -3853,9 +3856,12 @@ uint8_t* ContainerToReaderWrapper::readBlock(const int readerID, uint32_t& readC
                     string ext = strToUpperCase(extractFileExt(demuxerData.m_streamName));
                     if (ext != "MOV" && ext != "MP4" && ext != "M4V" && ext != "M4A")
                         THROW(ERR_CONTAINER_STREAM_NOT_SYNC,
-                              "Reading buffer overflow. Possible container streams are not syncronized. Please, verify "
-                              "stream fps. File name: "
-                                  << demuxerData.m_streamName)
+                              "Reading buffer overflow: more than "
+                                  << MAX_DEMUX_BUFFER_SIZE / (1024 * 1024) << " MiB of one track of "
+                                  << demuxerData.m_streamName
+                                  << " wait to be muxed. Either a picture of it is larger than 256 MiB, which tsMuxeR "
+                                     "cannot read, or the tracks of the file are far out of step: check the fps= of "
+                                     "its tracks.")
                 }
             }
             m_discardedSize += discardSize;
