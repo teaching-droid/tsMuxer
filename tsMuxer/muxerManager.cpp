@@ -786,15 +786,16 @@ int MuxerManager::getExtraISOBlocks()
         // A part is cut at the first key frame past the size, so none is smaller, and the transport stream adds
         // about 5 per cent to what the sources hold.
         parts = (std::max)(parts, totalSize() / 100 * 106 / m_isoSplitBytes + 1);
-    if (m_isoSplitSeconds > 0)
+    if (m_isoSplitTicks > 0)
     {
         const auto toNano = [](const int64_t pts)
         { return static_cast<int64_t>(static_cast<double>(pts) * 1e9 / static_cast<double>(INTERNAL_PTS_FREQ)); };
         const int64_t fromNano = m_cutStart > 0 ? toNano(m_cutStart) : 0;
         const int64_t toEndNano = m_cutEnd > 0 ? toNano(m_cutEnd) : m_metaDemuxer.statedDurationNano();
+        const double partNano = static_cast<double>(m_isoSplitTicks) * 1e9 / static_cast<double>(INTERNAL_PTS_FREQ);
         if (toEndNano > fromNano)
-            parts = (std::max)(parts,
-                               static_cast<int64_t>((toEndNano - fromNano) / (m_isoSplitSeconds * 1000000000LL) + 1));
+            parts = (std::max)(
+                parts, static_cast<int64_t>((std::min)(static_cast<double>(toEndNano - fromNano) / partNano, 1e9)) + 1);
     }
     if (m_isoSplitChapters)
     {
@@ -1249,7 +1250,14 @@ void MuxerManager::parseMuxOpt(const string& opts)
             if (paramPair.size() >= 2 && paramPair[0] == "--split-size")
                 m_isoSplitBytes = checkedSplitSize(paramPair[1]);
             else if (paramPair.size() >= 2)
-                m_isoSplitSeconds = strToInt64(paramPair[1].c_str());
+            {
+                // Read as the split reads it (checkedSplitDuration): as whole seconds, 2000ms was 2000 s, so an image
+                // split into 2 s parts got the room of one part and was refused after the mux.
+                // A value the split refuses is left for it to refuse.
+                int64_t ticks = 0;
+                if (parseTimeToTicks(paramPair[1], "s", &ticks) && ticks > 0)
+                    m_isoSplitTicks = ticks;
+            }
         }
         else if (paramPair[0] == "--split-chapters")
             m_isoSplitChapters = true;

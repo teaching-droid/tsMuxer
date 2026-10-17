@@ -177,7 +177,7 @@ class MuxerManager final
     int m_extraIsoBlocks;
     bool m_extraIsoBlocksGiven = false;  // --extra-iso-space was given, and is taken as it is
     int64_t m_isoSplitBytes = 0;         // --split-size, in bytes
-    int64_t m_isoSplitSeconds = 0;       // --split-duration, in seconds
+    int64_t m_isoSplitTicks = 0;         // --split-duration, in INTERNAL_PTS_FREQ ticks
     bool m_isoSplitChapters = false;     // --split-chapters
     std::optional<std::vector<AVChapter>> m_sourceChapters;
     bool m_bluRayMode;
