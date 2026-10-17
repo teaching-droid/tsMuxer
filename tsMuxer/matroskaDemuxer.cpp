@@ -4772,9 +4772,12 @@ int MatroskaDemuxer::matroska_add_stream()
             if ((res = ebml_read_utf8(&id, &text)) < 0)
                 break;
             const size_t len = strlen(text);
+            // Said once per file and tag, as the start code rule is (applyStartCodeRule): the file is opened for the
+            // track list and again for the mux, and the warning came twice.
+            static std::set<std::string> reportedTooLong;
             if (len > 0 && len < sizeof(track->languageBCP47))
                 memcpy(track->languageBCP47, text, len + 1);
-            else if (len > 0)
+            else if (len > 0 && reportedTooLong.insert(m_sourceName + '\n' + text).second)
                 LTRACE(LT_WARN, 2,
                        "Warning: a track's LanguageBCP47 of " << len << " characters is too long and is left out.");
             delete[] text;
