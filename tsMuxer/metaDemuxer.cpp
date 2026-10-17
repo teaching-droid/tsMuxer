@@ -1408,6 +1408,12 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         streamInfo.m_addParams["default"] = "forced";
         LTRACE(LT_INFO, 2, "Marking this subtitle as the forced track, taken from the file name");
     }
+    // With default= given, the name still says what the track is: a Matroska output marks it forced (FlagForced)
+    // unless forced= says otherwise. The window writes default=all for the subtitle chosen as the default one, and
+    // a forced file chosen so lost its flag.
+    else if (!codec.empty() && codec[0] == 'S' && addParams.find("forced") == addParams.end() && !fileList.empty() &&
+             isForcedSubtitleName(fileList[0]))
+        streamInfo.m_addParams["forced"] = "";
 
     itr = addParams.find("lang");
     if (itr != addParams.end())
