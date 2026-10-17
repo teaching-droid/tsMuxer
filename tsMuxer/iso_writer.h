@@ -13,6 +13,9 @@ static constexpr int MAX_EXTENT_SIZE = 0x40000000;
 static constexpr uint32_t NEXT_EXTENT = 0xc0000000;
 
 static constexpr int64_t META_BLOCK_PER_DATA = 16 * 1000000000ll;
+// The metadata area's length is held in 32 bits, so it is at most 32767 blocks of 64K, about 2 GB: far more than any
+// disc needs. --extra-iso-space asks for blocks on top of the estimate, and is refused when the area would pass this.
+static constexpr int MAX_META_BLOCKS = 0x7fffffff / ALLOC_BLOCK_SIZE;
 
 // it can be allocated inside single sector of a extended file
 static constexpr int MAX_EXTENTS_IN_EXTFILE = (SECTOR_SIZE - 216 - 32) / 16;
@@ -197,9 +200,11 @@ class IsoWriter
     ~IsoWriter();
 
     void setVolumeLabel(const std::string& value);
-    bool open(const std::string& fileName, int64_t diskSize, int extraISOBlocks);
+    bool open(const std::string& fileName, int64_t diskSize, int64_t extraISOBlocks);
     // The metadata area open() sets aside, in blocks of ALLOC_BLOCK_SIZE.
-    static int metadataBlocks(int64_t diskSize, int extraISOBlocks);
+    static int64_t metadataBlocks(int64_t diskSize, int64_t extraISOBlocks);
+    // Why an --extra-iso-space value alone makes the metadata area larger than an image can hold, or nothing
+    static std::string tooManyExtraBlocks(int64_t extraISOBlocks);
 
     bool createDir(const std::string& dir);
     ISOFile* createFile();

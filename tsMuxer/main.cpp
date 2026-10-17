@@ -96,6 +96,11 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                                                   : paramPair[0] == "--extra-iso-space" ? "--extra-iso-space=64"
                                                                                         : "--auto-chapters=5")
                                               << ".")
+                    if (paramPair[0] == "--extra-iso-space")
+                        if (const std::string why = IsoWriter::tooManyExtraBlocks(
+                                v.size() > 18 ? INT64_MAX : strtoll(v.c_str(), nullptr, 10));
+                            !why.empty())
+                            THROW(ERR_COMMON, why)
                 }
                 // ** AN OPTION WRITTEN WITH A SPACE INSTEAD OF AN EQUALS SIGN READ PAST THE END OF THE
                 // VECTOR. ** splitStr on "--auto-chapters" alone yields one element, and every branch
@@ -1406,9 +1411,16 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
             else if (a.rfind("--extra-iso-space=", 0) == 0)
             {
                 const string v = a.substr(18);
-                if (v.empty() || v.find_first_not_of("0123456789") != string::npos || v.size() > 6)
+                if (v.empty() || v.find_first_not_of("0123456789") != string::npos)
                 {
                     LTRACE(LT_ERROR, 2, "Invalid value in " << a << ": a number of 64K blocks.");
+                    return -1;
+                }
+                if (const std::string why =
+                        IsoWriter::tooManyExtraBlocks(v.size() > 18 ? INT64_MAX : strtoll(v.c_str(), nullptr, 10));
+                    !why.empty())
+                {
+                    LTRACE(LT_ERROR, 2, why);
                     return -1;
                 }
                 extraIsoSpace = static_cast<int>(strToInt32(v.c_str()));

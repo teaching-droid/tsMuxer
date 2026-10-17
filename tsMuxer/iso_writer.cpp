@@ -828,11 +828,24 @@ void IsoWriter::setMetaPartitionSize(const int size) { m_metadataFileLen = round
 
 // Two blocks, the extra asked for, and one for every 16 GB of data. With the size unknown, open() keeps the three
 // blocks the constructor starts from, and the extra is not used.
-int IsoWriter::metadataBlocks(const int64_t diskSize, const int extraISOBlocks)
+int64_t IsoWriter::metadataBlocks(const int64_t diskSize, const int64_t extraISOBlocks)
 {
     if (diskSize <= 0)
         return 0x30000 / ALLOC_BLOCK_SIZE;
-    return 2 + extraISOBlocks + static_cast<int>(roundUp64(diskSize, META_BLOCK_PER_DATA) / META_BLOCK_PER_DATA);
+    return 2 + extraISOBlocks + roundUp64(diskSize, META_BLOCK_PER_DATA) / META_BLOCK_PER_DATA;
+}
+
+// The area was reckoned in a 32-bit int of bytes, which wrapped: --extra-iso-space=999999 to --bdmv-to-iso wrote a
+// 2.2 GB image with a wrong area, 65536 on a mux gave no extra room at all, 32765 a negative room and the job was
+// refused after the mux, and 99999999999 was cut to another number. Each is refused before the image is opened now.
+std::string IsoWriter::tooManyExtraBlocks(const int64_t extraISOBlocks)
+{
+    if (extraISOBlocks <= MAX_META_BLOCKS - 3)
+        return {};
+    return "--extra-iso-space=" + std::to_string(extraISOBlocks) +
+           " is more than an image can hold: its metadata area is at most " + std::to_string(MAX_META_BLOCKS) +
+           " blocks of 64K (about 2 GB), and " + std::to_string(MAX_META_BLOCKS - 3) +
+           " is the most that can be asked for on top of the estimate.";
 }
 
 void IsoWriter::setVolumeLabel(const std::string& value)
@@ -842,8 +855,15 @@ void IsoWriter::setVolumeLabel(const std::string& value)
         m_volumeLabel = "Blu-Ray";
 }
 
-bool IsoWriter::open(const std::string& fileName, const int64_t diskSize, const int extraISOBlocks)
+bool IsoWriter::open(const std::string& fileName, const int64_t diskSize, const int64_t extraISOBlocks)
 {
+    if (const std::string why = tooManyExtraBlocks(extraISOBlocks); !why.empty())
+        throw std::runtime_error(why);
+    const int64_t metaBlocks = diskSize > 0 ? metadataBlocks(diskSize, extraISOBlocks) : 0;
+    if (metaBlocks > MAX_META_BLOCKS)
+        throw std::runtime_error("The metadata area of this image would be " + std::to_string(metaBlocks) +
+                                 " blocks of 64K, and an image holds at most " + std::to_string(MAX_META_BLOCKS) +
+                                 ". Give a smaller --extra-iso-space.");
     // Sequential hint: the image is written front-to-back with only a few descriptor seeks at finalize,
     // so FILE_FLAG_SEQUENTIAL_SCAN suits it better than the default random-access flag.
     if (!m_file.open(fileName.c_str(), File::ofWrite | File::ofSequential))
@@ -854,7 +874,7 @@ bool IsoWriter::open(const std::string& fileName, const int64_t diskSize, const 
     m_sparseOk = m_file.setSparse();
 
     if (diskSize > 0)
-        setMetaPartitionSize(ALLOC_BLOCK_SIZE * metadataBlocks(diskSize, extraISOBlocks));
+        setMetaPartitionSize(ALLOC_BLOCK_SIZE * static_cast<int>(metaBlocks));
 
     // 1. write 32K empty space
     memset(m_buffer, 0, sizeof(m_buffer));
