@@ -1171,6 +1171,14 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                     LTRACE(LT_INFO, 2,
                            "Track " << pid << " of " << unquoteStr(fileList[0]) << " is " << src.codecId
                                     << ", and is drawn with libass.");
+                    // A fonts-dir that is not there, as a mistyped name, was passed over without a word
+                    if (std::error_code ec; !drawing.fontsDir.empty() &&
+                                            !std::filesystem::is_directory(
+                                                std::u8string(drawing.fontsDir.begin(), drawing.fontsDir.end()), ec))
+                        LTRACE(LT_WARN, 2,
+                               "Warning: fonts-dir names " << drawing.fontsDir
+                                                           << ", which is not a folder. The track is drawn with the "
+                                                              "fonts attached to the file and those of the system.");
                     codec = "S_HDMV/PGS";
                     m_containerReader.m_assDrawing[{fileList[0], pid}] = drawing;
                 }
