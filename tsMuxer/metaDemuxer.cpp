@@ -1998,6 +1998,47 @@ void METADemuxer::readClose()
 // Discovery phase: self-contained probe of all tracks
 // ---------------------------------------------------------------------------
 
+// One half of a merged Dolby Vision track, cut out of probed Annex B data as HevcDolbyVisionFilter cuts it: the
+// enhancement layer is each type 63 NAL without its two wrapper bytes, and the RPU; the base layer is the rest. The
+// picture size of the half, probed on its own, goes to its discovery data.
+static void probeSubTrackSize(uint8_t* data, const size_t size, const int subTrackNo, StreamDiscoveryData& dd)
+{
+    static constexpr uint8_t startCode[4] = {0, 0, 0, 1};
+    std::vector<uint8_t> half;
+    uint8_t* end = data + size;
+    for (uint8_t* nal = NALUnit::findNextNAL(data, end); nal < end;)
+    {
+        uint8_t* next = NALUnit::findNALWithStartCode(nal, end, true);
+        const uint8_t* nalEnd = next;
+        if (next < end)
+            while (nalEnd > nal && nalEnd[-1] == 0) --nalEnd;  // the zeroes of the next start code
+        if (nalEnd - nal >= 2)
+        {
+            const auto type = static_cast<HevcUnit::NalType>(nal[0] >> 1 & 0x3f);
+            const bool enhancement = type == HevcUnit::NalType::DVEL || type == HevcUnit::NalType::DVRPU;
+            if (enhancement == (subTrackNo == HevcDolbyVisionFilter::EL_SUB_TRACK))
+            {
+                half.insert(half.end(), startCode, startCode + 4);
+                const uint8_t* from = type == HevcUnit::NalType::DVEL ? nal + 2 : nal;  // the wrapper
+                half.insert(half.end(), from, nalEnd);
+            }
+        }
+        nal = NALUnit::findNextNAL(next, end);
+    }
+    if (half.empty())
+        return;
+    HEVCStreamReader reader;
+    if (!reader.checkStream(half.data(), static_cast<int>(half.size())).codecInfo.codecID)
+        return;
+    StreamDiscoveryData own;
+    reader.fillVideoDiscoveryData(own);
+    if (own.width > 0 && own.height > 0)
+    {
+        dd.width = own.width;
+        dd.height = own.height;
+    }
+}
+
 std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
 {
     const size_t trackCount = m_codecInfo.size();
@@ -2194,6 +2235,13 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
                             dd.isDVRPU = false;
                             dd.isDVEL = false;
                         }
+                        // The size, though, is that of the half: probed whole, both halves had the size of the
+                        // base, 3840 wide, and with the enhancement layer listed first the base could not be told
+                        // by its size: the 1080p enhancement layer took 0x1011 and the base
+                        // 0x1012, with no 0x1015. The half is cut out of the probed data as the subTrack filter
+                        // cuts it, and probed on its own.
+                        if (subTrackNo != 0 && dynamic_cast<HEVCStreamReader*>(videoReader))
+                            probeSubTrackSize(vect.data(), vect.size(), subTrackNo, dd);
                         // Restore codec-private from container
                         if (dd.codecPrivate.empty() && cp && cpSize > 0)
                             dd.codecPrivate.assign(cp, cp + cpSize);
