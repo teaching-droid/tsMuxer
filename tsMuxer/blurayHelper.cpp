@@ -654,6 +654,14 @@ bool BlurayHelper::createMPLSFile(TSMuxer* mainMuxer, TSMuxer* subMuxer, int aut
                 mplsParser.m_marks.emplace_back(-1, mark + mplsParser.IN_time);
         }
     }
+    // Counted before the mux from the length the sources state (refuseTooManyMarks in main); a length stated wrong
+    // still stops here with the reason, not in the playlist's buffer with "Bitstream exception"
+    if (mplsParser.m_marks.size() > 999)
+    {
+        delete[] mplsBuffer;
+        THROW(ERR_COMMON, "A Blu-ray playlist holds at most 999 chapter marks, and the chapters within the title are "
+                              << mplsParser.m_marks.size() << ". Give fewer chapters.")
+    }
     mplsParser.PlayItem_random_access_flag = false;
     PIDListMap pidList = mainMuxer->getPidList();
     PIDListMap pidListMVC;

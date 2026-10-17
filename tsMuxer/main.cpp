@@ -225,12 +225,6 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
         customChaptersList.erase(std::unique(customChaptersList.begin(), customChaptersList.end()),
                                  customChaptersList.end());
     }
-    // A Blu-ray playlist holds at most 999 marks. More were written into a buffer of fixed size at the end of the
-    // mux, which stopped there with "Bitstream exception", after all the work; 1000 were written in silence.
-    if (result != DiskType::NONE && customChaptersList.size() > 999)
-        THROW(ERR_COMMON, "A Blu-ray playlist holds at most 999 chapter marks, and the chapters given are "
-                              << customChaptersList.size() << ". Give fewer chapters.")
-
     // The blank playlist is written under its number twice: as a playlist and as the clip it plays. The same number as
     // the main playlist, or as the main title's first clip, replaced that file without a word (in an image, the blank
     // was added to it). Both are known now, before anything is written. A clip of a later part of a split is known
@@ -251,6 +245,38 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                          "title's clips do not use.")
     }
     return result;
+}
+
+// A Blu-ray playlist holds at most 999 marks. More were written into a buffer of fixed size at the end of the mux,
+// which stopped there with "Bitstream exception", after all the work; 1000 were written in silence. They are counted
+// before anything is written. A chapter past the end of the title gets no mark, and counted all the same, 1200
+// chapters a second apart on a 5 s title were refused: when the sources state their length, only the chapters
+// inside it count. A raw stream states none, and then every chapter given counts, as the message says.
+// createMPLSFile refuses more than 999 marks as well, for a length that was stated wrong.
+static void refuseTooManyMarks(MuxerManager& muxerManager, const vector<double>& chapters)
+{
+    constexpr size_t MAX_MARKS = 999;
+    if (chapters.size() <= MAX_MARKS)
+        return;
+    const auto seconds = [](const int64_t pts) { return static_cast<double>(pts) / INTERNAL_PTS_FREQ; };
+    const double stated = static_cast<double>(muxerManager.statedDurationNano()) / 1e9;
+    const double start = muxerManager.getCutStart() > 0 ? seconds(muxerManager.getCutStart()) : 0.0;
+    const double end = muxerManager.getCutEnd() > 0 ? seconds(muxerManager.getCutEnd()) : stated;
+    if (end > start)
+    {
+        const auto inside = static_cast<size_t>(
+            std::count_if(chapters.begin(), chapters.end(), [&](const double t) { return t <= end - start; }));
+        if (inside > MAX_MARKS)
+            THROW(ERR_COMMON,
+                  "A Blu-ray playlist holds at most 999 chapter marks, and the chapters given within the "
+                  "title are "
+                      << inside << ". Give fewer chapters.")
+        return;
+    }
+    THROW(ERR_COMMON, "A Blu-ray playlist holds at most 999 chapter marks, and the chapters given are "
+                          << chapters.size()
+                          << ". The length of the title is not known before the mux, as its sources do not state it, "
+                             "so chapters past its end count too. Give fewer chapters.")
 }
 
 // The blank playlist's clip takes the number of --blankOffset. A split gives the main title one clip a part, numbered
@@ -3088,6 +3114,8 @@ int main(int argc, char** argv)
             muxerManager.moveChaptersByCut(customChapterList, chapterInfo);
             if (!customChapterList.empty())
                 muxerManager.setChapters(customChapterList);
+            if (dt != DiskType::NONE)
+                refuseTooManyMarks(muxerManager, customChapterList);
             reportDvProfileIgnored(muxerManager, dt != DiskType::NONE ? "a disc" : "a transport stream");
             if (!isV3() && dt == DiskType::BLURAY && muxerManager.getHevcFound())
             {
