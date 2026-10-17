@@ -7,6 +7,7 @@
 #include <iostream>
 
 #include "avCodecs.h"
+#include "tsMuxer.h"  // V3_flags
 #include "vodCoreException.h"
 #include "vod_common.h"
 
@@ -1008,6 +1009,28 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
             avPacket.flags |= AVPacket::PRIORITY_DATA;
         if (isIFrame(&avPacket))
             avPacket.flags |= AVPacket::IS_IFRAME;  // can be used in split points
+
+        // A disc carries audio at 48, 96 or 192 kHz only. The rate is checked when the track is added, from its first
+        // frames, so a join whose later file has another rate went onto the disc without a word (AC-3 at 48 kHz, then
+        // 44.1 kHz).
+        if (const int freq = getFreq(); freq > 0)
+        {
+            if (m_firstFreq == 0)
+                m_firstFreq = freq;
+            else if (freq != m_firstFreq && !m_laterFreqSaid && (V3_flags & BLURAY_OUT) && freq != 48000 &&
+                     freq != 96000 && freq != 192000)
+            {
+                m_laterFreqSaid = true;
+                LTRACE(LT_WARN, 2,
+                       "Warning: track "
+                           << m_streamIndex << " (" << getCodecInfo().displayName << ") changes its sample rate from "
+                           << m_firstFreq << " to " << freq << " Hz at "
+                           << floatToTime(static_cast<double>(avPacket.pts - PTS_CONST_OFFSET) / INTERNAL_PTS_FREQ, ',')
+                           << ", as a join of files with different rates does. A Blu-ray disc carries audio at 48, 96 "
+                              "or 192 kHz only, and its stream information gives one rate for the track, so a player "
+                              "may not play this part. Convert the audio to 48 kHz before muxing.");
+            }
+        }
 
         if (m_halfFrameLen == 0.0)
             m_halfFrameLen = getFrameDuration() / 2.0;

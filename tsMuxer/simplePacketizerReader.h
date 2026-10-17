@@ -124,6 +124,8 @@ class SimplePacketizerReader : public AbstractStreamReader
 
    protected:
     uint64_t m_frameNum;
+    int m_firstFreq = 0;  // the sample rate of the first frame, for the warning of a later one (readPacket)
+    bool m_laterFreqSaid = false;
     bool m_needSync;
     double m_curPts;
     double m_lastMplsTime;
