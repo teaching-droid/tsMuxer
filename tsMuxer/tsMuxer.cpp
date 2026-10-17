@@ -2446,6 +2446,16 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
             m_computeMuxStats = true;
         }
     }
+    // A disc keeps its HDMV descriptors, as the help says: its clip information is written for them. With
+    // --no-hdmv-descriptors, a disc lost the HDMV registration of its program map table, and its MPEG-2 video the
+    // HDMV descriptor its clip information matches.
+    if (m_bluRayMode && !m_hdmvDescriptors)
+    {
+        m_hdmvDescriptors = true;
+        LTRACE(LT_INFO, 2,
+               "--no-hdmv-descriptors does not apply to a Blu-ray or AVCHD disc: it keeps its HDMV "
+               "descriptors.");
+    }
     // --maxbitrate also sets the rate the muxing clock runs at, and it did so over --bitrate when it came after it, as
     // the window writes it for a constant bitrate disc with the read rate tick. The size stayed the rate of --bitrate,
     // which the padding follows, but the remainder that padding carries from one PCR to the next was dropped. --bitrate
