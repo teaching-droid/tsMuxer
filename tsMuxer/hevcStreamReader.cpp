@@ -969,17 +969,35 @@ int HEVCStreamReader::getStreamHDR() const
     // hdr10-override (#6): the stream says SDR, and the disc marks it as HDR10 all the same, in its playlist, its clip
     // information and its index. Only for SDR: HDR10, HDR10+ and Dolby Vision streams are marked as they are. The
     // picture is not changed: a player switches the screen to HDR, and the stream itself still says SDR.
-    if (!m_hdr10Override || hdr != 1)
+    // Asked before the SPS is read, the stream is not known yet, and nothing is marked or said: a PQ stream got the
+    // warning that it says SDR, "transfer characteristics -1", and was marked right later on.
+    if (!m_hdr10Override || hdr != 1 || !m_sps)
         return hdr;
+    // HLG is not SDR: it is a high dynamic range of its own, and a player that takes it for HDR10 shows it wrong. It
+    // was marked as HDR10, with a warning that it said SDR (transfer characteristics 18).
+    if (m_sps->transfer_characteristics == 18)
+    {
+        static bool saidHlg = false;  // once a run, as below
+        if (!saidHlg)
+            LTRACE(LT_WARN, 2,
+                   "Warning: hdr10-override is ignored: the HEVC stream is HLG (transfer characteristics 18), not "
+                   "SDR, and the disc marks it as it is.");
+        saidHlg = true;
+        return hdr;
+    }
     static bool said = false;  // once a run: more than one reader of the track asks
     if (!said)
     {
         said = true;
+        // PQ without the BT.2020 colours and matrix HDR10 names is not SDR either: it is said as it is
+        const bool pq = m_sps->transfer_characteristics == 16;
         LTRACE(LT_WARN, 2,
-               "Warning: hdr10-override: the HEVC stream says SDR (transfer characteristics "
-                   << (m_sps ? static_cast<int>(m_sps->transfer_characteristics) : -1)
+               "Warning: hdr10-override: the HEVC stream "
+                   << (pq ? "is PQ without the BT.2020 colours of HDR10" : "says SDR") << " (transfer characteristics "
+                   << static_cast<int>(m_sps->transfer_characteristics)
                    << "), and the disc marks it as HDR10 as asked. A player will switch the screen to HDR while the "
-                      "picture is coded for SDR; check how it looks before using the disc.");
+                      "picture is coded "
+                   << (pq ? "otherwise" : "for SDR") << "; check how it looks before using the disc.");
     }
     V3_flags |= HDR10;
     return 2;
