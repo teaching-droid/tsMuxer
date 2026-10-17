@@ -1778,64 +1778,105 @@ static int64_t sampleCount(const MOVStreamContext* st)
     return n;
 }
 
-// The audio tracks of the part of a join that has just been read: how far their sound and their content reach. The
-// content of a part is what its edit list plays; without one, all of its samples less the priming. Each sample of
-// these tracks is one frame (AAC, AC-3, E-AC-3, MPEG audio, DTS); the correction was made for AAC only, and AC-3 or
-// MP3 sound still fell behind the picture at every joint, by its priming each time.
+static int64_t usualDuration(const MOVStreamContext* st);
+
+// Where a track of the open file starts against the first picture of its first video track, as the reader hands
+// its samples on: its start on the file's timeline (m_trackStartNs), less what its edit list skips (the priming, and
+// in a cut file the sound before the cut), plus the pictures before the cut that the video keeps (m_videoLeadNs).
+// For the first file of a join this is what METADemuxer::addStream moves the track by.
+int64_t MovDemuxer::soundOffsetNs(const int index) const
+{
+    const auto st = reinterpret_cast<const MOVStreamContext*>(tracks[index]);
+    return trackStartFromVideoNs(index + 1) - ticksToNs(st->editMediaTime, st->time_scale) + m_videoLeadNs;
+}
+
+// How long the open file's pictures last as the video reader times them, one usual picture length each; for a file
+// without video, how long the content of the audio track audioIndex lasts
+int64_t MovDemuxer::partVideoNs(const int audioIndex) const
+{
+    for (int i = 0; i < num_tracks; ++i)
+    {
+        const auto st = reinterpret_cast<const MOVStreamContext*>(tracks[i]);
+        if (st->type != IOContextTrackType::VIDEO)
+            continue;
+        const int64_t usual = usualDuration(st);
+        if (usual > 0 && st->time_scale > 0)
+            return ticksToNs(sampleCount(st) * usual, st->time_scale);
+        break;
+    }
+    const auto st = reinterpret_cast<const MOVStreamContext*>(tracks[audioIndex]);
+    const int64_t content =
+        st->editDuration > 0 ? st->editDuration : sampleCount(st) * usualDuration(st) - st->editMediaTime;
+    return ticksToNs(content, st->time_scale);
+}
+
+// The audio tracks of the part of a join that has just been read: the frames handed on so far, and where the
+// pictures of the parts so far end, on the clock of the join's first picture. Each sample of these tracks is one
+// frame (AAC, AC-3, E-AC-3, MPEG audio, DTS).
 void MovDemuxer::accountJoinPart()
 {
     for (int i = 0; i < num_tracks; ++i)
     {
         const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
         const auto* audio = dynamic_cast<MovParsedAudioTrackData*>(st->parsed_priv_data);
-        if (!audio || st->stts_data.empty() || st->stts_data[0].duration <= 0)
+        const int64_t frameLen = audio ? usualDuration(st) : 0;
+        if (frameLen <= 0 || st->time_scale == 0)
             continue;
         JoinAudio& j = m_joinAudio[i + 1];
-        const int64_t frameLen = st->stts_data[0].duration;
-        const int64_t frames = sampleCount(st);
-        const int64_t content = st->editDuration > 0 ? st->editDuration : frames * frameLen - st->editMediaTime;
         if (m_joinPart == 0)
         {
-            // the first part's sound starts its content at 0: its edit list start moves it back (METADemuxer)
             j.timeScale = st->time_scale;
             j.frameLen = frameLen;
-            j.audioEnd = frames * frameLen - st->editMediaTime;
-            j.contentEnd = content;
+            j.firstOffsetNs = soundOffsetNs(i);
         }
-        else if (j.timeScale == st->time_scale && j.frameLen == frameLen)
+        else if (j.timeScale != st->time_scale || j.frameLen != frameLen)
         {
-            j.audioEnd += (frames - j.dropped) * frameLen;
-            j.contentEnd += content;
-        }
-        else
             j.timeScale = 0;  // a part with another sample rate or frame length: not kept in step
+            continue;
+        }
+        j.frames += sampleCount(st) - j.dropped;
+        j.videoEndNs += partVideoNs(i);
     }
 }
 
-// A later file of a join. The sound of a join runs on from file to file, frame after frame, and each file's sound
-// begins with the encoder's priming, which its edit list starts after, and ends with the rest of its last frame,
-// which its edit list stops before. Both came out at every joint, so the sound fell behind the picture at each joint,
-// by more each time: 15, 19 and 29 ms after the first three joints of 10 s AAC-LC parts. As many whole frames are left
-// out at the start of each later file as bring the start of its content nearest to where its picture starts: the
-// priming, and one more whenever the rest of the parts before reaches half a frame. The sound then stays within half a
-// frame of the picture however many files are joined; to the sample it cannot be without decoding the sound.
+// ** A LATER FILE OF A JOIN. ** The sound of a join runs on from file to file, frame after frame, and the pictures
+// of each file follow those of the file before. Each file's sound begins with the encoder's priming, which its edit
+// list starts after, and ends with the rest of its last frame; a cut file's sound begins with the sound before the
+// cut as well, and its video keeps the pictures before the cut. The frames of each later file were left out as far
+// as its edit list starts, the pre-roll the video keeps with them, so the sound of each later part of a join of cut
+// files came 496 ms earlier than the one before; a fragmented file, or one without edit lists, starts its
+// tracks with a long first sample or with the first composition offset, which were not counted, and the sound fell
+// 37 ms further behind at every joint. As many whole frames are left out at the start of each later file
+// as bring its sound nearest to where the file plays it against its own first picture, placed where the pictures
+// of the files before end. The sound then stays within half a frame of the picture however many files are joined;
+// to the sample it cannot be without decoding the sound. A file whose sound ends before its picture leaves a gap
+// that frames cannot fill: the sound of the files after it comes early, with a warning.
 void MovDemuxer::dropJoinPriming()
 {
     for (int i = 0; i < num_tracks; ++i)
     {
         const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
         auto* audio = dynamic_cast<MovParsedAudioTrackData*>(st->parsed_priv_data);
-        if (!audio || st->stts_data.empty() || st->stts_data[0].duration <= 0)
+        const int64_t frameLen = audio ? usualDuration(st) : 0;
+        if (frameLen <= 0 || st->time_scale == 0)
             continue;
-        const int64_t frameLen = st->stts_data[0].duration;
+        const auto j = m_joinAudio.find(i + 1);
         const int64_t frames = sampleCount(st);
         int64_t drop = st->editMediaTime / frameLen;  // the priming, whole frames
-        const auto j = m_joinAudio.find(i + 1);
         if (j != m_joinAudio.end() && j->second.timeScale == st->time_scale && j->second.frameLen == frameLen)
         {
-            // content start = sound end so far + priming - dropped frames; nearest to the content end so far
-            const int64_t late = j->second.audioEnd + st->editMediaTime - j->second.contentEnd;
-            drop = late >= 0 ? (late + frameLen / 2) / frameLen : 0;
+            // where the next frame of the join plays, and where this file's first frame should
+            const int64_t soundNs = j->second.firstOffsetNs + ticksToNs(j->second.frames * frameLen, st->time_scale);
+            const int64_t dueNs = j->second.videoEndNs + soundOffsetNs(i);
+            const int64_t frameNs = ticksToNs(frameLen, st->time_scale);
+            const int64_t lateNs = soundNs - dueNs;
+            drop = lateNs >= 0 && frameNs > 0 ? (lateNs + frameNs / 2) / frameNs : 0;
+            if (lateNs < -frameNs / 2)
+                LTRACE(LT_WARN, 2,
+                       "Warning: from part " << m_joinPart + 1 << " of the join on, the sound of track " << i + 1
+                                             << " comes " << (-lateNs + 500000) / 1000000
+                                             << " ms early: a part before it has less sound than picture, and "
+                                                "frames cannot fill the gap.");
         }
         drop = (std::min)(drop, frames);
         if (j != m_joinAudio.end())

@@ -79,17 +79,20 @@ class MovDemuxer final : public IOContextDemuxer
     int m_pastEndWarnings = 0;   // boxes whose size reaches past the end of the file, warned once
     int64_t trailingBytesWithoutMedia(int64_t from) const;
     int m_joinPart = 0;  // which file of a join is open: 0 the first
-    // An audio track of a join, in its samples: where the sound handed on so far ends, and where the content of the
-    // parts so far ends, which is where the picture of the next part begins (dropJoinPriming)
+    // An audio track of a join (dropJoinPriming): where its first frame plays against the join's first picture, the
+    // frames handed on so far, and where the pictures of the parts so far end
     struct JoinAudio
     {
-        int64_t audioEnd = 0;
-        int64_t contentEnd = 0;
+        int64_t firstOffsetNs = 0;
+        int64_t frames = 0;
+        int64_t videoEndNs = 0;
         int64_t timeScale = 0;
         int64_t frameLen = 0;
         int dropped = 0;  // frames left out at the start of the open part
     };
     std::map<int, JoinAudio> m_joinAudio;
+    [[nodiscard]] int64_t soundOffsetNs(int index) const;
+    [[nodiscard]] int64_t partVideoNs(int audioIndex) const;
     void accountJoinPart();
     void dropJoinPriming();
     std::vector<std::pair<int64_t, int64_t>> topLevelMdats() const;
