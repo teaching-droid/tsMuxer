@@ -2317,7 +2317,13 @@ int64_t checkedSplitSize(const std::string& value)
                               << value
                               << "\": write a number and a unit, such as 4GB, 4G, 700MiB or "
                                  "500MB (KB, MB, GB, TB, and KiB, MiB, GiB, TiB).")
-    const auto splitBytes = static_cast<int64_t>(strToDouble(number.c_str()) * coeff);
+    // Above what 64 bits hold the conversion wrapped, and 99999999999999G was refused as not above zero
+    const double bytes = strToDouble(number.c_str()) * coeff;
+    if (!(bytes < 9.2e18))
+        THROW(ERR_COMMON, "Invalid --split-size value \"" << value
+                                                          << "\": it is larger than any output can be. Leave the "
+                                                             "split out, or give a size such as 4GB.")
+    const auto splitBytes = static_cast<int64_t>(bytes);
     if (splitBytes <= 0)
         THROW(ERR_COMMON, "Invalid --split-size value \"" << value << "\": it must be above zero.")
     return splitBytes;
