@@ -489,6 +489,10 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
 // an empty folder tree. When such a line is there, the first blocks are read here instead, before anything is made.
 void MuxerManager::checkTimeshiftFitsClock()
 {
+    // Only a transport stream (a TS, an M2TS, a disc) has that clock: Matroska keeps the shift in its own times and a
+    // demux writes no times at all, and both were refused all the same
+    if (dynamic_cast<TSMuxerFactory*>(&m_factory) == nullptr)
+        return;
     const std::vector<StreamInfo>& ci = m_metaDemuxer.getStreamInfo();
     // A negative timeshift raises the start of the mux by what it needs (preinitMux). The 90 kHz clock of a transport
     // stream wraps after 2^33 ticks, about 26.5 hours, and the raise had no bound: a timeshift of -95440 s put the start
