@@ -426,7 +426,7 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                     // and what the disc's own navigation uses. A bare .m2ts opened on its own has
                     // no playlist, so nothing changes there: the CLPI is still the only source.
                     const std::string mplsLang = applyLangCodeStyle(mplsStreamInfo.language_code);
-                    if (!mplsLang.empty() && mplsLang != "und" && mplsLang != streams[i].lang)
+                    if (isLanguageCode(mplsLang) && mplsLang != "und" && mplsLang != streams[i].lang)
                     {
                         LTRACE(LT_INFO, 2,
                                "Language for track " << streams[i].trackID << " taken from the playlist, " << mplsLang

@@ -204,6 +204,8 @@ LangCodeStyle getLangCodeStyle();
 std::string toIso639_2T(const std::string& lang);
 std::string toIso639_2B(const std::string& lang);
 std::string applyLangCodeStyle(const std::string& lang);
+// Three letters, as a language code of a disc is: a playlist whose field holds spaces or other bytes names no language
+bool isLanguageCode(const std::string& lang);
 // The ISO 639-2 code (terminological form) of a BCP 47 language tag, from its primary subtag; empty when it has none.
 std::string iso639FromBcp47(const std::string& tag);
 

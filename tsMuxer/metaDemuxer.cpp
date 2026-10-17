@@ -1551,8 +1551,10 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     if (!mplsInfoList.empty() && pid > 0 && addParams.find("lang") == addParams.end())
     {
         const MPLSStreamInfo fromPlaylist = mplsInfoList[0].getStreamByPID(pid);
+        // Only a language code: three spaces in the playlist were written as the language of the TS, the Matroska
+        // track and the clip info
         const std::string lang = fromPlaylist.streamPID ? applyLangCodeStyle(fromPlaylist.language_code) : "";
-        if (!lang.empty() && lang != "und" && lang != streamInfo.m_lang)
+        if (isLanguageCode(lang) && lang != "und" && lang != streamInfo.m_lang)
         {
             LTRACE(LT_INFO, 2, "Language for track " << pid << " taken from the playlist, " << lang << ".");
             streamInfo.m_lang = lang;
@@ -2602,6 +2604,12 @@ std::string applyLangCodeStyle(const std::string& lang)
     default:
         return toIso639_2T(lang);
     }
+}
+
+bool isLanguageCode(const std::string& lang)
+{
+    return lang.size() == 3 && std::all_of(lang.begin(), lang.end(), [](const char c)
+                                           { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); });
 }
 
 DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& readManager, const string& fileName,
