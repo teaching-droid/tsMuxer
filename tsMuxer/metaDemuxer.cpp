@@ -1122,7 +1122,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         !addParams.count("ass-as-srt") && !SubTrackFilter::isSubTrack(pid))
     {
         const std::string srcExt = strToUpperCase(extractFileExt(unquoteStr(trimStr(fileList[0]))));
-        if (srcExt == "MKV" || srcExt == "MKS" || srcExt == "MK3D")
+        // A Matroska file of any name: an ASS track in a .mka was drawn as plain text without a word
+        if (srcExt == "MKV" || srcExt == "MKA" || srcExt == "MKS" || srcExt == "MK3D")
         {
             MatroskaDemuxer probe(m_readManager);
             probe.openFile(fileList[0]);
