@@ -396,7 +396,9 @@ bool SingleFileMuxer::muxPacketTo(StreamInfo* streamInfo, AVPacket& avPacket)
             // enough for the two together.
             const int toFileLen = streamInfo->m_bufLen & 0x7fff0000;
             const int rest = streamInfo->m_bufLen - toFileLen;
-            const auto newBuf = new uint8_t[(std::max)(bufCapacity, rest + outSize + ADD_DATA_SIZE)];
+            // The new buffer has the usual size: a frame that does not fit beside the rest goes in by
+            // parts below.
+            const auto newBuf = new uint8_t[bufCapacity];
             memcpy(newBuf, streamInfo->m_buffer + toFileLen, rest);
             if (toFileLen > 0)
                 m_owner->asyncWriteBuffer(this, streamInfo->m_buffer, toFileLen, &streamInfo->m_file);
@@ -414,10 +416,21 @@ bool SingleFileMuxer::muxPacketTo(StreamInfo* streamInfo, AVPacket& avPacket)
         }
     }
 
-    if (outSize > 0)
-        memcpy(streamInfo->m_buffer + streamInfo->m_bufLen, outData, outSize);
-    streamInfo->m_bufLen += outSize;
-    writeOutBuffer(streamInfo);
+    // A frame larger than the room left goes in by parts, and the whole blocks each part completes
+    // are written before the next part is copied. The buffer holds 2 MiB + 34 KiB, and a larger
+    // picture was copied into it whole: a demux of lossless 4K video (pictures of 13 to 40 MiB) wrote
+    // past the buffer and ended in an access violation, with 12 MiB of a 40 MiB picture written or nothing at all.
+    // Every frame that fits is copied in one part, as before.
+    int copied = 0;
+    do
+    {
+        const int part = (std::min)(outSize - copied, bufCapacity - streamInfo->m_bufLen);
+        if (part > 0)
+            memcpy(streamInfo->m_buffer + streamInfo->m_bufLen, outData + copied, part);
+        streamInfo->m_bufLen += part;
+        copied += part;
+        writeOutBuffer(streamInfo);
+    } while (copied < outSize);
     return true;
 }
 
