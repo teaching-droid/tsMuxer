@@ -2315,7 +2315,7 @@ class KeepOldOutput
     {
         if (!m_committed && !m_fresh.empty())
             removeEmptySkeleton();
-        if (!m_armed || m_committed)
+        if (!m_armed || m_committed || m_swapBegun)
             return;
         std::error_code ec;
         if (m_folder || m_demux)
@@ -2390,7 +2390,8 @@ class KeepOldOutput
         return pathStr(m_tmp);
     }
 
-    // The job has succeeded: the new output takes the old one's place.
+    // The job has succeeded: the new output takes the old one's place. When that fails, the new output is left where
+    // the message says it is: it used to be removed as the job ended, after the message had named it as complete.
     void commit()
     {
         if (!m_armed || m_committed)
@@ -2398,6 +2399,7 @@ class KeepOldOutput
             m_committed = true;
             return;
         }
+        m_swapBegun = true;
         std::error_code ec;
         if (m_demux)
         {
@@ -2508,6 +2510,7 @@ class KeepOldOutput
 
     bool m_armed = false;
     bool m_committed = false;
+    bool m_swapBegun = false;  // the swap has begun: what the job wrote is not removed any more
     bool m_folder = false;
     std::filesystem::path m_fresh;  // a disc folder written in place (forDiscFolder), for removeEmptySkeleton
     bool m_freshFolderExisted = false;
