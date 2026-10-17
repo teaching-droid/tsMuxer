@@ -166,6 +166,28 @@ bool tagText(const std::string& xml, const std::string& tag, const size_t from, 
     return true;
 }
 
+// The edition's own EditionFlagDefault, between from and to: one that is not inside a ChapterAtom, wherever it stands
+// among the atoms. Only one before the first atom was looked for, and a default edition whose flag follows its atoms,
+// as RFC 9559 lets the children of a master come in any order, was not taken.
+bool editionIsDefault(const std::string& text, const size_t from, const size_t to)
+{
+    for (size_t at = text.find("<EditionFlagDefault", from); at != std::string::npos && at < to;
+         at = text.find("<EditionFlagDefault", at + 1))
+    {
+        int depth = 0;
+        for (size_t p = text.find("<ChapterAtom", from); p != std::string::npos && p < at;
+             p = text.find("<ChapterAtom", p + 1))
+            ++depth;
+        for (size_t p = text.find("</ChapterAtom>", from); p != std::string::npos && p < at;
+             p = text.find("</ChapterAtom>", p + 1))
+            --depth;
+        std::string flag;
+        if (depth <= 0 && tagText(text, "EditionFlagDefault", at, to, flag))
+            return trimmed(flag) == "1";
+    }
+    return false;
+}
+
 std::string readWholeFile(const std::string& fileName)
 {
     TextFile file;
@@ -279,10 +301,7 @@ std::vector<AVChapter> parseXml(const std::string& text, const std::string& file
     {
         const size_t edEnd = text.find("</EditionEntry>", ed);
         const size_t end = edEnd == std::string::npos ? text.size() : edEnd;
-        // The edition's own flag only: the one before its first chapter
-        const size_t firstAtom = std::min(text.find("<ChapterAtom", ed), end);
-        std::string flag;
-        const bool isDefault = tagText(text, "EditionFlagDefault", ed, firstAtom, flag) && trimmed(flag) == "1";
+        const bool isDefault = editionIsDefault(text, ed, end);
         if (ed == text.find("<EditionEntry") || (isDefault && !chosenDefault))
         {
             scanFrom = ed;
