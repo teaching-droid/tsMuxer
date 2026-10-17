@@ -2001,10 +2001,15 @@ void METADemuxer::readClose()
 // One half of a merged Dolby Vision track, cut out of probed Annex B data as HevcDolbyVisionFilter cuts it: the
 // enhancement layer is each type 63 NAL without its two wrapper bytes, and the RPU; the base layer is the rest. The
 // picture size of the half, probed on its own, goes to its discovery data.
-static void probeSubTrackSize(uint8_t* data, const size_t size, const int subTrackNo, StreamDiscoveryData& dd)
+// A track whose probed data holds no wrapped enhancement layer NAL has nothing to split off, and is refused here, by
+// what the stream holds: the filter refuses such a track only after 32 pictures without one, so a shorter plain HEVC
+// track was split into an empty second track and called successful.
+static void probeSubTrack(uint8_t* data, const size_t size, const int subTrackNo, StreamDiscoveryData& dd)
 {
     static constexpr uint8_t startCode[4] = {0, 0, 0, 1};
     std::vector<uint8_t> half;
+    int64_t wrapped = 0;
+    int64_t rpu = 0;
     uint8_t* end = data + size;
     for (uint8_t* nal = NALUnit::findNextNAL(data, end); nal < end;)
     {
@@ -2016,6 +2021,10 @@ static void probeSubTrackSize(uint8_t* data, const size_t size, const int subTra
         {
             const auto type = static_cast<HevcUnit::NalType>(nal[0] >> 1 & 0x3f);
             const bool enhancement = type == HevcUnit::NalType::DVEL || type == HevcUnit::NalType::DVRPU;
+            if (type == HevcUnit::NalType::DVEL)
+                ++wrapped;
+            else if (type == HevcUnit::NalType::DVRPU)
+                ++rpu;
             if (enhancement == (subTrackNo == HevcDolbyVisionFilter::EL_SUB_TRACK))
             {
                 half.insert(half.end(), startCode, startCode + 4);
@@ -2025,6 +2034,12 @@ static void probeSubTrackSize(uint8_t* data, const size_t size, const int subTra
         }
         nal = NALUnit::findNextNAL(next, end);
     }
+    if (wrapped == 0)
+        THROW(ERR_COMMON, (rpu > 0 ? "Dolby Vision: this track carries an RPU but no enhancement layer, so it is "
+                                     "single layer and cannot be split into two."
+                                   : "This HEVC track carries no Dolby Vision enhancement layer, so it cannot be "
+                                     "split into two.")
+                              << " Mux it as ONE track, without subTrack=.")
     if (half.empty())
         return;
     HEVCStreamReader reader;
@@ -2241,7 +2256,7 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
                         // 0x1012, with no 0x1015. The half is cut out of the probed data as the subTrack filter
                         // cuts it, and probed on its own.
                         if (subTrackNo != 0 && dynamic_cast<HEVCStreamReader*>(videoReader))
-                            probeSubTrackSize(vect.data(), vect.size(), subTrackNo, dd);
+                            probeSubTrack(vect.data(), vect.size(), subTrackNo, dd);
                         // Restore codec-private from container
                         if (dd.codecPrivate.empty() && cp && cpSize > 0)
                             dd.codecPrivate.assign(cp, cp + cpSize);

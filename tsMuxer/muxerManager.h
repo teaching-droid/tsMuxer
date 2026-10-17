@@ -188,6 +188,7 @@ class MuxerManager final
 
     /// Results of the discovery (probe) phase, indexed by stream index.
     std::vector<StreamDiscoveryData> m_discoveryData;
+    bool m_discovered = false;       // m_discoveryData is filled (doMux, or early for a check)
     bool m_firstBlocksRead = false;  // every stream has read its first block (preinitMux, or early for a check)
 };
 

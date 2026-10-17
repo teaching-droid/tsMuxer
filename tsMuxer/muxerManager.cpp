@@ -532,6 +532,13 @@ void MuxerManager::checkTracksBeforeOutput()
     });
     if (!hevcSplit || m_firstBlocksRead)
         return;
+    // The probe refuses a split of a track that holds no enhancement layer, by what the track holds; the first
+    // blocks below are refused by the subTrack filter only after 32 pictures without one.
+    if (!m_discovered)
+    {
+        m_discoveryData = m_metaDemuxer.discoverStreams();
+        m_discovered = true;
+    }
     for (StreamInfo& si : ci) si.read();
     m_firstBlocksRead = true;
 }
@@ -826,7 +833,9 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     // (channels, sample rate, resolution, codec-private, etc.) before
     // the main mux pipeline starts.  This is self-contained -- all
     // temporary I/O is closed before discoverStreams() returns.
-    m_discoveryData = m_metaDemuxer.discoverStreams();
+    if (!m_discovered)
+        m_discoveryData = m_metaDemuxer.discoverStreams();
+    m_discovered = true;
 
     preinitMux(outFileName, fileFactory);
 
