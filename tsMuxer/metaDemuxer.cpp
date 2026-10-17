@@ -636,6 +636,12 @@ void METADemuxer::openFile(const string& streamName)
         string codec = trimStr(params[0]);
         string codecStreamName = trimStr(params[1]);
         codec = strToUpperCase(codec);
+        // Only an HEVC reader takes hdr10-override; on another track, such as H.264 on a disc, it did nothing, without
+        // a word.
+        if (addParams.count("hdr10-override") && codec != "V_MPEGH/ISO/HEVC")
+            LTRACE(
+                LT_WARN, 2,
+                "Warning: hdr10-override applies to HEVC video only, and is ignored for this " << codec << " track.");
         // ** THE KEY IS THE FILE THE LINE OPENS, NOT THE TEXT THAT NAMES IT. **
         //
         // The guard below refuses a track that is both merged into a TrueHD line and muxed on its
