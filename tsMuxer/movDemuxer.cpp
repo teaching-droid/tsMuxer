@@ -1011,6 +1011,17 @@ class MovParsedPCMTrackData final : public ParsedTrackPrivData
         return size + static_cast<unsigned>(m_wave.size());
     }
 
+    // The bytes of one sample of every channel, as prepare takes the format
+    [[nodiscard]] unsigned bytesPerFrame() const
+    {
+        unsigned bits = m_sc->bits_per_coded_sample;
+        if (m_format == MKTAG('i', 'n', '2', '4'))
+            bits = 24;
+        else if (m_format == MKTAG('i', 'n', '3', '2'))
+            bits = 32;
+        return m_sc->channels * (bits / 8);
+    }
+
     void extractData(AVPacket* pkt, uint8_t* buff, const int size) override
     {
         prepare();
@@ -1572,7 +1583,12 @@ void MovDemuxer::warnUnreadBoxes(const int64_t from) const
 static std::vector<int64_t> ownChunkBytes(const MOVStreamContext* st)
 {
     std::vector<int64_t> bytes(st->chunk_offsets.size(), -1);
-    if (st->sample_size != 0 || st->stsc_data.empty())
+    // Linear PCM whose one sample size is the bytes of a sample of every channel counts its samples in bytes after
+    // all. Read up to the next chunk, bytes between two chunks went out as sound: 3 bytes after one chunk of 16-bit
+    // stereo shifted every later sample by a byte and a half, with no word.
+    const auto pcm = dynamic_cast<const MovParsedPCMTrackData*>(st->parsed_priv_data);
+    const bool pcmBytes = pcm && st->sample_size != 0 && st->sample_size == pcm->bytesPerFrame();
+    if ((st->sample_size != 0 && !pcmBytes) || st->stsc_data.empty())
         return bytes;
     size_t sample = 0;
     for (size_t e = 0; e < st->stsc_data.size(); ++e)
@@ -1585,6 +1601,11 @@ static std::vector<int64_t> ownChunkBytes(const MOVStreamContext* st)
         for (size_t c = first; c < last && c <= bytes.size(); ++c)
         {
             const size_t n = st->stsc_data[e].count;
+            if (pcmBytes)
+            {
+                bytes[c - 1] = static_cast<int64_t>(n) * st->sample_size;
+                continue;
+            }
             if (sample + n > st->m_index.size())
                 return bytes;
             int64_t sum = 0;
@@ -1703,10 +1724,20 @@ int MovDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepte
         // the next chunk of any track alone took in the data of a track whose tables were lost (a damaged box before
         // them), and the AAC reader then stopped the job with "Out of index". The bytes up to the next chunk are
         // skipped below.
+        const int trackId = static_cast<int>(chunks[m_curChunk].second);
         if (!found_moof && m_curChunk < m_chunkBytes.size() && m_chunkBytes[m_curChunk] >= 0 &&
             m_chunkBytes[m_curChunk] < chunkSize)
+        {
+            const auto sc = reinterpret_cast<MOVStreamContext*>(tracks[trackId]);
+            static std::set<std::pair<std::string, int>> told;  // the file is opened more than once in a job
+            if (m_curChunk + 1 < chunks.size() && dynamic_cast<MovParsedPCMTrackData*>(sc->parsed_priv_data) &&
+                told.emplace(m_fileName, trackId).second)
+                LTRACE(LT_WARN, 2,
+                       "Warning: audio track #" << sc->ffindex << " of the MP4 file has "
+                                                << chunkSize - m_chunkBytes[m_curChunk]
+                                                << " bytes after the samples of a chunk; they are left out.");
             chunkSize = static_cast<int>(m_chunkBytes[m_curChunk]);
-        const int trackId = static_cast<int>(chunks[m_curChunk].second);
+        }
         auto filterItr = m_pidFilters.find(trackId + 1);
         if (filterItr == m_pidFilters.end() && acceptedPIDs.find(trackId + 1) == acceptedPIDs.end())
         {
