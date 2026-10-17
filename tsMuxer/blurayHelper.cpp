@@ -331,12 +331,21 @@ bool BlurayHelper::open(const string& dst, const DiskType dt, const int64_t disk
         std::vector<int> breaks = layerBreakLbns;
         if (afterMB >= 0 && breaks.empty())
         {
-            breaks = defaultLayerBreaks(discBytes);
+            std::string warning, error;
+            breaks = defaultLayerBreaks(discBytes, warning, error);
+            if (!error.empty())
+                THROW(ERR_COMMON, error)
+            if (!warning.empty())
+                LTRACE(LT_WARN, 2, warning);
             std::string list;
             for (const int b : breaks) list += (list.empty() ? "" : ",") + std::to_string(b);
+            // The option given is named: with --layer-break-guard-before alone, the warning of a single layer disc
+            // named the other one.
             if (breaks.empty())
                 LTRACE(LT_WARN, 2,
-                       "Warning: a single layer disc has no layer break, so --layer-break-guard is not applied.");
+                       "Warning: a single layer disc has no layer break, so "
+                           << (layerBreakGuardMB < 0 ? "--layer-break-guard-before" : "--layer-break-guard")
+                           << " is not applied.");
             else
                 LTRACE(LT_INFO, 2,
                        "Layer break guard at sector(s) " << list

@@ -1672,7 +1672,15 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
         layerBreakGuardMB = 0;
     if ((layerBreakGuardMB >= 0 || innerOnly) && layerBreakLbns.empty())
     {
-        layerBreakLbns = defaultLayerBreaks(discCapacitySectors > 0 ? discCapacitySectors * 2048 : 0);
+        std::string warning, error;
+        layerBreakLbns = defaultLayerBreaks(discCapacitySectors > 0 ? discCapacitySectors * 2048 : 0, warning, error);
+        if (!error.empty())
+        {
+            LTRACE(LT_ERROR, 2, error);
+            return -1;
+        }
+        if (!warning.empty())
+            LTRACE(LT_WARN, 2, warning);
         if (layerBreakLbns.empty())
         {
             LTRACE(LT_WARN, 2, "Warning: a single layer disc has no layer break, so the guard is not applied.");

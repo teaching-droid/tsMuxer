@@ -3,6 +3,7 @@
 #include <cctype>
 #include <climits>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <sstream>
 #include <string>
@@ -571,13 +572,57 @@ std::string parseGuardMB(const std::string& option, const std::string& value, in
     return std::string();
 }
 
-std::vector<int> defaultLayerBreaks(const int64_t discBytes)
+// The number of layers was guessed from the size alone, so a size that is no disc's got breaks no disc has: 66 GB
+// (the first two layers of a 100 GB disc) three layers, at 10861909 and 21723818 for 16292864, and 50g and 100g
+// even splits of their round numbers, 12207031 for 12219392.
+std::vector<int> defaultLayerBreaks(const int64_t discBytes, std::string& warning, std::string& error)
 {
+    warning.clear();
+    error.clear();
+    struct KnownDisc
+    {
+        int64_t sectors;
+        int layers;
+        const char* name;
+    };
+    static constexpr KnownDisc discs[] = {
+        {24438784, 2, "BD-R DL 50 GB"},
+        {23652352, 2, "BD-RE DL 50 GB"},
+        {32585728, 2, "BD-R XL 100 GB, first 2 layers only (66 GB)"},
+        {48878592, 3, "BD-R XL 100 GB"},
+        {47305728, 3, "BD-R XL 100 GB with defect management"},
+        {62500864, 4, "BD-R XL 128 GB"},
+        {60403712, 4, "BD-R XL 128 GB with defect management"},
+    };
     const int64_t bytes = discBytes > 0 ? discBytes : BD50_CAPACITY;
-    const int layers = bytes <= BD25_CAPACITY ? 1 : bytes <= BD50_CAPACITY ? 2 : bytes <= BD100_CAPACITY ? 3 : 4;
+    if (bytes <= BD25_CAPACITY)
+        return {};  // a single layer disc
     const int64_t sectors = bytes / 2048;
+    const KnownDisc* disc = nullptr;
+    int64_t off = 0;
+    for (const KnownDisc& d : discs)
+    {
+        const int64_t diff = std::llabs(sectors - d.sectors);
+        if (diff * 50 <= d.sectors && (disc == nullptr || diff < off))
+        {
+            disc = &d;
+            off = diff;
+        }
+    }
+    if (disc == nullptr)
+    {
+        error = "A disc of " + std::to_string(bytes) +
+                " bytes is not one whose layer breaks are known (50, 66, 100 or 128 GB), so the layer break guard "
+                "cannot be placed. Give the breaks with --layer-break-lbn, or the size of the disc.";
+        return {};
+    }
+    if (off != 0)
+        warning = "Warning: " + std::to_string(bytes) + " bytes is not the capacity of a known disc; the layer " +
+                  (disc->layers > 2 ? "breaks" : "break") + " of a " + disc->name + " (" +
+                  std::to_string(disc->sectors) + " sectors) " + (disc->layers > 2 ? "are" : "is") +
+                  " used. Give --layer-break-lbn for another disc.";
     std::vector<int> breaks;
-    for (int k = 1; k < layers; ++k) breaks.push_back(static_cast<int>(sectors * k / layers));
+    for (int k = 1; k < disc->layers; ++k) breaks.push_back(static_cast<int>(disc->sectors * k / disc->layers));
     return breaks;
 }
 
