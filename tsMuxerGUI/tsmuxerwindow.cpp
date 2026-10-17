@@ -3754,11 +3754,13 @@ void TsMuxerWindow::continueAddFile()
             // info.mplsFile = fileInfo.baseName();
             info.mplsFiles << unquoteStr(newFileName);
         }
-        if (info.descr.indexOf("not found") >= 0)
-        {
+        // A rate the listing does not know is left to tsMuxeR, as on the command line: fps= is not written, and a PGS
+        // track bound to the video gets none either. Writing 23.976 for it retimed interlaced 29.97 and 25 H.264 from a
+        // TS, and an H.264 elementary stream, which the command line muxes at their own rate. 23.976 stays the choice
+        // the box offers when it is ticked.
+        const bool fpsUnknown = info.descr.indexOf("not found") >= 0;
+        if (fpsUnknown)
             fps = 23.976;
-            info.checkFPS = true;
-        }
         else
             fps = extractFloatFromDescr(info.descr, "Frame rate: ");
         info.width = extractFloatFromDescr(info.descr, "Resolution: ") + 0.5;
@@ -3771,7 +3773,7 @@ void TsMuxerWindow::continueAddFile()
             info.fpsText = "60000/1001";
         else
             info.fpsText = QString::number(fps);
-        info.fpsTextOrig = QString::number(fps);
+        info.fpsTextOrig = fpsUnknown ? QString() : QString::number(fps);
         level = extractFloatFromDescr(info.descr, "@");
         // One decimal, because that is how the list reads. Plain QString::number turns 4.0
         // into "4", which matches no entry, and setComboBoxText then ADDS a stray "4" rather
