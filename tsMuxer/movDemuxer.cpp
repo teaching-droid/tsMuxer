@@ -1111,6 +1111,11 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
         int counter = m_packetCnt;
         std::string out;
         uint32_t used = 0;
+        // Where the track starts against the first video track: an empty edit in front of a text track delays every
+        // cue (a cue due at 5 s after an empty edit of 5 s came at 0). A text track gets no Stream
+        // delay in the listing, so nothing else moves it.
+        const int64_t startNs = m_demuxer->trackStartNs(static_cast<int32_t>(m_sc->ffindex));
+        const int64_t startMs = (startNs >= 0 ? startNs + 500000 : startNs - 500000) / 1000000;
         while (used < size)
         {
             uint32_t sampleSize = size - used;  // without a size table, what is left, as before
@@ -1125,8 +1130,8 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
             const int64_t endUnits = timeOffset + getSttsVal();
             const auto toMs = [this](const int64_t units)
             { return (units * 1000 + m_sc->time_scale / 2) / m_sc->time_scale; };
-            const int64_t startTime = toMs(timeOffset);
-            const int64_t endTime = toMs(endUnits);
+            const int64_t startTime = (std::max)(int64_t{0}, toMs(timeOffset) + startMs);
+            const int64_t endTime = (std::max)(int64_t{0}, toMs(endUnits) + startMs);
             std::string cue = m_wvtt
                                   ? webVttCueFor(buff + used, buff + used + sampleSize, startTime, endTime, counter + 1)
                                   : cueFor(buff + used, buff + used + sampleSize, startTime, endTime, counter + 1);

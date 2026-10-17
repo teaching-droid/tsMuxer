@@ -35,6 +35,8 @@ class MovDemuxer final : public IOContextDemuxer
     [[nodiscard]] bool isPidFilterSupported() const override { return true; }
     [[nodiscard]] int64_t getFileDurationNano() const override;
     const uint8_t* getTrackCodecPrivate(int32_t pid, int& size) override;
+    // where track pid starts against the first video track, in ns (the text reader moves its cues by it)
+    [[nodiscard]] int64_t trackStartNs(const int32_t pid) const { return trackStartFromVideoNs(pid); }
 
    private:
     struct MOVAtom
