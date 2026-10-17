@@ -2244,9 +2244,14 @@ static void reportFinishedDiscSize(const std::string& outputRoot, const int64_t 
         size = static_cast<int64_t>(getFileSize(outputRoot));
     else
     {
-        std::vector<std::string> files;
-        findFilesRecursive(outputRoot + getDirSeparator(), "*", &files);  // the path ends with a separator, as elsewhere
-        for (const std::string& f : files) size += static_cast<int64_t>(getFileSize(f));
+        // Only what the disc holds: the BDMV and CERTIFICATE folders. Every file in the output folder was counted, so a
+        // source kept there put a disc of 2.4 MB over a limit of 3 MB.
+        for (const char* sub : {"BDMV", "CERTIFICATE"})
+        {
+            std::vector<std::string> files;
+            findFilesRecursive(outputRoot + getDirSeparator() + sub + getDirSeparator(), "*", &files);
+            for (const std::string& f : files) size += static_cast<int64_t>(getFileSize(f));
+        }
     }
     const char* what = image ? "the finished image is " : "the files of the finished disc folder come to ";
     if (size > discLimit)
