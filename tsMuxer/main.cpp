@@ -2529,6 +2529,56 @@ static void refuseSourceAsOutput(const MuxerManager& muxerManager, const std::st
     }
 }
 
+// ** THE FILES OF SAVE-SRT ARE CHECKED BEFORE ANYTHING IS WRITTEN. ** Each .srt is opened with its first subtitle,
+// in the middle of the mux: two tracks naming one .srt failed there, with an empty output and part of the .srt left
+// behind, and a .srt named as the output itself did the same. A .srt named as a source of another track would empty
+// that source while it is read. The names are compared as the system does, also for files that do not exist yet.
+static void refuseSaveSrtClash(const MuxerManager& muxerManager, const std::string& dstFile)
+{
+    const auto sameName = [](const std::string& a, const std::string& b)
+    {
+        std::error_code ec;
+        const std::filesystem::path pa = std::filesystem::absolute(std::u8string(a.begin(), a.end()), ec);
+        if (ec)
+            return false;
+        const std::filesystem::path pb = std::filesystem::absolute(std::u8string(b.begin(), b.end()), ec);
+        if (ec)
+            return false;
+        if (std::filesystem::equivalent(pa, pb, ec) && !ec)
+            return true;
+        return pathIsInside(pa, pb) && pathIsInside(pb, pa);
+    };
+    std::vector<std::string> saved;
+    for (const auto& si : muxerManager.getStreamInfo())
+    {
+        const auto it = si.m_addParams.find("save-srt");
+        if (it == si.m_addParams.end() || si.m_addParams.count("keep-text"))
+            continue;  // keep-text ignores save-srt
+        const std::string name = unquoteStr(it->second);
+        if (name.empty())
+            continue;
+        for (const std::string& other : saved)
+            if (sameName(name, other))
+                throw runtime_error("Two tracks write their subtitles with save-srt to the same file " + name +
+                                    ". Give each track a file of its own.");
+        if (sameName(name, dstFile))
+            throw runtime_error("save-srt names the output " + dstFile +
+                                ", and the subtitles would be written over it. Give the .srt another name.");
+        for (const auto& src : muxerManager.getStreamInfo())
+        {
+            std::vector<std::string> names;
+            for (const std::string& part : splitQuotedStr(src.m_fullStreamName.c_str(), '+'))
+                names.push_back(unquoteStr(trimStr(part)));
+            names.insert(names.end(), src.m_sourceFiles.begin(), src.m_sourceFiles.end());
+            for (const std::string& srcName : names)
+                if (sameName(name, srcName))
+                    throw runtime_error("save-srt names the source " + srcName +
+                                        ", and writing the subtitles would destroy it. Give the .srt another name.");
+        }
+        saved.push_back(name);
+    }
+}
+
 static void checkSourceConsumed(MuxerManager& muxerManager)
 {
     const int64_t total = muxerManager.totalSize();
@@ -2920,6 +2970,7 @@ int main(int argc, char** argv)
                                            "cannot be used: \"") +
                                     dstFile + "\"");
             refuseSourceAsOutput(muxerManager, dstFile);
+            refuseSaveSrtClash(muxerManager, dstFile);
 
             if (muxerManager.getTrackCnt() == 0)
                 THROW(ERR_COMMON, "No tracks selected")
@@ -2993,6 +3044,7 @@ int main(int argc, char** argv)
                                     dstFile + "\"");
 
             refuseSourceAsOutput(muxerManager, dstFile);
+            refuseSaveSrtClash(muxerManager, dstFile);
             const string outputRoot = dstFile;  // the image or the disc folder, before dstFile names its first clip
 
             // ** BEFORE THE DESTINATION IS CREATED, NOT AFTER. ** This stood below the block that
@@ -3132,6 +3184,7 @@ int main(int argc, char** argv)
                                     dstFile + "\"");
 
             sMuxer.checkTracksBeforeOutput();  // before the folder is made, so a refusal leaves nothing behind
+            refuseSaveSrtClash(sMuxer, dstFile);
             // Refused when the muxer was set up, after the demux folder had been made, which was left empty
             if (sMuxer.keepEditions())
                 THROW(ERR_COMMON, "--keep-editions applies to a Matroska output (.mkv) only.")
