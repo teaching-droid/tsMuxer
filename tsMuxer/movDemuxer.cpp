@@ -2758,7 +2758,12 @@ int MovDemuxer::mov_read_moov(MOVAtom atom)
         const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
         if (st->type != IOContextTrackType::VIDEO || st->editMediaTime <= 0 || st->time_scale <= 0)
             continue;
-        const int64_t firstOffset = st->ctts_data.empty() ? 0 : st->ctts_data[0].duration;
+        // signed, as below: read unsigned, a first offset of -1024 (a cut file written with negative composition
+        // offsets) left no pre-roll, and the sound came 500 ms early
+        const int64_t firstOffset =
+            st->ctts_data.empty()
+                ? 0
+                : static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(st->ctts_data[0].duration)));
         const int64_t lead = st->editMediaTime - firstOffset;
         if (lead > 0)
             m_videoLeadNs = lead * 1000000000LL / st->time_scale;
