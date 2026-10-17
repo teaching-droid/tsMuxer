@@ -1752,6 +1752,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                 THROW(ERR_CANT_OPEN_STREAM, "Can't open merge-ac3-file stream: " << ac3File)
             streamInfo.m_mergeAc3ReaderId = r2;
             streamInfo.m_mergeAc3DataReader = ac3Reader;
+            // A source like the others: an output of its name was not refused, and was written over it
+            streamInfo.m_sourceFiles.push_back(ac3File);
         }
     }
 
