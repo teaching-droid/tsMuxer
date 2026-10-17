@@ -30,7 +30,15 @@ class SRTStreamReader final : public AbstractStreamReader
     // keep-text: hand the subtitles over as text, each with its start and duration, instead of drawing
     // them into pictures. Only a muxer that can carry text leaves it on; the others turn it off. In a
     // demux each subtitle is handed over as an SRT record, so the file written is an SRT file.
-    void setKeepText(const bool value) { m_keepText = value; }
+    // Kept as text, the subtitles are not drawn and need no font: the font is loaded only when they are drawn. Loaded
+    // at once, a line with keep-text and without font-name= was refused on Linux and macOS ("No font is named"), and
+    // one naming a font not installed there as well.
+    void setKeepText(const bool value)
+    {
+        m_keepText = value;
+        if (!value && m_fontSet)
+            m_srtRender->m_textRender->setFont(m_font);
+    }
     // save-srt: while the subtitles are drawn into pictures, each one is also written to an SRT file there (#643)
     void setSaveSrt(const std::string& fileName);
     // The timeshift of the track, by which its pictures are moved: the .srt is written at their times
@@ -57,7 +65,13 @@ class SRTStreamReader final : public AbstractStreamReader
         if (pgsReader)
             pgsReader->setVideoInfo(0, 0, fps);
     }
-    void setFont(const text_subtitles::Font& font) const { m_srtRender->m_textRender->setFont(font); }
+    void setFont(const text_subtitles::Font& font)
+    {
+        m_font = font;
+        m_fontSet = true;
+        if (!m_keepText)
+            m_srtRender->m_textRender->setFont(font);
+    }
     void setAnimation(const text_subtitles::TextAnimation& animation);
     void setBottomOffset(const int offset) const { m_srtRender->setBottomOffset(offset); }
 
@@ -79,6 +93,8 @@ class SRTStreamReader final : public AbstractStreamReader
     double m_outTime;
     bool m_untilNext = false;  // the timing line has no end: shown until the next subtitle
     bool m_keepText = false;
+    text_subtitles::Font m_font;  // setFont's, loaded when the subtitles are drawn
+    bool m_fontSet = false;
     // save-srt: the SRT file, the subtitle waiting for the next one when it has no end, and the count written
     std::unique_ptr<File> m_saveSrt;
     std::string m_saveSrtName;
