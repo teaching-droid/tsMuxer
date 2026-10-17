@@ -24,6 +24,7 @@
 #include "iso_writer.h"
 #include "matroskaMuxer.h"
 #include "metaDemuxer.h"
+#include "movDemuxer.h"
 #include "mpegStreamReader.h"
 #include "muxerManager.h"
 #include "pgsStreamReader.h"
@@ -2598,6 +2599,22 @@ static void checkSourceConsumed(MuxerManager& muxerManager)
                              "what it was asked to do.")
 }
 
+// An MP4 source that was cut off is read as far as it goes, and the job then ends with an error that says what is
+// missing, unless --cut-end stops before the first of it.
+static void checkSourcesCutOff(const MuxerManager& muxerManager)
+{
+    for (const auto& [file, cut] : MovDemuxer::cutOffFiles())
+    {
+        if (muxerManager.getCutEnd() > 0 &&
+            static_cast<double>(muxerManager.getCutEnd()) / INTERNAL_PTS_FREQ <= cut.from)
+            continue;
+        THROW(ERR_COMMON, "The source " << file
+                                        << " is cut off: its index lists data past the end of the file, in track "
+                                        << cut.track << " from " << doubleToStr(cut.from, 3)
+                                        << " s on. The output holds what the file has and is incomplete.")
+    }
+}
+
 static void reportEmptyTracks(const MuxerManager& muxerManager)
 {
     for (const StreamInfo& si : muxerManager.getStreamInfo())
@@ -2986,6 +3003,7 @@ int main(int argc, char** argv)
             muxerManager.doMux(keepOld.forFile(dstFile, muxerManager.totalSize()), nullptr);
 
             checkSourceConsumed(muxerManager);
+            checkSourcesCutOff(muxerManager);
             keepOld.commit();
             LTRACE(LT_INFO, 2, "Mux successful complete");
             reportSplitWithoutParameterSets(muxerManager);
@@ -3159,6 +3177,7 @@ int main(int argc, char** argv)
             // program without a message.
             blurayHelper.close();
             checkSourceConsumed(muxerManager);
+            checkSourcesCutOff(muxerManager);
             keepOld.commit();
             if (dt != DiskType::NONE)
                 reportFinishedDiscSize(outputRoot, muxerManager.getDiscSizeLimit());

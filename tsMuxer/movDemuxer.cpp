@@ -1617,6 +1617,42 @@ static std::vector<int64_t> ownChunkBytes(const MOVStreamContext* st)
     return bytes;
 }
 
+std::map<std::string, MovDemuxer::CutOff>& MovDemuxer::cutOffFiles()
+{
+    static std::map<std::string, CutOff> files;
+    return files;
+}
+
+// Chunk `chunk` (from 0) of a track lies past the end of the file: the time of its first sample, by stsc and stts
+static void noteCutOff(const std::string& fileName, const int64_t fileSize, const MOVStreamContext* st,
+                       const size_t chunk)
+{
+    uint64_t sample = 0;
+    for (size_t e = 0; e < st->stsc_data.size(); ++e)
+    {
+        const size_t first = st->stsc_data[e].first;  // 1-based
+        const size_t last = e + 1 < st->stsc_data.size() ? st->stsc_data[e + 1].first : chunk + 2;
+        for (size_t c = first; c < last && c <= chunk; ++c) sample += st->stsc_data[e].count;
+    }
+    uint64_t time = 0;
+    for (const auto& e : st->stts_data)
+    {
+        const uint64_t n = (std::min)(sample, static_cast<uint64_t>(e.count));
+        time += n * e.duration;
+        sample -= n;
+    }
+    const double from = st->time_scale > 0 ? static_cast<double>(time) / st->time_scale : 0;
+    auto [it, added] = MovDemuxer::cutOffFiles().emplace(fileName, MovDemuxer::CutOff{from, st->ffindex});
+    if (!added && from < it->second.from)
+        it->second = MovDemuxer::CutOff{from, st->ffindex};
+    static std::set<std::string> warned;  // a job opens a file more than once
+    if (warned.insert(fileName).second)
+        LTRACE(LT_WARN, 2,
+               "Warning: " << fileName << " is cut off: track " << st->ffindex << " lists data from byte "
+                           << st->chunk_offsets[chunk] << " on, and the file ends at byte " << fileSize
+                           << ". What the file holds is read; the rest is missing.");
+}
+
 void MovDemuxer::buildIndex()
 {
     m_curChunk = 0;
@@ -1650,7 +1686,17 @@ void MovDemuxer::buildIndex()
                     const auto in = std::find_if(mdats.begin(), mdats.end(), [j](const auto& m)
                                                  { return j >= m.first && j <= m.first + m.second; });
                     if (in == mdats.end())
+                    {
+                        // A chunk past the end of the file: the file was cut off. It was refused whole with
+                        // "Invalid chunk offset", just after the warning that its mdat is read up to the end of the
+                        // file. What the file holds is read now, and the job ends saying that the rest is missing.
+                        if (j >= m_fileSize)
+                        {
+                            noteCutOff(m_fileName, m_fileSize, st, k);
+                            continue;
+                        }
                         THROW(ERR_MOV_PARSE, "Invalid chunk offset " << j)
+                    }
                     // where its own samples end, or its mdat where its tables do not say (-1: all samples one size)
                     const int64_t own = k < bytes.size() && bytes[k] >= 0 ? bytes[k] : in->second;
                     mediaEnd = (std::max)(mediaEnd, (std::min)(in->first + in->second, j + own));

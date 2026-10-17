@@ -17,6 +17,14 @@ class MovDemuxer final : public IOContextDemuxer
     void openFile(const std::string& streamName) override;
     // The file open now (for a reader's messages)
     [[nodiscard]] const std::string& fileName() const { return m_fileName; }
+    // A file whose index lists data past its end, as a file that was cut off: from when (s, in the file's own time)
+    // and in which track the first of it is missing. Asked once the mux is over (main.cpp).
+    struct CutOff
+    {
+        double from = 0;
+        unsigned track = 0;
+    };
+    static std::map<std::string, CutOff>& cutOffFiles();
     std::string getTitle() override;
     std::vector<AVChapter> getChapters() override;
     std::vector<std::vector<uint8_t>> getPassThroughAttachments() override;
