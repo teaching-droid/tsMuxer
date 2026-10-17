@@ -825,9 +825,10 @@ bool TSMuxer::close()
     if (m_sectorSize)
         return true;
 
-    // The file is opened again only for what is left in the buffer. With nothing left, the file closed above was
-    // closed a second time, which fails, and a complete output was reported as one whose end could not be written
-    // (a --cut-end whose last packet filled the buffer exactly).
+    // The file is opened again only for what is left in the buffer. With nothing left over it was closed a second
+    // time, which fails on Linux and macOS (a closed descriptor), so an output that ended on a whole block, as an empty
+    // one or a --cut-end whose last packet filled the buffer exactly does, was reported as "Failed to write the end of
+    // the output".
     if (m_outBufLen == 0)
         return true;
     if (!m_muxFile->open(m_outFileName.c_str(), AbstractOutputStream::ofWrite + AbstractOutputStream::ofAppend))
