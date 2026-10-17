@@ -1440,12 +1440,22 @@ void MovDemuxer::openFile(const std::string& streamName)
     // it that is never read, and the count has to keep saying so.
     if (!found_moof && m_headerWalkEnd > m_mdat_pos + m_mdat_size)
         m_firstHeaderSize += m_headerWalkEnd - (m_mdat_pos + m_mdat_size);
-    // What follows the last box the walk read holds no media when it is only boxes such as free, skip or uuid. The
-    // demux never reaches them, and left out of the count they made a complete mux read as stopped early once they
-    // were over 1 % of the file (#43). A file with more media after the walk's end (a second mdat, a moof) keeps
-    // saying so.
-    if (!found_moof && m_headerWalkEnd > 0 && m_headerWalkEnd < m_fileSize)
-        m_firstHeaderSize += trailingBytesWithoutMedia(m_headerWalkEnd);
+    // What follows both the media and the last box the walk read is never read, and it holds no media of this file:
+    // buildIndex refuses a chunk that lies outside the mdat boxes, and the media is read up to the end of the last
+    // chunk. Only boxes such as free, skip or uuid were counted (#43). The unused rest of a second mdat, a box after
+    // it, a box whose size runs past the end of the file, an mdat no chunk uses and a moof without an mvex in the moov
+    // were not, and a complete mux of such a file said it stopped before the source was finished: 98.0 percent read
+    // with 2 % of free bytes after a second mdat, 95.0 percent with an unused mdat of 5 % after the moov, the output
+    // the same byte for byte as that of the file without them.
+    if (!found_moof && m_headerWalkEnd > 0)
+    {
+        const int64_t readEnd = (std::max)(m_headerWalkEnd, m_mdat_pos + m_mdat_size);
+        if (readEnd < m_fileSize)
+        {
+            m_firstHeaderSize += m_fileSize - readEnd;
+            warnUnreadBoxes(readEnd);
+        }
+    }
 }
 
 // Every mdat at the top level of the file, as the position and size of its contents, read by the box headers alone.
@@ -1484,37 +1494,58 @@ std::vector<std::pair<int64_t, int64_t>> MovDemuxer::topLevelMdats() const
     return out;
 }
 
-// The bytes from `from` to the end of the file when the top-level boxes there hold no media, read by their headers
-// alone; 0 when one of them is an mdat or a moof, or the headers do not reach the end of the file exactly.
-int64_t MovDemuxer::trailingBytesWithoutMedia(const int64_t from) const
+// The boxes from `from` on are not read. An mdat or a moof there holds no chunk the moov lists, but its bytes may be
+// media all the same (an index that lost tracks, fragments without the mvex that would describe them), and a box that
+// says it is longer than the rest of the file is a sign of a file cut off: a warning says so, once a file.
+void MovDemuxer::warnUnreadBoxes(const int64_t from) const
 {
+    static std::set<std::pair<std::string, int64_t>> warned;  // a job opens a file more than once
     File f;
     if (!f.open(m_fileName.c_str(), File::ofRead))
-        return 0;
-    int64_t pos = from;
-    while (pos < m_fileSize)
+        return;
+    int64_t pos = 0;
+    while (pos + 8 <= m_fileSize)
     {
         uint8_t h[16];
-        if (m_fileSize - pos < 8 || f.seek(pos, File::SeekMethod::smBegin) == -1 || f.read(h, 8) != 8)
-            return 0;
+        if (f.seek(pos, File::SeekMethod::smBegin) == -1 || f.read(h, 8) != 8)
+            return;
         uint64_t size = static_cast<uint64_t>(h[0]) << 24 | static_cast<uint64_t>(h[1]) << 16 |
                         static_cast<uint64_t>(h[2]) << 8 | h[3];
         const uint32_t type = MKTAG(h[4], h[5], h[6], h[7]);
+        int header = 8;
         if (size == 1)
         {
             if (f.read(h + 8, 8) != 8)
-                return 0;
+                return;
             size = 0;
             for (int i = 8; i < 16; ++i) size = size << 8 | h[i];
+            header = 16;
         }
         else if (size == 0)
             size = static_cast<uint64_t>(m_fileSize - pos);
-        if (type == MKTAG('m', 'd', 'a', 't') || type == MKTAG('m', 'o', 'o', 'f') || size < 8 ||
-            size > static_cast<uint64_t>(m_fileSize - pos))
-            return 0;
+        if (size < static_cast<uint64_t>(header))
+            return;
+        if (pos >= from && (type == MKTAG('m', 'o', 'o', 'f') ||
+                            (type == MKTAG('m', 'd', 'a', 't') && size > static_cast<uint64_t>(header))))
+        {
+            if (warned.emplace(m_fileName, pos).second)
+                LTRACE(LT_WARN, 2,
+                       "Warning: the MP4 box '" << std::string(reinterpret_cast<const char*>(h + 4), 4) << "' at byte "
+                                                << pos << " holds no sample the moov lists; it is not read.");
+            return;
+        }
+        if (size > static_cast<uint64_t>(m_fileSize - pos))
+        {
+            if (pos >= from && warned.emplace(m_fileName, pos).second)
+                LTRACE(LT_WARN, 2,
+                       "Warning: the MP4 box '" << std::string(reinterpret_cast<const char*>(h + 4), 4) << "' at byte "
+                                                << pos << " says it is " << size << " bytes long, "
+                                                << size - static_cast<uint64_t>(m_fileSize - pos)
+                                                << " more than the file holds; it holds no media and is not read.");
+            return;
+        }
         pos += static_cast<int64_t>(size);
     }
-    return pos == m_fileSize ? m_fileSize - from : 0;
 }
 
 // The byte size of each chunk of a track by its own tables: stsc gives the samples of each chunk, stsz the size of
