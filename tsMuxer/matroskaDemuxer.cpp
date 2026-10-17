@@ -1897,6 +1897,20 @@ void MatroskaDemuxer::applyTrackCopy()
             continue;
         delete track->parsed_priv_data;
         track->parsed_priv_data = new ParsedCopyTrackData();
+        // The header of the track (CodecPrivate: the styles of ASS and SSA, the palette of VobSub) is written once,
+        // from the first file. A later file of a join with another header had its subtitles kept with the first
+        // file's without a word: the Default style of the second file, red in its own file, became the first file's
+        // white one.
+        std::vector<uint8_t> priv;
+        if (track->codec_priv && track->codec_priv_size > 0)
+            priv.assign(track->codec_priv, track->codec_priv + track->codec_priv_size);
+        if (const auto [first, isNew] = m_copyPrivates.try_emplace(pid, priv); !isNew && first->second != priv)
+            LTRACE(LT_WARN, 2,
+                   "Warning: track " << pid
+                                     << ": a later file of the join has another header (CodecPrivate, which holds the "
+                                        "styles of ASS and SSA and the palette of DVD subtitles) than the first file. "
+                                        "Only the first file's is written, so the later file's subtitles may look "
+                                        "otherwise.");
     }
 }
 

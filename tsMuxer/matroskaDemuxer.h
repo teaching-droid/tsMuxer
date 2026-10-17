@@ -111,6 +111,7 @@ class MatroskaDemuxer final : public IOContextDemuxer
     typedef Track MatroskaTrack;
     // setTrackCopy's tracks, and every track's BlockAdditionMapping bodies, by the pid of getTrackList (index + 1).
     std::set<int> m_copyPids;
+    std::map<int, std::vector<uint8_t>> m_copyPrivates;  // the CodecPrivate of each copied track in the first file
     std::map<int, ass_render::Drawing> m_assPids;  // setAssDrawing's tracks
     std::map<int, std::vector<std::vector<uint8_t>>> m_addMappings;
     std::map<const Track*, std::vector<std::vector<uint8_t>>> m_addMappingsByTrack;  // while the header is read
