@@ -399,11 +399,12 @@ static std::string lowerCase(const std::string& s)
 }
 
 // ** AN UNBRACKETED CODE COMES AFTER "_" OR ".", AND IS NOT A WORD OF A TITLE. ** Ordinary English words are ISO
-// 639-2 codes: "Iron Man.ac3" was Mandingo, "Holy War" Waray and "X-Men" Mende. The tools that write a code into a
-// name join it with an underscore or a dot (Movie_spa.ac3, movie.eng.srt). Joined that way, a word of a title looks
-// the same as a code ("IRON.MAN", "iron_man", "x.men", "holy_war"), and a capital does not tell them apart either:
-// "Movie.Eng" and "Movie_Ger" are codes. So the codes that are English words are read only in brackets ([man]), and
-// the codes of languages that tracks are made in keep their place even where they are words too (cat, may, nor, per).
+// 639-2 codes: "Pebble Man.ac3" was Mandingo, "Teapot War" Waray and "Clockwork Men" Mende. The tools that write a code
+// into a name join it with an underscore or a dot (Movie_spa.ac3, movie.eng.srt). Joined that way, a word of a title
+// looks the same as a code ("PEBBLE.MAN", "pebble_man", "clockwork.men", "teapot_war"), and a capital does not tell
+// them apart either: "Movie.Eng" and "Movie_Ger" are codes. So the codes that are English words are read only in
+// brackets ([man]), and the codes of languages that tracks are made in keep their place even where they are words too
+// (cat, may, nor, per).
 static bool isTitleWord(const std::string& lower)
 {
     static const char* const WORDS =
