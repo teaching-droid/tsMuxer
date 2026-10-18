@@ -2188,6 +2188,11 @@ static void probeSubTrack(uint8_t* data, const size_t size, const int subTrackNo
                                    : "This HEVC track carries no Dolby Vision enhancement layer, so it cannot be "
                                      "split into two.")
                               << " Mux it as ONE track, without subTrack=.")
+    // The enhancement layer half of a dual layer track is a layer whatever its RPUs say: a profile 8.1 file keeps the
+    // disc's layer with converted, single layer RPUs (and the disc's own ones attached, put back as the layers are
+    // separated), and that layer was taken for a picture of its own: a second track in Matroska, 0x1012 on a disc.
+    if (subTrackNo == HevcDolbyVisionFilter::EL_SUB_TRACK)
+        dd.dvRpuElPresent = 1;
     if (half.empty())
         return;
     HEVCStreamReader reader;

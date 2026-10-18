@@ -166,7 +166,9 @@ void HEVCStreamReader::applyDiscoveryData(const StreamDiscoveryData& data)
         if (data.isDVEL)
             m_hdr->isDVEL = true;
     }
-    if (m_dvRpuElPresent < 0)
+    // The container's word that this is an enhancement layer (the layer half of a dual layer track) counts over the
+    // first RPU read, which a profile 8.1 file has converted to single layer.
+    if (m_dvRpuElPresent < 0 || data.dvRpuElPresent == 1)
         m_dvRpuElPresent = data.dvRpuElPresent;
 }
 
