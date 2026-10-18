@@ -1,8 +1,10 @@
-## tsMuxeR 2.21.0
+## tsMuxeR 3.0.0
 
 This release is about MP4 and MOV. tsMuxeR now reads much more of what these files can hold: more codecs, track names, chapters, cover pictures and colour data, fragmented files, joins, and damaged or unusual files. It still does not write MP4. ASS and SSA subtitles are now drawn with libass, with their styles and animations. The changes are grouped below by area.
 
-**Mac users are still asked to test.** The Intel macOS build has been built and checked, but it has not been run on an Intel Mac, because no Mac is available here. If you have an Intel Mac, please try it and report whether it works. On any Mac, please also report whether ASS subtitles are drawn with libass after `brew install libass`, and what happens when you change the subtitle font and colour in the window.
+**Why 3.0.0: two changes can need a look at existing meta files.** ASS and SSA subtitles that are drawn into pictures are now drawn with libass, as their script says, and the font parameters on their line (font-name, font-size and the others) no longer apply to them. Add `ass-as-srt` to the line to draw them as before, as plain text with those parameters. And a demux with `keep-text` writes ASS, SSA and WebVTT subtitles from a Matroska file as .ass, .ssa and .vtt files, in their own form, where it wrote an .srt file.
+
+**The Intel macOS build has been back since 2.19.0, and Mac users are still asked to test.** It has been built and checked, but it has not been run on an Intel Mac, because no Mac is available here. If you have an Intel Mac, please try it and report whether it works. On any Mac, please also report whether ASS subtitles are drawn with libass after `brew install libass`, and what happens when you change the subtitle font and colour in the window.
 
 **If something goes wrong, please report it** with the bug report form on GitHub, and include as much as you can: the version line and the full log, the meta file (the text in the Meta file box of the window), what you expected and what happened instead, and the player you used. A short sample of the source helps most.
 
