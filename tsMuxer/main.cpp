@@ -909,6 +909,13 @@ Additional parameters for HEVC video tracks:
                     than the stream actually needs will not be met. Raising it
                     is safe, since a higher level is a superset of a lower one.
                     Written to every VPS and SPS.
+- hdr10-override    UHD Blu-ray only. For a stream that says SDR: the disc
+                    marks it as HDR10 in its playlist, clip information and
+                    index. The picture is not changed, so a player switches
+                    the screen to HDR while the picture is coded for SDR; a
+                    warning says so. Ignored, with a warning, for any other
+                    output. A stream that is already HDR10, HDR10+ or Dolby
+                    Vision is marked as it is.
 
 Additional parameters for PG and SRT tracks:
 
@@ -962,9 +969,24 @@ Additional parameters for SRT tracks:
 - keep-text         Keep the subtitles as text instead of drawing them into
                     pictures: each one is copied with its text, its tags and
                     its own start and end. For Matroska output, and for a
-                    demux, which then writes an SRT file. Other outputs draw
-                    the subtitles as usual, with a warning, which needs
+                    demux, which then writes an SRT file; ASS, SSA and WebVTT
+                    subtitles from a Matroska file are written as .ass, .ssa
+                    and .vtt files instead, in their own form. Other outputs
+                    draw the subtitles as usual, with a warning, which needs
                     video-width, video-height and fps.
+- save-srt          save-srt="name.srt": while the subtitles are drawn into
+                    pictures, also write them as text to that SRT file
+                    (UTF-8, numbered from 1), as a demux with keep-text would.
+                    The file takes its name when the job has succeeded.
+                    Ignored, with a warning, on a line with keep-text.
+- fonts-dir         fonts-dir="folder": a folder of fonts that ASS and SSA
+                    subtitles drawn with libass may use, besides the fonts
+                    attached to the file and those installed in the system.
+- ass-as-srt        Draw ASS and SSA subtitles as plain text with the font
+                    parameters above, as SRT subtitles are drawn, instead of
+                    with libass. Without it, ASS and SSA subtitles drawn into
+                    pictures are drawn with libass, as their script says, and
+                    the font parameters above do not apply to them.
 
 tsMuxeR supports additional tags inside SRT tracks. The syntax and parameters
 coincide with HTML: <b>, <i>, <u>, <strike>, <font>. Default relative font size
