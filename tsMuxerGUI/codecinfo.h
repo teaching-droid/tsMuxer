@@ -17,6 +17,9 @@ struct QtvCodecInfo
     QString descr;
     QString lang;
     int delay = 0;
+    // The delay the listing gave. Where it is not 0, a delay set to 0 in the window is written as timeshift=0ms:
+    // without a timeshift the track kept the start its file gives, so 0 in the window did not mean 0.
+    int listedDelay = 0;
     int subTrack = 0;
     bool dtsDownconvert = false;
     // For a disc TrueHD track (A_AC3 reported as TRUE-HD, which carries an AC-3 core beside the

@@ -2625,7 +2625,7 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
         if (p >= 0)
         {
             tmpStr = QtCompat::strMid(procStdOutput[i], QString("Stream delay: ").length());
-            codecInfo->delay = tmpStr.toInt();
+            codecInfo->delay = codecInfo->listedDelay = tmpStr.toInt();
         }
         p = procStdOutput[i].indexOf("subTrack: ");
         if (p >= 0)
@@ -4714,7 +4714,7 @@ QString TsMuxerWindow::getAudioMetaInfo(QtvCodecInfo* codecInfo)
 {
     QString rezStr = codecInfo->programName + ", ";
     rezStr += getFileList(codecInfo);
-    if (codecInfo->delay != 0)
+    if (codecInfo->delay != 0 || codecInfo->listedDelay != 0)
         rezStr += QString(", timeshift=") + QString::number(codecInfo->delay) + "ms";
     if (codecInfo->dtsDownconvert && codecInfo->programName == "A_DTS")
         rezStr += ", down-to-dts";
