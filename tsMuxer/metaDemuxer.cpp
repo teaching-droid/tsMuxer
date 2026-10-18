@@ -625,7 +625,8 @@ void METADemuxer::openFile(const string& streamName)
                  unit == "min" || unit == "h"))
                 THROW(ERR_COMMON, "\"" << trimStr(params[i - 1]) << "," << paramName
                                        << "\" on a track line: a decimal comma parts the value in two, as the "
-                                          "parameters are parted at commas. Write it with a point, such as 23.976.")
+                                          "parameters are parted at commas. Write it with a point: "
+                                       << trimStr(params[i - 1]) << "." << paramName << ".")
             // A track number is digits alone: track=1.5 was read as track 1, and track=-1 as no track, which skipped
             // the check that the track is in the file and made an empty output that said it was successful
             if (paramName == "track" &&

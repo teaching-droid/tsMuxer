@@ -424,8 +424,8 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
             rest = " It is ignored; down-to-ac3 keeps the AC-3 core alone.";
         else
             rest =
-                " It is ignored, and the track is kept whole. The E-AC-3 part of Dolby Digital Plus cannot be "
-                "played without its AC-3 core; to keep the core alone, use down-to-ac3.";
+                " It is ignored, and the track is kept whole. In a disc's Dolby Digital Plus the E-AC-3 part cannot "
+                "be played without its AC-3 core; to keep the core alone, use down-to-ac3.";
         LTRACE(LT_WARN, 2,
                "Warning: drop-ac3-core applies to TrueHD only, and track " << si.m_streamReader->getStreamIndex()
                                                                            << " is not TrueHD." << rest);

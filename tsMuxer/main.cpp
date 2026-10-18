@@ -1146,9 +1146,10 @@ All parameters in this group start with two dashes:
 --layer-break-lbn     Layer break sector(s) for --layer-break-guard, in 2048-byte LBA
                       sectors = the disc's TOTAL sectors / number of layers.
                       WRITE THE NUMBER WITH NO GROUPING. A comma SEPARATES VALUES here and
-                      is NOT a thousands separator, so 12,219,392 is read as three breaks,
-                      at sectors 12, 219 and 392, and the guard then lands in the middle of
-                      your data. Write 12219392.
+                      is NOT a thousands separator: 12,219,392 is refused, and a list of
+                      small numbers such as 12,219 is read as breaks at sectors 12 and 219,
+                      with a warning, as the guard would land in the middle of your data.
+                      Write 12219392.
                       One value for BD-R/RE DL, a list for BDXL: 100GB has 2 breaks
                       (Free/3 and 2*Free/3), 128GB has 3. Examples, with the Free Sectors
                       each was worked out from:

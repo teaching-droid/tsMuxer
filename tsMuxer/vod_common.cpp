@@ -528,7 +528,7 @@ std::string checkLayerBreakLbn(const int lbn, std::string& warning)
         warning = "a layer break at sector " + std::to_string(lbn) +
                   " is far too small to be a layer boundary on any Blu-ray, so the guard band will land inside "
                   "your data rather than at the layer change. A comma separates VALUES in this option and is not "
-                  "a thousands separator: 12,219,392 is read as three breaks, at 12, 219 and 392. Write 12219392.";
+                  "a thousands separator: write the sector number with no grouping, such as 12219392.";
     return std::string();
 }
 

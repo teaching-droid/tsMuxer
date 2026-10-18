@@ -402,8 +402,7 @@ double chapterTimeToSeconds(const std::string& text, const std::string& where)
     }
     const double seconds = ok ? timeToFloat(t) : 0.0;
     if (!ok || !std::isfinite(seconds) || seconds < 0.0 || seconds > 100000.0 * 3600.0)
-        THROW(ERR_COMMON, where << ": the chapter time \"" << t
-                                << "\" is not a time from 0 to 100000 hours, written as HH:MM:SS.mmm")
+        THROW(ERR_COMMON, where << ": \"" << t << "\" is not a time from 0 to 100000 hours, written as HH:MM:SS.mmm")
     return seconds;
 }
 
