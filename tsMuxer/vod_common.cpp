@@ -398,13 +398,14 @@ static std::string lowerCase(const std::string& s)
     return lower;
 }
 
-// ** AN UNBRACKETED CODE COMES AFTER "_" OR ".", AND IS NOT A WORD OF A TITLE. ** Ordinary English words are ISO
-// 639-2 codes: "Pebble Man.ac3" was Mandingo, "Teapot War" Waray and "Clockwork Men" Mende. The tools that write a code
-// into a name join it with an underscore or a dot (Movie_spa.ac3, movie.eng.srt). Joined that way, a word of a title
-// looks the same as a code ("PEBBLE.MAN", "pebble_man", "clockwork.men", "teapot_war"), and a capital does not tell
-// them apart either: "Movie.Eng" and "Movie_Ger" are codes. So the codes that are English words are read only in
-// brackets ([man]), and the codes of languages that tracks are made in keep their place even where they are words too
-// (cat, may, nor, per).
+// ** A WORD OF A TITLE AFTER A SPACE OR A HYPHEN IS NOT A CODE. ** Ordinary English words are ISO 639-2 codes:
+// "Pebble Man.ac3" was Mandingo and "Clockwork-Men.srt" Mende. A title is written with spaces and hyphens, and there a
+// code that is also such a word is read only in brackets ([man]); any other code after a space or a hyphen is read
+// ("Movie - eng.ac3", "Movie-ger.ac3"). The tools that write a code into a name join it with an underscore or a dot
+// (Movie_spa.ac3, movie.eng.srt, a demux's name.track_4352_mar.ac3), and there every code is read, as before: the list
+// holds real languages too (mar is Marathi, hat Haitian, kin Kinyarwanda), and a rule that dropped them there lost the
+// language of names that were read right. A title joined with underscores (Teapot_War.ac3) is read as a code, as it
+// always was. The codes of languages that tracks are made in are never on the list (cat, may, nor, per).
 static bool isTitleWord(const std::string& lower)
 {
     static const char* const WORDS =
@@ -416,10 +417,10 @@ static bool isTitleWord(const std::string& lower)
 
 static bool unbracketedCode(const std::string& token, const char separator)
 {
-    if (separator != 0 && separator != '_' && separator != '.')
-        return false;
     const std::string lower = lowerCase(token);
-    return isIso639_2(lower) && !isTitleWord(lower);
+    if (!isIso639_2(lower))
+        return false;
+    return (separator != ' ' && separator != '-') || !isTitleWord(lower);
 }
 
 // A code in brackets at the end of a name, as "Movie (forced) [eng]"

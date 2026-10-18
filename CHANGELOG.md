@@ -112,7 +112,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **An SRT timing line with a tab after the arrow** keeps its end time. The subtitle stayed on screen until the next one.
 
-* **Words of a title are no longer read as a language.** "Pebble Man.ac3" was Mandingo, "Clockwork Men.srt" Mende and "Teapot_War.ac3" Waray. Without brackets, a code in a file name is read after "_" or "." (Movie_spa.ac3, movie.eng.srt), and codes that are also English words, such as man, men and war, are read only in brackets ([man]). A name with both a language and "forced" (movie_eng_forced.srt, "Movie (forced) [eng].srt") gives both.
+* **Words of a title are no longer read as a language.** "Pebble Man.ac3" was Mandingo and "Clockwork-Men.srt" Mende. After a space or a hyphen, a code that is also an English word, such as man, men or war, is read only in brackets ([man]); other codes are read there as before ("Movie - eng.ac3"), and after "_" or "." every code is (Movie_spa.ac3, movie.eng.srt). A name with both a language and "forced" (movie_eng_forced.srt, "Movie (forced) [eng].srt") gives both.
 
 * **SRT:** a number alone after an empty line in a subtitle, as a year, is kept as text, also in the last subtitle of a file and in SRT from a Matroska file; it was lost without a word. A block whose timing line has a mistyped arrow is skipped with a warning; it was drawn inside the subtitle before it.
 
