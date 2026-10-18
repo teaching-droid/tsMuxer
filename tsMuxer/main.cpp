@@ -2215,39 +2215,41 @@ static void reportDvProfileIgnored(const MuxerManager& muxerManager, const char*
 
 // A single layer Dolby Vision stream (profile 8) on a disc: the Dolby Vision data travels inside the HDR10 picture,
 // and a UHD Blu-ray player takes Dolby Vision from two layers only, so the disc plays as its HDR10, SDR or HLG base.
-// The disc is written as asked; this only says so, which was left to be found out on a television. A disc with a
-// second primary video is a dual layer disc, whichever of the two is listed first, and then nothing is said: that
-// includes a minimal enhancement layer made from a profile 8 file. Profile 5 has no such base and is warned about by
-// the reader itself.
+// The disc is written as asked; this only says so, which was left to be found out on a television. A disc with an
+// enhancement layer on its own PID (0x1015) is a dual layer disc, whichever of the two is listed first, and then
+// nothing is said: that includes a minimal enhancement layer made from a profile 8 file. A second video that is no
+// layer, such as a plain 1080p picture beside a 4K profile 8.1 one, goes to a PID of its own and the disc still plays
+// as the base: it was counted as a layer, and the warning was not given. Profile 5 has no such base and is warned about
+// by the reader itself.
 static void reportSingleLayerDvOnDisc(const MuxerManager& muxerManager)
 {
-    const StreamInfo* first = nullptr;
-    int videos = 0;
+    for (const AbstractMuxer* muxer : {muxerManager.getMainMuxer(), muxerManager.getSubMuxer()})
+        if (const auto* ts = dynamic_cast<const TSMuxer*>(muxer))
+            for (const auto& [pid, info] : ts->getPidList())
+                if (info.isDvEnhancement)
+                    return;
     for (const StreamInfo& si : muxerManager.getStreamInfo())
     {
         if (si.m_codec.empty() || si.m_codec[0] != 'V' || si.m_streamReader == nullptr ||
             si.m_streamReader->isSecondary() || si.m_isSubStream)
             continue;
-        if (videos++ == 0)
-            first = &si;
+        const auto* hevc = dynamic_cast<const HEVCStreamReader*>(si.m_streamReader);
+        if (hevc == nullptr || si.m_streamReader->getStreamHDR() != 4)
+            continue;
+        int profile = 0;
+        int compatibility = 0;
+        hevc->doViProfileAndCompatibility(false, profile, compatibility);
+        if (compatibility == 0)
+            continue;
+        const char* base = compatibility == 2 ? "SDR" : compatibility == 4 ? "HLG" : "HDR10";
+        LTRACE(LT_WARN, 2,
+               "Warning: the video is single layer Dolby Vision (profile "
+                   << profile
+                   << "). A UHD Blu-ray player plays Dolby Vision from "
+                      "two layers only, so this disc plays as "
+                   << base << ".");
+        return;
     }
-    if (first == nullptr || videos != 1)
-        return;
-    const auto* hevc = dynamic_cast<const HEVCStreamReader*>(first->m_streamReader);
-    if (hevc == nullptr || first->m_streamReader->getStreamHDR() != 4)
-        return;
-    int profile = 0;
-    int compatibility = 0;
-    hevc->doViProfileAndCompatibility(false, profile, compatibility);
-    if (compatibility == 0)
-        return;
-    const char* base = compatibility == 2 ? "SDR" : compatibility == 4 ? "HLG" : "HDR10";
-    LTRACE(LT_WARN, 2,
-           "Warning: the video is single layer Dolby Vision (profile "
-               << profile
-               << "). A UHD Blu-ray player plays Dolby Vision from "
-                  "two layers only, so this disc plays as "
-               << base << ".");
 }
 
 // --disc-size is checked before the mux against an estimate, the sources and five per cent, which counts neither a
