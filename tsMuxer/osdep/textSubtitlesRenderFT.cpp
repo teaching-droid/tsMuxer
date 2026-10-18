@@ -245,8 +245,9 @@ void TextSubtitlesRenderFT::setFont(const Font& font)
     {
         // Windows draws with a font of its own choosing when none is named; here there is none to fall back on
         if (font.m_name.empty())
-            THROW(ERR_COMMON, "No font is named for the subtitles. Give the track font-name=, the name of a font "
-                              "installed here or the path of a .ttf, .otf or .ttc file.")
+            THROW(ERR_COMMON,
+                  "No font is named for the subtitles. Give the track font-name=, the name of a font "
+                  "installed here or the path of a .ttf, .otf or .ttc file.")
         string fontName = font.m_name;
         // A name that ends in a font file's extension is a path and is used as it stands;
         // anything else is a family name and is looked up. The test used to be ".ttf" alone and

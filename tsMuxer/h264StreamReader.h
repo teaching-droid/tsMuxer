@@ -144,7 +144,7 @@ class H264StreamReader final : public MPEGStreamReader
     int calcPicOrder(const SliceUnit& slice);
     int getIdrPrevFrames(uint8_t* buff, const uint8_t* bufEnd);
     int leadingPicturesOfFirst(const SliceUnit& firstSlice, uint8_t* buff);
-    int64_t m_maxPts = 0;  // the latest presentation time given, for the start of the next IDR period
+    int64_t m_maxPts = 0;       // the latest presentation time given, for the start of the next IDR period
     int64_t m_maxPtsShown = 0;  // how long the picture at m_maxPts is shown: a frame, or its fields with pulldown
     // Pulldown with pictures shown out of decode order (B pictures): a picture is shown for 2 to 6 fields, so its
     // presentation time is the time the pictures shown before it take. pulldownFieldsAhead reads the ones that

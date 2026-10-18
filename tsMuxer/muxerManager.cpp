@@ -84,19 +84,20 @@ static std::vector<size_t> transportStreamAddOrder(const std::vector<StreamInfo>
                                                    const std::vector<StreamDiscoveryData>& dd)
 {
     std::vector<size_t> order(ci.size());
-    for (size_t i = 0; i < ci.size(); ++i)
-        order[i] = i;
+    for (size_t i = 0; i < ci.size(); ++i) order[i] = i;
 
     // The base is the first later primary HEVC video that is WIDER than the first Dolby Vision one, with or without
     // Dolby Vision data of its own (a base whose RPU was not taken out still carries it). One only as wide is no base
     // of it: a profile 8.1 picture listed before a plain one of the same size went to the enhancement layer PID.
-    const auto primaryHevc = [&](const size_t i) {
+    const auto primaryHevc = [&](const size_t i)
+    {
         AbstractStreamReader* reader = ci[i].m_streamReader;
         return dynamic_cast<HEVCStreamReader*>(reader) != nullptr && !reader->isSecondary() && !ci[i].m_isSubStream;
     };
     // The width the probe found: the readers have not parsed a picture yet when the order is decided, so theirs was 0
     // here and a test on it never held. Through the base class: the HEVC reader keeps its own protected.
-    const auto width = [&](const size_t i) -> int64_t {
+    const auto width = [&](const size_t i) -> int64_t
+    {
         if (i < dd.size() && dd[i].discovered && dd[i].width > 0)
             return dd[i].width;
         return dynamic_cast<MPEGStreamReader*>(ci[i].m_streamReader)->getStreamWidth();
@@ -126,10 +127,9 @@ static std::vector<size_t> transportStreamAddOrder(const std::vector<StreamInfo>
     order.erase(order.begin() + static_cast<std::ptrdiff_t>(base));
     order.insert(order.begin() + static_cast<std::ptrdiff_t>(dv), base);
     LTRACE(LT_INFO, 2,
-           "Dolby Vision: the enhancement layer (track " << ci[dv].m_streamReader->getStreamIndex()
-                                                         << ") is listed before its base layer (track "
-                                                         << ci[base].m_streamReader->getStreamIndex()
-                                                         << "). The base layer is muxed as the primary video.");
+           "Dolby Vision: the enhancement layer (track "
+               << ci[dv].m_streamReader->getStreamIndex() << ") is listed before its base layer (track "
+               << ci[base].m_streamReader->getStreamIndex() << "). The base layer is muxed as the primary video.");
     return order;
 }
 
@@ -432,8 +432,7 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
     }
 
     std::vector<size_t> order(ci.size());
-    for (size_t i = 0; i < ci.size(); ++i)
-        order[i] = i;
+    for (size_t i = 0; i < ci.size(); ++i) order[i] = i;
     if (dynamic_cast<TSMuxer*>(m_mainMuxer.get()) != nullptr)
         order = transportStreamAddOrder(ci, m_discoveryData);
 
@@ -508,11 +507,10 @@ void MuxerManager::checkTimeshiftFitsClock()
         return;
     const std::vector<StreamInfo>& ci = m_metaDemuxer.getStreamInfo();
     // A negative timeshift raises the start of the mux by what it needs (preinitMux). The 90 kHz clock of a transport
-    // stream wraps after 2^33 ticks, about 26.5 hours, and the raise had no bound: a timeshift of -95440 s put the start
-    // so high that the times of a 10 s clip wrapped round halfway through it, and went backwards there.
+    // stream wraps after 2^33 ticks, about 26.5 hours, and the raise had no bound: a timeshift of -95440 s put the
+    // start so high that the times of a 10 s clip wrapped round halfway through it, and went backwards there.
     int64_t mostNegativeShift = 0;
-    for (const StreamInfo& si : ci)
-        mostNegativeShift = std::min(mostNegativeShift, si.m_timeShift);
+    for (const StreamInfo& si : ci) mostNegativeShift = std::min(mostNegativeShift, si.m_timeShift);
     if (mostNegativeShift < 0)
     {
         static constexpr int64_t CLOCK_WRAP = 1LL << 33;  // 90 kHz ticks
@@ -573,14 +571,14 @@ void MuxerManager::checkTracksBeforeOutput()
                                           {secondaryVideo, "secondary video"}})
             if (count > 32)
                 THROW(ERR_COMMON, "A Blu-ray disc holds at most 32 " << kind << " tracks, and " << count
-                                                                     << " were given. Leave out "
-                                                                     << count - 32 << " of them.")
+                                                                     << " were given. Leave out " << count - 32
+                                                                     << " of them.")
     }
     checkTimeshiftFitsClock();
 
-    const bool hevcSplit = std::any_of(ci.begin(), ci.end(), [](const StreamInfo& si) {
-        return SubTrackFilter::isSubTrack(si.m_pid) && si.m_codec == hevcCodecInfo.programName;
-    });
+    const bool hevcSplit =
+        std::any_of(ci.begin(), ci.end(), [](const StreamInfo& si)
+                    { return SubTrackFilter::isSubTrack(si.m_pid) && si.m_codec == hevcCodecInfo.programName; });
     // PCM of an MP4 or MOV file is found to be floating point, which is refused, at its first packet: a disc or a
     // demux had made its folders by then, and left them empty. Its first block is read here as well.
     const bool movPcm =

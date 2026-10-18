@@ -1558,7 +1558,8 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                 const string part = item.rel.substr(from, slash == string::npos ? string::npos : slash - from);
                 const auto [it, isNew] = seen.emplace(std::make_pair(parent, udfFileIdentifier(part)), part);
                 if (!isNew && it->second != part)
-                    THROW(ERR_COMMON, "bdmv-to-iso: the names \"" << it->second << "\" and \"" << part << "\" in "
+                    THROW(ERR_COMMON, "bdmv-to-iso: the names \""
+                                          << it->second << "\" and \"" << part << "\" in "
                                           << (parent.empty() ? string("the disc folder") : parent)
                                           << " are the same as far as a UDF file identifier holds a name. "
                                              "Shorten one of them.")
@@ -2421,8 +2422,7 @@ class KeepOldOutput
         if (m_folder || m_demux)
             std::filesystem::remove_all(m_tmp, ec);
         else
-            for (const auto& p : ownFiles())
-                std::filesystem::remove(p, ec);
+            for (const auto& p : ownFiles()) std::filesystem::remove(p, ec);
     }
 
     // A file output (TS, M2TS, ISO, Matroska): returns the name to write. Its split parts are name.split.n.ext.
@@ -2640,12 +2640,14 @@ static void refuseSourceAsOutput(const MuxerManager& muxerManager, const std::st
                 const std::filesystem::path src(std::u8string(name.begin(), name.end()));
                 const std::u8string fn = src.filename().u8string();
                 const std::u8string se = src.extension().u8string();
-                const std::filesystem::path srcDir = src.has_parent_path() ? src.parent_path() : std::filesystem::path(".");
+                const std::filesystem::path srcDir =
+                    src.has_parent_path() ? src.parent_path() : std::filesystem::path(".");
                 if (strStartWith(strToLowerCase(std::string(fn.begin(), fn.end())), prefix) &&
                     strToLowerCase(std::string(se.begin(), se.end())) == ext &&
                     std::filesystem::equivalent(srcDir, outDir, ec) && !ec)
                     throw runtime_error("The source " + name + " has the name of a part of the split output " +
-                                        dstFile + ", and writing that part would destroy it. Choose another output "
+                                        dstFile +
+                                        ", and writing that part would destroy it. Choose another output "
                                         "name.");
             }
     }
@@ -2667,8 +2669,8 @@ static void refuseSourceAsOutput(const MuxerManager& muxerManager, const std::st
             if (outIsFolder)
                 for (const char* sub : {"BDMV", "CERTIFICATE"})
                     if (pathIsInside(src, out / sub))
-                        throw runtime_error("The output folder " + dstFile + " holds the source " + name +
-                                            " in its " + sub +
+                        throw runtime_error("The output folder " + dstFile + " holds the source " + name + " in its " +
+                                            sub +
                                             " folder, and writing the disc there would destroy that source. Choose "
                                             "another output folder.");
         }

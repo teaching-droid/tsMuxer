@@ -852,8 +852,8 @@ CheckStreamRez PGSStreamReader::checkStream(uint8_t* buffer, int len, ContainerT
     else if (containerType == ContainerType::ctSUP && len > 2)
     {
         // A few bytes in front of the first "PG" marker: the file was not taken for a .sup at all, and nothing was
-        // muxed. The first plausible segment counts, as the reader finds it: within 16 bytes only, a file with 16 or more
-        // bytes in front, or one that begins inside a segment, was not listed, though the reader muxes it.
+        // muxed. The first plausible segment counts, as the reader finds it: within 16 bytes only, a file with 16 or
+        // more bytes in front, or one that begins inside a segment, was not listed, though the reader muxes it.
         if (uint8_t* first = supMarkerIn(buffer, buffer + len))
         {
             rez.codecInfo = pgsCodecInfo;

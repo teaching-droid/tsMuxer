@@ -466,9 +466,9 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
     {
         const ptrdiff_t room = PG_BUFFER_SIZE - HIDE_RESERVE - (curPos - m_pgsBuffer);
         const int budget = room > 0 ? static_cast<int>(room / stepBytes) : 0;
-        const int framesShown =
-            lastAnimateTime + FLOAT_EPS >= updateTime ? static_cast<int>((lastAnimateTime - updateTime) / fpsPts + 1.5)
-                                                      : 0;
+        const int framesShown = lastAnimateTime + FLOAT_EPS >= updateTime
+                                    ? static_cast<int>((lastAnimateTime - updateTime) / fpsPts + 1.5)
+                                    : 0;
         const int wantIn = FFMIN(fadeInFrames - 1, framesShown);
         const int wantOut = hide ? FFMIN(fadeOutFrames - 1, framesShown) : 0;
         if (wantIn + wantOut > budget)
@@ -476,9 +476,8 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
             if (!m_fadeCutSaid)
                 LTRACE(LT_WARN, 2, "Warning: a fade of a subtitle is too long to be drawn in full; it is shortened.");
             m_fadeCutSaid = true;
-            const int inSteps = wantIn > 0 ? FFMAX(1, static_cast<int>(static_cast<int64_t>(budget) * wantIn /
-                                                                       (wantIn + wantOut)))
-                                           : 0;
+            const int inSteps =
+                wantIn > 0 ? FFMAX(1, static_cast<int>(static_cast<int64_t>(budget) * wantIn / (wantIn + wantOut))) : 0;
             const int outSteps = FFMAX(0, budget - inSteps);
             if (wantIn > inSteps)
             {

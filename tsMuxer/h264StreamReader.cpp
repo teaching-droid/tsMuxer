@@ -1823,7 +1823,8 @@ int H264StreamReader::processSPS(uint8_t* buff)
             // A new rate (fps=, delPulldown) is written into the SPS where it lies in the buffer, and the stream check
             // and the mux read that same buffer: the second reading met the rewritten SPS and called it a change.
             const uint8_t* end = NALUnit::findNALWithStartCode(buff, m_bufEnd, true);
-            const auto sameAs = [&](const std::map<uint32_t, std::vector<uint8_t>>& kept) {
+            const auto sameAs = [&](const std::map<uint32_t, std::vector<uint8_t>>& kept)
+            {
                 const auto known = kept.find(seq_parameter_set_id);
                 return known != kept.end() && known->second.size() == static_cast<size_t>(end - buff) &&
                        std::equal(known->second.begin(), known->second.end(), buff);

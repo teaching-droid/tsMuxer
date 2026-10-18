@@ -1242,16 +1242,15 @@ void MatroskaDemuxer::applyStartCodeRule()
     if (rule.empty())
         return;
 
-    // Each video track's own rule when the file gives one per track, found by the track's TrackUID: a tool that rewrites
-    // the file may number its tracks anew (mkvmerge does, with --track-order or a track left out), and a rule found by
-    // number went to another track. A file from before, or one whose tracks were given new UIDs, has no line for its
-    // tracks, and the line for the whole file goes to every track as it did (see MatroskaMuxer::writeAttachments).
-    const auto ownRule = [&](const Track* t) {
-        return dvManifestValue(manifest, "start-code-track-uid-" + std::to_string(static_cast<uint64_t>(t->uid)));
-    };
+    // Each video track's own rule when the file gives one per track, found by the track's TrackUID: a tool that
+    // rewrites the file may number its tracks anew (mkvmerge does, with --track-order or a track left out), and a rule
+    // found by number went to another track. A file from before, or one whose tracks were given new UIDs, has no line
+    // for its tracks, and the line for the whole file goes to every track as it did (see
+    // MatroskaMuxer::writeAttachments).
+    const auto ownRule = [&](const Track* t)
+    { return dvManifestValue(manifest, "start-code-track-uid-" + std::to_string(static_cast<uint64_t>(t->uid))); };
     bool perTrack = false;
-    for (int i = 0; i < num_tracks && !perTrack; i++)
-        perTrack = tracks[i] != nullptr && !ownRule(tracks[i]).empty();
+    for (int i = 0; i < num_tracks && !perTrack; i++) perTrack = tracks[i] != nullptr && !ownRule(tracks[i]).empty();
 
     int applied = 0;
     for (int i = 0; i < num_tracks; i++)
@@ -1781,10 +1780,10 @@ int MatroskaDemuxer::matroska_read_header()
             }
             else if (!strcmp(track->codec_id, MATROSKA_CODEC_ID_TEXT_WEBVTT) || isWebmVttText(track->codec_id))
             {
-                track->parsed_priv_data = new ParsedSRTTrackData(track->codec_priv, track->codec_priv_size,
-                                                                 isWebmVttText(track->codec_id)
-                                                                     ? ParsedSRTTrackData::Form::WebmVtt
-                                                                     : ParsedSRTTrackData::Form::WebVtt);
+                track->parsed_priv_data =
+                    new ParsedSRTTrackData(track->codec_priv, track->codec_priv_size,
+                                           isWebmVttText(track->codec_id) ? ParsedSRTTrackData::Form::WebmVtt
+                                                                          : ParsedSRTTrackData::Form::WebVtt);
             }
             else if (!strcmp(track->codec_id, MATROSKA_CODEC_ID_SUBTITLE_PGS))
             {
@@ -1946,10 +1945,9 @@ void MatroskaDemuxer::applyAssDrawing()
                 !drawing.fontsDir.empty() &&
                 std::filesystem::is_directory(std::u8string(drawing.fontsDir.begin(), drawing.fontsDir.end()), ec);
             LTRACE(LT_INFO, 2,
-                   "ASS subtitles are drawn with libass, with " << fonts.size() << " font(s) attached to the file"
-                                                                << (fontsDirUsed ? ", the fonts in " : "")
-                                                                << (fontsDirUsed ? drawing.fontsDir : "")
-                                                                << " and the system's fonts.");
+                   "ASS subtitles are drawn with libass, with "
+                       << fonts.size() << " font(s) attached to the file" << (fontsDirUsed ? ", the fonts in " : "")
+                       << (fontsDirUsed ? drawing.fontsDir : "") << " and the system's fonts.");
         }
         delete track->parsed_priv_data;
         track->parsed_priv_data =
@@ -2587,7 +2585,8 @@ void MatroskaDemuxer::readTracksAfterClusters()
     level_up = savedLevelUp;
     peek_id = savedPeek;
     if (num_tracks > 0)
-        LTRACE(LT_INFO, 2, "Matroska: the track list of " << m_sourceName << " follows the clusters, and is read there.");
+        LTRACE(LT_INFO, 2,
+               "Matroska: the track list of " << m_sourceName << " follows the clusters, and is read there.");
 }
 
 // The chapters of a Matroska file, read wherever the Chapters element is. They used to be read only while the header

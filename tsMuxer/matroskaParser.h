@@ -283,9 +283,9 @@ constexpr auto MATROSKA_CODEC_ID_TEXT_ASS = "S_TEXT/ASS";
 constexpr auto MATROSKA_CODEC_ID_TEXT_SSA = "S_TEXT/SSA";
 constexpr auto MATROSKA_CODEC_ID_TEXT_WEBVTT = "S_TEXT/WEBVTT";
 constexpr auto MATROSKA_CODEC_ID_WEBM_WEBVTT = "D_WEBVTT/SUBTITLES";
-// WebM stores WebVTT as D_WEBVTT/ and its kind: SUBTITLES, CAPTIONS, DESCRIPTIONS or METADATA, all in the same form. Only
-// SUBTITLES was recognised, so captions and descriptions were not read at all. METADATA is not text to be shown and is
-// still not read.
+// WebM stores WebVTT as D_WEBVTT/ and its kind: SUBTITLES, CAPTIONS, DESCRIPTIONS or METADATA, all in the same form.
+// Only SUBTITLES was recognised, so captions and descriptions were not read at all. METADATA is not text to be shown
+// and is still not read.
 inline bool isWebmVttText(const std::string& codecId)
 {
     return codecId == "D_WEBVTT/SUBTITLES" || codecId == "D_WEBVTT/CAPTIONS" || codecId == "D_WEBVTT/DESCRIPTIONS";

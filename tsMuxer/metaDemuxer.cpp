@@ -1019,8 +1019,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         which << codec << " from " << unquotedStreamName;
         if (pid)
             which << ", track " << pid;
-        THROW(ERR_COMMON, which.str() << " uses " << taken.front()
-                                      << (taken.size() > 1 ? " and other files" : "")
+        THROW(ERR_COMMON, which.str() << " uses " << taken.front() << (taken.size() > 1 ? " and other files" : "")
                                       << " for a track an earlier line of the meta file already muxes, and the same "
                                          "track of a file can be muxed only once. The line would lose that part. "
                                          "Give each file to one line only.")
@@ -1078,7 +1077,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     // pulldown as well: 144 pictures of H.264 film played in 4.8 s instead of 6.0.
     map<string, string> readerParams = addParams;
     bool fpsFromPulldown = false;
-    const int pulldownCodec = codec == "V_MPEG-2"           ? CODEC_V_MPEG2
+    const int pulldownCodec = codec == "V_MPEG-2"          ? CODEC_V_MPEG2
                               : codec == "V_MPEG4/ISO/AVC" ? CODEC_V_MPEG4_H264
                               : codec == "V_MS/VFW/WVC1"   ? CODEC_V_VC1
                                                            : 0;
@@ -1763,9 +1762,9 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                                 << doubleToStr(static_cast<double>(editNs) / 1e6, 3)
                                 << " ms into the track and the video keeps "
                                 << doubleToStr(static_cast<double>(leadNs) / 1e6, 3)
-                                << " ms before the cut, so its times are moved "
-                                << (backNs > 0 ? "back" : "on") << " by "
-                                << doubleToStr(static_cast<double>(backNs > 0 ? backNs : -backNs) / 1e6, 3) << " ms.");
+                                << " ms before the cut, so its times are moved " << (backNs > 0 ? "back" : "on")
+                                << " by " << doubleToStr(static_cast<double>(backNs > 0 ? backNs : -backNs) / 1e6, 3)
+                                << " ms.");
             else
                 LTRACE(LT_INFO, 2,
                        "Track " << pid << " of " << unquoteStr(fileList[0]) << ": its edit list starts the sound "
