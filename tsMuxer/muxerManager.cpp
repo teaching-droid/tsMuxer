@@ -1363,8 +1363,9 @@ void MuxerManager::parseMuxOpt(const string& opts)
         else if (paramPair[0] == "--no-chapters")
             m_noChapters = true;
         // An empty list is a list: the window writes it when every line of its chapter box was deleted. It was read as
-        // no list at all, and the source's chapters came back.
-        else if (paramPair[0] == "--custom-chapters" && (paramPair.size() < 2 || trimStr(paramPair[1]).empty()))
+        // no list at all, and the source's chapters came back. A list of empty places only (;) is empty as well.
+        else if (paramPair[0] == "--custom-chapters" &&
+                 (paramPair.size() < 2 || trimStr(paramPair[1]).find_first_not_of("; \t") == std::string::npos))
             m_noChapters = true;
         else if (paramPair[0] == "--layer-break-lbn")
         {
