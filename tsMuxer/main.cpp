@@ -2159,12 +2159,9 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
 // container up front to decide, and that read is exactly what tsMuxeR's shared streaming reader
 // cannot afford, so each broke joins or refused correct input. An outcome cannot false refuse.
 //
-// A WARNING RATHER THAN A REFUSAL, and that is not timidity. Asked to read the same track as the
-// wrong codec, ffmpeg produces a file of 1,841,388 bytes, the same count to the byte, and exits 0.
-// Asked to read a stream with 10,000 corrupted bytes, ffmpeg drops 70 per cent of it and exits 0,
-// and mkvmerge keeps almost all of it and says nothing at all. No reference tool treats partial
-// loss as a failure, so neither does this. What none of them does is state the size of the loss,
-// and that is the part worth adding.
+// A WARNING RATHER THAN A REFUSAL. What could be read is a usable output, and a refusal would lose
+// that part as well: a stream read as the wrong codec, or one with damaged bytes, is muxed as far as
+// it can be read. What was missing is the size of the loss, and that is the part worth adding.
 //
 // The threshold is any loss at all, after the first frame is found. That needs no tuning: 48
 // correct sources measured here lose exactly zero bytes, and the 32 that begin part way through a
@@ -2172,7 +2169,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
 // One line per track that lost data, and the explanation ONCE.
 //
 // ** THE EXPLANATION USED TO BE REPEATED PER TRACK, AND THAT GETS WORSE THE MORE TRACKS ARE
-// AFFECTED. ** The ninth review measured a six track job printing six warnings of 427 characters
+// AFFECTED. ** Measured: a six track job printed six warnings of 427 characters
 // each, 2,562 in total, identical apart from the first 55 - about 32 lines of near duplicate prose
 // on an 80 column console, in which the six facts that actually differ are the least visible part.
 // A six track Blu-ray demux is an everyday job, and the signal to noise ratio FELL as the number of
