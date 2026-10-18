@@ -3,9 +3,11 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <filesystem>
 #include <functional>
 #include <set>
 #include <sstream>
+#include <system_error>
 #include <tuple>
 
 #include <fs/directory.h>
@@ -1938,10 +1940,16 @@ void MatroskaDemuxer::applyAssDrawing()
         {
             fonts = ass_render::fontsFromAttachments(getPassThroughAttachments());
             fontsRead = true;
+            // a fonts-dir that is not a folder adds no font, and the meta reader has warned about it already
+            std::error_code ec;
+            const bool fontsDirUsed =
+                !drawing.fontsDir.empty() &&
+                std::filesystem::is_directory(std::u8string(drawing.fontsDir.begin(), drawing.fontsDir.end()), ec);
             LTRACE(LT_INFO, 2,
                    "ASS subtitles are drawn with libass, with " << fonts.size() << " font(s) attached to the file"
-                                                                << (drawing.fontsDir.empty() ? "" : ", the fonts in ")
-                                                                << drawing.fontsDir << " and the system's fonts.");
+                                                                << (fontsDirUsed ? ", the fonts in " : "")
+                                                                << (fontsDirUsed ? drawing.fontsDir : "")
+                                                                << " and the system's fonts.");
         }
         delete track->parsed_priv_data;
         track->parsed_priv_data =

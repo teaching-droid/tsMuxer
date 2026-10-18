@@ -39,13 +39,24 @@ if(EXISTS "${TSMUXER_GIT_DIR}" AND NOT IS_DIRECTORY "${TSMUXER_GIT_DIR}")
   endif()
 endif()
 if(IS_DIRECTORY "${TSMUXER_GIT_DIR}")
+  # A worktree's own directory holds only its HEAD and its log; the branch refs and packed-refs are in the
+  # repository's common directory, which "commondir" names. Watching the branch ref in the worktree's own
+  # directory watched a file that does not exist there, so a build in a worktree kept the commit it was first
+  # configured with: one printed a commit two merges older than the one it was built from.
+  set(TSMUXER_GIT_COMMON "${TSMUXER_GIT_DIR}")
+  if(EXISTS "${TSMUXER_GIT_DIR}/commondir")
+    file(READ "${TSMUXER_GIT_DIR}/commondir" TSMUXER_GIT_COMMONDIR)
+    string(STRIP "${TSMUXER_GIT_COMMONDIR}" TSMUXER_GIT_COMMONDIR)
+    get_filename_component(TSMUXER_GIT_COMMON "${TSMUXER_GIT_COMMONDIR}" ABSOLUTE BASE_DIR "${TSMUXER_GIT_DIR}")
+  endif()
   # HEAD covers a checkout and a detached head; the branch ref covers a commit on the current
-  # branch, which does NOT rewrite HEAD; packed-refs covers a tree whose refs are packed.
-  set(TSMUXER_GIT_WATCH "${TSMUXER_GIT_DIR}/HEAD" "${TSMUXER_GIT_DIR}/packed-refs")
+  # branch, which does NOT rewrite HEAD; packed-refs covers a tree whose refs are packed; the log of HEAD is
+  # written by every commit, merge and checkout, also while the branch ref is packed and has no file of its own.
+  set(TSMUXER_GIT_WATCH "${TSMUXER_GIT_DIR}/HEAD" "${TSMUXER_GIT_DIR}/logs/HEAD" "${TSMUXER_GIT_COMMON}/packed-refs")
   if(EXISTS "${TSMUXER_GIT_DIR}/HEAD")
     file(READ "${TSMUXER_GIT_DIR}/HEAD" TSMUXER_GIT_HEAD)
     if(TSMUXER_GIT_HEAD MATCHES "ref: *([^\r\n]+)")
-      list(APPEND TSMUXER_GIT_WATCH "${TSMUXER_GIT_DIR}/${CMAKE_MATCH_1}")
+      list(APPEND TSMUXER_GIT_WATCH "${TSMUXER_GIT_COMMON}/${CMAKE_MATCH_1}")
     endif()
   endif()
   foreach(watched IN LISTS TSMUXER_GIT_WATCH)

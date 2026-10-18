@@ -3415,7 +3415,7 @@ int main(int argc, char** argv)
     {
         if (argc == 2)
             LTRACE2(LT_ERROR, "Error: ")
-        LTRACE(LT_ERROR, 2, "Unknnown exception" << EXCEPTION_ERR_MSG);
+        LTRACE(LT_ERROR, 2, "Unknown exception" << EXCEPTION_ERR_MSG);
         return -4;
     }
 }
