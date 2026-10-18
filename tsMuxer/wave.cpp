@@ -1,5 +1,7 @@
 #include "wave.h"
 
+#include <cstring>
+
 #include "vodCoreException.h"
 
 namespace wave_format
@@ -68,29 +70,52 @@ void buildWaveHeader(MemoryBlock& waveBuffer, const int samplerate, const uint16
     for (const char c : "data\x00\x00\x00\x00") *curPos++ = c;
 }
 
+// Only whole samples are turned round. A block that ends inside a sample, as the first block read to probe a track can,
+// was read and written up to two bytes past its end; the bytes of such a part sample are now copied as they are.
+// 32 bit samples are turned round as 4 bytes: they went through the 3 byte path, which mixed bytes of two samples.
 void toLittleEndian(uint8_t* dstData, uint8_t* srcData, const int size, const int bitdepth)
 {
+    if (size <= 0)
+        return;
     if (bitdepth == 16)
     {
+        const int whole = size / 2 * 2;
         auto dst = UnalignedPtr<uint16_t>(dstData);
         auto src = UnalignedPtr<uint16_t>(srcData);
-        const auto srcEnd = UnalignedPtr<uint16_t>(srcData + size);
+        const auto srcEnd = UnalignedPtr<uint16_t>(srcData + whole);
         while (src < srcEnd) *dst++ = my_ntohs(*src++);
+        if (whole < size)
+            memmove(dstData + whole, srcData + whole, static_cast<size_t>(size - whole));
     }
     else if (bitdepth > 16)
     {
+        const int width = bitdepth == 32 ? 4 : 3;
+        const int whole = size / width * width;
         uint8_t* dst = dstData;
         const uint8_t* src = srcData;
-        const uint8_t* srcEnd = srcData + size;
+        const uint8_t* srcEnd = srcData + whole;
         while (src < srcEnd)
         {
-            const uint8_t tmp = src[0];
-            dst[0] = src[2];
-            dst[1] = src[1];
-            dst[2] = tmp;
-            dst += 3;
-            src += 3;
+            if (width == 4)
+            {
+                const uint8_t b0 = src[0], b1 = src[1];
+                dst[0] = src[3];
+                dst[1] = src[2];
+                dst[2] = b1;
+                dst[3] = b0;
+            }
+            else
+            {
+                const uint8_t tmp = src[0];
+                dst[0] = src[2];
+                dst[1] = src[1];
+                dst[2] = tmp;
+            }
+            dst += width;
+            src += width;
         }
+        if (whole < size)
+            memmove(dstData + whole, srcData + whole, static_cast<size_t>(size - whole));
     }
     else
     {
