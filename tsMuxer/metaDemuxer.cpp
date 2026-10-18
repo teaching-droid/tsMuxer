@@ -1076,6 +1076,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     // pulldown and nobody chose one. The same holds for H.264 and VC-1, whose readers remove the
     // pulldown as well: 144 pictures of H.264 film played in 4.8 s instead of 6.0.
     map<string, string> readerParams = addParams;
+    bool fpsFromPulldown = false;
     const int pulldownCodec = codec == "V_MPEG-2"           ? CODEC_V_MPEG2
                               : codec == "V_MPEG4/ISO/AVC" ? CODEC_V_MPEG4_H264
                               : codec == "V_MS/VFW/WVC1"   ? CODEC_V_VC1
@@ -1111,6 +1112,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             if (filmFps)
             {
                 readerParams["fps"] = filmFps;
+                fpsFromPulldown = true;
                 LTRACE(LT_INFO, 2,
                        "delPulldown: the " << s.codecInfo.displayName << " stream carries pulldown at " << streamFps
                                            << " fps, so it is muxed at " << filmFps << " fps.");
@@ -1233,6 +1235,9 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     }
     if (codecReader == nullptr)
         codecReader = createCodec(codec, readerParams, fileList[0], mergePlayItems(mplsInfoList));
+    if (fpsFromPulldown)
+        if (auto* mpegReader = dynamic_cast<MPEGStreamReader*>(codecReader))
+            mpegReader->setFpsAnnounced();
     codecReader->setStreamIndex(static_cast<int>(m_codecInfo.size() + 1));
     codecReader->setStreamName(fileList[0]);
     codecReader->setTimeOffset(m_timeOffset);

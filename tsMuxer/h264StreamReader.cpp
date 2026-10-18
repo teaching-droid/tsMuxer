@@ -1820,10 +1820,15 @@ int H264StreamReader::processSPS(uint8_t* buff)
             // content, from a part of the stream encoded again, as a cutting tool does with the start of a file, was
             // passed over as well, and every picture after it was decoded with the first one's settings: the picture
             // broke up from there on (#813). It is read now, and ours follows it.
+            // A new rate (fps=, delPulldown) is written into the SPS where it lies in the buffer, and the stream check
+            // and the mux read that same buffer: the second reading met the rewritten SPS and called it a change.
             const uint8_t* end = NALUnit::findNALWithStartCode(buff, m_bufEnd, true);
-            const auto known = m_spsSource.find(seq_parameter_set_id);
-            if (known != m_spsSource.end() && known->second.size() == static_cast<size_t>(end - buff) &&
-                std::equal(known->second.begin(), known->second.end(), buff))
+            const auto sameAs = [&](const std::map<uint32_t, std::vector<uint8_t>>& kept) {
+                const auto known = kept.find(seq_parameter_set_id);
+                return known != kept.end() && known->second.size() == static_cast<size_t>(end - buff) &&
+                       std::equal(known->second.begin(), known->second.end(), buff);
+            };
+            if (sameAs(m_spsSource) || sameAs(m_spsRewritten))
                 return 0;
             if (!m_spsChangeSaid)
                 LTRACE(LT_INFO, 2,
@@ -1898,6 +1903,7 @@ int H264StreamReader::processSPS(uint8_t* buff)
     }
 
     updateFPS(sps, buff, nextNal, oldSpsLen);
+    m_spsRewritten[sps->seq_parameter_set_id].assign(buff, NALUnit::findNALWithStartCode(buff, m_bufEnd, true));
     updateHRDParam(sps);
     if (sps->nalHrdParams.isPresent)
         updatedSPSList.insert(sps->seq_parameter_set_id);

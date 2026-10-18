@@ -126,6 +126,7 @@ class H264StreamReader final : public MPEGStreamReader
     std::set<uint32_t> updatedSPSList;
     // Each SPS as it came in the stream, by its id: a later one with the same id and other content is read again
     std::map<uint32_t, std::vector<uint8_t>> m_spsSource;
+    std::map<uint32_t, std::vector<uint8_t>> m_spsRewritten;  // the same SPS after a new rate was written into it
     bool m_spsChangeSaid = false;
     std::vector<uint8_t> m_lastSeiMvcHeader;
     // The SPS of the last IDR, as stored in m_spsMap. An IDR with a different one begins a new stream,

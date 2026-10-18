@@ -99,6 +99,9 @@ class MPEGStreamReader : public AbstractStreamReader
     [[nodiscard]] virtual unsigned getStreamHeight() const = 0;
     virtual bool getInterlaced() = 0;
     void setRemovePulldown(const bool value) { m_removePulldown = value; }
+    // The rate was chosen by delPulldown, which has said so: the line that reports fps= changing the stream's rate
+    // would report it a second time, as if fps= had been given.
+    void setFpsAnnounced() { m_isFirstFpsWarn = false; }
     virtual int getFrameDepth() { return 1; }
 
     /// Probe a buffer of elementary stream data and populate a
