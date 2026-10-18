@@ -22,9 +22,9 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **The sound of an MP4 cut without re-encoding was out of step with its picture.** Such a file keeps the pictures from the key picture before the cut, and its edit lists start every track at the cut. In a TS the sound came 82 to 109 ms late, and AAC in Matroska 0.5 s early. The sound now comes with its picture, also in a join of such files.
 
-* **Video that names no frame rate of its own was muxed at 25 fps from a TS, an M2TS or a Blu-ray playlist,** as HEVC, H.264, VVC or AV1 may be encoded: a 23.976 film played 4 % too fast and ended before its sound. Without fps= on the track, the rate now comes from the times of its pictures in the file, as it does from Matroska and MP4, also over the next files of a join or the next clips of a playlist when the first is short. This holds when every PES starts with a time, each PES holds one picture, the times keep one step and that step is a standard frame rate; otherwise the track still gets 25, and so does interlaced H.264, whose times may be those of its fields. The listing shows the rate, and the window writes it. Where the listing finds no rate, the window writes no fps= and leaves the rate to tsMuxeR, as the command line does; it wrote 23.976 for every such track. The HDMV descriptor of HEVC, VVC and H.264 now gives the rate the track is muxed at; without fps= it gave 0. Mux such files again.
+* **Video that names no frame rate of its own was muxed at 25 fps from a TS, an M2TS or a Blu-ray playlist,** as HEVC, H.264, VVC or AV1 may be encoded: a 23.976 film played 4 % too fast and ended before its sound. Without fps= on the track, the rate now comes from the times of its pictures in the file, as it does from Matroska and MP4, also over the next files of a join or the next clips of a playlist when the first is short. This holds when every PES starts with a time, each PES holds one picture, the times keep one step and that step is a standard frame rate; otherwise the track still gets 25, and so does interlaced H.264, whose times may be those of its fields. The listing shows the rate, and the window writes it. Where the listing finds no rate, the window writes no fps= and leaves the rate to tsMuxeR, as the command line does; it wrote 23.976 for every such track. The HDMV descriptor of HEVC, VVC and H.264 now gives the rate the track is muxed at; without fps= it gave 0. Mux such files again. (#46, thanks to @Moonghost-coder for the detailed report)
 
-* **An MP4 whose last box has 0 in its size field was muxed only in part,** and since 2.19.4 the mux still said it was complete. Such a file is now read to its end. A complete mux of an MP4 with boxes after its media that hold no sample (free, skip or uuid boxes, an mdat or moof that nothing uses, a box that says it is longer than the file) said "The output is incomplete"; it now ends as a complete mux, with a warning for an unused mdat or moof and for a box longer than the file.
+* **An MP4 whose last box has 0 in its size field was muxed only in part,** and since 2.19.4 the mux still said it was complete. Such a file is now read to its end. A complete mux of an MP4 with boxes after its media that hold no sample (free, skip or uuid boxes, an mdat or moof that nothing uses, a box that says it is longer than the file) said "The output is incomplete"; it now ends as a complete mux, with a warning for an unused mdat or moof and for a box longer than the file. (#42 and #43, thanks to @Moonghost-coder for the detailed reports)
 
 * **An ISO image of a folder with more than 4093 files and folders had its first file damaged,** with --bdmv-to-iso and --keep-extra-files: the table that maps the files was written over the start of it. The table now has the room it needs.
 
@@ -122,7 +122,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A .sup with bytes in front of its first segment** is muxed whole, with a warning, and is listed. With bytes that begin with "PG", nothing was muxed.
 
-* **Subtitles drawn for video up to 720 pixels wide at 25 or 50 frames per second, such as 720x576, were drawn for 720x480.** The canvas of their PGS was the size of NTSC video, and each subtitle was placed for 480 lines. They now get the canvas of 720x576 a disc has for such video, whether they come from SRT, ASS, SSA or WebVTT. A PGS track already drawn at 720x576 is no longer scaled down to 720x480 when its line names the size and the frame rate of the video.
+* **Subtitles drawn for video up to 720 pixels wide at 25 or 50 frames per second, such as 720x576, were drawn for 720x480.** The canvas of their PGS was the size of NTSC video, and each subtitle was placed for 480 lines. They now get the canvas of 720x576 a disc has for such video, whether they come from SRT, ASS, SSA or WebVTT. A PGS track already drawn at 720x576 is no longer scaled down to 720x480 when its line names the size and the frame rate of the video. (#45, thanks to @Moonghost-coder for the detailed report)
 
 * **A PGS track scaled to the video size on its line without fps=** had a frame rate of 0 in its pictures. It now keeps the frame rate of the stream.
 
@@ -132,7 +132,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Blu-ray and transport stream
 
-* **hdr10-override** marks an SDR HEVC track as HDR10 on a UHD disc. In the window: "Mark as HDR10 on a UHD disc" on the HEVC track.
+* **hdr10-override** marks an SDR HEVC track as HDR10 on a UHD disc. In the window: "Mark as HDR10 on a UHD disc" on the HEVC track. (#6)
 
 * **SDR HEVC video with BT.2020 colours** is marked as BT.2020 in the playlist and the clip information, as on a UHD disc mastered in SDR.
 
@@ -192,7 +192,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **At its smallest size, every tab stays readable.** The track list keeps at least four rows, the buttons beside it are no longer squashed, and a tab that needs more room scrolls. Rows of the Subtitles and Blu-ray tabs were drawn over each other there.
 
-* **The window shows whether the meta file follows the settings.** Text typed into the Meta file box, or a meta file opened, stops the window from building the meta file from the settings, and nothing said so: a setting changed in a tab was then not in the mux. A box above the meta file, "Build the meta file from the settings", now shows it: it unticks itself when the text is edited by hand, the title of the box says so, a line says when a change in a tab is not applied, and ticking it builds the meta file from the settings again. It takes the place of the "Reset meta to auto-generated" button.
+* **The window shows whether the meta file follows the settings.** Text typed into the Meta file box, or a meta file opened, stops the window from building the meta file from the settings, and nothing said so: a setting changed in a tab was then not in the mux. A box above the meta file, "Build the meta file from the settings", now shows it: it unticks itself when the text is edited by hand, the title of the box says so, a line says when a change in a tab is not applied, and ticking it builds the meta file from the settings again. It takes the place of the "Reset meta to auto-generated" button. (#41, thanks to @ddemarco5 for the suggestion)
 
 * **The German texts** write "Metadatei" one way throughout.
 
@@ -200,7 +200,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **An output named .mks or .mk3d** is a Matroska output, in the window and on the command line. On the command line it became a folder of demuxed tracks, and the window refused the name.
 
-* **A WebM output can be muxed from the window.** A .webm name chooses MKV output, but "Start muxing" refused it, a click on "MKV muxing" turned it into .mkv, and the Browse dialog had no WebM type and added .mkv to it. A .webm name is now kept and muxed as WebM, and the Browse dialog offers "WebM (*.webm)".
+* **A WebM output can be muxed from the window.** A .webm name chooses MKV output, but "Start muxing" refused it, a click on "MKV muxing" turned it into .mkv, and the Browse dialog had no WebM type and added .mkv to it. A .webm name is now kept and muxed as WebM, and the Browse dialog offers "WebM (*.webm)". (#44, thanks to @Moonghost-coder for the detailed report)
 
 * **New options:** "Draw ASS and SSA subtitles as plain text, without their styles" and "Fonts folder for ASS and SSA subtitles" on the Subtitles tab, "Also save drawn SRT subtitles as .srt files", and "Mark as HDR10 on a UHD disc" on an HEVC track.
 
