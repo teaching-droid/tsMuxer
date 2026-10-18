@@ -173,8 +173,15 @@ SaveSrtFile::~SaveSrtFile()
     if (m_file)
     {
         m_file->close();
-        LTRACE(LT_INFO, 2,
-               "The ASS subtitles were also written as text to " << m_name << " (" << m_count << " subtitles).");
+        std::string why;
+        const int done = finishSaveSrt(saveSrtTempName(m_name), m_name, why);
+        if (done == 0)
+            LTRACE(LT_INFO, 2,
+                   "The ASS subtitles were also written as text to " << m_name << " (" << m_count << " subtitles).");
+        else if (done == 2)
+            LTRACE(LT_ERROR, 2,
+                   "The ASS subtitles were written as text to "
+                       << saveSrtTempName(m_name) << ", which could not replace " << m_name << ": " << why);
     }
     else
         LTRACE(LT_INFO, 2, "No ASS subtitle was written to " << m_name << ".");
@@ -191,7 +198,7 @@ void SaveSrtFile::write(const std::string& text, int64_t inMs, int64_t outMs)
     if (!m_file)
     {
         m_file = std::make_unique<File>();
-        if (!m_file->open(m_name.c_str(), File::ofWrite))
+        if (!m_file->open(saveSrtTempName(m_name).c_str(), File::ofWrite))
         {
             m_file.reset();
             THROW(ERR_COMMON, "save-srt: the file " << m_name << " cannot be written.")

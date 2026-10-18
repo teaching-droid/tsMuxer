@@ -1,13 +1,21 @@
 #include "vod_common.h"
 
+#include <atomic>
 #include <cctype>
 #include <climits>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <sstream>
 #include <string>
+#include <system_error>
 #include <vector>
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 
 #include <fs/directory.h>
 
@@ -661,4 +669,37 @@ std::string stripDelayToken(const std::string& fileName)
     if (at == std::string::npos)
         return fileName;
     return fileName.substr(0, at);
+}
+
+namespace
+{
+std::atomic<bool> saveSrtSucceeded{false};
+std::filesystem::path saveSrtPath(const std::string& name) { return {std::u8string(name.begin(), name.end())}; }
+}  // namespace
+
+std::string saveSrtTempName(const std::string& name)
+{
+#ifdef _WIN32
+    const auto pid = static_cast<unsigned long>(_getpid());
+#else
+    const auto pid = static_cast<unsigned long>(getpid());
+#endif
+    return name + ".tsmuxer-new-" + std::to_string(pid);
+}
+
+void setSaveSrtJobSucceeded() { saveSrtSucceeded = true; }
+
+int finishSaveSrt(const std::string& tempName, const std::string& name, std::string& why)
+{
+    std::error_code ec;
+    if (!saveSrtSucceeded)
+    {
+        std::filesystem::remove(saveSrtPath(tempName), ec);
+        return 1;
+    }
+    std::filesystem::rename(saveSrtPath(tempName), saveSrtPath(name), ec);
+    if (!ec)
+        return 0;
+    why = ec.message();
+    return 2;
 }

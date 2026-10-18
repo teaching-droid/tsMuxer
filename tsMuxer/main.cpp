@@ -3160,6 +3160,7 @@ int main(int argc, char** argv)
             checkSourceConsumed(muxerManager);
             checkSourcesCutOff(muxerManager);
             keepOld.commit();
+            setSaveSrtJobSucceeded();
             LTRACE(LT_INFO, 2, "Mux successful complete");
             reportSplitWithoutParameterSets(muxerManager);
             reportLostData(muxerManager);
@@ -3336,6 +3337,7 @@ int main(int argc, char** argv)
             checkSourceConsumed(muxerManager);
             checkSourcesCutOff(muxerManager);
             keepOld.commit();
+            setSaveSrtJobSucceeded();
             if (dt != DiskType::NONE)
                 reportFinishedDiscSize(outputRoot, muxerManager.getDiscSizeLimit(), muxerManager.getExtraISOBlocks());
             LTRACE(LT_INFO, 2, "Mux successful complete");
@@ -3372,6 +3374,7 @@ int main(int argc, char** argv)
             createDir(demuxDir, true);
             sMuxer.doMux(demuxDir, nullptr);
             keepOld.commit();
+            setSaveSrtJobSucceeded();
             LTRACE(LT_INFO, 2, "Demux complete.");
             reportLostData(sMuxer);
             reportEmptyTracks(sMuxer);

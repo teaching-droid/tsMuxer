@@ -53,9 +53,17 @@ SRTStreamReader::~SRTStreamReader()
         if (m_saveSrt)
         {
             m_saveSrt->close();
-            LTRACE(LT_INFO, 2,
-                   "The subtitles of track " << m_streamIndex << " were also written as text to " << m_saveSrtName
-                                             << " (" << m_saveSrtCount << " subtitles).");
+            std::string why;
+            const int done = finishSaveSrt(saveSrtTempName(m_saveSrtName), m_saveSrtName, why);
+            if (done == 0)
+                LTRACE(LT_INFO, 2,
+                       "The subtitles of track " << m_streamIndex << " were also written as text to " << m_saveSrtName
+                                                 << " (" << m_saveSrtCount << " subtitles).");
+            else if (done == 2)
+                LTRACE(LT_ERROR, 2,
+                       "The subtitles of track " << m_streamIndex << " were written as text to "
+                                                 << saveSrtTempName(m_saveSrtName) << ", which could not replace "
+                                                 << m_saveSrtName << ": " << why);
         }
         else
             LTRACE(LT_INFO, 2, "No subtitle of track " << m_streamIndex << " was written to " << m_saveSrtName << ".");
@@ -90,7 +98,7 @@ void SRTStreamReader::saveSrtWrite(const std::string& text, int64_t inMs, int64_
     if (!m_saveSrt)
     {
         m_saveSrt = std::make_unique<File>();
-        if (!m_saveSrt->open(m_saveSrtName.c_str(), File::ofWrite))
+        if (!m_saveSrt->open(saveSrtTempName(m_saveSrtName).c_str(), File::ofWrite))
         {
             m_saveSrt.reset();
             THROW(ERR_COMMON, "save-srt: the file " << m_saveSrtName << " cannot be written.")

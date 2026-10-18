@@ -193,6 +193,15 @@ std::string parseLayerBreakList(const std::string& value, std::vector<int>& lbns
 // Returns an error text, or an empty one with mb set.
 std::string parseGuardMB(const std::string& option, const std::string& value, int& mb);
 
+// save-srt writes its file under a temporary name beside the name asked for, and the file takes that name only when the
+// job has succeeded. A job that failed after its first subtitle had written over a file of that name.
+std::string saveSrtTempName(const std::string& name);
+// Called where the job has succeeded, before the readers are closed
+void setSaveSrtJobSucceeded();
+// For a save-srt file its writer has closed: 0 it took its name, 1 the job failed and it was removed, 2 the job
+// succeeded but it could not take its name (it is kept under the temporary name, reason in why)
+int finishSaveSrt(const std::string& tempName, const std::string& name, std::string& why);
+
 static int64_t internalClockToPts(const int64_t value) { return value / INT_FREQ_TO_TS_FREQ; }
 
 // Sample count to internal clock ticks. The clock runs at 5.292 GHz, so the single product samples x clock passes the
