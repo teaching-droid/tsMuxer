@@ -291,6 +291,7 @@ class METADemuxer final : public AbstractDemuxer
     // MPLSPlayItemsMap m_mplsStreamMap;
     MPLSCache m_mplsStreamMap;
     std::set<std::string> m_processedTracks;
+    std::set<std::string> m_processedLines;  // the files and track of every line read, to tell a repeated line
 
     friend class ContainerToReaderWrapper;
 

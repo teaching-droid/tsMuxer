@@ -1018,24 +1018,60 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         }
     }
 
+    // ** THE KEY IS THE FILE AND THE TRACK, NOT WHERE THE LINE NAMES IT OR HOW. ** It held the file's place in the line
+    // and the name as written, so a file the second line names at another place (p2.ts alone, then "p1.ts"+"p2.ts"),
+    // or another way (./p1.ts), was muxed a second time, and the same track came out twice. A file named twice in ONE
+    // line, a join of a file with itself, is checked only against the lines before it.
+    const auto fileKey = [](const string& name)
+    {
+        std::error_code ec;
+        const std::filesystem::path p(std::u8string(name.begin(), name.end()));
+        std::filesystem::path c = std::filesystem::weakly_canonical(p, ec);
+        if (ec)
+            c = p;
+        const std::u8string u = c.generic_u8string();
+        const string key(u.begin(), u.end());
+#ifdef _WIN32
+        return strToLowerCase(key);
+#else
+        return key;
+#endif
+    };
+    const string trackPart =
+        string(addParams.find("subClip") == addParams.end() ? "_track_" : "_subtrack_") + int32ToStr(pid);
+    string lineKey;  // every file of this line, for telling a line that repeats an earlier one
+    std::vector<string> keys;
+    for (const auto& name : fileList)
+    {
+        keys.push_back(fileKey(name) + trackPart);
+        lineKey += keys.back() + "|";
+    }
     std::vector<string> taken;  // files of this line whose track an earlier line already reads
     for (int i = static_cast<int>(fileList.size()) - 1; i >= 0; --i)
     {
-        string trackKey = fileList[i] + string("_#") + int32ToStr(i) + string("_");
-        if (addParams.find("subClip") == addParams.end())
-            trackKey += string("_track_");
-        else
-            trackKey += string("_subtrack_");
-        trackKey += int32ToStr(pid);
-        if (m_processedTracks.find(trackKey) != m_processedTracks.end())
+        if (m_processedTracks.find(keys[i]) != m_processedTracks.end())
         {
             taken.insert(taken.begin(), fileList[i]);
             fileList.erase(fileList.begin() + i);
             if (static_cast<size_t>(i) < timelineRanges.size())
                 timelineRanges.erase(timelineRanges.begin() + i);
         }
-        else
-            m_processedTracks.insert(trackKey);
+    }
+    for (const auto& key : keys) m_processedTracks.insert(key);
+    // A line that names only files an earlier line already muxes for this track, but not the same files as any
+    // earlier line, would lose its part as well: the first file of a join alone after the join gave nothing. It is
+    // refused like the line above. A line that repeats an earlier one exactly is still left out with a warning.
+    const bool repeatsALine = m_processedLines.count(lineKey) != 0;
+    m_processedLines.insert(lineKey);
+    if (!taken.empty() && fileList.empty() && !repeatsALine)
+    {
+        std::ostringstream which;
+        which << codec << " from " << unquotedStreamName;
+        if (pid)
+            which << ", track " << pid;
+        THROW(ERR_COMMON, which.str() << " uses " << taken.front() << (taken.size() > 1 ? " and other files" : "")
+                                      << " for a track an earlier line of the meta file already muxes, and the same "
+                                         "track of a file can be muxed only once. Give each file to one line only.")
     }
     // A track of a file is read once, so a line that names some of the files of an earlier line for the same track
     // cannot have them. They were left out without a word, and the track started where the first remaining file does:
