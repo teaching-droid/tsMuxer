@@ -1571,7 +1571,13 @@ int HEVCStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
     }
     m_auMinSliceType = -1;
 
-    const bool needInsSpsPps = m_firstFileFrame && !(avPacket.flags & AVPacket::IS_SPS_PPS_IN_GOP);
+    // A decoder starts on an IRAP picture only with the parameter sets in hand, and a disc player starts there after
+    // every chapter jump and seek. A stream from MP4 or Matroska holds them once, in the file's header, so a disc made
+    // from one had them only at its first picture: started anywhere else, not one picture decoded. A disc repeats
+    // them at every IRAP, as H.264 on a disc already gets them (muxerManager.cpp, setH264SPSCont). An access unit that
+    // carries its own is left exactly as it is.
+    const bool irapWithoutSets = (V3_flags & BLURAY_OUT) && (avPacket.flags & AVPacket::IS_IFRAME);
+    const bool needInsSpsPps = (m_firstFileFrame || irapWithoutSets) && !(avPacket.flags & AVPacket::IS_SPS_PPS_IN_GOP);
     if (needInsSpsPps)
     {
         avPacket.flags |= AVPacket::IS_SPS_PPS_IN_GOP;

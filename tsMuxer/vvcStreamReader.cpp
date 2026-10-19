@@ -724,7 +724,10 @@ int VVCStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPa
         }
     }
 
-    const bool needInsSpsPps = m_firstFileFrame && !(avPacket.flags & AVPacket::IS_SPS_PPS_IN_GOP);
+    // On a disc the parameter sets come at every IRAP picture, where a player starts after a seek, as for HEVC
+    // (hevcStreamReader.cpp, writeAdditionData)
+    const bool irapWithoutSets = (V3_flags & BLURAY_OUT) && (avPacket.flags & AVPacket::IS_IFRAME);
+    const bool needInsSpsPps = (m_firstFileFrame || irapWithoutSets) && !(avPacket.flags & AVPacket::IS_SPS_PPS_IN_GOP);
     if (needInsSpsPps)
     {
         avPacket.flags |= AVPacket::IS_SPS_PPS_IN_GOP;
