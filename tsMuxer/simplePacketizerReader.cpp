@@ -1102,6 +1102,7 @@ void SimplePacketizerReader::fillDiscoveryData(StreamDiscoveryData& data)
 }
 
 static constexpr int CHECK_FRAMES_COUNT = 10;
+static constexpr int MIN_SHORT_FILE_FRAMES = 3;
 
 CheckStreamRez SimplePacketizerReader::checkStream(uint8_t* buffer, const int len, const ContainerType containerType,
                                                    const int containerDataType, const int containerStreamIndex)
@@ -1148,6 +1149,11 @@ CheckStreamRez SimplePacketizerReader::checkStream(uint8_t* buffer, const int le
     for (int i = 0; i < CHECK_FRAMES_COUNT && frame < end;)
     {
         const int frameLen = decodeFrame(frame, end, skipBytes, skipBeforeBytes);
+        // A file of fewer than ten frames ends inside this check, and its last frame, or the few bytes a reader looks
+        // at behind it, runs past the data: a cut of a third of a second was not recognised at all. Frames that were
+        // read back to back up to the end of the data are enough when there are at least three.
+        if (frameLen == NOT_ENOUGH_BUFFER && i >= MIN_SHORT_FILE_FRAMES)
+            break;
         if (frameLen <= 0 || getFreq() != freq || (firstStep && frameLen > end - frame))
         {
             setTestMode(false);
