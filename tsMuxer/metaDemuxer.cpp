@@ -891,6 +891,7 @@ std::vector<MPLSPlayItem> METADemuxer::mergePlayItems(const std::vector<MPLSPars
 }
 
 static double parseFpsValue(const std::string& text);
+static void warnSubtitleCanvas(const std::string& what, uint16_t width, uint16_t height, double fps);
 
 // level= as the codec counts it (H.264 in tenths, HEVC in thirtieths), when it is one of the codec's levels; anything
 // else is refused with the levels there are.
@@ -1268,6 +1269,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                     drawing.fontsDir = unquoteStr(it->second);
                 // drawn at the standard size a subtitle of that video has, as an SRT track is: 704x576 is drawn at
                 // 720x576, which a disc carries
+                const int videoWidth = drawing.width;
+                const int videoHeight = drawing.height;
                 if (drawing.width > 0 && drawing.height > 0 && drawing.fps > 0)
                 {
                     uint16_t w = 0, h = 0;
@@ -1298,6 +1301,10 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                     LTRACE(LT_INFO, 2,
                            "Track " << pid << " of " << unquoteStr(fileList[0]) << " is " << src.codecId
                                     << ", and is drawn with libass.");
+                    if (videoWidth <= 65535 && videoHeight <= 65535)
+                        warnSubtitleCanvas(
+                            "the subtitles of track " + std::to_string(pid) + " of " + unquoteStr(fileList[0]),
+                            static_cast<uint16_t>(videoWidth), static_cast<uint16_t>(videoHeight), drawing.fps);
                     // A fonts-dir that is not there, as a mistyped name, was passed over without a word
                     if (std::error_code ec; !drawing.fontsDir.empty() &&
                                             !std::filesystem::is_directory(
@@ -3135,6 +3142,23 @@ static uint16_t parsePictureSize(const char* name, const std::string& text)
     return static_cast<uint16_t>(value);
 }
 
+// Subtitles are drawn on the picture that subtitles have on a disc for the video's width and frame rate, as they always
+// were. Where that picture has fewer lines than the video (720x576 at 23.976 fps gets 720x480, portrait video
+// 1280x720, 720x1080 gets 720x576) a player stretches the subtitles over the video, and that happened without a word.
+// Video wider than 1920 is left out: on a UHD disc the subtitles are 1920x1080 by rule.
+static void warnSubtitleCanvas(const std::string& what, const uint16_t width, const uint16_t height, const double fps)
+{
+    uint16_t canvasWidth = 0;
+    uint16_t canvasHeight = 0;
+    text_subtitles::TextToPGSConverter::enlargeCrop(width, height, fps, &canvasWidth, &canvasHeight);
+    if (width <= 1920 && height > canvasHeight + 8)
+        LTRACE(LT_WARN, 2,
+               "Warning: " << what << " are drawn on a picture of " << canvasWidth << "x" << canvasHeight
+                           << ", the size subtitles have on a disc for video " << width << " pixels wide at " << fps
+                           << " fps. The video is " << width << "x" << height
+                           << ", so a player stretches the subtitles over it.");
+}
+
 // fadein-time= and fadeout-time=: seconds, 0 or more. A negative fade made the subtitle invisible for all of its time,
 // and text such as abc was taken as no fade, both in silence.
 static float parseFadeTime(const char* name, const std::string& text)
@@ -3739,7 +3763,11 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
                                      "to keep the subtitles as text (in a Matroska output or a demux).")
         }
         if (srtWidth && srtHeight && fps != 0.0)
+        {
             srtReader->setVideoInfo(srtWidth, srtHeight, fps);
+            if (!quiet && !srtReader->keepText())
+                warnSubtitleCanvas("the text subtitles of " + unquoteStr(codecStreamName), srtWidth, srtHeight, fps);
+        }
         srtReader->setFont(font);
         srtReader->setAnimation(animation);
     }
