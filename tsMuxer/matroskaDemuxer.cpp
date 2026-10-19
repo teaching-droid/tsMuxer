@@ -3503,8 +3503,19 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
             // Also when it equals the picture's size. That is a file saying "square pixels" over a stream that says
             // otherwise, and in Matroska the file's display size is the one shown: it was left out, and the output
             // then showed the stream's shape, a 720x576 file made to be shown at 5:4 came out 16:9.
-            if (displayUnit == 0 && displayWidth && displayHeight)
-                display = std::to_string(displayWidth) + "x" + std::to_string(displayHeight);
+            //
+            // One of the two alone stands with the other at its default, the picture's size less the crop (RFC 9559,
+            // DisplayWidth and DisplayHeight, for DisplayUnit 0): DisplayWidth 720 alone over 720x576 says square
+            // pixels, and was ignored, so the output showed the stream's shape.
+            if (displayUnit == 0 && (displayWidth || displayHeight))
+            {
+                if (!displayWidth && pixelWidth > cropLeft + cropRight)
+                    displayWidth = pixelWidth - cropLeft - cropRight;
+                if (!displayHeight && pixelHeight > cropTop + cropBottom)
+                    displayHeight = pixelHeight - cropTop - cropBottom;
+                if (displayWidth && displayHeight)
+                    display = std::to_string(displayWidth) + "x" + std::to_string(displayHeight);
+            }
             // In centimetres, inches or as an aspect ratio (DisplayUnit 1, 2 and 3), the two numbers give the shape
             // only, and a current ffmpeg writes the ratio. It was left out, so such a file's shape was lost the same
             // way. It goes on as the display size at the picture's height.
