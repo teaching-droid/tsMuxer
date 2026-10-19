@@ -1582,8 +1582,22 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     // Two names of one folder that a UDF file identifier cannot tell apart: a name in 16 bit characters keeps only
     // its first 127. The writer refused them only when it finished the image, so a refused image was left behind,
     // 43 MB in the case measured. Every level of every path is checked here, before the image is opened.
+    //
+    // Compared as the text the identifiers hold, not as their bytes: a name of 127 Latin letters is kept in 8 bit
+    // characters, and the same 127 letters with one more character outside Latin-1 are kept in 16 bit ones, cut to the
+    // same 127. The bytes differed, and both were written as two entries a reader shows with one name.
     {
-        std::map<std::pair<string, std::vector<uint8_t>>, string> seen;
+        const auto textOf = [](const std::vector<uint8_t>& id)
+        {
+            std::u16string text;
+            if (!id.empty() && id[0] == 16)
+                for (size_t i = 1; i + 1 < id.size(); i += 2)
+                    text.push_back(static_cast<char16_t>(id[i] << 8 | id[i + 1]));
+            else
+                for (size_t i = 1; i < id.size(); ++i) text.push_back(id[i]);
+            return text;
+        };
+        std::map<std::pair<string, std::u16string>, string> seen;
         for (const auto& item : items)
         {
             string parent;
@@ -1592,7 +1606,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
             {
                 const size_t slash = item.rel.find('/', from);
                 const string part = item.rel.substr(from, slash == string::npos ? string::npos : slash - from);
-                const auto [it, isNew] = seen.emplace(std::make_pair(parent, udfFileIdentifier(part)), part);
+                const auto [it, isNew] = seen.emplace(std::make_pair(parent, textOf(udfFileIdentifier(part))), part);
                 if (!isNew && it->second != part)
                     THROW(ERR_COMMON, "bdmv-to-iso: the names \""
                                           << it->second << "\" and \"" << part << "\" in "
