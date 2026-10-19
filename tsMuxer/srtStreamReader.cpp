@@ -212,6 +212,33 @@ bool SRTStreamReader::detectSrcFormat(const uint8_t* dataStart, const size_t len
         break;
     }
     const bool hasUtf8Bom = dataStart[0] == 0xEF && dataStart[1] == 0xBB && dataStart[2] == 0xBF;
+    // UTF-16 or UTF-32 without a byte order mark: the zero bytes in every character of plain text are legal UTF-8,
+    // so the file was read as UTF-8, no line was a subtitle, and the refusal named the first line without saying
+    // why. Text has no zero bytes; with one in at least every fourth character the encoding is named instead.
+    const bool hasUtf16Bom =
+        (dataStart[0] == 0xFF && dataStart[1] == 0xFE) || (dataStart[0] == 0xFE && dataStart[1] == 0xFF);
+    if (!hasUtf8Bom && !hasUtf16Bom && !(dataStart[0] == 0 && dataStart[1] == 0 && dataStart[2] == 0xFE))
+    {
+        size_t zeros[2] = {0, 0};
+        for (size_t i = 0; i < checkLen; ++i)
+            if (dataStart[i] == 0)
+                ++zeros[i % 2];
+        const size_t pairs = checkLen / 2;
+        if (zeros[0] * 4 >= pairs || zeros[1] * 4 >= pairs)
+        {
+            std::ostringstream what;
+            what << "Track " << m_streamIndex;
+            if (!m_streamName.empty())
+                what << " (" << m_streamName << ")";
+            what << " is text in "
+                 << (zeros[0] * 4 >= pairs && zeros[1] * 4 >= pairs ? "UTF-32"
+                     : zeros[1] > zeros[0]                          ? "UTF-16 little endian"
+                                                                    : "UTF-16 big endian")
+                 << " without a byte order mark, which is not read. Save the file as UTF-8, or with a byte order "
+                    "mark.";
+            THROW(ERR_COMMON, what.str())
+        }
+    }
     if (hasUtf8Bom || convertUTF::isLegalUTF8String(dataStart, checkLen))
     {
         m_charSize = 1;
