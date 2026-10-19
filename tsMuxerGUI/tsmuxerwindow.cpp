@@ -6662,6 +6662,16 @@ void TsMuxerWindow::writeSettings()
     disableUpdatesCnt--;
 }
 
+// A list's entry from the settings, when it is one of its entries. -1 or a number past the list was taken as it was: a
+// picture in picture size of -1 selected nothing, and the track was written as fullScreen.
+static void setComboIndexFromSettings(QComboBox* box, const QVariant& value)
+{
+    bool ok = false;
+    const int index = value.toInt(&ok);
+    if (value.isValid() && ok && index >= 0 && index < box->count())
+        box->setCurrentIndex(index);
+}
+
 bool TsMuxerWindow::readSettings()
 {
     // due to QTBUG-28893, the settings saved under "general" are not accessible
@@ -6702,10 +6712,10 @@ bool TsMuxerWindow::readSettingsBody()
     settings->endGroup();
 
     settings->beginGroup("pip");
-    ui->comboBoxPipCorner->setCurrentIndex(settings->value("corner", ui->comboBoxPipCorner->currentIndex()).toInt());
+    setComboIndexFromSettings(ui->comboBoxPipCorner, settings->value("corner"));
     ui->spinBoxPipOffsetH->setValue(settings->value("h_offset", ui->spinBoxPipOffsetH->value()).toInt());
     ui->spinBoxPipOffsetV->setValue(settings->value("v_offset", ui->spinBoxPipOffsetV->value()).toInt());
-    ui->comboBoxPipSize->setCurrentIndex(settings->value("size", ui->comboBoxPipSize->currentIndex()).toInt());
+    setComboIndexFromSettings(ui->comboBoxPipSize, settings->value("size"));
     settings->endGroup();
 
     return true;
@@ -6816,7 +6826,9 @@ bool TsMuxerWindow::readGeneralSettings(const QString& prefix)
             ui->langCodesComboBox->setCurrentIndex(idx);
     }
 
-    if (!settings->contains("outputDir"))
+    // A group with no keys is no settings. One without outputDir, as an ini written by hand may be, was taken for none
+    // and the rest of it was not read.
+    if (settings->childKeys().isEmpty())
     {
         settings->endGroup();
         return false;
@@ -6832,9 +6844,9 @@ bool TsMuxerWindow::readGeneralSettings(const QString& prefix)
     ui->checkBoxNewAudioPes->setChecked(settings->value("hdmvPES", ui->checkBoxNewAudioPes->isChecked()).toBool());
     ui->checkBoxCrop->setChecked(settings->value("restoreCropEnabled").toBool());
     ui->checkBoxBlankPL->setChecked(settings->value("useBlankPL", ui->checkBoxBlankPL->isChecked()).toBool());
-    int plNum = settings->value("blankPLNum").toInt();
-    if (plNum)
-        ui->BlackplaylistCombo->setValue(plNum);
+    // 0 is a playlist number like any other: it was skipped, and the box kept its default of 1900
+    if (settings->contains("blankPLNum"))
+        ui->BlackplaylistCombo->setValue(settings->value("blankPLNum").toInt());
 
     ui->radioButtonOutoutInInput->setChecked(
         settings->value("outputToInputFolder", ui->radioButtonOutoutInInput->isChecked()).toBool());
@@ -6844,7 +6856,7 @@ bool TsMuxerWindow::readGeneralSettings(const QString& prefix)
     // over anything above that also touches the output section.
     setOutputMode(settings->value("outputMode").toString());
 
-    ui->comboBoxSEI->setCurrentIndex(settings->value("addSEIMethod", ui->comboBoxSEI->currentIndex()).toInt());
+    setComboIndexFromSettings(ui->comboBoxSEI, settings->value("addSEIMethod"));
     ui->checkBoxSPS->setChecked(settings->value("addSPS", ui->checkBoxSPS->isChecked()).toBool());
 
     settings->endGroup();

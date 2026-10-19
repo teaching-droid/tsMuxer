@@ -68,8 +68,12 @@ void FontSettingsTableModel::load(QSettings& settings)
     if (fontSize > 0)
         m_font.setPointSize(fontSize);
 
-    if (!settings.value("color").isNull())
-        m_color = settings.value("color").toUInt();
+    // A colour that is not a number became 0, which is transparent black and was drawn as opaque black: it is left as
+    // it was
+    bool colorOk = false;
+    const uint color = settings.value("color").toUInt(&colorOk);
+    if (!settings.value("color").isNull() && colorOk)
+        m_color = color;
 
     if (settings.contains("options"))
         stringToFontOptions(settings.value("options").toString(), m_font);
