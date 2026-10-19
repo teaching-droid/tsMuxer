@@ -92,7 +92,10 @@ int MPEG2StreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool h
     const double fps = getFPS() > 0 ? getFPS() : m_sequence.getFrameRate();
     M2TSStreamInfo::blurayStreamParams(fps, getInterlaced(), getStreamWidth(), getStreamHeight(), getStreamAR(),
                                        &video_format, &frame_rate_index, &aspect_ratio_index);
-    *dstBuff++ = static_cast<uint8_t>(video_format << 4 | m_sequence.frame_rate_index);
+    // The rate the stream is muxed at, as the clip information file gives it: with fps= or delPulldown the stream's own
+    // code was written here, so the two disagreed (24 against 23.976, 29.97 against 23.976)
+    *dstBuff++ = static_cast<uint8_t>(video_format << 4 |
+                                      (frame_rate_index != 0 ? frame_rate_index : m_sequence.frame_rate_index));
     *dstBuff = static_cast<uint8_t>(m_sequence.aspect_ratio_info << 4 | 0xf);
 
     return 10;  // total descriptor length
