@@ -101,6 +101,7 @@ void TextToPGSConverter::setVideoInfo(const uint16_t width, const uint16_t heigh
 {
     enlargeCrop(width, height, fps, &m_videoWidth, &m_videoHeight);
     m_videoFps = fps;
+    m_bt709 = m_videoHeight > 576;
     if (m_textRender)
         m_textRender->setRenderSize(m_videoWidth, m_videoHeight);
     delete[] m_renderedData;
@@ -113,6 +114,7 @@ void TextToPGSConverter::setCanvas(const uint16_t width, const uint16_t height, 
     m_videoWidth = width;
     m_videoHeight = height;
     m_videoFps = fps;
+    m_bt709 = m_videoHeight > 576;
     delete[] m_renderedData;
     m_renderedData = new uint8_t[(m_videoWidth + 16) * m_videoHeight];
 }
@@ -131,7 +133,7 @@ double TextToPGSConverter::alignToGrid(const double value) const
 
 uint8_t TextToPGSConverter::color32To8(const uint32_t* buff, const uint32_t colorMask)
 {
-    YUVQuad yuv = RGBAToYUVA(*buff | colorMask);
+    YUVQuad yuv = RGBAToYUVA(*buff | colorMask, m_bt709);
     const auto itr = m_paletteYUV.find(yuv);
     if (itr == m_paletteYUV.end())
     {
@@ -149,7 +151,7 @@ uint8_t TextToPGSConverter::color32To8(const uint32_t* buff, const uint32_t colo
     return itr->second;
 }
 
-int TextToPGSConverter::getRepeatCnt(const uint32_t* pos, const uint32_t* end, const uint32_t colorMask)
+int TextToPGSConverter::getRepeatCnt(const uint32_t* pos, const uint32_t* end, const uint32_t colorMask) const
 {
     int rez = 1;
     if (*pos == 0)
@@ -165,11 +167,11 @@ int TextToPGSConverter::getRepeatCnt(const uint32_t* pos, const uint32_t* end, c
     else
     {
         const uint32_t rgbColor = *pos | colorMask;
-        const YUVQuad color = RGBAToYUVA(rgbColor);
+        const YUVQuad color = RGBAToYUVA(rgbColor, m_bt709);
         for (const uint32_t* cur = pos + 1; cur < end && *cur != 0; cur++)
         {
             const uint32_t newRGBColor = *cur | colorMask;
-            if (newRGBColor == rgbColor || RGBAToYUVA(newRGBColor) == color)
+            if (newRGBColor == rgbColor || RGBAToYUVA(newRGBColor, m_bt709) == color)
                 rez++;
             else
                 break;
@@ -178,10 +180,23 @@ int TextToPGSConverter::getRepeatCnt(const uint32_t* pos, const uint32_t* end, c
     return rez;
 }
 
-YUVQuad TextToPGSConverter::RGBAToYUVA(uint32_t data)
+// Studio range (Y 16-235, Cb and Cr 16-240), in 1/256: BT.601 with Kr = 0.299, Kb = 0.114, BT.709 with Kr = 0.2126,
+// Kb = 0.0722
+YUVQuad TextToPGSConverter::RGBAToYUVA(uint32_t data, const bool bt709)
 {
     const auto rgba = reinterpret_cast<RGBQUAD*>(&data);
     YUVQuad rez;
+    if (bt709)
+    {
+        rez.Y = static_cast<uint8_t>(
+            lround(46.742 * rgba->rgbRed + 157.243 * rgba->rgbGreen + 15.874 * rgba->rgbBlue + 4224.0) >> 8);
+        rez.Cr = static_cast<uint8_t>(
+            lround(112.439 * rgba->rgbRed - 102.129 * rgba->rgbGreen - 10.310 * rgba->rgbBlue + 32896.0) >> 8);
+        rez.Cb = static_cast<uint8_t>(
+            lround(-25.765 * rgba->rgbRed - 86.674 * rgba->rgbGreen + 112.439 * rgba->rgbBlue + 32896.0) >> 8);
+        rez.alpha = rgba->rgbReserved;
+        return rez;
+    }
     rez.Y = static_cast<uint8_t>(
         lround(65.738 * rgba->rgbRed + 129.057 * rgba->rgbGreen + 25.064 * rgba->rgbBlue + 4224.0) >> 8);
     rez.Cr = static_cast<uint8_t>(
@@ -192,9 +207,20 @@ YUVQuad TextToPGSConverter::RGBAToYUVA(uint32_t data)
     return rez;
 }
 
-RGBQUAD TextToPGSConverter::YUVAToRGBA(const YUVQuad& yuv)
+RGBQUAD TextToPGSConverter::YUVAToRGBA(const YUVQuad& yuv, const bool bt709)
 {
     RGBQUAD rez;
+    if (bt709)
+    {
+        int c = lround(298.082 * yuv.Y + 540.775 * yuv.Cb - 73860.497) >> 8;
+        rez.rgbBlue = static_cast<uint8_t>(FFMAX(FFMIN(c, 255L), 0));
+        c = lround(298.082 * yuv.Y - 136.425 * yuv.Cr - 54.592 * yuv.Cb + 19808.788) >> 8;
+        rez.rgbGreen = static_cast<uint8_t>(FFMAX(FFMIN(c, 255L), 0));
+        c = lround(298.082 * yuv.Y + 458.942 * yuv.Cr - 63385.855) >> 8;
+        rez.rgbRed = static_cast<uint8_t>(FFMAX(FFMIN(c, 255L), 0));
+        rez.rgbReserved = yuv.alpha;
+        return rez;
+    }
     int tmp = lround(298.082 * yuv.Y + 516.412 * yuv.Cb - 70742.016) >> 8;
     rez.rgbBlue = static_cast<uint8_t>(FFMAX(FFMIN(tmp, 255L), 0));
     tmp = lround(298.082 * yuv.Y - 208.120 * yuv.Cr - 100.291 * yuv.Cb + 34835.456) >> 8;

@@ -62,8 +62,10 @@ class TextToPGSConverter  //: public TextSubtitlesRenderWin32
     // A display set that only clears the screen, at atTimeSec, in the window of the last text drawn
     uint8_t* doClear(double atTimeSec, uint32_t& dstBufSize);
     TextSubtitlesRender* m_textRender;
-    static YUVQuad RGBAToYUVA(uint32_t data);
-    static RGBQUAD YUVAToRGBA(const YUVQuad& yuv);
+    // The palette of a picture of more than 576 lines is in BT.709, as the video it is shown on: in BT.601 red came
+    // out orange-red and green darker on an HD screen
+    static YUVQuad RGBAToYUVA(uint32_t data, bool bt709 = false);
+    static RGBQUAD YUVAToRGBA(const YUVQuad& yuv, bool bt709 = false);
     void setImageBuffer(uint8_t* value) { m_imageBuffer = value; }
 
     int m_rleLen;
@@ -76,6 +78,7 @@ class TextToPGSConverter  //: public TextSubtitlesRenderWin32
     uint16_t m_videoWidth;
     uint16_t m_videoHeight;
     double m_videoFps;
+    bool m_bt709 = false;  // the palette is in BT.709: a picture of more than 576 lines
     uint8_t* m_pgsBuffer;
     bool m_fadeCutSaid = false;  // the warning that a fade was shortened, once
     uint8_t* m_imageBuffer;
@@ -95,7 +98,7 @@ class TextToPGSConverter  //: public TextSubtitlesRenderWin32
     [[nodiscard]] double alignToGrid(double value) const;
     bool rlePack(uint32_t colorMask);
     void reduceColors(uint8_t mask) const;
-    static int getRepeatCnt(const uint32_t* pos, const uint32_t* end, uint32_t colorMask);
+    int getRepeatCnt(const uint32_t* pos, const uint32_t* end, uint32_t colorMask) const;
     uint8_t color32To8(const uint32_t* buff, uint32_t colorMask);
     Palette buildPalette(float opacity);
     [[nodiscard]] uint16_t renderedHeight() const;

@@ -143,7 +143,7 @@ void PGSStreamReader::yuvToRgb(const int minY) const
 
     for (auto itr : m_palette)
     {
-        rgbPal[itr.first] = TextToPGSConverter::YUVAToRGBA(itr.second);
+        rgbPal[itr.first] = TextToPGSConverter::YUVAToRGBA(itr.second, m_video_height > 576);  // as it was written
         yuvPal[itr.first] = itr.second;
     }
     constexpr RGBQUAD zeroRgb = {};
