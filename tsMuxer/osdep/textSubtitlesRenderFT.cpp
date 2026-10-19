@@ -445,8 +445,11 @@ void RenderGlyph(const FT_Library& library, const uint32_t ch, const FT_Face& fa
         FT_Stroker_Set(strokerOut, static_cast<int>(outlineWidth * 64), FT_STROKER_LINECAP_ROUND,
                        FT_STROKER_LINEJOIN_ROUND, 0);
         FT_Glyph_StrokeBorder(&glyph, strokerOut, 0, 1);
-        // Again, this needs to be an outline to work.
-        if (glyph->format == FT_GLYPH_FORMAT_OUTLINE)
+        // Again, this needs to be an outline to work. Without a border (font-border=0) the stroke of width 0 is the
+        // glyph's own shape: drawn in black under a half-transparent text, it made the text more opaque than asked.
+        // It is then left out; under an opaque colour it is drawn as it always was.
+        const bool border = outlineWidth > 0 || fontCol.a == 255;
+        if (glyph->format == FT_GLYPH_FORMAT_OUTLINE && border)
         {
             // Render the outline spans to the span list
             FT_Outline* o = &reinterpret_cast<FT_OutlineGlyph>(glyph)->outline;
@@ -466,7 +469,7 @@ void RenderGlyph(const FT_Library& library, const uint32_t ch, const FT_Face& fa
             FT_Stroker_Set(strokerIn, static_cast<int>(outlineWidth * 32), FT_STROKER_LINECAP_ROUND,
                            FT_STROKER_LINEJOIN_ROUND, 0);
             FT_Glyph_StrokeBorder(&glyph, strokerIn, 0, 1);
-            if (glyph->format == FT_GLYPH_FORMAT_OUTLINE)
+            if (glyph->format == FT_GLYPH_FORMAT_OUTLINE && border)
             {
                 FT_Outline* o = &reinterpret_cast<FT_OutlineGlyph>(glyph)->outline;
                 RenderSpans(library, o, &outlineSpansIner);
@@ -537,7 +540,8 @@ void RenderGlyph(const FT_Library& library, const uint32_t ch, const FT_Face& fa
                     {
                         const int offset = y * width + x;
                         Pixel32* dst = reinterpret_cast<Pixel32*>(dstData) + offset;
-                        *dst = Pixel32(outlineColIner.b, outlineColIner.g, outlineColIner.r, span.coverage);
+                        *dst = Pixel32(outlineColIner.b, outlineColIner.g, outlineColIner.r,
+                                       static_cast<uint8_t>(span.coverage * outlineColIner.a / 255));
                     }
                 }
             }
@@ -557,11 +561,19 @@ void RenderGlyph(const FT_Library& library, const uint32_t ch, const FT_Face& fa
 
                         // Pixel32 takes blue first. The colours were passed red first, so red and blue changed
                         // places: a subtitle asked for in red came out blue on Linux and macOS.
-                        const auto src = Pixel32(fontCol.b, fontCol.g, fontCol.r, span.coverage);
+                        // The alpha of the font colour counts as well as the coverage: it was left out, so a
+                        // colour such as 0x80FFFFFF was drawn fully opaque, here and in the border. A
+                        // half-transparent text is laid over the border as one layer over another; the alphas of an
+                        // opaque one are added, as they always were.
+                        const auto src = Pixel32(fontCol.b, fontCol.g, fontCol.r,
+                                                 static_cast<uint8_t>(span.coverage * fontCol.a / 255));
                         dst->r = static_cast<uint8_t>(static_cast<float>(dst->r + (src.r - dst->r) * src.a) / 255.0f);
                         dst->g = static_cast<uint8_t>(static_cast<float>(dst->g + (src.g - dst->g) * src.a) / 255.0f);
                         dst->b = static_cast<uint8_t>(static_cast<float>(dst->b + (src.b - dst->b) * src.a) / 255.0f);
-                        dst->a = FFMIN(255, dst->a + src.a);
+                        if (fontCol.a == 255)
+                            dst->a = FFMIN(255, dst->a + src.a);
+                        else
+                            dst->a = static_cast<uint8_t>(src.a + dst->a * (255 - src.a) / 255);
                     }
                 }
             }
