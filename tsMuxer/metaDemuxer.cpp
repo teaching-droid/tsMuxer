@@ -3120,6 +3120,21 @@ static double parseFpsValue(const std::string& text)
     return fps;
 }
 
+// video-width= and video-height= of a subtitle track: a whole number of pixels. A negative size wrapped round to a
+// large one (-720 became 64816, and the subtitles were drawn for 1920x1080), and text such as abc was read as 0, both
+// in silence.
+static uint16_t parsePictureSize(const char* name, const std::string& text)
+{
+    const std::string t = trimStr(text);
+    const bool digits = !t.empty() && t.size() <= 5 && t.find_first_not_of("0123456789") == std::string::npos;
+    const long value = digits ? strtol(t.c_str(), nullptr, 10) : 0;
+    if (value < 1 || value > 65535)
+        THROW(ERR_COMMON, name << "=" << text
+                               << " is not a picture size. Write the size of the video in pixels, a whole number "
+                                  "from 1 up to 65535, such as 1920.")
+    return static_cast<uint16_t>(value);
+}
+
 CheckStreamRez METADemuxer::detectTrackReader(uint8_t* tmpBuffer, int len,
                                               AbstractStreamReader::ContainerType containerType, int containerDataType,
                                               int containerStreamIndex)
@@ -3571,10 +3586,10 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
             fps = parseFpsValue(itr->second);
         itr = addParams.find("video-width");
         if (itr != addParams.end())
-            width = strToInt16u(itr->second.c_str());
+            width = parsePictureSize("video-width", itr->second);
         itr = addParams.find("video-height");
         if (itr != addParams.end())
-            height = strToInt16u(itr->second.c_str());
+            height = parsePictureSize("video-height", itr->second);
         dynamic_cast<PGSStreamReader*>(rez)->setVideoInfo(width, height, fps);
         itr = addParams.find("font-border");
         if (itr != addParams.end())
@@ -3627,9 +3642,9 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
                 fps = parseFpsValue(addParam.second);
             }
             else if (addParam.first == "video-width")
-                srtWidth = strToInt16u(addParam.second.c_str());
+                srtWidth = parsePictureSize("video-width", addParam.second);
             else if (addParam.first == "video-height")
-                srtHeight = strToInt16u(addParam.second.c_str());
+                srtHeight = parsePictureSize("video-height", addParam.second);
             else if (addParam.first == "bottom-offset")
                 srtReader->setBottomOffset(strToInt32(addParam.second.c_str()));
             else if (addParam.first == "fadein-time")
