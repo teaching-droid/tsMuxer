@@ -1073,8 +1073,32 @@ uint8_t* SRTStreamReader::drawNext(uint32_t& renderedLen)
     {
         double lo = 0.0;
         double hi = 1.0;
+        // ** THE SIZE THE SUBTITLE BEFORE NEEDED IS TRIED FIRST. ** The subtitles of a track are mostly too large by
+        // the same amount, so the sizes the one before was drawn at nearly always fit and the next larger sizes do not:
+        // two measurements give the answer the search below finds in six or seven, the largest sizes that fit.
+        bool found = false;
+        if (m_lastFitScale > 0.0)
+        {
+            render->m_fitScale = 1.0;
+            const std::vector<int> full = render->fittedSizes(piece.text);
+            render->m_fitScale = m_lastFitScale;
+            const std::vector<int> atLast = render->fittedSizes(piece.text);
+            double next = 2.0;  // the smallest scale above the last one at which a size grows by one
+            for (size_t i = 0; i < full.size() && i < atLast.size(); ++i)
+                if (full[i] > atLast[i])
+                    next = (std::min)(next, (atLast[i] + 1.0) / full[i] + 1e-9);
+            if (next <= 1.0 && render->textFits(piece.text))
+            {
+                render->m_fitScale = next;
+                if (!render->textFits(piece.text))
+                {
+                    lo = m_lastFitScale;
+                    found = true;
+                }
+            }
+        }
         std::map<std::vector<int>, bool> measured;
-        for (int step = 0; step < 24; ++step)
+        for (int step = 0; step < 24 && !found; ++step)
         {
             render->m_fitScale = (lo + hi) / 2;
             auto [known, isNew] = measured.try_emplace(render->fittedSizes(piece.text), false);
@@ -1086,6 +1110,7 @@ uint8_t* SRTStreamReader::drawNext(uint32_t& renderedLen)
                 hi = render->m_fitScale;
         }
         render->m_fitScale = lo;
+        m_lastFitScale = lo;
         if (lo > 0.0 && m_shrunkCues++ == 0)
             LTRACE(LT_WARN, 2,
                    "Warning: track " << m_streamIndex << ": the subtitle at " << floatToTime(piece.inTime, ',')

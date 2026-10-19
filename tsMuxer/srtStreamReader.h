@@ -150,6 +150,9 @@ class SRTStreamReader final : public AbstractStreamReader
     uint32_t m_long_N;
     text_subtitles::TextAnimation m_animation;
 
+    // the scale the last subtitle too large for the picture was drawn at
+    double m_lastFitScale = 0.0;
+
     enum class ParseState
     {
         PARSE_FIRST_LINE,
