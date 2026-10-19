@@ -2451,6 +2451,8 @@ class KeepOldOutput
     {
         if (!m_committed && !m_fresh.empty())
             removeEmptySkeleton();
+        if (!m_committed && !m_freshDemux.empty())
+            removeEmptyDemux();
         if (!m_armed || m_committed || m_swapBegun)
             return;
         std::error_code ec;
@@ -2515,7 +2517,10 @@ class KeepOldOutput
         const std::filesystem::path out = u8path(dst);
         std::error_code ec;
         if (!std::filesystem::is_directory(out, ec))
+        {
+            m_freshDemux = out;
             return dst;
+        }
         m_dir = out;
         m_tmp = out / u8path(".tsmuxer-new-" + std::to_string(processId()));
         std::filesystem::remove_all(m_tmp, ec);  // left by a job of an earlier process with the same number
@@ -2631,6 +2636,17 @@ class KeepOldOutput
             std::filesystem::remove(m_fresh, ec);
     }
 
+    // A demux into a folder this job made, refused during the mux before any of its files had a byte in it: the empty
+    // files and the folder go again. They were left behind.
+    void removeEmptyDemux() const
+    {
+        std::error_code ec;
+        for (const auto& e : std::filesystem::directory_iterator(m_freshDemux, ec))
+            if (!e.is_regular_file(ec) || e.file_size(ec) > 0)
+                return;
+        std::filesystem::remove_all(m_freshDemux, ec);
+    }
+
     static void warnRoom(const std::filesystem::path& dir, const int64_t estimate)
     {
         std::error_code ec;
@@ -2648,6 +2664,8 @@ class KeepOldOutput
     bool m_swapBegun = false;  // the swap has begun: what the job wrote is not removed any more
     bool m_folder = false;
     std::filesystem::path m_fresh;  // a disc folder written in place (forDiscFolder), for removeEmptySkeleton
+    // a demux folder this job makes, for removeEmptyDemux
+    std::filesystem::path m_freshDemux;
     bool m_freshFolderExisted = false;
     bool m_demux = false;
     std::filesystem::path m_dir;
