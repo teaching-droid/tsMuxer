@@ -1230,6 +1230,7 @@ void MuxerManager::warnUnknownMuxOpts(const string& opts)
                                                       "--no-chapters",
                                                       "--no-hdmv-descriptors",
                                                       "--no-pcr-on-video-pid",
+                                                      "--playlist-clips",
                                                       "--right-eye",
                                                       "--split-chapters",
                                                       "--split-duration",
@@ -1282,6 +1283,14 @@ void MuxerManager::parseMuxOpt(const string& opts)
         {
             m_keepEditions = true;
             m_metaDemuxer.setKeepEditions(true);
+        }
+        else if (paramPair[0] == "--playlist-clips")
+        {
+            const string how = paramPair.size() > 1 ? strToLowerCase(paramPair[1]) : string();
+            if (how != "played" && how != "whole")
+                THROW(ERR_COMMON, "--playlist-clips takes played or whole, not \""
+                                      << (paramPair.size() > 1 ? paramPair[1] : "") << "\".")
+            m_metaDemuxer.setPlaylistClipsPlayed(how == "played");
         }
         else if (paramPair[0] == "--cut-start" || paramPair[0] == "--cut-end")
         {

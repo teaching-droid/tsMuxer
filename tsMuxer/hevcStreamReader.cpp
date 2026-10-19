@@ -1147,7 +1147,12 @@ int HEVCStreamReader::toFullPicOrder(const HevcSliceHeader* slice, const unsigne
 {
     const bool bla =
         slice->nal_unit_type >= HevcUnit::NalType::BLA_W_LP && slice->nal_unit_type <= HevcUnit::NalType::BLA_N_LP;
-    if (slice->isIDR() || bla || !m_picOrderStarted)
+    // The first picture of a part cut from a clip of a playlist (a CRA picture, where the part does not start at an IDR
+    // picture) starts the count again as a BLA picture does: its count goes on from the pictures before it in its
+    // clip, which the cut left out, as do the pictures shown before it, which went with them (TSDemuxer::keptInPart)
+    const bool partStart = slice->nal_unit_type >= HevcUnit::NalType::BLA_W_LP &&
+                           slice->nal_unit_type <= HevcUnit::NalType::RSV_IRAP_VCL23 && isPartStart();
+    if (slice->isIDR() || bla || !m_picOrderStarted || partStart)
     {
         // A Dolby Vision enhancement layer may lack a picture its base layer has (a disc's stream was measured with
         // one missing). The pictures were placed by counting them, so from the next IDR on every picture of the

@@ -18,7 +18,18 @@ bool FileReaderData::openStream()
 {
     base_class::openStream();
 
-    const bool rez = m_file.open(m_streamName.c_str(), File::ofRead);
+    bool rez = m_file.open(m_streamName.c_str(), File::ofRead);
+    m_readPos = 0;
+    m_readEnd = -1;
+    // A clip of a playlist that plays only a part of it is read from the bytes of that part only
+    int64_t first = 0, end = -1;
+    if (rez && itr && itr->getByteRange(first, end))
+    {
+        if (first > 0)
+            rez = m_file.seek(first, File::SeekMethod::smBegin) != -1;
+        m_readPos = first;
+        m_readEnd = end;
+    }
 
     if (!rez)
     {
@@ -70,6 +81,7 @@ bool BufferedFileReader::gotoByte(const int readerID, const int64_t seekDist)
     {
         data->m_blockSize = m_blockSize - static_cast<uint32_t>(seekDist % static_cast<uint64_t>(m_blockSize));
         const uint64_t seekRez = data->m_file.seek(seekDist + data->m_fileHeaderSize, File::SeekMethod::smBegin);
+        data->m_readPos = seekDist + data->m_fileHeaderSize;
         const bool rez = seekRez != static_cast<uint64_t>(-1);
         if (rez)
         {

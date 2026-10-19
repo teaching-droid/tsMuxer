@@ -66,6 +66,13 @@ void AC3StreamReader::probeTrueHD()
     m_state = AC3State::stateDecodeAC3;
     AC3Codec::setTestMode(false);
 
+    // A track that does not begin where its stream begins, as a part cut from a clip of a playlist, need not have the
+    // lossless frame that says what the stream is (the one with a major sync) right behind its first core frames: it
+    // comes once in 128 frames. It is looked for in what has been read.
+    for (uint8_t* p = m_buffer + 4; !m_true_hd_mode && p + 4 <= m_bufEnd; ++p)
+        if (p[0] == 0xF8 && p[1] == 0x72 && p[2] == 0x6F && p[3] == 0xBA)
+            m_true_hd_mode = mlp.decodeFrame(p - 4, m_bufEnd);
+
     if (m_true_hd_mode)
         LTRACE(
             LT_INFO, 2,

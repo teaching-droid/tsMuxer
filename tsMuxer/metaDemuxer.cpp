@@ -931,6 +931,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     string unquotedStreamName = unquoteStr(codecStreamName);
     string fileExt = strToLowerCase(extractFileExt(codecStreamName));
     std::vector<MPLSParser> mplsInfoList;
+    std::vector<ClipPart> clipParts;  // the part of each clip that is muxed (cutPlayItems); empty for whole clips
+    bool anyPart = false;
 
     // filds for SS PG
     int leftEyeSubStreamIdx = -1;
@@ -973,6 +975,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                 if (mplsInfo.isDependStreamExist && !fileExists(fileName))
                     fileName = mplsTrackToSSIFName(unquotedStreamName, mplsInfo.m_playItems[i].fileName);
                 fileList.push_back(fileName);
+                clipParts.push_back(isSubStream ? ClipPart() : mplsInfo.m_playItems[i].part);
+                anyPart = anyPart || clipParts.back().isCut();
             }
 
             MPLSStreamInfo streamInfo = mplsInfo.getStreamByPID(pid);
@@ -1056,6 +1060,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             fileList.erase(fileList.begin() + i);
             if (static_cast<size_t>(i) < timelineRanges.size())
                 timelineRanges.erase(timelineRanges.begin() + i);
+            if (static_cast<size_t>(i) < clipParts.size())
+                clipParts.erase(clipParts.begin() + i);
         }
     }
     for (const auto& key : keys) m_processedTracks.insert(key);
@@ -1106,13 +1112,15 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     }
 
     FileListIterator* listIterator = nullptr;
-    if (fileList.size() > 1 || !timelineRanges.empty())
+    if (fileList.size() > 1 || !timelineRanges.empty() || anyPart)
     {
         listIterator = new FileListIterator();
         m_iterators.push_back(listIterator);
         for (size_t i = 0; i < fileList.size(); ++i)
             if (i < timelineRanges.size())
                 listIterator->addFile(fileList[i], timelineRanges[i]);
+            else if (anyPart && i < clipParts.size())
+                listIterator->addFile(fileList[i], clipParts[i]);
             else
                 listIterator->addFile(fileList[i]);
     }
@@ -1122,8 +1130,9 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     if (m_containerReader.m_demuxers.find(fileList[0]) == m_containerReader.m_demuxers.end())
     {
         File tmpFile;
-        for (const string& fileName : fileList)
+        for (size_t i = 0; i < fileList.size(); ++i)
         {
+            const string& fileName = fileList[i];
             if (!tmpFile.open(fileName.c_str(), File::ofRead))
             {
                 // why, as far as it can be told: the message named the file and nothing else, also for a file that is
@@ -1144,6 +1153,10 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             }
             int64_t tmpSize = 0;
             tmpFile.size(&tmpSize);
+            // of a clip cut to a part, the bytes that are read
+            if (anyPart && i < clipParts.size() && clipParts[i].isCut())
+                tmpSize = (clipParts[i].endByte >= 0 ? (std::min)(clipParts[i].endByte, tmpSize) : tmpSize) -
+                          (std::min)(clipParts[i].firstByte, tmpSize);
             fileSize += tmpSize;
             tmpFile.close();
         }
@@ -1324,6 +1337,16 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     if (fpsFromPulldown)
         if (auto* mpegReader = dynamic_cast<MPEGStreamReader*>(codecReader))
             mpegReader->setFpsAnnounced();
+    // A playlist whose clips are cut to the parts played: the video reader asks where a part begins
+    if (anyPart)
+        if (auto* mpegReader = dynamic_cast<MPEGStreamReader*>(codecReader))
+            mpegReader->setPartStartSource(
+                [this, file = fileList[0], pid](const int64_t picture)
+                {
+                    const auto it = m_containerReader.m_demuxers.find(file);
+                    return it != m_containerReader.m_demuxers.end() && it->second.m_demuxer &&
+                           it->second.m_demuxer->isPartStartPicture(pid, picture);
+                });
     codecReader->setStreamIndex(static_cast<int>(m_codecInfo.size() + 1));
     codecReader->setStreamName(fileList[0]);
     codecReader->setTimeOffset(m_timeOffset);
@@ -1628,8 +1651,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         // the log still says "Mux successful complete". A first file smaller than one read block
         // vanished completely. Asking the container is not worth silently dropping a reel, and an
         // explicit lang= still works on joined tracks.
-        if (const auto demuxerIt = fileList.size() == 1 ? m_containerReader.m_demuxers.find(fileList[0])
-                                                        : m_containerReader.m_demuxers.end();
+        if (const auto demuxerIt = fileList.size() == 1 && !anyPart ? m_containerReader.m_demuxers.find(fileList[0])
+                                                                    : m_containerReader.m_demuxers.end();
             demuxerIt != m_containerReader.m_demuxers.end() && demuxerIt->second.m_demuxer)
         {
             std::map<int32_t, TrackInfo> trackList;
@@ -3841,11 +3864,242 @@ std::vector<MPLSParser> METADemuxer::getMplsInfo(const string& mplsFileName)
             MPLSParser parser;
             if (!parser.parse(unquoteStr(i).c_str()))
                 THROW(ERR_COMMON, "Can't parse play list file " << i)
+            cutPlayItems(parser, unquoteStr(i), m_playlistClipsPlayed);
             m_mplsStreamMap[i] = parser;
             result.push_back(parser);
         }
     }
     return result;
+}
+
+// The time of the key picture an entry point names, as its PES header gives it (the entry point map keeps the time
+// without its 9 lowest bits), and the times of the first and the last picture shown before it of the pictures that
+// follow it in the order of decoding, as an open GOP has them (-1: none). False when the clip file does not have the
+// picture where the map says.
+static bool keyPictureTimes(const string& m2tsFileName, const int pid, const ClipEntryPoint& key, int64_t& keyPts,
+                            int64_t& firstShown, int64_t& lastBefore)
+{
+    lastBefore = -1;
+    File file;
+    if (!file.open(m2tsFileName.c_str(), File::ofRead) ||
+        file.seek(static_cast<int64_t>(key.spn) * 192, File::SeekMethod::smBegin) == -1)
+        return false;
+    keyPts = -1;
+    std::vector<uint8_t> buffer(192 * 2048);
+    // up to the first picture after the key picture that is shown after it, within 64 MiB
+    for (int block = 0; block < 170; ++block)
+    {
+        const int len = file.read(buffer.data(), static_cast<uint32_t>(buffer.size()));
+        for (int pos = 0; pos + 192 <= len; pos += 192)
+        {
+            uint8_t* packet = buffer.data() + pos + 4;  // after the 4 bytes of arrival time
+            if (packet[0] != 0x47 || ((packet[1] & 0x1f) << 8 | packet[2]) != pid || !(packet[1] & 0x40) ||
+                !(packet[3] & 0x10))
+                continue;
+            const int offset = packet[3] & 0x20 ? 5 + packet[4] : 4;
+            if (offset + 14 > 188)
+                continue;
+            auto* pes = reinterpret_cast<PESPacket*>(packet + offset);
+            if (pes->startCode0 != 0 || pes->startCode1 != 0 || pes->startCode2 != 1 || !(pes->flagsLo & 0x80))
+                continue;
+            const int64_t pts = pes->getPts();
+            if (keyPts < 0)
+            {
+                if ((pts & ~int64_t{511}) != key.pts)
+                    return false;
+                keyPts = firstShown = pts;
+            }
+            else if (pts > keyPts)
+                return true;
+            else
+            {
+                firstShown = (std::min)(firstShown, pts);
+                lastBefore = (std::max)(lastBefore, pts);
+            }
+        }
+        if (len < static_cast<int>(buffer.size()))
+            break;
+    }
+    return keyPts >= 0;
+}
+
+// ** A PLAYLIST THAT PLAYS ONLY A PART OF A CLIP GETS ONLY THAT PART (--playlist-clips=played). ** A play item names a
+// clip and the stretch of it that is played, from IN_time to OUT_time. Most play the whole clip, but a playlist may
+// play the first seconds of each of many clips, or several stretches of one clip, as a version of a film made of the
+// scenes of another. Every clip was muxed whole all the same, from its first picture to its last: the pictures the
+// playlist leaves out were in the output, a clip played in several stretches came in whole that many times, and the
+// playlist's length, its marks and the places of its play items no longer matched what was muxed.
+//
+// A clip is now cut where a player starts and stops in it: from the key picture at or before IN_time, where a player
+// starts to decode, to the key picture at or after OUT_time, both as the entry point map of the clip information file
+// lists them. Only the bytes of the clip around that part are read. The play item's IN_time and OUT_time are moved out
+// to those key pictures, so that the length of the playlist, its chapters and the place of each part follow what is
+// muxed. Once one play item of a playlist is cut, all of them are read as parts, from their first key picture, so
+// that the sound of each part starts where the sound of the part before ends (TSDemuxer::keptInPart).
+//
+// --playlist-clips=whole keeps the whole clips; the log says when a playlist plays only parts of them. A 3D playlist
+// keeps them too: the second view is read from files the map does not count in.
+void METADemuxer::cutPlayItems(MPLSParser& mpls, const string& mplsFileName, const bool played)
+{
+    struct Plan
+    {
+        int pid = -1;
+        std::vector<ClipEntryPoint> keys;
+        size_t first = 0;  // the key picture the part starts at
+        size_t last = 0;   // the key picture the part ends at; keys.size() at the end of the clip
+    };
+    const string streamDir = playlistStreamDir(mplsFileName);
+    std::vector<Plan> plans(mpls.m_playItems.size());
+    size_t cutItems = 0;
+    string unread;
+    std::map<string, Plan> maps;  // a clip played in many items is read once
+    for (size_t i = 0; i < plans.size(); ++i)
+    {
+        const MPLSPlayItem& item = mpls.m_playItems[i];
+        Plan& plan = plans[i];
+        auto known = maps.find(item.fileName);
+        if (known == maps.end())
+        {
+            Plan read;
+            const string clpi = findBluRayFile(streamDir, "CLIPINF", item.fileName + ".clpi");
+            if (clpi.empty() || !readClipEntryPoints(clpi, read.pid, read.keys))
+                read.keys.clear();
+            known = maps.emplace(item.fileName, std::move(read)).first;
+        }
+        plan.pid = known->second.pid;
+        plan.keys = known->second.keys;
+        if (plan.keys.empty())
+        {
+            if (unread.empty())
+                unread = item.fileName;
+            continue;
+        }
+        const int64_t in = static_cast<int64_t>(item.IN_time) * 2;
+        const int64_t out = static_cast<int64_t>(item.OUT_time) * 2;
+        while (plan.first + 1 < plan.keys.size() && plan.keys[plan.first + 1].pts <= in) ++plan.first;
+        // a key picture at or after OUT_time: the map keeps its time less up to 511
+        plan.last = plan.first + 1;
+        while (plan.last < plan.keys.size() && plan.keys[plan.last].pts <= out - 512) ++plan.last;
+        if (plan.first > 0 || plan.last < plan.keys.size())
+            ++cutItems;
+    }
+    if (cutItems == 0)
+        return;
+    const string name = extractFileName2(mplsFileName, true);
+    std::ostringstream what;
+    what << name << " plays only a part of its clip in " << cutItems << " of its " << plans.size() << " play items";
+    if (!played)
+    {
+        LTRACE(LT_INFO, 2,
+               "Playlist " << what.str()
+                           << ". Each clip is muxed whole (--playlist-clips=whole); --playlist-clips=played muxes only "
+                              "the parts the playlist plays.");
+        return;
+    }
+    if (mpls.isDependStreamExist)
+    {
+        LTRACE(LT_WARN, 2,
+               "Warning: playlist " << what.str() << ", but it is a 3D playlist, and its clips are muxed whole.");
+        return;
+    }
+    if (!unread.empty())
+    {
+        LTRACE(LT_WARN, 2,
+               "Warning: playlist " << what.str() << ", but the clip information of clip " << unread
+                                    << " gives no map of its key pictures, so the clips are muxed whole.");
+        return;
+    }
+    // A play item that goes on in the same clip where the one before it ends, or inside its last group of pictures,
+    // continues the same stretch of the clip. Each cut at its own key pictures, the group of pictures between them came
+    // in twice. The first one now ends where the next one starts, and the next one goes on from it with nothing left
+    // out. One that starts at the same key picture as the one before leaves nothing to that one, and goes on from the
+    // one before that when that one is continued.
+    std::vector<bool> continues(plans.size(), false);
+    for (size_t i = 0; i + 1 < plans.size(); ++i)
+        if (mpls.m_playItems[i + 1].fileName == mpls.m_playItems[i].fileName && plans[i + 1].first >= plans[i].first &&
+            plans[i + 1].first <= plans[i].last)
+        {
+            plans[i].last = plans[i + 1].first;
+            continues[i + 1] = plans[i + 1].first > plans[i].first || continues[i];
+        }
+    struct KeyTimes
+    {
+        bool found = false;
+        int64_t pts = -1, firstShown = -1, lastBefore = -1;
+    };
+    std::map<std::pair<string, size_t>, KeyTimes> keyTimes;  // a key picture where one part ends and the next starts
+    const auto timesOf = [&](const string& m2ts, const Plan& plan, const size_t key)
+    {
+        const auto it = keyTimes.find({m2ts, key});
+        if (it != keyTimes.end())
+            return it->second;
+        KeyTimes t;
+        t.found = keyPictureTimes(m2ts, plan.pid, plan.keys[key], t.pts, t.firstShown, t.lastBefore);
+        return keyTimes[{m2ts, key}] = t;
+    };
+    std::vector<MPLSPlayItem> items = mpls.m_playItems;
+    for (size_t i = 0; i < items.size(); ++i)
+    {
+        const Plan& plan = plans[i];
+        const string m2ts = mplsTrackToFullName(mplsFileName, items[i].fileName);
+        ClipPart part;
+        part.startCut = plan.first > 0;
+        part.continuesPrevious = continues[i];
+        part.continuedByNext = i + 1 < items.size() && continues[i + 1];
+        int64_t before = -1;
+        KeyTimes t = timesOf(m2ts, plan, plan.first);
+        bool found = t.found;
+        part.startPts = t.pts;
+        part.startShown = t.firstShown;
+        // read from two key pictures earlier: the sound and subtitles of the first pictures may be stored before them
+        if (part.startCut)
+            part.firstByte = static_cast<int64_t>(plan.keys[plan.first >= 2 ? plan.first - 2 : 0].spn) * 192;
+        if (found && plan.last == plan.first)
+        {
+            // nothing of its own: the next part starts at the same key picture
+            part.endPts = part.startPts;
+            part.shownEnd = part.firstShown();
+        }
+        else if (found && plan.last < plan.keys.size())
+        {
+            // The pictures of an open GOP shown before the last key picture are made from it and are left out with it,
+            // unless the play item shows some of them: then they are kept, with the key picture. A part that the next
+            // one continues leaves them to that one.
+            t = timesOf(m2ts, plan, plan.last);
+            found = t.found;
+            part.endPts = t.pts;
+            part.shownEnd = t.firstShown;
+            before = t.lastBefore;
+            if (found && !part.continuedByNext && before >= 0 &&
+                static_cast<int64_t>(items[i].OUT_time) * 2 > part.shownEnd)
+            {
+                part.keepEndKey = true;
+                part.shownEnd = part.endPts + (part.endPts - before);
+            }
+            // and on to 2 s after the last one, for the sound and subtitles stored after it
+            size_t after = plan.last;
+            while (after < plan.keys.size() && plan.keys[after].pts < plan.keys[plan.last].pts + 2 * 90000) ++after;
+            part.endByte = after < plan.keys.size() ? static_cast<int64_t>(plan.keys[after].spn) * 192 : -1;
+        }
+        if (!found)
+        {
+            LTRACE(LT_WARN, 2,
+                   "Warning: playlist " << what.str() << ", but clip " << items[i].fileName
+                                        << " does not have a key picture where its clip information says, so the "
+                                           "clips are muxed whole.");
+            return;
+        }
+        if (part.startCut)
+            items[i].IN_time = static_cast<uint32_t>(part.firstShown() / 2);
+        if (part.endPts >= 0)
+            items[i].OUT_time = (std::max)(items[i].IN_time, static_cast<uint32_t>(part.shownEnd / 2));
+        items[i].part = part;
+    }
+    mpls.m_playItems = items;
+    LTRACE(LT_INFO, 2,
+           "Playlist " << what.str()
+                       << ": only the parts played are muxed, each from the key picture at or before where it starts "
+                          "to the key picture at or after where it ends (--playlist-clips=played).");
 }
 
 string METADemuxer::findBluRayFile(const string& streamDir, const string& requestDir, const string& requestFile)

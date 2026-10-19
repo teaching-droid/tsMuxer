@@ -37,9 +37,28 @@ class FileListIterator final : public FileNameIterator
     // One for each file of a play timeline; empty for a plain join.
     [[nodiscard]] const std::vector<JoinRange>& getRanges() const { return m_ranges; }
 
+    // A clip of a Blu-ray playlist of which only the part its play item plays is read
+    void addFile(const std::string& fileName, const ClipPart& part)
+    {
+        m_parts.resize(m_files.size());
+        m_files.push_back(fileName);
+        m_parts.push_back(part);
+    }
+    // One for each file when any of them is cut to a part; empty otherwise.
+    [[nodiscard]] const std::vector<ClipPart>& getClipParts() const { return m_parts; }
+    bool getByteRange(int64_t& first, int64_t& end) const override
+    {
+        if (m_index >= m_parts.size() || !m_parts[m_index].isCut())
+            return false;
+        first = m_parts[m_index].firstByte;
+        end = m_parts[m_index].endByte;
+        return true;
+    }
+
    private:
     std::vector<std::string> m_files;
     std::vector<JoinRange> m_ranges;
+    std::vector<ClipPart> m_parts;
     size_t m_index;
 };
 
@@ -51,14 +70,33 @@ struct FileReaderData final : ReaderData
 
     ~FileReaderData() override = default;
 
-    int readBlock(uint8_t* buffer, const uint32_t max_size) override { return m_file.read(buffer, max_size); }
+    int readBlock(uint8_t* buffer, uint32_t max_size) override
+    {
+        if (m_readEnd >= 0)
+        {
+            if (m_readPos >= m_readEnd)
+                return 0;
+            if (m_readEnd - m_readPos < max_size)
+                max_size = static_cast<uint32_t>(m_readEnd - m_readPos);
+        }
+        const int read = m_file.read(buffer, max_size);
+        if (read > 0)
+            m_readPos += read;
+        return read;
+    }
 
     bool openStream() override;
     bool closeStream() override { return m_file.close(); }
-    bool incSeek(const int64_t offset) override { return m_file.seek(offset, File::SeekMethod::smCurrent) != -1; }
+    bool incSeek(const int64_t offset) override
+    {
+        m_readPos += offset;
+        return m_file.seek(offset, File::SeekMethod::smCurrent) != -1;
+    }
 
     File m_file;
     uint32_t m_fileHeaderSize;
+    int64_t m_readPos = 0;   // where the next read starts
+    int64_t m_readEnd = -1;  // where the part of the file that is read ends; -1: at the end of the file
 };
 
 class BufferedFileReader final : public BufferedReader

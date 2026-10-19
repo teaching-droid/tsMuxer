@@ -659,7 +659,10 @@ void SimplePacketizerReader::doMplsCorrection()
     if (m_curPts >= (m_lastMplsTime - mplsEps) && m_curMplsIndex < static_cast<int>(m_mplsInfo.size() - 1))
     {
         m_curMplsIndex++;
-        if (m_mplsInfo[m_curMplsIndex].connection_condition == 5)
+        // The sound of a clip cut to the part played is cut to it by the demuxer (TSDemuxer::keptInPart), and has no
+        // frame to remove where it meets another part
+        if (m_mplsInfo[m_curMplsIndex].connection_condition == 5 && !m_mplsInfo[m_curMplsIndex].part.isCut() &&
+            !m_mplsInfo[m_curMplsIndex - 1].part.isCut())
         {
             m_mplsOffset += m_curPts - m_lastMplsTime;
         }

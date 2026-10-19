@@ -1527,6 +1527,18 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     if (m_pulldownMaxFields > 2 && !slice.m_field_pic_flag && slice.getSPS()->pic_order_cnt_type == 0)
         pulldownFieldsAhead(slice, buff);
 
+    // The first picture of a part cut from a clip of a playlist, when it is not an IDR picture: its order count goes on
+    // from the pictures before it in its clip, which the cut left out, not from the picture before it here, and every
+    // picture of the part was shown frames away from its place. The count starts again from it, as from an IDR
+    // picture. The pictures shown before it were left out with the cut (TSDemuxer::keptInPart).
+    const bool partStart = !guessOrder && !slice.isIDR() && slice.isIFrame() && !slice.m_field_pic_flag &&
+                           slice.getSPS()->pic_order_cnt_type == 0 && isPartStart();
+    if (partStart)
+    {
+        prevPicOrderCntMsb = 0;
+        prevPicOrderCntLsb = static_cast<int>(slice.pic_order_cnt_lsb);
+    }
+
     // A guessed order is set below from the GOP before; calcPicOrder would take the stand-in count as the stream's own.
     int fullPicOrder = 0;
     if (!guessOrder)
@@ -1548,6 +1560,11 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
         if (m_iFramePtsOffset == -1)
             return NOT_ENOUGH_BUFFER;
     }
+    else if (partStart)
+    {
+        m_frameNum = 0;
+        m_iFramePtsOffset = -fullPicOrder;
+    }
     else if (firstLeading >= 0)
         m_frameNum = 0;  // counted from the first picture as from an IDR, so the pictures shown before it fit the delay
     else
@@ -1568,6 +1585,8 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
         m_idrSliceCnt++;
         m_picOrderOffset = 0;
     }
+    else if (partStart)
+        m_picOrderOffset = 0;
     if (m_idrSliceCnt == 0)
     {
         if (firstLeading >= 0)

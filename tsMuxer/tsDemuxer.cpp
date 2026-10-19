@@ -337,16 +337,22 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         m_tmpBufferLen = 0;
     }
 
+    int64_t handedOn = 0;  // bytes of subtitles written here (clearSubtitlesAtPartEnd), counted against the discarded
     if (isFirstBlock)
     {
+        handedOn = clearSubtitlesAtPartEnd(demuxedData);
         if (m_curFileNum < m_mplsInfo.size())
             m_prevFileLen +=
                 static_cast<int64_t>(m_mplsInfo[m_curFileNum].OUT_time - m_mplsInfo[m_curFileNum].IN_time) *
                 2;  // in 90Khz clock
         else
         {
+            // A part cut from a clip counts its pictures by the step of their decoding times: the first two of them
+            // need not be one picture apart, where the pictures shown before its first key picture were left out
+            const bool cutPart = m_curFileNum < m_clipParts.size() && m_clipParts[m_curFileNum].isCut();
             if (m_firstVideoPTS != -1 && m_lastVideoPTS != -1)
-                m_prevFileLen += (m_lastVideoPTS - m_firstVideoPTS + m_videoDtsGap);
+                m_prevFileLen += (m_lastVideoPTS - m_firstVideoPTS +
+                                  (cutPart && m_partVideoStep > 0 ? m_partVideoStep : m_videoDtsGap));
             else  // no video file
                 m_prevFileLen += (m_lastPTS - m_firstPTS);
         }
@@ -357,9 +363,10 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         m_firstSeenVideoPTS = -1;
         m_lastVideoPTS = -1;
         m_curFileNum++;
+        startPart();
     }
 
-    discardSize = 0;
+    discardSize = -handedOn;
 
     if (readedBytes < TS_FRAME_SIZE)
     {
@@ -379,6 +386,10 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         readProgramTables(data, lastFrameAddr, false);
     else if (isFirstBlock)
         readProgramTables(data, lastFrameAddr, true);
+
+    // A block holds data of one file only
+    const ClipPart* part =
+        m_curFileNum < m_clipParts.size() && m_clipParts[m_curFileNum].isCut() ? &m_clipParts[m_curFileNum] : nullptr;
 
     for (m_curPos = data; m_curPos <= lastFrameAddr; m_curPos += TS_FRAME_SIZE)
     {
@@ -420,11 +431,18 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
 
         uint8_t* frameData = m_curPos + tsPacket->getHeaderSize();
         const bool pesStartCode = frameData[0] == 0 && frameData[1] == 0 && frameData[2] == 1 && tsPacket->payloadStart;
+        if (part != nullptr && !pesStartCode && !m_partKeep[pid])
+            continue;
         if (pesStartCode)
         {
-            m_clipStartOfPid.try_emplace(pid, m_prevFileLen);
             const auto pesPacket = reinterpret_cast<PESPacket*>(frameData);
             auto streamInfo = m_pmt.pidList.find(pid);
+            if (part != nullptr &&
+                !keptInPart(*part, pid,
+                            streamInfo != m_pmt.pidList.end() ? streamInfo->second.m_streamType : StreamType::RESERVED,
+                            pesPacket, TS_FRAME_SIZE - (frameData - m_curPos)))
+                continue;
+            m_clipStartOfPid.try_emplace(pid, m_prevFileLen);
 
             if ((pesPacket->flagsLo & 0x80) == 0x80)
             {
@@ -455,6 +473,13 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
                         m_lastVideoDTS = curDts;
                     if (m_videoDtsGap == -1 && curDts > m_lastVideoDTS)
                         m_videoDtsGap = curDts - m_lastVideoDTS;
+                    if (part != nullptr)
+                    {
+                        if (m_partLastVideoDts != -1 && curDts > m_partLastVideoDts &&
+                            (m_partVideoStep <= 0 || curDts - m_partLastVideoDts < m_partVideoStep))
+                            m_partVideoStep = curDts - m_partLastVideoDts;
+                        m_partLastVideoDts = curDts;
+                    }
                 }
 
                 if (m_firstPtsTime.find(pid) == m_firstPtsTime.end())
@@ -479,11 +504,16 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
                 frameData += pesPacket->getHeaderLength();
             else
             {
-                const int64_t ptsBase = m_firstVideoPTS != -1 ? m_firstVideoPTS : m_firstPTS;
+                // A part cut from a clip starts at its key picture, also for a subtitle read before that picture
+                const int64_t ptsBase = part != nullptr && part->startCut ? part->firstShown()
+                                        : m_firstVideoPTS != -1           ? m_firstVideoPTS
+                                                                          : m_firstPTS;
                 if ((pesPacket->flagsLo & 0xc0) == 0xc0)
                 {
                     const int64_t pts = pesPacket->getPts() - ptsBase + m_prevFileLen;
-                    const int64_t dts = pesPacket->getDts() - ptsBase + m_prevFileLen;
+                    int64_t dts = pesPacket->getDts() - ptsBase + m_prevFileLen;
+                    if (part != nullptr && dts < 0)
+                        dts = 0;  // decoded before the cut, at the start of the output
                     pesPacket->setPtsAndDts(pts, dts);
                 }
                 else if ((pesPacket->flagsLo & 0x80) == 0x80)
@@ -528,6 +558,191 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     }
 
     return 0;
+}
+
+// A clip file of a playlist begins: the state of the part before is cleared. The sound of a cut part carries where
+// it ended in the output over to the next part, which starts its own sound where that leaves off.
+void TSDemuxer::startPart()
+{
+    const bool prevCut =
+        m_curFileNum > 0 && m_curFileNum - 1 < m_clipParts.size() && m_clipParts[m_curFileNum - 1].isCut();
+    for (auto& [pid, cut] : m_partCut)
+    {
+        // a part that kept nothing of the sound passes on where the sound before it ended
+        if (!prevCut)
+            cut.outEnd = -1;
+        else if (cut.keptAny && cut.outPos >= 0)
+            cut.outEnd = cut.outPos + cut.step;
+        cut.keep = cut.ended = cut.keptAny = false;
+        cut.lastSeenPts = cut.firstKeptPts = cut.lastKeptPts = -1;
+        cut.pgsShowing = cut.pgsClearing = cut.pgsCleared = false;
+    }
+    memset(m_partKeep, 0, sizeof(m_partKeep));
+    m_partLastVideoDts = -1;
+}
+
+// Whether a PES of a clip of which only a part is muxed is kept, decided where it starts; the packets that carry the
+// rest of it go with it. The part is read from a little before its first key picture to a little after its last one.
+//
+// Video is kept in the order of decoding from the key picture at or before the play item's IN time, where a player
+// starts to decode, up to the key picture at or after its OUT time, which is left out: a stream that is not encoded
+// again can only be cut where a group of pictures begins. The pictures shown before the first key picture are made
+// from pictures before the cut and are left out too. The readers count the pictures they are given, so the parts
+// follow one another without a gap.
+//
+// The sound is cut to the same times. Its readers count frames as well, so a part's sound starts where the sound of
+// the part before ends in the output: the first frame kept is the one that belongs nearest to that point, at most
+// half a frame away, and the sound cannot drift from the pictures over many parts. A part that ends at a key picture
+// ends its sound there, within half a frame.
+//
+// Subtitles are kept from the first key picture to the last one, at their times moved with the part. A subtitle still
+// on the screen where the part ends is taken off there: the display set after the end that clears the screen is kept,
+// moved to the end of the part.
+bool TSDemuxer::keptInPart(const ClipPart& part, const int pid, const StreamType type, PESPacket* pes,
+                           const int64_t payloadLen)
+{
+    PartCut& cut = m_partCut[pid];
+    if ((pes->flagsLo & 0x80) == 0)  // no time: it goes with the PES before it
+    {
+        m_partKeep[pid] = cut.keep;
+        return cut.keep;
+    }
+    const int64_t pts = pes->getPts();
+    bool keep;
+    if (isVideoPID(type))
+    {
+        // the last key picture itself is kept with the pictures shown before it that the play item shows (keepEndKey)
+        if (part.endPts >= 0 && (part.keepEndKey ? pts > part.endPts : pts >= part.endPts))
+            cut.ended = true;
+        keep = !cut.ended && (!part.startCut || pts >= part.firstShown());
+        if (keep)
+        {
+            // the first picture of every part after the first, by its number in the track, for the video reader; a
+            // part that continues the one before goes on without a break
+            if (!cut.keptAny && m_curFileNum > 0 && !part.continuesPrevious)
+                m_partStartPictures[pid].insert(m_keptPictures[pid]);
+            cut.keptAny = true;
+            m_keptPictures[pid]++;
+        }
+    }
+    else if (type == StreamType::SUB_PGS)
+    {
+        const uint8_t* segment = reinterpret_cast<const uint8_t*>(pes) + pes->getHeaderLength();
+        const int64_t segmentLen = payloadLen - pes->getHeaderLength();
+        const bool composition = segmentLen >= 14 && segment[0] == 0x16;  // presentation composition segment
+        keep = (!part.startCut || pts >= part.firstShown()) && (part.endPts < 0 || pts < part.shownEnd);
+        if (!keep && part.endPts >= 0 && !part.continuedByNext && pts >= part.shownEnd && !cut.pgsCleared &&
+            (cut.pgsClearing || (cut.pgsShowing && composition && segment[13] == 0)))
+        {
+            keep = cut.pgsClearing = true;
+            if (segmentLen >= 1 && segment[0] == 0x80)  // the end of the display set
+            {
+                cut.pgsClearing = false;
+                cut.pgsCleared = true;
+            }
+            if ((pes->flagsLo & 0xc0) == 0xc0)
+                pes->setPtsAndDts(part.shownEnd, part.shownEnd);
+            else
+                pes->setPts(part.shownEnd);
+        }
+        if (keep && composition)
+        {
+            cut.pgsShowing = segment[13] != 0;
+            memcpy(cut.pgsVideo, segment + 3, sizeof(cut.pgsVideo));
+        }
+        // a window definition, kept for a display set written at the end of the part (clearSubtitlesAtPartEnd)
+        if (keep && segmentLen >= 3 && segment[0] == 0x17 && 3 + (segment[1] << 8 | segment[2]) <= segmentLen)
+            cut.pgsWindow.assign(segment, segment + 3 + (segment[1] << 8 | segment[2]));
+    }
+    else
+    {
+        // A TrueHD track carries each AC-3 core frame with the lossless frames of its time after it, and its reader
+        // takes them in that order: the track is cut where a core frame begins, and the lossless frames go with it
+        if (type == StreamType::AUDIO_TRUE_HD)
+        {
+            const uint8_t* data = reinterpret_cast<const uint8_t*>(pes) + pes->getHeaderLength();
+            if (payloadLen - pes->getHeaderLength() < 2 || data[0] != 0x0B || data[1] != 0x77)
+            {
+                m_partKeep[pid] = cut.keep;
+                return cut.keep;
+            }
+        }
+        if (cut.lastSeenPts >= 0 && pts > cut.lastSeenPts && (cut.step == 0 || pts - cut.lastSeenPts < cut.step))
+            cut.step = pts - cut.lastSeenPts;
+        cut.lastSeenPts = pts;
+        const int64_t half = cut.step / 2;
+        if (cut.keptAny)
+            keep = pts >= cut.firstKeptPts;
+        else if (part.startPts >= 0 && (part.startCut || cut.outEnd >= 0))
+        {
+            // where this frame belongs in the output, against where the sound before it ends
+            const int64_t at = m_prevFileLen + pts - part.firstShown();
+            keep = at >= (cut.outEnd >= 0 ? cut.outEnd : m_prevFileLen) - half;
+        }
+        else
+            keep = true;
+        if (keep && part.endPts >= 0 && pts >= part.shownEnd - half)
+            keep = false;
+        if (keep)
+        {
+            if (!cut.keptAny)
+            {
+                cut.keptAny = true;
+                cut.firstKeptPts = pts;
+                cut.outPos = cut.outEnd >= 0 ? cut.outEnd : m_prevFileLen;
+            }
+            else
+                cut.outPos += pts - cut.lastKeptPts;
+            cut.lastKeptPts = pts;
+        }
+    }
+    cut.keep = keep;
+    m_partKeep[pid] = keep;
+    return keep;
+}
+
+// A part that ends at a key picture while a subtitle is on the screen, and whose own display set that takes it off
+// comes after the bytes read of the part, left the subtitle on into the next part, until a display set of that part
+// replaced it. A display set that clears the screen is written at the end of the part, with the window of the
+// subtitle, as the stream's own would be.
+int64_t TSDemuxer::clearSubtitlesAtPartEnd(DemuxedData& demuxedData)
+{
+    int64_t written = 0;
+    if (m_curFileNum >= m_clipParts.size())
+        return written;
+    const ClipPart& part = m_clipParts[m_curFileNum];
+    if (part.startPts < 0 || part.endPts < 0 || part.continuedByNext)
+        return written;
+    const int64_t pts = part.shownEnd - (part.startCut ? part.firstShown() : m_firstVideoPTS) + m_prevFileLen;
+    for (auto& [pid, cut] : m_partCut)
+    {
+        if (!cut.pgsShowing || cut.pgsCleared || cut.pgsWindow.empty() || pid < 0 || pid >= 8192 ||
+            !m_acceptedPidCache[pid])
+            continue;
+        const auto composition = static_cast<uint16_t>((cut.pgsVideo[5] << 8 | cut.pgsVideo[6]) + 1);
+        std::vector<std::vector<uint8_t>> segments;
+        segments.push_back({0x16, 0, 11, cut.pgsVideo[0], cut.pgsVideo[1], cut.pgsVideo[2], cut.pgsVideo[3],
+                            cut.pgsVideo[4], static_cast<uint8_t>(composition >> 8), static_cast<uint8_t>(composition),
+                            0, 0, 0, 0});  // normal case, no object
+        segments.push_back(cut.pgsWindow);
+        segments.push_back({0x80, 0, 0});
+        StreamData& out = demuxedData[pid];
+        for (const auto& segment : segments)
+        {
+            constexpr int headerLen = PESPacket::HEADER_SIZE + 2 * PESPacket::PTS_SIZE;
+            const auto len = static_cast<int>(headerLen + segment.size());
+            out.grow(len);
+            uint8_t* dst = out.data() + out.size() - len;
+            auto* pes = reinterpret_cast<PESPacket*>(dst);
+            pes->serialize(pts, pts, PES_PRIVATE_DATA1);
+            pes->setPacketLength(len);
+            memcpy(dst + headerLen, segment.data(), segment.size());
+            written += len;
+        }
+        cut.pgsShowing = false;
+        cut.pgsCleared = true;
+    }
+    return written;
 }
 
 bool TSDemuxer::isDvbSubtitlePid(const int pid) const
@@ -632,7 +847,10 @@ void TSDemuxer::setFileIterator(FileNameIterator* itr)
 {
     // The files of a join or a playlist, for getTrackPacketFps: a first clip may be too short to give a rate
     if (const auto* list = dynamic_cast<const FileListIterator*>(itr))
+    {
         m_joinFiles = list->getFiles();
+        m_clipParts = list->getClipParts();
+    }
     const auto br = dynamic_cast<BufferedFileReader*>(m_bufferedReader);
     if (br)
         br->setFileIterator(itr, m_readerID);

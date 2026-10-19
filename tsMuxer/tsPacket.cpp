@@ -829,6 +829,79 @@ void CLPIParser::parseCPI(uint8_t* buffer, const uint8_t* end)
 
 void CLPIParser::EP_map(BitStreamReader& reader) {}
 
+bool readClipEntryPoints(const std::string& clpiFileName, int& videoPid, std::vector<ClipEntryPoint>& points)
+{
+    points.clear();
+    File file;
+    int64_t size = 0;
+    if (!file.open(clpiFileName.c_str(), File::ofRead) || !file.size(&size) || size < 40 || size > 64 * 1024 * 1024)
+        return false;
+    std::vector<uint8_t> d(static_cast<size_t>(size));
+    if (file.read(d.data(), static_cast<uint32_t>(size)) != static_cast<int>(size))
+        return false;
+    const auto be = [&d](const size_t pos, const size_t bytes, uint32_t& value)
+    {
+        if (pos + bytes > d.size())
+            return false;
+        value = 0;
+        for (size_t i = 0; i < bytes; ++i) value = value << 8 | d[pos + i];
+        return true;
+    };
+    uint32_t seqStart = 0, cpiStart = 0, cpiLen = 0, v = 0;
+    if (memcmp(d.data(), "HDMV", 4) != 0 || !be(8, 4, seqStart) || !be(16, 4, cpiStart))
+        return false;
+    // A clip with more than one sequence of times can give the same time to two places, and an entry point could not
+    // be told apart by its time: such a clip is not cut
+    uint32_t atcCount = 0, stcCount = 0;
+    if (!be(seqStart + 5, 1, atcCount) || atcCount != 1 || !be(seqStart + 10, 1, stcCount) || stcCount != 1)
+        return false;
+    if (!be(cpiStart, 4, cpiLen) || cpiLen == 0)
+        return false;
+    // EP_map: the streams it indexes, 12 bytes each after the count, then for each stream its coarse entries (8 bytes)
+    // and its fine entries (4 bytes). The coarse entry keeps bits 19 to 32 of a time and the fine one bits 9 to 19.
+    const size_t epMap = cpiStart + 6;
+    uint32_t streams = 0;
+    if (!be(epMap + 1, 1, streams))
+        return false;
+    for (uint32_t k = 0; k < streams; ++k)
+    {
+        const size_t entry = epMap + 2 + 12 * k;
+        uint32_t pid = 0, typeAndCoarse = 0, fineCount = 0, start = 0;
+        if (!be(entry, 2, pid) || !be(entry + 2, 4, typeAndCoarse) || !be(entry + 5, 3, fineCount) ||
+            !be(entry + 8, 4, start))
+            return false;
+        const uint32_t epStreamType = typeAndCoarse >> 18 & 0x0f;
+        const uint32_t coarseCount = typeAndCoarse >> 2 & 0xffff;
+        fineCount &= 0x3ffff;
+        if (epStreamType != 1)  // a video stream
+            continue;
+        const size_t one = epMap + start;
+        uint32_t fineStart = 0;
+        if (!be(one, 4, fineStart))
+            return false;
+        for (uint32_t c = 0; c < coarseCount; ++c)
+        {
+            uint32_t coarse = 0, coarseSpn = 0, nextFine = fineCount;
+            if (!be(one + 4 + 8 * c, 4, coarse) || !be(one + 8 + 8 * c, 4, coarseSpn))
+                return false;
+            if (c + 1 < coarseCount && be(one + 4 + 8 * (c + 1), 4, v))
+                nextFine = v >> 14;
+            for (uint32_t f = coarse >> 14; f < nextFine && f < fineCount; ++f)
+            {
+                uint32_t fine = 0;
+                if (!be(one + fineStart + 4 * f, 4, fine))
+                    return false;
+                const int64_t pts =
+                    (static_cast<int64_t>(coarse & 0x3ffe) << 19) + (static_cast<int64_t>(fine >> 17 & 0x7ff) << 9);
+                points.push_back({pts, (coarseSpn & ~0x1ffffu) + (fine & 0x1ffff)});
+            }
+        }
+        videoPid = static_cast<int>(pid);
+        return !points.empty();
+    }
+    return false;
+}
+
 void CLPIParser::composeCPI(BitStreamWriter& writer, const bool isCPIExt)
 {
     const auto lengthPos = UnalignedPtr<uint32_t>(writer.getBuffer() + writer.getBitsCount() / 8);

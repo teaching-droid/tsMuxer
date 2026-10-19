@@ -3177,6 +3177,8 @@ int main(int argc, char** argv)
                     }
                     detectStreamReader(itemName.c_str(), &mplsParser, false, &laterClips);
                 }
+                // The lengths and marks of the play items, as the mux places them (the default of --playlist-clips)
+                METADemuxer::cutPlayItems(mplsParser, argv[1], PLAYLIST_CLIPS_PLAYED_BY_DEFAULT);
 
                 size_t markIndex = 0;
                 int64_t prevFileOffset = 0;

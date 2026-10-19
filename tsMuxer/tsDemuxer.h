@@ -12,6 +12,7 @@
 #include "bufferedReader.h"
 #include "bufferedReaderManager.h"
 #include "ioContextDemuxer.h"
+#include "pesPacket.h"
 #include "tsPacket.h"
 
 // typedef StreamReaderMap std::map<int, AbstractStreamReader*>;
@@ -65,6 +66,11 @@ class TSDemuxer final : public AbstractDemuxer
         return start->second;
     }
     double getTrackPacketFps(uint32_t trackId) override;
+    bool isPartStartPicture(const int32_t pid, const int64_t picture) override
+    {
+        const auto starts = m_partStartPictures.find(pid);
+        return starts != m_partStartPictures.end() && starts->second.count(picture) != 0;
+    }
     // The clips that follow the one opened, when a playlist is listed: read by getTrackPacketFps when the first clip
     // holds too few pictures. A join or a playlist that is muxed gives them through setFileIterator.
     void setLaterFiles(const std::vector<std::string>& files) { m_laterFiles = files; }
@@ -89,6 +95,36 @@ class TSDemuxer final : public AbstractDemuxer
     // discarded, less what was handed on, so that the two add up to the file.
     void convertDvbSubtitlePes(int pid, DvbSubtitlePes& sub, DemuxedData& demuxedData, bool last, int64_t& discardSize);
     void readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, bool laterClip);
+
+    // A playlist of which only the part each play item plays is muxed: one ClipPart for each clip file, and what is
+    // kept of each stream in the part being read (see keptInPart)
+    struct PartCut
+    {
+        bool keep = false;         // the PES being read is kept, and the packets that carry the rest of it
+        bool ended = false;        // video: the key picture the part ends at has been reached
+        bool keptAny = false;      // something of the stream is kept in this part
+        int64_t lastSeenPts = -1;  // sound: the time of the PES before, kept or not
+        int64_t step = 0;          // sound: the time from one PES to the next
+        int64_t firstKeptPts = -1;
+        int64_t lastKeptPts = -1;
+        int64_t outPos = -1;       // sound: where the last PES kept is in the output, on the timeline of the join
+        int64_t outEnd = -1;       // sound: where the sound of the part before ends in the output; -1: not known
+        bool pgsShowing = false;   // a subtitle is on the screen
+        bool pgsClearing = false;  // the display set that takes it off at the end of the part is being kept
+        bool pgsCleared = false;
+        uint8_t pgsVideo[7]{};           // size, rate and composition number of the last composition kept
+        std::vector<uint8_t> pgsWindow;  // the last window definition segment kept
+    };
+    std::vector<ClipPart> m_clipParts;
+    std::map<int, PartCut> m_partCut;
+    uint8_t m_partKeep[8192]{};
+    int64_t m_partVideoStep = -1;                          // the smallest step of the decoding times of the video kept
+    int64_t m_partLastVideoDts = -1;                       // the decoding time of the last picture kept
+    std::map<int, int64_t> m_keptPictures;                 // the pictures of each video track kept so far
+    std::map<int, std::set<int64_t>> m_partStartPictures;  // their numbers where a part begins (isPartStartPicture)
+    void startPart();
+    int64_t clearSubtitlesAtPartEnd(DemuxedData& demuxedData);
+    bool keptInPart(const ClipPart& part, int pid, StreamType type, PESPacket* pes, int64_t payloadLen);
 
     int64_t m_firstPCRTime;
     bool m_m2tsHdrDiscarded;

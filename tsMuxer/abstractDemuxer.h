@@ -77,6 +77,8 @@ class FileNameIterator
 {
    public:
     virtual std::string getNextName() = 0;
+    // The bytes of the current file to read, when only a part of it is wanted (end -1: to the end of the file)
+    virtual bool getByteRange(int64_t& first, int64_t& end) const { return false; }
     virtual ~FileNameIterator() = default;
 };
 
@@ -147,6 +149,9 @@ class AbstractDemuxer
     // The rate the times of a video track's packets give, for a stream that names no rate of its own: asked only then,
     // in place of the default of 25. A transport stream answers from its PES times; the other demuxers say 0.
     [[nodiscard]] virtual double getTrackPacketFps(uint32_t trackId) { return 0.0; }
+    // Whether the picture of a video track with this number (counted from 0, in the order of decoding) is the first
+    // picture of a part cut from a clip of a playlist, after which the pictures before it are not there (TSDemuxer)
+    [[nodiscard]] virtual bool isPartStartPicture(int32_t pid, int64_t picture) { return false; }
 
     /// Return a pointer to the track's codec-private (extradata) blob and its
     /// size.  The default implementation returns nullptr/0 for demuxers that do

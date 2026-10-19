@@ -563,13 +563,50 @@ struct MPLSStnTable
     uint8_t counts[8]{};
 };
 
+// The part of a clip file that a play item plays, when only that part is muxed (METADemuxer::cutPlayItems): the key
+// pictures of the main video it is cut at, on the clip's 90 kHz clock (-1: from the first picture, or to the last),
+// where its pictures end as they are shown, and the bytes of the file that hold it (endByte -1: to the end of the
+// file).
+struct ClipPart
+{
+    int64_t startPts = -1;
+    int64_t endPts = -1;
+    // Where the pictures of the part end as they are shown. Before endPts when the pictures of an open GOP that are
+    // shown before the last key picture are left out with it; after it when OUT_time falls among them, and they are
+    // kept with the key picture they are made from (keepEndKey).
+    int64_t shownEnd = -1;
+    bool keepEndKey = false;
+    // The part goes on in the same clip where the part before ends, at the same key picture: nothing is left out
+    // between them, the pictures shown before that key picture included (startShown, the first of them)
+    bool continuesPrevious = false;
+    bool continuedByNext = false;
+    int64_t startShown = -1;
+    [[nodiscard]] int64_t firstShown() const { return continuesPrevious ? startShown : startPts; }
+    int64_t firstByte = 0;
+    int64_t endByte = -1;
+    bool startCut = false;  // the part starts after the first key picture of the clip
+    [[nodiscard]] bool isCut() const { return startPts >= 0 || endPts >= 0; }
+};
+
 struct MPLSPlayItem
 {
     uint32_t IN_time = 0;
     uint32_t OUT_time = 0;
     std::string fileName;
     uint8_t connection_condition = 0;
+    // When only the part played is muxed, IN_time and OUT_time are moved out to the key pictures of the part
+    ClipPart part;
 };
+
+// A key picture of a clip's main video, as the entry point map of its clip information file lists it: a place where
+// a player can start to decode. pts is on the 90 kHz clock without its 9 lowest bits, which the map does not keep;
+// spn counts the 192 byte packets of the clip file.
+struct ClipEntryPoint
+{
+    int64_t pts;
+    uint32_t spn;
+};
+bool readClipEntryPoints(const std::string& clpiFileName, int& videoPid, std::vector<ClipEntryPoint>& points);
 
 struct PlayListMark
 {

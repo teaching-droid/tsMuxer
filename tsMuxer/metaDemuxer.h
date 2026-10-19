@@ -210,6 +210,11 @@ bool isLanguageCode(const std::string& lang);
 // The ISO 639-2 code (terminological form) of a BCP 47 language tag, from its primary subtag; empty when it has none.
 std::string iso639FromBcp47(const std::string& tag);
 
+// ** THE DEFAULT OF --playlist-clips, IN THIS ONE PLACE. ** true: a Blu-ray playlist that plays only a part of a clip
+// gets only that part (--playlist-clips=played). false: every clip of a playlist is muxed whole, from its first picture
+// to its last, whatever part of it the playlist plays (--playlist-clips=whole).
+constexpr bool PLAYLIST_CLIPS_PLAYED_BY_DEFAULT = true;
+
 class METADemuxer final : public AbstractDemuxer
 {
    public:
@@ -226,6 +231,8 @@ class METADemuxer final : public AbstractDemuxer
     // --keep-editions: a Matroska source is read as it is stored, not as its ordered edition plays it, and its
     // chapters and segment identity go to the output unchanged.
     void setKeepEditions(const bool value) { m_keepEditions = value; }
+    // --playlist-clips: true when a clip of a playlist is cut to the part its play item plays (cutPlayItems)
+    void setPlaylistClipsPlayed(const bool value) { m_playlistClipsPlayed = value; }
     // The output is Matroska (1) or WebM (2), known before the meta is read: a subtitle of a Matroska source is then
     // copied in its own form (MatroskaCopyStreamReader) instead of being converted.
     void setMatroskaOutput(const int kind) { m_matroskaOutput = kind; }
@@ -267,6 +274,10 @@ class METADemuxer final : public AbstractDemuxer
     static std::string playlistStreamDir(const std::string& mplsFileName);
     static std::string mplsTrackToFullName(const std::string& mplsFileName, const std::string& mplsNum);
     static std::string mplsTrackToSSIFName(const std::string& mplsFileName, const std::string& mplsNum);
+    // --playlist-clips=played (played true): the play items of a playlist that plays only parts of its clips are cut
+    // to those parts; the listing does it as the mux does by default, so that the lengths and marks it gives are the
+    // ones of the output
+    static void cutPlayItems(MPLSParser& mpls, const std::string& mplsFileName, bool played);
     bool m_HevcFound;
     bool m_MvcFound;  // a 3D (MVC) track is in the mux
 
@@ -278,6 +289,7 @@ class METADemuxer final : public AbstractDemuxer
     std::chrono::steady_clock::time_point m_lastReportTime;
     std::set<std::string> m_timelinesReported;  // the Matroska files whose play timeline was said in the log
     bool m_keepEditions = false;                // --keep-editions (setKeepEditions)
+    bool m_playlistClipsPlayed = PLAYLIST_CLIPS_PLAYED_BY_DEFAULT;  // --playlist-clips (setPlaylistClipsPlayed)
     int m_matroskaOutput = 0;                   // setMatroskaOutput: 0 other, 1 Matroska, 2 WebM
     bool m_demuxOutput = false;                 // setDemuxOutput
     double m_lastProgress = 0.0;                // the last value printed
