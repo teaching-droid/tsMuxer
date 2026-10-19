@@ -743,6 +743,8 @@ void H264StreamReader::additionalStreamCheck(uint8_t* buff, uint8_t* end)
         m_needSeiCorrection = false;
 
     m_forceLsbDiv = -1;
+    // The coded frames of a stream that can code fields: whether odd and even counts were seen
+    bool oddFrame = false, evenFrame = false;
     for (uint8_t* nal = NALUnit::findNextNAL(buff, end); nal != end; nal = NALUnit::findNextNAL(nal, end))
     {
         switch (static_cast<NALUnit::NALType>(*nal & 0x1f))
@@ -766,7 +768,17 @@ void H264StreamReader::additionalStreamCheck(uint8_t* buff, uint8_t* end)
                 // coded fields
                 if (slice.getSPS()->frame_mbs_only_flag == 0 && slice.m_field_pic_flag)
                     m_forceLsbDiv = 1;
-                // coded frames
+                // Coded frames of a stream that can code fields. A frame has a count for each field, and the one in
+                // the slice header is the top field's: with the bottom field first it is often the odd one of the
+                // two, and the counts of the frames step by two from odd numbers. Taken as steps of one, the pictures
+                // came out twice as far apart as they are, and the stream twice as long. Steps of one give odd and
+                // even counts both.
+                else if (slice.getSPS()->frame_mbs_only_flag == 0)
+                {
+                    (slice.pic_order_cnt_lsb % 2 == 1 ? oddFrame : evenFrame) = true;
+                    if (oddFrame && evenFrame)
+                        m_forceLsbDiv = 0;
+                }
                 else if (slice.pic_order_cnt_lsb % 2 == 1)
                     m_forceLsbDiv = 0;
             }
@@ -963,7 +975,8 @@ int H264StreamReader::leadingPicturesOfFirst(const SliceUnit& firstSlice, uint8_
 // The picture order count step of the IDR period that begins with idrSlice (its NAL at buff), read from
 // that period's own pictures by the rule additionalStreamCheck applies at the start of a track: 1 (halve
 // the counts) for coded fields and for frames whose counts are all even, 0 when a coded frame has an odd
-// count. Returns the step in use when the data cannot tell, and -1 when more data is needed and can come.
+// count; in a stream that can code fields, only when its coded frames have odd and even counts both.
+// Returns the step in use when the data cannot tell, and -1 when more data is needed and can come.
 int H264StreamReader::lsbDivOfIdrPeriod(const SliceUnit& idrSlice, uint8_t* buff)
 {
     // With steps of one, the picture with count 1 is shown right after the IDR, and a decoder holds back
@@ -977,6 +990,9 @@ int H264StreamReader::lsbDivOfIdrPeriod(const SliceUnit& idrSlice, uint8_t* buff
         return 1;  // coded fields (and the second field of this IDR would look like the next IDR below)
 
     int pictures = 0;
+    bool oddFrame = false, evenFrame = false;
+    if (idrSlice.getSPS()->frame_mbs_only_flag == 0)
+        (idrSlice.pic_order_cnt_lsb % 2 == 1 ? oddFrame : evenFrame) = true;
     for (uint8_t* nal = NALUnit::findNextNAL(buff, m_bufEnd); nal < m_bufEnd; nal = NALUnit::findNextNAL(nal, m_bufEnd))
     {
         const auto nalType = static_cast<NALUnit::NALType>(*nal & 0x1f);
@@ -1002,7 +1018,13 @@ int H264StreamReader::lsbDivOfIdrPeriod(const SliceUnit& idrSlice, uint8_t* buff
             return m_forceLsbDiv;
         if (slice.getSPS()->frame_mbs_only_flag == 0 && slice.m_field_pic_flag)
             return 1;
-        if (slice.pic_order_cnt_lsb % 2 == 1)
+        if (slice.getSPS()->frame_mbs_only_flag == 0)
+        {
+            (slice.pic_order_cnt_lsb % 2 == 1 ? oddFrame : evenFrame) = true;
+            if (oddFrame && evenFrame)
+                return 0;
+        }
+        else if (slice.pic_order_cnt_lsb % 2 == 1)
             return 0;
         if (++pictures >= PICTURES_TO_BE_SURE)
             return 1;
