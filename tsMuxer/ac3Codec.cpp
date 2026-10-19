@@ -1,5 +1,7 @@
 #include "ac3Codec.h"
 
+#include <fs/systemlog.h>
+
 #include <sstream>
 
 #include "avCodecs.h"
@@ -500,6 +502,9 @@ int AC3Codec::decodeFrame(uint8_t* buf, uint8_t* end, int& skipBytes)
             }
             return trueHDFrameLen;
         }
+        const int timecodeBlock = timecodeBlockAfter(buf + rez, end);
+        if (timecodeBlock == NOT_ENOUGH_BUFFER)
+            return NOT_ENOUGH_BUFFER;
         if (m_downconvertToAC3 && m_bsid > 10)
         {
             // Extracting the core means dropping the E-AC-3 frames and keeping the AC-3 ones
@@ -513,15 +518,40 @@ int AC3Codec::decodeFrame(uint8_t* buf, uint8_t* end, int& skipBytes)
                 THROW(ERR_INVALID_CODEC_FORMAT,
                       "down-to-ac3: this Dolby Digital Plus track has no AC-3 core to extract, so there is "
                       "nothing to keep. Mux it without down-to-ac3 to pass the track through unchanged.")
-            skipBytes = rez;  // skip E-AC3 frame
+            skipBytes = rez + timecodeBlock;  // skip E-AC3 frame
             return 0;
         }
+        skipBytes = timecodeBlock;
         return rez;
     }
     catch (BitStreamException&)
     {
         return NOT_ENOUGH_BUFFER;
     }
+}
+
+// ** A TIMECODE BLOCK BETWEEN THE FRAMES. **
+// With their timecode option on, AC-3 encoders such as SurCode and the Dolby Media Encoder put 16 bytes in front of
+// every AC-3 frame, or in front of each AC-3 core and the E-AC-3 frame that follows it: 01 10, the time stamp of the
+// AC-3 standard's time stamp annex (hours, minutes, seconds and frames, the sample it refers to, a frame rate code),
+// and two more bytes. The audio is the same as without them, but the frames were expected back to back, so such a
+// file was not recognised at all. The block is left out: it is taken only where it is followed by the sync word of
+// the next frame, so audio that merely happens to hold 01 10 there is read as before.
+int AC3Codec::timecodeBlockAfter(const uint8_t* next, const uint8_t* end)
+{
+    static constexpr int BLOCK_SIZE = 16;
+    if (end - next < 2 || next[0] != 0x01 || next[1] != 0x10)
+        return 0;
+    if (end - next < BLOCK_SIZE + 2)
+        return NOT_ENOUGH_BUFFER;
+    if (next[BLOCK_SIZE] != 0x0B || next[BLOCK_SIZE + 1] != 0x77)
+        return 0;
+    if (!m_timecodeBlockSaid && !m_testMode)
+    {
+        m_timecodeBlockSaid = true;
+        LTRACE(LT_INFO, 2, "AC-3: a 16 byte timecode block in front of the frames is left out");
+    }
+    return BLOCK_SIZE;
 }
 
 AC3Codec::AC3ParseError AC3Codec::testParseHeader(uint8_t* buf, uint8_t* end) const

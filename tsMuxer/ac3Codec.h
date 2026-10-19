@@ -134,6 +134,9 @@ class AC3Codec
     uint32_t m_bit_rateExt;
     bool m_nextFrameIsExt;  // the frame after this AC-3 one is E-AC-3, so this one adds no time
     bool m_extChannelsExists;
+    bool m_timecodeBlockSaid = false;
+
+    int timecodeBlockAfter(const uint8_t* next, const uint8_t* end);
 
     static bool crc32(const uint8_t* buf, int length);
     AC3ParseError parseHeader(uint8_t* buf, const uint8_t* end);
