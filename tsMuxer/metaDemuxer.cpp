@@ -3715,8 +3715,29 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
         }
         // The picture size and frame rate are only needed to draw the subtitles. Kept as text they
         // are not drawn, unless the output cannot carry text, and that output says so when it is.
+        // The message named "SRT tracks" also for an ASS track and for a demux, and did not say which value was
+        // missing or that keep-text needs none of them.
         if (!srtReader->keepText() && (srtWidth == 0 || srtHeight == 0 || fps == 0.0))
-            THROW(ERR_COMMON, "video-width, video-height and fps parameters MUST be provided for SRT tracks")
+        {
+            std::vector<const char*> missing;
+            if (srtWidth == 0)
+                missing.push_back("video-width");
+            if (srtHeight == 0)
+                missing.push_back("video-height");
+            if (fps == 0.0)
+                missing.push_back("fps");
+            std::string list = missing[0];
+            for (size_t i = 1; i < missing.size(); ++i)
+                list += (i + 1 == missing.size() ? " and " : ", ") + std::string(missing[i]);
+            const auto track = addParams.find("track");
+            THROW(ERR_COMMON, "The text subtitles of "
+                                  << (track != addParams.end() ? "track " + track->second + " of " : std::string())
+                                  << unquoteStr(codecStreamName)
+                                  << " are drawn as pictures, which needs the size and frame rate of the video: "
+                                  << list << (missing.size() > 1 ? " are" : " is")
+                                  << " not given on the line. Give video-width, video-height and fps, or keep-text "
+                                     "to keep the subtitles as text (in a Matroska output or a demux).")
+        }
         if (srtWidth && srtHeight && fps != 0.0)
             srtReader->setVideoInfo(srtWidth, srtHeight, fps);
         srtReader->setFont(font);
