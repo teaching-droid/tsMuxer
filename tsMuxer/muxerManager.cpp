@@ -279,6 +279,11 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
                         THROW(ERR_COMMON,
                               "--keep-editions keeps the editions of a Matroska source, and no track "
                               "here comes from a Matroska file. Leave it out.")
+                    // A Matroska source without editions has nothing to keep, and nothing said so
+                    if (m_metaDemuxer.getSourceEditions().chapters.empty())
+                        LTRACE(LT_WARN, 2,
+                               "Warning: --keep-editions: the Matroska source has no chapters or editions, so there "
+                               "is nothing to keep.");
                     mkv->setSourceEditions(m_metaDemuxer.getSourceEditions());
                 }
                 // Now that the muxer exists it can be given the chapter list main() supplied.
