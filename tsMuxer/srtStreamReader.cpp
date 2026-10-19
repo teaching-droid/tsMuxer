@@ -1309,13 +1309,43 @@ bool SRTStreamReader::parseTime(const string& text)
 }
 
 // ReSharper disable once CppMemberFunctionMayBeStatic
+// ** A FILE NAMED .srt IS SRT ONLY WHEN IT READS LIKE ONE. **
+// The name alone decided it: a file named .srt was listed as "SRT text subtitles" whatever it held, audio or anything
+// else, and a mux then asked for the size and rate of the video instead of saying that the file is not SRT. A file
+// that has text in it now needs a timing line, two times with "-->" between them, in its first 64 KiB. A file with
+// nothing in it but spaces stays SRT, as it was. UTF-16 is read by taking the byte of each pair that carries the text.
+static bool readsLikeSrt(const uint8_t* buffer, const int len)
+{
+    int step = 1;
+    int first = 0;
+    if (len >= 2 && ((buffer[0] == 0xFF && buffer[1] == 0xFE) || (buffer[0] == 0xFE && buffer[1] == 0xFF)))
+    {
+        step = 2;
+        first = buffer[0] == 0xFF ? 2 : 3;
+    }
+    const int limit = (std::min)(len, 64 * 1024);
+    std::string text;
+    for (int i = first; i < limit; i += step) text += static_cast<char>(buffer[i]);
+    if (text.find_first_not_of(" \t\r\n\xEF\xBB\xBF") == std::string::npos)
+        return true;
+    for (size_t arrow = text.find("-->"); arrow != std::string::npos; arrow = text.find("-->", arrow + 3))
+    {
+        const size_t before = text.find_last_not_of(" \t", arrow == 0 ? 0 : arrow - 1);
+        const size_t after = text.find_first_not_of(" \t", arrow + 3);
+        if (arrow > 0 && before != std::string::npos && after != std::string::npos &&
+            isdigit(static_cast<uint8_t>(text[before])) && isdigit(static_cast<uint8_t>(text[after])))
+            return true;
+    }
+    return false;
+}
+
 CheckStreamRez SRTStreamReader::checkStream(uint8_t* buffer, const int len, const ContainerType containerType,
                                             const int containerDataType, int containerStreamIndex)
 {
     CheckStreamRez rez;
     if (((containerType == ContainerType::ctMKV || containerType == ContainerType::ctMOV) &&
          containerDataType == TRACKTYPE_SRT) ||
-        containerType == ContainerType::ctSRT)
+        (containerType == ContainerType::ctSRT && readsLikeSrt(buffer, len)))
     {
         rez.codecInfo = srtCodecInfo;
         rez.streamDescr = "SRT text subtitles";
