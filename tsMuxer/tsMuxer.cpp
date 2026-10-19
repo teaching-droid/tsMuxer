@@ -1193,7 +1193,10 @@ bool TSMuxer::isSplitPoint(const AVPacket& avPacket) const
     }
     if (m_splitDuration > 0)
     {
-        return (avPacket.pts - m_curFileStartPts) > m_splitDuration;
+        // A key picture that comes exactly at the duration starts the next part, as one at a chapter does below. With
+        // ">" it went into the part it ends, and the part waited for the next key picture: a split every 2 s of video
+        // with a key picture every second gave parts of 3 s.
+        return (avPacket.pts - m_curFileStartPts) >= m_splitDuration;
     }
     if (m_splitByChapters && m_nextChapter < m_chapterPts.size())
     {
