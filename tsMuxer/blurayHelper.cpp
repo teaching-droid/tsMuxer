@@ -650,7 +650,10 @@ bool BlurayHelper::createMPLSFile(TSMuxer* mainMuxer, TSMuxer* subMuxer, int aut
             if (!(ticks >= 0.0 && ticks < 4294967296.0))
                 continue;
             const auto mark = static_cast<uint32_t>(ticks);
-            if (mark <= (mplsParser.OUT_time - mplsParser.IN_time))
+            // The list is in time order with no time twice, but two times a few microseconds apart become one tick of
+            // the playlist's clock: they gave two marks at one time, which a player shows as an empty chapter
+            if (mark <= (mplsParser.OUT_time - mplsParser.IN_time) &&
+                (mplsParser.m_marks.empty() || mplsParser.m_marks.back().m_markTime != mark + mplsParser.IN_time))
                 mplsParser.m_marks.emplace_back(-1, mark + mplsParser.IN_time);
         }
     }
