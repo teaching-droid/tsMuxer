@@ -249,6 +249,7 @@ CheckStreamRez AV1StreamReader::checkStream(uint8_t* buffer, const int len)
     // container hands over, starts with one, and the emulation prevention bytes keep any other one out of the OBUs:
     // so the data has to begin with a start code, and the first start code that is not followed by an AV1 OBU header
     // ends the probe with no AV1 found.
+    m_notAv1 = true;  // until the data is seen to begin as AV1
     int leadingZeros = 0;
     while (leadingZeros < scanLen && leadingZeros <= 16 && buffer[leadingZeros] == 0) leadingZeros++;
     if (leadingZeros < 2 || leadingZeros > 16 || leadingZeros >= scanLen || buffer[leadingZeros] != 1)
@@ -303,6 +304,7 @@ CheckStreamRez AV1StreamReader::checkStream(uint8_t* buffer, const int len)
             break;
     }
 
+    m_notAv1 = false;
     if (foundSeqHdr && foundFrame)
     {
         m_seqHdr = candidateSeqHdr;
@@ -495,7 +497,17 @@ int AV1StreamReader::intDecodeNAL(uint8_t* buff)
 int AV1StreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, const bool hdmvDescriptors)
 {
     if (m_firstFrame)
+    {
         checkStream(m_buffer, static_cast<int>(m_bufEnd - m_buffer));
+        // A line that names V_AV1 for data that is not AV1 was muxed all the same: start codes found by chance in audio
+        // became "pictures", and the job said "Mux successful complete" over a stream nothing can play
+        if (m_notAv1)
+            THROW(ERR_COMMON,
+                  "Track " << m_streamIndex
+                           << " is not AV1: its data does not begin with an AV1 OBU, as an AV1 stream does. "
+                              "The usual reason is that the codec on the meta line is not the codec the "
+                              "file holds. List the file on its own to see what tsMuxeR makes of it.")
+    }
 
     uint8_t* start = dstBuff;
 

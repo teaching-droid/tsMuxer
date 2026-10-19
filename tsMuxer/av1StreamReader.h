@@ -80,6 +80,7 @@ class AV1StreamReader final : public MPEGStreamReader
     bool m_firstFrame;
     bool m_lastIFrame;
     bool m_firstFileFrame;
+    bool m_notAv1 = false;  // checkStream saw data that does not begin as AV1
     int m_frameNum;
 
     MemoryBlock m_seqHdrBuffer;
