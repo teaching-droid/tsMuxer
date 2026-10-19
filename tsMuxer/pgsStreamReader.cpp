@@ -747,8 +747,30 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
             break;
         case PCS_DEF_SEGMENT:
             // Presentation Composition Segment
-            if (fabs(m_scale - 1.0) > 1e-4 || m_replaceRate)
-                m_curPos[4] = static_cast<uint8_t>(calcFpsIndex(m_newFps) << 4);
+            // The rate was written only where the FIRST PCS differs from fps=, so a stream whose display sets give
+            // more than one rate kept the others as they were. With fps= every PCS gets its rate; the times are
+            // scaled as the first PCS decided.
+            {
+                const int ownIndex = m_curPos[4] >> 4;
+                if (m_firstRateIndex < 0)
+                    m_firstRateIndex = ownIndex;
+                else if (ownIndex != m_firstRateIndex && !m_mixedRateSaid)
+                {
+                    m_mixedRateSaid = true;
+                    std::ostringstream what;
+                    what << "Warning: the display sets of PGS stream #" << m_streamIndex
+                         << " give more than one frame rate (" << pgs_frame_rates[m_firstRateIndex] << " and "
+                         << pgs_frame_rates[ownIndex] << "). ";
+                    if (m_newFps != 0.0)
+                        what << "Every display set is written at fps=" << m_newFps << ".";
+                    else
+                        what << "Give fps= with the rate of the video to write one rate.";
+                    LTRACE(LT_WARN, 2, what.str());
+                }
+                if (fabs(m_scale - 1.0) > 1e-4 || m_replaceRate ||
+                    (m_newFps != 0.0 && ownIndex != calcFpsIndex(m_newFps)))
+                    m_curPos[4] = static_cast<uint8_t>(calcFpsIndex(m_newFps) << 4);
+            }
             bitReader.setBuffer(m_curPos, m_bufEnd);
             video_descriptor(bitReader);
             composition_descriptor(bitReader);

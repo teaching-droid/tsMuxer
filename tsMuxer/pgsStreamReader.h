@@ -130,6 +130,8 @@ class PGSStreamReader final : public AbstractStreamReader
     bool m_renderedFromText;
     bool m_rateGuessed = false;
     bool m_replaceRate = false;
+    int m_firstRateIndex = -1;     // the frame rate code of the first PCS
+    bool m_mixedRateSaid = false;  // the warning that the PCS give more than one rate, once
 
     text_subtitles::TextToPGSConverter* m_render;
     uint8_t* m_renderedData;
