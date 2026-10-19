@@ -50,6 +50,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <filesystem>
 #include <unordered_set>
 
 #include "checkboxedheaderview.h"
@@ -251,7 +252,17 @@ bool isMatroskaOutputName(const QString& name)
 
 // Whether two names are one file. QFileInfo compares them as the system does, without regard to case on Windows, so
 // "00000.M2TS" and "00000.m2ts", or a name with each kind of slash, are the same file.
-bool isSameFile(const QString& a, const QString& b) { return QFileInfo(a) == QFileInfo(b); }
+// One file, also when the two names are hard links to it: compared by name, an output that is a hard link to a source
+// got the question whether to overwrite it, and the muxer then refused it as a source
+bool isSameFile(const QString& a, const QString& b)
+{
+    if (QFileInfo(a) == QFileInfo(b))
+        return true;
+    std::error_code ec;
+    const bool same = std::filesystem::equivalent(std::filesystem::path(a.toStdU16String()),
+                                                  std::filesystem::path(b.toStdU16String()), ec);
+    return same && !ec;
+}
 
 QSettings* settings = nullptr;
 
