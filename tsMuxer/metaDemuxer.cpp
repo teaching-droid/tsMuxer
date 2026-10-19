@@ -3149,6 +3149,42 @@ static float parseFadeTime(const char* name, const std::string& text)
     return static_cast<float>(value);
 }
 
+// font-color=: 0xAARRGGBB or xAARRGGBB in hexadecimal, #RRGGBB or #AARRGGBB as in a <font color=> tag, or a decimal
+// number. A value in no such form was read as 0: #FF0000 and FF0000 drew black text, without a word. Without 0x, x or
+// # a value is decimal, as it always was, so FF0000 is refused rather than guessed.
+static uint32_t parseFontColor(const std::string& text)
+{
+    const std::string t = trimStr(unquoteStr(trimStr(text)));
+    bool ok;
+    uint64_t value = 0;
+    size_t prefix = 0;
+    if (t.size() >= 2 && t[0] == '0' && (t[1] == 'x' || t[1] == 'X'))
+        prefix = 2;
+    else if (!t.empty() && (t[0] == 'x' || t[0] == 'X' || t[0] == '#'))
+        prefix = 1;
+    if (prefix)
+    {
+        const std::string hex = t.substr(prefix);
+        ok = !hex.empty() && hex.size() <= 8 && (t[0] != '#' || hex.size() == 6 || hex.size() == 8) &&
+             std::all_of(hex.begin(), hex.end(), [](const unsigned char c) { return isxdigit(c) != 0; });
+        if (ok)
+            value = strtoull(hex.c_str(), nullptr, 16);
+    }
+    else
+    {
+        ok = !t.empty() && t.size() <= 10 && t.find_first_not_of("0123456789") == std::string::npos;
+        if (ok)
+            value = strtoull(t.c_str(), nullptr, 10);
+        ok = ok && value <= 0xFFFFFFFFu;
+    }
+    if (!ok)
+        THROW(ERR_COMMON, "font-color=" << text
+                                        << " is not a colour. Write it in hexadecimal as 0xRRGGBB or #RRGGBB, such "
+                                           "as 0xFF0000 for red, with the alpha in front as 0xAARRGGBB, or as a "
+                                           "decimal number.")
+    return static_cast<uint32_t>(value);
+}
+
 CheckStreamRez METADemuxer::detectTrackReader(uint8_t* tmpBuffer, int len,
                                               AbstractStreamReader::ContainerType containerType, int containerDataType,
                                               int containerStreamIndex)
@@ -3635,13 +3671,7 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
                 font.m_opts |= text_subtitles::Font::STRIKE_OUT;
             else if (addParam.first == "font-color")
             {
-                const string& s = addParam.second;
-                if (s.size() >= 2 && s[0] == '0' && s[1] == 'x')
-                    font.m_color = strToInt32u(s.substr(2, s.size() - 2).c_str(), 16);
-                else if (!s.empty() && s[0] == 'x')
-                    font.m_color = strToInt32u(s.substr(1, s.size() - 1).c_str(), 16);
-                else
-                    font.m_color = strToInt32u(s.c_str());
+                font.m_color = parseFontColor(addParam.second);
                 if ((font.m_color & 0xff000000u) == 0)
                     font.m_color |= 0xff000000u;
             }
