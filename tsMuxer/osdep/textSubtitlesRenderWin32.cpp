@@ -146,15 +146,22 @@ void TextSubtitlesRenderWin32::drawText(const std::string& text, RECT* rect)
     path.AddString(text_wide.data(), static_cast<int>(text_wide.size()) - 1, &fontFamily, m_font.m_opts & 0xf,
                    static_cast<float>(m_font.m_size), Point(rect->left, rect->top), &strformat);
 
+    // GDI+ draws a pen of width 0 one pixel wide, so font-border=0 still gave the text a black hairline, and a
+    // half-transparent colour laid over it came out more opaque than asked (alpha 181 for 0x80) at every edge.
+    // Without a border the outline is left out under a half-transparent colour; under an opaque one it is drawn as
+    // it always was.
     const uint8_t alpha = m_font.m_color >> 24;
-    const uint8_t outColor = (alpha * 48 + 128) / 255;
-    Pen pen(Color(outColor, 0, 0, 0), m_font.m_borderWidth * 2.0F);
-    pen.SetLineJoin(LineJoinRound);
-    graphics.DrawPath(&pen, &path);
+    if (m_font.m_borderWidth > 0 || alpha == 255)
+    {
+        const uint8_t outColor = (alpha * 48 + 128) / 255;
+        Pen pen(Color(outColor, 0, 0, 0), m_font.m_borderWidth * 2.0F);
+        pen.SetLineJoin(LineJoinRound);
+        graphics.DrawPath(&pen, &path);
 
-    Pen penInner(Color(alpha, 0, 0, 0), m_font.m_borderWidth);
-    penInner.SetLineJoin(LineJoinRound);
-    graphics.DrawPath(&penInner, &path);
+        Pen penInner(Color(alpha, 0, 0, 0), m_font.m_borderWidth);
+        penInner.SetLineJoin(LineJoinRound);
+        graphics.DrawPath(&penInner, &path);
+    }
 
     const SolidBrush brush(Color(m_font.m_color));
     graphics.FillPath(&brush, &path);
