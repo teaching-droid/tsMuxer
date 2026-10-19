@@ -234,7 +234,8 @@ QString TS_SAVE_DIALOG_FILTER() { return makeFileFilter({{TsMuxerWindow::tr("Tra
 
 QString M2TS_SAVE_DIALOG_FILTER()
 {
-    return makeFileFilter({{TsMuxerWindow::tr("BDAV Transport Stream"), {"m2ts", "mts", "ssif"}}});
+    // .m2ts only: a .mts or .ssif chosen here became name.mts.m2ts, and a typed one was refused at the start
+    return makeFileFilter({{TsMuxerWindow::tr("BDAV Transport Stream"), {"m2ts"}}});
 }
 
 QString ISO_SAVE_DIALOG_FILTER() { return makeFileFilter({{TsMuxerWindow::tr("Disk image"), {"iso"}}}); }
