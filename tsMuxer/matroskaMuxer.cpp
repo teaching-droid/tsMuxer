@@ -1470,7 +1470,11 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track, i
             }
             displayW = displayWidth;
         }
-        else if (track.streamAR != VideoAspectRatio::AR_KEEP_DEFAULT && track.streamAR != VideoAspectRatio::AR_VGA)
+        // The nearest of the disc's aspect ratios, for a stream that gives no pixel shape of its own: MPEG-2 and VC-1,
+        // or ar= of the meta. H.264 that says nothing about its shape (no aspect_ratio_info) has square pixels, and
+        // its nearest ratio is a guess: 720x576 was shown at 4:3.
+        else if (track.streamAR != VideoAspectRatio::AR_KEEP_DEFAULT && track.streamAR != VideoAspectRatio::AR_VGA &&
+                 (track.arForced || track.codecID != CODEC_V_MPEG4_H264))
         {
             unsigned displayWidth = track.width;
             unsigned displayHeight = track.height;
