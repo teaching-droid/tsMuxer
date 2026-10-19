@@ -3219,6 +3219,16 @@ int main(int argc, char** argv)
         bool muxMode =
             !demuxAsked && (fileExt2 == "M2TS" || fileExt2 == "MTS" || fileExt2 == "M2T" || fileExt2 == "TS" ||
                             fileExt2 == "SSIF" || fileExt2 == "ISO" || dt != DiskType::NONE);
+        // An output named as a kind of file tsMuxeR does not write became a folder of demuxed tracks without a word:
+        // movie.mp4 was a folder named movie.mp4, and the job said "Demux complete."
+        if (!demuxAsked && !mkvMode && !muxMode)
+            for (const char* kind :
+                 {"MP4", "MOV", "M4V", "M4A", "MPG", "MPEG", "VOB", "AVI", "FLV", "OGG", "OGM", "WMV"})
+                if (fileExt2 == kind)
+                    THROW(ERR_COMMON, "tsMuxeR does not write ." << strToLowerCase(fileExt2)
+                                                                 << " files. Name the output .ts, .m2ts, .mkv or .iso, "
+                                                                    "or add --demux to the MUXOPT line for a folder of "
+                                                                    "tracks.")
 
         if (mkvMode)
         {
