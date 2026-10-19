@@ -1988,6 +1988,25 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                                              << " MB to spare before the UDF structures");
     }
 
+    // An image this run makes and does not finish is removed: a refusal that comes while the image is written, such as
+    // a path too long for the system after the files were copied, left an image of several MB that holds no disc. It
+    // is made before the helper, so the helper has closed the image when it is removed.
+    struct UnfinishedImage
+    {
+        std::string name;
+        bool keep = false;
+        ~UnfinishedImage()
+        {
+            std::error_code ec;
+            if (!keep && !name.empty())
+                std::filesystem::remove(std::filesystem::path(std::u8string(name.begin(), name.end())), ec);
+        }
+    } unfinished;
+    {
+        std::error_code ec;
+        if (!std::filesystem::exists(std::filesystem::path(std::u8string(outIso.begin(), outIso.end())), ec))
+            unfinished.name = outIso;
+    }
     BlurayHelper helper;
     if (!helper.open(outIso, DiskType::BLURAY, total, extraISOBlocks, false, layerBreakGuardMB, layerBreakLbns,
                      layerBreakGuardBeforeMB))
@@ -2181,6 +2200,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                                                        << " MB TOO BIG for the disc and will not burn (" << isoBytes
                                                        << " bytes against " << capBytes << "). It was kept at "
                                                        << outIso);
+                    unfinished.keep = true;
                     return -1;
                 }
             }
@@ -2190,6 +2210,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                                                                     << " MB to spare");
         }
     }
+    unfinished.keep = true;
     LTRACE(LT_INFO, 2, "bdmv-to-iso complete -> " << outIso);
     return 0;
 }
@@ -2467,6 +2488,13 @@ class KeepOldOutput
             removeEmptySkeleton();
         if (!m_committed && !m_freshDemux.empty())
             removeEmptyDemux();
+        if (!m_committed && !m_freshImage.empty())
+        {
+            // A refusal that comes only during the mux, such as an MVC view without its base, left an image of a
+            // few MB that holds no disc
+            std::error_code ec;
+            std::filesystem::remove(m_freshImage, ec);
+        }
         if (!m_armed || m_committed || m_swapBegun)
             return;
         std::error_code ec;
@@ -2489,7 +2517,12 @@ class KeepOldOutput
             if (startsWithName(pathStr(e.path().filename()), stem + ".split."))
                 exists = true;
         if (!exists)
+        {
+            // an image this job makes and does not finish holds no disc: it goes again (see the destructor)
+            if (strToLowerCase(ext) == ".iso")
+                m_freshImage = out;
             return dst;
+        }
         m_dir = dir;
         m_oldPrefix = stem + ".";
         m_newPrefix = stem + ".tsmuxer-new-" + std::to_string(processId()) + ".";
@@ -2680,6 +2713,8 @@ class KeepOldOutput
     std::filesystem::path m_fresh;  // a disc folder written in place (forDiscFolder), for removeEmptySkeleton
     // a demux folder this job makes, for removeEmptyDemux
     std::filesystem::path m_freshDemux;
+    // an ISO image this job makes, removed when the job fails
+    std::filesystem::path m_freshImage;
     bool m_freshFolderExisted = false;
     bool m_demux = false;
     std::filesystem::path m_dir;
