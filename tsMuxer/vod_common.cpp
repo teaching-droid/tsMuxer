@@ -533,6 +533,12 @@ std::string checkLayerBreakLbn(const int lbn, std::string& warning)
     // sectors, and a defect-managed disc still reports millions. So anything under this is not a
     // layer boundary that exists, while the 12, 219 and 392 a grouped number turns into are five
     // orders of magnitude below it.
+    // A BD-R XL of 128 GB, the largest Blu-ray, has 62500864 sectors: a break past them is past the end of any disc,
+    // and 2147483647 was taken without a word
+    const int largestDiscSectors = 62500864;
+    if (lbn > largestDiscSectors)
+        return "a layer break at sector " + std::to_string(lbn) + " is past the end of any Blu-ray: the largest, of " +
+               "128 GB, has " + std::to_string(largestDiscSectors) + " sectors.";
     const int smallestPlausibleLayer = 1048576;
     if (lbn < smallestPlausibleLayer)
         warning = "a layer break at sector " + std::to_string(lbn) +
