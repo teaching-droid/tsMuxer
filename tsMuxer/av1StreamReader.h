@@ -19,6 +19,8 @@ class AV1StreamReader final : public MPEGStreamReader
     void applyDiscoveryData(const StreamDiscoveryData& data) override;
     [[nodiscard]] bool needSPSForSplit() const override { return false; }
     void setBuffer(uint8_t* data, uint32_t dataLen, bool lastBlock = false) override;
+    // From an IVF file, the bytes read from it, as for VP8 and VP9 (vpxStreamReader.cpp)
+    int64_t getProcessedSize() override;
     int prepareDemuxPacket(uint8_t* data, int size, const uint8_t** outData) override;
 
     // The last sequence header OBU of the stream as a file stores it: with its size field, without emulation
@@ -72,6 +74,9 @@ class AV1StreamReader final : public MPEGStreamReader
     std::vector<uint8_t> m_pending;      // source bytes not yet converted, an OBU may span blocks
     std::vector<uint8_t> m_ivfRaw;       // IVF bytes whose frame is not complete yet
     int m_ivfHeaderLeft = 0;             // bytes of the IVF file header still to skip
+    int64_t m_ivfRead = 0;               // the bytes of an IVF file handed over so far
+    int64_t m_ivfLeftOut = 0;            // of them, the bytes left out after a damaged frame size
+    bool m_ivfDamaged = false;           // a frame size no frame can have was met: the rest is left out
     std::vector<uint8_t> m_convBuffer;   // front pad plus the converted OBUs handed to the base
     std::vector<uint8_t> m_demuxBuffer;  // the same OBUs turned back into the on disk form
     bool m_demuxSeqHdrPending;           // a sequence header owed to the head of a demuxed part

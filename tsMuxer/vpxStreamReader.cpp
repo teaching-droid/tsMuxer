@@ -92,6 +92,19 @@ bool VpxStreamReader::readIvfHeaderOf(const uint8_t* data, const int size, const
     return true;
 }
 
+// ** THE BYTES READ FROM AN IVF FILE, NOT THE FRAMES THEY BECAME. ** The share of the source a job has read is the sum
+// of what each reader processed, and an IVF file's 32 byte header and the 12 bytes in front of each frame are not in
+// the frames: a small IVF file came short of the 99 percent a complete job reaches, and the job ended with "The mux
+// stopped before the source was finished" over a complete output. A file whose last frame is cut, which a warning
+// already names, is read to its end as well. A file damaged by a frame size no frame can have still counts what was
+// left out, so the job still ends with an error there.
+int64_t VpxStreamReader::getProcessedSize()
+{
+    if (m_input != Input::IVF)
+        return MPEGStreamReader::getProcessedSize();
+    return m_ivfRead - m_ivfLeftOut;
+}
+
 void VpxStreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const bool lastBlock)
 {
     // Every block arrives behind the front pad the reader protocol puts in front of it.
@@ -115,6 +128,7 @@ void VpxStreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const boo
         MPEGStreamReader::setBuffer(data, dataLen, lastBlock);
         return;
     }
+    m_ivfRead += dataLen;
     if (m_ivfDamagedSize != 0)
     {
         m_ivfLeftOut += dataLen;

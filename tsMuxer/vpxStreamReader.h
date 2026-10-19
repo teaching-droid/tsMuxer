@@ -28,6 +28,8 @@ class VpxStreamReader final : public MPEGStreamReader
     [[nodiscard]] bool needSPSForSplit() const override { return false; }
     int prepareDemuxPacket(uint8_t* data, int size, const uint8_t** outData) override;
     void setBuffer(uint8_t* data, uint32_t dataLen, bool lastBlock = false) override;
+    // From an IVF file, the bytes read from it: its headers are not in the frames that are counted otherwise
+    int64_t getProcessedSize() override;
 
     // An IVF file header: its codec (true for VP9), picture size and frame rate. False when data is not one.
     static bool readIvfHeader(const uint8_t* data, int size, bool& vp9, double& fps);
@@ -75,6 +77,7 @@ class VpxStreamReader final : public MPEGStreamReader
     std::vector<uint8_t> m_convBuffer;  // front pad plus the framed frames handed to the base
     int m_ivfHeaderLeft = 0;            // bytes of the file header still to skip
     uint32_t m_ivfDamagedSize = 0;      // a frame size no frame can have: the file is damaged from there
+    int64_t m_ivfRead = 0;              // the bytes of an IVF file handed over so far
     int64_t m_ivfLeftOut = 0;           // the bytes of the file left out after that
     // demux: an IVF file
     std::vector<uint8_t> m_demuxBuffer;

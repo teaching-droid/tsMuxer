@@ -185,7 +185,7 @@ static size_t takeIvfFrames(const std::vector<uint8_t>& raw, size_t at, std::vec
         if (frameSize > maxIvfFrameSize)
         {
             damaged = true;
-            return raw.size();
+            return at;  // where the damage begins: the caller leaves the rest out
         }
         if (at + 12 + frameSize > raw.size())
             break;
@@ -194,6 +194,13 @@ static size_t takeIvfFrames(const std::vector<uint8_t>& raw, size_t at, std::vec
         at += 12 + frameSize;
     }
     return at;
+}
+
+int64_t AV1StreamReader::getProcessedSize()
+{
+    if (m_framing != Av1Framing::IVF)
+        return MPEGStreamReader::getProcessedSize();
+    return m_ivfRead - m_ivfLeftOut;
 }
 
 void AV1StreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const bool lastBlock)
@@ -222,6 +229,14 @@ void AV1StreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const boo
 
     if (m_framing == Av1Framing::IVF)
     {
+        m_ivfRead += dataLen;
+        if (m_ivfDamaged)
+        {
+            m_ivfLeftOut += dataLen;
+            const size_t converted = convertPending(lastBlock);
+            MPEGStreamReader::setBuffer(m_convBuffer.data(), static_cast<uint32_t>(converted), lastBlock);
+            return;
+        }
         m_ivfRaw.insert(m_ivfRaw.end(), block, block + dataLen);
         size_t at = 0;
         if (m_ivfHeaderLeft > 0)
@@ -231,9 +246,11 @@ void AV1StreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const boo
         }
         bool damaged = false;
         at = takeIvfFrames(m_ivfRaw, at, m_pending, damaged);
-        if (damaged && !m_brokenObuWarned)
+        if (damaged)
         {
-            m_brokenObuWarned = true;
+            m_ivfDamaged = true;
+            m_ivfLeftOut += static_cast<int64_t>(m_ivfRaw.size() - at);
+            at = m_ivfRaw.size();
             LTRACE(LT_WARN, 2,
                    "Warning: IVF: a frame gives a size no frame can have, so the file is damaged there. The frames "
                    "before it are kept; the rest of the file is left out.");
