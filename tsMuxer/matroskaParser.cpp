@@ -453,7 +453,10 @@ void ParsedVC1TrackData::extractData(AVPacket* pkt, uint8_t* buff, const int siz
 
 ParsedAACTrackData::ParsedAACTrackData(uint8_t* buff, const int size) : ParsedTrackPrivData(buff, size)
 {
-    m_aacRaw.m_id = 1;  // MPEG2
+    // ID 0, MPEG-4: an A_AAC track is described by an AudioSpecificConfig, which is MPEG-4 audio. The ADTS headers
+    // were written with ID 1 (MPEG-2), so AAC that came in as MPEG-4 ADTS changed its headers on a way through
+    // Matroska.
+    m_aacRaw.m_id = 0;
     m_aacRaw.m_layer = 0;
     m_aacRaw.m_rdb = 0;
     m_aacRaw.readConfig(buff, size);
