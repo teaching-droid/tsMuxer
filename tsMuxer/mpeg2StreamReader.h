@@ -46,6 +46,7 @@ class MPEG2StreamReader final : public MPEGStreamReader
     bool m_isFirstFrame;
     bool spsFound;
     bool m_seqExtFound;
+    bool m_noRateSaid = false;  // the warning about a sequence header without a frame rate was given
     bool m_lastIFrame;
     // The last I or P picture: when it is shown, and for how long
     bool m_anchorFound = false;

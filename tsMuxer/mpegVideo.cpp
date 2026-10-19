@@ -102,7 +102,9 @@ uint8_t* MPEGSequenceHeader::deserialize(uint8_t* buf, const int64_t buf_size)
     if (aspect_ratio_info == 0)
         return nullptr;
     frame_rate_index = bitReader.getBits<uint8_t>(4);
-    if (frame_rate_index == 0 || frame_rate_index > 13)
+    // 0 is forbidden, and a header with it was not read at all: no picture of such a stream was found, and it was muxed
+    // as one picture. It is read, with no rate (getFrameRate gives 0), and the reader gives it the rate it is muxed at.
+    if (frame_rate_index > 13)
         return nullptr;
 
     bit_rate = bitReader.getBits(18) * 400;
@@ -236,7 +238,10 @@ std::string MPEGSequenceHeader::getStreamDescr() const
     rez << (progressive_sequence ? 'p' : 'i') << ". ";
     rez << "Frame rate: ";
     const double fps = getFrameRate();
-    rez << fps;
+    if (fps > 0)
+        rez << fps;
+    else
+        rez << "not found";  // frame_rate_code 0
     return rez.str();
 }
 

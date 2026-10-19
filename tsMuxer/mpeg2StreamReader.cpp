@@ -253,6 +253,21 @@ int MPEG2StreamReader::processSeqStartCode(uint8_t* buff)
     }
     constexpr int oldSpsLen = 0;
     updateFPS(nullptr, buff, nextNal, oldSpsLen);
+    // ** A SEQUENCE HEADER WITHOUT A FRAME RATE. ** frame_rate_code 0 is forbidden, and the stream got the rate fps=,
+    // its picture times or the default gave, but its pictures were timed by the code: every one at the same time, the
+    // whole stream in one PES, the HDMV descriptor with rate 0, and "Mux successful complete". The rate the stream is
+    // muxed at is written into the header, so the pictures are timed by it and a player reads it.
+    if (m_sequence.getFrameRate() == 0.0 && m_fps > 0.0)
+    {
+        m_sequence.setFrameRate(buff + 1, m_fps);
+        if (!m_noRateSaid)
+        {
+            m_noRateSaid = true;
+            LTRACE(LT_WARN, 2,
+                   "Warning: the MPEG-2 sequence header gives no frame rate (frame_rate_code 0). The stream is muxed at "
+                       << m_fps << " fps, written into its header; give fps= on the track's line for another rate.");
+        }
+    }
     spsFound = true;
     m_lastIFrame = true;
     return 0;
