@@ -296,6 +296,18 @@ int MPEG2StreamReader::decodePicture(uint8_t* buff)
         return NOT_ENOUGH_BUFFER;
     }
 
+    // An I or P picture is shown after the B pictures that follow it in the stream, so its time is known only when
+    // it is known how long those B pictures are shown: they are read first, and the picture waits for them. This comes
+    // before findFrameExt: with delPulldown that takes the marks out of the picture, which is read again after a wait.
+    const bool anchor = m_frame.pict_type != PictureCodingType::B_FRAME;
+    int64_t bShownFor = 0;
+    if (anchor && (m_frame.pict_type == PictureCodingType::I_FRAME || m_frame.ref != m_lastRef))
+    {
+        const int bRez = timeOfFollowingB(buff, bShownFor);
+        if (bRez != 0)
+            return bRez;
+    }
+
     m_frame.picture_structure = 0;
     const int rez = findFrameExt(buff + 1);
     if (rez == NOT_ENOUGH_BUFFER)
@@ -313,31 +325,49 @@ int MPEG2StreamReader::decodePicture(uint8_t* buff)
         m_lastRef = m_frame.ref;
         m_totalFrameNum++;
 
-        m_curDts += m_prevFrameDelay;
+        const int64_t shownFor = pictureDuration(m_frame.repeat_first_field != 0, m_frame.top_field_first != 0);
+        // Without the marks every picture is one frame of the new rate
+        const int64_t duration = m_removePulldown ? m_pcrIncPerFrame : shownFor;
 
-        if (m_frame.repeat_first_field)
+        // A picture with repeat_first_field is shown for 3 fields, one without it for 2, so the pictures of film
+        // with pulldown are not shown for equal times. The times used to be counted as if each picture started when
+        // the one before it in the stream ended, and the pictures in between were then moved by whole frames to the
+        // order they are shown in: some pictures got the time of the one before them, others left a gap of two. Each
+        // time is now where its picture is shown: a B picture when it is decoded, an I or P picture when the next I
+        // or P picture is decoded, after the B pictures between them.
+        int64_t dts;
+        if (anchor)
         {
-            if (!m_sequence.progressive_sequence)
-                m_prevFrameDelay = m_pcrIncPerFrame + m_pcrIncPerField;
-            else if (m_frame.top_field_first)
-                m_prevFrameDelay = m_pcrIncPerFrame * 3;
+            if (m_anchorFound)
+            {
+                dts = m_anchorPts;
+                m_nextShownPts = m_anchorPts + m_anchorDuration;
+            }
             else
-                m_prevFrameDelay = m_pcrIncPerFrame * 2;
+            {
+                m_nextShownPts = PTS_CONST_OFFSET;
+                dts = PTS_CONST_OFFSET - m_pcrIncPerFrame;
+            }
+            m_curPts = m_nextShownPts + bShownFor;
+            m_anchorPts = m_curPts;
+            m_anchorDuration = duration;
+            m_anchorFound = true;
         }
         else
-            m_prevFrameDelay = m_pcrIncPerFrame;
+        {
+            m_curPts = dts = m_nextShownPts;
+            m_nextShownPts += duration;
+        }
+        // The packets take one frame off the decoding time (readPacket)
+        m_curDts = dts + m_pcrIncPerFrame;
 
         if (m_removePulldown)
         {
             checkPulldownSync();
-            m_testPulldownDts += m_prevFrameDelay;
-
-            m_prevFrameDelay = m_pcrIncPerFrame;
+            m_testPulldownDts += shownFor;
         }
     }
     m_isFirstFrame = false;
-    const int refDif = m_frame.ref - m_framesAtGop;
-    m_curPts = m_curDts + refDif * m_pcrIncPerFrame;
     m_lastIFrame = m_frame.pict_type == PictureCodingType::I_FRAME;
 
     return 0;
@@ -377,6 +407,61 @@ int MPEG2StreamReader::findFrameExt(uint8_t* buffer)
             return NALUnit::NOT_FOUND;
     }
     return NOT_ENOUGH_BUFFER;
+}
+
+int64_t MPEG2StreamReader::pictureDuration(const bool repeatFirstField, const bool topFieldFirst) const
+{
+    if (!repeatFirstField)
+        return m_pcrIncPerFrame;
+    if (!m_sequence.progressive_sequence)
+        return m_pcrIncPerFrame + m_pcrIncPerField;  // 3 fields
+    // In a progressive sequence the whole frame is repeated: shown for 3 frames with top_field_first, else for 2
+    return m_pcrIncPerFrame * (topFieldFirst ? 3 : 2);
+}
+
+// How long the B pictures after the I or P picture at buff are shown, up to the next I or P picture. They come after
+// it in the stream and are shown before it. NOT_ENOUGH_BUFFER while they are not all read yet.
+int MPEG2StreamReader::timeOfFollowingB(uint8_t* buff, int64_t& shownFor)
+{
+    // A limit for a stream that never comes to another I or P picture: the buffer is not filled with it
+    static constexpr int MAX_B_PICTURES = 64;
+    shownFor = 0;
+    int lastRef = m_frame.ref;
+    int bPictures = 0;
+    for (uint8_t* nal = MPEGHeader::findNextMarker(buff + 1, m_bufEnd);;
+         nal = MPEGHeader::findNextMarker(nal + 4, m_bufEnd))
+    {
+        if (m_bufEnd - nal < 6)
+            return m_eof ? 0 : NOT_ENOUGH_BUFFER;
+        if (nal[3] == SEQ_END_SHORT_CODE)
+            return 0;
+        if (nal[3] == GOP_START_SHORT_CODE)
+            lastRef = -1;
+        if (nal[3] != PICTURE_START_SHORT_CODE)
+            continue;
+        const int ref = nal[4] << 2 | nal[5] >> 6;
+        const auto type = static_cast<PictureCodingType>((nal[5] >> 3) & 7);
+        // the second field of a picture coded as two fields, counted as decodePicture counts it
+        if (type != PictureCodingType::I_FRAME && ref == lastRef)
+            continue;
+        if (type != PictureCodingType::B_FRAME)
+            return 0;
+        lastRef = ref;
+        // The picture coding extension follows the picture header; MPEG-1 has none
+        uint8_t* ext = MPEGHeader::findNextMarker(nal + 4, m_bufEnd);
+        if (m_bufEnd - ext < 8)
+            return m_eof ? 0 : NOT_ENOUGH_BUFFER;
+        bool repeatFirstField = false, topFieldFirst = false;
+        if (ext[3] == EXT_START_SHORT_CODE && static_cast<unsigned>(ext[4] >> 4) == PICTURE_CODING_EXT)
+        {
+            topFieldFirst = (ext[7] & 0x80) != 0;
+            repeatFirstField = (ext[7] & 0x02) != 0;
+        }
+        shownFor += m_removePulldown ? m_pcrIncPerFrame : pictureDuration(repeatFirstField, topFieldFirst);
+        if (++bPictures == MAX_B_PICTURES)
+            return 0;
+        nal = ext;
+    }
 }
 
 void MPEG2StreamReader::updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* nextNal, int oldSpsLen)

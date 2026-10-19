@@ -18,7 +18,6 @@ class MPEG2StreamReader final : public MPEGStreamReader
         m_streamMsgPrinted = false;
         m_lastIFrame = false;
         m_longCodesAllowed = false;
-        m_prevFrameDelay = 0;
     }
     int getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdmvDescriptors) override;
     CheckStreamRez checkStream(uint8_t* buffer, int len);
@@ -48,11 +47,18 @@ class MPEG2StreamReader final : public MPEGStreamReader
     bool spsFound;
     bool m_seqExtFound;
     bool m_lastIFrame;
-    int64_t m_prevFrameDelay;
+    // The last I or P picture: when it is shown, and for how long
+    bool m_anchorFound = false;
+    int64_t m_anchorPts = 0;
+    int64_t m_anchorDuration = 0;
+    // When the next B picture is shown
+    int64_t m_nextShownPts = PTS_CONST_OFFSET;
     MPEGSequenceHeader m_sequence;
     MPEGGOPHeader m_gop;
     MPEGPictureHeader m_frame;
     int findFrameExt(uint8_t* buffer);
+    [[nodiscard]] int64_t pictureDuration(bool repeatFirstField, bool topFieldFirst) const;
+    int timeOfFollowingB(uint8_t* buff, int64_t& shownFor);
     int decodePicture(uint8_t* buff);
     int processExtStartCode(uint8_t* buff);
     int processSeqStartCode(uint8_t* buff);
