@@ -418,6 +418,30 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
     fadeInFrames++;
     fadeOutFrames++;
 
+    // ** FADES LONGER THAN THE SUBTITLE ARE FITTED INTO IT. ** A fade-in longer than the subtitle ended with the
+    // subtitle at the opacity it had reached (none to see, for a fade of minutes on a subtitle of a second), and with
+    // both fades the fade-in took all the time, so the text left at its peak without a fade-out. When the two do not
+    // fit into the frames the subtitle is shown for, those frames are shared between them in the ratio of their
+    // lengths: the text still reaches full opacity, and then fades out to nothing.
+    {
+        const double framePts = 90000.0 / m_videoFps;
+        const double firstStep = alignToGrid(inTimePTS + framePts);
+        const double lastStep = alignToGrid(outTimePTS - framePts);
+        const int shown =
+            lastStep + FLOAT_EPS >= firstStep ? static_cast<int>((lastStep - firstStep) / framePts + 1.5) : 0;
+        const int64_t wantIn = fadeInFrames - 1;
+        const int64_t wantOut = hide ? fadeOutFrames - 1 : 0;
+        if (shown > 0 && wantIn + wantOut > shown)
+        {
+            const int inSteps = wantIn > 0 ? FFMAX(1, static_cast<int>(shown * wantIn / (wantIn + wantOut))) : 0;
+            const int outSteps = wantOut > 0 ? FFMAX(0, shown - inSteps) : 0;
+            if (wantIn > inSteps)
+                fadeInFrames = inSteps + 1;
+            if (wantOut > outSteps)
+                fadeOutFrames = outSteps + 1;
+        }
+    }
+
     float opacityInDelta = 1.0F / static_cast<float>(fadeInFrames);
     float opacityOutDelta = 1.0F / static_cast<float>(fadeOutFrames);
     float opacity = opacityInDelta;
