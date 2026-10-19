@@ -4622,7 +4622,13 @@ QString TsMuxerWindow::getSrtParams()
         {
             rez += QString(",video-width=") + QString::number(std::min(codecInfo->width, 1920));
             rez += QString(",video-height=") + QString::number(std::min(codecInfo->height, 1080));
-            rez += QString(",fps=") + fpsTextToFpsStr(codecInfo->fpsText);
+            // The rate the video is muxed at: the one the box sets when it is ticked, else the stream's own. A video
+            // whose rate the listing does not know is muxed at 25, the rate tsMuxeR gives a stream without one, and the
+            // subtitles were drawn at the 23.976 the box offers, so they came at the wrong pictures.
+            if (codecInfo->checkFPS || !codecInfo->fpsTextOrig.isEmpty())
+                rez += QString(",fps=") + fpsTextToFpsStr(codecInfo->fpsText);
+            else
+                rez += QString(",fps=25");
             return rez;
         }
     }
