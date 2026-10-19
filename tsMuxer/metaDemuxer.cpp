@@ -602,6 +602,13 @@ void METADemuxer::openFile(const string& streamName)
             file.readLine(str);
             continue;
         }
+        // A quote that is not closed, such as one inside a track-name, cut the line there: the rest was read as
+        // parameters no track has, with a warning for each, and the name was lost
+        if (std::count(str.begin(), str.end(), '"') % 2 != 0)
+            THROW(ERR_COMMON, "A quote on this meta line is not closed, so it cannot be read: "
+                                  << trimStr(str)
+                                  << ". A file name or a value with a comma in it goes in quotes; a value cannot hold "
+                                     "a quote itself.")
         vector<string> params = splitQuotedStr(str.c_str(), ',');
         if (params.size() < 2)
             THROW(ERR_INVALID_CODEC_FORMAT, "Invalid codec format: " << str)
@@ -1505,6 +1512,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             streamInfo.m_lang = strToLowerCase(itr->second);
             streamInfo.m_addParams["lang"] = streamInfo.m_lang;
         }
+    }
     else if (dataReader != &m_containerReader && !fileList.empty() && !langFromFileName(fileList[0]).empty())
     {
         // A raw elementary stream has nowhere to carry its language, so the file name is the only

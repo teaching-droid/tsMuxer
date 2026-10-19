@@ -1183,6 +1183,10 @@ string MuxerManager::muxOptLine(const string& line)
         else if (c == '\t' && !quoted)
             c = ' ';
     }
+    // A quote that is not closed took the rest of the line into one value: --label="Disc --cut-end=5s made a label
+    // of all of it, and the cut was not made, without a word
+    if (quoted)
+        THROW(ERR_COMMON, "A quote on the MUXOPT line is not closed: " << trimStr(line))
     const size_t start = out.find_first_not_of(' ');
     return start == string::npos ? string() : out.substr(start);
 }
