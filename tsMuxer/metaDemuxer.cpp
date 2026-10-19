@@ -1499,8 +1499,12 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             streamInfo.m_addParams["langbcp47"] = value;
         }
         else
-            streamInfo.m_lang = itr->second;
-    }
+        {
+            // in lower case, as the language field of a disc, a transport stream and Matroska is: lang=ENG was
+            // written as ENG
+            streamInfo.m_lang = strToLowerCase(itr->second);
+            streamInfo.m_addParams["lang"] = streamInfo.m_lang;
+        }
     else if (dataReader != &m_containerReader && !fileList.empty() && !langFromFileName(fileList[0]).empty())
     {
         // A raw elementary stream has nowhere to carry its language, so the file name is the only
