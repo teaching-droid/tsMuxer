@@ -156,6 +156,12 @@ void PGSStreamReader::yuvToRgb(const int minY) const
     }
 }
 
+// ** EVERY PIXEL GOES INTO THE PICTURE ONLY WHERE IT LIES INSIDE IT. **
+// The pixels were written one after the other from the object's place, and the end of each line moved on by the rest of
+// the picture's width, so an object placed to reach past the right or the bottom edge of the picture, or one whose
+// lines hold more pixels than its stated width, was written past the end of the picture buffer. Each pixel now has its
+// own column and line, and what lies outside the picture is left out. The lengths in the data are checked against its
+// end the same way. An object inside the picture is drawn as before.
 void PGSStreamReader::decodeRleData(const int xOffset, const int yOffset) const
 {
     if (m_dstRle.empty())
@@ -163,42 +169,53 @@ void PGSStreamReader::decodeRleData(const int xOffset, const int yOffset) const
     const uint8_t* src = m_dstRle.data();
     const uint8_t* srcEnd = src + m_dstRle.size();
 
-    uint8_t* dst = m_imgBuffer + (yOffset * m_video_width + xOffset);
-    const int dstLineStep = m_video_width - object_width;
-    uint8_t color;
-    int run_length;
+    int x = 0;
+    int y = 0;
+    const auto put = [&](const uint8_t color, int count)
+    {
+        for (; count > 0; --count, ++x)
+        {
+            const int px = xOffset + x;
+            const int py = yOffset + y;
+            if (px < m_video_width && py < m_video_height)
+                m_imgBuffer[static_cast<size_t>(py) * m_video_width + px] = color;
+        }
+    };
     while (src < srcEnd)
     {
         if (*src != 0)
-            *dst++ = *src++;
-        else
         {
-            src++;
-            if (*src == 0)
-            {  // end of line
-                src++;
-                dst += dstLineStep;
-            }
-            else
-            {
-                const bool b1 = *src & 0x80;
-                if (*src & 0x40)
-                {
-                    run_length = ((*src & 0x3f) << 8) + src[1];
-                    src += 2;
-                }
-                else
-                {
-                    run_length = *src & 0x3f;
-                    src++;
-                }
-                if (b1)
-                    color = *src++;
-                else
-                    color = 0;
-                for (int i = 0; i < run_length; ++i) *dst++ = color;
-            }
+            put(*src++, 1);
+            continue;
         }
+        if (++src >= srcEnd)
+            break;
+        if (*src == 0)
+        {  // end of line
+            src++;
+            x = 0;
+            y++;
+            continue;
+        }
+        const bool hasColor = *src & 0x80;
+        int runLength;
+        if (*src & 0x40)
+        {
+            if (srcEnd - src < 2)
+                break;
+            runLength = ((*src & 0x3f) << 8) + src[1];
+            src += 2;
+        }
+        else
+            runLength = *src++ & 0x3f;
+        uint8_t color = 0;
+        if (hasColor)
+        {
+            if (src >= srcEnd)
+                break;
+            color = *src++;
+        }
+        put(color, runLength);
     }
 }
 
