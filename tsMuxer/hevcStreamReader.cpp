@@ -923,7 +923,11 @@ void HEVCStreamReader::updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* ne
 // video_format is chosen from the WIDTH for anything above SD, so it is unaffected.
 //
 // Offsets are in chroma units, hence the subsampling factors.
-double HEVCStreamReader::getSampleAspectRatio() const { return m_sps ? m_sps->sar : 0; }
+double HEVCStreamReader::getSampleAspectRatio() const
+{
+    // the shape of the first SPS (noteSampleAspectRatio), or of the one known now where the mux has read none yet
+    return m_sampleARKnown ? m_sampleAR : m_sps ? m_sps->sar : 0;
+}
 
 unsigned HEVCStreamReader::getStreamWidth() const { return m_sps ? m_sps->getDisplayWidth() : 0; }
 
@@ -1407,6 +1411,7 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                 }
                 if (rez)
                     return rez;
+                noteSampleAspectRatio(m_sps->sar);
                 m_spsPpsFound = true;
                 m_vpsSizeDiff = 0;
                 updateFPS(m_sps, curPos, nextNalWithStartCode, 0);

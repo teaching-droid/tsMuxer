@@ -5189,5 +5189,21 @@ bool MatroskaMuxer::close()
     flushCluster();
 
     finishPart(INT64_MAX);
+
+    // A track has one display size, written from the pixel shape at the stream's start. A stream that changes its
+    // shape later was written in silence; where the size came from the stream, that is said now.
+    for (const auto& [streamIdx, track] : m_tracks)
+        if (const auto mpegReader = dynamic_cast<const MPEGStreamReader*>(track.codecReader);
+            mpegReader && track.trackType == MKV_TRACK_TYPE_VIDEO && mpegReader->sampleAspectRatioChanged() &&
+            !track.arForced && !(track.srcDisplayWidth && track.srcDisplayHeight))
+            LTRACE(LT_WARN, 2,
+                   "Warning: the pixel shape of video track "
+                       << track.trackNumber << " changes in the stream, from "
+                       << doubleToStr(track.sampleAR > 0 ? track.sampleAR : 1.0, 4) << " to "
+                       << doubleToStr(
+                              mpegReader->laterSampleAspectRatio() > 0 ? mpegReader->laterSampleAspectRatio() : 1.0, 4)
+                       << " (width to height). A Matroska track has one display size, and it is written for the "
+                          "shape at the start (none for square pixels); a player that follows it shows the later part "
+                          "in that shape too. Give ar= to choose the shape.");
     return true;
 }

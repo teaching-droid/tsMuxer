@@ -85,6 +85,9 @@ class MPEGStreamReader : public AbstractStreamReader
     // The shape of a pixel as the stream gives it (width / height), 0 where it gives none. getStreamAR is the nearest
     // of the few a Blu-ray disc can say; a Matroska output can say this one.
     [[nodiscard]] virtual double getSampleAspectRatio() const { return m_sampleAR; }
+    // A later parameter set gave another pixel shape than the first (laterSampleAspectRatio: the first other one)
+    [[nodiscard]] bool sampleAspectRatioChanged() const { return m_laterSampleAR >= 0; }
+    [[nodiscard]] double laterSampleAspectRatio() const { return m_laterSampleAR; }
     int64_t getProcessedSize() override;
     void setBuffer(uint8_t* data, uint32_t dataLen, bool lastBlock = false) override;
     int readPacket(AVPacket& avPacket) override;
@@ -122,6 +125,12 @@ class MPEGStreamReader : public AbstractStreamReader
     VideoAspectRatio m_ar;
     VideoAspectRatio m_streamAR;
     double m_sampleAR = 0;
+    // The pixel shape of a new parameter set (0 where it gives none). The first one is kept as the stream's: a
+    // Matroska track has one display size, and it was the shape of the last parameter set read before the header was
+    // written, so a stream that changes its shape after a second was shown in the later shape from its start.
+    void noteSampleAspectRatio(double sar);
+    bool m_sampleARKnown = false;
+    double m_laterSampleAR = -1;
     bool m_shortStartCodes;
     int64_t m_curPts;
     int64_t m_curDts;

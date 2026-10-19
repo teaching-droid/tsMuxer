@@ -429,6 +429,17 @@ void MPEGStreamReader::checkPulldownSync()
     }
 }
 
+void MPEGStreamReader::noteSampleAspectRatio(const double sar)
+{
+    if (!m_sampleARKnown)
+    {
+        m_sampleARKnown = true;
+        m_sampleAR = sar;
+    }
+    else if (m_laterSampleAR < 0 && std::fabs(sar - m_sampleAR) > 1e-6)
+        m_laterSampleAR = sar;
+}
+
 void MPEGStreamReader::fillAspectBySAR(const double sar)
 {
     if (m_streamAR == VideoAspectRatio::AR_KEEP_DEFAULT)
