@@ -853,6 +853,17 @@ void IsoWriter::setVolumeLabel(const std::string& value)
     m_volumeLabel = value;
     if (m_volumeLabel.empty())
         m_volumeLabel = "Blu-Ray";
+    // The image keeps 126 characters of the label, or 63 of one with a character outside Latin-1, and a longer one
+    // was cut there without a word
+    const std::vector<std::uint8_t> field = serializeDString(m_volumeLabel.c_str(), 128);
+    const int used = field.empty() ? 0 : field.back();
+    const int kept = used <= 1 ? 0 : field[0] == 16 ? (used - 1) / 2 : used - 1;
+    const auto characters = static_cast<int>(
+        std::count_if(m_volumeLabel.begin(), m_volumeLabel.end(), [](const char c) { return (c & 0xC0) != 0x80; }));
+    if (kept < characters)
+        LTRACE(LT_WARN, 2,
+               "Warning: the ISO label has " << characters << " characters, and an image keeps " << kept
+                                             << " of them. The rest is left out.");
 }
 
 bool IsoWriter::open(const std::string& fileName, const int64_t diskSize, const int64_t extraISOBlocks)
