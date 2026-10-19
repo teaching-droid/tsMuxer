@@ -212,6 +212,24 @@ size_t findUnquotedStr(const string& str, const string& substr)
     }
     return string::npos;
 }
+
+// An SRT file made from an ASS script can keep its override blocks, such as {\an8} for a subtitle at the top. They
+// were drawn as text. tsMuxeR places every subtitle at the bottom, so a block is left out of the picture; the text
+// kept in a Matroska output or a demux still has it, for a player that reads it.
+string withoutOverrideBlocks(const string& line)
+{
+    string out;
+    size_t pos = 0;
+    for (size_t open; (open = line.find("{\\", pos)) != string::npos;)
+    {
+        const size_t close = line.find('}', open);
+        if (close == string::npos)
+            break;
+        out.append(line, pos, open - pos);
+        pos = close + 1;
+    }
+    return pos == 0 ? line : out.append(line, pos, string::npos);
+}
 }  // namespace
 
 namespace text_subtitles
@@ -291,8 +309,9 @@ int TextSubtitlesRender::browserSizeToRealSize(const int bSize, double rSize)
     return static_cast<int>(std::clamp(rSize, -65535.0, 65535.0));
 }
 
-vector<pair<Font, string>> TextSubtitlesRender::processTxtLine(const std::string& line, vector<Font>& fontStack) const
+vector<pair<Font, string>> TextSubtitlesRender::processTxtLine(const std::string& text, vector<Font>& fontStack) const
 {
+    const std::string line = withoutOverrideBlocks(text);
     if (fontStack.empty())
     {
         fontStack.push_back(m_font);
