@@ -64,11 +64,14 @@ class AV1StreamReader final : public MPEGStreamReader
     {
         UNDECIDED,
         START_CODES,
-        LOW_OVERHEAD
+        LOW_OVERHEAD,
+        IVF  // low overhead temporal units, each behind the 12 byte frame header of an IVF file
     };
     Av1Framing m_framing;
     bool m_brokenObuWarned;
     std::vector<uint8_t> m_pending;      // source bytes not yet converted, an OBU may span blocks
+    std::vector<uint8_t> m_ivfRaw;       // IVF bytes whose frame is not complete yet
+    int m_ivfHeaderLeft = 0;             // bytes of the IVF file header still to skip
     std::vector<uint8_t> m_convBuffer;   // front pad plus the converted OBUs handed to the base
     std::vector<uint8_t> m_demuxBuffer;  // the same OBUs turned back into the on disk form
     bool m_demuxSeqHdrPending;           // a sequence header owed to the head of a demuxed part

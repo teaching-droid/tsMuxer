@@ -31,6 +31,8 @@ class VpxStreamReader final : public MPEGStreamReader
 
     // An IVF file header: its codec (true for VP9), picture size and frame rate. False when data is not one.
     static bool readIvfHeader(const uint8_t* data, int size, bool& vp9, double& fps);
+    // The header of an IVF file holding the codec of this fourcc, and the frame rate its first frames give
+    static bool readIvfHeaderOf(const uint8_t* data, int size, const char* fourcc, double& fps);
 
     // One framed frame as it arrives here, back to the frame itself: the start code, the escaping and the stop byte
     // taken off.

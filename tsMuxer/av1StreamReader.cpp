@@ -10,6 +10,7 @@
 #include "tsPacket.h"
 #include "vodCoreException.h"
 #include "vod_common.h"
+#include "vpxStreamReader.h"
 
 using namespace std;
 
@@ -170,6 +171,31 @@ size_t AV1StreamReader::convertPending(const bool lastBlock)
     return static_cast<size_t>(dst - dstStart);
 }
 
+// ** AV1 IN AN IVF FILE. ** An IVF file holds each temporal unit of low overhead OBUs behind 12 bytes of its own, its
+// size and its time, after a 32 byte file header. Only VP8 and VP9 were read from IVF, so AV1 in one gave "Can't detect
+// stream type". The frames are taken out of their IVF headers here and then read as a low overhead stream. A size no
+// frame can have ends the reading there, as for VP8 and VP9.
+static size_t takeIvfFrames(const std::vector<uint8_t>& raw, size_t at, std::vector<uint8_t>& out, bool& damaged)
+{
+    constexpr uint32_t maxIvfFrameSize = 256u * 1024 * 1024;
+    while (at + 12 <= raw.size())
+    {
+        const uint32_t frameSize =
+            raw[at] | raw[at + 1] << 8 | raw[at + 2] << 16 | static_cast<uint32_t>(raw[at + 3]) << 24;
+        if (frameSize > maxIvfFrameSize)
+        {
+            damaged = true;
+            return raw.size();
+        }
+        if (at + 12 + frameSize > raw.size())
+            break;
+        out.insert(out.end(), raw.begin() + static_cast<std::ptrdiff_t>(at + 12),
+                   raw.begin() + static_cast<std::ptrdiff_t>(at + 12 + frameSize));
+        at += 12 + frameSize;
+    }
+    return at;
+}
+
 void AV1StreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const bool lastBlock)
 {
     // Every block arrives behind the front pad the reader protocol prefixes it with.
@@ -177,9 +203,50 @@ void AV1StreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const boo
 
     if (m_framing == Av1Framing::UNDECIDED && dataLen > 0)
     {
-        m_framing = isLowOverhead(block, block + dataLen) ? Av1Framing::LOW_OVERHEAD : Av1Framing::START_CODES;
-        if (m_framing == Av1Framing::LOW_OVERHEAD)
-            LTRACE(LT_INFO, 2, "AV1 elementary stream in the low overhead format, converting OBU framing on read");
+        double ivfFps = 0;
+        if (VpxStreamReader::readIvfHeaderOf(block, static_cast<int>(dataLen), "AV01", ivfFps))
+        {
+            m_framing = Av1Framing::IVF;
+            m_ivfHeaderLeft = block[6] | block[7] << 8;
+            if (m_fps == 0.0 && ivfFps > 0)
+                setFPS(correctFps(ivfFps));
+            LTRACE(LT_INFO, 2, "AV1 in an IVF file, converting OBU framing on read");
+        }
+        else
+        {
+            m_framing = isLowOverhead(block, block + dataLen) ? Av1Framing::LOW_OVERHEAD : Av1Framing::START_CODES;
+            if (m_framing == Av1Framing::LOW_OVERHEAD)
+                LTRACE(LT_INFO, 2, "AV1 elementary stream in the low overhead format, converting OBU framing on read");
+        }
+    }
+
+    if (m_framing == Av1Framing::IVF)
+    {
+        m_ivfRaw.insert(m_ivfRaw.end(), block, block + dataLen);
+        size_t at = 0;
+        if (m_ivfHeaderLeft > 0)
+        {
+            at = (std::min)(static_cast<size_t>(m_ivfHeaderLeft), m_ivfRaw.size());
+            m_ivfHeaderLeft -= static_cast<int>(at);
+        }
+        bool damaged = false;
+        at = takeIvfFrames(m_ivfRaw, at, m_pending, damaged);
+        if (damaged && !m_brokenObuWarned)
+        {
+            m_brokenObuWarned = true;
+            LTRACE(LT_WARN, 2,
+                   "Warning: IVF: a frame gives a size no frame can have, so the file is damaged there. The frames "
+                   "before it are kept; the rest of the file is left out.");
+        }
+        m_ivfRaw.erase(m_ivfRaw.begin(), m_ivfRaw.begin() + static_cast<std::ptrdiff_t>(at));
+        if (lastBlock && !m_ivfRaw.empty())
+        {
+            LTRACE(LT_WARN, 2, "IVF: the file ends inside a frame, " << m_ivfRaw.size() << " bytes left out");
+            m_ivfRaw.clear();
+        }
+        const size_t converted = convertPending(lastBlock);
+        MPEGStreamReader::setBuffer(m_convBuffer.data(), static_cast<uint32_t>(converted), lastBlock);
+        return;
     }
 
     if (m_framing != Av1Framing::LOW_OVERHEAD)
@@ -213,11 +280,26 @@ CheckStreamRez AV1StreamReader::checkStream(uint8_t* buffer, const int len)
     std::vector<uint8_t> probe;
     uint8_t* scanBuf = buffer;
     int scanLen = len;
-    if (len > 0 && isLowOverhead(buffer, buffer + len))
+    // An IVF file: its frames, out of their IVF headers, are a low overhead stream
+    std::vector<uint8_t> ivfFrames;
+    double ivfFps = 0;
+    if (len > 0 && VpxStreamReader::readIvfHeaderOf(buffer, len, "AV01", ivfFps))
+    {
+        const std::vector<uint8_t> raw(buffer + (std::min)(len, buffer[6] | buffer[7] << 8), buffer + len);
+        bool damaged = false;
+        takeIvfFrames(raw, 0, ivfFrames, damaged);
+        if (ivfFrames.empty())
+            return rez;
+        if (m_fps == 0.0 && ivfFps > 0)
+            setFPS(correctFps(ivfFps));
+        scanBuf = ivfFrames.data();
+        scanLen = static_cast<int>(ivfFrames.size());
+    }
+    if (scanLen > 0 && (!ivfFrames.empty() || isLowOverhead(scanBuf, scanBuf + scanLen)))
     {
         std::vector<uint8_t> savedPending;
         savedPending.swap(m_pending);
-        m_pending.assign(buffer, buffer + len);
+        m_pending.assign(scanBuf, scanBuf + scanLen);
         const size_t converted = convertPending(false);
         probe.assign(m_convBuffer.begin() + MAX_AV_PACKET_SIZE, m_convBuffer.begin() + MAX_AV_PACKET_SIZE + converted);
         m_pending.swap(savedPending);

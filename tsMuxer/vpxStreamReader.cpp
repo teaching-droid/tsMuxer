@@ -39,12 +39,21 @@ std::vector<uint8_t> VpxStreamReader::unframe(const uint8_t* data, const int siz
 
 bool VpxStreamReader::readIvfHeader(const uint8_t* data, const int size, bool& vp9, double& fps)
 {
+    if (readIvfHeaderOf(data, size, "VP80", fps))
+        vp9 = false;
+    else if (readIvfHeaderOf(data, size, "VP90", fps))
+        vp9 = true;
+    else
+        return false;
+    return true;
+}
+
+bool VpxStreamReader::readIvfHeaderOf(const uint8_t* data, const int size, const char* fourcc, double& fps)
+{
     // "DKIF", version (2), header size (2), fourcc, width (2), height (2), time base denominator (4) and numerator (4),
     // frames (4), unused (4). Then each frame: its size (4), its time in the time base (8), the frame.
-    if (size < 32 || memcmp(data, "DKIF", 4) != 0 ||
-        (memcmp(data + 8, "VP80", 4) != 0 && memcmp(data + 8, "VP90", 4) != 0))
+    if (size < 32 || memcmp(data, "DKIF", 4) != 0 || memcmp(data + 8, fourcc, 4) != 0)
         return false;
-    vp9 = data[10] == '9';
     const auto le = [data](const int at, const int bytes)
     {
         uint64_t v = 0;
