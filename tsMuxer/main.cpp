@@ -2781,6 +2781,62 @@ static void checkSourcesCutOff(const MuxerManager& muxerManager)
     }
 }
 
+// ** AN AUDIO OR VIDEO TRACK THAT GAVE NOTHING IS A FAILED JOB. **
+// It was only a warning after "Mux successful complete" and exit 0, so a meta line that named the wrong codec, an
+// AC-3 file as HEVC or an H.264 file as A_MLP, left an output without that track, or an empty one, that a script took
+// for a good one. Audio and video are what the job was asked for, so it now ends with an error before success is
+// said, and an existing output of the same name is kept. A cut may leave a short track with nothing in its range, and a
+// subtitle track may have nothing to show, so those stay a warning (reportEmptyTracks).
+static bool isEmptyTrack(const StreamInfo& si)
+{
+    const AbstractStreamReader* reader = si.m_streamReader;
+    return reader != nullptr && reader->getDeliveredFrames() == 0;  // -1 means this reader does not count
+}
+
+static std::string emptyTrackText(const StreamInfo& si)
+{
+    const auto trackParam = si.m_addParams.find("track");
+    std::ostringstream who;
+    if (trackParam != si.m_addParams.end() && !trackParam->second.empty())
+        who << "track " << trackParam->second << " of ";
+    who << (si.m_fullStreamName.empty() ? ("\"" + si.m_streamName + "\"") : si.m_fullStreamName);
+    who << " produced no frames at all. It was read as " << si.m_codec
+        << ", and nothing in it was recognised as that. The usual reason is that the codec on the meta line is not the "
+           "codec the file holds. List the file on its own to see what tsMuxeR makes of it.";
+    return who.str();
+}
+
+static bool isAudioOrVideoLine(const StreamInfo& si)
+{
+    return strStartWith(si.m_codec, "A_") || strStartWith(si.m_codec, "V_");
+}
+
+static void checkEmptyTracks(const MuxerManager& muxerManager)
+{
+    if (muxerManager.getCutStart() > 0 || muxerManager.getCutEnd() > 0)
+        return;
+    for (const StreamInfo& si : muxerManager.getStreamInfo())
+    {
+        if (isAudioOrVideoLine(si) && isEmptyTrack(si))
+            THROW(ERR_COMMON, "The " << emptyTrackText(si) << " The output is incomplete.")
+        // The same for audio of which a few frames were found by chance and the rest dropped: AC-3 named A_AAC gave
+        // a third of its bytes as "AAC" and a warning. More than half of the data that could not be used is not a
+        // damaged track but another codec.
+        const auto audio = dynamic_cast<const SimplePacketizerReader*>(si.m_streamReader);
+        if (audio == nullptr || !strStartWith(si.m_codec, "A_"))
+            continue;
+        const int64_t lost = audio->getLostSize();
+        const int64_t total = audio->getReadSize();
+        if (total > 0 && lost > total / 2)
+            THROW(ERR_COMMON, (si.m_fullStreamName.empty() ? ("\"" + si.m_streamName + "\"") : si.m_fullStreamName)
+                                  << ": " << lost << " bytes of the " << total << " read for this track as "
+                                  << si.m_codec
+                                  << " could not be used, more than half of it. The usual reason is that the codec on "
+                                     "the meta line is not the codec the file holds. List the file on its own to see "
+                                     "what tsMuxeR makes of it. The output is incomplete.")
+    }
+}
+
 static void reportEmptyTracks(const MuxerManager& muxerManager)
 {
     for (const StreamInfo& si : muxerManager.getStreamInfo())
@@ -3178,6 +3234,7 @@ int main(int argc, char** argv)
 
             checkSourceConsumed(muxerManager);
             checkSourcesCutOff(muxerManager);
+            checkEmptyTracks(muxerManager);
             keepOld.commit();
             setSaveSrtJobSucceeded();
             LTRACE(LT_INFO, 2, "Mux successful complete");
@@ -3355,6 +3412,7 @@ int main(int argc, char** argv)
             blurayHelper.close();
             checkSourceConsumed(muxerManager);
             checkSourcesCutOff(muxerManager);
+            checkEmptyTracks(muxerManager);
             keepOld.commit();
             setSaveSrtJobSucceeded();
             if (dt != DiskType::NONE)
@@ -3392,6 +3450,7 @@ int main(int argc, char** argv)
             const std::string demuxDir = keepOld.forDemuxFolder(dstFile, sMuxer.totalSize());
             createDir(demuxDir, true);
             sMuxer.doMux(demuxDir, nullptr);
+            checkEmptyTracks(sMuxer);
             keepOld.commit();
             setSaveSrtJobSucceeded();
             LTRACE(LT_INFO, 2, "Demux complete.");
