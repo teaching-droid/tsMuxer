@@ -174,42 +174,48 @@ QString makeFileFilter(const FileFilterVec& filters)
 
 QString fileDialogFilter()
 {
+    // The elementary files the command line reads, VC-1, VVC, MP2, MP3 and FLAC among them, as the window lists them:
+    // they were missing, so the open dialog did not show them.
     // Consolidated filters to keep the dialog manageable on all platforms
 #if defined(Q_OS_MACOS)
     // Native macOS dialogs are stricter about wildcard/type conversion.
     // Keep filters simple and extension-only to avoid silent failures.
     FileFilterVec filters = {
         {TsMuxerWindow::tr("All supported media files"),
-         {"ac3",  "ddp", "ec3", "eac3",  "aac",   "avc",  "mvc",    "264", "h264", "hevc", "265", "h265",
-          "obu",  "ivf", "dts", "dtshd", "dtsma", "thd",  "truehd", "mpv", "m1v",  "m2v",  "mpa", "ts",
-          "m2ts", "mts", "m2t", "ssif",  "mpg",   "mpeg", "vob",    "evo", "mkv",  "mka",  "mks", "mk3d",
-          "webm", "mp4", "m4a", "m4v",   "mov",   "mpls", "mpl",    "sup", "srt",  "wav",  "w64", "pcm"}},
+         {"ac3",  "ddp",  "ec3",  "eac3", "aac", "avc",   "mvc",   "264", "h264",   "hevc", "265", "h265", "obu", "vc1",
+          "vvc",  "266",  "h266", "ivf",  "dts", "dtshd", "dtsma", "thd", "truehd", "mpv",  "m1v", "m2v",  "mpa", "mp2",
+          "mp3",  "flac", "ts",   "m2ts", "mts", "m2t",   "ssif",  "mpg", "mpeg",   "vob",  "evo", "mkv",  "mka", "mks",
+          "mk3d", "webm", "mp4",  "m4a",  "m4v", "mov",   "mpls",  "mpl", "sup",    "srt",  "wav", "w64",  "pcm"}},
         {TsMuxerWindow::tr("Container files (TS, MKV, MP4, MOV, etc.)"),
          {"ts", "m2ts", "mts", "m2t", "ssif", "mpg", "mpeg", "vob", "evo", "mkv", "mka", "mks", "mk3d", "webm", "mp4",
           "m4a", "m4v", "mov"}},
         {TsMuxerWindow::tr("Video elementary streams"),
-         {"avc", "mvc", "264", "h264", "hevc", "265", "h265", "obu", "ivf", "mpv", "m1v", "m2v"}},
+         {"avc", "mvc", "264", "h264", "hevc", "265", "h265", "obu", "vc1", "vvc", "266", "h266", "ivf", "mpv", "m1v",
+          "m2v"}},
         {TsMuxerWindow::tr("Audio files"),
-         {"ac3", "ddp", "ec3", "eac3", "aac", "dts", "dtshd", "dtsma", "thd", "truehd", "mpa", "wav", "w64", "pcm"}},
+         {"ac3", "ddp", "ec3", "eac3", "aac", "dts", "dtshd", "dtsma", "thd", "truehd", "mpa", "mp2", "mp3", "flac",
+          "wav", "w64", "pcm"}},
         {TsMuxerWindow::tr("Subtitle files"), {"sup", "srt"}},
         {TsMuxerWindow::tr("Blu-ray playlist"), {"mpls", "mpl"}}};
 #else
-    FileFilterVec filters = {{TsMuxerWindow::tr("All supported media files"),
-                              {"ac3",     "ddp",  "ec3", "eac3", "aac", "avc",   "mvc",   "264",  "h264",   "hevc",
-                               "265",     "h265", "obu", "ivf",  "dts", "dtshd", "dtsma", "thd",  "truehd", "ac3+thd",
-                               "thd+ac3", "mpv",  "m1v", "m2v",  "mpa", "ts",    "m2ts",  "mts",  "m2t",    "ssif",
-                               "mpg",     "mpeg", "vob", "evo",  "mkv", "mka",   "mks",   "mk3d", "webm",   "mp4",
-                               "m4a",     "m4v",  "mov", "mpls", "mpl", "sup",   "srt",   "wav",  "w64",    "pcm"}},
-                             {TsMuxerWindow::tr("Container files (TS, MKV, MP4, MOV, etc.)"),
-                              {"ts", "m2ts", "mts", "m2t", "ssif", "mpg", "mpeg", "vob", "evo", "mkv", "mka", "mks",
-                               "mk3d", "webm", "mp4", "m4a", "m4v", "mov"}},
-                             {TsMuxerWindow::tr("Video elementary streams"),
-                              {"avc", "mvc", "264", "h264", "hevc", "265", "h265", "obu", "ivf", "mpv", "m1v", "m2v"}},
-                             {TsMuxerWindow::tr("Audio files"),
-                              {"ac3", "ddp", "ec3", "eac3", "aac", "dts", "dtshd", "dtsma", "thd", "truehd", "ac3+thd",
-                               "thd+ac3", "mpa", "wav", "w64", "pcm"}},
-                             {TsMuxerWindow::tr("Subtitle files"), {"sup", "srt"}},
-                             {TsMuxerWindow::tr("Blu-ray playlist"), {"mpls", "mpl"}}};
+    FileFilterVec filters = {
+        {TsMuxerWindow::tr("All supported media files"),
+         {"ac3",     "ddp", "ec3",  "eac3", "aac",  "avc", "mvc", "264",   "h264",  "hevc", "265",    "h265",
+          "obu",     "vc1", "vvc",  "266",  "h266", "ivf", "dts", "dtshd", "dtsma", "thd",  "truehd", "ac3+thd",
+          "thd+ac3", "mpv", "m1v",  "m2v",  "mpa",  "mp2", "mp3", "flac",  "ts",    "m2ts", "mts",    "m2t",
+          "ssif",    "mpg", "mpeg", "vob",  "evo",  "mkv", "mka", "mks",   "mk3d",  "webm", "mp4",    "m4a",
+          "m4v",     "mov", "mpls", "mpl",  "sup",  "srt", "wav", "w64",   "pcm"}},
+        {TsMuxerWindow::tr("Container files (TS, MKV, MP4, MOV, etc.)"),
+         {"ts", "m2ts", "mts", "m2t", "ssif", "mpg", "mpeg", "vob", "evo", "mkv", "mka", "mks", "mk3d", "webm", "mp4",
+          "m4a", "m4v", "mov"}},
+        {TsMuxerWindow::tr("Video elementary streams"),
+         {"avc", "mvc", "264", "h264", "hevc", "265", "h265", "obu", "vc1", "vvc", "266", "h266", "ivf", "mpv", "m1v",
+          "m2v"}},
+        {TsMuxerWindow::tr("Audio files"),
+         {"ac3", "ddp", "ec3", "eac3", "aac", "dts", "dtshd", "dtsma", "thd", "truehd", "ac3+thd", "thd+ac3", "mpa",
+          "mp2", "mp3", "flac", "wav", "w64", "pcm"}},
+        {TsMuxerWindow::tr("Subtitle files"), {"sup", "srt"}},
+        {TsMuxerWindow::tr("Blu-ray playlist"), {"mpls", "mpl"}}};
 #endif
     return makeFileFilter(filters);
 }
