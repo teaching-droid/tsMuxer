@@ -56,6 +56,8 @@ class HEVCStreamReader final : public MPEGStreamReader
     [[nodiscard]] double getSampleAspectRatio() const override;
     [[nodiscard]] unsigned getStreamHeight() const override;
     [[nodiscard]] int getStreamHDR() const override;
+    // This stream's mastering display and light level values, packed as in HDR10_metadata (zeros where none came)
+    [[nodiscard]] const unsigned* getHdr10Metadata() const { return m_hdr->hdr10Metadata; }
     [[nodiscard]] bool getColourDesc(uint8_t& primaries, uint8_t& transfer, uint8_t& matrix) const override;
     bool getInterlaced() override { return false; }
     bool isIFrame() override { return m_lastIFrame; }

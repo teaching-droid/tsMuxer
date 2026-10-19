@@ -199,6 +199,9 @@ struct HevcHdrUnit : HevcUnit
     bool isHDR10plus;
     bool isDVRPU;
     bool isDVEL;
+    // This stream's own SEI 137 and 144 values, packed as in HDR10_metadata. That one is global and serves the disc,
+    // which has one set; a Matroska track describes its own stream only.
+    unsigned hdr10Metadata[6] = {0, 0, 0, 0, 0, 0};
 };
 
 // The head of a Dolby Vision RPU (NAL type 62), as far as it says whether the picture it describes is built from a base

@@ -893,11 +893,15 @@ int HevcHdrUnit::deserialize()
                 const unsigned maxDisplayMasteringLuminance = m_reader.getBits(32);
                 const unsigned minDisplayMasteringLuminance = m_reader.getBits(32);
                 HDR10_metadata[4] = ((maxDisplayMasteringLuminance / 10000) << 16) + minDisplayMasteringLuminance;
+                for (int i = 0; i < 5; ++i) hdr10Metadata[i] = HDR10_metadata[i];
             }
             else if (payloadType == 144)  // content_light_level_info
             {
                 auto maxCLL = m_reader.getBits<uint32_t>(16);
                 auto maxFALL = m_reader.getBits<uint32_t>(16);
+                // the largest of this stream, as the global one keeps the largest of all
+                hdr10Metadata[5] =
+                    ((std::max)(maxCLL, hdr10Metadata[5] >> 16) << 16) + (std::max)(maxFALL, hdr10Metadata[5] & 0xffff);
                 if (maxCLL > (HDR10_metadata[5] >> 16) || maxFALL > (HDR10_metadata[5] & 0x0000ffff))
                 {
                     maxCLL = (std::max)(maxCLL, HDR10_metadata[5] >> 16);

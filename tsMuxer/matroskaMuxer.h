@@ -126,6 +126,7 @@ class MatroskaMuxer final : public AbstractMuxer
         uint8_t colourTransfer;
         uint8_t colourMatrix;
         bool isHdr10;
+        unsigned hdr10Metadata[6] = {0, 0, 0, 0, 0, 0};  // the track's own, packed as in HDR10_metadata
 
         // Dolby Vision configuration record and its BlockAddIDType (dvcC or dvvC), 0 if not DV.
         uint32_t dvBlockAddIdType;

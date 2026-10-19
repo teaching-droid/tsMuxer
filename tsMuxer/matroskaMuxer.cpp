@@ -1237,7 +1237,8 @@ void MatroskaMuxer::writeSegmentInfo()
 
 int MatroskaMuxer::writeColourInfo(uint8_t* dst, const MkvTrackInfo& track)
 {
-    const bool haveMastering = track.isHdr10 && (HDR10_metadata[3] != 0 || HDR10_metadata[4] != 0);
+    const unsigned* const hdr10 = track.hdr10Metadata;
+    const bool haveMastering = track.isHdr10 && (hdr10[3] != 0 || hdr10[4] != 0);
     // What the source container says, for what the stream does not. HDR metadata that a file keeps only in its
     // container, as many do, was dropped by a remux, so the copy played as plain SDR.
     const auto src = [&track](const char* key) { return track.srcColour.find(key); };
@@ -1305,8 +1306,8 @@ int MatroskaMuxer::writeColourInfo(uint8_t* dst, const MkvTrackInfo& track)
         // MaxCLL and MaxFALL live beside MasteringMetadata, not inside it. Both are written only
         // when non-zero: a stream can legitimately signal zeros, and writing those back says
         // "measured as zero" rather than "unknown", so passing them on would be wrong.
-        const unsigned maxCLL = HDR10_metadata[5] >> 16;
-        const unsigned maxFALL = HDR10_metadata[5] & 0xffff;
+        const unsigned maxCLL = hdr10[5] >> 16;
+        const unsigned maxFALL = hdr10[5] & 0xffff;
         if (maxCLL)
             p += ebml_write_uint(body + p, MATROSKA_ID_COLOURMAXCLL, maxCLL);
         if (maxFALL)
@@ -1317,18 +1318,17 @@ int MatroskaMuxer::writeColourInfo(uint8_t* dst, const MkvTrackInfo& track)
         int m = 0;
         const auto x = [](const unsigned packed) { return (packed >> 16) / CHROMA_UNIT; };
         const auto y = [](const unsigned packed) { return (packed & 0xffff) / CHROMA_UNIT; };
-        m += ebml_write_float(mm + m, MATROSKA_ID_PRIMARYGCHROMATICITYX, x(HDR10_metadata[0]));
-        m += ebml_write_float(mm + m, MATROSKA_ID_PRIMARYGCHROMATICITYY, y(HDR10_metadata[0]));
-        m += ebml_write_float(mm + m, MATROSKA_ID_PRIMARYBCHROMATICITYX, x(HDR10_metadata[1]));
-        m += ebml_write_float(mm + m, MATROSKA_ID_PRIMARYBCHROMATICITYY, y(HDR10_metadata[1]));
-        m += ebml_write_float(mm + m, MATROSKA_ID_PRIMARYRCHROMATICITYX, x(HDR10_metadata[2]));
-        m += ebml_write_float(mm + m, MATROSKA_ID_PRIMARYRCHROMATICITYY, y(HDR10_metadata[2]));
-        m += ebml_write_float(mm + m, MATROSKA_ID_WHITEPOINTCHROMATICITYX, x(HDR10_metadata[3]));
-        m += ebml_write_float(mm + m, MATROSKA_ID_WHITEPOINTCHROMATICITYY, y(HDR10_metadata[3]));
-        // HDR10_metadata[4] packs max in whole cd/m2 (already divided by 10000 on parse) and min
-        // still in 0.0001 cd/m2 units.
-        m += ebml_write_float(mm + m, MATROSKA_ID_LUMINANCEMAX, static_cast<double>(HDR10_metadata[4] >> 16));
-        m += ebml_write_float(mm + m, MATROSKA_ID_LUMINANCEMIN, (HDR10_metadata[4] & 0xffff) / 10000.0);
+        m += ebml_write_float(mm + m, MATROSKA_ID_PRIMARYGCHROMATICITYX, x(hdr10[0]));
+        m += ebml_write_float(mm + m, MATROSKA_ID_PRIMARYGCHROMATICITYY, y(hdr10[0]));
+        m += ebml_write_float(mm + m, MATROSKA_ID_PRIMARYBCHROMATICITYX, x(hdr10[1]));
+        m += ebml_write_float(mm + m, MATROSKA_ID_PRIMARYBCHROMATICITYY, y(hdr10[1]));
+        m += ebml_write_float(mm + m, MATROSKA_ID_PRIMARYRCHROMATICITYX, x(hdr10[2]));
+        m += ebml_write_float(mm + m, MATROSKA_ID_PRIMARYRCHROMATICITYY, y(hdr10[2]));
+        m += ebml_write_float(mm + m, MATROSKA_ID_WHITEPOINTCHROMATICITYX, x(hdr10[3]));
+        m += ebml_write_float(mm + m, MATROSKA_ID_WHITEPOINTCHROMATICITYY, y(hdr10[3]));
+        // [4] packs max in whole cd/m2 (already divided by 10000 on parse) and min still in 0.0001 cd/m2 units.
+        m += ebml_write_float(mm + m, MATROSKA_ID_LUMINANCEMAX, static_cast<double>(hdr10[4] >> 16));
+        m += ebml_write_float(mm + m, MATROSKA_ID_LUMINANCEMIN, (hdr10[4] & 0xffff) / 10000.0);
 
         p += ebml_write_master_open(body + p, MATROSKA_ID_MASTERINGMETADATA, m);
         memcpy(body + p, mm, m);
@@ -1968,7 +1968,16 @@ void MatroskaMuxer::refreshTrackProperties()
                     mpegReader->getColourDesc(track.colourPrimaries, track.colourTransfer, track.colourMatrix);
                 // getStreamHDR: 1 SDR, 2 HDR10, 4 Dolby Vision, 16 HDR10+. Everything except
                 // plain SDR carries an HDR10 base layer, so mastering metadata applies.
-                track.isHdr10 = mpegReader->getStreamHDR() != 1;
+                //
+                // Only HEVC answers it: every other reader says 0, which was taken for HDR, and the mastering values
+                // are the track's own. They were read from one global set, so plain H.264 beside an HDR10 HEVC track
+                // was given the HEVC track's mastering display and light levels, and two HDR10 tracks shared one set.
+                track.isHdr10 = false;
+                if (const auto hevc = dynamic_cast<HEVCStreamReader*>(track.codecReader))
+                {
+                    track.isHdr10 = hevc->getStreamHDR() != 1;
+                    std::copy_n(hevc->getHdr10Metadata(), 6, track.hdr10Metadata);
+                }
                 // Dolby Vision configuration, when the stream carries an RPU. Written whatever
                 // the profile, because a single layer profile 8 track is complete on its own; a
                 // profile 7 base layer without its enhancement layer is handled below.
