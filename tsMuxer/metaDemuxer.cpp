@@ -1381,7 +1381,11 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         if (pid)
             dataReader = &m_containerReader;
         else
-            THROW(ERR_INVALID_CODEC_FORMAT, "For streams inside MKV container need track parameter.")
+            THROW(ERR_INVALID_CODEC_FORMAT,
+                  (addParams.count("track") ? std::string("track=0 is not a track: the tracks of a Matroska file are "
+                                                          "numbered from 1. List the file to see them.")
+                                            : std::string("A track of a Matroska file needs track= on its line, "
+                                                          "such as track=2. List the file to see its tracks.")))
         if (listIterator)
             dynamic_cast<ContainerToReaderWrapper*>(dataReader)->setFileIterator(fileList[0].c_str(), listIterator);
         codecReader->setSrcContainerType(AbstractStreamReader::ContainerType::ctMKV);
