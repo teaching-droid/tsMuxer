@@ -106,6 +106,14 @@ class MatroskaDemuxer final : public IOContextDemuxer
     bool getBlockAdditionInfo(int pid, uint64_t& maxId, std::vector<std::vector<uint8_t>>& mappings) const override;
     bool takeBlockAdditions(int pid, int64_t pts, std::vector<uint8_t>& out) override;
     void keepBlockAdditions(const int pid) override { m_keepAdditionPids.insert(pid); }
+    // A file cut off inside a block: from when (s, in the file's own time) and in which track (as track= counts) the
+    // first of it is missing. Asked once the mux is over (main.cpp), as MovDemuxer::cutOffFiles.
+    struct CutOff
+    {
+        double from = 0;
+        unsigned track = 0;
+    };
+    static std::map<std::string, CutOff>& cutOffFiles();
 
    private:
     typedef Track MatroskaTrack;
@@ -198,7 +206,9 @@ class MatroskaDemuxer final : public IOContextDemuxer
     int ebml_read_num(int max_size, int64_t* number);
     int ebml_read_element_level_up();
     int matroska_parse_cluster();
-    int ebml_read_binary(uint32_t* id, uint8_t** binary, int* size);
+    // clusterTime: the element is a block of the cluster of that time, which may be cut off by the end of the file
+    static constexpr int64_t NOT_A_BLOCK = INT64_MIN;
+    int ebml_read_binary(uint32_t* id, uint8_t** binary, int* size, int64_t clusterTime = NOT_A_BLOCK);
     int ebml_read_element_length(int64_t* length);
     int ebml_read_master(uint32_t* id);
     int ebml_read_skip();

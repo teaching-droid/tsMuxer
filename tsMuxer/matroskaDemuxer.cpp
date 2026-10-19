@@ -871,7 +871,7 @@ int MatroskaDemuxer::matroska_parse_blockgroup(const int64_t cluster_time)
         case MATROSKA_ID_BLOCK:
         {
             pos = m_processedBytes;
-            res = ebml_read_binary(&id, &data, &size);
+            res = ebml_read_binary(&id, &data, &size, cluster_time);
             break;
         }
 
@@ -1052,7 +1052,13 @@ int MatroskaDemuxer::ebml_read_element_length(int64_t* length)
     return ebml_read_num(8, length);
 }
 
-int MatroskaDemuxer::ebml_read_binary(uint32_t* id, uint8_t** binary, int* size)
+std::map<std::string, MatroskaDemuxer::CutOff>& MatroskaDemuxer::cutOffFiles()
+{
+    static std::map<std::string, CutOff> files;
+    return files;
+}
+
+int MatroskaDemuxer::ebml_read_binary(uint32_t* id, uint8_t** binary, int* size, const int64_t clusterTime)
 {
     int64_t rlength;
     int res;
@@ -1067,9 +1073,46 @@ int MatroskaDemuxer::ebml_read_binary(uint32_t* id, uint8_t** binary, int* size)
         THROW(ERR_COMMON_MEMORY, "Memory allocation error")
     }
 
-    if (static_cast<int>(get_buffer(*binary, *size)) != *size)
+    const int got = static_cast<int>(get_buffer(*binary, *size));
+    if (got != *size)
     {
-        THROW(ERR_MATROSKA_PARSE, "Matroska parser: read error at pos " << m_processedBytes)
+        if (clusterTime == NOT_A_BLOCK)
+            THROW(ERR_MATROSKA_PARSE, "Matroska parser: read error at pos " << m_processedBytes)
+        // A block that the end of the file cuts off: the file was refused whole ("read error at pos"), and every
+        // complete frame in front of the block was lost with it. The stream ends with the frames before the block,
+        // and the job then says that the rest is missing (main.cpp), as for an MP4 that was cut off. The track and
+        // the time are those of the block's own header, where enough of it is there.
+        unsigned track = 0;
+        double from = 0;
+        int n = 1;
+        while (n <= 8 && got > 0 && !((*binary)[0] & (0x80 >> (n - 1)))) ++n;
+        if (got >= n + 2 && n <= 8)
+        {
+            uint64_t number = (*binary)[0] & ((0x80 >> (n - 1)) - 1);
+            for (int k = 1; k < n; ++k) number = number << 8 | (*binary)[k];
+            for (int i = 0; i < num_tracks; ++i)
+                if (tracks[i]->num == number)
+                    track = static_cast<unsigned>(i + 1);
+            const auto relative = static_cast<int16_t>(static_cast<uint16_t>((*binary)[n] << 8 | (*binary)[n + 1]));
+            from = static_cast<double>(clusterTime + relative) * static_cast<double>(time_scale) / 1e9;
+        }
+        delete[] *binary;
+        *binary = nullptr;
+        // The end of the data, as the reader of a single byte would have found it: left at "more to come", the mux
+        // waited for the rest of the file forever.
+        m_isEOF = true;
+        m_lastReadRez = BufferedReader::DATA_EOF;
+        const std::string& file = m_joinPart < m_joinFiles.size() ? m_joinFiles[m_joinPart] : m_sourceName;
+        auto [it, added] = cutOffFiles().emplace(file, CutOff{from, track});
+        if (!added && from < it->second.from)
+            it->second = CutOff{from, track};
+        static std::set<std::string> warned;  // a job opens a file more than once
+        if (warned.insert(file).second)
+            LTRACE(LT_WARN, 2,
+                   "Warning: " << file << " is cut off: a block of track " << track << " at " << doubleToStr(from, 3)
+                               << " s runs past the end of the file. What the file holds is read; the rest is "
+                                  "missing.");
+        return -BufferedReader::DATA_EOF;
     }
     return 0;
 }
@@ -1141,7 +1184,7 @@ int MatroskaDemuxer::matroska_parse_cluster()
 
         case MATROSKA_ID_SIMPLEBLOCK:
             pos = m_processedBytes;
-            res = ebml_read_binary(&id, &data, &size);
+            res = ebml_read_binary(&id, &data, &size, cluster_time);
             if (res == 0)
                 res = matroska_parse_block(data, size, pos, cluster_time, AV_NOPTS_VALUE, -1, 0);
             break;

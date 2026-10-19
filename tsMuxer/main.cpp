@@ -22,6 +22,7 @@
 #include "h264StreamReader.h"
 #include "hevcStreamReader.h"
 #include "iso_writer.h"
+#include "matroskaDemuxer.h"
 #include "matroskaMuxer.h"
 #include "metaDemuxer.h"
 #include "movDemuxer.h"
@@ -2846,20 +2847,23 @@ static void checkSourceConsumed(MuxerManager& muxerManager)
                              "what it was asked to do.")
 }
 
-// An MP4 source that was cut off is read as far as it goes, and the job then ends with an error that says what is
-// missing, unless --cut-end stops before the first of it.
+// An MP4 or Matroska source that was cut off is read as far as it goes, and the job then ends with an error that says
+// what is missing, unless --cut-end stops before the first of it.
 static void checkSourcesCutOff(const MuxerManager& muxerManager)
 {
-    for (const auto& [file, cut] : MovDemuxer::cutOffFiles())
+    const auto check =
+        [&muxerManager](const std::string& file, const double from, const unsigned track, const char* what)
     {
-        if (muxerManager.getCutEnd() > 0 &&
-            static_cast<double>(muxerManager.getCutEnd()) / INTERNAL_PTS_FREQ <= cut.from)
-            continue;
-        THROW(ERR_COMMON, "The source " << file
-                                        << " is cut off: its index lists data past the end of the file, in track "
-                                        << cut.track << " from " << doubleToStr(cut.from, 3)
+        if (muxerManager.getCutEnd() > 0 && static_cast<double>(muxerManager.getCutEnd()) / INTERNAL_PTS_FREQ <= from)
+            return;
+        THROW(ERR_COMMON, "The source " << file << " is cut off: " << what << ", in track " << track << " from "
+                                        << doubleToStr(from, 3)
                                         << " s on. The output holds what the file has and is incomplete.")
-    }
+    };
+    for (const auto& [file, cut] : MovDemuxer::cutOffFiles())
+        check(file, cut.from, cut.track, "its index lists data past the end of the file");
+    for (const auto& [file, cut] : MatroskaDemuxer::cutOffFiles())
+        check(file, cut.from, cut.track, "a block runs past the end of the file");
 }
 
 // ** AN AUDIO OR VIDEO TRACK THAT GAVE NOTHING IS A FAILED JOB. **
