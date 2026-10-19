@@ -123,6 +123,9 @@ class SRTStreamReader final : public AbstractStreamReader
     int64_t m_skippedLines = 0;  // lines of text that are not part of any subtitle, passed over
     int64_t m_firstSkippedLine = 0;
     std::string m_firstSkippedText;
+    int64_t m_counterLine = 0;  // the line of the counter of the subtitle being read
+    std::string m_counterText;
+    int m_doubleCounters = 0;  // counters written twice, named in a warning
     void skipNonCueLine();
     void reportSkippedLines();
     bool m_openEndWarned = false;

@@ -731,6 +731,27 @@ void SRTStreamReader::skipNonCueLine()
             LTRACE(LT_WARN, 2, what.str());
         }
     }
+    // The same number twice before a timing line: the first one was taken as the counter, but after a blank line it
+    // may as well be the last line of the subtitle before, as in "The answer is", a blank line, "2". Which it is cannot
+    // be told, and it was dropped in silence. It is still taken as a counter, and named.
+    else if (const std::string number = trimStr(line.substr(from)); !number.empty() && number == m_counterText &&
+                                                                    m_counterLine > 0 && m_cuesRead > 0 &&
+                                                                    m_containerType == ContainerType::ctNone)
+    {
+        if (m_doubleCounters++ < 5)
+        {
+            std::ostringstream what;
+            what << "Warning: track " << m_streamIndex;
+            if (!m_streamName.empty())
+                what << " (" << m_streamName << ")";
+            what << ", lines " << m_counterLine << " and "
+                 << m_linesRead - static_cast<int64_t>(m_sourceText.size()) + 1 << ": the number " << number
+                 << " stands twice before a timing line and is taken as the counter of the subtitle after it. If the "
+                    "first is text of the subtitle before, it is lost: write it without a blank line above it.";
+            LTRACE(LT_WARN, 2, what.str());
+        }
+        m_counterLine = 0;
+    }
     m_sourceText.pop_front();
     m_processedSize += m_origSize.front();
     m_origSize.pop();
@@ -799,6 +820,8 @@ bool SRTStreamReader::readNextCue()
         }
         if (isNUmber)
         {
+            m_counterLine = m_linesRead - static_cast<int64_t>(m_sourceText.size()) + 1;
+            m_counterText = trimStr(m_sourceText.front());
             m_sourceText.pop_front();
             m_processedSize += m_origSize.front();
             m_origSize.pop();
