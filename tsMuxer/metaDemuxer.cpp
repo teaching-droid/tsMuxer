@@ -3135,6 +3135,20 @@ static uint16_t parsePictureSize(const char* name, const std::string& text)
     return static_cast<uint16_t>(value);
 }
 
+// fadein-time= and fadeout-time=: seconds, 0 or more. A negative fade made the subtitle invisible for all of its time,
+// and text such as abc was taken as no fade, both in silence.
+static float parseFadeTime(const char* name, const std::string& text)
+{
+    const std::string t = trimStr(text);
+    const bool number = !t.empty() && t.find_first_not_of("0123456789.") == std::string::npos &&
+                        std::count(t.begin(), t.end(), '.') <= 1 && t.find_first_of("0123456789") != std::string::npos;
+    const double value = number ? strToDouble(t.c_str()) : -1.0;
+    if (!(value >= 0.0) || value > 86400.0)
+        THROW(ERR_COMMON,
+              name << "=" << text << " is not a fade time. Write it in seconds, from 0 up to 86400, such as 0.25.")
+    return static_cast<float>(value);
+}
+
 CheckStreamRez METADemuxer::detectTrackReader(uint8_t* tmpBuffer, int len,
                                               AbstractStreamReader::ContainerType containerType, int containerDataType,
                                               int containerStreamIndex)
@@ -3648,9 +3662,9 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
             else if (addParam.first == "bottom-offset")
                 srtReader->setBottomOffset(strToInt32(addParam.second.c_str()));
             else if (addParam.first == "fadein-time")
-                animation.fadeInDuration = strToFloat(addParam.second.c_str());
+                animation.fadeInDuration = parseFadeTime("fadein-time", addParam.second);
             else if (addParam.first == "fadeout-time")
-                animation.fadeOutDuration = strToFloat(addParam.second.c_str());
+                animation.fadeOutDuration = parseFadeTime("fadeout-time", addParam.second);
             else if (addParam.first == "keep-text")
                 srtReader->setKeepText(true);
         }
