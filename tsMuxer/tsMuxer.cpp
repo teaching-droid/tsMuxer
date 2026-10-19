@@ -2399,6 +2399,7 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
     bool cbrAsked = false;
     bool vbrAsked = false;
     bool rateGiven = false;
+    bool minRateGiven = false;
     int maxRate = -1;
     for (auto& i : params)
     {
@@ -2425,7 +2426,10 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
         else if (paramPair[0] == "--maxbitrate" && paramPair.size() > 1)
             maxRate = checkedMuxRate(paramPair[0], paramPair[1]);
         else if (paramPair[0] == "--minbitrate" && paramPair.size() > 1)
+        {
             setMinBitrate(static_cast<int>(strToDouble(paramPair[1].c_str()) * 1000.0));
+            minRateGiven = true;
+        }
         else if (paramPair[0] == "--vbv-len" && paramPair.size() > 1)
             setVBVBufferLen(strToInt32(paramPair[1].c_str()));
         // Written with a space instead of an equals sign this read past the end of the vector. See
@@ -2481,6 +2485,20 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
         setMaxBitrate(maxRate);
         if (rateGiven)
             setMuxRate(cbrRate);
+        // A ceiling below the constant rate holds the stream to the ceiling, and nothing said so: --bitrate=40000 with
+        // --maxbitrate=20000 gave 20000
+        if (rateGiven && maxRate < cbrRate)
+            LTRACE(LT_WARN, 2,
+                   "Warning: --maxbitrate (" << maxRate / 1000 << " kbps) is below --bitrate (" << cbrRate / 1000
+                                             << " kbps), so the constant rate is held at " << maxRate / 1000
+                                             << " kbps.");
+    }
+    // --bitrate gives a constant rate, and --minbitrate after it lowered that rate without a word: 20000 became 10000.
+    // The constant rate is kept, whatever order the two come in.
+    if (rateGiven && minRateGiven)
+    {
+        setMinBitrate(maxRate != -1 ? (std::min)(m_cbrBitrate, maxRate) : m_cbrBitrate);
+        LTRACE(LT_WARN, 2, "Warning: --minbitrate is ignored with --bitrate, which gives a constant rate.");
     }
     // Neither --cbr nor --vbr is a switch. Nothing anywhere reads them, the rate comes from
     // --bitrate alone, and until now both words fell out of the bottom of this loop without a
