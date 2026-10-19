@@ -5067,7 +5067,10 @@ void TsMuxerWindow::onColorBtnClicked()
 {
     // getColor returns an invalid colour when the dialog is cancelled, and its rgba() is opaque black: Cancel turned
     // every text subtitle drawn into pictures black, and the black was saved for the next start.
-    const QColor color = QColorDialog::getColor(QColor(fontSettingsModel->color()), this);
+    // QColor(QRgb) takes the colour as opaque, and the dialog showed no alpha, so a semi-transparent colour such as
+    // 0x80ffffff came back from OK as 0xffffffff. The colour is now given with its alpha, and the dialog shows it.
+    const QColor color = QColorDialog::getColor(QColor::fromRgba(fontSettingsModel->color()), this, QString(),
+                                                QColorDialog::ShowAlphaChannel);
     if (!color.isValid())
         return;
     fontSettingsModel->setColor(color.rgba());
