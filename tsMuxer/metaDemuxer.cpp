@@ -1644,31 +1644,64 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             streamInfo.m_lang = lang;
         }
     }
-    // A join: every Matroska or MP4 file of it is asked whether it has the track, as a single file is above. A join
-    // naming a track the files do not have was not checked, and made an empty output.
-    if (fileList.size() > 1 && pid > 0 && !SubTrackFilter::isSubTrack(pid))
+    // A join: every Matroska, MP4 or transport stream file of it is asked whether it has the track, as a single file
+    // is above. A join naming a track the files do not have was not checked, and made an empty output; a transport
+    // stream without the PID was not asked at all, and its part of the join was left out without a word. The track
+    // must also be of the same kind in every file of the same container: a file whose track of that number is a
+    // subtitle was read as the AC-3 of the line, with "bad frame" for each packet, and the job said it had succeeded.
+    // The clips of a playlist are not asked: a clip without the track, as a short logo without sound before the
+    // film, is part of how a disc is made, and the track starts after it.
+    if (fileList.size() > 1 && pid > 0 && !SubTrackFilter::isSubTrack(pid) && mplsInfoList.empty())
+    {
+        std::map<std::string, int> firstKind;  // per kind of container: the type of the track in its first file
         for (const auto& name : fileList)
         {
             const std::string file = unquoteStr(trimStr(name));
             const std::string ext = strToUpperCase(extractFileExt(file));
             std::unique_ptr<AbstractDemuxer> probe;
+            std::string container;
             if (ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM")
+            {
                 probe = std::make_unique<MatroskaDemuxer>(m_readManager);
+                container = "MKV";
+            }
             else if (ext == "MP4" || ext == "M4A" || ext == "M4V" || ext == "MOV")
+            {
                 probe = std::make_unique<MovDemuxer>(m_readManager);
+                container = "MP4";
+            }
+            else if (ext == "TS" || ext == "M2TS" || ext == "MTS" || ext == "M2T")
+            {
+                probe = std::make_unique<TSDemuxer>(m_readManager, "");
+                container = "TS";
+            }
             else
                 continue;
             probe->openFile(file);
             std::map<int32_t, TrackInfo> tracks;
             probe->getTrackList(tracks);
-            if (!tracks.empty() && tracks.find(pid) == tracks.end())
+            if (tracks.empty())
+                continue;
+            const auto found = tracks.find(pid);
+            if (found == tracks.end())
             {
                 std::string list;
                 for (const auto& [id, info] : tracks) list += (list.empty() ? "" : ", ") + std::to_string(id);
                 THROW(ERR_COMMON, file << ", a file of the join, has no track " << pid << " (its tracks are " << list
                                        << "). Nothing was written.")
             }
+            // a Matroska track is told by the kind its codec name begins with (A_, V_, S_), as its type names an audio
+            // codec only when one was recognised; other containers by the type they give
+            const auto codecId = found->second.m_srcParams.find("srccodecid");
+            const int trackKind = codecId != found->second.m_srcParams.end() && !codecId->second.empty()
+                                      ? 1000 + static_cast<uint8_t>(codecId->second[0])
+                                      : found->second.m_trackType;
+            const auto [kind, isFirst] = firstKind.try_emplace(container, trackKind);
+            if (!isFirst && kind->second != 0 && trackKind != 0 && trackKind != kind->second)
+                THROW(ERR_COMMON, file << ", a file of the join, has a track " << pid
+                                       << " of another kind than the first file of the join has. Nothing was written.")
         }
+    }
     // A join of Matroska files with Opus sound: each file is asked for the padding at its end (the DiscardPadding of
     // its last block). The reader leaves the samples it and the next file's pre-skip make out at each joint, and the
     // padding at the end of the join is the last file's. A join was not asked about its tracks at all, so the end
