@@ -1434,7 +1434,21 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                 for (const auto& warning : warnings) LTRACE(LT_WARN, 2, "Warning: " << warning);
             }
             else if (a.rfind("--disc-capacity=", 0) == 0)
-                discCapacitySectors = std::stoll(a.substr(16));
+            {
+                // A number of sectors, digits only. It was read up to the first sign that is not a digit, so
+                // 24.438.784 was 24 sectors, 66g 66, and 24438784abc was taken; a disc of 24 sectors held nothing.
+                const std::string value = a.substr(16);
+                if (value.empty() || value.size() > 12 || value.find_first_not_of("0123456789") != std::string::npos ||
+                    std::stoll(value) == 0)
+                {
+                    LTRACE(LT_ERROR, 2,
+                           "--disc-capacity=" << value
+                                              << " is not a number of sectors. Write it in digits only, such as "
+                                                 "24438784 for a 50 GB disc.");
+                    return -1;
+                }
+                discCapacitySectors = std::stoll(value);
+            }
             else if (a == "--original-order")
                 originalOrder = true;
             else if (a == "--no-layer-fit")
