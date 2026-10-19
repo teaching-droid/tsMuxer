@@ -183,12 +183,19 @@ size_t findUnquotedStr(const string& str, const string& substr)
 {
     if (substr.empty())
         return string::npos;
-    bool quote = false;
+    // A quote ends only at the same kind of quote that opened it: the apostrophe in face="Smith's Script" ended the
+    // double quotes, so the rest of the tag counted as quoted and its color= was not found.
+    char quote = 0;
     for (size_t i = 0; i < str.size(); i++)
     {
-        if (str[i] == '\"' || str[i] == '\'')
-            quote = !quote;
-        else if (!quote && str[i] == substr[0])
+        if (quote)
+        {
+            if (str[i] == quote)
+                quote = 0;
+        }
+        else if (str[i] == '\"' || str[i] == '\'')
+            quote = str[i];
+        else if (str[i] == substr[0])
         {
             bool found = true;
             for (size_t j = 1; j < substr.size(); j++)
