@@ -1124,7 +1124,23 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         for (const string& fileName : fileList)
         {
             if (!tmpFile.open(fileName.c_str(), File::ofRead))
-                THROW(ERR_INVALID_CODEC_FORMAT, "Can't open file: " << fileName.c_str())
+            {
+                // why, as far as it can be told: the message named the file and nothing else, also for a file that is
+                // there and has a path too long for the system
+                std::error_code ec;
+                const std::filesystem::path path(std::u8string(fileName.begin(), fileName.end()));
+                std::string why = " (the system refused to open it; check that it can be read and is not in use)";
+                if (!std::filesystem::exists(path, ec) && !ec)
+                    why = " (it does not exist)";
+                else if (std::filesystem::is_directory(path, ec))
+                    why = " (it is a folder)";
+#ifdef _WIN32
+                else if (fileName.size() >= 260)
+                    why = " (its path has " + std::to_string(fileName.size()) +
+                          " characters, more than this system opens by default)";
+#endif
+                THROW(ERR_INVALID_CODEC_FORMAT, "Can't open file: " << fileName << why)
+            }
             int64_t tmpSize = 0;
             tmpFile.size(&tmpSize);
             fileSize += tmpSize;
