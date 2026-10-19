@@ -541,6 +541,9 @@ class ParsedPGTrackData final : public ParsedTrackPrivData
     ParsedPGTrackData() = default;
     ~ParsedPGTrackData() override = default;
     void extractData(AVPacket* pkt, uint8_t* buff, int size) override;
+
+   private:
+    int64_t m_lastEnd = 0;  // the last decoding time given, in 90 kHz: the next display set does not go before it
 };
 
 typedef struct MatroskaVideoTrack : MatroskaTrack

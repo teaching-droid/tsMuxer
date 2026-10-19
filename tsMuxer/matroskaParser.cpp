@@ -9,6 +9,7 @@
 #include "bitStream.h"
 #include "hevc.h"
 #include "nalUnits.h"
+#include "textSubtitles.h"
 #include "vodCoreException.h"
 #include "vod_common.h"
 #include "vvc.h"
@@ -935,19 +936,78 @@ void ParsedPGTrackData::extractData(AVPacket* pkt, uint8_t* buff, const int size
         return;  // ignore invalid packet
     }
 
+    // ** A DISPLAY SET GETS THE DECODING TIMES OF A DISC. **
+    // Matroska keeps one time for each display set, the time it is shown, so every segment was given that time and no
+    // decoding time: a .sup demuxed from it, and a disc made from it, had the palette and the pictures decoded at the
+    // moment they were to be shown. On a disc they come before it, by the time the decoder of the subtitle plane needs:
+    // the plane is cleared at the start of an epoch, the windows are drawn, and each picture is decoded, at the pixel
+    // rates the drawn subtitles of tsMuxeR use as well (textSubtitles.h). The times are those a disc gives for the same
+    // set: PCS shown at its time and decoded at the start, WDS shown after the plane is cleared, PDS at the start, each
+    // ODS shown when it is decoded, END with the last of them. A set never starts before the last one ended.
+    using text_subtitles::PIXEL_COMPOSITION_RATE;
+    using text_subtitles::PIXEL_DECODING_RATE;
+    const auto ticks = [](const double pixels, const double rate)
+    { return static_cast<int64_t>(90000.0 * pixels / rate + 0.999); };
+    const int64_t shown = internalClockToPts(pkt->pts);
+    int64_t planeInit = 0;
+    int64_t windowsTransfer = 0;
+    std::vector<int64_t> objectDecode;  // per ODS segment: the time to decode its picture, 0 for a continuation
+    for (const uint8_t* p = buff; p <= end - 3; p += AV_RB16(p + 1) + 3)
+    {
+        const int len = AV_RB16(p + 1);
+        const uint8_t* s = p + 3;
+        if (p[0] == 0x16 && len >= 8 && (s[7] & 0x80))  // PCS, epoch start: the whole plane is cleared
+            planeInit = ticks(static_cast<double>(AV_RB16(s)) * AV_RB16(s + 2), PIXEL_COMPOSITION_RATE);
+        else if (p[0] == 0x17 && len >= 1)  // WDS: id, x, y, width, height of each window
+            for (int w = 0; w < s[0] && 1 + 9 * (w + 1) <= len; ++w)
+                windowsTransfer += ticks(static_cast<double>(AV_RB16(s + 1 + 9 * w + 5)) * AV_RB16(s + 1 + 9 * w + 7),
+                                         PIXEL_COMPOSITION_RATE);
+        else if (p[0] == 0x15)  // ODS: the first part of an object gives its size
+            objectDecode.push_back(
+                len >= 11 && (s[3] & 0x80)
+                    ? ticks(static_cast<double>(AV_RB16(s + 7)) * AV_RB16(s + 9), PIXEL_DECODING_RATE)
+                    : 0);
+    }
+    const int64_t start = (std::max)((std::min)(shown, (std::max)(m_lastEnd, shown - planeInit - windowsTransfer)),
+                                     static_cast<int64_t>(1));
+
     pkt->size = size + PG_HEADER_SIZE * blocks;
     pkt->data = new uint8_t[pkt->size];
     curPtr = buff;
     uint8_t* dst = pkt->data;
+    int64_t decoded = start;  // where the last picture decoded so far is ready
+    size_t ods = 0;
     while (curPtr <= end - 3)
     {
         const int blockSize = AV_RB16(curPtr + 1) + 3;
 
+        int64_t pts = shown;
+        int64_t dts = start;
+        switch (curPtr[0])
+        {
+        case 0x16:  // PCS
+            break;
+        case 0x17:  // WDS
+            pts = (std::max)(start, shown - windowsTransfer);
+            break;
+        case 0x14:  // PDS
+            pts = start;
+            break;
+        case 0x15:  // ODS
+            decoded = (std::min)(shown, decoded + objectDecode[ods++]);
+            pts = decoded;
+            break;
+        default:  // END and anything else: with the last picture
+            pts = dts = decoded;
+            break;
+        }
+        m_lastEnd = (std::max)(m_lastEnd, pts);
+
         dst[0] = 'P';
         dst[1] = 'G';
         const auto ptsDts = UnalignedPtr<uint32_t>(dst + 2);
-        ptsDts[0] = my_htonl(static_cast<uint32_t>(internalClockToPts(pkt->pts)));
-        ptsDts[1] = 0;
+        ptsDts[0] = my_htonl(static_cast<uint32_t>(pts));
+        ptsDts[1] = my_htonl(static_cast<uint32_t>(dts));
         dst += PG_HEADER_SIZE;
         memcpy(dst, curPtr, blockSize);
         curPtr += blockSize;
