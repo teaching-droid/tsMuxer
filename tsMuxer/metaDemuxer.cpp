@@ -738,6 +738,26 @@ void METADemuxer::openFile(const string& streamName)
         file.readLine(str);
     }
 
+    // A default= the user wrote on a subtitle line wins over one taken from a file name: a disc has one default
+    // subtitle, the first that has one, so an earlier file named "forced" took it from a later line that said
+    // default=all. The forced file keeps its forced mark for a Matroska output.
+    bool defaultWritten = false;
+    for (const auto& si : m_codecInfo)
+        if (!si.m_codec.empty() && si.m_codec[0] == 'S' && si.m_addParams.count("default") &&
+            !si.m_addParams.count("defaultfromname"))
+            defaultWritten = true;
+    for (auto& si : m_codecInfo)
+    {
+        if (!si.m_addParams.count("defaultfromname"))
+            continue;
+        si.m_addParams.erase("defaultfromname");
+        if (defaultWritten)
+        {
+            si.m_addParams.erase("default");
+            si.m_addParams.try_emplace("forced", "");
+        }
+    }
+
     auto primarySEI = H264StreamReader::SeiMethod::SEI_NotDefined;
     for (const auto& si : m_codecInfo)
     {
@@ -1464,6 +1484,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         isForcedSubtitleName(fileList[0]))
     {
         streamInfo.m_addParams["default"] = "forced";
+        streamInfo.m_addParams["defaultfromname"] = "";  // given way to a default= on another subtitle line
         LTRACE(LT_INFO, 2, "Marking this subtitle as the forced track, taken from the file name");
     }
     // With default= given, the name still says what the track is: a Matroska output marks it forced (FlagForced)
