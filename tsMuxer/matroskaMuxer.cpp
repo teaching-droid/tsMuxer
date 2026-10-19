@@ -1492,8 +1492,9 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track, i
             displayH = displayHeight;
         }
         // Written when it is not the picture size, or when the container's size overrules a shape of the stream's own:
-        // left out, a player would take the stream's.
-        const bool streamShaped = displayW != track.width || displayH != track.height;
+        // left out, a player would take the stream's. So is an ar= of the meta, which overrules the stream's shape
+        // also where it comes out at the picture size (ar=4:3 on 1440x1080 that the stream makes 16:9).
+        const bool streamShaped = displayW != track.width || displayH != track.height || track.arForced;
         if (track.srcDisplayWidth && track.srcDisplayHeight)
         {
             displayW = track.srcDisplayWidth;

@@ -914,6 +914,8 @@ static int checkedLevel(const std::string& text, const char* codec, const int sc
     return static_cast<int>(idc);
 }
 
+VideoAspectRatio arNameToCode(const string& arName);  // below, with createCodec
+
 int METADemuxer::addStream(const string& codecName, const string& codecStreamName, const map<string, string>& addParams)
 {
     // the reader's codec: the one asked for, or PGS for an ASS or SSA track drawn with libass
@@ -1334,6 +1336,22 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     }
     if (codecReader == nullptr)
         codecReader = createCodec(codec, readerParams, fileList[0], mergePlayItems(mplsInfoList));
+    // ar= on H.264, HEVC, VVC and VC-1, which was read for MPEG-2 only (createCodec) and ignored for the others
+    // without a word: a Matroska output takes it as the display size, which a player shows over the stream's own
+    // shape. MPEG-2 has the shape in its sequence header, which is rewritten; the other codecs have it in headers
+    // that are not, so any other output keeps the stream's own shape, and says so.
+    if (const auto mpegVideo = dynamic_cast<MPEGStreamReader*>(codecReader);
+        mpegVideo && codec != "V_MPEG-2" && addParams.find("ar") != addParams.end())
+    {
+        if (m_matroskaOutput)
+            mpegVideo->setAspectRatio(arNameToCode(addParams.find("ar")->second));
+        else
+            LTRACE(LT_WARN, 2,
+                   "Warning: ar= on the line of " << codec
+                                                  << " is applied to a Matroska output only. This stream gives its "
+                                                     "shape in its own headers, which are kept as they are, so this "
+                                                     "output keeps the stream's shape.");
+    }
     if (fpsFromPulldown)
         if (auto* mpegReader = dynamic_cast<MPEGStreamReader*>(codecReader))
             mpegReader->setFpsAnnounced();
