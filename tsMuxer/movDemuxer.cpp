@@ -1236,6 +1236,52 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
         return cue;
     }
 
+    // The text of a sample in UTF-8. A timed text sample may also be in UTF-16, and then it starts with a byte order
+    // mark; it was copied as UTF-8, so every letter of it came out as a broken character. A pair that is not a
+    // whole character becomes U+FFFD.
+    static std::string sampleText(const uint8_t* buff, const size_t len)
+    {
+        const bool be = len >= 2 && buff[0] == 0xFE && buff[1] == 0xFF;
+        const bool le = len >= 2 && buff[0] == 0xFF && buff[1] == 0xFE;
+        if (!be && !le)
+            return {reinterpret_cast<const char*>(buff), len};
+        const auto unitAt = [&](const size_t i)
+        { return static_cast<uint32_t>(be ? buff[i] << 8 | buff[i + 1] : buff[i + 1] << 8 | buff[i]); };
+        std::string out;
+        for (size_t i = 2; i + 1 < len; i += 2)
+        {
+            uint32_t c = unitAt(i);
+            if (c >= 0xD800 && c <= 0xDBFF && i + 3 < len && unitAt(i + 2) >= 0xDC00 && unitAt(i + 2) <= 0xDFFF)
+            {
+                c = 0x10000 + ((c - 0xD800) << 10) + (unitAt(i + 2) - 0xDC00);
+                i += 2;
+            }
+            else if (c >= 0xD800 && c <= 0xDFFF)
+                c = 0xFFFD;
+            if (c < 0x80)
+                out += static_cast<char>(c);
+            else if (c < 0x800)
+            {
+                out += static_cast<char>(0xC0 | c >> 6);
+                out += static_cast<char>(0x80 | (c & 0x3F));
+            }
+            else if (c < 0x10000)
+            {
+                out += static_cast<char>(0xE0 | c >> 12);
+                out += static_cast<char>(0x80 | (c >> 6 & 0x3F));
+                out += static_cast<char>(0x80 | (c & 0x3F));
+            }
+            else
+            {
+                out += static_cast<char>(0xF0 | c >> 18);
+                out += static_cast<char>(0x80 | (c >> 12 & 0x3F));
+                out += static_cast<char>(0x80 | (c >> 6 & 0x3F));
+                out += static_cast<char>(0x80 | (c & 0x3F));
+            }
+        }
+        return out;
+    }
+
     // One sample as an SRT cue with the styles it carries, or nothing for a sample without text
     static std::string cueFor(const uint8_t* buff, const uint8_t* end, const int64_t startTime, const int64_t endTime,
                               const int counter)
@@ -1246,7 +1292,7 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
         buff += 2;
         if (textLen == 0 || textLen > static_cast<size_t>(end - buff))
             return {};
-        std::string text(reinterpret_cast<const char*>(buff), textLen);
+        std::string text = sampleText(buff, textLen);
         buff += textLen;
         std::vector<pair<int, string>> tags;
         while (end - buff >= 8)
