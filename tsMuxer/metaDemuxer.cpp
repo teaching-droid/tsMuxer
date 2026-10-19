@@ -2030,7 +2030,7 @@ static bool isKnownTrackParam(const std::string& name)
         "forced", "hearing-impaired", "visual-impaired", "text-descriptions", "original", "commentary", "srclang",
         "srclangbcp47", "srcdefault", "srcname", "srcflags", "srccolour", "srcdisplay", "srcendpadding", "srcpgsrate",
         "srccrop", "srcfieldorder", "srcprojection", "srccodecdelay", "srcvideolead", "srcopusskip", "srcrighteye",
-        "langbcp47", "srcvpxprivate", "srccodecid", "srcstartdelay"};
+        "langbcp47", "srcvpxprivate", "srccodecid", "srcstartdelay", "srcstereomode"};
     return known.find(name) != known.end();
 }
 

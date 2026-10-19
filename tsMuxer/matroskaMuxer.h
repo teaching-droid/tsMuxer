@@ -103,6 +103,7 @@ class MatroskaMuxer final : public AbstractMuxer
         bool frameAdditions = false;  // the source stored BlockAdditions beside the frames of this track
         int64_t lastBlockRelMs = 0;   // the time of the track's last block, for a ReferenceBlock
         unsigned srcDisplayHeight = 0;
+        unsigned srcStereoMode = 0;    // the source's StereoMode (srcstereomode), 0 when it gave none
         int64_t endPaddingNs = 0;      // DiscardPadding for the track's last block (Opus, Vorbis), from the source
         uint64_t srcCodecDelayNs = 0;  // CodecDelay from the source's edit list (srccodecdelay), AAC from MP4
         bool mp3InfoChecked = false;   // the first MPEG audio frame was looked at for a Xing/Info frame

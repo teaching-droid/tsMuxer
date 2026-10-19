@@ -427,6 +427,8 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
             track.srcDisplayHeight = static_cast<unsigned>(strtoul(src->second.c_str() + x + 1, nullptr, 10));
         }
     }
+    if (const auto src = params.find("srcstereomode"); src != params.end())
+        track.srcStereoMode = static_cast<unsigned>(strtoul(src->second.c_str(), nullptr, 10));
     // "default" already exists and is documented for Blu-ray; it just never reached Matroska.
     // Its VALUE is read now. Testing only for presence meant default=0 marked the track as THE
     // default, and it also meant "no default for this type" could not be said at all, because a
@@ -1544,6 +1546,11 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track, i
             vPos += ebml_write_uint(
                 videoBuf + vPos, MATROSKA_ID_VIDEOSTEREOMODE_CURRENT,
                 m_rightEyeFirst ? MATROSKA_STEREO_BOTH_EYES_RIGHT_FIRST : MATROSKA_STEREO_BOTH_EYES_LEFT_FIRST);
+        // The source's StereoMode for a picture that holds both views itself (1 to 12: side by side, top and bottom,
+        // checkerboard, interleaved rows or columns, anaglyph), which was dropped. 13 and 14 say that a block holds
+        // two views, which only the folded 3D track above does.
+        else if (track.srcStereoMode >= 1 && track.srcStereoMode < MATROSKA_STEREO_BOTH_EYES_LEFT_FIRST)
+            vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEOSTEREOMODE_CURRENT, track.srcStereoMode);
 
         // Write Video master
         pos += ebml_write_master_open(inner.data() + pos, MATROSKA_ID_TRACKVIDEO, vPos);
