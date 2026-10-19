@@ -126,6 +126,7 @@ class PGSStreamReader final : public AbstractStreamReader
     std::map<uint8_t, text_subtitles::YUVQuad> m_palette;
     uint16_t m_scaled_width;
     uint16_t m_scaled_height;
+    uint16_t m_lineHeight = 0;  // video-height= as the line gives it
     bool m_firstRenderedPacket;
     bool m_renderedFromText;
     bool m_rateGuessed = false;

@@ -511,14 +511,28 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
                                             &m_scaled_height);
             m_render->setVideoInfo(m_scaled_width, m_scaled_height, m_frame_rate);
         }
+        // A presentation graphics plane is at most 1920x1080, on a UHD disc too. A larger stream was kept as it was,
+        // with or without a size on the line: it is scaled to 1920x1080 now.
+        const bool oversized = m_video_width > 1920 || m_video_height > 1080;
+        if (oversized && !(m_scaled_width && m_scaled_height))
+        {
+            const double rate = m_newFps != 0.0 ? m_newFps : m_frame_rate;
+            TextToPGSConverter::enlargeCrop(m_video_width, m_video_height, rate, &m_scaled_width, &m_scaled_height);
+            m_render->setVideoInfo(m_scaled_width, m_scaled_height, rate);
+        }
         uint16_t tmpWidth;
         uint16_t tmpHeight;
         // the stream's own size at the frame rate its target was chosen at, so that a stream already at the size the
         // line asks for is left as it is
         TextToPGSConverter::enlargeCrop(m_video_width, m_video_height, m_newFps != 0.0 ? m_newFps : m_frame_rate,
                                         &tmpWidth, &tmpHeight);
-        m_needRescale =
-            (m_scaled_width && m_scaled_width != tmpWidth) || (m_scaled_height && m_scaled_height != tmpHeight);
+        m_needRescale = oversized || (m_scaled_width && m_scaled_width != tmpWidth) ||
+                        (m_scaled_height && m_scaled_height != tmpHeight);
+        // At the line's rate a 720x480 stream counts as 720x576 when the line says 25 fps, so it was not scaled for
+        // video of 576 lines, and a 720x576 stream not for video of 480. A stream whose height is neither the video's
+        // nor the target's is scaled; one with the video's own height is still left as it is.
+        if (m_lineHeight && m_scaled_height && m_video_height != m_lineHeight && m_video_height != m_scaled_height)
+            m_needRescale = true;
         if (m_needRescale)
         {
             const unsigned size = m_video_width * m_video_height;
@@ -969,6 +983,7 @@ void PGSStreamReader::setVideoInfo(const uint16_t width, const uint16_t height, 
 {
     m_scaled_width = width;
     m_scaled_height = height;
+    m_lineHeight = height;
     m_newFps = fps;
     // the size at the frame rate of the line: it was chosen before the rate was known, so that a line for video of
     // 720x576 at 25 fps asked for 720x480, and a PGS stream at 720x576 was scaled down to it. Without a rate on the
