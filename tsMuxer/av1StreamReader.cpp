@@ -240,21 +240,35 @@ CheckStreamRez AV1StreamReader::checkStream(uint8_t* buffer, const int len)
     bool foundSeqHdr = false;
     bool foundFrame = false;
 
+    // ** AV1 BEGINS AT THE FRONT, AND EVERY START CODE IN IT IS AN OBU. **
+    // The scan used to walk every start code anywhere in the buffer, skipping those that were not followed by an OBU
+    // header, and to accept a sequence header and a frame header found anywhere in it. A raw file that every earlier
+    // reader had refused, such as AC-3 or DTS with a few bytes between two frames, has start codes inside its audio by
+    // chance, so it was listed as AV1 with a picture size read out of audio bytes, and a mux of it said "successful".
+    // An AV1 stream framed with start codes, which is what the low overhead file is converted to above and what a
+    // container hands over, starts with one, and the emulation prevention bytes keep any other one out of the OBUs:
+    // so the data has to begin with a start code, and the first start code that is not followed by an AV1 OBU header
+    // ends the probe with no AV1 found.
+    int leadingZeros = 0;
+    while (leadingZeros < scanLen && leadingZeros <= 16 && buffer[leadingZeros] == 0) leadingZeros++;
+    if (leadingZeros < 2 || leadingZeros > 16 || leadingZeros >= scanLen || buffer[leadingZeros] != 1)
+        return rez;
+
     for (uint8_t* nal = NALUnit::findNextNAL(buffer, end); nal < end - 2; nal = NALUnit::findNextNAL(nal, end))
     {
         Av1ObuHeader obuHdr;
         const int hdrLen = obuHdr.parse(nal, end);
         if (hdrLen < 0)
-            continue;
+            return rez;
 
         uint8_t* nextNal = NALUnit::findNALWithStartCode(nal, end, true);
         if (!m_eof && nextNal == end)
             break;
 
-        // Validate OBU type is a known AV1 type (reject random byte patterns)
+        // A type AV1 does not define
         const int typeInt = static_cast<int>(obuHdr.obu_type);
-        if (typeInt < 0 || (typeInt > 8 && typeInt != 15))
-            continue;
+        if (typeInt <= 0 || (typeInt > 8 && typeInt != 15))
+            return rez;
 
         if (!foundSeqHdr && obuHdr.obu_type == Av1ObuType::SEQUENCE_HEADER)
         {
