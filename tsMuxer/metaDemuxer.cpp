@@ -1651,17 +1651,38 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         // the log still says "Mux successful complete". A first file smaller than one read block
         // vanished completely. Asking the container is not worth silently dropping a reel, and an
         // explicit lang= still works on joined tracks.
-        if (const auto demuxerIt = fileList.size() == 1 && !anyPart ? m_containerReader.m_demuxers.find(fileList[0])
-                                                                    : m_containerReader.m_demuxers.end();
-            demuxerIt != m_containerReader.m_demuxers.end() && demuxerIt->second.m_demuxer)
+        //
+        // A join of Matroska files is asked through a reader of its own on the first file, which reads that file's
+        // header and nothing of the join's stream. Not asked, a joined track lost its language, and a joined 3D file
+        // whose base view is the right eye was written with the eyes swapped (StereoMode 13 in place of 14).
+        AbstractDemuxer* factsDemuxer = nullptr;
+        std::unique_ptr<AbstractDemuxer> joinProbe;
+        if (fileList.size() == 1 && !anyPart)
+        {
+            if (const auto demuxerIt = m_containerReader.m_demuxers.find(fileList[0]);
+                demuxerIt != m_containerReader.m_demuxers.end())
+                factsDemuxer = demuxerIt->second.m_demuxer;
+        }
+        else if (fileList.size() > 1)
+        {
+            const std::string first = unquoteStr(trimStr(fileList[0]));
+            const std::string ext = strToUpperCase(extractFileExt(first));
+            if (ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM")
+            {
+                joinProbe = std::make_unique<MatroskaDemuxer>(m_readManager);
+                joinProbe->openFile(first);
+                factsDemuxer = joinProbe.get();
+            }
+        }
+        if (factsDemuxer)
         {
             std::map<int32_t, TrackInfo> trackList;
-            demuxerIt->second.m_demuxer->getTrackList(trackList);
+            factsDemuxer->getTrackList(trackList);
             // A line naming a track the file does not have, or one its reader leaves out, made an empty output: the
             // job went on, said it was successful, and warned that the codec on the line was not the codec of the
             // track. It stops here, before anything is written. Only for Matroska and MP4, whose headers list every
             // track; a transport or program stream is listed from its first part only, and a track may start later.
-            AbstractDemuxer* const fileDemuxer = demuxerIt->second.m_demuxer;
+            AbstractDemuxer* const fileDemuxer = factsDemuxer;
             if (pid > 0 && !SubTrackFilter::isSubTrack(pid) && !trackList.empty() &&
                 (dynamic_cast<MatroskaDemuxer*>(fileDemuxer) || dynamic_cast<MovDemuxer*>(fileDemuxer)))
             {
@@ -1699,9 +1720,10 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                     streamInfo.m_lang = trackIt->second.m_lang;
                     streamInfo.m_langBCP47 = trackIt->second.m_langBCP47;
                 }
-                // Under their own keys, which only the Matroska muxer reads, and never over what the meta says.
+                // Under their own keys, which only the Matroska muxer reads, and never over what the meta says. Of a
+                // join, the padding at the end is the last file's, which the Opus part below takes from each file.
                 for (const auto& [key, value] : trackIt->second.m_srcParams)
-                    if (addParams.find(key) == addParams.end())
+                    if (addParams.find(key) == addParams.end() && (!joinProbe || key != "srcendpadding"))
                         streamInfo.m_addParams[key] = value;
                 if (auto* pgStream = dynamic_cast<PGSStreamReader*>(codecReader))
                     pgStream->setRateGuessed(trackIt->second.m_srcParams.count("srcpgsrate") > 0);
