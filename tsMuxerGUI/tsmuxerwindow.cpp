@@ -5246,10 +5246,21 @@ void TsMuxerWindow::onRemoveBtnClick()
         }
     }
 
-    delTracksByFileName(myUnquoteStr(ui->inputFilesLV->currentItem()->data(FileNameRole).toString()));
+    const QString removedFile = myUnquoteStr(ui->inputFilesLV->currentItem()->data(FileNameRole).toString());
+    delTracksByFileName(removedFile);
     ui->inputFilesLV->takeItem(idx);
     if (idx >= ui->inputFilesLV->count())
         idx--;
+    // A meta file edited by hand that names the removed file kept naming it, and the next mux muxed the file that had
+    // been removed. The meta file is built from the settings again, as "Remove all" does, and the box above it says so.
+    const QString meta = ui->memoMeta->toPlainText();
+    if (m_metaUserOverride && (meta.contains(QDir::toNativeSeparators(removedFile)) ||
+                               meta.contains(QDir::fromNativeSeparators(removedFile))))
+    {
+        m_metaUserOverride = false;
+        updateMetaState();
+        updateMetaLines();
+    }
 
     if (delMplsM2ts)
     {
