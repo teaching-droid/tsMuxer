@@ -1,6 +1,8 @@
 #ifndef LPCM_STREAM_READER_H_
 #define LPCM_STREAM_READER_H_
 
+#include <vector>
+
 #include "avPacket.h"
 #include "simplePacketizerReader.h"
 
@@ -43,7 +45,8 @@ class LPCMStreamReader final : public SimplePacketizerReader
     void setNewStyleAudioPES(const bool value) { m_useNewStyleAudioPES = value; }
     int getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdmvDescriptors) override;
     int getFreq() override { return m_freq; }
-    uint8_t getChannels() override { return m_channels; }
+    // what a disc's clip information and descriptor give; a demux and a Matroska output keep the WAV's own count
+    uint8_t getChannels() override { return m_demuxMode ? m_channels : static_cast<uint8_t>(bdChannels()); }
     void applyDiscoveryData(const StreamDiscoveryData& data) override;
     void fillDiscoveryData(StreamDiscoveryData& data) override;
     // void setDemuxMode(bool value) {m_demuxMode = value;}
@@ -82,6 +85,15 @@ class LPCMStreamReader final : public SimplePacketizerReader
     int32_t m_freq;
     uint8_t m_channels;
     bool m_lfeExists;
+    // ** WHERE EACH CHANNEL GOES ON A DISC. ** A Blu-ray LPCM track has a fixed set of layouts. m_bdMap gives, for each
+    // channel of the layout the WAV becomes, in WAV order, the WAV's own channel, or -1 for a silent one; empty when
+    // the WAV is written as it is. m_backCentre: the single surround of the 2/1 and 3/1 layouts. A demux and a Matroska
+    // output keep the WAV's own channels; only the disc and transport stream path use these.
+    std::vector<int> m_bdMap;
+    std::vector<uint8_t> m_bdBuffer;
+    bool m_backCentre = false;
+    [[nodiscard]] int bdChannels() const { return m_bdMap.empty() ? m_channels : static_cast<int>(m_bdMap.size()); }
+    void planBdLayout(uint32_t mask);
     int64_t m_curChunkLen;
     bool m_openSizeWaveFormat;
     // The data chunk's size was given, so m_curChunkLen reaching 0 is the end of the audio and not

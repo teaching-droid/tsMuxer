@@ -1,5 +1,6 @@
 #include "lpcmStreamReader.h"
 
+#include <algorithm>
 #include <cmath>
 #include <sstream>
 
@@ -97,7 +98,7 @@ int LPCMStreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hd
     *curPos++ = 0xff;  // stuffing_bits
 
     *curPos++ = static_cast<uint8_t>(TSDescriptorTag::LPCM);  // descriptor tag
-    const int audio_presentation_type = (m_channels > 2) ? 6 : (m_channels == 2) ? 3 : 1;
+    const int audio_presentation_type = (bdChannels() > 2) ? 6 : (bdChannels() == 2) ? 3 : 1;
     const int sampling_frequency = (m_freq == 192000) ? 5 : (m_freq == 96000) ? 4 : 1;
     *curPos++ = static_cast<uint8_t>(audio_presentation_type << 4 | sampling_frequency);
     *curPos++ = static_cast<uint8_t>((m_bitsPerSample - 12) << 4 | 0x3f);  // bits_per_sample (2 bits), stuffing_bits
@@ -110,6 +111,7 @@ int LPCMStreamReader::decodeLPCMHeader(const uint8_t* buff)
     const int audio_data_payload_size = AV_RB16(buff);
     const int channelsIndex = buff[2] >> 4;
     m_lfeExists = false;
+    m_backCentre = false;
     switch (channelsIndex)
     {
     case 0:
@@ -123,13 +125,15 @@ int LPCMStreamReader::decodeLPCMHeader(const uint8_t* buff)
     case 4:
         m_channels = 3;
         break;
+    // 2/1 and 3/1: left, right (and centre) and ONE surround, which is the back centre speaker; neither has an LFE.
+    // They were read as 2.1 and 3.1, so a demux gave the surround as the LFE.
     case 5:
         m_channels = 3;
-        m_lfeExists = true;
+        m_backCentre = true;
         break;
     case 6:
         m_channels = 4;
-        m_lfeExists = true;
+        m_backCentre = true;
         break;
     case 7:
         m_channels = 4;
@@ -217,6 +221,93 @@ void LPCMStreamReader::removeChannel(uint8_t* start, const uint8_t* end, const i
     }
 }
 
+// ** A WAV'S CHANNELS ON A DISC. ** A Blu-ray LPCM track has a fixed set of layouts: 1/0, 2/0, 3/0, 2/1, 3/1, 2/2, 3/2,
+// 3/2+LFE, 3/4 and 3/4+LFE, the single surround of 2/1 and 3/1 being the back centre. The layout was chosen by the
+// number of channels and the LFE bit alone, so a WAV whose speakers are not one of them went onto the disc in the wrong
+// places: the LFE of 2.1 and 3.1 played as the surround, the centre of 4.0 as the left surround, the LFE of 4.1 as the
+// centre, and the back centre of 6.0 as the LFE. The WAV's own speakers now choose the layout. A layout the disc has
+// is written as it is; an LFE without a layout of its own (2.1, 3.1, 4.1) and side or back pairs without a centre get
+// the next larger layout with silent channels, every channel at its own speaker; and speakers a disc has no place for
+// (a back centre beside a pair, top speakers) are refused. A mask that does not name one speaker per channel says
+// nothing, and the channels are taken as before.
+void LPCMStreamReader::planBdLayout(const uint32_t mask)
+{
+    m_bdMap.clear();
+    m_backCentre = false;
+    std::vector<uint32_t> order;  // the speaker of each channel, in the order of the WAV
+    for (uint32_t bit = 1; bit != 0; bit <<= 1)
+        if (mask & bit)
+            order.push_back(bit);
+    if (static_cast<int>(order.size()) != m_channels || m_channels < 2)
+        return;
+    const uint32_t known = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT | SPEAKER_FRONT_CENTER | SPEAKER_LOW_FREQUENCY |
+                           SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT | SPEAKER_BACK_CENTER | SPEAKER_SIDE_LEFT |
+                           SPEAKER_SIDE_RIGHT;
+    const auto refuse = [&](const char* why)
+    {
+        THROW(ERR_COMMON, "The WAV of track " << m_streamIndex << " has the speaker layout 0x" << std::hex << mask
+                                              << std::dec << ", and " << why
+                                              << " Convert it to stereo, 5.1 or 7.1 before muxing it to a disc.")
+    };
+    if (mask & ~known)
+        refuse("a Blu-ray LPCM track has no place for some of its speakers (such as top or front centre-side ones).");
+    const bool backPair = (mask & (SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT)) == (SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT);
+    const bool sidePair = (mask & (SPEAKER_SIDE_LEFT | SPEAKER_SIDE_RIGHT)) == (SPEAKER_SIDE_LEFT | SPEAKER_SIDE_RIGHT);
+    if (((mask & (SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT)) && !backPair) ||
+        ((mask & (SPEAKER_SIDE_LEFT | SPEAKER_SIDE_RIGHT)) && !sidePair) ||
+        (mask & (SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT)) != (SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT))
+        refuse("one speaker of a left and right pair is missing, which no Blu-ray LPCM layout has.");
+    const bool lfe = mask & SPEAKER_LOW_FREQUENCY;
+    const bool centre = mask & SPEAKER_FRONT_CENTER;
+    if (mask & SPEAKER_BACK_CENTER)
+    {
+        if (backPair || sidePair || lfe)
+            refuse("its back centre comes with other surround speakers or an LFE, which no Blu-ray LPCM layout has.");
+        m_backCentre = true;  // 2/1 or 3/1, in the order of the WAV
+        return;
+    }
+    // The layout on the disc, in the order of a WAV: what the code below and convertWavToPCM's remap expect
+    std::vector<uint32_t> target;
+    const uint32_t first = backPair ? SPEAKER_BACK_LEFT : SPEAKER_SIDE_LEFT;
+    const uint32_t second = backPair ? SPEAKER_BACK_RIGHT : SPEAKER_SIDE_RIGHT;
+    if (!backPair && !sidePair)
+    {
+        if (!lfe)
+            return;  // 2/0 or 3/0
+        target = {SPEAKER_FRONT_LEFT,    SPEAKER_FRONT_RIGHT, SPEAKER_FRONT_CENTER,
+                  SPEAKER_LOW_FREQUENCY, SPEAKER_BACK_LEFT,   SPEAKER_BACK_RIGHT};
+    }
+    else if (backPair != sidePair)
+    {
+        if (centre || !lfe)
+            return;  // 2/2, 3/2 or 3/2+LFE
+        target = {SPEAKER_FRONT_LEFT, SPEAKER_FRONT_RIGHT, SPEAKER_FRONT_CENTER, SPEAKER_LOW_FREQUENCY, first, second};
+    }
+    else
+    {
+        if (centre)
+            return;  // 3/4 or 3/4+LFE
+        target = {SPEAKER_FRONT_LEFT, SPEAKER_FRONT_RIGHT, SPEAKER_FRONT_CENTER};
+        if (lfe)
+            target.push_back(SPEAKER_LOW_FREQUENCY);
+        for (const uint32_t s : {SPEAKER_BACK_LEFT, SPEAKER_BACK_RIGHT, SPEAKER_SIDE_LEFT, SPEAKER_SIDE_RIGHT})
+            target.push_back(s);
+    }
+    for (const uint32_t speaker : target)
+    {
+        const auto at = std::find(order.begin(), order.end(), speaker);
+        m_bdMap.push_back(at == order.end() ? -1 : static_cast<int>(at - order.begin()));
+    }
+    if (bdChannels() > 6 && m_freq == 192000)
+        refuse(
+            "with silent channels added for a disc layout it would have more than the 6 channels a disc carries at "
+            "192 kHz.");
+    LTRACE(LT_INFO, 2,
+           "The WAV of track " << m_streamIndex << " has " << static_cast<int>(m_channels)
+                               << " channels in a layout a Blu-ray does not have; it is written with " << bdChannels()
+                               << " channels, the missing ones silent, each channel at its own speaker.");
+}
+
 int LPCMStreamReader::convertWavToPCM(uint8_t* start, uint8_t* end)
 {
     // int mch = m_channels; // + (m_channels%2==1 ? 1 : 0);
@@ -228,7 +319,6 @@ int LPCMStreamReader::convertWavToPCM(uint8_t* start, uint8_t* end)
     cLen -= cLen % fullSampleSize;
     end = start + cLen;
 
-    const int64_t ch1FullSize = (end - start) / m_channels;
     // 1. convert byte order to little endian
     if (m_bitsPerSample == 16)
     {
@@ -244,46 +334,68 @@ int LPCMStreamReader::convertWavToPCM(uint8_t* start, uint8_t* end)
             curPos[2] = tmp;
         }
     }
+    // 1b. The disc layout: the WAV's channels in their places, silent channels where the layout has more (planBdLayout)
+    int ch = m_channels;
+    if (!m_bdMap.empty())
+    {
+        ch = bdChannels();
+        const int64_t samples = (end - start) / fullSampleSize;
+        m_bdBuffer.resize(static_cast<size_t>(samples * ch * ch1SampleSize));
+        uint8_t* out = m_bdBuffer.data();
+        for (const uint8_t* in = start; in < end; in += fullSampleSize)
+            for (const int from : m_bdMap)
+            {
+                if (from >= 0)
+                    memcpy(out, in + from * ch1SampleSize, ch1SampleSize);
+                else
+                    memset(out, 0, ch1SampleSize);
+                out += ch1SampleSize;
+            }
+        start = m_bdBuffer.data();
+        end = start + m_bdBuffer.size();
+    }
+    const int64_t chFullSize = (end - start) / ch;
     // 2. Remap channels to Blu-ray standard
-    if (m_channels == 6)
+    if (ch == 6)
     {
-        const auto tmpData = new uint8_t[ch1FullSize];
-        storeChannelData(start, end, 4, tmpData, m_channels);    // copy channel 6(LFE) to tmpData
-        copyChannelData(start, end, 5, 4, m_channels);           // Shift RS
-        copyChannelData(start, end, 6, 5, m_channels);           // Shift LS
-        restoreChannelData(start, end, 6, tmpData, m_channels);  // copy LFE to channel #4
+        const auto tmpData = new uint8_t[chFullSize];
+        storeChannelData(start, end, 4, tmpData, ch);    // copy channel 6(LFE) to tmpData
+        copyChannelData(start, end, 5, 4, ch);           // Shift RS
+        copyChannelData(start, end, 6, 5, ch);           // Shift LS
+        restoreChannelData(start, end, 6, tmpData, ch);  // copy LFE to channel #4
         delete[] tmpData;
     }
-    else if (m_channels == 7)
+    else if (ch == 7)
     {
-        const auto tmpData = new uint8_t[ch1FullSize];
+        const auto tmpData = new uint8_t[chFullSize];
 
-        storeChannelData(start, end, 4, tmpData, m_channels);  // copy channel 8(LFE) to tmpData
-        copyChannelData(start, end, 6, 4, m_channels);
-        copyChannelData(start, end, 5, 6, m_channels);
-        restoreChannelData(start, end, 5, tmpData, m_channels);
+        storeChannelData(start, end, 4, tmpData, ch);  // copy channel 8(LFE) to tmpData
+        copyChannelData(start, end, 6, 4, ch);
+        copyChannelData(start, end, 5, 6, ch);
+        restoreChannelData(start, end, 5, tmpData, ch);
 
         delete[] tmpData;
     }
-    else if (m_channels == 8)
+    else if (ch == 8)
     {
-        const auto lfeData = new uint8_t[ch1FullSize];
+        const auto lfeData = new uint8_t[chFullSize];
 
-        storeChannelData(start, end, 4, lfeData, m_channels);  // copy channel 8(LFE) to tmpData
-        copyChannelData(start, end, 7, 4, m_channels);
-        copyChannelData(start, end, 8, 7, m_channels);
-        restoreChannelData(start, end, 8, lfeData, m_channels);
+        storeChannelData(start, end, 4, lfeData, ch);  // copy channel 8(LFE) to tmpData
+        copyChannelData(start, end, 7, 4, ch);
+        copyChannelData(start, end, 8, 7, ch);
+        restoreChannelData(start, end, 8, lfeData, ch);
 
         delete[] lfeData;
     }
     // 3. transfer to frame buffer and Add X channel (zero channel for padding if needed)
     uint8_t* dst = m_tmpFrameBuffer + (m_needPCMHdr ? 4 : 0);
     const uint8_t* src = start;
-    for (; src < end; src += fullSampleSize)
+    const int outSampleSize = ch * ch1SampleSize;
+    for (; src < end; src += outSampleSize)
     {
-        memcpy(dst, src, fullSampleSize);
-        dst += fullSampleSize;
-        if (m_channels % 2 == 1)
+        memcpy(dst, src, outSampleSize);
+        dst += outSampleSize;
+        if (ch % 2 == 1)
         {
             memset(dst, 0, ch1SampleSize);
             dst += ch1SampleSize;
@@ -294,21 +406,24 @@ int LPCMStreamReader::convertWavToPCM(uint8_t* start, uint8_t* end)
     if (m_needPCMHdr)
     {
         const int audio_data_payload_size = (m_bitsPerSample == 20 ? 24 : m_bitsPerSample) * m_freq *
-                                            ((m_channels + 1) & 0xfe) / 8 / 200;  // 5 ms frame len. 1000/5 = 200
+                                            ((ch + 1) & 0xfe) / 8 / 200;  // 5 ms frame len. 1000/5 = 200
         // int audio_data_payload_size = dst - (m_tmpFrameBuffer + 4);
         m_tmpFrameBuffer[0] = static_cast<uint8_t>(audio_data_payload_size >> 8);
         m_tmpFrameBuffer[1] = audio_data_payload_size & 0xff;
         int channelsIndex = 1;
-        switch (m_channels)
+        switch (ch)
         {
         case 2:
             channelsIndex = 3;
             break;
+        // 3/0 or 2/1, 2/2 or 3/1: the single surround of 2/1 and 3/1 is the back centre (m_backCentre). A WAV with an
+        // LFE and three or four channels has no layout of its own on a disc: planBdLayout gives it 3/2+LFE. It got the
+        // 2/1 and 3/1 codes, so its LFE played as the surround.
         case 3:
-            channelsIndex = 4 + (m_lfeExists ? 1 : 0);
+            channelsIndex = m_backCentre ? 5 : 4;
             break;
         case 4:
-            channelsIndex = 6 + (m_lfeExists ? 0 : 1);
+            channelsIndex = m_backCentre ? 6 : 7;
             break;
         case 5:
             channelsIndex = 8;
@@ -490,6 +605,7 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
             if (waveFormatPCMEx->Samples.wValidBitsPerSample)
                 m_bitsPerSample = waveFormatPCMEx->Samples.wValidBitsPerSample;
             m_lfeExists = waveFormatPCMEx->dwChannelMask & SPEAKER_LOW_FREQUENCY;
+            planBdLayout(waveFormatPCMEx->dwChannelMask);
             if (!(waveFormatPCMEx->SubFormat == KSDATAFORMAT_SUBTYPE_PCM))
                 THROW(ERR_COMMON, "Unsupported WAVE format. Only PCM audio is supported.")
         }
@@ -549,6 +665,8 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
         }
         else
             THROW(ERR_COMMON, "Unsupported WAVE format. wFormatTag: " << waveFormatPCMEx->wFormatTag)
+        if (waveFormatPCMEx->wFormatTag == 0x01 && m_channels > 2)
+            planBdLayout(getWaveChannelMask(m_channels, m_lfeExists));
         // A Wave64 chunk is padded to 8 bytes: an 18 byte format (42 with its header) has 6 pad bytes,
         // and the chunks after it were looked for from inside them.
         if (m_headerType == LPCMHeaderType::htWAVE64)
@@ -881,7 +999,7 @@ int LPCMStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
             waveFormatPCMEx->wBitsPerSample = bitsPerSample;
             waveFormatPCMEx->cbSize = 22;  // After this to GUID
             waveFormatPCMEx->Samples.wValidBitsPerSample = m_bitsPerSample;
-            waveFormatPCMEx->dwChannelMask = getWaveChannelMask(m_channels, m_lfeExists);  // Specify PCM
+            waveFormatPCMEx->dwChannelMask = getWaveChannelMask(m_channels, m_lfeExists, m_backCentre);  // Specify PCM
             waveFormatPCMEx->SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
             curPos += sizeof(WAVEFORMATPCMEX);
             if (m_demuxToW64)
@@ -1215,7 +1333,7 @@ int LPCMStreamReader::flushPacket(AVPacket& avPacket)
     if (m_frameRest > 0 && !m_demuxMode)
     {
         const int32_t samplesRest = m_frameRest / m_channels;
-        m_frameRest = samplesRest * ((m_channels + 1) & 0xfe);
+        m_frameRest = samplesRest * ((bdChannels() + 1) & 0xfe);
         m_frameRest -= avPacket.size - (m_needPCMHdr ? 4 : 0);
         if (avPacket.data != nullptr && m_frameRest > 0)
         {

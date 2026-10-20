@@ -6,8 +6,12 @@
 
 namespace wave_format
 {
-uint32_t getWaveChannelMask(const int channels, const bool lfeExists)
+uint32_t getWaveChannelMask(const int channels, const bool lfeExists, const bool backCentre)
 {
+    if (backCentre && channels == 3)
+        return SPEAKER_FRONT_LEFT + SPEAKER_FRONT_RIGHT + SPEAKER_BACK_CENTER;
+    if (backCentre && channels == 4)
+        return SPEAKER_FRONT_LEFT + SPEAKER_FRONT_RIGHT + SPEAKER_FRONT_CENTER + SPEAKER_BACK_CENTER;
     switch (channels)
     {
     case 1:
