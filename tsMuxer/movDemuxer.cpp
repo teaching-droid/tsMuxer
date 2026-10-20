@@ -1089,6 +1089,15 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
     {
         if (sttsCnt == 0)
         {
+            // A fragmented file gives the durations of its samples in its fragments, after those its moov has: the
+            // table ran out, and such a file could not even be listed ("invalid stts index").
+            if (sttsPos + 1 >= static_cast<int64_t>(m_sc->stts_data.size()) && fragPos < m_sc->fragDur.size())
+            {
+                if (m_sc->time_scale == 0)
+                    THROW(ERR_MOV_PARSE, "MP4/MOV error: text track #"
+                                             << m_sc->ffindex << " has a time scale of 0 in its media header (mdhd)")
+                return m_sc->fragDur[fragPos++];
+            }
             sttsPos++;
             if (sttsPos >= static_cast<unsigned>(m_sc->stts_data.size()))
                 THROW(ERR_MOV_PARSE, "MP4/MOV error: invalid stts index for SRT track #"
@@ -1111,6 +1120,7 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
         m_size = size;
         sttsCnt = 0;
         sttsPos = -1;
+        fragPos = 0;
     }
 
     void extractData(AVPacket* pkt, uint8_t* buff, const int size) override
@@ -1141,6 +1151,7 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
     {
         const int64_t savedSttsPos = sttsPos;
         const int64_t savedSttsCnt = sttsCnt;
+        const size_t savedFragPos = fragPos;
         size_t indexCur = m_sc->m_indexCur;
         int64_t timeOffset = m_timeOffset;
         int counter = m_packetCnt;
@@ -1194,6 +1205,7 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
         {
             sttsPos = savedSttsPos;
             sttsCnt = savedSttsCnt;
+            fragPos = savedFragPos;
         }
         return out;
     }
@@ -1382,6 +1394,8 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
     int m_packetCnt;
     int64_t sttsPos;
     int64_t sttsCnt;
+    // the next sample duration of the fragments
+    size_t fragPos = 0;
     int64_t m_timeOffset;  // in the track's time scale
     bool m_wvtt;
 };
