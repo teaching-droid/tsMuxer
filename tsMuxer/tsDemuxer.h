@@ -30,29 +30,28 @@ class TSDemuxer final : public AbstractDemuxer
     void setFileIterator(FileNameIterator* itr) override;
     int64_t getTrackDelay(const int32_t pid) override
     {
-        // Track delay must be measured against the FIRST timestamp seen for each PID, not the
-        // smallest one. m_firstVideoPTS / m_firstPtsTime are running minima (they are used
-        // elsewhere to measure the presented span of a clip), so on an open-GOP stream whose
-        // leading B pictures are presented before the first coded picture they report the
-        // display start instead of the stream's anchor. The muxer anchors every track on its
-        // first coded unit, so the delay written here has to use the same reference or the
-        // reorder lead-in is silently dropped on demux/remux.
-        //
-        // Found on AVCHD .MTS clips from a Sony ZV-1, which writes its audio 80 ms ahead of the
-        // video and opens with two leading B pictures: the minimum video PTS then equals the
-        // audio's first PTS, the delay computes as 0, and a zero is not reported at all, so the
-        // offset was silently lost on a demux and remux. Clips from a Panasonic Lumix DMC-TZ110
-        // do not reproduce it, because their first coded picture is also their first displayed
-        // one. Nothing here is specific to AVCHD; that is only where it was noticed.
+        // The delay of a stream is measured from the FIRST timestamp seen for it, not its smallest one. Of the sound
+        // it is measured against the picture the video reader shows first, as the mux applies it (getTrackStart):
+        // the readers of H.264, MPEG-2 and VC-1 show first the pictures that follow the first coded picture of an open
+        // GOP at the start and are shown before it, so that is the smallest PTS of the video. Against the first coded
+        // picture, as it was, the sound of such a cut came that much early, 40 ms for H.264 behind one B picture. A
+        // video stream is measured against the first video PES, as before, so the video itself has no delay.
+        const auto stream = m_pmt.pidList.find(pid);
+        int64_t clockTicks = 0;
+        if (m_firstVideoPTS != -1 && stream != m_pmt.pidList.end() && !isVideoPID(stream->second.m_streamType) &&
+            getTrackStart(pid, m_videoTimedFromFirstPes, clockTicks))
+            return llround(static_cast<double>(clockTicks) / 90.0);  // convert to ms
         if (m_firstPtsTime.find(pid) != m_firstPtsTime.end())
         {
-            const int64_t clockTicks =
-                m_firstPtsTime[pid] - (m_firstSeenVideoPTS != -1 ? m_firstSeenVideoPTS : m_firstSeenPTS);
+            clockTicks = m_firstPtsTime[pid] - (m_firstSeenVideoPTS != -1 ? m_firstSeenVideoPTS : m_firstSeenPTS);
             return llround(static_cast<double>(clockTicks) / 90.0);  // convert to ms
         }
 
         return 0;
     }
+    // The video is timed from its first PES (getTrackStart): an HEVC stream that begins with a random access picture,
+    // whose leading pictures the reader times before it, as a decoder leaves them out
+    void setVideoTimedFromFirstPes(const bool fromFirstPes) { m_videoTimedFromFirstPes = fromFirstPes; }
     // Where a stream starts against the video, in 90 kHz ticks, for the mux (METADemuxer::addStream): its first PTS
     // less the smallest PTS of the video read so far, or with fromFirstPes the PTS of the first video PES, across a
     // wrap of the 33 bit clock. False while no PES of the stream or of the video has been read.
@@ -184,6 +183,7 @@ class TSDemuxer final : public AbstractDemuxer
     int64_t m_firstSeenVideoPTS;  // first PTS seen on a video PID, in file order (never a minimum)
     int64_t m_videoPesRead = 0;   // see videoPesRead
     int m_firstVideoPid = -1;     // see firstVideoPid
+    bool m_videoTimedFromFirstPes = false;
     int64_t m_lastVideoPTS;
     int64_t m_lastVideoDTS;
     int64_t m_videoDtsGap;

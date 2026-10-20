@@ -122,7 +122,21 @@ static void readLateTracks(AbstractDemuxer* demuxer, DemuxedData& demuxedData,
     }
 }
 
-// The first coded picture of an HEVC stream of a transport stream file is a random access picture (IDR, CRA or BLA)
+// The first coded picture of an HEVC elementary stream is a random access picture (IDR, CRA or BLA); -1 while the data
+// holds no slice
+static int hevcStartsAtRandomAccess(StreamData& es)
+{
+    uint8_t* const end = es.data() + es.size();
+    for (uint8_t* nal = NALUnit::findNextNAL(es.data(), end); nal < end; nal = NALUnit::findNextNAL(nal, end))
+    {
+        const int type = (*nal >> 1) & 0x3f;
+        if (type < 32)  // the first slice
+            return type >= 16 && type <= 23 ? 1 : 0;
+    }
+    return -1;
+}
+
+// The same for the HEVC stream of a transport stream file
 static bool tsHevcStartsAtRandomAccess(const BufferedReaderManager& readManager, const std::string& fileName,
                                        const int pid)
 {
@@ -138,14 +152,8 @@ static bool tsHevcStartsAtRandomAccess(const BufferedReaderManager& readManager,
     for (int block = 0; block < 16; block++)
     {
         const bool eof = probe.simpleDemuxBlock(demuxedData, video, discardedSize) == BufferedReader::DATA_EOF;
-        StreamData& es = demuxedData[pid];
-        uint8_t* const end = es.data() + es.size();
-        for (uint8_t* nal = NALUnit::findNextNAL(es.data(), end); nal < end; nal = NALUnit::findNextNAL(nal, end))
-        {
-            const int type = (*nal >> 1) & 0x3f;
-            if (type < 32)  // the first slice
-                return type >= 16 && type <= 23;
-        }
+        if (const int randomAccess = hevcStartsAtRandomAccess(demuxedData[pid]); randomAccess >= 0)
+            return randomAccess == 1;
         if (eof)
             break;
     }
@@ -3173,6 +3181,16 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
         for (unsigned i = 0; i < DETECT_STREAM_BUFFER_SIZE / fileBlockSize; i++)
             demuxer->simpleDemuxBlock(demuxedData, acceptedPidSet, discardedSize);
         readLateTracks(demuxer.get(), demuxedData, acceptedPidMap, discardedSize);
+        // The Stream delay of the sound is taken against the picture the video reader shows first, as the mux takes it
+        // (tsTrackStart): an HEVC stream that begins with a random access picture is timed from that picture
+        if (auto* ts = dynamic_cast<TSDemuxer*>(demuxer.get()))
+        {
+            const auto video = acceptedPidMap.find(ts->firstVideoPid());
+            const auto data = demuxedData.find(ts->firstVideoPid());
+            ts->setVideoTimedFromFirstPes(video != acceptedPidMap.end() &&
+                                          video->second.m_trackType == static_cast<int>(StreamType::VIDEO_H265) &&
+                                          data != demuxedData.end() && hevcStartsAtRandomAccess(data->second) == 1);
+        }
 
         for (auto& itr : demuxedData)
         {
