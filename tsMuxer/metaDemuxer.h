@@ -118,6 +118,7 @@ class ContainerToReaderWrapper final : public AbstractReader
 
         DemuxerData& m_demuxerData;
         int m_pid;
+        int64_t m_readAheadTo = INT64_MIN;  // setReadAhead
     };
 
     ContainerToReaderWrapper(const METADemuxer& owner, const BufferedReaderManager& readManager)
@@ -159,6 +160,10 @@ class ContainerToReaderWrapper final : public AbstractReader
     int64_t getTrackClipStart(uint32_t readerID);
     // The gaps the demuxer found in the stream's times (see AbstractDemuxer::takeTimeGaps).
     std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(uint32_t readerID);
+    // A track whose packets are sparse (subtitles) and due before the others of its file, by a negative timeshift:
+    // while it has none, its file is read on up to this time (the internal clock of the demuxer's packets), so that
+    // they are there when due.
+    void setReadAhead(uint32_t readerID, int64_t until);
 
    private:
     int64_t m_discardedSize;
@@ -297,6 +302,7 @@ class METADemuxer final : public AbstractDemuxer
     double m_lastProgress = 0.0;                // the last value printed
     int64_t m_totalSize;
     bool m_flushDataMode;
+    int64_t m_muxPos = 0;  // the time of the packet given out last, for setReadAhead
     const BufferedReaderManager& m_readManager;
     std::string m_streamName;
     std::vector<StreamInfo> m_codecInfo;

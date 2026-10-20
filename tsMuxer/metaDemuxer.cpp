@@ -456,6 +456,13 @@ int METADemuxer::readPacket(AVPacket& avPacket)
                 StreamInfo& streamInfo = m_codecInfo[i];
                 if (!m_flushDataMode)
                 {
+                    // A negative timeshift: its packets are due this much before their place in the file. 10 s
+                    // more, as the time a file has been read to is that of its latest packet, and a transport
+                    // stream carries its video well ahead of a subtitle that is due at the same time.
+                    if (streamInfo.m_timeShift < 0)
+                        if (auto* wrapper = dynamic_cast<ContainerToReaderWrapper*>(streamInfo.m_dataReader))
+                            wrapper->setReadAhead(streamInfo.m_readerID,
+                                                  m_muxPos - streamInfo.m_timeShift + 10 * INTERNAL_PTS_FREQ);
                     streamInfo.lastReadRez = streamInfo.read();
                     if (streamInfo.lastReadRez == BufferedFileReader::DATA_DELAYED)
                         continue;  // skip stream
@@ -499,6 +506,7 @@ int METADemuxer::readPacket(AVPacket& avPacket)
         }
         if (minDtsIndex != -1)
         {
+            m_muxPos = (std::max)(m_muxPos, minDts);
             if (!m_flushDataMode)
             {
                 if (m_codecInfo[minDtsIndex].lastReadRez != BufferedFileReader::DATA_EOF2)
@@ -4396,6 +4404,25 @@ uint8_t* ContainerToReaderWrapper::readBlock(const int readerID, uint32_t& readC
 
     readCnt = static_cast<uint32_t>((FFMIN(streamData.size(), nFileBlockSize) - m_readBuffOffset));
     const DemuxerReadPolicy policy = demuxerData.m_pids[pid];
+    // ** A SUBTITLE DUE BEFORE ITS PLACE IN THE FILE IS READ AHEAD FOR. ** The packets of a sparse track are taken
+    // as the file is read for the other tracks, so with a negative timeshift each came as late as the shift: every
+    // PGS of a Matroska file with timeshift=-3000ms reached the output 1.7 to 2.5 s after it was due, and of a disc
+    // clip the same. While such a track has nothing buffered, the file is read on to the time its next packet can
+    // be due at (setReadAhead), where the demuxer says how far it has read (Matroska, transport stream), as long as
+    // no track of the file holds a quarter of the buffer limit.
+    const int64_t aheadTo = itr->second.m_readAheadTo;
+    const auto readAhead = [&]()
+    {
+        if (aheadTo == INT64_MIN || policy != DemuxerReadPolicy::drpFragmented)
+            return false;
+        const int64_t at = demuxerData.m_demuxer->getDemuxedTime();
+        if (at < 0 || at >= aheadTo)
+            return false;
+        for (const auto& [otherPid, otherData] : demuxerData.demuxedData)
+            if (otherData.size() > MAX_DEMUX_BUFFER_SIZE / 4)
+                return false;
+        return true;
+    };
     if ((readCnt > 0 && (policy == DemuxerReadPolicy::drpFragmented || demuxerData.lastReadCnt[pid] == DATA_EOF2 ||
                          demuxerData.lastReadCnt[pid] == DATA_EOF2)) ||
         readCnt >= MIN_READED_BLOCK)
@@ -4404,7 +4431,7 @@ uint8_t* ContainerToReaderWrapper::readBlock(const int readerID, uint32_t& readC
         demuxerData.lastReadCnt[pid] = readCnt;
         demuxerData.lastReadRez[pid] = 0;
     }
-    else if (demuxerData.lastReadRez[pid] != DATA_DELAYED || demuxerData.m_allFragmented)
+    else if (demuxerData.lastReadRez[pid] != DATA_DELAYED || demuxerData.m_allFragmented || readAhead())
     {
         int demuxRez;
         do
@@ -4430,8 +4457,9 @@ uint8_t* ContainerToReaderWrapper::readBlock(const int readerID, uint32_t& readC
             }
             m_discardedSize += discardSize;
             readCnt = static_cast<uint32_t>((FFMIN(streamData.size(), nFileBlockSize) - m_readBuffOffset));
-        } while (demuxRez == 0 && readCnt < MIN_READED_BLOCK && policy != DemuxerReadPolicy::drpFragmented &&
-                 !m_terminated);
+        } while (demuxRez == 0 && !m_terminated &&
+                 ((readCnt < MIN_READED_BLOCK && policy != DemuxerReadPolicy::drpFragmented) ||
+                  (readCnt == 0 && readAhead())));
 
         demuxerData.lastReadCnt[pid] = readCnt;
         data = streamData.data();
@@ -4471,6 +4499,13 @@ const uint8_t* ContainerToReaderWrapper::getTrackCodecPrivate(const uint32_t rea
     }
     const ReaderInfo& ri = it->second;
     return ri.m_demuxerData.m_demuxer->getTrackCodecPrivate(ri.m_pid, size);
+}
+
+void ContainerToReaderWrapper::setReadAhead(const uint32_t readerID, const int64_t until)
+{
+    const auto it = m_readerInfo.find(readerID);
+    if (it != m_readerInfo.end())
+        it->second.m_readAheadTo = until;
 }
 
 std::vector<std::pair<int64_t, int64_t>> ContainerToReaderWrapper::takeTimeGaps(const uint32_t readerID)

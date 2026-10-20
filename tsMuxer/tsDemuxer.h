@@ -76,6 +76,14 @@ class TSDemuxer final : public AbstractDemuxer
     void setLaterFiles(const std::vector<std::string>& files) { m_laterFiles = files; }
     void setMPLSInfo(const std::vector<MPLSPlayItem>& mplsInfo) { m_mplsInfo = mplsInfo; }
     [[nodiscard]] int64_t getFileDurationNano() const override;
+    // The latest PES time read, on the PGS timeline the PES headers are rewritten to (see AbstractDemuxer)
+    [[nodiscard]] int64_t getDemuxedTime() const override
+    {
+        if (m_lastPTS == -1)
+            return -1;
+        const int64_t ptsBase = m_firstVideoPTS != -1 ? m_firstVideoPTS : m_firstPTS;
+        return (m_lastPTS - ptsBase + m_prevFileLen) * INT_FREQ_TO_TS_FREQ;
+    }
 
    private:
     [[nodiscard]] bool mvcContinueExpected() const;

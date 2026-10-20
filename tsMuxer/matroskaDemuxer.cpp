@@ -747,6 +747,8 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
                 pkt->pts = timecode == AV_NOPTS_VALUE
                                ? AV_NOPTS_VALUE
                                : toInternal(timecode) + timelineShiftNs * (INTERNAL_PTS_FREQ / 1000000) / 1000;
+                if (pkt->pts != AV_NOPTS_VALUE)
+                    m_demuxedTime = (std::max)(m_demuxedTime, pkt->pts);
                 pkt->pos = pos;
                 const double trackScale = tracks[track]->timestampScale > 0 ? tracks[track]->timestampScale : 1.0;
                 pkt->duration =

@@ -201,6 +201,8 @@ class AbstractDemuxer
     // Gaps in a track's times the demuxer has found, taken out once asked for: (where, how long), in ns on the clock
     // of the track's reader (AbstractStreamReader::addTimeGap)
     virtual std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(int pid) { return {}; }
+    // The time the demuxer has read the file up to, on the internal clock its packets carry; -1 where it cannot say
+    [[nodiscard]] virtual int64_t getDemuxedTime() const { return -1; }
     // Keep them for this track from now on; only the tracks asked for are kept, so that nothing piles up for a
     // track nobody muxes
     virtual void keepBlockAdditions(int pid) {}

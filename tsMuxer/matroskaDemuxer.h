@@ -69,6 +69,7 @@ class MatroskaDemuxer final : public IOContextDemuxer
     const uint8_t* getTrackCodecPrivate(int32_t pid, int& size) override;
 
     [[nodiscard]] int64_t getFileDurationNano() const override { return fileDuration; }
+    [[nodiscard]] int64_t getDemuxedTime() const override { return m_demuxedTime; }
     bool getVideoSpanNano(int64_t& startNano, int64_t& endNano) override;
 
     // Fetch an attached file by name. The bytes are read from the file when asked for, not held
@@ -246,6 +247,7 @@ class MatroskaDemuxer final : public IOContextDemuxer
 
     std::map<uint64_t, AVChapter> chapters;
     MemoryBlock m_tmpBuffer;
+    int64_t m_demuxedTime = -1;  // the latest block time read, as the packets carry it (getDemuxedTime)
 };
 
 #endif
