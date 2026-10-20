@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 
 #include <fs/systemlog.h>
 
@@ -956,7 +957,7 @@ void ParsedPGTrackData::extractData(AVPacket* pkt, uint8_t* buff, const int size
     using text_subtitles::PIXEL_DECODING_RATE;
     const auto ticks = [](const double pixels, const double rate)
     { return static_cast<int64_t>(90000.0 * pixels / rate + 0.999); };
-    const int64_t shown = internalClockToPts(pkt->pts);
+    int64_t shown = internalClockToPts(pkt->pts);
     int64_t planeInit = 0;
     int64_t windowsTransfer = 0;
     std::vector<int64_t> objectDecode;  // per ODS segment: the time to decode its picture, 0 for a continuation
@@ -975,6 +976,22 @@ void ParsedPGTrackData::extractData(AVPacket* pkt, uint8_t* buff, const int size
                 len >= 11 && (s[3] & 0x80)
                     ? ticks(static_cast<double>(AV_RB16(s + 7)) * AV_RB16(s + 9), PIXEL_DECODING_RATE)
                     : 0);
+    }
+    // A Matroska time is in milliseconds, so a set shown on a frame came out up to half a millisecond beside it, and
+    // after the frame where a player shows it one frame late (of 149 sets of a disc, 8 stayed on a frame). A time
+    // within a millisecond of a frame of the rate the composition names is put on that frame.
+    if (buff + 3 + 5 <= end && buff[0] == 0x16)
+    {
+        static constexpr double RATES[] = {0.0, 24000.0 / 1001, 24.0, 25.0, 30000.0 / 1001, 0.0, 50.0, 60000.0 / 1001};
+        const int rateId = buff[3 + 4] >> 4;
+        if (rateId < 8 && RATES[rateId] > 0.0)
+        {
+            const double step = 90000.0 / RATES[rateId];
+            const auto onFrame = static_cast<int64_t>(
+                std::llround(static_cast<double>(std::llround(static_cast<double>(shown) / step)) * step));
+            if (onFrame - shown <= 90 && shown - onFrame <= 90)
+                shown = onFrame;
+        }
     }
     const int64_t start = (std::max)((std::min)(shown, (std::max)(m_lastEnd, shown - planeInit - windowsTransfer)),
                                      static_cast<int64_t>(1));
