@@ -96,7 +96,10 @@ bool File::open(const char* fName, unsigned int oflag, unsigned int systemDepend
         close();
 
     int sysFlags = makeUnixOpenFlags(oflag);
-    createDir(extractFileDir(fName), true);
+    // The folder is made only for a file the open may create, as on Windows: a source that does not exist got its
+    // folders made, on a drive that is only read from as well.
+    if (sysFlags & O_CREAT)
+        createDir(extractFileDir(fName), true);
     auto fd = ::open(fName, sysFlags | systemDependentFlags, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
     openAtEnd(fd, oflag);
     m_impl = from_fd(fd);
