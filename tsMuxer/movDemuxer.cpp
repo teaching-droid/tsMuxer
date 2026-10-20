@@ -2849,12 +2849,22 @@ int MovDemuxer::mov_read_tfhd(MOVAtom atom)
     get_byte();  // version
     const int flags = get_be24();
 
-    const int track_id = static_cast<int>(get_be32());
-    if (track_id <= 0 || track_id > num_tracks)
+    // The header names its track by the track_ID of the track's tkhd, which need not be the track's place in the file:
+    // the one audio track of a fragmented file is often track 2 or 101. It was taken as the place, so such a file
+    // could not even be listed. The place is looked up; trex names the track by its track_ID as well.
+    const int fileTrackId = static_cast<int>(get_be32());
+    int track_id = 0;
+    for (int i = 0; i < num_tracks && track_id == 0; ++i)
+        if (reinterpret_cast<MOVStreamContext*>(tracks[i])->trackId == static_cast<uint32_t>(fileTrackId))
+            track_id = i + 1;
+    if (track_id == 0 && fileTrackId > 0 && fileTrackId <= num_tracks &&
+        reinterpret_cast<MOVStreamContext*>(tracks[fileTrackId - 1])->trackId == 0)
+        track_id = fileTrackId;  // a track without a tkhd track_ID: its place, as before
+    if (track_id == 0)
         return -1;
     frag->track_id = track_id;
     for (const auto& i : trex_data)
-        if (i.track_id == frag->track_id)
+        if (i.track_id == fileTrackId)
         {
             trex = &i;
             break;
