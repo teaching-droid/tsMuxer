@@ -1903,7 +1903,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     // as its Stream delay, which the window writes as timeshift=. A meta written by hand muxed every track from the
     // same moment: the sound of a file whose sound starts 0.5 s after its picture came 0.5 s early. The start is
     // applied where the meta gives no timeshift= (and the file name no delay), so a meta from the window, which
-    // carries it as timeshift=, gets it once, as before.
+    // carries it as timeshift=, gets it once, as before. A Matroska source gives the start of its tracks the same way
+    // (MatroskaDemuxer::loadTrackExtras).
     if (!timeShiftGiven)
         if (const auto start = streamInfo.m_addParams.find("srcstartdelay"); start != streamInfo.m_addParams.end())
         {

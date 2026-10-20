@@ -3597,6 +3597,52 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
         if (stereoMode > 0 && stereoMode <= MATROSKA_STEREO_BOTH_EYES_RIGHT_FIRST)
             extras["srcstereomode"] = std::to_string(stereoMode);
     }
+
+    // Where each audio and video track starts against the first video track: the time of its first block less the
+    // video's (srcstartdelay, in ns), as the listing gives it as Stream delay and the window writes it as timeshift=.
+    // The readers time a track from its own first frame, so a meta that gave no timeshift= muxed every track from the
+    // same moment: an AC-3 track whose first block is 512 ms after the first picture came 512 ms early.
+    // METADemuxer::addStream applies it where the meta gives no timeshift=, as for an MP4 source. Not for a file that
+    // plays a timeline of other files or of chapters, whose start is not that of its own blocks, nor for a track whose
+    // first block is not in the first clusters.
+    SegmentFacts facts;
+    if (!readSegmentFacts(fileName, facts) || facts.firstCluster <= 0 || !facts.prevUuid.empty() ||
+        !facts.nextUuid.empty() || (facts.defaultEdition() && facts.defaultEdition()->ordered))
+        return;
+    static constexpr int START_CLUSTERS = 64;
+    const auto firstBlock = [&](const int64_t number, int64_t& time)
+    {
+        bool found = false;
+        walkTrackBlocks(scan, facts.firstCluster, facts.segmentEnd, START_CLUSTERS, number,
+                        [&](const int64_t t, int64_t, bool, int)
+                        {
+                            time = t;
+                            found = true;
+                            return false;
+                        });
+        return found;
+    };
+    const MatroskaTrack* video = nullptr;
+    for (int i = 0; i < num_tracks && !video; i++)
+        if (tracks[i] && tracks[i]->type == MatroskaTrackType::VIDEO)
+            video = tracks[i];
+    // A Video for Windows track (V_MS/VFW/FOURCC) has no reordered frames in its mapping, and is often stamped with
+    // decode times: its first block can be a frame before its first picture is shown, and VC-1 written so started
+    // the sound a frame late. Its own start is not known from the blocks, so its file is left as it was.
+    const auto vfw = [](const MatroskaTrack* t)
+    { return t->codec_id && !strcmp(t->codec_id, MATROSKA_CODEC_ID_VIDEO_VFW_FOURCC); };
+    int64_t videoTime = 0;
+    if (!video || vfw(video) || !firstBlock(video->num, videoTime))
+        return;
+    for (int i = 0; i < num_tracks; i++)
+    {
+        int64_t time = 0;
+        if (tracks[i] && tracks[i] != video && !vfw(tracks[i]) &&
+            (tracks[i]->type == MatroskaTrackType::VIDEO || tracks[i]->type == MatroskaTrackType::AUDIO) &&
+            firstBlock(tracks[i]->num, time) && time != videoTime)
+            m_trackExtras[tracks[i]->num]["srcstartdelay"] =
+                std::to_string((time - videoTime) * static_cast<int64_t>(facts.timestampScale));
+    }
 }
 
 // The source's attachments, each a whole AttachedFile element as it stands in the file, for a Matroska output to
