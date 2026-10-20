@@ -129,8 +129,41 @@ void SRTStreamReader::saveSrtCue(const std::string& text, const double inTime, c
 
 void SRTStreamReader::setAnimation(const TextAnimation& animation) { m_animation = animation; }
 
+// A line is only taken once its line end arrives, so the last line of a file that does not end with one would stay in
+// the buffer for good, and with it the last subtitle: it is finished here, with a line end in the file's own encoding.
+void SRTStreamReader::finishLastLine()
+{
+    std::vector<uint8_t> lastLine(m_tmpBuffer.begin(), m_tmpBuffer.end());
+    if (m_charSize == 2)
+    {
+        const auto* nl = reinterpret_cast<const uint8_t*>(&m_short_N);
+        lastLine.insert(lastLine.end(), nl, nl + 2);
+    }
+    else if (m_charSize == 4)
+    {
+        const auto* nl = reinterpret_cast<const uint8_t*>(&m_long_N);
+        lastLine.insert(lastLine.end(), nl, nl + 4);
+    }
+    else
+        lastLine.push_back('\n');
+    parseText(lastLine.data(), lastLine.size());
+    m_tmpBuffer.clear();
+}
+
 void SRTStreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const bool lastBlock)
 {
+    // ** A LATER FILE OF A JOIN STARTS WHERE ITS VIDEO DOES. ** Its cues came at their own times, the times of the
+    // file before: with two files of 10 s, the second file's subtitles at 1 and 3 s came between those of the first.
+    // The lines of each later file are counted from here, and its cues are moved by where it starts (parseTime).
+    if (m_joinPending)
+    {
+        m_joinPending = false;
+        if (!m_tmpBuffer.empty())
+            finishLastLine();  // the last line of the file before ends with it
+        ++m_joinFile;
+        if (m_joinFile < m_joinStartsNs.size())
+            m_joinLines.emplace_back(m_linesRead, static_cast<double>(m_joinStartsNs[m_joinFile]) / 1e9);
+    }
     m_lastBlock = lastBlock;
     uint8_t* dataBegin = data + MAX_AV_PACKET_SIZE - m_tmpBuffer.size();
     if (!m_tmpBuffer.empty())
@@ -148,27 +181,8 @@ void SRTStreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const boo
     if (rest > 0)
         memmove(m_tmpBuffer.data(), restStart, rest);
 
-    // A line is only taken once its line end arrives, so the last line of a file that does not end
-    // with one stayed in the buffer for good, and with it the last subtitle. At the end of the file
-    // that line is finished here, with a line end in the file's own encoding.
     if (m_lastBlock && !m_tmpBuffer.empty())
-    {
-        std::vector<uint8_t> lastLine(m_tmpBuffer.begin(), m_tmpBuffer.end());
-        if (m_charSize == 2)
-        {
-            const auto* nl = reinterpret_cast<const uint8_t*>(&m_short_N);
-            lastLine.insert(lastLine.end(), nl, nl + 2);
-        }
-        else if (m_charSize == 4)
-        {
-            const auto* nl = reinterpret_cast<const uint8_t*>(&m_long_N);
-            lastLine.insert(lastLine.end(), nl, nl + 4);
-        }
-        else
-            lastLine.push_back('\n');
-        parseText(lastLine.data(), lastLine.size());
-        m_tmpBuffer.clear();
-    }
+        finishLastLine();
 }
 
 // The encoding is judged from the first block of the file, up to 2 MB. When that is plain ASCII it reads the same as
@@ -1377,6 +1391,16 @@ bool SRTStreamReader::parseTime(const string& text)
             m_inTime = timeToFloat(first);
             m_outTime = timeToFloat(second);
             m_untilNext = second.empty();
+            // the file of a join this line comes from (setBuffer): the line read is the first one kept
+            const int64_t line = m_linesRead - static_cast<int64_t>(m_sourceText.size());
+            while (!m_joinLines.empty() && line >= m_joinLines.front().first)
+            {
+                m_joinShift = m_joinLines.front().second;
+                m_joinLines.pop_front();
+            }
+            m_inTime += m_joinShift;
+            if (!m_untilNext)
+                m_outTime += m_joinShift;
             return true;
         }
     }

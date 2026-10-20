@@ -45,6 +45,12 @@ class MovDemuxer final : public IOContextDemuxer
     const uint8_t* getTrackCodecPrivate(int32_t pid, int& size) override;
     // where track pid starts against the first video track, in ns (the text reader moves its cues by it)
     [[nodiscard]] int64_t trackStartNs(const int32_t pid) const { return trackStartFromVideoNs(pid); }
+    // Where the open file of a join starts: the pictures of the files before it, as the video reader times them (the
+    // text reader moves its cues by it as well)
+    [[nodiscard]] int64_t joinStartNs() const { return m_joinStartNs; }
+    // How long the pictures of the open file last as the video reader times them, one usual picture length each; -1
+    // for a file without video
+    [[nodiscard]] int64_t videoLengthNs() const;
 
    private:
     struct MOVAtom
@@ -89,6 +95,8 @@ class MovDemuxer final : public IOContextDemuxer
     int m_pastEndWarnings = 0;   // boxes whose size reaches past the end of the file, warned once
     void warnUnreadBoxes(int64_t from) const;
     int m_joinPart = 0;  // which file of a join is open: 0 the first
+    // where the open file of a join starts (joinStartNs)
+    int64_t m_joinStartNs = 0;
     // An audio track of a join (dropJoinPriming): where its first frame plays against the join's first picture, the
     // frames handed on so far, and where the pictures of the parts so far end
     struct JoinAudio

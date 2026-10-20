@@ -23,6 +23,10 @@ class SRTStreamReader final : public AbstractStreamReader
     int flushPacket(AVPacket& avPacket) override;
     void setBuffer(uint8_t* data, uint32_t dataLen, bool lastBlock = false) override;
     int64_t getProcessedSize() override { return m_processedSize; }
+    // A join of subtitle files ("a.srt"+"b.srt"): where each file starts in the output, in ns, the first file at 0
+    // (METADemuxer gives it from the video joined from as many files). Each file's cues are moved by it.
+    void setJoinStarts(std::vector<int64_t> ns) { m_joinStartsNs = std::move(ns); }
+    void onJoinedFileStart() override { m_joinPending = true; }
     CheckStreamRez checkStream(uint8_t* buffer, int len, ContainerType containerType, int containerDataType,
                                int containerStreamIndex);
     // Kept as text the track is SRT, in Matroska S_TEXT/UTF8; otherwise it is drawn into PGS
@@ -145,6 +149,12 @@ class SRTStreamReader final : public AbstractStreamReader
     // Lines handed to the queue since the file was opened. The line at the front of the queue is
     // therefore m_linesRead - m_sourceText.size() + 1, which is what a parse error should name.
     int64_t m_linesRead;
+    std::vector<int64_t> m_joinStartsNs;                 // setJoinStarts
+    bool m_joinPending = false;                          // onJoinedFileStart: the next block begins a later file
+    size_t m_joinFile = 0;                               // the file of the join being read
+    std::deque<std::pair<int64_t, double>> m_joinLines;  // (first line of a later file, its start in s), to come
+    double m_joinShift = 0.0;                            // the start of the file the cue being read comes from, in s
+    void finishLastLine();
     std::string m_renderedText;
     long m_splitterOfs;
     uint16_t m_short_R;

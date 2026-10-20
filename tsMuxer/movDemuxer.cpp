@@ -1149,7 +1149,9 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
         // Where the track starts against the first video track: an empty edit in front of a text track delays every
         // cue (a cue due at 5 s after an empty edit of 5 s came at 0). A text track gets no Stream
         // delay in the listing, so nothing else moves it.
-        const int64_t startNs = m_demuxer->trackStartNs(static_cast<int32_t>(m_sc->ffindex));
+        // A later file of a join starts where the pictures of the files before it end: its cues came at their own
+        // times, before that point, in the middle of the file before.
+        const int64_t startNs = m_demuxer->trackStartNs(static_cast<int32_t>(m_sc->ffindex)) + m_demuxer->joinStartNs();
         const int64_t startMs = (startNs >= 0 ? startNs + 500000 : startNs - 500000) / 1000000;
         while (used < size)
         {
@@ -1975,6 +1977,21 @@ int64_t MovDemuxer::soundOffsetNs(const int index) const
     return trackStartFromVideoNs(index + 1) - ticksToNs(st->editMediaTime, st->time_scale) + m_videoLeadNs;
 }
 
+int64_t MovDemuxer::videoLengthNs() const
+{
+    for (int i = 0; i < num_tracks; ++i)
+    {
+        const auto st = reinterpret_cast<const MOVStreamContext*>(tracks[i]);
+        if (st->type != IOContextTrackType::VIDEO)
+            continue;
+        const int64_t usual = usualDuration(st);
+        if (usual > 0 && st->time_scale > 0)
+            return ticksToNs(sampleCount(st) * usual, st->time_scale);
+        break;
+    }
+    return -1;
+}
+
 // How long the open file's pictures last as the video reader times them, one usual picture length each; for a file
 // without video, how long the content of the audio track audioIndex lasts
 int64_t MovDemuxer::partVideoNs(const int audioIndex) const
@@ -2000,6 +2017,8 @@ int64_t MovDemuxer::partVideoNs(const int audioIndex) const
 // frame (AAC, AC-3, E-AC-3, MPEG audio, DTS).
 void MovDemuxer::accountJoinPart()
 {
+    if (const int64_t videoNs = videoLengthNs(); videoNs > 0)
+        m_joinStartNs += videoNs;
     for (int i = 0; i < num_tracks; ++i)
     {
         const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);

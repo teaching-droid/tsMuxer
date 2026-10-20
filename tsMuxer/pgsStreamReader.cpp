@@ -629,11 +629,23 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
             memmove(m_tmpBuffer.data(), m_curPos, m_tmpBufferLen);
             return NEED_MORE_DATA;
         }
+        // ** A LATER .SUP OF A JOIN STARTS WHERE ITS VIDEO DOES. ** Its segments came at their own times, those of
+        // the file before. The first segment read after a later file's first block arrived is that file's: a file
+        // ends with a whole segment, which is read before more data is asked for.
+        if (m_joinPending)
+        {
+            m_joinPending = false;
+            ++m_joinFile;
+            if (m_joinFile < m_joinStartsNs.size())
+                m_joinShift = m_joinStartsNs[m_joinFile] * (INTERNAL_PTS_FREQ / 1000000) / 1000;
+        }
         m_lastPTS = static_cast<int64_t>(static_cast<double>(getTimeValueNano(m_curPos + 2)) * m_scale);
-        m_maxPTS = FFMAX(m_maxPTS, m_lastPTS);
         m_lastDTS = static_cast<int64_t>(static_cast<double>(getTimeValueNano(m_curPos + 6)) * m_scale);
         if (m_lastDTS == 0)
             m_lastDTS = m_lastPTS;
+        m_lastPTS += m_joinShift;
+        m_lastDTS += m_joinShift;
+        m_maxPTS = FFMAX(m_maxPTS, m_lastPTS);
         m_curPos += 10;
         m_processedSize += 10;
         m_state = State::stParsePGS;

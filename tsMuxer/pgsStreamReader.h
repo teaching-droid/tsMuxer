@@ -43,6 +43,9 @@ class PGSStreamReader final : public AbstractStreamReader
     int readPacket(AVPacket& avPacket) override;
     int flushPacket(AVPacket& avPacket) override;
     void setBuffer(uint8_t* data, uint32_t dataLen, bool lastBlock = false) override;
+    // A join of .sup files: where each file starts in the output, in ns, the first file at 0 (see SRTStreamReader)
+    void setJoinStarts(std::vector<int64_t> ns) { m_joinStartsNs = std::move(ns); }
+    void onJoinedFileStart() override { m_joinPending = true; }
     int64_t getProcessedSize() override;
     CheckStreamRez checkStream(uint8_t* buffer, int len, ContainerType containerType, int containerDataType,
                                int containerStreamIndex);
@@ -103,6 +106,10 @@ class PGSStreamReader final : public AbstractStreamReader
     // size_t m_tmpBufferLen;
     std::vector<uint8_t> m_tmpBuffer;
     int64_t m_lastPTS;
+    std::vector<int64_t> m_joinStartsNs;  // setJoinStarts
+    bool m_joinPending = false;           // onJoinedFileStart: the next block begins a later file
+    size_t m_joinFile = 0;                // the file of the join whose segments are read
+    int64_t m_joinShift = 0;              // its start, on the internal clock
     int64_t m_maxPTS;
     int64_t m_lastDTS;
     int64_t m_processedSize;

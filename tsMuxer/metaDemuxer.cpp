@@ -796,6 +796,79 @@ void METADemuxer::openFile(const string& streamName)
             }
         }
     }
+    placeJoinedSubtitles();
+}
+
+// ** THE SUBTITLE FILES OF A JOIN FOLLOW ITS VIDEO. ** A join of .srt or .sup files ("a.srt"+"b.srt") read each file at
+// its own times, so the subtitles of every later file came at the start, among those of the first. Each later file
+// starts where the video joined from as many files has its file of the same place in the join start: the pictures of
+// the files before, as the video reader times them. Only where those lengths can be read from the video's files
+// (MP4 and MOV, Matroska); a join of elementary video streams or of transport streams has no stated length, and its
+// subtitle files are read as before. A join inside a container moves its subtitles itself.
+void METADemuxer::placeJoinedSubtitles()
+{
+    for (StreamInfo& sub : m_codecInfo)
+    {
+        auto* srt = dynamic_cast<SRTStreamReader*>(sub.m_streamReader);
+        auto* pgs = dynamic_cast<PGSStreamReader*>(sub.m_streamReader);
+        if ((!srt && !pgs) || dynamic_cast<ContainerToReaderWrapper*>(sub.m_dataReader))
+            continue;
+        const std::vector<std::string> subFiles = splitQuotedStr(sub.m_fullStreamName.c_str(), '+');
+        if (subFiles.size() < 2)
+            continue;
+        for (const StreamInfo& video : m_codecInfo)
+        {
+            if (video.m_codec.empty() || video.m_codec[0] != 'V')
+                continue;
+            const std::vector<std::string> files = splitQuotedStr(video.m_fullStreamName.c_str(), '+');
+            if (files.size() != subFiles.size())
+                continue;
+            std::vector<int64_t> starts{0};
+            int64_t prevEnd = 0;
+            for (size_t i = 0; i < files.size(); ++i)
+            {
+                const std::string file = unquoteStr(trimStr(files[i]));
+                const std::string ext = strToUpperCase(extractFileExt(file));
+                int64_t start = 0;
+                int64_t end = 0;
+                if (ext == "MP4" || ext == "MOV" || ext == "M4V")
+                {
+                    MovDemuxer part(m_readManager);
+                    part.openFile(file);
+                    end = part.videoLengthNs();
+                }
+                else if (ext == "MKV" || ext == "MKS" || ext == "MK3D" || ext == "WEBM")
+                {
+                    MatroskaDemuxer part(m_readManager);
+                    part.openFile(file);
+                    if (!part.getVideoSpanNano(start, end))
+                        end = -1;
+                }
+                else
+                    end = -1;
+                if (end <= 0)
+                {
+                    starts.clear();  // a length that cannot be read: the files are placed as before
+                    break;
+                }
+                if (i > 0)
+                    starts.push_back(starts.back() + prevEnd - start);
+                prevEnd = end;
+            }
+            if (starts.size() == files.size())
+            {
+                if (srt)
+                    srt->setJoinStarts(starts);
+                else
+                    pgs->setJoinStarts(starts);
+                LTRACE(LT_INFO, 2,
+                       "Subtitles joined from " << subFiles.size()
+                                                << " files: each file starts where the video file at its place in "
+                                                   "the join starts.");
+            }
+            break;
+        }
+    }
 }
 
 // The folder above the one that holds the playlist is the disc's BDMV folder, and STREAM is in it; for a playlist of

@@ -315,6 +315,8 @@ class METADemuxer final : public AbstractDemuxer
 
     friend class ContainerToReaderWrapper;
 
+    void placeJoinedSubtitles();
+
     // quiet suppresses advice meant for the user. discoverStreams builds a reader purely to look
     // at a file and throws it away, so anything said there is said a second time by the real pass.
     static AbstractStreamReader* createCodec(const std::string& codecName,
