@@ -602,8 +602,12 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
         m_lfeExists = false;
         if (waveFormatPCMEx->wFormatTag == WAVE_FORMAT_EXTENSIBLE)
         {
-            if (waveFormatPCMEx->Samples.wValidBitsPerSample)
-                m_bitsPerSample = waveFormatPCMEx->Samples.wValidBitsPerSample;
+            // The samples fill the container size wBitsPerSample, the valid bits are only their top bits. A disc
+            // knows 20 bit samples in a 24 bit container, so a valid size of up to 20 bits in 24 is written as 20
+            // bit; any other valid size keeps the container size, which also sets the sample stride.
+            const uint16_t validBits = waveFormatPCMEx->Samples.wValidBitsPerSample;
+            if (m_bitsPerSample == 24 && validBits && validBits <= 20)
+                m_bitsPerSample = 20;
             m_lfeExists = waveFormatPCMEx->dwChannelMask & SPEAKER_LOW_FREQUENCY;
             planBdLayout(waveFormatPCMEx->dwChannelMask);
             if (!(waveFormatPCMEx->SubFormat == KSDATAFORMAT_SUBTYPE_PCM))
