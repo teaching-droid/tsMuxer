@@ -71,6 +71,7 @@ class MovDemuxer final : public IOContextDemuxer
         int64_t base_data_offset;
         int64_t moof_offset;     // where the next track fragment's data begins when its header names no base
         int64_t moof_start = 0;  // where the moof box begins
+        int runs = 0;            // track runs read in the current track fragment
         unsigned stsd_id;
         unsigned duration;
         unsigned size;

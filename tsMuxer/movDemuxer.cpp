@@ -2635,7 +2635,11 @@ int MovDemuxer::mov_read_trun(MOVAtom atom)
         data_offset = get_be32();
     if (flags & 0x004)
         get_be32();  // first_sample_flags
-    int64_t offset = frag->base_data_offset + data_offset;
+    // A run that gives no data offset follows the data of the run before it in the track fragment; only the first
+    // run starts at the base. Every later run without an offset was read from the base again, so a fragment of two
+    // runs gave the samples of the first run twice and lost those of the second.
+    int64_t offset = (flags & 0x001) || frag->runs == 0 ? frag->base_data_offset + data_offset : frag->moof_offset;
+    frag->runs++;
     sc->chunk_offsets.push_back(offset);
     for (size_t i = 0; i < entries; i++)
     {
@@ -2863,6 +2867,7 @@ int MovDemuxer::mov_read_tfhd(MOVAtom atom)
     if (track_id == 0)
         return -1;
     frag->track_id = track_id;
+    frag->runs = 0;
     for (const auto& i : trex_data)
         if (i.track_id == fileTrackId)
         {
