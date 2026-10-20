@@ -352,6 +352,9 @@ int OpusStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, i
             return NOT_ENOUGH_BUFFER;
     }
 
+    // The last block of the stream ends with this packet: the samples the source trims at the end are in it
+    m_lastOfStream = m_lastBlock && end - buff == FRAME_PREFIX_LEN + frameLen;
+
     // Parse the Opus packet to determine frame duration
     m_curFrameSamples = parseFrameSamples(buff + FRAME_PREFIX_LEN, frameLen);
 
@@ -553,7 +556,7 @@ int OpusStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
         // each Opus packet.  The 16-bit control header fields are:
         //   bits [15:5]  = control_header_prefix = 0x3FF (11 bits)
         //   bit  [4]     = start_trim_flag       = 0
-        //   bit  [3]     = end_trim_flag          = 0
+        //   bit  [3]     = end_trim_flag          = 0, 1 on the last access unit of a track that ends in padding
         //   bit  [2]     = control_extension_flag = 0
         //   bits [1:0]   = reserved               = 11
         // Packed big-endian: 0x7FE3  (byte 0 = 0x7F, byte 1 = 0xE3)
@@ -561,7 +564,11 @@ int OpusStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
         // After the 2-byte header comes a variable-length payload size field:
         //   while (next_byte == 0xFF) { size += 255; consume byte; }
         //   size += next_byte; consume byte;
+        // then, with end_trim_flag, 3 reserved bits and the 13-bit end_trim (samples at 48 kHz).
         // Then the raw Opus packet data follows.
+        //
+        // The padding at the end of the track, the last file's in a join, was played as sound: only a Matroska
+        // output and a demux left it out. It is said here as end_trim, what the padding is to a player.
 
         // Maximum header size: 2 (control header) + ceil(frameSize/255) + 1 (payload length)
         // For a 61440-byte maximum Opus packet: 2 + 241 + 1 = 244 bytes.
@@ -581,13 +588,18 @@ int OpusStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
             payloadLenFieldSize++;  // final non-0xFF byte
         }
 
-        const int totalHeaderSize = 2 + payloadLenFieldSize;
+        int64_t endTrim = 0;
+        if (m_lastOfStream && m_endTrimNs > 0)
+            endTrim = (std::min)(static_cast<int64_t>((std::min)(m_curFrameSamples, 0x1FFF)),
+                                 (m_endTrimNs * 48000 + 500000000) / 1000000000);
+
+        const int totalHeaderSize = 2 + payloadLenFieldSize + (endTrim > 0 ? 2 : 0);
         if (dstEnd - dstBuffer < totalHeaderSize)
             return 0;
 
         // Write 2-byte control header
-        dstBuffer[0] = 0x7F;  // prefix upper 8 bits: 0_1111111
-        dstBuffer[1] = 0xE3;  // prefix lower 3 bits (111) + flags (000) + reserved (11)
+        dstBuffer[0] = 0x7F;                       // prefix upper 8 bits: 0_1111111
+        dstBuffer[1] = endTrim > 0 ? 0xEB : 0xE3;  // prefix lower 3 bits (111) + flags + reserved (11)
 
         // Write variable-length payload size
         uint8_t* p = dstBuffer + 2;
@@ -598,6 +610,11 @@ int OpusStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
             remaining -= 255;
         }
         *p++ = static_cast<uint8_t>(remaining);
+        if (endTrim > 0)
+        {
+            *p++ = static_cast<uint8_t>(0xE0 | (endTrim >> 8));
+            *p++ = static_cast<uint8_t>(endTrim & 0xFF);
+        }
 
         return totalHeaderSize;
     }

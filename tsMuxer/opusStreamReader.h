@@ -37,7 +37,8 @@ class OpusStreamReader final : public SimplePacketizerReader
     void applyDiscoveryData(const StreamDiscoveryData& data) override;
 
     // Demux: the last page is marked as the end of the stream, its granule position less the samples the source trims
-    // from the end of its last packet (its DiscardPadding, setEndTrim).
+    // from the end of its last packet (its DiscardPadding, setEndTrim). A transport stream says them in the control
+    // header of the last access unit (writeAdditionData).
     bool beforeFileCloseEvent(File& file) override;
     void setEndTrim(const int64_t nanoseconds) { m_endTrimNs = nanoseconds; }
     // A join: the end padding of each file, in nanoseconds, in the order of the join (the DiscardPadding of its last
@@ -86,6 +87,7 @@ class OpusStreamReader final : public SimplePacketizerReader
     size_t m_joinFile = 0;     // the file of the join being read
     int64_t m_joinExcess = 0;  // samples at the joints so far that are not sound and are still played
     int m_nextPreSkip = -1;    // decodeFrame: the packet just decoded is the last of its file; the next file's pre-skip
+    bool m_lastOfStream = false;  // decodeFrame: the packet just decoded ends the stream
 
     /// Raw CodecPrivate data (OpusHead).
     std::vector<uint8_t> m_codecPrivate;

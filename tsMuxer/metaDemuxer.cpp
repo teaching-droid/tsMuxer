@@ -1870,6 +1870,12 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             }
         }
     }
+    // The padding at the end of an Opus track, the last file's in a join: a transport stream says it in its last
+    // access unit, as a demux does in its last page
+    if (codec == "A_OPUS")
+        if (auto* opus = dynamic_cast<OpusStreamReader*>(codecReader))
+            if (const auto pad = streamInfo.m_addParams.find("srcendpadding"); pad != streamInfo.m_addParams.end())
+                opus->setEndTrim(strtoll(pad->second.c_str(), nullptr, 10));
     // ** THE SOUND OF AN MP4 STARTS WHERE ITS EDIT LIST SAYS. ** An encoder puts start-up samples in front of the sound
     // (1024 for AAC, 256 for AC-3, about 1100 for a LAME MP3), and the MP4 says in its edit list to start that much
     // into the track. That was ignored: the first frame, start-up samples and all, was placed with the first picture,
