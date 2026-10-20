@@ -1409,7 +1409,8 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track, i
 
     if (track.fps > 0)
     {
-        const uint64_t durationNs = static_cast<uint64_t>(1000000000.0 / track.fps);
+        // rounded, as the audio's is: cut off, 29.97 fps was written 33366666 ns where it is 33366666.7
+        const auto durationNs = static_cast<uint64_t>(llround(1000000000.0 / track.fps));
         pos += ebml_write_uint(inner.data() + pos, MATROSKA_ID_TRACKDEFAULTDURATION, durationNs);
     }
     else if (track.trackType == 2 && track.audioFrameNs > 0)
