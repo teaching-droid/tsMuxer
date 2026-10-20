@@ -3192,6 +3192,33 @@ int MovDemuxer::mov_read_moov(MOVAtom atom)
         m_trackStartNs[track] = ticksToNs(units, m_timescale);
     }
     m_emptyEditUnits.clear();
+    // An edit list can play a track in parts: 0 to 5 s and then 10 to 15 s. Only where the first part starts is
+    // used, so the output holds the track from there to its end, the parts left out as well, and nothing said so.
+    // Parts that follow on from each other are one part.
+    for (const auto& [track, edits] : m_playedEdits)
+    {
+        if (edits.size() < 2 || track <= 0 || track > num_tracks || m_timescale == 0)
+            continue;
+        const auto st = reinterpret_cast<MOVStreamContext*>(tracks[track - 1]);
+        if (st->time_scale == 0)
+            continue;
+        bool parts = false;
+        for (size_t k = 1; k < edits.size(); ++k)
+        {
+            const int64_t end = edits[k - 1].second + edits[k - 1].first * st->time_scale / m_timescale;
+            if (std::llabs(edits[k].second - end) > st->time_scale / 100)
+                parts = true;
+        }
+        static std::mutex partsMtx;
+        static std::set<std::string> partsWarned;  // a job opens a file more than once
+        const std::lock_guard<std::mutex> lock(partsMtx);
+        if (parts && partsWarned.insert(m_fileName + "|" + std::to_string(track)).second)
+            LTRACE(LT_WARN, 2,
+                   "Warning: the edit list of track " << track << " of " << m_fileName << " plays " << edits.size()
+                                                      << " parts of it. tsMuxeR takes the track from where the first "
+                                                         "part starts to its end, the parts left out as well.");
+    }
+    m_playedEdits.clear();
     // An audio track's edit list start in its own time scale, in nanoseconds, for a Matroska output's CodecDelay. It
     // was not read, so the priming came out as sound at the start of the track.
     for (const auto& [track, mediaTime] : m_editMediaTime)
@@ -4266,6 +4293,8 @@ int MovDemuxer::mov_read_elst(MOVAtom atom)
             leadingEmpty += duration;
         else
         {
+            if (!empty)
+                m_playedEdits[num_tracks].emplace_back(duration, mediaTime);
             // The first edit that plays something: where in the media it starts. For AAC that is the priming the
             // encoder put in front, 1024 or 2112 samples, which a player skips.
             if (leading && mediaTime > 0)

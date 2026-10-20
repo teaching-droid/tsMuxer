@@ -137,6 +137,8 @@ class MovDemuxer final : public IOContextDemuxer
     std::map<int32_t, int64_t> m_firstTfdt;
     std::map<int32_t, int64_t> m_firstCompositionOffset;
     std::map<int32_t, int64_t> m_videoMediaTime;
+    // the edits that play something, per track: their duration in movie units and their start in media units
+    std::map<int32_t, std::vector<std::pair<int64_t, int64_t>>> m_playedEdits;
     int mov_read_tfdt(MOVAtom atom);
     void fragmentStartDelays();
     // List<chunk offset, chunk size>
