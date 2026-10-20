@@ -208,6 +208,163 @@ bool TSDemuxer::getTrackStart(const int32_t pid, const bool fromFirstPes, int64_
     return true;
 }
 
+bool TSDemuxer::isJoinOfFiles() const { return m_joinFiles.size() > 1 && m_mplsInfo.empty() && m_clipParts.empty(); }
+
+// The decoding time of the first picture of a video stream of a file, from the PES headers; -1 where it is not found.
+int64_t TSDemuxer::fileVideoStart(const std::string& fileName, const int videoPid) const
+{
+    static constexpr int64_t READ_LIMIT = 256LL * 1024 * 1024;
+    TSDemuxer probe(m_readManager, "");
+    probe.openFile(fileName);
+    std::map<int32_t, TrackInfo> tracks;
+    probe.getTrackList(tracks);
+    if (tracks.find(videoPid) == tracks.end() || probe.getFileBlockSize() == 0)
+        return -1;
+    DemuxedData demuxedData;
+    const PIDSet none;
+    int64_t discardedSize = 0;
+    for (int64_t read = 0; read < READ_LIMIT; read += probe.getFileBlockSize())
+    {
+        if (const auto first = probe.m_fileFirstDts.find(videoPid); first != probe.m_fileFirstDts.end())
+            return first->second;
+        if (probe.simpleDemuxBlock(demuxedData, none, discardedSize) == BufferedReader::DATA_EOF)
+            break;
+    }
+    const auto first = probe.m_fileFirstDts.find(videoPid);
+    return first != probe.m_fileFirstDts.end() ? first->second : -1;
+}
+
+// A file of a join ends: where the last PES of the sound of each track handed on so far is on the timeline of the join,
+// and for the first file where the track begins; and where the video of the next file begins.
+//
+// The video readers count the pictures they are given, in decode order, so the pictures of the next file follow on
+// from the decoding times of this one: the timeline is laid by the decoding times of the video, from the first picture
+// shown of the first file. Where the decoding times of the next file run on from those of this one, the two files are
+// on one clock, as where a recording was split into files, also in the middle of a group of pictures, where pictures
+// shown before the last ones of a file are decoded in the next file: the times of both are then taken as they are.
+void TSDemuxer::endJoinFile()
+{
+    const bool known = m_joinFileDts.first != -1 && (m_curFileNum > 0 || m_firstVideoPTS != -1);
+    if (known && m_curFileNum == 0)
+        m_joinBase = m_joinFileDts.first - m_firstVideoPTS;
+    for (auto& [pid, sound] : m_joinSound)
+    {
+        if (sound.lastPts != -1 && known && m_joinBaseKnown)
+        {
+            const int64_t onTimeline = m_joinBase - m_joinFileDts.first;
+            if (sound.origin == -1)
+                sound.origin = sound.firstPts + onTimeline;
+            sound.lastPes = sound.lastPts + onTimeline + sound.shift;
+        }
+        else
+            sound.lastPes = -1;
+        sound.shift = 0;
+        sound.firstPts = sound.lastPts = sound.prevPts = -1;
+    }
+    memset(m_joinDrop, 0, sizeof(m_joinDrop));
+    // the sound of the next file may come before its first picture in the file: that picture is looked up first
+    m_joinVideoStart = -1;
+    if (known && m_joinBaseKnown && !m_joinSound.empty() && m_curFileNum + 1 < m_joinFiles.size())
+        m_joinVideoStart = fileVideoStart(unquoteStr(m_joinFiles[m_curFileNum + 1]), m_firstVideoPid);
+    const int64_t step = (std::max)(m_videoDtsGap, int64_t{0});
+    const int64_t runOn = m_joinVideoStart - m_joinFileDts.second;
+    if (!known || !m_joinBaseKnown)
+        m_joinBaseKnown = false;
+    else if (m_joinVideoStart != -1 && step > 0 && runOn > step / 2 && runOn < step + step / 2)
+        m_joinBase += m_joinVideoStart - m_joinFileDts.first;  // one clock
+    else
+        m_joinBase += m_joinFileDts.second - m_joinFileDts.first + step;
+    m_joinFileDts = {-1, -1};
+}
+
+// Whether a PES of the sound of a join of files is kept, decided where it starts.
+//
+// The audio readers count the frames they are given: the sound of a later file followed on from the end of the sound
+// of the file before, not from where its own file starts it against its picture. A file whose sound starts later than
+// its picture, or ends before it, put the sound of every file after it early. The sound of each later file now starts
+// where its picture puts it, within half a frame (or half a PES of frames, or a millisecond): where the sound before
+// ends earlier, the track's times have a gap there (takeTimeGaps), and where it ends later, the PES of the file that
+// it overlaps are left out, as a reader that counts frames cannot go back. A file whose sound follows on from the
+// sound before, as it does where a recording was split into files, is muxed as before.
+bool TSDemuxer::keepJoinSound(const int pid, const StreamType type, const int64_t pts)
+{
+    JoinSound& sound = m_joinSound[pid];
+    if (sound.firstPts == -1)
+    {
+        if (m_curFileNum > 0 && sound.lastPes != -1 && m_joinVideoStart != -1 && m_joinBaseKnown)
+        {
+            const int64_t due = pts - m_joinVideoStart + m_joinBase;
+            // A PES at the time of the last one of the file before carries the rest of the same frame (the
+            // extension of a DTS-HD frame, the TrueHD unit after an AC-3 frame), as where a recording was split
+            // into files: kept with it, and the time of the next one decides.
+            if (due == sound.lastPes && sound.pesBytes >= 0)
+                return true;
+            // Where the sound before ends: the last PES of the file before may hold fewer frames than the others,
+            // which for a sound of a constant bit rate its size tells, against the PES that gave the step. A PES
+            // that a file split in the middle of a recording cut in two goes on at the start of this file, and that
+            // part counts with it.
+            if (sound.pesBytes >= 0)
+            {
+                const int64_t lastLen = sound.sizedFrames && sound.stepBytes > 0
+                                            ? sound.step * sound.pesBytes / sound.stepBytes
+                                            : sound.step;
+                sound.end = sound.lastPes + (std::min)(lastLen, sound.step);
+                sound.pesBytes = -1;  // counted; the PES left out of this file count as nothing
+            }
+            // half a frame, but at least a millisecond: the end of TrueHD, whose units of under a millisecond come
+            // in PES of their own and with the AC-3 frames of its core, is not known closer than that
+            const int64_t within = (std::max)(sound.step / 2, int64_t{90});
+            if (due + within < sound.end)
+                return false;
+            // within that the sound goes on where the sound before ends: the times of this file's sound are that
+            // much off, which the next joint takes into account, so that it cannot add up over many files
+            const int64_t gap = due - sound.end;
+            sound.shift = -gap;
+            if (sound.step > 0 && gap > within)
+            {
+                sound.shift = 0;
+                m_joinGaps[pid].emplace_back((sound.end - sound.origin) * 100000 / 9, gap * 100000 / 9);
+                LTRACE(LT_INFO, 2,
+                       "The sound of track " << pid << " in file " << m_curFileNum + 1 << " of the join starts "
+                                             << (gap + 45) / 90 << " ms after the sound before it ends: it starts "
+                                             << "after a gap, with its picture.");
+            }
+        }
+        sound.firstPts = pts;
+    }
+    // the PES of one time are one frame, as a DTS-HD frame and its extension
+    if (pts != sound.prevPts)
+    {
+        if (sound.prevPts != -1 && pts > sound.prevPts && (sound.step <= 0 || pts - sound.prevPts < sound.step))
+        {
+            sound.step = pts - sound.prevPts;
+            sound.stepBytes = sound.pesBytes;
+        }
+        sound.pesBytes = 0;
+    }
+    sound.prevPts = pts;
+    sound.sizedFrames = type == StreamType::AUDIO_AC3 || type == StreamType::AUDIO_DTS ||
+                        type == StreamType::AUDIO_MPEG1 || type == StreamType::AUDIO_MPEG2 ||
+                        type == StreamType::AUDIO_LPCM;
+    m_joinSoundPid[pid] = 1;
+    if (sound.lastPts == -1 || pts > sound.lastPts)
+        sound.lastPts = pts;
+    return true;
+}
+
+std::vector<std::pair<int64_t, int64_t>> TSDemuxer::takeTimeGaps(const int pid)
+{
+    // the core of a stream is a track of its own, on the same PID
+    const auto gaps = m_joinGaps.find(pid >= 0x10000 ? pid >> 16 : pid);
+    if (gaps == m_joinGaps.end())
+        return {};
+    size_t& taken = m_joinGapsTaken[pid];
+    std::vector<std::pair<int64_t, int64_t>> result(gaps->second.begin() + static_cast<std::ptrdiff_t>(taken),
+                                                    gaps->second.end());
+    taken = gaps->second.size();
+    return result;
+}
+
 bool TSDemuxer::hasVideoStream() const
 {
     return std::any_of(m_pmt.pidList.begin(), m_pmt.pidList.end(),
@@ -430,6 +587,8 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     int64_t handedOn = 0;  // bytes of subtitles written here (clearSubtitlesAtPartEnd), counted against the discarded
     if (isFirstBlock)
     {
+        if (isJoinOfFiles())
+            endJoinFile();
         handedOn = clearSubtitlesAtPartEnd(demuxedData);
         if (m_curFileNum < m_mplsInfo.size())
             m_prevFileLen +=
@@ -456,6 +615,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         m_lastVideoPTS = -1;
         m_curFileNum++;
         startPart();
+        m_fileFirstDts.clear();
     }
 
     discardSize = -handedOn;
@@ -529,6 +689,8 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         const bool pesStartCode = frameData[0] == 0 && frameData[1] == 0 && frameData[2] == 1 && tsPacket->payloadStart;
         if (part != nullptr && !pesStartCode && !m_partKeep[pid])
             continue;
+        if (!pesStartCode && m_joinDrop[pid])
+            continue;
         if (pesStartCode)
         {
             const auto pesPacket = reinterpret_cast<PESPacket*>(frameData);
@@ -566,6 +728,13 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
                     if (m_firstVideoPid == -1)
                         m_firstVideoPid = pid;
                     m_videoPesRead++;
+                    m_fileFirstDts.try_emplace(pid, curDts);
+                    if (pid == m_firstVideoPid && isJoinOfFiles())
+                    {
+                        if (m_joinFileDts.first == -1)
+                            m_joinFileDts.first = curDts;
+                        m_joinFileDts.second = (std::max)(m_joinFileDts.second, curDts);
+                    }
                     if (curPts > m_lastVideoPTS)
                         m_lastVideoPTS = curPts;
                     if (m_lastVideoDTS == -1)
@@ -583,7 +752,13 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
 
                 if (m_firstPtsTime.find(pid) == m_firstPtsTime.end())
                     m_firstPtsTime[pid] = curPts;
+
+                if (m_acceptedPidCache[pid] && streamInfo != m_pmt.pidList.end() &&
+                    isAudioStreamType(streamInfo->second.m_streamType) && isJoinOfFiles())
+                    m_joinDrop[pid] = !keepJoinSound(pid, streamInfo->second.m_streamType, curPts);
             }
+            if (m_joinDrop[pid])
+                continue;
 
             if (m_acceptedPidCache[pid] && isDvbSubtitlePid(pid))
             {
@@ -647,6 +822,8 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
                 uint8_t* dst = vect->data() + vect->size() - payloadLen;
                 memcpy(dst, frameData, payloadLen);
             }
+            if (m_joinSoundPid[pid])
+                m_joinSound[pid].pesBytes += payloadLen;
         }
         discardSize -= payloadLen;
     }

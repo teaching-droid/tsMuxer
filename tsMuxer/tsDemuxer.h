@@ -83,6 +83,7 @@ class TSDemuxer final : public AbstractDemuxer
     // holds too few pictures. A join or a playlist that is muxed gives them through setFileIterator.
     void setLaterFiles(const std::vector<std::string>& files) { m_laterFiles = files; }
     void setMPLSInfo(const std::vector<MPLSPlayItem>& mplsInfo) { m_mplsInfo = mplsInfo; }
+    std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(int pid) override;
     [[nodiscard]] int64_t getFileDurationNano() const override;
     // The latest PES time read, on the PGS timeline the PES headers are rewritten to (see AbstractDemuxer)
     [[nodiscard]] int64_t getDemuxedTime() const override
@@ -141,6 +142,37 @@ class TSDemuxer final : public AbstractDemuxer
     void startPart();
     int64_t clearSubtitlesAtPartEnd(DemuxedData& demuxedData);
     bool keptInPart(const ClipPart& part, int pid, StreamType type, PESPacket* pes, int64_t payloadLen);
+
+    // A join of whole files ("+"), not a playlist: the sound of each later file starts against its own first picture
+    // (see keepJoinSound). Times in 90 kHz ticks, on the timeline of the join (see endJoinFile).
+    struct JoinSound
+    {
+        int64_t origin = -1;    // where the first frame of the track is, the start of its reader's own clock
+        int64_t lastPes = -1;   // where the last PES of the file before is; -1: not known
+        int64_t end = -1;       // where the sound handed on so far ends
+        int64_t shift = 0;      // how much later than its own times the sound of the file being read is muxed
+        int64_t firstPts = -1;  // the first PES kept in the file being read, and the last one, on its own clock
+        int64_t lastPts = -1;
+        int64_t prevPts = -1;      // the PES before, for the step
+        int64_t step = 0;          // the shortest time from one PES to the next: a frame, or a PES of frames
+        int64_t stepBytes = 0;     // the bytes of the sound of the PES (of one time) that gave the step
+        int64_t pesBytes = 0;      // the bytes of the sound of the PES (of one time) being read
+        bool sizedFrames = false;  // a constant bit rate: the size of a PES tells its length
+    };
+    std::map<int, JoinSound> m_joinSound;
+    uint8_t m_joinSoundPid[8192]{};  // the PID has a JoinSound
+    uint8_t m_joinDrop[8192]{};  // the PES being read of the PID is left out, and the packets that carry the rest of it
+    int64_t m_joinVideoStart = -1;  // the first decoding time of the video of the file being read (fileVideoStart)
+    int64_t m_joinBase = 0;         // where the first decoding time of the video of the file being read is
+    bool m_joinBaseKnown = true;
+    std::pair<int64_t, int64_t> m_joinFileDts{-1, -1};  // the first and the last decoding time of the video in the file
+    std::map<int, int64_t> m_fileFirstDts;              // the first decoding time of each video stream in the file
+    std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_joinGaps;  // by PID, see takeTimeGaps
+    std::map<int, size_t> m_joinGapsTaken;                               // by track asking, see takeTimeGaps
+    [[nodiscard]] bool isJoinOfFiles() const;
+    [[nodiscard]] int64_t fileVideoStart(const std::string& fileName, int videoPid) const;
+    void endJoinFile();
+    bool keepJoinSound(int pid, StreamType type, int64_t pts);
 
     int64_t m_firstPCRTime;
     bool m_m2tsHdrDiscarded;

@@ -111,6 +111,8 @@ enum class StreamType
     SUB_DVB = 0x06,  // DVB Subtitles
 };
 
+bool isAudioStreamType(StreamType stream_coding_type);
+
 // A transport stream packet header and its adaptation field, laid over the bytes of a packet. A packet is found at any
 // byte offset when a stream has lost its sync, so the two are packed: read at any address, with the same bit layout.
 #pragma pack(push, 1)
