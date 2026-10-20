@@ -1152,10 +1152,48 @@ void TSMuxer::sendAheadFinishAll()
     sendAheadReleaseDone(true);
 }
 
+// A disc player starts and seeks at key pictures only, the entries of the clip's seek index. A stream made with intra
+// refresh has a key picture at its start only: a disc of a minute of it had one entry, so nothing in it could be
+// reached by a chapter or a seek, and nothing said so.
+void TSMuxer::noteKeyGap(const int pid, const int64_t pts, const bool key)
+{
+    if (!m_bluRayMode)
+        return;
+    KeyGap& gap = m_keyGaps[pid];
+    // as the seek index takes them: a key picture counts when it is later than the last one
+    if (key && pts > gap.lastKey)
+    {
+        if (gap.lastKey != -1)
+            gap.longest = (std::max)(gap.longest, pts - gap.lastKey);
+        gap.lastKey = pts;
+    }
+    gap.lastPts = (std::max)(gap.lastPts, pts);
+}
+
+void TSMuxer::reportKeyPictureGaps()
+{
+    if (m_keyGapsReported)
+        return;
+    m_keyGapsReported = true;
+    for (const auto& [pid, gap] : m_keyGaps)
+    {
+        const int64_t longest = (std::max)(gap.longest, gap.lastKey != -1 ? gap.lastPts - gap.lastKey : int64_t{0});
+        if (longest > 10 * 90000)
+            LTRACE(LT_WARN, 2,
+                   "Warning: the video on PID 0x" << std::hex << pid << std::dec << " goes "
+                                                  << doubleToStr(static_cast<double>(longest) / 90000.0, 1)
+                                                  << " s without a key picture. A disc player starts and seeks at key "
+                                                     "pictures only, so chapters and seeks there do not work. Encode "
+                                                     "the video with key pictures, such as one a second (a stream made "
+                                                     "with intra refresh has one only at its start).");
+    }
+}
+
 bool TSMuxer::close()
 {
     reportReadRate();
     reportLateArrival();
+    reportKeyPictureGaps();
 
     if (m_isExternalFile)
         return true;
@@ -1851,6 +1889,8 @@ void TSMuxer::finalizeInplacePes()
         const bool SPSRequired = streamInfo.m_codecReader->needSPSForSplit();
         const auto aCodec = streamInfo.m_audioReader;
         bool updateIdx = false;
+        if (vCodec)
+            noteKeyGap(streamInfo.m_pid, static_cast<int64_t>(curPts), m_pesIFrame);
         if (vCodec && m_pesIFrame)
         {
             if (m_pesSpsPps || !SPSRequired)
@@ -1924,6 +1964,8 @@ void TSMuxer::writePESPacket()
             // bool isH264 = dynamic_cast <H264StreamReader*> (streamInfo.m_codecReader);
             const bool SPSRequired = streamInfo.m_codecReader->needSPSForSplit();
             const auto aCodec = streamInfo.m_audioReader;  // cached at intAddStream
+            if (vCodec)
+                noteKeyGap(streamInfo.m_pid, static_cast<int64_t>(curPts), m_pesIFrame);
             if (vCodec && m_pesIFrame)
             {
                 // skip some I-frames for H.264 if no SPS/PPS in a gop

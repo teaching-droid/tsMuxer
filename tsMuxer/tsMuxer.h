@@ -133,6 +133,18 @@ class TSMuxer final : public AbstractMuxer
     void refuseLongNonVideoPes() const;
     void noteLateArrival();
     void reportLateArrival() const;
+    // Key pictures of each video PID on a disc: the time of the last one, the longest stretch without one, the time of
+    // the last picture; said once when a stretch is long (reportKeyPictureGaps).
+    struct KeyGap
+    {
+        int64_t lastKey = -1;
+        int64_t longest = 0;
+        int64_t lastPts = -1;
+    };
+    std::map<int, KeyGap> m_keyGaps;
+    bool m_keyGapsReported = false;
+    void noteKeyGap(int pid, int64_t pts, bool key);
+    void reportKeyPictureGaps();
     [[nodiscard]] int64_t pcrForMaxRate(int64_t newPCR, int64_t extraFrames, int64_t pcrGAP) const;
     [[nodiscard]] bool nextPCRChanceTooLate(int tsIndex, int64_t dts) const;
     void noteAtsPass(int frames, double gap);
