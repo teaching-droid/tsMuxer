@@ -53,6 +53,15 @@ class TSDemuxer final : public AbstractDemuxer
 
         return 0;
     }
+    // Where a stream starts against the video, in 90 kHz ticks, for the mux (METADemuxer::addStream): its first PTS
+    // less the smallest PTS of the video read so far, or with fromFirstPes the PTS of the first video PES, across a
+    // wrap of the 33 bit clock. False while no PES of the stream or of the video has been read.
+    [[nodiscard]] bool getTrackStart(int32_t pid, bool fromFirstPes, int64_t& ticks) const;
+    // The program map lists a video stream
+    [[nodiscard]] bool hasVideoStream() const;
+    // The video PES read, of all video streams and files, and the stream of the first one (-1: none yet)
+    [[nodiscard]] int64_t videoPesRead() const { return m_videoPesRead; }
+    [[nodiscard]] int firstVideoPid() const { return m_firstVideoPid; }
     // Where a stream starts on the timeline of a join, in 90 kHz: the start of the clip in which its first PES was
     // seen, so 0 for every stream of the first clip. An audio or video reader counts its own time from its first
     // frame and needs this added; PGS times already carry it in their PES headers.
@@ -173,6 +182,8 @@ class TSDemuxer final : public AbstractDemuxer
     uint32_t m_curFileNum;
     int64_t m_firstVideoPTS;
     int64_t m_firstSeenVideoPTS;  // first PTS seen on a video PID, in file order (never a minimum)
+    int64_t m_videoPesRead = 0;   // see videoPesRead
+    int m_firstVideoPid = -1;     // see firstVideoPid
     int64_t m_lastVideoPTS;
     int64_t m_lastVideoDTS;
     int64_t m_videoDtsGap;

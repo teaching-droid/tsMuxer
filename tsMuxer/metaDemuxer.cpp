@@ -122,6 +122,75 @@ static void readLateTracks(AbstractDemuxer* demuxer, DemuxedData& demuxedData,
     }
 }
 
+// The first coded picture of an HEVC stream of a transport stream file is a random access picture (IDR, CRA or BLA)
+static bool tsHevcStartsAtRandomAccess(const BufferedReaderManager& readManager, const std::string& fileName,
+                                       const int pid)
+{
+    TSDemuxer probe(readManager, "");
+    probe.openFile(fileName);
+    std::map<int32_t, TrackInfo> tracks;
+    probe.getTrackList(tracks);
+    if (probe.getFileBlockSize() == 0)
+        return false;
+    DemuxedData demuxedData;
+    const PIDSet video{pid};
+    int64_t discardedSize = 0;
+    for (int block = 0; block < 16; block++)
+    {
+        const bool eof = probe.simpleDemuxBlock(demuxedData, video, discardedSize) == BufferedReader::DATA_EOF;
+        StreamData& es = demuxedData[pid];
+        uint8_t* const end = es.data() + es.size();
+        for (uint8_t* nal = NALUnit::findNextNAL(es.data(), end); nal < end; nal = NALUnit::findNextNAL(nal, end))
+        {
+            const int type = (*nal >> 1) & 0x3f;
+            if (type < 32)  // the first slice
+                return type >= 16 && type <= 23;
+        }
+        if (eof)
+            break;
+    }
+    return false;
+}
+
+// Where a stream of a transport stream file starts against the first picture of its video that is shown, in 90 kHz
+// ticks (TSDemuxer::getTrackStart); 0 for a file without video, or where the stream or the video is not found as far
+// as the listing looks for a track that starts late. Only the PES headers are read: no stream is handed on.
+//
+// The video readers time the pictures from the first one shown. H.264 and MPEG-2 show first the pictures that follow
+// the first picture in decode order and are shown before it (an open GOP at the start of a cut), so that is the
+// smallest PTS of the video. An HEVC stream that begins with a random access picture times the pictures shown before
+// it before the start, as a decoder leaves them out (they refer to pictures before the cut): that is the PTS of the
+// first video PES.
+static int64_t tsTrackStart(const BufferedReaderManager& readManager, const std::string& fileName, const int pid)
+{
+    static constexpr int64_t LATE_LIMIT = 1024LL * 1024 * 1024;
+    // the pictures shown before the first one follow it in decode order within the depth of the picture reordering,
+    // at most 16 frames, or 32 fields
+    static constexpr int64_t LEADING_PES = 34;
+    TSDemuxer probe(readManager, "");
+    probe.openFile(fileName);
+    std::map<int32_t, TrackInfo> tracks;
+    probe.getTrackList(tracks);
+    if (tracks.find(pid) == tracks.end() || !probe.hasVideoStream() || probe.getFileBlockSize() == 0)
+        return 0;
+    DemuxedData demuxedData;
+    const PIDSet none;
+    int64_t discardedSize = 0;
+    int64_t ticks = 0;
+    for (int64_t read = 0; read < LATE_LIMIT; read += probe.getFileBlockSize())
+    {
+        if (probe.videoPesRead() >= LEADING_PES && probe.getTrackStart(pid, false, ticks))
+            break;
+        if (probe.simpleDemuxBlock(demuxedData, none, discardedSize) == BufferedReader::DATA_EOF)
+            break;
+    }
+    const auto video = tracks.find(probe.firstVideoPid());
+    const bool fromFirstPes = video != tracks.end() &&
+                              video->second.m_trackType == static_cast<int>(StreamType::VIDEO_H265) &&
+                              tsHevcStartsAtRandomAccess(readManager, fileName, video->first);
+    return probe.getTrackStart(pid, fromFirstPes, ticks) ? ticks : 0;
+}
+
 static void loadDvOriginalRpus(AbstractDemuxer* demuxer, HevcDolbyVisionFilter* filter)
 {
     std::vector<uint8_t> manifestBytes;
@@ -2056,12 +2125,33 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     // applied where the meta gives no timeshift= (and the file name no delay), so a meta from the window, which
     // carries it as timeshift=, gets it once, as before. A Matroska source gives the start of its tracks the same way
     // (MatroskaDemuxer::loadTrackExtras).
+    //
+    // The same for the sound of a transport stream, a join of them and a playlist: the first PES of the track against
+    // the first picture of the video of the (first) file that is shown (tsTrackStart). The sound of a file whose sound
+    // starts 0.5 s after its picture came 0.5 s early, and a disc clip whose sound starts a few ms before its picture
+    // had it that much late. Not for a playlist whose first play item starts after the first key picture of its clip:
+    // the sound of such a part is cut to the time of its first picture (TSDemuxer::keptInPart). Only for the sound, as
+    // the window writes it: a second video track of a transport stream is the other view, the enhancement layer or the
+    // picture in picture, which go with the main video.
+    int64_t tsStart = 0;  // 90 kHz ticks
+    if (!timeShiftGiven && pid > 0 && !codec.empty() && codec[0] == 'A' && !fileList.empty() &&
+        streamInfo.m_addParams.find("srcstartdelay") == streamInfo.m_addParams.end() &&
+        !(anyPart && !clipParts.empty() && clipParts[0].startCut))
+    {
+        const std::string first = unquoteStr(trimStr(fileList[0]));
+        const std::string ext = strToUpperCase(extractFileExt(first));
+        if (ext == "TS" || ext == "M2TS" || ext == "MTS" || ext == "M2T" || ext == "SSIF")
+            tsStart = tsTrackStart(m_readManager, first, SubTrackFilter::isSubTrack(pid) ? pid >> 16 : pid);
+    }
     if (!timeShiftGiven)
-        if (const auto start = streamInfo.m_addParams.find("srcstartdelay"); start != streamInfo.m_addParams.end())
+        if (const auto start = streamInfo.m_addParams.find("srcstartdelay");
+            start != streamInfo.m_addParams.end() || tsStart != 0)
         {
-            const int64_t ns = strtoll(start->second.c_str(), nullptr, 10);
+            const int64_t ns = tsStart != 0 ? tsStart * 100000 / 9 : strtoll(start->second.c_str(), nullptr, 10);
             const auto ticks =
-                static_cast<int64_t>(static_cast<double>(ns) * INTERNAL_PTS_FREQ / 1e9 + (ns > 0 ? 0.5 : -0.5));
+                tsStart != 0
+                    ? tsStart * (INTERNAL_PTS_FREQ / 90000)
+                    : static_cast<int64_t>(static_cast<double>(ns) * INTERNAL_PTS_FREQ / 1e9 + (ns > 0 ? 0.5 : -0.5));
             if (ticks != 0)
             {
                 streamInfo.m_timeShift += ticks;

@@ -191,6 +191,29 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
         THROW(ERR_COMMON, "Function TSDemuxer::getTrackList required bufferedReader!")
 }
 
+bool TSDemuxer::getTrackStart(const int32_t pid, const bool fromFirstPes, int64_t& ticks) const
+{
+    const auto first = m_firstPtsTime.find(pid);
+    const int64_t reference = fromFirstPes ? m_firstSeenVideoPTS : m_firstVideoPTS;
+    if (first == m_firstPtsTime.end() || reference == -1)
+        return false;
+    // A PTS has 33 bits and wraps after about 26.5 hours: a stream that starts just after the wrap and a video that
+    // starts just before it are a moment apart, not a day
+    static constexpr int64_t CLOCK_WRAP = 1LL << 33;
+    ticks = (first->second - reference) % CLOCK_WRAP;
+    if (ticks >= CLOCK_WRAP / 2)
+        ticks -= CLOCK_WRAP;
+    else if (ticks < -CLOCK_WRAP / 2)
+        ticks += CLOCK_WRAP;
+    return true;
+}
+
+bool TSDemuxer::hasVideoStream() const
+{
+    return std::any_of(m_pmt.pidList.begin(), m_pmt.pidList.end(),
+                       [](const auto& stream) { return isVideoPID(stream.second.m_streamType); });
+}
+
 bool TSDemuxer::isVideoPID(const StreamType streamType)
 {
     switch (streamType)
@@ -540,6 +563,9 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
                         m_firstVideoPTS = curPts;
                     if (m_firstSeenVideoPTS == -1)
                         m_firstSeenVideoPTS = curPts;
+                    if (m_firstVideoPid == -1)
+                        m_firstVideoPid = pid;
+                    m_videoPesRead++;
                     if (curPts > m_lastVideoPTS)
                         m_lastVideoPTS = curPts;
                     if (m_lastVideoDTS == -1)
