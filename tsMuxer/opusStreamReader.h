@@ -88,6 +88,7 @@ class OpusStreamReader final : public SimplePacketizerReader
     int64_t m_joinExcess = 0;  // samples at the joints so far that are not sound and are still played
     int m_nextPreSkip = -1;    // decodeFrame: the packet just decoded is the last of its file; the next file's pre-skip
     bool m_lastOfStream = false;  // decodeFrame: the packet just decoded ends the stream
+    int m_startTrimLeft = -1;     // the pre-skip still to be trimmed in a transport stream; -1 before the first packet
 
     /// Raw CodecPrivate data (OpusHead).
     std::vector<uint8_t> m_codecPrivate;

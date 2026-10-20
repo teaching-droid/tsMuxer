@@ -555,7 +555,7 @@ int OpusStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
         // TS mux mode: write ETSI TS 101 154 opus_access_unit header before
         // each Opus packet.  The 16-bit control header fields are:
         //   bits [15:5]  = control_header_prefix = 0x3FF (11 bits)
-        //   bit  [4]     = start_trim_flag       = 0
+        //   bit  [4]     = start_trim_flag       = 0, 1 on the first access units, as long as the pre-skip lasts
         //   bit  [3]     = end_trim_flag          = 0, 1 on the last access unit of a track that ends in padding
         //   bit  [2]     = control_extension_flag = 0
         //   bits [1:0]   = reserved               = 11
@@ -564,11 +564,15 @@ int OpusStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
         // After the 2-byte header comes a variable-length payload size field:
         //   while (next_byte == 0xFF) { size += 255; consume byte; }
         //   size += next_byte; consume byte;
-        // then, with end_trim_flag, 3 reserved bits and the 13-bit end_trim (samples at 48 kHz).
-        // Then the raw Opus packet data follows.
+        // then, with start_trim_flag, 3 reserved bits and the 13-bit start_trim, and with end_trim_flag the same
+        // for end_trim (samples at 48 kHz). Then the raw Opus packet data follows.
         //
-        // The padding at the end of the track, the last file's in a join, was played as sound: only a Matroska
-        // output and a demux left it out. It is said here as end_trim, what the padding is to a player.
+        // The pre-skip at the start of the track (its OpusHead's, as a Matroska file's CodecDelay says it) and the
+        // padding at the end, the last file's in a join, were played as sound: only a Matroska output and a demux
+        // left them out. They are said here as start_trim and end_trim, what they are to a player. A pre-skip longer
+        // than the first access unit goes on into the next ones. The joints of a join are kept by leaving out whole
+        // packets (readPacket), so that the times of the packets stay those of the sound: a trim there would leave a
+        // gap in the sound against them.
 
         // Maximum header size: 2 (control header) + ceil(frameSize/255) + 1 (payload length)
         // For a 61440-byte maximum Opus packet: 2 + 241 + 1 = 244 bytes.
@@ -588,18 +592,24 @@ int OpusStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
             payloadLenFieldSize++;  // final non-0xFF byte
         }
 
+        const int samples = (std::min)(parseFrameSamples(avPacket.data, avPacket.size), 0x1FFF);
+        if (m_startTrimLeft < 0)
+            m_startTrimLeft = m_preSkip;
+        const int startTrim = (std::min)(m_startTrimLeft, samples);
+        m_startTrimLeft -= startTrim;
         int64_t endTrim = 0;
         if (m_lastOfStream && m_endTrimNs > 0)
-            endTrim = (std::min)(static_cast<int64_t>((std::min)(m_curFrameSamples, 0x1FFF)),
-                                 (m_endTrimNs * 48000 + 500000000) / 1000000000);
+            endTrim =
+                (std::min)(static_cast<int64_t>(samples - startTrim), (m_endTrimNs * 48000 + 500000000) / 1000000000);
 
-        const int totalHeaderSize = 2 + payloadLenFieldSize + (endTrim > 0 ? 2 : 0);
+        const int totalHeaderSize = 2 + payloadLenFieldSize + (startTrim > 0 ? 2 : 0) + (endTrim > 0 ? 2 : 0);
         if (dstEnd - dstBuffer < totalHeaderSize)
             return 0;
 
         // Write 2-byte control header
-        dstBuffer[0] = 0x7F;                       // prefix upper 8 bits: 0_1111111
-        dstBuffer[1] = endTrim > 0 ? 0xEB : 0xE3;  // prefix lower 3 bits (111) + flags + reserved (11)
+        dstBuffer[0] = 0x7F;  // prefix upper 8 bits: 0_1111111
+        // prefix lower 3 bits (111) + flags + reserved (11)
+        dstBuffer[1] = static_cast<uint8_t>(0xE3 | (startTrim > 0 ? 0x10 : 0) | (endTrim > 0 ? 0x08 : 0));
 
         // Write variable-length payload size
         uint8_t* p = dstBuffer + 2;
@@ -610,6 +620,11 @@ int OpusStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
             remaining -= 255;
         }
         *p++ = static_cast<uint8_t>(remaining);
+        if (startTrim > 0)
+        {
+            *p++ = static_cast<uint8_t>(0xE0 | (startTrim >> 8));
+            *p++ = static_cast<uint8_t>(startTrim & 0xFF);
+        }
         if (endTrim > 0)
         {
             *p++ = static_cast<uint8_t>(0xE0 | (endTrim >> 8));
