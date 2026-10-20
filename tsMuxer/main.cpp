@@ -3095,6 +3095,28 @@ int main(int argc, char** argv)
         for (int j = i; j + 1 < argc; ++j) argv[j] = argv[j + 1];
         --argc;
     }
+    // The same for --playlist-clips: a listing of a playlist gives the lengths and marks of the parts the mux takes,
+    // and the window takes the chapters from it, so the listing has to know the choice too. A mux takes it from the
+    // MUXOPT line of its meta file.
+    bool listPlaylistPlayed = PLAYLIST_CLIPS_PLAYED_BY_DEFAULT;
+    for (int i = 1; i < argc;)
+    {
+        const std::string arg = argv[i];
+        if (arg.compare(0, 17, "--playlist-clips=") != 0)
+        {
+            ++i;
+            continue;
+        }
+        const std::string value = arg.substr(17);
+        if (value != "played" && value != "whole")
+        {
+            LTRACE(LT_ERROR, 2, "Unknown --playlist-clips value \"" << value << "\". It takes played or whole.");
+            return -2;
+        }
+        listPlaylistPlayed = value == "played";
+        for (int j = i; j + 1 < argc; ++j) argv[j] = argv[j + 1];
+        --argc;
+    }
     int firstMplsOffset = 0;
     int firstM2tsOffset = 0;
     int blankNum = 1900;
@@ -3182,7 +3204,7 @@ int main(int argc, char** argv)
                     detectStreamReader(itemName.c_str(), &mplsParser, false, &laterClips);
                 }
                 // The lengths and marks of the play items, as the mux places them (the default of --playlist-clips)
-                METADemuxer::cutPlayItems(mplsParser, argv[1], PLAYLIST_CLIPS_PLAYED_BY_DEFAULT);
+                METADemuxer::cutPlayItems(mplsParser, argv[1], listPlaylistPlayed);
 
                 size_t markIndex = 0;
                 int64_t prevFileOffset = 0;
