@@ -208,13 +208,19 @@ class MatroskaDemuxer final : public IOContextDemuxer
         int64_t prev = -1;     // the frame before in the part, for the step
         int64_t step = 0;      // the shortest time from one frame to the next
         int64_t shift = 0;     // how much later than its own times the sound of the part being read is muxed
+        int64_t pad = 0;       // the padding at the end of the sound handed on so far (DiscardPadding)
+        int64_t excess = 0;    // what is not sound at the joints so far and is still played (a codec delay)
+        bool offered = false;  // a frame of the track has come in the part
         bool started = false;  // a frame of the track has been kept in the part
     };
     std::map<int, JoinSound> m_joinSound;  // by track (stream index)
     bool m_joinShiftKnown = true;  // where each part is put is known (m_joinShiftNs): a part of unknown length is not
     std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_timeGaps;  // by track, see takeTimeGaps
-    bool keepJoinSound(int track, int64_t ns, int64_t lengthNs);
+    bool keepJoinSound(int track, int64_t ns, int64_t lengthNs, int64_t leadNs = 0, int64_t padNs = 0,
+                       bool readerTrims = false, bool counted = false);
     static bool isJoinTimedCodec(const MatroskaTrack* track);
+    static bool isJoinDelayCodec(const MatroskaTrack* track);
+    int64_t m_blockDiscardNs = 0;  // the DiscardPadding of the block group being read
     std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(int pid) override;
 
     AVPacket* m_lastDeliveryPacket;

@@ -46,6 +46,11 @@ class OpusStreamReader final : public SimplePacketizerReader
     // that are not sound; whole packets of them are left out (readPacket).
     void setJoinEndPadding(std::vector<int64_t> nanoseconds) { m_joinEndPadNs = std::move(nanoseconds); }
     int readPacket(AVPacket& avPacket) override;
+    // The source counts the packets readPacket leaves out at the joints: a gap is put that much earlier.
+    void addTimeGap(const int64_t atNs, const int64_t gapNs) override
+    {
+        SimplePacketizerReader::addTimeGap(atNs - m_joinLeftOutNs, gapNs);
+    }
 
    protected:
     void fillDiscoveryData(StreamDiscoveryData& data) override;
@@ -88,6 +93,7 @@ class OpusStreamReader final : public SimplePacketizerReader
     int64_t m_joinExcess = 0;  // samples at the joints so far that are not sound and are still played
     int m_nextPreSkip = -1;    // decodeFrame: the packet just decoded is the last of its file; the next file's pre-skip
     bool m_lastOfStream = false;  // decodeFrame: the packet just decoded ends the stream
+    int64_t m_joinLeftOutNs = 0;  // the packets left out at the joints so far, in nanoseconds
     int m_startTrimLeft = -1;     // the pre-skip still to be trimmed in a transport stream; -1 before the first packet
 
     /// Raw CodecPrivate data (OpusHead).

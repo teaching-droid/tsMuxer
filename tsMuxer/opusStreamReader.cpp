@@ -375,6 +375,17 @@ int OpusStreamReader::readPacket(AVPacket& avPacket)
         if (rez != 0 || avPacket.size <= 0 || m_nextPreSkip < 0)
             return rez;
         const int64_t pad = (m_joinEndPadNs[m_joinFile] * 48000 + 500000000) / 1000000000;
+        // A gap the source asks for at this joint puts the next file where its picture is, by the frames the source
+        // hands on: the packets left out at the joints before are given back to it, and what they left over is
+        // taken up by it. Only this joint's padding and pre-skip are still played.
+        if (!m_timeGaps.empty() && static_cast<double>(m_timeGaps.front().first) <=
+                                       (m_curPts - PTS_CONST_OFFSET + m_halfFrameLen) * 1e9 / INTERNAL_PTS_FREQ)
+        {
+            m_timeGaps.front().second += m_joinLeftOutNs;
+            for (auto gap = m_timeGaps.begin() + 1; gap != m_timeGaps.end(); ++gap) gap->first += m_joinLeftOutNs;
+            m_joinLeftOutNs = 0;
+            m_joinExcess = 0;
+        }
         m_joinExcess += pad + m_nextPreSkip;
         m_nextPreSkip = -1;
         ++m_joinFile;
@@ -382,6 +393,10 @@ int OpusStreamReader::readPacket(AVPacket& avPacket)
             return rez;
         m_joinExcess -= m_curFrameSamples;
         m_curPts -= getFrameDuration();
+        // a gap the source asks for is placed by the frames it hands on, this one too
+        const auto leftOutNs = static_cast<int64_t>(getFrameDuration() * 1e9 / INTERNAL_PTS_FREQ + 0.5);
+        m_joinLeftOutNs += leftOutNs;
+        for (auto& gap : m_timeGaps) gap.first -= leftOutNs;
         if (m_frameNum > 0)
             --m_frameNum;
         LTRACE(LT_INFO, 2,
