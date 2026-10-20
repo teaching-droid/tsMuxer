@@ -3087,12 +3087,19 @@ void MovDemuxer::pictureLengths()
             if (!warned.insert(m_fileName + "|" + std::to_string(i + 1)).second)
                 continue;
         }
+        // How far the video ends from where the file's own times end, so the warning says how much is at stake: a
+        // file of 60 fps that drops to 30 fps halfway came out 5 s short, with only "does not keep in step" said.
+        double mediaTicks = 0;
+        for (const auto& e : runs) mediaTicks += static_cast<double>(e.count) * static_cast<double>(e.duration);
+        const double drift = (static_cast<double>(total) * frameTicks - mediaTicks) / st->time_scale;
         LTRACE(LT_WARN, 2,
                "Warning: video track " << i + 1 << " of " << m_fileName << " has pictures of different lengths, from "
                                        << shortest * 1000 / st->time_scale << " to " << longest * 1000 / st->time_scale
                                        << " ms. Its pictures are timed at " << doubleToStr(st->fps, 3)
                                        << " fps, so where their lengths differ from that, the video does not keep in "
-                                          "step with the sound.");
+                                          "step with the sound: by its end it is "
+                                       << doubleToStr(std::fabs(drift), 1) << " s "
+                                       << (drift < 0 ? "shorter" : "longer") << " than the file's times.");
     }
 }
 
