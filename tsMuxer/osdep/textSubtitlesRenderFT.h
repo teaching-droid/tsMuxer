@@ -4,6 +4,7 @@
 #include <ft2build.h>
 
 #include <map>
+#include <set>
 #include <vector>
 
 #include "../textSubtitlesRender.h"
@@ -35,6 +36,10 @@ class TextSubtitlesRenderFT final : public TextSubtitlesRender
     // The font m_face was loaded for. m_font is set and restored by others (textFits) without loading anything, so a
     // font equal to m_font is not necessarily the one loaded.
     Font m_loadedFont;
+    // The file of the first font loaded, the track's own, which a font a tag names and the system lacks falls back
+    // to; and the names already said to be missing.
+    std::string m_fallbackFontFile;
+    std::set<std::string> m_missingFonts;
     int m_underline_position;
     int m_line_thickness;
     FT_Matrix italic_matrix;

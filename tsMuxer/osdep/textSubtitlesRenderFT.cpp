@@ -260,9 +260,22 @@ void TextSubtitlesRenderFT::setFont(const Font& font)
             auto itr = m_fontNameToFile.find(fontLower);
             if (itr != m_fontNameToFile.end())
                 fontName = itr->second;
+            else if (!m_fallbackFontFile.empty())
+            {
+                // A font a tag names (<font face=...>) that is not installed: Windows draws such a piece with
+                // another font, here the job ended. It is drawn with the track's font, and said once per name.
+                if (m_missingFonts.insert(fontLower).second)
+                    LTRACE(LT_WARN, 2,
+                           "Warning: the font \"" << font.m_name
+                                                  << "\" is not installed, and the subtitles that name it "
+                                                  << "are drawn with " << m_fallbackFontFile << ".");
+                fontName = m_fallbackFontFile;
+            }
             else
                 THROW(ERR_COMMON, "Can't find a font file for " << fontName)
         }
+        if (m_fallbackFontFile.empty())
+            m_fallbackFontFile = fontName;
         string fileExt = extractFileExt(fontName);
         if (fileExt.length() > 0)
             fileExt = string(".") + fileExt;
