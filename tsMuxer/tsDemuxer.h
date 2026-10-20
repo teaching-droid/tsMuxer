@@ -184,6 +184,13 @@ class TSDemuxer final : public AbstractDemuxer
     uint8_t m_acceptedPidCache[8192];
     bool m_firstDemuxCall;
 
+    // The version of the program map the tracks were taken from (-1: none yet, -2: the next one seen, as at the start
+    // of a clip), the PID it comes on, and whether a change was said.
+    int m_pmtVersion = -1;
+    int m_pmtVersionPid = -1;
+    bool m_pmtChangeReported = false;
+    void checkPmtVersion(uint8_t* payload, const uint8_t* end);
+
     static bool isVideoPID(StreamType streamType);
     bool checkForRealM2ts(const uint8_t* buffer, const uint8_t* end) const;
 };

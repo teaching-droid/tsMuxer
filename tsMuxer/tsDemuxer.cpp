@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <set>
 #include <vector>
 
 #include "abstractStreamReader.h"
@@ -149,6 +150,8 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                         m_pmt.deserialize(pmtBuffer, pmtBufferLen);
                         if (m_pmt.video_type != static_cast<int>(StreamType::VIDEO_MVC))
                             m_nonMVCVideoFound = true;
+                        m_pmtVersionPid = pid;
+                        m_pmtVersion = -2;
                         pmtBufferLen = 0;
                         for (const auto& [fst, snd] : m_pmt.pidList)
                             trackList.insert(std::make_pair(
@@ -272,6 +275,8 @@ void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, c
                         m_pmt.deserialize(pmtBuffer, pmtBufferLen);
                         if (m_pmt.video_type != static_cast<int>(StreamType::VIDEO_MVC))
                             m_nonMVCVideoFound = true;
+                        m_pmtVersionPid = pid;
+                        m_pmtVersion = -2;
                     }
                     else
                     {
@@ -286,6 +291,48 @@ void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, c
             }
         }
     }
+}
+
+// A broadcast recording can change its program map, at a change of programme: new PIDs for the sound, a second
+// sound or subtitles, or another codec on a PID. The tracks are those of the first map, and the new ones were left
+// out without a word. Said once, with the tracks the new map adds or changes.
+void TSDemuxer::checkPmtVersion(uint8_t* payload, const uint8_t* end)
+{
+    const uint8_t* section = payload + 1 + payload[0];
+    if (section + 8 > end || section[0] != 2)
+        return;
+    const int version = section[5] >> 1 & 0x1f;
+    if (m_pmtVersion == -2)
+        m_pmtVersion = version;
+    if (version == m_pmtVersion || m_pmtChangeReported)
+        return;
+    m_pmtVersion = version;
+    TS_program_map_section pmt;
+    const int len = static_cast<int>(end - payload);
+    if (!TS_program_map_section::isFullBuff(payload, len) || !pmt.deserialize(payload, len))
+        return;
+    std::string added;
+    std::string changed;
+    for (const auto& [streamPid, info] : pmt.pidList)
+    {
+        const auto known = m_pmt.pidList.find(streamPid);
+        std::string& list = known == m_pmt.pidList.end() ? added : changed;
+        if (known == m_pmt.pidList.end() || known->second.m_streamType != info.m_streamType)
+            list += (list.empty() ? "" : ", ") + std::to_string(streamPid);
+    }
+    if (added.empty() && changed.empty())
+        return;
+    m_pmtChangeReported = true;
+    // once per file: the file is read by more than one demuxer (the tracks are told before the mux)
+    static std::set<std::string> reported;
+    if (!reported.insert(m_streamNameLow).second)
+        return;
+    LTRACE(LT_WARN, 2,
+           "Warning: the program map of the transport stream changes inside the file."
+               << (added.empty() ? "" : " Tracks " + added + " are not in the first map and are left out.")
+               << (changed.empty()
+                       ? ""
+                       : " Tracks " + changed + " change their kind of stream; they are read as the first map says."));
 }
 
 int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& acceptedPIDs, int64_t& discardSize)
@@ -386,6 +433,8 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         readProgramTables(data, lastFrameAddr, false);
     else if (isFirstBlock)
         readProgramTables(data, lastFrameAddr, true);
+    if (isFirstBlock && m_pmtVersion != -1)
+        m_pmtVersion = -2;  // each clip of a playlist has a program map of its own
 
     // A block holds data of one file only
     const ClipPart* part =
@@ -430,6 +479,8 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         }
 
         uint8_t* frameData = m_curPos + tsPacket->getHeaderSize();
+        if (pid == m_pmtVersionPid && tsPacket->payloadStart)
+            checkPmtVersion(frameData, m_curPos + TS_FRAME_SIZE);
         const bool pesStartCode = frameData[0] == 0 && frameData[1] == 0 && frameData[2] == 1 && tsPacket->payloadStart;
         if (part != nullptr && !pesStartCode && !m_partKeep[pid])
             continue;
