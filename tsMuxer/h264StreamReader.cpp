@@ -229,8 +229,10 @@ const CodecInfo& H264StreamReader::getCodecInfo()
 
 uint8_t* H264StreamReader::writeNalPrefix(uint8_t* curPos) const
 {
-    if (!m_shortStartCodes)
-        *curPos++ = 0;
+    // What is inserted (delimiters, parameter sets, SEI) stands at the head of an access unit, where the byte stream
+    // format asks for four bytes. It took the length of the stream's own start code there, three in many streams:
+    // every inserted SPS and PPS of such a stream had three.
+    *curPos++ = 0;
     *curPos++ = 0;
     *curPos++ = 0;
     *curPos++ = 1;
