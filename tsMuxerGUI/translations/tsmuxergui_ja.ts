@@ -2871,6 +2871,21 @@ Build the ISO anyway?</source>
         <translation>クロップされた映像をフルサイズに復元</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>A Blu-ray playlist can play only part of a clip. Ticked, only that part is muxed, cut at the key pictures around it, as a player plays it. Unticked, every clip is muxed whole, as earlier versions did.</source>
+        <translation>Blu-ray のプレイリストはクリップの一部だけを再生することがあります。チェックすると、プレーヤーが再生するとおり、その部分だけを前後のキーピクチャで切って多重化します。チェックしないと、以前のバージョンと同じく各クリップ全体を多重化します。</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>Mux only the parts of a playlist&apos;s clips that it plays</source>
+        <translation>プレイリストが再生するクリップの部分だけを多重化する</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>Remove the playlist and add it again: its length and chapters were read for the other choice.</source>
+        <translation>プレイリストを削除してから追加し直してください。長さとチャプターは別の設定で読み込まれています。</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="1173"/>
         <source>Default output folder</source>
         <translation>デフォルトの出力フォルダー</translation>

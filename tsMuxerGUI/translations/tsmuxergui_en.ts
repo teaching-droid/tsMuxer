@@ -2763,6 +2763,21 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>A Blu-ray playlist can play only part of a clip. Ticked, only that part is muxed, cut at the key pictures around it, as a player plays it. Unticked, every clip is muxed whole, as earlier versions did.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>Mux only the parts of a playlist&apos;s clips that it plays</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>Remove the playlist and add it again: its length and chapters were read for the other choice.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="1173"/>
         <source>Default output folder</source>
         <translation type="unfinished"></translation>

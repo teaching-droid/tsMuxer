@@ -2871,6 +2871,21 @@ Build the ISO anyway?</source>
         <translation>שחזר סרטון חתוך לגודל מלא</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>A Blu-ray playlist can play only part of a clip. Ticked, only that part is muxed, cut at the key pictures around it, as a player plays it. Unticked, every clip is muxed whole, as earlier versions did.</source>
+        <translation>רשימת השמעה של Blu-ray יכולה לנגן רק חלק מקליפ. כשמסומן, רק החלק הזה עובר מיקס, חתוך בתמונות המפתח שסביבו, כפי שנגן מנגן אותו. כשלא מסומן, כל קליפ עובר מיקס בשלמותו, כמו בגרסאות קודמות.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>Mux only the parts of a playlist&apos;s clips that it plays</source>
+        <translation>לבצע מיקס רק לחלקי הקליפים שרשימת ההשמעה מנגנת</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>Remove the playlist and add it again: its length and chapters were read for the other choice.</source>
+        <translation>הסירו את רשימת ההשמעה והוסיפו אותה מחדש: האורך והפרקים שלה נקראו עבור הבחירה האחרת.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="1173"/>
         <source>Default output folder</source>
         <translation>תיקיית פלט ברירת מחדל</translation>

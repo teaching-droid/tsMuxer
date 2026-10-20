@@ -2871,6 +2871,21 @@ ISO trotzdem erstellen?</translation>
         <translation>Geschnittenes Video in Originalgröße wiederherstellen</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>A Blu-ray playlist can play only part of a clip. Ticked, only that part is muxed, cut at the key pictures around it, as a player plays it. Unticked, every clip is muxed whole, as earlier versions did.</source>
+        <translation>Eine Blu-ray-Playlist kann nur einen Teil eines Clips abspielen. Angehakt wird nur dieser Teil gemuxt, an den Schlüsselbildern davor und danach geschnitten, so wie ein Player ihn abspielt. Nicht angehakt wird jeder Clip ganz gemuxt, wie in früheren Versionen.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>Mux only the parts of a playlist&apos;s clips that it plays</source>
+        <translation>Von den Clips einer Playlist nur die abgespielten Teile muxen</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>Remove the playlist and add it again: its length and chapters were read for the other choice.</source>
+        <translation>Entfernen Sie die Playlist und fügen Sie sie erneut hinzu: Ihre Länge und ihre Kapitel wurden für die andere Einstellung gelesen.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="1173"/>
         <source>Default output folder</source>
         <translation>Standard-Ausgabeordner</translation>

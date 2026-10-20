@@ -2871,6 +2871,21 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas, seleccionables como
         <translation>Restaurar vídeo recortado a su tamaño original</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>A Blu-ray playlist can play only part of a clip. Ticked, only that part is muxed, cut at the key pictures around it, as a player plays it. Unticked, every clip is muxed whole, as earlier versions did.</source>
+        <translation>Una playlist de Blu-ray puede reproducir solo una parte de un clip. Marcado, solo se multiplexa esa parte, cortada en las imágenes clave que la rodean, como la reproduce un reproductor. Sin marcar, cada clip se multiplexa entero, como en versiones anteriores.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>Mux only the parts of a playlist&apos;s clips that it plays</source>
+        <translation>Multiplexar solo las partes de los clips que reproduce una playlist</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>Remove the playlist and add it again: its length and chapters were read for the other choice.</source>
+        <translation>Quite la playlist y vuelva a añadirla: su duración y sus capítulos se leyeron para la otra opción.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="1173"/>
         <source>Default output folder</source>
         <translation>Carpeta de salida por defecto</translation>

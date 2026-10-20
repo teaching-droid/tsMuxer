@@ -2871,6 +2871,21 @@ Build the ISO anyway?</source>
         <translation>Восстановить обрезанное видео</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>A Blu-ray playlist can play only part of a clip. Ticked, only that part is muxed, cut at the key pictures around it, as a player plays it. Unticked, every clip is muxed whole, as earlier versions did.</source>
+        <translation>Плейлист Blu-ray может воспроизводить только часть клипа. Если отмечено, мультиплексируется только эта часть, обрезанная по ближайшим ключевым кадрам, как её воспроизводит плеер. Если не отмечено, каждый клип мультиплексируется целиком, как в прежних версиях.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>Mux only the parts of a playlist&apos;s clips that it plays</source>
+        <translation>Мультиплексировать только воспроизводимые плейлистом части клипов</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>Remove the playlist and add it again: its length and chapters were read for the other choice.</source>
+        <translation>Удалите плейлист и добавьте его снова: его длительность и главы были прочитаны для другого варианта.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="1173"/>
         <source>Default output folder</source>
         <translation>Папка по умолчанию для результирующих файлов</translation>

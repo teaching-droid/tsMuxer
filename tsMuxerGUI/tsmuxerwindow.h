@@ -89,6 +89,7 @@ class TsMuxerWindow : public QWidget
     void onSplitCutParamsChanged();
     void onSavedParamChanged();
     void onFontParamsChanged();
+    void onPlaylistPartsChanged();
     void onRemoveBtnClick();
     void onAppendButtonClick();
     void onRemoveTrackButtonClick();

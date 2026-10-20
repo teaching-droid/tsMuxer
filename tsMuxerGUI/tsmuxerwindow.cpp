@@ -910,6 +910,7 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->BlackplaylistCombo, spinBoxValueChanged, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->checkBoxNewAudioPes, &QAbstractButton::clicked, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->checkBoxCrop, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onSavedParamChanged);
+    connect(ui->checkBoxPlaylistParts, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onPlaylistPartsChanged);
     connect(ui->checkBoxRVBR, &QAbstractButton::clicked, this, &TsMuxerWindow::onGeneralCheckboxClicked);
     connect(ui->checkBoxCBR, &QAbstractButton::clicked, this, &TsMuxerWindow::onGeneralCheckboxClicked);
     connect(ui->radioButtonStoreOutput, &QAbstractButton::clicked, this, &TsMuxerWindow::onSavedParamChanged);
@@ -4210,6 +4211,10 @@ void TsMuxerWindow::tsMuxerExecute(const QStringList& args)
     const QString langStyle = ui->langCodesComboBox->currentData().toString();
     if (!langStyle.isEmpty() && langStyle != QLatin1String("terminological"))
         allArgs << (QLatin1String("--lang-codes=") + langStyle);
+    // The listing of a playlist gives the lengths and chapters of the parts it muxes, so it is asked the same way as
+    // the mux: the window takes the chapters from it. Left off at the default.
+    if (!ui->checkBoxPlaylistParts->isChecked())
+        allArgs << QLatin1String("--playlist-clips=whole");
     allArgs << args;
     ui->buttonMux->setEnabled(false);
     procStdOutput.clear();
@@ -4409,6 +4414,10 @@ QString TsMuxerWindow::getMuxOpts()
         if (ui->checkBoxRVBR->isChecked())
             rez += QString(" --minbitrate=") + QString::number(ui->editMinBitrate->value(), 'f', 3);
     }
+
+    // A playlist's clips whole, as earlier versions muxed them; the default muxes the parts the playlist plays
+    if (!ui->checkBoxPlaylistParts->isChecked())
+        rez += " --playlist-clips=whole";
 
     // ** THE CEILING IS WRITTEN ONCE. ** Two controls can ask for one: Restricted VBR here, and
     // the tick on the Blu-ray tab that holds the disc to the rate a player has to supply. Both
@@ -5226,6 +5235,25 @@ void TsMuxerWindow::onSavedParamChanged()
 }
 
 void TsMuxerWindow::onFontParamsChanged() { updateMetaLines(); }
+
+// The lengths and chapters of a playlist were read when it was added, for the choice made then: a playlist added before
+// the box changed keeps them until it is added again.
+void TsMuxerWindow::onPlaylistPartsChanged()
+{
+    onSavedParamChanged();
+    for (int i = 0; i < ui->inputFilesLV->count(); ++i)
+    {
+        const QString name = ui->inputFilesLV->item(i)->data(FileNameRole).toString();
+        if (name.endsWith(QLatin1String(".mpls"), Qt::CaseInsensitive) ||
+            name.endsWith(QLatin1String(".mpl"), Qt::CaseInsensitive))
+        {
+            QMessageBox::information(this, tr("tsMuxeR"),
+                                     tr("Remove the playlist and add it again: its length and chapters were read for "
+                                        "the other choice."));
+            break;
+        }
+    }
+}
 
 void TsMuxerWindow::onRemoveBtnClick()
 {
@@ -6617,6 +6645,7 @@ void TsMuxerWindow::writeSettings()
     settings->setValue("hdmvPES", ui->checkBoxNewAudioPes->isChecked());
     if (ui->checkBoxCrop->isEnabled())
         settings->setValue("restoreCropEnabled", ui->checkBoxCrop->isChecked());
+    settings->setValue("playlistParts", ui->checkBoxPlaylistParts->isChecked());
     settings->setValue("inputDir", lastInputDir);
     settings->setValue("outputDir", lastOutputDir);
     settings->setValue("useBlankPL", ui->checkBoxBlankPL->isChecked());
@@ -6843,6 +6872,8 @@ bool TsMuxerWindow::readGeneralSettings(const QString& prefix)
     ui->checkBoxSound->setChecked(settings->value("soundEnabled", ui->checkBoxSound->isChecked()).toBool());
     ui->checkBoxNewAudioPes->setChecked(settings->value("hdmvPES", ui->checkBoxNewAudioPes->isChecked()).toBool());
     ui->checkBoxCrop->setChecked(settings->value("restoreCropEnabled").toBool());
+    ui->checkBoxPlaylistParts->setChecked(
+        settings->value("playlistParts", ui->checkBoxPlaylistParts->isChecked()).toBool());
     ui->checkBoxBlankPL->setChecked(settings->value("useBlankPL", ui->checkBoxBlankPL->isChecked()).toBool());
     // 0 is a playlist number like any other: it was skipped, and the box kept its default of 1900
     if (settings->contains("blankPLNum"))

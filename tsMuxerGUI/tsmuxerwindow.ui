@@ -1315,6 +1315,19 @@
               </widget>
              </item>
              <item>
+              <widget class="QCheckBox" name="checkBoxPlaylistParts">
+               <property name="toolTip">
+                <string>A Blu-ray playlist can play only part of a clip. Ticked, only that part is muxed, cut at the key pictures around it, as a player plays it. Unticked, every clip is muxed whole, as earlier versions did.</string>
+               </property>
+               <property name="text">
+                <string>Mux only the parts of a playlist's clips that it plays</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
               <layout class="QHBoxLayout" name="langCodesLayout">
                <item>
                 <widget class="QLabel" name="langCodesLabel">

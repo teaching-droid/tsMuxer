@@ -2871,6 +2871,21 @@ Créer l'ISO malgré tout ?</translation>
         <translation>Restaurer une vidéo recadrée à sa taille d&apos;origine</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>A Blu-ray playlist can play only part of a clip. Ticked, only that part is muxed, cut at the key pictures around it, as a player plays it. Unticked, every clip is muxed whole, as earlier versions did.</source>
+        <translation>Une playlist Blu-ray peut ne lire qu&apos;une partie d&apos;un clip. Coché, seule cette partie est multiplexée, coupée aux images clés qui l&apos;entourent, comme un lecteur la lit. Décoché, chaque clip est multiplexé en entier, comme dans les versions précédentes.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>Mux only the parts of a playlist&apos;s clips that it plays</source>
+        <translation>Ne multiplexer que les parties des clips qu&apos;une playlist lit</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>Remove the playlist and add it again: its length and chapters were read for the other choice.</source>
+        <translation>Retirez la playlist et ajoutez-la de nouveau : sa durée et ses chapitres ont été lus pour l&apos;autre choix.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="1173"/>
         <source>Default output folder</source>
         <translation>Dossier de sortie par défaut</translation>

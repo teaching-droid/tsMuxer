@@ -2871,6 +2871,21 @@ Build the ISO anyway?</source>
         <translation>将裁剪的视频还原到完整大小</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>A Blu-ray playlist can play only part of a clip. Ticked, only that part is muxed, cut at the key pictures around it, as a player plays it. Unticked, every clip is muxed whole, as earlier versions did.</source>
+        <translation>蓝光播放列表可能只播放片段的一部分。勾选时，只复用该部分，并在其前后的关键帧处切开，与播放器的播放方式一致。不勾选时，每个片段都完整复用，与早期版本相同。</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>Mux only the parts of a playlist&apos;s clips that it plays</source>
+        <translation>仅复用播放列表实际播放的片段部分</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>Remove the playlist and add it again: its length and chapters were read for the other choice.</source>
+        <translation>请移除该播放列表后重新添加：它的时长和章节是按另一种设置读取的。</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="1173"/>
         <source>Default output folder</source>
         <translation>默认输出目录</translation>
