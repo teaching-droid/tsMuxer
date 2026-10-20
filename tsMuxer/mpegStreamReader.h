@@ -186,6 +186,8 @@ class MPEGStreamReader : public AbstractStreamReader
     bool m_longCodesAllowed;
     bool m_removePulldown;
     int64_t m_testPulldownDts;
+    int64_t m_pulldownDtsStart = 0;  // the decoding time of the first picture the pulldown check counts
+    int64_t m_pulldownStep = 0;      // the frame step the pulldown check counts in
     void checkPulldownSync();
     // The depth (getFrameDepth) grew from depthBefore before the picture being read, after pictures were given their
     // decoding times: the times of the next pictures catch up in steps shorter than a frame (pictureDts).

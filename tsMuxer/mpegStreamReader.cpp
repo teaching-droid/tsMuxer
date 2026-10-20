@@ -464,16 +464,37 @@ double MPEGStreamReader::headerFps(const double streamFps)
 
 void MPEGStreamReader::checkPulldownSync()
 {
-    int64_t asyncValue = m_curDts * 5 - m_testPulldownDts * 4;
+    // Film reaches 29.97 with fields repeated, five fields for four pictures (1.25), and 59.94 with frames repeated,
+    // five frames for two pictures (2.5). Only the first was checked, so film at 59.94 gave a warning every few
+    // seconds. The cadence is the one the two times are nearer to: above 1.875 it is the second.
+    // Both times count from the first picture: the decoding time does not start at 0, and its start counted as a
+    // mistiming of its own. They count again when the frame step changes, as it does when the film rate is found:
+    // the times before were in steps of the other rate.
+    if (m_pcrIncPerFrame != m_pulldownStep)
+    {
+        m_pulldownStep = m_pcrIncPerFrame;
+        m_testPulldownDts = 0;
+    }
+    if (m_testPulldownDts == 0)
+        m_pulldownDtsStart = m_curDts;
+    const int64_t curDts = m_curDts - m_pulldownDtsStart;
+    if (curDts < 2 * INTERNAL_PTS_FREQ)
+        return;  // the cadence of the first pictures is not yet the stream's
+    const bool repeatedFrames = m_testPulldownDts * 8 > curDts * 15;
+    int64_t asyncValue = repeatedFrames ? curDts * 5 - m_testPulldownDts * 2 : curDts * 5 - m_testPulldownDts * 4;
     if (asyncValue < 0)
         asyncValue = -asyncValue;
+    // a picture shown two or three times is half a picture away from the average of the two, either way
+    if (repeatedFrames)
+        asyncValue = (std::max)(int64_t{0}, asyncValue - 5 * 2 * m_pcrIncPerFrame);
 
     if (m_testPulldownDts != 0 && asyncValue > 5 * MAX_PULLDOWN_ASYNC * m_pulldownWarnCnt)
     {
         LTRACE(LT_ERROR, 2,
                "Warning! Source stream contain irregular pulldown marks. Mistiming between original fps and "
-               "fps/1.25 (without pulldown) exceeds "
-                   << (asyncValue / 5000000ll) << "ms.");
+               "fps/"
+                   << (repeatedFrames ? "2.5" : "1.25") << " (without pulldown) exceeds " << (asyncValue / 5000000ll)
+                   << "ms.");
         m_pulldownWarnCnt *= 2;
     }
 }
