@@ -122,6 +122,8 @@ class SRTStreamReader final : public AbstractStreamReader
     int m_unseenCues = 0;       // drawn: subtitles with text, none of which lands inside the picture
     int m_shrunkCues = 0;       // drawn: subtitles too large for the picture, drawn at the largest size that fits
     bool m_unseenReported = false;
+    // a subtitle that ends where or before it starts was said
+    bool m_noLengthReported = false;
     int m_srtRecords = 0;        // demux: SRT records written so far, which numbers the next
     int64_t m_cuesRead = 0;      // subtitles read from the file
     int64_t m_skippedLines = 0;  // lines of text that are not part of any subtitle, passed over

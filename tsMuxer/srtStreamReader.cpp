@@ -1040,9 +1040,19 @@ void SRTStreamReader::flushCueGroup()
 {
     if (m_cueGroup.size() == 1)
     {
-        // A cue that overlaps nothing is drawn exactly as it always was, from its times as read
+        // A cue that overlaps nothing is drawn exactly as it always was, from its times as read. One that ends on the
+        // frame it starts on or before it was drawn too: its clear came at its start, or before it, so the times of
+        // the subtitles went back. It has nothing to show and is left out.
         const Cue& c = m_cueGroup.front();
-        m_toDraw.push_back(Piece{c.text, c.inTime, c.outTime, true});
+        if (c.outFrame > c.inFrame)
+            m_toDraw.push_back(Piece{c.text, c.inTime, c.outTime, true});
+        else if (!m_noLengthReported)
+        {
+            m_noLengthReported = true;
+            LTRACE(LT_WARN, 2,
+                   "Warning: a subtitle of track " << m_streamIndex << " at " << c.inTime
+                                                   << " s ends where it starts, or before, and is left out.");
+        }
     }
     else if (m_cueGroup.size() > 1)
     {
