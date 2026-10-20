@@ -1023,6 +1023,12 @@ void SRTStreamReader::addCue(const std::string& text, const double inTime, const
         if (!m_cueGroup.empty() && cue.inFrame < m_cueGroupEnd)
             return;  // no text or no length, inside a group: nothing to add to it
         flushCueGroup();
+        // A cue that starts on the frame where the one before ends replaces it there. The one before was cleared at
+        // that frame all the same: a clearing composition and the new subtitle at one presentation time, the
+        // decoding time going back between the two.
+        if (drawable && m_containerType == ContainerType::ctNone && !m_toDraw.empty() && m_toDraw.back().hide &&
+            m_srtRender->alignToGrid(m_toDraw.back().outTime) == cue.inFrame)
+            m_toDraw.back().hide = false;
     }
     m_cueGroupEnd = m_cueGroup.empty() ? cue.outFrame : (std::max)(m_cueGroupEnd, cue.outFrame);
     m_cueGroup.push_back(cue);
