@@ -972,6 +972,51 @@ int H264StreamReader::leadingPicturesOfFirst(const SliceUnit& firstSlice, uint8_
     return m_eof ? leading : -1;
 }
 
+// The depth checkPyramid will find in the IDR period that begins at this IDR, from the frame pictures after it: up to
+// 33 of them, the next IDR, a coded field or a reset of the order count, whichever comes first. Returns -1 when more
+// data is needed and can come; it is read no further than 32 MiB past the IDR.
+int H264StreamReader::depthOfIdrPeriod(const SliceUnit& idrSlice, uint8_t* buff)
+{
+    static constexpr int MAX_PICTURES = 33;
+    static constexpr std::ptrdiff_t MAX_AHEAD = 32 * 1024 * 1024;
+    const int maxLsb = 1 << idrSlice.getSPS()->log2_max_pic_order_cnt_lsb;
+    int prevLsb = static_cast<int>(idrSlice.pic_order_cnt_lsb);
+    int order = prevLsb;  // the order count, as calcPicOrder gives it from the IDR on
+    int pictures = 0;
+    int depth = 0;
+    for (uint8_t* nal = NALUnit::findNextNAL(buff + 4, m_bufEnd); nal < m_bufEnd;
+         nal = NALUnit::findNextNAL(nal, m_bufEnd))
+    {
+        const auto type = static_cast<NALUnit::NALType>(*nal & 0x1f);
+        if (type == NALUnit::NALType::nuSliceIDR)
+            return depth;
+        if (type != NALUnit::NALType::nuSliceNonIDR && type != NALUnit::NALType::nuSliceA)
+            continue;
+        SliceUnit slice;
+        const int rez = deserializeSliceHeader(slice, nal, m_bufEnd);
+        if (rez == NOT_ENOUGH_BUFFER && !m_eof && nal - buff < MAX_AHEAD)
+            return -1;
+        if (rez != 0)
+            return depth;
+        if (slice.first_mb_in_slice != 0)
+            continue;
+        if (slice.m_field_pic_flag || slice.memory_management_control_operation == 5)
+            return depth;
+        const int lsb = static_cast<int>(slice.pic_order_cnt_lsb);
+        if (lsb < prevLsb && prevLsb - lsb >= maxLsb / 2)
+            order += lsb + maxLsb - prevLsb;
+        else if (lsb > prevLsb && lsb - prevLsb > maxLsb / 2)
+            order += lsb - maxLsb - prevLsb;
+        else
+            order += lsb - prevLsb;
+        prevLsb = lsb;
+        depth = (std::max)(depth, ++pictures - (order >> m_forceLsbDiv));
+        if (pictures >= MAX_PICTURES)
+            return depth;
+    }
+    return m_eof || m_bufEnd - buff >= MAX_AHEAD ? depth : -1;
+}
+
 // The picture order count step of the IDR period that begins with idrSlice (its NAL at buff), read from
 // that period's own pictures by the rule additionalStreamCheck applies at the start of a track: 1 (halve
 // the counts) for coded fields and for frames whose counts are all even, 0 when a coded frame has an odd
@@ -1056,7 +1101,7 @@ int H264StreamReader::intDecodeNAL(uint8_t* buff)
         nalRez = processSPS(buff);
         if (nalRez != 0)
             return nalRez;
-        m_spsCounter++;
+        countSps(buff);
         break;
     case NALUnit::NALType::nuSEI:
         // LTRACE(LT_DEBUG, 0, "SEI");
@@ -1109,7 +1154,7 @@ int H264StreamReader::intDecodeNAL(uint8_t* buff)
             nalRez = processSPS(nextNal);
             if (nalRez != 0)
                 return nalRez;
-            m_spsCounter++;
+            countSps(nextNal);
             break;
         case NALUnit::NALType::nuPPS:
             // LTRACE(LT_DEBUG, 0, "PPS");
@@ -1135,6 +1180,17 @@ int H264StreamReader::intDecodeNAL(uint8_t* buff)
             break;
         }
         nextNal = NALUnit::findNextNAL(nextNal, m_bufEnd);
+    }
+}
+
+void H264StreamReader::countSps(const uint8_t* nal)
+{
+    // where the unit stands in the stream: m_processedBytes counts the bytes before m_curPos
+    const int64_t at = m_processedBytes + (nal - m_curPos);
+    if (at > m_spsCountedTo)
+    {
+        m_spsCounter++;
+        m_spsCountedTo = at;
     }
 }
 
@@ -1510,6 +1566,26 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
             return NOT_ENOUGH_BUFFER;
         if (firstLeading == -2)
             firstLeading = -1;  // coded fields follow: as before
+    }
+
+    // An IDR period can have a deeper B pyramid than the pictures before it: a joined file coded otherwise, or a stream
+    // whose first block holds too few pictures to show its depth. Found only at its first deep picture, the larger
+    // depth moved the decoding time of that picture back behind the times already given. The period is read ahead from
+    // its IDR, and the decoding times catch up over its first pictures (deepenAfterOutput).
+    if (slice.isIDR() && !damaged && !slice.m_field_pic_flag && !m_fieldPicturesSeen &&
+        slice.getSPS()->pic_order_cnt_type == 0)
+    {
+        const int ahead = (std::min)(16, depthOfIdrPeriod(slice, buff));
+        if (ahead == -1)
+            return NOT_ENOUGH_BUFFER;
+        if (ahead > m_frameDepth)
+        {
+            const int depthBefore = getFrameDepth();
+            m_frameDepth = ahead;
+            LTRACE(LT_INFO, 2,
+                   "B-pyramid level " << m_frameDepth - 1 << " detected. Shift DTS to " << m_frameDepth << " frames");
+            deepenAfterOutput(depthBefore);
+        }
     }
 
     // Times by fields begin at the next IDR, where a period begins anyway: begun at once, mid period, the pictures

@@ -96,6 +96,10 @@ class H264StreamReader final : public MPEGStreamReader
     int m_frameDepth;
 
     int m_spsCounter;
+    // An access unit is read again from its start when its picture needs data the buffer does not hold yet: its SPS
+    // is counted once, by where it stands in the stream (countSps)
+    int64_t m_spsCountedTo = -1;
+    void countSps(const uint8_t* nal);
     bool m_h264SPSCont;
     bool m_lastSliceIDR;
     uint32_t m_lastSliceSPS;
@@ -144,6 +148,7 @@ class H264StreamReader final : public MPEGStreamReader
     int calcPicOrder(const SliceUnit& slice);
     int getIdrPrevFrames(uint8_t* buff, const uint8_t* bufEnd);
     int leadingPicturesOfFirst(const SliceUnit& firstSlice, uint8_t* buff);
+    int depthOfIdrPeriod(const SliceUnit& idrSlice, uint8_t* buff);
     int64_t m_maxPts = 0;       // the latest presentation time given, for the start of the next IDR period
     int64_t m_maxPtsShown = 0;  // how long the picture at m_maxPts is shown: a frame, or its fields with pulldown
     // Pulldown with pictures shown out of decode order (B pictures): a picture is shown for 2 to 6 fields, so its

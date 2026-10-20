@@ -1142,6 +1142,46 @@ int HEVCStreamReader::picturesShownBeforeFirst(uint8_t* nal, uint8_t* end) const
     return m_eof ? leading : -1;
 }
 
+// The depth incTimings will find in the period that begins at this IDR picture, from the pictures after it: up to 33
+// of them or the next IDR or BLA picture, whichever comes first. Returns -1 when more data is needed and can come;
+// it is read no further than 32 MiB past the picture.
+int HEVCStreamReader::depthOfPeriod(uint8_t* nal, uint8_t* end) const
+{
+    static constexpr int MAX_PICTURES = 33;
+    static constexpr std::ptrdiff_t MAX_AHEAD = 32 * 1024 * 1024;
+    const int range = 1 << m_sps->log2_max_pic_order_cnt_lsb;
+    int prevLsb = 0;  // an IDR picture's order count
+    int order = 0;    // the order count from this picture's, as toFullPicOrder steps it
+    int pictures = 0;
+    int depth = 0;
+    HevcSliceHeader slice;
+    for (uint8_t* cur = NALUnit::findNextNAL(nal, end); cur < end - 4; cur = NALUnit::findNextNAL(cur, end))
+    {
+        const auto type = static_cast<HevcUnit::NalType>((*cur >> 1) & 0x3f);
+        if (!isSlice(type) || !(cur[2] & 0x80))
+            continue;  // not the first slice of a picture
+        if (type >= HevcUnit::NalType::BLA_W_LP && type <= HevcUnit::NalType::IDR_N_LP)
+            return depth;  // the next period
+        uint8_t* next = NALUnit::findNALWithStartCode(cur, end, true);
+        if (next == end && !m_eof && cur - nal < MAX_AHEAD)
+            return -1;
+        slice.decodeBuffer(cur, FFMIN(cur + MAX_SLICE_HEADER, next));
+        if (slice.deserialize(m_sps, m_pps) != 0)
+            return depth;
+        int diff = static_cast<int>(slice.pic_order_cnt_lsb) - prevLsb;
+        if (diff <= -range / 2)
+            diff += range;
+        else if (diff >= range / 2)
+            diff -= range;
+        prevLsb = static_cast<int>(slice.pic_order_cnt_lsb);
+        order += diff;
+        depth = (std::max)(depth, ++pictures - order);
+        if (pictures >= MAX_PICTURES)
+            return depth;
+    }
+    return m_eof || end - nal >= MAX_AHEAD ? depth : -1;
+}
+
 // The picture order count, on a scale where the first picture of the stream is at its own position. The count starts
 // again at an IDR picture, whose count is 0, and at a BLA picture, whose count is its pic_order_cnt_lsb alone. It
 // used to start only at an IDR, so a stream that begins on another picture, as a broadcast capture that begins on a
@@ -1302,6 +1342,25 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                     m_lastDecodedPos = prevPos;  // next frame started
                     incTimings();
                     return 0;
+                }
+                // A period can have a deeper B pyramid than the pictures before it: a joined file coded otherwise.
+                // Found only at its first deep picture, the larger depth moved the decoding time of that picture
+                // back behind the times already given. The period is read ahead from its IDR picture, and the
+                // decoding times catch up over its first pictures (deepenAfterOutput).
+                if (nalType == HevcUnit::NalType::IDR_W_RADL || nalType == HevcUnit::NalType::IDR_N_LP)
+                {
+                    const int ahead = (std::min)(16, depthOfPeriod(curPos, m_bufEnd));
+                    if (ahead == -1)
+                        return NOT_ENOUGH_BUFFER;
+                    if (ahead > m_frameDepth)
+                    {
+                        const int depthBefore = m_frameDepth;
+                        m_frameDepth = ahead;
+                        LTRACE(LT_INFO, 2,
+                               "B-pyramid level " << m_frameDepth - 1 << " detected. Shift DTS to " << m_frameDepth
+                                                  << " frames");
+                        deepenAfterOutput(depthBefore);
+                    }
                 }
                 // first slice of current frame. Before parsing it, put back any HDR SEI this
                 // access unit should carry: every prefix NAL of it has now been seen, so what the

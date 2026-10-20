@@ -101,7 +101,7 @@ int MPEGStreamReader::flushPacket(AVPacket& avPacket)
     }
 
     avPacket.pts = m_curPts + m_timeOffset;
-    avPacket.dts = m_curDts + m_timeOffset - m_pcrIncPerFrame * getFrameDepth();  // shift dts back
+    avPacket.dts = pictureDts();  // shift dts back
 
     string message = "Processed ";
     message += int32ToStr(m_totalFrameNum);
@@ -110,6 +110,43 @@ int MPEGStreamReader::flushPacket(AVPacket& avPacket)
     LTRACE(LT_INFO, 2, message);
     m_processedBytes += avPacket.size;
     return static_cast<int>(m_tmpBufferLen);
+}
+
+int64_t MPEGStreamReader::pictureDts()
+{
+    const int64_t dts = m_curDts + m_timeOffset - m_pcrIncPerFrame * getFrameDepth();
+    if (m_catchUpStep == 0)
+        return dts;
+    if (m_curDts == m_catchUpCurDts)
+        return m_catchUpDts;  // the same picture again: its packets share one time
+    const int64_t next = m_catchUpDts + m_catchUpStep;
+    if (dts >= next)
+    {
+        m_catchUpStep = 0;  // caught up
+        return dts;
+    }
+    // Never after the time the picture is shown
+    m_catchUpDts = (std::min)(next, m_curPts + m_timeOffset);
+    m_catchUpCurDts = m_curDts;
+    return m_catchUpDts;
+}
+
+// A deeper pyramid moves every decoding time from here on further back, behind the times the pictures before were
+// already given: taken at once, the decoding time went back (by a frame for each level more), which a decoder cannot
+// follow. The new period's pictures are shown no earlier than its first, and that is a frame or more after the last
+// decoding time given, so the depth's growth of k frames fits there: the next k pictures take steps of 1/(k+1)
+// frame, after which the times are those of the new depth.
+void MPEGStreamReader::deepenAfterOutput(const int depthBefore)
+{
+    const int grown = getFrameDepth() - depthBefore;
+    if (grown <= 0 || m_totalFrameNum == 0)
+        return;  // nothing was given a time yet: the new depth holds from the first picture
+    if (m_catchUpStep == 0)
+    {
+        m_catchUpDts = m_curDts + m_timeOffset - m_pcrIncPerFrame * depthBefore;
+        m_catchUpCurDts = m_curDts;
+    }
+    m_catchUpStep = (std::max)(int64_t{1}, m_pcrIncPerFrame / (grown + 1));
 }
 
 void MPEGStreamReader::onShiftBuffer(int offset) {}
@@ -146,7 +183,7 @@ int MPEGStreamReader::readPacket(AVPacket& avPacket)
     avPacket.data = nullptr;
     avPacket.size = 0;
     avPacket.pts = m_curPts + m_timeOffset;
-    avPacket.dts = m_curDts + m_timeOffset - m_pcrIncPerFrame * getFrameDepth();  // shift dts back
+    avPacket.dts = pictureDts();  // shift dts back
     const uint8_t* prevPos = m_curPos;
     if (!m_syncToStream)
     {
@@ -229,7 +266,7 @@ int MPEGStreamReader::readPacket(AVPacket& avPacket)
             // stream interleaving is allowed during one stream packet
 
             avPacket.pts = m_curPts + m_timeOffset;
-            avPacket.dts = m_curDts + m_timeOffset - m_pcrIncPerFrame * getFrameDepth();  // shift dts back to 1 frame;
+            avPacket.dts = pictureDts();  // shift dts back to 1 frame;
             if (isIFrame())
                 avPacket.flags |= AVPacket::IS_IFRAME;
             if (isPriorityData(&avPacket))
@@ -263,7 +300,7 @@ int MPEGStreamReader::readPacket(AVPacket& avPacket)
     avPacket.data = m_curPos;
     avPacket.size = bytesProcessed;
     avPacket.pts = m_curPts + m_timeOffset;
-    avPacket.dts = m_curDts + m_timeOffset - m_pcrIncPerFrame * getFrameDepth();  // shift dts back
+    avPacket.dts = pictureDts();  // shift dts back
     if (isIFrame())
         avPacket.flags |= AVPacket::IS_IFRAME;
     if (isPriorityData(&avPacket))

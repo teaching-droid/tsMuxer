@@ -110,6 +110,9 @@ class MPEGStreamReader : public AbstractStreamReader
     // would report it a second time, as if fps= had been given.
     void setFpsAnnounced() { m_isFirstFpsWarn = false; }
     virtual int getFrameDepth() { return 1; }
+    // The decoding time of the picture read last: m_curDts moved back by the depth of the B pyramid, and while a
+    // deeper pyramid is caught up (deepenAfterOutput), a step after the time given before.
+    int64_t pictureDts();
 
     /// Probe a buffer of elementary stream data and populate a
     /// StreamDiscoveryData struct with video-specific properties.
@@ -179,6 +182,9 @@ class MPEGStreamReader : public AbstractStreamReader
     bool m_removePulldown;
     int64_t m_testPulldownDts;
     void checkPulldownSync();
+    // The depth (getFrameDepth) grew from depthBefore before the picture being read, after pictures were given their
+    // decoding times: the times of the next pictures catch up in steps shorter than a frame (pictureDts).
+    void deepenAfterOutput(int depthBefore);
     uint8_t* m_tmpBuffer;
     int64_t m_tmpBufferSize;  // the size of m_tmpBuffer, TMP_BUFFER_SIZE until it grows
     // The buffer before the last growth, freed at the next: a packet handed out just before may still point into it
@@ -187,6 +193,9 @@ class MPEGStreamReader : public AbstractStreamReader
 
    private:
     int64_t m_pulldownWarnCnt;
+    int64_t m_catchUpStep = 0;    // 0: no catch-up running
+    int64_t m_catchUpDts = 0;     // the decoding time given last while catching up
+    int64_t m_catchUpCurDts = 0;  // m_curDts of the picture that got it
     long m_lastDecodeOffset;
     bool m_syncToStream;
     bool m_isFirstFpsWarn;
