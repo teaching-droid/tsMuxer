@@ -199,6 +199,23 @@ class MatroskaDemuxer final : public IOContextDemuxer
     bool m_partVideoDone = false;          // and its last
     bool keepBlock(const MatroskaTrack* track, int64_t ns, bool keyFrame);
     void nextJoinPart();
+    // A plain join: the sound of each later part starts against its own picture (see keepJoinSound). Times in ns, on
+    // the timeline of the join (m_joinShiftNs).
+    struct JoinSound
+    {
+        int64_t origin = -1;   // where the first frame of the track is, the start of its reader's own clock
+        int64_t end = -1;      // where the sound handed on so far ends; -1: not known
+        int64_t prev = -1;     // the frame before in the part, for the step
+        int64_t step = 0;      // the shortest time from one frame to the next
+        int64_t shift = 0;     // how much later than its own times the sound of the part being read is muxed
+        bool started = false;  // a frame of the track has been kept in the part
+    };
+    std::map<int, JoinSound> m_joinSound;  // by track (stream index)
+    bool m_joinShiftKnown = true;  // where each part is put is known (m_joinShiftNs): a part of unknown length is not
+    std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_timeGaps;  // by track, see takeTimeGaps
+    bool keepJoinSound(int track, int64_t ns, int64_t lengthNs);
+    static bool isJoinTimedCodec(const MatroskaTrack* track);
+    std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(int pid) override;
 
     AVPacket* m_lastDeliveryPacket;
 

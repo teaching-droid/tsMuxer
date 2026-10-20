@@ -692,6 +692,17 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
         if (!timeline && timecode != AV_NOPTS_VALUE &&
             m_firstTimecode.find(tracks[track]->num) == m_firstTimecode.end())
             m_firstTimecode[tracks[track]->num] = timecode;
+        // A plain join: each frame of the sound on the timeline of the join, to start the sound of each later part
+        // against its own picture (keepJoinSound). Only for the codecs whose blocks are timed as they sound: AAC, Opus
+        // and Vorbis have a codec delay, their first block timed before the start and their last one cut short, and
+        // follow on from frame to frame as before.
+        const bool joinSound = !timeline && m_joinFiles.size() > 1 && m_joinShiftKnown && blockNs != AV_NOPTS_VALUE &&
+                               tracks[track]->type == IOContextTrackType::AUDIO && isJoinTimedCodec(tracks[track]);
+        const int64_t laceLenNs = tracks[track]->default_duration > 0
+                                      ? static_cast<int64_t>(tracks[track]->default_duration)
+                                  : duration != AV_NOPTS_VALUE && duration > 0 && laces > 0
+                                      ? duration * static_cast<int64_t>(time_scale) / laces
+                                      : 0;
 
         for (n = 0; n < laces; n++)
         {
@@ -708,6 +719,12 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
                 }
                 if (timecode != AV_NOPTS_VALUE && m_firstTimecode.find(tracks[track]->num) == m_firstTimecode.end())
                     m_firstTimecode[tracks[track]->num] = timecode;
+            }
+            else if (joinSound && !keepJoinSound(track + 1, blockNs + m_joinShiftNs + n * laceLenNs, laceLenNs))
+            {
+                data += lace_size[n];
+                size -= lace_size[n];
+                continue;
             }
             int slices = 1;
 
@@ -1360,6 +1377,7 @@ bool MatroskaDemuxer::keepBlock(const MatroskaTrack* track, const int64_t ns, co
 void MatroskaDemuxer::nextJoinPart()
 {
     m_partVideoOn = m_partVideoDone = false;
+    for (auto& [track, sound] : m_joinSound) sound.started = false;
     if (++m_joinPart >= m_joinFiles.size())
         return;
     // A plain join puts each file where the video of the one before ends (see METADemuxer::getChapters). The video
@@ -1376,6 +1394,7 @@ void MatroskaDemuxer::nextJoinPart()
             {
                 start = 0;
                 end = part.getFileDurationNano();
+                m_joinShiftKnown = false;  // no picture to put the sound against
             }
         };
         int64_t prevStart = 0, prevEnd = 0, start = 0, end = 0;
@@ -1383,10 +1402,83 @@ void MatroskaDemuxer::nextJoinPart()
         span(m_joinFiles[m_joinPart], start, end);
         if (prevEnd > 0)
             m_joinShiftNs += prevEnd - start;
+        else
+            m_joinShiftKnown = false;  // the sound of the parts follows on from frame to frame, as it always did
     }
     m_attachments.clear();
     loadAttachments(m_joinFiles[m_joinPart]);
     applyStartCodeRule();
+}
+
+bool MatroskaDemuxer::isJoinTimedCodec(const MatroskaTrack* track)
+{
+    if (track->codec_id == nullptr)
+        return false;
+    for (const char* prefix : {"A_AC3", "A_EAC3", "A_DTS", "A_TRUEHD", "A_MLP", "A_PCM/", "A_MPEG/L"})
+        if (strncmp(track->codec_id, prefix, strlen(prefix)) == 0)
+            return true;
+    return false;
+}
+
+// Whether a frame of the sound of a plain join is kept: ns is where it comes on the timeline of the join, lengthNs how
+// long it is (0: not known, the step from one frame to the next is taken).
+//
+// The audio readers count the frames they are given: the sound of a later part followed on from the end of the sound
+// of the part before, not from where its own file starts it against its picture. A part whose sound starts later
+// than its picture, or ends before it, put the sound of every part after it early. The sound of each later part now
+// starts where its picture puts it, within half a frame (or a millisecond): where the sound before ends earlier, the
+// track's times have a gap there (takeTimeGaps), and where it ends later, the frames of the part that it overlaps are
+// left out, as a reader that counts frames cannot go back.
+bool MatroskaDemuxer::keepJoinSound(const int track, const int64_t ns, const int64_t lengthNs)
+{
+    JoinSound& sound = m_joinSound[track];
+    if (sound.step <= 0 && lengthNs > 0)
+        sound.step = lengthNs;
+    if (!sound.started)
+    {
+        if (m_joinPart > 0 && sound.end != -1 && sound.step > 0)
+        {
+            // half a frame, but at least a millisecond, the step of the times of most files
+            const int64_t within = (std::max)(sound.step / 2, int64_t{1000000});
+            if (ns + within < sound.end)
+                return false;
+            // within that the sound goes on where the sound before ends: the times of this part's sound are that
+            // much off, which the next joint takes into account, so that it cannot add up over many parts
+            const int64_t gap = ns - sound.end;
+            sound.shift = -gap;
+            if (gap > within)
+            {
+                sound.shift = 0;
+                m_timeGaps[track].emplace_back(sound.end - sound.origin, gap);
+                LTRACE(LT_INFO, 2,
+                       "The sound of track " << track << " in file " << m_joinPart + 1 << " of the join starts "
+                                             << (gap + 500000) / 1000000 << " ms after the sound before it ends: it "
+                                             << "starts after a gap, with its picture.");
+            }
+        }
+        if (sound.origin == -1)
+        {
+            sound.origin = ns;
+            sound.shift = 0;
+        }
+        sound.started = true;
+        sound.prev = -1;
+    }
+    if (sound.prev != -1 && ns > sound.prev && (sound.step <= 0 || ns - sound.prev < sound.step))
+        sound.step = ns - sound.prev;
+    sound.prev = ns;
+    sound.end = (std::max)(sound.end, ns + sound.shift + (lengthNs > 0 ? lengthNs : sound.step));
+    return true;
+}
+
+std::vector<std::pair<int64_t, int64_t>> MatroskaDemuxer::takeTimeGaps(const int pid)
+{
+    const auto it = m_timeGaps.find(pid);
+    if (it == m_timeGaps.end())
+        return {};
+    std::vector<std::pair<int64_t, int64_t>> gaps;
+    gaps.swap(it->second);
+    return gaps;
 }
 
 // A track is a block of characters that a Track was never constructed in, so ~Track never runs
