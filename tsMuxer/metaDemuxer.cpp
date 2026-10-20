@@ -81,6 +81,47 @@ static std::string manifestValue(const std::string& text, const std::string& key
 // manifest states, there is one timestamp per entry, and the order is the one claimed. The
 // manifest itself says a mismatch must be refused rather than guessed, because the result would be
 // a disc that looks right and is wrong.
+// Audio or video of a transport stream that begins after the first DETECT_STREAM_BUFFER_SIZE bytes, as the sound of a
+// recording that starts a minute after its picture, was "Can't detect stream type" though its PMT names it. Such a
+// track is read on alone after that window, until it has enough data to be told, the file ends, or LATE_LIMIT more
+// bytes are read. Subtitles are left out: they are often far apart, and they are told by their stream type.
+static void readLateTracks(AbstractDemuxer* demuxer, DemuxedData& demuxedData,
+                           const std::map<int32_t, TrackInfo>& acceptedPidMap, int64_t& discardedSize)
+{
+    static constexpr int64_t LATE_LIMIT = 1024LL * 1024 * 1024;
+    static constexpr size_t ENOUGH = 256 * 1024;
+    if (dynamic_cast<TSDemuxer*>(demuxer) == nullptr || demuxer->getFileBlockSize() == 0)
+        return;
+    PIDSet late;
+    for (const auto& [pid, info] : acceptedPidMap)
+    {
+        const int t = info.m_trackType;
+        const bool audioOrVideo = t == 0x01 || t == 0x02 || t == 0x03 || t == 0x04 || t == 0x0f || t == 0x10 ||
+                                  t == 0x1b || t == 0x20 || t == 0x24 || t == 0x33 || t == 0xea ||
+                                  (t >= 0x80 && t <= 0x88) || t == 0xa1 || t == 0xa2;
+        const auto data = demuxedData.find(pid);
+        if (audioOrVideo && (data == demuxedData.end() || data->second.size() == 0))
+            late.insert(pid);
+    }
+    // The demuxer keeps the tracks it was first asked for, so the others are cut back to what the window gave them
+    // after every block: they would otherwise hold up to LATE_LIMIT in memory.
+    std::map<int32_t, unsigned> kept;
+    for (const auto& [pid, info] : acceptedPidMap)
+        if (late.count(pid) == 0)
+            kept[pid] = demuxedData.count(pid) ? static_cast<unsigned>(demuxedData[pid].size()) : 0;
+    for (int64_t read = 0; !late.empty() && read < LATE_LIMIT; read += demuxer->getFileBlockSize())
+    {
+        const int rez = demuxer->simpleDemuxBlock(demuxedData, late, discardedSize);
+        for (const auto& [pid, size] : kept)
+            if (const auto data = demuxedData.find(pid); data != demuxedData.end())
+                data->second.resize(size);
+        if (rez == BufferedReader::DATA_EOF)
+            break;
+        for (auto pid = late.begin(); pid != late.end();)
+            pid = demuxedData[*pid].size() >= ENOUGH ? late.erase(pid) : std::next(pid);
+    }
+}
+
 static void loadDvOriginalRpus(AbstractDemuxer* demuxer, HevcDolbyVisionFilter* filter)
 {
     std::vector<uint8_t> manifestBytes;
@@ -2576,6 +2617,7 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
 
             for (unsigned i = 0; i < DETECT_STREAM_BUFFER_SIZE / fileBlockSize; i++)
                 demuxer->simpleDemuxBlock(demuxedData, acceptedPidSet, discardedSize);
+            readLateTracks(demuxer.get(), demuxedData, acceptedPidMap, discardedSize);
 
             // For each track of interest in this file, probe
             for (const auto& [idx, pid] : trackList)
@@ -3028,6 +3070,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
 
         for (unsigned i = 0; i < DETECT_STREAM_BUFFER_SIZE / fileBlockSize; i++)
             demuxer->simpleDemuxBlock(demuxedData, acceptedPidSet, discardedSize);
+        readLateTracks(demuxer.get(), demuxedData, acceptedPidMap, discardedSize);
 
         for (auto& itr : demuxedData)
         {
