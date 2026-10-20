@@ -11,6 +11,7 @@
 #include "osdep/textSubtitlesRenderFT.h"
 #endif
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 
@@ -131,9 +132,24 @@ double TextToPGSConverter::alignToGrid(const double value) const
     return frameCnt / m_videoFps;
 }
 
+// The renderers draw with premultiplied alpha: a colour's red, green and blue are already scaled by its alpha. A
+// palette entry holds the colour and its alpha apart, so half-transparent white 0x80FFFFFF was written as grey (Y 126
+// at alpha 128) and every antialiased edge was darker than its colour. Drawn text is turned back into colour and
+// alpha; a picture from a bitmap subtitle holds them apart already.
+uint32_t TextToPGSConverter::straightColor(const uint32_t premultiplied) const
+{
+    const uint32_t a = premultiplied >> 24;
+    if (m_textRender == nullptr || a == 0 || a == 255)
+        return premultiplied;
+    uint32_t rez = premultiplied & 0xff000000;
+    for (int shift = 0; shift < 24; shift += 8)
+        rez |= (std::min)(255u, ((premultiplied >> shift & 0xff) * 255 + a / 2) / a) << shift;
+    return rez;
+}
+
 uint8_t TextToPGSConverter::color32To8(const uint32_t* buff, const uint32_t colorMask)
 {
-    YUVQuad yuv = RGBAToYUVA(*buff | colorMask, m_bt709);
+    YUVQuad yuv = RGBAToYUVA(straightColor(*buff | colorMask), m_bt709);
     const auto itr = m_paletteYUV.find(yuv);
     if (itr == m_paletteYUV.end())
     {
@@ -167,11 +183,11 @@ int TextToPGSConverter::getRepeatCnt(const uint32_t* pos, const uint32_t* end, c
     else
     {
         const uint32_t rgbColor = *pos | colorMask;
-        const YUVQuad color = RGBAToYUVA(rgbColor, m_bt709);
+        const YUVQuad color = RGBAToYUVA(straightColor(rgbColor), m_bt709);
         for (const uint32_t* cur = pos + 1; cur < end && *cur != 0; cur++)
         {
             const uint32_t newRGBColor = *cur | colorMask;
-            if (newRGBColor == rgbColor || RGBAToYUVA(newRGBColor, m_bt709) == color)
+            if (newRGBColor == rgbColor || RGBAToYUVA(straightColor(newRGBColor), m_bt709) == color)
                 rez++;
             else
                 break;

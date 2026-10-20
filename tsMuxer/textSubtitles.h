@@ -98,6 +98,7 @@ class TextToPGSConverter  //: public TextSubtitlesRenderWin32
     [[nodiscard]] double alignToGrid(double value) const;
     bool rlePack(uint32_t colorMask);
     void reduceColors(uint8_t mask) const;
+    [[nodiscard]] uint32_t straightColor(uint32_t premultiplied) const;
     int getRepeatCnt(const uint32_t* pos, const uint32_t* end, uint32_t colorMask) const;
     uint8_t color32To8(const uint32_t* buff, uint32_t colorMask);
     Palette buildPalette(float opacity);
