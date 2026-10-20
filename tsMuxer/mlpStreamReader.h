@@ -29,6 +29,7 @@ class MLPStreamReader : public SimplePacketizerReader, public MLPCodec
 
     int readPacket(AVPacket& avPacket) override;
     int flushPacket(AVPacket& avPacket) override;
+    void addTimeGap(int64_t atNs, int64_t gapNs) override { m_thdGaps.emplace_back(atNs, gapNs); }
 
    protected:
     int m_demuxedTHDSamples;
@@ -38,6 +39,9 @@ class MLPStreamReader : public SimplePacketizerReader, public MLPCodec
     // access unit has been handed on yet; -1 when they could not be counted
     int m_preSyncUnits = 0;
     bool m_started = false;
+    // The gaps of addTimeGap: the times of the units are counted in samples (m_totalTHDSamples), from the first
+    // access unit of the track, not by the base class
+    std::vector<std::pair<int64_t, int64_t>> m_thdGaps;
 
    private:
 };

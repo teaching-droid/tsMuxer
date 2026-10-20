@@ -130,6 +130,7 @@ class SimplePacketizerReader : public AbstractStreamReader
     bool m_needSync;
     double m_curPts;
     std::vector<std::pair<int64_t, int64_t>> m_timeGaps;  // addTimeGap, in the order they come
+    void applyTimeGaps();
     double m_lastMplsTime;
     double m_mplsOffset;
     double m_halfFrameLen;

@@ -756,15 +756,20 @@ void SimplePacketizerReader::addTimeGap(const int64_t atNs, const int64_t gapNs)
     m_timeGaps.emplace_back(atNs, gapNs);
 }
 
-int SimplePacketizerReader::readPacket(AVPacket& avPacket)
+// A gap the source asks for (addTimeGap) begins at the frame that comes at its time, within half a frame
+void SimplePacketizerReader::applyTimeGaps()
 {
-    // A gap the source asks for (addTimeGap) begins at the frame that comes at its time, within half a frame
     while (!m_timeGaps.empty() && (m_curPts - PTS_CONST_OFFSET + m_halfFrameLen) * 1e9 / INTERNAL_PTS_FREQ >=
                                       static_cast<double>(m_timeGaps.front().first))
     {
         m_curPts += static_cast<double>(m_timeGaps.front().second) * INTERNAL_PTS_FREQ / 1e9;
         m_timeGaps.erase(m_timeGaps.begin());
     }
+}
+
+int SimplePacketizerReader::readPacket(AVPacket& avPacket)
+{
+    applyTimeGaps();
     do
     {
         avPacket.flags = m_flags + AVPacket::IS_COMPLETE_FRAME | AVPacket::FORCE_NEW_FRAME;

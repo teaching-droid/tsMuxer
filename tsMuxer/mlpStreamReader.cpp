@@ -1,5 +1,6 @@
 #include "mlpStreamReader.h"
 
+#include <cmath>
 #include <functional>
 
 #include <fs/systemlog.h>
@@ -224,6 +225,14 @@ int MLPStreamReader::readPacket(AVPacket& avPacket)
                                   "out; the audio after them keeps its time ("
                                << m_totalTHDSamples * 1000 / m_samplerate << " ms from the start of the track).");
             }
+        }
+        // A gap the source asks for (addTimeGap) begins at the unit that comes at its time, within half a unit
+        while (m_samplerate && !m_thdGaps.empty() &&
+               (static_cast<double>(m_totalTHDSamples) + m_samples / 2.0) * 1e9 / m_samplerate >=
+                   static_cast<double>(m_thdGaps.front().first))
+        {
+            m_totalTHDSamples += llround(static_cast<double>(m_thdGaps.front().second) * m_samplerate / 1e9);
+            m_thdGaps.erase(m_thdGaps.begin());
         }
         // thg packet
         // m_samplerate stays 0 until a major sync decodes; a stream that never produces one

@@ -1127,6 +1127,7 @@ bool LPCMStreamReader::beforeFileCloseEvent(File& file)
 
 int LPCMStreamReader::readPacket(AVPacket& avPacket)
 {
+    applyTimeGaps();           // as in the base class
     avPacket.flags = m_flags;  // + AVPacket::IS_COMPLETE_FRAME | AVPacket::FORCE_NEW_FRAME;
     avPacket.stream_index = m_streamIndex;
     avPacket.codecID = getCodecInfo().codecID;
