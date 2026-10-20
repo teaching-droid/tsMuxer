@@ -1082,6 +1082,14 @@ All parameters in this group start with two dashes:
                       (pt-BR) is written as its ISO 639-2 code in this form.
                       Unlike the options below it is a command line argument, not
                       a MUXOPT entry, so that it also applies when listing a file.
+--playlist-clips=<how> How the clips of a Blu-ray playlist are muxed. played,
+                      the default, takes from each clip only the part its play
+                      item plays: from the key picture at or before the point
+                      where a player starts to the one at or after the point
+                      where it stops. whole takes every clip whole, as earlier
+                      versions did. It is a MUXOPT entry and also a command line
+                      argument, as --lang-codes is, so that a listing of a
+                      playlist gives the lengths and marks of the same parts.
 --keep-editions       Matroska output only, from one Matroska file: keep its
                       chapters exactly as they are, every edition of them and
                       every link to another file, and its segment identity

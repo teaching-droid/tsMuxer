@@ -10,6 +10,30 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Worth acting on
 
+* **A Blu-ray playlist muxed each clip whole, also where it plays only a part of it.** The pictures a disc never shows were in the output, a clip played in several parts came in that many times, and the length and the chapters did not match what was muxed: a path of three items through three clips came out 16 times as long. A playlist now muxes only the parts of its clips that it plays, from the key picture at or before the point where a player starts to the one at or after the point where it stops. `--playlist-clips=whole` muxes the clips whole, as before, also in a listing; in the window it is the box "Mux only the parts of a playlist's clips that it plays" in the General box. Mux such playlists again.
+
+* **Interlaced H.264 coded as frames with the bottom field first was muxed at twice its length,** so it played at half speed. Each frame now lasts one frame. Mux such files again.
+
+* **HEVC on a disc made from an MP4 or Matroska file could not be started anywhere but at its beginning.** Such a file holds the parameter sets of its video once, in its header, and the disc got them only at its first picture, so a chapter jump or a seek decoded no picture at all. A disc now gets them at every IRAP picture that lacks them, as the Blu-ray format has them; H.264 already got them. Make such discs again.
+
+* **A WAV with 3 to 7 channels put some of them on the wrong speakers on a disc.** In 2.1 and 3.1 the low-frequency channel went to a surround speaker, in 4.0 the centre went to the left surround, and in 4.1 and 6.0 the low-frequency and the back channels were swapped with others. Each channel now goes to its own speaker: a layout a disc has no code for, such as 2.1, is written as 5.1 with silent channels, 4.0 as 3/1, and a layout a disc cannot hold is refused. Stereo, 5.1 and 7.1 are written as before. A demux of a disc's 2/1 and 3/1 audio now names the back speaker.
+
+* **A raw audio file could be listed as AV1 video,** with a picture size read out of audio bytes, and a mux of it as AV1 said it had succeeded. This happened to AC-3, E-AC-3, DTS and PCM files with a few bytes between their frames. A raw file is now AV1 only when it begins as AV1, and a V_AV1 line over data that is not AV1 is refused. (#48, thanks to @Moonghost-coder for the detailed report)
+
+* **AC-3 and E-AC-3 encoded with timecode were not recognised.** With their timecode option on, encoders put 16 bytes in front of every frame, or every pair of AC-3 core and E-AC-3 frame. That block is now left out: the audio muxed is byte for byte that of the same file made without timecode. (#47, thanks to @Nandos64 for the samples and to @Moonghost-coder for the analysis)
+
+* **An audio or video track that gave nothing ended "successful".** A meta line naming a codec the file does not hold left an output without that track, or an empty one, with only a warning and exit code 0. Such a job, and one whose audio was mostly unusable as the codec named, now ends with an error before success is said.
+
+* **MPEG-2 video with repeated fields (soft pulldown) got uneven picture times:** some pictures got the time of the one before them, others left a gap of two. Each picture now lasts the two or three fields it is shown for. MPEG-2 with a second I picture in a group of pictures is timed right as well.
+
+* **--split-duration split one group of pictures late:** 2 s gave parts of 3 s. A key picture on the duration now starts the next part.
+
+* **Start times from Matroska.** A track of a Matroska file that starts later or earlier than the picture kept that start only in the listing, as its Stream delay, which the window writes as timeshift=. A meta file without timeshift= muxed every track from the same moment: audio that starts half a second after the picture came half a second early, and TrueHD that starts a few ms after it came that much early. The start is now applied also without timeshift=, and to a join of Matroska files.
+
+* **With --maxbitrate, video whose own peaks are above the cap reached the decoder after it was due,** even with the average well under the cap: the data was held back at a peak, and the quiet part before it was never used to send it ahead. It is now sent ahead, never more than --vbv-len earlier, so that it arrives in time. The packets, their order and the size of the output stay the same. In the disc cuts measured, 12 to 55 pictures that came late came in time.
+
+* **In a join of subtitle files (.srt, .sup), and of MP4 files with text subtitles, the subtitles of every later file came at their own times,** among those of the first file. Each file's subtitles now start where its video file starts, when the video is joined from as many MP4, MOV or Matroska files.
+
 * **TrueHD with its AC-3 core, muxed as plain TrueHD, lost most of its audio.** A demuxed .ac3+thd file renamed to .thd and muxed as A_MLP had every core frame taken for a damaged frame, and the mux still said it was complete. The core frames are now left out, as drop-ac3-core does, and all of the TrueHD is kept. A_AC3 keeps both, as before.
 
 * **TrueHD that does not begin with a full sync frame played early,** as in a Matroska file after a cut. The frames before the first full sync frame cannot be played and are left out, and the rest of the audio moved forward by their length: 97 ms in a measured file. The audio now starts within a few milliseconds of its time, also when it is muxed with its AC-3 core (A_MLP).
@@ -18,7 +42,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **The sound of an MP4 came late.** An audio encoder puts start-up samples in front of the sound, and the MP4 says in its edit list to skip them. Only a Matroska output of AAC did. Everywhere else the sound came late against the picture: 21 ms for AAC at 48 kHz, 5 ms for AC-3, 23 ms for MP3. It now starts where the edit list says. A file without an edit list, such as a fragmented file, says it with a longer first sample, and that is read now as well.
 
-* **In a join of MP4 files, the AAC sound fell further behind the picture at every joint.** It now stays within half an AAC frame of the picture, however many files are joined, also for files cut without re-encoding, fragmented files and files without an edit list. A file whose sound is shorter than its picture leaves a gap that cannot be filled: the sound of the files after it comes early by that much, and a warning says so.
+* **In a join of MP4 files, the AAC sound fell further behind the picture at every joint.** It now stays within half an AAC frame of the picture, however many files are joined, also for files cut without re-encoding, fragmented files and files without an edit list. A file whose sound is shorter than its picture now leaves a gap in the sound, and the sound of the files after it stays with their picture.
 
 * **The sound of an MP4 cut without re-encoding was out of step with its picture.** Such a file keeps the pictures from the key picture before the cut, and its edit lists start every track at the cut. In a TS the sound came 82 to 109 ms late, and AAC in Matroska 0.5 s early. The sound now comes with its picture, also in a join of such files.
 
@@ -32,11 +56,11 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A subtitle with a long fade could end the mux with a crash,** for example at 59.94 fps. The steps of a fade are written into a buffer of fixed size, and a fade of minutes on a long subtitle ran past its end. A fade that does not fit is now shortened, with a warning.
 
-* **H.264 with pulldown and B pictures got times that were out of order or used twice,** and a Matroska output joined pictures that had the same time: with frame doubling, 60 of 144 times were used twice. Each picture now comes when the pictures before it in the order shown have been shown for their own time. Pulldown that begins later in the stream gets such times from the next IDR picture on, after a gap of a few frames there.
+* **H.264 with pulldown and B pictures got times that were out of order or used twice,** and a Matroska output joined pictures that had the same time: with frame doubling, 60 of 144 times were used twice. Each picture now comes when the pictures before it in the order shown have been shown for their own time. Pulldown that begins later in the stream gets such times from the next IDR picture on, after a gap of a few frames there. The first decoding times of such a stream no longer repeat.
 
-* **H.264 with a deep B pyramid could be decoded after it was due,** in a transport stream and on a disc, as with the 16 B pictures in a row Quick Sync encodes. The decoding times were moved back by 3 pictures at most, and such a stream needs 5. They now move back as far as the deepest pyramid seen so far needs, up to the 16 pictures a decoder holds. Where the pyramid becomes deeper later in the stream, a few decoding times there can still go back.
+* **H.264 with a deep B pyramid could be decoded after it was due,** in a transport stream and on a disc, as with the 16 B pictures in a row Quick Sync encodes. The decoding times were moved back by 3 pictures at most, and such a stream needs 5. They now move back as far as the deepest pyramid seen so far needs, up to the 16 pictures a decoder holds. Where the pyramid becomes deeper later in the stream, as in a join of files coded otherwise, the decoding times now keep rising there as well.
 
-* **A cut stream that does not begin with an IDR picture could get two pictures with one time,** and a Matroska output wrote the two as one block: H.264 that begins with an I picture of an open GOP, a P or a B picture, H.264 and HEVC that begin inside a run of B pictures, and the IDR after such a start. Each picture now gets its own time, in the order the stream gives. H.264 coded as fields is muxed as before. In a join this holds for the first file only: a later file that begins so can still get pictures with one time.
+* **A cut stream that does not begin with an IDR picture could get two pictures with one time,** and a Matroska output wrote the two as one block: H.264 that begins with an I picture of an open GOP, a P or a B picture, H.264 and HEVC that begin inside a run of B pictures, and the IDR after such a start. Each picture now gets its own time, in the order the stream gives. H.264 coded as fields is muxed as before. This now holds for each file of a join as well: a later file that begins so comes after the file before it.
 
 * **On the command line, an output that is one of the sources destroyed that source.** The output was opened for writing, which empties it, while the same file was still to be read. Such an output is now refused before anything is written, also when its name is written in another case or with other slashes. This includes the clips a playlist plays, the file of merge-ac3-file, a Blu-ray folder written over the disc it reads, and a source named as a part of a split output when the job splits. A demux of a raw stream into its own folder wrote the stream over itself and said it was complete; it is refused as well.
 
@@ -52,13 +76,13 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **In a join of MP4 files, AC-3, E-AC-3 and MP3 sound fell further behind the picture at every joint,** by the encoder's delay each time: 16 ms for AC-3 and 32 ms for MP3 in the files measured. They now stay within half a frame of the picture, as AAC does. E-AC-3 from a single MP4 file started 5 ms late as well.
 
-* **A join of Opus files played what each file leaves out,** and the sound of each later file came about 20 ms late. The padding of each file and the start-up samples of the next are left out at the joint now. In a Matroska output, the end of the join is also trimmed by the last file's padding.
+* **A join of Opus files played what each file leaves out,** and the sound of each later file came about 20 ms late. The padding of each file and the start-up samples of the next are left out at the joint now. The start-up samples at the start of the track and the padding at its end, the last file's in a join, are now left out in a transport stream as well as in Matroska.
 
-* **A timeshift sent subtitles late.** With timeshift=5000ms on the subtitles of a Matroska file, more than half of them came about 10 s after they were due. Their times were right, and with a positive timeshift they are now sent in time.
+* **A timeshift sent subtitles late.** With timeshift=5000ms on the subtitles of a Matroska file, more than half of them came about 10 s after they were due. Their times were right, and they are now sent in time, with a negative timeshift as well. A negative timeshift of many seconds on a high bitrate file can still send the first subtitles late.
 
 * **The time between two clock references could still pass 0.1 s,** with video under 10 frames a second or with subtitles alone: 125 ms and 12 s. Packets that carry only the clock fill such gaps now.
 
-* **Chapters on a disc came out of order, or twice at one time,** when a chapter file was not in time order. The chapters of a file and of --custom-chapters are now one list in time order, whichever option comes first. Two chapter times only a few microseconds apart can still give two marks at one time. More than 999 chapters within the title, which a disc cannot hold, were written without a word, or stopped the job after the whole mux when there were thousands; they are refused before it now (from a raw stream, whose length is not known before the mux, every chapter given counts).
+* **Chapters on a disc came out of order, or twice at one time,** when a chapter file was not in time order. The chapters of a file and of --custom-chapters are now one list in time order, whichever option comes first. More than 999 chapters within the title, which a disc cannot hold, were written without a word, or stopped the job after the whole mux when there were thousands; they are refused before it now (from a raw stream, whose length is not known before the mux, every chapter given counts).
 
 * **A Blu-ray split past clip 99999 wrote clip names of six digits** that the playlist could not name. Such a split now stops with a message.
 
@@ -102,6 +126,22 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **More than 255 chapters** are kept: the Nero chapter list holds at most 255, and a file's chapter track is now taken when it holds more.
 
+* **A fragmented file whose track is not track 1,** as an audio file whose only track is track 2, is read: it could not even be listed.
+
+* **A fragment of a fragmented file with a second run of samples** is read whole: the first run was read twice and the second was lost.
+
+* **Text subtitles of a fragmented file** are read: the file could not even be listed ("invalid stts index").
+
+* **Timed text in UTF-16** is read as such: it came out as broken characters.
+
+### Matroska input
+
+* **A join of Matroska files** takes the language, the flags, the colour, the display size and the eye of a 3D base view of each track from its first file: a joined German track came out without a language, and a joined 3D file whose base view is the right eye had its eyes swapped.
+
+* **A file cut off inside a block** is muxed as far as it goes, and the job then ends with an error that says the source is cut off: it was refused whole, with every frame before the cut.
+
+* **AAC from a Matroska file** keeps MPEG-4 in its ADTS headers: they said MPEG-2.
+
 ### Subtitles
 
 * **ASS and SSA subtitles are drawn with libass** wherever they are drawn into pictures: with their styles, colours, positions, rotations, fades, moves and karaoke. libass uses the fonts attached to the Matroska file, a fonts folder given with the new track parameter fonts-dir, and the fonts of the system. The Windows packages include libass and the libraries it needs, with their licenses in THIRD-PARTY-NOTICES.txt and the licenses folder. On Linux and Mac, install the system's libass. Without libass, or with the new parameter ass-as-srt, they are drawn as plain text, as before.
@@ -129,6 +169,48 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **WebVTT captions and descriptions in a WebM or Matroska file** are read, as subtitles. Of the WebM forms, only the kind SUBTITLES was. WebVTT metadata is not text to show and is still not read.
 
 * **The track list names ASS, SSA and WebVTT subtitles from a Matroska file as what they are.** Each was listed as "SRT text subtitles".
+
+* **Drawn text keeps its colour where it is half transparent:** font-color=0x80ffffff was drawn grey, and every soft edge of a subtitle was darker than its colour. On Linux and macOS the alpha of font-color was not drawn at all, and on Windows a half-transparent colour came out more opaque than asked.
+
+* **Text without a border (font-border=0) has no dark outline on Windows.**
+
+* **On Linux and macOS a font that a <font face=...> tag names and the system lacks** is replaced by the track's font, with a warning: the job ended.
+
+* **An SRT subtitle that starts where the one before ends** replaces it on that frame: a clear and the next subtitle came at one time, and the decoding times went back. **A subtitle that ends where it starts, or before,** is left out with a warning: it was drawn with its clear at or before its start.
+
+* **An ASS override block in an SRT file,** such as {\an8}, is no longer drawn as text. The subtitle stays at the bottom; the text kept in a Matroska output or a demux keeps the block.
+
+* **An apostrophe inside a quoted font name** (face="Tom's Hand") no longer hides the color= after it.
+
+* **font-color=** reads #RRGGBB and #AARRGGBB. A negative fadein-time or fadeout-time, a video-width or video-height that is not a size and a font-color that is not a colour are refused, with the value: they made the subtitle invisible, drew it at a wrong size, or drew it black. A fade longer than its subtitle is fitted into it.
+
+* **The palette of a subtitle drawn for HD video is in BT.709,** as its video is: colours were a little off.
+
+* **PGS:** a stream above 1920x1080 is scaled down to the video, and one of 480 lines up for 576-line video. A stream that mixes frame rates gets fps= in every composition. PGS from a Matroska file gets the decoding times of a disc in a .sup demux, a transport stream and on a disc; the times the subtitles are shown are unchanged. A scaled PGS picture is drawn only inside the picture: an object reaching past its edge was written past its buffer.
+
+* **SRT:** a file named .srt must read like SRT: audio named .srt was listed as SRT text subtitles. A default= on a subtitle line wins over a file named forced. Subtitles too large for the picture are fitted faster.
+
+* **Clearer messages:** a missing video-width, video-height or fps is named, and so is an SRT file in UTF-16 or UTF-32 without a byte order mark. A number written twice before a timing line gets a warning, and so do subtitles drawn on fewer lines than the video.
+
+### Audio
+
+* **AAC whose channel layout is given by a program config element,** such as 6.0, 6.1 or 7.1 with front wide speakers, is muxed: from an MP4 or Matroska file it gave an empty output said to be successful, and a raw file of it was not recognised.
+
+* **A WAV whose valid bits are fewer than its sample size,** such as 18 bits in 24, is read at its sample size: it gave noise of the wrong length.
+
+* **An E-AC-3 stream of more than one program** keeps the time of the first: a stream of two programs was muxed at twice its length.
+
+* **An AC-3 stream that changes its channel layout,** as a join of 2.0 and 5.1, says so; its description keeps the first layout.
+
+* **A raw AC-3, E-AC-3 or DTS file of ten frames or fewer** is recognised, from three frames on.
+
+* **TrueHD at a rate a disc does not have,** such as 44.1 kHz, no longer has 48 kHz in its PMT.
+
+### Video
+
+* **AV1 in an IVF file** is read, and an IVF file read to its end counts as read: a small one ended with "The mux stopped before the source was finished".
+
+* **MPEG-2 whose sequence header gives no frame rate** is muxed whole, at the rate of its picture times, fps= or 25: it went into one PES. The PMT gives the frame rate an MPEG-2 stream is muxed at, also with fps= or delPulldown.
 
 ### Blu-ray and transport stream
 
@@ -164,6 +246,18 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **On Linux and macOS, a transport stream whose end filled the write buffer exactly was reported as failed,** with "Failed to write the end of the output", although the file was complete.
 
+* **Audio or video that begins after the first 64 MiB of a transport stream** is recognised: it was listed as "Can't detect stream type".
+
+* **A program map that changes inside a transport stream,** at a change of programme in a recording, is said: the new tracks were left out without a word.
+
+* **Two chapter times on one tick of a disc** give one mark.
+
+* **--disc-capacity** is read whole, or refused. A layer break past the end of any disc is refused.
+
+* **An ISO image:** a label longer than an image keeps is said, two names that an image would show as one are refused before the image is written, and an image a refused job made is removed.
+
+* **--minbitrate** no longer lowers the rate of --bitrate, and a --maxbitrate below --bitrate is said.
+
 ### Matroska output
 
 * **The display size follows the pixel shape** the H.264 or HEVC video gives. Square pixels at 720x576 or 720x480 were shown at 4:3, and HEVC at 1440x1080 with 4:3 pixels was shown at 4:3 instead of 16:9. A shape within 3 % of a common one, such as 4:3, is written as that one, and when the pixel shape changes within the stream, one shape is used for the whole track. Video that gives no pixel shape is shown as before.
@@ -187,6 +281,16 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **Each video track keeps its own start code framing.** With two video tracks framed differently, one came back from the file framed the other's way and no longer matched its source.
 
 * **--dv-profile=8.1:** a dovi.dll that is there but cannot be loaded is no longer reported as missing. The message names the file and the Windows error. The published dovi.dll needs Windows 8 or newer, so on Windows 7 this option may not work; that is a limit of the library build, not of tsMuxeR.
+
+* **HDR mastering data is written for HEVC only, each track its own:** an SDR H.264 track beside an HDR10 HEVC track was given the HEVC track's mastering display and light levels.
+
+* **ar=** gives the display size of H.264, HEVC, VVC and VC-1, as it did of MPEG-2: it was ignored. H.264 that gives no pixel shape gets no guessed display size: 720x576 with square pixels was shown at 4:3. A DisplayWidth or DisplayHeight of a Matroska source alone is read with the default of the other.
+
+* **A stream that changes its pixel shape** keeps the shape it starts with, and a warning says so: the shape read last was written for the whole track.
+
+* **A StereoMode of a source** that describes the picture (side by side, top and bottom and the others) is kept: such a track came out flat.
+
+* **The default duration of a video track** is rounded: 29.97 fps was written as 33366666 ns, which is 33366666.7.
 
 ### Window
 
@@ -217,6 +321,18 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **"Remove all"** builds the meta file from the settings again after it was edited by hand, and --keep-editions is not written for a .webm name, nor for a source that is no Matroska file, a join, a cut, a split or chapters typed in the window: the tick is greyed there. A dropped chapter file is put in time order, and from a Matroska XML file it takes the edition --chapters-file uses, without hidden chapters. The open dialog lists .m2t files. An empty tsMuxerGUI.ini takes over settings that are only under the old company name.
 
 * **The ISO label can no longer hold a double quote.** It ended the label in the meta file, and the options after it were lost.
+
+* **The colour dialog keeps the transparency of a subtitle colour:** 0x80ffffff came back as opaque white, also when nothing was changed.
+
+* **A constant bitrate above the disc's read rate limit** is asked about before the job, with both rates. Only the log said that the stream is held at the limit.
+
+* **When the listing finds no frame rate for the video,** the SRT line gets the 25 the video is muxed at: it got 23.976, and its subtitles were drawn for other pictures.
+
+* **Remove** builds a meta file that was edited by hand from the settings again when it names the removed file: the next mux muxed the removed file.
+
+* **Values read from the settings are checked:** a bad picture in picture corner or size, a blank playlist number of 0 and a subtitle colour that is not a number came back as other values.
+
+* **An output that is a hard link to a source** is refused as one of the sources. The M2TS save dialog offers .m2ts only, and the open dialog lists VC-1, VVC, MP2, MP3 and FLAC files.
 
 ### Other
 
@@ -254,7 +370,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A chapter file with more than one edition** uses the edition a Matroska file would: the one marked as the default, also when the mark follows its chapters, without its hidden and disabled chapters. It used the first edition with them.
 
-* **A meta line that shares some, but not all, of its files with an earlier line for the same track** is refused, with the file it shares, when that file is named the same way and has the same place in both lines, as in a join of a.ts and b.ts after a line with a.ts alone. Those files were left out without a word.
+* **A meta line that shares some, but not all, of its files with an earlier line for the same track** is refused, with the file it shares, whatever its name or place in either line, as in a join of a.ts and b.ts after a line with a.ts alone, or a.ts alone after the join. Those files were left out without a word.
 
 * **A timeshift or a --start-time so large that the times would wrap round** the 26.5 hour limit of the clock of a transport stream is refused before anything is written. The times went backwards.
 
@@ -263,6 +379,14 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **drop-ac3-core on a track that is not TrueHD** says that it applies to TrueHD only and is ignored, and on AC-3 or Dolby Digital Plus that down-to-ac3 keeps the AC-3 core alone. It was ignored without a word.
 
 * **On Linux and macOS, every part of a split Matroska output after the first was damaged:** its size, its index and its SeekHead were written in the wrong places, so it showed no duration. Each part is now whole.
+
+* **An output named .mp4, .mov, .avi or another kind tsMuxeR does not write** is refused: it became a demux folder.
+
+* **Meta lines:** lang= is written in lower case, a quote that is not closed is refused, a source that cannot be opened is named with the reason, track=0 on a Matroska file is named as such, and --keep-editions on a source without editions is said.
+
+* **Every file of a join must have the track, of the same kind:** a transport stream without the PID was left out in silence, and a file whose track of that number is of another kind was read as the codec of the line. The clips of a playlist may lack a track, as a short clip without sound before the film does.
+
+* **A refused demux into a new folder** leaves nothing behind.
 
 ### What is still converted or left out
 
