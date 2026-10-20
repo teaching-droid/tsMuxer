@@ -137,11 +137,12 @@ class TSMuxer final : public AbstractMuxer
     [[nodiscard]] bool nextPCRChanceTooLate(int tsIndex, int64_t dts) const;
     void noteAtsPass(int frames, double gap);
     // Sending ahead under --maxbitrate, see sendAheadAdvance in tsMuxer.cpp.
-    void sendAheadRecordPass(int64_t pcrVal, int64_t pcrGAP, int64_t oldPrevHi, bool hasPcrPacket);
+    void sendAheadRecordPass(int64_t pcrVal, int64_t askedPcr, int64_t pcrGAP, int64_t oldPrevHi, bool hasPcrPacket);
     void sendAheadNotePes();
     void sendAheadAdvance(int64_t muxDts);
     void sendAheadFinishAll();
     void sendAheadFinalizeFront();
+    [[nodiscard]] bool sendAheadReach(int64_t* dts) const;
     void sendAheadReleaseDone(bool all);
     void sendAheadHold(uint8_t* data, int len);
     void sendAheadPatch(int64_t pos, const uint8_t* src, int len);
@@ -349,6 +350,7 @@ class TSMuxer final : public AbstractMuxer
         int64_t muxDts;     // the latest decoding time muxed by then, 90 kHz
         bool hasPcrPacket;
         bool first;
+        bool held;  // the cap made its end later than the picture times asked for
     };
     struct SendAheadPes
     {
@@ -375,6 +377,7 @@ class TSMuxer final : public AbstractMuxer
     int64_t m_saPrevPcr;     // the final value of the last PCR, 90 kHz
     int64_t m_saPrevOldPcr;  // and its value as written
     int64_t m_saPassBits;    // m_pcrBits at the PCR being written
+    int64_t m_saAskedPcr;    // the time that PCR was asked for, before the cap
     bool m_saFirstPass;
     int64_t m_saDtsClock;
     int64_t m_saMuxDts;
