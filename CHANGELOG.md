@@ -408,6 +408,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **An Opus, Vorbis, ALAC, MPEG-4 Part 2 or ProRes line over a file of its own,** such as an Ogg Opus file, is refused, as these are read from a container only: it gave noise and a mux said to be successful.
 
+* **On Linux and macOS a source that does not exist got its folders made,** also on a drive that is only read from. Folders are now made only for an output.
+
 ### What is still converted or left out
 
 * **MP4 is not written.**
