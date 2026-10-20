@@ -2886,6 +2886,11 @@ Build the ISO anyway?</source>
         <translation>Удалите плейлист и добавьте его снова: его длительность и главы были прочитаны для другого варианта.</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>The constant bitrate of %1 kbit/s is above the read rate limit of %2 kbit/s, so the stream is held at %2 kbit/s. Mux it so?</source>
+        <translation>Постоянный битрейт %1 кбит/с выше ограничения скорости чтения %2 кбит/с, поэтому поток будет удерживаться на %2 кбит/с. Мультиплексировать так?</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="1173"/>
         <source>Default output folder</source>
         <translation>Папка по умолчанию для результирующих файлов</translation>

@@ -6086,6 +6086,21 @@ void TsMuxerWindow::startMuxing()
         }
     }
 
+    // A constant rate above the disc's read rate limit cannot be held: tsMuxeR holds the stream at the limit, with a
+    // warning in its log. Asked here, before the job, where the two boxes that set them are.
+    if (ui->checkBoxCBR->isChecked() && (ui->radioButtonBluRay->isChecked() || ui->radioButtonBluRayISO->isChecked()) &&
+        ui->checkBoxRateLimit->isChecked())
+    {
+        const double limit = ui->checkBoxV3->isChecked() ? ui->comboRateLimit->currentData().toDouble() : 48000.0;
+        if (ui->editCBRBitrate->value() > limit &&
+            QMessageBox::question(this, tr("tsMuxeR"),
+                                  tr("The constant bitrate of %1 kbit/s is above the read rate limit of %2 kbit/s, so "
+                                     "the stream is held at %2 kbit/s. Mux it so?")
+                                      .arg(ui->editCBRBitrate->value(), 0, 'f', 0)
+                                      .arg(limit, 0, 'f', 0)) != QMessageBox::Yes)
+            return;
+    }
+
     // A Matroska or WebM output is a file too, and an existing one was replaced without the question the others ask.
     bool isFile = ui->radioButtonM2TS->isChecked() || ui->radioButtonTS->isChecked() ||
                   ui->radioButtonBluRayISO->isChecked() || ui->radioButtonMKV->isChecked();

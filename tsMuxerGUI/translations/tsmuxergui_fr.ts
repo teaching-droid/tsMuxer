@@ -2886,6 +2886,11 @@ Créer l'ISO malgré tout ?</translation>
         <translation>Retirez la playlist et ajoutez-la de nouveau : sa durée et ses chapitres ont été lus pour l&apos;autre choix.</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>The constant bitrate of %1 kbit/s is above the read rate limit of %2 kbit/s, so the stream is held at %2 kbit/s. Mux it so?</source>
+        <translation>Le débit constant de %1 kbit/s dépasse la limite de vitesse de lecture de %2 kbit/s : le flux est donc maintenu à %2 kbit/s. Multiplexer ainsi ?</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="1173"/>
         <source>Default output folder</source>
         <translation>Dossier de sortie par défaut</translation>

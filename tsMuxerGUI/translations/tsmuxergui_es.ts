@@ -2886,6 +2886,11 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas, seleccionables como
         <translation>Quite la playlist y vuelva a añadirla: su duración y sus capítulos se leyeron para la otra opción.</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>The constant bitrate of %1 kbit/s is above the read rate limit of %2 kbit/s, so the stream is held at %2 kbit/s. Mux it so?</source>
+        <translation>La tasa de bits constante de %1 kbit/s supera el límite de velocidad de lectura de %2 kbit/s, así que el flujo se mantiene en %2 kbit/s. ¿Multiplexar así?</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="1173"/>
         <source>Default output folder</source>
         <translation>Carpeta de salida por defecto</translation>

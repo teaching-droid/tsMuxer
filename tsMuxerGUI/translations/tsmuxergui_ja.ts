@@ -2886,6 +2886,11 @@ Build the ISO anyway?</source>
         <translation>プレイリストを削除してから追加し直してください。長さとチャプターは別の設定で読み込まれています。</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>The constant bitrate of %1 kbit/s is above the read rate limit of %2 kbit/s, so the stream is held at %2 kbit/s. Mux it so?</source>
+        <translation>固定ビットレート %1 kbit/s が読み出しレートの上限 %2 kbit/s を超えているため、ストリームは %2 kbit/s に抑えられます。このまま多重化しますか?</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="1173"/>
         <source>Default output folder</source>
         <translation>デフォルトの出力フォルダー</translation>

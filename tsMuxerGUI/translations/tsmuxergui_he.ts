@@ -2886,6 +2886,11 @@ Build the ISO anyway?</source>
         <translation>הסירו את רשימת ההשמעה והוסיפו אותה מחדש: האורך והפרקים שלה נקראו עבור הבחירה האחרת.</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>The constant bitrate of %1 kbit/s is above the read rate limit of %2 kbit/s, so the stream is held at %2 kbit/s. Mux it so?</source>
+        <translation>קצב הסיביות הקבוע של %1 kbit/s גבוה ממגבלת קצב הקריאה של %2 kbit/s, ולכן הזרם יוחזק על %2 kbit/s. לבצע מיקס כך?</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="1173"/>
         <source>Default output folder</source>
         <translation>תיקיית פלט ברירת מחדל</translation>

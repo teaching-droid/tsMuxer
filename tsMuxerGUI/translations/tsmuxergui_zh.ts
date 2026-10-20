@@ -2886,6 +2886,11 @@ Build the ISO anyway?</source>
         <translation>请移除该播放列表后重新添加：它的时长和章节是按另一种设置读取的。</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>The constant bitrate of %1 kbit/s is above the read rate limit of %2 kbit/s, so the stream is held at %2 kbit/s. Mux it so?</source>
+        <translation>恒定码率 %1 kbit/s 高于读取速率上限 %2 kbit/s，因此流将被限制在 %2 kbit/s。仍要这样复用吗？</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="1173"/>
         <source>Default output folder</source>
         <translation>默认输出目录</translation>
