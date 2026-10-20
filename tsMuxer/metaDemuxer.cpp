@@ -1573,6 +1573,18 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     }
     else
     {
+        // Opus, Vorbis, ALAC, MPEG-4 Part 2 and ProRes are read from a container only: their readers take the packets
+        // a container gives them. A file of its own, as an Ogg Opus file, was read all the same: any four bytes were
+        // taken for the length of a packet, and the mux of the noise that made was said to be successful.
+        if (codec == "A_OPUS" || codec == "A_VORBIS" || codec == "A_ALAC" || codec == "V_MPEG4/ISO/ASP" ||
+            codec == "V_PRORES")
+        {
+            delete codecReader;
+            THROW(ERR_INVALID_CODEC_FORMAT, codec << " is read from a Matroska, WebM, MP4 or MOV file or a transport "
+                                                     "stream only, and "
+                                                  << unquoteStr(trimStr(fileList[0]))
+                                                  << " is none of them. An Ogg file is not read.")
+        }
         dataReader = m_readManager.getReader(fileList[0].c_str());
     }
     if (dataReader == nullptr)
