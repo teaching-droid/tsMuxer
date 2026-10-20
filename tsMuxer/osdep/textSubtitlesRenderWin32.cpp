@@ -148,10 +148,9 @@ void TextSubtitlesRenderWin32::drawText(const std::string& text, RECT* rect)
 
     // GDI+ draws a pen of width 0 one pixel wide, so font-border=0 still gave the text a black hairline, and a
     // half-transparent colour laid over it came out more opaque than asked (alpha 181 for 0x80) at every edge.
-    // Without a border the outline is left out under a half-transparent colour; under an opaque one it is drawn as
-    // it always was.
+    // Without a border the outline is left out, as on Linux and macOS.
     const uint8_t alpha = m_font.m_color >> 24;
-    if (m_font.m_borderWidth > 0 || alpha == 255)
+    if (m_font.m_borderWidth > 0)
     {
         const uint8_t outColor = (alpha * 48 + 128) / 255;
         Pen pen(Color(outColor, 0, 0, 0), m_font.m_borderWidth * 2.0F);
