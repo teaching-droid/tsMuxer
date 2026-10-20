@@ -57,6 +57,9 @@ class AC3Codec
         m_extChannelsExists = false;
         m_bsid = m_bsidBase = 0;
         m_strmtyp = 0;
+        m_substreamid = 0;
+        m_eac3FirstProgram = false;
+        m_extraProgramReported = false;
         m_dsurmod = 0;
         m_mixinfoexists = false;
         m_isAtmos = false;
@@ -101,6 +104,9 @@ class AC3Codec
     uint8_t m_bsid;
     uint8_t m_bsidBase;
     uint8_t m_strmtyp;
+    uint8_t m_substreamid;    // the program of an independent E-AC-3 frame
+    bool m_eac3FirstProgram;  // an independent E-AC-3 frame of program 0 was seen
+    bool m_extraProgramReported;
     uint8_t m_bsmod;
     uint8_t m_acmod;
     uint8_t m_dsurmod;

@@ -130,7 +130,17 @@ AC3Codec::AC3ParseError AC3Codec::parseHeader(uint8_t* buf, const uint8_t* end)
         if (m_strmtyp == 3)
             return AC3ParseError::SYNC;  // invalid stream type
 
-        gbc.skipBits(14);  // substreamid, frmsize
+        m_substreamid = gbc.getBits<uint8_t>(3);
+        gbc.skipBits(11);  // frmsize
+        if (m_strmtyp == 0 && m_substreamid == 0)
+            m_eac3FirstProgram = true;
+        if (m_substreamid && m_strmtyp != 1 && m_eac3FirstProgram && !m_extraProgramReported && !m_testMode)
+        {
+            m_extraProgramReported = true;
+            LTRACE(LT_WARN, 2,
+                   "Warning: the E-AC-3 stream holds more than one program. Its times follow the first program; the "
+                   "others are kept, and a player plays only the first.");
+        }
 
         const auto fscod = gbc.getBits<uint8_t>(2);
 
@@ -633,6 +643,12 @@ uint64_t AC3Codec::getFrameDuration() const
 {
     // EAC3 dependent frame : wait for next independent frame
     if (!m_bit_rate && m_strmtyp == 1)
+        return 0;
+
+    // A further independent program of E-AC-3 plays at the same time as the first: every one of its frames moved the
+    // time on as well, and a stream of two programs lasted twice its length. Behind an AC-3 core the E-AC-3 frames
+    // keep the time, whatever their substream.
+    if (m_bsid > 10 && m_strmtyp != 1 && m_substreamid != 0 && m_eac3FirstProgram)
         return 0;
 
     // AC3 frame in AC3/EAC3 stream: wait for EAC3 frame
