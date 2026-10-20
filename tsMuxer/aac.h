@@ -3,7 +3,17 @@
 
 #include <types/types.h>
 
+#include <vector>
+
 static constexpr int AAC_HEADER_LEN = 7;
+
+// A program config element (ISO/IEC 14496-3, 4.4.1.1): the channel layout of AAC whose channel configuration is 0.
+struct AacProgramConfig
+{
+    std::vector<uint8_t> bits;     // its fields up to its byte alignment, one bit per entry
+    std::vector<uint8_t> comment;  // the comment bytes after the alignment
+    int channels = 0;
+};
 
 class AACCodec
 {
@@ -29,6 +39,10 @@ class AACCodec
     void buildADTSHeader(uint8_t* buffer, unsigned frameSize);
     void setSampleRate(const int value) { m_sample_rate = value; }
     void readConfig(uint8_t* buff, int size);
+    // The element that carries m_pce inside a frame, as whole bytes: empty without a program config element.
+    [[nodiscard]] const std::vector<uint8_t>& inBandPce() const { return m_inBandPce; }
+    // An AudioSpecificConfig of 2 bytes, or with the program config element when the stream has one.
+    [[nodiscard]] std::vector<uint8_t> audioSpecificConfig() const;
 
     int m_id;
     int m_layer;
@@ -40,6 +54,12 @@ class AACCodec
     uint8_t m_channels_index;
     uint8_t m_profile;
     uint8_t m_rdb;  // ch, sr;
+    // channel configuration 0 only
+    AacProgramConfig m_pce;
+
+   private:
+    std::vector<uint8_t> m_inBandPce;
+    void setPce(const AacProgramConfig& pce);
 };
 
 #endif

@@ -278,9 +278,14 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
             }
             if (isAAC)
             {
-                m_aacRaw.buildADTSHeader(dst, frameSize + AAC_HEADER_LEN);
-                memcpy(dst + AAC_HEADER_LEN, buff, frameSize);
-                dst += frameSize + AAC_HEADER_LEN;
+                // A layout given by a program config element goes into every frame: an ADTS header cannot name it.
+                const auto& pce = m_aacRaw.inBandPce();
+                const unsigned headerLen = AAC_HEADER_LEN + static_cast<unsigned>(pce.size());
+                m_aacRaw.buildADTSHeader(dst, frameSize + headerLen);
+                if (!pce.empty())
+                    memcpy(dst + AAC_HEADER_LEN, pce.data(), pce.size());
+                memcpy(dst + headerLen, buff, frameSize);
+                dst += frameSize + headerLen;
             }
             else
             {
@@ -348,7 +353,8 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
         i -= empties;
         if (!isAAC)
             i = 0;
-        const unsigned out = (size - left) - dropped + (i - (isAAC ? drop : 0)) * AAC_HEADER_LEN;
+        const unsigned headerLen = AAC_HEADER_LEN + static_cast<unsigned>(m_aacRaw.inBandPce().size());
+        const unsigned out = (size - left) - dropped + (i - (isAAC ? drop : 0)) * headerLen;
         // A chunk of nothing but dropped frames gives nothing, and extractData is then not called for it: its frames
         // are consumed here. For a track of one sample size too: its count of frames still to drop stayed where it
         // was, and every chunk after it was dropped, to the end of the part.

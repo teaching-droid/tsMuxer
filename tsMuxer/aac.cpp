@@ -11,6 +11,99 @@ static constexpr int aac_sample_rates[16] = {
 // 22.2 and 7.1 (ISO/IEC 14496-3 table 1.19), the others are reserved.
 static constexpr uint8_t aac_channels[16] = {0, 1, 2, 3, 4, 5, 6, 8, 0, 0, 0, 7, 8, 24, 8, 0};
 
+// Reads a program config element from its first field on. Its byte alignment counts from the start of the reader's
+// buffer, which is where the frame or the AudioSpecificConfig begins. False when it names no channel.
+static bool readProgramConfig(BitStreamReader& reader, AacProgramConfig& pce)
+{
+    pce = {};
+    auto take = [&](const unsigned n)
+    {
+        const unsigned value = reader.getBits(n);
+        for (int i = static_cast<int>(n) - 1; i >= 0; --i) pce.bits.push_back(static_cast<uint8_t>(value >> i & 1));
+        return value;
+    };
+    take(4);  // element_instance_tag
+    take(2);  // object_type
+    take(4);  // sampling_frequency_index
+    const unsigned front = take(4);
+    const unsigned side = take(4);
+    const unsigned back = take(4);
+    const unsigned lfe = take(2);
+    const unsigned assocData = take(3);
+    const unsigned validCc = take(4);
+    if (take(1))
+        take(4);  // mono_mixdown_element_number
+    if (take(1))
+        take(4);  // stereo_mixdown_element_number
+    if (take(1))
+        take(3);  // matrix_mixdown_idx, pseudo_surround_enable
+    int channels = 0;
+    for (unsigned i = 0; i < front + side + back; ++i)
+    {
+        channels += take(1) ? 2 : 1;  // is_cpe
+        take(4);                      // element_tag_select
+    }
+    for (unsigned i = 0; i < lfe; ++i)
+    {
+        ++channels;
+        take(4);
+    }
+    for (unsigned i = 0; i < assocData; ++i) take(4);
+    for (unsigned i = 0; i < validCc; ++i) take(5);
+    reader.skipBits((8 - reader.getBitsCount() % 8) % 8);  // byte_alignment
+    const unsigned commentBytes = reader.getBits(8);
+    for (unsigned i = 0; i < commentBytes; ++i) pce.comment.push_back(static_cast<uint8_t>(reader.getBits(8)));
+    pce.channels = channels;
+    return channels > 0;
+}
+
+static void putBitsTo(std::vector<uint8_t>& out, size_t& pos, const unsigned n, const unsigned value)
+{
+    for (int i = static_cast<int>(n) - 1; i >= 0; --i, ++pos)
+    {
+        if (pos % 8 == 0)
+            out.push_back(0);
+        if (value >> i & 1)
+            out.back() |= static_cast<uint8_t>(0x80 >> pos % 8);
+    }
+}
+
+// Writes the element at bit pos of out, aligned as counted from the start of out; it ends on a byte boundary.
+static void writeProgramConfig(std::vector<uint8_t>& out, size_t& pos, const AacProgramConfig& pce)
+{
+    for (const auto bit : pce.bits) putBitsTo(out, pos, 1, bit);
+    if (pos % 8)
+        putBitsTo(out, pos, static_cast<unsigned>(8 - pos % 8), 0);
+    putBitsTo(out, pos, 8, static_cast<unsigned>(pce.comment.size()));
+    for (const auto byte : pce.comment) putBitsTo(out, pos, 8, byte);
+}
+
+void AACCodec::setPce(const AacProgramConfig& pce)
+{
+    if (pce.bits == m_pce.bits && pce.comment == m_pce.comment && pce.channels == m_pce.channels)
+        return;
+    m_pce = pce;
+    m_inBandPce.clear();
+    if (pce.channels == 0)
+        return;
+    size_t pos = 0;
+    putBitsTo(m_inBandPce, pos, 3, 5);  // ID_PCE
+    writeProgramConfig(m_inBandPce, pos, pce);
+}
+
+std::vector<uint8_t> AACCodec::audioSpecificConfig() const
+{
+    std::vector<uint8_t> config;
+    size_t pos = 0;
+    putBitsTo(config, pos, 5, m_profile + 1u);  // audioObjectType: the profile is one lower
+    putBitsTo(config, pos, 4, m_sample_rates_index);
+    putBitsTo(config, pos, 4, m_pce.channels ? 0 : m_channels_index);
+    putBitsTo(config, pos, 3, 0);  // frameLengthFlag, dependsOnCoreCoder, extensionFlag
+    if (m_pce.channels)
+        writeProgramConfig(config, pos, m_pce);
+    return config;
+}
+
 // Is there a second ADTS header exactly one frame after this one, agreeing on the fields a stream
 // does not change?
 //
@@ -129,7 +222,7 @@ bool AACCodec::decodeFrame(uint8_t* buffer, const uint8_t* end)
 
         m_id = bits.getBit();               /* 0: MPEG-4, 1: MPEG-2*/
         m_layer = bits.getBits<uint8_t>(2); /* layer */
-        bits.skipBit();                     /* protection_absent */
+        const bool protectionAbsent = bits.getBit();
         // -- 16 bit
         m_profile = bits.getBits<uint8_t>(2);            /* profile_objecttype */
         m_sample_rates_index = bits.getBits<uint8_t>(4); /* sample_frequency_index */
@@ -137,10 +230,8 @@ bool AACCodec::decodeFrame(uint8_t* buffer, const uint8_t* end)
             return false;
         bits.skipBit();                              /* private_bit */
         m_channels_index = bits.getBits<uint8_t>(3); /* channel_configuration */
-        if (!aac_channels[m_channels_index])
-            return false;
-        bits.skipBit(); /* original/copy */
-        bits.skipBit(); /* home */
+        bits.skipBit();                              /* original/copy */
+        bits.skipBit();                              /* home */
 
         /* adts_variable_header */
         bits.skipBit();                                    /* copyright_identification_bit */
@@ -149,7 +240,22 @@ bool AACCodec::decodeFrame(uint8_t* buffer, const uint8_t* end)
         bits.skipBits(11);                                 /* adts_buffer_fullness */
         m_rdb = bits.getBits<uint8_t>(2);                  /* number_of_raw_data_blocks_in_frame */
 
-        m_channels = aac_channels[m_channels_index];
+        // Channel configuration 0: the layout is in a program config element at the start of the frame, as for 6.0,
+        // 6.1 or 7.1 with front wide speakers; a stream may give it in its first frame only. Such a stream was not
+        // recognised at all.
+        if (m_channels_index == 0)
+        {
+            if (!protectionAbsent)
+                bits.skipBits(16u * (m_rdb + 1u));  // raw_data_block_position of the later blocks, crc_check
+            AacProgramConfig pce;
+            if (bits.getBits(3) == 5 && readProgramConfig(bits, pce))  // ID_PCE
+                setPce(pce);
+            else if (m_pce.channels == 0)
+                return false;
+        }
+        else
+            setPce({});
+        m_channels = m_channels_index ? aac_channels[m_channels_index] : static_cast<uint8_t>(m_pce.channels);
         m_sample_rate = aac_sample_rates[m_sample_rates_index];
         m_samples = (m_rdb + 1) * 1024;
         // In 64 bits: a long frame at 44.1 kHz and above went past the int range (8191 bytes at 96 kHz is
@@ -181,8 +287,9 @@ void AACCodec::buildADTSHeader(uint8_t* buffer, const unsigned frameSize)
         }
     writer.putBits(4, m_sample_rates_index);
     writer.putBit(0); /* private_bit */
+    // 0 with a program config element, which the frames carry
     m_channels_index = 0;
-    for (uint8_t i = 0; i < 8; i++)
+    for (uint8_t i = 0; i < 8 && m_inBandPce.empty(); i++)
         if (aac_channels[i] == m_channels)
         {
             m_channels_index = i;
@@ -227,6 +334,29 @@ void AACCodec::readConfig(uint8_t* buff, const int size)
             core = 32 + reader.getBits<uint8_t>(6);
         if (core >= 1 && core <= 4)
             m_profile = core - 1;
+        object_type = core;
     }
+    // Channel configuration 0 of a general audio object: a program config element follows in its GASpecificConfig.
+    // It was not read, so such a track had no channels and gave empty frames, an empty output said to be successful.
+    AacProgramConfig pce;
+    static constexpr uint32_t generalAudio = 1u << 1 | 1u << 2 | 1u << 3 | 1u << 4 | 1u << 6 | 1u << 7 | 1u << 17 |
+                                             1u << 19 | 1u << 20 | 1u << 21 | 1u << 22 | 1u << 23;
+    if (m_channels_index == 0 && object_type < 32 && (generalAudio >> object_type & 1))
+    {
+        try
+        {
+            reader.skipBit();  // frameLengthFlag
+            if (reader.getBit())
+                reader.skipBits(14);  // dependsOnCoreCoder, coreCoderDelay
+            reader.skipBit();         // extensionFlag
+            if (readProgramConfig(reader, pce))
+                m_channels = static_cast<uint8_t>(pce.channels);
+        }
+        catch (BitStreamException&)
+        {
+            pce = {};
+        }
+    }
+    setPce(pce);
     // return specific_config_bitindex;
 }

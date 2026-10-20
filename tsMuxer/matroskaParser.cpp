@@ -464,10 +464,15 @@ ParsedAACTrackData::ParsedAACTrackData(uint8_t* buff, const int size) : ParsedTr
 
 void ParsedAACTrackData::extractData(AVPacket* pkt, uint8_t* buff, const int size)
 {
-    pkt->size = size + AAC_HEADER_LEN;
+    // A layout given by a program config element goes into every frame: an ADTS header cannot name it.
+    const auto& pce = m_aacRaw.inBandPce();
+    const int headerLen = AAC_HEADER_LEN + static_cast<int>(pce.size());
+    pkt->size = size + headerLen;
     pkt->data = new uint8_t[pkt->size];
-    m_aacRaw.buildADTSHeader(pkt->data, size + AAC_HEADER_LEN);
-    memcpy(pkt->data + AAC_HEADER_LEN, buff, size);
+    m_aacRaw.buildADTSHeader(pkt->data, size + headerLen);
+    if (!pce.empty())
+        memcpy(pkt->data + AAC_HEADER_LEN, pce.data(), pce.size());
+    memcpy(pkt->data + headerLen, buff, size);
 }
 
 // ------------ LPCM --------------

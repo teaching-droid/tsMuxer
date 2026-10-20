@@ -875,17 +875,9 @@ std::vector<uint8_t> MatroskaMuxer::buildAACConfig(AbstractStreamReader* reader)
     if (!aac)
         return {};
 
-    // Build a 2-byte AudioSpecificConfig
-    // audioObjectType(5 bits) | samplingFrequencyIndex(4 bits) | channelConfiguration(4 bits) | padding(3 bits)
-    const uint8_t objectType = aac->m_profile + 1;  // AAC profile is 0-based, objectType is 1-based
-    const uint8_t freqIndex = aac->m_sample_rates_index;
-    const uint8_t chanConfig = aac->m_channels_index;
-
-    std::vector<uint8_t> config(2);
-    config[0] = static_cast<uint8_t>((objectType << 3) | (freqIndex >> 1));
-    config[1] = static_cast<uint8_t>(((freqIndex & 1) << 7) | (chanConfig << 3));
-
-    return config;
+    // audioObjectType(5 bits) | samplingFrequencyIndex(4 bits) | channelConfiguration(4 bits) | 3 flags, and a
+    // program config element after them when the layout is given by one
+    return aac->audioSpecificConfig();
 }
 
 void MatroskaMuxer::buildCodecPrivate(MkvTrackInfo& track)
