@@ -884,6 +884,21 @@ int H264StreamReader::calcPicOrder(const SliceUnit& slice)
     return (PicOrderCntMsb + PicOrderCntLsb) >> m_forceLsbDiv;
 }
 
+int H264StreamReader::nextPicOrder(const SliceUnit& slice) const
+{
+    const int lsb = static_cast<int>(slice.pic_order_cnt_lsb);
+    const int maxLsb = 1 << slice.getSPS()->log2_max_pic_order_cnt_lsb;
+    int msb = prevPicOrderCntMsb;
+    if (lsb < prevPicOrderCntLsb && prevPicOrderCntLsb - lsb >= maxLsb / 2)
+        msb += maxLsb;
+    else if (lsb > prevPicOrderCntLsb && lsb - prevPicOrderCntLsb > maxLsb / 2)
+        msb -= maxLsb;
+    int order = ((msb + lsb) >> m_forceLsbDiv) + m_iFramePtsOffset;
+    if (m_idrSliceCnt == 0 && m_bSliceFound)
+        order += m_picOrderOffset;
+    return order;
+}
+
 int H264StreamReader::getIdrPrevFrames(uint8_t* buff, const uint8_t* bufEnd)
 {
     int prevPicCnt = 0;
@@ -1556,9 +1571,23 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     // a Matroska output wrote the two as one block. The first picture now comes after them, and every picture from it
     // on takes its time from its own order count, as after an IDR.
     int firstLeading = -1;
+    // A later file of a join that does not begin with an IDR, as a cut does, is a stream of its own when its first
+    // picture would take an order a picture of the file before already has: it continued that file's IDR period,
+    // its pictures took times the file before had given, and the two parts overlapped (4 of 268 times repeated).
+    // It begins as a stream does, by the rule above, after the pictures before it. A file that continues the
+    // stream before it, as the parts of a split recording do, gives no order twice and goes on as before.
+    bool joinStart = false;
+    if (m_joinPos && buff >= m_joinPos)
+    {
+        joinStart = !slice.isIDR() && !guessOrder && !damaged && !slice.m_field_pic_flag && !m_fieldPicturesSeen &&
+                    slice.getSPS()->pic_order_cnt_type == 0 && m_ptsGiven &&
+                    m_periodOrders.count(nextPicOrder(slice)) > 0;
+        if (!joinStart)
+            m_joinPos = nullptr;
+    }
     // Frame pictures only: the two fields of a frame share one time, which a Matroska block needs, and this count
     // placed them apart (a 1080i capture cut mid stream got its first field pair in two blocks).
-    if (m_totalFrameNum == 0 && m_idrSliceCnt == 0 && !guessOrder && !damaged && !slice.isIDR() &&
+    if ((joinStart || (m_totalFrameNum == 0 && m_idrSliceCnt == 0)) && !guessOrder && !damaged && !slice.isIDR() &&
         !slice.m_field_pic_flag && !m_fieldPicturesSeen && slice.getSPS()->pic_order_cnt_type == 0)
     {
         firstLeading = leadingPicturesOfFirst(slice, buff);
@@ -1566,6 +1595,20 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
             return NOT_ENOUGH_BUFFER;
         if (firstLeading == -2)
             firstLeading = -1;  // coded fields follow: as before
+    }
+    if (joinStart)
+    {
+        m_joinPos = nullptr;
+        joinStart = firstLeading >= 0;
+        if (joinStart)
+        {
+            m_idrSliceCnt = 0;
+            m_bSliceFound = false;
+            m_picOrderOffset = 0;
+            m_iFramePtsOffset = 0;
+            m_periodOrders.clear();
+            m_fieldsShown.clear();
+        }
     }
 
     // An IDR period can have a deeper B pyramid than the pictures before it: a joined file coded otherwise, or a stream
@@ -1660,6 +1703,7 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     {
         m_idrSliceCnt++;
         m_picOrderOffset = 0;
+        m_periodOrders.clear();
     }
     else if (partStart)
         m_picOrderOffset = 0;
@@ -1710,6 +1754,9 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     if (slice.m_field_pic_flag)
         m_fieldPicturesSeen = true;
     checkPyramid(m_frameNum, &fullPicOrder, m_nextFrameFound);
+    if (m_periodOrders.size() >= 4096)
+        m_periodOrders.erase(m_periodOrders.begin());
+    m_periodOrders.insert(fullPicOrder);
 
     // increase PTS/DTS
     m_curDts += m_lastDtsInc;
@@ -1775,9 +1822,10 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     // A new IDR period begins after the latest time already given. A stream that lacks pictures, as a cut does (the
     // pictures before its first one in decode order), has a hole in the order shown, and the IDR, placed by the count
     // of pictures decoded, took a time a picture before it already had. The decoding times skip the same gap.
-    if (slice.isIDR() && m_ptsGiven && !m_fieldPicturesSeen)
+    if ((slice.isIDR() || joinStart) && m_ptsGiven && !m_fieldPicturesSeen)
     {
-        const int64_t periodStart = m_curPts - static_cast<int64_t>(m_iFramePtsOffset) * m_pcrIncPerFrame;
+        const int before = joinStart ? firstLeading : m_iFramePtsOffset;  // the pictures shown before this one
+        const int64_t periodStart = m_curPts - static_cast<int64_t>(before) * m_pcrIncPerFrame;
         if (periodStart <= m_maxPts)
         {
             const int64_t gap = m_maxPts + m_maxPtsShown - periodStart;

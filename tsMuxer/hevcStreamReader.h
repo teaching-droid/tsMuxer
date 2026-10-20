@@ -2,6 +2,7 @@
 #define HEVC_STREAM_READER_H_
 
 #include <map>
+#include <set>
 
 #include "abstractDemuxer.h"
 #include "hevc.h"
@@ -79,6 +80,10 @@ class HEVCStreamReader final : public MPEGStreamReader
     int toFullPicOrder(const HevcSliceHeader* slice, unsigned pic_bits);
     int picturesShownBeforeFirst(uint8_t* nal, uint8_t* end) const;
     int depthOfPeriod(uint8_t* nal, uint8_t* end) const;
+    // The full order a picture would get as the next of the period (toFullPicOrder, without moving its state)
+    [[nodiscard]] int nextFullPicOrder(const HevcSliceHeader* slice) const;
+    std::set<int> m_periodOrders;  // the full orders given since the last IDR or BLA picture, for a join
+    bool m_joinRestart = false;    // the picture being read begins a later file of a join as a stream of its own
     static void storeBuffer(MemoryBlock& dst, const uint8_t* data, const uint8_t* dataEnd);
     uint8_t* writeBuffer(MemoryBlock& srcData, uint8_t* dstBuffer, const uint8_t* dstEnd) const;
     uint8_t* writeNalPrefix(uint8_t* curPos) const;

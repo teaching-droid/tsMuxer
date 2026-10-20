@@ -149,6 +149,10 @@ class H264StreamReader final : public MPEGStreamReader
     int getIdrPrevFrames(uint8_t* buff, const uint8_t* bufEnd);
     int leadingPicturesOfFirst(const SliceUnit& firstSlice, uint8_t* buff);
     int depthOfIdrPeriod(const SliceUnit& idrSlice, uint8_t* buff);
+    // The full order a picture would get as the next of the period (calcPicOrder, without moving its state)
+    [[nodiscard]] int nextPicOrder(const SliceUnit& slice) const;
+    // the full orders given in the current IDR period, for a join (see processSliceNal)
+    std::set<int> m_periodOrders;
     int64_t m_maxPts = 0;       // the latest presentation time given, for the start of the next IDR period
     int64_t m_maxPtsShown = 0;  // how long the picture at m_maxPts is shown: a frame, or its fields with pulldown
     // Pulldown with pictures shown out of decode order (B pictures): a picture is shown for 2 to 6 fields, so its

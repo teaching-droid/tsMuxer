@@ -1196,7 +1196,7 @@ int HEVCStreamReader::toFullPicOrder(const HevcSliceHeader* slice, const unsigne
     // clip, which the cut left out, as do the pictures shown before it, which went with them (TSDemuxer::keptInPart)
     const bool partStart = slice->nal_unit_type >= HevcUnit::NalType::BLA_W_LP &&
                            slice->nal_unit_type <= HevcUnit::NalType::RSV_IRAP_VCL23 && isPartStart();
-    if (slice->isIDR() || bla || !m_picOrderStarted || partStart)
+    if (slice->isIDR() || bla || !m_picOrderStarted || partStart || m_joinRestart)
     {
         // A Dolby Vision enhancement layer may lack a picture its base layer has (a disc's stream was measured with
         // one missing). The pictures were placed by counting them, so from the next IDR on every picture of the
@@ -1209,7 +1209,7 @@ int HEVCStreamReader::toFullPicOrder(const HevcSliceHeader* slice, const unsigne
         if (m_picOrderStarted && m_maxFullPicOrder + 1 > m_frameNum)
         {
             const int gap = m_maxFullPicOrder + 1 - m_frameNum;
-            if (!m_dvGapReported)
+            if (!m_dvGapReported && !m_joinRestart)
                 LTRACE(LT_INFO, 2,
                        (m_hdr->isDVRPU ? "Dolby Vision: the stream lacks " : "HEVC: the stream lacks ")
                            << gap << (gap == 1 ? " picture" : " pictures") << " before picture " << m_totalFrameNum
@@ -1219,8 +1219,13 @@ int HEVCStreamReader::toFullPicOrder(const HevcSliceHeader* slice, const unsigne
             m_curDts += static_cast<int64_t>(gap) * m_pcrIncPerFrame;
         }
         // a first picture that is not IRAP goes after the pictures shown before it (picturesShownBeforeFirst)
-        const int leading =
-            !m_picOrderStarted && slice->nal_unit_type < HevcUnit::NalType::BLA_W_LP ? m_firstLeading : 0;
+        const int leading = (!m_picOrderStarted && slice->nal_unit_type < HevcUnit::NalType::BLA_W_LP) ||
+                                    (m_joinRestart && slice->nal_unit_type != HevcUnit::NalType::BLA_W_LP &&
+                                     slice->nal_unit_type != HevcUnit::NalType::BLA_W_RADL &&
+                                     slice->nal_unit_type != HevcUnit::NalType::BLA_N_LP)
+                                ? m_firstLeading
+                                : 0;
+        m_joinRestart = false;
         m_picOrderStarted = true;
         m_picOrderBase = m_frameNum + leading - static_cast<int>(slice->pic_order_cnt_lsb);
         m_picOrderMsb = 0;
@@ -1239,6 +1244,18 @@ int HEVCStreamReader::toFullPicOrder(const HevcSliceHeader* slice, const unsigne
     }
 
     return slice->pic_order_cnt_lsb + m_picOrderMsb + m_picOrderBase;
+}
+
+int HEVCStreamReader::nextFullPicOrder(const HevcSliceHeader* slice) const
+{
+    const int range = 1 << m_sps->log2_max_pic_order_cnt_lsb;
+    const int lsb = static_cast<int>(slice->pic_order_cnt_lsb);
+    int msb = m_picOrderMsb;
+    if (lsb < m_prevPicOrder && m_prevPicOrder - lsb >= range / 2)
+        msb += range;
+    else if (lsb > m_prevPicOrder && lsb - m_prevPicOrder >= range / 2)
+        msb -= range;
+    return lsb + msb + m_picOrderBase;
 }
 
 int HEVCStreamReader::guessPicOrder(const HevcUnit::NalType nalType)
@@ -1268,6 +1285,11 @@ void HEVCStreamReader::notePicOrder(const HevcUnit::NalType nalType)
         m_prevGopOrderOffsets.swap(m_gopOrderOffsets);
         m_gopOrderOffsets.clear();
     }
+    if (nalType >= HevcUnit::NalType::BLA_W_LP && nalType <= HevcUnit::NalType::IDR_N_LP)
+        m_periodOrders.clear();
+    if (m_periodOrders.size() >= 4096)
+        m_periodOrders.erase(m_periodOrders.begin());
+    m_periodOrders.insert(m_fullPicOrder);
     if (m_gopOrderOffsets.size() < MAX_GOP_PICTURES)
         m_gopOrderOffsets.push_back(m_fullPicOrder - m_frameNum);
 }
@@ -1407,12 +1429,31 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                     if (m_slice->slice_type <= 2 &&
                         (m_auMinSliceType < 0 || static_cast<int>(m_slice->slice_type) < m_auMinSliceType))
                         m_auMinSliceType = static_cast<int>(m_slice->slice_type);
-                    if (!m_picOrderStarted && nalType < HevcUnit::NalType::BLA_W_LP)
+                    // A later file of a join that does not begin with an IDR or BLA picture, as a cut does, is a
+                    // stream of its own when its first picture would take an order a picture of the file before
+                    // already has: it continued the count of the file before, its pictures took times that file had
+                    // given, and the two parts overlapped. It begins as a stream does, after the pictures before it,
+                    // its leading pictures with it. A file that continues the stream before it gives no order twice.
+                    bool joinStart = false;
+                    if (m_joinPos && curPos >= m_joinPos)
+                    {
+                        joinStart = m_picOrderStarted &&
+                                    (nalType < HevcUnit::NalType::BLA_W_LP || nalType == HevcUnit::NalType::CRA) &&
+                                    m_periodOrders.count(nextFullPicOrder(m_slice)) > 0;
+                        if (!joinStart)
+                            m_joinPos = nullptr;
+                    }
+                    if ((!m_picOrderStarted && nalType < HevcUnit::NalType::BLA_W_LP) || joinStart)
                     {
                         const int leading = picturesShownBeforeFirst(curPos, m_bufEnd);
                         if (leading == -1)
                             return NOT_ENOUGH_BUFFER;
                         m_firstLeading = leading;
+                    }
+                    if (joinStart)
+                    {
+                        m_joinPos = nullptr;
+                        m_joinRestart = true;
                     }
                     m_fullPicOrder = toFullPicOrder(m_slice, m_sps->log2_max_pic_order_cnt_lsb);
                 }

@@ -80,6 +80,8 @@ class AbstractStreamReader : public BaseAbstractStreamReader
     // and every frame after it, come gapNs later (a part of a join with less sound than picture). A reader that
     // counts its times by frames keeps it; the others do not take gaps.
     virtual void addTimeGap(int64_t atNs, int64_t gapNs) {}
+    // The data of the next setBuffer begins a later file of a join of files read one after the other
+    virtual void onJoinedFileStart() {}
     unsigned m_flags;
     virtual const CodecInfo& getCodecInfo() = 0;  // get codecInfo struct. (CodecID, codec name)
     void setSrcContainerType(const ContainerType containerType) { m_containerType = containerType; }

@@ -25,6 +25,7 @@ void MPEGStreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const bo
 {
     if (lastBlock)
         m_eof = true;
+    const int64_t keptLen = m_tmpBufferLen;
 
     if (m_tmpBufferLen + dataLen > m_tmpBufferSize)
     {
@@ -48,6 +49,8 @@ void MPEGStreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const bo
             m_cachedMarker += delta;
         if (m_scanHighWater)
             m_scanHighWater += delta;
+        if (m_joinPos)
+            m_joinPos += delta;
         delete[] m_retiredBuffer;
         m_retiredBuffer = m_tmpBuffer;
         m_tmpBuffer = grown;
@@ -58,6 +61,11 @@ void MPEGStreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const bo
 
     m_curPos = m_buffer = m_tmpBuffer;
     m_bufEnd = m_buffer + m_tmpBufferLen;
+    if (m_joinPending)
+    {
+        m_joinPending = false;
+        m_joinPos = m_tmpBuffer + keptLen;
+    }
     m_tmpBufferLen = 0;
 }
 
@@ -168,6 +176,10 @@ void MPEGStreamReader::storeBufferRest()
         m_scanHighWater = m_tmpBuffer + (m_scanHighWater - m_curPos);
     else
         m_scanHighWater = nullptr;
+    if (m_joinPos >= m_curPos)
+        m_joinPos = m_tmpBuffer + (m_joinPos - m_curPos);
+    else
+        m_joinPos = nullptr;
     m_curPos = m_bufEnd;
 }
 

@@ -4312,7 +4312,8 @@ int StreamInfo::read()
             }
         }
 
-        m_data = m_dataReader->readBlock(m_readerID, m_blockSize, readRez);
+        bool firstBlockOfFile = false;
+        m_data = m_dataReader->readBlock(m_readerID, m_blockSize, readRez, &firstBlockOfFile);
         if (readRez == BufferedFileReader::DATA_NOT_READY || readRez == BufferedFileReader::DATA_DELAYED)
         {
             m_lastAVRez = readRez;
@@ -4324,6 +4325,9 @@ int StreamInfo::read()
         // gets that file's data
         if (auto* wrapper = dynamic_cast<ContainerToReaderWrapper*>(m_dataReader))
             for (const auto& [atNs, gapNs] : wrapper->takeTimeGaps(m_readerID)) m_streamReader->addTimeGap(atNs, gapNs);
+        // The file reader begins each later file of a join ("a.264"+"b.264") with a block of its own
+        if (firstBlockOfFile && m_readCnt > 0 && m_blockSize > 0)
+            m_streamReader->onJoinedFileStart();
         m_streamReader->setBuffer(m_data, m_blockSize, m_isEOF);
         m_readCnt += m_blockSize;
         m_notificated = false;

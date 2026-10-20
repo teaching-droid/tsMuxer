@@ -90,6 +90,7 @@ class MPEGStreamReader : public AbstractStreamReader
     [[nodiscard]] double laterSampleAspectRatio() const { return m_laterSampleAR; }
     int64_t getProcessedSize() override;
     void setBuffer(uint8_t* data, uint32_t dataLen, bool lastBlock = false) override;
+    void onJoinedFileStart() override { m_joinPending = true; }
     int readPacket(AVPacket& avPacket) override;
     int flushPacket(AVPacket& avPacket) override;
     /*
@@ -151,6 +152,10 @@ class MPEGStreamReader : public AbstractStreamReader
     // the remaining NAL tail (quadratic for NALs above MAX_AV_PACKET_SIZE).
     uint8_t* m_cachedMarker;
     uint8_t* m_scanHighWater;
+    // Where a later file of a join begins in the buffer, until the reader has looked at its first picture; rebased
+    // like m_cachedMarker
+    uint8_t* m_joinPos = nullptr;
+    bool m_joinPending = false;  // onJoinedFileStart: the next setBuffer begins a later file
     int m_totalFrameNum;
 
    public:
