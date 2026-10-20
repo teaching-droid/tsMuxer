@@ -76,6 +76,10 @@ class AbstractStreamReader : public BaseAbstractStreamReader
     void setStreamName(const std::string& name) { m_streamName = name; }
     [[nodiscard]] const std::string& getStreamName() const { return m_streamName; }
     virtual void setTimeOffset(const int64_t offset) { m_timeOffset = offset; }
+    // A gap in the track's times: the frame that comes atNs after the track's first frame on the reader's own clock,
+    // and every frame after it, come gapNs later (a part of a join with less sound than picture). A reader that
+    // counts its times by frames keeps it; the others do not take gaps.
+    virtual void addTimeGap(int64_t atNs, int64_t gapNs) {}
     unsigned m_flags;
     virtual const CodecInfo& getCodecInfo() = 0;  // get codecInfo struct. (CodecID, codec name)
     void setSrcContainerType(const ContainerType containerType) { m_containerType = containerType; }

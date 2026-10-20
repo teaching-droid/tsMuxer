@@ -53,6 +53,7 @@ class SimplePacketizerReader : public AbstractStreamReader
     virtual int getAltFreq() { return getFreq(); }
     virtual uint8_t getChannels() = 0;
     void setStretch(const double value) { m_stretch = value; }
+    void addTimeGap(int64_t atNs, int64_t gapNs) override;
     void setMPLSInfo(const std::vector<MPLSPlayItem>& mplsInfo)
     {
         m_mplsInfo = mplsInfo;
@@ -128,6 +129,7 @@ class SimplePacketizerReader : public AbstractStreamReader
     bool m_laterFreqSaid = false;
     bool m_needSync;
     double m_curPts;
+    std::vector<std::pair<int64_t, int64_t>> m_timeGaps;  // addTimeGap, in the order they come
     double m_lastMplsTime;
     double m_mplsOffset;
     double m_halfFrameLen;

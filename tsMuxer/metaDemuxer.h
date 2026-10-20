@@ -157,6 +157,8 @@ class ContainerToReaderWrapper final : public AbstractReader
     const uint8_t* getTrackCodecPrivate(uint32_t readerID, int& size);
     // Where the stream begins on the timeline of a join, in 90 kHz (see AbstractDemuxer::getTrackClipStart).
     int64_t getTrackClipStart(uint32_t readerID);
+    // The gaps the demuxer found in the stream's times (see AbstractDemuxer::takeTimeGaps).
+    std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(uint32_t readerID);
 
    private:
     int64_t m_discardedSize;

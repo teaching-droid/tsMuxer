@@ -2035,7 +2035,9 @@ void MovDemuxer::accountJoinPart()
 // as bring its sound nearest to where the file plays it against its own first picture, placed where the pictures
 // of the files before end. The sound then stays within half a frame of the picture however many files are joined;
 // to the sample it cannot be without decoding the sound. A file whose sound ends before its picture leaves a gap
-// that frames cannot fill: the sound of the files after it comes early, with a warning.
+// that frames cannot fill. Its sound came early, and that of every file after it by as much more: the sound of the
+// next file now starts where its picture puts it, after a gap in the track's times (takeTimeGaps), which a transport
+// stream and a Matroska file carry as they are.
 void MovDemuxer::dropJoinPriming()
 {
     for (int i = 0; i < num_tracks; ++i)
@@ -2050,18 +2052,23 @@ void MovDemuxer::dropJoinPriming()
         int64_t drop = st->editMediaTime / frameLen;  // the priming, whole frames
         if (j != m_joinAudio.end() && j->second.timeScale == st->time_scale && j->second.frameLen == frameLen)
         {
-            // where the next frame of the join plays, and where this file's first frame should
-            const int64_t soundNs = j->second.firstOffsetNs + ticksToNs(j->second.frames * frameLen, st->time_scale);
+            // where the next frame of the join plays, and where this file's first frame should; readerNs is where it
+            // comes on the clock of the track's reader, the frames handed on and the gaps put in so far
+            const int64_t readerNs = ticksToNs(j->second.frames * frameLen, st->time_scale) + j->second.gapNs;
+            const int64_t soundNs = j->second.firstOffsetNs + readerNs;
             const int64_t dueNs = j->second.videoEndNs + soundOffsetNs(i);
             const int64_t frameNs = ticksToNs(frameLen, st->time_scale);
             const int64_t lateNs = soundNs - dueNs;
             drop = lateNs >= 0 && frameNs > 0 ? (lateNs + frameNs / 2) / frameNs : 0;
             if (lateNs < -frameNs / 2)
-                LTRACE(LT_WARN, 2,
-                       "Warning: from part " << m_joinPart + 1 << " of the join on, the sound of track " << i + 1
-                                             << " comes " << (-lateNs + 500000) / 1000000
-                                             << " ms early: a part before it has less sound than picture, and "
-                                                "frames cannot fill the gap.");
+            {
+                m_timeGaps[i + 1].emplace_back(readerNs, -lateNs);
+                j->second.gapNs -= lateNs;
+                LTRACE(LT_INFO, 2,
+                       "Part " << m_joinPart << " of the join has less sound than picture on track " << i + 1
+                               << ": the sound of part " << m_joinPart + 1 << " starts after a gap of "
+                               << (-lateNs + 500000) / 1000000 << " ms, with its picture.");
+            }
         }
         drop = (std::min)(drop, frames);
         if (j != m_joinAudio.end())
@@ -2073,6 +2080,16 @@ void MovDemuxer::dropJoinPriming()
                "Part " << m_joinPart + 1 << " of the join, track " << i + 1 << ": its first " << drop
                        << " audio frame(s) are left out at the joint, to keep the sound with the picture.");
     }
+}
+
+std::vector<std::pair<int64_t, int64_t>> MovDemuxer::takeTimeGaps(const int pid)
+{
+    const auto it = m_timeGaps.find(pid);
+    if (it == m_timeGaps.end())
+        return {};
+    std::vector<std::pair<int64_t, int64_t>> gaps;
+    gaps.swap(it->second);
+    return gaps;
 }
 
 void MovDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)

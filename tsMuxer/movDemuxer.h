@@ -98,13 +98,16 @@ class MovDemuxer final : public IOContextDemuxer
         int64_t videoEndNs = 0;
         int64_t timeScale = 0;
         int64_t frameLen = 0;
-        int dropped = 0;  // frames left out at the start of the open part
+        int dropped = 0;    // frames left out at the start of the open part
+        int64_t gapNs = 0;  // gaps put into the track's times so far (m_timeGaps)
     };
+    std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_timeGaps;  // by track, see takeTimeGaps
     std::map<int, JoinAudio> m_joinAudio;
     [[nodiscard]] int64_t soundOffsetNs(int index) const;
     [[nodiscard]] int64_t partVideoNs(int audioIndex) const;
     void accountJoinPart();
     void dropJoinPriming();
+    std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(int pid) override;
     std::vector<std::pair<int64_t, int64_t>> topLevelMdats() const;
     uint32_t m_timescale;
     // Where each track starts on the movie's timeline, in ns: its leading empty edits, or without an edit list the

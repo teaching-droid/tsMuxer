@@ -4320,6 +4320,10 @@ int StreamInfo::read()
         }
         if (readRez == BufferedFileReader::DATA_EOF)
             m_isEOF = true;
+        // A gap in the stream's times, found where the demuxer opened a later file of a join, before the reader
+        // gets that file's data
+        if (auto* wrapper = dynamic_cast<ContainerToReaderWrapper*>(m_dataReader))
+            for (const auto& [atNs, gapNs] : wrapper->takeTimeGaps(m_readerID)) m_streamReader->addTimeGap(atNs, gapNs);
         m_streamReader->setBuffer(m_data, m_blockSize, m_isEOF);
         m_readCnt += m_blockSize;
         m_notificated = false;
@@ -4463,6 +4467,15 @@ const uint8_t* ContainerToReaderWrapper::getTrackCodecPrivate(const uint32_t rea
     }
     const ReaderInfo& ri = it->second;
     return ri.m_demuxerData.m_demuxer->getTrackCodecPrivate(ri.m_pid, size);
+}
+
+std::vector<std::pair<int64_t, int64_t>> ContainerToReaderWrapper::takeTimeGaps(const uint32_t readerID)
+{
+    const auto it = m_readerInfo.find(readerID);
+    if (it == m_readerInfo.end())
+        return {};
+    const ReaderInfo& ri = it->second;
+    return ri.m_demuxerData.m_demuxer->takeTimeGaps(ri.m_pid);
 }
 
 int64_t ContainerToReaderWrapper::getTrackClipStart(const uint32_t readerID)
