@@ -293,6 +293,26 @@ void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, c
     }
 }
 
+// The full time of a PES time: of the three it can be round the 33 bit wrap, the one nearest the last full time.
+// After the wrap the times went back to 0, so the subtitles after it were placed hours before the start and lost.
+int64_t TSDemuxer::fullPts(const int64_t raw)
+{
+    constexpr int64_t WRAP = int64_t{1} << 33;
+    int64_t full = raw + m_ptsWrapOffset;
+    if (m_lastFullPts != -1)
+    {
+        if (full < m_lastFullPts - WRAP / 2)
+        {
+            m_ptsWrapOffset += WRAP;
+            full += WRAP;
+        }
+        else if (full > m_lastFullPts + WRAP / 2 && full >= WRAP)
+            full -= WRAP;  // a packet from before the wrap, after one from after it
+    }
+    m_lastFullPts = full;
+    return full;
+}
+
 // A broadcast recording can change its program map, at a change of programme: new PIDs for the sound, a second
 // sound or subtitles, or another codec on a PID. The tracks are those of the first map, and the new ones were left
 // out without a word. Said once, with the tracks the new map adds or changes.
@@ -406,6 +426,8 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         m_firstPTS = -1;
         m_firstSeenPTS = -1;
         m_lastPTS = -1;
+        m_ptsWrapOffset = 0;  // each file has its own clock
+        m_lastFullPts = -1;
         m_firstVideoPTS = -1;
         m_firstSeenVideoPTS = -1;
         m_lastVideoPTS = -1;
@@ -497,11 +519,11 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
 
             if ((pesPacket->flagsLo & 0x80) == 0x80)
             {
-                const int64_t curPts = pesPacket->getPts();
+                const int64_t curPts = fullPts(pesPacket->getPts());
                 int64_t curDts = curPts;
 
                 if ((pesPacket->flagsLo & 0xc0) == 0xc0)
-                    curDts = pesPacket->getDts();
+                    curDts = fullPts(pesPacket->getDts());
 
                 if (m_lastPTS == -1 || curPts > m_lastPTS)
                     m_lastPTS = curPts;
@@ -545,7 +567,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
                 {
                     // on the PGS timeline: from the first video picture, joined files one after another
                     const int64_t ptsBase = m_firstVideoPTS != -1 ? m_firstVideoPTS : m_firstPTS;
-                    sub.pts = (pesPacket->getPts() - ptsBase + m_prevFileLen) * INTERNAL_PTS_FREQ / 90000;
+                    sub.pts = (fullPts(pesPacket->getPts()) - ptsBase + m_prevFileLen) * INTERNAL_PTS_FREQ / 90000;
                 }
                 else
                     sub.pts = -1;
@@ -561,15 +583,15 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
                                                                           : m_firstPTS;
                 if ((pesPacket->flagsLo & 0xc0) == 0xc0)
                 {
-                    const int64_t pts = pesPacket->getPts() - ptsBase + m_prevFileLen;
-                    int64_t dts = pesPacket->getDts() - ptsBase + m_prevFileLen;
+                    const int64_t pts = fullPts(pesPacket->getPts()) - ptsBase + m_prevFileLen;
+                    int64_t dts = fullPts(pesPacket->getDts()) - ptsBase + m_prevFileLen;
                     if (part != nullptr && dts < 0)
                         dts = 0;  // decoded before the cut, at the start of the output
                     pesPacket->setPtsAndDts(pts, dts);
                 }
                 else if ((pesPacket->flagsLo & 0x80) == 0x80)
                 {
-                    const int64_t pts = pesPacket->getPts() - ptsBase + m_prevFileLen;
+                    const int64_t pts = fullPts(pesPacket->getPts()) - ptsBase + m_prevFileLen;
                     pesPacket->setPts(pts);
                 }
             }
@@ -864,6 +886,8 @@ void TSDemuxer::openFile(const std::string& streamName)
     m_streamName = streamName;
     m_streamNameLow = strToLowerCase(unquoteStr(streamName));
     readClose();
+    m_ptsWrapOffset = 0;
+    m_lastFullPts = -1;
     m_lastPesPts.clear();
     m_dvbSubtitles.clear();
     m_dvbSubtitlesFinished = false;

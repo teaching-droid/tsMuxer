@@ -184,6 +184,12 @@ class TSDemuxer final : public AbstractDemuxer
     uint8_t m_acceptedPidCache[8192];
     bool m_firstDemuxCall;
 
+    // The times of the file on one line: a PES time is 33 bits and goes round to 0 every 26.5 hours, as it can do in
+    // the middle of a long recording. The offset added to the times since the wrap, and the last full time.
+    int64_t m_ptsWrapOffset = 0;
+    int64_t m_lastFullPts = -1;
+    int64_t fullPts(int64_t raw);
+
     // The version of the program map the tracks were taken from (-1: none yet, -2: the next one seen, as at the start
     // of a clip), the PID it comes on, and whether a change was said.
     int m_pmtVersion = -1;
