@@ -218,7 +218,11 @@ void SingleFileMuxer::intAddStream(const std::string& streamName, const std::str
     // and other tools that already speak this convention can read it.
     // Any stale token in the source name is stripped first, or a file that has been through
     // the loop once accumulates one token per generation.
+    // The start a track has against the picture in its file is such an offset too, when no timeshift= is given: it
+    // was lost on a demux, so the sound of the demuxed files muxed again started with the picture.
     itr = params.find("timeshift");
+    if (itr == params.end())
+        itr = params.find("srcstartms");
     if (itr != params.end())
     {
         const int64_t delayMs = parseTimeshiftToMs(itr->second);

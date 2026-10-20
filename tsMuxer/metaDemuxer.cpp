@@ -2162,6 +2162,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                     : static_cast<int64_t>(static_cast<double>(ns) * INTERNAL_PTS_FREQ / 1e9 + (ns > 0 ? 0.5 : -0.5));
             if (ticks != 0)
             {
+                // for the name of a demuxed file, which carries the start as its delay (SingleFileMuxer)
+                streamInfo.m_addParams["srcstartms"] = int64ToStr((ns + (ns > 0 ? 500000 : -500000)) / 1000000);
                 streamInfo.m_timeShift += ticks;
                 if (streamInfo.m_timeShift > 0)
                     streamInfo.m_lastDTS = FFMAX(streamInfo.m_lastDTS, streamInfo.m_timeShift);
@@ -2280,7 +2282,7 @@ static bool isKnownTrackParam(const std::string& name)
         "forced", "hearing-impaired", "visual-impaired", "text-descriptions", "original", "commentary", "srclang",
         "srclangbcp47", "srcdefault", "srcname", "srcflags", "srccolour", "srcdisplay", "srcendpadding", "srcpgsrate",
         "srccrop", "srcfieldorder", "srcprojection", "srccodecdelay", "srcvideolead", "srcopusskip", "srcrighteye",
-        "langbcp47", "srcvpxprivate", "srccodecid", "srcstartdelay", "srcstereomode"};
+        "langbcp47", "srcvpxprivate", "srccodecid", "srcstartdelay", "srcstereomode", "srcstartms"};
     return known.find(name) != known.end();
 }
 
