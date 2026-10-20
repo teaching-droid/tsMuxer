@@ -1896,6 +1896,17 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                     if (const auto d = t->second.m_srcParams.find(key); d != t->second.m_srcParams.end())
                         streamInfo.m_addParams[key] = d->second;
         }
+        // The same for the start of a track of a join of Matroska files, which is that of its first file
+        else if (ext == "mkv" || ext == "mka" || ext == "mks" || ext == "mk3d" || ext == "webm")
+        {
+            MatroskaDemuxer probe(m_readManager);
+            probe.openFile(unquoteStr(trimStr(fileList[0])));
+            std::map<int32_t, TrackInfo> firstTracks;
+            probe.getTrackList(firstTracks);
+            if (const auto t = firstTracks.find(pid); t != firstTracks.end())
+                if (const auto d = t->second.m_srcParams.find("srcstartdelay"); d != t->second.m_srcParams.end())
+                    streamInfo.m_addParams["srcstartdelay"] = d->second;
+        }
     }
     // ** AN MP4 TRACK STARTS WHERE THE FILE SAYS, ALSO ON THE COMMAND LINE. ** A track that starts after the first
     // video track (its leading empty edits, a fragmented track's first tfdt, the composition time of its first sample
