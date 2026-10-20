@@ -1,6 +1,7 @@
 #include "tsMuxer.h"
 
 #include <cmath>
+#include <limits>
 
 #include <fs/systemlog.h>
 #include <fs/textfile.h>
@@ -157,6 +158,19 @@ TSMuxer::TSMuxer(MuxerManager* owner) : AbstractMuxer(owner)
     m_cappedPictures = 0;
     m_latePictures = 0;
     m_worstLateness = 0;
+    m_sendAhead = false;
+    m_outBufPos = 0;
+    m_saHeldEnd = 0;
+    m_saRecEnd = 0;
+    m_saRecOldHi = 0;
+    m_saDoneEnd = 0;
+    m_saPrevHi = 0;
+    m_saPrevPcr = 0;
+    m_saPrevOldPcr = 0;
+    m_saPassBits = 0;
+    m_saFirstPass = true;
+    m_saDtsClock = 0;
+    m_saMuxDts = 0;
     m_pendingStartPktCnt = 0;
     m_pendingTsPackets = 0;
     m_pendingPayloadStart = false;
@@ -218,6 +232,7 @@ void TSMuxer::internalReset() { m_outBufLen = 0; }
 
 TSMuxer::~TSMuxer()
 {
+    for (const auto& b : m_saHeld) delete[] b.data;  // only after a failed mux: a finished one hands all of it on
     delete[] m_outBuf;
     if (!m_isExternalFile)
         delete m_muxFile;
@@ -662,7 +677,16 @@ bool TSMuxer::doFlush(const int64_t newPCR, const int64_t pcrGAP)
     }
 
     if (m_m2tsMode)
-        processM2TSPCR(pcrForMaxRate(newPCR, 0, pcrGAP), pcrGAP);
+    {
+        const int64_t pcr = pcrForMaxRate(newPCR, 0, pcrGAP);
+        if (m_sendAhead)
+            sendAheadRecordPass(pcr, pcrGAP, m_prevM2TSPCR, false);
+        processM2TSPCR(pcr, pcrGAP);
+    }
+    // The end of the output or of a block: nothing after it can be sent ahead of it, so every time is made final here
+    // and the held data goes out before the rest of the buffer.
+    if (m_sendAhead)
+        sendAheadFinishAll();
 
     const int lastBlockSize = m_outBufLen & (MuxerManager::PHYSICAL_SECTOR_SIZE - 1);  // last 64K of data
     const int roundBufLen = m_outBufLen & ~(MuxerManager::PHYSICAL_SECTOR_SIZE - 1);
@@ -689,6 +713,8 @@ bool TSMuxer::doFlush(const int64_t newPCR, const int64_t pcrGAP)
         m_owner->syncWriteBuffer(this, m_outBuf, roundBufLen, m_muxFile);
         memmove(m_outBuf, m_outBuf + roundBufLen, lastBlockSize);
     }
+    m_outBufPos += roundBufLen;
+    m_saHeldEnd = m_outBufPos;
     m_outBufLen = lastBlockSize;
     assert(!m_sectorSize || m_outBufLen == 0);
     return true;
@@ -778,6 +804,11 @@ static bool isVideoStreamType(const StreamType streamType)
 // 900 up to 5.9 s. A picture counts as late when its last packet arrives, at the cap, after its decoding time.
 void TSMuxer::noteLateArrival()
 {
+    if (m_sendAhead)
+    {
+        sendAheadNotePes();  // counted when its time is final (sendAheadFinalizeFront)
+        return;
+    }
     if (m_maxBitrate == -1 || m_lastPCR == -1 || m_lastPESDTS == -1)
         return;
     const auto it = m_pmt.pidList.find(m_pesPID);
@@ -804,6 +835,290 @@ void TSMuxer::reportLateArrival() const
                                          << " s late. The video's peaks are above the cap, so a player may stutter or "
                                             "freeze there. Re-encode the video with its peak bitrate capped below the "
                                             "cap, or raise the cap.");
+}
+
+// ** --maxbitrate SENDS DATA AHEAD IN THE QUIET PARTS. **
+//
+// The pacing gives each packet the time the picture times ask for, vbv-len before the decoding time, or later when
+// the data since the last PCR takes longer than that to arrive at the cap. It only ever holds data back. Where the
+// video's own peaks are above the cap, its pictures therefore arrived after they were due even when the average was
+// well under it, because the time the quiet part before a peak leaves unused was never spent on the peak.
+//
+// The times are now made final only once the muxer has seen what comes next. Every pass between two PCRs is kept,
+// with the output it covers, until the decoding times have moved on by four times vbv-len past it. Its end is then
+// given the latest time that still lets every PES seen in that window arrive by its decoding time at the cap, if
+// that is earlier than the time it was written with: the packets keep their order, their content and their count,
+// only the PCR values and the arrival timestamps change. No time is ever made more than vbv-len earlier than the
+// picture times ask for, so data waits in the decoder for at most twice vbv-len, and no pass is ever shorter than its
+// packets take at the cap. Where even that cannot bring a picture in on time, the peak is longer than the decoder
+// can buffer, and the warning at the end of the mux still counts it.
+//
+// A mux that never needs it gets every time exactly as before: a pass is only made earlier when one of the PES after
+// it would otherwise be late. Measured on a 1080p H.264 video averaging 17 Mbit/s with peaks of 70 to 120 Mbit/s,
+// --maxbitrate=40000: 125 of 719 pictures up to 1.0 s late before, 50 up to 0.5 s now. With at most 1 s in the
+// decoder no order of sending these packets does better than 46 up to 0.5 s.
+//
+// Not with --bitrate or --minbitrate, whose padding follows the old times, nor for the two views of a 3D disc, which
+// are interleaved in blocks.
+static constexpr int64_t SEND_AHEAD_WINDOW_FACTOR = 4;  // how far ahead is looked, in vbv-len
+// The most output held back at once, so that a stream whose decoding times stall cannot hold the whole of it.
+static constexpr int64_t SEND_AHEAD_HOLD_LIMIT = 128LL * 1024 * 1024;
+
+void TSMuxer::writeBlockToOwner(uint8_t* data, const int len)
+{
+    if (m_owner->isAsyncMode())
+        m_owner->asyncWriteBuffer(this, data, len, m_muxFile);
+    else
+    {
+        m_owner->syncWriteBuffer(this, data, len, m_muxFile);
+        delete[] data;
+    }
+}
+
+// A block of output whose times may still change. It takes the block (allocated with new[]).
+void TSMuxer::sendAheadHold(uint8_t* data, const int len)
+{
+    m_saHeld.push_back({data, len, m_saHeldEnd});
+    m_saHeldEnd += len;
+    sendAheadReleaseDone(false);
+}
+
+void TSMuxer::sendAheadReleaseDone(const bool all)
+{
+    while (!m_saHeld.empty() && (all || m_saHeld.front().pos + m_saHeld.front().len <= m_saDoneEnd))
+    {
+        writeBlockToOwner(m_saHeld.front().data, m_saHeld.front().len);
+        m_saHeld.pop_front();
+    }
+}
+
+// Writes len bytes at an output position that has not gone out yet: in a held block, in a block still waiting for its
+// arrival timestamps, or in m_outBuf.
+void TSMuxer::sendAheadPatch(int64_t pos, const uint8_t* src, int len)
+{
+    while (len > 0)
+    {
+        uint8_t* dst = nullptr;
+        int64_t room = 0;
+        for (const auto& b : m_saHeld)
+            if (pos >= b.pos && pos < b.pos + b.len)
+            {
+                dst = b.data + (pos - b.pos);
+                room = b.pos + b.len - pos;
+                break;
+            }
+        if (!dst)
+        {
+            int64_t start = m_outBufPos;
+            for (const auto& b : m_m2tsDelayBlocks) start -= b.second;
+            for (const auto& b : m_m2tsDelayBlocks)
+            {
+                if (pos >= start && pos < start + b.second)
+                {
+                    dst = b.first + (pos - start);
+                    room = start + b.second - pos;
+                    break;
+                }
+                start += b.second;
+            }
+        }
+        if (!dst)
+        {
+            if (pos < m_outBufPos || pos >= m_outBufPos + m_outBufLen)
+                THROW(ERR_COMMON, "Internal error: output at " << pos << " to be retimed is no longer held")
+            dst = m_outBuf + (pos - m_outBufPos);
+            room = m_outBufPos + m_outBufLen - pos;
+        }
+        const int n = static_cast<int>(FFMIN(room, static_cast<int64_t>(len)));
+        memcpy(dst, src, n);
+        pos += n;
+        src += n;
+        len -= n;
+    }
+}
+
+void TSMuxer::sendAheadRecordPass(const int64_t pcrVal, const int64_t pcrGAP, const int64_t oldPrevHi,
+                                  const bool hasPcrPacket)
+{
+    SendAheadPass p{};
+    p.endPos = m_outBufPos + m_outBufLen;
+    p.frames = (p.endPos - m_saRecEnd) / m_frameSize;
+    p.oldPcr = pcrVal;
+    p.oldPrevHi = oldPrevHi;
+    p.pcrGap = pcrGAP;
+    p.bits = m_saPassBits;
+    p.dtsClock = m_saDtsClock;
+    p.muxDts = m_saMuxDts;
+    p.hasPcrPacket = hasPcrPacket;
+    p.first = m_saFirstPass;
+    m_saFirstPass = false;
+    m_saRecEnd = p.endPos;
+    m_saRecOldHi = pcrVal * 300 - pcrGAP;
+    m_saPasses.push_back(p);
+}
+
+void TSMuxer::sendAheadNotePes()
+{
+    if (m_lastPESDTS == -1)
+        return;
+    const auto it = m_pmt.pidList.find(m_pesPID);
+    const bool video = it != m_pmt.pidList.end() && isVideoStreamType(it->second.m_streamType);
+    m_saPes.push_back({m_outBufPos + m_outBufLen, m_lastPESDTS, video});
+}
+
+void TSMuxer::sendAheadFinalizeFront()
+{
+    const SendAheadPass p = m_saPasses.front();
+    m_saPasses.pop_front();
+    const int64_t start = m_saDoneEnd;
+    if (p.frames == 0)
+    {
+        // A block that ends right after a PCR carries no packet, only a time, which keeps its distance to the pass
+        // before.
+        m_saPrevHi += p.oldPcr * 300 - p.pcrGap - p.oldPrevHi;
+        return;
+    }
+    const double floorGap = atsGapFloor(m_maxBitrate);  // 27 MHz per packet at the cap
+    const auto frames = static_cast<double>(p.frames);
+    int64_t prevHi = m_saPrevHi;
+    if (p.first)
+        prevHi =
+            m_m2tsMode ? p.oldPrevHi : p.oldPcr * 300 - p.pcrGap - static_cast<int64_t>(std::ceil(frames * floorGap));
+
+    // The latest end this pass may have so that each PES seen in the window ahead arrives by its decoding time: one
+    // that ends inside the pass arrives with the packet after its last, spread evenly across the pass; one after it
+    // with the packets after the pass at the cap.
+    const int64_t window = m_vbvLen * SEND_AHEAD_WINDOW_FACTOR;
+    double latest = std::numeric_limits<double>::infinity();
+    for (const auto& e : m_saPes)
+    {
+        if (e.endPos <= start || e.dts > p.muxDts + window)
+            continue;
+        const double due = static_cast<double>(e.dts) * 300.0;
+        const auto n = static_cast<double>((e.endPos - start) / m_frameSize);
+        const double bound = n < frames
+                                 ? static_cast<double>(prevHi) + (due - static_cast<double>(prevHi)) * frames / (n + 1)
+                                 : due - (n + 1 - frames) * floorGap;
+        latest = FFMIN(latest, bound);
+    }
+    int64_t cand = p.oldPcr;
+    if (latest < std::numeric_limits<double>::infinity())
+    {
+        const auto latestPcr = static_cast<int64_t>(std::floor((latest + static_cast<double>(p.pcrGap)) / 300.0));
+        cand = FFMIN(cand, FFMAX(latestPcr, p.dtsClock - m_vbvLen));
+    }
+    // A pass that follows one made earlier may not stretch past the 0.1 s a PCR interval is allowed to take.
+    if (!p.first)
+        cand = FFMIN(cand, m_saPrevPcr + FFMAX(PCR_MAX_INTERVAL - PCR_INTERVAL_MARGIN, p.oldPcr - m_saPrevOldPcr));
+    int64_t newPcr = p.oldPcr;
+    if (cand < p.oldPcr)
+    {
+        // never faster than the cap after the pass before: the same floor pcrForMaxRate holds
+        int64_t lo = 0;
+        if (!p.first)
+        {
+            if (m_m2tsMode)
+                lo = (prevHi + p.pcrGap + static_cast<int64_t>(std::ceil(frames * floorGap)) + 299) / 300;
+            else
+                lo =
+                    m_saPrevPcr + static_cast<int64_t>(std::ceil(static_cast<double>(p.bits) * 90000.0 / m_maxBitrate));
+        }
+        newPcr = FFMAX(lo, cand);
+        if (p.first)
+            prevHi -= (p.oldPcr - newPcr) * 300;
+    }
+    const int64_t newHi = newPcr * 300 - p.pcrGap;
+    const double inc = static_cast<double>(newHi - prevHi) / frames;
+
+    if (newPcr != p.oldPcr || prevHi != p.oldPrevHi)
+    {
+        if (m_m2tsMode)
+        {
+            // the arrival timestamps, computed as processM2TSPCR does
+            auto cur = static_cast<double>(prevHi);
+            for (int64_t i = 0; i < p.frames; i++)
+            {
+                cur += inc;
+                uint8_t ats[4];
+                writeM2TSHeader(ats, llround(cur));
+                sendAheadPatch(start + i * m_frameSize, ats, 4);
+            }
+        }
+        if (p.hasPcrPacket && newPcr != p.oldPcr)
+        {
+            // the PCR field, as setPCR33 writes it
+            uint8_t pcr[6];
+            const auto base = static_cast<uint32_t>(newPcr >> 1);
+            pcr[0] = static_cast<uint8_t>(base >> 24);
+            pcr[1] = static_cast<uint8_t>(base >> 16);
+            pcr[2] = static_cast<uint8_t>(base >> 8);
+            pcr[3] = static_cast<uint8_t>(base);
+            pcr[4] = static_cast<uint8_t>((newPcr & 1) << 7 | 0x7e);
+            pcr[5] = 0;
+            const int64_t pcrPos = p.endPos - m_frameSize + (m_m2tsMode ? 4 : 0) + TSPacket::TS_HEADER_SIZE +
+                                   AdaptiveField::ADAPTIVE_FIELD_LEN;
+            sendAheadPatch(pcrPos, pcr, 6);
+        }
+    }
+    if (m_m2tsMode)
+        noteAtsPass(static_cast<int>(p.frames), inc);
+
+    // the pictures that end in this pass, with the times they now have
+    while (!m_saPes.empty() && m_saPes.front().endPos <= p.endPos)
+    {
+        const SendAheadPes e = m_saPes.front();
+        m_saPes.pop_front();
+        if (!e.video || e.endPos <= start)
+            continue;
+        m_cappedPictures++;
+        const auto n = static_cast<double>((e.endPos - start) / m_frameSize);
+        const double arrival = static_cast<double>(prevHi) + (n + 1) * inc;
+        const double late = arrival - static_cast<double>(e.dts) * 300.0;
+        if (late > 0)
+        {
+            m_latePictures++;
+            m_worstLateness = FFMAX(m_worstLateness, static_cast<int64_t>(std::ceil(late / 300.0)));
+        }
+    }
+    m_saDoneEnd = p.endPos;
+    m_saPrevHi = newHi;
+    if (p.hasPcrPacket)
+    {
+        m_saPrevPcr = newPcr;
+        m_saPrevOldPcr = p.oldPcr;
+    }
+}
+
+// Called at each new PES: makes final the passes the decoding times have moved past by the window.
+void TSMuxer::sendAheadAdvance(const int64_t muxDts)
+{
+    const int64_t window = m_vbvLen * SEND_AHEAD_WINDOW_FACTOR;
+    while (!m_saPasses.empty() &&
+           (m_saPasses.front().muxDts + window < muxDts || m_saRecEnd - m_saDoneEnd > SEND_AHEAD_HOLD_LIMIT))
+        sendAheadFinalizeFront();
+    sendAheadReleaseDone(false);
+}
+
+void TSMuxer::sendAheadFinishAll()
+{
+    while (!m_saPasses.empty()) sendAheadFinalizeFront();
+    // A transport stream may end with packets after its last PCR. Their pictures arrive at the cap after it.
+    const double floorGap = atsGapFloor(m_maxBitrate);
+    for (const auto& e : m_saPes)
+    {
+        if (!e.video || e.endPos <= m_saDoneEnd)
+            continue;
+        m_cappedPictures++;
+        const auto n = static_cast<double>((e.endPos - m_saDoneEnd) / m_frameSize);
+        const double late = static_cast<double>(m_saPrevHi) + (n + 1) * floorGap - static_cast<double>(e.dts) * 300.0;
+        if (late > 0)
+        {
+            m_latePictures++;
+            m_worstLateness = FFMAX(m_worstLateness, static_cast<int64_t>(std::ceil(late / 300.0)));
+        }
+    }
+    m_saPes.clear();
+    sendAheadReleaseDone(true);
 }
 
 bool TSMuxer::close()
@@ -907,14 +1222,8 @@ void TSMuxer::processM2TSPCR(const int64_t pcrVal, const int64_t pcrGAP)
     // without effort. Yet it was what the warning quoted as the fastest rate, and on a 3D disc
     // whose video never went over the limit it alone made a warning that said "0.0 per cent".
     // Such passes no longer count; a pass that carries the streams themselves still does.
-    if (m2tsFrameCnt > TABLE_BURST_PACKETS && pcrIncPerFrame > 0)
-    {
-        if (m_minAtsGap == 0 || pcrIncPerFrame < m_minAtsGap)
-            m_minAtsGap = pcrIncPerFrame;
-        m_atsPackets += m2tsFrameCnt;
-        if (pcrIncPerFrame < atsGapFloor(isV3() ? BD_READ_RATE_UHD : BD_READ_RATE_HD))
-            m_atsOverLimit += m2tsFrameCnt;
-    }
+    if (!m_sendAhead)  // its times are not final yet: counted in sendAheadFinalizeFront
+        noteAtsPass(m2tsFrameCnt, pcrIncPerFrame);
 
     auto curM2TSPCR = static_cast<double>(m_prevM2TSPCR);
     uint8_t* curPos;
@@ -931,7 +1240,9 @@ void TSMuxer::processM2TSPCR(const int64_t pcrVal, const int64_t pcrGAP)
                 writeM2TSHeader(curPos, llround(curM2TSPCR));
                 curPos += 192;
             }
-            if (m_owner->isAsyncMode())
+            if (m_sendAhead)
+                sendAheadHold(i.first, i.second);
+            else if (m_owner->isAsyncMode())
                 m_owner->asyncWriteBuffer(this, i.first, i.second, m_muxFile);
             else
             {
@@ -954,6 +1265,18 @@ void TSMuxer::processM2TSPCR(const int64_t pcrVal, const int64_t pcrGAP)
     m_prevM2TSPCROffset = m_outBufLen;
     // assert((int64_t) curM2TSPCR == hiResPCR);
     m_prevM2TSPCR = hiResPCR;
+}
+
+// The read rate a pass of arrival timestamps asks for, for reportReadRate. See processM2TSPCR.
+void TSMuxer::noteAtsPass(const int frames, const double gap)
+{
+    if (frames <= TABLE_BURST_PACKETS || gap <= 0)
+        return;
+    if (m_minAtsGap == 0 || gap < m_minAtsGap)
+        m_minAtsGap = gap;
+    m_atsPackets += frames;
+    if (gap < atsGapFloor(isV3() ? BD_READ_RATE_UHD : BD_READ_RATE_HD))
+        m_atsOverLimit += frames;
 }
 
 // The continuity counter of a packet that carries only a PCR. A packet without payload repeats the counter of the last
@@ -1021,6 +1344,8 @@ void TSMuxer::writeEmptyPacketWithPCR(const int64_t pcrVal)
     m_processedBlockSize += TS_FRAME_SIZE;
     m_pcrBits += TS_FRAME_SIZE * 8;
     m_muxedPacketCnt[m_muxedPacketCnt.size() - 1]++;
+    if (m_sendAhead)
+        sendAheadRecordPass(pcrVal, 0, m_m2tsMode ? m_prevM2TSPCR : m_saRecOldHi, true);
     if (m_m2tsMode)
         processM2TSPCR(pcrVal, 0);
     writeOutBuffer();
@@ -1650,6 +1975,7 @@ void TSMuxer::writePCR(const int64_t newPCR)
     // PCR packet and then run the arrival pass over the lot. Computed before m_pcrBits is cleared,
     // because the transport stream branch of it reads that count.
     const int64_t pcr = pcrForMaxRate(newPCR, 1, 0);
+    m_saPassBits = m_pcrBits;
     m_pcrBits = bitsRest;
     // assert(m_pcrBits % 8 == 0);
     writeEmptyPacketWithPCR(pcr);
@@ -1672,6 +1998,8 @@ void TSMuxer::flushTSBuffer()
     if (writeOutFile(m_outBuf, m_outBufLen) != m_outBufLen)
         THROW(ERR_FILE_COMMON, "Can't write last data block to file " << m_outFileName)
     delete[] m_outBuf;
+    m_outBufPos += m_outBufLen;
+    m_saHeldEnd = m_outBufPos;
     m_outBufLen = 0;
 }
 
@@ -1778,12 +2106,17 @@ bool TSMuxer::muxPacket(AVPacket& avPacket)
         // least M_PCR_DELTA after the one before; a PCR that has to come sooner (see nextPCRChanceTooLate)
         // takes them along as well, so they too stay within 0.1 s of each other.
         m_patPmtDelta = m_m2tsMode ? 0 : PCR_FREQUENCY / 4;
+        // see sendAheadAdvance
+        m_sendAhead = m_maxBitrate != -1 && m_minBitrate <= 0 && m_vbvLen > 0 && m_interliaveBlockSize == 0 &&
+                      !m_subMode && !m_masterMode;
     }
 
     if (m_minDts == -1)
         m_minDts = avPacket.dts;
 
     auto newPCR = (avPacket.dts - m_minDts) / INT_FREQ_TO_TS_FREQ + m_fixed_pcr_offset;
+    m_saDtsClock = newPCR;
+    m_saMuxDts = internalClockToPts(avPacket.dts) + m_timeOffset;
     if (m_lastPCR == -1)
     {
         writePATPMT(newPCR, true);
@@ -1798,6 +2131,8 @@ bool TSMuxer::muxPacket(AVPacket& avPacket)
         newPES = true;
         if (streamInfo.m_dts != static_cast<int64_t>(ULLONG_MAX) && avPacket.dts > streamInfo.m_dts)
             streamInfo.m_dtsStep = avPacket.dts - streamInfo.m_dts;
+        if (m_sendAhead)
+            sendAheadAdvance(m_saMuxDts);
     }
 
     m_lastTSIndex = tsIndex;
@@ -2234,7 +2569,23 @@ void TSMuxer::writeOutBuffer()
     if (m_outBufLen >= m_writeBlockSize)
     {
         int toFileLen = m_writeBlockSize & ~(MuxerManager::PHYSICAL_SECTOR_SIZE - 1);
-        if (m_owner->isAsyncMode())
+        if (m_sendAhead)
+        {
+            // Held until its times are final (sendAheadAdvance). In an M2TS a block whose arrival timestamps are
+            // not written yet waits for the next PCR first, as it always has.
+            const auto block = new uint8_t[toFileLen];
+            memcpy(block, m_outBuf, toFileLen);
+            if (!m_m2tsMode || (m_prevM2TSPCROffset >= toFileLen && m_m2tsDelayBlocks.empty()))
+            {
+                sendAheadHold(block, toFileLen);
+                if (m_m2tsMode)
+                    m_prevM2TSPCROffset -= toFileLen;
+            }
+            else
+                m_m2tsDelayBlocks.emplace_back(block, toFileLen);
+            memmove(m_outBuf, m_outBuf + toFileLen, m_outBufLen - toFileLen);
+        }
+        else if (m_owner->isAsyncMode())
         {
             // the remainder can exceed one block right after an in-place PES finalized
             const int newCap = FFMAX(m_writeBlockSize, m_outBufLen - toFileLen) + 1024;
@@ -2275,6 +2626,7 @@ void TSMuxer::writeOutBuffer()
             }
             memmove(m_outBuf, m_outBuf + toFileLen, m_outBufLen - toFileLen);
         }
+        m_outBufPos += toFileLen;
         m_outBufLen -= toFileLen;
     }
 }

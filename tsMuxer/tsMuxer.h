@@ -3,6 +3,7 @@
 
 #include <types/types.h>
 
+#include <deque>
 #include <map>
 #include <set>
 #include <vector>
@@ -134,6 +135,17 @@ class TSMuxer final : public AbstractMuxer
     void reportLateArrival() const;
     [[nodiscard]] int64_t pcrForMaxRate(int64_t newPCR, int64_t extraFrames, int64_t pcrGAP) const;
     [[nodiscard]] bool nextPCRChanceTooLate(int tsIndex, int64_t dts) const;
+    void noteAtsPass(int frames, double gap);
+    // Sending ahead under --maxbitrate, see sendAheadAdvance in tsMuxer.cpp.
+    void sendAheadRecordPass(int64_t pcrVal, int64_t pcrGAP, int64_t oldPrevHi, bool hasPcrPacket);
+    void sendAheadNotePes();
+    void sendAheadAdvance(int64_t muxDts);
+    void sendAheadFinishAll();
+    void sendAheadFinalizeFront();
+    void sendAheadReleaseDone(bool all);
+    void sendAheadHold(uint8_t* data, int len);
+    void sendAheadPatch(int64_t pos, const uint8_t* src, int len);
+    void writeBlockToOwner(uint8_t* data, int len);
     static void writeM2TSHeader(uint8_t* buffer, const int64_t m2tsPCR)
     {
         const auto cur = UnalignedPtr<uint32_t>(buffer);
@@ -323,6 +335,49 @@ class TSMuxer final : public AbstractMuxer
     bool m_canSwithBlock;
     int64_t m_additionCLPISize;
     std::vector<std::string> m_fileNames;
+    // Sending ahead under --maxbitrate. A pass is the run of packets that one PCR (or the end of a block) closes; its
+    // arrival times are spread evenly between the end of the pass before and its own end.
+    struct SendAheadPass
+    {
+        int64_t endPos;     // output position just after the pass's last packet
+        int64_t frames;     // packets in the pass
+        int64_t oldPcr;     // the time its end was given when it was written, 90 kHz
+        int64_t oldPrevHi;  // where it began then, 27 MHz
+        int64_t pcrGap;     // 27 MHz held back from the end of a pass that closes a block
+        int64_t bits;       // a transport stream: bits since the PCR before, as the pacing counted them
+        int64_t dtsClock;   // the time the picture times asked for, 90 kHz
+        int64_t muxDts;     // the latest decoding time muxed by then, 90 kHz
+        bool hasPcrPacket;
+        bool first;
+    };
+    struct SendAheadPes
+    {
+        int64_t endPos;  // output position just after the PES's last packet
+        int64_t dts;     // 90 kHz, the clock of the PCR
+        bool video;
+    };
+    struct SendAheadBlock
+    {
+        uint8_t* data;
+        int len;
+        int64_t pos;
+    };
+    bool m_sendAhead;
+    int64_t m_outBufPos;  // output position of m_outBuf[0]
+    std::deque<SendAheadPass> m_saPasses;
+    std::deque<SendAheadPes> m_saPes;
+    std::deque<SendAheadBlock> m_saHeld;
+    int64_t m_saHeldEnd;     // output position after the last byte handed to the hold
+    int64_t m_saRecEnd;      // output position after the last pass recorded
+    int64_t m_saRecOldHi;    // its end as written, 27 MHz
+    int64_t m_saDoneEnd;     // output position up to which every time is final
+    int64_t m_saPrevHi;      // the final time of that position, 27 MHz
+    int64_t m_saPrevPcr;     // the final value of the last PCR, 90 kHz
+    int64_t m_saPrevOldPcr;  // and its value as written
+    int64_t m_saPassBits;    // m_pcrBits at the PCR being written
+    bool m_saFirstPass;
+    int64_t m_saDtsClock;
+    int64_t m_saMuxDts;
 #ifdef _DEBUG
     int64_t m_lastProcessedDts;
     int m_lastStreamIndex;
