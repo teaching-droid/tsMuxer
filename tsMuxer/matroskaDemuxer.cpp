@@ -1739,6 +1739,13 @@ void MatroskaDemuxer::readClose()
 {
     delete[] writing_app;
     delete[] muxing_app;
+    // The packet handed out last is freed at the next read; a reader that stops before it, as a probe does, left it
+    if (m_lastDeliveryPacket)
+    {
+        delete[] m_lastDeliveryPacket->data;
+        delete m_lastDeliveryPacket;
+        m_lastDeliveryPacket = nullptr;
+    }
     while (!packets.empty())
     {
         const AVPacket* pkt = packets.front();
