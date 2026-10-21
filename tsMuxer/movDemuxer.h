@@ -109,6 +109,11 @@ class MovDemuxer final : public IOContextDemuxer
         int64_t frameLen = 0;
         int dropped = 0;    // frames left out at the start of the open part
         int64_t gapNs = 0;  // gaps put into the track's times so far (m_timeGaps)
+        int64_t padNs = 0;  // Opus: the padding at the end of the part read last, after its edit
+        // Opus: as its reader counts at each joint (OpusStreamReader::readPacket), the padding and pre-skip not yet
+        // made up for by a packet left out, in samples, and the packets it left out since the last gap
+        int64_t opusExcess = 0;
+        int64_t opusLeftOutNs = 0;
     };
     std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_timeGaps;  // by track, see takeTimeGaps
     std::map<int, JoinAudio> m_joinAudio;

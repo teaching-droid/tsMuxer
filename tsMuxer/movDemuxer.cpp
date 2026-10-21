@@ -884,6 +884,10 @@ class MovParsedFramedTrackData final : public ParsedTrackPrivData
     };
     MovParsedFramedTrackData(MOVStreamContext* sc, const Form form) : m_sc(sc), m_form(form) {}
 
+    // The first packets of the track are left out: the sound of a later file of a join that the sound before it
+    // already covers (MovDemuxer::dropJoinPriming)
+    void setDropFrames(const int frames) { m_dropLeft = frames; }
+
     void setPrivData(uint8_t* buff, const int size) override
     {
         m_head.clear();
@@ -952,6 +956,12 @@ class MovParsedFramedTrackData final : public ParsedTrackPrivData
             if (sampleSize == 0)
                 break;
             const uint8_t* s = buff + used;
+            if (m_dropLeft > 0)
+            {
+                --m_dropLeft;
+                used += sampleSize;
+                continue;
+            }
             if (m_form == Form::Vpx)
             {
                 m_out.insert(m_out.end(), {0x00, 0x00, 0x01});
@@ -992,6 +1002,7 @@ class MovParsedFramedTrackData final : public ParsedTrackPrivData
     std::vector<uint8_t> m_out;
     size_t m_indexAfter = 0;
     bool m_headSent = false;
+    int m_dropLeft = 0;
 };
 
 // Linear PCM, as the LPCM reader takes it from Matroska: a WAVE header in front of the first chunk, then the samples
@@ -1981,6 +1992,32 @@ static int64_t sampleCount(const MOVStreamContext* st)
 
 static int64_t usualDuration(const MOVStreamContext* st);
 
+// Opus whose packets the framed reader hands on (Opus from MP4 has no reader of its own that counts frames)
+static MovParsedFramedTrackData* joinOpus(const MOVStreamContext* st)
+{
+    return st->isOpus ? dynamic_cast<MovParsedFramedTrackData*>(st->parsed_priv_data) : nullptr;
+}
+
+// The samples after the end of a track's edit, which only fill its last frame (the padding of Opus and Vorbis)
+static int64_t endPaddingTicks(const MOVStreamContext* st)
+{
+    if (st->editDuration <= 0)
+        return 0;
+    int64_t media = 0;
+    for (const auto& e : st->stts_data) media += static_cast<int64_t>(e.count) * e.duration;
+    for (const int64_t d : st->fragDur) media += d;
+    return (std::max)(media - st->editMediaTime - st->editDuration, int64_t{0});
+}
+
+// The pre-skip of an Opus track, the encoder's start-up samples, from its dOps (big endian, 48 kHz)
+static int64_t opusPreSkip(const MOVStreamContext* st)
+{
+    if (!st->codec_priv || st->codec_priv_size < 4)
+        return 0;
+    const auto* p = reinterpret_cast<const uint8_t*>(st->codec_priv);
+    return static_cast<int64_t>(p[2]) << 8 | p[3];
+}
+
 // Where a track of the open file starts against the first picture of its first video track, as the reader hands
 // its samples on: its start on the file's timeline (m_trackStartNs), less what its edit list skips (the priming, and
 // in a cut file the sound before the cut), plus the pictures before the cut that the video keeps (m_videoLeadNs).
@@ -2028,7 +2065,7 @@ int64_t MovDemuxer::partVideoNs(const int audioIndex) const
 
 // The audio tracks of the part of a join that has just been read: the frames handed on so far, and where the
 // pictures of the parts so far end, on the clock of the join's first picture. Each sample of these tracks is one
-// frame (AAC, AC-3, E-AC-3, MPEG audio, DTS).
+// frame (AAC, AC-3, E-AC-3, MPEG audio, DTS, Opus).
 void MovDemuxer::accountJoinPart()
 {
     if (const int64_t videoNs = videoLengthNs(); videoNs > 0)
@@ -2037,10 +2074,11 @@ void MovDemuxer::accountJoinPart()
     {
         const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
         const auto* audio = dynamic_cast<MovParsedAudioTrackData*>(st->parsed_priv_data);
-        const int64_t frameLen = audio ? usualDuration(st) : 0;
+        const int64_t frameLen = audio || joinOpus(st) ? usualDuration(st) : 0;
         if (frameLen <= 0 || st->time_scale == 0)
             continue;
         JoinAudio& j = m_joinAudio[i + 1];
+        j.padNs = joinOpus(st) ? ticksToNs(endPaddingTicks(st), st->time_scale) : 0;
         if (m_joinPart == 0)
         {
             j.timeScale = st->time_scale;
@@ -2071,18 +2109,26 @@ void MovDemuxer::accountJoinPart()
 // that frames cannot fill. Its sound came early, and that of every file after it by as much more: the sound of the
 // next file now starts where its picture puts it, after a gap in the track's times (takeTimeGaps), which a transport
 // stream and a Matroska file carry as they are.
+//
+// Opus was left out of this: the sound of a later file followed on from the file before, and where it starts half a
+// second after its picture it came half a second early. Its reader leaves the padding at the end of a file and the
+// pre-skip of the next out itself, the last packet of the file before at a joint where they come to half a packet
+// with what is left of them from the joints before (OpusStreamReader::readPacket). Where the next file's first packet
+// plays is reckoned as the reader does it, and a gap, or packets left out at its start, put it where its picture is
+// within half a packet, as for the other codecs. With a gap the reader gives back the packets it left out before.
 void MovDemuxer::dropJoinPriming()
 {
     for (int i = 0; i < num_tracks; ++i)
     {
         const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
         auto* audio = dynamic_cast<MovParsedAudioTrackData*>(st->parsed_priv_data);
-        const int64_t frameLen = audio ? usualDuration(st) : 0;
+        auto* opus = joinOpus(st);
+        const int64_t frameLen = audio || opus ? usualDuration(st) : 0;
         if (frameLen <= 0 || st->time_scale == 0)
             continue;
         const auto j = m_joinAudio.find(i + 1);
         const int64_t frames = sampleCount(st);
-        int64_t drop = st->editMediaTime / frameLen;  // the priming, whole frames
+        int64_t drop = opus ? 0 : st->editMediaTime / frameLen;  // the priming, whole frames
         if (j != m_joinAudio.end() && j->second.timeScale == st->time_scale && j->second.frameLen == frameLen)
         {
             // where the next frame of the join plays, and where this file's first frame should; readerNs is where it
@@ -2091,12 +2137,37 @@ void MovDemuxer::dropJoinPriming()
             const int64_t soundNs = j->second.firstOffsetNs + readerNs;
             const int64_t dueNs = j->second.videoEndNs + soundOffsetNs(i);
             const int64_t frameNs = ticksToNs(frameLen, st->time_scale);
-            const int64_t lateNs = soundNs - dueNs;
+            // Opus: what is not sound at the joint, the padding of the file before and the pre-skip of this one, in
+            // samples as its reader counts them; whether the reader leaves the last packet of the file before out
+            // for them, with what is left from the joints before (without a gap) or alone (with one)
+            int64_t notSound = 0, leftOutNs = 0, gapLeftOutNs = 0;
+            const int64_t packetSamples = frameLen * 48000 / st->time_scale;
+            if (opus)
+            {
+                notSound = (j->second.padNs * 48000 + 500000000) / 1000000000 + opusPreSkip(st);
+                const bool leftOut = (j->second.opusExcess + notSound) * 2 >= packetSamples;
+                leftOutNs = j->second.opusLeftOutNs + (leftOut ? frameNs : 0);
+                gapLeftOutNs = notSound * 2 >= packetSamples ? frameNs : 0;
+            }
+            const int64_t lateNs = soundNs - leftOutNs - dueNs;
             drop = lateNs >= 0 && frameNs > 0 ? (lateNs + frameNs / 2) / frameNs : 0;
+            if (opus)
+            {
+                j->second.opusExcess += notSound;
+                if (j->second.opusExcess * 2 >= packetSamples)
+                    j->second.opusExcess -= packetSamples;
+                j->second.opusLeftOutNs = leftOutNs;
+            }
             if (lateNs < -frameNs / 2)
             {
-                m_timeGaps[i + 1].emplace_back(readerNs, -lateNs);
-                j->second.gapNs -= lateNs;
+                const int64_t gapNs = dueNs - soundNs + gapLeftOutNs;
+                m_timeGaps[i + 1].emplace_back(readerNs, gapNs);
+                j->second.gapNs += gapNs;
+                if (opus)
+                {
+                    j->second.opusExcess = notSound - (gapLeftOutNs > 0 ? packetSamples : 0);
+                    j->second.opusLeftOutNs = gapLeftOutNs;
+                }
                 LTRACE(LT_INFO, 2,
                        "Part " << m_joinPart << " of the join has less sound than picture on track " << i + 1
                                << ": the sound of part " << m_joinPart + 1 << " starts after a gap of "
@@ -2108,7 +2179,10 @@ void MovDemuxer::dropJoinPriming()
             j->second.dropped = static_cast<int>(drop);
         if (drop <= 0)
             continue;
-        audio->setDropFrames(static_cast<int>(drop));
+        if (opus)
+            opus->setDropFrames(static_cast<int>(drop));
+        else
+            audio->setDropFrames(static_cast<int>(drop));
         LTRACE(LT_INFO, 2,
                "Part " << m_joinPart + 1 << " of the join, track " << i + 1 << ": its first " << drop
                        << " audio frame(s) are left out at the joint, to keep the sound with the picture.");
