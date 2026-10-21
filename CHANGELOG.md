@@ -222,6 +222,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Video
 
+* **H.264 whose order counts are of type 1** (pic_order_cnt_type 1, as some camera and reference encoders write it) is muxed. It was refused with "SPS picture order 1 not supported".
+
 * **AV1 in an IVF file** is read, and an IVF file read to its end counts as read: a small one ended with "The mux stopped before the source was finished".
 
 * **MPEG-2 whose sequence header gives no frame rate** is muxed whole, at the rate of its picture times, fps= or 25: it went into one PES. The PMT gives the frame rate an MPEG-2 stream is muxed at, also with fps= or delPulldown.
