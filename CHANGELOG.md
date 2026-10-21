@@ -280,6 +280,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A disc whose video goes more than 10 s without a key picture** gets a warning: a player starts and seeks at key pictures only, and a stream made with intra refresh has one at its start only.
 
+* **The sound of a TS cut inside an audio frame** keeps its place against the picture. Its first PES begins with the rest of a frame, and the time of that PES went to the first whole frame: the sound came a frame early, about 11 ms for DTS. The few frames before the first PES that begins with a frame are left out.
+
 ### Matroska output
 
 * **The display size follows the pixel shape** the H.264 or HEVC video gives. Square pixels at 720x576 or 720x480 were shown at 4:3, and HEVC at 1440x1080 with 4:3 pixels was shown at 4:3 instead of 16:9. A shape within 3 % of a common one, such as 4:3, is written as that one, and when the pixel shape changes within the stream, one shape is used for the whole track. Video that gives no pixel shape is shown as before.
