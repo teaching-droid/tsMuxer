@@ -206,6 +206,7 @@ class MPEGStreamReader : public AbstractStreamReader
     long m_lastDecodeOffset;
     bool m_syncToStream;
     bool m_isFirstFpsWarn;
+    bool m_badFpsSaid = false;  // the warning about a frame rate no video has was given (updateFPS)
     [[nodiscard]] int bufFromNAL() const;
     virtual int decodeNal(uint8_t* buff);
     void storeBufferRest();

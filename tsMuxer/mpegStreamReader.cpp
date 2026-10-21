@@ -390,6 +390,20 @@ void MPEGStreamReader::updateFPS(void* curNALUnit, uint8_t* buff, uint8_t* nextN
 {
     double spsFps = getStreamFPS(curNALUnit);
     spsFps = correctFps(spsFps);
+    // A rate no video has, as a damaged header gives (one picture in 30 years): taken as it stood, every picture
+    // lasted that long, and a transport stream was filled with clock references without end, gigabytes a minute. It
+    // is set aside as if the stream gave none.
+    static constexpr double MIN_STREAM_FPS = 0.1;
+    static constexpr double MAX_STREAM_FPS = 1000.0;
+    if (spsFps != 0.0 && !(spsFps >= MIN_STREAM_FPS && spsFps <= MAX_STREAM_FPS))
+    {
+        if (!m_badFpsSaid)
+            LTRACE(LT_WARN, 2,
+                   "Warning: the " << getCodecInfo().displayName << " stream gives a frame rate of " << spsFps
+                                   << ", which no video has. It is left aside, as if the stream gave none.");
+        m_badFpsSaid = true;
+        spsFps = 0.0;
+    }
     if (spsFps == 0.0 && m_fps == 0.0)
     {
         setFPS(fallbackFps(curNALUnit));
