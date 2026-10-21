@@ -1445,6 +1445,74 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     // a quarter too fast. Ask the stream, as the listing does, and supply the rate when it is
     // pulldown and nobody chose one. The same holds for H.264 and VC-1, whose readers remove the
     // pulldown as well: 144 pictures of H.264 film played in 4.8 s instead of 6.0.
+    // A video track of a transport stream named on the line as another video codec than its data is was read as that
+    // codec: the MPEG-2 video of a disc clip named V_MPEG4/ISO/AVC came out as the odd pictures the H.264 reader finds
+    // in MPEG-2 data, and the mux said it was successful. Where the stream type the PMT gives is not the codec of the
+    // line, the track is detected as the listing detects it, by its data (a PMT can name the wrong codec, and the
+    // listing and the window then give the right one), and a line naming another video codec stops here.
+    if (pid > 0 && !SubTrackFilter::isSubTrack(pid) && fileList.size() == 1)
+    {
+        const auto videoCodecId = [](const std::string& name)
+        {
+            return name == "V_MPEG-2"                                       ? CODEC_V_MPEG2
+                   : name == "V_MPEG4/ISO/AVC" || name == "V_MPEG4/ISO/MVC" ? CODEC_V_MPEG4_H264
+                   : name == "V_MPEGH/ISO/HEVC"                             ? CODEC_V_MPEG4_H265
+                   : name == "V_MPEGI/ISO/VVC"                              ? CODEC_V_MPEG4_H266
+                   : name == "V_MS/VFW/WVC1"                                ? CODEC_V_VC1
+                                                                            : 0;
+        };
+        const std::string ext = strToUpperCase(extractFileExt(unquoteStr(trimStr(fileList[0]))));
+        const int named = videoCodecId(codec);
+        int pmtCodec = 0;
+        if (named != 0 && (ext == "TS" || ext == "M2TS" || ext == "MTS" || ext == "M2T"))
+        {
+            TSDemuxer pmt(m_readManager, "");
+            pmt.openFile(unquoteStr(trimStr(fileList[0])));
+            std::map<int32_t, TrackInfo> tracks;
+            pmt.getTrackList(tracks);
+            if (const auto t = tracks.find(pid); t != tracks.end())
+                switch (static_cast<StreamType>(t->second.m_trackType))
+                {
+                case StreamType::VIDEO_MPEG2:
+                    pmtCodec = CODEC_V_MPEG2;
+                    break;
+                case StreamType::VIDEO_H264:
+                case StreamType::VIDEO_MVC:
+                    pmtCodec = CODEC_V_MPEG4_H264;
+                    break;
+                case StreamType::VIDEO_H265:
+                    pmtCodec = CODEC_V_MPEG4_H265;
+                    break;
+                case StreamType::VIDEO_H266:
+                    pmtCodec = CODEC_V_MPEG4_H266;
+                    break;
+                case StreamType::VIDEO_VC1:
+                    pmtCodec = CODEC_V_VC1;
+                    break;
+                default:
+                    pmtCodec = -1;  // another stream type: the data says what it is
+                }
+        }
+        if (named != 0 && pmtCodec != 0 && pmtCodec != named)
+        {
+            const DetectStreamRez probe = DetectStreamReader(m_readManager, unquoteStr(trimStr(fileList[0])), false);
+            for (const CheckStreamRez& s : probe.streams)
+            {
+                if (s.trackID != pid)
+                    continue;
+                const int found = s.codecInfo.codecID == CODEC_V_MPEG4_H264_DEP ? CODEC_V_MPEG4_H264
+                                                                                 : s.codecInfo.codecID;
+                if (found != named &&
+                    (found == CODEC_V_MPEG2 || found == CODEC_V_MPEG4_H264 || found == CODEC_V_MPEG4_H265 ||
+                     found == CODEC_V_MPEG4_H266 || found == CODEC_V_VC1))
+                    THROW(ERR_COMMON, "Track " << pid << " of " << unquoteStr(fileList[0]) << " is "
+                                               << s.codecInfo.programName << ", but the line names " << codec
+                                               << ". Name the track as the listing gives it. Nothing was written.")
+                break;
+            }
+        }
+    }
+
     map<string, string> readerParams = addParams;
     bool fpsFromPulldown = false;
     const int pulldownCodec = codec == "V_MPEG-2"          ? CODEC_V_MPEG2
