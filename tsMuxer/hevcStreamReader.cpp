@@ -468,6 +468,15 @@ int HEVCStreamReader::getTSDescriptor(uint8_t* dstBuff, const bool blurayMode, c
     if (m_firstFrame)
         CheckStreamRez rez = checkStream(m_buffer, static_cast<int>(m_bufEnd - m_buffer));
 
+    // A disc takes HEVC as progressive pictures only: coded as fields, a player cannot decode it
+    if (blurayMode && fieldCoded() && !m_fieldsOnDiscSaid)
+    {
+        LTRACE(LT_WARN, 2,
+               "Warning: this HEVC stream is coded as fields (interlaced). A Blu-ray or UHD disc takes HEVC as "
+               "progressive pictures only, and a disc player cannot play it.");
+        m_fieldsOnDiscSaid = true;
+    }
+
     int lenDoviDesc = 0;
     if (!blurayMode && m_hdr->isDVRPU)
     {

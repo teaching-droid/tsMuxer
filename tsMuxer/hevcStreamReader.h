@@ -63,6 +63,7 @@ class HEVCStreamReader final : public MPEGStreamReader
     bool getInterlaced() override { return false; }
     // Each picture is a field (VUI field_seq_flag), for a Matroska output to say so; the disc path is left as it was
     [[nodiscard]] bool fieldCoded() const { return m_sps && m_sps->field_seq_flag; }
+    bool m_fieldsOnDiscSaid = false;  // the warning that a disc takes no HEVC fields was given
     bool isIFrame() override { return m_lastIFrame; }
 
     void updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* nextNal, int oldSpsLen) override;
