@@ -150,6 +150,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **AAC from a Matroska file** keeps MPEG-4 in its ADTS headers: they said MPEG-2.
 
+* **VC-1 from a Matroska file is timed from the picture it shows first.** Its blocks hold the pictures in the order they are decoded, so the first block is a picture that is shown a frame later. The listing measured the sound from that block: a VC-1 file that tsMuxeR wrote listed its sound a frame late, the window wrote that frame as timeshift=, and the sound came one frame late. The start of the sound against the picture is now also applied to VC-1 without timeshift=, as for other video.
+
 ### Subtitles
 
 * **ASS and SSA subtitles are drawn with libass** wherever they are drawn into pictures: with their styles, colours, positions, rotations, fades, moves and karaoke. libass uses the fonts attached to the Matroska file, a fonts folder given with the new track parameter fonts-dir, and the fonts of the system. The Windows packages include libass and the libraries it needs, with their licenses in THIRD-PARTY-NOTICES.txt and the licenses folder. On Linux and Mac, install the system's libass. Without libass, or with the new parameter ass-as-srt, they are drawn as plain text, as before.
