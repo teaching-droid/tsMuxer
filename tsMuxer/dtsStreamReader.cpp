@@ -174,13 +174,17 @@ int DTSStreamReader::getSurroundModeCode() const
     return rez;
 }
 
+// An empty file gives no data at all: buff and end were null, end - 4 went round to the top of the address space and the
+// first header was read at address 0 (a crash). The magic takes 4 bytes, the header with its frame size 10.
 void DTSStreamReader::checkIfOnlyHDDataExists(uint8_t* buff, const uint8_t* end)
 {
-    for (int i = 0; i < 2 && buff < end - 4; ++i)
+    for (int i = 0; i < 2 && buff != nullptr && end - buff > 4; ++i)
     {
         const bool isHDData = loadUnaligned<uint32_t>(buff) == my_htonl(DTS_HD_PREFIX);
         if (!isHDData)
             return;
+        if (end - buff < 10)
+            break;
 
         BitStreamReader reader{};
         reader.setBuffer(buff + 5, end);  // skip 4 byte magic and 1 unknown byte
@@ -203,6 +207,10 @@ void DTSStreamReader::checkIfOnlyHDDataExists(uint8_t* buff, const uint8_t* end)
 
 uint8_t* DTSStreamReader::findFrame(uint8_t* buff, uint8_t* end)
 {
+    // An empty file gives no data at all, buff and end null: the scans below, to end - 4, went round to the top of the
+    // address space and read address 0 (a crash). A frame takes more than 4 bytes.
+    if (buff == nullptr || end - buff <= 4)
+        return nullptr;
     // check for DTS-HD headers
     while (end - buff >= 16)
     {
