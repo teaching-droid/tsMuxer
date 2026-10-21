@@ -1494,7 +1494,11 @@ void MatroskaDemuxer::nextJoinPart()
         int64_t prevStart = 0, prevEnd = 0, start = 0, end = 0;
         span(m_joinFiles[m_joinPart - 1], prevStart, prevEnd);
         span(m_joinFiles[m_joinPart], start, end);
-        if (prevEnd > 0)
+        // Files without video, of subtitles only, beside a video joined from as many files: each starts where the
+        // video file at its place does (setJoinStarts), not where the subtitles of the file before end
+        if (m_joinPart < m_joinStartsNs.size() && !m_joinShiftKnown)
+            m_joinShiftNs = m_joinStartsNs[m_joinPart];
+        else if (prevEnd > 0)
             m_joinShiftNs += prevEnd - start;
         else
             m_joinShiftKnown = false;  // the sound of the parts follows on from frame to frame, as it always did

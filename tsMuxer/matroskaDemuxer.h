@@ -244,6 +244,14 @@ class MatroskaDemuxer final : public IOContextDemuxer
     int64_t m_blockDiscardNs = 0;  // the DiscardPadding of the block group being read
     std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(int pid) override;
     std::vector<int64_t> takeTouchingCues(int pid) override;
+
+   public:
+    // A join of Matroska files without video, beside a video joined from as many files: where each file starts, in
+    // ns, the first at 0 (METADemuxer::placeJoinedSubtitles)
+    void setJoinStarts(std::vector<int64_t> ns) { m_joinStartsNs = std::move(ns); }
+
+   private:
+    std::vector<int64_t> m_joinStartsNs;
     std::map<int, std::vector<int64_t>> m_touchingCues;  // by track, see takeTouchingCues
     int64_t m_clusterPos = -1;                           // where the cluster being read begins in the file
     std::unique_ptr<File> m_aheadFile;                   // the file again, for nextBlockAt

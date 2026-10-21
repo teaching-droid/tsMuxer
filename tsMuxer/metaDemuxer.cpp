@@ -996,11 +996,28 @@ void METADemuxer::placeJoinedSubtitles()
     {
         auto* srt = dynamic_cast<SRTStreamReader*>(sub.m_streamReader);
         auto* pgs = dynamic_cast<PGSStreamReader*>(sub.m_streamReader);
-        if ((!srt && !pgs) || dynamic_cast<ContainerToReaderWrapper*>(sub.m_dataReader))
+        if (!srt && !pgs)
             continue;
         const std::vector<std::string> subFiles = splitQuotedStr(sub.m_fullStreamName.c_str(), '+');
         if (subFiles.size() < 2)
             continue;
+        // A join of Matroska files without video (subtitles only, as save-srt or a demux leaves them) is read by a
+        // demuxer of its own, which placed each file where the subtitles of the one before end: the second file's
+        // subtitles came seconds early. It takes the same starts. Other containers move their subtitles themselves.
+        MatroskaDemuxer* mkvJoin = nullptr;
+        if (dynamic_cast<ContainerToReaderWrapper*>(sub.m_dataReader))
+        {
+            const auto it = m_containerReader.m_demuxers.find(sub.m_streamName);
+            mkvJoin = it != m_containerReader.m_demuxers.end() ? dynamic_cast<MatroskaDemuxer*>(it->second.m_demuxer)
+                                                                : nullptr;
+            int64_t start = 0, end = 0;
+            if (!mkvJoin)
+                continue;
+            MatroskaDemuxer first(m_readManager);
+            first.openFile(unquoteStr(trimStr(subFiles[0])));
+            if (first.getVideoSpanNano(start, end))
+                continue;  // a file with video: the join follows its own video
+        }
         for (const StreamInfo& video : m_codecInfo)
         {
             if (video.m_codec.empty() || video.m_codec[0] != 'V')
@@ -1051,7 +1068,9 @@ void METADemuxer::placeJoinedSubtitles()
             }
             if (starts.size() == files.size())
             {
-                if (srt)
+                if (mkvJoin)
+                    mkvJoin->setJoinStarts(starts);
+                else if (srt)
                     srt->setJoinStarts(starts);
                 else
                     pgs->setJoinStarts(starts);
