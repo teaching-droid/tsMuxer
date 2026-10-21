@@ -2205,6 +2205,46 @@ const uint8_t* MovDemuxer::getTrackCodecPrivate(const int32_t pid, int& size)
 
 int MovDemuxer::ParseTableEntry(MOVAtom atom)
 {
+    // The boxes that describe a track are read into the last track a trak box opened. In a damaged file one can stand
+    // before any trak, and its reader took the track before the first, tracks[-1]. Such a box describes no track and
+    // is stepped over.
+    if (num_tracks < 1)
+        switch (atom.type)
+        {
+        case MKTAG('t', 'k', 'h', 'd'):
+        case MKTAG('m', 'd', 'h', 'd'):
+        case MKTAG('s', 't', 's', 'd'):
+        case MKTAG('s', 't', 't', 's'):
+        case MKTAG('c', 't', 't', 's'):
+        case MKTAG('s', 't', 's', 'c'):
+        case MKTAG('s', 't', 's', 'z'):
+        case MKTAG('s', 't', 's', 's'):
+        case MKTAG('s', 't', 'c', 'o'):
+        case MKTAG('c', 'o', '6', '4'):
+        case MKTAG('e', 'l', 's', 't'):
+        case MKTAG('e', 's', 'd', 's'):
+        case MKTAG('a', 'v', 's', 's'):
+        case MKTAG('a', 'l', 'a', 'c'):
+        case MKTAG('f', 'i', 'e', 'l'):
+        case MKTAG('j', 'p', '2', 'h'):
+        case MKTAG('a', 'v', '1', 'C'):
+        case MKTAG('a', 'v', 'c', 'C'):
+        case MKTAG('g', 'l', 'b', 'l'):
+        case MKTAG('m', 'v', 'c', 'C'):
+        case MKTAG('h', 'v', 'c', 'C'):
+        case MKTAG('v', 'v', 'c', 'C'):
+        case MKTAG('d', 'O', 'p', 's'):
+        case MKTAG('p', 'c', 'm', 'C'):
+        case MKTAG('c', 'o', 'l', 'r'):
+        case MKTAG('m', 'd', 'c', 'v'):
+        case MKTAG('c', 'l', 'l', 'i'):
+        case MKTAG('C', 'o', 'L', 'L'):
+        case MKTAG('p', 'a', 's', 'p'):
+        case MKTAG('v', 'p', 'c', 'C'):
+            return 0;
+        default:
+            break;
+        }
     switch (atom.type)
     {
     case MKTAG('a', 'v', 's', 's'):
