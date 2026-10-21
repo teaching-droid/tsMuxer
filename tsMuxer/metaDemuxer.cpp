@@ -920,9 +920,76 @@ void METADemuxer::openFile(const string& streamName)
 // ** THE SUBTITLE FILES OF A JOIN FOLLOW ITS VIDEO. ** A join of .srt or .sup files ("a.srt"+"b.srt") read each file at
 // its own times, so the subtitles of every later file came at the start, among those of the first. Each later file
 // starts where the video joined from as many files has its file of the same place in the join start: the pictures of
-// the files before, as the video reader times them. Only where those lengths can be read from the video's files
-// (MP4 and MOV, Matroska); a join of elementary video streams or of transport streams has no stated length, and its
-// subtitle files are read as before. A join inside a container moves its subtitles itself.
+// the files before, as the video reader times them. MP4, MOV and Matroska files say how long their video is. A
+// transport stream and an elementary video stream do not, and the subtitles of a later file came at their own times:
+// the files before the last are read through for it, a transport stream by the decoding times of its video, as a join
+// lays its files (TSDemuxer::fileVideoLengthNs), an elementary stream by its own reader (esVideoLengthNs). A join
+// inside a container moves its subtitles itself.
+int64_t METADemuxer::esVideoLengthNs(const std::string& codec, const std::map<std::string, std::string>& addParams,
+                                     const std::string& fileName)
+{
+    std::unique_ptr<AbstractStreamReader> reader;
+    try
+    {
+        reader.reset(createCodec(codec, addParams, fileName, std::vector<MPLSPlayItem>(), true));
+    }
+    catch (...)
+    {
+        return -1;
+    }
+    auto* video = dynamic_cast<MPEGStreamReader*>(reader.get());
+    File file;
+    if (!video || !file.open(fileName.c_str(), File::ofRead))
+        return -1;
+    static constexpr uint32_t BLOCK = 2 * 1024 * 1024;
+    std::vector<uint8_t> buffer(MAX_AV_PACKET_SIZE + BLOCK);
+    int64_t first = INT64_MAX, last = INT64_MIN;
+    bool eof = false;
+    AVPacket packet;
+    try
+    {
+        for (;;)
+        {
+            const int rez = reader->readPacket(packet);
+            if (rez == AbstractStreamReader::NEED_MORE_DATA)
+            {
+                if (eof)
+                {
+                    // the last picture, which the reader holds until the end of the stream, as the mux flushes it
+                    reader->flushPacket(packet);
+                    if (packet.size > 0 && packet.pts != AV_NOPTS_VALUE_INTERNAL)
+                    {
+                        first = (std::min)(first, packet.pts);
+                        last = (std::max)(last, packet.pts);
+                    }
+                    break;
+                }
+                const int got = file.read(buffer.data() + MAX_AV_PACKET_SIZE, BLOCK);
+                eof = got < static_cast<int>(BLOCK);
+                reader->setBuffer(buffer.data(), static_cast<uint32_t>((std::max)(got, 0)), eof);
+                continue;
+            }
+            if (rez != 0)
+                break;
+            if (packet.size > 0 && packet.pts != AV_NOPTS_VALUE_INTERNAL)
+            {
+                first = (std::min)(first, packet.pts);
+                last = (std::max)(last, packet.pts);
+            }
+        }
+    }
+    catch (...)
+    {
+        return -1;
+    }
+    file.close();
+    const double fps = video->getFPS();
+    if (first > last || fps <= 0)
+        return -1;
+    // from the first picture shown to the end of the last, one picture after its time
+    return static_cast<int64_t>(static_cast<double>(last - first) * 1e9 / INTERNAL_PTS_FREQ + 1e9 / fps + 0.5);
+}
+
 void METADemuxer::placeJoinedSubtitles()
 {
     for (StreamInfo& sub : m_codecInfo)
@@ -962,8 +1029,17 @@ void METADemuxer::placeJoinedSubtitles()
                     if (!part.getVideoSpanNano(start, end))
                         end = -1;
                 }
+                else if (i + 1 == files.size())
+                    end = 1;  // the last file: where it starts is all that is needed
                 else
-                    end = -1;
+                {
+                    LTRACE(LT_INFO, 2,
+                           "Subtitles joined from " << subFiles.size() << " files: reading " << file
+                                                    << " for how long its video is.");
+                    end = ext == "TS" || ext == "M2TS" || ext == "MTS" || ext == "M2T"
+                              ? TSDemuxer::fileVideoLengthNs(m_readManager, file)
+                              : esVideoLengthNs(video.m_codec, video.m_addParams, file);
+                }
                 if (end <= 0)
                 {
                     starts.clear();  // a length that cannot be read: the files are placed as before

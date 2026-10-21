@@ -287,6 +287,29 @@ int64_t TSDemuxer::fileVideoStart(const std::string& fileName, const int videoPi
     return first != probe.m_fileFirstDts.end() ? first->second : -1;
 }
 
+// How long the first video stream of a file lasts on the timeline of a join, as the join lays its files (endJoinFile):
+// from its first decoding time to its last, and one step more; in ns, -1 where it is not found. The whole file is read.
+int64_t TSDemuxer::fileVideoLengthNs(const BufferedReaderManager& readManager, const std::string& fileName)
+{
+    TSDemuxer probe(readManager, "");
+    probe.openFile(fileName);
+    std::map<int32_t, TrackInfo> tracks;
+    probe.getTrackList(tracks);
+    if (probe.getFileBlockSize() == 0)
+        return -1;
+    DemuxedData demuxedData;
+    const PIDSet none;
+    int64_t discardedSize = 0;
+    // each block is read in turn, as fileVideoStart reads them, until the end of the file
+    for (int64_t blocks = 0; blocks < INT64_C(1) << 40; ++blocks)
+        if (probe.simpleDemuxBlock(demuxedData, none, discardedSize) == BufferedReader::DATA_EOF)
+            break;
+    if (probe.m_videoSpanDts.first == -1 || probe.m_videoDtsGap <= 0)
+        return -1;
+    const int64_t ticks = probe.m_videoSpanDts.second - probe.m_videoSpanDts.first + probe.m_videoDtsGap;
+    return ticks * 100000 / 9;
+}
+
 // A file of a join ends: where the last PES of the sound of each track handed on so far is on the timeline of the join,
 // and for the first file where the track begins; and where the video of the next file begins.
 //
@@ -789,6 +812,12 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
                         m_firstVideoPid = pid;
                     m_videoPesRead++;
                     m_fileFirstDts.try_emplace(pid, curDts);
+                    if (pid == m_firstVideoPid)
+                    {
+                        if (m_videoSpanDts.first == -1)
+                            m_videoSpanDts.first = curDts;
+                        m_videoSpanDts.second = (std::max)(m_videoSpanDts.second, curDts);
+                    }
                     if (pid == m_firstVideoPid && isJoinOfFiles())
                     {
                         if (m_joinFileDts.first == -1)

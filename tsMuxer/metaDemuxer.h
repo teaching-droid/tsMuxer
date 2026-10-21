@@ -316,6 +316,9 @@ class METADemuxer final : public AbstractDemuxer
     friend class ContainerToReaderWrapper;
 
     void placeJoinedSubtitles();
+    // How long an elementary video stream lasts as its reader times it, in ns; -1 where it cannot be read
+    static int64_t esVideoLengthNs(const std::string& codec, const std::map<std::string, std::string>& addParams,
+                                   const std::string& fileName);
 
     // quiet suppresses advice meant for the user. discoverStreams builds a reader purely to look
     // at a file and throws it away, so anything said there is said a second time by the real pass.

@@ -86,6 +86,8 @@ class TSDemuxer final : public AbstractDemuxer
     std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(int pid) override;
     [[nodiscard]] int64_t getFileDurationNano() const override;
     // The latest PES time read, on the PGS timeline the PES headers are rewritten to (see AbstractDemuxer)
+    // How long the first video stream of a file lasts on the timeline of a join, in ns; -1 where it is not found
+    static int64_t fileVideoLengthNs(const BufferedReaderManager& readManager, const std::string& fileName);
     [[nodiscard]] int64_t getDemuxedTime() const override
     {
         if (m_lastPTS == -1)
@@ -167,6 +169,7 @@ class TSDemuxer final : public AbstractDemuxer
     bool m_joinBaseKnown = true;
     std::pair<int64_t, int64_t> m_joinFileDts{-1, -1};  // the first and the last decoding time of the video in the file
     std::map<int, int64_t> m_fileFirstDts;              // the first decoding time of each video stream in the file
+    std::pair<int64_t, int64_t> m_videoSpanDts{-1, -1};  // the first and the last decoding time of the first video
     std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_joinGaps;  // by PID, see takeTimeGaps
     std::map<int, size_t> m_joinGapsTaken;                               // by track asking, see takeTimeGaps
     [[nodiscard]] bool isJoinOfFiles() const;
