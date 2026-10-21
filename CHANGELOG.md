@@ -40,7 +40,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **With --maxbitrate, video whose own peaks are above the cap reached the decoder after it was due,** even with the average well under the cap: the data was held back at a peak, and the quiet part before it was never used to send it ahead. It is now sent ahead, never more than --vbv-len earlier, so that it arrives in time. The packets, their order and the size of the output stay the same. In the disc cuts measured, 12 to 55 pictures that came late came in time.
 
-* **In a join of subtitle files (.srt, .sup), and of MP4 files with text subtitles, the subtitles of every later file came at their own times,** among those of the first file. Each file's subtitles now start where its video file starts, when the video is joined from as many MP4, MOV or Matroska files.
+* **In a join of subtitle files (.srt, .sup), and of MP4 files with text subtitles, the subtitles of every later file came at their own times,** among those of the first file. Each file's subtitles now start where its video file starts, when the video is joined from as many MP4, MOV, Matroska, TS or M2TS files or elementary video streams. The TS files and elementary streams before the last are read through for their length first.
 
 * **TrueHD with its AC-3 core, muxed as plain TrueHD, lost most of its audio.** A demuxed .ac3+thd file renamed to .thd and muxed as A_MLP had every core frame taken for a damaged frame, and the mux still said it was complete. The core frames are now left out, as drop-ac3-core does, and all of the TrueHD is kept. A_AC3 keeps both, as before.
 
