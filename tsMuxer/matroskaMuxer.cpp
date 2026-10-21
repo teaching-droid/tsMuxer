@@ -394,9 +394,10 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
         for (const std::string& item : splitStr(src->second.c_str(), ';'))
             if (const size_t eq = item.find('='); eq != std::string::npos)
                 track.srcColour[item.substr(0, eq)] = strtod(item.c_str() + eq + 1, nullptr);
-    // The samples at the end of an Opus track that only fill its last frame (srcendpadding, in nanoseconds).
+    // The samples at the end of an Opus, Vorbis or AAC track that only fill its last frame (srcendpadding, in ns).
     if (const auto src = params.find("srcendpadding");
-        src != params.end() && (track.codecID == CODEC_A_OPUS || track.codecID == CODEC_A_VORBIS))
+        src != params.end() &&
+        (track.codecID == CODEC_A_OPUS || track.codecID == CODEC_A_VORBIS || track.codecID == CODEC_A_AAC))
         track.endPaddingNs = strtoll(src->second.c_str(), nullptr, 10);
     // HE-AAC that an MP4 or Matroska source names in its AudioSpecificConfig (srcaacsbr: output rate, config in hex).
     // The sound reaches the muxer as ADTS frames, which describe the core codec only, at its own rate: the track was
