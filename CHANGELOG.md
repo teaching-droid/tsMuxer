@@ -160,6 +160,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **save-srt** writes subtitles that are drawn into pictures to an .srt file as well.
 
+* **Text subtitles from an MP4 or Matroska file that follow one another without a gap** are no longer cleared in between. The clear and the next subtitle came at one time, the decoding time going back between the two. They are now drawn as from an .srt file.
+
 * **A demux writes ASS, SSA and WebVTT in their own form,** as .ass, .ssa and .vtt files, when they are kept as text. They used to become SRT. WebVTT from an MP4 file still becomes SRT.
 
 * **MP4 text subtitles (tx3g)** keep their times: each was rounded down to the millisecond and the errors added up, so in a file measured the 1200th subtitle came 479 ms early. Their bold, italic and underline go on the right letters, and text outside ASCII is no longer broken by them.
