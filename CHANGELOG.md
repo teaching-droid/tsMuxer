@@ -294,6 +294,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Matroska output
 
+* **AAC in ADTS frames of more than one raw block** goes in a block per raw block, where the frame has a CRC. Such a frame went in as one block, with the positions and CRCs of its blocks inside, and most of it did not decode.
+
 * **The display size follows the pixel shape** the H.264 or HEVC video gives. Square pixels at 720x576 or 720x480 were shown at 4:3, and HEVC at 1440x1080 with 4:3 pixels was shown at 4:3 instead of 16:9. A shape within 3 % of a common one, such as 4:3, is written as that one, and when the pixel shape changes within the stream, one shape is used for the whole track. Video that gives no pixel shape is shown as before.
 
 * **Chapters:** a list edited in the window keeps the names of the source's chapters at the same times, and a list emptied in the window gives no chapters. A Matroska XML chapter file gives characters written by their number (&#233;), and a chapter language that is not a language code is written as und, with a warning.
