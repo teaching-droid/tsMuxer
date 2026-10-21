@@ -420,7 +420,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **On Linux and macOS a source that does not exist got its folders made,** also on a drive that is only read from. Folders are now made only for an output.
 
-* **Damaged MP4 and Matroska files** end with an error that names the damage: a table that counts far more entries than its box holds was read for minutes or asked for gigabytes of memory, a box that describes a track outside any track, or a track entry with two types, could crash tsMuxeR, and an element of an impossible length ended with "Unknown exception".
+* **Damaged MP4 and Matroska files** end with an error that names the damage: a table that counts far more entries than its box holds was read for minutes or asked for gigabytes of memory, a box that describes a track outside any track, or a track entry with two types, could crash tsMuxeR, and an element of an impossible length ended with "Unknown exception". A Matroska file damaged part way through made the mux run for ever without writing anything; it now ends with the message for a source read only in part.
 
 * **A block read ahead from a source is handed over under its lock.** When it was ready already, the muxer took it without the lock, so on a processor that reorders memory writes, as ARM does, it could read the block before all of its bytes had arrived.
 
