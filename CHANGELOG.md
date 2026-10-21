@@ -210,6 +210,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Audio
 
+* **An empty .dts file** stops with "produced no frames at all". The mux crashed.
+
 * **AAC whose channel layout is given by a program config element,** such as 6.0, 6.1 or 7.1 with front wide speakers, is muxed: from an MP4 or Matroska file it gave an empty output said to be successful, and a raw file of it was not recognised.
 
 * **A WAV whose valid bits are fewer than its sample size,** such as 18 bits in 24, is read at its sample size: it gave noise of the wrong length.
