@@ -243,6 +243,13 @@ class MatroskaDemuxer final : public IOContextDemuxer
     static int flacSampleRate(const MatroskaTrack* track);
     int64_t m_blockDiscardNs = 0;  // the DiscardPadding of the block group being read
     std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(int pid) override;
+    std::vector<int64_t> takeTouchingCues(int pid) override;
+    std::map<int, std::vector<int64_t>> m_touchingCues;  // by track, see takeTouchingCues
+    int64_t m_clusterPos = -1;                           // where the cluster being read begins in the file
+    std::unique_ptr<File> m_aheadFile;                   // the file again, for nextBlockAt
+    std::string m_aheadName;
+    int64_t m_aheadEnd = 0;
+    int64_t nextBlockAt(int64_t trackNumber, int64_t after);
 
     AVPacket* m_lastDeliveryPacket;
 

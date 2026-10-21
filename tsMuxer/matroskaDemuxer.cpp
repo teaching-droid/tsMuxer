@@ -892,6 +892,15 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
                 // The BlockAdditions of a video or audio track a Matroska output keeps them for, by the block's time
                 if (n == 0 && !m_pendingAdditions.empty() && m_keepAdditionPids.count(track + 1))
                     m_blockAddLog[track + 1][pkt->pts] = m_pendingAdditions;
+                // A text subtitle that the next one of its track follows at once is not cleared at its end
+                // (SRTStreamReader::addTouchingCue). Its block says when it ends; the next block of the track is
+                // looked for in the clusters ahead, in a file of its own (not a join, not a play timeline).
+                if (laces == 1 && duration != AV_NOPTS_VALUE && duration > 0 && timecode != AV_NOPTS_VALUE &&
+                    pkt->pts != AV_NOPTS_VALUE && !timeline && m_joinFiles.size() <= 1 && m_clusterPos >= 0 &&
+                    dynamic_cast<ParsedSRTTrackData*>(tracks[track]->parsed_priv_data) &&
+                    nextBlockAt(tracks[track]->num, timecode) == timecode + duration)
+                    m_touchingCues[track + 1].push_back(
+                        (pkt->pts * 1000 + INTERNAL_PTS_FREQ / 2) / INTERNAL_PTS_FREQ);
                 if (tracks[track]->parsed_priv_data != nullptr)
                 {
                     if (n == 0 && !m_pendingAdditions.empty())
@@ -1683,6 +1692,14 @@ bool MatroskaDemuxer::keepJoinSound(const int track, const int64_t ns, const int
     return true;
 }
 
+std::vector<int64_t> MatroskaDemuxer::takeTouchingCues(const int pid)
+{
+    std::vector<int64_t> cues;
+    if (const auto it = m_touchingCues.find(pid); it != m_touchingCues.end())
+        cues.swap(it->second);
+    return cues;
+}
+
 std::vector<std::pair<int64_t, int64_t>> MatroskaDemuxer::takeTimeGaps(const int pid)
 {
     const auto it = m_timeGaps.find(pid);
@@ -1816,6 +1833,7 @@ int MatroskaDemuxer::readPacket(AVPacket& avPacket)
             switch (id)
             {
             case MATROSKA_ID_CLUSTER:
+                m_clusterPos = m_processedBytes - 4;  // its ID, four bytes, has been read
                 if ((res = ebml_read_master(&id)) < 0)
                     break;
                 if ((res = matroska_parse_cluster()) == 0)
@@ -2747,6 +2765,39 @@ void walkTrackBlocks(EbmlScan& scan, const int64_t from, const int64_t segmentEn
     }
 }
 }  // namespace
+
+// The time of the next block of a track after the time given, in the units of the block times, from the cluster being
+// read and a few after it; -1 where none is found there
+int64_t MatroskaDemuxer::nextBlockAt(const int64_t trackNumber, const int64_t after)
+{
+    static constexpr int AHEAD_CLUSTERS = 8;
+    if (m_sourceName.empty())
+        return -1;
+    if (!m_aheadFile || m_aheadName != m_sourceName)
+    {
+        m_aheadFile = std::make_unique<File>();
+        if (!m_aheadFile->open(m_sourceName.c_str(), File::ofRead))
+        {
+            m_aheadFile.reset();
+            return -1;
+        }
+        m_aheadName = m_sourceName;
+        int64_t size = 0;
+        m_aheadFile->size(&size);
+        m_aheadEnd = size;
+    }
+    EbmlScan scan(*m_aheadFile);
+    int64_t next = -1;
+    walkTrackBlocks(scan, m_clusterPos, m_aheadEnd, AHEAD_CLUSTERS, trackNumber,
+                    [&](const int64_t t, int64_t, bool, int)
+                    {
+                        if (t <= after)
+                            return true;
+                        next = t;
+                        return false;
+                    });
+    return next;
+}
 
 // Find the attachments WITHOUT reading the media.
 //

@@ -1044,8 +1044,13 @@ void SRTStreamReader::flushCueGroup()
         // frame it starts on or before it was drawn too: its clear came at its start, or before it, so the times of
         // the subtitles went back. It has nothing to show and is left out.
         const Cue& c = m_cueGroup.front();
+        // A subtitle from a container that the next one follows at once: cleared at its end all the same, the clear
+        // and the next subtitle came at one time, the decoding time going back between the two (as for an .srt
+        // file above). Its container says so (addTouchingCue), as each subtitle comes on its own and is drawn at once.
+        const bool touching = m_containerType != ContainerType::ctNone &&
+                              m_touchingCues.erase(static_cast<int64_t>(std::llround(c.inTime * 1000.0))) > 0;
         if (c.outFrame > c.inFrame)
-            m_toDraw.push_back(Piece{c.text, c.inTime, c.outTime, true});
+            m_toDraw.push_back(Piece{c.text, c.inTime, c.outTime, !touching});
         else if (!m_noLengthReported)
         {
             m_noLengthReported = true;

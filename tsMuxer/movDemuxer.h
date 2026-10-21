@@ -122,6 +122,13 @@ class MovDemuxer final : public IOContextDemuxer
     void accountJoinPart();
     void dropJoinPriming();
     std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(int pid) override;
+    std::map<int, std::vector<int64_t>> m_touchingCues;  // by track, see takeTouchingCues
+
+   public:
+    void addTouchingCue(const int pid, const int64_t ms) { m_touchingCues[pid].push_back(ms); }
+    std::vector<int64_t> takeTouchingCues(int pid) override;
+
+   private:
     std::vector<std::pair<int64_t, int64_t>> topLevelMdats() const;
     uint32_t m_timescale;
     // Where each track starts on the movie's timeline, in ns: its leading empty edits, or without an edit list the

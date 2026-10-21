@@ -4652,7 +4652,11 @@ int StreamInfo::read()
         // A gap in the stream's times, found where the demuxer opened a later file of a join, before the reader
         // gets that file's data
         if (auto* wrapper = dynamic_cast<ContainerToReaderWrapper*>(m_dataReader))
+        {
             for (const auto& [atNs, gapNs] : wrapper->takeTimeGaps(m_readerID)) m_streamReader->addTimeGap(atNs, gapNs);
+            if (auto* srt = dynamic_cast<SRTStreamReader*>(m_streamReader))
+                for (const int64_t ms : wrapper->takeTouchingCues(m_readerID)) srt->addTouchingCue(ms);
+        }
         // The file reader begins each later file of a join ("a.264"+"b.264") with a block of its own
         if (firstBlockOfFile && m_readCnt > 0 && m_blockSize > 0)
             m_streamReader->onJoinedFileStart();
@@ -4826,6 +4830,15 @@ void ContainerToReaderWrapper::setReadAhead(const uint32_t readerID, const int64
     const auto it = m_readerInfo.find(readerID);
     if (it != m_readerInfo.end())
         it->second.m_readAheadTo = until;
+}
+
+std::vector<int64_t> ContainerToReaderWrapper::takeTouchingCues(const uint32_t readerID)
+{
+    const auto it = m_readerInfo.find(readerID);
+    if (it == m_readerInfo.end())
+        return {};
+    const ReaderInfo& ri = it->second;
+    return ri.m_demuxerData.m_demuxer->takeTouchingCues(ri.m_pid);
 }
 
 std::vector<std::pair<int64_t, int64_t>> ContainerToReaderWrapper::takeTimeGaps(const uint32_t readerID)

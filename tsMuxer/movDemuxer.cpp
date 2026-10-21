@@ -1200,6 +1200,12 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
                     out += "\xEF\xBB\xBF";  // UTF-8 header
                 out += cue;
                 ++counter;
+                // The samples of a text track follow one another without a gap, an empty one where nothing is shown.
+                // A subtitle whose next sample holds text (more than the length of an empty tx3g sample, or than a
+                // vtte box) is followed by it at once (SRTStreamReader::addTouchingCue).
+                if (commit && m_sc->sample_size == 0 && indexCur < m_sc->m_index.size() &&
+                    m_sc->m_index[indexCur] > (m_wvtt ? 8u : 2u))
+                    m_demuxer->addTouchingCue(static_cast<int>(m_sc->ffindex), startTime);
             }
             timeOffset = endUnits;
             used += sampleSize;
@@ -2187,6 +2193,14 @@ void MovDemuxer::dropJoinPriming()
                "Part " << m_joinPart + 1 << " of the join, track " << i + 1 << ": its first " << drop
                        << " audio frame(s) are left out at the joint, to keep the sound with the picture.");
     }
+}
+
+std::vector<int64_t> MovDemuxer::takeTouchingCues(const int pid)
+{
+    std::vector<int64_t> cues;
+    if (const auto it = m_touchingCues.find(pid); it != m_touchingCues.end())
+        cues.swap(it->second);
+    return cues;
 }
 
 std::vector<std::pair<int64_t, int64_t>> MovDemuxer::takeTimeGaps(const int pid)

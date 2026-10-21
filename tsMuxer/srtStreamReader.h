@@ -4,6 +4,7 @@
 #include <deque>
 #include <memory>
 #include <queue>
+#include <set>
 #include <string>
 
 #include "abstractStreamReader.h"
@@ -27,6 +28,9 @@ class SRTStreamReader final : public AbstractStreamReader
     // (METADemuxer gives it from the video joined from as many files). Each file's cues are moved by it.
     void setJoinStarts(std::vector<int64_t> ns) { m_joinStartsNs = std::move(ns); }
     void onJoinedFileStart() override { m_joinPending = true; }
+    // A subtitle from a container that the next one follows at once (its start, in ms as its SRT text gives it): it is
+    // not cleared, as the next one takes its place at that moment (see AbstractDemuxer::takeTouchingCues)
+    void addTouchingCue(const int64_t ms) { m_touchingCues.insert(ms); }
     CheckStreamRez checkStream(uint8_t* buffer, int len, ContainerType containerType, int containerDataType,
                                int containerStreamIndex);
     // Kept as text the track is SRT, in Matroska S_TEXT/UTF8; otherwise it is drawn into PGS
@@ -124,6 +128,7 @@ class SRTStreamReader final : public AbstractStreamReader
     bool m_unseenReported = false;
     // a subtitle that ends where or before it starts was said
     bool m_noLengthReported = false;
+    std::set<int64_t> m_touchingCues;  // addTouchingCue
     int m_srtRecords = 0;        // demux: SRT records written so far, which numbers the next
     int64_t m_cuesRead = 0;      // subtitles read from the file
     int64_t m_skippedLines = 0;  // lines of text that are not part of any subtitle, passed over
