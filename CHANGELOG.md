@@ -82,7 +82,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A complete mux of an MP4 with unused bytes at the end of its mdat, more than 1 % of the file, ended with exit -2,** saying the mux stopped before the source was finished. It ends as a complete mux now.
 
-* **In a join of MP4 files, AC-3, E-AC-3 and MP3 sound fell further behind the picture at every joint,** by the encoder's delay each time: 16 ms for AC-3 and 32 ms for MP3 in the files measured. They now stay within half a frame of the picture, as AAC does. E-AC-3 from a single MP4 file started 5 ms late as well.
+* **In a join of MP4 files, AC-3, E-AC-3 and MP3 sound fell further behind the picture at every joint,** by the encoder's delay each time: 16 ms for AC-3 and 32 ms for MP3 in the files measured. They now stay within half a frame of the picture, as AAC does. E-AC-3 from a single MP4 file started 5 ms late as well. The Opus sound of a later MP4 file that starts after its picture followed on from the file before, and came that much early; it now starts with its picture.
 
 * **A join of Opus files played what each file leaves out,** and the sound of each later file came about 20 ms late. The padding of each file and the start-up samples of the next are left out at the joint now. The start-up samples at the start of the track and the padding at its end, the last file's in a join, are now left out in a transport stream as well as in Matroska.
 
