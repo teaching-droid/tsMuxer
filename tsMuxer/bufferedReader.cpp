@@ -155,19 +155,24 @@ uint8_t* BufferedReader::readBlock(const int readerID, uint32_t& readCnt, int& r
         }
     }
 
-    if (!data->m_nextBlockSize)
+    // The block is taken under the lock the reading thread hands it over under, also when it is there already. Taken
+    // without it when it was ready, nothing ordered the bytes of the block, its size and the end flag before they were
+    // read here: a processor that reorders stores (ARM) can show the size before the bytes. The buffer index is changed
+    // under it as well, as the reading thread reads it to know which buffer to fill.
+    uint8_t prevIndex;
     {
         std::unique_lock lk(m_readMtx);
-        while (data->m_nextBlockSize == 0 && !data->m_eof) m_readCond.wait(lk);
+        m_readCond.wait(lk, [data] { return data->m_nextBlockSize != 0 || data->m_eof; });
+        const int size = data->m_nextBlockSize;
+        readCnt = size >= 0 ? size : 0;
+        rez = data->m_eof ? DATA_EOF : NO_ERROR;
+        prevIndex = data->m_bufferIndex;
+        data->m_bufferIndex = 1 - data->m_bufferIndex;
+        data->m_nextBlockSize = 0;
+        if (firstBlockVar)
+            *firstBlockVar = data->m_firstBlock;
     }
-    readCnt = data->m_nextBlockSize >= 0 ? data->m_nextBlockSize : 0;
-    rez = data->m_eof ? DATA_EOF : NO_ERROR;
-    const uint8_t prevIndex = data->m_bufferIndex;
-    data->m_bufferIndex = 1 - data->m_bufferIndex;
-    data->m_nextBlockSize = 0;
     data->m_notified = false;
-    if (firstBlockVar)
-        *firstBlockVar = data->m_firstBlock;
     return data->m_nextBlock[prevIndex];
 }
 
@@ -211,7 +216,11 @@ void BufferedReader::thread_main()
             ReaderData* data = getReader(readerID);
             if (data)
             {
-                uint8_t* buffer = data->m_nextBlock[data->m_bufferIndex] + data->m_readOffset;
+                uint8_t* buffer;
+                {
+                    std::lock_guard lk(m_readMtx);  // the index is changed under it by readBlock
+                    buffer = data->m_nextBlock[data->m_bufferIndex] + data->m_readOffset;
+                }
                 // Held while this reader's block is read, which may use its file iterator: deleteReader waits for it.
                 std::unique_lock busy(m_processMtx);
                 if (!data->m_deleted)

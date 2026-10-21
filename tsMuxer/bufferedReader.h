@@ -4,6 +4,7 @@
 #include <containers/safequeue.h>
 #include <system/terminatablethread.h>
 
+#include <atomic>
 #include <map>
 #include <string>
 
@@ -64,13 +65,16 @@ virtual void deleteNextBlocks()
 
     virtual bool closeStream() = 0;
 
+    // Shared with the reading thread. The block, its size and the facts set with it (m_firstBlock, the end of the
+    // stream) are handed over under BufferedReader::m_readMtx, and m_bufferIndex is changed and read under it; the
+    // flags read without it are atomic.
     uint8_t m_bufferIndex;
-    bool m_notified;
-    int m_nextBlockSize;
+    std::atomic<bool> m_notified;
+    std::atomic<int> m_nextBlockSize;
     bool m_deleted;
     bool m_firstBlock;
     bool m_lastBlock;
-    bool m_eof;
+    std::atomic<bool> m_eof;
     int m_atQueue;
     FileNameIterator* itr;
     uint8_t* m_nextBlock[2];
@@ -105,7 +109,7 @@ class BufferedReader : public AbstractReader, TerminatableThread
     void thread_main() override;
 
     bool m_started;
-    bool m_terminated;
+    std::atomic<bool> m_terminated;
     WaitableSafeQueue<int> m_readQueue;
     ReaderData* getReader(int readerID);
     std::condition_variable m_readCond;
