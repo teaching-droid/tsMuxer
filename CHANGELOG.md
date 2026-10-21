@@ -224,6 +224,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **MPEG-2 whose sequence header gives no frame rate** is muxed whole, at the rate of its picture times, fps= or 25: it went into one PES. The PMT gives the frame rate an MPEG-2 stream is muxed at, also with fps= or delPulldown.
 
+* **MPEG-2 with a picture coded as two I fields** counts that picture once. Each such picture was counted twice, so the video got a frame longer at each one and the pictures after it came that much late.
+
 * **What tsMuxeR inserts into H.264, HEVC and VVC** (delimiters, parameter sets, SEI) gets a start code of four bytes, as the format asks at the head of an access unit. It took three where the stream used three.
 
 * **Film at 59.94 with delPulldown** gets no false "irregular pulldown marks" warnings.
