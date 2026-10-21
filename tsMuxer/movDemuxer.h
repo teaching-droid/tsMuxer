@@ -186,6 +186,9 @@ class MovDemuxer final : public IOContextDemuxer
     void takeFreshReader();
     void seekOnFreshReader(int64_t pos);
     int ParseTableEntry(MOVAtom atom);
+    // The bytes of a box not read yet. A table of a damaged file names more entries than its box holds, up to 2^32,
+    // which were asked for in memory or read one by one far past the box: no table is longer than its box.
+    [[nodiscard]] int64_t atomLeft(const MOVAtom& atom) const { return atom.size - (m_processedBytes - atom.offset); }
     int mov_read_default(MOVAtom atom);
     int mov_read_extradata(MOVAtom atom);
     int mov_read_mdat(MOVAtom atom);

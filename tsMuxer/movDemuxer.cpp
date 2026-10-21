@@ -2695,6 +2695,12 @@ int MovDemuxer::mov_read_trun(MOVAtom atom)
         data_offset = get_be32();
     if (flags & 0x004)
         get_be32();  // first_sample_flags
+    // As for the tables (atomLeft): each sample takes 4 bytes per field the flags give it. A run whose samples have no
+    // field of their own is a count only, and 2^24 samples are far more than a fragment holds.
+    const int64_t sampleBytes = 4 * (((flags & 0x100) != 0) + ((flags & 0x200) != 0) + ((flags & 0x400) != 0) +
+                                     ((flags & 0x800) != 0));
+    if (sampleBytes > 0 ? entries > atomLeft(atom) / sampleBytes : entries > (1u << 24))
+        return -1;
     // A run that gives no data offset follows the data of the run before it in the track fragment; only the first
     // run starts at the base. Every later run without an offset was read from the base again, so a fragment of two
     // runs gave the samples of the first run twice and lost those of the second.
@@ -2987,6 +2993,8 @@ int MovDemuxer::mov_read_ctts(MOVAtom atom)
     get_byte();  // version
     get_be24();  // flags
     const unsigned entries = get_be32();
+    if (entries > atomLeft(atom) / 8)
+        return -1;
     st->ctts_data.resize(entries);
     st->ctts_data.shrink_to_fit();
     st->ctts_count = 0;
@@ -3064,6 +3072,8 @@ int MovDemuxer::mov_read_stts(MOVAtom atom)
     get_byte();  // version
     get_be24();  // flags
     const unsigned entries = get_be32();
+    if (entries > atomLeft(atom) / 8)
+        return -1;
     st->stts_data.resize(entries);
     for (unsigned i = 0; i < entries; i++)
     {
@@ -3158,7 +3168,7 @@ int MovDemuxer::mov_read_stsz(MOVAtom atom)
     const unsigned int entries = get_be32();
     if (st->sample_size)
         return 0;
-    if (entries >= UINT_MAX / sizeof(int))
+    if (entries > atomLeft(atom) / 4)
         return -1;
     for (size_t i = 0; i < entries; i++) st->m_index.push_back(get_be32());
     return 0;
@@ -3173,7 +3183,7 @@ int MovDemuxer::mov_read_stss(MOVAtom atom)
     const unsigned int entries = get_be32();
     if (st->sample_size)
         return 0;
-    if (entries >= UINT_MAX / sizeof(int))
+    if (entries > atomLeft(atom) / 4)
         return -1;
     for (size_t i = 0; i < entries; i++) st->keyframes.push_back(get_be32());
     return 0;
@@ -3418,6 +3428,10 @@ int MovDemuxer::mov_read_stsd(MOVAtom atom)
     get_be24();  // flags
 
     const unsigned entries = get_be32();
+    // A sample description takes at least 16 bytes (size, type, reserved, data reference): as for the tables
+    // (atomLeft), a count past the box was read entry by entry far beyond the end of the file
+    if (entries > atomLeft(atom) / 16)
+        return -1;
 
     for (unsigned pseudo_stream_id = 0; pseudo_stream_id < entries; pseudo_stream_id++)
     {
@@ -3679,7 +3693,7 @@ int MovDemuxer::mov_read_stco(MOVAtom atom)
 
     const unsigned entries = get_be32();
 
-    if (entries >= UINT_MAX / sizeof(int64_t))
+    if (entries > atomLeft(atom) / (atom.type == MKTAG('c', 'o', '6', '4') ? 8 : 4))
         return -1;
 
     // sc->chunk_count = entries;
@@ -4250,6 +4264,8 @@ int MovDemuxer::mov_read_stsc(MOVAtom atom)
     get_be24();  // flags
 
     const unsigned entries = get_be32();
+    if (entries > atomLeft(atom) / 12)
+        return -1;
     st->stsc_data.resize(entries);
 
     for (unsigned i = 0; i < entries; i++)
