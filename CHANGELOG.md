@@ -86,7 +86,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A join of Opus files played what each file leaves out,** and the sound of each later file came about 20 ms late. The padding of each file and the start-up samples of the next are left out at the joint now. The start-up samples at the start of the track and the padding at its end, the last file's in a join, are now left out in a transport stream as well as in Matroska.
 
-* **A timeshift sent subtitles late.** With timeshift=5000ms on the subtitles of a Matroska file, more than half of them came about 10 s after they were due. Their times were right, and they are now sent in time, with a negative timeshift as well. A negative timeshift of many seconds on a high bitrate file can still send the first subtitles late.
+* **A timeshift sent subtitles late.** With timeshift=5000ms on the subtitles of a Matroska file, more than half of them came about 10 s after they were due. Their times were right, and they are now sent in time, with a negative timeshift as well, also on a file of high bitrate: a subtitle track of a Matroska file or transport stream with a negative timeshift is read by a reader of its own. At 135 Mbit/s, timeshift=-10s sent the first subtitles about 10 s late.
 
 * **The time between two clock references could still pass 0.1 s,** with video under 10 frames a second or with subtitles alone: 125 ms and 12 s. Packets that carry only the clock fill such gaps now.
 
