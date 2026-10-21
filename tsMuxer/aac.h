@@ -3,6 +3,7 @@
 
 #include <types/types.h>
 
+#include <string>
 #include <vector>
 
 static constexpr int AAC_HEADER_LEN = 7;
@@ -43,6 +44,11 @@ class AACCodec
     [[nodiscard]] const std::vector<uint8_t>& inBandPce() const { return m_inBandPce; }
     // An AudioSpecificConfig of 2 bytes, or with the program config element when the stream has one.
     [[nodiscard]] std::vector<uint8_t> audioSpecificConfig() const;
+    // The output sample rate of an AudioSpecificConfig that names HE-AAC (SBR, object type 5) or HE-AAC v2 (PS, 29)
+    // as its object type; 0 for any other.
+    static int explicitSbrRate(const uint8_t* config, int size);
+    // The srcaacsbr track parameter for such a config, "<output rate>:<the config in hex>"; empty for any other.
+    static std::string sbrParam(const uint8_t* config, int size);
 
     int m_id;
     int m_layer;

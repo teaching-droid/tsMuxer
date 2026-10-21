@@ -310,6 +310,63 @@ void AACCodec::buildADTSHeader(uint8_t* buffer, const unsigned frameSize)
     writer.flushBits();
 }
 
+int AACCodec::explicitSbrRate(const uint8_t* config, const int size)
+{
+    if (config == nullptr || size < 3)
+        return 0;
+    try
+    {
+        BitStreamReader reader{};
+        // the reader takes a buffer it may write to, and only reads it
+        auto* buffer = const_cast<uint8_t*>(config);
+        reader.setBuffer(buffer, buffer + size);
+        const auto rateAt = [&](const uint8_t index)
+        { return index == 0x0f ? reader.getBits<int>(24) : index < 13 ? aac_sample_rates[index] : 0; };
+        auto objectType = reader.getBits<uint8_t>(5);
+        if (objectType == 31)
+            objectType = 32 + reader.getBits<uint8_t>(6);
+        if (reader.getBits<uint8_t>(4) == 0x0f)  // the core's samplingFrequencyIndex
+            reader.skipBits(24);
+        const auto channels = reader.getBits<uint8_t>(4);
+        if (objectType == 5 || objectType == 29)
+            return rateAt(reader.getBits<uint8_t>(4));  // extensionSamplingFrequencyIndex
+        // The backward compatible form: AAC LC, and after its GASpecificConfig an extension with sync word 0x2B7
+        // that names SBR and its rate, which a decoder that does not know it reads past
+        if (objectType != 2)
+            return 0;
+        reader.skipBit();  // frameLengthFlag
+        if (reader.getBit())
+            reader.skipBits(14);  // dependsOnCoreCoder, coreCoderDelay
+        reader.skipBit();         // extensionFlag
+        AacProgramConfig pce;
+        if (channels == 0 && !readProgramConfig(reader, pce))
+            return 0;
+        if (size * 8 - reader.getBitsCount() < 16 || reader.getBits<int>(11) != 0x2B7 ||
+            reader.getBits<uint8_t>(5) != 5 || !reader.getBit())  // extensionAudioObjectType SBR, sbrPresentFlag
+            return 0;
+        return rateAt(reader.getBits<uint8_t>(4));
+    }
+    catch (BitStreamException&)
+    {
+        return 0;
+    }
+}
+
+std::string AACCodec::sbrParam(const uint8_t* config, const int size)
+{
+    const int rate = explicitSbrRate(config, size);
+    if (rate <= 0)
+        return {};
+    static const char* HEX = "0123456789abcdef";
+    std::string out = std::to_string(rate) + ":";
+    for (int i = 0; i < size; ++i)
+    {
+        out += HEX[config[i] >> 4];
+        out += HEX[config[i] & 15];
+    }
+    return out;
+}
+
 void AACCodec::readConfig(uint8_t* buff, const int size)
 {
     BitStreamReader reader{};

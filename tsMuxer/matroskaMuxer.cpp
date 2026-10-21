@@ -398,6 +398,23 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
     if (const auto src = params.find("srcendpadding");
         src != params.end() && (track.codecID == CODEC_A_OPUS || track.codecID == CODEC_A_VORBIS))
         track.endPaddingNs = strtoll(src->second.c_str(), nullptr, 10);
+    // HE-AAC that an MP4 or Matroska source names in its AudioSpecificConfig (srcaacsbr: output rate, config in hex).
+    // The sound reaches the muxer as ADTS frames, which describe the core codec only, at its own rate: the track was
+    // written as AAC LC at half the rate, and a player that takes the header as it stands played it so.
+    if (const auto src = params.find("srcaacsbr"); src != params.end() && track.codecID == CODEC_A_AAC)
+    {
+        const std::string& value = src->second;
+        const size_t colon = value.find(':');
+        std::vector<uint8_t> config;
+        for (size_t i = colon + 1; colon != std::string::npos && i + 1 < value.size(); i += 2)
+            config.push_back(static_cast<uint8_t>(strtoul(value.substr(i, 2).c_str(), nullptr, 16)));
+        const int rate = colon == std::string::npos ? 0 : atoi(value.c_str());
+        if (rate > 0 && AACCodec::explicitSbrRate(config.data(), static_cast<int>(config.size())) == rate)
+        {
+            track.srcAacConfig = config;
+            track.outputSampleRate = rate;
+        }
+    }
     // The crop, the field order and the projection of a Matroska source (srccrop: top,bottom,left,right;
     // srcfieldorder; srcprojection: the element's body in hex).
     if (const auto src = params.find("srccrop"); src != params.end())
@@ -932,7 +949,7 @@ void MatroskaMuxer::buildCodecPrivate(MkvTrackInfo& track)
         break;
     }
     case CODEC_A_AAC:
-        track.codecPrivate = buildAACConfig(track.codecReader);
+        track.codecPrivate = track.srcAacConfig.empty() ? buildAACConfig(track.codecReader) : track.srcAacConfig;
         break;
     case CODEC_A_FLAC:
     {
@@ -1617,6 +1634,9 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track, i
         uint8_t audioBuf[128];
         int aPos = 0;
         aPos += ebml_write_float(audioBuf + aPos, MATROSKA_ID_AUDIOSAMPLINGFREQ, static_cast<double>(track.sampleRate));
+        if (track.outputSampleRate > 0 && track.outputSampleRate != track.sampleRate)
+            aPos += ebml_write_float(audioBuf + aPos, MATROSKA_ID_AUDIOOUTSAMPLINGFREQ,
+                                     static_cast<double>(track.outputSampleRate));
         const int channelsAt = aPos + 2;  // the one byte ID 0x9F and a one byte size come first
         aPos += ebml_write_uint(audioBuf + aPos, MATROSKA_ID_AUDIOCHANNELS, track.channels);
         if (track.bitDepth > 0)

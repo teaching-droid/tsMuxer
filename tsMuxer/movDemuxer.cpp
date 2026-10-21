@@ -2169,6 +2169,12 @@ void MovDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             }
             if (!mst->name.empty())
                 trackList[i + 1].m_srcParams["srcname"] = mst->name;
+            // HE-AAC that the esds names (srcaacsbr), for a Matroska output to keep
+            if (const auto* audio = dynamic_cast<MovParsedAudioTrackData*>(mst->parsed_priv_data); audio && audio->isAAC)
+                if (const std::string sbr =
+                        AACCodec::sbrParam(reinterpret_cast<const uint8_t*>(mst->codec_priv), mst->codec_priv_size);
+                    !sbr.empty())
+                    trackList[i + 1].m_srcParams["srcaacsbr"] = sbr;
             if (!mst->leftOut.empty())
                 trackList[i + 1].m_srcParams["srcleftout"] = mst->leftOut;
             std::string colour;

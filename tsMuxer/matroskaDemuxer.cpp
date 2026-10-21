@@ -5390,6 +5390,11 @@ void MatroskaDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             }
             trackList[i + 1].m_srcParams["srcvpxprivate"] = hex;
         }
+        // HE-AAC that the CodecPrivate names (srcaacsbr), for a Matroska output to keep
+        if (tracks[i]->codec_id && !strcmp(tracks[i]->codec_id, MATROSKA_CODEC_ID_AUDIO_AAC))
+            if (const std::string sbr = AACCodec::sbrParam(tracks[i]->codec_priv, tracks[i]->codec_priv_size);
+                !sbr.empty())
+                trackList[i + 1].m_srcParams["srcaacsbr"] = sbr;
         // DVD or DVB subtitles in a file without video: the frame rate their display sets carry is a guess, which
         // fps= replaces rather than converts from.
         if (const auto* bitmapSub = dynamic_cast<ParsedBitmapSubTrackData*>(tracks[i]->parsed_priv_data);
