@@ -402,6 +402,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **An output named .mts or .m2t** is a transport stream. It became a folder of demuxed tracks. --demux writes a folder of demuxed tracks whatever the output is named; with .ts, .m2ts or .mkv it wrote that file.
 
+* **A job whose sources hold no data at all,** such as an empty .sup muxed alone, stops with "Nothing was written". It said "Mux successful complete" and left an output of 0 bytes.
+
 * **A video track of a TS or M2TS named in the meta as another video codec** (V_MPEG4/ISO/AVC for an MPEG-2 track) stops before anything is written, naming the codec the track has. It was read as the codec named, and the mux could say it was successful.
 
 * **A join of Matroska, MP4 or MOV files naming a track they do not have** stops before anything is written, as a single file does. **--keep-editions with no Matroska source** is refused; it kept nothing.
