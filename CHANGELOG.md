@@ -316,6 +316,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **The default duration of a video track** is rounded: 29.97 fps was written as 33366666 ns, which is 33366666.7.
 
+* **HE-AAC from an MP4 or Matroska file** keeps its header: it was written as AAC LC at the rate of its core, half the rate it plays at, so a player that goes by the header played it without its high frequencies.
+
 ### Window
 
 * **At its smallest size, every tab stays readable.** The track list keeps at least four rows, the buttons beside it are no longer squashed, and a tab that needs more room scrolls. Rows of the Subtitles and Blu-ray tabs were drawn over each other there.
