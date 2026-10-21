@@ -34,6 +34,10 @@ class VorbisStreamReader final : public SimplePacketizerReader
     // The length in samples of the first packet, which gives no sound: a Matroska output's CodecDelay.
     [[nodiscard]] int leadSamples() const { return m_leadSamples; }
 
+    // The block size of an audio packet, by the modes of the setup header (setCodecPrivate); 0 for any other packet.
+    [[nodiscard]] int blockSizeOf(const uint8_t* packet, int size) const;
+    [[nodiscard]] int sampleRate() const { return m_sampleRate; }
+
    protected:
     int getHeaderLen() override { return 4; }
     int getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdmvDescriptors) override { return 0; }

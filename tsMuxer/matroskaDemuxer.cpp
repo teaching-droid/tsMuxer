@@ -699,14 +699,14 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
             m_firstTimecode.find(tracks[track]->num) == m_firstTimecode.end())
             m_firstTimecode[tracks[track]->num] = timecode;
         // A plain join: each frame of the sound on the timeline of the join, to start the sound of each later part
-        // against its own picture (keepJoinSound). The codecs whose blocks are timed as they sound, and AAC and Opus,
+        // against its own picture (keepJoinSound). The codecs whose blocks are timed as they sound, AAC and Opus,
         // which have a codec delay: their first block is timed before the start (CodecDelay), and their last one is
-        // cut short (DiscardPadding). Vorbis and FLAC, whose frames differ in length, follow on from frame to frame as
-        // before.
+        // cut short (DiscardPadding), and Vorbis and FLAC, whose frames differ in length.
         const bool delayCodec = isJoinDelayCodec(tracks[track]);
+        const bool varCodec = isJoinVarCodec(tracks[track]);
         const bool joinSound = !timeline && m_joinFiles.size() > 1 && m_joinShiftKnown && blockNs != AV_NOPTS_VALUE &&
                                tracks[track]->type == IOContextTrackType::AUDIO &&
-                               (isJoinTimedCodec(tracks[track]) || delayCodec);
+                               (isJoinTimedCodec(tracks[track]) || delayCodec || varCodec);
         const int64_t laceLenNs =
             tracks[track]->default_duration > 0 ? static_cast<int64_t>(tracks[track]->default_duration)
             : duration != AV_NOPTS_VALUE && duration > 0 && laces > 0 && (!delayCodec || laces > 1)
@@ -720,10 +720,56 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
         const bool opus = delayCodec && strcmp(tracks[track]->codec_id, "A_OPUS") == 0;
         if (opus && tracks[track]->codec_priv_size >= 12 && tracks[track]->codec_priv)
             leadNs = (tracks[track]->codec_priv[10] | tracks[track]->codec_priv[11] << 8) * INT64_C(1000000000) / 48000;
-        const int64_t joinNs = blockNs + m_joinShiftNs - (delayCodec ? tracks[track]->codecDelayNs : 0);
+        const int64_t joinNs =
+            blockNs + m_joinShiftNs - (delayCodec || varCodec ? tracks[track]->codecDelayNs : 0);
+        // Vorbis and FLAC: each frame as long as its reader counts it, a FLAC frame by its header, a Vorbis packet by
+        // the modes of its setup header (else by the BlockDuration of its block and the DiscardPadding of the last
+        // one, or as long as the packet before it); the frames of a laced block follow on by their lengths.
+        const bool flac = varCodec && strcmp(tracks[track]->codec_id, MATROSKA_CODEC_ID_AUDIO_FLAC) == 0;
+        const int flacRate = flac && joinSound ? flacSampleRate(tracks[track]) : 0;
+        int64_t laceOffNs = 0;
 
         for (n = 0; n < laces; n++)
         {
+            int64_t frameNs = joinNs + n * laceLenNs;
+            int64_t frameLenNs = laceLenNs;
+            bool exactLen = false;  // the frame's length as its reader counts it
+            int vorbisBlock = 0;
+            if (joinSound && varCodec)
+            {
+                frameNs = joinNs + laceOffNs;
+                int64_t ownLenNs = 0;  // how long the frame is in its own file
+                if (flac)
+                {
+                    const int samples =
+                        flacRate > 0 && tracks[track]->encodingAlgo < 0 ? flacFrameSamples(data, lace_size[n]) : 0;
+                    exactLen = samples > 0;
+                    if (exactLen)
+                        ownLenNs = frameLenNs = samples * INT64_C(1000000000) / flacRate;
+                }
+                else if ((vorbisBlock = joinVorbisBlock(track, data, lace_size[n])) > 0)
+                {
+                    // A packet gives a quarter of the block before it and a quarter of its own. It is as long as the
+                    // reader counts it, on from the packet handed on before it (over a joint as well, where the
+                    // files have the same headers), and placed where it ends in its own file, so that the sound
+                    // after it stays where its file has it.
+                    JoinSound& sound = m_joinSound[track + 1];
+                    const int64_t rate = m_joinVorbis[track]->sampleRate();
+                    const int own = (sound.vorbisFilePrev ? sound.vorbisFilePrev : vorbisBlock) / 4 + vorbisBlock / 4;
+                    const int handed =
+                        (sound.vorbisHandedPrev ? sound.vorbisHandedPrev : vorbisBlock) / 4 + vorbisBlock / 4;
+                    sound.vorbisFilePrev = vorbisBlock;
+                    exactLen = true;
+                    ownLenNs = own * INT64_C(1000000000) / rate;
+                    frameLenNs = handed * INT64_C(1000000000) / rate;
+                    frameNs += ownLenNs - frameLenNs;
+                }
+                else
+                    frameLenNs = laces == 1 && duration != AV_NOPTS_VALUE && duration > 0
+                                     ? duration * static_cast<int64_t>(time_scale) + discardNs
+                                     : 0;
+                laceOffNs += ownLenNs > 0 ? ownLenNs : frameLenNs > 0 ? frameLenNs : laceLenNs;
+            }
             if (timeline)
             {
                 const int64_t laceNs = blockNs == AV_NOPTS_VALUE
@@ -738,14 +784,17 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
                 if (timecode != AV_NOPTS_VALUE && m_firstTimecode.find(tracks[track]->num) == m_firstTimecode.end())
                     m_firstTimecode[tracks[track]->num] = timecode;
             }
-            else if (joinSound && !keepJoinSound(track + 1, joinNs + n * laceLenNs, laceLenNs, leadNs,
+            else if (joinSound && !keepJoinSound(track + 1, frameNs, frameLenNs, leadNs,
                                                  opus && n == laces - 1 ? discardNs : 0, opus,
-                                                 delayCodec && tracks[track]->default_duration > 0))
+                                                 (delayCodec && tracks[track]->default_duration > 0) || exactLen,
+                                                 varCodec))
             {
                 data += lace_size[n];
                 size -= lace_size[n];
                 continue;
             }
+            if (vorbisBlock > 0)
+                m_joinSound[track + 1].vorbisHandedPrev = vorbisBlock;
             int slices = 1;
 
             if (real_v)
@@ -1409,7 +1458,11 @@ bool MatroskaDemuxer::keepBlock(const MatroskaTrack* track, const int64_t ns, co
 void MatroskaDemuxer::nextJoinPart()
 {
     m_partVideoOn = m_partVideoDone = false;
-    for (auto& [track, sound] : m_joinSound) sound.started = sound.offered = false;
+    for (auto& [track, sound] : m_joinSound)
+    {
+        sound.started = sound.offered = false;
+        sound.vorbisFilePrev = 0;
+    }
     if (++m_joinPart >= m_joinFiles.size())
         return;
     // A plain join puts each file where the video of the one before ends (see METADemuxer::getChapters). The video
@@ -1459,6 +1512,80 @@ bool MatroskaDemuxer::isJoinDelayCodec(const MatroskaTrack* track)
            (strncmp(track->codec_id, "A_AAC", 5) == 0 || strcmp(track->codec_id, "A_OPUS") == 0);
 }
 
+// Vorbis and FLAC: frames whose length can differ from one to the next
+bool MatroskaDemuxer::isJoinVarCodec(const MatroskaTrack* track)
+{
+    return track->codec_id != nullptr && (strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_VORBIS) == 0 ||
+                                          strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_FLAC) == 0);
+}
+
+// The block size of a Vorbis packet of a joined track, by the setup header of the part being read (0: not known). The
+// headers of a part that differ from those before start a new stream for the reader (VorbisStreamReader), which then
+// counts the first packet on its own again.
+int MatroskaDemuxer::joinVorbisBlock(const int track, const uint8_t* packet, const int size)
+{
+    const MatroskaTrack* t = tracks[track];
+    if (t->codec_priv == nullptr || t->codec_priv_size <= 0 || t->encodingAlgo >= 0)
+        return 0;
+    auto& modes = m_joinVorbis[track];
+    if (!modes || modes->getCodecPrivate().size() != static_cast<size_t>(t->codec_priv_size) ||
+        memcmp(modes->getCodecPrivate().data(), t->codec_priv, t->codec_priv_size) != 0)
+    {
+        modes = std::make_unique<VorbisStreamReader>();
+        if (!modes->setCodecPrivate(t->codec_priv, t->codec_priv_size))
+            return 0;
+        m_joinSound[track + 1].vorbisHandedPrev = 0;
+    }
+    return modes->sampleRate() > 0 ? modes->blockSizeOf(packet, size) : 0;
+}
+
+// The samples of a FLAC frame, from its header (RFC 9639, 9.1); 0 where the data does not begin with one that says it
+int MatroskaDemuxer::flacFrameSamples(const uint8_t* p, const int size)
+{
+    if (size < 6 || p[0] != 0xFF || (p[1] & 0xFE) != 0xF8)
+        return 0;
+    const int code = p[2] >> 4;
+    if (code == 1)
+        return 192;
+    if (code >= 2 && code <= 5)
+        return 576 << (code - 2);
+    if (code >= 8)
+        return 256 << (code - 8);
+    if (code != 6 && code != 7)
+        return 0;
+    // the frame or sample number, coded as UTF-8 is, then the block size less one in 8 or 16 bits
+    int len = 1;
+    if (p[4] & 0x80)
+    {
+        len = 0;
+        for (int b = p[4]; b & 0x80; b <<= 1) ++len;
+        if (len < 2 || len > 7)
+            return 0;
+    }
+    const int pos = 4 + len;
+    if (pos + (code == 7 ? 2 : 1) > size)
+        return 0;
+    return (code == 6 ? p[pos] : p[pos] << 8 | p[pos + 1]) + 1;
+}
+
+// The sample rate of a FLAC track, from the STREAMINFO of its CodecPrivate ("fLaC" and the metadata blocks); 0: none
+int MatroskaDemuxer::flacSampleRate(const MatroskaTrack* track)
+{
+    const uint8_t* p = track->codec_priv;
+    int size = track->codec_priv_size;
+    if (p == nullptr)
+        return 0;
+    if (size >= 4 && memcmp(p, "fLaC", 4) == 0)
+    {
+        p += 4;
+        size -= 4;
+    }
+    // the block header (type 0, STREAMINFO), then two block sizes and two frame sizes before the 20 bits of the rate
+    if (size < 4 + 13 || (p[0] & 0x7F) != 0)
+        return 0;
+    return p[4 + 10] << 12 | p[4 + 11] << 4 | p[4 + 12] >> 4;
+}
+
 // Whether a frame of the sound of a plain join is kept: ns is where it comes on the timeline of the join, lengthNs how
 // long it is (0: not known, the step from one frame to the next is taken).
 //
@@ -1478,8 +1605,13 @@ bool MatroskaDemuxer::isJoinDelayCodec(const MatroskaTrack* track)
 // that only fills its last frame (padNs, the DiscardPadding of each frame). The start and end of the sound are
 // compared, not of the frames, as its reader leaves the start-up samples out itself (readerTrims: it drops whole
 // packets of them at each joint). Where a gap is put in, it takes them up.
+//
+// Vorbis and FLAC (variable), whose frames differ in length, followed on from frame to frame: the sound of a later
+// file that starts half a second after its picture came half a second early. They are compared by their frames, each
+// as long as its reader counts it (counted), and a frame is kept within half its own length.
 bool MatroskaDemuxer::keepJoinSound(const int track, const int64_t ns, const int64_t lengthNs, const int64_t leadNs,
-                                    const int64_t padNs, const bool readerTrims, const bool counted)
+                                    const int64_t padNs, const bool readerTrims, const bool counted,
+                                    const bool variable)
 {
     JoinSound& sound = m_joinSound[track];
     if (sound.step <= 0 && lengthNs > 0)
@@ -1493,8 +1625,10 @@ bool MatroskaDemuxer::keepJoinSound(const int track, const int64_t ns, const int
         sound.offered = true;
         if (m_joinPart > 0 && sound.end != -1 && sound.step > 0)
         {
-            // half a frame, but at least a millisecond, the step of the times of most files
-            const int64_t within = (std::max)(sound.step / 2, int64_t{1000000});
+            // half a frame, but at least a millisecond, the step of the times of most files; of frames that differ
+            // in length (variable), half of this one
+            const int64_t within =
+                (std::max)((variable && lengthNs > 0 ? lengthNs : sound.step) / 2, int64_t{1000000});
             // where the sound before ends, without its padding and without what is not sound at the joints before
             const int64_t soundEnd = sound.end - sound.pad - sound.excess;
             if (ns + lead + within < soundEnd)
@@ -1530,12 +1664,17 @@ bool MatroskaDemuxer::keepJoinSound(const int track, const int64_t ns, const int
     }
     if (sound.prev != -1 && ns > sound.prev && (sound.step <= 0 || ns - sound.prev < sound.step))
         sound.step = ns - sound.prev;
+    if (sound.prev != -1 && ns > sound.prev)
+        sound.lastStep = ns - sound.prev;
     sound.prev = ns;
     // Frames of one length (counted) follow on as the reader counts them: their block times are rounded to the
-    // file's timestamp step, which over a few joints of short frames added up to more than half a frame.
+    // file's timestamp step, which over a few joints of short frames added up to more than half a frame. A frame of
+    // unknown length whose frames differ in length (variable: Vorbis, FLAC) is taken to be as long as the one before
+    // it, as the last packets of Vorbis are: the shortest step of a file with short blocks is an eighth of that.
+    const int64_t unknownLen = variable && sound.lastStep > 0 ? sound.lastStep : sound.step;
     const int64_t end = counted && !partStart && lengthNs > 0
                             ? sound.end + lengthNs
-                            : ns + sound.shift + (lengthNs > 0 ? lengthNs : sound.step);
+                            : ns + sound.shift + (lengthNs > 0 ? lengthNs : unknownLen);
     if (end >= sound.end)
     {
         sound.end = end;

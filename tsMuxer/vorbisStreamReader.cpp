@@ -340,6 +340,14 @@ int VorbisStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes,
     return static_cast<int>(len);
 }
 
+int VorbisStreamReader::blockSizeOf(const uint8_t* packet, const int size) const
+{
+    if (size < 1 || (packet[0] & 1) != 0 || m_modeLong.empty() || m_modeBits > 7)
+        return 0;
+    const uint32_t mode = m_modeBits ? (packet[0] >> 1) & ((1u << m_modeBits) - 1) : 0;
+    return mode < m_modeLong.size() ? m_blockSize[m_modeLong[mode] ? 1 : 0] : 0;
+}
+
 int VorbisStreamReader::oggPageHeader(uint8_t* dst, const uint8_t* dstEnd, const std::vector<int>& packets,
                                       const uint8_t headerType, const int64_t granule, const uint8_t* payload,
                                       const int payloadSize)

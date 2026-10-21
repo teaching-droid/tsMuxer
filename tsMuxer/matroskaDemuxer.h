@@ -2,12 +2,14 @@
 #define MATROSKA_STREAM_READER_H_
 
 #include <map>
+#include <memory>
 #include <set>
 
 #include "assRender.h"
 #include "bufferedFileReader.h"
 #include "ioContextDemuxer.h"
 #include "matroskaParser.h"
+#include "vorbisStreamReader.h"
 
 // One part of the timeline a Matroska file plays (MatroskaDemuxer::playTimeline).
 struct MatroskaPlayPart
@@ -218,6 +220,9 @@ class MatroskaDemuxer final : public IOContextDemuxer
         int64_t end = -1;      // where the sound handed on so far ends; -1: not known
         int64_t prev = -1;     // the frame before in the part, for the step
         int64_t step = 0;      // the shortest time from one frame to the next
+        int64_t lastStep = 0;  // the time from the frame before to the last one
+        int vorbisFilePrev = 0;    // Vorbis: the block size of the packet before in the part being read, 0 at its start
+        int vorbisHandedPrev = 0;  // and of the packet handed on before, which the reader counts on from
         int64_t shift = 0;     // how much later than its own times the sound of the part being read is muxed
         int64_t pad = 0;       // the padding at the end of the sound handed on so far (DiscardPadding)
         int64_t excess = 0;    // what is not sound at the joints so far and is still played (a codec delay)
@@ -228,9 +233,14 @@ class MatroskaDemuxer final : public IOContextDemuxer
     bool m_joinShiftKnown = true;  // where each part is put is known (m_joinShiftNs): a part of unknown length is not
     std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_timeGaps;  // by track, see takeTimeGaps
     bool keepJoinSound(int track, int64_t ns, int64_t lengthNs, int64_t leadNs = 0, int64_t padNs = 0,
-                       bool readerTrims = false, bool counted = false);
+                       bool readerTrims = false, bool counted = false, bool variable = false);
     static bool isJoinTimedCodec(const MatroskaTrack* track);
     static bool isJoinDelayCodec(const MatroskaTrack* track);
+    static bool isJoinVarCodec(const MatroskaTrack* track);
+    std::map<int, std::unique_ptr<VorbisStreamReader>> m_joinVorbis;  // by track: the modes of its setup header
+    int joinVorbisBlock(int track, const uint8_t* packet, int size);
+    static int flacFrameSamples(const uint8_t* p, int size);
+    static int flacSampleRate(const MatroskaTrack* track);
     int64_t m_blockDiscardNs = 0;  // the DiscardPadding of the block group being read
     std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(int pid) override;
 
