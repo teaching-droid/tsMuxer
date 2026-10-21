@@ -2906,6 +2906,13 @@ static bool isAudioOrVideoLine(const StreamInfo& si)
 
 static void checkEmptyTracks(const MuxerManager& muxerManager)
 {
+    // ** AN OUTPUT OF NOTHING IS NOT A SUCCESS. ** A subtitle track may have nothing to show beside other tracks, but a
+    // job whose sources hold no data at all, as an empty .sup muxed alone, said "Mux successful complete" and left an
+    // output of 0 bytes.
+    bool anyData = false;
+    for (const StreamInfo& si : muxerManager.getStreamInfo()) anyData = anyData || si.m_readCnt > 0;
+    if (!muxerManager.getStreamInfo().empty() && !anyData)
+        THROW(ERR_COMMON, "The sources of the meta file hold no data at all. Nothing was written.")
     if (muxerManager.getCutStart() > 0 || muxerManager.getCutEnd() > 0)
         return;
     for (const StreamInfo& si : muxerManager.getStreamInfo())
