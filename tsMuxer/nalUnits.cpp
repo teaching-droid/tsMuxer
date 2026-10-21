@@ -240,9 +240,11 @@ unsigned NALUnit::extractUEGolombCode()
 {
     unsigned cnt = 0;
     for (; bitReader.getBit() == 0; cnt++);
-    if (cnt > INT_BIT)
+    // 31 zeros give the largest number a code can carry; 32 or more are no code, and 1 << 32 is undefined: such a
+    // header was read as a wrong number rather than as damaged
+    if (cnt >= INT_BIT)
         THROW_BITSTREAM_ERR;
-    return (1 << cnt) - 1 + bitReader.getBits(cnt);
+    return (1u << cnt) - 1 + bitReader.getBits(cnt);
 }
 
 void NALUnit::writeSEGolombCode(BitStreamWriter& bitWriter, const int32_t value)
@@ -270,9 +272,11 @@ void NALUnit::writeUEGolombCode(BitStreamWriter& bitWriter, const uint32_t value
 
 unsigned NALUnit::extractUEGolombCode(BitStreamReader& bitReader)
 {
-    int cnt = 0;
+    unsigned cnt = 0;
     for (; bitReader.getBit() == 0; cnt++);
-    return (1 << cnt) - 1 + bitReader.getBits(cnt);
+    if (cnt >= INT_BIT)  // as above
+        THROW_BITSTREAM_ERR;
+    return (1u << cnt) - 1 + bitReader.getBits(cnt);
 }
 
 int NALUnit::extractSEGolombCode()
