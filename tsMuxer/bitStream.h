@@ -115,11 +115,13 @@ class BitStreamReader : public BitStream
         return m_curVal >> m_bitLeft & 1;
     }
 
-    void skipBits(const unsigned num)
+    void skipBits(unsigned num)
     {
         if (m_totalBits < num)
             THROW_BITSTREAM_ERR;
-        assert(num <= INT_BIT);
+        // More than a word in steps of a word. A longer step, as the 64 bits of an AAC frame's block positions and
+        // CRC, put the read position below 0, and every bit read after it was taken from the wrong place.
+        for (; num > INT_BIT; num -= INT_BIT) skipBits(INT_BIT);
         if (num <= m_bitLeft)
             m_bitLeft -= num;
         else
