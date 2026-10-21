@@ -57,9 +57,15 @@ class MatroskaDemuxer final : public IOContextDemuxer
         {
             if (tracks[i]->type == IOContextTrackType::VIDEO)
             {
+                // Measured from the picture the video shows first, which for VC-1 in the Video for Windows
+                // mapping can come after its first block (vfwVc1FirstShown).
                 const auto it = m_firstTimecode.find(tracks[i]->num);
+                const auto shown = m_shownAfterFirstBlock.find(tracks[i]->num);
+                if (it != m_firstTimecode.end() && tracks[i]->num != pid)
+                    return m_firstTimecode[pid] - it->second -
+                           (shown == m_shownAfterFirstBlock.end() ? 0 : shown->second);
                 if (it != m_firstTimecode.end())
-                    return m_firstTimecode[pid] - it->second;
+                    return 0;
             }
         }
 
@@ -170,6 +176,8 @@ class MatroskaDemuxer final : public IOContextDemuxer
     char* muxing_app;
     uint64_t time_scale;
     std::map<int64_t, int64_t> m_firstTimecode;
+    // For a video track whose first picture is shown after its first block, how long after, in the file's units.
+    std::map<int64_t, int64_t> m_shownAfterFirstBlock;
     bool index_parsed;
     bool metadata_parsed;
     bool attachments_parsed;

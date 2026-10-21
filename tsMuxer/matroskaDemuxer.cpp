@@ -20,6 +20,7 @@
 #include "metaDemuxer.h"
 #include "nalUnits.h"
 #include "subTrackFilter.h"
+#include "vc1Parser.h"
 #include "vodCoreException.h"
 
 extern "C"
@@ -3428,9 +3429,91 @@ void MatroskaDemuxer::loadChapters(const std::string& fileName)
 //   srcflags    forced=1,hearing=1,visual=1,descriptions=1,original=1,commentary=1 (the flags present, with their
 //   value) srccolour   m=,r=,t=,p=,cll=,fall= and rx= ry= gx= gy= bx= by= wx= wy= lmax= lmin= (the elements present)
 //   srcdisplay  WIDTHxHEIGHT, when the file gives a display size: in pixels, or as a shape at the picture's height
+// The first picture a VC-1 track in the Video for Windows mapping shows, as a time after its first block, in the file's
+// units. Such a track holds its pictures in decode order and is timed as they are decoded: a B picture is shown at its
+// own time, an I or P picture at the time of the next I or P picture, which a decoder waits for before it shows it. A
+// file tsMuxeR writes has the I picture first and its sound with the picture shown first, a frame after that block, and
+// the listing measured from the block: it gave the sound a delay of one frame, which the window wrote as timeshift=. 0
+// for a track without B pictures, whose pictures are shown as they are decoded. False where the pictures are not read
+// as VC-1 (a sequence header to read them with, rising times), and the track's start is then not known.
+static bool vfwVc1FirstShown(EbmlScan& scan, const int64_t from, const int64_t segmentEnd, const MatroskaTrack* video,
+                             int64_t& shown)
+{
+    static constexpr int PICTURES = 16;
+    VC1SequenceHeader sequence;
+    uint8_t* priv = video->codec_priv;
+    if (!priv || video->codec_priv_size < 8)
+        return false;
+    // The sequence header after the bitmap header, whose height and plane count can read as a start code too.
+    uint8_t* privEnd = priv + video->codec_priv_size;
+    uint8_t* seq = VC1Unit::findNextMarker(priv, privEnd);
+    while (seq + 4 < privEnd && seq[3] != static_cast<uint8_t>(VC1Code::SEQHDR))
+        seq = VC1Unit::findNextMarker(seq + 3, privEnd);
+    if (seq + 4 >= privEnd)
+        return false;
+    const uint8_t* seqEnd = VC1Unit::findNextMarker(seq + 4, privEnd);
+    sequence.vc1_unescape_buffer(seq + 4, seqEnd - seq - 4);
+    if (sequence.decode_sequence_header() != 0 || sequence.profile != Profile::ADVANCED)
+        return false;
+
+    struct Picture
+    {
+        int64_t time;
+        bool b;
+    };
+    std::vector<Picture> pictures;
+    bool ok = true;
+    walkTrackBlocks(scan, from, segmentEnd, 64, video->num,
+                    [&](const int64_t t, int64_t, bool, const int laces)
+                    {
+                        // The block's data follows its 2 byte timestamp and its flags, from where the walk stands.
+                        uint8_t data[256];
+                        scan.f.seek(scan.pos + 3);
+                        const int got = laces == 1 ? scan.f.read(data, sizeof(data)) : 0;
+                        uint8_t* end = data + (std::max)(got, 0);
+                        uint8_t* frame = data;
+                        if (got >= 4 && data[0] == 0 && data[1] == 0 && data[2] == 1)
+                        {
+                            frame = VC1Unit::findNextMarker(data, end);
+                            while (frame + 4 < end && frame[3] != static_cast<uint8_t>(VC1Code::FRAME))
+                                frame = VC1Unit::findNextMarker(frame + 4, end);
+                            frame += 4;
+                        }
+                        VC1Frame picture;
+                        if (frame >= end || picture.decode_frame_direct(sequence, frame, end) != 0 ||
+                            (!pictures.empty() && t < pictures.back().time))
+                        {
+                            ok = false;
+                            return false;
+                        }
+                        pictures.push_back({t, picture.pict_type == VC1PictType::B_TYPE ||
+                                                   picture.pict_type == VC1PictType::BI_TYPE});
+                        return pictures.size() < PICTURES;
+                    });
+    if (!ok || pictures.empty())
+        return false;
+    int64_t first = INT64_MAX;
+    for (size_t i = 0; i < pictures.size(); i++)
+    {
+        if (pictures[i].b)
+            first = (std::min)(first, pictures[i].time);
+        else
+            for (size_t j = i + 1; j < pictures.size(); j++)
+                if (!pictures[j].b)
+                {
+                    first = (std::min)(first, pictures[j].time);
+                    break;
+                }
+    }
+    const bool reorders = std::any_of(pictures.begin(), pictures.end(), [](const Picture& p) { return p.b; });
+    shown = reorders && first != INT64_MAX ? first - pictures.front().time : 0;
+    return true;
+}
+
 void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
 {
     m_trackExtras.clear();
+    m_shownAfterFirstBlock.clear();
     File f;
     if (!f.open(fileName.c_str(), File::ofRead))
         return;
@@ -3787,12 +3870,21 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
             video = tracks[i];
     // A Video for Windows track (V_MS/VFW/FOURCC) has no reordered frames in its mapping, and is often stamped with
     // decode times: its first block can be a frame before its first picture is shown, and VC-1 written so started
-    // the sound a frame late. Its own start is not known from the blocks, so its file is left as it was.
+    // the sound a frame late. VC-1 is measured from the picture it shows first (vfwVc1FirstShown); the start of any
+    // other such track is not known from its blocks, so its file is left as it was.
     const auto vfw = [](const MatroskaTrack* t)
     { return t->codec_id && !strcmp(t->codec_id, MATROSKA_CODEC_ID_VIDEO_VFW_FOURCC); };
     int64_t videoTime = 0;
-    if (!video || vfw(video) || !firstBlock(video->num, videoTime))
+    if (!video || !firstBlock(video->num, videoTime))
         return;
+    if (vfw(video))
+    {
+        int64_t shown = 0;
+        if (!vfwVc1FirstShown(scan, facts.firstCluster, facts.segmentEnd, video, shown))
+            return;
+        m_shownAfterFirstBlock[video->num] = shown;
+        videoTime += shown;
+    }
     for (int i = 0; i < num_tracks; i++)
     {
         int64_t time = 0;
