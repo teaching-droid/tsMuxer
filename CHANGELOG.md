@@ -316,6 +316,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A StereoMode of a source** that describes the picture (side by side, top and bottom and the others) is kept: such a track came out flat.
 
+* **HEVC coded as fields** is marked interlaced, shown at the shape of its frame: 1080i was written as progressive video of 1920x540 and shown squashed.
+
 * **The default duration of a video track** is rounded: 29.97 fps was written as 33366666 ns, which is 33366666.7.
 
 * **HE-AAC from an MP4 or Matroska file** keeps its header: it was written as AAC LC at the rate of its core, half the rate it plays at, so a player that goes by the header played it without its high frequencies.
