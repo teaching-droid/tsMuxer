@@ -256,6 +256,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **subTrack= on HEVC without an enhancement layer is refused,** however short the track, before anything is written: single layer Dolby Vision or plain HEVC has nothing to split off. The split wrote an empty second track, and every RPU was moved out of the base, so a profile 8 disc lost its Dolby Vision.
 
+* **HEVC coded as fields** gets a warning on a disc: a Blu-ray or UHD disc takes HEVC as progressive pictures only, and a disc player cannot play it.
+
 * **E-AC-3 without an AC-3 core** gets a warning on a disc: a Blu-ray player has to decode AC-3 but not E-AC-3, so a player without an E-AC-3 decoder plays no sound from it.
 
 * **More than 32 tracks of one kind on a disc** are refused before it is written, with the number to leave out. A 33rd audio track took PID 0x1120, outside the audio range. A transport stream whose tracks need a program map table longer than the 1021 bytes a transport stream allows is refused as well.
