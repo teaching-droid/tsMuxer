@@ -117,10 +117,10 @@ CombinedH264Demuxer::CombinedH264Demuxer(const BufferedReaderManager& readManage
     : m_readManager(readManager)
 {
     m_bufferedReader = m_readManager.getReader(streamName);
-    m_readerID = m_bufferedReader->createReader(MAX_TMP_BUFFER_SIZE);
     if (m_bufferedReader == nullptr)
         THROW(ERR_COMMON,
               "TS demuxer can't accept reader because this reader does not support BufferedReader interface")
+    m_readerID = m_bufferedReader->createReader(MAX_TMP_BUFFER_SIZE);
     m_lastReadRez = 0;
     m_dataProcessed = 0;
 }
