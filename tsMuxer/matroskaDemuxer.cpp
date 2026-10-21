@@ -18,6 +18,7 @@
 #include "avPacket.h"
 #include "bufferedFileReader.h"
 #include "metaDemuxer.h"
+#include "mpegStreamReader.h"
 #include "nalUnits.h"
 #include "subTrackFilter.h"
 #include "vc1Parser.h"
@@ -249,15 +250,17 @@ int MatroskaDemuxer::ebml_read_ascii(uint32_t* id, char** str)
 
     if ((res = ebml_read_element_id(id, nullptr)) < 0 || (res = ebml_read_element_length(&rlength)) < 0)
         return res;
+    // A length of a damaged file, up to 2^56: cut to an int it could be negative, and it was only checked after the
+    // memory was asked for. No string of a Matroska file comes near 16 MiB.
+    static constexpr int64_t MAX_STRING_SIZE = 16ll * 1024 * 1024;
+    if (rlength < 0 || rlength > MAX_STRING_SIZE)
+        THROW(ERR_MATROSKA_PARSE,
+              "Matroska parse error: a text element of " << rlength << " bytes at pos " << m_processedBytes)
     const int size = static_cast<int>(rlength);
 
     // ebml strings are usually not 0-terminated, so we allocate one
     // byte more, read the string and nullptr-terminate it ourselves.
     *str = new char[size + 1];
-    if (size < 0 || *str == nullptr)
-    {
-        THROW(ERR_MATROSKA_PARSE, "Memory allocation failed")
-    }
     if (static_cast<int32_t>(get_buffer(reinterpret_cast<uint8_t*>(*str), size)) != size)
     {
         const offset_t pos = m_processedBytes;
@@ -1113,13 +1116,15 @@ int MatroskaDemuxer::ebml_read_binary(uint32_t* id, uint8_t** binary, int* size,
 
     if ((res = ebml_read_element_id(id, nullptr)) < 0 || (res = ebml_read_element_length(&rlength)) < 0)
         return res;
+    // As for a string: a block holds one picture or a few frames, and no reader takes a picture above
+    // MAX_TMP_BUFFER_SIZE, 256 MiB. Up to four times that is read, so that such a picture is refused by the reader
+    // with its plain message; what lies beyond is no block.
+    if (rlength < 0 || rlength > 4 * MAX_TMP_BUFFER_SIZE)
+        THROW(ERR_MATROSKA_PARSE,
+              "Matroska parse error: an element of " << rlength << " bytes at pos " << m_processedBytes)
     *size = static_cast<int>(rlength);
 
     *binary = new uint8_t[*size];
-    if (!(*binary))
-    {
-        THROW(ERR_COMMON_MEMORY, "Memory allocation error")
-    }
 
     const int got = static_cast<int>(get_buffer(*binary, *size));
     if (got != *size)
