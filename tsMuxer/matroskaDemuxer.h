@@ -32,10 +32,13 @@ class MatroskaDemuxer final : public IOContextDemuxer
     // end flag, and this demuxer reads it byte by byte and may stop part way through it, its demux block full. The
     // flag was passed on as it stood, and the reader of the track took the data of that call for the last: the rest of
     // the block was never demuxed. A join of two Matroska files of 1.26 MB each lost 45 of its 254 pictures that way.
+    // Once the demux has ended it is the end, also where the parser stopped before the end of the file, at data it
+    // cannot read: the reader of the file had not reached its end, the track readers were told "not ready", and each
+    // asked again for ever, the parser ending at once each time.
     int getLastReadRez() override
     {
         if (m_demuxEnded)
-            return m_lastReadRez;
+            return AbstractReader::DATA_EOF;
         return m_lastReadRez == AbstractReader::DATA_EOF && (m_curPos < m_bufEnd || !packets.empty()) ? 0
                                                                                                       : m_lastReadRez;
     }
