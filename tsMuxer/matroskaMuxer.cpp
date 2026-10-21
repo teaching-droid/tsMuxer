@@ -1462,7 +1462,7 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track, i
         // shown at its pixel size. A container size equal to the picture over a stream that is square too adds
         // nothing and is not written, so such a remux keeps the bytes it had.
         unsigned displayW = track.width;
-        unsigned displayH = track.height;
+        unsigned displayH = track.fieldPictures ? track.height * 2 : track.height;
         if (!track.arForced && track.sampleAR > 0 && track.width && track.height)
         {
             // The pixel shape the stream gives. It was rounded to the nearest of the aspect ratios a Blu-ray disc can
@@ -1986,6 +1986,10 @@ void MatroskaMuxer::refreshTrackProperties()
                 track.height = mpegReader->getStreamHeight();
                 track.fps = mpegReader->getFPS();
                 track.interlaced = mpegReader->getInterlaced();
+                // HEVC coded as fields: each block is one field, a picture of half the frame's height. It was written
+                // as progressive video of that height, shown squashed; it is marked interlaced, at its frame's shape.
+                if (const auto hevc = dynamic_cast<HEVCStreamReader*>(mpegReader); hevc && hevc->fieldCoded())
+                    track.interlaced = track.fieldPictures = true;
                 track.streamAR = mpegReader->getStreamAR();
                 track.sampleAR = mpegReader->getSampleAspectRatio();
                 track.arForced = mpegReader->aspectRatioForced();

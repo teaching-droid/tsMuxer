@@ -119,6 +119,7 @@ class MatroskaMuxer final : public AbstractMuxer
         unsigned height;
         double fps;
         bool interlaced;
+        bool fieldPictures = false;  // each picture of the stream is one field (HEVC field_seq_flag)
         VideoAspectRatio streamAR;
         double sampleAR = 0;    // the stream's own pixel shape, 0 where it gives none
         bool arForced = false;  // ar= in the meta

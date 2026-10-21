@@ -61,6 +61,8 @@ class HEVCStreamReader final : public MPEGStreamReader
     [[nodiscard]] const unsigned* getHdr10Metadata() const { return m_hdr->hdr10Metadata; }
     [[nodiscard]] bool getColourDesc(uint8_t& primaries, uint8_t& transfer, uint8_t& matrix) const override;
     bool getInterlaced() override { return false; }
+    // Each picture is a field (VUI field_seq_flag), for a Matroska output to say so; the disc path is left as it was
+    [[nodiscard]] bool fieldCoded() const { return m_sps && m_sps->field_seq_flag; }
     bool isIFrame() override { return m_lastIFrame; }
 
     void updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* nextNal, int oldSpsLen) override;

@@ -492,7 +492,9 @@ int HevcSpsUnit::vui_parameters()
             return 1;
     }
 
-    m_reader.skipBits(3);  // unused flags
+    m_reader.skipBit();                  // neutral_chroma_indication_flag
+    field_seq_flag = m_reader.getBit();  // each picture is a field
+    m_reader.skipBit();                  // frame_field_info_present_flag
 
     if (m_reader.getBit())  // default_display_window_flag
     {

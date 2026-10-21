@@ -160,6 +160,7 @@ struct HevcSpsUnit : HevcUnitWithProfile
     double sar = 0;  // the VUI sample aspect ratio, 0 where the stream gives none
     unsigned chroma_sample_loc_type_top_field;
     unsigned chroma_sample_loc_type_bottom_field;
+    bool field_seq_flag = false;  // VUI: each picture is a field
 
     unsigned num_short_term_ref_pic_sets;
     unsigned num_units_in_tick;
