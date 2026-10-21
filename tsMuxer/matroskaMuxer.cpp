@@ -430,7 +430,8 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
     if (const auto src = params.find("srcvpxprivate"); src != params.end() && track.codecID == CODEC_V_VP9)
         for (size_t i = 0; i + 1 < src->second.size(); i += 2)
             track.srcVpxPrivate.push_back(static_cast<uint8_t>(strtoul(src->second.substr(i, 2).c_str(), nullptr, 16)));
-    // The priming at the start of an AAC track, from an MP4 source's edit list (srccodecdelay, in nanoseconds).
+    // The priming at the start of an AAC track, from an MP4 source's edit list or a Matroska source's CodecDelay
+    // (srccodecdelay, in nanoseconds).
     if (const auto src = params.find("srccodecdelay"); src != params.end() && track.codecID == CODEC_A_AAC)
         track.srcCodecDelayNs = strtoull(src->second.c_str(), nullptr, 10);
     // The size the container said to show the picture at (srcdisplay: 640x480). It says more than the stream's own

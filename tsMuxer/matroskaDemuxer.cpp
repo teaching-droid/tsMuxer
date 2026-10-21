@@ -5410,6 +5410,13 @@ void MatroskaDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             if (const std::string sbr = AACCodec::sbrParam(tracks[i]->codec_priv, tracks[i]->codec_priv_size);
                 !sbr.empty())
                 trackList[i + 1].m_srcParams["srcaacsbr"] = sbr;
+        // The encoder's start-up samples at the start of an AAC track, which CodecDelay says a player drops: its first
+        // block is timed that much before the sound it starts. They were muxed with the first picture, and the sound
+        // came that much late against it, 21 ms for AAC of 48 kHz, in a transport stream and a Matroska output alike,
+        // which carried no CodecDelay. As for the edit list of an MP4 source (srccodecdelay, in ns): the track's times
+        // are moved back by it, and a Matroska output says it as CodecDelay again (METADemuxer::addStream).
+        if (tracks[i]->codec_id && !strncmp(tracks[i]->codec_id, "A_AAC", 5) && tracks[i]->codecDelayNs > 0)
+            trackList[i + 1].m_srcParams["srccodecdelay"] = std::to_string(tracks[i]->codecDelayNs);
         // DVD or DVB subtitles in a file without video: the frame rate their display sets carry is a guess, which
         // fps= replaces rather than converts from.
         if (const auto* bitmapSub = dynamic_cast<ParsedBitmapSubTrackData*>(tracks[i]->parsed_priv_data);

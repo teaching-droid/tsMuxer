@@ -2186,6 +2186,10 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         };
         const int64_t editNs = paramNs("srccodecdelay");
         const int64_t leadNs = paramNs("srcvideolead");
+        // the start-up samples of AAC from a Matroska file (its CodecDelay) rather than from an MP4 edit list
+        const std::string firstExt =
+            fileList.empty() ? std::string() : strToLowerCase(extractFileExt(unquoteStr(trimStr(fileList[0]))));
+        const bool codecDelayFromMkv = firstExt == "mkv" || firstExt == "mka" || firstExt == "mk3d" || firstExt == "webm";
         int64_t backNs = editNs - leadNs;
         if (m_matroskaOutput && codec == "A_AAC")
             backNs = -leadNs;  // CodecDelay is the whole edit list start
@@ -2211,7 +2215,9 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                                 << " ms.");
             else
                 LTRACE(LT_INFO, 2,
-                       "Track " << pid << " of " << unquoteStr(fileList[0]) << ": its edit list starts the sound "
+                       "Track " << pid << " of " << unquoteStr(fileList[0])
+                                << (codecDelayFromMkv ? ": its CodecDelay starts the sound "
+                                                      : ": its edit list starts the sound ")
                                 << doubleToStr(static_cast<double>(editNs) / 1e6, 3)
                                 << " ms into the track, so its times are moved back by that much.");
         }
