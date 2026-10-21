@@ -4747,6 +4747,7 @@ int MatroskaDemuxer::matroska_add_stream()
 
     /* Allocate a generic track. As soon as we know its type we'll realloc. */
     auto* track = reinterpret_cast<MatroskaTrack*>(new char[MAX_TRACK_SIZE]{});
+    bool listed = false;  // in tracks[], which frees it
     track->encodingAlgo = -1;
     strcpy(track->language, "eng");
     // FlagDefault's default VALUE in Matroska is 1, so a track that does not carry the element is
@@ -4824,7 +4825,12 @@ int MatroskaDemuxer::matroska_add_stream()
                 LTRACE(LT_INFO, 0, "Unknown or unsupported track type " << (uint64_t)track->type);
                 track->type = static_cast<MatroskaTrackType>(0);
             }
-            tracks[num_tracks++] = track;
+            // Once: a damaged entry with a second TrackType listed the track again, and it was freed twice
+            if (!listed)
+            {
+                tracks[num_tracks++] = track;
+                listed = true;
+            }
             break;
         }
 
@@ -5295,6 +5301,8 @@ int MatroskaDemuxer::matroska_add_stream()
             memcpy(track->language, fromTag.c_str(), 4);
     }
 
+    if (!listed)
+        freeTrack(track);  // an entry without a TrackType: no track, and nothing that would free it
     return res;
 }
 
