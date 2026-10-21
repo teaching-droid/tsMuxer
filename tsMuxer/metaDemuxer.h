@@ -294,6 +294,8 @@ class METADemuxer final : public AbstractDemuxer
     std::vector<FileListIterator*> m_iterators;
     int m_lastReadRez;
     ContainerToReaderWrapper m_containerReader;
+    // Subtitle tracks with a negative timeshift, read by a demuxer of their own (see addStream)
+    ContainerToReaderWrapper m_shiftedSubReader;
     int m_lastProgressY;
     std::chrono::steady_clock::time_point m_lastReportTime;
     std::set<std::string> m_timelinesReported;  // the Matroska files whose play timeline was said in the log

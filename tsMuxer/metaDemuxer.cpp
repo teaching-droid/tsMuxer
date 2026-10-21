@@ -530,7 +530,7 @@ static void checkNameMatchesContent(const std::string& fileName, const std::stri
 }
 
 METADemuxer::METADemuxer(const BufferedReaderManager& readManager)
-    : m_containerReader(*this, readManager), m_readManager(readManager)
+    : m_containerReader(*this, readManager), m_shiftedSubReader(*this, readManager), m_readManager(readManager)
 {
     m_flushDataMode = false;
     m_HevcFound = false;
@@ -1692,6 +1692,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                                                               "fonts attached to the file and those of the system.");
                     codec = "S_HDMV/PGS";
                     m_containerReader.m_assDrawing[{fileList[0], pid}] = drawing;
+                    m_shiftedSubReader.m_assDrawing[{fileList[0], pid}] = drawing;
                 }
             }
         }
@@ -1740,6 +1741,23 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
 
     checkNameMatchesContent(unquoteStr(trimStr(fileList[0])), strToLowerCase(extractFileExt(tmpname)));
 
+    // ** A SUBTITLE TRACK WITH A NEGATIVE TIMESHIFT IS READ BY A DEMUXER OF ITS OWN. ** Its packets are due that much
+    // before their place in the file, so the file was read ahead for them, holding the video and the sound read on the
+    // way in memory, which stops at a quarter of the buffer limit: at 135 Mbit/s that is about 4 s, and with
+    // timeshift=-10s the first subtitles came about 5 s after they were due. A demuxer of its own reads the same file
+    // for the subtitle track alone and holds nothing else. Only for a single Matroska file or transport stream that
+    // another line already reads (whose demuxer gives the title, chapters, attachments and tags of the file).
+    int64_t lineShift = 0;
+    if (const auto ts = addParams.find("timeshift"); ts != addParams.end())
+        parseTimeToTicks(ts->second, "ms", &lineShift);
+    const bool ownReader =
+        pid > 0 && !SubTrackFilter::isSubTrack(pid) && lineShift < 0 && !codec.empty() && codec[0] == 'S' &&
+        fileList.size() == 1 && listIterator == nullptr && mplsInfoList.empty() &&
+        m_containerReader.m_demuxers.find(fileList[0]) != m_containerReader.m_demuxers.end() &&
+        (strEndWith(tmpname, ".mkv") || strEndWith(tmpname, ".mks") || strEndWith(tmpname, ".webm") ||
+         strEndWith(tmpname, ".ts") || strEndWith(tmpname, ".m2ts") || strEndWith(tmpname, ".mts") ||
+         strEndWith(tmpname, ".m2t"));
+
     if (strEndWith(tmpname, ".h264") || strEndWith(tmpname, ".264") || strEndWith(tmpname, ".mvc"))
     {
         if (pid)
@@ -1761,7 +1779,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
              strEndWith(tmpname, ".m2t") || strEndWith(tmpname, ".ssif"))
     {
         if (pid)
-            dataReader = &m_containerReader;
+            dataReader = ownReader ? &m_shiftedSubReader : &m_containerReader;
         else
             THROW(ERR_INVALID_CODEC_FORMAT, "For streams inside TS/M2TS container need track parameter.")
         if (listIterator)
@@ -1789,7 +1807,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
              strEndWith(tmpname, ".mk3d") || strEndWith(tmpname, ".webm"))
     {
         if (pid)
-            dataReader = &m_containerReader;
+            dataReader = ownReader ? &m_shiftedSubReader : &m_containerReader;
         else
             THROW(ERR_INVALID_CODEC_FORMAT,
                   (addParams.count("track") ? std::string("track=0 is not a track: the tracks of a Matroska file are "
@@ -1845,7 +1863,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     StreamInfo& streamInfo = *m_codecInfo.rbegin();
     // The track's own UID in its source, for the tags that source has about it. Its header has been read by now, and
     // asking reads nothing else. A sub-track is half of a track the output writes as one, or two of: it gets none.
-    if (dataReader == &m_containerReader && pid > 0 && !SubTrackFilter::isSubTrack(pid))
+    if ((dataReader == &m_containerReader || dataReader == &m_shiftedSubReader) && pid > 0 &&
+        !SubTrackFilter::isSubTrack(pid))
         if (const auto it = m_containerReader.m_demuxers.find(fileList[0]);
             it != m_containerReader.m_demuxers.end() && it->second.m_demuxer)
             streamInfo.m_srcTrackUid = it->second.m_demuxer->getTrackUid(pid);
