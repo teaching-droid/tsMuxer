@@ -331,7 +331,14 @@ int MPEG2StreamReader::decodePicture(uint8_t* buff)
     if (rez == NOT_ENOUGH_BUFFER)
         return rez;
 
-    if (m_frame.pict_type == PictureCodingType::I_FRAME)
+    // The second field of a picture coded as two fields has the temporal reference of the first and is no picture of
+    // its own. When both fields of a picture are I pictures, the second one started a new count, as an I picture
+    // does, and was counted as one more picture: a frame longer at each such picture.
+    const bool field = m_frame.picture_structure == 1 || m_frame.picture_structure == 2;
+    const bool secondField = field && m_firstFieldPending && m_frame.ref == m_lastRef;
+    m_firstFieldPending = field && !secondField;
+
+    if (m_frame.pict_type == PictureCodingType::I_FRAME && !secondField)
     {
         m_framesAtGop = -1;
         m_lastRef = -1;
@@ -459,18 +466,22 @@ int MPEG2StreamReader::timeOfFollowingB(uint8_t* buff, int64_t& shownFor)
             continue;
         const int ref = nal[4] << 2 | nal[5] >> 6;
         const auto type = static_cast<PictureCodingType>((nal[5] >> 3) & 7);
-        // the second field of a picture coded as two fields, counted as decodePicture counts it
-        if (type != PictureCodingType::I_FRAME && ref == lastRef)
-            continue;
-        if (type != PictureCodingType::B_FRAME)
-            return 0;
-        lastRef = ref;
         // The picture coding extension follows the picture header; MPEG-1 has none
         uint8_t* ext = MPEGHeader::findNextMarker(nal + 4, m_bufEnd);
         if (m_bufEnd - ext < 8)
             return m_eof ? 0 : NOT_ENOUGH_BUFFER;
+        const bool codingExt =
+            ext[3] == EXT_START_SHORT_CODE && static_cast<unsigned>(ext[4] >> 4) == PICTURE_CODING_EXT;
+        const bool frame = !codingExt || (ext[6] & 3) == 3;
+        // the second field of a picture coded as two fields, counted as decodePicture counts it, also when both
+        // fields are I pictures: such an I field ended the B pictures early
+        if (ref == lastRef && (type != PictureCodingType::I_FRAME || !frame))
+            continue;
+        if (type != PictureCodingType::B_FRAME)
+            return 0;
+        lastRef = ref;
         bool repeatFirstField = false, topFieldFirst = false;
-        if (ext[3] == EXT_START_SHORT_CODE && static_cast<unsigned>(ext[4] >> 4) == PICTURE_CODING_EXT)
+        if (codingExt)
         {
             topFieldFirst = (ext[7] & 0x80) != 0;
             repeatFirstField = (ext[7] & 0x02) != 0;
