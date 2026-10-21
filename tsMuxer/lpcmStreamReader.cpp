@@ -728,10 +728,11 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
     }
     if (!walked)
     {
+        const uint8_t* searchFrom = curPos;  // curPos is null when nothing is found
         curPos = findSubstr("data", curPos, FFMIN(curPos + MAX_HEADER_SIZE, end));
         if (curPos == nullptr)
         {
-            return end < curPos + MAX_HEADER_SIZE ? NOT_ENOUGH_BUFFER : 0;
+            return end < searchFrom + MAX_HEADER_SIZE ? NOT_ENOUGH_BUFFER : 0;
             // 'riff' header was wrong detected, it is just data
         }
     }
