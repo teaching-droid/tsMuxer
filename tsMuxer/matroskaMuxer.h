@@ -203,6 +203,7 @@ class MatroskaMuxer final : public AbstractMuxer
         int channels;
         int bitDepth;
         uint64_t audioFrameNs = 0;  // DefaultDuration for audio of a fixed frame length, 0 for the others
+        int aacSplit = 1;  // AAC whose ADTS frames carry this many raw blocks, each written as a block of its own
 
         // A Blu-ray TrueHD stream is two things braided onto one PID: the lossless MLP frames and a
         // 448 kbps AC-3 core beside them, so a player that cannot decode the lossless stream still
@@ -564,6 +565,7 @@ class MatroskaMuxer final : public AbstractMuxer
     // Emit one completed frame. Shared by the ordinary path and by the dual layer Dolby Vision
     // path, which writes its frames later than it finishes them.
     void writeBlock(MkvTrackInfo& track, const uint8_t* frameData, int frameSize, int64_t pts, uint8_t pendingFlags);
+    bool writeAacRawBlocks(MkvTrackInfo& track, const uint8_t* frame, int frameSize, int rdb);
     // Text subtitles: one BlockGroup with its BlockDuration per subtitle, held until the other tracks
     // reach its time so that every cluster is written in time order
     void writeTextBlock(MkvTrackInfo& track, const uint8_t* data, int size, int64_t pts, int64_t duration,

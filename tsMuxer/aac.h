@@ -60,6 +60,7 @@ class AACCodec
     uint8_t m_channels_index;
     uint8_t m_profile;
     uint8_t m_rdb;  // ch, sr;
+    bool m_crc = false;  // the ADTS header is followed by its CRC (protection_absent 0)
     // channel configuration 0 only
     AacProgramConfig m_pce;
 

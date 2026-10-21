@@ -239,6 +239,7 @@ bool AACCodec::decodeFrame(uint8_t* buffer, const uint8_t* end)
         const auto frameSize = bits.getBits<uint16_t>(13); /* aac_frame_length */
         bits.skipBits(11);                                 /* adts_buffer_fullness */
         m_rdb = bits.getBits<uint8_t>(2);                  /* number_of_raw_data_blocks_in_frame */
+        m_crc = !protectionAbsent;
 
         // Channel configuration 0: the layout is in a program config element at the start of the frame, as for 6.0,
         // 6.1 or 7.1 with front wide speakers; a stream may give it in its first frame only. Such a stream was not

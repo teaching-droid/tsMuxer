@@ -2064,7 +2064,15 @@ void MatroskaMuxer::refreshTrackProperties()
                 (track.codecID == CODEC_A_AAC || track.codecID == CODEC_A_MPEG_AUDIO || track.codecID == CODEC_A_ALAC ||
                  (track.codecID == CODEC_A_AC3 && kind == "AC3") || (track.codecID == CODEC_A_DTS && kind == "DTS")))
             {
-                const double frame = simpleReader->frameDurationInternal();
+                double frame = simpleReader->frameDurationInternal();
+                // AAC whose ADTS frames carry more than one raw block, each 1024 samples: a Matroska block holds one
+                // (writeAacRawBlocks), where the frame's CRC says where each begins
+                if (const auto aac = dynamic_cast<AACStreamReader*>(track.codecReader);
+                    aac && track.codecID == CODEC_A_AAC && aac->m_rdb > 0 && aac->m_crc)
+                {
+                    track.aacSplit = aac->m_rdb + 1;
+                    frame /= track.aacSplit;
+                }
                 if (frame > 0)
                     track.audioFrameNs = static_cast<uint64_t>(llround(frame * 1e9 / INTERNAL_PTS_FREQ));
             }
@@ -3417,6 +3425,13 @@ void MatroskaMuxer::flushPendingFrame(MkvTrackInfo& track)
         // doubled header decodes to nothing. 7 bytes, or 9 when a CRC follows the header.
         if (frameSize >= 7 && frameData[0] == 0xFF && (frameData[1] & 0xF6) == 0xF0)
         {
+            // A frame of more than one raw block went in as one block, with the positions of the later blocks
+            // after the header and the CRC after each block: a Matroska block holds one raw block. With a CRC the
+            // header says where each begins, and each is written as a block of its own, 1024 samples apart.
+            // Without one only decoding the blocks finds their ends, and the frame goes in whole as before.
+            const int rdb = frameData[6] & 0x03;
+            if (rdb > 0 && !(frameData[1] & 0x01) && writeAacRawBlocks(track, frameData, frameSize, rdb))
+                return;
             const int headerLen = (frameData[1] & 0x01) ? 7 : 9;
             if (frameSize > headerLen)
             {
@@ -3556,6 +3571,45 @@ void MatroskaMuxer::writeTextBlock(MkvTrackInfo& track, const uint8_t* data, int
 // Write one completed frame as a SimpleBlock. Split out of flushPendingFrame so that a dual layer
 // Dolby Vision base track, which has to hold its frames back until the matching enhancement layer
 // access unit has arrived, can emit them through exactly the same path later.
+// The raw blocks of an ADTS frame with a CRC, each as a block of its own. raw_data_block_position gives where each
+// block after the first begins, from the start of the first; each block is followed by its CRC. A raw block ends with
+// the END element (three bits 111) and the zero bits that fill its last byte: positions that do not give such ends are
+// not used, and false is returned (the frame then goes in whole).
+bool MatroskaMuxer::writeAacRawBlocks(MkvTrackInfo& track, const uint8_t* frame, const int frameSize, const int rdb)
+{
+    const int dataStart = 7 + 2 * rdb + 2;  // the header, the positions of blocks 2.., its CRC
+    if (frameSize <= dataStart)
+        return false;
+    const uint8_t* data = frame + dataStart;
+    const int dataLen = frameSize - dataStart;
+    std::vector<int> starts{0};
+    for (int i = 0; i < rdb; ++i) starts.push_back(frame[7 + 2 * i] << 8 | frame[8 + 2 * i]);
+    starts.push_back(dataLen);  // the end of the frame, after the CRC of the last block
+    for (size_t i = 1; i < starts.size(); ++i)
+    {
+        const int end = starts[i] - 2;  // the block's own end, before its CRC
+        if (end - starts[i - 1] < 2 || end > dataLen)
+            return false;
+        int last = data[end - 2] << 8 | data[end - 1];
+        int zeros = 0;
+        for (; zeros < 8 && last != 0 && (last & 1) == 0; ++zeros) last >>= 1;
+        if (zeros >= 8 || (last & 7) != 7)
+            return false;
+    }
+    static constexpr int RATES[16] = {96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050,
+                                      16000, 12000, 11025, 8000,  7350,  0,     0,     0};
+    const int rate = RATES[(frame[2] >> 2) & 0x0F];
+    if (rate <= 0)
+        return false;
+    const int64_t step = 1024 * INTERNAL_PTS_FREQ / rate;
+    for (int i = 0; i <= rdb; ++i)
+        writeBlock(track, data + starts[i], starts[i + 1] - starts[i] - 2, track.pendingPts + i * step,
+                   track.pendingFlags);
+    track.pendingFrameData.clear();
+    track.hasPendingFrame = false;
+    return true;
+}
+
 void MatroskaMuxer::writeBlock(MkvTrackInfo& track, const uint8_t* frameData, int frameSize, int64_t pts,
                                uint8_t pendingFlags)
 {
