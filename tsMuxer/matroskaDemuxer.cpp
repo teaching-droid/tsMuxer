@@ -712,16 +712,14 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
             : duration != AV_NOPTS_VALUE && duration > 0 && laces > 0 && (!delayCodec || laces > 1)
                 ? duration * static_cast<int64_t>(time_scale) / laces
                 : 0;
-        // A codec delay: the samples of a block begin CodecDelay before its time, and the first ones of a file are
-        // not sound, the encoder's start-up (for Opus the pre-skip of its OpusHead, else the CodecDelay itself). The
-        // BlockDuration of the last block is left aside, as it may or may not have the DiscardPadding taken off.
+        // A codec delay: the samples of a block begin CodecDelay before its time. The BlockDuration of the last block
+        // is left aside, as it may or may not have the DiscardPadding taken off. AAC is placed by its frames, as the
+        // decoder plays them, the encoder's start-up in the first and the padding in the last included; the first
+        // samples of Opus are not sound (the pre-skip of its OpusHead), which its reader leaves out itself.
         int64_t leadNs = 0;
         const bool opus = delayCodec && strcmp(tracks[track]->codec_id, "A_OPUS") == 0;
-        if (delayCodec)
-            leadNs =
-                opus && tracks[track]->codec_priv_size >= 12 && tracks[track]->codec_priv
-                    ? (tracks[track]->codec_priv[10] | tracks[track]->codec_priv[11] << 8) * INT64_C(1000000000) / 48000
-                    : tracks[track]->codecDelayNs;
+        if (opus && tracks[track]->codec_priv_size >= 12 && tracks[track]->codec_priv)
+            leadNs = (tracks[track]->codec_priv[10] | tracks[track]->codec_priv[11] << 8) * INT64_C(1000000000) / 48000;
         const int64_t joinNs = blockNs + m_joinShiftNs - (delayCodec ? tracks[track]->codecDelayNs : 0);
 
         for (n = 0; n < laces; n++)
@@ -741,7 +739,7 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
                     m_firstTimecode[tracks[track]->num] = timecode;
             }
             else if (joinSound && !keepJoinSound(track + 1, joinNs + n * laceLenNs, laceLenNs, leadNs,
-                                                 delayCodec && n == laces - 1 ? discardNs : 0, opus,
+                                                 opus && n == laces - 1 ? discardNs : 0, opus,
                                                  delayCodec && tracks[track]->default_duration > 0))
             {
                 data += lace_size[n];
@@ -1471,11 +1469,15 @@ bool MatroskaDemuxer::isJoinDelayCodec(const MatroskaTrack* track)
 // track's times have a gap there (takeTimeGaps), and where it ends later, the frames of the part that it overlaps are
 // left out, as a reader that counts frames cannot go back.
 //
-// A codec with a codec delay (AAC, Opus) begins each part with samples that are not sound (leadNs, of the part's first
-// frame) and ends it with padding that only fills its last frame (padNs, the DiscardPadding of each frame). The start
-// and end of the sound are compared, not of the frames: these samples are played at a joint as they always were, so a
-// part whose sound follows on is muxed as before. Where a gap is put in, it takes them up, unless the reader leaves
-// them out itself (readerTrims: the Opus reader drops whole packets of them at each joint).
+// AAC is compared by its frames, as the decoder plays them: each part begins with the encoder's start-up samples and
+// ends with the padding of its last frame, and both are played at a joint. Compared by its sound, as Opus is, a part
+// whose sound follows on kept every frame, and the sound of each later part came that much later against its picture,
+// 32 ms more at every joint for AAC of 48 kHz.
+//
+// Opus begins each part with samples that are not sound (leadNs, of the part's first frame) and ends it with padding
+// that only fills its last frame (padNs, the DiscardPadding of each frame). The start and end of the sound are
+// compared, not of the frames, as its reader leaves the start-up samples out itself (readerTrims: it drops whole
+// packets of them at each joint). Where a gap is put in, it takes them up.
 bool MatroskaDemuxer::keepJoinSound(const int track, const int64_t ns, const int64_t lengthNs, const int64_t leadNs,
                                     const int64_t padNs, const bool readerTrims, const bool counted)
 {
