@@ -905,6 +905,10 @@ int H264StreamReader::getIdrPrevFrames(uint8_t* buff, const uint8_t* bufEnd)
 {
     int prevPicCnt = 0;
     int deserializeRez;
+    // An IDR coded as two fields: its second field is no IDR, has the IDR's frame_num, 0, and follows it. Its count
+    // is the IDR's, not one shown before it, and it ended the count at once: the pictures after the IDR that are shown
+    // before it got the times of the pictures before the IDR, and the IDR and every picture after it came 2 frames early.
+    bool firstPicture = true;
     for (uint8_t* nal = NALUnit::findNextNAL(buff + 4, m_bufEnd); nal < m_bufEnd;
          nal = NALUnit::findNextNAL(nal, m_bufEnd))
     {
@@ -930,6 +934,12 @@ int H264StreamReader::getIdrPrevFrames(uint8_t* buff, const uint8_t* bufEnd)
                 return 0;
             if (slice.first_mb_in_slice != 0)
                 break;
+            if (firstPicture)
+            {
+                firstPicture = false;
+                if (slice.m_field_pic_flag && slice.frame_num == 0)
+                    break;  // the IDR's second field
+            }
             MaxPicOrderCntLsbHalf = 1 << (slice.getSPS()->log2_max_pic_order_cnt_lsb - 1);
             if (slice.pic_order_cnt_lsb > MaxPicOrderCntLsbHalf)
             {
