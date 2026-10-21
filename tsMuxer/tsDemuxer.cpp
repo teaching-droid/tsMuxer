@@ -33,6 +33,7 @@ TSDemuxer::TSDemuxer(const BufferedReaderManager& readManager, const char* strea
       m_notificated(false),
       m_tmpBuffer{}
 {
+    memset(m_lastCounter, 0xFF, sizeof(m_lastCounter));
     m_firstPCRTime = -1;
     m_bufferedReader = m_readManager.getReader(streamName);
     m_readerID = m_bufferedReader->createReader(TS_FRAME_SIZE);
@@ -760,6 +761,20 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         }
 
         uint8_t* frameData = m_curPos + tsPacket->getHeaderSize();
+        // ** A PACKET SENT TWICE IS READ ONCE. ** A stream may send a packet again right after it, with the same
+        // continuity counter and the same payload (ISO/IEC 13818-1, 2.4.3.3), which a decoder discards. Both were read:
+        // the payload of the PES came twice, and an AC-3 track whose every 30th packet was sent twice was no longer
+        // recognised at all.
+        if (tsPacket->dataExists && frameData < m_curPos + TS_FRAME_SIZE)
+        {
+            uint64_t hash = 14695981039346656037ULL;
+            for (const uint8_t* b = frameData; b < m_curPos + TS_FRAME_SIZE; ++b) hash = (hash ^ *b) * 1099511628211ULL;
+            const bool duplicate = m_lastCounter[pid] == tsPacket->counter && m_lastPayloadHash[pid] == hash;
+            m_lastCounter[pid] = static_cast<uint8_t>(tsPacket->counter);
+            m_lastPayloadHash[pid] = hash;
+            if (duplicate)
+                continue;
+        }
         if (pid == m_pmtVersionPid && tsPacket->payloadStart)
             checkPmtVersion(frameData, m_curPos + TS_FRAME_SIZE);
         const bool pesStartCode = frameData[0] == 0 && frameData[1] == 0 && frameData[2] == 1 && tsPacket->payloadStart;
@@ -1189,6 +1204,7 @@ void TSDemuxer::openFile(const std::string& streamName)
     m_firstPtsTime.clear();
     memset(m_leadPes, 0, sizeof(m_leadPes));
     memset(m_leadDrop, 0, sizeof(m_leadDrop));
+    memset(m_lastCounter, 0xFF, sizeof(m_lastCounter));
     m_firstDtsTime.clear();
     m_clipStartOfPid.clear();
     m_firstPCRTime = -1;

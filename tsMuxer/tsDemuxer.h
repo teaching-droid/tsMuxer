@@ -182,6 +182,10 @@ class TSDemuxer final : public AbstractDemuxer
     uint8_t m_leadPes[8192]{};   // 0: not decided; 1 to LEAD_PES_MAX: PES left out so far; LEAD_PES_DONE: decided
     uint8_t m_leadDrop[8192]{};  // the PES being read of the PID is left out, and the packets that carry the rest of it
     bool skipsLeadingPes(int pid, StreamType type, const uint8_t* payload, const uint8_t* end);
+    // A packet sent twice (ISO/IEC 13818-1, 2.4.3.3): the continuity counter and a hash of the payload of the last
+    // packet with payload of each PID, the counter 0xFF before the first
+    uint8_t m_lastCounter[8192];
+    uint64_t m_lastPayloadHash[8192]{};
 
     int64_t m_firstPCRTime;
     bool m_m2tsHdrDiscarded;
