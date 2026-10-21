@@ -84,7 +84,21 @@ class H264StreamReader final : public MPEGStreamReader
 
    private:
     [[nodiscard]] bool replaceToOwnSPS() const;
-    int deserializeSliceHeader(SliceUnit& slice, const uint8_t* buff, const uint8_t* sliceEnd);
+    // pic_order_cnt_type 1 (H.264 8.2.1.2): a picture's order count follows from its frame_num, with the offset of
+    // frame_num at the picture before (each wrap of frame_num adds one MaxFrameNum), and the cycle of offsets of the
+    // SPS. It is given to the rest of the reader as a count of type 0 of 16 bits (fillPoc1), so that each reading of
+    // the counts, from a picture on or ahead of it, follows such a stream as it follows one of type 0.
+    struct Poc1State
+    {
+        int prevFrameNum = 0;
+        int64_t prevFrameNumOffset = 0;
+        int lastOrder = 0;  // the count of the picture read last, for its other slices
+    };
+    Poc1State m_poc1;  // at the picture the reader is at
+    static void fillPoc1(SliceUnit& slice, Poc1State& state);
+    // poc1: the state the slices read follow on from; without one, each slice is read as if after an IDR
+    int deserializeSliceHeader(SliceUnit& slice, const uint8_t* buff, const uint8_t* sliceEnd,
+                               Poc1State* poc1 = nullptr);
     void checkPyramid(int frameNum, int* fullPicOrder, bool nextFrameFound);
 
     bool m_nextFrameFound;

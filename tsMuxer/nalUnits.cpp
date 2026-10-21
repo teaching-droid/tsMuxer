@@ -558,15 +558,19 @@ int SPSUnit::deserialize()
         }
         else if (pic_order_cnt_type == 1)
         {
+            // Kept, as the order counts follow from them. The reader gives them on as counts of type 0 of 16 bits
+            // (H264StreamReader::fillPoc1).
+            log2_max_pic_order_cnt_lsb = 16;
             delta_pic_order_always_zero_flag = bitReader.getBit();
             offset_for_non_ref_pic = extractSEGolombCode();
-            extractSEGolombCode();  // offset_for_top_to_bottom_field
+            offset_for_top_to_bottom_field = extractSEGolombCode();
             const unsigned num_ref_frames_in_pic_order_cnt_cycle = extractUEGolombCode();
             if (num_ref_frames_in_pic_order_cnt_cycle >= 256)
                 return 1;
 
+            offset_for_ref_frame.clear();
             for (size_t i = 0; i < num_ref_frames_in_pic_order_cnt_cycle; i++)
-                extractSEGolombCode();  // offset_for_ref_frame[i]
+                offset_for_ref_frame.push_back(extractSEGolombCode());
         }
 
         num_ref_frames = extractUEGolombCode();
@@ -1240,6 +1244,7 @@ void SliceUnit::assumeDamagedFirstSlice(const NALType type, const SPSUnit* lastS
     m_field_pic_flag = 0;
     bottom_field_flag = 0;
     pic_order_cnt_lsb = 0;
+    delta_pic_order_cnt[0] = delta_pic_order_cnt[1] = 0;
     memory_management_control_operation = 0;
     sps = lastSps;
     pps = lastPps;
@@ -1372,6 +1377,7 @@ int SliceUnit::deserializeSliceHeader(const std::map<uint32_t, SPSUnit*>& spsMap
         bitReader.skipBits(2);  // colour_plane_id
 
     frame_num = bitReader.getBits<uint16_t>(sps->log2_max_frame_num);
+    delta_pic_order_cnt[0] = delta_pic_order_cnt[1] = 0;
     bottom_field_flag = 0;
     m_field_pic_flag = 0;
     if (sps->frame_mbs_only_flag == 0)
@@ -1390,6 +1396,12 @@ int SliceUnit::deserializeSliceHeader(const std::map<uint32_t, SPSUnit*>& spsMap
         pic_order_cnt_lsb = bitReader.getBits<uint16_t>(sps->log2_max_pic_order_cnt_lsb);
         if (pps->pic_order_present_flag && !m_field_pic_flag)
             extractSEGolombCode();  // delta_pic_order_cnt_bottom
+    }
+    else if (sps->pic_order_cnt_type == 1 && !sps->delta_pic_order_always_zero_flag)
+    {
+        delta_pic_order_cnt[0] = extractSEGolombCode();
+        if (pps->pic_order_present_flag && !m_field_pic_flag)
+            delta_pic_order_cnt[1] = extractSEGolombCode();
     }
     return 0;
 }

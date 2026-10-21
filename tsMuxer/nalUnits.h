@@ -225,6 +225,10 @@ class SPSUnit final : public NALUnit
     unsigned log2_max_pic_order_cnt_lsb;
     int delta_pic_order_always_zero_flag;
     int offset_for_non_ref_pic;
+    // pic_order_cnt_type 1: the offset of a bottom field from its top field, and the cycle of offsets of the reference
+    // frames (H264StreamReader::fillPoc1)
+    int offset_for_top_to_bottom_field = 0;
+    std::vector<int> offset_for_ref_frame;
     unsigned num_ref_frames;
     unsigned pic_width_in_mbs;
     unsigned pic_height_in_map_units;
@@ -383,6 +387,7 @@ class SliceUnit final : public NALUnit
     uint16_t frame_num;
     int bottom_field_flag;
     uint16_t pic_order_cnt_lsb;
+    int delta_pic_order_cnt[2] = {0, 0};  // pic_order_cnt_type 1
     int anchor_pic_flag;
 
     SliceUnit();

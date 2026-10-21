@@ -586,6 +586,7 @@ void H264StreamReader::pulldownFieldsAhead(const SliceUnit& slice, uint8_t* buff
     const int maxLsb = 1 << slice.getSPS()->log2_max_pic_order_cnt_lsb;
     int prevLsb = static_cast<int>(slice.pic_order_cnt_lsb);
     int order = 0;  // the order count from this picture's, in steps of the picture before
+    Poc1State poc1 = m_poc1;  // the counts of type 1 go on from this picture's
     int picStruct = -1;
     for (uint8_t* nal = NALUnit::findNextNAL(buff + 4, m_bufEnd); nal < m_bufEnd && m_fieldsAhead.size() < 32;
          nal = NALUnit::findNextNAL(nal, m_bufEnd))
@@ -608,7 +609,7 @@ void H264StreamReader::pulldownFieldsAhead(const SliceUnit& slice, uint8_t* buff
         if (type != NALUnit::NALType::nuSliceNonIDR)
             continue;
         SliceUnit next;
-        if (deserializeSliceHeader(next, nal, m_bufEnd) != 0)
+        if (deserializeSliceHeader(next, nal, m_bufEnd, &poc1) != 0)
             return;
         if (next.first_mb_in_slice != 0)
             continue;
@@ -744,6 +745,7 @@ void H264StreamReader::additionalStreamCheck(uint8_t* buff, uint8_t* end)
     else
         m_needSeiCorrection = false;
 
+    Poc1State poc1;  // the counts of type 1 from the start of the stream
     m_forceLsbDiv = -1;
     // The coded frames of a stream that can code fields: whether odd and even counts were seen
     bool oddFrame = false, evenFrame = false;
@@ -764,7 +766,7 @@ void H264StreamReader::additionalStreamCheck(uint8_t* buff, uint8_t* end)
         case NALUnit::NALType::nuSliceB:
         case NALUnit::NALType::nuSliceC:
         case NALUnit::NALType::nuSliceExt:
-            rez = deserializeSliceHeader(slice, nal, end);
+            rez = deserializeSliceHeader(slice, nal, end, &poc1);
             if (rez == 0)
             {
                 // coded fields
@@ -809,6 +811,7 @@ void H264StreamReader::additionalStreamCheck(uint8_t* buff, uint8_t* end)
             deserializeSliceHeader(slice, nal, end) == 0 && slice.m_field_pic_flag)
             m_fieldPicturesSeen = true;
     }
+    poc1 = Poc1State();  // the counts of type 1 from the start of the stream again
     for (uint8_t* nal = NALUnit::findNextNAL(buff, end); nal != end; nal = NALUnit::findNextNAL(nal, end))
     {
         switch (static_cast<NALUnit::NALType>(*nal & 0x1f))
@@ -819,7 +822,7 @@ void H264StreamReader::additionalStreamCheck(uint8_t* buff, uint8_t* end)
         case NALUnit::NALType::nuSliceB:
         case NALUnit::NALType::nuSliceC:
         case NALUnit::NALType::nuSliceExt:
-            rez = deserializeSliceHeader(slice, nal, end);
+            rez = deserializeSliceHeader(slice, nal, end, &poc1);
             if (rez == 0 && slice.first_mb_in_slice == 0 && slice.getSPS()->pic_order_cnt_type != 2)
             {
                 int picOrder = calcPicOrder(slice);
@@ -852,7 +855,7 @@ void H264StreamReader::additionalStreamCheck(uint8_t* buff, uint8_t* end)
 
 int H264StreamReader::calcPicOrder(const SliceUnit& slice)
 {
-    if (slice.getSPS()->pic_order_cnt_type != 0)
+    if (slice.getSPS()->pic_order_cnt_type == 2)
         THROW(ERR_H264_UNSUPPORTED_PARAMETER,
               "SPS picture order " << slice.getSPS()->pic_order_cnt_type << " not supported.")
 
@@ -908,6 +911,7 @@ int H264StreamReader::getIdrPrevFrames(uint8_t* buff, const uint8_t* bufEnd)
     // An IDR coded as two fields: its second field is no IDR, has the IDR's frame_num, 0, and follows it. Its count
     // is the IDR's, not one shown before it, and it ended the count at once: the pictures after the IDR that are shown
     // before it got the times of the pictures before the IDR, and the IDR and every picture after it came 2 frames early.
+    Poc1State poc1 = m_poc1;  // the counts of type 1 go on from the IDR's
     bool firstPicture = true;
     for (uint8_t* nal = NALUnit::findNextNAL(buff + 4, m_bufEnd); nal < m_bufEnd;
          nal = NALUnit::findNextNAL(nal, m_bufEnd))
@@ -923,7 +927,7 @@ int H264StreamReader::getIdrPrevFrames(uint8_t* buff, const uint8_t* bufEnd)
         case NALUnit::NALType::nuSliceB:
         case NALUnit::NALType::nuSliceC:
         case NALUnit::NALType::nuSliceExt:
-            deserializeRez = deserializeSliceHeader(slice, nal, bufEnd);
+            deserializeRez = deserializeSliceHeader(slice, nal, bufEnd, &poc1);
             if (deserializeRez == UNIT_DAMAGED)
                 break;  // a damaged picture header says nothing about the pictures around it
             if (deserializeRez == NOT_ENOUGH_BUFFER && !m_eof)
@@ -965,6 +969,7 @@ int H264StreamReader::getIdrPrevFrames(uint8_t* buff, const uint8_t* bufEnd)
 int H264StreamReader::leadingPicturesOfFirst(const SliceUnit& firstSlice, uint8_t* buff)
 {
     const int maxLsb = 1 << firstSlice.getSPS()->log2_max_pic_order_cnt_lsb;
+    Poc1State poc1 = m_poc1;  // the counts of type 1 go on from this picture's
     int leading = 0;
     for (uint8_t* nal = NALUnit::findNextNAL(buff + 4, m_bufEnd); nal < m_bufEnd;
          nal = NALUnit::findNextNAL(nal, m_bufEnd))
@@ -975,7 +980,7 @@ int H264StreamReader::leadingPicturesOfFirst(const SliceUnit& firstSlice, uint8_
         if (type != NALUnit::NALType::nuSliceNonIDR && type != NALUnit::NALType::nuSliceA)
             continue;
         SliceUnit slice;
-        const int rez = deserializeSliceHeader(slice, nal, m_bufEnd);
+        const int rez = deserializeSliceHeader(slice, nal, m_bufEnd, &poc1);
         if (rez == UNIT_DAMAGED)
             continue;
         if (rez == NOT_ENOUGH_BUFFER && !m_eof)
@@ -1009,6 +1014,7 @@ int H264StreamReader::depthOfIdrPeriod(const SliceUnit& idrSlice, uint8_t* buff)
     const int maxLsb = 1 << idrSlice.getSPS()->log2_max_pic_order_cnt_lsb;
     int prevLsb = static_cast<int>(idrSlice.pic_order_cnt_lsb);
     int order = prevLsb;  // the order count, as calcPicOrder gives it from the IDR on
+    Poc1State poc1 = m_poc1;  // the counts of type 1 go on from the IDR's
     int pictures = 0;
     int depth = 0;
     for (uint8_t* nal = NALUnit::findNextNAL(buff + 4, m_bufEnd); nal < m_bufEnd;
@@ -1020,7 +1026,7 @@ int H264StreamReader::depthOfIdrPeriod(const SliceUnit& idrSlice, uint8_t* buff)
         if (type != NALUnit::NALType::nuSliceNonIDR && type != NALUnit::NALType::nuSliceA)
             continue;
         SliceUnit slice;
-        const int rez = deserializeSliceHeader(slice, nal, m_bufEnd);
+        const int rez = deserializeSliceHeader(slice, nal, m_bufEnd, &poc1);
         if (rez == NOT_ENOUGH_BUFFER && !m_eof && nal - buff < MAX_AHEAD)
             return -1;
         if (rez != 0)
@@ -1061,6 +1067,7 @@ int H264StreamReader::lsbDivOfIdrPeriod(const SliceUnit& idrSlice, uint8_t* buff
     if (idrSlice.getSPS()->frame_mbs_only_flag == 0 && idrSlice.m_field_pic_flag)
         return 1;  // coded fields (and the second field of this IDR would look like the next IDR below)
 
+    Poc1State poc1 = m_poc1;  // the counts of type 1 go on from the IDR's
     int pictures = 0;
     bool oddFrame = false, evenFrame = false;
     if (idrSlice.getSPS()->frame_mbs_only_flag == 0)
@@ -1080,7 +1087,7 @@ int H264StreamReader::lsbDivOfIdrPeriod(const SliceUnit& idrSlice, uint8_t* buff
                 continue;  // a further slice of a picture already looked at
             if (slice.isIDR())
                 return pictures > 0 ? 1 : m_forceLsbDiv;  // the next period begins: every count was even
-            rez = deserializeSliceHeader(slice, nal, m_bufEnd);
+            rez = deserializeSliceHeader(slice, nal, m_bufEnd, &poc1);
         }
         if (rez == UNIT_DAMAGED)
             continue;  // a damaged picture header says nothing about the step
@@ -1402,7 +1409,45 @@ bool H264StreamReader::findPPSForward(uint8_t* buff)
     return spsFound && ppsFound;
 }
 
-int H264StreamReader::deserializeSliceHeader(SliceUnit& slice, const uint8_t* buff, const uint8_t* sliceEnd)
+void H264StreamReader::fillPoc1(SliceUnit& slice, Poc1State& state)
+{
+    const SPSUnit* sps = slice.getSPS();
+    if (sps == nullptr || sps->pic_order_cnt_type != 1)
+        return;
+    if (slice.first_mb_in_slice != 0)
+    {
+        slice.pic_order_cnt_lsb = static_cast<uint16_t>(state.lastOrder & 0xFFFF);
+        return;
+    }
+    const int64_t maxFrameNum = int64_t{1} << sps->log2_max_frame_num;
+    const int64_t frameNumOffset = slice.isIDR()                         ? 0
+                                   : state.prevFrameNum > slice.frame_num ? state.prevFrameNumOffset + maxFrameNum
+                                                                          : state.prevFrameNumOffset;
+    const auto cycle = static_cast<int64_t>(sps->offset_for_ref_frame.size());
+    int64_t absFrameNum = cycle != 0 ? frameNumOffset + slice.frame_num : 0;
+    if (slice.nal_ref_idc == 0 && absFrameNum > 0)
+        --absFrameNum;
+    int64_t expected = 0;
+    if (absFrameNum > 0)
+    {
+        int64_t perCycle = 0;
+        for (const int offset : sps->offset_for_ref_frame) perCycle += offset;
+        expected = (absFrameNum - 1) / cycle * perCycle;
+        for (int64_t i = 0; i <= (absFrameNum - 1) % cycle; ++i) expected += sps->offset_for_ref_frame[i];
+    }
+    if (slice.nal_ref_idc == 0)
+        expected += sps->offset_for_non_ref_pic;
+    // a frame by its top field, as a count of type 0 gives it; a bottom field by its own
+    const int64_t order = expected + slice.delta_pic_order_cnt[0] +
+                          (slice.m_field_pic_flag && slice.bottom_field_flag ? sps->offset_for_top_to_bottom_field : 0);
+    state.prevFrameNum = slice.frame_num;
+    state.prevFrameNumOffset = frameNumOffset;
+    state.lastOrder = static_cast<int>(order);
+    slice.pic_order_cnt_lsb = static_cast<uint16_t>(order & 0xFFFF);
+}
+
+int H264StreamReader::deserializeSliceHeader(SliceUnit& slice, const uint8_t* buff, const uint8_t* sliceEnd,
+                                             Poc1State* poc1)
 {
     // A slice header is read up to the start code of the next unit, not up to the end of the data: a header cut short
     // read the next unit's bytes as its own fields and was taken as whole, and every picture time after it was
@@ -1429,6 +1474,11 @@ int H264StreamReader::deserializeSliceHeader(SliceUnit& slice, const uint8_t* bu
 
     if (nalRez == NOT_ENOUGH_BUFFER && unitWhole)
         return UNIT_DAMAGED;  // the whole unit was read and the header still ends early
+    if (nalRez == 0)
+    {
+        Poc1State fresh;
+        fillPoc1(slice, poc1 ? *poc1 : fresh);
+    }
     return nalRez;
 }
 
@@ -1465,12 +1515,12 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     SliceUnit slice;
     const uint8_t* sliceEnd = m_bufEnd;
 
-    int nalRez = deserializeSliceHeader(slice, buff, sliceEnd);
+    int nalRez = deserializeSliceHeader(slice, buff, sliceEnd, &m_poc1);
 
     if (nalRez == NALUnit::SPS_OR_PPS_NOT_READY && m_isFirstFrame)
     {
         if (findPPSForward(buff + 1))
-            nalRez = deserializeSliceHeader(slice, buff, sliceEnd);
+            nalRez = deserializeSliceHeader(slice, buff, sliceEnd, &m_poc1);
     }
 
     // A picture whose header is damaged (a recording that lost part of a packet) is kept as it came. Its first slice
@@ -1538,7 +1588,7 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     // A new stream begins at an IDR whose SPS is not the one of the IDR before, and there the step is
     // decided again from that IDR period's own pictures. A stream whose SPS stays the same never gets
     // past the comparison, so it is muxed exactly as before.
-    if (slice.isIDR() && slice.getSPS()->pic_order_cnt_type == 0)
+    if (slice.isIDR() && slice.getSPS()->pic_order_cnt_type != 2)
     {
         const SPSUnit* sps = slice.getSPS();
         if (m_idrSps.size() != sps->m_nalBufferLen ||
@@ -1592,7 +1642,7 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     if (m_joinPos && buff >= m_joinPos)
     {
         joinStart = !slice.isIDR() && !guessOrder && !damaged && !slice.m_field_pic_flag && !m_fieldPicturesSeen &&
-                    slice.getSPS()->pic_order_cnt_type == 0 && m_ptsGiven &&
+                    slice.getSPS()->pic_order_cnt_type != 2 && m_ptsGiven &&
                     m_periodOrders.count(nextPicOrder(slice)) > 0;
         if (!joinStart)
             m_joinPos = nullptr;
@@ -1600,7 +1650,7 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     // Frame pictures only: the two fields of a frame share one time, which a Matroska block needs, and this count
     // placed them apart (a 1080i capture cut mid stream got its first field pair in two blocks).
     if ((joinStart || (m_totalFrameNum == 0 && m_idrSliceCnt == 0)) && !guessOrder && !damaged && !slice.isIDR() &&
-        !slice.m_field_pic_flag && !m_fieldPicturesSeen && slice.getSPS()->pic_order_cnt_type == 0)
+        !slice.m_field_pic_flag && !m_fieldPicturesSeen && slice.getSPS()->pic_order_cnt_type != 2)
     {
         firstLeading = leadingPicturesOfFirst(slice, buff);
         if (firstLeading == -1)
@@ -1628,7 +1678,7 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     // depth moved the decoding time of that picture back behind the times already given. The period is read ahead from
     // its IDR, and the decoding times catch up over its first pictures (deepenAfterOutput).
     if (slice.isIDR() && !damaged && !slice.m_field_pic_flag && !m_fieldPicturesSeen &&
-        slice.getSPS()->pic_order_cnt_type == 0)
+        slice.getSPS()->pic_order_cnt_type != 2)
     {
         const int ahead = (std::min)(16, depthOfIdrPeriod(slice, buff));
         if (ahead == -1)
@@ -1655,7 +1705,7 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
         m_curDts += later;
     }
     // Pulldown: the pictures shown before this one that come later in decode order, read before anything changes
-    if (m_pulldownMaxFields > 2 && !slice.m_field_pic_flag && slice.getSPS()->pic_order_cnt_type == 0)
+    if (m_pulldownMaxFields > 2 && !slice.m_field_pic_flag && slice.getSPS()->pic_order_cnt_type != 2)
         pulldownFieldsAhead(slice, buff);
 
     // The first picture of a part cut from a clip of a playlist, when it is not an IDR picture: its order count goes on
@@ -1663,7 +1713,7 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     // picture of the part was shown frames away from its place. The count starts again from it, as from an IDR
     // picture. The pictures shown before it were left out with the cut (TSDemuxer::keptInPart).
     const bool partStart = !guessOrder && !slice.isIDR() && slice.isIFrame() && !slice.m_field_pic_flag &&
-                           slice.getSPS()->pic_order_cnt_type == 0 && isPartStart();
+                           slice.getSPS()->pic_order_cnt_type != 2 && isPartStart();
     if (partStart)
     {
         prevPicOrderCntMsb = 0;
@@ -1777,7 +1827,7 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     // number of fields. Taking the reordering in whole frames, as without pulldown, gave pictures the same times
     // and put them out of order: with frame doubling, 60 of 144 times were taken twice.
     const bool pulldownTimes =
-        m_pulldownMaxFields > 2 && !slice.m_field_pic_flag && slice.getSPS()->pic_order_cnt_type == 0;
+        m_pulldownMaxFields > 2 && !slice.m_field_pic_flag && slice.getSPS()->pic_order_cnt_type != 2;
     if (pulldownTimes)
     {
         if (slice.isIDR() || m_fieldsShown.empty())
