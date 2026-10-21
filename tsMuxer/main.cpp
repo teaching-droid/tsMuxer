@@ -2906,17 +2906,11 @@ static bool isAudioOrVideoLine(const StreamInfo& si)
 
 static void checkEmptyTracks(const MuxerManager& muxerManager)
 {
-    // ** AN OUTPUT OF NOTHING IS NOT A SUCCESS. ** A subtitle track may have nothing to show beside other tracks, but a
-    // job whose sources hold no data at all, as an empty .sup muxed alone, said "Mux successful complete" and left an
-    // output of 0 bytes.
-    bool anyData = false;
-    for (const StreamInfo& si : muxerManager.getStreamInfo()) anyData = anyData || si.m_readCnt > 0;
-    if (!muxerManager.getStreamInfo().empty() && !anyData)
-        THROW(ERR_COMMON, "The sources of the meta file hold no data at all. Nothing was written.")
-    if (muxerManager.getCutStart() > 0 || muxerManager.getCutEnd() > 0)
-        return;
+    const bool cut = muxerManager.getCutStart() > 0 || muxerManager.getCutEnd() > 0;
     for (const StreamInfo& si : muxerManager.getStreamInfo())
     {
+        if (cut)
+            break;
         if (isAudioOrVideoLine(si) && isEmptyTrack(si))
             THROW(ERR_COMMON, "The " << emptyTrackText(si) << " The output is incomplete.")
         // The same for audio of which a few frames were found by chance and the rest dropped: AC-3 named A_AAC gave
@@ -2935,6 +2929,13 @@ static void checkEmptyTracks(const MuxerManager& muxerManager)
                                      "the meta line is not the codec the file holds. List the file on its own to see "
                                      "what tsMuxeR makes of it. The output is incomplete.")
     }
+    // ** AN OUTPUT OF NOTHING IS NOT A SUCCESS. ** A subtitle track may have nothing to show beside other tracks, but a
+    // job none of whose tracks read anything, as an empty .sup muxed alone, said "Mux successful complete" and left an
+    // output of 0 bytes. After the checks above, which name the track where it is audio or video.
+    bool anyData = false;
+    for (const StreamInfo& si : muxerManager.getStreamInfo()) anyData = anyData || si.m_readCnt > 0;
+    if (!muxerManager.getStreamInfo().empty() && !anyData)
+        THROW(ERR_COMMON, "No track of the meta file read any data from its source. Nothing was written.")
 }
 
 static void reportEmptyTracks(const MuxerManager& muxerManager)
