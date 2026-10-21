@@ -191,6 +191,59 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
         THROW(ERR_COMMON, "Function TSDemuxer::getTrackList required bufferedReader!")
 }
 
+// The sound of a file cut at any byte, or written by a muxer that does not start each PES with a frame, can begin
+// inside a frame. Its first PES then begins with the rest of a frame, and the time in its header is that of the frame
+// in progress, or of the frame that starts later in the PES: which of the two depends on the muxer that wrote it. The
+// readers leave the rest of the frame out and gave that time to the first whole frame, which then came a frame early
+// (about 11 ms for DTS). Such PES are left out at the start of the file, up to the first one that begins with a frame,
+// whose time is that frame's: the first PES is never more than a few frames. Only for the kinds whose frames begin with
+// a sync word; a stream none of whose first LEAD_PES_MAX PES begins with a frame is read from where it starts, as
+// before. The ExSS sync word begins a frame of a stream without a core only, as DTS Express is: where there is a core,
+// a PES that begins with the extension of a frame carries the end of a frame whose core was before it.
+bool TSDemuxer::skipsLeadingPes(const int pid, const StreamType type, const uint8_t* payload, const uint8_t* end)
+{
+    const auto at = [&](const std::initializer_list<uint8_t> bytes)
+    {
+        if (end - payload < static_cast<int64_t>(bytes.size()))
+            return false;
+        return std::equal(bytes.begin(), bytes.end(), payload);
+    };
+    bool known = true;
+    bool frameStart = false;
+    switch (type)
+    {
+    case StreamType::AUDIO_AC3:
+    case StreamType::AUDIO_EAC3:
+    case StreamType::AUDIO_EAC3_SECONDARY:
+        frameStart = at({0x0B, 0x77});
+        break;
+    case StreamType::AUDIO_DTS:
+    case StreamType::AUDIO_DTS_HD:
+    case StreamType::AUDIO_DTS_HD_MA:
+        frameStart = at({0x7F, 0xFE, 0x80, 0x01});
+        break;
+    case StreamType::AUDIO_DTS_HD_SECONDARY:
+        frameStart = at({0x7F, 0xFE, 0x80, 0x01}) || at({0x64, 0x58, 0x20, 0x25});
+        break;
+    case StreamType::AUDIO_MPEG1:
+    case StreamType::AUDIO_MPEG2:
+        frameStart = end - payload >= 2 && payload[0] == 0xFF && (payload[1] & 0xE0) == 0xE0;
+        break;
+    case StreamType::AUDIO_AAC:
+        frameStart = end - payload >= 2 && payload[0] == 0xFF && (payload[1] & 0xF0) == 0xF0;
+        break;
+    default:
+        known = false;
+    }
+    // a PES whose payload does not reach into this packet is taken as it is
+    if (!known || frameStart || end - payload < 4 || ++m_leadPes[pid] > LEAD_PES_MAX)
+    {
+        m_leadPes[pid] = LEAD_PES_DONE;
+        return false;
+    }
+    return true;
+}
+
 bool TSDemuxer::getTrackStart(const int32_t pid, const bool fromFirstPes, int64_t& ticks) const
 {
     const auto first = m_firstPtsTime.find(pid);
@@ -689,7 +742,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         const bool pesStartCode = frameData[0] == 0 && frameData[1] == 0 && frameData[2] == 1 && tsPacket->payloadStart;
         if (part != nullptr && !pesStartCode && !m_partKeep[pid])
             continue;
-        if (!pesStartCode && m_joinDrop[pid])
+        if (!pesStartCode && (m_joinDrop[pid] || m_leadDrop[pid]))
             continue;
         if (pesStartCode)
         {
@@ -699,6 +752,13 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
                 !keptInPart(*part, pid,
                             streamInfo != m_pmt.pidList.end() ? streamInfo->second.m_streamType : StreamType::RESERVED,
                             pesPacket, TS_FRAME_SIZE - (frameData - m_curPos)))
+                continue;
+            m_leadDrop[pid] =
+                m_leadPes[pid] != LEAD_PES_DONE && streamInfo != m_pmt.pidList.end() &&
+                (pesPacket->flagsLo & 0x80) == 0x80 &&
+                skipsLeadingPes(pid, streamInfo->second.m_streamType, frameData + pesPacket->getHeaderLength(),
+                                m_curPos + TS_FRAME_SIZE);
+            if (m_leadDrop[pid])
                 continue;
             m_clipStartOfPid.try_emplace(pid, m_prevFileLen);
 
@@ -1098,6 +1158,8 @@ void TSDemuxer::openFile(const std::string& streamName)
     m_fullPtsTime.clear();
     m_fullDtsTime.clear();
     m_firstPtsTime.clear();
+    memset(m_leadPes, 0, sizeof(m_leadPes));
+    memset(m_leadDrop, 0, sizeof(m_leadDrop));
     m_firstDtsTime.clear();
     m_clipStartOfPid.clear();
     m_firstPCRTime = -1;

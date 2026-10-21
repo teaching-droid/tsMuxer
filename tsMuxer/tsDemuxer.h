@@ -173,6 +173,12 @@ class TSDemuxer final : public AbstractDemuxer
     [[nodiscard]] int64_t fileVideoStart(const std::string& fileName, int videoPid) const;
     void endJoinFile();
     bool keepJoinSound(int pid, StreamType type, int64_t pts);
+    // The sound of a file whose first PES does not begin with a frame (skipsLeadingPes)
+    static constexpr uint8_t LEAD_PES_MAX = 4;
+    static constexpr uint8_t LEAD_PES_DONE = 0xFF;
+    uint8_t m_leadPes[8192]{};   // 0: not decided; 1 to LEAD_PES_MAX: PES left out so far; LEAD_PES_DONE: decided
+    uint8_t m_leadDrop[8192]{};  // the PES being read of the PID is left out, and the packets that carry the rest of it
+    bool skipsLeadingPes(int pid, StreamType type, const uint8_t* payload, const uint8_t* end);
 
     int64_t m_firstPCRTime;
     bool m_m2tsHdrDiscarded;
