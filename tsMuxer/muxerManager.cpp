@@ -358,6 +358,13 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
             }
         }
     }
+    // The second view of 3D video (subClip=, or an MVC dependent view) goes to a muxer of its own beside the one of the
+    // first view. With only such tracks there was no muxer for the first view, and the mux crashed after the whole
+    // source had been read.
+    if (m_subMuxer && !m_mainMuxer)
+        THROW(ERR_COMMON,
+              "Every track of the meta file is the second view of 3D video (subClip= or an MVC dependent view), so "
+              "there is nothing for the first view. Add the track of the first view, or leave subClip= out.")
 
     if (m_mainMuxer)
     {
