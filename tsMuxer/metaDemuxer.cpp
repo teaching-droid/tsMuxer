@@ -1717,6 +1717,9 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     }
     if (codecReader == nullptr)
         codecReader = createCodec(codec, readerParams, fileList[0], mergePlayItems(mplsInfoList));
+    // The reader belongs to the stream once it is added (m_codecInfo). A line refused before that, as a track of a
+    // container file without track=, left it behind.
+    std::unique_ptr<AbstractStreamReader> readerGuard(codecReader);
     // ar= on H.264, HEVC, VVC and VC-1, which was read for MPEG-2 only (createCodec) and ignored for the others
     // without a word: a Matroska output takes it as the display size, which a player shows over the stream's own
     // shape. MPEG-2 has the shape in its sequence header, which is rewritten; the other codecs have it in headers
@@ -1854,7 +1857,6 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         if (codec == "A_OPUS" || codec == "A_VORBIS" || codec == "A_ALAC" || codec == "V_MPEG4/ISO/ASP" ||
             codec == "V_PRORES")
         {
-            delete codecReader;
             THROW(ERR_INVALID_CODEC_FORMAT, codec << " is read from a Matroska, WebM, MP4 or MOV file or a transport "
                                                      "stream only, and "
                                                   << unquoteStr(trimStr(fileList[0]))
@@ -1863,12 +1865,10 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         dataReader = m_readManager.getReader(fileList[0].c_str());
     }
     if (dataReader == nullptr)
-    {
-        delete codecReader;
         THROW(ERR_INVALID_CODEC_FORMAT, "This version do not support multicast or other network steams for muxing")
-    }
 
     m_codecInfo.emplace_back(dataReader, codecReader, fileList[0], codecStreamName, pid, isSubStream);
+    readerGuard.release();
     m_codecInfo.back().m_sourceFiles = fileList;
     if (listIterator)
     {
