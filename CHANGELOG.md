@@ -425,6 +425,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A track number above 8191 for a transport stream** wrote past a table in memory. It ends like any other track the file does not have.
 
+* **tsMuxeR --help** (also -h and -?) shows the help. It printed the version line only, as if --help were a file to list. The help also names --3d-single-copy and --title now.
+
 * **A chapter file with more than one edition** uses the edition a Matroska file would: the one marked as the default, also when the mark follows its chapters, without its hidden and disabled chapters. It used the first edition with them.
 
 * **A meta line that shares some, but not all, of its files with an earlier line for the same track** is refused, with the file it shares, whatever its name or place in either line, as in a join of a.ts and b.ts after a line with a.ts alone, or a.ts alone after the join. Those files were left out without a word.

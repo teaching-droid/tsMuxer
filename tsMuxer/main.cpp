@@ -1099,6 +1099,8 @@ All parameters in this group start with two dashes:
                       Remux each file of a linked set this way. Not with a join,
                       a cut, a split, --custom-chapters, --chapters-file or a
                       .webm output.
+--title               Matroska output: the title of the file. Without it a
+                      Matroska source's own title is kept.
 --split-chapters      Split the output at the chapter marks the source carries,
                       so each file begins at a chapter. Takes no value. A
                       Blu-ray playlist's marks and a Matroska's own chapter
@@ -1221,6 +1223,10 @@ All parameters in this group start with two dashes:
                               folders some discs place beside BDMV for their BD-J features.
                               If your source has such folders and you want a faithful image,
                               use this.
+                        --3d-single-copy  Store a 3D disc's video once instead of twice: the
+                              base view, the dependent view and the .ssif all point to the same
+                              sectors, as on the source disc. Without it the video is written
+                              twice and a 3D disc from a BD50 does not fit back onto one.
                         --inner-only  Keep the payload on the inner tracks of every layer and
                               pad each layer's outer rim with zeros, where discs burn worst.
                               Widens the layer-break guard symmetrically to (free space)/2 per
@@ -3163,6 +3169,13 @@ int main(int argc, char** argv)
         if (argc == 2)
         {
             string str = argv[1];
+            // --help, -h and -? show the help a call without arguments shows. They were taken as the name of a file to
+            // list, which printed the version line and nothing else.
+            if (str == "--help" || str == "-h" || str == "-?" || str == "/?")
+            {
+                showHelp();
+                return 0;
+            }
             string fileExt = extractFileExt(str);
             fileExt = strToLowerCase(fileExt);
             if (fileExt == "mpls" || fileExt == "mpl")
