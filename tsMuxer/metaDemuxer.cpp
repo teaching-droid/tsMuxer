@@ -3461,12 +3461,13 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
                 {
                     double containerFps = correctFps(demuxer->getTrackFps(itr.first));
                     // A stream that names no rate in a transport stream: the times of its pictures, as the mux takes
-                    // them. Not for a field coded stream, whose times may be those of its fields.
+                    // them. Not for a field coded stream, whose times may be those of its fields; an interlaced one
+                    // coded as frames (MBAFF) has the time of a frame for each picture.
                     const size_t res = trackRez.streamDescr.find("Resolution: ");
                     const size_t scan =
                         res == string::npos ? res : trackRez.streamDescr.find_first_not_of("0123456789:x", res + 12);
                     const bool interlaced = scan != string::npos && trackRez.streamDescr[scan] == 'i';
-                    if (containerFps <= 0.0 && !interlaced)
+                    if (containerFps <= 0.0 && (!interlaced || trackRez.framesOnly))
                         containerFps = correctFps(demuxer->getTrackPacketFps(itr.first));
                     if (containerFps > 0.0)
                     {

@@ -75,6 +75,50 @@ void H264StreamReader::applyDiscoveryData(const StreamDiscoveryData& data)
         setFPS(data.fps);
 }
 
+// Whether an interlaced stream codes its pictures as frames (MBAFF) and no fields: the field_pic_flag of the first
+// slice of each picture in the block read so far, read with the parameter set being read. A field, or no slice to
+// tell, keeps the default rate (MPEGStreamReader::fallbackFps).
+bool H264StreamReader::codesFramesOnly(void* curNalUnit)
+{
+    const SPSUnit* sps = curNalUnit         ? static_cast<const SPSUnit*>(curNalUnit)
+                         : m_spsMap.empty() ? nullptr
+                                            : m_spsMap.begin()->second;
+    if (sps == nullptr || sps->frame_mbs_only_flag || m_buffer == nullptr)
+        return false;
+    int frames = 0;
+    for (uint8_t* nal = NALUnit::findNextNAL(m_buffer, m_bufEnd); nal < m_bufEnd - 4 && frames < 16;
+         nal = NALUnit::findNextNAL(nal, m_bufEnd))
+    {
+        const auto type = static_cast<NALUnit::NALType>(*nal & 0x1f);
+        if (type != NALUnit::NALType::nuSliceIDR && type != NALUnit::NALType::nuSliceNonIDR)
+            continue;
+        uint8_t header[32];
+        const int len = NALUnit::decodeNAL(nal + 1, (std::min)(nal + 25, m_bufEnd), header, sizeof(header));
+        if (len <= 0)
+            continue;
+        try
+        {
+            BitStreamReader reader{};
+            reader.setBuffer(header, header + len);
+            if (NALUnit::extractUEGolombCode(reader) != 0)
+                continue;                          // not the first slice of its picture
+            NALUnit::extractUEGolombCode(reader);  // slice_type
+            NALUnit::extractUEGolombCode(reader);  // pic_parameter_set_id
+            if (sps->separate_colour_plane_flag)
+                reader.skipBits(2);  // colour_plane_id
+            reader.skipBits(sps->log2_max_frame_num);
+            if (reader.getBit())  // field_pic_flag
+                return false;
+            ++frames;
+        }
+        catch (BitStreamException&)
+        {
+            return false;
+        }
+    }
+    return frames > 0;
+}
+
 static int fieldsShownOf(int picStruct);
 
 CheckStreamRez H264StreamReader::checkStream(uint8_t* buffer, int len)
@@ -88,6 +132,9 @@ CheckStreamRez H264StreamReader::checkStream(uint8_t* buffer, int len)
     bool offsetsInserted = false;
     int64_t timedFrames = 0;  // frame pictures with a pic_struct, and the fields they are shown for
     int64_t fieldsShown = 0;
+    // the slices of a stream that can code fields: coded as frames, and coded as fields
+    bool interlacedFrames = false;
+    bool fields = false;
 
     for (uint8_t* nal = NALUnit::findNextNAL(buffer, end); nal < end - 4; nal = NALUnit::findNextNAL(nal, end))
     {
@@ -193,6 +240,8 @@ CheckStreamRez H264StreamReader::checkStream(uint8_t* buffer, int len)
                 int nalRez = slice.deserialize(tmpBuffer, tmpBuffer + decodedLen, m_spsMap, m_ppsMap);
                 if (nalRez != 0)
                     return rez;
+                if (slice.getSPS()->frame_mbs_only_flag == 0)
+                    (slice.m_field_pic_flag ? fields : interlacedFrames) = true;
 
                 if (m_mvcSubStream)
                     rez.codecInfo = h264DepCodecInfo;
@@ -216,6 +265,7 @@ CheckStreamRez H264StreamReader::checkStream(uint8_t* buffer, int len)
     if (pulldownInserted && timedFrames >= 8 && !m_spsMap.empty())
         rez.filmFps = m_spsMap.begin()->second->getFPS() * 2.0 * static_cast<double>(timedFrames) /
                       static_cast<double>(fieldsShown);
+    rez.framesOnly = interlacedFrames && !fields;
 
     return rez;
 }

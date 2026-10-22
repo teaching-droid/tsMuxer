@@ -63,6 +63,7 @@ class H264StreamReader final : public MPEGStreamReader
     {
         return curNalUnit ? !static_cast<SPSUnit*>(curNalUnit)->frame_mbs_only_flag : getInterlaced();
     }
+    bool codesFramesOnly(void* curNalUnit) override;
 
     int writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPacket& avPacket,
                           PriorityDataInfo* priorityData) override;

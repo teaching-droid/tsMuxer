@@ -463,7 +463,9 @@ double MPEGStreamReader::fallbackFps(void* curNalUnit)
     {
         m_packetFps = 0.0;
         // A field coded stream may carry a PES for each field, whose times give the field rate: it keeps the default.
-        if (m_packetFpsSource && !interlacedBy(curNalUnit))
+        // An interlaced stream coded as frames (MBAFF) has one time for each frame, as a progressive one: it was given
+        // 25 all the same, and an interlaced 29.97 stream played 17 % slow.
+        if (m_packetFpsSource && (!interlacedBy(curNalUnit) || codesFramesOnly(curNalUnit)))
             m_packetFps = correctFps(m_packetFpsSource());
     }
     return m_packetFps > 0.0 ? m_packetFps : 25.0;
