@@ -969,7 +969,9 @@ void CLPIParser::composeEP_map(BitStreamWriter& writer, const bool isSSExt)
         writer.putBits(4, EP_stream_type);
         std::vector<BluRayCoarseInfo> coarseInfo = buildCoarseInfo(i);
         writer.putBits(16, static_cast<int>(coarseInfo.size()));  // number_of_EP_coarse_entries[k]
-        if (!i.m_index.empty())
+        // A stream has an index for each clip up to the last one it has an entry in. With clips of a few bytes each
+        // (--split-size) the later clips have none, and the index of a clip past the list was read past its end.
+        if (m_clpiNum < i.m_index.size())
             writer.putBits(18, static_cast<int>(i.m_index[m_clpiNum].size()));  // number_of_EP_fine_entries[k]
         else
             writer.putBits(18, 0);
@@ -991,7 +993,7 @@ void CLPIParser::composeEP_map(BitStreamWriter& writer, const bool isSSExt)
 std::vector<BluRayCoarseInfo> CLPIParser::buildCoarseInfo(M2TSStreamInfo& streamInfo) const
 {
     std::vector<BluRayCoarseInfo> rez;
-    if (streamInfo.m_index.empty())
+    if (m_clpiNum >= streamInfo.m_index.size())
         return rez;
     uint32_t cnt = 0;
     int64_t lastPktCnt = 0;
@@ -1029,7 +1031,7 @@ void CLPIParser::composeEP_map_for_one_stream_PID(BitStreamWriter& writer, M2TSS
     if (writer.getBitsCount() % 16 != 0)
         writer.putBits(8, 0);  // padding_word
     *epFineStartAddr = my_htonl(writer.getBitsCount() / 8 - beforePos);
-    if (!streamInfo.m_index.empty())
+    if (m_clpiNum < streamInfo.m_index.size())
     {
         const PMTIndex& curIndex = streamInfo.m_index[m_clpiNum];
         for (const auto& [fst, snd] : curIndex)
