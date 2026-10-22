@@ -20,6 +20,7 @@ jaminmc/tsMuxer. All of them are opt-in; the default behaviour is unchanged.
 | `--original-order` | Optional, `--bdmv-to-iso` only. Write the files in their numeric (playback) order instead of largest first; for seamless-branching discs whose many segments should stay close to their playback order. |
 | `--no-layer-fit` | Optional, `--bdmv-to-iso` only. Disable the layer-fit placement (see below) and always split whichever file crosses the guard zone. |
 | `--3d-single-copy` | Optional, `--bdmv-to-iso` only. Store a 3D disc's video once instead of twice (see below). Off by default: without it the image is byte for byte what it has always been. |
+| `--keep-extra-files` | Optional, `--bdmv-to-iso` only. Copy everything at the top of the source folder into the image, not just `BDMV`, `CERTIFICATE` and `AACS`. Without it anything else there is skipped, each with a "skipping ..." line in the log: helper folders of ripping tools, cover art, and also the folders some discs keep beside `BDMV` for their BD-J features. For a faithful image of such a disc, use it. |
 
 ## New mode: `--bdmv-to-iso`
 
@@ -172,6 +173,11 @@ The GUI exposes the same features with no command line. On the "BDMV folder -> I
   fits entirely on the next layer it is placed there whole, so the break falls cleanly between
   files instead of splitting one; this is how commercially authored discs place their layer
   breaks too.
+- **Include all files from the folder (not just BDMV).** Only the disc folders (`BDMV`,
+  `CERTIFICATE`, `AACS`) go into the image unless this is ticked; anything else at the top of
+  the folder is skipped with a "skipping ..." line in the log. Some discs keep folders beside
+  `BDMV` for their BD-J features, and a faithful image of such a disc needs them: tick it then.
+  The same as `--keep-extra-files`.
 - **Layer break report.** After the build, the log shows where each guard landed: which stream
   file, the byte offset inside it, and (for a normal single-file movie) the playback time, so
   you know where to spot-check on a player. The same information is written next to the image

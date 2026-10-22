@@ -20,6 +20,7 @@ Dieser Fork ergänzt jaminmc/tsMuxer um Authoring-Funktionen für mehrschichtige
 | `--original-order` | Optional, nur mit `--bdmv-to-iso`. Schreibt die Dateien in ihrer numerischen (Wiedergabe-)Reihenfolge statt der größten zuerst; für Seamless-Branching-Discs, deren viele Segmente nahe an ihrer Wiedergabereihenfolge bleiben sollen. |
 | `--no-layer-fit` | Optional, nur mit `--bdmv-to-iso`. Schaltet die Layer-Fit-Platzierung ab (siehe unten); die Datei, die die Schutzzone überquert, wird dann immer geteilt. |
 | `--3d-single-copy` | Optional, nur mit `--bdmv-to-iso`. Speichert das Video einer 3D-Disc einmal statt zweimal (siehe unten). Standardmäßig aus: ohne die Option ist das Abbild Byte für Byte das, was es immer war. |
+| `--keep-extra-files` | Optional, nur mit `--bdmv-to-iso`. Übernimmt alles aus der obersten Ebene des Quellordners ins Abbild, nicht nur `BDMV`, `CERTIFICATE` und `AACS`. Ohne die Option wird alles andere dort übersprungen, jeweils mit einer Zeile "skipping ..." im Log: Hilfsordner von Ripping-Programmen, Coverbilder und auch die Ordner, die manche Discs für ihre BD-J-Funktionen neben `BDMV` haben. Für ein originalgetreues Abbild einer solchen Disc diese Option verwenden. |
 
 ## Neuer Modus: `--bdmv-to-iso`
 
@@ -187,6 +188,11 @@ Die grafische Oberfläche bietet dieselben Funktionen ganz ohne Kommandozeile. A
   gilt: Passt die Datei, die den Break überqueren würde, vollständig auf den nächsten Layer,
   wird sie dort im Ganzen platziert; der Break fällt dann sauber zwischen zwei Dateien, statt
   eine zu teilen. Genauso platzieren auch kommerziell erstellte Discs ihre Layer-Breaks.
+- **Include all files from the folder (not just BDMV).** Ohne dieses Häkchen kommen nur die
+  Disc-Ordner (`BDMV`, `CERTIFICATE`, `AACS`) ins Abbild; alles andere in der obersten Ebene
+  des Ordners wird mit einer Zeile "skipping ..." im Log übersprungen. Manche Discs haben
+  neben `BDMV` Ordner für ihre BD-J-Funktionen, und ein originalgetreues Abbild einer solchen
+  Disc braucht sie: dann das Häkchen setzen. Entspricht `--keep-extra-files`.
 - **Layer-Break-Bericht.** Nach dem Bau zeigt das Log, wo jede Schutzzone gelandet ist:
   welche Stream-Datei, der Byte-Offset darin und (bei einem normalen Film aus einer einzigen
   Datei) die Wiedergabezeit, damit du weißt, wo du auf einem Player stichprobenartig prüfen
