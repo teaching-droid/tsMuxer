@@ -32,6 +32,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **AAC from a Matroska file that has a CodecDelay came 21 ms late** against the picture, in a TS, on a disc and in a Matroska output, which also lost the CodecDelay. The CodecDelay is now applied as an MP4's edit list is, and a Matroska output keeps it. The padding at the end of AAC, which a Matroska file gives as DiscardPadding and an MP4 by where its edit list ends, is now kept in a Matroska output as for Opus and Vorbis: it was played, 512 samples in the files measured.
 
+* **AC-3, E-AC-3, MP2, MP3 and DTS from a Matroska file that has a CodecDelay** start with the picture. An encoder writes one for AC-3, E-AC-3, MP2 and MP3 (5 ms for AC-3, 23 ms for MP3), and a DTS-HD file remuxed to Matroska keeps its encoder delay as one (21 ms). It was used for AAC only, so the sound came that much late. Their times are now moved back by it, as by the edit list of an MP4.
+
 * **The sound of a TS, M2TS or Blu-ray playlist lost its start against the picture when the meta file had no timeshift=.** Only the window wrote the start, the listed Stream delay, into the meta. A meta written by hand muxed the sound from the same moment as the picture: sound that starts half a second after the picture came half a second early, and disc sound that starts some ms before the picture came that much late. The start is now taken from the file, as for MP4 and Matroska. A timeshift= still wins. A demux now writes such a start into the name of the sound file (DELAY), so the demuxed files muxed again keep it.
 
 * **The window put the sound of a cut TS too early** when the cut begins with B pictures that are shown before its first picture, by their length, 40 to 100 ms. The listed Stream delay is now measured from the picture shown first.
@@ -224,7 +226,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **TrueHD at a rate a disc does not have,** such as 44.1 kHz, no longer has 48 kHz in its PMT.
 
-* **A DTS-HD file with an encoder delay,** as the DTS-HD encoder writes its .dtshd files, starts with the picture. Its start-up samples were left out, but their time was kept, so the sound came 21 ms late (1024 samples at 48 kHz), and a disc made from it listed the track with that delay. The same for DTS from a Matroska file that gives the delay as CodecDelay, as a .dtshd file remuxed to Matroska does: its CodecDelay was not used, so the sound came 21 ms late. (#49, thanks to @Nandos64)
+* **A DTS-HD file with an encoder delay,** as the DTS-HD encoder writes its .dtshd files, starts with the picture. Its start-up samples were left out, but their time was kept, so the sound came 21 ms late (1024 samples at 48 kHz), and a disc made from it listed the track with that delay. (#49, thanks to @Nandos64)
 
 * **A DTS-HD file whose encoder delay is not a whole number of frames** keeps its sound. All of it was left out, and the mux still said it was successful: a DTS Express file with a delay of 1024 samples, for one, as its frames are 4096 samples long. A 96 kHz file also lost the first 21 ms of its sound, as twice its delay was left out.
 

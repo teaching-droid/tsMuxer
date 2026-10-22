@@ -5612,11 +5612,12 @@ void MatroskaDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
         // came that much late against it, 21 ms for AAC of 48 kHz, in a transport stream and a Matroska output alike,
         // which carried no CodecDelay. As for the edit list of an MP4 source (srccodecdelay, in ns): the track's times
         // are moved back by it, and a Matroska output says it as CodecDelay again (METADemuxer::addStream).
-        // The same for DTS, whose CodecDelay is that of a DTS-HD file (its encoder delay) remuxed to Matroska: its
-        // sound came 21 ms late. Its times are moved back as those of DTS from an MP4 with an edit list.
-        if (tracks[i]->codec_id &&
-            (!strncmp(tracks[i]->codec_id, "A_AAC", 5) || !strncmp(tracks[i]->codec_id, "A_DTS", 5)) &&
-            tracks[i]->codecDelayNs > 0)
+        // The same for the other codecs, whose times are moved back as those from an MP4 with an edit list: an encoder
+        // writes a CodecDelay for AC-3 and E-AC-3 (256 samples, 5 ms), MP2 (481), MP3 (1105, 23 ms), and a DTS-HD file
+        // remuxed to Matroska keeps its encoder delay as one (21 ms). Not for Opus, whose reader leaves out the
+        // pre-skip that its CodecDelay is, nor Vorbis.
+        if (tracks[i]->type == IOContextTrackType::AUDIO && tracks[i]->codec_id && tracks[i]->codecDelayNs > 0 &&
+            strcmp(tracks[i]->codec_id, "A_OPUS") != 0 && strcmp(tracks[i]->codec_id, "A_VORBIS") != 0)
             trackList[i + 1].m_srcParams["srccodecdelay"] = std::to_string(tracks[i]->codecDelayNs);
         // DVD or DVB subtitles in a file without video: the frame rate their display sets carry is a guess, which
         // fps= replaces rather than converts from.
