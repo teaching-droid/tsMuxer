@@ -496,6 +496,16 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
 
     checkTrackList(ci);
 
+    // A .ssif written directly holds both views of 3D video in one file, which the muxer of the second view writes
+    // through the first view's (joinToMasterFile). A split of it went wrong: each view began new parts of its own, and
+    // the mux stopped at the third part with "Can't create file", after the first parts had been written. It is refused
+    // before anything is written. A Blu-ray folder or an ISO image keeps the views in clips of their own and splits.
+    const auto* const mainTs = dynamic_cast<const TSMuxer*>(m_mainMuxer.get());
+    if (m_subMuxer && m_interleave && !(fileFactory && fileFactory->isVirtualFS()) && mainTs && mainTs->isSplitting())
+        THROW(ERR_COMMON,
+              "A .ssif output cannot be split. Leave out the split options, or write a Blu-ray folder or "
+              "an ISO image (--blu-ray), whose clips are split instead.")
+
     if (m_mainMuxer)
         m_mainMuxer->openDstFile();
     if (m_subMuxer)
