@@ -420,6 +420,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **On Windows, an output on a network path or a path starting with `\\?\`** gets its folders made. A demux, a Blu-ray folder, an ISO image and a file in a new folder there stopped with "Can't create output file". The `\\?\` prefix is what a path longer than 260 characters needs.
 
+* **On Windows, a path of 248 characters or more works without the `\\?\` prefix,** also on Windows 7 and without the long path setting of Windows 10: tsMuxeR adds the prefix itself. A long meta file, source or output stopped with "The system cannot find the path specified".
+
 * **A meta file whose every track is marked subClip=,** the second view of 3D video, stops before anything is read, with a message. The mux read the whole source and then crashed.
 
 * **The same track of a file named on two lines, once with subClip= and once without,** stops before anything is written. The two lines read one track, and the mux crashed at its end.

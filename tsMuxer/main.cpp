@@ -41,6 +41,19 @@ TSMuxerFactory tsMuxerFactory;
 MatroskaMuxerFactory matroskaMuxerFactory;
 SingleFileMuxerFactory singleFileMuxerFactory;
 
+// A UTF-8 path for std::filesystem. On Windows a long one gets the \\?\ prefix (windowsPath), as every file tsMuxeR
+// opens does: without it the old output kept until a new one is complete, and the image of --bdmv-to-iso, were not
+// found on a path of 248 characters or more.
+static std::filesystem::path fsPath(const string& utf8)
+{
+#ifdef _WIN32
+    const string p = windowsPath(utf8);
+#else
+    const string& p = utf8;
+#endif
+    return {std::u8string(p.begin(), p.end())};
+}
+
 static constexpr char EXCEPTION_ERR_MSG[] =
     ". It does not have to be! Please contact application support team for more information.";
 
@@ -2014,12 +2027,12 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
         {
             std::error_code ec;
             if (!keep && !name.empty())
-                std::filesystem::remove(std::filesystem::path(std::u8string(name.begin(), name.end())), ec);
+                std::filesystem::remove(fsPath(name), ec);
         }
     } unfinished;
     {
         std::error_code ec;
-        if (!std::filesystem::exists(std::filesystem::path(std::u8string(outIso.begin(), outIso.end())), ec))
+        if (!std::filesystem::exists(fsPath(outIso), ec))
             unfinished.name = outIso;
     }
     BlurayHelper helper;
@@ -2177,7 +2190,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
             LTRACE(LT_INFO, 2, "    " << loc);
             side << line.str() << "\n  " << loc << "\n";
         }
-        std::ofstream sideFile(outIso + ".layerbreak.txt", std::ios::binary);
+        std::ofstream sideFile(fsPath(outIso + ".layerbreak.txt"), std::ios::binary);
         if (sideFile)
             sideFile << side.str();
     }
@@ -2522,7 +2535,7 @@ class KeepOldOutput
     // A file output (TS, M2TS, ISO, Matroska): returns the name to write. Its split parts are name.split.n.ext.
     std::string forFile(const std::string& dst, const int64_t estimate)
     {
-        const std::filesystem::path out = u8path(dst);
+        const std::filesystem::path out = fsPath(dst);
         const std::filesystem::path dir = out.has_parent_path() ? out.parent_path() : std::filesystem::path(".");
         const std::string stem = pathStr(out.stem());
         const std::string ext = pathStr(out.extension());
@@ -2552,7 +2565,7 @@ class KeepOldOutput
     // replace the old ones. Anything else in the folder is not touched.
     std::string forDiscFolder(const std::string& dst, const int64_t estimate)
     {
-        const std::filesystem::path out = u8path(dst);
+        const std::filesystem::path out = fsPath(dst);
         std::error_code ec;
         if (!std::filesystem::exists(out / "BDMV", ec) && !std::filesystem::exists(out / "CERTIFICATE", ec))
         {
@@ -2576,7 +2589,7 @@ class KeepOldOutput
     // Every other file in the folder is not touched.
     std::string forDemuxFolder(const std::string& dst, const int64_t estimate)
     {
-        const std::filesystem::path out = u8path(dst);
+        const std::filesystem::path out = fsPath(dst);
         std::error_code ec;
         if (!std::filesystem::is_directory(out, ec))
         {

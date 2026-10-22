@@ -542,13 +542,38 @@ std::vector<wchar_t> fromAcp(const char* acpStr, const int sz)
 // \\?\ prefix, which it passes on as it is: there a forward slash is part of a name. tsMuxeR joins the parts of the
 // paths it makes with one (BDMV/index.bdmv), so a Blu-ray folder could not be written to a path with the prefix, which
 // is what a path longer than 260 characters needs. In such a path they are turned into backslashes.
+//
+// A full path of 248 characters or more (a folder may have 247 without the prefix) is given it here: Windows takes such
+// a path with the prefix on every version, Windows 7 too, and without it only on Windows 10 and later with long paths
+// switched on; a long meta file, source or output stopped with "The system cannot find the path specified". A path
+// with the prefix is used as it is, with no . or .. resolved and no current folder put in front of a relative one, so
+// the full path is asked of Windows first; a network path becomes \\?\UNC\server\share\.... Shorter paths, and those
+// of the \\.\ device space, are left as they were.
 std::string windowsPath(const std::string& path)
 {
-    if (path.compare(0, 4, R"(\\?\)") != 0)
+    if (path.compare(0, 4, R"(\\?\)") == 0)
+    {
+        std::string p = path;
+        std::replace(p.begin(), p.end(), '/', '\\');
+        return p;
+    }
+    constexpr DWORD LONGEST_PLAIN = 247;
+    if (path.empty() || path.compare(0, 4, R"(\\.\)") == 0 || path.compare(0, 4, "//./") == 0)
         return path;
-    std::string p = path;
-    std::replace(p.begin(), p.end(), '/', '\\');
-    return p;
+    const std::vector<wchar_t> wide = toWide(path);
+    const DWORD needed = GetFullPathNameW(wide.data(), 0, nullptr, nullptr);
+    if (needed <= LONGEST_PLAIN + 1)  // the count includes the closing zero
+        return path;
+    std::vector<wchar_t> full(needed);
+    const DWORD len = GetFullPathNameW(wide.data(), needed, full.data(), nullptr);
+    if (len == 0 || len >= needed)
+        return path;
+    std::wstring prefixed;
+    if (len > 2 && full[0] == L'\\' && full[1] == L'\\')
+        prefixed = L"\\\\?\\UNC\\" + std::wstring(full.data() + 2, len - 2);
+    else
+        prefixed = L"\\\\?\\" + std::wstring(full.data(), len);
+    return toUtf8(prefixed.c_str());
 }
 
 std::vector<wchar_t> toWide(const std::string& utf8Str)
