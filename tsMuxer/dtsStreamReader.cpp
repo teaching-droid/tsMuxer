@@ -1283,11 +1283,31 @@ double DTSStreamReader::getFrameDuration()
 
 bool DTSStreamReader::needSkipFrame(const AVPacket& packet)
 {
-    if (m_skippingSamples == 0)
+    if (m_skippingSamples <= 0)
         return false;
 
+    // The codec delay is counted in samples at the highest sample rate of the stream, and so is the frame here (a core
+    // frame of 512 samples at 48 kHz is 1024 samples of a 96 kHz stream). It was counted at the core's rate, so twice
+    // the delay was left out of a 96 kHz stream. And it was counted down by whole frames to exactly 0, so a delay that
+    // is not a whole number of frames was never used up and every frame of the track was left out: a delay of 1024
+    // samples in a DTS Express stream, for one, whose frames are 4096 samples long.
+    const int frameSamples = static_cast<int>(lround(m_frameDuration * getFreq() / INTERNAL_PTS_FREQ));
+    if (frameSamples <= 0)
+    {
+        m_skippingSamples = 0;
+        return false;
+    }
+    // the core and the extension of one frame come one after the other, and the frame is counted once
     if (getFrameDuration() > 0)
-        m_skippingSamples -= pi_frame_length;
+    {
+        m_skippingSamples -= frameSamples;
+        // The last frame left out held the first samples of the sound too: the frames after it start that much later.
+        if (m_skippingSamples < 0)
+        {
+            m_curPts += static_cast<double>(-m_skippingSamples) * INTERNAL_PTS_FREQ / getFreq();
+            m_skippingSamples = 0;
+        }
+    }
     return true;
 }
 

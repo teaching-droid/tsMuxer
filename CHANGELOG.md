@@ -226,6 +226,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A DTS-HD file with an encoder delay,** as the DTS-HD encoder writes its .dtshd files, starts with the picture. Its start-up samples were left out, but their time was kept, so the sound came 21 ms late (1024 samples at 48 kHz), and a disc made from it listed the track with that delay. (#49, thanks to @Nandos64)
 
+* **A DTS-HD file whose encoder delay is not a whole number of frames** keeps its sound. All of it was left out, and the mux still said it was successful: a DTS Express file with a delay of 1024 samples, for one, as its frames are 4096 samples long. A 96 kHz file also lost the first 21 ms of its sound, as twice its delay was left out.
+
 ### Video
 
 * **H.264 whose order counts are of type 1** (pic_order_cnt_type 1, as some camera and reference encoders write it) is muxed. It was refused with "SPS picture order 1 not supported".
