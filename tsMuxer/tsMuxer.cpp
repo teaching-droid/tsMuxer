@@ -1677,6 +1677,13 @@ void TSMuxer::gotoNextFile(const int64_t newPts)
 
     m_muxFile->close();
     assert(m_outBufLen == 0);
+    // The object of the closed part was kept for the whole mux, one for each part. It is freed here, except with a
+    // second view of 3D video beside this muxer: there its file object can still be in use, by a .ssif written directly
+    // (the second view writes through this one's, joinToMasterFile) and by this view's blocks held back for the
+    // interleave (MuxerManager::asyncWriteBuffer).
+    if (!m_isExternalFile && !m_sublingMuxer)
+        delete m_muxFile;
+    m_muxFile = nullptr;
 
     // 3. open new file
     m_outFileName = getNextName(m_outFileName);
