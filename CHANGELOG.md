@@ -420,6 +420,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A meta file whose every track is marked subClip=,** the second view of 3D video, stops before anything is read, with a message. The mux read the whole source and then crashed.
 
+* **The same track of a file named on two lines, once with subClip= and once without,** stops before anything is written. The two lines read one track, and the mux crashed at its end.
+
 * **A chapter file with more than one edition** uses the edition a Matroska file would: the one marked as the default, also when the mark follows its chapters, without its hidden and disabled chapters. It used the first edition with them.
 
 * **A meta line that shares some, but not all, of its files with an earlier line for the same track** is refused, with the file it shares, whatever its name or place in either line, as in a join of a.ts and b.ts after a line with a.ts alone, or a.ts alone after the join. Those files were left out without a word.

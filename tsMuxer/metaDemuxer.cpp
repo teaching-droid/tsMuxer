@@ -1347,6 +1347,24 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         keys.push_back(fileKey(name) + trackPart);
         lineKey += keys.back() + "|";
     }
+    // A track of a file named by an earlier line with subClip= and here without it, or the other way round, is the
+    // same track: two readers read it, and closing the first freed what the second still used. It is refused.
+    const string otherTrackPart =
+        string(addParams.find("subClip") == addParams.end() ? "_subtrack_" : "_track_") + int32ToStr(pid);
+    for (const auto& name : fileList)
+    {
+        if (m_processedTracks.count(fileKey(name) + otherTrackPart) == 0)
+            continue;
+        std::ostringstream which;
+        which << codec << " from " << unquotedStreamName;
+        if (pid)
+            which << ", track " << pid;
+        THROW(ERR_COMMON,
+              which.str() << " is muxed by an earlier line of the meta file "
+                          << (addParams.find("subClip") == addParams.end() ? "as the second view of 3D video (subClip=)"
+                                                                           : "without subClip=")
+                          << ", and the same track of a file can be muxed only once.")
+    }
     std::vector<string> taken;  // files of this line whose track an earlier line already reads
     for (int i = static_cast<int>(fileList.size()) - 1; i >= 0; --i)
     {
