@@ -683,7 +683,7 @@ int AV1StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPa
         avPacket.flags |= AVPacket::IS_SPS_PPS_IN_GOP;
         // A demux writes a file, and an AV1 file is a chain of temporal units each of which BEGINS
         // with a temporal delimiter. Nothing may sit in front of the first one: writing the
-        // sequence header here put an OBU there, and ffmpeg refused the whole file for it. So in
+        // sequence header here put an OBU there, and a reader refused the whole file for it. So in
         // demux mode the header is owed rather than written, and prepareDemuxPacket puts it just
         // after the temporal delimiter the packet starts with.
         if (m_demuxMode)
@@ -732,8 +732,8 @@ int AV1StreamReader::prepareDemuxPacket(uint8_t* data, const int size, const uin
 
     // ** AN AV1 FILE BEGINS WITH A TEMPORAL DELIMITER AND NOTHING MAY STAND IN FRONT OF IT. **
     // A transport stream carries a sequence header ahead of the first delimiter, so writing the
-    // packets out in the order they arrive put that header at the head of the file and ffmpeg
-    // refused the whole thing, forced with -f obu as well. Anything ahead of the first delimiter is
+    // packets out in the order they arrive put that header at the head of the file, which the
+    // format does not allow, and a reader refused the whole thing. Anything ahead of the first delimiter is
     // held back and written immediately after it instead: nothing is dropped, and the file starts
     // the way the format says it must.
     if (!m_demuxSawTd)

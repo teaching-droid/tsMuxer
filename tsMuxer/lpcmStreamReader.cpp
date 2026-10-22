@@ -38,8 +38,8 @@ uint32_t FOUR_CC(const char a, const char b, const char c, const char d)
 // Every chunk GUID begins with the four character id, and the remaining twelve bytes are NOT the
 // same for all of them. The riff chunk has its own suffix; wave, fmt and data share a different
 // one. Writing the riff suffix on all four produced a file that tsMuxeR itself read back happily,
-// because its own detector compares only the first sixteen bytes, while ffprobe and two versions
-// of libsndfile all refused it: "No 'data' chunk marker". The audio was never affected, only the
+// because its own detector compares only the first sixteen bytes, while readers that check the
+// whole GUID refused it: "No 'data' chunk marker". The audio was never affected, only the
 // thirty six bytes of those three GUIDs.
 constexpr uint8_t W64_RIFF_SUFFIX[12] = {0x2E, 0x91, 0xCF, 0x11, 0xA5, 0xD6, 0x28, 0xDB, 0x04, 0xC1, 0x00, 0x00};
 constexpr uint8_t W64_CHUNK_SUFFIX[12] = {0xF3, 0xAC, 0xD3, 0x11, 0x8C, 0xD1, 0x00, 0xC0, 0x4F, 0x8E, 0xDB, 0x8A};

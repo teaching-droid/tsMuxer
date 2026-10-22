@@ -1392,7 +1392,7 @@ void MatroskaDemuxer::applyStartCodeRule()
         return;
 
     // Each video track's own rule when the file gives one per track, found by the track's TrackUID: a tool that
-    // rewrites the file may number its tracks anew (mkvmerge does, with --track-order or a track left out), and a rule
+    // rewrites the file may number its tracks anew (when it reorders them or leaves one out), and a rule
     // found by number went to another track. A file from before, or one whose tracks were given new UIDs, has no line
     // for its tracks, and the line for the whole file goes to every track as it did (see
     // MatroskaMuxer::writeAttachments).
@@ -2817,7 +2817,7 @@ int64_t MatroskaDemuxer::nextBlockAt(const int64_t trackNumber, const int64_t af
 //
 // The SeekHead at the front of the segment says where the top level elements are, and this muxer
 // writes one deliberately so that what follows the clusters can be found (see writeFrontSeekHead).
-// mkvmerge writes one too. So read the index and go straight there.
+// Most muxers write one too. So read the index and go straight there.
 //
 // If a SeekHead exists and does not mention attachments, the file has none: an index that lists
 // Info, Tracks and Cues but no Attachments is not silent about them, it is saying there are none.
@@ -2942,8 +2942,8 @@ static bool findTopLevelElement(EbmlScan& scan, const int64_t fileSize, const ui
     return scan.readElement(id, size, bodyPos) && id == wanted && bodyPos + size <= fileSize;
 }
 
-// RFC 9559 (6.1) lets the Tracks follow the clusters when a SeekHead before them says where they are, and a current
-// ffmpeg writes them there when the codec data did not fit the room it kept for them in the head. The header was read
+// RFC 9559 (6.1) lets the Tracks follow the clusters when a SeekHead before them says where they are, and a muxer
+// writes them there when the codec data did not fit the room it kept for them in the head. The header was read
 // up to the first cluster only, so such a file had no tracks at all: the listing showed none, and a mux of its track
 // wrote an empty output and called it successful. The Tracks element is found through the SeekHead now and read from
 // memory, as if the reader stood there, and the reader then goes on at the first cluster where it was.
@@ -4010,7 +4010,7 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
                     display = std::to_string(displayWidth) + "x" + std::to_string(displayHeight);
             }
             // In centimetres, inches or as an aspect ratio (DisplayUnit 1, 2 and 3), the two numbers give the shape
-            // only, and a current ffmpeg writes the ratio. It was left out, so such a file's shape was lost the same
+            // only, and current muxers write the ratio. It was left out, so such a file's shape was lost the same
             // way. It goes on as the display size at the picture's height.
             else if (displayUnit >= 1 && displayUnit <= 3 && displayWidth && displayHeight && pixelHeight)
                 display = std::to_string((pixelHeight * displayWidth + displayHeight / 2) / displayHeight) + "x" +
@@ -4354,8 +4354,8 @@ std::map<uint64_t, std::vector<AbstractDemuxer::SourceTrackTag>> MatroskaDemuxer
                     if (sid == MATROSKA_ID_TAGNAME)
                         name.assign(d.begin() + static_cast<std::ptrdiff_t>(sb),
                                     d.begin() + static_cast<std::ptrdiff_t>(se));
-                // Also the statistics a writer leaves without naming them in _STATISTICS_TAGS, as ffmpeg writes a
-                // DURATION for each track: kept, it gave the source's length to a cut output.
+                // Also the statistics a writer leaves without naming them in _STATISTICS_TAGS, as a DURATION some
+                // muxers write for each track: kept, it gave the source's length to a cut output.
                 const bool isStatistics = name.rfind("_STATISTICS_", 0) == 0 ||
                                           (!name.empty() && statistics.find(" " + name + " ") != std::string::npos) ||
                                           name == "DURATION" || name == "BPS" || name == "NUMBER_OF_FRAMES" ||
@@ -4955,7 +4955,7 @@ int MatroskaDemuxer::matroska_add_stream()
     track->encodingAlgo = -1;
     strcpy(track->language, "eng");
     // FlagDefault's default VALUE in Matroska is 1, so a track that does not carry the element is
-    // the default one, and mkvmerge leaves it out exactly when it is true. The track is raw zeroed
+    // the default one, and muxers leave it out exactly when it is true. The track is raw zeroed
     // memory here, so without this an absent element read as "not the default", which is backwards.
     // FlagEnabled defaults to 1 as well; nothing reads that one, so it is left alone.
     track->flags |= MATROSKA_TRACK_DEFAULT;

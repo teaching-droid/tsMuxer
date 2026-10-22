@@ -2967,7 +2967,7 @@ static int64_t usualDuration(const MOVStreamContext* st)
 }
 
 // ** A START OFFSET WRITTEN AS A LONG FIRST SAMPLE. ** Where a writer does not use an edit list (a fragmented file,
-// or ffmpeg with -use_editlist 0), it puts a track that starts later than the others at time 0 all the same, and
+// or a muxer told to write none), it puts a track that starts later than the others at time 0 all the same, and
 // makes its first sample longer by the difference: an AAC track whose sound starts 0.5 s after the picture has a
 // first sample of 27840 at 48000 instead of 1024. The readers time a track by its usual sample length, so the start
 // was lost: the sound came 500 ms early, the picture 520 ms early, and the priming of AAC that

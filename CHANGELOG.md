@@ -72,7 +72,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **H.264 with pulldown and B pictures got times that were out of order or used twice,** and a Matroska output joined pictures that had the same time: with frame doubling, 60 of 144 times were used twice. Each picture now comes when the pictures before it in the order shown have been shown for their own time. Pulldown that begins later in the stream gets such times from the next IDR picture on, after a gap of a few frames there. The first decoding times of such a stream no longer repeat.
 
-* **H.264 with a deep B pyramid could be decoded after it was due,** in a transport stream and on a disc, as with the 16 B pictures in a row Quick Sync encodes. The decoding times were moved back by 3 pictures at most, and such a stream needs 5. They now move back as far as the deepest pyramid seen so far needs, up to the 16 pictures a decoder holds. Where the pyramid becomes deeper later in the stream, as in a join of files coded otherwise, the decoding times now keep rising there as well.
+* **H.264 with a deep B pyramid could be decoded after it was due,** in a transport stream and on a disc, as with the 16 B pictures in a row some hardware encoders write. The decoding times were moved back by 3 pictures at most, and such a stream needs 5. They now move back as far as the deepest pyramid seen so far needs, up to the 16 pictures a decoder holds. Where the pyramid becomes deeper later in the stream, as in a join of files coded otherwise, the decoding times now keep rising there as well.
 
 * **A cut stream that does not begin with an IDR picture could get two pictures with one time,** and a Matroska output wrote the two as one block: H.264 that begins with an I picture of an open GOP, a P or a B picture, H.264 and HEVC that begin inside a run of B pictures, and the IDR after such a start. Each picture now gets its own time, in the order the stream gives. H.264 coded as fields is muxed as before. This now holds for each file of a join as well: a later file that begins so comes after the file before it.
 
@@ -108,7 +108,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **H.264 film with pulldown played too fast with delPulldown,** a quarter too fast at 29.97 and 2.5 times as fast at 720p 59.94. The marks were removed and the rate stayed, as only MPEG-2 got the film rate. H.264 now gets the rate of its pictures shown once each, 24000/1001 or 24 for film, and VC-1 at 29.97 or 30 gets 24000/1001 or 24, when no fps= is given.
 
-* **A Matroska file whose track list follows its clusters was not read at all.** Matroska allows it, and a current ffmpeg writes it there when its codec data did not fit the room it kept. The listing showed no tracks, and a mux wrote an empty file and called it successful. The track list is found where the file says it is.
+* **A Matroska file whose track list follows its clusters was not read at all.** Matroska allows it, and a muxer writes it there when its codec data did not fit the room it kept. The listing showed no tracks, and a mux wrote an empty file and called it successful. The track list is found where the file says it is.
 
 * **A join of Matroska files lost the whole second file** when the clusters of the first file all had unknown size, or when it ended inside a cluster whose size runs past the end of the file, and the mux said it was successful. Such a cluster now ends where the next part of the file begins. A file with more than 16 clusters of unknown size is no longer refused, and a video track without DefaultDuration in such a file keeps its frame rate; it was muxed at 25 fps.
 
@@ -320,7 +320,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A 3D track whose base view is the right eye** is marked so (StereoMode 14), with --right-eye, or from a playlist or a single Matroska file that says so, on a disc as well. It was marked left eye first, which swapped the eyes.
 
-* **20 bit LPCM** says BitDepth 24, as its samples take 3 bytes; it played as noise in other players. A LanguageBCP47 of 40 to 255 characters is kept; a longer one is left out with a warning. The DURATION tags of a source made by ffmpeg are left out, as they give the source's length.
+* **20 bit LPCM** says BitDepth 24, as its samples take 3 bytes; it played as noise in other players. A LanguageBCP47 of 40 to 255 characters is kept; a longer one is left out with a warning. The DURATION tags some muxers write for each track are left out, as they give the source's length.
 
 * **A split of sound without video** goes on as long as any of the sound lasts. A subtitle line listed first decided it, and the first sound line did where it was the shorter: the split stopped where that track ended.
 

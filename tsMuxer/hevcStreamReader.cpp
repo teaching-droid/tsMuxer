@@ -1039,7 +1039,7 @@ int HEVCStreamReader::getStreamHDR() const
 // The VPS comes first in the stream, so by the time the SPS arrived the VPS had already been
 // rewritten to the new rate. The SPS was then compared against that new rate, matched it, and was
 // left alone. The file went out carrying two timings that disagreed: the VPS said 25 and the SPS
-// still said 23.976. ffmpeg reads the VPS and reported 25, tsMuxeR reads the SPS and reported
+// still said 23.976. A reader that takes the VPS reported 25, tsMuxeR reads the SPS and reported
 // 23.976, and neither was wrong about what it had read.
 //
 // The fallback is kept for the other caller, which passes the SPS only as a formality and wants
