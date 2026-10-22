@@ -616,7 +616,10 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
 {
     if (m_firstDemuxCall)
     {
-        for (const int acceptedPID : acceptedPIDs) m_acceptedPidCache[acceptedPID] = 1;
+        // A PID has 13 bits. A track number above 8191 in the meta wrote past the table, into whatever followed it.
+        for (const int acceptedPID : acceptedPIDs)
+            if (acceptedPID >= 0 && acceptedPID < 8192)
+                m_acceptedPidCache[acceptedPID] = 1;
         m_firstDemuxCall = false;
     }
 
