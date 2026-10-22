@@ -120,7 +120,7 @@ MUXOPT --vbr
 V_MPEG4/ISO/AVC, D:/media/test/stream.h264, fps=25
 A_AC3, D:/media/test/stream.ac3, timeshift=-10000ms
 ```
-When the output file has an `.mkv`, `.mka`, `.mks`, `.mk3d` or `.webm` extension, tsMuxeR automatically uses the Matroska muxer. A `.webm` output is WebM, the subset of Matroska that web browsers play: it takes VP8, VP9 and AV1 video and Opus and Vorbis audio only, and holds no attachments. Most MUXOPT parameters related to TS/Blu-ray (such as `--blu-ray`, `--new-audio-pes`, `--pcr-on-video-pid`) are not applicable to MKV output and will be ignored.
+When the output file has an `.mkv`, `.mka`, `.mks`, `.mk3d` or `.webm` extension, tsMuxeR automatically uses the Matroska muxer. A `.webm` output is WebM, the subset of Matroska that web browsers play: it takes VP8, VP9 and AV1 video and Opus and Vorbis audio only, and holds no attachments. Most MUXOPT parameters related to TS/Blu-ray (such as `--blu-ray`, `--new-audio-pes`, `--no-pcr-on-video-pid`) are not applicable to MKV output and will be ignored.
 
 Supported input containers:
 * TS/M2TS/MTS
