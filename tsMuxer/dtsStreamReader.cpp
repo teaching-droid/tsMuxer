@@ -349,10 +349,14 @@ int DTSStreamReader::decodeHdInfo(uint8_t* buff, const uint8_t* end)
             return hdFrameSize;
 
         uint8_t nuNumAssets = 1;
+        // The frame duration of the extension substream is counted at this clock, which is not the sample rate of a
+        // 96 or 192 kHz stream
+        int refClock = 0;
         const bool bStaticFieldsPresent = reader.getBit();
         if (bStaticFieldsPresent)
         {
-            reader.skipBits(2);  // nuRefClockCode
+            static constexpr int refClocks[] = {32000, 44100, 48000, 0};
+            refClock = refClocks[reader.getBits<uint8_t>(2)];  // nuRefClockCode
             const auto nuExSSFrameDurationCode = reader.getBits<uint8_t>(3) + 1;
             if (pi_frame_length == 0)
                 pi_frame_length = nuExSSFrameDurationCode << 9;
@@ -422,11 +426,15 @@ int DTSStreamReader::decodeHdInfo(uint8_t* buff, const uint8_t* end)
                 hd_pi_sample_rate = dtshd_samplerate[nuMaxSampleRate];
                 hd_bitDepth = nuBitResolution;
 
+                // Divided by the sample rate, the frames of a 96 kHz stream without a core were timed at half their
+                // length, so its sound ran twice as fast as the picture; and the bitrate of a 96 kHz stream was given
+                // as twice what it is.
                 if (!m_isCoreExists)
-                    m_frameDuration = static_cast<double>(pi_frame_length) * INTERNAL_PTS_FREQ / hd_pi_sample_rate;
+                    m_frameDuration = static_cast<double>(pi_frame_length) * INTERNAL_PTS_FREQ /
+                                      (refClock ? refClock : hd_pi_sample_rate);
 
-                if (m_hdType != DTSHD_SUBTYPE::DTS_SUBTYPE_MASTER_AUDIO)
-                    m_hdBitrate = lround(static_cast<double>(hd_pi_sample_rate) / pi_frame_length * hdFrameSize * 8);
+                if (m_hdType != DTSHD_SUBTYPE::DTS_SUBTYPE_MASTER_AUDIO && m_frameDuration > 0)
+                    m_hdBitrate = lround(INTERNAL_PTS_FREQ / m_frameDuration * hdFrameSize * 8);
 
                 hd_pi_lfeCnt = 0;
 
