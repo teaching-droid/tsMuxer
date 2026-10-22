@@ -1054,7 +1054,8 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
 
         if (m_halfFrameLen == 0.0)
             m_halfFrameLen = getFrameDuration() / 2.0;
-        m_curPts += getFrameDuration();
+        const double frameStep = getFrameDuration();
+        m_curPts += frameStep;
         int64_t nextDts = static_cast<int64_t>(m_curPts * m_stretch) + m_timeOffset;
         avPacket.duration = nextDts - avPacket.dts;
         // doMplsCorrection();
@@ -1087,8 +1088,14 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
             doMplsCorrection();
         }
 
+        // The start-up samples an encoder puts in front of the sound (the codec delay of a DTS-HD file) are left out,
+        // and so is their time: the first sample after them is where the sound starts. Their time was kept, so the
+        // sound of a DTS-HD file with a codec delay of 1024 samples came 21.3 ms late against the picture.
         if (needSkipFrame(avPacket))
+        {
+            m_curPts -= frameStep;
             continue;
+        }
 
         return 0;
 

@@ -224,6 +224,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **TrueHD at a rate a disc does not have,** such as 44.1 kHz, no longer has 48 kHz in its PMT.
 
+* **A DTS-HD file with an encoder delay,** as the DTS-HD encoder writes its .dtshd files, starts with the picture. Its start-up samples were left out, but their time was kept, so the sound came 21 ms late (1024 samples at 48 kHz), and a disc made from it listed the track with that delay. (#49, thanks to @Nandos64)
+
 ### Video
 
 * **H.264 whose order counts are of type 1** (pic_order_cnt_type 1, as some camera and reference encoders write it) is muxed. It was refused with "SPS picture order 1 not supported".
