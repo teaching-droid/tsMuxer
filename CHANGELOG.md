@@ -414,7 +414,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **--bdmv-to-iso** counts folders when it makes room for the image's metadata, and takes --extra-iso-space: a disc folder with 400 extra folders was refused after the whole copy.
 
-* **Reads outside the data, and reads at addresses C++ does not allow, are gone.** The search for the start codes of a video stream read up to 15 bytes before and after its buffer, the check for the next TrueHD frame could read two bytes past the data, and many fields of two, four and eight bytes were read and written through pointers the language does not allow at their addresses. A refused job that joined files could read memory already freed while it closed, as its file reader was still opening the next part. None of them was seen to change an output.
+* **Reads outside the data, and reads at addresses C++ does not allow, are gone.** The search for the start codes of a video stream read up to 15 bytes before and after its buffer, the check for the next TrueHD frame could read two bytes past the data, and many fields of two, four and eight bytes were read and written through pointers the language does not allow at their addresses. A refused job that joined files could read memory already freed while it closed, as its file reader was still opening the next part. A name shorter than the ending it was checked for was read from before its start. None of them was seen to change an output.
 
 * **A playlist is found by every path that names it:** PLAYLIST/00000.mpls from inside BDMV gave no tracks, a playlist in BACKUP could not be muxed, and a name relative to a folder inside PLAYLIST or BACKUP, such as ./00000.mpls, took the clips from the wrong folder.
 

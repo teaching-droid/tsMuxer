@@ -233,7 +233,8 @@ string strPadRight(const string& str, const size_t newSize, const char filler)
 
 bool strEndWith(const string& str, const string& substr)
 {
-    if (str.empty())
+    // A text shorter than the ending was read from before its start, as far as the ending is longer.
+    if (str.empty() || str.size() < substr.size())
         return false;
     size_t idx = str.size();
     for (size_t i = substr.size(); i-- > 0;)
