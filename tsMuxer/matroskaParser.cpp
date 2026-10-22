@@ -993,8 +993,10 @@ void ParsedPGTrackData::extractData(AVPacket* pkt, uint8_t* buff, const int size
                 shown = onFrame;
         }
     }
-    const int64_t start = (std::max)((std::min)(shown, (std::max)(m_lastEnd, shown - planeInit - windowsTransfer)),
-                                     static_cast<int64_t>(1));
+    // A decoding time of 0 in the header reads as "decoded when shown", so a set is decoded at 1 at the earliest; never
+    // after it is shown, though: a set shown at 0 was given 1 and so was decoded after it was shown. It gets 0 instead.
+    const int64_t start = (std::max)(
+        (std::min)(shown, (std::max)({m_lastEnd, shown - planeInit - windowsTransfer, int64_t{1}})), int64_t{0});
 
     pkt->size = size + PG_HEADER_SIZE * blocks;
     pkt->data = new uint8_t[pkt->size];
