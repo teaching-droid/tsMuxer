@@ -174,8 +174,8 @@ int DTSStreamReader::getSurroundModeCode() const
     return rez;
 }
 
-// An empty file gives no data at all: buff and end were null, end - 4 went round to the top of the address space and the
-// first header was read at address 0 (a crash). The magic takes 4 bytes, the header with its frame size 10.
+// An empty file gives no data at all: buff and end were null, end - 4 went round to the top of the address space and
+// the first header was read at address 0 (a crash). The magic takes 4 bytes, the header with its frame size 10.
 void DTSStreamReader::checkIfOnlyHDDataExists(uint8_t* buff, const uint8_t* end)
 {
     for (int i = 0; i < 2 && buff != nullptr && end - buff > 4; ++i)

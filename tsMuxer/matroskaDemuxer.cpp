@@ -720,8 +720,7 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
         const bool opus = delayCodec && strcmp(tracks[track]->codec_id, "A_OPUS") == 0;
         if (opus && tracks[track]->codec_priv_size >= 12 && tracks[track]->codec_priv)
             leadNs = (tracks[track]->codec_priv[10] | tracks[track]->codec_priv[11] << 8) * INT64_C(1000000000) / 48000;
-        const int64_t joinNs =
-            blockNs + m_joinShiftNs - (delayCodec || varCodec ? tracks[track]->codecDelayNs : 0);
+        const int64_t joinNs = blockNs + m_joinShiftNs - (delayCodec || varCodec ? tracks[track]->codecDelayNs : 0);
         // Vorbis and FLAC: each frame as long as its reader counts it, a FLAC frame by its header, a Vorbis packet by
         // the modes of its setup header (else by the BlockDuration of its block and the DiscardPadding of the last
         // one, or as long as the packet before it); the frames of a laced block follow on by their lengths.
@@ -784,10 +783,9 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
                 if (timecode != AV_NOPTS_VALUE && m_firstTimecode.find(tracks[track]->num) == m_firstTimecode.end())
                     m_firstTimecode[tracks[track]->num] = timecode;
             }
-            else if (joinSound && !keepJoinSound(track + 1, frameNs, frameLenNs, leadNs,
-                                                 opus && n == laces - 1 ? discardNs : 0, opus,
-                                                 (delayCodec && tracks[track]->default_duration > 0) || exactLen,
-                                                 varCodec))
+            else if (joinSound &&
+                     !keepJoinSound(track + 1, frameNs, frameLenNs, leadNs, opus && n == laces - 1 ? discardNs : 0,
+                                    opus, (delayCodec && tracks[track]->default_duration > 0) || exactLen, varCodec))
             {
                 data += lace_size[n];
                 size -= lace_size[n];
@@ -899,8 +897,7 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
                     pkt->pts != AV_NOPTS_VALUE && !timeline && m_joinFiles.size() <= 1 && m_clusterPos >= 0 &&
                     dynamic_cast<ParsedSRTTrackData*>(tracks[track]->parsed_priv_data) &&
                     nextBlockAt(tracks[track]->num, timecode) == timecode + duration)
-                    m_touchingCues[track + 1].push_back(
-                        (pkt->pts * 1000 + INTERNAL_PTS_FREQ / 2) / INTERNAL_PTS_FREQ);
+                    m_touchingCues[track + 1].push_back((pkt->pts * 1000 + INTERNAL_PTS_FREQ / 2) / INTERNAL_PTS_FREQ);
                 if (tracks[track]->parsed_priv_data != nullptr)
                 {
                     if (n == 0 && !m_pendingAdditions.empty())
@@ -1640,8 +1637,7 @@ bool MatroskaDemuxer::keepJoinSound(const int track, const int64_t ns, const int
         {
             // half a frame, but at least a millisecond, the step of the times of most files; of frames that differ
             // in length (variable), half of this one
-            const int64_t within =
-                (std::max)((variable && lengthNs > 0 ? lengthNs : sound.step) / 2, int64_t{1000000});
+            const int64_t within = (std::max)((variable && lengthNs > 0 ? lengthNs : sound.step) / 2, int64_t{1000000});
             // where the sound before ends, without its padding and without what is not sound at the joints before
             const int64_t soundEnd = sound.end - sound.pad - sound.excess;
             if (ns + lead + within < soundEnd)
@@ -3694,8 +3690,8 @@ static bool vfwVc1FirstShown(EbmlScan& scan, const int64_t from, const int64_t s
                             ok = false;
                             return false;
                         }
-                        pictures.push_back({t, picture.pict_type == VC1PictType::B_TYPE ||
-                                                   picture.pict_type == VC1PictType::BI_TYPE});
+                        pictures.push_back(
+                            {t, picture.pict_type == VC1PictType::B_TYPE || picture.pict_type == VC1PictType::BI_TYPE});
                         return pictures.size() < PICTURES;
                     });
     if (!ok || pictures.empty())

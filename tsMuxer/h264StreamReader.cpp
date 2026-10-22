@@ -585,7 +585,7 @@ void H264StreamReader::pulldownFieldsAhead(const SliceUnit& slice, uint8_t* buff
         return;
     const int maxLsb = 1 << slice.getSPS()->log2_max_pic_order_cnt_lsb;
     int prevLsb = static_cast<int>(slice.pic_order_cnt_lsb);
-    int order = 0;  // the order count from this picture's, in steps of the picture before
+    int order = 0;            // the order count from this picture's, in steps of the picture before
     Poc1State poc1 = m_poc1;  // the counts of type 1 go on from this picture's
     int picStruct = -1;
     for (uint8_t* nal = NALUnit::findNextNAL(buff + 4, m_bufEnd); nal < m_bufEnd && m_fieldsAhead.size() < 32;
@@ -910,7 +910,8 @@ int H264StreamReader::getIdrPrevFrames(uint8_t* buff, const uint8_t* bufEnd)
     int deserializeRez;
     // An IDR coded as two fields: its second field is no IDR, has the IDR's frame_num, 0, and follows it. Its count
     // is the IDR's, not one shown before it, and it ended the count at once: the pictures after the IDR that are shown
-    // before it got the times of the pictures before the IDR, and the IDR and every picture after it came 2 frames early.
+    // before it got the times of the pictures before the IDR, and the IDR and every picture after it came 2 frames
+    // early.
     Poc1State poc1 = m_poc1;  // the counts of type 1 go on from the IDR's
     bool firstPicture = true;
     for (uint8_t* nal = NALUnit::findNextNAL(buff + 4, m_bufEnd); nal < m_bufEnd;
@@ -1013,7 +1014,7 @@ int H264StreamReader::depthOfIdrPeriod(const SliceUnit& idrSlice, uint8_t* buff)
     static constexpr std::ptrdiff_t MAX_AHEAD = 32 * 1024 * 1024;
     const int maxLsb = 1 << idrSlice.getSPS()->log2_max_pic_order_cnt_lsb;
     int prevLsb = static_cast<int>(idrSlice.pic_order_cnt_lsb);
-    int order = prevLsb;  // the order count, as calcPicOrder gives it from the IDR on
+    int order = prevLsb;      // the order count, as calcPicOrder gives it from the IDR on
     Poc1State poc1 = m_poc1;  // the counts of type 1 go on from the IDR's
     int pictures = 0;
     int depth = 0;
@@ -1420,7 +1421,7 @@ void H264StreamReader::fillPoc1(SliceUnit& slice, Poc1State& state)
         return;
     }
     const int64_t maxFrameNum = int64_t{1} << sps->log2_max_frame_num;
-    const int64_t frameNumOffset = slice.isIDR()                         ? 0
+    const int64_t frameNumOffset = slice.isIDR()                          ? 0
                                    : state.prevFrameNum > slice.frame_num ? state.prevFrameNumOffset + maxFrameNum
                                                                           : state.prevFrameNumOffset;
     const auto cycle = static_cast<int64_t>(sps->offset_for_ref_frame.size());

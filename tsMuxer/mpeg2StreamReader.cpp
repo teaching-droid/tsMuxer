@@ -263,9 +263,10 @@ int MPEG2StreamReader::processSeqStartCode(uint8_t* buff)
         if (!m_noRateSaid)
         {
             m_noRateSaid = true;
-            LTRACE(LT_WARN, 2,
-                   "Warning: the MPEG-2 sequence header gives no frame rate (frame_rate_code 0). The stream is muxed at "
-                       << m_fps << " fps, written into its header; give fps= on the track's line for another rate.");
+            LTRACE(
+                LT_WARN, 2,
+                "Warning: the MPEG-2 sequence header gives no frame rate (frame_rate_code 0). The stream is muxed at "
+                    << m_fps << " fps, written into its header; give fps= on the track's line for another rate.");
         }
     }
     spsFound = true;

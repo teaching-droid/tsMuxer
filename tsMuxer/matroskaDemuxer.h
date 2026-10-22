@@ -216,18 +216,18 @@ class MatroskaDemuxer final : public IOContextDemuxer
     // the timeline of the join (m_joinShiftNs).
     struct JoinSound
     {
-        int64_t origin = -1;   // where the first frame of the track is, the start of its reader's own clock
-        int64_t end = -1;      // where the sound handed on so far ends; -1: not known
-        int64_t prev = -1;     // the frame before in the part, for the step
-        int64_t step = 0;      // the shortest time from one frame to the next
-        int64_t lastStep = 0;  // the time from the frame before to the last one
+        int64_t origin = -1;       // where the first frame of the track is, the start of its reader's own clock
+        int64_t end = -1;          // where the sound handed on so far ends; -1: not known
+        int64_t prev = -1;         // the frame before in the part, for the step
+        int64_t step = 0;          // the shortest time from one frame to the next
+        int64_t lastStep = 0;      // the time from the frame before to the last one
         int vorbisFilePrev = 0;    // Vorbis: the block size of the packet before in the part being read, 0 at its start
         int vorbisHandedPrev = 0;  // and of the packet handed on before, which the reader counts on from
-        int64_t shift = 0;     // how much later than its own times the sound of the part being read is muxed
-        int64_t pad = 0;       // the padding at the end of the sound handed on so far (DiscardPadding)
-        int64_t excess = 0;    // what is not sound at the joints so far and is still played (a codec delay)
-        bool offered = false;  // a frame of the track has come in the part
-        bool started = false;  // a frame of the track has been kept in the part
+        int64_t shift = 0;         // how much later than its own times the sound of the part being read is muxed
+        int64_t pad = 0;           // the padding at the end of the sound handed on so far (DiscardPadding)
+        int64_t excess = 0;        // what is not sound at the joints so far and is still played (a codec delay)
+        bool offered = false;      // a frame of the track has come in the part
+        bool started = false;      // a frame of the track has been kept in the part
     };
     std::map<int, JoinSound> m_joinSound;  // by track (stream index)
     bool m_joinShiftKnown = true;  // where each part is put is known (m_joinShiftNs): a part of unknown length is not

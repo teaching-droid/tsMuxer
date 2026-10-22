@@ -1009,7 +1009,7 @@ void METADemuxer::placeJoinedSubtitles()
         {
             const auto it = m_containerReader.m_demuxers.find(sub.m_streamName);
             mkvJoin = it != m_containerReader.m_demuxers.end() ? dynamic_cast<MatroskaDemuxer*>(it->second.m_demuxer)
-                                                                : nullptr;
+                                                               : nullptr;
             int64_t start = 0, end = 0;
             if (!mkvJoin)
                 continue;
@@ -1537,8 +1537,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             {
                 if (s.trackID != pid)
                     continue;
-                const int found = s.codecInfo.codecID == CODEC_V_MPEG4_H264_DEP ? CODEC_V_MPEG4_H264
-                                                                                 : s.codecInfo.codecID;
+                const int found =
+                    s.codecInfo.codecID == CODEC_V_MPEG4_H264_DEP ? CODEC_V_MPEG4_H264 : s.codecInfo.codecID;
                 if (found != named &&
                     (found == CODEC_V_MPEG2 || found == CODEC_V_MPEG4_H264 || found == CODEC_V_MPEG4_H265 ||
                      found == CODEC_V_MPEG4_H266 || found == CODEC_V_VC1))
@@ -1768,13 +1768,12 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     int64_t lineShift = 0;
     if (const auto ts = addParams.find("timeshift"); ts != addParams.end())
         parseTimeToTicks(ts->second, "ms", &lineShift);
-    const bool ownReader =
-        pid > 0 && !SubTrackFilter::isSubTrack(pid) && lineShift < 0 && !codec.empty() && codec[0] == 'S' &&
-        fileList.size() == 1 && listIterator == nullptr && mplsInfoList.empty() &&
-        m_containerReader.m_demuxers.find(fileList[0]) != m_containerReader.m_demuxers.end() &&
-        (strEndWith(tmpname, ".mkv") || strEndWith(tmpname, ".mks") || strEndWith(tmpname, ".webm") ||
-         strEndWith(tmpname, ".ts") || strEndWith(tmpname, ".m2ts") || strEndWith(tmpname, ".mts") ||
-         strEndWith(tmpname, ".m2t"));
+    const bool ownReader = pid > 0 && !SubTrackFilter::isSubTrack(pid) && lineShift < 0 && !codec.empty() &&
+                           codec[0] == 'S' && fileList.size() == 1 && listIterator == nullptr && mplsInfoList.empty() &&
+                           m_containerReader.m_demuxers.find(fileList[0]) != m_containerReader.m_demuxers.end() &&
+                           (strEndWith(tmpname, ".mkv") || strEndWith(tmpname, ".mks") ||
+                            strEndWith(tmpname, ".webm") || strEndWith(tmpname, ".ts") ||
+                            strEndWith(tmpname, ".m2ts") || strEndWith(tmpname, ".mts") || strEndWith(tmpname, ".m2t"));
 
     if (strEndWith(tmpname, ".h264") || strEndWith(tmpname, ".264") || strEndWith(tmpname, ".mvc"))
     {
@@ -2389,7 +2388,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         // the start-up samples of AAC from a Matroska file (its CodecDelay) rather than from an MP4 edit list
         const std::string firstExt =
             fileList.empty() ? std::string() : strToLowerCase(extractFileExt(unquoteStr(trimStr(fileList[0]))));
-        const bool codecDelayFromMkv = firstExt == "mkv" || firstExt == "mka" || firstExt == "mk3d" || firstExt == "webm";
+        const bool codecDelayFromMkv =
+            firstExt == "mkv" || firstExt == "mka" || firstExt == "mk3d" || firstExt == "webm";
         int64_t backNs = editNs - leadNs;
         if (m_matroskaOutput && codec == "A_AAC")
             backNs = -leadNs;  // CodecDelay is the whole edit list start

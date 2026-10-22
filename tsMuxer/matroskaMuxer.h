@@ -103,13 +103,13 @@ class MatroskaMuxer final : public AbstractMuxer
         bool frameAdditions = false;  // the source stored BlockAdditions beside the frames of this track
         int64_t lastBlockRelMs = 0;   // the time of the track's last block, for a ReferenceBlock
         unsigned srcDisplayHeight = 0;
-        unsigned srcStereoMode = 0;    // the source's StereoMode (srcstereomode), 0 when it gave none
-        int64_t endPaddingNs = 0;      // DiscardPadding for the track's last block (Opus, Vorbis), from the source
-        uint64_t srcCodecDelayNs = 0;  // CodecDelay from the source's edit list (srccodecdelay), AAC from MP4
+        unsigned srcStereoMode = 0;         // the source's StereoMode (srcstereomode), 0 when it gave none
+        int64_t endPaddingNs = 0;           // DiscardPadding for the track's last block (Opus, Vorbis), from the source
+        uint64_t srcCodecDelayNs = 0;       // CodecDelay from the source's edit list (srccodecdelay), AAC from MP4
         std::vector<uint8_t> srcAacConfig;  // the AudioSpecificConfig of HE-AAC the source names (srcaacsbr)
         int outputSampleRate = 0;           // its output sample rate, OutputSamplingFrequency; 0 for none
-        bool mp3InfoChecked = false;   // the first MPEG audio frame was looked at for a Xing/Info frame
-        int mp3Delay = -1;             // its LAME encoder delay and padding in samples, -1 without one
+        bool mp3InfoChecked = false;        // the first MPEG audio frame was looked at for a Xing/Info frame
+        int mp3Delay = -1;                  // its LAME encoder delay and padding in samples, -1 without one
         int mp3Padding = 0;
         bool finalFlush = false;  // the frame being written is the track's last
         AbstractStreamReader* codecReader;

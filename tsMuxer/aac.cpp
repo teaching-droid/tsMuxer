@@ -321,8 +321,9 @@ int AACCodec::explicitSbrRate(const uint8_t* config, const int size)
         // the reader takes a buffer it may write to, and only reads it
         auto* buffer = const_cast<uint8_t*>(config);
         reader.setBuffer(buffer, buffer + size);
-        const auto rateAt = [&](const uint8_t index)
-        { return index == 0x0f ? reader.getBits<int>(24) : index < 13 ? aac_sample_rates[index] : 0; };
+        const auto rateAt = [&](const uint8_t index) {
+            return index == 0x0f ? reader.getBits<int>(24) : index < 13 ? aac_sample_rates[index] : 0;
+        };
         auto objectType = reader.getBits<uint8_t>(5);
         if (objectType == 31)
             objectType = 32 + reader.getBits<uint8_t>(6);

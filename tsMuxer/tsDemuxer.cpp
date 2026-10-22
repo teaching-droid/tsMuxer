@@ -794,11 +794,10 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
                             streamInfo != m_pmt.pidList.end() ? streamInfo->second.m_streamType : StreamType::RESERVED,
                             pesPacket, TS_FRAME_SIZE - (frameData - m_curPos)))
                 continue;
-            m_leadDrop[pid] =
-                m_leadPes[pid] != LEAD_PES_DONE && streamInfo != m_pmt.pidList.end() &&
-                (pesPacket->flagsLo & 0x80) == 0x80 &&
-                skipsLeadingPes(pid, streamInfo->second.m_streamType, frameData + pesPacket->getHeaderLength(),
-                                m_curPos + TS_FRAME_SIZE);
+            m_leadDrop[pid] = m_leadPes[pid] != LEAD_PES_DONE && streamInfo != m_pmt.pidList.end() &&
+                              (pesPacket->flagsLo & 0x80) == 0x80 &&
+                              skipsLeadingPes(pid, streamInfo->second.m_streamType,
+                                              frameData + pesPacket->getHeaderLength(), m_curPos + TS_FRAME_SIZE);
             if (m_leadDrop[pid])
                 continue;
             m_clipStartOfPid.try_emplace(pid, m_prevFileLen);

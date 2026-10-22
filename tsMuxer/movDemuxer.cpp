@@ -2262,7 +2262,8 @@ void MovDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             if (!mst->name.empty())
                 trackList[i + 1].m_srcParams["srcname"] = mst->name;
             // HE-AAC that the esds names (srcaacsbr), for a Matroska output to keep
-            if (const auto* audio = dynamic_cast<MovParsedAudioTrackData*>(mst->parsed_priv_data); audio && audio->isAAC)
+            if (const auto* audio = dynamic_cast<MovParsedAudioTrackData*>(mst->parsed_priv_data);
+                audio && audio->isAAC)
                 if (const std::string sbr =
                         AACCodec::sbrParam(reinterpret_cast<const uint8_t*>(mst->codec_priv), mst->codec_priv_size);
                     !sbr.empty())
@@ -2789,8 +2790,8 @@ int MovDemuxer::mov_read_trun(MOVAtom atom)
         get_be32();  // first_sample_flags
     // As for the tables (atomLeft): each sample takes 4 bytes per field the flags give it. A run whose samples have no
     // field of their own is a count only, and 2^24 samples are far more than a fragment holds.
-    const int64_t sampleBytes = 4 * (((flags & 0x100) != 0) + ((flags & 0x200) != 0) + ((flags & 0x400) != 0) +
-                                     ((flags & 0x800) != 0));
+    const int64_t sampleBytes =
+        4 * (((flags & 0x100) != 0) + ((flags & 0x200) != 0) + ((flags & 0x400) != 0) + ((flags & 0x800) != 0));
     if (sampleBytes > 0 ? entries > atomLeft(atom) / sampleBytes : entries > (1u << 24))
         return -1;
     // A run that gives no data offset follows the data of the run before it in the track fragment; only the first

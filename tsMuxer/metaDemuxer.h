@@ -301,9 +301,9 @@ class METADemuxer final : public AbstractDemuxer
     std::set<std::string> m_timelinesReported;  // the Matroska files whose play timeline was said in the log
     bool m_keepEditions = false;                // --keep-editions (setKeepEditions)
     bool m_playlistClipsPlayed = PLAYLIST_CLIPS_PLAYED_BY_DEFAULT;  // --playlist-clips (setPlaylistClipsPlayed)
-    int m_matroskaOutput = 0;                   // setMatroskaOutput: 0 other, 1 Matroska, 2 WebM
-    bool m_demuxOutput = false;                 // setDemuxOutput
-    double m_lastProgress = 0.0;                // the last value printed
+    int m_matroskaOutput = 0;                                       // setMatroskaOutput: 0 other, 1 Matroska, 2 WebM
+    bool m_demuxOutput = false;                                     // setDemuxOutput
+    double m_lastProgress = 0.0;                                    // the last value printed
     int64_t m_totalSize;
     bool m_flushDataMode;
     int64_t m_muxPos = 0;  // the time of the packet given out last, for setReadAhead

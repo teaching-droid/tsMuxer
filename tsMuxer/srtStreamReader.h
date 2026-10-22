@@ -129,9 +129,9 @@ class SRTStreamReader final : public AbstractStreamReader
     // a subtitle that ends where or before it starts was said
     bool m_noLengthReported = false;
     std::set<int64_t> m_touchingCues;  // addTouchingCue
-    int m_srtRecords = 0;        // demux: SRT records written so far, which numbers the next
-    int64_t m_cuesRead = 0;      // subtitles read from the file
-    int64_t m_skippedLines = 0;  // lines of text that are not part of any subtitle, passed over
+    int m_srtRecords = 0;              // demux: SRT records written so far, which numbers the next
+    int64_t m_cuesRead = 0;            // subtitles read from the file
+    int64_t m_skippedLines = 0;        // lines of text that are not part of any subtitle, passed over
     int64_t m_firstSkippedLine = 0;
     std::string m_firstSkippedText;
     int64_t m_counterLine = 0;  // the line of the counter of the subtitle being read
