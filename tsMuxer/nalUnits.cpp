@@ -1326,28 +1326,35 @@ int SliceUnit::deserialize(uint8_t* buffer, uint8_t* end, const std::map<uint32_
 
 void NALUnit::updateBits(const int bitOffset, const int bitLen, const unsigned value) const
 {
-    // uint8_t* ptr = m_getbitContextBuffer + (bitOffset/8);
+    // Written through a scratch buffer, as in HevcUnit::updateBits: the bit writer stores whole 32 bit words, and a
+    // field near the end of the unit (the timing fields of an SPS that end it) made it read and write up to 3 bytes
+    // past the buffer. Only the bytes the field covers are copied back.
     uint8_t* ptr = bitReader.getBuffer() + bitOffset / 8;
-    BitStreamWriter bitWriter{};
     const int byteOffset = bitOffset % 8;
-    bitWriter.setBuffer(ptr, ptr + (bitLen / 8 + 5));
-
-    const uint8_t* ptr_end = bitReader.getBuffer() + (bitOffset + bitLen) / 8;
     const int endBitsPostfix = 8 - ((bitOffset + bitLen) % 8);
+    const int touched = (byteOffset + bitLen + 7) / 8;
+    if (bitOffset < 0 || bitLen <= 0 || bitLen > 32 || ptr < m_nalBuffer ||
+        ptr + touched > m_nalBuffer + m_nalBufferLen)
+        return;
+    uint8_t scratch[16]{};
+    memcpy(scratch, ptr, touched);
+    BitStreamWriter bitWriter{};
+    bitWriter.setBuffer(scratch, scratch + sizeof(scratch));
 
     if (byteOffset > 0)
     {
-        const int prefix = *ptr >> (8 - byteOffset);
+        const int prefix = scratch[0] >> (8 - byteOffset);
         bitWriter.putBits(byteOffset, prefix);
     }
     bitWriter.putBits(bitLen, value);
 
     if (endBitsPostfix < 8)
     {
-        const int postfix = *ptr_end & (1 << endBitsPostfix) - 1;
+        const int postfix = scratch[touched - 1] & (1 << endBitsPostfix) - 1;
         bitWriter.putBits(endBitsPostfix, postfix);
     }
     bitWriter.flushBits();
+    memcpy(ptr, scratch, touched);
 }
 
 int SliceUnit::deserializeSliceHeader(const std::map<uint32_t, SPSUnit*>& spsMap,

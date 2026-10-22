@@ -1,6 +1,7 @@
 #include "vc1Parser.h"
 
 #include <cmath>
+#include <cstring>
 #include <sstream>
 
 #include <fs/systemlog.h>
@@ -36,27 +37,34 @@ int decode012(BitStreamReader& bitReader)
 
 void VC1Unit::updateBits(const int bitOffset, const int bitLen, const int value) const
 {
+    // Through a scratch buffer, as NALUnit::updateBits: the bit writer stores whole 32 bit words, and a field near the
+    // end of the unit made it read and write past the buffer. Only the bytes the field covers are copied back.
     uint8_t* ptr = bitReader.getBuffer() + bitOffset / 8;
-    BitStreamWriter bitWriter{};
     const int byteOffset = bitOffset % 8;
-    bitWriter.setBuffer(ptr, ptr + (bitLen / 8 + 5));
-
-    const uint8_t* ptr_end = bitReader.getBuffer() + (bitOffset + bitLen) / 8;
     const int endBitsPostfix = 8 - ((bitOffset + bitLen) % 8);
+    const int touched = (byteOffset + bitLen + 7) / 8;
+    if (bitOffset < 0 || bitLen <= 0 || bitLen > 32 || ptr < m_nalBuffer ||
+        ptr + touched > m_nalBuffer + m_nalBufferLen)
+        return;
+    uint8_t scratch[16]{};
+    memcpy(scratch, ptr, touched);
+    BitStreamWriter bitWriter{};
+    bitWriter.setBuffer(scratch, scratch + sizeof(scratch));
 
     if (byteOffset > 0)
     {
-        const int prefix = *ptr >> (8 - byteOffset);
+        const int prefix = scratch[0] >> (8 - byteOffset);
         bitWriter.putBits(byteOffset, prefix);
     }
     bitWriter.putBits(bitLen, value);
 
     if (endBitsPostfix < 8)
     {
-        const int postfix = *ptr_end & (1 << endBitsPostfix) - 1;
+        const int postfix = scratch[touched - 1] & (1 << endBitsPostfix) - 1;
         bitWriter.putBits(endBitsPostfix, postfix);
     }
     bitWriter.flushBits();
+    memcpy(ptr, scratch, touched);
 }
 
 // ---------------------------- VC1SequenceHeader ------------------------------------------
