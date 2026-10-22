@@ -81,7 +81,7 @@ File::File(const char* fName, const unsigned int oflag,
         else
             systemDependentFlags = FILE_FLAG_RANDOM_ACCESS;
     }
-    m_impl = CreateFile(toWide(fName).data(), dwDesiredAccess, dwShareMode, nullptr, dwCreationDisposition,
+    m_impl = CreateFile(toWide(windowsPath(fName)).data(), dwDesiredAccess, dwShareMode, nullptr, dwCreationDisposition,
                         systemDependentFlags, nullptr);
     if (m_impl == INVALID_HANDLE_VALUE)
     {
@@ -128,7 +128,7 @@ bool File::open(const char* fName, const unsigned int oflag, unsigned int system
     {
         createDir(extractFileDir(fName), true);
     }
-    m_impl = CreateFile(toWide(fName).data(), dwDesiredAccess, dwShareMode, nullptr, dwCreationDisposition,
+    m_impl = CreateFile(toWide(windowsPath(fName)).data(), dwDesiredAccess, dwShareMode, nullptr, dwCreationDisposition,
                         systemDependentFlags, nullptr);
     if (m_impl == INVALID_HANDLE_VALUE)
     {
@@ -279,7 +279,7 @@ static bool realVolumeOfFolder(const wchar_t* folder, wchar_t* volume, const DWO
 // file is asked first, and the path as written is the fallback when that fails.
 uint32_t File::volumeSectorSize(const char* fName)
 {
-    const auto name = toWide(fName);
+    const auto name = toWide(windowsPath(fName));
     wchar_t full[MAX_PATH * 4];
     wchar_t volume[MAX_PATH * 4];
     wchar_t* filePart = nullptr;

@@ -537,6 +537,19 @@ std::vector<wchar_t> fromAcp(const char* acpStr, const int sz)
     return mbtwc_wrapper(CP_ACP, acpStr, sz, requiredSiz);
 }
 
+// Windows takes a forward slash in a path as a separator, as it does a backslash, except in a path with the
+// \\?\ prefix, which it passes on as it is: there a forward slash is part of a name. tsMuxeR joins the parts of the
+// paths it makes with one (BDMV/index.bdmv), so a Blu-ray folder could not be written to a path with the prefix, which
+// is what a path longer than 260 characters needs. In such a path they are turned into backslashes.
+std::string windowsPath(const std::string& path)
+{
+    if (path.compare(0, 4, R"(\\?\)") != 0)
+        return path;
+    std::string p = path;
+    std::replace(p.begin(), p.end(), '/', '\\');
+    return p;
+}
+
 std::vector<wchar_t> toWide(const std::string& utf8Str)
 {
     return toWide(utf8Str.c_str(), static_cast<int>(utf8Str.size()));

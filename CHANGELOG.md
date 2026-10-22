@@ -416,6 +416,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A playlist is found by every path that names it:** PLAYLIST/00000.mpls from inside BDMV gave no tracks, a playlist in BACKUP could not be muxed, and a name relative to a folder inside PLAYLIST or BACKUP, such as ./00000.mpls, took the clips from the wrong folder.
 
+* **On Windows, an output on a network path or a path starting with `\\?\`** gets its folders made. A demux, a Blu-ray folder, an ISO image and a file in a new folder there stopped with "Can't create output file". The `\\?\` prefix is what a path longer than 260 characters needs.
+
 * **A chapter file with more than one edition** uses the edition a Matroska file would: the one marked as the default, also when the mark follows its chapters, without its hidden and disabled chapters. It used the first edition with them.
 
 * **A meta line that shares some, but not all, of its files with an earlier line for the same track** is refused, with the file it shares, whatever its name or place in either line, as in a join of a.ts and b.ts after a line with a.ts alone, or a.ts alone after the join. Those files were left out without a word.

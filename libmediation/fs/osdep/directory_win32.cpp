@@ -40,13 +40,34 @@ uint64_t getFileSize(const std::string& fileName)
     return 0;
 }
 
-bool createDir(const std::string& dirName, const bool createParentDirs)
+// The beginning of a path that is no folder of its own and cannot be created: the \\?\ prefix, and the server and the
+// share of a network path, \\server\share or \\?\UNC\server\share. Creating the folders of a path from its first one
+// stopped at the first of these, so no folder could be made on a network path or a path with the prefix, which is
+// what a path longer than 260 characters needs: a demux or a Blu-ray folder there failed with "Can't create output
+// file", and so did a file in a folder that did not exist yet.
+static bool isPathRoot(const std::string& dir)
 {
+    if (dir == R"(\\?)" || dir == R"(\\?\UNC)")
+        return true;
+    size_t rest = 0;  // where the server name starts
+    if (strStartWith(dir, R"(\\?\UNC\)"))
+        rest = 8;
+    else if (strStartWith(dir, R"(\\)") && !strStartWith(dir, R"(\\?\)") && !strStartWith(dir, R"(\\.\)"))
+        rest = 2;
+    else
+        return false;
+    const size_t sep = dir.find('\\', rest);
+    return sep == std::string::npos || dir.find('\\', sep + 1) == std::string::npos;  // \\server or \\server\share
+}
+
+bool createDir(const std::string& dirNameAsGiven, const bool createParentDirs)
+{
+    const std::string dirName = windowsPath(dirNameAsGiven);
     const bool ok = preCreateDir(
         [](auto&& parentDir)
         {
             return parentDir.empty() || parentDir[parentDir.size() - 1] == ':' || parentDir == "\\\\." ||
-                   parentDir == R"(\\.\)" ||                                                        // UNC patch prefix
+                   isPathRoot(parentDir) || parentDir == R"(\\.\)" ||                               // UNC patch prefix
                    (strStartWith(parentDir, R"(\\.\)") && parentDir[parentDir.size() - 1] == '}');  // UNC patch prefix
         },
         [](auto&& parentDir)
@@ -64,7 +85,7 @@ bool createDir(const std::string& dirName, const bool createParentDirs)
 
 bool deleteFile(const string& fileName)
 {
-    if (DeleteFile(toWide(fileName).data()))
+    if (DeleteFile(toWide(windowsPath(fileName)).data()))
     {
         return true;
     }
@@ -77,7 +98,7 @@ bool findFiles(const string& path, const string& fileMask, vector<string>* fileL
     WIN32_FIND_DATA fileData;  // Data structure describes the file found
     // Search handle returned by FindFirstFile
 
-    const auto searchStr = toWide(path + '/' + fileMask);
+    const auto searchStr = toWide(windowsPath(path + '/' + fileMask));
     const HANDLE hSearch = FindFirstFile(searchStr.data(), &fileData);
     if (hSearch == INVALID_HANDLE_VALUE)
         return false;
@@ -101,7 +122,7 @@ bool findDirs(const string& path, vector<string>* dirsList)
     WIN32_FIND_DATA fileData;  // Data structure describes the file found
     // Search handle returned by FindFirstFile
 
-    const auto searchStr = toWide(path + "*");
+    const auto searchStr = toWide(windowsPath(path + "*"));
     const HANDLE hSearch = FindFirstFile(searchStr.data(), &fileData);
     if (hSearch == INVALID_HANDLE_VALUE)
         return false;

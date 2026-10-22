@@ -178,6 +178,7 @@ class UnalignedPtr
 std::vector<wchar_t> fromAcp(const char*, int sz);
 std::vector<wchar_t> toWide(const char*, int sz = -1);
 std::vector<wchar_t> toWide(const std::string&);
+std::string windowsPath(const std::string&);
 std::string toUtf8(const wchar_t*);
 #endif
 
