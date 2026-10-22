@@ -295,7 +295,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **A disc whose video goes more than 10 s without a key picture** gets a warning: a player starts and seeks at key pictures only, and a stream made with intra refresh has one at its start only.
 
 * **The sound of a TS cut inside an audio frame** keeps its place against the picture. Its first PES begins with the rest of a frame, and the time of that PES went to the first whole frame: the sound came a frame early, about 11 ms for DTS. The few frames before the first PES that begins with a frame are left out.
-* **A Blu-ray output split into very small parts** with --split-size no longer crashes while it writes the clip information. For a part that holds no entry of a track's seek index, the list of entries was read past its end.
+* **A Blu-ray output split into very small parts** with --split-size no longer crashes while it writes the clip information. For a part that holds no entry of a track's seek index, the list of entries was read past its end. When the first part held no picture, each part's clip information got the seek entries of the part after it, and the playlist left a part out.
 
 ### Matroska output
 

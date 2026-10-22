@@ -1662,6 +1662,18 @@ std::string TSMuxer::getNextName(const std::string curName)
     return toNativeSeparators(result);
 }
 
+// A track's seek index has a list of entries for each part of a split output, and the clip information of part n reads
+// list n. A new part adds a list to every index that has begun; an index began with one list when its first entry came.
+// When that was in a later part, as when a split of a few bytes came before the first picture, the lists were one part
+// behind: a part's entries went into the clip information of the part before. The index now begins with a list for
+// each part so far.
+void TSMuxer::startIndexLists(PMTStreamInfo& streamInfo) const
+{
+    const size_t parts = (std::max)(m_fileNames.size(), static_cast<size_t>(1));
+    if (streamInfo.m_index.size() < parts)
+        streamInfo.m_index.resize(parts);
+}
+
 void TSMuxer::gotoNextFile(const int64_t newPts)
 {
     // Step past every chapter this part has already reached. More than one can fall inside a
@@ -1890,8 +1902,7 @@ void TSMuxer::finalizeInplacePes()
     if (m_computeMuxStats && m_pendingPesHasPts)
     {
         const uint64_t curPts = m_pendingPesPts;
-        if (streamInfo.m_index.empty())
-            streamInfo.m_index.emplace_back();
+        startIndexLists(streamInfo);
         const auto vCodec = streamInfo.m_mpegReader;
         const bool SPSRequired = streamInfo.m_codecReader->needSPSForSplit();
         const auto aCodec = streamInfo.m_audioReader;
@@ -1964,9 +1975,8 @@ void TSMuxer::writePESPacket()
         {
             uint64_t curPts = pesPacket->getPts();
 
+            startIndexLists(streamInfo);
             size_t idxSize = streamInfo.m_index.size();
-            if (idxSize == 0)
-                streamInfo.m_index.emplace_back();
             const auto vCodec = streamInfo.m_mpegReader;  // cached at intAddStream
             // bool isH264 = dynamic_cast <H264StreamReader*> (streamInfo.m_codecReader);
             const bool SPSRequired = streamInfo.m_codecReader->needSPSForSplit();

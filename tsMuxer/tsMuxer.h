@@ -179,6 +179,7 @@ class TSMuxer final : public AbstractMuxer
     void flushTSBuffer();
     void finishFileBlock(int64_t newPts, int64_t newPCR, bool doChangeFile, bool recursive = true);
     void gotoNextFile(int64_t newPts);
+    void startIndexLists(PMTStreamInfo& streamInfo) const;
 
     AbstractOutputStream* m_muxFile;
     bool m_isExternalFile;
