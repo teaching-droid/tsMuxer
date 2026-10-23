@@ -1,6 +1,6 @@
 ## tsMuxeR 3.0.0
 
-This release is about MP4 and MOV. tsMuxeR now reads much more of what these files can hold: more codecs, track names, chapters, cover pictures and colour data, fragmented files, joins, and damaged or unusual files. It still does not write MP4. ASS and SSA subtitles are now drawn with libass, with their styles and animations. The changes are grouped below by area.
+This release is about MP4 and MOV. tsMuxeR now reads much more of what these files can hold: more codecs, track names, chapters, cover pictures and colour data, fragmented files, joins, and damaged or unusual files. ASS and SSA subtitles are now drawn with libass, with their styles and animations. The changes are grouped below by area.
 
 **Why 3.0.0: two changes can need a look at existing meta files.** ASS and SSA subtitles that are drawn into pictures are now drawn with libass, as their script says, and the font parameters on their line (font-name, font-size and the others) no longer apply to them. Add `ass-as-srt` to the line to draw them as before, as plain text with those parameters. And a demux with `keep-text` writes ASS, SSA and WebVTT subtitles from a Matroska file as .ass, .ssa and .vtt files, in their own form, where it wrote an .srt file.
 
