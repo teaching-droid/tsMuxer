@@ -2907,6 +2907,10 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
             // the window always sets it for a disc. Only --new-audio-pes did it, so a disc from a meta file without it
             // had 0xbd, and a player that takes the extension to find the audio played it without sound.
             setNewStyleAudioPES(true);
+            // The clock references of a disc go on a PID of their own, 0x1001, as the format has it and as the window
+            // always writes it. On the command line they went on the last video track added, for a Dolby Vision disc
+            // the enhancement layer.
+            setPCROnVideoPID(false);
         }
         else if (paramPair[0] == "--cut-start" || paramPair[0] == "--cut-end")
         {

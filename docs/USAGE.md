@@ -286,8 +286,8 @@ Global additional parameters are placed in the first line of the META file, whic
 
 Parameter           | Description 
 ---                 | --- 
---no-pcr-on-video-pid | Allocate a separate PID for PCR and do not use the existing video PID. 
---new-audio-pes     | Use bytes 0xfd instead of 0xbd for AC3, True-HD, DTS and DTS-HD. Activated automatically for BD muxing. 
+--no-pcr-on-video-pid | Allocate a separate PID for PCR and do not use the existing video PID. Activated automatically for BD and AVCHD muxing.
+--new-audio-pes     | Use bytes 0xfd instead of 0xbd for AC3, True-HD, DTS and DTS-HD. Activated automatically for BD and AVCHD muxing. 
 --no-hdmv-descriptors | Use ITU-T H.222.0 / ISO/IEC 13818-1 descriptors instead of HDMV descriptors. Not activated for BD or AVCHD muxing.
 --vbr               | Use variable bitrate. This is the default mode, so on its own the word changes nothing.
 --minbitrate        | Sets the lower limit of the muxing rate, in kbps. If the streams together come to less, NULL packets are inserted to make up the difference. Has no effect unless --bitrate or --maxbitrate is given as well.

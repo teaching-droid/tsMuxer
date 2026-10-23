@@ -1342,9 +1342,14 @@ int CLPIParser::compose(uint8_t* buffer, const int bufferSize)
     composeClipMark(writer);
     while (writer.getBitsCount() % 32 != 0) writer.putBits(8, 0);
 
-    *extentInfo_pos = my_htonl(writer.getBitsCount() / 8);
-    composeExtentInfo(writer);
-    while (writer.getBitsCount() % 32 != 0) writer.putBits(8, 0);
+    // A UHD clip (version 0300) has ExtensionData only where there is some, as on the UHD discs seen, none of which has
+    // the empty one written for every clip. A Blu-ray clip keeps the empty one, as most Blu-ray discs seen have it.
+    if (!interleaveInfo.empty() || memcmp(version_number, "0300", 4) != 0)
+    {
+        *extentInfo_pos = my_htonl(writer.getBitsCount() / 8);
+        composeExtentInfo(writer);
+        while (writer.getBitsCount() % 32 != 0) writer.putBits(8, 0);
+    }
 
     writer.flushBits();
     return writer.getBitsCount() / 8;

@@ -1016,9 +1016,9 @@ which must begin with the MUXOPT token.
 All parameters in this group start with two dashes:
 
 --no-pcr-on-video-pid Allocate a separate PID for PCR and do not use the existing
-                      video PID.
+                      video PID. Activated automatically for BD and AVCHD muxing.
 --new-audio-pes       Use bytes 0xfd instead of 0xbd for AC3, True-HD, DTS and
-                      DTS-HD. Activated automatically for BD muxing.
+                      DTS-HD. Activated automatically for BD and AVCHD muxing.
 --no-hdmv-descriptors Use ITU-T H.222.0 | ISO/IEC 13818-1 descriptors instead of
                       HDMV descriptors. Not activated for BD or AVCHD muxing.
 --vbr                 Use variable bitrate. This is the default mode, so on its

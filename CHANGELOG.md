@@ -258,6 +258,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A Blu-ray or AVCHD disc made from the command line or a meta file had its AC-3, E-AC-3, DTS, DTS-HD and TrueHD-with-core audio as stream id 0xbd,** although `--help` says a disc gets 0xfd with its extension, as the Blu-ray format has it and as the window always writes it with `--new-audio-pes`. A player that finds the audio by that extension played such a disc without sound. A disc now always gets 0xfd; LPCM keeps 0xbd, and a TS or M2TS that is no disc is written as before. Mux such discs again.
 
+* **A disc from the command line or a meta file had its clock references on the last video track,** for a Dolby Vision disc on the enhancement layer, where the Blu-ray format and the window put them on a PID of their own, 0x1001. A disc now always does. The clip information files of a UHD disc no longer end with an empty extension block, which none of the UHD discs measured has.
+
 * **A transport stream packet sent twice** (the same continuity counter and payload, as the standard allows) is read once. Both were read, and the track could be damaged or not recognised.
 
 * **hdr10-override** marks an SDR HEVC track as HDR10 on a UHD disc. In the window: "Mark as HDR10 on a UHD disc" on the HEVC track. (#6)
