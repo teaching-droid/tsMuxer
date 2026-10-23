@@ -88,7 +88,7 @@ class SimplePacketizerReader : public AbstractStreamReader
     /// subclasses.  The base implementation fills sampleRate and channels.
     virtual void fillDiscoveryData(StreamDiscoveryData& data);
 
-    virtual bool needSkipFrame(const AVPacket& packet) { return false; }
+    virtual bool needSkipFrame(AVPacket& packet) { return false; }
 
     // uint8_t* m_tmpBuffer;
     int m_curMplsIndex;

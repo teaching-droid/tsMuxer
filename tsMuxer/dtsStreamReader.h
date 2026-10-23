@@ -82,7 +82,7 @@ class DTSStreamReader final : public SimplePacketizerReader
     }
 
     const std::string getStreamInfo() override;
-    bool needSkipFrame(const AVPacket& packet) override;
+    bool needSkipFrame(AVPacket& packet) override;
     void writePESExtension(PESPacket* pesPacket, const AVPacket& avPacket) override;
 
    private:

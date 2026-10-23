@@ -1289,7 +1289,7 @@ double DTSStreamReader::getFrameDuration()
     return m_frameDuration;
 }
 
-bool DTSStreamReader::needSkipFrame(const AVPacket& packet)
+bool DTSStreamReader::needSkipFrame(AVPacket& packet)
 {
     if (m_skippingSamples <= 0)
         return false;
@@ -1305,17 +1305,23 @@ bool DTSStreamReader::needSkipFrame(const AVPacket& packet)
         m_skippingSamples = 0;
         return false;
     }
-    // the core and the extension of one frame come one after the other, and the frame is counted once
-    if (getFrameDuration() > 0)
+    // A frame that holds the last start-up samples and the first samples of the sound is kept, and starts that many
+    // samples before the picture, so that its sound begins with it. It was left out, and its sound with it: 64 ms of
+    // a DTS Express track with a delay of 1024 samples. Its core and its extension both start there.
+    if (m_skippingSamples < frameSamples)
     {
-        m_skippingSamples -= frameSamples;
-        // The last frame left out held the first samples of the sound too: the frames after it start that much later.
-        if (m_skippingSamples < 0)
-        {
-            m_curPts += static_cast<double>(-m_skippingSamples) * INTERNAL_PTS_FREQ / getFreq();
-            m_skippingSamples = 0;
-        }
+        const double back = static_cast<double>(m_skippingSamples) * INTERNAL_PTS_FREQ / getFreq();
+        m_curPts -= back;
+        const auto ticks = static_cast<int64_t>(back * m_stretch);
+        packet.pts -= ticks;
+        packet.dts -= ticks;
+        m_skippingSamples = 0;
+        return false;
     }
+    // a frame of start-up samples only: left out. Its core and its extension come one after the other, and the frame
+    // is counted once.
+    if (getFrameDuration() > 0)
+        m_skippingSamples -= frameSamples;
     return true;
 }
 
