@@ -487,8 +487,6 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### What is still converted or left out
 
-* **MP4 is not written.**
-
 * **WebVTT from an MP4 file** goes into a Matroska output as SRT text, without its cue settings.
 
 * **Floating point PCM** in an MP4 or MOV file is not read, and 32 bit PCM is refused, as from Matroska. Only one form of floating point PCM is refused with a message; the others are left out without a word.
