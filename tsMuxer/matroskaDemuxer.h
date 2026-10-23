@@ -182,7 +182,8 @@ class MatroskaDemuxer final : public IOContextDemuxer
     char* muxing_app;
     uint64_t time_scale;
     std::map<int64_t, int64_t> m_firstTimecode;
-    // For a video track whose first picture is shown after its first block, how long after, in the file's units.
+    // For a video track whose first picture is shown after its first block, how long after, in the file's units; less
+    // than 0 where it is shown before it (the B pictures of an MPEG-2 group that is not closed).
     std::map<int64_t, int64_t> m_shownAfterFirstBlock;
     bool index_parsed;
     bool metadata_parsed;

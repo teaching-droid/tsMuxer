@@ -161,6 +161,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **AAC from a Matroska file** keeps MPEG-4 in its ADTS headers: they said MPEG-2.
 
 * **VC-1 from a Matroska file is timed from the picture it shows first.** Its blocks hold the pictures in the order they are decoded, so the first block is a picture that is shown a frame later. The listing measured the sound from that block: a VC-1 file that tsMuxeR wrote listed its sound a frame late, the window wrote that frame as timeshift=, and the sound came one frame late. The start of the sound against the picture is now also applied to VC-1 without timeshift=, as for other video.
+* **The sound of a Matroska file whose MPEG-2 video opens with B pictures shown before its first picture came early,** by the length of those pictures: 33 to 80 ms in the files measured. Such a group stores its I picture first, and the listed Stream delay was measured from it. It is now measured from the picture shown first, as for a TS. (#47, thanks to @Nandos64)
 
 ### Subtitles
 

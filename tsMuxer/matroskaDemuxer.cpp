@@ -4103,6 +4103,28 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
         m_shownAfterFirstBlock[video->num] = shown;
         videoTime += shown;
     }
+    else if (video->codec_id && !strcmp(video->codec_id, MATROSKA_CODEC_ID_VIDEO_MPEG2))
+    {
+        // MPEG-2 video starts at the earliest picture of its first group, up to the second keyframe, not at its first
+        // block. A group that is not closed stores its I picture before the B pictures shown ahead of it, the MPEG-2
+        // reader shows those first, and measured from the I picture the sound of such a file came early by those
+        // pictures: 33 ms in a 29.97 film with soft pulldown (#47). Only MPEG-2: an HEVC stream that begins with a
+        // random access picture is timed from that picture (the TS rule), and H.264 was not measured.
+        // The listing takes it from m_shownAfterFirstBlock, here before the first block, so not above 0.
+        int64_t earliest = videoTime;
+        int blocks = 0, keyframes = 0;
+        walkTrackBlocks(scan, facts.firstCluster, facts.segmentEnd, START_CLUSTERS, video->num,
+                        [&](const int64_t t, int64_t, const bool key, int)
+                        {
+                            if (key && ++keyframes == 2)
+                                return false;
+                            earliest = (std::min)(earliest, t);
+                            return ++blocks < 64;
+                        });
+        if (earliest < videoTime)
+            m_shownAfterFirstBlock[video->num] = earliest - videoTime;
+        videoTime = earliest;
+    }
     for (int i = 0; i < num_tracks; i++)
     {
         int64_t time = 0;
