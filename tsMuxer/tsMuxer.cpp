@@ -832,7 +832,7 @@ void TSMuxer::reportLateArrival() const
     LTRACE(LT_WARN, 2,
            "Warning: with --maxbitrate=" << m_maxBitrate / 1000 << ", " << m_latePictures << " of " << m_cappedPictures
                                          << " video pictures arrive after they are due, up to "
-                                         << doubleToStr(static_cast<double>(m_worstLateness) / 90000.0, 1)
+                                         << doubleToStr(static_cast<double>(m_worstLateness) / 90000.0, 2)
                                          << " s late. The video's peaks are above the cap, so a player may stutter or "
                                             "freeze there. Re-encode the video with its peak bitrate capped below the "
                                             "cap, or raise the cap.");

@@ -309,6 +309,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **--minbitrate** no longer lowers the rate of --bitrate, and a --maxbitrate below --bitrate is said.
 
+* **The warning about pictures that arrive late with --maxbitrate gave their delay to a tenth of a second,** so pictures less than 0.05 s late were said to be "up to 0.0 s late". It is now given to a hundredth. (#51, thanks to @Nemesh64)
+
 * **Subtitles after the wrap of a transport stream's clock** are kept: a recording whose 33 bit times go round to 0 lost every subtitle after that point.
 
 * **A disc whose video goes more than 10 s without a key picture** gets a warning: a player starts and seeks at key pictures only, and a stream made with intra refresh has one at its start only.
