@@ -177,6 +177,7 @@ class MatroskaDemuxer final : public IOContextDemuxer
     uint64_t segment_start;
     uint64_t created;
     int64_t fileDuration;
+    bool m_infoRead = false;  // the Info element was read in the header
     char* writing_app;
     char* muxing_app;
     uint64_t time_scale;
@@ -295,7 +296,8 @@ class MatroskaDemuxer final : public IOContextDemuxer
     int matroska_parse_metadata();
     int ebml_read_seek(int64_t offset);
     int matroska_parse_tracks();
-    void readTracksAfterClusters();
+    // Tracks or Info, read where the SeekHead says when they follow the clusters
+    void readAfterClusters(uint32_t wanted);
     int matroska_add_stream();
     static int getTrackType(const MatroskaTrack* track);
 

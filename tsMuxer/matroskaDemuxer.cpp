@@ -1960,6 +1960,7 @@ int MatroskaDemuxer::matroska_read_header()
     segment_start = m_processedBytes;
 
     time_scale = 1000000;
+    m_infoRead = false;
     /* we've found our segment, start reading the different contents in here */
     while (res == 0)
     {
@@ -1982,6 +1983,7 @@ int MatroskaDemuxer::matroska_read_header()
             if ((res = ebml_read_master(&id)) < 0)
                 break;
             res = matroska_parse_info();
+            m_infoRead = true;
             break;
         }
 
@@ -2066,8 +2068,11 @@ int MatroskaDemuxer::matroska_read_header()
         }
     }
 
+    // Info first: its TimestampScale counts the times of the blocks, and Tracks may give times in it too
+    if (!m_infoRead && ebml_peek_id(nullptr) == MATROSKA_ID_CLUSTER)
+        readAfterClusters(MATROSKA_ID_INFO);
     if (num_tracks == 0 && ebml_peek_id(nullptr) == MATROSKA_ID_CLUSTER)
-        readTracksAfterClusters();
+        readAfterClusters(MATROSKA_ID_TRACKS);
 
     /* Have we found a cluster? */
     if (ebml_peek_id(nullptr) == MATROSKA_ID_CLUSTER)
@@ -2947,7 +2952,9 @@ static bool findTopLevelElement(EbmlScan& scan, const int64_t fileSize, const ui
 // up to the first cluster only, so such a file had no tracks at all: the listing showed none, and a mux of its track
 // wrote an empty output and called it successful. The Tracks element is found through the SeekHead now and read from
 // memory, as if the reader stood there, and the reader then goes on at the first cluster where it was.
-void MatroskaDemuxer::readTracksAfterClusters()
+// The same for the Info element, which a header editor moves behind the clusters when an edited title no longer fits:
+// the file had no duration and no title, and its TimestampScale was taken as the default.
+void MatroskaDemuxer::readAfterClusters(const uint32_t wanted)
 {
     File f;
     if (!f.open(m_sourceName.c_str(), File::ofRead))
@@ -2955,7 +2962,7 @@ void MatroskaDemuxer::readTracksAfterClusters()
     const int64_t fileSize = f.size();
     EbmlScan scan(f);
     int64_t body = 0, size = 0;
-    if (!findTopLevelElement(scan, fileSize, MATROSKA_ID_TRACKS, body, size) || size <= 0 || size > (16 << 20))
+    if (!findTopLevelElement(scan, fileSize, wanted, body, size) || size <= 0 || size > (16 << 20))
         return;
     std::vector<uint8_t> data(static_cast<size_t>(size));
     f.seek(body);
@@ -2981,7 +2988,13 @@ void MatroskaDemuxer::readTracksAfterClusters()
         level->start = body;
         level->length = size;
         level->unknownSize = false;
-        matroska_parse_tracks();
+        if (wanted == MATROSKA_ID_INFO)
+        {
+            matroska_parse_info();
+            m_infoRead = true;
+        }
+        else
+            matroska_parse_tracks();
     }
     m_memoryOnly = false;
     m_curPos = savedCur;
@@ -2991,9 +3004,10 @@ void MatroskaDemuxer::readTracksAfterClusters()
     num_levels = savedLevels;
     level_up = savedLevelUp;
     peek_id = savedPeek;
-    if (num_tracks > 0)
+    if (wanted == MATROSKA_ID_INFO ? m_infoRead : num_tracks > 0)
         LTRACE(LT_INFO, 2,
-               "Matroska: the track list of " << m_sourceName << " follows the clusters, and is read there.");
+               "Matroska: the " << (wanted == MATROSKA_ID_INFO ? "segment information" : "track list") << " of "
+                                << m_sourceName << " follows the clusters, and is read there.");
 }
 
 // The chapters of a Matroska file, read wherever the Chapters element is. They used to be read only while the header

@@ -108,7 +108,9 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **H.264 film with pulldown played too fast with delPulldown,** a quarter too fast at 29.97 and 2.5 times as fast at 720p 59.94. The marks were removed and the rate stayed, as only MPEG-2 got the film rate. H.264 now gets the rate of its pictures shown once each, 24000/1001 or 24 for film, and VC-1 at 29.97 or 30 gets 24000/1001 or 24, when no fps= is given.
 
-* **A Matroska file whose track list follows its clusters was not read at all.** Matroska allows it, and a muxer writes it there when its codec data did not fit the room it kept. The listing showed no tracks, and a mux wrote an empty file and called it successful. The track list is found where the file says it is.
+* **A Matroska file whose track list follows its clusters was not read at all.** Matroska allows it, and a header editor puts it there when an edited track list no longer fits in its old place. After a long wait the listing showed no tracks, and a mux wrote an empty file and called it successful. The track list is found where the file says it is.
+
+* **A Matroska file whose segment information follows its clusters** was listed without its duration and lost its title. A header editor moves it there when an edited title no longer fits in its old place. It is found where the file says it is, as the track list is. (#50, thanks to @Moonghost-coder)
 
 * **A join of Matroska files lost the whole second file** when the clusters of the first file all had unknown size, or when it ended inside a cluster whose size runs past the end of the file, and the mux said it was successful. Such a cluster now ends where the next part of the file begins. A file with more than 16 clusters of unknown size is no longer refused, and a video track without DefaultDuration in such a file keeps its frame rate; it was muxed at 25 fps.
 
