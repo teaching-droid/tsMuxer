@@ -4103,34 +4103,47 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
         m_shownAfterFirstBlock[video->num] = shown;
         videoTime += shown;
     }
-    else if (video->codec_id && !strcmp(video->codec_id, MATROSKA_CODEC_ID_VIDEO_MPEG2))
+    // MPEG-1 and MPEG-2 video start at the earliest picture of their first group, up to the second keyframe, not at
+    // their first block. A group that is not closed stores its I picture before the B pictures shown ahead of it, the
+    // reader of both shows those first, and measured from the I picture the sound of such a file came early by those
+    // pictures: 33 ms in a 29.97 film with soft pulldown (#47). Every such video track is measured so, the first as
+    // the reference and any other against it. Only these two: an HEVC stream that begins with a random access picture
+    // is timed from that picture (the TS rule), and H.264 was not measured. The listing takes the start from
+    // m_shownAfterFirstBlock, here before the first block, so below 0.
+    const auto mpegVideo = [](const MatroskaTrack* t)
     {
-        // MPEG-2 video starts at the earliest picture of its first group, up to the second keyframe, not at its first
-        // block. A group that is not closed stores its I picture before the B pictures shown ahead of it, the MPEG-2
-        // reader shows those first, and measured from the I picture the sound of such a file came early by those
-        // pictures: 33 ms in a 29.97 film with soft pulldown (#47). Only MPEG-2: an HEVC stream that begins with a
-        // random access picture is timed from that picture (the TS rule), and H.264 was not measured.
-        // The listing takes it from m_shownAfterFirstBlock, here before the first block, so not above 0.
-        int64_t earliest = videoTime;
+        return t->type == MatroskaTrackType::VIDEO && t->codec_id &&
+               (!strcmp(t->codec_id, MATROSKA_CODEC_ID_VIDEO_MPEG2) ||
+                !strcmp(t->codec_id, MATROSKA_CODEC_ID_VIDEO_MPEG1));
+    };
+    const auto firstShown = [&](const MatroskaTrack* t, const int64_t first)
+    {
+        int64_t earliest = first;
         int blocks = 0, keyframes = 0;
-        walkTrackBlocks(scan, facts.firstCluster, facts.segmentEnd, START_CLUSTERS, video->num,
-                        [&](const int64_t t, int64_t, const bool key, int)
+        walkTrackBlocks(scan, facts.firstCluster, facts.segmentEnd, START_CLUSTERS, t->num,
+                        [&](const int64_t time, int64_t, const bool key, int)
                         {
                             if (key && ++keyframes == 2)
                                 return false;
-                            earliest = (std::min)(earliest, t);
+                            earliest = (std::min)(earliest, time);
                             return ++blocks < 64;
                         });
-        if (earliest < videoTime)
-            m_shownAfterFirstBlock[video->num] = earliest - videoTime;
-        videoTime = earliest;
-    }
+        if (earliest < first)
+            m_shownAfterFirstBlock[t->num] = earliest - first;
+        return earliest;
+    };
+    if (mpegVideo(video))
+        videoTime = firstShown(video, videoTime);
     for (int i = 0; i < num_tracks; i++)
     {
         int64_t time = 0;
-        if (tracks[i] && tracks[i] != video && !vfw(tracks[i]) &&
-            (tracks[i]->type == MatroskaTrackType::VIDEO || tracks[i]->type == MatroskaTrackType::AUDIO) &&
-            firstBlock(tracks[i]->num, time) && time != videoTime)
+        if (!tracks[i] || tracks[i] == video || vfw(tracks[i]) ||
+            (tracks[i]->type != MatroskaTrackType::VIDEO && tracks[i]->type != MatroskaTrackType::AUDIO) ||
+            !firstBlock(tracks[i]->num, time))
+            continue;
+        if (mpegVideo(tracks[i]))
+            time = firstShown(tracks[i], time);
+        if (time != videoTime)
             m_trackExtras[tracks[i]->num]["srcstartdelay"] =
                 std::to_string((time - videoTime) * static_cast<int64_t>(facts.timestampScale));
     }
