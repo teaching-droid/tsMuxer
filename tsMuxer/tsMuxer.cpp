@@ -2903,6 +2903,10 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
         {
             m_bluRayMode = true;
             m_computeMuxStats = true;
+            // A disc carries AC-3, E-AC-3, DTS and DTS-HD as stream id 0xfd with its extension, as --help says and as
+            // the window always sets it for a disc. Only --new-audio-pes did it, so a disc from a meta file without it
+            // had 0xbd, and a player that takes the extension to find the audio played it without sound.
+            setNewStyleAudioPES(true);
         }
         else if (paramPair[0] == "--cut-start" || paramPair[0] == "--cut-end")
         {
