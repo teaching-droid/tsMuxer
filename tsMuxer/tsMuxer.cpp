@@ -3066,6 +3066,9 @@ void TSMuxer::setMuxFormat(const std::string& format)
 {
     m_m2tsMode = format == "M2TS" || format == "M2T" || format == "MTS" || format == "SSIF";
     m_writeBlockSize = m_m2tsMode ? DEFAULT_FILE_BLOCK_SIZE : TS188_ROUND_BLOCK_SIZE;
+    // The muxer of the second view of a 3D disc is given its file name twice (MuxerManager::preinitMux), and the
+    // buffer of the first call was left behind. Nothing has been written into it yet at this point.
+    delete[] m_outBuf;
     m_outBuf = new uint8_t[m_writeBlockSize + 1024];
     m_outBufCapacity = m_writeBlockSize + 1024;
     m_frameSize = m_m2tsMode ? 192 : 188;
