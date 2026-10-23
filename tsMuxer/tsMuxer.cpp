@@ -825,6 +825,17 @@ void TSMuxer::noteLateArrival()
     }
 }
 
+// How late the latest picture is, for the warning: whole milliseconds below one second, rounded up, so that a picture
+// that is late is never said to be 0 ms late; from one second, seconds to a hundredth. In tenths or hundredths of a
+// second, a delay of a few milliseconds read "0.0 s" or "0.00 s", as if there were none (#51).
+static std::string latenessText(const int64_t ticks)
+{
+    const int64_t ms = (std::max)(int64_t{1}, (ticks + 89) / 90);
+    if (ms < 1000)
+        return std::to_string(ms) + " ms";
+    return doubleToStr(static_cast<double>(ticks) / 90000.0, 2) + " s";
+}
+
 void TSMuxer::reportLateArrival() const
 {
     if (m_latePictures == 0)
@@ -832,8 +843,8 @@ void TSMuxer::reportLateArrival() const
     LTRACE(LT_WARN, 2,
            "Warning: with --maxbitrate=" << m_maxBitrate / 1000 << ", " << m_latePictures << " of " << m_cappedPictures
                                          << " video pictures arrive after they are due, up to "
-                                         << doubleToStr(static_cast<double>(m_worstLateness) / 90000.0, 2)
-                                         << " s late. The video's peaks are above the cap, so a player may stutter or "
+                                         << latenessText(m_worstLateness)
+                                         << " late. The video's peaks are above the cap, so a player may stutter or "
                                             "freeze there. Re-encode the video with its peak bitrate capped below the "
                                             "cap, or raise the cap.");
 }
