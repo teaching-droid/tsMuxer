@@ -1565,8 +1565,11 @@ static void noteRemovedOutput(const std::string& name, const bool afterError = f
         LTRACE(LT_WARN, 2, line);
 }
 
-static void printRemovedOutputNotes()
+// lineOpen: the error before it was written without an end of line, so the note begins one of its own
+static void printRemovedOutputNotes(const bool lineOpen = false)
 {
+    if (lineOpen && !removedOutputNotes().empty())
+        LTRACE2(LT_ERROR, "\n")
     for (const std::string& line : removedOutputNotes()) LTRACE(LT_WARN, 2, line);
     removedOutputNotes().clear();
 }
@@ -4278,7 +4281,7 @@ int main(int argc, char** argv)
         if (argc == 2)
             LTRACE2(LT_ERROR, "Error: ")
         LTRACE2(LT_ERROR, e.what())
-        printRemovedOutputNotes();
+        printRemovedOutputNotes(true);
         return -1;
     }
     catch (VodCoreException& e)
