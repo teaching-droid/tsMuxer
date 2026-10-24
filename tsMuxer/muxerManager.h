@@ -148,6 +148,7 @@ class MuxerManager final
     void findCutKeyPictures();
     // --cut-pictures=cover: what the outputs that keep their own times are told once the start is known
     void applyCutOrigin();
+    [[nodiscard]] int64_t cutKeyBefore(int64_t key) const;
     std::unique_ptr<AbstractMuxer> createMuxer();
     void asyncWriteBlock(const WriterData& data) const;
     void checkTrackList(const std::vector<StreamInfo>& ci) const;
@@ -185,7 +186,8 @@ class MuxerManager final
     bool m_cutCover = true;               // --cut-pictures
     int m_cutMainVideo = -1;              // the stream index of the main video, the one a disc playlist follows
     std::map<int, int64_t> m_cutKeyFrom;  // cover: per video stream, the time of its key picture at or before the cut
-    int64_t m_cutShownFrom = -1;  // cover: the first picture of the main video shown at or after --cut-start
+    bool m_cutStartCovered = false;  // cover: the main video begins at its key picture at or before --cut-start
+    int64_t m_cutShownFrom = -1;     // cover: the first picture of the main video shown at or after --cut-start
     int64_t m_cutShownTo = -1;    // cover: the first picture of the main video shown at or after --cut-end
     std::string m_metaFileName;   // the meta file, read again by findCutKeyPictures
     const BufferedReaderManager& m_readManager;

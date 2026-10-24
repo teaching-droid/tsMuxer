@@ -4,6 +4,7 @@
 #include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <set>
 #include <sstream>
@@ -886,11 +887,11 @@ void MuxerManager::writeChapterFile(const std::string& outDirName)
     // --cut-pictures=cover: the demuxed video begins at its key picture before the cut, and the chapters, times from
     // the cut, describe that video. The chapter playing at the cut stays at its start.
     const auto key = m_cutKeyFrom.find(m_cutMainVideo);
-    if (m_cutCover && m_cutStart > 0 && key != m_cutKeyFrom.end() && key->second < m_cutStart)
+    const int64_t before = key != m_cutKeyFrom.end() ? cutKeyBefore(key->second) : 0;
+    if (m_cutCover && m_cutStart > 0 && before > 0)
     {
-        const auto shift = static_cast<int64_t>(static_cast<double>(m_cutStart - key->second) * 1e9 /
-                                                    static_cast<double>(INTERNAL_PTS_FREQ) +
-                                                0.5);
+        const auto shift =
+            static_cast<int64_t>(static_cast<double>(before) * 1e9 / static_cast<double>(INTERNAL_PTS_FREQ) + 0.5);
         for (AVChapter& chapter : chapters)
         {
             if (chapter.start > 0)
@@ -961,6 +962,7 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     std::set<int> withPackets;      // streams that have given a packet, subtitles left out (--cut-end)
     std::map<int, int64_t> firstMuxed;  // the time of each stream's first packet muxed (the demux of a --cut-start)
     int64_t mainVideoDts = -1;          // the decoding time of the main video's last packet (--cut-end)
+    std::set<int> shownBeforeEnd;       // the video streams that have given a picture shown before --cut-end
     // A picture a cut leaves out is not counted in the reader's "Processed N video frames", which counted every
     // picture of the source: part 2 of a film cut in two said 15000 for its 7488
     const auto leftOut = [](const AVPacket& packet)
@@ -1011,21 +1013,27 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
             // pictures shown just before the cut are made from a picture shown at or after it, which is decoded before
             // them; it was left out, and they with it, so the pictures of up to a group were in neither part of a film
             // cut in two. A disc does not show what is kept past the cut (OUT_time, m_cutShownTo).
+            // A video that shows nothing before the cut (it begins after it) ends as before, at its first picture shown
+            // at or after the cut: nothing it shows needs that picture.
             if (!subtitle)
                 withPackets.insert(avPacket.stream_index);
-            const bool endByDecoding = m_cutCover && isCutVideo(avPacket.codec);
+            const bool video = isCutVideo(avPacket.codec);
+            if (video && avPacket.pts < m_cutEnd && endedByCut.count(avPacket.stream_index) == 0)
+                shownBeforeEnd.insert(avPacket.stream_index);
+            const bool endByDecoding = m_cutCover && video && shownBeforeEnd.count(avPacket.stream_index) != 0;
             if ((endByDecoding ? avPacket.dts : avPacket.pts) >= m_cutEnd)
                 endedByCut.insert(avPacket.stream_index);
             // With cover, the first picture of the main video shown at or after the cut, kept or not: the one a disc
             // stops before, and the next part starts with. It is known once a picture decoded after its time is read.
-            if (m_cutCover && avPacket.stream_index == m_cutMainVideo)
+            const bool mainShownBefore = shownBeforeEnd.count(m_cutMainVideo) != 0;
+            if (m_cutCover && avPacket.stream_index == m_cutMainVideo && mainShownBefore)
             {
                 if (avPacket.pts >= m_cutEnd && (m_cutShownTo < 0 || avPacket.pts < m_cutShownTo))
                     m_cutShownTo = avPacket.pts;
                 mainVideoDts = avPacket.dts;
             }
             const bool shownToKnown =
-                !m_cutCover || m_cutMainVideo < 0 || (m_cutShownTo >= 0 && mainVideoDts > m_cutShownTo);
+                !m_cutCover || !mainShownBefore || (m_cutShownTo >= 0 && mainVideoDts > m_cutShownTo);
             if (!subtitle && avPacket.dts >= m_cutEnd)
             {
                 const bool allEnded = std::all_of(withPackets.begin(), withPackets.end(),
@@ -1042,7 +1050,7 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
 
         // The first picture of the main video shown at or after --cut-start: where a disc starts playing
         // (TSMuxer::setCutPlayTimes)
-        if (m_cutCover && m_cutStart > 0 && avPacket.stream_index == m_cutMainVideo && avPacket.pts >= m_cutStart &&
+        if (m_cutStartCovered && avPacket.stream_index == m_cutMainVideo && avPacket.pts >= m_cutStart &&
             (m_cutShownFrom < 0 || avPacket.pts < m_cutShownFrom))
             m_cutShownFrom = avPacket.pts;
         firstMuxed.emplace(avPacket.stream_index, avPacket.pts);
@@ -1630,6 +1638,7 @@ void MuxerManager::findCutKeyPictures()
             }
             // A picture decoded after the cut is shown after it as well, and so is every one after it
             std::set<int> past;
+            std::set<int> reaches;  // the videos with a picture shown at or after the cut
             AVPacket packet;
             while (past.size() < own.size() && pass.readPacket(packet) != BufferedReader::DATA_EOF)
             {
@@ -1637,9 +1646,15 @@ void MuxerManager::findCutKeyPictures()
                     continue;
                 if ((packet.flags & AVPacket::IS_IFRAME) && packet.pts <= m_cutStart)
                     found[packet.stream_index] = packet.pts;
+                if (packet.pts >= m_cutStart)
+                    reaches.insert(packet.stream_index);
                 if (packet.dts > m_cutStart)
                     past.insert(packet.stream_index);
             }
+            // A video that ends before the cut keeps the rule of inside: it gives nothing, and a cut at or past the
+            // end of the sources is refused as before, with the output that was there kept
+            for (auto it = found.begin(); it != found.end();)
+                it = reaches.count(it->first) != 0 ? std::next(it) : found.erase(it);
         }
         catch (const std::exception& e)
         {
@@ -1660,9 +1675,10 @@ void MuxerManager::findCutKeyPictures()
     m_cutKeyFrom = found;
     // A layer begins with the main video (keptAfterCutStart): its packets before that are not dropped by their time
     const auto mainKey = found.find(m_cutMainVideo);
+    m_cutStartCovered = mainKey != found.end();
     if (mainKey != found.end())
         for (const int layer : m_cutLayers) m_cutKeyFrom[layer] = mainKey->second;
-    if (mainKey != found.end() && mainKey->second < m_cutStart)
+    if (mainKey != found.end() && cutKeyBefore(mainKey->second) > 0)
         LTRACE(LT_INFO, 2,
                "The picture begins at the key picture at "
                    << floatToTime(static_cast<double>(mainKey->second) / INTERNAL_PTS_FREQ) << ", "
@@ -1670,11 +1686,19 @@ void MuxerManager::findCutKeyPictures()
                    << " ms before the cut; the sound and subtitles begin at the cut.");
 }
 
+// How long before --cut-start a key picture is, in whole ticks of the 90 kHz clock. A key picture on the cut whose
+// time came through another clock (the ns of a Matroska file) is a few internal ticks before it, and moved the
+// chapters by 11 ns.
+int64_t MuxerManager::cutKeyBefore(const int64_t key) const
+{
+    return key < m_cutStart ? (m_cutStart - key) / INT_FREQ_TO_TS_FREQ * INT_FREQ_TO_TS_FREQ : 0;
+}
+
 // --cut-pictures=cover with a --cut-start: the chapters of the cut are times from the cut (moveChaptersByCut,
 // readSourceChapters), and the outputs that are timed from their first picture now start before it
 void MuxerManager::applyCutOrigin()
 {
-    if (m_cutStart <= 0 || !m_cutCover)
+    if (!m_cutStartCovered)
         return;
     // A transport stream: a --split-chapters part starts at the key picture of its chapter, counted from the cut, not
     // from the first packet
@@ -1684,8 +1708,8 @@ void MuxerManager::applyCutOrigin()
     // Matroska: time 0 is the first picture
     int64_t origin = m_cutStart;
     for (const auto& [stream, from] : m_cutKeyFrom) origin = (std::min)(origin, from);
-    if (auto* mkv = dynamic_cast<MatroskaMuxer*>(m_mainMuxer.get()); mkv != nullptr && origin < m_cutStart)
-        mkv->setCutOrigin(m_cutStart - origin);
+    if (auto* mkv = dynamic_cast<MatroskaMuxer*>(m_mainMuxer.get()); mkv != nullptr && cutKeyBefore(origin) > 0)
+        mkv->setCutOrigin(cutKeyBefore(origin));
 }
 
 // A cut that does not start at the beginning kept every packet from the cut time on, so its video began with whatever
