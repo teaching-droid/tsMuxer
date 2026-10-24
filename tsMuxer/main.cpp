@@ -3,6 +3,7 @@
 #include <fs/textfile.h>
 
 #include <algorithm>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -1537,7 +1538,35 @@ struct GuardedIsoOptions
     int extraIsoSpace = 0;            // --extra-iso-space, in 64K blocks, on top of the estimate
     std::string discLabel;
     bool keepTooBigImage = true;  // an image refused by the final size check stays where it was written
+    // Set by a mux with --inner-only, which ends with an error of its own when the image fails: an unfinished image
+    // removed is said after that error, and not at all when outIso is the temporary name of KeepOldOutput
+    bool partOfMux = false;
+    bool tempName = false;
 };
+
+// ** AN OUTPUT A FAILED JOB MADE IS SAID TO BE REMOVED. ** One line, after the error that ended the job: while an
+// exception is on its way to main, the line waits there (printRemovedOutputNotes), and a job that ends with a return
+// code has said its error already.
+static std::vector<std::string>& removedOutputNotes()
+{
+    static std::vector<std::string> notes;
+    return notes;
+}
+
+static void noteRemovedOutput(const std::string& name, const bool afterError = false)
+{
+    std::string line = "The unfinished output " + name + " was removed.";
+    if (afterError || std::uncaught_exceptions() > 0)
+        removedOutputNotes().push_back(std::move(line));
+    else
+        LTRACE(LT_WARN, 2, line);
+}
+
+static void printRemovedOutputNotes()
+{
+    for (const std::string& line : removedOutputNotes()) LTRACE(LT_WARN, 2, line);
+    removedOutputNotes().clear();
+}
 
 // sizeRefused, when given, comes back true when the finished image was refused because it does not fit the disc
 static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused = nullptr);
@@ -2284,22 +2313,35 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
 
     // An image this run makes and does not finish is removed: a refusal that comes while the image is written, such as
     // a path too long for the system after the files were copied, left an image of several MB that holds no disc. It
-    // is made before the helper, so the helper has closed the image when it is removed.
+    // is made before the helper, so the helper has closed the image when it is removed. The .layerbreak.txt written
+    // beside it goes with it, when this run made that as well.
     struct UnfinishedImage
     {
         std::string name;
         bool keep = false;
+        bool sideFileExisted = true;
+        bool quiet = false;       // the error already says the image is not kept, or name is a temporary name
+        bool afterError = false;  // part of a mux that ends with its own error
         ~UnfinishedImage()
         {
             std::error_code ec;
-            if (!keep && !name.empty())
-                std::filesystem::remove(fsPath(name), ec);
+            if (keep || name.empty())
+                return;
+            if (!sideFileExisted)
+                std::filesystem::remove(fsPath(name + ".layerbreak.txt"), ec);
+            if (std::filesystem::remove(fsPath(name), ec) && !quiet)
+                noteRemovedOutput(name, afterError);
         }
     } unfinished;
     {
         std::error_code ec;
         if (!std::filesystem::exists(fsPath(outIso), ec))
+        {
             unfinished.name = outIso;
+            unfinished.sideFileExisted = std::filesystem::exists(fsPath(outIso + ".layerbreak.txt"), ec);
+            unfinished.quiet = opt.tempName;
+            unfinished.afterError = opt.partOfMux;
+        }
     }
     BlurayHelper helper;
     if (!helper.open(outIso, DiskType::BLURAY, total, extraISOBlocks, opt.reproducibleHeader, layerBreakGuardMB,
@@ -2501,6 +2543,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
                                                        << " bytes against " << capBytes << ")."
                                                        << (opt.keepTooBigImage ? " It was kept at " + outIso : ""));
                     unfinished.keep = opt.keepTooBigImage;
+                    unfinished.quiet = true;  // the mux's error says the image is not kept
                     if (sizeRefused)
                         *sizeRefused = true;
                     return -1;
@@ -2778,6 +2821,13 @@ static bool pathIsInside(const std::filesystem::path& child, const std::filesyst
 // not exist yet is written in place, as before. A demux into a folder that exists is written into a temporary folder
 // inside it: a demux refused at its end (a cut past the end of the sources) had emptied the files of an earlier demux
 // of the same sources.
+// ** AN OUTPUT THE JOB MADE GOES WHEN THE JOB FAILS. ** An output that did not exist was written in place and left as
+// far as the job had come: a meta line with the wrong codec, a track a WebM file cannot hold or a mux that stopped
+// before its sources were read left a file, a disc folder or a demux folder that looked like a result. Only what this
+// job made goes: the file and its split parts, the BDMV and CERTIFICATE folders of a disc folder, the files of a demux
+// folder, and the folders made for them; a folder that was there before is never removed, nor anything in it the
+// job did not write. One line says so. A source that is cut off is the one exception: the job ends with an error that
+// says the output holds what the file has, and a new output is kept then (keepNewOutput), as that message says.
 class KeepOldOutput
 {
    public:
@@ -2786,17 +2836,8 @@ class KeepOldOutput
     KeepOldOutput& operator=(const KeepOldOutput&) = delete;
     ~KeepOldOutput()
     {
-        if (!m_committed && !m_fresh.empty())
-            removeEmptySkeleton();
-        if (!m_committed && !m_freshDemux.empty())
-            removeEmptyDemux();
-        if (!m_committed && !m_freshImage.empty())
-        {
-            // A refusal that comes only during the mux, such as an MVC view without its base, left an image of a
-            // few MB that holds no disc
-            std::error_code ec;
-            std::filesystem::remove(m_freshImage, ec);
-        }
+        if (!m_committed)
+            removeFreshOutput();
         if (!m_armed || m_committed || m_swapBegun)
             return;
         std::error_code ec;
@@ -2820,9 +2861,14 @@ class KeepOldOutput
                 exists = true;
         if (!exists)
         {
-            // an image this job makes and does not finish holds no disc: it goes again (see the destructor)
-            if (strToLowerCase(ext) == ".iso")
-                m_freshImage = out;
+            // Neither the file nor a split part of it is there: whatever of them a failed job writes goes again. An
+            // image this job makes and does not finish holds no disc: it goes also when a source is cut off.
+            m_freshFile = out;
+            m_freshName = dst;
+            m_freshDir = dir;
+            m_freshSplitPrefix = stem + ".split.";
+            m_freshIsImage = strToLowerCase(ext) == ".iso";
+            m_createdDirs = missingFolders(dir);
             return dst;
         }
         m_dir = dir;
@@ -2844,7 +2890,9 @@ class KeepOldOutput
         if (!std::filesystem::exists(out / "BDMV", ec) && !std::filesystem::exists(out / "CERTIFICATE", ec))
         {
             m_fresh = out;
+            m_freshName = dst;
             m_freshFolderExisted = std::filesystem::exists(out, ec);
+            m_createdDirs = missingFolders(out);
             return dst;
         }
         std::filesystem::path base = out;
@@ -2867,7 +2915,14 @@ class KeepOldOutput
         std::error_code ec;
         if (!std::filesystem::is_directory(out, ec))
         {
-            m_freshDemux = out;
+            // Only a folder this job makes. A file of that name is not a folder of the job's, and was never removed
+            // with it: the demux fails on it and it stays.
+            if (!std::filesystem::exists(out, ec))
+            {
+                m_freshDemux = out;
+                m_freshName = dst;
+                m_createdDirs = missingFolders(out);
+            }
             return dst;
         }
         m_dir = out;
@@ -2878,6 +2933,13 @@ class KeepOldOutput
         warnRoom(out, estimate);
         return pathStr(m_tmp);
     }
+
+    // The job ends with an error over a source that is cut off, and that error says the output holds what the file
+    // has: a new file or disc folder is kept, as before. An image still goes, and an old output stays as it was.
+    void keepNewOutput() { m_keepNew = true; }
+
+    // The output is written under a temporary name, as one of that name exists
+    [[nodiscard]] bool armed() const { return m_armed; }
 
     // The job has succeeded: the new output takes the old one's place. When that fails, the new output is left where
     // the message says it is: it used to be removed as the job ended, after the message had named it as complete.
@@ -2968,10 +3030,92 @@ class KeepOldOutput
                 files.push_back(e.path());
         return files;
     }
+    // The folders of p that are not there yet, p first: the job makes them, and a failed job removes those of them
+    // that are empty when its output has gone.
+    static std::vector<std::filesystem::path> missingFolders(std::filesystem::path p)
+    {
+        std::vector<std::filesystem::path> dirs;
+        std::error_code ec;
+        while (!p.empty() && !std::filesystem::exists(p, ec) && !ec)
+        {
+            dirs.push_back(p);
+            if (!p.has_parent_path() || p.parent_path() == p)
+                break;
+            p = p.parent_path();
+        }
+        return dirs;
+    }
+
+    // Removes the file p, and says whether it had a byte in it. An empty file or folder that goes is not reported:
+    // that was the rule for an empty disc skeleton and an empty demux folder before.
+    static bool removeFile(const std::filesystem::path& p)
+    {
+        std::error_code ec;
+        const auto size = std::filesystem::file_size(p, ec);
+        const bool hadData = !ec && size > 0;
+        return std::filesystem::remove(p, ec) && hadData;
+    }
+
+    // A failed job: the output it made in place goes (see above the class). Nothing that was there when the job began
+    // is touched: forFile, forDiscFolder and forDemuxFolder name an output here only when it was not there.
+    void removeFreshOutput() const
+    {
+        std::error_code ec;
+        bool removedData = false;
+        if (!m_freshFile.empty())
+        {
+            if (m_keepNew && !m_freshIsImage)
+                return;
+            // the file and its split parts: none of them was there (forFile)
+            std::vector<std::filesystem::path> files;
+            if (std::filesystem::is_regular_file(m_freshFile, ec))
+                files.push_back(m_freshFile);
+            for (const auto& e : std::filesystem::directory_iterator(m_freshDir, ec))
+                if (startsWithName(pathStr(e.path().filename()), m_freshSplitPrefix) && e.is_regular_file(ec))
+                    files.push_back(e.path());
+            for (const auto& p : files) removedData = removeFile(p) || removedData;
+        }
+        else if (!m_fresh.empty())
+        {
+            if (m_keepNew)
+            {
+                removeEmptySkeleton();
+                return;
+            }
+            // BDMV and CERTIFICATE were not there (forDiscFolder): the job made them and all that is in them
+            for (const char* sub : {"BDMV", "CERTIFICATE"})
+            {
+                std::vector<std::filesystem::path> files;
+                for (auto it = std::filesystem::recursive_directory_iterator(m_fresh / sub, ec);
+                     !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec))
+                    if (it->is_regular_file(ec))
+                        files.push_back(it->path());
+                for (const auto& p : files) removedData = removeFile(p) || removedData;
+                std::filesystem::remove_all(m_fresh / sub, ec);  // the folders the job made in them
+            }
+        }
+        else if (!m_freshDemux.empty())
+        {
+            // the folder was not there (forDemuxFolder): the files in it are the job's
+            std::vector<std::filesystem::path> files;
+            for (const auto& e : std::filesystem::directory_iterator(m_freshDemux, ec))
+                if (e.is_regular_file(ec))
+                    files.push_back(e.path());
+            for (const auto& p : files) removedData = removeFile(p) || removedData;
+        }
+        else
+            return;
+        for (const auto& d : m_createdDirs)
+            if (std::filesystem::is_directory(d, ec) && std::filesystem::is_empty(d, ec) && !ec)
+                std::filesystem::remove(d, ec);
+        if (removedData)
+            noteRemovedOutput(m_freshName);
+    }
+
     // A disc folder written in place whose job failed before any of its files had a byte in it: the BDMV and
     // CERTIFICATE folders made for it, and the folder itself when this job made it, go again. A refusal that can come
-    // only during the mux, a program map table longer than 1021 bytes, left an empty disc skeleton. A failure after
-    // anything was written leaves the output as it is, as before.
+    // only during the mux, a program map table longer than 1021 bytes, left an empty disc skeleton. Now used only when
+    // a source is cut off (keepNewOutput): a disc with data in it is kept then.
     void removeEmptySkeleton() const
     {
         std::error_code ec;
@@ -2983,17 +3127,6 @@ class KeepOldOutput
         for (const char* sub : {"BDMV", "CERTIFICATE"}) std::filesystem::remove_all(m_fresh / sub, ec);
         if (!m_freshFolderExisted && std::filesystem::is_empty(m_fresh, ec) && !ec)
             std::filesystem::remove(m_fresh, ec);
-    }
-
-    // A demux into a folder this job made, refused during the mux before any of its files had a byte in it: the empty
-    // files and the folder go again. They were left behind.
-    void removeEmptyDemux() const
-    {
-        std::error_code ec;
-        for (const auto& e : std::filesystem::directory_iterator(m_freshDemux, ec))
-            if (!e.is_regular_file(ec) || e.file_size(ec) > 0)
-                return;
-        std::filesystem::remove_all(m_freshDemux, ec);
     }
 
     static void warnRoom(const std::filesystem::path& dir, const int64_t estimate)
@@ -3012,11 +3145,17 @@ class KeepOldOutput
     bool m_committed = false;
     bool m_swapBegun = false;  // the swap has begun: what the job wrote is not removed any more
     bool m_folder = false;
-    std::filesystem::path m_fresh;  // a disc folder written in place (forDiscFolder), for removeEmptySkeleton
-    // a demux folder this job makes, for removeEmptyDemux
+    std::filesystem::path m_fresh;  // a disc folder written in place (forDiscFolder)
+    // a demux folder this job makes (forDemuxFolder)
     std::filesystem::path m_freshDemux;
-    // an ISO image this job makes, removed when the job fails
-    std::filesystem::path m_freshImage;
+    // a file this job makes (forFile): an ISO image, a transport stream or a Matroska file, and its split parts
+    std::filesystem::path m_freshFile;
+    std::filesystem::path m_freshDir;
+    std::string m_freshSplitPrefix;
+    bool m_freshIsImage = false;
+    std::string m_freshName;  // the output as the job names it, for the line that says it was removed
+    std::vector<std::filesystem::path> m_createdDirs;  // the folders the output needs that were not there, deepest first
+    bool m_keepNew = false;                            // keepNewOutput
     bool m_freshFolderExisted = false;
     bool m_demux = false;
     std::filesystem::path m_dir;
@@ -3802,7 +3941,15 @@ int main(int argc, char** argv)
             muxerManager.doMux(keepOld.forFile(dstFile, muxerManager.totalSize()), nullptr);
 
             checkSourceConsumed(muxerManager);
-            checkSourcesCutOff(muxerManager);
+            try
+            {
+                checkSourcesCutOff(muxerManager);
+            }
+            catch (...)
+            {
+                keepOld.keepNewOutput();  // the error says the output holds what the file has
+                throw;
+            }
             checkEmptyTracks(muxerManager);
             keepOld.commit();
             setSaveSrtJobSucceeded();
@@ -4011,7 +4158,15 @@ int main(int argc, char** argv)
             // program without a message.
             blurayHelper.close();
             checkSourceConsumed(muxerManager);
-            checkSourcesCutOff(muxerManager);
+            try
+            {
+                checkSourcesCutOff(muxerManager);
+            }
+            catch (...)
+            {
+                keepOld.keepNewOutput();  // the error says the output holds what the file has
+                throw;
+            }
             checkEmptyTracks(muxerManager);
             if (innerIso)
             {
@@ -4032,6 +4187,8 @@ int main(int argc, char** argv)
                 iso.extraIsoSpace = muxerManager.getExtraIsoSpaceGiven();
                 iso.discLabel = isoDiskLabel;
                 iso.keepTooBigImage = false;  // the folder is kept instead, see below
+                iso.partOfMux = true;
+                iso.tempName = keepOld.armed();
                 LTRACE(LT_INFO, 2, "--inner-only, step 2 of 2: the image is laid out from the folder.");
                 bool sizeRefused = false;
                 if (buildGuardedIso(iso, &sizeRefused) != 0)
@@ -4118,6 +4275,7 @@ int main(int argc, char** argv)
         if (argc == 2)
             LTRACE2(LT_ERROR, "Error: ")
         LTRACE2(LT_ERROR, e.what())
+        printRemovedOutputNotes();
         return -1;
     }
     catch (VodCoreException& e)
@@ -4125,6 +4283,7 @@ int main(int argc, char** argv)
         if (argc == 2)
             LTRACE2(LT_ERROR, "Error: ")
         LTRACE(LT_ERROR, 2, e.m_errStr.c_str());
+        printRemovedOutputNotes();
         return -2;
     }
     catch (BitStreamException& e)
@@ -4132,6 +4291,7 @@ int main(int argc, char** argv)
         if (argc == 2)
             LTRACE2(LT_ERROR, "Error: ")
         LTRACE(LT_ERROR, 2, "Bitstream exception " << e.what() << EXCEPTION_ERR_MSG);
+        printRemovedOutputNotes();
         return -3;
     }
     catch (...)
@@ -4139,6 +4299,7 @@ int main(int argc, char** argv)
         if (argc == 2)
             LTRACE2(LT_ERROR, "Error: ")
         LTRACE(LT_ERROR, 2, "Unknown exception" << EXCEPTION_ERR_MSG);
+        printRemovedOutputNotes();
         return -4;
     }
 }
