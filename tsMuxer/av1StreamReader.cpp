@@ -424,9 +424,16 @@ CheckStreamRez AV1StreamReader::checkStream(uint8_t* buffer, const int len)
         str << "  Level: " << static_cast<int>(m_seqHdr.seq_level_idx_0);
         str << "  Resolution: " << m_seqHdr.max_frame_width << "x" << m_seqHdr.max_frame_height;
         str << "  Bit depth: " << m_seqHdr.getBitDepth() << "bit";
+        // An AV1 sequence header seldom holds timing info, and the libaom and SVT-AV1 IVF files never had it, so
+        // their listing said "Frame rate: not found" although the mux takes the rate from the IVF frame times (set
+        // above: 23.976 for a 24000/1001 time base and also for an IVF copied through Matroska, whose time base is
+        // 1/1000). The listing now gives that rate when the sequence header has none, as for VP8 and VP9 in IVF. A
+        // raw OBU file has no IVF rate and still says "not found".
         str << "  Frame rate: ";
         if (m_seqHdr.getFPS() > 0)
             str << m_seqHdr.getFPS();
+        else if (ivfFps > 0)
+            str << correctFps(ivfFps);
         else
             str << "not found";
         rez.streamDescr = str.str();
