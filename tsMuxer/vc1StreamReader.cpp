@@ -421,3 +421,21 @@ void VC1StreamReader::updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* nex
     }
     memcpy(buff + 1, tmpBuffer.get(), newSpsLen);
 }
+
+// ** THE UNITS THAT CANNOT BE VC-1 (see MPEGStreamReader::unusableUnit). ** SMPTE ST 421 Annex E (Table E.1): the BDU
+// types other than 0A to 0F and the user data 1B to 1F are reserved or forbidden. The longest unit of a type is the
+// size its syntax comes to, with room to spare: a sequence header with 31 leaky buckets is about 150 bytes.
+bool VC1StreamReader::unusableUnit(const uint8_t* unit, const uint8_t* /*end*/, int& maxLen)
+{
+    maxLen = 0;
+    const int type = unit[0];
+    if (!((type >= 0x0A && type <= 0x0F) || (type >= 0x1B && type <= 0x1F)))
+        return true;
+    if (type == 0x0F)  // sequence header
+        maxLen = 256;
+    else if (type == 0x0E)  // entry point
+        maxLen = 128;
+    else if (type == 0x0A)  // end of sequence
+        maxLen = 64;
+    return false;
+}

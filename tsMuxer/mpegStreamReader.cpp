@@ -86,6 +86,7 @@ int MPEGStreamReader::flushPacket(AVPacket& avPacket)
     {
         m_curPos = m_tmpBuffer;
         m_bufEnd = m_tmpBuffer + m_tmpBufferLen;
+        countUnits(m_curPos, m_bufEnd);
         const int isNal = bufFromNAL();
         int decodeRez = 0;
         if (isNal)
@@ -256,6 +257,7 @@ int MPEGStreamReader::readPacket(AVPacket& avPacket)
             uint8_t* nal = NALUnit::findNALWithStartCode(m_curPos + isNal, m_bufEnd, m_longCodesAllowed);
             // assert(nal < findEnd); // if unit is skipped, next unit MUST be in buffer
 
+            countUnitBytes(m_curPos, nal - m_curPos, isNal);
             m_processedBytes += nal - m_curPos;
             prevPos = m_curPos = nal;
             if (nal == m_bufEnd)
@@ -309,6 +311,7 @@ int MPEGStreamReader::readPacket(AVPacket& avPacket)
     }
 
     const int bytesProcessed = static_cast<int>(nal - prevPos);
+    countUnitBytes(m_curPos, nal - m_curPos, isNal);
     avPacket.data = m_curPos;
     avPacket.size = bytesProcessed;
     avPacket.pts = m_curPts + m_timeOffset;
@@ -360,6 +363,110 @@ int MPEGStreamReader::bufFromNAL(const uint8_t* buff, const uint8_t* bufEnd, boo
 */
 
 int64_t MPEGStreamReader::getProcessedSize() { return m_processedBytes; }
+
+// ** WHAT A READER CANNOT USE IS COUNTED WHERE IT GOES THROUGH THE UNITS, NOT WHERE THE DATA ARRIVES. ** A track named
+// as another codec than the file holds came out as "video" when one parameter set of the right type turned up by
+// chance: DTS read as HEVC gave 2,633 "pictures" and "Mux successful". Every unit passes here once, in the packets
+// readPacket sends (or skips) and in the rest flushPacket sends, from whatever source: a raw file, a transport stream,
+// MP4 or Matroska. The bytes before the first start code are not in a unit and are not counted at all.
+void MPEGStreamReader::countUnitBytes(const uint8_t* pos, const int64_t len, const int startCodeLen)
+{
+    if (startCodeLen > 0)
+    {
+        m_unusableBytes += overLongUnitBytes();
+        int maxLen = 0;
+        m_unitUnusable = len > startCodeLen && unusableUnit(pos + startCodeLen, pos + len, maxLen);
+        m_unitMaxLen = maxLen;
+        m_unitLen = -startCodeLen;
+        m_unitStartCodeLen = startCodeLen;
+        m_unitOpen = true;
+    }
+    if (!m_unitOpen)
+        return;
+    m_unitBytes += len;
+    m_unitLen += len;
+    if (m_unitUnusable)
+        m_unusableBytes += len;
+}
+
+void MPEGStreamReader::countUnits(const uint8_t* from, const uint8_t* end)
+{
+    for (const uint8_t* p = from; p < end;)
+    {
+        int startCodeLen = 0;
+        if (end - p >= 3 && p[0] == 0 && p[1] == 0)
+        {
+            if (p[2] == 1)
+                startCodeLen = 3;
+            else if (m_longCodesAllowed && end - p >= 4 && p[2] == 0 && p[3] == 1)
+                startCodeLen = 4;
+        }
+        const uint8_t* next =
+            NALUnit::findNALWithStartCode(const_cast<uint8_t*>(p + (startCodeLen ? startCodeLen : 1)),
+                                          const_cast<uint8_t*>(end), m_longCodesAllowed);
+        countUnitBytes(p, next - p, startCodeLen);
+        p = next;
+    }
+}
+
+int64_t MPEGStreamReader::overLongUnitBytes() const
+{
+    return m_unitOpen && !m_unitUnusable && m_unitMaxLen > 0 && m_unitLen > m_unitMaxLen
+               ? m_unitLen + m_unitStartCodeLen
+               : 0;
+}
+
+int64_t MPEGStreamReader::getUnusableBytes() const { return m_unusableBytes + overLongUnitBytes(); }
+
+MPEGStreamReader::UnitHead::UnitHead(const uint8_t* unit, const uint8_t* end, const int headerBytes)
+{
+    const uint8_t* const last = (std::min)(end, unit + sizeof(m_data));
+    const int len = last > unit ? NALUnit::decodeNAL(unit, last, m_data, sizeof(m_data)) : 0;
+    m_bits = len > 0 ? len * 8 : 0;
+    m_pos = headerBytes * 8;
+}
+
+bool MPEGStreamReader::UnitHead::readBit(int& value)
+{
+    if (m_pos >= m_bits)
+        return false;
+    value = (m_data[m_pos / 8] >> (7 - m_pos % 8)) & 1;
+    m_pos++;
+    return true;
+}
+
+bool MPEGStreamReader::UnitHead::skipBits(const int n)
+{
+    m_pos += n;
+    return m_pos <= m_bits;
+}
+
+bool MPEGStreamReader::UnitHead::readUe(uint32_t& value)
+{
+    int zeros = 0;
+    int bit = 0;
+    for (;;)
+    {
+        if (!readBit(bit))
+            return false;
+        if (bit)
+            break;
+        if (++zeros > 31)
+            return false;
+    }
+    uint64_t v = 0;
+    for (int i = 0; i < zeros; i++)
+    {
+        if (!readBit(bit))
+            return false;
+        v = (v << 1) | static_cast<uint64_t>(bit);
+    }
+    v += (uint64_t{1} << zeros) - 1;
+    if (v > 0xFFFFFFFFull)
+        return false;
+    value = static_cast<uint32_t>(v);
+    return true;
+}
 
 int MPEGStreamReader::decodeNal(uint8_t* buff)
 {

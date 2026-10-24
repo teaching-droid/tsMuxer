@@ -742,3 +742,60 @@ int VVCStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPa
     m_firstFileFrame = false;
     return static_cast<int>(curPos - dstBuffer);
 }
+
+// ** THE UNITS THAT CANNOT BE VVC (see MPEGStreamReader::unusableUnit). ** ITU-T H.266 7.3.1.2, 7.4.2.2 and Table 5:
+// the forbidden_zero_bit, nuh_reserved_zero_bit 1 and nuh_layer_id above 55 (a decoder discards such a unit),
+// nuh_temporal_id_plus1 0, the reserved types 4 to 6, 11, 26 and 27, and the unspecified 28 to 31. A picture header
+// whose ph_pic_parameter_set_id is above 63 (7.4.3.8), in its own unit or in a slice header that carries it
+// (sh_picture_header_in_slice_header_flag), cannot be one. The longest unit of a type is the size its syntax comes
+// to, with room to spare.
+bool VVCStreamReader::unusableUnit(const uint8_t* unit, const uint8_t* end, int& maxLen)
+{
+    maxLen = 0;
+    if (end - unit < 2)
+        return false;
+    if ((unit[0] & 0xc0) || (unit[0] & 0x3f) > 55 || (unit[1] & 7) == 0)
+        return true;
+    const int type = unit[1] >> 3;
+    if ((type >= 4 && type <= 6) || type == 11 || type >= 26)
+        return true;
+    switch (type)
+    {
+    case 12:  // operating point information
+    case 20:  // access unit delimiter
+    case 21:  // end of sequence
+    case 22:  // end of bitstream
+        maxLen = 64;
+        break;
+    case 13:  // decoding capability information
+        maxLen = 512;
+        break;
+    case 14:  // VPS
+        maxLen = 2048;
+        break;
+    case 15:  // SPS
+    case 16:  // PPS
+        maxLen = 4096;
+        break;
+    default:
+        break;
+    }
+    if (type != 19 && type > 10)
+        return false;
+    UnitHead head(unit, end, 2);
+    if (type != 19)
+    {
+        int inSliceHeader = 0;  // sh_picture_header_in_slice_header_flag
+        if (!head.readBit(inSliceHeader))
+            return true;
+        if (!inSliceHeader)
+            return false;
+    }
+    int gdrOrIrap = 0;
+    int interAllowed = 0;
+    uint32_t ppsId = 0;
+    if (!head.readBit(gdrOrIrap) || !head.skipBits(1 + gdrOrIrap) || !head.readBit(interAllowed) ||
+        !head.skipBits(interAllowed) || !head.readUe(ppsId))
+        return true;
+    return ppsId > 63;
+}

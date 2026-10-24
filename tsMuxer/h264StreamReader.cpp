@@ -984,6 +984,11 @@ int H264StreamReader::getIdrPrevFrames(uint8_t* buff, const uint8_t* bufEnd)
                 if (slice.m_field_pic_flag && slice.frame_num == 0)
                     break;  // the IDR's second field
             }
+            // A picture whose parameter set has no order count of its own (pic_order_cnt_type 2) is shown in the
+            // order it is decoded, so it is not shown before the IDR. Its log2_max_pic_order_cnt_lsb is 0, and the
+            // shift below was by -1: undefined, measured on a damaged transport stream named as H.264.
+            if (slice.getSPS()->log2_max_pic_order_cnt_lsb == 0)
+                return prevPicCnt;
             MaxPicOrderCntLsbHalf = 1 << (slice.getSPS()->log2_max_pic_order_cnt_lsb - 1);
             if (slice.pic_order_cnt_lsb > MaxPicOrderCntLsbHalf)
             {
@@ -2281,4 +2286,68 @@ bool H264StreamReader::isPriorityData(AVPacket* packet)
         return true;
     }
     return false;
+}
+
+// ** THE UNITS THAT CANNOT BE H.264 (see MPEGStreamReader::unusableUnit). ** ITU-T H.264 7.3.1 and Table 7-1: the
+// forbidden_zero_bit, type 0 and 25 to 31 (unspecified; 24 is the delimiter of an MVC view on a Blu-ray disc and
+// stays), and the types reserved for later (16 to 18, 22, 23). A slice whose first fields are out of range (7.4.3:
+// slice_type 0 to 9, pic_parameter_set_id 0 to 255, an IDR picture coded intra only) is a slice by its type alone. The
+// longest unit of a type is the size its syntax comes to, with room to spare: an SPS or PPS of a real stream is a few
+// dozen bytes, one with scaling lists a few hundred. Other data read as H.264 has many units of these types of 2 KB.
+bool H264StreamReader::unusableUnit(const uint8_t* unit, const uint8_t* end, int& maxLen)
+{
+    maxLen = 0;
+    if (*unit & 0x80)
+        return true;
+    const int type = *unit & 0x1f;
+    switch (type)
+    {
+    case 0:
+    case 16:
+    case 17:
+    case 18:
+    case 22:
+    case 23:
+    case 25:
+    case 26:
+    case 27:
+    case 28:
+    case 29:
+    case 30:
+    case 31:
+        return true;
+    case 7:  // SPS
+        maxLen = 1024;
+        return false;
+    case 8:  // PPS
+        maxLen = 512;
+        return false;
+    case 15:  // subset SPS
+        maxLen = 2048;
+        return false;
+    case 9:   // access unit delimiter
+    case 10:  // end of sequence
+    case 11:  // end of stream
+    case 13:  // SPS extension
+    case 14:  // prefix
+    case 24:  // the delimiter of an MVC view on a Blu-ray disc
+        maxLen = 64;
+        return false;
+    case 1:
+    case 2:
+    case 5:
+    {
+        UnitHead head(unit, end, 1);
+        uint32_t firstMb = 0;
+        uint32_t sliceType = 0;
+        uint32_t ppsId = 0;
+        if (!head.readUe(firstMb) || !head.readUe(sliceType) || !head.readUe(ppsId))
+            return true;
+        if (sliceType > 9 || ppsId > 255)
+            return true;
+        return type == 5 && sliceType % 5 != 2 && sliceType % 5 != 4;  // an IDR picture is coded intra only
+    }
+    default:
+        return false;
+    }
 }

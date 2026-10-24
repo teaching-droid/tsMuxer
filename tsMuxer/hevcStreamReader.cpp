@@ -1711,3 +1711,46 @@ int HEVCStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
     m_firstFileFrame = false;
     return static_cast<int>(curPos - dstBuffer);
 }
+
+// ** THE UNITS THAT CANNOT BE HEVC (see MPEGStreamReader::unusableUnit). ** ITU-T H.265 7.3.1.2 and Table 7-1: the
+// forbidden_zero_bit, nuh_temporal_id_plus1 0, the reserved types 10 to 15, 22 to 31 and 41 to 47, and the unspecified
+// 48 to 61 (62 and 63 carry Dolby Vision and stay). A slice whose slice_pic_parameter_set_id is above 63 (7.4.7.1) is
+// a slice by its type alone. The longest unit of a type is the size its syntax comes to, with room to spare.
+bool HEVCStreamReader::unusableUnit(const uint8_t* unit, const uint8_t* end, int& maxLen)
+{
+    maxLen = 0;
+    if (end - unit < 2)
+        return false;
+    if ((unit[0] & 0x80) || (unit[1] & 7) == 0)
+        return true;
+    const int type = (unit[0] >> 1) & 0x3f;
+    if ((type >= 10 && type <= 15) || (type >= 22 && type <= 31) || (type >= 41 && type <= 61))
+        return true;
+    if (type <= 9 || (type >= 16 && type <= 21))
+    {
+        UnitHead head(unit, end, 2);
+        // first_slice_segment_in_pic_flag, and no_output_of_prior_pics_flag in an IRAP picture
+        uint32_t ppsId = 0;
+        if (!head.skipBits(type >= 16 ? 2 : 1) || !head.readUe(ppsId))
+            return true;
+        return ppsId > 63;
+    }
+    switch (type)
+    {
+    case 32:  // VPS
+    case 34:  // PPS
+        maxLen = 1024;
+        break;
+    case 33:  // SPS
+        maxLen = 2048;
+        break;
+    case 35:  // access unit delimiter
+    case 36:  // end of sequence
+    case 37:  // end of bitstream
+        maxLen = 64;
+        break;
+    default:
+        break;
+    }
+    return false;
+}

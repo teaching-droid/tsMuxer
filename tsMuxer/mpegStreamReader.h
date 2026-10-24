@@ -161,6 +161,36 @@ class MPEGStreamReader : public AbstractStreamReader
 
    public:
     [[nodiscard]] int64_t getDeliveredFrames() const override { return m_totalFrameNum; }
+    // The bytes of the units the reader went through, from the first start code on, and how many of them are in
+    // units the codec cannot have (unusableUnit). Video of another codec has start codes too, and some of what
+    // follows them passes for a parameter set or a picture: a track mostly of such units is not this codec.
+    [[nodiscard]] int64_t getUnitBytes() const { return m_unitBytes; }
+    [[nodiscard]] int64_t getUnusableBytes() const;
+
+   protected:
+    // Whether the unit whose header begins at unit, behind its start code, is one the codec cannot use: a header it
+    // forbids or reserves, or a picture whose first fields are impossible. maxLen is set to the longest a unit of this
+    // type can be (0: no limit); a longer one cannot be what its header says. end: the end of what is buffered of it.
+    virtual bool unusableUnit(const uint8_t* unit, const uint8_t* end, int& maxLen)
+    {
+        maxLen = 0;
+        return false;
+    }
+    // The first bytes of a unit without its emulation prevention bytes, to read the first fields of its header. The
+    // reading begins behind the headerBytes of the unit header.
+    class UnitHead
+    {
+       public:
+        UnitHead(const uint8_t* unit, const uint8_t* end, int headerBytes);
+        bool skipBits(int n);
+        bool readUe(uint32_t& value);  // false: the code runs past what was read, or is longer than 32 bits
+        bool readBit(int& value);
+
+       private:
+        uint8_t m_data[32];
+        int m_bits = 0;
+        int m_pos = 0;
+    };
 
    protected:
     virtual double getStreamFPS(void* curNalUnit) = 0;
@@ -213,6 +243,18 @@ class MPEGStreamReader : public AbstractStreamReader
     [[nodiscard]] int bufFromNAL() const;
     virtual int decodeNal(uint8_t* buff);
     void storeBufferRest();
+    // getUnitBytes / getUnusableBytes. A unit goes out in one or more packets; the first begins with its start code
+    // (startCodeLen > 0), the rest continue it.
+    void countUnitBytes(const uint8_t* pos, int64_t len, int startCodeLen);
+    void countUnits(const uint8_t* from, const uint8_t* end);  // the units of a block, as flushPacket sends it
+    int64_t m_unitBytes = 0;
+    int64_t m_unusableBytes = 0;  // of the units before the current one, and of the current one so far
+    int64_t m_unitLen = 0;        // of the current unit, without its start code
+    int m_unitStartCodeLen = 0;
+    int m_unitMaxLen = 0;
+    [[nodiscard]] int64_t overLongUnitBytes() const;  // the current unit, where it is longer than its type allows
+    bool m_unitUnusable = false;
+    bool m_unitOpen = false;
 };
 
 #endif

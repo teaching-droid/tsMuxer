@@ -2923,6 +2923,15 @@ static bool isAudioOrVideoLine(const StreamInfo& si)
     return strStartWith(si.m_codec, "A_") || strStartWith(si.m_codec, "V_");
 }
 
+static std::string trackSourceName(const StreamInfo& si)
+{
+    return si.m_fullStreamName.empty() ? ("\"" + si.m_streamName + "\"") : si.m_fullStreamName;
+}
+
+static constexpr const char* WRONG_CODEC_HINT =
+    "The usual reason is that the codec on the meta line is not the codec the file holds. List the file on its own to "
+    "see what tsMuxeR makes of it. The output is incomplete.";
+
 static void checkEmptyTracks(const MuxerManager& muxerManager)
 {
     const bool cut = muxerManager.getCutStart() > 0 || muxerManager.getCutEnd() > 0;
@@ -2947,6 +2956,49 @@ static void checkEmptyTracks(const MuxerManager& muxerManager)
                                   << " could not be used, more than half of it. The usual reason is that the codec on "
                                      "the meta line is not the codec the file holds. List the file on its own to see "
                                      "what tsMuxeR makes of it. The output is incomplete.")
+        // ** WHAT THE LOSS LEAVES OUT. ** It does not count what comes before the first frame and after the last, on
+        // purpose (a stream may begin in the middle of a frame and end with a tag), so a WAV file named A_MP3 that
+        // gave two frames at its start lost nothing of its 8 MB and passed with 1.7 KB of output. The frames have to
+        // carry half of what was read, the tags left aside. LPCM has a reader of its own and its own loss count.
+        const int64_t tags = (std::min)(audio->getTagBytes(), total);
+        const int64_t besideTags = total - tags;
+        if (si.m_codec != "A_LPCM" && besideTags > 0 && audio->getFrameBytes() < besideTags / 2)
+            THROW(ERR_COMMON, trackSourceName(si)
+                                  << ": only " << audio->getFrameBytes() << " of the " << besideTags
+                                  << " bytes read for this track as " << si.m_codec
+                                  << (tags > 0 ? ", its tags left aside," : "")
+                                  << " are frames of that codec, less than half of it. " << WRONG_CODEC_HINT)
+        // ** FRAMES FOUND ONE BY ONE, EACH WITH ANOTHER RATE. ** The AAC sync word turns up in PCM often enough that
+        // two thirds of a WAV file named A_AAC became "frames", every one found after the one before failed, and with
+        // another sample rate or channel count nearly every time. A real stream found again after damage keeps them.
+        const int64_t frames = audio->getDeliveredFrames();
+        if (frames >= 20 && audio->getSyncChanges() * 10 > frames)
+            THROW(ERR_COMMON, trackSourceName(si) << ": the sample rate or the channels changed at "
+                                                  << audio->getSyncChanges() << " of the " << frames
+                                                  << " frames read as " << si.m_codec << "; a real stream keeps them. "
+                                                  << WRONG_CODEC_HINT)
+    }
+    // ** VIDEO OF ANOTHER CODEC. ** A video reader passed a track as soon as one picture was found, and other data
+    // has start codes too (DTS, TrueHD and MPEG-2 video have many), some of them followed by what passes for a
+    // parameter set or a slice: DTS named as HEVC gave 2,633 "pictures" and "Mux successful". Each reader counts the
+    // units it cannot use (MPEGStreamReader::unusableUnit). Real video has at most a few bytes in a thousand of them,
+    // also when damaged, as damage seldom makes a start code; other data read as video has from 71 % up.
+    for (const StreamInfo& si : muxerManager.getStreamInfo())
+    {
+        if (cut)
+            break;
+        auto* video = dynamic_cast<MPEGStreamReader*>(si.m_streamReader);
+        if (video == nullptr || !strStartWith(si.m_codec, "V_"))
+            continue;
+        const int64_t unusable = video->getUnusableBytes();
+        if (si.m_readCnt > 0 && unusable > si.m_readCnt / 2)
+            THROW(ERR_COMMON, trackSourceName(si)
+                                  << ": " << unusable << " bytes of the " << si.m_readCnt << " read for this track as "
+                                  << si.m_codec << " are in units that "
+                                  << (dynamic_cast<H264StreamReader*>(video) ? std::string("H.264")
+                                                                             : video->getCodecInfo().displayName)
+                                  << " does not allow or that cannot be what they say, more than half of it. "
+                                  << WRONG_CODEC_HINT)
     }
     // ** AN OUTPUT OF NOTHING IS NOT A SUCCESS. ** A subtitle track may have nothing to show beside other tracks, but a
     // job none of whose tracks read anything, as an empty .sup muxed alone, said "Mux successful complete" and left an

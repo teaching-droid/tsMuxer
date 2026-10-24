@@ -61,6 +61,10 @@ class FLACStreamReader final : public SimplePacketizerReader
 
     /// Raw CodecPrivate data (fLaC marker + STREAMINFO metadata block, possibly more).
     std::vector<uint8_t> m_codecPrivate;
+    // The file header (marker and metadata blocks) is counted with the tags, once: a picture in it is no sound, and
+    // can be larger than the sound of a short file (see SimplePacketizerReader::getFrameBytes)
+    bool m_headerCounted = false;
+    void countHeader(int64_t len);
 
     // What one frame header says that must stay the same from frame to frame of one stream, and its number.
     struct FrameFields

@@ -34,6 +34,7 @@ class VC1StreamReader final : public MPEGStreamReader
    protected:
     const CodecInfo& getCodecInfo() override { return vc1CodecInfo; }
     int intDecodeNAL(uint8_t* buff) override;
+    bool unusableUnit(const uint8_t* unit, const uint8_t* end, int& maxLen) override;
     void updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* nextNal, int oldSpsLen) override;
     void writePESExtension(PESPacket* pesPacket, const AVPacket& avPacket) override;
     int writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPacket& avPacket,

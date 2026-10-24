@@ -508,3 +508,40 @@ void MPEG2StreamReader::updateStreamAR(void* nalUnit, uint8_t* buff, uint8_t* ne
         m_streamAR = m_ar;
     }
 }
+
+// ** THE UNITS THAT CANNOT BE MPEG-2 VIDEO (see MPEGStreamReader::unusableUnit). ** ITU-T H.262 Table 6-1: the
+// reserved start codes B0, B1 and B6, and B9 to FF, which are system start codes and not video. A picture header
+// whose picture_coding_type is 0 or 5 to 7 (Table 6-12, forbidden and reserved) is a picture by its code alone. The
+// longest unit of a type is the size its syntax comes to, with room to spare: a sequence header with both
+// quantiser matrices is 140 bytes.
+bool MPEG2StreamReader::unusableUnit(const uint8_t* unit, const uint8_t* end, int& maxLen)
+{
+    maxLen = 0;
+    const int code = unit[0];
+    if (code == 0xB0 || code == 0xB1 || code == 0xB6 || code >= 0xB9)
+        return true;
+    switch (code)
+    {
+    case 0x00:  // picture header
+    {
+        maxLen = 256;
+        if (end - unit < 3)
+            return false;
+        const int codingType = (unit[2] >> 3) & 7;
+        return codingType == 0 || codingType > 4;
+    }
+    case 0xB3:  // sequence header
+        maxLen = 160;
+        break;
+    case 0xB5:  // extension
+        maxLen = 512;
+        break;
+    case 0xB7:  // sequence end
+    case 0xB8:  // group of pictures
+        maxLen = 64;
+        break;
+    default:
+        break;
+    }
+    return false;
+}

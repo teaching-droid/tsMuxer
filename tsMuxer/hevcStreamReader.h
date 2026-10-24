@@ -51,6 +51,7 @@ class HEVCStreamReader final : public MPEGStreamReader
    protected:
     const CodecInfo& getCodecInfo() override { return hevcCodecInfo; }
     int intDecodeNAL(uint8_t* buff) override;
+    bool unusableUnit(const uint8_t* unit, const uint8_t* end, int& maxLen) override;
 
     double getStreamFPS(void* curNalUnit) override;
     [[nodiscard]] unsigned getStreamWidth() const override;

@@ -879,6 +879,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
         {
             m_tagProbePos = m_curPos;
             m_tagCredit = tagRunAt(m_curPos, m_bufEnd);
+            m_tagBytes += m_tagCredit;
         }
         int skipBytes = 0;
         int skipBeforeBytes = 0;
@@ -1051,6 +1052,10 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
             LTRACE(LT_INFO, 2,
                    "Decoding " << getCodecInfo().displayName << " stream (track " << m_streamIndex
                                << "): " << getStreamInfo());
+            if (m_syncFreq != 0 && (getFreq() != m_syncFreq || getChannels() != m_syncChannels))
+                m_syncChanges++;
+            m_syncFreq = getFreq();
+            m_syncChannels = getChannels();
             m_curPos = frame;
             m_needSync = false;
         }
@@ -1132,6 +1137,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
         avPacket.duration = nextDts - avPacket.dts;
         // doMplsCorrection();
         m_frameNum++;
+        m_frameBytes += frameLen + skipBytes + skipBeforeBytes;
         if (m_frameNum % 1000 == 0)
             LTRACE(LT_DEBUG, 0, "Processed " << m_frameNum << " " << getCodecInfo().displayName << " frames");
         m_curPos += frameLen + skipBytes + skipBeforeBytes;

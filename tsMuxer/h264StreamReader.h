@@ -52,6 +52,7 @@ class H264StreamReader final : public MPEGStreamReader
     void onSplitEvent() override { m_firstFileFrame = true; }
     const CodecInfo& getCodecInfo() override;
     int intDecodeNAL(uint8_t* buff) override;
+    bool unusableUnit(const uint8_t* unit, const uint8_t* end, int& maxLen) override;
     void updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* nextNal, int oldSpsLen) override;
     double getStreamFPS(void* curNalUnit) override
     {

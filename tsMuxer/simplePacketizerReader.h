@@ -161,6 +161,24 @@ class SimplePacketizerReader : public AbstractStreamReader
     int m_containerStreamIndex;
     std::vector<MPLSPlayItem> m_mplsInfo;
     void doMplsCorrection();
+
+   public:
+    // For the end of the job, beside getLostSize: what the frames found carry (with what a frame skips), what the tags
+    // recognised hold, and how often the sample rate or the channels were others where the stream was found again.
+    // The loss leaves out on purpose what comes before the first frame and after the last; other audio read as this
+    // codec is mostly that, with a frame or two found by chance. Its frames, found one by one, each say another rate.
+    [[nodiscard]] int64_t getFrameBytes() const { return m_frameBytes; }
+    [[nodiscard]] int64_t getTagBytes() const { return m_tagBytes; }
+    [[nodiscard]] int64_t getSyncChanges() const { return m_syncChanges; }
+
+   protected:
+    int64_t m_frameBytes = 0;
+    int64_t m_tagBytes = 0;
+
+   private:
+    int64_t m_syncChanges = 0;
+    int m_syncFreq = 0;  // the rate and channels at the sync before
+    int m_syncChannels = 0;
 };
 
 #endif

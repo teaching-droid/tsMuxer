@@ -112,6 +112,7 @@ void TrueHDAC3MergeReader::extractAc3FramesFromAccum()
                   "transcode with ffmpeg -c:a ac3 (see tsMuxer --help).")
         }
         const int total = flen + skipBytes;
+        m_frameBytes += total;  // the core arrives here, and its bytes are counted as read here (setAc3SideData)
         Ac3QueuedFrame q;
         q.data.assign(frame, frame + total);
         q.samples = m_ac3Parser.frameSamples();

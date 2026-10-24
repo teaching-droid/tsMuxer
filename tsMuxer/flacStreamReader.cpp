@@ -253,6 +253,13 @@ void FLACStreamReader::applyDiscoveryData(const StreamDiscoveryData& data)
 // Frame detection
 // ---------------------------------------------------------------------------
 
+void FLACStreamReader::countHeader(const int64_t len)
+{
+    if (!m_headerCounted)
+        m_tagBytes += len;
+    m_headerCounted = true;
+}
+
 uint8_t* FLACStreamReader::findFrame(uint8_t* buff, uint8_t* end)
 {
     // Check for "fLaC" magic at the beginning (standalone FLAC file).
@@ -290,12 +297,16 @@ uint8_t* FLACStreamReader::findFrame(uint8_t* buff, uint8_t* end)
             }
 
             if (p + blockLen > end)
+            {
+                countHeader(p + blockLen - buff);
                 return nullptr;  // metadata extends past buffer
+            }
 
             p += blockLen;
             if (isLast)
                 break;
         }
+        countHeader(p - buff);
         // p now points to the first audio frame
         if (p + 2 <= end)
         {
