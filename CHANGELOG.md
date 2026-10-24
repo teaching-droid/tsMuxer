@@ -165,7 +165,9 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **AAC from a Matroska file** keeps MPEG-4 in its ADTS headers: they said MPEG-2.
 
 * **VC-1 from a Matroska file is timed from the picture it shows first.** Its blocks hold the pictures in the order they are decoded, so the first block is a picture that is shown a frame later. The listing measured the sound from that block: a VC-1 file that tsMuxeR wrote listed its sound a frame late, the window wrote that frame as timeshift=, and the sound came one frame late. The start of the sound against the picture is now also applied to VC-1 without timeshift=, as for other video.
-* **The sound of a Matroska file whose MPEG-1 or MPEG-2 video opens with B pictures shown before its first picture came early,** by the length of those pictures: 33 to 80 ms in the files measured. Such a group stores its I picture first, and the listed Stream delay was measured from it. It is now measured from the picture shown first, as for a TS. In a file cut inside a group, whose first pictures cannot be decoded and are left out, the sound came late instead, by up to 50 ms; it is now right there as well. (#47, thanks to @Nandos64)
+* **The sound of a Matroska file whose MPEG-1 or MPEG-2 video opens with B pictures shown before its first picture came early,** by the length of those pictures: 33 to 80 ms in the files measured. Such a group stores its I picture first, and the listed Stream delay was measured from it. It is now measured from the picture shown first, as for a TS. In a file cut inside a group, whose first pictures cannot be decoded, the sound came late instead, by up to 50 ms, and by the length of every picture before the first sequence header where that header comes groups later: 4.2 s where it came 75 pictures in. It is now right there as well. (#47, thanks to @Nandos64)
+* **The chapters of a Matroska file joined after another came early,** by the B pictures shown before its first I picture, when that file stores the two fields of each I picture in a block of its own: 80 ms in the file measured. Its start was taken from the second field. Its subtitles are placed from the same start.
+* **MPEG-2 and H.264 from a Matroska file that stores each field in a block of its own, without DefaultDuration,** played at twice their speed when their stream gives no frame rate: the rate was taken from the times of the fields. It is now that of the frames. The rate taken from the times of the first pictures also leaves out the last ones read, whose B pictures are still to come: it was 59.438 for 59.94 fields.
 
 ### Subtitles
 
@@ -282,6 +284,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **MPEG-2 whose sequence header gives no frame rate** is muxed whole, at the rate of its picture times, fps= or 25: it went into one PES. The PMT gives the frame rate an MPEG-2 stream is muxed at, also with fps= or delPulldown.
 
 * **H.264 coded as fields with B pictures after an IDR that are shown before it** keeps its pictures in place: those pictures took the times of the pictures before them, and the IDR and every picture after it came 2 frames early.
+
+* **MPEG-2 that begins with pictures before its first sequence header,** as a stream cut inside a group of pictures does, leaves them out: they cannot be decoded, and they went into the output ahead of the first picture that can.
 
 * **MPEG-2 with a picture coded as two I fields** counts that picture once. Each such picture was counted twice, so the video got a frame longer at each one and the pictures after it came that much late.
 

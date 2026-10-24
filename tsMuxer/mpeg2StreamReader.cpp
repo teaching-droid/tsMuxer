@@ -217,8 +217,21 @@ CheckStreamRez MPEG2StreamReader::checkStream(uint8_t* buffer, int len)
     return rez;
 }
 
+// ** WHAT COMES BEFORE THE FIRST SEQUENCE HEADER IS LEFT OUT. ** A picture cannot be decoded without the sequence
+// header before it, and decodePicture decodes none before the first one, but the bytes of those pictures went on into
+// the output with the first picture after them: a stream cut inside a group of pictures, as a Matroska file cut without
+// re-encoding begins, put the pictures left of that group ahead of its first sequence header, with the time of the
+// first picture shown. The #47 test file so cut, with a P picture and two B pictures before the next group's I
+// picture, began with those 3 pictures, 18909 bytes that no player can decode; with the headers of its first six
+// groups taken out, with 75 pictures, 749764 bytes. The output now begins with the sequence header, and the sound
+// stays in sync (0 ms, every picture matched by its bytes). Not where a header came before (spsFound), as in the next
+// file of a join, whose first pictures follow the file before.
+bool MPEG2StreamReader::skipNal(uint8_t* nal) { return !spsFound && *nal != SEQ_START_SHORT_CODE; }
+
 int MPEG2StreamReader::intDecodeNAL(uint8_t* buff)
 {
+    if (skipNal(buff))
+        return 0;  // left out by decodeNal
     try
     {
         int rez;

@@ -35,6 +35,7 @@ class MPEG2StreamReader final : public MPEGStreamReader
     const CodecInfo& getCodecInfo() override { return mpeg2CodecInfo; }
     int intDecodeNAL(uint8_t* buff) override;
     bool unusableUnit(const uint8_t* unit, const uint8_t* end, int& maxLen) override;
+    bool skipNal(uint8_t* nal) override;
     void updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* nextNal, int oldSpsLen) override;
     void updateStreamAR(void* nalUnit, uint8_t* buff, uint8_t* nextNal, int oldSpsLen) override;
     double getStreamFPS(void* curNalUnit) override { return m_sequence.getFrameRate(); }

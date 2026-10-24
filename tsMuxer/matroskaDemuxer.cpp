@@ -3762,6 +3762,207 @@ static bool holdsMpegSequenceHeader(File& f, const int64_t frameAt, const int64_
     return false;
 }
 
+// How a block of a video track coded as fields is told to hold one field picture (holdsOneField): a writer that takes
+// each field of such a stream for a frame of its own stores a block for each, and their times are those of the
+// fields. MPEG-2: the picture coding extension of its picture says it is a field (picture_structure 1 or 2). H.264: its
+// slices say so (field_pic_flag), which follows frame_num, whose length the SPS gives; a stream whose SPS says it has
+// frames only (frame_mbs_only_flag) has no field pictures. Either way one picture in the block, not the two fields
+// of a frame stored together, as most writers store them.
+struct FieldCheck
+{
+    enum class Codec
+    {
+        NONE,
+        MPEG2,
+        H264
+    } codec = Codec::NONE;
+    int nalLength = 4;          // H.264: bytes of the length in front of each NAL unit (avcC)
+    unsigned frameNumBits = 0;  // H.264: log2_max_frame_num
+    bool colourPlane = false;   // H.264: separate_colour_plane_flag, which puts two more bits before frame_num
+};
+
+static FieldCheck fieldCheckOf(const MatroskaTrack* t)
+{
+    FieldCheck check;
+    if (t->type != MatroskaTrackType::VIDEO || !t->codec_id)
+        return check;
+    if (!strcmp(t->codec_id, MATROSKA_CODEC_ID_VIDEO_MPEG2))
+        check.codec = FieldCheck::Codec::MPEG2;
+    // avcC: version, profile, compatibility, level, 6 bits + the NAL length less 1, 3 bits + the number of SPS, then
+    // the length of the first SPS and the SPS
+    const uint8_t* avcc = t->codec_priv;
+    if (strcmp(t->codec_id, MATROSKA_CODEC_ID_AVC_FOURCC) != 0 || !avcc || t->codec_priv_size < 9 ||
+        (avcc[5] & 0x1f) == 0)
+        return check;
+    const int spsSize = avcc[6] << 8 | avcc[7];
+    if (spsSize < 4 || 8 + spsSize > t->codec_priv_size)
+        return check;
+    SPSUnit sps;
+    sps.decodeBuffer(avcc + 8, avcc + 8 + spsSize);
+    if (sps.deserialize() != 0 || sps.frame_mbs_only_flag)
+        return check;
+    check.codec = FieldCheck::Codec::H264;
+    check.nalLength = (avcc[4] & 3) + 1;
+    check.frameNumBits = sps.log2_max_frame_num;
+    check.colourPlane = sps.separate_colour_plane_flag != 0;
+    return check;
+}
+
+// The first bits of an H.264 slice header, without its emulation prevention bytes: whether it begins a picture
+// (first_mb_in_slice 0) and whether that picture is a field.
+static bool h264SliceHeader(const FieldCheck& check, const uint8_t* nal, const uint8_t* end, bool& first, bool& field)
+{
+    uint8_t bits[32];
+    const int got = NALUnit::decodeNAL(nal + 1, (std::min)(end, nal + 1 + 24), bits, sizeof(bits));
+    if (got <= 0)
+        return false;
+    int pos = 0;
+    const int total = got * 8;
+    const auto bit = [&]
+    {
+        const int b = pos < total ? bits[pos / 8] >> (7 - pos % 8) & 1 : 0;
+        pos++;
+        return b;
+    };
+    const auto ue = [&]
+    {
+        int zeros = 0;
+        while (pos < total && !bit()) zeros++;
+        uint32_t v = 0;
+        for (int i = 0; i < zeros && i < 31; i++) v = v << 1 | static_cast<uint32_t>(bit());
+        return (1u << (std::min)(zeros, 31)) - 1 + v;
+    };
+    first = ue() == 0;
+    ue();  // slice_type
+    ue();  // pic_parameter_set_id
+    pos += (check.colourPlane ? 2 : 0) + static_cast<int>(check.frameNumBits);
+    field = bit() != 0;
+    return pos <= total;
+}
+
+static bool holdsOneField(File& f, const FieldCheck& check, const int64_t frameAt, const int64_t frameSize)
+{
+    static constexpr int64_t MAX_FRAME = 16 * 1024 * 1024;
+    if (check.codec == FieldCheck::Codec::NONE || frameAt < 0 || frameSize < 8 || frameSize > MAX_FRAME)
+        return false;
+    std::vector<uint8_t> data(static_cast<size_t>(frameSize));
+    f.seek(frameAt);
+    if (f.read(data.data(), static_cast<uint32_t>(frameSize)) != static_cast<int>(frameSize))
+        return false;
+    int pictures = 0;
+    bool field = false;
+    if (check.codec == FieldCheck::Codec::MPEG2)
+    {
+        int structure = 0;
+        for (size_t i = 0; i + 6 < data.size(); i++)
+        {
+            if (data[i] != 0 || data[i + 1] != 0 || data[i + 2] != 1)
+                continue;
+            if (data[i + 3] == 0x00 && ++pictures > 1)
+                return false;
+            if (data[i + 3] == 0xB5 && pictures == 1 && structure == 0 && data[i + 4] >> 4 == 8)
+                structure = data[i + 6] & 3;  // the picture coding extension
+        }
+        field = structure == 1 || structure == 2;
+    }
+    else
+    {
+        const uint8_t* end = data.data() + data.size();
+        for (const uint8_t* p = data.data(); end - p > check.nalLength;)
+        {
+            uint32_t size = 0;
+            for (int i = 0; i < check.nalLength; i++) size = size << 8 | p[i];
+            p += check.nalLength;
+            if (size == 0 || size > static_cast<uint32_t>(end - p))
+                return false;
+            const int type = p[0] & 0x1f;
+            bool first = false, isField = false;
+            if ((type == 1 || type == 5) && h264SliceHeader(check, p, p + size, first, isField) && first)
+            {
+                if (++pictures > 1)
+                    return false;
+                field = isField;
+            }
+            p += size;
+        }
+    }
+    return pictures == 1 && field;
+}
+
+// How many clusters from the first one the start of each track is looked for in (loadTrackExtras).
+static constexpr int START_CLUSTERS = 64;
+
+// An MPEG-1 or MPEG-2 video track, whose start is that of mpegFirstShown
+static bool mpegVideo(const MatroskaTrack* t)
+{
+    return t->type == MatroskaTrackType::VIDEO && t->codec_id &&
+           (!strcmp(t->codec_id, MATROSKA_CODEC_ID_VIDEO_MPEG2) || !strcmp(t->codec_id, MATROSKA_CODEC_ID_VIDEO_MPEG1));
+}
+
+// The time of the picture an MPEG-1 or MPEG-2 track shows first: the earliest block from where its reader starts, up
+// to the end of the group of pictures it starts in, at the keyframe after that group's keyframe. A group that is not
+// closed stores its I picture before the B pictures shown ahead of it. A keyframe is a run of key blocks next to each
+// other: an I picture coded as two I fields can be stored as a key block for each field, and a walk that ended at
+// the second key block ended before those B pictures: in a 25 fps file with two of them, 80 ms after the first
+// picture shown.
+// Where the reader starts depends on what came before it. The reader of a file, or of the first file of a join,
+// decodes nothing before the first sequence header, so with fromHeader the walk starts at the first block whose frame
+// holds one, else at the first keyframe, else at the first block (loadTrackExtras gives the measured cases). In a
+// join ("a.mkv"+"b.mkv") the reader goes on into the next file with the header of the file before it, and shows the
+// blocks of that file from the first: the #47 test file cut so that it begins with a P picture at 1156 ms, then B at
+// 1073 and 1123, then the I picture at 1289 with its sequence header, joined after a whole file, has all its 2856
+// pictures in the mux, the first one shown at 1073 right after the last picture of the file before. Without
+// fromHeader the walk so starts at the first block; measured from the header, the sound of that file in the join
+// came 128 ms early, and 96 ms early for a file whose first picture shown is at 539 and whose header is at 655.
+// The header is looked for in up to HEADER_BLOCKS blocks, reading 64 bytes of each: a stream that repeats it only
+// every few hundred pictures, cut far before the next one, is decoded from that header on. From the header, or from
+// the first block without fromHeader, the group is looked for in up to GROUP_BLOCKS blocks. Gives false where the walk
+// finds no block of the track.
+static bool mpegFirstShown(EbmlScan& scan, const int64_t firstCluster, const int64_t segmentEnd, const int maxClusters,
+                           const int64_t track, const bool fromHeader, int64_t& earliest)
+{
+    static constexpr size_t GROUP_BLOCKS = 64;
+    static constexpr size_t HEADER_BLOCKS = 1024;
+    struct Walked
+    {
+        int64_t time;
+        bool key;
+    };
+    std::vector<Walked> walked;
+    int64_t header = -1;    // the first block whose frame holds a sequence header
+    int64_t firstKey = -1;  // the first key block
+    // A keyframe after the block at `from`: a key block that does not follow another key block
+    const auto keyframeAfter = [&](const size_t i, const size_t from)
+    { return i > from && walked[i].key && !walked[i - 1].key; };
+    walkTrackBlocks(
+        scan, firstCluster, segmentEnd, maxClusters, track,
+        [&](const int64_t time, int64_t, const bool key, int, const int64_t frameAt, const int64_t frameSize)
+        {
+            const auto at = static_cast<int64_t>(walked.size());
+            if (fromHeader && header < 0 && holdsMpegSequenceHeader(scan.f, frameAt, frameSize))
+                header = at;
+            if (firstKey < 0 && key)
+                firstKey = at;
+            walked.push_back({time, key});
+            const int64_t group = fromHeader ? header : firstKey;
+            if (group >= 0 && keyframeAfter(walked.size() - 1, static_cast<size_t>(group)))
+                return false;
+            if (!fromHeader)
+                return walked.size() < GROUP_BLOCKS;
+            return walked.size() < (header >= 0 ? static_cast<size_t>(header) + GROUP_BLOCKS : HEADER_BLOCKS);
+        });
+    if (walked.empty())
+        return false;
+    // where the pictures the reader shows begin, and the keyframe whose group they end with
+    size_t from = 0, group = firstKey >= 0 ? static_cast<size_t>(firstKey) : 0;
+    if (fromHeader)
+        from = group = header >= 0 ? static_cast<size_t>(header) : group;
+    earliest = walked[from].time;
+    for (size_t i = from + 1; i < walked.size() && i < group + GROUP_BLOCKS && !keyframeAfter(i, group); i++)
+        earliest = (std::min)(earliest, walked[i].time);
+    return true;
+}
+
 void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
 {
     m_trackExtras.clear();
@@ -4103,7 +4304,6 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
     if (!readSegmentFacts(fileName, facts) || facts.firstCluster <= 0 || !facts.prevUuid.empty() ||
         !facts.nextUuid.empty() || (facts.defaultEdition() && facts.defaultEdition()->ordered))
         return;
-    static constexpr int START_CLUSTERS = 64;
     const auto firstBlock = [&](const int64_t number, int64_t& time)
     {
         bool found = false;
@@ -4155,48 +4355,16 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
     // block for each field, and the walk ended at the second field, before the B pictures shown ahead of the first: in
     // a 25 fps file so stored, with two B pictures ahead of the I picture, the sound came 80 ms early.
     // The start is then before the first block or after it, and the listing takes it from m_shownAfterFirstBlock.
-    const auto mpegVideo = [](const MatroskaTrack* t)
-    {
-        return t->type == MatroskaTrackType::VIDEO && t->codec_id &&
-               (!strcmp(t->codec_id, MATROSKA_CODEC_ID_VIDEO_MPEG2) ||
-                !strcmp(t->codec_id, MATROSKA_CODEC_ID_VIDEO_MPEG1));
-    };
+    // The sequence header is looked for in up to 1024 blocks (mpegFirstShown). In the first 64 only, a stream that
+    // repeats it only every few hundred pictures, cut far before the next one, was measured from its first keyframe,
+    // while the reader starts at that header: the #47 test file cut inside a group, with the headers of its first
+    // groups taken out so that the first one left is in block 75 (4209 ms) or block 302 (13668 ms), was listed as
+    // starting at 1206 ms, and its sound came 3003 and 12462 ms late.
     const auto firstShown = [&](const MatroskaTrack* t, const int64_t first)
     {
-        static constexpr int GROUP_BLOCKS = 64;
-        struct Walked
-        {
-            int64_t time;
-            bool key;
-        };
-        std::vector<Walked> walked;
-        int header = -1;  // the first block whose frame holds a sequence header
-        // A keyframe after the block at `from`: a key block that does not follow another key block
-        const auto keyframeAfter = [&](const size_t i, const size_t from)
-        { return i > from && walked[i].key && !walked[i - 1].key; };
-        walkTrackBlocks(
-            scan, facts.firstCluster, facts.segmentEnd, START_CLUSTERS, t->num,
-            [&](const int64_t time, int64_t, const bool key, int, const int64_t frameAt, const int64_t frameSize)
-            {
-                if (header < 0 && holdsMpegSequenceHeader(scan.f, frameAt, frameSize))
-                    header = static_cast<int>(walked.size());
-                walked.push_back({time, key});
-                if (header >= 0 && keyframeAfter(walked.size() - 1, header))
-                    return false;
-                // up to GROUP_BLOCKS blocks to find a sequence header in, and as many from it
-                return walked.size() < static_cast<size_t>((std::max)(header, 0) + GROUP_BLOCKS);
-            });
-        if (walked.empty())
-            return first;
-        // From the first sequence header, else from the first keyframe, else from the first block
-        size_t from = header >= 0 ? static_cast<size_t>(header) : 0;
-        while (header < 0 && from < walked.size() && !walked[from].key) from++;
-        if (from == walked.size())
-            from = 0;
-        int64_t earliest = walked[from].time;
-        for (size_t i = from + 1; i < walked.size() && !keyframeAfter(i, from); i++)
-            earliest = (std::min)(earliest, walked[i].time);
-        if (earliest != first)
+        int64_t earliest = first;
+        if (mpegFirstShown(scan, facts.firstCluster, facts.segmentEnd, START_CLUSTERS, t->num, true, earliest) &&
+            earliest != first)
             m_shownAfterFirstBlock[t->num] = earliest - first;
         return earliest;
     };
@@ -4791,18 +4959,35 @@ bool MatroskaDemuxer::getVideoSpanNano(int64_t& startNano, int64_t& endNano)
     if (firstCluster < 0 || cues < 0)
         return false;
 
-    // The start: the earliest picture of the first group, up to the second keyframe.
+    // The start: the earliest picture of the first group, up to the second keyframe. For MPEG-1 and MPEG-2 a keyframe
+    // is a run of key blocks (mpegFirstShown): an I picture stored as two key blocks, one per field, ended the walk
+    // at its second field, before the B pictures shown ahead of it. Such a file of 25 fps with two of them, joined
+    // after the same file stored with a block per frame, was listed as starting 80 ms late, and in the join its sound
+    // came 96 ms early against that of the control, the file joined after itself (-16 ms, from the sound frames at
+    // the seam). The walk starts at the first block, not at the first sequence header
+    // as for the start of the sound in a file of its own (loadTrackExtras): this start is that of a file joined after
+    // another, whose reader goes on into it and shows its blocks from the first (mpegFirstShown).
     int64_t start = 0;
     int blocks = 0, keyframes = 0;
-    walkTrackBlocks(scan, firstCluster, segmentEnd, FIRST_GROUP_CLUSTERS, video->num,
-                    [&](const int64_t time, int64_t, const bool key, int)
-                    {
-                        if (key && ++keyframes == 2)
-                            return false;
-                        if (blocks == 0 || time * scale < start)
-                            start = time * scale;
-                        return ++blocks < FIRST_GROUP_BLOCKS;
-                    });
+    if (mpegVideo(video))
+    {
+        int64_t time = 0;
+        if (mpegFirstShown(scan, firstCluster, segmentEnd, FIRST_GROUP_CLUSTERS, video->num, false, time))
+        {
+            start = time * scale;
+            blocks = 1;
+        }
+    }
+    else
+        walkTrackBlocks(scan, firstCluster, segmentEnd, FIRST_GROUP_CLUSTERS, video->num,
+                        [&](const int64_t time, int64_t, const bool key, int)
+                        {
+                            if (key && ++keyframes == 2)
+                                return false;
+                            if (blocks == 0 || time * scale < start)
+                                start = time * scale;
+                            return ++blocks < FIRST_GROUP_BLOCKS;
+                        });
 
     // The cluster of the last keyframe the Cues give for the video track.
     std::vector<uint8_t> index;
@@ -5768,19 +5953,42 @@ double MatroskaDemuxer::getTrackFps(const uint32_t trackId)
     {
         EbmlScan scan(f);
         std::vector<int64_t> times;
+        // MPEG-2 and H.264 coded as fields can be stored with a block for each field, whose times are then those of
+        // the fields: the MPEG-2 test stream of 25 fps so stored, with no DefaultDuration, was taken to be of 50 fps
+        // and muxed at twice its speed, its 38 frames in 0.74 s; H.264 of 29.97 with no timing in its SPS, so stored,
+        // was taken to be of 59.438 fps, its 5.4 s in 2.8 s. The rate is halved where each of the first FIELD_BLOCKS
+        // blocks holds one field picture (holdsOneField).
+        static constexpr size_t FIELD_BLOCKS = 16;
+        // A walk that stops before the track ends has the B pictures of its last pictures still to come, shown before
+        // the I or P picture read last: the times after the earliest of the last REORDER_BLOCKS blocks read are left
+        // out, as not all the pictures between them were read. With them, the mean spacing of the first 240 fields of
+        // that H.264 stream was that of 59.438 fps, not 59.94.
+        static constexpr size_t REORDER_BLOCKS = 32;
+        const FieldCheck check = fieldCheckOf(track);
+        size_t fieldBlocks = 0;
         walkTrackBlocks(scan, facts.firstCluster, facts.segmentEnd, 256, track->num,
-                        [&](const int64_t time, int64_t, bool, int)
+                        [&](const int64_t time, int64_t, bool, int, const int64_t frameAt, const int64_t frameSize)
                         {
+                            if (check.codec != FieldCheck::Codec::NONE && times.size() < FIELD_BLOCKS &&
+                                fieldBlocks == times.size() && holdsOneField(scan.f, check, frameAt, frameSize))
+                                fieldBlocks++;
                             times.push_back(time);
                             return times.size() < PICTURES;
                         });
+        const bool fields = fieldBlocks >= 8 && fieldBlocks == (std::min)(times.size(), FIELD_BLOCKS);
+        if (times.size() == PICTURES)
+        {
+            const int64_t complete = *std::min_element(times.end() - REORDER_BLOCKS, times.end());
+            times.erase(std::remove_if(times.begin(), times.end(), [&](const int64_t t) { return t > complete; }),
+                        times.end());
+        }
         std::sort(times.begin(), times.end());
         times.erase(std::unique(times.begin(), times.end()), times.end());
         if (times.size() >= 8 && times.back() > times.front())
         {
             const double spacingNs = static_cast<double>(times.back() - times.front()) *
                                      static_cast<double>(facts.timestampScale) / static_cast<double>(times.size() - 1);
-            fps = 1e9 / spacingNs;
+            fps = 1e9 / spacingNs / (fields ? 2 : 1);
             // The rate the times stand for: a standard one within 0.04 % (240 pictures rounded to the millisecond are
             // out by about 0.013 % at most; 29.97 and 30 are 0.1 % apart).
             for (const double standard :
@@ -5790,7 +5998,8 @@ double MatroskaDemuxer::getTrackFps(const uint32_t trackId)
                     fps = standard;
             LTRACE(LT_INFO, 2,
                    "Track " << trackId << " gives no frame rate (DefaultDuration). Taken from the times of its first "
-                            << times.size() << " pictures: " << fps << " fps. fps= on the track's line sets another.");
+                            << times.size() << (fields ? " fields, a block for each" : " pictures") << ": " << fps
+                            << " fps. fps= on the track's line sets another.");
         }
     }
     m_estimatedFps[trackId] = fps;
