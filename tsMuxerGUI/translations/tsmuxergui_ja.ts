@@ -3192,8 +3192,8 @@ Build the ISO anyway?</source>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1"/>
-        <source>Ticked, the video of a cut holds only the pictures shown between its start and its end, as earlier versions did: the pictures from the start to the next key picture are lost, and those shown just before the end. Unticked, the video begins at the key picture before the start and keeps the pictures the end needs. A disc plays only the cut; a TS, M2TS or Matroska output also shows those pictures.</source>
-        <translation>チェックすると、カットの映像には開始から終了までの間に表示されるピクチャーだけが入ります（以前のバージョンと同じ）。開始から次のキーピクチャーまでのピクチャーと、終了の直前に表示されるピクチャーは失われます。チェックしないと、映像は開始の前のキーピクチャーから始まり、終了に必要なピクチャーも残ります。ディスクはカットの範囲だけを再生しますが、TS、M2TS、Matroska の出力ではそれらのピクチャーも表示されます。</translation>
+        <source>Ticked, the video of a cut holds only the pictures shown between its start and its end, as earlier versions did: the pictures from the start to the next key picture are lost, and those shown just before the end. Unticked, the video begins at the key picture before the start, and on a Blu-ray or AVCHD disc it also keeps the pictures the end needs. A disc plays only the cut; a TS, M2TS or Matroska output also shows the pictures before the start, and it ends as with the box ticked.</source>
+        <translation>チェックすると、カットの映像には開始から終了までの間に表示されるピクチャーだけが入ります（以前のバージョンと同じ）。開始から次のキーピクチャーまでのピクチャーと、終了の直前に表示されるピクチャーは失われます。チェックしないと、映像は開始の前のキーピクチャーから始まり、Blu-ray または AVCHD のディスクでは終了に必要なピクチャーも残ります。ディスクはカットの範囲だけを再生しますが、TS、M2TS、Matroska の出力では開始の前のピクチャーも表示され、終了はチェックしたときと同じになります。</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1895"/>

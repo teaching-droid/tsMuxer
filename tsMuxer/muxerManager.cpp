@@ -940,9 +940,12 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
 
     preinitMux(outFileName, fileFactory);
 
+    // cover at a --cut-end: on a Blu-ray or AVCHD disc only, whose playlist stops playing at the cut (OUT_time). In a
+    // file the pictures kept past the cut are shown, after a hole in the display order where the left out ones were.
+    const bool coverEnd = m_cutCover && m_bluRayMode;
     // cover: the main video is known before the mux (findCutKeyPictures, the end of a --cut-end); inside: at its first
     // packet, as before
-    if (m_cutCover && (m_cutStart > 0 || m_cutEnd > 0))
+    if (m_cutCover && (m_cutStart > 0 || (coverEnd && m_cutEnd > 0)))
         findCutLayers(m_metaDemuxer.getStreamInfo());
     if (m_cutStart > 0)
         for (const StreamInfo& si : m_metaDemuxer.getStreamInfo())
@@ -1019,7 +1022,8 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
             // --cut-pictures=cover: a video stream ends at its first picture DECODED at or after the cut. The B
             // pictures shown just before the cut are made from a picture shown at or after it, which is decoded before
             // them; it was left out, and they with it, so the pictures of up to a group were in neither part of a film
-            // cut in two. A disc does not show what is kept past the cut (OUT_time, m_cutShownTo).
+            // cut in two. A disc does not show what is kept past the cut (OUT_time, m_cutShownTo), and only a disc
+            // ends so (coverEnd): any other output ends as with inside.
             // A video that shows nothing before the cut (it begins after it) ends as before, at its first picture shown
             // at or after the cut: nothing it shows needs that picture.
             if (!subtitle)
@@ -1027,20 +1031,20 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
             const bool video = isCutVideo(avPacket.codec);
             if (video && avPacket.pts < m_cutEnd && endedByCut.count(avPacket.stream_index) == 0)
                 shownBeforeEnd.insert(avPacket.stream_index);
-            const bool endByDecoding = m_cutCover && video && shownBeforeEnd.count(avPacket.stream_index) != 0;
+            const bool endByDecoding = coverEnd && video && shownBeforeEnd.count(avPacket.stream_index) != 0;
             if ((endByDecoding ? avPacket.dts : avPacket.pts) >= m_cutEnd)
                 endedByCut.insert(avPacket.stream_index);
             // With cover, the first picture of the main video shown at or after the cut, kept or not: the one a disc
             // stops before, and the next part starts with. It is known once a picture decoded after its time is read.
             const bool mainShownBefore = shownBeforeEnd.count(m_cutMainVideo) != 0;
-            if (m_cutCover && avPacket.stream_index == m_cutMainVideo && mainShownBefore)
+            if (coverEnd && avPacket.stream_index == m_cutMainVideo && mainShownBefore)
             {
                 if (avPacket.pts >= m_cutEnd && (m_cutShownTo < 0 || avPacket.pts < m_cutShownTo))
                     m_cutShownTo = avPacket.pts;
                 mainVideoDts = avPacket.dts;
             }
             const bool shownToKnown =
-                !m_cutCover || !mainShownBefore || (m_cutShownTo >= 0 && mainVideoDts > m_cutShownTo);
+                !coverEnd || !mainShownBefore || (m_cutShownTo >= 0 && mainVideoDts > m_cutShownTo);
             if (!subtitle && avPacket.dts >= m_cutEnd)
             {
                 const bool allEnded = std::all_of(withPackets.begin(), withPackets.end(),

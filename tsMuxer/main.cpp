@@ -1147,17 +1147,20 @@ All parameters in this group start with two dashes:
                       the pictures shown just before an end can be made from
                       one shown after it. cover, the default, keeps every
                       picture the cut needs: the video begins at the key
-                      picture at or before --cut-start, and it ends with the
-                      last picture decoded before --cut-end. A Blu-ray or AVCHD
-                      playlist plays only from --cut-start to --cut-end, from
-                      the first picture shown at or after each, so no picture
-                      outside the cut is shown, and a film cut in two loses no
-                      picture between the parts. A TS, M2TS or Matroska output
-                      shows them: up to one group of pictures before the sound
-                      at the start, and a picture or a few at the end. inside
-                      keeps only the pictures shown inside the cut, as earlier
-                      versions did: the video begins at the first key picture
-                      at or after --cut-start, and the pictures before that key
+                      picture at or before --cut-start, and on a Blu-ray or
+                      AVCHD disc it ends with the last picture decoded before
+                      --cut-end. The disc playlist plays only from --cut-start
+                      to --cut-end, from the first picture shown at or after
+                      each, so no picture outside the cut is shown, and a film
+                      cut in two loses no picture between the parts. A TS, M2TS
+                      or Matroska output shows up to one group of pictures
+                      before the sound at the start, and it ends as with
+                      inside: a film cut in two loses a picture between the
+                      parts only at a cut exactly on a key picture, the few
+                      shown just before it and made from it. inside keeps only
+                      the pictures shown inside the cut, as earlier versions
+                      did: the video begins at the first key picture at or
+                      after --cut-start, and the pictures before that key
                       picture, and those shown just before --cut-end, are in no
                       part. The sound and subtitles start and stop at the cut
                       either way.

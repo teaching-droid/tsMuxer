@@ -2171,7 +2171,7 @@
                 <bool>false</bool>
                </property>
                <property name="toolTip">
-                <string>Ticked, the video of a cut holds only the pictures shown between its start and its end, as earlier versions did: the pictures from the start to the next key picture are lost, and those shown just before the end. Unticked, the video begins at the key picture before the start and keeps the pictures the end needs. A disc plays only the cut; a TS, M2TS or Matroska output also shows those pictures.</string>
+                <string>Ticked, the video of a cut holds only the pictures shown between its start and its end, as earlier versions did: the pictures from the start to the next key picture are lost, and those shown just before the end. Unticked, the video begins at the key picture before the start, and on a Blu-ray or AVCHD disc it also keeps the pictures the end needs. A disc plays only the cut; a TS, M2TS or Matroska output also shows the pictures before the start, and it ends as with the box ticked.</string>
                </property>
                <property name="text">
                 <string>Keep only the pictures inside the cut</string>
