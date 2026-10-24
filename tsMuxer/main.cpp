@@ -1001,6 +1001,7 @@ Additional parameters for PG and SRT tracks:
                     all subtitles to be shown, and "forced" which shows only
                     elements marked as "forced" in the subtitle stream. They
                     are read in any case; any other value is refused.
+                    "default" with no value is the same as "all".
                     "none", and also no, 0, false and off, mean this track is NOT
                     the default. Put it on every track of a type to say that the
                     type has no default at all: with nothing said either way, the

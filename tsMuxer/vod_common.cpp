@@ -510,7 +510,9 @@ int defaultParamKind(const std::string& value)
         return 0;
     if (lower == "forced")
         return 2;
-    if (lower == "all" || lower == "yes" || lower == "1" || lower == "true" || lower == "on")
+    // "default" with no value, as the window writes it for the default audio track, is the default track, as it was
+    // for Matroska and for a disc's audio. A disc subtitle took it, as yes and 1, for a mistake (no default subtitle).
+    if (lower.empty() || lower == "all" || lower == "yes" || lower == "1" || lower == "true" || lower == "on")
         return 1;
     return -1;
 }

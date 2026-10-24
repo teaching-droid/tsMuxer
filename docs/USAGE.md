@@ -235,7 +235,7 @@ Parameter         | Description
 ---               | ---
 video-width       | The width of the video in pixels. 
 video-height      | The height of the video in pixels. 
-default           | Mark this track as the default one. `all` (or `yes`, `1`, `true`, `on`) shows all subtitles, and `forced` shows only elements marked as "forced" in the subtitle stream; in a Matroska output the track is then marked forced as well. `none`, `no`, `0`, `false` or `off` say that it is not the default. The values are read in any case, and any other value is refused.
+default           | Mark this track as the default one. `all` (or `yes`, `1`, `true`, `on`) shows all subtitles, and `forced` shows only elements marked as "forced" in the subtitle stream; in a Matroska output the track is then marked forced as well. `none`, `no`, `0`, `false` or `off` say that it is not the default. `default` with no value is the same as `all`. The values are read in any case, and any other value is refused.
 fps               | Video fps. It is recommended to define this parameter in order to enable more careful timing processing. 
 3d-plane          | Defines the number of the '3D offset track' which is placed inside the MVC track. Each message has an individual 3D offset. This information is stored inside 3D offset track.
 
