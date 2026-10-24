@@ -363,7 +363,17 @@ int SRTStreamReader::parseText(uint8_t* dataStart, const size_t len)
 
         if (m_utf8Guessed)
             checkUtf8Guess(lastProcessedLine, textEnd - lastProcessedLine);
-        m_sourceText.emplace_back(UtfConverter::toUtf8(lastProcessedLine, textEnd - lastProcessedLine, m_srcFormat));
+        bool replaced = false;
+        m_sourceText.emplace_back(
+            UtfConverter::toUtf8(lastProcessedLine, textEnd - lastProcessedLine, m_srcFormat, &replaced));
+        if (replaced && !m_badUnitReported)
+        {
+            m_badUnitReported = true;
+            LTRACE(LT_WARN, 2,
+                   "Warning: line " << m_linesRead + 1 << " of the SRT file of track " << m_streamIndex
+                                    << " holds a code unit that is no character (a surrogate without its other half, "
+                                       "or a value above U+10FFFF). It is read as the replacement character U+FFFD.");
+        }
         std::string& tmp = m_sourceText.back();
         if (strOnlySpace(tmp))
             tmp.clear();
@@ -708,6 +718,10 @@ uint8_t* SRTStreamReader::renderNextMessage(uint32_t& renderedLen)
                            "Warning: track " << m_streamIndex << ": " << m_unseenCues
                                              << " subtitles in all were left out because none of their text lands "
                                                 "inside the picture.");
+                if (m_invalidUtf8Cues > 1)
+                    LTRACE(LT_WARN, 2,
+                           "Warning: track " << m_streamIndex << ": " << m_invalidUtf8Cues
+                                             << " subtitles in all held bytes that are not valid UTF-8.");
                 m_unseenReported = true;
             }
             return nullptr;
@@ -993,6 +1007,19 @@ void SRTStreamReader::addCue(const std::string& text, const double inTime, const
             m_textCues.push_back(TextCue{text, inTime, outTime, m_untilNext});
         return;
     }
+#ifndef _WIN32
+    // Drawn, a byte that is not valid UTF-8 is drawn as the replacement character (convertUTF::IterateUTF8Chars), as
+    // kept as text it is written as one, and it is said as it is there. Without a word the marks were the only sign:
+    // on Linux and macOS a file in a legacy code page is read as UTF-8, and a file that starts in plain ASCII is
+    // taken for UTF-8 there to its end, so a subtitle in cp1252 or Shift-JIS is drawn with U+FFFD for its letters.
+    // Windows draws such text in the active code page (toWide), so there is nothing to say there.
+    if (!convertUTF::isLegalUTF8String(reinterpret_cast<const uint8_t*>(text.data()), text.size()) &&
+        m_invalidUtf8Cues++ == 0)
+        LTRACE(LT_WARN, 2,
+               "Warning: track " << m_streamIndex << ": the subtitle at " << floatToTime(inTime, ',')
+                                 << " holds bytes that are not valid UTF-8, drawn as the replacement character "
+                                    "U+FFFD. Save the file as UTF-8 to keep every character.");
+#endif
     // Each cue used to be drawn as a picture of its own that cleared the screen at its end. Two cues
     // that overlap then wrote their pictures out of time order, and the first one's end cleared
     // the second while it was still due.
@@ -1154,25 +1181,41 @@ uint8_t* SRTStreamReader::drawNext(uint32_t& renderedLen)
     // A font size is a whole number, so most of the search's steps give sizes an earlier step already measured, and
     // each measurement sets every font of the text. A measured set of sizes is answered from memory: the search takes
     // the same steps to the same size as before, with less than half the measuring.
-    if (hasVisibleText(piece.text) && !render->textFits(piece.text))
+    //
+    // ** A SIZE THAT CANNOT FIT IS NOT MEASURED. ** A line is at least as tall as the line height of its largest piece,
+    // which is about the font size (DejaVu Sans on FreeType: 1.04 x), so at line-spacing=1 a piece larger than four
+    // times the picture's height is more than three pictures tall: it never fits, and the search runs below that bound
+    // alone, and never above 16,384, half the largest glyph FreeType draws. Measured, such a size cost a mux on Linux
+    // and macOS its time or its end: FreeType draws each glyph to read its width, and at font-size=44000 a glyph is
+    // about 30,000 by 20,000 pixels, so 12 subtitles took 22 s and 607 MB (320x240); above about 49,000 a glyph is
+    // larger than FreeType draws at all, and the mux ended with "Can't render symbol code", as <font size="+20"> on
+    // font-size=65 did at 1080p. The search finds the same sizes as before, from sizes no larger than the bound: the 12
+    // subtitles take 0.05 s and 72 MB, with the same pictures. One result changes: a line-spacing below about 0.24
+    // counts a line as less tall than the picture although its glyphs are as tall as ever, so a short text such as "i"
+    // above the bound used to fit, and was drawn at its size, cut off by the picture; it is drawn at the bound now
+    // (font-size=5000 at 1080p and line-spacing=0.2: at 4320). A size of 0 or less is measured as before.
+    const std::vector<int> full = render->fittedSizes(piece.text);  // the sizes as written: m_fitScale is 1.0 here
+    const int largest = full.empty() ? 0 : *std::max_element(full.begin(), full.end());
+    const int bound = (std::min)(4 * render->m_height, 16384);
+    const bool tooLarge = largest > bound && bound > 0;
+    if (hasVisibleText(piece.text) && (tooLarge || !render->textFits(piece.text)))
     {
         double lo = 0.0;
-        double hi = 1.0;
+        const double top = tooLarge ? static_cast<double>(bound) / largest : 1.0;  // the largest scale searched
+        double hi = top;
         // ** THE SIZE THE SUBTITLE BEFORE NEEDED IS TRIED FIRST. ** The subtitles of a track are mostly too large by
         // the same amount, so the sizes the one before was drawn at nearly always fit and the next larger sizes do not:
         // two measurements give the answer the search below finds in six or seven, the largest sizes that fit.
         bool found = false;
         if (m_lastFitScale > 0.0)
         {
-            render->m_fitScale = 1.0;
-            const std::vector<int> full = render->fittedSizes(piece.text);
             render->m_fitScale = m_lastFitScale;
             const std::vector<int> atLast = render->fittedSizes(piece.text);
             double next = 2.0;  // the smallest scale above the last one at which a size grows by one
             for (size_t i = 0; i < full.size() && i < atLast.size(); ++i)
                 if (full[i] > atLast[i])
                     next = (std::min)(next, (atLast[i] + 1.0) / full[i] + 1e-9);
-            if (next <= 1.0 && render->textFits(piece.text))
+            if (next <= top && render->textFits(piece.text))
             {
                 render->m_fitScale = next;
                 if (!render->textFits(piece.text))
@@ -1201,7 +1244,9 @@ uint8_t* SRTStreamReader::drawNext(uint32_t& renderedLen)
                    "Warning: track " << m_streamIndex << ": the subtitle at " << floatToTime(piece.inTime, ',')
                                      << " does not fit the picture, which usually means its font size is too large "
                                         "for it. It is drawn smaller, at the largest size that fits ("
-                                     << lround(lo * 100) << "% of its size).");
+                                     << (lround(lo * 100) == 0 ? std::string("less than 1")
+                                                               : std::to_string(lround(lo * 100)))
+                                     << "% of its size).");
     }
     uint8_t* rez = m_srtRender->doConvert(piece.text, animation, piece.inTime, piece.outTime, renderedLen, piece.hide);
     render->m_fitScale = 1.0;
@@ -1259,12 +1304,20 @@ static bool isSrtTime(const std::string& text)
     return digit || fraction;
 }
 
+// Where the text of a line starts: after a byte order mark (U+FEFF) at its front, which two files joined byte for byte
+// leave at the start of the second one's first line.
+static size_t afterBom(const std::string& line) { return line.compare(0, 3, "\xEF\xBB\xBF") == 0 ? 3 : 0; }
+
 // A timing line: a time, the arrow, and a time or nothing as the first word after it. Display
 // coordinates may follow the end time. A line of dialogue that holds an arrow is no timing line.
+// ** A BYTE ORDER MARK IN FRONT IS NOT PART OF THE TIME. ** A timing line that carried one was not read: it was
+// skipped as text, with its subtitle, and a file whose only timing line it was ended the mux with "no subtitles",
+// naming the line, although the listing calls such a file SRT (a counter with one in front was already taken).
 static bool isTimingLine(const std::string& line)
 {
-    const size_t arrow = line.find("-->");
-    if (arrow == std::string::npos || !isSrtTime(line.substr(0, arrow)))
+    const size_t from = afterBom(line);
+    const size_t arrow = line.find("-->", from);
+    if (arrow == std::string::npos || !isSrtTime(line.substr(from, arrow - from)))
         return false;
     const std::string rest = line.substr(arrow + 3);
     const size_t first = rest.find_first_not_of(" \t");
@@ -1379,7 +1432,8 @@ bool SRTStreamReader::parseTime(const string& text)
     // length() - 2 is unsigned, so a line shorter than the arrow it is looking for wrapped the
     // bound to SIZE_MAX and the loop walked off the end of the string. A blank line where a
     // timing line belongs is exactly that case, and it is what a damaged subtitle file gives.
-    for (size_t i = 0; i + 2 < text.length(); i++)
+    const size_t from = afterBom(text);
+    for (size_t i = from; i + 2 < text.length(); i++)
     {
         if (text[i] == '-' && text[i + 1] == '-' && text[i + 2] == '>')
         {
@@ -1390,7 +1444,7 @@ bool SRTStreamReader::parseTime(const string& text)
                 const size_t b = part.find_first_not_of(" \t\r\n");
                 return b == string::npos ? string() : part.substr(b, part.find_last_not_of(" \t\r\n") - b + 1);
             };
-            string first = trim(text.substr(0, i));
+            string first = trim(text.substr(from, i - from));
             string second = trim(text.substr(i + 3, text.length() - i - 3));
             // Some writers put display coordinates after the end time, "X1:100 X2:600 Y1:50 Y2:100".
             // The end time is read by splitting at colons from the right, so those numbers were read

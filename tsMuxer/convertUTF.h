@@ -170,45 +170,69 @@ const char trailingBytesForUTF8[256] = {
 constexpr UTF32 offsetsFromUTF8[6] = {0x00000000UL, 0x00003080UL, 0x000E2080UL,
                                       0x03C82080UL, 0xFA082080UL, 0x82082080UL};
 
+// Every character of the text in turn, as a code point, until f returns false.
+//
+// ** TEXT THAT IS NOT VALID UTF-8 IS NEVER READ PAST ITS END. ** The lead byte of a sequence used to say how many bytes
+// followed it, and that many were read, whatever they were and wherever the text ended. A subtitle in a legacy code
+// page is such text: on Linux and macOS an SRT file that is neither UTF-8 nor UTF-16 nor UTF-32 is read as UTF-8
+// ("Failed to auto-detect SRT encoding : falling back to UTF-8"), and its letters beyond ASCII are single bytes from
+// 0x80 up. In "Caf\xE9 und Gr\xFC\xDFe", cp1252 for "Cafe und Grusse" with their accents, 0xFC claims five more bytes
+// where two are left, so the read went past the end of the text. The loop stops only where it meets the end exactly,
+// so nothing stopped it after that: every byte of the memory after the string was measured as a character until one
+// could not be read, and drawing such subtitles ended with a segmentation fault in getTextSize, for files in cp1252,
+// cp1251, GBK, Shift-JIS and Big5 alike. Where no letter sat that near the end of a line, each one took the bytes
+// after it into one wrong character, and the subtitle was drawn with letters missing.
+//
+// A byte that does not begin a valid sequence (RFC 3629: no overlong form, no surrogate, nothing above U+10FFFF), or
+// begins one the text cuts short, is now one U+FFFD REPLACEMENT CHARACTER, and the next byte is read. That is the rule
+// a subtitle kept as text is written by (makeValidUtf8 in srtStreamReader.cpp), so a subtitle drawn and the same one
+// kept as text show the same characters. Valid UTF-8 reads exactly as before. The replacement character, not each
+// byte taken as a letter of some code page: Linux and macOS have no code page to take, a guess such as cp1252 would
+// draw Cyrillic or CJK text as other letters with no sign that anything is wrong, and the mark shows at a glance that
+// the file is not UTF-8. Windows reads such an SRT file in the active code page before it is drawn.
 template <typename Fn>
 void IterateUTF8Chars(const std::string& utf8String, Fn f)
 {
-    auto it = std::begin(utf8String);
+    const auto* p = reinterpret_cast<const unsigned char*>(utf8String.data());
+    const auto* const end = p + utf8String.size();
     bool keep_going = true;
-    while (keep_going && it != std::end(utf8String))
+    while (keep_going && p != end)
     {
-        UTF32 ch = 0;
-        const unsigned short extraBytesToRead = trailingBytesForUTF8[static_cast<unsigned char>(*it)];
-        auto get_as_uchar = [&]() mutable { return static_cast<unsigned char>(*it++); };
-        switch (extraBytesToRead)
+        const unsigned char lead = *p;
+        size_t len = 0;           // the bytes of the sequence this one begins, 0 for none
+        unsigned char lo = 0x80;  // the allowed range of the second byte
+        unsigned char hi = 0xBF;
+        if (lead < 0x80)
+            len = 1;
+        else if (lead >= 0xC2 && lead <= 0xDF)
+            len = 2;
+        else if (lead >= 0xE0 && lead <= 0xEF)
         {
-        case 5:
-            ch += get_as_uchar();
-            ch <<= 6;
-            [[fallthrough]];
-        case 4:
-            ch += get_as_uchar();
-            ch <<= 6;
-            [[fallthrough]];
-        case 3:
-            ch += get_as_uchar();
-            ch <<= 6;
-            [[fallthrough]];
-        case 2:
-            ch += get_as_uchar();
-            ch <<= 6;
-            [[fallthrough]];
-        case 1:
-            ch += get_as_uchar();
-            ch <<= 6;
-            [[fallthrough]];
-        case 0:
-            ch += get_as_uchar();
-            break;
-        default:
-            break;
+            len = 3;
+            if (lead == 0xE0)
+                lo = 0xA0;  // no overlong form
+            else if (lead == 0xED)
+                hi = 0x9F;  // no surrogate
         }
-        ch -= offsetsFromUTF8[extraBytesToRead];
+        else if (lead >= 0xF0 && lead <= 0xF4)
+        {
+            len = 4;
+            if (lead == 0xF0)
+                lo = 0x90;
+            else if (lead == 0xF4)
+                hi = 0x8F;  // nothing above U+10FFFF
+        }
+        bool ok = len > 0 && static_cast<size_t>(end - p) >= len;
+        for (size_t k = 1; ok && k < len; ++k) ok = k == 1 ? p[k] >= lo && p[k] <= hi : p[k] >= 0x80 && p[k] <= 0xBF;
+        UTF32 ch = UNI_REPLACEMENT_CHAR;
+        if (ok)
+        {
+            ch = static_cast<UTF32>(len == 1 ? lead : lead & (0x7F >> len));
+            for (size_t k = 1; k < len; ++k) ch = ch << 6 | static_cast<UTF32>(p[k] & 0x3F);
+            p += len;
+        }
+        else
+            ++p;
         keep_going = f(ch);
     }
 }

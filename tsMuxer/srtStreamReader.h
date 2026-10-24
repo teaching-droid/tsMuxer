@@ -97,6 +97,7 @@ class SRTStreamReader final : public AbstractStreamReader
     UtfConverter::SourceFormat m_srcFormat;
     // Judged UTF-8 only because the start of the file is plain ASCII, which every 8 bit code page shares with UTF-8.
     bool m_utf8Guessed = false;
+    bool m_badUnitReported = false;  // a UTF-16 or UTF-32 code unit that is no character was said
     double m_inTime;
     double m_outTime;
     bool m_untilNext = false;  // the timing line has no end: shown until the next subtitle
@@ -122,7 +123,7 @@ class SRTStreamReader final : public AbstractStreamReader
     std::deque<TextCue> m_textCues;
     std::vector<uint8_t> m_textPacket;
     int m_lengthlessCues = 0;   // kept as text: subtitles left out because they have no length
-    int m_invalidUtf8Cues = 0;  // kept as text: subtitles whose bytes were not all valid UTF-8
+    int m_invalidUtf8Cues = 0;  // kept as text or drawn: subtitles whose bytes were not all valid UTF-8
     int m_unseenCues = 0;       // drawn: subtitles with text, none of which lands inside the picture
     int m_shrunkCues = 0;       // drawn: subtitles too large for the picture, drawn at the largest size that fits
     bool m_unseenReported = false;

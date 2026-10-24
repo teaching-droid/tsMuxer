@@ -20,7 +20,9 @@ enum class SourceFormat
     sfUTF32be
 };
 
-std::string toUtf8(const uint8_t* start, size_t numBytes, SourceFormat srcFormat);
+// The text in UTF-8. A UTF-16 or UTF-32 code unit that is no character becomes U+FFFD, and *replaced, when given, says
+// whether one did.
+std::string toUtf8(const uint8_t* start, size_t numBytes, SourceFormat srcFormat, bool* replaced = nullptr);
 }  // namespace UtfConverter
 
 #endif

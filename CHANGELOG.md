@@ -165,6 +165,16 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Subtitles
 
+* **On Linux and macOS, drawing an SRT file in a legacy code page could crash tsMuxeR,** for example cp1252, cp1251, GBK, Shift-JIS or Big5. Each byte that is not UTF-8 is now drawn as the replacement character, with a warning that asks for the file in UTF-8.
+
+* **On Linux and macOS, a subtitle with a very large font size ended the mux** with "Can't render symbol code" or "Invalid font size", from a font-size of about 49000 or a tag such as `<font size="+20">`. It is now drawn smaller, at the largest size that fits.
+
+* **An underlined or struck-out subtitle wider than the picture wrote one pixel past its edge on Linux and macOS,** on the last row past the end of the picture's memory. The line now stops at the edge.
+
+* **An SRT file in UTF-16 or UTF-32 with one broken character ended the mux** with "Cannot convert string : invalid source text". The character is now read as the replacement character, with a warning that names the line.
+
+* **A timing line with a byte order mark in front of it was not read,** as in two SRT files joined byte for byte: its subtitle was skipped, and a file with only that timing line ended with an error. The mark is now passed over.
+
 * **ASS and SSA subtitles are drawn with libass** wherever they are drawn into pictures: with their styles, colours, positions, rotations, fades, moves and karaoke. libass uses the fonts attached to the Matroska file, a fonts folder given with the new track parameter fonts-dir, and the fonts of the system. The Windows packages include libass and the libraries it needs, with their licenses in THIRD-PARTY-NOTICES.txt and the licenses folder. On Linux and Mac, install the system's libass. Without libass, or with the new parameter ass-as-srt, they are drawn as plain text, as before.
 
 * **save-srt** writes subtitles that are drawn into pictures to an .srt file as well.

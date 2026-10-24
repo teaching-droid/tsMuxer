@@ -37,21 +37,58 @@ auto make_vector(const uint8_t* start, size_t numBytes, F func) -> std::vector<d
     return rv;
 }
 
-template <typename InputType, typename F>
-std::string from_utf_nn(std::vector<InputType>&& vec, F conversionFn)
+// The characters of UTF-16 or UTF-32 text. A code unit that is no character, a surrogate without its other half or a
+// value above U+10FFFF, is U+FFFD REPLACEMENT CHARACTER, and replaced is set. Such a unit was refused, and the
+// refusal ended the mux with "Cannot convert string : invalid source text", naming neither the file nor the line: an
+// SRT file in UTF-16 with one lone surrogate in a subtitle, such as a text editor leaves when it cuts a pair in two,
+// gave no output at all, drawn or kept as text. One bad character now costs that character, as a byte that is not
+// valid UTF-8 does in a UTF-8 file (makeValidUtf8 in srtStreamReader.cpp).
+std::vector<UTF32> codePoints(const std::vector<UTF16>& units, bool& replaced)
 {
+    std::vector<UTF32> rv;
+    rv.reserve(units.size());
+    for (size_t i = 0; i < units.size(); ++i)
+    {
+        const UTF32 u = units[i];
+        if (u >= 0xD800 && u <= 0xDBFF && i + 1 < units.size() && units[i + 1] >= 0xDC00 && units[i + 1] <= 0xDFFF)
+            rv.push_back(0x10000 + ((u - 0xD800) << 10) + (units[++i] - 0xDC00U));
+        else if (u >= 0xD800 && u <= 0xDFFF)
+        {
+            rv.push_back(UNI_REPLACEMENT_CHAR);
+            replaced = true;
+        }
+        else
+            rv.push_back(u);
+    }
+    return rv;
+}
+
+std::vector<UTF32> codePoints(std::vector<UTF32> units, bool& replaced)
+{
+    for (auto& u : units)
+        if ((u >= 0xD800 && u <= 0xDFFF) || u > UNI_MAX_LEGAL_UTF32)
+        {
+            u = UNI_REPLACEMENT_CHAR;
+            replaced = true;
+        }
+    return units;
+}
+
+template <typename InputType>
+std::string from_utf_nn(std::vector<InputType>&& vec, bool& replaced)
+{
+    const std::vector<UTF32> chars = codePoints(std::move(vec), replaced);
     std::string rv;
-    rv.resize(vec.size() * 4);
-    const InputType* sourceStart = vec.data();
-    auto sourceEnd = sourceStart + vec.size();
+    rv.resize(chars.size() * 4);
+    const UTF32* sourceStart = chars.data();
+    const auto sourceEnd = sourceStart + chars.size();
     const auto targetStart = reinterpret_cast<UTF8*>(rv.data());
     auto targetStart_out = targetStart;
-    auto targetEnd = targetStart + rv.size();
-    auto result = conversionFn(&sourceStart, sourceEnd, &targetStart_out, targetEnd, ConversionFlags::strictConversion);
-    if (result != ConversionResult::conversionOK)
-    {
+    const auto targetEnd = targetStart + rv.size();
+    // Every character is valid now, and 4 bytes are room for any: the conversion cannot fail
+    if (ConvertUTF32toUTF8(&sourceStart, sourceEnd, &targetStart_out, targetEnd, ConversionFlags::strictConversion) !=
+        ConversionResult::conversionOK)
         THROW(ERR_COMMON, "Cannot convert string : invalid source text")
-    }
     rv.resize(targetStart_out - targetStart);
     return rv;
 }
@@ -59,20 +96,28 @@ std::string from_utf_nn(std::vector<InputType>&& vec, F conversionFn)
 
 namespace UtfConverter
 {
-std::string toUtf8(const uint8_t* start, const size_t numBytes, const SourceFormat srcFormat)
+std::string toUtf8(const uint8_t* start, const size_t numBytes, const SourceFormat srcFormat, bool* replaced)
 {
+    bool anyReplaced = false;
+    if (replaced)
+        *replaced = false;
+    std::string rv;
     switch (srcFormat)
     {
     case SourceFormat::sfUTF8:
         return {start, start + numBytes};
     case SourceFormat::sfUTF16be:
-        return from_utf_nn(make_vector(start, numBytes, read_be16), ConvertUTF16toUTF8);
+        rv = from_utf_nn(make_vector(start, numBytes, read_be16), anyReplaced);
+        break;
     case SourceFormat::sfUTF16le:
-        return from_utf_nn(make_vector(start, numBytes, read_le16), ConvertUTF16toUTF8);
+        rv = from_utf_nn(make_vector(start, numBytes, read_le16), anyReplaced);
+        break;
     case SourceFormat::sfUTF32be:
-        return from_utf_nn(make_vector(start, numBytes, read_be32), ConvertUTF32toUTF8);
+        rv = from_utf_nn(make_vector(start, numBytes, read_be32), anyReplaced);
+        break;
     case SourceFormat::sfUTF32le:
-        return from_utf_nn(make_vector(start, numBytes, read_le32), ConvertUTF32toUTF8);
+        rv = from_utf_nn(make_vector(start, numBytes, read_le32), anyReplaced);
+        break;
 #ifdef _WIN32
     case SourceFormat::sfANSI:
     {
@@ -82,5 +127,8 @@ std::string toUtf8(const uint8_t* start, const size_t numBytes, const SourceForm
     default:
         THROW(ERR_COMMON, "Unknown parameter to UtfConverter::toUtf8")
     }
+    if (replaced)
+        *replaced = anyReplaced;
+    return rv;
 }
 }  // namespace UtfConverter

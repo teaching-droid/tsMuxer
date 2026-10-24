@@ -293,11 +293,17 @@ void TextSubtitlesRenderFT::setFont(const Font& font)
             THROW(ERR_COMMON, "Can't load font file " << modFontName.c_str())
         }
 
-        error = FT_Set_Char_Size(m_face,           /* handle to face object */
-                                 0,                /* char_width in 1/64th of points */
-                                 font.m_size * 64, /* char_height in 1/64th of points */
-                                 64,               /* horizontal device resolution */
-                                 64);              /* vertical device resolution */
+        // No piece of a subtitle is measured or drawn above 65,535 (browserSizeToRealSize holds every size to it, and
+        // drawNext measures nothing above 16,384), but the track's own font is loaded once at the start with the size
+        // its line gives, and FreeType refuses a face of more than 65,535 pixels per em: font-size=74000 or more
+        // ended the mux with "Invalid font size" before a subtitle was read. The face is set to 65,535 at most; the
+        // font keeps its size, from which the size of every piece is worked out.
+        const int faceSize = (std::min)(font.m_size, 65535);
+        error = FT_Set_Char_Size(m_face,        /* handle to face object */
+                                 0,             /* char_width in 1/64th of points */
+                                 faceSize * 64, /* char_height in 1/64th of points */
+                                 64,            /* horizontal device resolution */
+                                 64);           /* vertical device resolution */
         if (error)
             THROW(ERR_COMMON, "Invalid font size " << font.m_size)
 
@@ -342,10 +348,14 @@ void TextSubtitlesRenderFT::drawHorLine(int left, int right, int top, const RECT
 {
     if (top < rect->top || top >= rect->bottom)
         return;
+    // rect->right is the width of the picture, the first column outside it, as it is for the glyphs (x < width). The
+    // line is drawn up to and including right, which was held to rect->right itself, so a line that reached the edge
+    // (an underlined or struck-out text wider than the picture, which a text too long to fit at any size is) wrote the
+    // pixel x = width: the first pixel of the next row, or, on the last row, 4 bytes past the end of the picture.
     if (left < rect->left)
         left = rect->left;
-    if (right > rect->right)
-        right = rect->right;
+    if (right > rect->right - 1)
+        right = rect->right - 1;
     const int offset = m_width * top + left;
     auto dst = reinterpret_cast<uint32_t*>(m_pData) + offset;
     // The picture holds each pixel as 0xAARRGGBB, the form of the font colour itself. The colour used to have its red
