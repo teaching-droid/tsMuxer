@@ -107,6 +107,19 @@ int AACStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, in
     return 0;
 }
 
+// The ADTS header gives aac_frame_length, header included, in its bytes 3 to 5. A tail shorter than that which begins
+// with the 12 sync bits is a cut header.
+int AACStreamReader::wholeFrameSizeAt(const uint8_t* p, const uint8_t* end)
+{
+    const int64_t avail = end - p;
+    if (avail <= 0 || p[0] != 0xff || (avail >= 2 && (p[1] & 0xf0) != 0xf0))
+        return 0;
+    if (avail < 6)
+        return NOT_ENOUGH_BUFFER;
+    const int size = getFrameSize(p);
+    return size >= AAC_HEADER_LEN ? size : 0;
+}
+
 int AACStreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdmvDescriptors)
 {
     // Ensure we have decoded at least one frame so codec parameters are valid

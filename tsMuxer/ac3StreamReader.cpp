@@ -250,6 +250,46 @@ void AC3StreamReader::stampDependentFrame(AVPacket& avPacket)
         avPacket.pts = avPacket.dts = m_lastIndependentPts;
 }
 
+// The AC-3 and E-AC-3 header gives the frame's length (frmsizecod, or frmsiz for E-AC-3), and so does the first word of
+// a TrueHD access unit braided into the track, as the 12 bit length in 16 bit words that decodeFrame reads. A tail
+// shorter than the six bytes up to the bsid that begins with the sync word is a cut header.
+int AC3StreamReader::wholeFrameSizeAt(const uint8_t* p, const uint8_t* end)
+{
+    const int64_t avail = end - p;
+    if (avail <= 0)
+        return 0;
+    const bool sync = p[0] == 0x0B && (avail < 2 || p[1] == 0x77);
+    if (!sync)
+    {
+        if (!m_true_hd_mode)
+            return 0;
+        if (avail < 2)
+            return NOT_ENOUGH_BUFFER;
+        const int unitLen = (((p[0] & 0x0f) << 8) | p[1]) * 2;
+        return unitLen >= 4 ? unitLen : 0;
+    }
+    if (avail < 6)
+        return NOT_ENOUGH_BUFFER;
+    return frameSizeAt(p, end);
+}
+
+// AC-3 and E-AC-3 as the Blu-ray and the ATSC stream types name them, the secondary audio of a disc included
+bool AC3StreamReader::declaredByContainer() const
+{
+    if (m_containerType != ContainerType::ctTS && m_containerType != ContainerType::ctM2TS)
+        return false;
+    switch (static_cast<StreamType>(m_containerDataType))
+    {
+    case StreamType::AUDIO_AC3:
+    case StreamType::AUDIO_EAC3:
+    case StreamType::AUDIO_EAC3_ATSC:
+    case StreamType::AUDIO_EAC3_SECONDARY:
+        return true;
+    default:
+        return false;
+    }
+}
+
 int AC3StreamReader::flushPacket(AVPacket& avPacket)
 {
     const int rez = SimplePacketizerReader::flushPacket(avPacket);

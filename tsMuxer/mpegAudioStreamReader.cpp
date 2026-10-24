@@ -30,6 +30,17 @@ int MpegAudioStreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bo
 
 uint8_t* MpegAudioStreamReader::findFrame(uint8_t* buff, uint8_t* end) { return mp3FindFrame(buff, end); }
 
+// A tail shorter than the four header bytes that begins with the eleven sync bits is a cut header.
+int MpegAudioStreamReader::wholeFrameSizeAt(const uint8_t* p, const uint8_t* end)
+{
+    const int64_t avail = end - p;
+    if (avail <= 0)
+        return 0;
+    if (avail < MPEG_AUDIO_HEADER_SIZE)
+        return p[0] == 0xff && (avail < 2 || (p[1] & 0xe0) == 0xe0) ? NOT_ENOUGH_BUFFER : 0;
+    return frameSizeAt(p, end);
+}
+
 int MpegAudioStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, int& skipBeforeBytes)
 {
     skipBytes = 0;

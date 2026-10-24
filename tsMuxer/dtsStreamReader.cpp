@@ -1185,6 +1185,64 @@ int DTSStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, in
     return i_frame_size;
 }
 
+// A core frame gives its length in FSIZE, the extension substream in its own header, the way decodeHdInfo reads it.
+// Only the 16 bit big endian core is sized: it is what a disc and a .dts file carry. The 14 bit and little endian
+// forms (DTS in a WAV) answer 0 and keep the behaviour they had, as a length got wrong there by a byte would leave out
+// a byte of a whole frame.
+int DTSStreamReader::wholeFrameSizeAt(const uint8_t* p, const uint8_t* end)
+{
+    static constexpr uint8_t CORE_SYNC[4] = {0x7f, 0xfe, 0x80, 0x01};
+    static constexpr uint8_t HD_SYNC[4] = {0x64, 0x58, 0x20, 0x25};  // DTS_HD_PREFIX
+    const int64_t avail = end - p;
+    if (avail <= 0)
+        return 0;
+    const auto startsWith = [&](const uint8_t* sync)
+    {
+        for (int64_t i = 0; i < 4 && i < avail; ++i)
+            if (p[i] != sync[i])
+                return false;
+        return true;
+    };
+    if (m_isCoreExists && startsWith(CORE_SYNC))
+    {
+        if (avail < 8)
+            return NOT_ENOUGH_BUFFER;
+        return ((p[5] & 0x03) << 12 | p[6] << 4 | p[7] >> 4) + 1;
+    }
+    if (startsWith(HD_SYNC))
+    {
+        // nuSubStreamIndex (2 bits) and bHeaderSizeType (1) behind the sync and one more byte, then the header size
+        // and the substream size less one: 8 and 16 bits, or 12 and 20 in the blown up header
+        if (avail < 6)
+            return NOT_ENOUGH_BUFFER;
+        const bool blownUp = (p[5] & 0x20) != 0;
+        const int need = blownUp ? 10 : 9;
+        if (avail < need)
+            return NOT_ENOUGH_BUFFER;
+        uint64_t bits = 0;
+        for (int i = 5; i < need; ++i) bits = bits << 8 | p[i];
+        return static_cast<int>((bits >> 5) & (blownUp ? 0xfffff : 0xffff)) + 1;
+    }
+    return 0;
+}
+
+// DTS and DTS-HD as the Blu-ray stream types name them, the secondary audio of a disc included
+bool DTSStreamReader::declaredByContainer() const
+{
+    if (m_containerType != ContainerType::ctTS && m_containerType != ContainerType::ctM2TS)
+        return false;
+    switch (static_cast<StreamType>(m_containerDataType))
+    {
+    case StreamType::AUDIO_DTS:
+    case StreamType::AUDIO_DTS_HD:
+    case StreamType::AUDIO_DTS_HD_MA:
+    case StreamType::AUDIO_DTS_HD_SECONDARY:
+        return true;
+    default:
+        return false;
+    }
+}
+
 int DTSStreamReader::syncInfo16be(const uint8_t* p_buf)
 {
     nblks = (p_buf[4] & 0x01) << 6 | p_buf[5] >> 2;

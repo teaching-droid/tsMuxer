@@ -728,12 +728,73 @@ int SimplePacketizerReader::flushPacket(AVPacket& avPacket)
         m_tmpBufferLen = 0;
         return 0;
     }
+    // ** A FRAME THE END OF THE FILE CUT OFF IS NOT A FRAME. ** What is held here is what readPacket could not send
+    // because the frame did not fit, and at the end of the source nothing more comes. It was sent as it was, as the
+    // last frame: an AC-3 file that an encoder stopped in the middle of a frame got 1,280 of the frame's 2,560 bytes
+    // as a frame of its own, one a player cannot decode, and the track came out 32 ms longer than its sound. A tail of
+    // seven bytes, the header and nothing else, became a frame as well. The same held for E-AC-3, DTS, AAC and MPEG
+    // audio, in a transport stream and in Matroska alike.
+    //
+    // NOT_ENOUGH_BUFFER cannot tell this, which is why the length is asked of the header instead: DTS answers it for
+    // every whole last frame, because it looks for four bytes behind the frame, and so would FLAC, which ends a frame
+    // at the header of the next. Where the header gives a length, a frame is whole when that many bytes are here. A
+    // whole frame with the cut start of another behind it, a DTS core whose extension substream was cut, is sent and
+    // the rest left out. The part left out is said, as the IVF reader says it, and is not an error: a recording that
+    // stops in the middle of a frame is ordinary. What follows a whole frame without being the start of one, the
+    // three zero bytes a DTS file was measured with, is not sound either and is left out without a word, as the
+    // junk after the last frame is above.
+    if (m_tmpBufferLen > 0)
+    {
+        uint8_t* const tail = m_tmpBuffer.data();
+        uint8_t* const tailEnd = tail + m_tmpBufferLen;
+        const int whole = wholeFrameSizeAt(tail, tailEnd);
+        if (whole == NOT_ENOUGH_BUFFER || whole > m_tmpBufferLen)
+        {
+            leaveOutCutFrame(m_tmpBufferLen);
+            m_tmpBufferLen = 0;
+            return 0;
+        }
+        if (whole > 0 && whole < m_tmpBufferLen)
+        {
+            const int64_t rest = m_tmpBufferLen - whole;
+            const int next = wholeFrameSizeAt(tail + whole, tailEnd);
+            if (next == NOT_ENOUGH_BUFFER || next > rest)
+            {
+                leaveOutCutFrame(rest);
+                m_tmpBufferLen = whole;
+            }
+            else if (next == 0)
+            {
+                m_processedBytes += rest;
+                m_tmpBufferLen = whole;
+            }
+            // A whole frame behind it as well is not what readPacket leaves here, and is sent as it always was.
+        }
+    }
+    // ** FEWER BYTES THAN A HEADER ARE NEVER A FRAME. ** Every frame begins with its header, so a tail shorter than
+    // one, behind the last whole frame, is junk: three zero bytes at the end of an AC-3, AAC or MPEG audio file were
+    // written out as a frame of three bytes, which a player cannot decode and which made the track a frame longer.
+    // They are left out as the junk above is. A tail that begins like a header was left out with a warning above.
+    if (m_tmpBufferLen > 0 && m_tmpBufferLen < getHeaderLen())
+    {
+        m_processedBytes += m_tmpBufferLen;
+        m_tmpBufferLen = 0;
+        return 0;
+    }
     if (m_tmpBufferLen >= getHeaderLen())
     {
         const int size =
             decodeFrame(m_tmpBuffer.data(), m_tmpBuffer.data() + m_tmpBufferLen, skipBytes, skipBeforeBytes);
         if (size + skipBytes + skipBeforeBytes <= 0 && size != NOT_ENOUGH_BUFFER)
             return 0;
+        // A reader that gives no length above can still size the frame here. One longer than what is left was cut
+        // off as well: MPEG audio sizes a frame from its header without asking whether the frame is all there.
+        if (size > 0 && size + skipBytes + skipBeforeBytes > m_tmpBufferLen)
+        {
+            leaveOutCutFrame(m_tmpBufferLen);
+            m_tmpBufferLen = 0;
+            return 0;
+        }
     }
     avPacket.dts = avPacket.pts = static_cast<int64_t>(m_curPts * m_stretch) + m_timeOffset;
     if (m_tmpBufferLen > 0)
@@ -749,6 +810,17 @@ int SimplePacketizerReader::flushPacket(AVPacket& avPacket)
     LTRACE(LT_DEBUG, 0, "Processed " << m_frameNum << " " << getCodecInfo().displayName << " frames");
     m_processedBytes += avPacket.size + skipBytes + skipBeforeBytes;
     return static_cast<int>(m_tmpBufferLen);
+}
+
+// The bytes are counted as read, so that a source whose last frame was cut off still counts as read to its end, and
+// the job does not end with "The mux stopped before the source was finished" over an output that has every whole
+// frame. They are not counted as lost either: nothing in the middle of the stream was thrown away.
+void SimplePacketizerReader::leaveOutCutFrame(const int64_t bytes)
+{
+    LTRACE(LT_WARN, 2,
+           getCodecInfo().displayName << " stream (track " << m_streamIndex << "): the file ends inside a frame, "
+                                      << bytes << " bytes left out");
+    m_processedBytes += bytes;
 }
 
 void SimplePacketizerReader::addTimeGap(const int64_t atNs, const int64_t gapNs)
@@ -1130,6 +1202,14 @@ void SimplePacketizerReader::fillDiscoveryData(StreamDiscoveryData& data)
 
 static constexpr int CHECK_FRAMES_COUNT = 10;
 static constexpr int MIN_SHORT_FILE_FRAMES = 3;
+// ** A CHAIN THAT BREAKS IS LOOKED FOR AGAIN BEHIND THE BREAK. ** See checkStream. At most this many chains, and none
+// that begins further into the data than RESUME_SPAN: a track that is not this codec is turned down after a bounded
+// number of tries, as before, and the listing of such a track takes no longer than 16 short searches.
+static constexpr int MAX_FRAME_CHAINS = 16;
+static constexpr int64_t RESUME_SPAN = 8 * 1024 * 1024;
+// A track its transport stream declares as this codec (declaredByContainer) needs this many frames in a row in a chain
+// after the first: the stream type already says what it is, and the frames only have to show that the data agrees.
+static constexpr int DECLARED_CHAIN_FRAMES = 3;
 
 CheckStreamRez SimplePacketizerReader::checkStream(uint8_t* buffer, const int len, const ContainerType containerType,
                                                    const int containerDataType, const int containerStreamIndex)
@@ -1146,53 +1226,103 @@ CheckStreamRez SimplePacketizerReader::checkStream(uint8_t* buffer, const int le
     // ceiling a tagged file is not recognised at all: a real one carrying cover art answered
     // "Can't detect stream type" and could not be muxed.
     m_tagCeilingEnd = buffer + tagCeilingRunAt(buffer, end);
-    uint8_t* frame = findFrame(buffer, end);
-    if (frame == nullptr)
+
+    // ** ONE DAMAGED FRAME USED TO DECIDE THE WHOLE TRACK. ** After the first frame the next ones must decode back to
+    // back, and the first that did not ended the detection with "not detected", although the data holds up to 64 MiB
+    // of the track. One TS packet lost near the start of an AC-3, E-AC-3, DTS or AAC track of a transport stream, the
+    // 20th of its PID, which is about its third frame, made the listing say "Can't detect stream type", and the track
+    // was left out of the job without a word: the sound of a recording that begins with one damaged packet, which is
+    // ordinary broadcast material, was simply lost. The same packet lost later, the 400th, was found and muxed with
+    // the loss reported.
+    //
+    // So a chain that breaks is looked for again from behind the frame that failed, and the new chain must be whole
+    // on its own: CHECK_FRAMES_COUNT frames back to back, the AC-3 CRC checked on each, as the first chain. A chain of
+    // ten that random data forms by chance is no likelier for being looked for sixteen times. The first chain is
+    // exactly the check it always was, so a track it accepts is accepted as before, from the same frames.
+    //
+    // A chain after the first in a track the transport stream DECLARES as this codec needs DECLARED_CHAIN_FRAMES in a
+    // row instead: the stream type says what the track is, and a stream that loses one packet in 30 has no ten whole
+    // frames in a row anywhere.
+    const int resumedChainFrames = declaredByContainer() ? DECLARED_CHAIN_FRAMES : CHECK_FRAMES_COUNT;
+    uint8_t* from = buffer;
+    const uint8_t* const lastChainStart = end - buffer > RESUME_SPAN ? buffer + RESUME_SPAN : end;
+    for (int chain = 0; chain < MAX_FRAME_CHAINS && from < lastChainStart; ++chain)
     {
-        setTestMode(false);
-        return rez;
+        uint8_t* const brokeAt = frameChainBreak(from, end, chain == 0 ? CHECK_FRAMES_COUNT : resumedChainFrames,
+                                                 chain == 0, lastChainStart);
+        if (brokeAt == nullptr)
+        {
+            setTestMode(false);
+            rez.codecInfo = getCodecInfo();
+            rez.streamDescr = getStreamInfo();
+            return rez;
+        }
+        if (brokeAt == end)
+            break;  // no frame of this codec behind the break
+        from = brokeAt + 1;
     }
+    setTestMode(false);
+    return rez;
+}
+
+// One chain of frames from the first frame found at or after from. nullptr: the chain is whole, needFrames frames
+// back to back, or fewer that run to the end of the data (see below). Otherwise where it broke, the frame that did not
+// decode, or end when no frame was found to start a chain at. firstChain keeps the rule the check always had for the
+// chain at the start of the data: a run of any length that ends exactly at the end of the data is enough. A chain
+// further in must begin at or before lastStart, and is never accepted on less than MIN_SHORT_FILE_FRAMES frames.
+uint8_t* SimplePacketizerReader::frameChainBreak(uint8_t* from, uint8_t* end, const int needFrames,
+                                                 const bool firstChain, const uint8_t* lastStart)
+{
+    uint8_t* frame = findFrame(from, end);
+    if (frame == nullptr || (!firstChain && frame > lastStart))
+        return end;
     int skipBytes = 0;
     int skipBeforeBytes = 0;
     for (int i = 0; i < 5; ++i)
     {
         if (decodeFrame(frame, end, skipBytes, skipBeforeBytes) <= 0)
         {
-            // setTestMode(false);
-            // return rez;
             frame = findFrame(frame + 2, end);
 
             if (frame == nullptr)
-            {
-                setTestMode(false);
-                return rez;
-            }
+                return end;
         }
         else
             break;
     }
     const int freq = getFreq();
     bool firstStep = true;
-    for (int i = 0; i < CHECK_FRAMES_COUNT && frame < end;)
+    int i = 0;
+    for (; i < needFrames && frame < end;)
     {
         const int frameLen = decodeFrame(frame, end, skipBytes, skipBeforeBytes);
         // A file of fewer than ten frames ends inside this check, and its last frame, or the few bytes a reader looks
         // at behind it, runs past the data: a cut of a third of a second was not recognised at all. Frames that were
         // read back to back up to the end of the data are enough when there are at least three.
-        if (frameLen == NOT_ENOUGH_BUFFER && i >= MIN_SHORT_FILE_FRAMES)
-            break;
-        if (frameLen <= 0 || getFreq() != freq || (firstStep && frameLen > end - frame))
+        //
+        // ** THE LAST FRAME COUNTS WHEN IT IS WHOLE. ** A reader looks behind each frame here, AC-3 at eight bytes for
+        // a TrueHD unit, and behind the last frame of a file there is nothing, so the last frame always came back
+        // NOT_ENOUGH_BUFFER and was never counted: a raw AC-3, E-AC-3 or DTS file of three whole frames gave "Can't
+        // detect stream type", and four were needed. Its header says how long it is, and when that many bytes are
+        // here it is counted like the others. It is decoded as far as the data goes, the AC-3 CRC included, and it
+        // must keep the sample rate, so this takes nothing on trust that the frames before it were not asked for.
+        // Two frames and fewer are still not enough.
+        if (frameLen == NOT_ENOUGH_BUFFER)
         {
-            setTestMode(false);
-            return rez;
+            const int whole = wholeFrameSizeAt(frame, end);
+            if (whole > 0 && whole <= end - frame && getFreq() == freq && getFrameDuration() > 0)
+                i++;
+            if (i >= MIN_SHORT_FILE_FRAMES)
+                return nullptr;
         }
+        if (frameLen <= 0 || getFreq() != freq || (firstStep && frameLen > end - frame))
+            return frame;
         firstStep = false;
         frame += frameLen + skipBytes + skipBeforeBytes;
         if (getFrameDuration() > 0)
             i++;
     }
-    setTestMode(false);
-    rez.codecInfo = getCodecInfo();
-    rez.streamDescr = getStreamInfo();
-    return rez;
+    if (firstChain || i >= needFrames || i >= MIN_SHORT_FILE_FRAMES)
+        return nullptr;
+    return frame < end ? frame : end;
 }

@@ -106,6 +106,9 @@ class LPCMStreamReader final : public SimplePacketizerReader
 
     void setDataChunkSize(int64_t size, bool known);
     int stepAfterData(uint8_t* buff, uint8_t* end);
+    // A later file of a join whose header comes before the data chunk of the file in front of it has ended
+    void findJoinedFileHeader();
+    int m_joinPartial = 0;  // the part of a sample in front of that header, stepped over when the chunk ends
     uint8_t* m_lastChannelRemapPos;
     bool m_demuxToW64;
 

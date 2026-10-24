@@ -1206,6 +1206,7 @@ int LPCMStreamReader::readPacket(AVPacket& avPacket)
         m_needSync = false;
     }
     avPacket.dts = avPacket.pts = llround(m_curPts * m_stretch) + m_timeOffset;
+    findJoinedFileHeader();
     while (m_skipRest > 0 || m_afterData)
     {
         if (m_skipRest > 0)
@@ -1269,7 +1270,11 @@ int LPCMStreamReader::readPacket(AVPacket& avPacket)
     {
         m_curChunkLen -= frameLen;
         if (m_curChunkLen == 0 && m_chunkSizeKnown)
+        {
             m_afterData = true;
+            m_skipRest = m_joinPartial;  // the part of a sample in front of the next file's header
+            m_joinPartial = 0;
+        }
     }
     if (frameLen > MAX_AV_PACKET_SIZE)
         THROW(ERR_AV_FRAME_TOO_LARGE, "AV frame too large (" << frameLen << " bytes). Increase AV buffer.")
@@ -1293,6 +1298,55 @@ int LPCMStreamReader::readPacket(AVPacket& avPacket)
     return 0;
 }
 
+// ** A FILE OF A JOIN THAT ENDS BEFORE ITS OWN HEADER SAYS. ** The data chunk of a WAV gives the length of its audio,
+// and the reader takes that many bytes as audio. A WAV that holds less, a recording that stopped before its header was
+// written again, made the reader take the header of the NEXT file of the join for audio as well, and every sample after
+// it was read out of step: measured on a 24 bit stereo WAV 3 bytes short of its header, joined to a whole one, the
+// header went into the sound as 102 bytes of noise and the whole second file was read 3 bytes off its samples, which is
+// noise for its whole length, under "Demux complete" and without a word.
+//
+// So, while the data chunk still says there is audio to come, the bytes of the next frame are looked at for the start
+// of another file: "RIFF" with "WAVE" 8 bytes on, or Wave64's "riff" with "wave" 24 bytes on, twelve or more bytes of
+// structure that sound does not hold by chance. Where one is found the chunk ends there, in whole samples: the part of
+// a sample in front of the header is left out and said, and the header is read as at the start of the stream.
+void LPCMStreamReader::findJoinedFileHeader()
+{
+    if ((m_headerType != LPCMHeaderType::htWAVE && m_headerType != LPCMHeaderType::htWAVE64) || !m_chunkSizeKnown ||
+        m_curChunkLen <= 0 || m_afterData || m_skipRest > 0 || m_joinPartial > 0 || m_curPos == nullptr)
+        return;
+    const int sampleSize = (m_bitsPerSample == 20 ? 3 : m_bitsPerSample / 8) * m_channels;
+    if (sampleSize <= 0)
+        return;
+    const int64_t frameLen = (m_bitsPerSample == 20 ? 3 : m_bitsPerSample / 8) * m_channels * m_freq / 200;
+    const int64_t span = FFMIN(FFMIN(frameLen, m_curChunkLen), m_bufEnd - m_curPos);
+    for (int64_t k = 0; k < span; ++k)
+    {
+        const uint8_t* p = m_curPos + k;
+        const bool riff =
+            p[0] == 'R' && m_bufEnd - p >= 12 && memcmp(p, "RIFF", 4) == 0 && memcmp(p + 8, "WAVE", 4) == 0;
+        const bool w64 =
+            p[0] == 'r' && m_bufEnd - p >= 28 && memcmp(p, "riff", 4) == 0 && memcmp(p + 24, "wave", 4) == 0;
+        if (!riff && !w64)
+            continue;
+        const int partial = static_cast<int>(k % sampleSize);
+        std::ostringstream said;
+        said << getCodecInfo().displayName << " stream (track " << m_streamIndex << "): a file of the join ends "
+             << m_curChunkLen - k << " bytes before the end of the audio its header gives";
+        if (partial > 0)
+            said << ", inside a sample, " << partial << " bytes left out";
+        LTRACE(LT_WARN, 2, said.str());
+        m_curChunkLen = k - partial;
+        if (m_curChunkLen == 0)
+        {
+            m_afterData = true;
+            m_skipRest = partial;
+        }
+        else
+            m_joinPartial = partial;
+        return;
+    }
+}
+
 int LPCMStreamReader::flushPacket(AVPacket& avPacket)
 {
     avPacket.duration = 0;
@@ -1309,6 +1363,41 @@ int LPCMStreamReader::flushPacket(AVPacket& avPacket)
         // What is left after the end of the data chunk is a part of a chunk, not audio.
         m_processedBytes += m_tmpBufferLen;
         m_tmpBufferLen = 0;
+    }
+    // ** A WAV THAT ENDS INSIDE A SAMPLE ENDS WITH A PART OF A SAMPLE, AND THAT PART IS NOT SOUND. ** The last block of
+    // a WAV cut 3 bytes into a 24 bit stereo sample was sent as 1,437 bytes, which is not a whole number of 6 byte
+    // samples: a Matroska output and a demux carry the block as it is, and a player reports the track as damaged. A
+    // transport stream did not show it only because the conversion to disc LPCM works in whole samples. The part is
+    // left out, on every output, and said, as a frame cut off by the end of the file is.
+    //
+    // A WAV whose data chunk gives more audio than the file holds, a recording that stopped before its header was
+    // written again, is said too: what the file holds is muxed, and the header's length cannot be.
+    const int sampleSize = (m_bitsPerSample == 20 ? 3 : m_bitsPerSample / 8) * m_channels;
+    if ((m_headerType == LPCMHeaderType::htWAVE || m_headerType == LPCMHeaderType::htWAVE64) && m_tmpBufferLen > 0 &&
+        sampleSize > 0)
+    {
+        const auto first = UnalignedPtr<uint32_t>(m_tmpBuffer.data());
+        const bool header = m_tmpBufferLen >= 4 && (*first == RIFF_SMALL || *first == RIFF_LARGE);
+        const int partial = header ? 0 : static_cast<int>(m_tmpBufferLen % sampleSize);
+        const int64_t notThere = m_chunkSizeKnown && !header ? m_curChunkLen - m_tmpBufferLen : 0;
+        if (notThere > 0)
+        {
+            std::ostringstream said;
+            said << getCodecInfo().displayName << " stream (track " << m_streamIndex << "): the file ends " << notThere
+                 << " bytes before the end of the audio its header gives";
+            if (partial > 0)
+                said << ", inside a sample, " << partial << " bytes left out";
+            LTRACE(LT_WARN, 2, said.str());
+            m_processedBytes += partial;
+        }
+        else if (partial > 0)
+        {
+            LTRACE(LT_WARN, 2,
+                   getCodecInfo().displayName << " stream (track " << m_streamIndex
+                                              << "): the file ends inside a sample, " << partial << " bytes left out");
+            m_processedBytes += partial;
+        }
+        m_tmpBufferLen -= partial;
     }
     if (m_tmpBufferLen >= getHeaderLen())
     {

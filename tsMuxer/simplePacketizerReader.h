@@ -78,7 +78,17 @@ class SimplePacketizerReader : public AbstractStreamReader
     virtual int decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes,
                             int& skipBeforeBytes) = 0;  // decode frame parameters. bitrate, channels for audio e.t.c
     virtual uint8_t* findFrame(uint8_t* buff, uint8_t* end) = 0;  // find forawrd nearest frame
-    virtual double getFrameDuration() = 0;                        // frame duration at nano seconds
+    // ** THE LENGTH A FRAME HAS WHEN IT IS WHOLE, FROM ITS HEADER ALONE. ** decodeFrame cannot say whether the LAST
+    // frame of a file is all there: most readers look a few bytes past a frame for the next one, and at the end of
+    // the data there is none, so a whole last frame and one the end of the file cut off can both answer
+    // NOT_ENOUGH_BUFFER. This reads only the header of the frame that begins at p, and nothing behind the frame:
+    //   > 0                the length the header gives. More than end - p: the end of the file cut the frame off.
+    //   NOT_ENOUGH_BUFFER  p holds the start of a header of this codec, and the header itself is cut off.
+    //   0                  this reader cannot tell, or p holds no header of it. This is the default, and a reader
+    //                      that gives 0 keeps the behaviour it had before the question was asked.
+    // checkStream counts a whole last frame with it, and flushPacket leaves out a cut one.
+    virtual int wholeFrameSizeAt(const uint8_t* p, const uint8_t* end) { return 0; }
+    virtual double getFrameDuration() = 0;  // frame duration at nano seconds
     virtual const std::string getStreamInfo() = 0;
     virtual void setTestMode(bool value) {}
     [[nodiscard]] virtual bool needMPLSCorrection() const { return true; }
@@ -90,6 +100,18 @@ class SimplePacketizerReader : public AbstractStreamReader
 
     virtual bool needSkipFrame(AVPacket& packet) { return false; }
 
+    // The end of the source cut the last frame off: its bytes are left out with a warning, and counted as read.
+    void leaveOutCutFrame(int64_t bytes);
+
+    // The transport stream that carries the track declares it as this reader's codec by its stream type, as checkStream
+    // has it in m_containerType and m_containerDataType. checkStream then asks less of a chain behind damage. False,
+    // the default, for any other source and any stream type that names no codec, as 0x06 private data.
+    [[nodiscard]] virtual bool declaredByContainer() const { return false; }
+
+   private:
+    uint8_t* frameChainBreak(uint8_t* from, uint8_t* end, int needFrames, bool firstChain, const uint8_t* lastStart);
+
+   protected:
     // uint8_t* m_tmpBuffer;
     int m_curMplsIndex;
     double m_stretch;

@@ -21,6 +21,9 @@ class MP3Codec
     }
 
     static uint8_t* mp3FindFrame(uint8_t* buff, const uint8_t* end);
+    // The length of the frame whose header is at p, from the header alone; 0 when p holds no header with a length or
+    // the four header bytes are not all there.
+    static int frameSizeAt(const uint8_t* p, const uint8_t* end);
     int mp3DecodeFrame(uint8_t* buff, const uint8_t* end);
 
    protected:

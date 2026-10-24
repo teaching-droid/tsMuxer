@@ -20,6 +20,13 @@ class AACStreamReader final : public SimplePacketizerReader, public AACCodec
     int getHeaderLen() override;
     int decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, int& skipBeforeBytes) override;
     uint8_t* findFrame(uint8_t* buff, uint8_t* end) override { return findAacFrame(buff, end, m_tagCeilingEnd); }
+    int wholeFrameSizeAt(const uint8_t* p, const uint8_t* end) override;
+    // ADTS, stream type 0x0F; LATM (0x11) is another framing, which this reader does not read
+    [[nodiscard]] bool declaredByContainer() const override
+    {
+        return (m_containerType == ContainerType::ctTS || m_containerType == ContainerType::ctM2TS) &&
+               m_containerDataType == static_cast<int>(StreamType::AUDIO_AAC);
+    }
     double getFrameDuration() override { return static_cast<double>(m_samples) * INTERNAL_PTS_FREQ / m_sample_rate; }
     const CodecInfo& getCodecInfo() override { return aacCodecInfo; }
     const std::string getStreamInfo() override;

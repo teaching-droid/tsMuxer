@@ -219,6 +219,16 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Audio
 
+* **An AC-3, E-AC-3, DTS, AAC or MPEG audio track that ends inside a frame,** as a recording an encoder stopped, got the part of that frame as its last frame, which a player cannot decode, and the track came out a frame longer. The part is now left out, with a warning.
+
+* **A few bytes after the last frame of a raw audio file** were muxed as a frame of their own. They are now left out.
+
+* **A WAV that ends inside a sample** got the part of a sample as its last block in Matroska and in a demux, which players report as damaged. The part is now left out, with a warning, and a WAV whose header gives more audio than the file holds says so.
+
+* **A join of WAV files whose first file holds less audio than its header says** read the next file's header as sound, and the rest of the join out of step with its samples, which is noise. The next file is now found where it begins, with a warning.
+
+* **Damage near the start of an AC-3, E-AC-3, DTS or AAC track of a transport stream,** even one lost packet, made the whole track unrecognised: the listing said "Can't detect stream type" and the track was left out without a warning. The check now goes on past the damage.
+
 * **An empty .dts file** stops with "produced no frames at all". The mux crashed.
 
 * **AAC whose channel layout is given by a program config element,** such as 6.0, 6.1 or 7.1 with front wide speakers, is muxed: from an MP4 or Matroska file it gave an empty output said to be successful, and a raw file of it was not recognised.

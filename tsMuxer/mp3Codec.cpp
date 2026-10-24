@@ -71,6 +71,16 @@ static int mp3FrameSizeFromHeader(const uint32_t header)
     return size;
 }
 
+int MP3Codec::frameSizeAt(const uint8_t* p, const uint8_t* end)
+{
+    if (end - p < 4)
+        return 0;
+    const uint32_t header = my_ntohl(loadUnaligned<uint32_t>(p));
+    if ((header & 0xffe00000) != 0xffe00000)
+        return 0;
+    return mp3FrameSizeFromHeader(header);
+}
+
 // The fields a real stream keeps constant from one frame to the next: the sync word, the version,
 // the layer and the sample rate. Bitrate and padding are excluded because a variable bitrate file
 // changes both legitimately, frame by frame.
