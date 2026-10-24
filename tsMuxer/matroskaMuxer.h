@@ -59,6 +59,9 @@ class MatroskaMuxer final : public AbstractMuxer
     void parseMuxOpt(const std::string& opts) override;
     void setChapters(const std::vector<double>& chapters) override { m_chapters = chapters; }
     void setChapterInfo(const std::vector<AVChapter>& info) override { m_chapterInfo = info; }
+    // --cut-pictures=cover: the output begins this long (internal clock) before --cut-start, at the key picture before
+    // it, and its chapters, times from the cut, are moved by as much; the chapter playing at the cut stays at 0
+    void setCutOrigin(int64_t before);
     void setSourceExtras(const std::string& title, const std::vector<std::vector<uint8_t>>& attachments,
                          const std::vector<std::vector<uint8_t>>& tags) override;
     void setSourceTrackTags(const std::map<int, std::vector<AbstractDemuxer::SourceTrackTag>>& tags) override;
@@ -367,6 +370,7 @@ class MatroskaMuxer final : public AbstractMuxer
     AbstractDemuxer::SourceEditions m_sourceEditions;
     std::vector<uint8_t> m_sourceChapterTree;  // setSourceChapterTree
     int64_t m_treeCutStartNs = 0;
+    int64_t m_treeOriginBeforeNs = 0;  // setCutOrigin: how long before the cut the output begins
     int64_t m_treeCutEndNs = INT64_MAX;
     bool m_writingPart = false;  // writePartChapters is writing the chapters of one part of a split
     double m_partStartSec = 0, m_partEndSec = 0;

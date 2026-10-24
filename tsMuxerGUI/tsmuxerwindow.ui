@@ -2165,6 +2165,19 @@
                </item>
               </layout>
              </item>
+             <item>
+              <widget class="QCheckBox" name="checkBoxCutInside">
+               <property name="enabled">
+                <bool>false</bool>
+               </property>
+               <property name="toolTip">
+                <string>Ticked, the video of a cut holds only the pictures shown between its start and its end, as earlier versions did: the pictures from the start to the next key picture are lost, and those shown just before the end. Unticked, the video begins at the key picture before the start and keeps the pictures the end needs. A disc plays only the cut; a TS, M2TS or Matroska output also shows those pictures.</string>
+               </property>
+               <property name="text">
+                <string>Keep only the pictures inside the cut</string>
+               </property>
+              </widget>
+             </item>
             </layout>
            </item>
            <item>
@@ -3375,6 +3388,7 @@ p, li { white-space: pre-wrap; }
   <tabstop>editSplitSize</tabstop>
   <tabstop>comboBoxMeasure</tabstop>
   <tabstop>checkBoxCut</tabstop>
+  <tabstop>checkBoxCutInside</tabstop>
   <tabstop>fontSettingsTableView</tabstop>
   <tabstop>fontButton</tabstop>
   <tabstop>colorButton</tabstop>

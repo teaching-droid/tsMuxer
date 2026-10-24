@@ -3186,6 +3186,16 @@ Créer l'ISO malgré tout ?</translation>
         <translation>Activer</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>Keep only the pictures inside the cut</source>
+        <translation>Ne garder que les images à l&apos;intérieur de la coupe</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>Ticked, the video of a cut holds only the pictures shown between its start and its end, as earlier versions did: the pictures from the start to the next key picture are lost, and those shown just before the end. Unticked, the video begins at the key picture before the start and keeps the pictures the end needs. A disc plays only the cut; a TS, M2TS or Matroska output also shows those pictures.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="1895"/>
         <source>Start</source>
         <translation>Début</translation>

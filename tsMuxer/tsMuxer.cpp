@@ -1608,7 +1608,10 @@ bool TSMuxer::isSplitPoint(const AVPacket& avPacket) const
         // Measured from the first packet of the mux, not from the start of the current part: a
         // chapter is a position in the film, and the parts before it have already been written.
         // m_firstPts[0] is that first packet, and it is not zero, because a transport stream is
-        // given an offset before anything is muxed.
+        // given an offset before anything is muxed. The chapters of a --cut-start are counted from the cut, which with
+        // --cut-pictures=cover is after the first picture (setChapterOrigin).
+        if (m_chapterOrigin >= 0)
+            return avPacket.pts - m_chapterOrigin >= m_chapterPts[m_nextChapter];
         if (m_firstPts.empty() || m_firstPts[0] == -1)
             return false;
         return avPacket.pts - m_firstPts[0] >= m_chapterPts[m_nextChapter];
@@ -1691,8 +1694,11 @@ void TSMuxer::gotoNextFile(const int64_t newPts)
     // single part when two marks sit closer together than the next key frame, and stepping past
     // only one would split again immediately on the next frame.
     if (m_splitByChapters && !m_firstPts.empty() && m_firstPts[0] != -1)
-        while (m_nextChapter < m_chapterPts.size() && newPts - m_firstPts[0] >= m_chapterPts[m_nextChapter])
+    {
+        const int64_t origin = m_chapterOrigin >= 0 ? m_chapterOrigin : m_firstPts[0];
+        while (m_nextChapter < m_chapterPts.size() && newPts - origin >= m_chapterPts[m_nextChapter])
             m_nextChapter++;
+    }
 
     // 2. CloseCurrentFile
     if (m_owner->isAsyncMode())
@@ -3043,6 +3049,11 @@ void TSMuxer::alignPTS(TSMuxer* otherMuxer)
         *m_lastPts.rbegin() = minPTS;
         *otherMuxer->m_lastPts.rbegin() = minPTS;
     }
+}
+
+int64_t TSMuxer::clipPts(const int64_t internal) const
+{
+    return internal < 0 ? -1 : internalClockToPts(internal) + m_timeOffset;
 }
 
 vector<int64_t> TSMuxer::getLastPts() const

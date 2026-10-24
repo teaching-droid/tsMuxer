@@ -113,7 +113,7 @@ int MPEGStreamReader::flushPacket(AVPacket& avPacket)
     avPacket.dts = pictureDts();  // shift dts back
 
     string message = "Processed ";
-    message += int32ToStr(m_totalFrameNum);
+    message += int32ToStr(m_totalFrameNum - m_framesLeftOut);
     message += " video frames";
     LTRACE(LT_DEBUG, 0, message);
     LTRACE(LT_INFO, 2, message);

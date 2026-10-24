@@ -2614,7 +2614,8 @@ void moveAtoms(std::vector<EbmlNode>& nodes, const int64_t origin, const int64_t
             keepPlaying ? start > winStart && start < winEnd : start >= winStart - slack && start < winEnd - slack;
         if (!inside && i != playing && i != playingHidden)
             continue;
-        const int64_t newStart = (std::max)(start, winStart) - origin;
+        // The chapter playing where the cut begins opens the output, which may begin before the cut
+        const int64_t newStart = i == playing || i == playingHidden ? 0 : (std::max)(start, winStart) - origin;
         bool drop = false;
         std::vector<EbmlNode> children;
         for (EbmlNode& c : n.children)
@@ -2683,20 +2684,40 @@ void MatroskaMuxer::setSourceChapterTree(const std::vector<uint8_t>& chapters, c
     }
 }
 
+void MatroskaMuxer::setCutOrigin(const int64_t before)
+{
+    const double seconds = static_cast<double>(before) / static_cast<double>(INTERNAL_PTS_FREQ);
+    const auto ns = static_cast<int64_t>(seconds * 1e9 + 0.5);
+    for (double& start : m_chapters)
+        if (start > 0)
+            start += seconds;
+    for (AVChapter& chapter : m_chapterInfo)
+    {
+        if (chapter.start > 0)
+            chapter.start += ns;
+        if (chapter.end >= 0)
+            chapter.end += ns;
+    }
+    m_treeOriginBeforeNs = ns;
+}
+
 // Every edition of the source, moved: for the whole output by the cut, for a part of a split to that part. The UIDs,
 // the names, the flags and the nesting stay as the source has them. EditionFlagHidden is left out, as from the
 // chapters tsMuxeR writes itself: RFC 9559 does not define it. False when nothing of any edition falls into the window.
 bool MatroskaMuxer::writeChapterTree()
 {
     std::vector<EbmlNode> editions = parseEbml(m_sourceChapterTree, 0, m_sourceChapterTree.size());
-    int64_t origin = m_treeCutStartNs, winStart = m_treeCutStartNs, winEnd = m_treeCutEndNs;
+    // The output begins at its first picture, m_treeOriginBeforeNs before the cut with --cut-pictures=cover
+    const int64_t fileStart = m_treeCutStartNs - m_treeOriginBeforeNs;
+    int64_t origin = fileStart, winStart = m_treeCutStartNs, winEnd = m_treeCutEndNs;
     bool keepPlaying = m_treeCutStartNs > 0;
     if (m_writingPart)
     {
-        origin = winStart = m_treeCutStartNs + static_cast<int64_t>(m_partStartSec * 1e9 + 0.5);
+        origin = fileStart + static_cast<int64_t>(m_partStartSec * 1e9 + 0.5);
+        winStart = (std::max)(origin, m_treeCutStartNs);
         winEnd = m_partEndSec >= 1e299
                      ? m_treeCutEndNs
-                     : (std::min)(m_treeCutEndNs, m_treeCutStartNs + static_cast<int64_t>(m_partEndSec * 1e9 + 0.5));
+                     : (std::min)(m_treeCutEndNs, fileStart + static_cast<int64_t>(m_partEndSec * 1e9 + 0.5));
         keepPlaying = false;
     }
     std::vector<EbmlNode> kept;

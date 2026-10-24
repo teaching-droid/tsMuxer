@@ -10,6 +10,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Worth acting on
 
+* **A film cut in two parts with --cut-end and --cut-start no longer loses pictures between them.** A video that is not encoded again can begin only at a key picture. The second part began at the first key picture after the cut, and the first part lost the B pictures shown just before its end, so up to one group of pictures, 0.3 to 0.4 s on a DVD source, was in neither part. The second part now begins at the key picture before the cut, and the first part keeps the pictures decoded before its end. The sound and subtitles still start and stop at the cut. A Blu-ray or AVCHD playlist plays only the cut, so these pictures are not shown; a TS, M2TS or Matroska output shows them. `--cut-pictures=inside` keeps only the pictures inside the cut, as before. (#49, thanks to @Nandos64)
+
 * **A Blu-ray playlist muxed each clip whole, also where it plays only a part of it.** The pictures a disc never shows were in the output, a clip played in several parts came in that many times, and the length and the chapters did not match: a path of three items through three clips came out 16 times as long. A playlist now muxes only the parts of its clips that it plays, from the key picture at or before where a player starts to the one at or after where it stops. `--playlist-clips=whole` muxes the clips whole, as before, also in a listing; in the window it is the box "Mux only the parts of a playlist's clips that it plays" in the General box. Mux such playlists again.
 
 * **Interlaced H.264 coded as frames with the bottom field first was muxed at twice its length,** so it played at half speed. Each frame now lasts one frame. Mux such files again.
@@ -267,6 +269,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Video
 
+* **The Dolby Vision enhancement layer of a cut began two pictures after its base layer** when its pictures are reordered differently. It now begins with the base layer.
+
 * **MPEG-2 video with a few damaged packets was not recognised:** one damaged picture header in the first part of the track made the listing say "Can't detect stream type". It is now recognised when such damage is rare.
 
 * **H.264 of the MFC and depth profiles (134, 135, 138, 139) was read wrongly:** the size and frame rate were wrong. Their stream parameters are now read as the standard defines them.
@@ -391,6 +395,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Window
 
+* **The cut fields have a tick "Keep only the pictures inside the cut",** which cuts as earlier versions did.
+
 * **At its smallest size, every tab stays readable.** The track list keeps at least four rows, the buttons beside it are no longer squashed, and a tab that needs more room scrolls. Rows of the Subtitles and Blu-ray tabs were drawn over each other there.
 
 * **The window shows whether the meta file follows the settings.** Text typed into the Meta file box, or a meta file opened, stops the window from building the meta file from the settings, and nothing said so: a setting changed in a tab was then not in the mux. A box above the meta file, "Build the meta file from the settings", now shows it: it unticks itself when the text is edited by hand, the title of the box says so, a line says when a change in a tab is not applied, and ticking it builds the meta file from the settings again. It takes the place of the "Reset meta to auto-generated" button. (#41, thanks to @ddemarco5 for the suggestion)
@@ -432,6 +438,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **An output that is a hard link to a source** is refused as one of the sources. The M2TS save dialog offers .m2ts only, and the open dialog lists VC-1, VVC, MP2, MP3 and FLAC files.
 
 ### Other
+
+* **A demux with --cut-start says how much later the sound starts than the picture,** as the timeshift to give it when the files are muxed again.
+
+* **The log of a cut counted every picture of the source** in "Processed N video frames". It now counts the pictures muxed.
 
 * **Pictures larger than 8 MiB** are read, as in video coded without loss in 4K or 8K, up to 256 MiB. From a Matroska file the mux stopped with "Not enough buffer", and from an MP4 file every such picture was left out. A demux of a picture larger than about 4 MiB wrote past its buffer, and could stop or damage the file.
 

@@ -1,5 +1,6 @@
 #include "blurayHelper.h"
 
+#include <algorithm>
 #include <memory>
 #include <type_traits>
 
@@ -624,6 +625,15 @@ bool BlurayHelper::createMPLSFile(TSMuxer* mainMuxer, TSMuxer* subMuxer, int aut
 {
     int64_t firstPts = *(mainMuxer->getFirstPts().begin());
     int64_t lastPts = *(mainMuxer->getLastPts().rbegin());
+    // --cut-pictures=cover: the clip of a cut begins at the key picture before --cut-start and ends with the pictures
+    // decoded before --cut-end, and the playlist plays it from the first picture shown at or after the one to the first
+    // shown at or after the other, as a Blu-ray playlist plays a part of a clip. The chapters of the cut are times from
+    // --cut-start, which is after the start of the clip.
+    if (mainMuxer->getCutPlayFromPts() > firstPts && mainMuxer->getCutPlayFromPts() < lastPts)
+        firstPts = mainMuxer->getCutPlayFromPts();
+    if (mainMuxer->getCutPlayToPts() > firstPts && mainMuxer->getCutPlayToPts() < lastPts)
+        lastPts = mainMuxer->getCutPlayToPts();
+    const int64_t chapterOrigin = mainMuxer->getChapterOriginPts() >= 0 ? mainMuxer->getChapterOriginPts() : firstPts;
 
     int bufSize = 1024 * 100;
     auto mplsBuffer = new uint8_t[bufSize];
@@ -649,12 +659,15 @@ bool BlurayHelper::createMPLSFile(TSMuxer* mainMuxer, TSMuxer* subMuxer, int aut
             const double ticks = i * 45000.0;
             if (!(ticks >= 0.0 && ticks < 4294967296.0))
                 continue;
-            const auto mark = static_cast<uint32_t>(ticks);
+            // On the clip's clock; one before the start of the playlist (the chapter playing at a --cut-start, when the
+            // playlist starts after it) is at the start
+            const int64_t mark = (std::max)(static_cast<int64_t>(ticks) + chapterOrigin / 2,
+                                            static_cast<int64_t>(mplsParser.IN_time));
             // The list is in time order with no time twice, but two times a few microseconds apart become one tick of
             // the playlist's clock: they gave two marks at one time, which a player shows as an empty chapter
-            if (mark <= (mplsParser.OUT_time - mplsParser.IN_time) &&
-                (mplsParser.m_marks.empty() || mplsParser.m_marks.back().m_markTime != mark + mplsParser.IN_time))
-                mplsParser.m_marks.emplace_back(-1, mark + mplsParser.IN_time);
+            if (mark <= mplsParser.OUT_time &&
+                (mplsParser.m_marks.empty() || mplsParser.m_marks.back().m_markTime != mark))
+                mplsParser.m_marks.emplace_back(-1, static_cast<uint32_t>(mark));
         }
     }
     // Counted before the mux from the length the sources state (refuseTooManyMarks in main); a length stated wrong

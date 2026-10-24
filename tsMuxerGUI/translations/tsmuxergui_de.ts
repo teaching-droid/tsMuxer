@@ -3186,6 +3186,16 @@ ISO trotzdem erstellen?</translation>
         <translation>Schneiden aktivieren</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>Keep only the pictures inside the cut</source>
+        <translation>Nur die Bilder innerhalb des Schnitts behalten</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1"/>
+        <source>Ticked, the video of a cut holds only the pictures shown between its start and its end, as earlier versions did: the pictures from the start to the next key picture are lost, and those shown just before the end. Unticked, the video begins at the key picture before the start and keeps the pictures the end needs. A disc plays only the cut; a TS, M2TS or Matroska output also shows those pictures.</source>
+        <translation>Angehakt enthält das Video eines Schnitts nur die Bilder, die zwischen seinem Anfang und seinem Ende gezeigt werden, wie in früheren Versionen: Die Bilder vom Anfang bis zum nächsten Schlüsselbild gehen verloren, ebenso die kurz vor dem Ende gezeigten. Nicht angehakt beginnt das Video beim Schlüsselbild vor dem Anfang und behält die Bilder, die das Ende braucht. Eine Disc spielt nur den Schnitt ab; eine TS-, M2TS- oder Matroska-Ausgabe zeigt auch diese Bilder.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="1895"/>
         <source>Start</source>
         <translation>Start</translation>

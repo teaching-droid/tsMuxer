@@ -665,14 +665,16 @@ int METADemuxer::readPacket(AVPacket& avPacket)
                 m_codecInfo[minDtsIndex].m_streamReader->flushPacket(avPacket);
                 m_codecInfo[minDtsIndex].m_flushed = true;
             }
-            updateReport(true);
+            if (!m_quiet)
+                updateReport(true);
             return 0;
         }
         if (!m_flushDataMode)
             m_flushDataMode = true;
         else
         {
-            updateReport(false);
+            if (!m_quiet)
+                updateReport(false);
             m_lastReadRez = BufferedFileReader::DATA_EOF;
             return BufferedReader::DATA_EOF;
         }
@@ -1716,7 +1718,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         }
     }
     if (codecReader == nullptr)
-        codecReader = createCodec(codec, readerParams, fileList[0], mergePlayItems(mplsInfoList));
+        codecReader = createCodec(codec, readerParams, fileList[0], mergePlayItems(mplsInfoList), m_quiet);
     // The reader belongs to the stream once it is added (m_codecInfo). A line refused before that, as a track of a
     // container file without track=, left it behind.
     std::unique_ptr<AbstractStreamReader> readerGuard(codecReader);
@@ -4460,6 +4462,7 @@ void METADemuxer::cutPlayItems(MPLSParser& mpls, const string& mplsFileName, con
         std::vector<ClipEntryPoint> keys;
         size_t first = 0;  // the key picture the part starts at
         size_t last = 0;   // the key picture the part ends at; keys.size() at the end of the clip
+        bool inFirst = false;  // IN_time is after the first key picture, inside its group of pictures
     };
     const string streamDir = playlistStreamDir(mplsFileName);
     std::vector<Plan> plans(mpls.m_playItems.size());
@@ -4493,7 +4496,18 @@ void METADemuxer::cutPlayItems(MPLSParser& mpls, const string& mplsFileName, con
         // a key picture at or after OUT_time: the map keeps its time less up to 511
         plan.last = plan.first + 1;
         while (plan.last < plan.keys.size() && plan.keys[plan.last].pts <= out - 512) ++plan.last;
-        if (plan.first > 0 || plan.last < plan.keys.size())
+        // A play item that starts inside the first group of pictures of its clip, as one of a disc tsMuxeR cut with
+        // --cut-start does (the clip begins at the key picture before the cut, and the play item at the cut): it was
+        // read as the whole clip, so the length and the marks the playlist gives, from IN_time, were not those of what
+        // was muxed, from the key picture. It is cut there now, as one that starts in a later group is.
+        if (plan.first == 0 && in > plan.keys[0].pts + 511)
+        {
+            int64_t keyPts = -1, firstShown = -1, lastBefore = -1;
+            const string m2ts = mplsTrackToFullName(mplsFileName, item.fileName);
+            plan.inFirst =
+                keyPictureTimes(m2ts, plan.pid, plan.keys[0], keyPts, firstShown, lastBefore) && in > keyPts;
+        }
+        if (plan.first > 0 || plan.inFirst || plan.last < plan.keys.size())
             ++cutItems;
     }
     if (cutItems == 0)
@@ -4556,7 +4570,7 @@ void METADemuxer::cutPlayItems(MPLSParser& mpls, const string& mplsFileName, con
         const Plan& plan = plans[i];
         const string m2ts = mplsTrackToFullName(mplsFileName, items[i].fileName);
         ClipPart part;
-        part.startCut = plan.first > 0;
+        part.startCut = plan.first > 0 || plan.inFirst;
         part.continuesPrevious = continues[i];
         part.continuedByNext = i + 1 < items.size() && continues[i + 1];
         int64_t before = -1;

@@ -46,6 +46,9 @@ class MuxerManager final
 
     void setCutEnd(const int64_t value) { m_cutEnd = value; }
     [[nodiscard]] int64_t getCutEnd() const { return m_cutEnd; }
+    // --cut-pictures: cover (true, the default) keeps the pictures a cut needs to show every picture inside it, inside
+    // (false) keeps only the pictures shown inside the cut, as earlier versions did
+    [[nodiscard]] bool cutPicturesCover() const { return m_cutCover; }
 
     void waitForWriting() const;
 
@@ -132,6 +135,15 @@ class MuxerManager final
     std::vector<AVChapter> readSourceChapters();
     // --cut-start: whether a packet the cut start has not dropped by its time is kept (see doMux).
     bool keptAfterCutStart(AVPacket& avPacket);
+    // The video streams a cut begins at a key picture of their own, and the ones that only add to another video
+    // (keptAfterCutStart); a video that is not one of these is not video (null)
+    void findCutLayers(const std::vector<StreamInfo>& ci);
+    static bool isCutVideo(const BaseAbstractStreamReader* reader);
+    // --cut-pictures=cover: the time each video's key picture at or before --cut-start has, read before the mux by a
+    // pass of its own over the sources (see muxerManager.cpp)
+    void findCutKeyPictures();
+    // --cut-pictures=cover: what the outputs that keep their own times are told once the start is known
+    void applyCutOrigin();
     std::unique_ptr<AbstractMuxer> createMuxer();
     void asyncWriteBlock(const WriterData& data) const;
     void checkTrackList(const std::vector<StreamInfo>& ci) const;
@@ -166,6 +178,13 @@ class MuxerManager final
     std::set<int> m_cutLayers;
     bool m_cutLayersKnown = false;
     int64_t m_cutVideoStart = -1;
+    bool m_cutCover = true;               // --cut-pictures
+    int m_cutMainVideo = -1;              // the stream index of the main video, the one a disc playlist follows
+    std::map<int, int64_t> m_cutKeyFrom;  // cover: per video stream, the time of its key picture at or before the cut
+    int64_t m_cutShownFrom = -1;  // cover: the first picture of the main video shown at or after --cut-start
+    int64_t m_cutShownTo = -1;    // cover: the first picture of the main video shown at or after --cut-end
+    std::string m_metaFileName;   // the meta file, read again by findCutKeyPictures
+    const BufferedReaderManager& m_readManager;
     std::unique_ptr<BufferedFileWriter> m_fileWriter;
     AbstractMuxerFactory& m_factory;
     bool m_allowStereoMux;

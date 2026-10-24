@@ -935,6 +935,7 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->checkBoxCut, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onSplitCutParamsChanged);
     connect(ui->cutStartTimeEdit, &QTimeEdit::timeChanged, this, &TsMuxerWindow::onSplitCutParamsChanged);
     connect(ui->cutEndTimeEdit, &QTimeEdit::timeChanged, this, &TsMuxerWindow::onSplitCutParamsChanged);
+    connect(ui->checkBoxCutInside, &QAbstractButton::clicked, this, &TsMuxerWindow::onSplitCutParamsChanged);
     connect(ui->spinEditBorder, spinBoxValueChanged, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->comboBoxAnimation, comboBoxIndexChanged, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->lineSpacing, doubleSpinBoxValueChanged, this, &TsMuxerWindow::onSavedParamChanged);
@@ -4526,6 +4527,9 @@ QString TsMuxerWindow::getMuxOpts()
         rez += QString(" --cut-start=%1ms").arg(startCut);
     if (endCut > 0 && ui->checkBoxCut->isChecked())
         rez += QString(" --cut-end=%1ms").arg(endCut);
+    // The video of a cut holds only the pictures shown inside it, as before 3.0.0
+    if ((startCut > 0 || endCut > 0) && ui->checkBoxCut->isChecked() && ui->checkBoxCutInside->isChecked())
+        rez += QString(" --cut-pictures=inside");
 
     int vbvLen = ui->editVBVLen->value();
     if (vbvLen > 0)
@@ -5225,6 +5229,7 @@ void TsMuxerWindow::onSplitCutParamsChanged()
 
     ui->cutStartTimeEdit->setEnabled(ui->checkBoxCut->isChecked());
     ui->cutEndTimeEdit->setEnabled(ui->checkBoxCut->isChecked());
+    ui->checkBoxCutInside->setEnabled(ui->checkBoxCut->isChecked());
     updateMetaLines();
 }
 

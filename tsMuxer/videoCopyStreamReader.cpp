@@ -116,7 +116,7 @@ int VideoCopyStreamReader::readPacket(AVPacket& avPacket)
         m_packet.clear();
         // MPEG-4 Part 2 in Matroska has no CodecPrivate (the codec specifications of Matroska): its configuration goes
         // in front of the first picture, where a decoder finds it as it does in an elementary stream
-        if (!m_configSent && !m_prores)
+        if ((!m_configSent || (m_configEveryKey && key)) && !m_prores)
             m_packet.insert(m_packet.end(), m_config.begin(), m_config.end());
         m_configSent = true;
         m_packet.insert(m_packet.end(), p + HEAD, p + HEAD + dataSize);

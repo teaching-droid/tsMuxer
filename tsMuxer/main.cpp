@@ -1083,6 +1083,25 @@ All parameters in this group start with two dashes:
                       time (00:01:30).
 --cut-end             Where to STOP, measured from the beginning too, not from
                       the end. --cut-end=30s keeps the first 30 seconds.
+--cut-pictures=<which> Which pictures of the video a cut keeps. A video that is
+                      not encoded again can only begin at a key picture, and
+                      the pictures shown just before an end can be made from
+                      one shown after it. cover, the default, keeps every
+                      picture the cut needs: the video begins at the key
+                      picture at or before --cut-start, and it ends with the
+                      last picture decoded before --cut-end. A Blu-ray or AVCHD
+                      playlist plays only from --cut-start to --cut-end, from
+                      the first picture shown at or after each, so no picture
+                      outside the cut is shown, and a film cut in two loses no
+                      picture between the parts. A TS, M2TS or Matroska output
+                      shows them: up to one group of pictures before the sound
+                      at the start, and a picture or a few at the end. inside
+                      keeps only the pictures shown inside the cut, as earlier
+                      versions did: the video begins at the first key picture
+                      at or after --cut-start, and the pictures before that key
+                      picture, and those shown just before --cut-end, are in no
+                      part. The sound and subtitles start and stop at the cut
+                      either way.
 --split-duration      Split the output into several files, with each of them being
                       <n> seconds long. A unit may follow: ms, s, min or h.
 --lang-codes=<form>   Which form a language READ from a source is reported in.

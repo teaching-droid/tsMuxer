@@ -3,9 +3,11 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <iostream>
 #include <limits>
 #include <set>
 #include <sstream>
+#include <streambuf>
 #include <string>
 #include <vector>
 
@@ -21,6 +23,7 @@
 #include "mpegStreamReader.h"
 #include "subTrackFilter.h"
 #include "tsMuxer.h"
+#include "videoCopyStreamReader.h"
 #include "vodCoreException.h"
 
 using namespace std;
@@ -55,7 +58,7 @@ int seekDefaultTrack(const std::vector<StreamInfo>& tracks, std::string& param, 
 }  // namespace
 
 MuxerManager::MuxerManager(const BufferedReaderManager& readManager, AbstractMuxerFactory& factory)
-    : m_metaDemuxer(readManager), m_factory(factory)
+    : m_metaDemuxer(readManager), m_readManager(readManager), m_factory(factory)
 {
     m_asyncMode = true;
     m_cutStart = 0;
@@ -877,9 +880,25 @@ int MuxerManager::getExtraISOBlocks()
 
 void MuxerManager::writeChapterFile(const std::string& outDirName)
 {
-    const std::vector<AVChapter> chapters = sourceChapters();
+    std::vector<AVChapter> chapters = sourceChapters();
     if (chapters.empty())
         return;
+    // --cut-pictures=cover: the demuxed video begins at its key picture before the cut, and the chapters, times from
+    // the cut, describe that video. The chapter playing at the cut stays at its start.
+    const auto key = m_cutKeyFrom.find(m_cutMainVideo);
+    if (m_cutCover && m_cutStart > 0 && key != m_cutKeyFrom.end() && key->second < m_cutStart)
+    {
+        const auto shift = static_cast<int64_t>(static_cast<double>(m_cutStart - key->second) * 1e9 /
+                                                    static_cast<double>(INTERNAL_PTS_FREQ) +
+                                                0.5);
+        for (AVChapter& chapter : chapters)
+        {
+            if (chapter.start > 0)
+                chapter.start += shift;
+            if (chapter.end >= 0)
+                chapter.end += shift;
+        }
+    }
 
     const std::string fileName = closeDirPath(toNativeSeparators(outDirName)) + "chapters.txt";
     TextFile file;
@@ -920,6 +939,17 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
 
     preinitMux(outFileName, fileFactory);
 
+    // cover: the main video is known before the mux (findCutKeyPictures, the end of a --cut-end); inside: at its first
+    // packet, as before
+    if (m_cutCover && (m_cutStart > 0 || m_cutEnd > 0))
+        findCutLayers(m_metaDemuxer.getStreamInfo());
+    if (m_cutStart > 0)
+        for (const StreamInfo& si : m_metaDemuxer.getStreamInfo())
+            if (auto* copied = dynamic_cast<VideoCopyStreamReader*>(si.m_streamReader))
+                copied->configUntilCutStart();
+    findCutKeyPictures();
+    applyCutOrigin();
+
     if (m_demuxMode)
         writeChapterFile(outFileName);
 
@@ -929,6 +959,15 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     bool anyAfterCutStart = false;  // a packet of the sources at or after --cut-start, kept or not
     std::set<int> endedByCut;       // streams that have reached --cut-end
     std::set<int> withPackets;      // streams that have given a packet, subtitles left out (--cut-end)
+    std::map<int, int64_t> firstMuxed;  // the time of each stream's first packet muxed (the demux of a --cut-start)
+    int64_t mainVideoDts = -1;          // the decoding time of the main video's last packet (--cut-end)
+    // A picture a cut leaves out is not counted in the reader's "Processed N video frames", which counted every
+    // picture of the source: part 2 of a film cut in two said 15000 for its 7488
+    const auto leftOut = [](const AVPacket& packet)
+    {
+        if (auto* video = dynamic_cast<MPEGStreamReader*>(packet.codec); video != nullptr && packet.size > 0)
+            video->frameLeftOut();
+    };
 
     while (true)
     {
@@ -940,8 +979,14 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
         {
             if (avPacket.pts >= m_cutStart)
                 anyAfterCutStart = true;
-            if (avPacket.pts < m_cutStart || !keptAfterCutStart(avPacket))
+            // A video stream begins at its key picture at or before the cut (findCutKeyPictures), the rest at the cut
+            const auto key = m_cutKeyFrom.find(avPacket.stream_index);
+            const int64_t from = key != m_cutKeyFrom.end() ? key->second : m_cutStart;
+            if (avPacket.pts < from || !keptAfterCutStart(avPacket))
+            {
+                leftOut(avPacket);
                 continue;
+            }
         }
         if (m_cutEnd > 0)
         {
@@ -961,21 +1006,46 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
             // decoded at or after the cut, and the sound read a little later than the pictures lost its
             // last frames before the cut, 2 AC-3 frames (64 ms) at a cut on an I picture. A stream that gives nothing
             // more ends the mux 2 s of decoding time past the cut, as nothing of it can be that late.
+            //
+            // --cut-pictures=cover: a video stream ends at its first picture DECODED at or after the cut. The B
+            // pictures shown just before the cut are made from a picture shown at or after it, which is decoded before
+            // them; it was left out, and they with it, so the pictures of up to a group were in neither part of a film
+            // cut in two. A disc does not show what is kept past the cut (OUT_time, m_cutShownTo).
             if (!subtitle)
                 withPackets.insert(avPacket.stream_index);
-            if (avPacket.pts >= m_cutEnd)
+            const bool endByDecoding = m_cutCover && isCutVideo(avPacket.codec);
+            if ((endByDecoding ? avPacket.dts : avPacket.pts) >= m_cutEnd)
                 endedByCut.insert(avPacket.stream_index);
+            // With cover, the first picture of the main video shown at or after the cut, kept or not: the one a disc
+            // stops before, and the next part starts with. It is known once a picture decoded after its time is read.
+            if (m_cutCover && avPacket.stream_index == m_cutMainVideo)
+            {
+                if (avPacket.pts >= m_cutEnd && (m_cutShownTo < 0 || avPacket.pts < m_cutShownTo))
+                    m_cutShownTo = avPacket.pts;
+                mainVideoDts = avPacket.dts;
+            }
+            const bool shownToKnown =
+                !m_cutCover || m_cutMainVideo < 0 || (m_cutShownTo >= 0 && mainVideoDts > m_cutShownTo);
             if (!subtitle && avPacket.dts >= m_cutEnd)
             {
                 const bool allEnded = std::all_of(withPackets.begin(), withPackets.end(),
                                                   [&](const int stream) { return endedByCut.count(stream) != 0; });
-                if (allEnded || avPacket.dts >= m_cutEnd + 2 * INTERNAL_PTS_FREQ)
+                if ((allEnded && shownToKnown) || avPacket.dts >= m_cutEnd + 2 * INTERNAL_PTS_FREQ)
                     break;
             }
             if (endedByCut.count(avPacket.stream_index) != 0)
+            {
+                leftOut(avPacket);
                 continue;
+            }
         }
 
+        // The first picture of the main video shown at or after --cut-start: where a disc starts playing
+        // (TSMuxer::setCutPlayTimes)
+        if (m_cutCover && m_cutStart > 0 && avPacket.stream_index == m_cutMainVideo && avPacket.pts >= m_cutStart &&
+            (m_cutShownFrom < 0 || avPacket.pts < m_cutShownFrom))
+            m_cutShownFrom = avPacket.pts;
+        firstMuxed.emplace(avPacket.stream_index, avPacket.pts);
         anyMuxed = true;
         if (m_subStreamIndex.find(avPacket.stream_index) != m_subStreamIndex.end())
             m_subMuxer->muxPacket(avPacket);
@@ -984,6 +1054,31 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     }
 
     LTRACE(LT_INFO, 2, "Flushing write buffer");
+
+    // A demux writes no times: its files all start at 0. The sound of a --cut-start begins at the cut, and the picture
+    // at a key picture, before the cut (--cut-pictures=cover) or after it (inside), and nothing said by how much they
+    // differ, which a mux of the files needs to know.
+    const auto mainFirst = firstMuxed.find(m_cutMainVideo);
+    if (m_demuxMode && m_cutStart > 0 && mainFirst != firstMuxed.end())
+        for (const StreamInfo& si : m_metaDemuxer.getStreamInfo())
+        {
+            const auto first = firstMuxed.find(si.m_streamReader->getStreamIndex());
+            if (si.m_codec.empty() || si.m_codec[0] != 'A' || first == firstMuxed.end())
+                continue;
+            const int64_t ms = llround(static_cast<double>(first->second - mainFirst->second) * 1000.0 /
+                                       static_cast<double>(INTERNAL_PTS_FREQ));
+            if (ms != 0)
+                LTRACE(LT_INFO, 2,
+                       "The sound of track " << si.m_streamReader->getStreamIndex() << " starts " << std::llabs(ms)
+                                             << " ms " << (ms > 0 ? "after" : "before")
+                                             << " the first picture: give it timeshift=" << ms
+                                             << "ms when these files are muxed together.");
+        }
+
+    // The places a disc playlist starts and stops playing at, before the clips are closed
+    for (AbstractMuxer* muxer : {m_mainMuxer.get(), m_subMuxer.get()})
+        if (auto* ts = dynamic_cast<TSMuxer*>(muxer))
+            ts->setCutPlayTimes(m_cutShownFrom, m_cutShownTo);
 
     if (m_subMuxer)
         m_subMuxer->doFlush();
@@ -1079,6 +1174,7 @@ bool MuxerManager::openMetaFile(const string& fileName)
 
     m_metaDemuxer.setDemuxOutput(m_demuxMode);
     m_metaDemuxer.openFile(fileName);
+    m_metaFileName = fileName;
     return true;
 }
 
@@ -1227,6 +1323,7 @@ void MuxerManager::warnUnknownMuxOpts(const string& opts)
                                                       "--constant-iso-hdr",
                                                       "--custom-chapters",
                                                       "--cut-end",
+                                                      "--cut-pictures",
                                                       "--cut-start",
                                                       "--demux",
                                                       "--disc-size",
@@ -1308,6 +1405,14 @@ void MuxerManager::parseMuxOpt(const string& opts)
                 THROW(ERR_COMMON, "--playlist-clips takes played or whole, not \""
                                       << (paramPair.size() > 1 ? paramPair[1] : "") << "\".")
             m_metaDemuxer.setPlaylistClipsPlayed(how == "played");
+        }
+        else if (paramPair[0] == "--cut-pictures")
+        {
+            const string how = paramPair.size() > 1 ? strToLowerCase(paramPair[1]) : string();
+            if (how != "cover" && how != "inside")
+                THROW(ERR_COMMON, "--cut-pictures takes cover or inside, not \""
+                                      << (paramPair.size() > 1 ? paramPair[1] : "") << "\".")
+            m_cutCover = how == "cover";
         }
         else if (paramPair[0] == "--cut-start" || paramPair[0] == "--cut-end")
         {
@@ -1417,40 +1522,183 @@ void MuxerManager::parseMuxOpt(const string& opts)
     }
 }
 
+void MuxerManager::findCutLayers(const std::vector<StreamInfo>& ci)
+{
+    if (m_cutLayersKnown)
+        return;
+    // In the order of the meta file, the order the transport stream muxer tells the layers apart in: a Dolby
+    // Vision stream is an enhancement layer only when a main video came before it (profiles 5 and 8 have one
+    // stream, and it is the main video).
+    m_cutLayersKnown = true;
+    int mainVideos = 0;
+    for (const StreamInfo& si : ci)
+    {
+        if (!isCutVideo(si.m_streamReader))
+            continue;
+        const auto* reader = dynamic_cast<const MPEGStreamReader*>(si.m_streamReader);
+        const auto* h264 = dynamic_cast<const H264StreamReader*>(reader);
+        if (reader != nullptr && (si.m_isSubStream || (h264 != nullptr && h264->isSubStream()) ||
+                                  (reader->getStreamHDR() == 4 && mainVideos > 0)))
+            m_cutLayers.insert(si.m_streamReader->getStreamIndex());
+        else if (!si.m_streamReader->isSecondary())
+        {
+            if (mainVideos++ == 0)
+                m_cutMainVideo = si.m_streamReader->getStreamIndex();
+        }
+    }
+}
+
+// A video that a cut begins at a key picture: every video a parser reads, and a video copied from an MP4 file into a
+// Matroska one, whose key pictures the source marks
+bool MuxerManager::isCutVideo(const BaseAbstractStreamReader* reader)
+{
+    return dynamic_cast<const MPEGStreamReader*>(reader) != nullptr ||
+           dynamic_cast<const VideoCopyStreamReader*>(reader) != nullptr;
+}
+
+// ** --cut-pictures=cover: THE PICTURE OF A --cut-start BEGINS AT THE KEY PICTURE AT OR BEFORE THE CUT. ** A video that
+// is not encoded again can begin only at a key picture, and it began at the first one after the cut: the pictures
+// between the cut and that key picture were in no part of a film cut in two, up to a group of pictures, 0.3 to 0.4 s
+// on a DVD source. It now begins at the last key picture at or before the cut, so that every picture after the cut is
+// there; the sound and the subtitles still begin at the cut, and a disc playlist starts playing at the first picture
+// shown at or after it (TSMuxer::setCutPlayTimes), so a player does not show the pictures before it.
+//
+// That key picture is known only once a picture decoded after the cut has been read, and the muxer asks a reader for
+// what goes with a packet when it takes it, from the reader's state at that moment, so the packets cannot be held back
+// until then. The sources are read up to the cut by a pass of their own first, from the same meta file and with the
+// same settings, which gives the same times: each video's last key picture with a time at or before the cut. Should
+// the mux not meet a key picture at that time, it begins at the first one after it, as before at worst.
+void MuxerManager::findCutKeyPictures()
+{
+    if (m_cutStart <= 0 || !m_cutCover || m_metaFileName.empty())
+        return;
+    const std::vector<StreamInfo>& main = m_metaDemuxer.getStreamInfo();
+    std::set<int> own;  // the videos that begin at a key picture of their own
+    for (const StreamInfo& si : main)
+        if (isCutVideo(si.m_streamReader) && m_cutLayers.count(si.m_streamReader->getStreamIndex()) == 0)
+            own.insert(si.m_streamReader->getStreamIndex());
+    if (own.empty())
+        return;
+    LTRACE(LT_INFO, 2,
+           "Looking for the key picture at or before --cut-start ("
+               << floatToTime(static_cast<double>(m_cutStart) / INTERNAL_PTS_FREQ) << ")...");
+
+    // The pass says nothing: what its readers have to say, the mux says again
+    struct NullBuffer final : std::streambuf
+    {
+        int overflow(const int c) override { return traits_type::not_eof(c); }
+    };
+    struct Silence
+    {
+        NullBuffer null;
+        std::streambuf* out = std::cout.rdbuf(&null);
+        std::streambuf* err = std::cerr.rdbuf(&null);
+        Silence() = default;
+        Silence(const Silence&) = delete;
+        Silence& operator=(const Silence&) = delete;
+        ~Silence()
+        {
+            std::cout.rdbuf(out);
+            std::cerr.rdbuf(err);
+        }
+    };
+    std::map<int, int64_t> found;
+    std::string failure;
+    {
+        Silence silence;
+        try
+        {
+            METADemuxer pass(m_readManager);
+            pass.takeSettingsOf(m_metaDemuxer);
+            pass.setQuiet(true);
+            pass.openFile(m_metaFileName);
+            std::vector<StreamInfo>& ci = pass.getCodecInfo();
+            if (ci.size() != main.size())
+                throw std::runtime_error("the meta file gave other tracks");
+            for (size_t i = 0; i < ci.size(); ++i)
+            {
+                if (auto* h264 = dynamic_cast<H264StreamReader*>(ci[i].m_streamReader))
+                    h264->setStartPTS(m_ptsOffset);
+                ci[i].read();
+                if (i < m_discoveryData.size() && m_discoveryData[i].discovered)
+                    ci[i].m_streamReader->applyDiscoveryData(m_discoveryData[i]);
+            }
+            // A picture decoded after the cut is shown after it as well, and so is every one after it
+            std::set<int> past;
+            AVPacket packet;
+            while (past.size() < own.size() && pass.readPacket(packet) != BufferedReader::DATA_EOF)
+            {
+                if (own.count(packet.stream_index) == 0)
+                    continue;
+                if ((packet.flags & AVPacket::IS_IFRAME) && packet.pts <= m_cutStart)
+                    found[packet.stream_index] = packet.pts;
+                if (packet.dts > m_cutStart)
+                    past.insert(packet.stream_index);
+            }
+        }
+        catch (const std::exception& e)
+        {
+            failure = e.what();
+        }
+        catch (...)
+        {
+            failure = "unknown error";
+        }
+    }
+    if (!failure.empty())
+    {
+        LTRACE(LT_WARN, 2,
+               "Warning: the key picture before --cut-start could not be found ("
+                   << failure << "). The picture begins at the first key picture after the cut.");
+        return;
+    }
+    m_cutKeyFrom = found;
+    // A layer begins with the main video (keptAfterCutStart): its packets before that are not dropped by their time
+    const auto mainKey = found.find(m_cutMainVideo);
+    if (mainKey != found.end())
+        for (const int layer : m_cutLayers) m_cutKeyFrom[layer] = mainKey->second;
+    if (mainKey != found.end() && mainKey->second < m_cutStart)
+        LTRACE(LT_INFO, 2,
+               "The picture begins at the key picture at "
+                   << floatToTime(static_cast<double>(mainKey->second) / INTERNAL_PTS_FREQ) << ", "
+                   << llround(static_cast<double>(m_cutStart - mainKey->second) * 1000.0 / INTERNAL_PTS_FREQ)
+                   << " ms before the cut; the sound and subtitles begin at the cut.");
+}
+
+// --cut-pictures=cover with a --cut-start: the chapters of the cut are times from the cut (moveChaptersByCut,
+// readSourceChapters), and the outputs that are timed from their first picture now start before it
+void MuxerManager::applyCutOrigin()
+{
+    if (m_cutStart <= 0 || !m_cutCover)
+        return;
+    // A transport stream: a --split-chapters part starts at the key picture of its chapter, counted from the cut, not
+    // from the first packet
+    for (AbstractMuxer* muxer : {m_mainMuxer.get(), m_subMuxer.get()})
+        if (auto* ts = dynamic_cast<TSMuxer*>(muxer))
+            ts->setChapterOrigin(m_cutStart);
+    // Matroska: time 0 is the first picture
+    int64_t origin = m_cutStart;
+    for (const auto& [stream, from] : m_cutKeyFrom) origin = (std::min)(origin, from);
+    if (auto* mkv = dynamic_cast<MatroskaMuxer*>(m_mainMuxer.get()); mkv != nullptr && origin < m_cutStart)
+        mkv->setCutOrigin(m_cutStart - origin);
+}
+
 // A cut that does not start at the beginning kept every packet from the cut time on, so its video began with whatever
 // picture came next. A picture other than an I-frame cannot be decoded without the ones before it, and a stream from
 // MP4 or Matroska holds its parameter sets once, ahead of its first picture, which the cut had dropped: such a cut
-// gave sound but no picture at all. Each video now begins with its first I-frame at or after the cut, and that picture
-// is told it opens a new file, the way the first picture of a split part is, so the reader writes the parameter sets
-// in front of it when its group has none. The pictures between the cut and that I-frame, and the ones shown before
-// it, are left out: none of them could be shown. A layer that only adds to another video (the second view of a 3D
-// stream, a Dolby Vision enhancement layer) begins at the same picture as the main video rather than at an I-frame of
-// its own. Audio and subtitles keep to the cut time, as before.
+// gave sound but no picture at all. Each video now begins with a key picture, at or before the cut (cover) or at or
+// after it (inside), and that picture is told it opens a new file, the way the first picture of a split part is, so
+// the reader writes the parameter sets in front of it when its group has none. The pictures shown before it are left
+// out: none of them could be shown. A layer that only adds to another video (the second view of a 3D stream, a Dolby
+// Vision enhancement layer) begins at the same picture as the main video rather than at an I-frame of its own. Audio
+// and subtitles keep to the cut time, as before. A video copied from an MP4 file into a Matroska one began at any
+// picture, one that could not be decoded: it begins at a key picture as well.
 bool MuxerManager::keptAfterCutStart(AVPacket& avPacket)
 {
-    auto* video = dynamic_cast<MPEGStreamReader*>(avPacket.codec);
-    if (video == nullptr)
+    auto* video = dynamic_cast<AbstractStreamReader*>(avPacket.codec);
+    if (!isCutVideo(video))
         return true;
-    if (!m_cutLayersKnown)
-    {
-        // In the order of the meta file, the order the transport stream muxer tells the layers apart in: a Dolby
-        // Vision stream is an enhancement layer only when a main video came before it (profiles 5 and 8 have one
-        // stream, and it is the main video).
-        m_cutLayersKnown = true;
-        int mainVideos = 0;
-        for (const StreamInfo& si : m_metaDemuxer.getStreamInfo())
-        {
-            const auto* reader = dynamic_cast<MPEGStreamReader*>(si.m_streamReader);
-            if (reader == nullptr)
-                continue;
-            const auto* h264 = dynamic_cast<const H264StreamReader*>(reader);
-            if (si.m_isSubStream || (h264 != nullptr && h264->isSubStream()) ||
-                (reader->getStreamHDR() == 4 && mainVideos > 0))
-                m_cutLayers.insert(si.m_streamReader->getStreamIndex());
-            else if (!si.m_streamReader->isSecondary())
-                mainVideos++;
-        }
-    }
+    findCutLayers(m_metaDemuxer.getStreamInfo());
     const auto begun = m_cutVideoFrom.find(avPacket.stream_index);
     if (begun != m_cutVideoFrom.end())
         return avPacket.pts >= begun->second;
@@ -1465,8 +1713,20 @@ bool MuxerManager::keptAfterCutStart(AVPacket& avPacket)
             return false;
         if (m_cutVideoStart < 0 && !video->isSecondary())
             m_cutVideoStart = avPacket.pts;
+        // The safety net of findCutKeyPictures: said, not hidden
+        const auto key = m_cutKeyFrom.find(avPacket.stream_index);
+        if (key != m_cutKeyFrom.end() && avPacket.pts != key->second)
+            LTRACE(LT_WARN, 2,
+                   "Warning: track " << avPacket.stream_index << " has no key picture at "
+                                     << floatToTime(static_cast<double>(key->second) / INTERNAL_PTS_FREQ)
+                                     << " in the mux; it begins at the one at "
+                                     << floatToTime(static_cast<double>(avPacket.pts) / INTERNAL_PTS_FREQ) << ".");
     }
-    m_cutVideoFrom[avPacket.stream_index] = avPacket.pts;
+    // A layer keeps every picture of the main video's from its first one on. With its own first picture as the
+    // bound, a layer whose pictures are reordered otherwise than the main video's lost the ones decoded after it and
+    // shown before it: the enhancement layer of a Dolby Vision file began 2 pictures after its base layer.
+    m_cutVideoFrom[avPacket.stream_index] =
+        m_cutLayers.count(avPacket.stream_index) > 0 ? m_cutVideoStart : avPacket.pts;
     video->onSplitEvent();
     return true;
 }

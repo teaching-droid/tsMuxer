@@ -167,6 +167,19 @@ class MPEGStreamReader : public AbstractStreamReader
     [[nodiscard]] int64_t getUnitBytes() const { return m_unitBytes; }
     [[nodiscard]] int64_t getUnusableBytes() const;
 
+    // A packet read and left out of the output by a cut: its picture is not counted in "Processed N video frames". A
+    // picture comes in several packets, which the count of pictures read so far tells apart.
+    void frameLeftOut()
+    {
+        if (m_totalFrameNum != m_lastFrameLeftOut)
+            ++m_framesLeftOut;
+        m_lastFrameLeftOut = m_totalFrameNum;
+    }
+
+   private:
+    int m_framesLeftOut = 0;
+    int m_lastFrameLeftOut = -1;
+
    protected:
     // Whether the unit whose header begins at unit, behind its start code, is one the codec cannot use: a header it
     // forbids or reserves, or a picture whose first fields are impossible. maxLen is set to the longest a unit of this

@@ -36,6 +36,10 @@ class VideoCopyStreamReader final : public AbstractStreamReader
     [[nodiscard]] uint32_t fourcc() const { return m_fourcc; }
     // The frame rate the first two pictures give, 0 before then
     [[nodiscard]] double fps() const { return m_fps; }
+    // A --cut-start drops the first pictures, and the configuration went in front of the first one only: the output
+    // began without it. Until the picture the cut begins at (onSplitEvent), every key picture carries it.
+    void configUntilCutStart() { m_configEveryKey = true; }
+    void onSplitEvent() override { m_configEveryKey = false; }
 
    private:
     bool m_prores;
@@ -46,6 +50,7 @@ class VideoCopyStreamReader final : public AbstractStreamReader
     int64_t m_firstDuration = 0;
     std::vector<uint8_t> m_config;  // MPEG-4: put in front of the first picture, as Matroska has no place for it
     bool m_configSent = false;
+    bool m_configEveryKey = false;  // configUntilCutStart
     std::vector<uint8_t> m_input;
     size_t m_inputPos = 0;
     std::vector<uint8_t> m_packet;

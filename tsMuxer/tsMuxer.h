@@ -80,6 +80,19 @@ class TSMuxer final : public AbstractMuxer
     [[nodiscard]] std::vector<int64_t> getFirstPts() const;
     void alignPTS(TSMuxer* otherMuxer);
     [[nodiscard]] std::vector<int64_t> getLastPts() const;
+    // --cut-pictures=cover: the first picture of the main video shown at or after --cut-start and --cut-end, where a
+    // disc playlist starts and stops playing, on the internal clock (-1: its first and last packet); and before the
+    // mux, the time the chapters of a --cut-start are counted from, the cut (-1: the first packet)
+    void setCutPlayTimes(const int64_t from, const int64_t to)
+    {
+        m_cutPlayFrom = from;
+        m_cutPlayTo = to;
+    }
+    void setChapterOrigin(const int64_t origin) { m_chapterOrigin = origin; }
+    // The same on the clock of the clips (90 kHz with the start time), -1 when not set
+    [[nodiscard]] int64_t getCutPlayFromPts() const { return clipPts(m_cutPlayFrom); }
+    [[nodiscard]] int64_t getCutPlayToPts() const { return clipPts(m_cutPlayTo); }
+    [[nodiscard]] int64_t getChapterOriginPts() const { return clipPts(m_chapterOrigin); }
     const std::vector<uint32_t>& getMuxedPacketCnt() { return m_muxedPacketCnt; }
     [[nodiscard]] size_t splitFileCnt() const { return m_fileNames.size(); }
     void setSplitDuration(const int64_t value) { m_splitDuration = value; }
@@ -264,6 +277,10 @@ class TSMuxer final : public AbstractMuxer
     void finalizeInplacePes();
     std::vector<int64_t> m_lastPts;
     std::vector<int64_t> m_firstPts;
+    int64_t m_cutPlayFrom = -1;
+    int64_t m_cutPlayTo = -1;
+    int64_t m_chapterOrigin = -1;
+    [[nodiscard]] int64_t clipPts(int64_t internal) const;
 
     struct StreamInfo
     {
