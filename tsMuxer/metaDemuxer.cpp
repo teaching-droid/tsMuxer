@@ -1173,6 +1173,12 @@ int METADemuxer::addPGSubStream(const string& codec, const string& _codecStreamN
     params["track"] = int32ToStr(subStream->streamPID);
     if (subStream->type == 2)
         params["subClip"] = "1";
+    // An eye of a stereo subtitle or an aligned subtitle is part of the track the line names, not a track of its own:
+    // it is not the default track the line may make that one (the disc start selected the left eye, being the first
+    // subtitle muxed), and its language is that track's (the caller puts it in lang=). The playlist declares none
+    // for it, and it was muxed with none.
+    params.erase("default");
+    params["srcpgpart"] = "1";
     return addStream(codec, _codecStreamName, params);
 }
 
@@ -1237,6 +1243,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     int rightEyeSubStreamIdx = -1;
     bool isSSPG = false;
     int ssPGOffset = 0xff;
+    int alignedSubStreamIdx[2] = {-1, -1};
+    uint8_t alignedOffset[2] = {0xff, 0xff};
     ////
 
     bool isSubStream = (codec == h264DepCodecInfo.programName) || addParams.find("subClip") != addParams.end();
@@ -1278,14 +1286,31 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             }
 
             MPLSStreamInfo streamInfo = mplsInfo.getStreamByPID(pid);
+            std::map<string, string> partParams = addParams;
+            const std::string partLang = applyLangCodeStyle(streamInfo.language_code);
+            if (partParams.find("lang") == partParams.end() && isLanguageCode(partLang) && partLang != "und")
+                partParams["lang"] = partLang;
             if (streamInfo.stream_coding_type == StreamType::SUB_PGS && streamInfo.isSSPG)
             {
                 // add refs to addition tracks for stereo subtitles
-                leftEyeSubStreamIdx = addPGSubStream(codec, unquotedStreamName, addParams, streamInfo.leftEye);
-                rightEyeSubStreamIdx = addPGSubStream(codec, unquotedStreamName, addParams, streamInfo.rightEye);
+                leftEyeSubStreamIdx = addPGSubStream(codec, unquotedStreamName, partParams, streamInfo.leftEye);
+                rightEyeSubStreamIdx = addPGSubStream(codec, unquotedStreamName, partParams, streamInfo.rightEye);
 
                 isSSPG = streamInfo.isSSPG;
                 ssPGOffset = streamInfo.SS_PG_offset_sequence_id;
+            }
+            // The aligned subtitles of the track (3D table), muxed with it as the eyes of a stereo one are. They were
+            // offered as unrelated subtitles of the clip and written as ordinary ones without a language.
+            for (int a = 0; a < 2 && streamInfo.stream_coding_type == StreamType::SUB_PGS; ++a)
+            {
+                const MPLSStreamInfo::AlignedRef& ref = a == 0 ? streamInfo.topAS : streamInfo.bottomAS;
+                if (ref.pid == 0 || alignedSubStreamIdx[a] != -1)
+                    continue;
+                MPLSStreamInfo aligned;
+                aligned.type = ref.type;
+                aligned.streamPID = ref.pid;
+                alignedSubStreamIdx[a] = addPGSubStream(codec, unquotedStreamName, partParams, &aligned);
+                alignedOffset[a] = ref.offsetId;
             }
         }
     }
@@ -1939,6 +1964,11 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         pgStream->ssPGOffset = ssPGOffset;
         pgStream->leftEyeSubStreamIdx = leftEyeSubStreamIdx;
         pgStream->rightEyeSubStreamIdx = rightEyeSubStreamIdx;
+        for (int a = 0; a < 2; ++a)
+        {
+            pgStream->alignedSubStreamIdx[a] = alignedSubStreamIdx[a];
+            pgStream->alignedOffset[a] = alignedOffset[a];
+        }
         // A .sup file: its segments carry the "PG" marker that the reader checks and finds its way back on.
         if (strEndWith(tmpname, ".sup"))
             pgStream->setSrcContainerType(AbstractStreamReader::ContainerType::ctSUP);
@@ -2170,16 +2200,61 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     }
     // A playlist source: the language the playlist gives the stream, as the listing shows it. The mux took the clip's,
     // so a disc whose playlist and clip disagree was listed in one language and muxed in the other.
-    if (!mplsInfoList.empty() && pid > 0 && addParams.find("lang") == addParams.end())
+    if (!mplsInfoList.empty() && pid > 0)
     {
+        const bool langGiven = addParams.find("lang") != addParams.end();
         const MPLSStreamInfo fromPlaylist = mplsInfoList[0].getStreamByPID(pid);
         // Only a language code: three spaces in the playlist were written as the language of the TS, the Matroska
         // track and the clip info
         const std::string lang = fromPlaylist.streamPID ? applyLangCodeStyle(fromPlaylist.language_code) : "";
-        if (isLanguageCode(lang) && lang != "und" && lang != streamInfo.m_lang)
+        if (!langGiven && isLanguageCode(lang) && lang != "und" && lang != streamInfo.m_lang)
         {
             LTRACE(LT_INFO, 2, "Language for track " << pid << " taken from the playlist, " << lang << ".");
             streamInfo.m_lang = lang;
+        }
+        // Where the playlist gives none, the listing shows the language of the clip information file, and the mux
+        // now takes that one too. A stream the playlist does not declare was listed as English and muxed without a
+        // language (00 00 00 in a disc's playlist, und in Matroska).
+        else if (!langGiven && !(isLanguageCode(lang) && lang != "und") && !SubTrackFilter::isSubTrack(pid))
+        {
+            const std::string m2ts = unquoteStr(trimStr(fileList[0]));
+            const std::string clpiFileName =
+                findBluRayFile(extractFileDir(m2ts), "CLIPINF", extractFileName(m2ts) + ".clpi");
+            CLPIParser clpi;
+            if (!clpiFileName.empty() && clpi.parse(clpiFileName.c_str()))
+                if (const auto it = clpi.m_streamInfo.find(pid); it != clpi.m_streamInfo.end())
+                {
+                    const std::string clpiLang = applyLangCodeStyle(it->second.language_code);
+                    if (isLanguageCode(clpiLang) && clpiLang != "und" && clpiLang != streamInfo.m_lang)
+                    {
+                        LTRACE(LT_INFO, 2,
+                               "Language for track " << pid << " taken from the clip information, " << clpiLang
+                                                     << ": the playlist gives none.");
+                        streamInfo.m_lang = clpiLang;
+                    }
+                }
+        }
+        if (auto* pgStream = dynamic_cast<PGSStreamReader*>(codecReader); pgStream && fromPlaylist.streamPID)
+        {
+            // A 3D playlist names the offset sequence each subtitle is placed by, and the listing shows it
+            // (3d-plane:). The mux took it from 3d-plane= alone, so a meta written by hand or by a script made the
+            // subtitles of a 3D disc sit at the depth of the screen, without a word. 3d-plane= still wins.
+            if (fromPlaylist.offsetId != 0xff && addParams.find("3d-plane") == addParams.end())
+            {
+                pgStream->setOffsetId(fromPlaylist.offsetId);
+                LTRACE(LT_INFO, 2,
+                       "3D offset for track " << pid << " taken from the playlist, 3d-plane="
+                                              << static_cast<int>(fromPlaylist.offsetId) << ".");
+            }
+            if (fromPlaylist.isPiP)
+            {
+                pgStream->isPiP = true;
+                streamInfo.m_addParams["srcpip"] = "1";
+                LTRACE(LT_INFO, 2,
+                       "Track " << pid
+                                << " is a picture-in-picture subtitle of the playlist. A disc gets it in the "
+                                   "picture-in-picture list, with the picture-in-picture video.");
+            }
         }
     }
     // A join: every Matroska, MP4 or transport stream file of it is asked whether it has the track, as a single file
@@ -2490,7 +2565,9 @@ static bool isKnownTrackParam(const std::string& name)
         "forced", "hearing-impaired", "visual-impaired", "text-descriptions", "original", "commentary", "srclang",
         "srclangbcp47", "srcdefault", "srcname", "srcflags", "srccolour", "srcdisplay", "srcendpadding", "srcpgsrate",
         "srccrop", "srcfieldorder", "srcprojection", "srccodecdelay", "srcvideolead", "srcopusskip", "srcrighteye",
-        "langbcp47", "srcvpxprivate", "srccodecid", "srcstartdelay", "srcstereomode", "srcstartms", "srcaacsbr"};
+        "langbcp47", "srcvpxprivate", "srccodecid", "srcstartdelay", "srcstereomode", "srcstartms", "srcaacsbr",
+        // a part of a playlist's PG track (an eye of a stereo subtitle, an aligned subtitle), a picture-in-picture one
+        "srcpgpart", "srcpip"};
     return known.find(name) != known.end();
 }
 

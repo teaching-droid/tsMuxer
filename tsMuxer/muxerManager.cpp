@@ -1761,8 +1761,16 @@ int MuxerManager::getDefaultAudioTrackIdx() const
 int MuxerManager::getDefaultSubTrackIdx(SubTrackMode& mode) const
 {
     std::string paramVal;
+    // Counted as a disc numbers its subtitles: the eyes of a stereo subtitle, its aligned subtitles (srcpgpart) and
+    // picture-in-picture subtitles (srcpip) are no entries of the PG list. Counted with them, the disc start of a
+    // stereo subtitle marked default selected its left eye.
     const auto idx = seekDefaultTrack(m_metaDemuxer.getStreamInfo(), paramVal,
-                                      [](auto&& streamInfo) { return streamInfo.m_codec[0] == 'S'; });
+                                      [](auto&& streamInfo)
+                                      {
+                                          return streamInfo.m_codec[0] == 'S' &&
+                                                 !streamInfo.m_addParams.count("srcpgpart") &&
+                                                 !streamInfo.m_addParams.count("srcpip");
+                                      });
     if (idx != -1)
     {
         // Read as the Matroska output reads it: default=Forced, yes and 1 gave a disc no default subtitle, with only

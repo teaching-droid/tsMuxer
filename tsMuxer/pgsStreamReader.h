@@ -67,6 +67,12 @@ class PGSStreamReader final : public AbstractStreamReader
     int leftEyeSubStreamIdx;
     int rightEyeSubStreamIdx;
     int ssPGOffset;
+    // The aligned subtitles of a 3D playlist's PG stream (top, bottom), muxed with it as the eyes of a stereo one are
+    int alignedSubStreamIdx[2] = {-1, -1};
+    uint8_t alignedOffset[2] = {0xff, 0xff};
+    // A picture-in-picture subtitle of a playlist: a disc writes it in the picture-in-picture list, not as an
+    // ordinary subtitle (MPLSParser::composeSTN_table)
+    bool isPiP = false;
 
    protected:
     int writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPacket& avPacket,

@@ -181,6 +181,22 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A timing line with a byte order mark in front of it was not read,** as in two SRT files joined byte for byte: its subtitle was skipped, and a file with only that timing line ended with an error. The mark is now passed over.
 
+* **Text subtitles and subtitles in a separate clip are listed for a playlist.** They were left out without a word, and a playlist could give their language to another track.
+
+* **Picture-in-picture subtitles are kept apart from the film's own.** A disc gets them with the picture-in-picture video, and leaves them out of its playlist without it.
+
+* **The 3D depth of a playlist's subtitles is kept without 3d-plane=.** A meta that did not repeat it put the subtitles at screen depth.
+
+* **Two-stream 3D subtitles are written as one stereo subtitle in their language.** Their two halves were ordinary subtitles with no language, and default= chose the left one.
+
+* **Aligned 3D subtitles keep their position and language.** They became plain subtitles with no language.
+
+* **Closed captions in the first picture of an H.264 stream are kept in Matroska with insertSEI or forceSEI.** When the captions sat in the same SEI unit as the picture timing, the first caption was lost.
+
+* **A playlist track that the playlist does not declare is muxed in the language the listing shows.** It was muxed with no language.
+
+* **A 3D playlist of several play items uses the 3D details of the play item it is described by.** Only those of the first were read.
+
 * **ASS and SSA subtitles are drawn with libass** wherever they are drawn into pictures: with their styles, colours, positions, rotations, fades, moves and karaoke. libass uses the fonts attached to the Matroska file, a fonts folder given with the new track parameter fonts-dir, and the fonts of the system. The Windows packages include libass and the libraries it needs, with their licenses in THIRD-PARTY-NOTICES.txt and the licenses folder. On Linux and Mac, install the system's libass. Without libass, or with the new parameter ass-as-srt, they are drawn as plain text, as before.
 
 * **save-srt** writes subtitles that are drawn into pictures to an .srt file as well.
@@ -625,7 +641,7 @@ This release is about Matroska. tsMuxeR now reads and writes it much more comple
 
 * **A WebM output** holds subtitles as WebVTT only. WebVTT stored in the WebM way (D_WEBVTT) is copied as it is. Other WebVTT, ASS and SSA become WebVTT text with italic, bold and underline, without their cue settings, styles, colours or positions. VobSub and DVB subtitles cannot go into a WebM file. A WebM output has no edition or chapter flags.
 
-* **A transport stream and a disc** get every subtitle as PGS and the frames without their BlockAdditions, as before.
+* **A transport stream and a disc** get every subtitle of a Matroska source as PGS, and its frames without their BlockAdditions, as before.
 
 * **A demux** writes ASS, SSA and WebVTT subtitles as SRT.
 

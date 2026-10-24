@@ -554,6 +554,31 @@ struct MPLSStreamInfo : M2TSStreamInfo
     MPLSStreamInfo* leftEye;  // used for stereo PG
     MPLSStreamInfo* rightEye;
     PIPParams pipParams;
+    // The sub path a stream entry of type 2, 3 or 4 names (ref_to_SubPath_id), -1 for an entry of type 1
+    int refSubPathId = -1;
+    // A PG or text subtitle entry of the picture-in-picture list of the STN table (the entries counted by
+    // number_of_PiP_PG_textST_stream_entries_plus, after the ordinary ones): the subtitles of the secondary video
+    bool isPiP = false;
+    // A PG stream that is not an entry of the PG list itself but hangs off one in the 3D table: an eye of a
+    // two-stream 3D subtitle, or an aligned subtitle. Set when a disc is written (BlurayHelper::createMPLSFile).
+    bool hangsOffEntry = false;
+    // The aligned subtitles of a PG entry in the 3D table (is_top_AS_PG_textST, is_bottom_AS_PG_textST): the stream
+    // a player shows instead when the subtitles are moved into the black bar above or below a wide picture
+    struct AlignedRef
+    {
+        int pid = 0;  // 0: none
+        uint8_t type = 1;
+        uint8_t offsetId = 0xff;
+    };
+    AlignedRef topAS;
+    AlignedRef bottomAS;
+};
+
+// A sub path of a playlist: what kind it is (SubPath_type) and the clips its sub play items play
+struct MPLSSubPath
+{
+    int type = 0;
+    std::vector<std::string> clips;
 };
 
 // One play item's STN table, kept per play item rather than only for the first. A playlist may
@@ -641,6 +666,14 @@ struct MPLSParser
 
     [[nodiscard]] MPLSStreamInfo getStreamByPID(int pid) const;
     [[nodiscard]] std::vector<MPLSStreamInfo> getPgStreams() const;
+    // The entries of the chosen STN table whose stream is not in the play item's own clip, but in a clip a sub path
+    // plays (see isInMainClip)
+    [[nodiscard]] std::vector<MPLSStreamInfo> getOutOfMuxStreams() const;
+    [[nodiscard]] bool isInMainClip(const MPLSStreamInfo& entry) const;
+    // The PG entry whose 3D table names `pid` as an eye or an aligned subtitle, with what it is named as ("left eye",
+    // "right eye", "top aligned", "bottom aligned"); streamPID 0 when none does
+    [[nodiscard]] MPLSStreamInfo getStreamReferencing(int pid, std::string& role) const;
+    std::vector<MPLSSubPath> m_subPaths;
 
     int PlayList_playback_type;
     int playback_count;
@@ -718,6 +751,9 @@ struct MPLSParser
 
     std::vector<MPLSStnTable> m_stnTables;
     std::vector<size_t> m_playItemsToSkip;
+    size_t m_chosenStnItem = 0;  // the play item whose STN table m_streamInfo is (chooseRepresentativeStnTable)
+    void parseSubPaths(const uint8_t* data, int len, int count);
+    void parseStnTableSSItem(BitStreamReader& reader);
 };
 
 #endif

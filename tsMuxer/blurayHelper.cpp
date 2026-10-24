@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <set>
 #include <type_traits>
 
 #include <fs/directory.h>
@@ -684,6 +685,22 @@ bool BlurayHelper::createMPLSFile(TSMuxer* mainMuxer, TSMuxer* subMuxer, int aut
     if (subMuxer)
         pidListMVC = subMuxer->getPidList();
 
+    // The eyes of a stereo subtitle and the aligned subtitles are muxed as streams of their own, and are named only by
+    // the 3D table entry of the subtitle they belong to: they are no entries of the PG list
+    std::set<int> hangingStreams;
+    bool hasSecondaryVideo = false;
+    for (auto& [index, si] : pidList)
+    {
+        if (const auto pg = dynamic_cast<PGSStreamReader*>(si.m_codecReader))
+        {
+            if (pg->isSSPG)
+                hangingStreams.insert({pg->leftEyeSubStreamIdx, pg->rightEyeSubStreamIdx});
+            hangingStreams.insert({pg->alignedSubStreamIdx[0], pg->alignedSubStreamIdx[1]});
+        }
+        if (si.isSecondary && si.m_codecReader && si.m_codecReader->getCodecInfo().programName[0] == 'V')
+            hasSecondaryVideo = true;
+    }
+    hangingStreams.erase(-1);
     for (auto& [index, si] : pidList)
     {
         mplsParser.m_streamInfo.emplace_back(si);
@@ -691,6 +708,31 @@ bool BlurayHelper::createMPLSFile(TSMuxer* mainMuxer, TSMuxer* subMuxer, int aut
         auto pgStream = dynamic_cast<PGSStreamReader*>(si.m_codecReader);
         if (pgStream)
         {
+            info.hangsOffEntry = hangingStreams.count(pgStream->getStreamIndex()) > 0;
+            info.isPiP = pgStream->isPiP && !info.hangsOffEntry;
+            if (info.isPiP && !hasSecondaryVideo)
+                LTRACE(LT_WARN, 2,
+                       "Warning: the picture-in-picture subtitle written with PID 0x"
+                           << std::hex << si.m_pid << std::dec
+                           << " is left out of the playlist. The picture-in-picture video it belongs to is not "
+                              "muxed, so no player could show it.");
+            for (int k = 0; k < 2; ++k)
+            {
+                bool isSecondary = false;
+                const PMTStreamInfo* as = streamByIndex(pgStream->alignedSubStreamIdx[k], pidList);
+                if (!as)
+                {
+                    as = streamByIndex(pgStream->alignedSubStreamIdx[k], pidListMVC);
+                    isSecondary = as != nullptr;
+                }
+                if (as)
+                {
+                    MPLSStreamInfo::AlignedRef& ref = k == 0 ? info.topAS : info.bottomAS;
+                    ref.pid = as->m_pid;
+                    ref.type = isSecondary ? 2 : 1;
+                    ref.offsetId = pgStream->alignedOffset[k];
+                }
+            }
             info.offsetId = pgStream->getOffsetId();
             info.SS_PG_offset_sequence_id = pgStream->ssPGOffset;
             info.isSSPG = pgStream->isSSPG;

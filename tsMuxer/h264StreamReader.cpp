@@ -1164,6 +1164,25 @@ int H264StreamReader::intDecodeNAL(uint8_t* buff)
     int nalRez;
     m_spsPpsFound = false;
 
+    // Whether picture order counts step by one or by two is a property of the stream, not of the
+    // container being written, and until now it was decided only inside getTSDescriptor. That exists
+    // to write a transport stream descriptor, so for a Matroska output the check never ran,
+    // m_forceLsbDiv stayed at the 0 it is constructed with, and the counts were used unhalved. The
+    // presentation times then advanced two frames per picture while the frame numbers advanced one.
+    // Measured on one source: 222 presentation times landed on an already used one and 323 were left
+    // empty, the timeline came out 100 frames too long, and one pair of pictures ended up sharing a
+    // time and was written as a single block.
+    // The check runs before the first unit is read, as it does for a transport stream, and not at the
+    // first slice: it also turns on the SEI correction (insertSEI, forceSEI), and the SEI units of the
+    // first picture were read with it still off. One holding the timing message together with closed
+    // captions, as broadcast streams carry them, was then not cut down to the captions but dropped
+    // whole, and a Matroska file lost the first picture's caption.
+    if (m_firstDecodeNal)
+    {
+        additionalStreamCheck(m_buffer, m_bufEnd);
+        m_firstDecodeNal = false;
+    }
+
     // First NAL of Access Unit
     switch (nal_unit_type)
     {
@@ -1543,20 +1562,6 @@ void H264StreamReader::warnDamagedUnit(const char* name)
 
 int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
 {
-    // Whether picture order counts step by one or by two is a property of the stream, not of the
-    // container being written, and until now it was decided only inside getTSDescriptor. That exists
-    // to write a transport stream descriptor, so for a Matroska output the check never ran,
-    // m_forceLsbDiv stayed at the 0 it is constructed with, and the counts were used unhalved. The
-    // presentation times then advanced two frames per picture while the frame numbers advanced one.
-    // Measured on one source: 222 presentation times landed on an already used one and 323 were left
-    // empty, the timeline came out 100 frames too long, and one pair of pictures ended up sharing a
-    // time and was written as a single block.
-    if (m_firstDecodeNal)
-    {
-        additionalStreamCheck(m_buffer, m_bufEnd);
-        m_firstDecodeNal = false;
-    }
-
     SliceUnit slice;
     const uint8_t* sliceEnd = m_bufEnd;
 

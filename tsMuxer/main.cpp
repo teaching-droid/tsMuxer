@@ -491,6 +491,10 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
 
             LTRACE(LT_INFO, 2, "Stream ID:   " << streams[i].codecInfo.programName);
             std::string descr = streams[i].streamDescr;
+            // The subtitles of the picture-in-picture video were listed as ordinary ones, numbered after the film's
+            if (streams[i].codecInfo.codecID == CODEC_S_PGS && mplsParser &&
+                mplsParser->getStreamByPID(streams[i].trackID).isPiP)
+                descr += "   picture-in-picture subtitle";
             if (streams[i].codecInfo.codecID == CODEC_S_PGS && mplsParser && mplsParser->isDependStreamExist)
             {
                 // PG stream
@@ -517,9 +521,32 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                         descr += int32ToStr(mplsStreamInfo.leftEye->streamPID);
                         descr += ")";
                     }
+                    for (int a = 0; a < 2; ++a)
+                    {
+                        const MPLSStreamInfo::AlignedRef& ref = a == 0 ? mplsStreamInfo.topAS : mplsStreamInfo.bottomAS;
+                        if (ref.pid)
+                            descr += std::string(a == 0 ? "   (top aligned=" : "   (bottom aligned=") +
+                                     (ref.type == 2 ? "dep-view " : "") + int32ToStr(ref.pid) + ")";
+                    }
                 }
                 else
-                    descr += "   (disabled)";
+                {
+                    // A stream the 3D table names as an eye of a stereo subtitle or as an aligned subtitle is muxed
+                    // with the track it belongs to, in that track's language. It was listed as an unrelated subtitle
+                    // in the clip's language.
+                    std::string role;
+                    const MPLSStreamInfo parent = mplsParser->getStreamReferencing(streams[i].trackID, role);
+                    if (parent.streamPID)
+                    {
+                        descr += "   (3D " + role + " subtitle of track " + int32ToStr(parent.streamPID) +
+                                 ", muxed with it)";
+                        const std::string parentLang = applyLangCodeStyle(parent.language_code);
+                        if (isLanguageCode(parentLang) && parentLang != "und")
+                            streams[i].lang = parentLang;
+                    }
+                    else
+                        descr += "   (disabled)";
+                }
             }
             // Both halves are worth telling. The base view looks like ordinary 2D video, and
             // the dependent view is recognisable but says nothing about where its partner is.
@@ -619,6 +646,37 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                 LTRACE(LT_INFO, 2, "Can't detect stream type (Matroska codec " << streams[i].codecId << ")");
             else
                 LTRACE(LT_INFO, 2, "Can't detect stream type");
+        }
+    }
+
+    // The playlist's streams that are not in its clips but in a clip a sub path plays, as a disc's text subtitles
+    // always are. They were left out of the listing without a word, so a playlist with subtitles of that kind seemed
+    // to have none, and the user could not know a track was dropped. Under "Not supported:", which the window shows
+    // as a track that is not offered (it rebuilds the text for a text subtitle from the stream type). Subtitles only:
+    // a pop-up menu in a clip of its own is how most discs carry it, and is no track a mux could have had.
+    if (mplsParser)
+    {
+        for (const MPLSStreamInfo& entry : mplsParser->getOutOfMuxStreams())
+        {
+            const auto codingType = static_cast<int>(entry.stream_coding_type);
+            if (codingType != 0x90 && codingType != 0x92)
+                continue;
+            std::string clip;
+            if (entry.refSubPathId >= 0 && static_cast<size_t>(entry.refSubPathId) < mplsParser->m_subPaths.size() &&
+                !mplsParser->m_subPaths[entry.refSubPathId].clips.empty())
+                clip = "clip " + mplsParser->m_subPaths[entry.refSubPathId].clips[0] + ", ";
+            const std::string lang = applyLangCodeStyle(entry.language_code);
+            std::ostringstream where;
+            where << "stream type 0x" << std::hex << codingType << ", PID 0x" << entry.streamPID << std::dec
+                  << (isLanguageCode(lang) ? ", language " + lang : std::string()) << ", " << clip << "sub path "
+                  << entry.refSubPathId;
+            const char* what = codingType == 0x92 ? "Text subtitles (Text-ST)"
+                                                  : "Presentation graphics subtitles in a separate clip";
+            LTRACE(LT_INFO, 2, "");
+            LTRACE(LT_INFO, 2,
+                   "Not supported: " << what << " (" << where.str()
+                                     << "). The playlist plays it from a clip of its own, and a stream of such a "
+                                        "clip is not muxed from the playlist, so the track is skipped.");
         }
     }
 

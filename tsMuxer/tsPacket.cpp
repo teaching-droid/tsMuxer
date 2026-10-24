@@ -1690,9 +1690,44 @@ void MPLSParser::parsePlayList(uint8_t* buffer, const int len)
     {
         parsePlayItem(reader, PlayItem_id);
     }
-    for (int SubPath_id = 0; SubPath_id < number_of_SubPaths; SubPath_id++)
+    // The sub paths follow the play items, found by the play items' own lengths: a play item can hold more than its
+    // reading takes
+    int subPathsStart = 10;
+    for (int i = 0; i < number_of_PlayItems && subPathsStart + 2 <= len; i++)
+        subPathsStart += 2 + (buffer[subPathsStart] << 8 | buffer[subPathsStart + 1]);
+    if (subPathsStart < len)
+        parseSubPaths(buffer + subPathsStart, len - subPathsStart, number_of_SubPaths);
+}
+
+// The sub paths were not read at all. A stream entry of the STN table that names one (entry type 2, 3 or 4) points
+// at a stream of ANOTHER clip, as a disc's text subtitles always are and other subtitles, audio or video can be, and
+// its PID is that clip's, not the play item's. Read only as far as the listing and the mux need: the kind of each
+// sub path and the clips it plays. A damaged sub path ends the reading, and the playlist is still read as before.
+void MPLSParser::parseSubPaths(const uint8_t* data, const int len, const int count)
+{
+    m_subPaths.clear();
+    int pos = 0;
+    for (int i = 0; i < count; ++i)
     {
-        // SubPath(); // not implemented now
+        if (pos + 10 > len)
+            return;
+        const int64_t length = static_cast<int64_t>(data[pos]) << 24 | data[pos + 1] << 16 | data[pos + 2] << 8 |
+                               data[pos + 3];
+        const int64_t end = pos + 4 + length;
+        if (end > len)
+            return;
+        MPLSSubPath subPath;
+        subPath.type = data[pos + 5];
+        const int subPlayItems = data[pos + 9];
+        int q = pos + 10;
+        for (int k = 0; k < subPlayItems && q + 7 <= end; ++k)
+        {
+            const int itemLength = data[q] << 8 | data[q + 1];
+            subPath.clips.emplace_back(reinterpret_cast<const char*>(data + q + 2), 5);
+            q += 2 + itemLength;
+        }
+        m_subPaths.push_back(subPath);
+        pos = static_cast<int>(end);
     }
 }
 
@@ -1774,6 +1809,7 @@ void MPLSParser::chooseRepresentativeStnTable()
 
     // swap rather than assign: MPLSStreamInfo owns its stereo PG halves and has a deep copy
     // constructor but no copy assignment, so assigning a vector of them would share the pointers.
+    m_chosenStnItem = best;
     m_streamInfo.swap(m_stnTables[best].streams);
     const MPLSStnTable& chosen = m_stnTables[best];
     number_of_primary_video_stream_entries = chosen.counts[0];
@@ -1882,12 +1918,64 @@ int MPLSParser::pgTextIndexToFullIndex(const int value) const
     return idx < m_streamInfo.size() ? static_cast<int>(idx) : -1;
 }
 
+// Whether the stream of an STN entry is in the play item's own clip. An entry of type 1 names a stream of that clip,
+// and so does one of type 3 or 4 whose sub path plays in the same clip (SubPath_type 7, picture-in-picture in the
+// main clip, which is how secondary video and audio are usually declared, and how tsMuxeR writes them). An
+// entry of type 2 always names a stream of the clip a sub path plays (it carries the sub clip's entry number), and
+// so does one whose sub path is of type 4 (text subtitles), 5 or 6 (out-of-mux streams and picture-in-picture).
+bool MPLSParser::isInMainClip(const MPLSStreamInfo& entry) const
+{
+    if (entry.type == 2)
+        return false;
+    if ((entry.type == 3 || entry.type == 4) && entry.refSubPathId >= 0 &&
+        static_cast<size_t>(entry.refSubPathId) < m_subPaths.size())
+    {
+        const int subPathType = m_subPaths[entry.refSubPathId].type;
+        return subPathType != 4 && subPathType != 5 && subPathType != 6;
+    }
+    return true;
+}
+
+// Only an entry whose stream is in the play item's clip is that clip's stream of this PID. A sub path entry
+// carries the PID of its own clip, and its subtitles start at 0x1200 there as they do in the main clip: matched by
+// PID alone, a playlist whose sub path subtitles are Japanese listed and muxed the main clip's first English PG
+// stream as Japanese.
 MPLSStreamInfo MPLSParser::getStreamByPID(const int pid) const
 {
     for (auto& i : m_streamInfo)
     {
-        if (i.streamPID == pid)
+        if (i.streamPID == pid && isInMainClip(i))
             return i;
+    }
+    return {};
+}
+
+std::vector<MPLSStreamInfo> MPLSParser::getOutOfMuxStreams() const
+{
+    std::vector<MPLSStreamInfo> rez;
+    for (auto& i : m_streamInfo)
+        if (!isInMainClip(i))
+            rez.push_back(i);
+    return rez;
+}
+
+MPLSStreamInfo MPLSParser::getStreamReferencing(const int pid, std::string& role) const
+{
+    for (auto& i : m_streamInfo)
+    {
+        if (i.stream_coding_type != StreamType::SUB_PGS || !isInMainClip(i))
+            continue;
+        if (i.isSSPG && i.leftEye && i.leftEye->type == 1 && i.leftEye->streamPID == pid)
+            role = "left eye";
+        else if (i.isSSPG && i.rightEye && i.rightEye->type == 1 && i.rightEye->streamPID == pid)
+            role = "right eye";
+        else if (i.topAS.pid == pid && i.topAS.type == 1)
+            role = "top aligned";
+        else if (i.bottomAS.pid == pid && i.bottomAS.type == 1)
+            role = "bottom aligned";
+        else
+            continue;
+        return i;
     }
     return {};
 }
@@ -2122,75 +2210,100 @@ int MPLSParser::composePip_metadata(uint8_t* buffer, const int bufferSize,
     return writer.getBitsCount() / 8;
 }
 
+// A 3D playlist has a 3D table for EACH play item, one after the other, each led by its length, as a real 3D playlist
+// of many play items has them. Only the first was read, and its entries were given to the PG streams of the play
+// item whose STN table describes the playlist (chooseRepresentativeStnTable), which need not be the first: a short
+// clip in front of the film gave the film's subtitles its own offsets and stereo streams, or none. The table of the
+// chosen play item is read now; the first is still read when the playlist has fewer tables than play items.
 void MPLSParser::parseStnTableSS(uint8_t* data, uint32_t dataLength)
 {
     try
     {
+        std::vector<uint32_t> starts;
+        for (uint32_t pos = 0; starts.size() < std::max<size_t>(m_playItems.size(), 1) && pos + 2 <= dataLength;)
+        {
+            starts.push_back(pos);
+            pos += 2 + (static_cast<uint32_t>(data[pos]) << 8 | data[pos + 1]);
+        }
+        if (starts.empty())
+            return;
+        const uint32_t start = m_chosenStnItem < starts.size() ? starts[m_chosenStnItem] : starts[0];
         BitStreamReader reader{};
-        reader.setBuffer(data, data + dataLength);
-        reader.skipBits(32);  // len, fixedOffsetDuringPopup, reserved
-
-        for (int i = 0; i < number_of_primary_video_stream_entries; ++i)
-        {
-            MPLSStreamInfo streamInfo;
-
-            streamInfo.parseStreamEntry(reader);
-
-            reader.skipBits(32);  // attrSSLen, coding type 0x20, format, frameRate
-            reader.skipBits(32);  // reserved, number_of_offset_sequences
-        }
-
-        for (int i = 0; i < number_of_PG_textST_stream_entries; ++i)
-        {
-            auto PG_textST_offset_sequence_id = reader.getBits<uint8_t>(8);
-            // Entry i here describes entry i of the PG and text subtitle list of the STN table, which STN_table()
-            // stored right after the video and audio entries, PG and text subtitles together in their own order.
-            // It used to be looked up as the i-th PG stream, so a text subtitle in front of a PG stream gave its
-            // values to that PG stream, and each PG stream after it received the values of the entry before.
-            const int idx = pgTextIndexToFullIndex(i);
-            if (idx != -1)
-                m_streamInfo[idx].offsetId = PG_textST_offset_sequence_id;
-
-            // The stereo details belong to a PG stream only. They are always read, so that everything after them
-            // stays in step, and kept only for an entry that is a PG stream.
-            const int pgIdx = (idx != -1 && m_streamInfo[idx].stream_coding_type == StreamType::SUB_PGS) ? idx : -1;
-            reader.skipBits(5);  // reserved, dialog_region_offset_valid
-            const bool isSSPG = reader.getBit();
-            bool isTopAS = reader.getBit();
-            bool isBottomAS = reader.getBit();
-            if (pgIdx != -1)
-                m_streamInfo[pgIdx].isSSPG = isSSPG;
-            if (isSSPG)
-            {
-                auto leftEye = std::make_unique<MPLSStreamInfo>();
-                leftEye->parseStreamEntry(reader);  // left eye
-                auto rightEye = std::make_unique<MPLSStreamInfo>();
-                rightEye->parseStreamEntry(reader);  // right eye
-                reader.skipBits(8);                  // reserved
-                const auto ssOffsetId = reader.getBits<uint8_t>(8);
-                if (pgIdx != -1)
-                {
-                    m_streamInfo[pgIdx].leftEye = leftEye.release();
-                    m_streamInfo[pgIdx].rightEye = rightEye.release();
-                    m_streamInfo[pgIdx].SS_PG_offset_sequence_id = ssOffsetId;
-                }
-            }
-            if (isTopAS)
-            {
-                MPLSStreamInfo streamInfo;
-                streamInfo.parseStreamEntry(reader);  // left eye
-                reader.skipBits(16);                  // reserved, top_AS_offset_sequence_id
-            }
-            if (isBottomAS)
-            {
-                MPLSStreamInfo streamInfo;
-                streamInfo.parseStreamEntry(reader);  // left eye
-                reader.skipBits(16);                  // reserved, bottom_AS_offset_sequence_id
-            }
-        }
+        reader.setBuffer(data + start, data + dataLength);
+        parseStnTableSSItem(reader);
     }
     catch (...)
     {
+    }
+}
+
+void MPLSParser::parseStnTableSSItem(BitStreamReader& reader)
+{
+    reader.skipBits(32);  // len, fixedOffsetDuringPopup, reserved
+
+    for (int i = 0; i < number_of_primary_video_stream_entries; ++i)
+    {
+        MPLSStreamInfo streamInfo;
+
+        streamInfo.parseStreamEntry(reader);
+
+        reader.skipBits(32);  // attrSSLen, coding type 0x20, format, frameRate
+        reader.skipBits(32);  // reserved, number_of_offset_sequences
+    }
+
+    for (int i = 0; i < number_of_PG_textST_stream_entries; ++i)
+    {
+        auto PG_textST_offset_sequence_id = reader.getBits<uint8_t>(8);
+        // Entry i here describes entry i of the PG and text subtitle list of the STN table, which STN_table()
+        // stored right after the video and audio entries, PG and text subtitles together in their own order.
+        // It used to be looked up as the i-th PG stream, so a text subtitle in front of a PG stream gave its
+        // values to that PG stream, and each PG stream after it received the values of the entry before.
+        const int idx = pgTextIndexToFullIndex(i);
+        if (idx != -1)
+            m_streamInfo[idx].offsetId = PG_textST_offset_sequence_id;
+
+        // The stereo details belong to a PG stream only. They are always read, so that everything after them
+        // stays in step, and kept only for an entry that is a PG stream.
+        const int pgIdx = (idx != -1 && m_streamInfo[idx].stream_coding_type == StreamType::SUB_PGS) ? idx : -1;
+        reader.skipBits(5);  // reserved, dialog_region_offset_valid
+        const bool isSSPG = reader.getBit();
+        bool isTopAS = reader.getBit();
+        bool isBottomAS = reader.getBit();
+        if (pgIdx != -1)
+            m_streamInfo[pgIdx].isSSPG = isSSPG;
+        if (isSSPG)
+        {
+            auto leftEye = std::make_unique<MPLSStreamInfo>();
+            leftEye->parseStreamEntry(reader);  // left eye
+            auto rightEye = std::make_unique<MPLSStreamInfo>();
+            rightEye->parseStreamEntry(reader);  // right eye
+            reader.skipBits(8);                  // reserved
+            const auto ssOffsetId = reader.getBits<uint8_t>(8);
+            if (pgIdx != -1)
+            {
+                m_streamInfo[pgIdx].leftEye = leftEye.release();
+                m_streamInfo[pgIdx].rightEye = rightEye.release();
+                m_streamInfo[pgIdx].SS_PG_offset_sequence_id = ssOffsetId;
+            }
+        }
+        // The aligned subtitles were read and dropped: the stream was then offered as an unrelated subtitle of
+        // the clip, and a disc made from the playlist lost the choice of the subtitle position
+        for (int k = 0; k < 2; ++k)
+        {
+            if (!(k == 0 ? isTopAS : isBottomAS))
+                continue;
+            MPLSStreamInfo streamInfo;
+            streamInfo.parseStreamEntry(reader);
+            reader.skipBits(8);  // reserved
+            const auto asOffsetId = reader.getBits<uint8_t>(8);
+            if (pgIdx != -1)
+            {
+                MPLSStreamInfo::AlignedRef& ref = k == 0 ? m_streamInfo[pgIdx].topAS : m_streamInfo[pgIdx].bottomAS;
+                ref.pid = streamInfo.streamPID;
+                ref.type = streamInfo.type;
+                ref.offsetId = asOffsetId;
+            }
+        }
     }
 }
 
@@ -2516,6 +2629,7 @@ void MPLSParser::composeSTN_table(BitStreamWriter& writer, const size_t PlayItem
     number_of_DolbyVision_video_stream_entries = 0;
 
     std::vector<MPLSStreamInfo>& streamInfo = isSSEx ? m_streamInfoMVC : m_streamInfo;
+    int numberOfPiPPg = 0;
 
     for (const auto& i : streamInfo)
     {
@@ -2537,7 +2651,14 @@ void MPLSParser::composeSTN_table(BitStreamWriter& writer, const size_t PlayItem
                 number_of_secondary_audio_stream_entries++;
         }
         else if (stream_coding_type == StreamType::SUB_PGS)
-            number_of_PG_textST_stream_entries++;
+        {
+            // An eye of a stereo subtitle or an aligned subtitle is named by the entry it belongs to, in the 3D
+            // table, and is no entry of its own; picture-in-picture subtitles are counted on their own below
+            if (i.isPiP)
+                numberOfPiPPg++;
+            else if (!i.hangsOffEntry)
+                number_of_PG_textST_stream_entries++;
+        }
         else
         {
             // Not a Blu-ray/AVCHD stream type this muxer can place in the playlist STN table: DVB
@@ -2564,7 +2685,11 @@ void MPLSParser::composeSTN_table(BitStreamWriter& writer, const size_t PlayItem
         writer.putBits(8,
                        number_of_secondary_video_stream_entries);  // int number_of_secondary_video_stream_entries.
                                                                    // Now subpath used for second video stream
-        writer.putBits(8, 0);                                      // number_of_PiP_PG_textST_stream_entries_plus
+        // The subtitles of the picture-in-picture video, when that video is on the disc too; without it they are
+        // left out of the table (BlurayHelper::createMPLSFile says so), as no player could show them
+        if (number_of_secondary_video_stream_entries == 0)
+            numberOfPiPPg = 0;
+        writer.putBits(8, numberOfPiPPg);  // number_of_PiP_PG_textST_stream_entries_plus
         writer.putBits(8, number_of_DolbyVision_video_stream_entries);
         writer.putBits(32, 0);  // reserved_for_future_use
     }
@@ -2596,12 +2721,17 @@ void MPLSParser::composeSTN_table(BitStreamWriter& writer, const size_t PlayItem
         }
     }
 
-    // PG
-    for (auto& i : m_streamInfo)
+    // PG: the ordinary entries, then the picture-in-picture ones, which have no 3D table entry. Every PG stream used
+    // to be written as an ordinary entry: the eyes of a stereo subtitle came first, without a language, and took
+    // the numbers the disc start and a player select subtitles by; picture-in-picture subtitles became ordinary
+    // ones after the film's own.
+    for (int pass = 0; pass < (isSSEx || numberOfPiPPg == 0 ? 1 : 2); ++pass)
     {
-        const StreamType stream_coding_type = i.stream_coding_type;
-        if (stream_coding_type == StreamType::SUB_PGS)
+        for (auto& i : m_streamInfo)
         {
+            const StreamType stream_coding_type = i.stream_coding_type;
+            if (stream_coding_type != StreamType::SUB_PGS || i.hangsOffEntry || i.isPiP != (pass == 1))
+                continue;
             if (isSSEx)
             {
                 i.composePGS_SS_StreamEntry(writer, PlayItem_id);
@@ -2662,8 +2792,15 @@ void MPLSParser::composeSTN_table(BitStreamWriter& writer, const size_t PlayItem
                 writer.putBits(8, 0);  // word align
             }
 
-            writer.putBits(8, 0);  // number_of_PiP_PG_textST_ref_entries
-            writer.putBits(8, 0);  // reserved_for_word_align
+            // The picture-in-picture subtitles by their place in the PG list, after the ordinary entries, as a real
+            // disc names them. Each secondary video is given all of them: the meta does not say which belongs to
+            // which, and a disc has one picture-in-picture video.
+            writer.putBits(8, numberOfPiPPg);  // number_of_PiP_PG_textST_ref_entries
+            writer.putBits(8, 0);              // reserved_for_word_align
+            for (int k = 0; k < numberOfPiPPg; ++k)
+                writer.putBits(8, number_of_PG_textST_stream_entries + k);  // PiP_PG_textST_stream_id_ref
+            if (numberOfPiPPg & 1)
+                writer.putBits(8, 0);  // reserved_for_word_align
             secondaryVNum++;
         }
     }
@@ -2735,6 +2872,11 @@ void MPLSParser::STN_table(BitStreamReader& reader, int PlayItem_id)
          PG_textST_stream_id++)
     {
         MPLSStreamInfo streamInfo;
+        // The entries after the ordinary ones are the subtitles of the picture-in-picture video: the secondary video
+        // entry names them by their place in this list (PiP_PG_textST_stream_id_ref: on a disc the numbers
+        // that follow those of the ordinary entries). They were read as ordinary subtitles, and offered and written
+        // as ones, numbered after the film's own.
+        streamInfo.isPiP = PG_textST_stream_id >= number_of_PG_textST_stream_entries;
         streamInfo.parseStreamEntry(reader);
         streamInfo.parseStreamAttributes(reader);
         m_stnTables[PlayItem_id].streams.push_back(streamInfo);
@@ -2962,6 +3104,11 @@ MPLSStreamInfo::MPLSStreamInfo(const MPLSStreamInfo& other) : M2TSStreamInfo(oth
     pipParams = other.pipParams;
     isSSPG = other.isSSPG;
     SS_PG_offset_sequence_id = other.SS_PG_offset_sequence_id;
+    refSubPathId = other.refSubPathId;
+    isPiP = other.isPiP;
+    hangsOffEntry = other.hangsOffEntry;
+    topAS = other.topAS;
+    bottomAS = other.bottomAS;
     leftEye = nullptr;
     rightEye = nullptr;
     if (other.leftEye)
@@ -3007,13 +3154,14 @@ void MPLSStreamInfo::parseStreamEntry(BitStreamReader& reader)
     }
     else if (type == 2)
     {
-        reader.skipBits(16);  // ref_to_SubPath_id, ref_to_subClip_entry_id
+        refSubPathId = reader.getBits<int>(8);
+        reader.skipBits(8);  // ref_to_subClip_entry_id
         streamPID = reader.getBits<int>(16);
         reader.skipBits(32);
     }
     else if (type == 3 || type == 4)
     {
-        reader.skipBits(8);  // ref_to_SubPath_id
+        refSubPathId = reader.getBits<int>(8);
         streamPID = reader.getBits<int>(16);
         reader.skipBits(32);
         reader.skipBits(8);
@@ -3026,14 +3174,25 @@ void MPLSStreamInfo::composePGS_SS_StreamEntry(BitStreamWriter& writer, const si
     writer.putBits(4, 0);   // reserved
     writer.putBit(0);       // dialog region offset valid
     writer.putBit(isSSPG);  // is SS PG
-    writer.putBit(0);       // top AS PG
-    writer.putBit(0);       // bottom AS PG
+    writer.putBit(topAS.pid != 0);     // top AS PG
+    writer.putBit(bottomAS.pid != 0);  // bottom AS PG
     if (isSSPG)
     {
         leftEye->composeStreamEntry(writer, entryNum);
         rightEye->composeStreamEntry(writer, entryNum);
         writer.putBits(8, 0);  // reserved
         writer.putBits(8, SS_PG_offset_sequence_id);
+    }
+    for (const AlignedRef* ref : {&topAS, &bottomAS})
+    {
+        if (ref->pid == 0)
+            continue;
+        MPLSStreamInfo entry;
+        entry.type = ref->type;
+        entry.streamPID = ref->pid;
+        entry.composeStreamEntry(writer, entryNum);
+        writer.putBits(8, 0);  // reserved
+        writer.putBits(8, ref->offsetId);
     }
 }
 
