@@ -529,7 +529,8 @@ bool SingleFileMuxer::close()
 
 void SingleFileMuxer::parseMuxOpt(const std::string& opts)
 {
-    const vector<string> params = splitStr(opts.c_str(), ' ');
+    // Split outside quotes, as the line is split everywhere else: a word of a quoted value is no option.
+    const vector<string> params = splitQuotedStr(opts.c_str(), ' ');
     for (auto& i : params)
     {
         vector<string> paramPair = splitOption(trimStr(i));

@@ -2621,7 +2621,12 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
 // simply not implemented for one output and now say so instead of ignoring the request.
 static void reportDvProfileIgnored(const MuxerManager& muxerManager, const char* outputName)
 {
-    if (muxerManager.getMuxOpts().find("--dv-profile") == std::string::npos)
+    // The option, not the text of the line: a label holding "--dv-profile" gave this warning.
+    bool given = false;
+    for (const std::string& token : splitQuotedStr(muxerManager.getMuxOpts().c_str(), ' '))
+        if (const vector<string> option = splitOption(trimStr(token)); !option.empty() && option[0] == "--dv-profile")
+            given = true;
+    if (!given)
         return;
     LTRACE(LT_WARN, 2,
            "Warning: --dv-profile was ignored, because it applies to Matroska output only and this is "

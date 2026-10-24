@@ -1185,7 +1185,6 @@ bool MuxerManager::openMetaFile(const string& fileName)
                                       << m_cutStart / INTERNAL_PTS_FREQ
                                       << "s). Both are positions from the start of the source, so the end "
                                          "must be the later of the two.")
-            m_mvcBaseViewR = m_muxOpts.find("right-eye") != string::npos;
         }
         file.readLine(str);
     }
@@ -1486,6 +1485,10 @@ void MuxerManager::parseMuxOpt(const string& opts)
         {
             m_demuxMode = true;
         }
+        // It was looked for in the text of the line, so a label or a title holding "right-eye" made the right eye
+        // the base view of a 3D disc.
+        else if (paramPair[0] == "--right-eye")
+            m_mvcBaseViewR = true;
         else if (paramPair[0] == "--constant-iso-hdr")
         {
             m_reproducibleIsoHeader = true;

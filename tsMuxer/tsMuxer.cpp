@@ -2856,7 +2856,10 @@ int checkedMuxRate(const std::string& option, const std::string& value)
 
 void TSMuxer::parseMuxOpt(const std::string& opts)
 {
-    const vector<string> params = splitStr(opts.c_str(), ' ');
+    // Split outside quotes, as the line is split everywhere else. Split at every space, the words of a quoted value
+    // were read as options: --label="no --blu-ray here" put a transport stream into disc mode, named 00000.ts and
+    // with its AC-3 as stream id 0xfd.
+    const vector<string> params = splitQuotedStr(opts.c_str(), ' ');
     bool cbrAsked = false;
     bool vbrAsked = false;
     bool rateGiven = false;
