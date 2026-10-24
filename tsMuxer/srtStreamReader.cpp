@@ -1428,37 +1428,124 @@ bool SRTStreamReader::parseTime(const string& text)
     return false;
 }
 
-// ReSharper disable once CppMemberFunctionMayBeStatic
-// ** A FILE NAMED .srt IS SRT ONLY WHEN IT READS LIKE ONE. **
+// ** A FILE NAMED .srt IS SRT ONLY WHEN IT READS LIKE ONE, TO THE READER ITSELF. **
 // The name alone decided it: a file named .srt was listed as "SRT text subtitles" whatever it held, audio or anything
-// else, and a mux then asked for the size and rate of the video instead of saying that the file is not SRT. A file
-// that has text in it now needs a timing line, two times with "-->" between them, in its first 64 KiB. A file with
-// nothing in it but spaces stays SRT, as it was. UTF-16 is read by taking the byte of each pair that carries the text.
+// else, and a mux then asked for the size and rate of the video instead of saying that the file is not SRT. The check
+// that took its place had a grammar of its own, narrower than the reader's, and it refused real files that the reader
+// muxes: UTF-32 with its byte order mark, a timing line without an end time or with a time that ends in its comma, and
+// a first timing line more than 64 KiB in, behind a block of notes. It also hid the reader's message on UTF-16 and
+// UTF-32 without a byte order mark. So the file is read here as the reader reads it, and judged with the reader's own
+// tests for a timing line, isTimingLine and looksLikeTimingLine, and the two can no longer disagree:
+// - The encoding by the rules and in the order of detectSrcFormat: a byte order mark of UTF-8, UTF-32 or UTF-16, the
+//   one of UTF-32 little endian before the one of UTF-16 little endian, which is its start; then UTF-16 or UTF-32
+//   without a mark by its zero bytes; else the bytes as they are. That covers UTF-8 and every code page the reader
+//   takes, also the double byte ones: digits, ":", ",", ".", "-", ">", CR and LF are the same single bytes in all of
+//   them, and no second byte of a double byte letter is below 0x40.
+// - A unit below 0x80 is that character; any other unit stands for a letter (0x80), which no test takes for a digit or
+//   a sign. Taking the low byte of each unit, as before, let a Chinese letter pass for a "-" or a digit.
+// - Lines end at LF, CR LF or CR, and a byte order mark at the start of a line is passed over, as the reader does for a
+//   counter that carries one, left by two files joined byte for byte.
+// A file is SRT when one of its lines is a timing line, or a line meant as one, which the reader then names. Only the
+// first block that the reader reads is looked at, the 2 MiB from which it judges the encoding: a real file ends the
+// search at its first timing line, and other data, of which up to 64 MiB are read in to find what it is, costs a few
+// milliseconds. UTF-16 or UTF-32 without a mark is listed as SRT when it holds a timing line, so that a mux says why it
+// is not read, with the reader's own message. A file with nothing in it but spaces and line ends stays SRT, as it was.
 static bool readsLikeSrt(const uint8_t* buffer, const int len)
 {
-    int step = 1;
-    int first = 0;
-    if (len >= 2 && ((buffer[0] == 0xFF && buffer[1] == 0xFE) || (buffer[0] == 0xFE && buffer[1] == 0xFF)))
+    const int limit = (std::min)(len, DEFAULT_FILE_BLOCK_SIZE);
+    int unitSize = 1;
+    bool bigEndian = false;
+    int pos = 0;
+    // The marks as detectSrcFormat tests them. A file that holds a mark alone, shorter than the 4 bytes detectSrcFormat
+    // judges, gives the reader nothing to read, and it stays SRT as an empty file does.
+    const uint8_t* b = buffer;
+    if (limit >= 3 && b[0] == 0xEF && b[1] == 0xBB && b[2] == 0xBF)
+        pos = 3;
+    else if (limit >= 4 && b[0] == 0 && b[1] == 0 && b[2] == 0xFE && b[3] == 0xFF)
     {
-        step = 2;
-        first = buffer[0] == 0xFF ? 2 : 3;
+        unitSize = 4;
+        bigEndian = true;
+        pos = 4;
     }
-    const int limit = (std::min)(len, 64 * 1024);
-    std::string text;
-    for (int i = first; i < limit; i += step) text += static_cast<char>(buffer[i]);
-    if (text.find_first_not_of(" \t\r\n\xEF\xBB\xBF") == std::string::npos)
-        return true;
-    for (size_t arrow = text.find("-->"); arrow != std::string::npos; arrow = text.find("-->", arrow + 3))
+    else if (limit >= 4 && b[0] == 0xFF && b[1] == 0xFE && b[2] == 0 && b[3] == 0)
     {
-        const size_t before = text.find_last_not_of(" \t", arrow == 0 ? 0 : arrow - 1);
-        const size_t after = text.find_first_not_of(" \t", arrow + 3);
-        if (arrow > 0 && before != std::string::npos && after != std::string::npos &&
-            isdigit(static_cast<uint8_t>(text[before])) && isdigit(static_cast<uint8_t>(text[after])))
-            return true;
+        unitSize = 4;
+        pos = 4;
     }
-    return false;
+    else if (limit >= 2 && b[0] == 0xFE && b[1] == 0xFF)
+    {
+        unitSize = 2;
+        bigEndian = true;
+        pos = 2;
+    }
+    else if (limit >= 2 && b[0] == 0xFF && b[1] == 0xFE)
+    {
+        unitSize = 2;
+        pos = 2;
+    }
+    else if (limit >= 4 && !(b[0] == 0 && b[1] == 0 && b[2] == 0xFE))
+    {
+        // No mark: a zero byte in at least every fourth character is UTF-16 or UTF-32, as detectSrcFormat says. The
+        // byte that carries the text of a character is the one that is seldom zero: the first in little endian, the
+        // last in big endian.
+        int zeros[4] = {0, 0, 0, 0};
+        for (int i = 0; i < limit; ++i)
+            if (b[i] == 0)
+                ++zeros[i % 4];
+        const int pairs = limit / 2;
+        const bool even = (zeros[0] + zeros[2]) * 4 >= pairs;
+        const bool odd = (zeros[1] + zeros[3]) * 4 >= pairs;
+        if (even && odd)
+        {
+            unitSize = 4;
+            bigEndian = zeros[0] > zeros[3];
+        }
+        else if (even || odd)
+        {
+            unitSize = 2;
+            bigEndian = zeros[1] + zeros[3] <= zeros[0] + zeros[2];
+        }
+    }
+    const auto timingLine = [](const std::string& line) { return isTimingLine(line) || looksLikeTimingLine(line); };
+    std::string line;
+    bool blank = true;  // nothing but spaces, tabs and line ends so far
+    for (int i = pos; i + unitSize <= limit; i += unitSize)
+    {
+        uint32_t c = buffer[i];
+        if (unitSize == 2)
+            c = bigEndian ? (c << 8) | buffer[i + 1] : c | (buffer[i + 1] << 8);
+        else if (unitSize == 4)
+            c = bigEndian
+                    ? (c << 24) | (buffer[i + 1] << 16) | (buffer[i + 2] << 8) | buffer[i + 3]
+                    : c | (buffer[i + 1] << 8) | (buffer[i + 2] << 16) | (static_cast<uint32_t>(buffer[i + 3]) << 24);
+        if (c == '\n' || c == '\r')
+        {
+            if (timingLine(line))
+                return true;
+            line.clear();
+            continue;
+        }
+        if (line.empty())
+        {
+            if (c == 0xFEFF)
+                continue;
+            if (unitSize == 1 && c == 0xEF && i + 2 < limit && buffer[i + 1] == 0xBB && buffer[i + 2] == 0xBF)
+            {
+                i += 2;
+                continue;
+            }
+        }
+        if (c != ' ' && c != '\t')
+            blank = false;
+        // Without a branch: in random data every other byte is above 0x7F, and the guess cost two thirds of the time.
+        line += static_cast<char>((std::min)(c, 0x80u));
+    }
+    // The last line of a file that does not end with a line end is read as well, as the reader finishes it; a line cut
+    // by the end of the block is not judged.
+    return blank || (limit == len && timingLine(line));
 }
 
+// ReSharper disable once CppMemberFunctionMayBeStatic
 CheckStreamRez SRTStreamReader::checkStream(uint8_t* buffer, const int len, const ContainerType containerType,
                                             const int containerDataType, int containerStreamIndex)
 {
