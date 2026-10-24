@@ -65,9 +65,14 @@ static const uint16_t ctx[256] = {
 static constexpr int AC3_ACMOD_MONO = 1;
 static constexpr int AC3_ACMOD_STEREO = 2;
 
+// ** DOWN-TO-AC3 MAKES AN AC-3 TRACK OF A TRUEHD ONE. ** With down-to-ac3 the reader still finds the lossless
+// substream (m_true_hd_mode), as it must to step over its units, but what it hands on is the AC-3 core alone, so
+// that is the codec the track holds. The TS and demux writers asked isTrueHD() && !getDownconvertToAC3() and were
+// right; Matroska takes its CodecID from here, declared the core A_TRUEHD and, as an A_TRUEHD track sends its AC-3
+// frames to a core track of their own and down-to-ac3 asks for none, wrote the track with no frame in it.
 const CodecInfo& AC3Codec::getCodecInfo()
 {
-    if (m_true_hd_mode)
+    if (m_true_hd_mode && !m_downconvertToAC3)
         return trueHDCodecInfo;
     if (isEAC3())
         return eac3CodecInfo;

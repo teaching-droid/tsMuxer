@@ -73,7 +73,7 @@ void AC3StreamReader::probeTrueHD()
         if (p[0] == 0xF8 && p[1] == 0x72 && p[2] == 0x6F && p[3] == 0xBA)
             m_true_hd_mode = mlp.decodeFrame(p - 4, m_bufEnd);
 
-    if (m_true_hd_mode)
+    if (m_true_hd_mode && !m_downconvertToAC3)
         LTRACE(
             LT_INFO, 2,
             "TrueHD track (track " << m_streamIndex << "): the lossless substream is carried through to the output.");
