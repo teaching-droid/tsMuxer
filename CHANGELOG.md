@@ -263,6 +263,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Video
 
+* **MPEG-2 video with a few damaged packets was not recognised:** one damaged picture header in the first part of the track made the listing say "Can't detect stream type". It is now recognised when such damage is rare.
+
+* **H.264 of the MFC and depth profiles (134, 135, 138, 139) was read wrongly:** the size and frame rate were wrong. Their stream parameters are now read as the standard defines them.
+
 * **H.264 whose order counts are of type 1** (pic_order_cnt_type 1, as some camera and reference encoders write it) is muxed. It was refused with "SPS picture order 1 not supported".
 
 * **AV1 in an IVF file** is read, and an IVF file read to its end counts as read: a small one ended with "The mux stopped before the source was finished".

@@ -505,8 +505,18 @@ int SPSUnit::deserialize()
         if (seq_parameter_set_id >= 32)
             return 1;
         pic_order_cnt_type = 0;
+        // ** THE PROFILES THAT CARRY THE CHROMA FORMAT. ** ITU-T H.264 7.3.2.1.1 lists thirteen profiles whose SPS
+        // has chroma_format_idc, the bit depths and the scaling matrices after seq_parameter_set_id. The four of the
+        // frame compatible and depth extensions, 134 (MFC High), 135 (MFC Depth High), 138 (Multiview Depth High) and
+        // 139 (Enhanced Multiview Depth High), were missing, so every field after seq_parameter_set_id was read from
+        // the wrong bits. Measured with the SPS of a 1920x1080 interlaced High profile stream given each of the four
+        // profile numbers, which keeps its syntax: listed as "16:160i, Frame rate: not found", and the TS of it came
+        // out 1880 bytes shorter, with other times; a subset SPS of a 3D disc's second view given 134 lost its view
+        // count and was listed as 48:64i. frame_mbs_only_flag, which the field and frame classification of a picture
+        // rests on, is one of the fields read from the wrong bits.
         if (profile_idc == 100 || profile_idc == 110 || profile_idc == 122 || profile_idc == 244 || profile_idc == 44 ||
-            profile_idc == 83 || profile_idc == 86 || profile_idc == 118 || profile_idc == 128)
+            profile_idc == 83 || profile_idc == 86 || profile_idc == 118 || profile_idc == 128 || profile_idc == 138 ||
+            profile_idc == 139 || profile_idc == 134 || profile_idc == 135)
         {
             chroma_format_idc = extractUEGolombCode();
             if (chroma_format_idc >= 4)
@@ -617,7 +627,8 @@ int SPSUnit::deserializeSubSPS()
     if (profile_idc == 83 || profile_idc == 86)
     {
     }
-    else if (profile_idc == 118 || profile_idc == 128)
+    // 134 (MFC High) carries the MVC extension of 118 and 128 (H.264 7.3.2.1.3)
+    else if (profile_idc == 118 || profile_idc == 128 || profile_idc == 134)
     {
         if (bitReader.getBit() != 1)
             return INVALID_BITSTREAM_SYNTAX;
@@ -627,6 +638,17 @@ int SPSUnit::deserializeSubSPS()
         if (mvc_vui_parameters_present_flag)
             if (mvc_vui_parameters_extension() != 0)  // specified in Annex H
                 return 1;
+    }
+    // 135, 138 and 139 carry the MVCD extension of Annex I, 139 the 3D-AVC one of Annex J behind it. Only the number of
+    // views, its first field, is read, for the listing: nothing else of a depth stream is used, as for SVC above.
+    else if (profile_idc == 135 || profile_idc == 138 || profile_idc == 139)
+    {
+        if (bitReader.getBit() != 1)
+            return INVALID_BITSTREAM_SYNTAX;
+        const unsigned num_views_minus1 = extractUEGolombCode();
+        if (num_views_minus1 >= 1 << 10)
+            return 1;
+        num_views = num_views_minus1 + 1;
     }
 
     return 0;
@@ -1024,8 +1046,10 @@ std::string SPSUnit::getStreamDescr() const
     {
         if (profile_idc == 83 || profile_idc == 86)
             rez << "SVC part ";
-        else if (profile_idc == 118 || profile_idc == 128)
+        else if (profile_idc == 118 || profile_idc == 128 || profile_idc == 134)
             rez << "H.264/MVC Views: " << int32uToStr(num_views) << " ";
+        else if (profile_idc == 135 || profile_idc == 138 || profile_idc == 139)
+            rez << "H.264/MVC+D Views: " << int32uToStr(num_views) << " ";
     }
 
     rez << "Profile: ";

@@ -107,6 +107,24 @@ void MPEG2StreamReader::applyDiscoveryData(const StreamDiscoveryData& data)
         setFPS(data.fps);
 }
 
+// ** ONE DAMAGED UNIT USED TO DECIDE THE WHOLE TRACK. ** checkStream looks at every start code in the up to 64 MiB
+// it is given, and the first one of a type MPEG-2 video does not have, or the first picture or sequence header that
+// did not parse, ended the check with "not detected". One TS packet in a hundred overwritten, as a weak broadcast
+// signal does it, in the first 60 MB of a disc clip of MPEG-2 video: about 32,000 start codes, and a few of them, the
+// ones whose type byte or header lies in a lost packet, are not MPEG-2: "Can't detect stream type", and the picture
+// of the recording could not be listed or chosen at all, while a mux that named the codec read it.
+//
+// Such units are now counted instead, and the track is taken when they are few and the stream around them is MPEG-2
+// video. Measured on that clip with 1, 5, 20 and 40 percent of its packets overwritten: 1, 4, 9 and 16 such start codes
+// of 19,768 to 32,682 (at most 0.08 percent), 29 to 40 sequence headers and 272 to 465 pictures. Data that is not
+// MPEG-2 video fails one of the three bounds: PCM has a quarter of its start codes out of place, and MP3 has 12,500
+// start codes of which 0.03 to 0.08 percent are out of place but no sequence header or picture; other video has no
+// sequence header at all (0xB3 is not a unit header of H.264 or HEVC). A track in which no unit is out of place is
+// decided exactly as before, from a sequence header, a picture and a slice.
+static constexpr int DAMAGED_SHARE_DIVISOR = 64;   // at most one start code in 64 out of place
+static constexpr int DAMAGED_MIN_SEQUENCES = 2;    // a disc or a broadcast repeats it at every group of pictures
+static constexpr int DAMAGED_MIN_PICTURES = 16;
+
 CheckStreamRez MPEG2StreamReader::checkStream(uint8_t* buffer, int len)
 {
     CheckStreamRez rez;
@@ -114,14 +132,18 @@ CheckStreamRez MPEG2StreamReader::checkStream(uint8_t* buffer, int len)
     BitStreamReader bitReader{};
     uint8_t* nextNal = nullptr;
     bool sliceFound = false;
-    bool pictureFound = false;
-    bool pulldownFound = false;
+    int pulldownPictures = 0;
     uint8_t extType = 0;
     MPEGPictureHeader frame(0);
+    int units = 0;
+    int damagedUnits = 0;
+    int sequences = 0;
+    int pictures = 0;
     for (uint8_t* nal = MPEGHeader::findNextMarker(buffer, end); nal <= end - 32;
          nal = MPEGHeader::findNextMarker(nal + 4, end))
     {
         uint8_t unitType = nal[3];
+        ++units;
         try
         {
             if (unitType >= SLICE_MIN_START_SHORT_CODE && unitType <= SLICE_MAX_START_SHORT_CODE)
@@ -139,7 +161,7 @@ CheckStreamRez MPEG2StreamReader::checkStream(uint8_t* buffer, int len)
                     else if (extType == PICTURE_CODING_EXT)
                     {
                         frame.deserializeCodingExtension(bitReader);
-                        pulldownFound |= frame.repeat_first_field > 0;
+                        pulldownPictures += frame.repeat_first_field > 0 ? 1 : 0;
                     }
                     break;
                 case SEQ_END_SHORT_CODE:
@@ -148,29 +170,48 @@ CheckStreamRez MPEG2StreamReader::checkStream(uint8_t* buffer, int len)
                     break;
                 case PICTURE_START_SHORT_CODE:
                     if (frame.deserialize(nal + 4, end - nal - 4) == nullptr)
-                        return rez;
-                    pictureFound = true;
+                        ++damagedUnits;
+                    else
+                        ++pictures;
                     break;
                 case SEQ_START_SHORT_CODE:
+                {
+                    // a damaged header is checked on a copy first, so that it does not overwrite the last good one,
+                    // which the listing describes
                     nextNal = MPEGHeader::findNextMarker(nal + 4, end);
-                    if (m_sequence.deserialize(nal + 4, nextNal - nal - 4) == nullptr)
-                        return rez;
+                    MPEGSequenceHeader check(0);
+                    if (check.deserialize(nal + 4, nextNal - nal - 4) == nullptr)
+                    {
+                        ++damagedUnits;
+                        break;
+                    }
+                    m_sequence.deserialize(nal + 4, nextNal - nal - 4);
                     m_streamAR = static_cast<VideoAspectRatio>(m_sequence.aspect_ratio_info);
                     spsFound = true;
+                    ++sequences;
                     break;
+                }
                 default:
-                    return rez;
+                    ++damagedUnits;
+                    break;
                 }
         }
         catch (BitStreamException&)
         {
         }
     }
-    if (spsFound && pictureFound && sliceFound)
+    const bool fewDamaged = damagedUnits == 0 ||
+                            (static_cast<int64_t>(damagedUnits) * DAMAGED_SHARE_DIVISOR <= units &&
+                             sequences >= DAMAGED_MIN_SEQUENCES && pictures >= DAMAGED_MIN_PICTURES);
+    if (spsFound && pictures > 0 && sliceFound && fewDamaged)
     {
         rez.codecInfo = mpeg2CodecInfo;
         rez.streamDescr = m_sequence.getStreamDescr();
-        if (pulldownFound)
+        // A picture coding extension in a lost packet can say repeat_first_field by chance: with damage, pulldown is
+        // only named where at least one picture in 16 repeats a field (3:2 pulldown repeats one in every two). Raw
+        // MPEG-2 without pulldown, 40 percent of its blocks overwritten, was listed "(pulldown)" from one such picture.
+        if (damagedUnits == 0 ? pulldownPictures > 0
+                              : static_cast<int64_t>(pulldownPictures) * DAMAGED_MIN_PICTURES >= pictures)
             rez.streamDescr += " (pulldown)";
     }
     return rez;
