@@ -484,7 +484,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **Every MUXOPT line counts.** With two of them, the muxers took the options of the last one only. --blu-ray or --avchd on the first of two lines gave a transport stream named .iso, or a folder of demuxed tracks where a disc folder was asked for. Lines that ask for both a Blu-ray and an AVCHD disc are refused.
 
-* **A disc label no longer chooses the disc.** --blu-ray, --blu-ray-v3 and --avchd were looked for in the text of the MUXOPT line, so --label="no --blu-ray here" made a Blu-ray folder, and a label with --blu-ray-v3 in it a UHD disc.
+* **A word inside a quoted value is no longer read as an option.** --blu-ray, --blu-ray-v3 and --avchd were looked for in the text of the MUXOPT line, so --label="no --blu-ray here" made a Blu-ray folder, and a label with --blu-ray-v3 in it a UHD disc. In the same way a label holding --split-size split the file, one holding --new-audio-pes changed the audio stream id, and one holding right-eye made the right eye the base view of a 3D disc.
 
 * **A WebM output** no longer carries the BCP 47 languages of its tracks, chapters and tags, nor the track flags that WebM does not have, such as "hearing impaired". A Matroska output keeps them.
 
