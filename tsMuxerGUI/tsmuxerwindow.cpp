@@ -1245,8 +1245,10 @@ TsMuxerWindow::TsMuxerWindow()
         innerOnlyCheck->setToolTip(wrapTip(
             tr("The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is "
                "packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so "
-               "the data stays off the weak outer edge. The image is padded to the full disc, so the burn writes "
-               "the whole disc. The layer-break guard is sized automatically; needs the disc Free Sectors set.")));
+               "the data stays off the weak outer edge. On a two- or four-layer disc the image is padded to the full "
+               "disc, so the burn writes the whole disc; a three-layer image ends inside its last layer, and a "
+               "single-layer disc is not padded. The layer-break guard is sized automatically; needs the disc Free "
+               "Sectors set.")));
         auto* singleCopy3dCheck = new QCheckBox(tr("3D disc: store the video once, not twice"), bdmvTab);
         singleCopy3dCheck->setToolTip(wrapTip(
             tr("A 3D disc stores its video once and gives it three names: the .ssif and the two .m2ts are the "
@@ -1780,8 +1782,10 @@ TsMuxerWindow::TsMuxerWindow()
                 innerOnlyCheck->setToolTip(wrapTip(tr(
                     "The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is "
                     "packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so "
-                    "the data stays off the weak outer edge. The image is padded to the full disc, so the burn writes "
-                    "the whole disc. The layer-break guard is sized automatically; needs the disc Free Sectors set.")));
+                    "the data stays off the weak outer edge. On a two- or four-layer disc the image is padded to the full "
+                    "disc, so the burn writes the whole disc; a three-layer image ends inside its last layer, and a "
+                    "single-layer disc is not padded. The layer-break guard is sized automatically; needs the disc "
+                    "Free Sectors set.")));
                 singleCopy3dCheck->setText(tr("3D disc: store the video once, not twice"));
                 singleCopy3dCheck->setToolTip(wrapTip(
                     tr("A 3D disc stores its video once and gives it three names: the .ssif and the two .m2ts are the "
@@ -5072,8 +5076,11 @@ QString TsMuxerWindow::buildMetaText()
         {
             if (codecInfo->bindFps && !tmpFps.isEmpty())
                 postfix += QString(", fps=") + tmpFps;
-            if (bluray3D && codecInfo->offsetId >= 0)
-                postfix += QString(", 3d-plane=%1").arg(codecInfo->offsetId);
+            // "zero" (offsetId -1) was written as no 3d-plane= at all, which gave the subtitle no offset (0xff). Since
+            // the mux takes the playlist's offset when 3d-plane= is absent, "zero" on a track of a 3D playlist came
+            // out at the playlist's plane. 255 is the core's own "no offset", the value it wrote for "zero" before.
+            if (bluray3D)
+                postfix += QString(", 3d-plane=%1").arg(codecInfo->offsetId >= 0 ? codecInfo->offsetId : 255);
         }
         if (codecInfo->displayName == "SRT")
         {

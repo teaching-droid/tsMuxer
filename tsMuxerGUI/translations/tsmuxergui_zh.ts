@@ -4046,8 +4046,8 @@ Build the ISO anyway?</source>
         <translation>光盘外缘是刻录时最容易出错的部分。勾选后，影片保留在每一层的内侧部分，外缘用零填充。光盘先被封装到映像旁边的一个文件夹中，然后像在“BDMV 文件夹 -&gt; ISO”选项卡中一样由它生成映像，因此运行期间驱动器需要同时容纳两者的空间。分层点处的零会自动确定大小，因此不使用分层点保护带。适用于两层或更多层光盘的 ISO 输出。</translation>
     </message>
     <message>
-        <source>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so the data stays off the weak outer edge. The image is padded to the full disc, so the burn writes the whole disc. The layer-break guard is sized automatically; needs the disc Free Sectors set.</source>
-        <translation>光盘的外缘是刻录时最容易出错的部分。勾选此项后，影片会被集中到每一层的内圈轨道，外缘区域用零填充，使数据远离脆弱的外缘。映像会填充到整张光盘大小，因此刻录会写满整张盘。层切换保护区会自动调整大小；需要设置光盘的 Free Sectors。</translation>
+        <source>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so the data stays off the weak outer edge. On a two- or four-layer disc the image is padded to the full disc, so the burn writes the whole disc; a three-layer image ends inside its last layer, and a single-layer disc is not padded. The layer-break guard is sized automatically; needs the disc Free Sectors set.</source>
+        <translation type="unfinished">光盘的外缘是刻录时最容易出错的部分。勾选此项后，影片会被集中到每一层的内圈轨道，外缘区域用零填充，使数据远离脆弱的外缘。映像会填充到整张光盘大小，因此刻录会写满整张盘。层切换保护区会自动调整大小；需要设置光盘的 Free Sectors。</translation>
     </message>
     <message>
         <source>3D disc: store the video once, not twice</source>

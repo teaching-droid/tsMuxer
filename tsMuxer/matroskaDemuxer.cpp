@@ -5975,7 +5975,18 @@ double MatroskaDemuxer::getTrackFps(const uint32_t trackId)
                             times.push_back(time);
                             return times.size() < PICTURES;
                         });
-        const bool fields = fieldBlocks >= 8 && fieldBlocks == (std::min)(times.size(), FIELD_BLOCKS);
+        bool fields = fieldBlocks >= 8 && fieldBlocks == (std::min)(times.size(), FIELD_BLOCKS);
+        // Halved only where the field blocks carry times of their own. A writer may give both fields of a frame the
+        // frame's time, and the distinct times are then those of the frames already: halved, a 29.97 H.264 stream so
+        // stored (each field a block, the second on the first one's time) came out at 14.985 fps and played at half
+        // speed, 11.0 s for 5.5 s. Its first 16 blocks hold 8 distinct times; fields with times of their own hold 16.
+        if (fields)
+        {
+            std::vector<int64_t> first(times.begin(), times.begin() + static_cast<std::ptrdiff_t>(fieldBlocks));
+            std::sort(first.begin(), first.end());
+            const size_t distinct = static_cast<size_t>(std::unique(first.begin(), first.end()) - first.begin());
+            fields = distinct * 4 > fieldBlocks * 3;
+        }
         if (times.size() == PICTURES)
         {
             const int64_t complete = *std::min_element(times.end() - REORDER_BLOCKS, times.end());

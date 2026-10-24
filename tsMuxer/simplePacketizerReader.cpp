@@ -689,6 +689,15 @@ void SimplePacketizerReader::setBuffer(uint8_t* data, const uint32_t dataLen, bo
     // display, where "how far have we got" is the right question and this is not the answer.
     m_readBytes += dataLen;
     m_lastBlock = lastBlock;
+    if (dataLen > 0 && data != nullptr)
+    {
+        const uint8_t* const from = data + MAX_AV_PACKET_SIZE;
+        const size_t keep = (std::min)(static_cast<size_t>(dataLen), TAIL_KEEP);
+        // trimmed only past twice the size, so a source of small blocks (a container's frames) is not moved each time
+        m_tail.insert(m_tail.end(), from + (dataLen - keep), from + dataLen);
+        if (m_tail.size() > 2 * TAIL_KEEP)
+            m_tail.erase(m_tail.begin(), m_tail.begin() + static_cast<std::ptrdiff_t>(m_tail.size() - TAIL_KEEP));
+    }
 
     if (static_cast<size_t>(m_tmpBufferLen + dataLen) > m_tmpBuffer.size())
         m_tmpBuffer.resize(m_tmpBufferLen + dataLen);
@@ -706,6 +715,110 @@ void SimplePacketizerReader::setBuffer(uint8_t* data, const uint32_t dataLen, bo
 }
 
 int64_t SimplePacketizerReader::getProcessedSize() { return m_processedBytes; }
+
+// The chain of tags that ENDS at end, read backwards from the footers, in bytes; base is where the bytes held begin
+// and dataLen how far back the data goes (a length found may reach before base, into bytes no longer held).
+// The order at the end of a file is the audio, then an APE tag or a Lyrics3 tag, then ID3v1, and each of them can be
+// found from its last bytes: ID3v1 is the last 128 and begins "TAG"; an APE footer is the last 32, "APETAGEX", with
+// the size of the items and the footer, and a header in front when its flags say so; Lyrics3 v2 ends with a six
+// digit size and "LYRICS200", v1 with "LYRICSEND" and is searched back for its "LYRICSBEGIN" as the forward reading
+// does. A size is believed as far as the data goes back, as tagRunAt believes one: it only takes bytes off the count
+// the frames are measured against, and never moves the read position.
+static int64_t tagChainBeforeEnd(const uint8_t* const base, const uint8_t* const end, const int64_t dataLen)
+{
+    const auto le32 = [](const uint8_t* q)
+    {
+        return static_cast<int64_t>(q[0]) | (static_cast<int64_t>(q[1]) << 8) | (static_cast<int64_t>(q[2]) << 16) |
+               (static_cast<int64_t>(q[3]) << 24);
+    };
+    int64_t total = 0;
+    for (;;)
+    {
+        const int64_t held = (end - base) - total;  // the bytes still held in front of the chain found so far
+        if (held < 15)
+            return total;  // a tag that reaches back past what is held ends the chain: nothing before it can be read
+        const uint8_t* const e = end - total;
+        // ID3v1, with the year rule of oneTagLength
+        if (held >= 128 && memcmp(e - 128, "TAG", 3) == 0)
+        {
+            const uint8_t* const t = e - 128;
+            bool yearOk = true;
+            for (int i = 93; i < 97; ++i)
+                if (!(t[i] == 0 || t[i] == ' ' || (t[i] >= '0' && t[i] <= '9')))
+                    yearOk = false;
+            if (yearOk)
+            {
+                total += 128;
+                continue;
+            }
+        }
+        // An APE footer: bit 29 clear (this block is not the header), a version of 1.000 or 2.000
+        if (held >= 32 && memcmp(e - 32, "APETAGEX", 8) == 0)
+        {
+            const uint8_t* const f = e - 32;
+            const int64_t version = le32(f + 8);
+            const int64_t size = le32(f + 12);
+            const auto flags = static_cast<uint32_t>(le32(f + 20));
+            const int64_t len = size + ((flags & 0x80000000u) != 0 ? 32 : 0);
+            if ((version == 1000 || version == 2000) && (flags & 0x20000000u) == 0 && size >= 32 &&
+                len <= dataLen - total)
+            {
+                total += len;
+                continue;
+            }
+        }
+        // Lyrics3 v2: "LYRICSBEGIN" ... six digits of the size up to them, "LYRICS200"
+        if (held >= 15 && memcmp(e - 9, "LYRICS200", 9) == 0)
+        {
+            int64_t size = 0;
+            bool digits = true;
+            for (int i = 15; i > 9; --i)
+            {
+                const uint8_t c = *(e - i);
+                if (c < '0' || c > '9')
+                    digits = false;
+                else
+                    size = size * 10 + (c - '0');
+            }
+            if (digits && size >= 11 && size + 15 <= dataLen - total)
+            {
+                total += size + 15;
+                continue;
+            }
+        }
+        // Lyrics3 v1: its start is searched for, within the bound the forward reading uses
+        if (held >= 20 && memcmp(e - 9, "LYRICSEND", 9) == 0)
+        {
+            constexpr int64_t LYRICS3_MAX = 16384;
+            const int64_t reach = (std::min)(held, LYRICS3_MAX);
+            int64_t found = 0;
+            for (int64_t back = 20; back <= reach && found == 0; ++back)
+                if (memcmp(e - back, "LYRICSBEGIN", 11) == 0)
+                    found = back;
+            if (found > 0)
+            {
+                total += found;
+                continue;
+            }
+        }
+        return total;
+    }
+}
+
+int64_t SimplePacketizerReader::trailingTagBytes() const
+{
+    if (m_tail.empty())
+        return 0;
+    const int64_t chain = tagChainBeforeEnd(m_tail.data(), m_tail.data() + m_tail.size(), m_readBytes);
+    if (chain <= 0)
+        return 0;
+    // A tag of the chain the forward reading stood on and credited is not counted again
+    const int64_t from = m_readBytes - chain;
+    const int64_t overlap = (std::min)(m_creditTo, m_readBytes) - (std::max)(m_creditFrom, from);
+    return chain - (overlap > 0 ? overlap : 0);
+}
+
+int64_t SimplePacketizerReader::getTagBytes() const { return m_tagBytes + trailingTagBytes(); }
 
 int SimplePacketizerReader::flushPacket(AVPacket& avPacket)
 {
@@ -880,6 +993,11 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
             m_tagProbePos = m_curPos;
             m_tagCredit = tagRunAt(m_curPos, m_bufEnd);
             m_tagBytes += m_tagCredit;
+            if (m_tagCredit > 0)
+            {
+                m_creditFrom = m_readBytes - (m_bufEnd - m_curPos);
+                m_creditTo = m_creditFrom + m_tagCredit;
+            }
         }
         int skipBytes = 0;
         int skipBeforeBytes = 0;

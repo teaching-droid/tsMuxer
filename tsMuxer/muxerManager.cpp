@@ -983,7 +983,14 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
                 anyAfterCutStart = true;
             // A video stream begins at its key picture at or before the cut (findCutKeyPictures), the rest at the cut
             const auto key = m_cutKeyFrom.find(avPacket.stream_index);
-            const int64_t from = key != m_cutKeyFrom.end() ? key->second : m_cutStart;
+            int64_t from = key != m_cutKeyFrom.end() ? key->second : m_cutStart;
+            // A Matroska file keeps its times in whole milliseconds, and the picture times are worked out from the
+            // frame rate, so a key picture at 2043.708 ms is stored, listed and given as 2044 ms. A cut at that time
+            // was taken to be after the picture, and the video began at the next key picture, 2 s later, with
+            // --cut-pictures=inside and in 2.20.0 (measured: 382 pictures for 431). A picture of the video that is
+            // less than half a millisecond before the cut is at it.
+            if (key == m_cutKeyFrom.end() && isCutVideo(avPacket.codec))
+                from -= INTERNAL_PTS_FREQ / 2000;
             if (avPacket.pts < from || !keptAfterCutStart(avPacket))
             {
                 leftOut(avPacket);
@@ -1533,6 +1540,23 @@ void MuxerManager::parseMuxOpt(const string& opts)
             for (const auto& warning : warnings) LTRACE(LT_WARN, 2, "Warning: " << warning);
         }
     }
+    // --inner-only works out the zeros at each layer break itself, from the disc and the data, so a guard given by
+    // hand on the same line is one of two answers to one question. It was decided (12 Oct) that on a meta line the two
+    // exclude each other and the job ends before anything is written, naming both, as the window's tick already does
+    // by greying the guard boxes. The mux printed one line saying the guard is not used and went on with rc 0, so a
+    // script that asked for a 64 MB guard got another padding without an error. --bdmv-to-iso keeps taking both, as
+    // it did when it was released.
+    if (m_innerOnly && (m_layerBreakGuardMB >= 0 || m_layerBreakGuardBeforeMB >= 0))
+    {
+        const char* guardName = m_layerBreakGuardMB >= 0 && m_layerBreakGuardBeforeMB >= 0
+                                    ? "--layer-break-guard and --layer-break-guard-before"
+                                : m_layerBreakGuardMB >= 0 ? "--layer-break-guard"
+                                                           : "--layer-break-guard-before";
+        THROW(ERR_COMMON, "--inner-only and " << guardName
+                                              << " cannot be used together. --inner-only works out its own padding at "
+                                                 "the layer break from the size of the disc. Remove one of the two. "
+                                                 "Nothing has been written.")
+    }
 }
 
 void MuxerManager::findCutLayers(const std::vector<StreamInfo>& ci)
@@ -1571,7 +1595,7 @@ bool MuxerManager::isCutVideo(const BaseAbstractStreamReader* reader)
 
 // ** --cut-pictures=cover: THE PICTURE OF A --cut-start BEGINS AT THE KEY PICTURE AT OR BEFORE THE CUT. ** A video that
 // is not encoded again can begin only at a key picture, and it began at the first one after the cut: the pictures
-// between the cut and that key picture were in no part of a film cut in two, up to a group of pictures, 0.3 to 0.4 s
+// between the cut and that key picture were in no part of a film cut in two, up to a group of pictures, 0.44 s
 // on a DVD source. It now begins at the last key picture at or before the cut, so that every picture after the cut is
 // there; the sound and the subtitles still begin at the cut, and a disc playlist starts playing at the first picture
 // shown at or after it (TSMuxer::setCutPlayTimes), so a player does not show the pictures before it.

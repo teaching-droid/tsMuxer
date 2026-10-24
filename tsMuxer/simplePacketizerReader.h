@@ -187,7 +187,8 @@ class SimplePacketizerReader : public AbstractStreamReader
     // The loss leaves out on purpose what comes before the first frame and after the last; other audio read as this
     // codec is mostly that, with a frame or two found by chance. Its frames, found one by one, each say another rate.
     [[nodiscard]] int64_t getFrameBytes() const { return m_frameBytes; }
-    [[nodiscard]] int64_t getTagBytes() const { return m_tagBytes; }
+    // With the tags at the very end of the data (trailingTagBytes), which no frame search ever stands on
+    [[nodiscard]] int64_t getTagBytes() const;
     [[nodiscard]] int64_t getSyncChanges() const { return m_syncChanges; }
 
    protected:
@@ -198,6 +199,18 @@ class SimplePacketizerReader : public AbstractStreamReader
     int64_t m_syncChanges = 0;
     int m_syncFreq = 0;  // the rate and channels at the sync before
     int m_syncChannels = 0;
+    // ** A TAG AT THE END IS FOUND FROM THE END. ** An APE tag that has only a footer (APEv1 always, APEv2 as Monkey's
+    // Audio writes it) begins with its items, so nothing marks its start for the forward reading: note 117 left it a
+    // stated limit, the bytes are held and never counted as lost. The frames-under-half rule then counted them as audio
+    // that is not frames, and an MP3 of 320 KB with a 1.5 MB cover in such a tag was refused, where 2.20.0 muxed it
+    // whole. The last bytes that arrived are kept so the chain of tags ending the data (ID3v1, APE footer, Lyrics3) can
+    // be read backwards from its footers, as their formats are meant to be read, for that rule alone.
+    [[nodiscard]] int64_t trailingTagBytes() const;
+    static constexpr size_t TAIL_KEEP = 16384 + 256;  // Lyrics3 v1's search bound, and ID3v1 and the footers
+    std::vector<uint8_t> m_tail;  // the last bytes given to setBuffer, TAIL_KEEP up to twice that
+    // The stream offsets of the last tag chain credited going forward, so a tag credited there is not counted twice
+    int64_t m_creditFrom = 0;
+    int64_t m_creditTo = 0;
 };
 
 #endif

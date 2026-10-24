@@ -1297,9 +1297,10 @@ All parameters in this group start with two dashes:
                       the drive needs room for both while it runs. The folder is
                       removed at the end; it is kept as an ordinary Blu-ray folder
                       only when the finished image does not fit the disc. Replaces
-                      --layer-break-guard. Each layer holds an even share at the
-                      centre of the disc; only the breaks at the outer edge (the 1st
-                      and 3rd) are padded. A single layer disc has nothing to pad.
+                      --layer-break-guard (a line with both is refused). Each
+                      layer holds an even share at the centre of the disc; only the
+                      breaks at the outer edge (the 1st and 3rd) are padded. A single
+                      layer disc has nothing to pad.
 --bdmv-to-iso         Separate mode: tsMuxeR --bdmv-to-iso [options] <BDMV_folder> <out.iso>
                       Wrap an existing BDMV folder into a UDF 2.50 BD-ROM ISO byte-for-byte
                       - no re-mux, no re-numbering - so BD-J menus and
@@ -2070,14 +2071,29 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         for (const int64_t g : guard)
             if (g <= 0)
                 room = false;
-        if (!room)
+        // "Keeping the normal guard" was said whatever was given. Only a guard asked for with --layer-break-guard (taken
+        // by --bdmv-to-iso beside --inner-only) is kept here; without one there is no guard to keep, and a direct mux
+        // never has one, since a meta line refuses the two together. Measured: a 355 MB image on the direct route
+        // said it kept the guard and was written with no zeros at the break.
+        if (!room && layerBreakGuardMB >= 0)
             LTRACE(LT_WARN, 2,
-                   "--inner-only: the disc is (nearly) full, so there is no room to pad; keeping the normal guard");
+                   "--inner-only: the disc is (nearly) full, so there is no room to pad; the guard given by "
+                   "--layer-break-guard is used instead");
+        else if (!room)
+            LTRACE(LT_WARN, 2,
+                   "--inner-only: the disc is (nearly) full, so there is no room to pad; the image is laid out with "
+                   "no zeros at the layer break");
         else
         {
             // whole MB, as the guard has always been given
             std::vector<int> guardMB;
             for (const int64_t g : guard) guardMB.push_back(static_cast<int>(g * 2048 / (1024 * 1024)));
+            // With --bdmv-to-iso a guard is taken beside --inner-only, as it was when released, with a warning (decided 12 Oct).
+            // The guard was replaced without a word. A meta line refuses the two together, so this is that route only.
+            if (layerBreakGuardMB >= 0)
+                LTRACE(LT_WARN, 2,
+                       "Warning: --inner-only works out the zeros at the layer break from the disc and the data, so "
+                       "the guard given by --layer-break-guard or --layer-break-guard-before is not used.");
             layerBreakGuardMB = guardMB.front();
             layerBreakGuardBeforeMB = guardMB.front();
             if (nLayers == 2)
@@ -3087,11 +3103,7 @@ static bool innerOnlyIsoAsked(const MuxerManager& muxerManager, const DiskType d
                "at the centre of the disc. The image is muxed as without --inner-only.");
         return false;
     }
-    if (muxerManager.getLayerBreakGuardMB() >= 0 || muxerManager.getLayerBreakGuardBeforeMB() >= 0)
-        LTRACE(
-            LT_INFO, 2,
-            "--inner-only sizes the zeros at the layer breaks from the disc and the data, so --layer-break-guard and "
-            "--layer-break-guard-before are not used.");
+    // A guard given beside --inner-only on the meta line is refused when the line is read (parseMuxOpt).
     return true;
 }
 
