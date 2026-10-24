@@ -295,6 +295,14 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Blu-ray and transport stream
 
+* **"Keep data on the inner disc area" padded the wrong part of a 100 GB or 128 GB disc.** On these discs the second layer change is at the centre of the disc, not at its edge, and it was padded like the edge: the data of the third layer went to its outer edge, where the option promises to keep the disc empty. Each layer now keeps its share of the data at the centre. On a 25 GB disc the option padded the middle of the disc and now leaves the image as it is. Two-layer discs are not changed.
+
+* **"Keep data on the inner disc area" could make an image too big for the disc** when the folder holds several large clips: a clip that would have crossed the layer change was moved behind the zeros, the clips after it ran past the end of the disc, and the image was refused after it had been written (49 MB too big for a title split into 100 MB clips on a 50 GB disc). A clip is now moved only when the rest still fits.
+
+* **"Keep data on the inner disc area" works when muxing straight to an ISO image.** Tick it in the dual-layer group beside the meta file, or add --inner-only to the MUXOPT line together with --disc-size. The disc is muxed into a folder beside the image first and the image is then laid out from it, the same way as on the BDMV folder to ISO tab, so both give the same image. While it runs, the drive needs room for that folder as well as the image. When the finished image does not fit the disc, the folder is kept as an ordinary Blu-ray folder. (#3, thanks to @DreckSoft)
+
+* **--bdmv-to-iso takes --constant-iso-hdr,** as a MUXOPT line does, so two images of one folder can be compared byte for byte.
+
 * **A Blu-ray or AVCHD disc made from the command line or a meta file had its AC-3, E-AC-3, DTS, DTS-HD and TrueHD-with-core audio as stream id 0xbd,** although `--help` says a disc gets 0xfd with its extension, as the Blu-ray format has it and as the window always writes it with `--new-audio-pes`. A player that finds the audio by that extension played such a disc without sound. A disc now always gets 0xfd; LPCM keeps 0xbd, and a TS or M2TS that is no disc is written as before. Mux such discs again.
 
 * **A disc from the command line or a meta file had its clock references on the last video track,** for a Dolby Vision disc on the enhancement layer, where the Blu-ray format and the window put them on a PID of their own, 0x1001. A disc now always does. The clip information files of a UHD disc no longer end with an empty extension block, which none of the UHD discs measured has.

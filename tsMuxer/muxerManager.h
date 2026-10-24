@@ -116,6 +116,10 @@ class MuxerManager final
     [[nodiscard]] int getLayerBreakGuardMB() const { return m_layerBreakGuardMB; }
     [[nodiscard]] int getLayerBreakGuardBeforeMB() const { return m_layerBreakGuardBeforeMB; }
     [[nodiscard]] const std::vector<int>& getLayerBreakLbns() const { return m_layerBreakLbns; }
+    // --inner-only: a disc image keeps its data on the inner part of each layer (see innerOnlyIsoAsked in main.cpp)
+    [[nodiscard]] bool getInnerOnly() const { return m_innerOnly; }
+    // --extra-iso-space as it was given, 0 without it, for an image laid out from a folder
+    [[nodiscard]] int getExtraIsoSpaceGiven() const { return m_extraIsoBlocksGiven ? m_extraIsoBlocks : 0; }
 
     enum class SubTrackMode
     {
@@ -213,6 +217,7 @@ class MuxerManager final
     int m_layerBreakGuardMB = -1;        // --layer-break-guard: MB of zero-fill each side of the DL break (-1 = off)
     int m_layerBreakGuardBeforeMB = -1;  // --layer-break-guard-before: MB before the break on its own (-1 = derived)
     std::vector<int> m_layerBreakLbns;   // --layer-break-lbn: break sector(s); empty = BD-R/RE DL default
+    bool m_innerOnly = false;            // --inner-only
 
     /// Results of the discovery (probe) phase, indexed by stream index.
     std::vector<StreamDiscoveryData> m_discoveryData;

@@ -216,6 +216,9 @@ class IsoWriter
     void setLayerBreakPoints(const std::vector<int>& lbns);
     void setLayerBreakGuard(int afterSectors);
     void setLayerBreakGuard(int beforeSectors, int afterSectors);
+    // One zone per break, given in the order of setLayerBreakPoints: --inner-only sizes each one from the layers on
+    // its two sides. A break left out of the list keeps the zone of setLayerBreakGuard.
+    void setLayerBreakGuards(const std::vector<int>& beforeSectors, const std::vector<int>& afterSectors);
 
     // One record per zero-fill actually written for a layer break, in absolute image sectors.
     // padStartLbn can be well before zoneStart (the fill starts wherever the interrupted write
@@ -232,7 +235,10 @@ class IsoWriter
     // current position, would run into a guard zone AND it fits completely between that zone's
     // end and the next zone (and the disc capacity, when known), pad with zeros up to the zone
     // end so the whole file lands on the next layer. Returns true if a pad was written.
-    bool padOverZoneIfFileCrosses(int64_t fileSizeBytes, int64_t discCapacitySectors);
+    // --inner-only gives two more limits (0 and -1 = none): restBytes, this file and every one after it, must still
+    // fit on the disc behind the zone, and the file may leave at most maxEmptySectors of the layer before it unused.
+    bool padOverZoneIfFileCrosses(int64_t fileSizeBytes, int64_t discCapacitySectors, int64_t restBytes = 0,
+                                  int64_t maxEmptySectors = -1);
 
     // Interleaved 3D groups: the two views have to end up cut into the SAME number of pieces, or
     // the .ssif cannot be described as an alias over them. Left to the ordinary path a guard pad
@@ -328,6 +334,10 @@ class IsoWriter
     std::vector<int> m_layerBreakPoints;  // absolute image LBAs of the layer breaks (DL=1, BDXL 100=2, 128=3)
     int m_layerBreakGuardBeforeSectors;   // zero-fill BEFORE each break (previous layer side; small margin)
     int m_layerBreakGuardAfterSectors;    // zero-fill AFTER each break (next layer side; main defect protection)
+    std::vector<int> m_breakGuardBefore;  // per break, when setLayerBreakGuards gave one (else the two above)
+    std::vector<int> m_breakGuardAfter;
+    // The zone of break i in absolute image sectors: [break - before, break + after)
+    void guardZone(size_t i, int64_t& zoneStart, int64_t& zoneEnd) const;
     std::vector<LayerBreakPad> m_layerBreakPads;  // where zeros were actually written (for reporting)
     // Set while a UDF structure is being written at a fixed address of its own. The guard exists to
     // move FILE DATA off the sectors around a layer break; a volume structure has nowhere else it

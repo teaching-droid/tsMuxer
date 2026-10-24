@@ -1229,6 +1229,19 @@ All parameters in this group start with two dashes:
                       are different: work them out from what your own disc reports.
                       Read the total from the disc's FULL formatted capacity (ImgBurn
                       "Free Sectors"), NOT a partial/POW value (which gives a wrong break).
+--inner-only          ISO output: keep the data on the inner part of every layer
+                      and fill the outer edge of the disc with zeros, where discs
+                      burn worst. Needs --disc-size (and --layer-break-lbn for a disc
+                      whose breaks differ from its size's). The disc is muxed into a
+                      folder beside the image first, <name>.tsmuxer-inner-<number>,
+                      and the image is then laid out from it as --bdmv-to-iso
+                      --inner-only --3d-single-copy --original-order lays it out, so
+                      the drive needs room for both while it runs. The folder is
+                      removed at the end; it is kept as an ordinary Blu-ray folder
+                      only when the finished image does not fit the disc. Replaces
+                      --layer-break-guard. Each layer holds an even share at the
+                      centre of the disc; only the breaks at the outer edge (the 1st
+                      and 3rd) are padded. A single layer disc has nothing to pad.
 --bdmv-to-iso         Separate mode: tsMuxeR --bdmv-to-iso [options] <BDMV_folder> <out.iso>
                       Wrap an existing BDMV folder into a UDF 2.50 BD-ROM ISO byte-for-byte
                       - no re-mux, no re-numbering - so BD-J menus and
@@ -1261,8 +1274,14 @@ All parameters in this group start with two dashes:
                               twice and a 3D disc from a BD50 does not fit back onto one.
                         --inner-only  Keep the payload on the inner tracks of every layer and
                               pad each layer's outer rim with zeros, where discs burn worst.
-                              Widens the layer-break guard symmetrically to (free space)/2 per
-                              break. Requires --disc-capacity.
+                              Each layer holds an even share of the payload at the centre of
+                              the disc. Multi-layer discs run from the centre out on layer 0,
+                              back in on layer 1, out again on layer 2, so only the 1st and
+                              3rd breaks are at the edge and padded; the 2nd, at the centre,
+                              is not. Requires --disc-capacity. A single layer disc has
+                              nothing to pad and is written as without it.
+                        --constant-iso-hdr  An image header that does not depend on the
+                              program version or the current time, as in a MUXOPT line.
                         --original-order  Write the files in disc order instead of largest
                               .m2ts first. Better for seamless branching titles, whose many
                               segments should stay physically close to their playback order.
@@ -1438,6 +1457,32 @@ static bool writeSsifGroup(IsoWriter* iso, const string& srcRoot, const BdSsifGr
     return iso->createInterleavedFile(g.baseRel, g.depRel, g.ssifRel);
 }
 
+// What the folder to ISO build is given. --bdmv-to-iso reads it from its command line, and a direct mux to an ISO with
+// --inner-only from its MUXOPT line: the disc is muxed into a folder first and the image is built from that folder by
+// the same code, so both routes give the same image.
+struct GuardedIsoOptions
+{
+    std::string srcRoot;  // the folder that holds BDMV
+    std::string outIso;
+    int layerBreakGuardMB = -1;
+    int layerBreakGuardBeforeMB = -1;
+    std::vector<int> layerBreakLbns;
+    bool originalOrder = false;
+    bool layerFit = true;
+    int64_t discCapacitySectors = 0;
+    bool keepExtras = false;
+    bool singleCopy3d = false;
+    bool innerOnly = false;
+    bool allowOversize = false;
+    bool reproducibleHeader = false;  // --constant-iso-hdr
+    int extraIsoSpace = 0;            // --extra-iso-space, in 64K blocks, on top of the estimate
+    std::string discLabel;
+    bool keepTooBigImage = true;  // an image refused by the final size check stays where it was written
+};
+
+// sizeRefused, when given, comes back true when the finished image was refused because it does not fit the disc
+static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused = nullptr);
+
 static int bdmvFolderToGuardedIso(const int argc, char** argv)
 {
     int layerBreakGuardMB = -1;
@@ -1450,6 +1495,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     bool singleCopy3d = false;
     bool innerOnly = false;
     bool allowOversize = false;
+    bool reproducibleHeader = false;
     int extraIsoSpace = 0;  // --extra-iso-space, in 64K blocks, on top of the estimate
     string discLabel;
     vector<string> positional;
@@ -1508,6 +1554,10 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                 innerOnly = true;
             else if (a == "--allow-oversize")
                 allowOversize = true;
+            // The header of the image was always random on this route, so two builds of one folder could not be
+            // compared byte for byte, as a direct mux to an ISO can with the same option.
+            else if (a == "--constant-iso-hdr")
+                reproducibleHeader = true;
             else if (a.rfind("--label=", 0) == 0)
                 discLabel = a.substr(8);
             // The refusal of an image whose metadata does not fit advises this option, which was not taken here.
@@ -1543,12 +1593,47 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                "Usage: tsMuxeR --bdmv-to-iso [--layer-break-guard=<MB>] [--layer-break-guard-before=<MB>] "
                "[--layer-break-lbn=<sector>] [--disc-capacity=<sectors>] [--original-order] [--no-layer-fit] "
                "[--keep-extra-files] [--3d-single-copy] [--inner-only] [--allow-oversize] [--label=<string>] "
-               "[--extra-iso-space=<64K blocks>] "
+               "[--extra-iso-space=<64K blocks>] [--constant-iso-hdr] "
                "<BDMV_folder> <out.iso>");
         return -1;
     }
-    string srcRoot = positional[0];
-    const string outIso = positional[1];
+    GuardedIsoOptions opt;
+    opt.srcRoot = positional[0];
+    opt.outIso = positional[1];
+    opt.layerBreakGuardMB = layerBreakGuardMB;
+    opt.layerBreakGuardBeforeMB = layerBreakGuardBeforeMB;
+    opt.layerBreakLbns = layerBreakLbns;
+    opt.originalOrder = originalOrder;
+    opt.layerFit = layerFit;
+    opt.discCapacitySectors = discCapacitySectors;
+    opt.keepExtras = keepExtras;
+    opt.singleCopy3d = singleCopy3d;
+    opt.innerOnly = innerOnly;
+    opt.allowOversize = allowOversize;
+    opt.reproducibleHeader = reproducibleHeader;
+    opt.extraIsoSpace = extraIsoSpace;
+    opt.discLabel = discLabel;
+    return buildGuardedIso(opt);
+}
+
+static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
+{
+    int layerBreakGuardMB = opt.layerBreakGuardMB;
+    int layerBreakGuardBeforeMB = opt.layerBreakGuardBeforeMB;
+    std::vector<int> layerBreakLbns = opt.layerBreakLbns;
+    const bool originalOrder = opt.originalOrder;
+    const bool layerFit = opt.layerFit;
+    const int64_t discCapacitySectors = opt.discCapacitySectors;
+    const bool keepExtras = opt.keepExtras;
+    const bool singleCopy3d = opt.singleCopy3d;
+    bool innerOnly = opt.innerOnly;
+    const bool allowOversize = opt.allowOversize;
+    const int extraIsoSpace = opt.extraIsoSpace;
+    const string& discLabel = opt.discLabel;
+    if (sizeRefused)
+        *sizeRefused = false;
+    string srcRoot = opt.srcRoot;
+    const string outIso = opt.outIso;
     while (!srcRoot.empty() && (srcRoot.back() == '/' || srcRoot.back() == '\\')) srcRoot.pop_back();
     // A common slip is selecting the BDMV folder itself instead of the disc root that contains it.
     // Building from there would put STREAM/ at the ISO root and the disc would not play, so step up
@@ -1830,9 +1915,9 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
 
     // --inner-only: keep the payload on the inner tracks of every layer and pad each layer's outer edge
     // (the rim) with zeros. BD-R DL fixes the layer break at the physical layer-0 capacity, so the drive
-    // cannot be made to jump early; instead we widen the layer-break guard symmetrically to (free space)/2
-    // per break, which pushes the movie toward both hubs and fills the outer/rim third with zeros. The
-    // worst-burned outer tracks then carry no data. Needs the disc capacity to know the free space.
+    // cannot be made to jump early; instead we widen the layer-break guard symmetrically, which pushes the
+    // movie toward both hubs and fills the outer/rim part with zeros. The worst-burned outer tracks then
+    // carry no data. Needs the disc capacity to know the free space.
     // --layer-break-guard-before on its own is a guard before the break only; it was ignored. Without breaks given, the
     // breaks are those of the disc --disc-capacity names (its sectors split over its layers), or the break of a
     // BD-R DL: a 100 GB disc got the guard at half a BD50.
@@ -1851,11 +1936,17 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
             LTRACE(LT_WARN, 2, warning);
         if (layerBreakLbns.empty())
         {
-            LTRACE(LT_WARN, 2, "Warning: a single layer disc has no layer break, so the guard is not applied.");
+            // --inner-only alone asks for no guard, and says below why it has nothing to do
+            if (layerBreakGuardMB >= 0)
+                LTRACE(LT_WARN, 2, "Warning: a single layer disc has no layer break, so the guard is not applied.");
             layerBreakGuardMB = -1;
             layerBreakGuardBeforeMB = -1;
         }
     }
+    // The zone of each break --inner-only pads, in sectors, for IsoWriter::setLayerBreakGuards. Empty when it pads
+    // none.
+    std::vector<int> innerBefore, innerAfter;
+    int innerLayers = 0;  // the layers of the disc --inner-only lays out, 0 when it lays out none
     if (innerOnly)
     {
         if (discCapacitySectors <= 0)
@@ -1863,29 +1954,111 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
             LTRACE(LT_ERROR, 2, "--inner-only needs the disc capacity; add --disc-capacity=<sectors>");
             return -1;
         }
+        // A disc of one layer has no layer change and no outer edge before one: its data starts at the centre and
+        // ends where it ends. A break was made up at half the disc and padded, which put the second half of the data
+        // at the rim, the very place the option keeps empty.
         if (layerBreakLbns.empty())
-            layerBreakLbns.push_back(static_cast<int>(discCapacitySectors / 2));  // dual-layer default break
+        {
+            LTRACE(LT_INFO, 2,
+                   "  inner-only: a single layer disc has no layer break and no outer edge to pad: its data already "
+                   "starts at the centre of the disc. The image is laid out as without --inner-only.");
+            innerOnly = false;
+        }
+    }
+    if (innerOnly)
+    {
+        // Blu-ray discs of more than one layer use the opposite track path: layer 0 is written from the centre (the
+        // hub) out to the rim, layer 1 from the rim back to the hub, layer 2 from the hub out again, layer 3 back in.
+        // So the first and third layer changes are at the RIM and the second is at the HUB. Each layer keeps an even
+        // share of the data at its hub end, and only the rim breaks are padded, each from the end of its outward layer
+        // to the start of the data of its inward one. The hub break gets no zeros: the data runs across it from one
+        // layer's hub end to the next one's. With an odd number of layers the image ends inside the last layer, from
+        // the hub outward, and the rest of that layer is left unwritten. Every break used to get the same zone around
+        // it, which padded the hub of a 100 GB or 128 GB disc and moved the data of layer 2 to its rim.
+        //
+        // A pair of layers around a rim break holds two shares. The last pair, which ends at the end of the disc,
+        // also keeps the margin and every pad's overrun, as the one pair of a two-layer disc always has, so a
+        // two-layer image comes out as before. The overrun: a pad starts wherever the current write lands, up to one
+        // copy buffer before its zone.
         const int64_t payloadSectors = (total + 2047) / 2048;
         const int64_t marginSectors = 8192;  // ~16 MB for UDF overhead + a small inner free tail
-        const int nBreaks = static_cast<int>(layerBreakLbns.size());
-        // Reserve the pad overrun as well as the margin. Without this the guard is sized to consume
-        // everything the margin does not, and the overrun then spends that same margin a second time:
-        // measured on a 1 GB payload, a guard asked for 89.0 MB each side was written as 104.1 MB
-        // before + 89.0 MB after and the image landed 1.44 MB OVER the disc, silently. The margin
-        // covers the UDF structures (~4 MB) and cannot also absorb an overrun of up to 16 MB.
-        const int64_t guardEach =
-            (discCapacitySectors - payloadSectors - marginSectors - nBreaks * overrunSectors) / (2 * nBreaks);
-        if (guardEach <= 0)
+        const int nLayers = static_cast<int>(layerBreakLbns.size()) + 1;
+        std::vector<int64_t> bound(1, 0);  // where each layer starts, and the end of the disc
+        for (const int b : layerBreakLbns) bound.push_back(b);
+        bound.push_back(discCapacitySectors);
+        std::vector<int64_t> share(nLayers, payloadSectors / nLayers);
+        share.back() = payloadSectors - payloadSectors / nLayers * (nLayers - 1);
+        const int nPads = nLayers / 2;
+        std::vector<int> rimBreaks;
+        std::vector<int64_t> guard;
+        for (int j = 1; j < nLayers; j += 2)
+        {
+            const bool lastPair = j + 1 == nLayers;
+            const int64_t reserve = lastPair ? marginSectors + nPads * overrunSectors : 0;
+            rimBreaks.push_back(layerBreakLbns[j - 1]);
+            guard.push_back((bound[j + 1] - bound[j - 1] - share[j - 1] - share[j] - reserve) / 2);
+        }
+        // With an odd count, the last layer holds its share plus all the margin and overruns: when the disc is near
+        // full the zones give way, the last one first, so the image still ends inside the disc.
+        int64_t excess = payloadSectors + marginSectors + nPads * overrunSectors - discCapacitySectors;
+        for (const int64_t g : guard) excess += 2 * g;
+        for (size_t k = guard.size(); excess > 0 && k-- > 0;)
+        {
+            const int64_t take = (std::min)((excess + 1) / 2, (std::max<int64_t>)(guard[k], 0));
+            guard[k] -= take;
+            excess -= 2 * take;
+        }
+        bool room = true;
+        for (const int64_t g : guard)
+            if (g <= 0)
+                room = false;
+        if (!room)
             LTRACE(LT_WARN, 2,
                    "--inner-only: the disc is (nearly) full, so there is no room to pad; keeping the normal guard");
         else
         {
-            const int guardMB = static_cast<int>(guardEach * 2048 / (1024 * 1024));
-            layerBreakGuardMB = guardMB;
-            layerBreakGuardBeforeMB = guardMB;
-            LTRACE(LT_INFO, 2,
-                   "  inner-only: data on the inner tracks; guard " << guardMB << " MB each side over " << nBreaks
-                                                                    << " break(s), outer/rim padded with zeros");
+            // whole MB, as the guard has always been given
+            std::vector<int> guardMB;
+            for (const int64_t g : guard) guardMB.push_back(static_cast<int>(g * 2048 / (1024 * 1024)));
+            layerBreakGuardMB = guardMB.front();
+            layerBreakGuardBeforeMB = guardMB.front();
+            if (nLayers == 2)
+                LTRACE(LT_INFO, 2,
+                       "  inner-only: data on the inner tracks; guard " << guardMB.front()
+                                                                        << " MB each side over 1 break(s), "
+                                                                           "outer/rim padded with zeros");
+            else
+            {
+                LTRACE(LT_INFO, 2,
+                       "  inner-only: data on the inner tracks of each of the "
+                           << nLayers << " layers, about " << share.front() / 512
+                           << " MB each; zeros only where a layer ends at the outer edge");
+                for (int j = 1; j < nLayers; ++j)
+                {
+                    if (j % 2 == 1)
+                        LTRACE(LT_INFO, 2,
+                               "    break " << j << " at sector " << layerBreakLbns[j - 1]
+                                            << " (outer edge): " << guardMB[j / 2] << " MB of zeros each side");
+                    else
+                        LTRACE(LT_INFO, 2,
+                               "    break " << j << " at sector " << layerBreakLbns[j - 1]
+                                            << " (centre of the disc): no zeros, the data runs on into layer " << j);
+                }
+                if (nLayers % 2 == 1)
+                    LTRACE(LT_INFO, 2,
+                           "    the image ends inside layer " << nLayers - 1
+                                                              << ", which is written from the centre outward; the rest "
+                                                                 "of it is left unwritten");
+            }
+            // Only the rim breaks are given to the writer, each with its own zone
+            layerBreakLbns = rimBreaks;
+            innerLayers = nLayers;
+            for (const int mb : guardMB)
+            {
+                const int sectors = static_cast<int>(static_cast<int64_t>(mb) * 1024 * 1024 / 2048);
+                innerBefore.push_back(sectors);
+                innerAfter.push_back(sectors);
+            }
         }
     }
 
@@ -2055,13 +2228,15 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
             unfinished.name = outIso;
     }
     BlurayHelper helper;
-    if (!helper.open(outIso, DiskType::BLURAY, total, extraISOBlocks, false, layerBreakGuardMB, layerBreakLbns,
-                     layerBreakGuardBeforeMB))
+    if (!helper.open(outIso, DiskType::BLURAY, total, extraISOBlocks, opt.reproducibleHeader, layerBreakGuardMB,
+                     layerBreakLbns, layerBreakGuardBeforeMB))
     {
         LTRACE(LT_ERROR, 2, "Can't create output ISO " << outIso);
         return -1;
     }
     IsoWriter* iso = helper.isoWriter();
+    if (!innerBefore.empty())
+        iso->setLayerBreakGuards(innerBefore, innerAfter);
     // Give the volume a label when one was requested. The direct ISO path already supports this;
     // BDMV-to-ISO simply reuses the same BlurayHelper call. Empty label keeps the previous behaviour.
     if (!discLabel.empty())
@@ -2086,12 +2261,16 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     };
     vector<FileRange> ranges;
     ranges.reserve(items.size());
+    int64_t restBytes = total;  // this item and every one after it
     for (auto& item : items)
     {
         // Layer-fit: start the file after the break instead of splitting it, when it fits there.
         // A folded 3D group is treated as one file here, which is what it is on the disc.
+        // Under --inner-only, only when the rest still fits and, on more than two layers, the shares stay even.
         if (layerFit)
-            iso->padOverZoneIfFileCrosses(item.size, discCapacitySectors);
+            iso->padOverZoneIfFileCrosses(item.size, discCapacitySectors, innerLayers > 0 ? restBytes : 0,
+                                          innerLayers > 2 ? overrunSectors : -1);
+        restBytes -= item.size;
         const int64_t startLbn = iso->currentImageLBA();
         if (item.ssifGroup >= 0)
         {
@@ -2245,9 +2424,11 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                     LTRACE(LT_ERROR, 2,
                            "  capacity: the image is " << std::fixed << std::setprecision(2) << diffMB
                                                        << " MB TOO BIG for the disc and will not burn (" << isoBytes
-                                                       << " bytes against " << capBytes << "). It was kept at "
-                                                       << outIso);
-                    unfinished.keep = true;
+                                                       << " bytes against " << capBytes << ")."
+                                                       << (opt.keepTooBigImage ? " It was kept at " + outIso : ""));
+                    unfinished.keep = opt.keepTooBigImage;
+                    if (sizeRefused)
+                        *sizeRefused = true;
                     return -1;
                 }
             }
@@ -2769,6 +2950,92 @@ class KeepOldOutput
     std::string m_oldPrefix;
     std::string m_newPrefix;
 };
+
+// --inner-only on a direct mux to an ISO image. The image cannot be laid out while the disc is muxed into it: the
+// zeros start at the end of the first layer's share of the data, and the size of the data is known only when the mux
+// is over (the estimate before it is off both ways). So the disc is muxed into a folder beside the image, and the
+// image is then laid out from that folder by the code of the BDMV folder to ISO route, which gives the same image as
+// those two steps by hand. The folder goes when the job ends, unless the image was refused for its size: the folder is
+// a whole disc then and is kept, so an image can be made from it without muxing again.
+struct InnerOnlyFolder
+{
+    std::filesystem::path path;
+    bool keep = false;
+    InnerOnlyFolder() = default;
+    InnerOnlyFolder(const InnerOnlyFolder&) = delete;
+    InnerOnlyFolder& operator=(const InnerOnlyFolder&) = delete;
+    ~InnerOnlyFolder()
+    {
+        std::error_code ec;
+        if (!keep && !path.empty())
+            std::filesystem::remove_all(path, ec);
+    }
+    [[nodiscard]] std::string str() const
+    {
+        const std::u8string u = path.u8string();
+        return {u.begin(), u.end()};
+    }
+};
+
+static unsigned long currentProcessId()
+{
+#ifdef _WIN32
+    return static_cast<unsigned long>(GetCurrentProcessId());
+#else
+    return static_cast<unsigned long>(getpid());
+#endif
+}
+
+// Whether this job takes the --inner-only route of a direct mux to an ISO image. Refuses, before anything is made, what
+// the option cannot do; says so where it is ignored.
+static bool innerOnlyIsoAsked(const MuxerManager& muxerManager, const DiskType dt, const std::string& dstFile)
+{
+    if (!muxerManager.getInnerOnly())
+        return false;
+    if (dt == DiskType::AVCHD)
+        THROW(ERR_COMMON, "--inner-only lays out a Blu-ray disc image, and this is an AVCHD disc. Leave it out.")
+    if (dt != DiskType::BLURAY)
+    {
+        LTRACE(LT_WARN, 2,
+               "Warning: --inner-only applies to a Blu-ray disc image (--blu-ray and an .iso output) and is being "
+               "ignored.");
+        return false;
+    }
+    if (strToUpperCase(extractFileExt(dstFile)) != "ISO")
+    {
+        LTRACE(LT_WARN, 2,
+               "Warning: --inner-only applies to an .iso destination and is being ignored, because this mux writes a "
+               "folder and only a disc image has sector positions. Author the folder as now, then run it through BDMV "
+               "folder to ISO with --inner-only, or name the output .iso.");
+        return false;
+    }
+    const int64_t discBytes = muxerManager.getDiscSizeLimit();
+    if (discBytes <= 0)
+        THROW(ERR_COMMON,
+              "--inner-only needs the disc it is for, to know where its layers end: add --disc-size, such as "
+              "--disc-size=bd50, or the Free Sectors of your disc times 2048. Nothing has been written.")
+    std::vector<int> breaks = muxerManager.getLayerBreakLbns();
+    if (breaks.empty())
+    {
+        std::string warning, error;
+        breaks = defaultLayerBreaks(discBytes, warning, error);
+        if (!error.empty())
+            THROW(ERR_COMMON, error << " Nothing has been written.")
+    }
+    if (breaks.empty())
+    {
+        LTRACE(LT_INFO, 2,
+               "--inner-only: a single layer disc has no layer break and no outer edge to pad: its data already starts "
+               "at the centre of the disc. The image is muxed as without --inner-only.");
+        return false;
+    }
+    if (muxerManager.getLayerBreakGuardMB() >= 0 || muxerManager.getLayerBreakGuardBeforeMB() >= 0)
+        LTRACE(
+            LT_INFO, 2,
+            "--inner-only sizes the zeros at the layer breaks from the disc and the data, so --layer-break-guard and "
+            "--layer-break-guard-before are not used.");
+    return true;
+}
 
 static void refuseSourceAsOutput(const MuxerManager& muxerManager, const std::string& dstFile)
 {
@@ -3477,6 +3744,7 @@ int main(int argc, char** argv)
         else if (muxMode)
         {
             KeepOldOutput keepOld;  // made first, so it is ended last: the image and the muxers are closed by then
+            InnerOnlyFolder innerFolder;  // --inner-only on an ISO: the disc folder the image is made from
             BlurayHelper blurayHelper;
 
             MuxerManager muxerManager(readManager, tsMuxerFactory);
@@ -3541,6 +3809,7 @@ int main(int argc, char** argv)
             // Refused when the muxer was set up, which an ISO image of the same name did not survive
             if (muxerManager.keepEditions())
                 THROW(ERR_COMMON, "--keep-editions applies to a Matroska output (.mkv) only.")
+            const bool innerIso = innerOnlyIsoAsked(muxerManager, dt, dstFile);
 
             if (dt != DiskType::NONE)
             {
@@ -3576,13 +3845,42 @@ int main(int argc, char** argv)
                                                                    << " GB target disc.");
                 }
                 muxerManager.checkTracksBeforeOutput();  // before the folders are made, as for a demux
-                dstFile = strToUpperCase(extractFileExt(dstFile)) == "ISO"
-                              ? keepOld.forFile(dstFile, muxerManager.totalSize())
-                              : keepOld.forDiscFolder(dstFile, muxerManager.totalSize());
-                if (!blurayHelper.open(dstFile, dt, muxerManager.totalSize(), muxerManager.getExtraISOBlocks(),
-                                       muxerManager.useReproducibleIsoHeader(), muxerManager.getLayerBreakGuardMB(),
-                                       muxerManager.getLayerBreakLbns(), muxerManager.getLayerBreakGuardBeforeMB(),
-                                       muxerManager.getDiscSizeLimit()))
+                if (innerIso)
+                {
+                    // Beside the image, named like the temporary outputs of KeepOldOutput. A folder of that name left
+                    // by an earlier job of a process with the same number is not anybody's disc.
+                    const std::filesystem::path out = fsPath(dstFile);
+                    const std::u8string stem = out.stem().u8string();
+                    const std::string name =
+                        std::string(stem.begin(), stem.end()) + ".tsmuxer-inner-" + std::to_string(currentProcessId());
+                    innerFolder.path = (out.has_parent_path() ? out.parent_path() : std::filesystem::path(".")) /
+                                       std::filesystem::path(std::u8string(name.begin(), name.end()));
+                    std::error_code ec;
+                    std::filesystem::remove_all(innerFolder.path, ec);
+                    const auto space = std::filesystem::space(
+                        out.has_parent_path() ? out.parent_path() : std::filesystem::path("."), ec);
+                    if (!ec && static_cast<int64_t>(space.available) < 2 * muxerManager.totalSize())
+                        LTRACE(
+                            LT_WARN, 2,
+                            "Warning: --inner-only writes the disc into a folder beside the image first, so the drive "
+                            "needs room for both: about "
+                                << space.available / 1000000 << " MB are free, and the two may need about "
+                                << 2 * muxerManager.totalSize() / 1000000 << " MB.");
+                    LTRACE(LT_INFO, 2,
+                           "--inner-only, step 1 of 2: the disc is muxed into the folder "
+                               << innerFolder.str() << "; step 2 lays out the image from it.");
+                    dstFile = innerFolder.str();
+                }
+                else
+                    dstFile = strToUpperCase(extractFileExt(dstFile)) == "ISO"
+                                  ? keepOld.forFile(dstFile, muxerManager.totalSize())
+                                  : keepOld.forDiscFolder(dstFile, muxerManager.totalSize());
+                // The guard of an --inner-only image is laid out in step 2, and the folder has no sectors for it
+                if (!blurayHelper.open(
+                        dstFile, dt, muxerManager.totalSize(), muxerManager.getExtraISOBlocks(),
+                        muxerManager.useReproducibleIsoHeader(), innerIso ? -1 : muxerManager.getLayerBreakGuardMB(),
+                        innerIso ? std::vector<int>() : muxerManager.getLayerBreakLbns(),
+                        innerIso ? -1 : muxerManager.getLayerBreakGuardBeforeMB(), muxerManager.getDiscSizeLimit()))
                     throw runtime_error(string("Can't create output file ") + dstFile);
                 blurayHelper.setVolumeLabel(isoDiskLabel);
                 blurayHelper.createBluRayDirs();
@@ -3645,6 +3943,43 @@ int main(int argc, char** argv)
             checkSourceConsumed(muxerManager);
             checkSourcesCutOff(muxerManager);
             checkEmptyTracks(muxerManager);
+            if (innerIso)
+            {
+                // Step 2, with what the MUXOPT line gave: the disc's sectors and breaks, the label, the header, the
+                // extra room. The video of a 3D disc is stored once, as a direct mux to an ISO has always stored it,
+                // and the files are written in their disc order, as a direct mux writes them: the navigation files
+                // first, at the start of layer 0, then the clips in the order they play.
+                GuardedIsoOptions iso;
+                iso.srcRoot = innerFolder.str();
+                iso.outIso = keepOld.forFile(outputRoot, muxerManager.totalSize());
+                iso.layerBreakLbns = muxerManager.getLayerBreakLbns();
+                iso.originalOrder = true;
+                iso.discCapacitySectors = muxerManager.getDiscSizeLimit() / 2048;
+                iso.singleCopy3d = true;
+                iso.innerOnly = true;
+                iso.allowOversize = muxerManager.getAllowOversize();
+                iso.reproducibleHeader = muxerManager.useReproducibleIsoHeader();
+                iso.extraIsoSpace = muxerManager.getExtraIsoSpaceGiven();
+                iso.discLabel = isoDiskLabel;
+                iso.keepTooBigImage = false;  // the folder is kept instead, see below
+                LTRACE(LT_INFO, 2, "--inner-only, step 2 of 2: the image is laid out from the folder.");
+                bool sizeRefused = false;
+                if (buildGuardedIso(iso, &sizeRefused) != 0)
+                {
+                    if (sizeRefused)
+                    {
+                        innerFolder.keep = true;
+                        THROW(ERR_COMMON,
+                              "The image is not kept, as it does not fit the disc. The disc it was made from "
+                              "is kept as an ordinary Blu-ray folder in "
+                                  << innerFolder.str()
+                                  << ": an image can be made from it with BDMV folder to ISO "
+                                     "(--bdmv-to-iso), for a larger disc say, without muxing again.")
+                    }
+                    // the folder goes with the job, so it is not named
+                    THROW(ERR_COMMON, "The image could not be laid out from the muxed disc; the reason is above.")
+                }
+            }
             keepOld.commit();
             setSaveSrtJobSucceeded();
             if (dt != DiskType::NONE)

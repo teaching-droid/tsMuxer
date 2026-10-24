@@ -4041,6 +4041,11 @@ Build the ISO anyway?</source>
         <translation>השאר את הנתונים באזור הפנימי של הדיסק (מלא את השוליים החיצוניים)</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is kept on the inner part of every layer and the outer edge is filled with zeros. The disc is muxed into a folder beside the image first and the image is then laid out from it, as on the BDMV folder -&gt; ISO tab, so the drive needs room for both while it runs. The zeros at the layer breaks are sized automatically, so the layer-break guard is not used. ISO output on a disc of two or more layers.</source>
+        <translation>הקצה החיצוני של הדיסק הוא החלק המועד ביותר לשגיאות בצריבה. כשהאפשרות מסומנת, הסרט נשמר בחלק הפנימי של כל שכבה והקצה החיצוני ממולא באפסים. הדיסק נארז תחילה לתיקייה לצד התמונה, ואז התמונה נבנית ממנה כמו בלשונית תיקיית BDMV -&gt; ISO, ולכן הכונן צריך מקום לשניהם בזמן הפעולה. האפסים במעברי השכבות נקבעים אוטומטית, ולכן לא נעשה שימוש במגן שבירת השכבה. פלט ISO לדיסק עם שתי שכבות או יותר.</translation>
+    </message>
+    <message>
         <source>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so the data stays off the weak outer edge. The image is padded to the full disc, so the burn writes the whole disc. The layer-break guard is sized automatically; needs the disc Free Sectors set.</source>
         <translation>השוליים החיצוניים של דיסק הם החלק הרגיש ביותר לשגיאות בצריבה. כאשר האפשרות מסומנת, הסרט נדחס אל הרצועות הפנימיות של כל שכבה והאזור החיצוני מתמלא באפסים, כך שהנתונים נשארים הרחק מהשוליים החיצוניים החלשים. הקובץ מרופד עד לגודל הדיסק המלא, ולכן הצריבה כותבת את כל הדיסק. אזור המגן של מעבר השכבה מחושב אוטומטית; יש להגדיר את ה-Free Sectors של הדיסק.</translation>
     </message>

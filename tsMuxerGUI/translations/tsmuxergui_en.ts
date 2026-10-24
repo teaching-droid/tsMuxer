@@ -3929,6 +3929,11 @@ Build the ISO anyway?</source>
         <translation>Keep data on the inner disc area (pad the outer edge)</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is kept on the inner part of every layer and the outer edge is filled with zeros. The disc is muxed into a folder beside the image first and the image is then laid out from it, as on the BDMV folder -&gt; ISO tab, so the drive needs room for both while it runs. The zeros at the layer breaks are sized automatically, so the layer-break guard is not used. ISO output on a disc of two or more layers.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
         <source>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so the data stays off the weak outer edge. The image is padded to the full disc, so the burn writes the whole disc. The layer-break guard is sized automatically; needs the disc Free Sectors set.</source>
         <translation>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so the data stays off the weak outer edge. The image is padded to the full disc, so the burn writes the whole disc. The layer-break guard is sized automatically; needs the disc Free Sectors set.</translation>
     </message>

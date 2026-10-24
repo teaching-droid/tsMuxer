@@ -1749,10 +1749,10 @@ bool IsoWriter::nearLayerBreak(const int upcomingBytes) const
         return false;
     const int64_t lbn = imageLBA();
     const int64_t lenSectors = (static_cast<int64_t>(upcomingBytes) + SECTOR_SIZE - 1) / SECTOR_SIZE;
-    for (const int bp : m_layerBreakPoints)
+    for (size_t i = 0; i < m_layerBreakPoints.size(); ++i)
     {
-        const int64_t zoneStart = static_cast<int64_t>(bp) - m_layerBreakGuardBeforeSectors;
-        const int64_t zoneEnd = static_cast<int64_t>(bp) + m_layerBreakGuardAfterSectors;
+        int64_t zoneStart = 0, zoneEnd = 0;
+        guardZone(i, zoneStart, zoneEnd);
         if (lbn < zoneEnd && lbn + lenSectors > zoneStart)
             return true;
     }
@@ -1806,10 +1806,11 @@ void IsoWriter::checkLayerBreakPoint(const int maxExtentSize)
         return;
     const int64_t lbn = imageLBA();
     const int64_t lenSectors = (static_cast<int64_t>(maxExtentSize) + SECTOR_SIZE - 1) / SECTOR_SIZE;
-    for (const int bp : m_layerBreakPoints)
+    for (size_t i = 0; i < m_layerBreakPoints.size(); ++i)
     {
-        const int64_t zoneStart = static_cast<int64_t>(bp) - m_layerBreakGuardBeforeSectors;
-        const int64_t zoneEnd = static_cast<int64_t>(bp) + m_layerBreakGuardAfterSectors;
+        const int bp = m_layerBreakPoints[i];
+        int64_t zoneStart = 0, zoneEnd = 0;
+        guardZone(i, zoneStart, zoneEnd);
         if (lbn < zoneEnd && lbn + lenSectors > zoneStart)
         {
             m_layerBreakPads.push_back({bp, lbn, zoneEnd});
@@ -1829,7 +1830,8 @@ void IsoWriter::padBeforeInterleavedPair(const int64_t pairBytes)
     checkLayerBreakPoint(upcoming);
 }
 
-bool IsoWriter::padOverZoneIfFileCrosses(const int64_t fileSizeBytes, const int64_t discCapacitySectors)
+bool IsoWriter::padOverZoneIfFileCrosses(const int64_t fileSizeBytes, const int64_t discCapacitySectors,
+                                         const int64_t restBytes, const int64_t maxEmptySectors)
 {
     if (m_layerBreakPoints.empty() || fileSizeBytes <= 0)
         return false;
@@ -1844,8 +1846,8 @@ bool IsoWriter::padOverZoneIfFileCrosses(const int64_t fileSizeBytes, const int6
     for (size_t i = 0; i < m_layerBreakPoints.size(); ++i)
     {
         const int bp = m_layerBreakPoints[i];
-        const int64_t zoneStart = static_cast<int64_t>(bp) - m_layerBreakGuardBeforeSectors;
-        const int64_t zoneEnd = static_cast<int64_t>(bp) + m_layerBreakGuardAfterSectors;
+        int64_t zoneStart = 0, zoneEnd = 0;
+        guardZone(i, zoneStart, zoneEnd);
         if (lbn >= zoneStart || lbn + fileSectors <= zoneStart)
             continue;  // file starts past this zone, or ends before reaching it
         // The file would cross this zone. Move it wholly past the break only if it then fits
@@ -1854,12 +1856,33 @@ bool IsoWriter::padOverZoneIfFileCrosses(const int64_t fileSizeBytes, const int6
         const int64_t fileEndIfMoved = zoneEnd + fileSectors;
         if (i + 1 < m_layerBreakPoints.size())
         {
-            const int64_t nextZoneStart =
-                static_cast<int64_t>(m_layerBreakPoints[i + 1]) - m_layerBreakGuardBeforeSectors;
+            int64_t nextZoneStart = 0, nextZoneEnd = 0;
+            guardZone(i + 1, nextZoneStart, nextZoneEnd);
             if (fileEndIfMoved > nextZoneStart)
                 return false;
         }
         if (fileEndIfMoved > capacity)
+            return false;
+        // The zones of --inner-only are sized for the data running on without a gap: the layer before the zone holds
+        // its share up to the zone. A file moved behind the zone leaves that share's end unused, and the data behind
+        // it then needs that much more room than the disc has left. Measured with four clips of 100 MB on a model disc
+        // of two layers: the second clip was moved, the last one ran past the end of the disc, and the image was
+        // refused once it had been written. So the rest of the data has to fit behind the zone, with every zone it
+        // will still reach and a few MB for the volume structures written at the end; and on a disc of more layers,
+        // where each layer keeps an even share, the move may leave no more of the layer unused than a pad's overrun.
+        if (restBytes > 0)
+        {
+            int64_t need = zoneEnd + (restBytes + SECTOR_SIZE - 1) / SECTOR_SIZE + 4096;
+            for (size_t k = i + 1; k < m_layerBreakPoints.size(); ++k)
+            {
+                int64_t laterStart = 0, laterEnd = 0;
+                guardZone(k, laterStart, laterEnd);
+                need += laterEnd - laterStart;
+            }
+            if (need > capacity)
+                return false;
+        }
+        if (maxEmptySectors >= 0 && zoneStart - lbn > maxEmptySectors)
             return false;
         m_layerBreakPads.push_back({bp, lbn, zoneEnd});
         writeZeroPad(zoneEnd - lbn);
@@ -1869,6 +1892,20 @@ bool IsoWriter::padOverZoneIfFileCrosses(const int64_t fileSizeBytes, const int6
 }
 
 void IsoWriter::setLayerBreakPoints(const std::vector<int>& lbns) { m_layerBreakPoints = lbns; }
+
+void IsoWriter::setLayerBreakGuards(const std::vector<int>& beforeSectors, const std::vector<int>& afterSectors)
+{
+    m_breakGuardBefore = beforeSectors;
+    m_breakGuardAfter = afterSectors;
+}
+
+void IsoWriter::guardZone(const size_t i, int64_t& zoneStart, int64_t& zoneEnd) const
+{
+    const int64_t bp = m_layerBreakPoints[i];
+    const bool own = i < m_breakGuardBefore.size() && i < m_breakGuardAfter.size();
+    zoneStart = bp - (own ? m_breakGuardBefore[i] : m_layerBreakGuardBeforeSectors);
+    zoneEnd = bp + (own ? m_breakGuardAfter[i] : m_layerBreakGuardAfterSectors);
+}
 
 void IsoWriter::setLayerBreakGuard(const int afterSectors)
 {

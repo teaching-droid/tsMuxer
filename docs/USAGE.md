@@ -9,7 +9,7 @@ The simplest thing to do is to use the tsMuxerGUI. A screenshot of that can be s
 ## Multi-layer disc authoring (this fork)
 
 This fork adds a "BDMV folder to ISO" tab and the `--bdmv-to-iso`, `--layer-break-guard`,
-`--layer-break-lbn`, `--disc-size` and `--allow-oversize` options for authoring dual-layer and
+`--layer-break-lbn`, `--disc-size`, `--allow-oversize` and `--inner-only` options for authoring dual-layer and
 BD-R XL discs. See [DISC_AUTHORING.md](DISC_AUTHORING.md) (also available in German as
 [DISC_AUTHORING_DE.md](DISC_AUTHORING_DE.md)) for the details and the layer-break calculator.
 
@@ -323,3 +323,4 @@ Parameter           | Description
 --label             | Disk label when muxing to ISO.
 --extra-iso-space   | Allocate extra space in 64K units for ISO metadata (file and directory names). Normally, tsMuxeR allocates this space automatically, and for a split it counts the parts from the split size, the split length or the chapters. A split it cannot count, such as --split-duration on a source that states no length, may need this option. When the space is too small, the mux ends with a message saying so.
 --constant-iso-hdr  | Generates an ISO header that does not depend on the program version or the current time. Normally, the ISO header's "application ID", "implementation ID", and "volume ID" fields are set to strings containing the program version and/or a random number, while the access/modification/creation times of the files in the image are set to the current time. This option disables this behaviour by filling these fields with hardcoded values and setting the file times to the equivalent of `Wed 1 Jul 20:00:00 UTC 2020` in the local timezone. Using this option is not recommended for normal usage, as it is meant only for testing ISO output validity.
+--inner-only        | ISO output with --disc-size: keep the data on the inner part of every layer and fill the outer edge of the disc with zeros. The disc is muxed into a folder beside the image first and the image is then laid out from it, as --bdmv-to-iso --inner-only lays it out, so the drive needs room for both while it runs. Replaces --layer-break-guard. See [DISC_AUTHORING.md](DISC_AUTHORING.md).

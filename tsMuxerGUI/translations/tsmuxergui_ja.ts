@@ -4041,6 +4041,11 @@ Build the ISO anyway?</source>
         <translation>データをディスクの内周側に保つ（外周を埋める）</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is kept on the inner part of every layer and the outer edge is filled with zeros. The disc is muxed into a folder beside the image first and the image is then laid out from it, as on the BDMV folder -&gt; ISO tab, so the drive needs room for both while it runs. The zeros at the layer breaks are sized automatically, so the layer-break guard is not used. ISO output on a disc of two or more layers.</source>
+        <translation>ディスクの外周は書き込みで最もエラーが起きやすい部分です。チェックを入れると、映画は各レイヤーの内側に置かれ、外周はゼロで埋められます。ディスクはまずイメージの隣のフォルダーに多重化され、そこから「BDMVフォルダー → ISO」タブと同じ方法でイメージが作られるため、実行中はドライブに両方を置ける空き容量が必要です。レイヤーブレイクのゼロは自動で決まるため、レイヤーブレイクガードは使われません。2層以上のディスクへのISO出力で使えます。</translation>
+    </message>
+    <message>
         <source>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so the data stays off the weak outer edge. The image is padded to the full disc, so the burn writes the whole disc. The layer-break guard is sized automatically; needs the disc Free Sectors set.</source>
         <translation>ディスクの外周は書き込み時に最もエラーが起きやすい部分です。これをオンにすると、映像は各層の内周トラック側に寄せられ、外周はゼロで埋められるので、データは弱い外周から離れた位置に保たれます。イメージはディスク全体まで埋められるため、書き込みはディスク全体に及びます。レイヤーブレイクのガードは自動的にサイズ調整されます。ディスクの Free Sectors の設定が必要です。</translation>
     </message>

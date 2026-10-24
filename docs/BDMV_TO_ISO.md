@@ -99,6 +99,10 @@ When you tick it:
 
 Use it when your priority is the most robust possible burn and you do not mind the image filling the whole disc. Leave it off if you would rather keep the image small and place a fixed guard yourself. It was verified on dual-layer BD-R DL: a disc that verified with a 41 MB uncorrectable defect right at the layer transition still played the movie flawlessly, because the defect fell inside the zero band. Requested by DreckSoft.
 
+On a disc of three or four layers (BD-R XL 100 GB and 128 GB) each layer keeps an even share of the movie at the centre of the disc. These discs are written from the centre outward on the first layer, back inward on the second, outward again on the third and inward on the fourth, so the first and the third layer change are at the outer edge and are padded, while the second is at the centre and gets no zeros. On a three-layer disc the image ends inside the third layer, and the rest of that layer stays unwritten. A single-layer disc has no layer change and nothing to pad, so the image is built as without the option.
+
+The same checkbox is on the Input tab, in the dual-layer group beside the meta file, when the output is a Blu-ray ISO and the chosen disc has two or more layers. tsMuxeR then muxes the disc into a folder beside the image first and lays the image out from that folder the way this tab does, with `Keep original file order` and the 3D option ticked, so both routes give the same image. While it runs, the drive needs room for that folder as well as the image. The folder is removed at the end; if the finished image does not fit the disc, the folder is kept as an ordinary Blu-ray folder, and this tab can make the image from it without muxing again.
+
 ## Advanced options
 
 `Also fill before the break` adds a second, smaller guard in front of the break (default 4 MB). The standard guard is asymmetric on purpose, because most defects sit at the start of the next layer; turn this on only for media that also fail just before the break.

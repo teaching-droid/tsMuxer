@@ -4041,6 +4041,11 @@ ISO trotzdem erstellen?</translation>
         <translation>Daten im inneren Disc-Bereich halten (den äußeren Rand auffüllen)</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is kept on the inner part of every layer and the outer edge is filled with zeros. The disc is muxed into a folder beside the image first and the image is then laid out from it, as on the BDMV folder -&gt; ISO tab, so the drive needs room for both while it runs. The zeros at the layer breaks are sized automatically, so the layer-break guard is not used. ISO output on a disc of two or more layers.</source>
+        <translation>Der äußere Rand einer Disc ist der fehleranfälligste Teil beim Brennen. Mit gesetztem Haken bleibt der Film auf dem inneren Teil jeder Schicht, und der äußere Rand wird mit Nullen gefüllt. Die Disc wird zuerst in einen Ordner neben dem Abbild gemuxt und das Abbild dann daraus angelegt, wie im Reiter BDMV-Ordner -&gt; ISO; das Laufwerk braucht dabei Platz für beides. Die Nullen an den Layer-Breaks werden automatisch bemessen, der Layer-Break-Schutz wird daher nicht verwendet. ISO-Ausgabe auf einer Disc mit zwei oder mehr Schichten.</translation>
+    </message>
+    <message>
         <source>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so the data stays off the weak outer edge. The image is padded to the full disc, so the burn writes the whole disc. The layer-break guard is sized automatically; needs the disc Free Sectors set.</source>
         <translation>Der äußere Rand einer Disc ist der fehleranfälligste Teil beim Brennen. Mit gesetztem Haken wird der Film zu den inneren Spuren jeder Schicht gepackt und der äußere Rand mit Nullen gefüllt, sodass die Daten vom schwachen Außenrand fernbleiben. Das Abbild wird auf die volle Disc aufgefüllt, der Brennvorgang beschreibt also die ganze Disc. Die Layer-Break-Schutzzone wird automatisch bemessen; die Free Sectors der Disc müssen gesetzt sein.</translation>
     </message>

@@ -1329,6 +1329,7 @@ void MuxerManager::warnUnknownMuxOpts(const string& opts)
                                                       "--disc-size",
                                                       "--dv-profile",
                                                       "--extra-iso-space",
+                                                      "--inner-only",
                                                       "--insertBlankPL",
                                                       "--keep-editions",
                                                       "--label",
@@ -1353,9 +1354,9 @@ void MuxerManager::warnUnknownMuxOpts(const string& opts)
                                                       "--title",
                                                       "--vbr",
                                                       "--vbv-len"};
-    static const std::set<std::string> commandLineOptions = {
-        "--3d-single-copy",   "--bdmv-to-iso", "--disc-capacity", "--inner-only",
-        "--keep-extra-files", "--lang-codes",  "--no-layer-fit",  "--original-order"};
+    static const std::set<std::string> commandLineOptions = {"--3d-single-copy",   "--bdmv-to-iso", "--disc-capacity",
+                                                             "--keep-extra-files", "--lang-codes",  "--no-layer-fit",
+                                                             "--original-order"};
     for (const auto& token : splitQuotedStr(opts.c_str(), ' '))
     {
         const string name = trimStr(token).substr(0, trimStr(token).find('='));
@@ -1485,6 +1486,10 @@ void MuxerManager::parseMuxOpt(const string& opts)
         {
             m_allowOversize = true;
         }
+        // It was a command line option of --bdmv-to-iso only and was ignored here with a warning: an image muxed
+        // directly could not keep its data on the inner part of the disc, only one made from a folder in a second step.
+        else if (paramPair[0] == "--inner-only")
+            m_innerOnly = true;
         else if (paramPair[0] == "--layer-break-guard")
         {
             if (paramPair.size() < 2)

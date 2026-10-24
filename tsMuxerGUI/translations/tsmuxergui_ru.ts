@@ -4042,6 +4042,11 @@ Build the ISO anyway?</source>
         <translation>Держать данные во внутренней области диска (заполнить внешний край)</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1"/>
+        <source>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is kept on the inner part of every layer and the outer edge is filled with zeros. The disc is muxed into a folder beside the image first and the image is then laid out from it, as on the BDMV folder -&gt; ISO tab, so the drive needs room for both while it runs. The zeros at the layer breaks are sized automatically, so the layer-break guard is not used. ISO output on a disc of two or more layers.</source>
+        <translation>Внешний край диска является самой подверженной ошибкам частью при записи. Если флажок установлен, фильм остаётся во внутренней части каждого слоя, а внешний край заполняется нулями. Сначала диск мультиплексируется в папку рядом с образом, затем образ собирается из неё, как на вкладке Папка BDMV -&gt; ISO, поэтому во время работы на диске нужно место для обоих. Нули на разрывах слоёв рассчитываются автоматически, поэтому защита разрыва слоя не используется. Вывод ISO на диск с двумя и более слоями.</translation>
+    </message>
+    <message>
         <source>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so the data stays off the weak outer edge. The image is padded to the full disc, so the burn writes the whole disc. The layer-break guard is sized automatically; needs the disc Free Sectors set.</source>
         <translation>Внешний край диска является самой подверженной ошибкам частью при записи. Если этот флажок установлен, фильм смещается к внутренним дорожкам каждого слоя, а внешняя область заполняется нулями, так что данные остаются вдали от слабого внешнего края. Образ дополняется до полного диска, поэтому запись охватывает весь диск. Защитная зона смены слоя рассчитывается автоматически; должны быть заданы Free Sectors диска.</translation>
     </message>
