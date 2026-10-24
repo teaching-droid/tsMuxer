@@ -1226,6 +1226,39 @@ void SliceUnit::nal_unit_header_mvc_extension()
     bitReader.skipBits(2);  // inter_view_flag, reserved_one_bit
 }
 
+bool SliceUnit::readFieldHeader(uint8_t* rbsp, const uint8_t* end,
+                                const std::function<const SPSUnit*(unsigned ppsId)>& spsOf, FieldHeader& head)
+{
+    head = FieldHeader{};
+    try
+    {
+        BitStreamReader reader{};
+        reader.setBuffer(rbsp, end);
+        head.firstMb = extractUEGolombCode(reader);
+        if (head.firstMb != 0)
+            return true;              // a further slice of its picture: the rest is not needed
+        extractUEGolombCode(reader);  // slice_type
+        head.ppsId = extractUEGolombCode(reader);
+        const SPSUnit* sps = spsOf(head.ppsId);
+        if (sps == nullptr)
+            return false;
+        if (sps->separate_colour_plane_flag)
+            reader.skipBits(2);  // colour_plane_id
+        head.frameNum = reader.getBits(sps->log2_max_frame_num);
+        if (!sps->frame_mbs_only_flag)
+        {
+            head.field = reader.getBit();
+            if (head.field)
+                head.bottom = reader.getBit();
+        }
+        return true;
+    }
+    catch (BitStreamException&)
+    {
+        return false;
+    }
+}
+
 bool SliceUnit::isIDR() const
 {
     return nal_unit_type == NALType::nuSliceIDR || (nal_unit_type == NALType::nuSliceExt && !non_idr_flag);

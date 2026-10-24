@@ -67,8 +67,9 @@ class MPEGStreamReader : public AbstractStreamReader
     }
 
     // Where the rate comes from for a stream that names none, when no fps= and no container rate is given either: the
-    // times of its packets in a transport stream. Asked only then, since it reads the file; without it, 25.
-    void setPacketFpsSource(std::function<double()> source) { m_packetFpsSource = std::move(source); }
+    // times of its packets in a transport stream. Asked only then, since it reads the file; without it, 25. It is told
+    // whether the stream may code fields (see AbstractDemuxer::getTrackPacketFps).
+    void setPacketFpsSource(std::function<double(bool fieldCoded)> source) { m_packetFpsSource = std::move(source); }
     // Of a playlist whose clips are cut to the parts played: whether the picture with this number (counted from 0, in
     // the order of decoding) begins a part. Its order count does not follow on from the pictures before it, which the
     // cut left out, so the count starts again from it as from an IDR picture.
@@ -173,7 +174,7 @@ class MPEGStreamReader : public AbstractStreamReader
     virtual bool codesFramesOnly(void* curNalUnit) { return false; }
     // The rate a descriptor written before updateFPS has run must carry: the one updateFPS will take
     double headerFps(double streamFps);
-    std::function<double()> m_packetFpsSource;
+    std::function<double(bool fieldCoded)> m_packetFpsSource;
     std::function<bool(int64_t)> m_partStartSource;
     [[nodiscard]] bool isPartStart() const { return m_partStartSource && m_partStartSource(m_totalFrameNum); }
     double m_packetFps = -1.0;  // -1: not asked yet

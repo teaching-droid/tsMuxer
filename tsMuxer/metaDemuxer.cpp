@@ -1919,11 +1919,11 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             // the file when it is needed, not before
             const int packetPid = SubTrackFilter::isSubTrack(pid) ? pid >> 16 : pid;
             mpegReader->setPacketFpsSource(
-                [this, file = fileList[0], packetPid]
+                [this, file = fileList[0], packetPid](const bool fieldCoded)
                 {
                     const auto it = m_containerReader.m_demuxers.find(file);
                     return it != m_containerReader.m_demuxers.end() && it->second.m_demuxer
-                               ? it->second.m_demuxer->getTrackPacketFps(packetPid)
+                               ? it->second.m_demuxer->getTrackPacketFps(packetPid, fieldCoded)
                                : 0.0;
                 });
         }
@@ -3461,14 +3461,16 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
                 {
                     double containerFps = correctFps(demuxer->getTrackFps(itr.first));
                     // A stream that names no rate in a transport stream: the times of its pictures, as the mux takes
-                    // them. Not for a field coded stream, whose times may be those of its fields; an interlaced one
-                    // coded as frames (MBAFF) has the time of a frame for each picture.
+                    // them. A field coded stream, whose times may be those of its fields, gets a rate only where the
+                    // demuxer can tell its fields from its frames (H.264); an interlaced one coded as frames (MBAFF)
+                    // has the time of a frame for each picture.
                     const size_t res = trackRez.streamDescr.find("Resolution: ");
                     const size_t scan =
                         res == string::npos ? res : trackRez.streamDescr.find_first_not_of("0123456789:x", res + 12);
                     const bool interlaced = scan != string::npos && trackRez.streamDescr[scan] == 'i';
-                    if (containerFps <= 0.0 && (!interlaced || trackRez.framesOnly))
-                        containerFps = correctFps(demuxer->getTrackPacketFps(itr.first));
+                    if (containerFps <= 0.0)
+                        containerFps =
+                            correctFps(demuxer->getTrackPacketFps(itr.first, interlaced && !trackRez.framesOnly));
                     if (containerFps > 0.0)
                     {
                         if (fpsNotFoundPos != string::npos)

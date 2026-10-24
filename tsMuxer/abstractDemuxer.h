@@ -148,7 +148,9 @@ class AbstractDemuxer
     [[nodiscard]] virtual double getTrackFps(uint32_t trackId) { return 0.0; }
     // The rate the times of a video track's packets give, for a stream that names no rate of its own: asked only then,
     // in place of the default of 25. A transport stream answers from its PES times; the other demuxers say 0.
-    [[nodiscard]] virtual double getTrackPacketFps(uint32_t trackId) { return 0.0; }
+    // fieldCoded: the stream may code its pictures as fields, whose times may be those of its fields. Then only a
+    // rate that is sure to be one of frames is given.
+    [[nodiscard]] virtual double getTrackPacketFps(uint32_t trackId, bool fieldCoded) { return 0.0; }
     // Whether the picture of a video track with this number (counted from 0, in the order of decoding) is the first
     // picture of a part cut from a clip of a playlist, after which the pictures before it are not there (TSDemuxer)
     [[nodiscard]] virtual bool isPartStartPicture(int32_t pid, int64_t picture) { return false; }

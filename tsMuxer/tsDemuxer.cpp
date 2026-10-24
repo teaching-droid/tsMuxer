@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <map>
+#include <memory>
 #include <set>
 #include <vector>
 
@@ -12,6 +14,7 @@
 #include "bitmapSubtitles.h"
 #include "bufferedFileReader.h"
 #include "matroskaParser.h"
+#include "nalUnits.h"
 #include "vodCoreException.h"
 #include "vod_common.h"
 
@@ -1342,6 +1345,18 @@ namespace
 // Counts the pictures that begin in each PES of a video stream, from the NAL unit (or VC-1 start code) after each
 // start code: the first slice of a picture, or a VVC picture header. A start code split between two TS packets is
 // still found, as the bytes run on through one counter.
+//
+// ** H.264 CODED AS FIELDS (PAFF). ** Each field has a first slice of its own. A PES that carried a field pair counted
+// two pictures and gave no rate, and a PES for each field gave the field rate, which the readers refuse for an
+// interlaced stream: both were muxed at 25, and a 29.97 disc clip written without timing played 17 % slow (600 frames
+// over 23.96 s, not 19.99 s). So for H.264 the head of each first slice is read, with the SPS and PPS met before it,
+// and the slice is a frame, a first field, or the second field of a pair: of the other parity, directly after a field
+// that has no pair yet, with its frame_num, and no IDR (the second field of an IDR picture is not one). A reference
+// field and a non-reference field are paired as well. A second field is no new picture, and a PES whose first
+// picture start is one gives no time, as its time is that of a field. A first slice that cannot be read so, as
+// before the first SPS of a cut stream, gives its PES no time either: a wrong reading would give a field stream the
+// field rate and play it twice as fast, so where nothing can be told nothing is said. The NAL units are gathered
+// across the TS packets of their PES, so a parameter set or slice header split between packets is read whole.
 class PictureStarts
 {
    public:
@@ -1367,13 +1382,26 @@ class PictureStarts
     void newPes()
     {
         m_inPes = 0;
+        m_first = Kind::NONE;
+        m_unknown = false;
         m_last = 0xffffffff;
         m_have = -1;
+    }
+    // The PES ends: an H.264 NAL unit still being gathered was its last one
+    void endPes()
+    {
+        if (m_type == StreamType::VIDEO_H264)
+            endNal();
     }
     void feed(const uint8_t* p, const uint8_t* end)
     {
         if (m_need == 0)
             return;
+        if (m_type == StreamType::VIDEO_H264)
+        {
+            feedH264(p, end);
+            return;
+        }
         for (; p < end; ++p)
         {
             if (m_have >= 0)
@@ -1391,19 +1419,153 @@ class PictureStarts
                 m_have = 0;
         }
     }
+    // The pictures that begin in the PES; for H.264 the frames and first fields
     [[nodiscard]] int inPes() const { return m_inPes; }
+    // Whether the time in the header of the PES is the time of a picture. A PES in which no picture starts keeps its
+    // time, as before.
+    [[nodiscard]] bool givesTime() const { return !m_unknown && m_first != Kind::SECOND_FIELD; }
 
    private:
+    enum class Kind
+    {
+        NONE,
+        FRAME,
+        FIRST_FIELD,
+        SECOND_FIELD
+    };
+    // What is gathered of an H.264 NAL unit: an SPS whole, of a PPS its two ids, of a slice its header as far as
+    // bottom_field_flag (at most about 11 bytes, with room for emulation prevention bytes)
+    static constexpr size_t SPS_BYTES = 4096;
+    static constexpr size_t PPS_BYTES = 16;
+    static constexpr size_t SLICE_BYTES = 48;
+    static constexpr int NO_NAL = -1;
+    static constexpr int NAL_HEADER_NEXT = -2;
+
+    void feedH264(const uint8_t* p, const uint8_t* end)
+    {
+        for (; p < end; ++p)
+        {
+            m_last = m_last << 8 | *p;
+            if ((m_last & 0xffffff) == 1)
+            {
+                // the zero bytes of the start code are not part of the NAL unit before it
+                while (!m_nal.empty() && m_nal.back() == 0) m_nal.pop_back();
+                endNal();
+                m_nalType = NAL_HEADER_NEXT;
+                continue;
+            }
+            if (m_nalType == NAL_HEADER_NEXT)
+            {
+                const int type = *p & 0x1f;
+                m_nalBytes = type == 7 ? SPS_BYTES : type == 8 ? PPS_BYTES : type == 1 || type == 5 ? SLICE_BYTES : 0;
+                m_nalType = m_nalBytes > 0 ? type : NO_NAL;
+            }
+            if (m_nalType >= 0)
+            {
+                m_nal.push_back(*p);
+                if (m_nal.size() >= m_nalBytes)
+                    endNal();  // all that is read of it is here
+            }
+        }
+    }
+    void endNal()
+    {
+        const int type = m_nalType;
+        m_nalType = NO_NAL;
+        if (type == 7)
+            readSps();
+        else if (type == 8)
+            readPps();
+        else if (type == 1 || type == 5)
+            readSlice(type == 5);
+        m_nal.clear();
+    }
+    void readSps()
+    {
+        auto sps = std::make_unique<SPSUnit>();
+        sps->decodeBuffer(m_nal.data(), m_nal.data() + m_nal.size());
+        if (sps->deserialize() != 0)
+        {
+            m_sps.clear();  // which one it was cannot be told: none is trusted until one is read again
+            return;
+        }
+        const unsigned id = sps->seq_parameter_set_id;
+        m_sps[id] = std::move(sps);
+    }
+    void readPps()
+    {
+        uint8_t rbsp[PPS_BYTES + 8]{};
+        const int len = NALUnit::decodeNAL(m_nal.data() + 1, m_nal.data() + m_nal.size(), rbsp, sizeof rbsp);
+        try
+        {
+            BitStreamReader reader{};
+            reader.setBuffer(rbsp, rbsp + (std::max)(len, 0));
+            const unsigned ppsId = NALUnit::extractUEGolombCode(reader);
+            const unsigned spsId = NALUnit::extractUEGolombCode(reader);
+            if (ppsId < 256 && spsId < 32)
+            {
+                m_pps[ppsId] = spsId;
+                return;
+            }
+        }
+        catch (BitStreamException&)
+        {
+        }
+        m_pps.clear();  // as for an SPS that cannot be read
+    }
+    void readSlice(const bool idr)
+    {
+        uint8_t rbsp[SLICE_BYTES + 8]{};
+        const int len = NALUnit::decodeNAL(m_nal.data() + 1, m_nal.data() + m_nal.size(), rbsp, sizeof rbsp);
+        SliceUnit::FieldHeader head;
+        const bool read = len > 0 && SliceUnit::readFieldHeader(
+                                         rbsp, rbsp + len,
+                                         [this](const unsigned ppsId) -> const SPSUnit*
+                                         {
+                                             const auto pps = m_pps.find(ppsId);
+                                             if (pps == m_pps.end())
+                                                 return nullptr;
+                                             const auto sps = m_sps.find(pps->second);
+                                             return sps == m_sps.end() ? nullptr : sps->second.get();
+                                         },
+                                         head);
+        if (read && head.firstMb != 0)
+            return;  // a further slice of its picture
+        if (!read)
+        {
+            // a first slice, or one too short to tell, with no SPS or PPS for it yet, or damaged
+            m_unknown = true;
+            m_unpaired = false;
+            return;
+        }
+        Kind kind;
+        if (!head.field)
+        {
+            kind = Kind::FRAME;
+            m_unpaired = false;
+        }
+        else if (m_unpaired && head.bottom != m_unpairedBottom && head.frameNum == m_unpairedFrameNum && !idr)
+        {
+            kind = Kind::SECOND_FIELD;
+            m_unpaired = false;
+        }
+        else
+        {
+            kind = Kind::FIRST_FIELD;
+            m_unpaired = true;
+            m_unpairedBottom = head.bottom;
+            m_unpairedFrameNum = head.frameNum;
+        }
+        if (kind != Kind::SECOND_FIELD)
+            ++m_inPes;
+        if (m_first == Kind::NONE)
+            m_first = kind;
+    }
     [[nodiscard]] bool isPictureStart() const
     {
         const uint8_t* h = m_header;
         switch (m_type)
         {
-        case StreamType::VIDEO_H264:  // a slice with first_mb_in_slice 0
-        {
-            const int type = h[0] & 0x1f;
-            return (type == 1 || type == 5) && h[1] & 0x80;
-        }
         case StreamType::VIDEO_H265:  // a slice of layer 0 with first_slice_segment_in_pic_flag
         {
             const int type = h[0] >> 1 & 0x3f;
@@ -1428,6 +1590,17 @@ class PictureStarts
     uint32_t m_last = 0xffffffff;
     uint8_t m_header[3]{};
     int m_have = -1;  // -1: no start code just read
+    // H.264
+    Kind m_first = Kind::NONE;  // the first picture start of the PES
+    bool m_unknown = false;     // a slice in the PES that may begin a picture and could not be read
+    std::vector<uint8_t> m_nal;
+    int m_nalType = NO_NAL;
+    size_t m_nalBytes = 0;
+    std::map<unsigned, std::unique_ptr<SPSUnit>> m_sps;
+    std::map<unsigned, unsigned> m_pps;  // pic_parameter_set_id: seq_parameter_set_id
+    bool m_unpaired = false;             // the last picture start was a field that has no pair yet
+    bool m_unpairedBottom = false;
+    unsigned m_unpairedFrameNum = 0;
 };
 
 // The times in the PES headers of one PID in one file, in file order, with what stops them giving the rate.
@@ -1440,7 +1613,9 @@ struct PesTimes
     bool unreadable = false;    // not a transport stream
 };
 
-PesTimes readPesTimes(const std::string& name, const uint32_t pid, const StreamType type, const size_t maxTimes,
+// pictures: the counter of the track, which goes on from one file of a join or a playlist to the next, as the stream
+// does: a later file need not repeat the parameter sets, and its pictures are read with those met before.
+PesTimes readPesTimes(const std::string& name, const uint32_t pid, PictureStarts& pictures, const size_t maxTimes,
                       const int64_t maxBytes)
 {
     PesTimes r;
@@ -1452,15 +1627,26 @@ PesTimes readPesTimes(const std::string& name, const uint32_t pid, const StreamT
     }
     static constexpr int CHUNK = 4 * 1024 * 1024;
     std::vector<uint8_t> buf(CHUNK + 2 * 192);
-    PictureStarts pictures(type);
     bool inPes = false;
-    int stride = 0;   // 188, or 192 for an M2TS: found from the first packets
-    size_t have = 0;  // bytes in buf
-    // The PES in progress when the window is full is counted too: its pictures so far are all it can hold.
+    int64_t pesTime = 0;  // the time in the header of the PES in progress
+    int stride = 0;       // 188, or 192 for an M2TS: found from the first packets
+    size_t have = 0;      // bytes in buf
+    // The PES in progress when the window is full is counted too: its pictures so far are all it can hold. Its time is
+    // taken when it ends, as only then is it known whether it is the time of a picture (see PictureStarts).
     const auto endPes = [&]
     {
-        if (inPes && pictures.inPes() > 1)
+        pictures.endPes();
+        if (!inPes)
+            return;
+        inPes = false;
+        if (pictures.inPes() > 1)
             r.manyPictures = true;
+        else if (pictures.givesTime())
+        {
+            if (!r.times.empty() && pesTime < r.times.front() - (1ll << 32))
+                pesTime += 1ll << 33;  // the 33-bit clock wrapped
+            r.times.push_back(pesTime);
+        }
     };
     while (r.times.size() < maxTimes && !r.withoutTime && !r.manyPictures && r.bytes < maxBytes)
     {
@@ -1526,17 +1712,15 @@ PesTimes readPesTimes(const std::string& name, const uint32_t pid, const StreamT
             if (pes[0] != 0 || pes[1] != 0 || pes[2] != 1)
                 continue;
             endPes();
+            if (r.manyPictures || r.times.size() >= maxTimes)
+                break;
             if (!(pes[7] & 0x80))
             {
                 r.withoutTime = true;
                 break;
             }
-            int64_t pts = static_cast<int64_t>(pes[9] & 0x0e) << 29 | static_cast<int64_t>(pes[10]) << 22 |
-                          static_cast<int64_t>(pes[11] & 0xfe) << 14 | static_cast<int64_t>(pes[12]) << 7 |
-                          pes[13] >> 1;
-            if (!r.times.empty() && pts < r.times.front() - (1ll << 32))
-                pts += 1ll << 33;  // the 33-bit clock wrapped
-            r.times.push_back(pts);
+            pesTime = static_cast<int64_t>(pes[9] & 0x0e) << 29 | static_cast<int64_t>(pes[10]) << 22 |
+                      static_cast<int64_t>(pes[11] & 0xfe) << 14 | static_cast<int64_t>(pes[12]) << 7 | pes[13] >> 1;
             inPes = true;
             pictures.newPes();
             const int payload = off + 9 + pes[8];
@@ -1567,8 +1751,14 @@ PesTimes readPesTimes(const std::string& name, const uint32_t pid, const StreamT
 // PES start in the window carries no time (H.222.0 asks for one only every 0.7 s), when a PES carries more than one
 // picture, when the steps vary, or when the rate they give is no standard one: a stream without B pictures that put
 // two pictures in each PES stepped two pictures at a time and was muxed at 11.988, at half its speed.
-double TSDemuxer::getTrackPacketFps(const uint32_t trackId)
+// A stream that may code fields gets a rate only from an H.264 track, whose field pairs are counted as one picture
+// (PictureStarts); for every other codec the times of its PES may be those of fields, and it keeps the default.
+double TSDemuxer::getTrackPacketFps(const uint32_t trackId, const bool fieldCoded)
 {
+    const auto info = m_pmt.pidList.find(static_cast<int>(trackId));
+    const StreamType type = info != m_pmt.pidList.end() ? info->second.m_streamType : StreamType::RESERVED;
+    if (fieldCoded && type != StreamType::VIDEO_H264)
+        return 0.0;
     if (const auto known = m_packetFps.find(trackId); known != m_packetFps.end())
         return known->second;
     m_packetFps[trackId] = 0.0;
@@ -1580,10 +1770,9 @@ double TSDemuxer::getTrackPacketFps(const uint32_t trackId)
         for (size_t i = 1; i < m_joinFiles.size(); ++i) files.push_back(unquoteStr(m_joinFiles[i]));
     else
         for (const std::string& later : m_laterFiles) files.push_back(unquoteStr(later));
-    const auto info = m_pmt.pidList.find(static_cast<int>(trackId));
-    const StreamType type = info != m_pmt.pidList.end() ? info->second.m_streamType : StreamType::RESERVED;
 
     static constexpr size_t PICTURES = 240;
+    PictureStarts pictures(type);
     std::vector<int64_t> steps;
     size_t timed = 0;
     int64_t read = 0;
@@ -1591,7 +1780,7 @@ double TSDemuxer::getTrackPacketFps(const uint32_t trackId)
     {
         if (timed >= PICTURES || read >= DETECT_STREAM_BUFFER_SIZE)
             break;
-        PesTimes clip = readPesTimes(name, trackId, type, PICTURES - timed, DETECT_STREAM_BUFFER_SIZE - read);
+        PesTimes clip = readPesTimes(name, trackId, pictures, PICTURES - timed, DETECT_STREAM_BUFFER_SIZE - read);
         if (clip.unreadable && name == files.front())
             return 0.0;
         if (clip.withoutTime || clip.manyPictures)

@@ -1,6 +1,7 @@
 #ifndef NAL_UNITS_H_
 #define NAL_UNITS_H_
 
+#include <functional>
 #include <map>
 #include <string>
 #include <unordered_set>
@@ -406,6 +407,21 @@ class SliceUnit final : public NALUnit
     [[nodiscard]] bool isIFrame() const;
     int deserializeSliceType(uint8_t* buffer, uint8_t* end);
     int deserializeSliceHeader(const std::map<uint32_t, SPSUnit*>& spsMap, const std::map<uint32_t, PPSUnit*>& ppsMap);
+
+    // The head of a slice header, as far as it tells a frame from a field, read without the PPS read in full: what
+    // H264StreamReader::codesFramesOnly and the PES reader of a transport stream (TSDemuxer::getTrackPacketFps) need.
+    struct FieldHeader
+    {
+        unsigned firstMb = 0;   // first_mb_in_slice; the rest is read only where it is 0
+        unsigned ppsId = 0;     // pic_parameter_set_id
+        unsigned frameNum = 0;  // frame_num
+        bool field = false;     // field_pic_flag
+        bool bottom = false;    // bottom_field_flag
+    };
+    // rbsp: the slice NAL unit after its header byte, its emulation prevention bytes taken out. spsOf gives the SPS
+    // the pic_parameter_set_id names, or nullptr. False when the bytes end too early or no SPS is known for it.
+    static bool readFieldHeader(uint8_t* rbsp, const uint8_t* end,
+                                const std::function<const SPSUnit*(unsigned ppsId)>& spsOf, FieldHeader& head);
     void nal_unit_header_svc_extension();
     void nal_unit_header_mvc_extension();
 

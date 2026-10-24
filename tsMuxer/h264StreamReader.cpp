@@ -96,25 +96,14 @@ bool H264StreamReader::codesFramesOnly(void* curNalUnit)
         const int len = NALUnit::decodeNAL(nal + 1, (std::min)(nal + 25, m_bufEnd), header, sizeof(header));
         if (len <= 0)
             continue;
-        try
-        {
-            BitStreamReader reader{};
-            reader.setBuffer(header, header + len);
-            if (NALUnit::extractUEGolombCode(reader) != 0)
-                continue;                          // not the first slice of its picture
-            NALUnit::extractUEGolombCode(reader);  // slice_type
-            NALUnit::extractUEGolombCode(reader);  // pic_parameter_set_id
-            if (sps->separate_colour_plane_flag)
-                reader.skipBits(2);  // colour_plane_id
-            reader.skipBits(sps->log2_max_frame_num);
-            if (reader.getBit())  // field_pic_flag
-                return false;
-            ++frames;
-        }
-        catch (BitStreamException&)
-        {
+        SliceUnit::FieldHeader head;
+        if (!SliceUnit::readFieldHeader(header, header + len, [sps](unsigned) { return sps; }, head))
             return false;
-        }
+        if (head.firstMb != 0)
+            continue;  // not the first slice of its picture
+        if (head.field)
+            return false;
+        ++frames;
     }
     return frames > 0;
 }

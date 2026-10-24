@@ -73,7 +73,7 @@ class TSDemuxer final : public AbstractDemuxer
             return 0;
         return start->second;
     }
-    double getTrackPacketFps(uint32_t trackId) override;
+    double getTrackPacketFps(uint32_t trackId, bool fieldCoded) override;
     bool isPartStartPicture(const int32_t pid, const int64_t picture) override
     {
         const auto starts = m_partStartPictures.find(pid);
