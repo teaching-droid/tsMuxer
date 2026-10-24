@@ -239,7 +239,11 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A join of WAV files whose first file holds less audio than its header says** read the next file's header as sound, and the rest of the join out of step with its samples, which is noise. The next file is now found where it begins, with a warning.
 
-* **Damage near the start of an AC-3, E-AC-3, DTS or AAC track of a transport stream,** even one lost packet, made the whole track unrecognised: the listing said "Can't detect stream type" and the track was left out without a warning. The check now goes on past the damage.
+* **Damage near the start of an AC-3, E-AC-3, DTS or AAC track of a transport stream,** even one lost packet, made the whole track unrecognised: the listing said "Can't detect stream type" and the track was left out without a warning. The check now goes on past the damage. A track the stream declares as AC-3, E-AC-3, TrueHD or DTS is also found when packets are lost all through it, and a damaged TrueHD track keeps its AC-3 core.
+
+* **In a join of DTS files whose first file ends inside a frame,** the part of that frame and the start of the next file went out as one frame, which a player cannot decode. The part is now left out, with a warning; of DTS-HD the whole core is kept. A DTS frame that loses a TS packet inside it is left out the same way.
+
+* **A file of a few bytes, of any kind, was listed as a subtitle stream (SUP).** It now gives "Can't detect stream type".
 
 * **An empty .dts file** stops with "produced no frames at all". The mux crashed.
 

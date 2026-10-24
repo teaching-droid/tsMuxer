@@ -484,6 +484,8 @@ int AC3Codec::decodeFrame(uint8_t* buf, uint8_t* end, int& skipBytes)
                     return NOT_ENOUGH_BUFFER;
                 m_true_hd_mode = mlp.decodeFrame(trueHDData, trueHDData + 21);
             }
+            else if (rez > 0 && !isSyncWord(trueHDData))
+                m_true_hd_mode = trueHDMajorSyncAhead(trueHDData, end);
         }
 
         if ((m_true_hd_mode))  // omit AC3+
@@ -554,6 +556,40 @@ int AC3Codec::decodeFrame(uint8_t* buf, uint8_t* end, int& skipBytes)
     {
         return NOT_ENOUGH_BUFFER;
     }
+}
+
+// ** TRUEHD IS FOUND BEHIND ANY AC-3 FRAME, NOT ONLY BEHIND THE FIRST. ** The check took a TrueHD track with its AC-3
+// core (a disc's TrueHD) for TrueHD only when the unit right behind an AC-3 frame was a major sync, and that is so
+// for the first frame of a track, as a track begins on a major sync, but seldom later: an AC-3 frame comes once in
+// some forty units at 48 kHz, and a major sync is one unit in many. Every chain of frames found behind damage near
+// the start (see SimplePacketizerReader::checkStream) began on a later frame, did not meet TrueHD, broke on the
+// first unit behind its first frame, and the AC-3 reader turned the track down: the TrueHD track of a disc with
+// its 3rd or 8th TS packet lost was listed as TrueHD without its core (A_MLP), which leaves the core out of the
+// mux. Here the units behind the frame are walked by the length each gives, over the AC-3 frames between them, to
+// the next major sync, which must decode. Lengths that do not chain, or data that ends first, are not TrueHD, as
+// before. At most MAX_UNITS units are walked, so data that is not TrueHD costs little.
+bool AC3Codec::trueHDMajorSyncAhead(const uint8_t* p, const uint8_t* end)
+{
+    static constexpr int MAX_UNITS = 512;
+    for (int units = 0; units < MAX_UNITS && end - p >= 8; ++units)
+    {
+        if (isSyncWord(p))
+        {
+            const int frameLen = frameSizeAt(p, end);
+            if (frameLen <= 0)
+                return false;
+            p += frameLen;
+            continue;
+        }
+        const int unitLen = (((p[0] & 0x0f) << 8) | p[1]) * 2;
+        if (unitLen < 8 || unitLen > end - p)
+            return false;
+        if (isHDSyncWord(p + 4))
+            return unitLen >= MLP_FULL_HEADER_LEN &&
+                   mlp.decodeFrame(const_cast<uint8_t*>(p), const_cast<uint8_t*>(p) + unitLen);
+        p += unitLen;
+    }
+    return false;
 }
 
 // ** A TIMECODE BLOCK BETWEEN THE FRAMES. **

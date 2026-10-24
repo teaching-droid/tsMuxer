@@ -148,6 +148,7 @@ class AC3Codec
     bool m_timecodeBlockSaid = false;
 
     int timecodeBlockAfter(const uint8_t* next, const uint8_t* end);
+    bool trueHDMajorSyncAhead(const uint8_t* p, const uint8_t* end);
 
     static bool crc32(const uint8_t* buf, int length);
     AC3ParseError parseHeader(uint8_t* buf, const uint8_t* end);

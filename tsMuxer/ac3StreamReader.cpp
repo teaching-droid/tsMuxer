@@ -273,7 +273,9 @@ int AC3StreamReader::wholeFrameSizeAt(const uint8_t* p, const uint8_t* end)
     return frameSizeAt(p, end);
 }
 
-// AC-3 and E-AC-3 as the Blu-ray and the ATSC stream types name them, the secondary audio of a disc included
+// AC-3 and E-AC-3 as the Blu-ray and the ATSC stream types name them, the secondary audio of a disc included, and
+// the TrueHD of a disc, which carries its AC-3 core braided in: its AC-3 frames are checked on their CRC as any other.
+// A TrueHD stream without a core has none, and goes on to the TrueHD reader as before.
 bool AC3StreamReader::declaredByContainer() const
 {
     if (m_containerType != ContainerType::ctTS && m_containerType != ContainerType::ctM2TS)
@@ -284,10 +286,22 @@ bool AC3StreamReader::declaredByContainer() const
     case StreamType::AUDIO_EAC3:
     case StreamType::AUDIO_EAC3_ATSC:
     case StreamType::AUDIO_EAC3_SECONDARY:
+    case StreamType::AUDIO_TRUE_HD:
         return true;
     default:
         return false;
     }
+}
+
+// The codec part as a new reader has it: TrueHD mode, the MLP state, the E-AC-3 programs, the Atmos counters and the
+// layout. Only the settings stay. checkStream runs on a reader of its own, before any frame is read for the mux.
+void AC3StreamReader::resetDecodeState()
+{
+    const bool downconvert = m_downconvertToAC3;
+    const bool testMode = m_testMode;
+    static_cast<AC3Codec&>(*this) = AC3Codec();
+    m_downconvertToAC3 = downconvert;
+    m_testMode = testMode;
 }
 
 int AC3StreamReader::flushPacket(AVPacket& avPacket)

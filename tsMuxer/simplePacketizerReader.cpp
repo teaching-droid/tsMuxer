@@ -1216,6 +1216,9 @@ static constexpr int64_t RESUME_SPAN = 8 * 1024 * 1024;
 // A track its transport stream declares as this codec (declaredByContainer) needs this many frames in a row in a chain
 // after the first: the stream type already says what it is, and the frames only have to show that the data agrees.
 static constexpr int DECLARED_CHAIN_FRAMES = 3;
+// A track its transport stream declares as this codec is accepted on this many good frames ANYWHERE in the first
+// RESUME_SPAN of its data, back to back or not, when no chain was found. See goodFramesAnywhere.
+static constexpr int DECLARED_GOOD_FRAMES = 5;
 
 CheckStreamRez SimplePacketizerReader::checkStream(uint8_t* buffer, const int len, const ContainerType containerType,
                                                    const int containerDataType, const int containerStreamIndex)
@@ -1254,6 +1257,16 @@ CheckStreamRez SimplePacketizerReader::checkStream(uint8_t* buffer, const int le
     const uint8_t* const lastChainStart = end - buffer > RESUME_SPAN ? buffer + RESUME_SPAN : end;
     for (int chain = 0; chain < MAX_FRAME_CHAINS && from < lastChainStart; ++chain)
     {
+        // ** EVERY CHAIN BEGINS FROM A CLEAN STATE. ** A reader keeps what the frames of a chain told it: TrueHD found
+        // behind an AC-3 frame and the state of its units, the extension substream of DTS-HD, the Atmos and DTS:X
+        // counters, the rate and the channels. A chain that broke handed all that to the next, which began on other
+        // frames, so what the listing said of an accepted chain could depend on the damage in front of it, and on a
+        // TrueHD track it began in a TrueHD unit as if it were one. A chain behind a break now starts as the first
+        // one did. Measured on TrueHD with its AC-3 core (Atmos and 7.1), DTS-HD MA with DTS:X, E-AC-3 with Atmos
+        // and E-AC-3 7.1, each with the 3rd, 8th, 20th or 60th TS packet of the track lost: every listing is the
+        // one of the undamaged track (TrueHD needed AC3Codec::trueHDMajorSyncAhead as well).
+        if (chain > 0)
+            resetDecodeState();
         uint8_t* const brokeAt = frameChainBreak(from, end, chain == 0 ? CHECK_FRAMES_COUNT : resumedChainFrames,
                                                  chain == 0, lastChainStart);
         if (brokeAt == nullptr)
@@ -1267,8 +1280,94 @@ CheckStreamRez SimplePacketizerReader::checkStream(uint8_t* buffer, const int le
             break;  // no frame of this codec behind the break
         from = brokeAt + 1;
     }
+    if (declaredByContainer() && frameProvesItself() && goodFramesAnywhere(buffer, end))
+    {
+        setTestMode(false);
+        rez.codecInfo = getCodecInfo();
+        rez.streamDescr = getStreamInfo();
+        return rez;
+    }
     setTestMode(false);
     return rez;
+}
+
+// ** A DECLARED TRACK IS TAKEN ON GOOD FRAMES, WHERE THEY STAND. ** A stream that loses one TS packet in 30 has no
+// chain at all. Measured on AC-3, E-AC-3 and DTS tracks of a TS with one packet in 30 lost: the longest run of
+// frames back to back in the first 8 MiB was three, in two places or one, so all three tracks said "Can't detect
+// stream type" and were left out of the job, while most of their frames were whole. Worse on a disc: E-AC-3 behind
+// its AC-3 core, a PES of 15 packets for each core frame and each E-AC-3 frame, lost the last packet of every E-AC-3
+// frame, so no period was whole anywhere; DTS-HD MA, whose frames take 60 packets and more, lost two in every
+// frame. The stream type of the PMT already says what the track is.
+//
+// So for a declared track a frame counts where it is, if it is good on its own: findFrame found it, or it follows a
+// good one where that ends, and decodeFrame read it whole (the AC-3 CRC over the whole frame; DTS has no CRC, and its
+// decodeFrame asks that the frame does not run into the next one and that its length is one the header allows).
+// One frame counts for each period of sound: the one that moves the time on, or, where the period broke behind a
+// good frame that does not (an AC-3 core whose E-AC-3 frame was damaged, a DTS core whose extension was), that frame.
+// Frames are counted by their layout (frameLayoutKey: the sample rate, the channels and, for DTS, the frame length
+// and the samples a frame), and DECLARED_GOOD_FRAMES of one layout are enough, so a false frame cannot decide the
+// layout. A track that is not this codec does not get there: other data in a track declared as AC-3 must meet the
+// 16 bit CRC on every frame, and five DTS frames of one layout in random data, each with a 32 bit sync, are out of
+// reach. A track no container declares, and every raw file, keep the strict rule above, and so does a declared AAC
+// track: an ADTS header proves nothing alone (see frameProvesItself).
+bool SimplePacketizerReader::goodFramesAnywhere(uint8_t* buffer, uint8_t* end)
+{
+    const uint8_t* const stop = end - buffer > RESUME_SPAN ? buffer + RESUME_SPAN : end;
+    resetDecodeState();
+    static constexpr int MAX_LAYOUTS = 8;
+    uint64_t layouts[MAX_LAYOUTS]{};
+    int counts[MAX_LAYOUTS]{};
+    int nLayouts = 0;
+    const auto count = [&](const uint64_t key)
+    {
+        int k = 0;
+        while (k < nLayouts && layouts[k] != key) ++k;
+        if (k == nLayouts)
+        {
+            if (nLayouts == MAX_LAYOUTS)
+                return false;
+            layouts[nLayouts++] = key;
+        }
+        return ++counts[k] >= DECLARED_GOOD_FRAMES;
+    };
+    uint8_t* from = buffer;
+    while (from < stop)
+    {
+        uint8_t* frame = findFrame(from, end);
+        if (frame == nullptr || frame < from || frame >= stop)
+            return false;
+        // The frames behind a good frame are read where it ends, as the demux reads them: the DTS-HD extension
+        // substream and the E-AC-3 frame behind an AC-3 core are found there, and no search would find them.
+        bool waiting = false;  // a good frame that does not move the time on, not yet followed by one that does
+        uint64_t waitingKey = 0;
+        while (frame < end)
+        {
+            int skipBytes = 0;
+            int skipBeforeBytes = 0;
+            const int frameLen = decodeFrame(frame, end, skipBytes, skipBeforeBytes);
+            const int64_t step = static_cast<int64_t>(frameLen) + skipBytes + skipBeforeBytes;
+            if (frameLen <= 0 || step > end - frame)
+                break;
+            if (getFrameDuration() > 0)
+            {
+                waiting = false;
+                if (count(frameLayoutKey()))
+                    return true;
+            }
+            else if (!waiting)
+            {
+                waiting = true;
+                waitingKey = frameLayoutKey();
+            }
+            frame += step;
+        }
+        if (waiting && count(waitingKey))
+            return true;
+        if (frame >= end)
+            return false;
+        from = frame + 1;
+    }
+    return false;
 }
 
 // One chain of frames from the first frame found at or after from. nullptr: the chain is whole, needFrames frames
@@ -1288,9 +1387,16 @@ uint8_t* SimplePacketizerReader::frameChainBreak(uint8_t* from, uint8_t* end, co
     {
         if (decodeFrame(frame, end, skipBytes, skipBeforeBytes) <= 0)
         {
+            // ** NO FRAME AT OR PAST THE END OF THE DATA. ** A search that does not look at the data, as that of the
+            // DVB subtitle reader, which answers the next byte every time, walked the frame past the end of a file
+            // of a few bytes in these tries. The chain below then read no frame at all, "ran to the end of the data"
+            // and was taken: any file of up to ten bytes, abc or a 1 and a new line, under any name, was listed as
+            // SUP subtitles.
+            if (end - frame <= 2)
+                return end;
             frame = findFrame(frame + 2, end);
 
-            if (frame == nullptr)
+            if (frame == nullptr || frame >= end)
                 return end;
         }
         else

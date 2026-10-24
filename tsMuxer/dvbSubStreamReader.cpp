@@ -5,8 +5,12 @@ static constexpr int BAD_FRAME = -1;
 
 int DVBSubStreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdmvDescriptors) { return 0; }
 
+// There is no frame to find at the end of the data: the answer was buff + 1 there as well, past the end, which
+// checkStream took for a frame (see frameChainBreak).
 uint8_t* DVBSubStreamReader::findFrame(uint8_t* buff, uint8_t* end)
 {
+    if (buff == nullptr || buff >= end)
+        return nullptr;
     if (m_firstFrame)
         return buff;
     return buff + 1;

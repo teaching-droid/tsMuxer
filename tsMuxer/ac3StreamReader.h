@@ -60,6 +60,8 @@ class AC3StreamReader final : public SimplePacketizerReader, public AC3Codec
     uint8_t* findFrame(uint8_t* buff, uint8_t* end) override { return AC3Codec::findFrame(buff, end); }
     int wholeFrameSizeAt(const uint8_t* p, const uint8_t* end) override;
     [[nodiscard]] bool declaredByContainer() const override;
+    void resetDecodeState() override;
+    [[nodiscard]] bool frameProvesItself() const override { return true; }
     double getFrameDuration() override { return static_cast<double>(AC3Codec::getFrameDuration()); }
     const CodecInfo& getCodecInfo() override { return AC3Codec::getCodecInfo(); }
     const std::string getStreamInfo() override { return AC3Codec::getStreamInfo(); }

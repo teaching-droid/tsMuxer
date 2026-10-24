@@ -968,6 +968,7 @@ int DTSStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, in
 {
     uint8_t* afterFrameData = buff;
     i_frame_size = 0;
+    m_coreAlone = false;
     // The sync word, and for a core its 14 byte header, are read before anything else; a frame that starts in the
     // last bytes of a read block was read past the block's end (as the AC-3 header was)
     if (end - buff < 4 || (m_isCoreExists && end - buff < static_cast<int>(DTS_HEADER_SIZE)))
@@ -1013,6 +1014,12 @@ int DTSStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, in
             i_frame_size = syncInfo16be(buff);
         }
         else
+            return 0;
+
+        // ** A LENGTH THE HEADER CANNOT HAVE. ** FSIZE gives a frame of 96 bytes or more and NBLKS 6 blocks of 32
+        // samples or more; smaller values are not DTS. They were taken: a frame of 1 byte was read in data that only
+        // has a sync word in it, which matters most where frames count one by one (goodFramesAnywhere).
+        if (i_frame_size < 96 || nblks < 5)
             return 0;
 
         switch (pi_audio_mode & 0xffff)
@@ -1119,6 +1126,23 @@ int DTSStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, in
         if (afterFrameData > end - 4)
             return NOT_ENOUGH_BUFFER;
 
+        // ** A CORE FRAME THAT RUNS INTO THE NEXT FRAME IS NOT A FRAME. ** DTS has no CRC, and the length of a frame
+        // is taken from its header alone. A join whose first file ends inside a frame, as a recording an encoder
+        // stopped does, gave that frame its length out of the next file: the part of the cut frame and the first
+        // bytes of the next file went out as one frame, one a player cannot decode, and the rest of the next file's
+        // first frame was then dropped as damage. Measured on two DTS files of 100 frames joined, the first cut half
+        // way into a frame: 200 frames out with one decode error at the seam. A TS packet lost inside a frame does
+        // the same: the frame took the start of the one after it. AC-3 rejects such a frame on its CRC. DTS now
+        // rejects it when the next frame BEGINS INSIDE IT and what follows it is not the start of a frame: the
+        // reader looks again, finds the next frame where it begins, and the bytes left out are reported as a loss.
+        // Both are asked. A whole frame followed by a tag, by junk at the end of a file or by a frame whose start a
+        // lost packet took, has no frame inside it and is kept as it always was. Only the 16 bit big endian core is
+        // asked: its length is exact, where the 14 bit forms give it rounded, and the little endian form keeps the
+        // behaviour it had.
+        m_coreFrameSize = i_frame_size;
+        if (buff[0] == 0x7f && buff[1] == 0xfe && nextFrameInside(buff, afterFrameData, end) != nullptr)
+            return 0;
+
         if (m_testMode && m_dtsEsChannels == 0)
         {
             auto curPtr32 = UnalignedPtr<uint32_t>(buff + 16);
@@ -1155,6 +1179,34 @@ int DTSStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, in
         // down-to-dts output that is supposed to carry the core only.
         if (nextFrame > end)
             return NOT_ENOUGH_BUFFER;
+        // The extension substream is asked the same as the core above: the extension of a DTS-HD frame cut by the
+        // end of a joined file, or by a TS packet lost inside it, took its length out of the next frame in the same
+        // way, and the next frame was lost behind it. Without a core the extension is the frame, and it is rejected
+        // as a core is. Behind a core, the core is whole: it is sent ALONE, as down-to-dts sends every core, and the
+        // part of the extension is left out up to where the next frame begins, so the period keeps its sound and
+        // its time. A DTS-HD decoder plays a core without its extension; the part of an extension it cannot decode.
+        // Rejecting the core as well left no frame at all of DTS-HD MA that loses one TS packet in 30: its frames
+        // are 60 packets long and more, so none keeps a whole extension. Measured on a join of a DTS-HD MA file cut
+        // inside an extension and a whole one: 200 frames and two decode errors at the seam before, 201 (the 100
+        // and the 100 whole, and the whole core of the cut frame) and none now.
+        if (const uint8_t* inside = nextFrameInside(afterFrameData, nextFrame, end); inside != nullptr)
+        {
+            if (!m_isCoreExists)
+                return 0;
+            m_coreAlone = true;
+            m_state = DTSDecodeState::stDecodeDTS;
+            skipBytes = static_cast<int>(inside - buff - i_frame_size);
+            // The part of the extension is reported with the bytes lost, once: a frame can be decoded twice before
+            // it is sent (after a resync), and then stands at the same place in the stream both times. down-to-dts
+            // leaves every extension out, and the detection sends nothing.
+            const int64_t at = m_processedBytes + (buff - m_curPos);
+            if (!m_testMode && !m_downconvertToDTS && at != m_cutExtensionAt)
+            {
+                m_cutExtensionAt = at;
+                m_lostBytes += skipBytes;
+            }
+            return i_frame_size;
+        }
         // The whole extension substream frame is known to be in the buffer here,
         // which is what the DTS:X walk needs. It is bounded to the first few
         // frames and stops as soon as the badge is settled.
@@ -1241,6 +1293,60 @@ bool DTSStreamReader::declaredByContainer() const
     default:
         return false;
     }
+}
+
+// Where the next frame begins inside the frame that begins at frame and, by its header, ends at next, or nullptr when
+// it does not run into the next frame (see decodeFrame). It does when the four bytes at next are not the start of a
+// frame, a core in any of the forms findFrame takes or the extension substream, and a core or an extension substream
+// sync lies inside the frame, behind its own sync. Zero bytes at next are not let through: in the join measured, the
+// bytes at the end of the cut frame's length were zero, from the quiet start of the next file. A whole frame with
+// zeros behind it has no sync inside and is kept. Fewer than four bytes at next cannot tell and are taken: at the end
+// of the data a frame is whole when its length is there, which the caller decides.
+const uint8_t* DTSStreamReader::nextFrameInside(const uint8_t* frame, const uint8_t* next, const uint8_t* end)
+{
+    if (end - next < 4)
+        return nullptr;
+    const auto isSync = [](const uint32_t word) { return word == 0x7ffe8001 || word == DTS_HD_PREFIX; };
+    const uint32_t behind = my_ntohl(loadUnaligned<uint32_t>(next));
+    if (isSync(behind) || behind == 0xfe7f0180 || behind == 0x1fffe800 || behind == 0xff1f00e8)
+        return nullptr;
+    for (const uint8_t* p = frame + 4; p + 4 <= next; ++p)
+        if ((p[0] == 0x7f || p[0] == 0x64) && isSync(my_ntohl(loadUnaligned<uint32_t>(p))))
+            return p;
+    return nullptr;
+}
+
+// The codec state as a new reader has it. The settings stay, and so do m_isCoreExists, m_firstCall and
+// m_skippingSamples: they come from the start of the data (the DTS-HD file header, a stream of extension
+// substreams only), not from a chain of frames.
+void DTSStreamReader::resetDecodeState()
+{
+    m_state = DTSDecodeState::stDecodeDTS;
+    m_hdFrameLen = 0;
+    m_dts_hd_mode = false;
+    m_hdType = DTSHD_SUBTYPE::DTS_SUBTYPE_UNINITIALIZED;
+    nblks = i_frame_size = pi_audio_mode = 0;
+    pi_sample_rate = hd_pi_sample_rate = 0;
+    pi_sample_rate_index = pi_bit_rate_index = 0;
+    pi_bit_rate = pi_frame_length = pi_channels_conf = 0;
+    pi_channels = hd_pi_channels = 0;
+    pi_lfeCnt = hd_pi_lfeCnt = 0;
+    hd_bitDepth = m_hdBitrate = 0;
+    m_dataSegmentLen = 0;
+    core_ext_mask = 0;
+    m_dtsEsChannels = 0;
+    m_isDtsX = m_isDtsXImax = false;
+    m_dtsxFramesProbed = m_dtsxHits = m_dtsxImaxHits = 0;
+    m_frameDuration = 0;
+    m_coreFrameSize = 0;
+    m_coreAlone = false;
+}
+
+// DTS has no CRC: good frames of one track also keep the length of the core frame and the samples a frame
+uint64_t DTSStreamReader::frameLayoutKey()
+{
+    return SimplePacketizerReader::frameLayoutKey() << 32 | static_cast<uint64_t>(m_coreFrameSize & 0x7fff) << 13 |
+           static_cast<uint64_t>(pi_frame_length & 0x1fff);
 }
 
 int DTSStreamReader::syncInfo16be(const uint8_t* p_buf)
@@ -1341,7 +1447,7 @@ double DTSStreamReader::getFrameDuration()
 {
     if (!m_isCoreExists)
         return m_frameDuration;
-    if (m_dts_hd_mode && !m_downconvertToDTS && m_state != DTSDecodeState::stDecodeHD2)
+    if (m_dts_hd_mode && !m_downconvertToDTS && m_state != DTSDecodeState::stDecodeHD2 && !m_coreAlone)
         return 0;
 
     return m_frameDuration;

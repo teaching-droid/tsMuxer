@@ -108,8 +108,27 @@ class SimplePacketizerReader : public AbstractStreamReader
     // the default, for any other source and any stream type that names no codec, as 0x06 private data.
     [[nodiscard]] virtual bool declaredByContainer() const { return false; }
 
+    // ** THE STATE A CHAIN OF FRAMES LEAVES IN THE READER, CLEARED. ** checkStream decodes frames in test mode, and a
+    // reader keeps what they say: TrueHD behind an AC-3 frame, a DTS-HD extension substream, the Atmos and DTS:X
+    // counters, the rate and the channels. A chain that broke on damage must not hand that to the next one. This puts
+    // the codec state back to what a new reader has, and keeps the settings (down-to-ac3, down-to-dts, test mode).
+    // The default does nothing: a reader that keeps no such state needs nothing cleared.
+    virtual void resetDecodeState() {}
+
+    // What a good frame must keep from the one before it for goodFramesAnywhere to count it: by default its sample
+    // rate and channels. DTS adds the length of its core frame and its samples a frame, as it has no CRC.
+    virtual uint64_t frameLayoutKey() { return static_cast<uint64_t>(getFreq()) << 8 | getChannels(); }
+
+    // Whether decodeFrame proves a frame good on its own, so that goodFramesAnywhere may count it where it stands:
+    // AC-3 and E-AC-3 by the CRC over the whole frame, DTS by its 32 bit sync, a header it checks and a frame that
+    // does not run into the next one. False, the default, for a codec whose frames prove nothing alone: an ADTS
+    // header is 12 bits of sync and a length, and five of them in a row of one layout turned up in PCM in a track
+    // declared as AAC, which was then listed as AAC, 96 kHz, 8 channels.
+    [[nodiscard]] virtual bool frameProvesItself() const { return false; }
+
    private:
     uint8_t* frameChainBreak(uint8_t* from, uint8_t* end, int needFrames, bool firstChain, const uint8_t* lastStart);
+    bool goodFramesAnywhere(uint8_t* buffer, uint8_t* end);
 
    protected:
     // uint8_t* m_tmpBuffer;

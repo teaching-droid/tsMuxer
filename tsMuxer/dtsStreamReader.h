@@ -71,6 +71,9 @@ class DTSStreamReader final : public SimplePacketizerReader
     uint8_t* findFrame(uint8_t* buff, uint8_t* end) override;
     int wholeFrameSizeAt(const uint8_t* p, const uint8_t* end) override;
     [[nodiscard]] bool declaredByContainer() const override;
+    void resetDecodeState() override;
+    [[nodiscard]] bool frameProvesItself() const override { return true; }
+    uint64_t frameLayoutKey() override;
     double getFrameDuration() override;
     // virtual bool isSubFrame() {return m_state == stDecodeHD2;}
     const CodecInfo& getCodecInfo() override
@@ -137,7 +140,11 @@ class DTSStreamReader final : public SimplePacketizerReader
     int m_dtsxImaxHits;
 
     double m_frameDuration;
+    int m_coreFrameSize = 0;        // the length of the last core frame read, for frameLayoutKey
+    bool m_coreAlone = false;       // the core just read is sent without its extension, which was cut (decodeFrame)
+    int64_t m_cutExtensionAt = -1;  // where in the stream the last cut extension was reported as lost
     int syncInfo16be(const uint8_t* p_buf);
+    static const uint8_t* nextFrameInside(const uint8_t* frame, const uint8_t* next, const uint8_t* end);
     int testSyncInfo16be(const uint8_t* p_buf);
     static int buf14To16(uint8_t* p_out, const uint8_t* p_in, int i_in, int i_le);
     static void BufLeToBe(uint8_t* p_out, const uint8_t* p_in, int i_in);
