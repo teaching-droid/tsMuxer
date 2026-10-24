@@ -3460,14 +3460,19 @@ static void checkEmptyTracks(const MuxerManager& muxerManager)
         // ** WHAT THE LOSS LEAVES OUT. ** It does not count what comes before the first frame and after the last, on
         // purpose (a stream may begin in the middle of a frame and end with a tag), so a WAV file named A_MP3 that
         // gave two frames at its start lost nothing of its 8 MB and passed with 1.7 KB of output. The frames have to
-        // carry half of what was read, the tags left aside. LPCM has a reader of its own and its own loss count.
+        // carry half of what was read, the tags and the padding left aside (getPadBytes: zeros or 0xFF are no codec).
+        // LPCM has a reader of its own and its own loss count.
         const int64_t tags = (std::min)(audio->getTagBytes(), total);
-        const int64_t besideTags = total - tags;
+        const int64_t pad = (std::min)(audio->getPadBytes(), total - tags);
+        const int64_t besideTags = total - tags - pad;
+        const char* const aside = tags > 0 && pad > 0 ? ", its tags and padding left aside,"
+                                  : tags > 0          ? ", its tags left aside,"
+                                  : pad > 0           ? ", its padding left aside,"
+                                                      : "";
         if (si.m_codec != "A_LPCM" && besideTags > 0 && audio->getFrameBytes() < besideTags / 2)
             THROW(ERR_COMMON, trackSourceName(si)
                                   << ": only " << audio->getFrameBytes() << " of the " << besideTags
-                                  << " bytes read for this track as " << si.m_codec
-                                  << (tags > 0 ? ", its tags left aside," : "")
+                                  << " bytes read for this track as " << si.m_codec << aside
                                   << " are frames of that codec, less than half of it. " << WRONG_CODEC_HINT)
         // ** FRAMES FOUND ONE BY ONE, EACH WITH ANOTHER RATE. ** The AAC sync word turns up in PCM often enough that
         // two thirds of a WAV file named A_AAC became "frames", every one found after the one before failed, and with

@@ -820,6 +820,26 @@ int64_t SimplePacketizerReader::trailingTagBytes() const
 
 int64_t SimplePacketizerReader::getTagBytes() const { return m_tagBytes + trailingTagBytes(); }
 
+// The bytes of [from, to) the search steps over that are in runs of zeros or of 0xFF, the part the tag chain we stand
+// on has credit for left out, as those bytes count as the tag's already (an ID3v2 tag's padding is zeros)
+void SimplePacketizerReader::countPadding(const uint8_t* from, const uint8_t* const to)
+{
+    from += (std::min)(m_tagCredit, static_cast<int64_t>(to - from));
+    while (from < to)
+    {
+        const uint8_t fill = *from;
+        if (fill != 0x00 && fill != 0xff)
+        {
+            ++from;
+            continue;
+        }
+        const uint8_t* const run = from;
+        while (from < to && *from == fill) ++from;
+        if (from - run >= PAD_RUN_MIN)
+            m_padBytes += from - run;
+    }
+}
+
 int SimplePacketizerReader::flushPacket(AVPacket& avPacket)
 {
     avPacket.duration = 0;
@@ -1040,6 +1060,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                 // frame of a file with 2,097,151 bytes in front of it, in silence.
                 uint8_t* const keepFrom = m_bufEnd - LONGEST_TAG_HEADER;
 
+                countPadding(m_curPos, keepFrom);
                 m_processedBytes += keepFrom - m_curPos;
                 // Nothing recognisable is left in this buffer. HELD BACK, not counted: if a frame
                 // turns up later this really was a hole and it is promoted to lost; if none ever
@@ -1094,6 +1115,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                 // call: whatever the tag chain has credit for is spent first, and the rest is a
                 // loss once the stream has synced at least once.
                 const int64_t skipped = frame + 1 - m_curPos;
+                countPadding(m_curPos, frame + 1);
                 m_curPos = frame + 1;
                 m_processedBytes += skipped;
                 const int64_t paid = m_tagCredit < skipped ? m_tagCredit : skipped;
@@ -1115,6 +1137,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                 if (m_lastBlock)
                 {
                     const int64_t skipped = frame + 1 - m_curPos;
+                    countPadding(m_curPos, frame + 1);
                     m_curPos = frame + 1;
                     m_processedBytes += skipped;
                     const int64_t paid = m_tagCredit < skipped ? m_tagCredit : skipped;
@@ -1123,6 +1146,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                         m_pendingLost += skipped - paid;
                     return 0;
                 }
+                countPadding(m_curPos, frame);
                 m_processedBytes += frame - m_curPos;
                 if (m_everSynced)
                 {
@@ -1137,6 +1161,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                 m_curPos = m_bufEnd;
                 return NEED_MORE_DATA;
             }
+            countPadding(m_curPos, frame);
             m_processedBytes += frame - m_curPos;
             // The bytes stepped over to reach this frame. On the FIRST sync they are the leading
             // fragment of a stream that started mid frame, which is not a loss; on every later one

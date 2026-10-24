@@ -190,6 +190,8 @@ class SimplePacketizerReader : public AbstractStreamReader
     // With the tags at the very end of the data (trailingTagBytes), which no frame search ever stands on
     [[nodiscard]] int64_t getTagBytes() const;
     [[nodiscard]] int64_t getSyncChanges() const { return m_syncChanges; }
+    // The padding the frame search stepped over, runs of zeros or 0xFF of PAD_RUN_MIN bytes or more (countPadding)
+    [[nodiscard]] int64_t getPadBytes() const { return m_padBytes; }
 
    protected:
     int64_t m_frameBytes = 0;
@@ -199,6 +201,16 @@ class SimplePacketizerReader : public AbstractStreamReader
     int64_t m_syncChanges = 0;
     int m_syncFreq = 0;  // the rate and channels at the sync before
     int m_syncChannels = 0;
+    // ** PADDING IS NOT ANOTHER CODEC. ** The frames-under-half rule counted every byte that was not a frame or a tag
+    // as data of some other codec, and zeros are no codec: real AAC behind 2 MiB of zeros, or AC-3, MP3 and DTS
+    // followed by zeros of twice their size, were muxed whole and then ended with that error. The same held for 0xFF,
+    // the fill of erased flash memory, which the frame search steps over as it does zeros (the same output). Runs of
+    // either that the search steps over are counted here and left aside as the tags are. A short run is not padding
+    // but data (PCM a little above silence has a zero byte in every other place), and a file of nothing but padding
+    // has no frames at all, which the rule for empty tracks refuses.
+    static constexpr int64_t PAD_RUN_MIN = 64;
+    int64_t m_padBytes = 0;
+    void countPadding(const uint8_t* from, const uint8_t* to);
     // ** A TAG AT THE END IS FOUND FROM THE END. ** An APE tag that has only a footer (APEv1 always, APEv2 as Monkey's
     // Audio writes it) begins with its items, so nothing marks its start for the forward reading: note 117 left it a
     // stated limit, the bytes are held and never counted as lost. The frames-under-half rule then counted them as audio

@@ -26,7 +26,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **An audio or video track that gave nothing ended "successful".** A meta line naming a codec the file does not hold left an output without that track, or an empty one, with only a warning and exit code 0. Such a job, and one whose audio was mostly unusable as the codec named, now ends with an error before success is said.
 
-* **A meta line naming the wrong codec could still end "successful" with an output of noise.** HEVC, H.264 or VC-1 named over DTS, TrueHD or MPEG-2 video, and AAC, DTS or MP3 named over WAV, DTS or MP3, gave exit code 0. Such a track now ends the job with an error, as does audio whose frames are less than half of the file; a damaged file of the right codec still muxes.
+* **A meta line naming the wrong codec could still end "successful" with an output of noise.** HEVC, H.264 or VC-1 named over DTS, TrueHD or MPEG-2 video, and AAC, DTS or MP3 named over WAV, DTS or MP3, gave exit code 0. Such a track now ends the job with an error, as does audio whose frames are less than half of the file, tags and padding not counted; a damaged file of the right codec still muxes.
 
 * **MPEG-2 video with repeated fields (soft pulldown) got uneven picture times:** some pictures got the time of the one before them, others left a gap of two. Each picture now lasts the two or three fields it is shown for. MPEG-2 with a second I picture in a group of pictures is timed right as well.
 
