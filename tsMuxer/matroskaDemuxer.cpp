@@ -9,6 +9,7 @@
 #include <sstream>
 #include <system_error>
 #include <tuple>
+#include <type_traits>
 
 #include <fs/directory.h>
 #include <fs/systemlog.h>
@@ -2697,6 +2698,9 @@ void readSeekPositions(EbmlScan& scan, const int64_t body, const int64_t size, i
 // and returns false to stop. What is not a cluster is stepped over. The walk ends quietly where the file stops making
 // sense. A cluster of unknown size, as a live writer leaves every one, ends where an element begins that cannot be in
 // it; the walk stopped at the first one, and a track without DefaultDuration in such a file was taken to be 25 fps.
+// An onBlock that takes two more arguments also gets where the block's frame starts in the file and how many bytes it
+// has (-1 and 0 for a laced block, whose frames are not told apart here), to read the start of the frame itself; it
+// reads on scan.f and leaves scan.pos alone, which the walk goes on from.
 template <typename OnBlock>
 void walkTrackBlocks(EbmlScan& scan, const int64_t from, const int64_t segmentEnd, int maxClusters, const int64_t track,
                      OnBlock onBlock)
@@ -2729,6 +2733,7 @@ void walkTrackBlocks(EbmlScan& scan, const int64_t from, const int64_t segmentEn
                 return;
             const int64_t childEnd = childBody + childSize;
             int64_t blockAt = child == MATROSKA_ID_SIMPLEBLOCK ? childBody : -1;
+            int64_t blockEnd = childEnd;
             int64_t duration = -1;
             bool key = true;  // a BlockGroup without a ReferenceBlock is a keyframe
             if (child == MATROSKA_ID_CLUSTERTIMECODE && !scan.readUInt(childBody, childSize, clusterTime))
@@ -2741,7 +2746,10 @@ void walkTrackBlocks(EbmlScan& scan, const int64_t from, const int64_t segmentEn
                 if (!scan.readElement(field, fieldSize, fieldBody))
                     return;
                 if (field == MATROSKA_ID_BLOCK)
+                {
                     blockAt = fieldBody;
+                    blockEnd = fieldBody + fieldSize;
+                }
                 else if (field == MATROSKA_ID_BLOCKDURATION && scan.readUInt(fieldBody, fieldSize, value))
                     duration = static_cast<int64_t>(value);
                 else if (field == MATROSKA_ID_BLOCKREFERENCE)
@@ -2765,8 +2773,17 @@ void walkTrackBlocks(EbmlScan& scan, const int64_t from, const int64_t segmentEn
                     const auto relative = static_cast<int16_t>(head[0] << 8 | head[1]);
                     if (child == MATROSKA_ID_SIMPLEBLOCK)
                         key = (head[2] & 0x80) != 0;
-                    const int laces = (head[2] & 0x06) ? head[3] + 1 : 1;
-                    if (!onBlock(static_cast<int64_t>(clusterTime) + relative, duration, key, laces))
+                    const bool laced = (head[2] & 0x06) != 0;
+                    const int laces = laced ? head[3] + 1 : 1;
+                    const int64_t blockTime = static_cast<int64_t>(clusterTime) + relative;
+                    if constexpr (std::is_invocable_v<OnBlock, int64_t, int64_t, bool, int, int64_t, int64_t>)
+                    {
+                        // The frame follows the 2 byte timestamp and the flags, from where the walk stands.
+                        const int64_t frameAt = laced ? -1 : scan.pos + 3;
+                        if (!onBlock(blockTime, duration, key, laces, frameAt, laced ? 0 : blockEnd - frameAt))
+                            return;
+                    }
+                    else if (!onBlock(blockTime, duration, key, laces))
                         return;
                 }
             }
@@ -3728,6 +3745,23 @@ static bool vfwVc1FirstShown(EbmlScan& scan, const int64_t from, const int64_t s
     return true;
 }
 
+// Whether the frame of a block of an MPEG-1 or MPEG-2 track holds a sequence header (00 00 01 B3) in its first 64
+// bytes, where a muxer writes it, ahead of the group and the picture that follow it. The reader of both decodes
+// nothing before the first one, and its clock starts at the first picture after it. Not past the frame: the P picture
+// of a still scene can be smaller than that, and the block after it can begin with the next group's sequence header.
+static bool holdsMpegSequenceHeader(File& f, const int64_t frameAt, const int64_t frameSize)
+{
+    uint8_t data[64];
+    if (frameAt < 0 || frameSize < 4)
+        return false;
+    f.seek(frameAt);
+    const int got = f.read(data, static_cast<uint32_t>((std::min)(frameSize, static_cast<int64_t>(sizeof(data)))));
+    for (int i = 0; i + 3 < got; i++)
+        if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1 && data[i + 3] == 0xB3)
+            return true;
+    return false;
+}
+
 void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
 {
     m_trackExtras.clear();
@@ -4103,13 +4137,24 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
         m_shownAfterFirstBlock[video->num] = shown;
         videoTime += shown;
     }
-    // MPEG-1 and MPEG-2 video start at the earliest picture of their first group, up to the second keyframe, not at
+    // MPEG-1 and MPEG-2 video start at the earliest picture of their first group, up to the next keyframe, not at
     // their first block. A group that is not closed stores its I picture before the B pictures shown ahead of it, the
     // reader of both shows those first, and measured from the I picture the sound of such a file came early by those
     // pictures: 33 ms in a 29.97 film with soft pulldown (#47). Every such video track is measured so, the first as
     // the reference and any other against it. Only these two: an HEVC stream that begins with a random access picture
-    // is timed from that picture (the TS rule), and H.264 was not measured. The listing takes the start from
-    // m_shownAfterFirstBlock, here before the first block, so below 0.
+    // is timed from that picture (the TS rule), and H.264 was not measured.
+    // The first group is the one the reader starts at: that of the first block whose frame holds a sequence header,
+    // as the reader decodes nothing before one. The walk began at the first block, and a file cut inside a group
+    // begins with the rest of that group, which the reader does not decode: its B pictures were the earliest of the
+    // walk, and the sound came late by them. In the #47 test file cut so that its first block is a P picture at 622 ms
+    // with B pictures at 539 and 572 after it, before the next group's I picture at 655, the sound came 116.5 ms late;
+    // cut where that group has B pictures at 1206 and 1239 ahead of its I picture, 133 ms late (2.20.0, which measured
+    // from the first block, 33.5 and 50 ms). Where no frame in the walk holds a sequence header, the walk starts at the
+    // first keyframe, and where there is none either, at the first block, as before.
+    // A keyframe is a run of key blocks next to each other: an I picture coded as two I fields can be stored as a key
+    // block for each field, and the walk ended at the second field, before the B pictures shown ahead of the first: in
+    // a 25 fps file so stored, with two B pictures ahead of the I picture, the sound came 80 ms early.
+    // The start is then before the first block or after it, and the listing takes it from m_shownAfterFirstBlock.
     const auto mpegVideo = [](const MatroskaTrack* t)
     {
         return t->type == MatroskaTrackType::VIDEO && t->codec_id &&
@@ -4118,17 +4163,40 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
     };
     const auto firstShown = [&](const MatroskaTrack* t, const int64_t first)
     {
-        int64_t earliest = first;
-        int blocks = 0, keyframes = 0;
-        walkTrackBlocks(scan, facts.firstCluster, facts.segmentEnd, START_CLUSTERS, t->num,
-                        [&](const int64_t time, int64_t, const bool key, int)
-                        {
-                            if (key && ++keyframes == 2)
-                                return false;
-                            earliest = (std::min)(earliest, time);
-                            return ++blocks < 64;
-                        });
-        if (earliest < first)
+        static constexpr int GROUP_BLOCKS = 64;
+        struct Walked
+        {
+            int64_t time;
+            bool key;
+        };
+        std::vector<Walked> walked;
+        int header = -1;  // the first block whose frame holds a sequence header
+        // A keyframe after the block at `from`: a key block that does not follow another key block
+        const auto keyframeAfter = [&](const size_t i, const size_t from)
+        { return i > from && walked[i].key && !walked[i - 1].key; };
+        walkTrackBlocks(
+            scan, facts.firstCluster, facts.segmentEnd, START_CLUSTERS, t->num,
+            [&](const int64_t time, int64_t, const bool key, int, const int64_t frameAt, const int64_t frameSize)
+            {
+                if (header < 0 && holdsMpegSequenceHeader(scan.f, frameAt, frameSize))
+                    header = static_cast<int>(walked.size());
+                walked.push_back({time, key});
+                if (header >= 0 && keyframeAfter(walked.size() - 1, header))
+                    return false;
+                // up to GROUP_BLOCKS blocks to find a sequence header in, and as many from it
+                return walked.size() < static_cast<size_t>((std::max)(header, 0) + GROUP_BLOCKS);
+            });
+        if (walked.empty())
+            return first;
+        // From the first sequence header, else from the first keyframe, else from the first block
+        size_t from = header >= 0 ? static_cast<size_t>(header) : 0;
+        while (header < 0 && from < walked.size() && !walked[from].key) from++;
+        if (from == walked.size())
+            from = 0;
+        int64_t earliest = walked[from].time;
+        for (size_t i = from + 1; i < walked.size() && !keyframeAfter(i, from); i++)
+            earliest = (std::min)(earliest, walked[i].time);
+        if (earliest != first)
             m_shownAfterFirstBlock[t->num] = earliest - first;
         return earliest;
     };

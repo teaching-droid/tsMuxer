@@ -64,7 +64,8 @@ class MatroskaDemuxer final : public IOContextDemuxer
             {
                 // Measured from the picture the video shows first, which for VC-1 in the Video for Windows
                 // mapping can come after its first block (vfwVc1FirstShown), and for MPEG-1 and MPEG-2 before
-                // it; a second MPEG video track from the picture it shows first as well.
+                // it, or after it in a file cut inside a group; a second MPEG video track from the picture it
+                // shows first as well.
                 const auto it = m_firstTimecode.find(tracks[i]->num);
                 const auto shown = m_shownAfterFirstBlock.find(tracks[i]->num);
                 const auto own = m_shownAfterFirstBlock.find(pid);
@@ -185,7 +186,8 @@ class MatroskaDemuxer final : public IOContextDemuxer
     uint64_t time_scale;
     std::map<int64_t, int64_t> m_firstTimecode;
     // For a video track whose first picture is shown after its first block, how long after, in the file's units; less
-    // than 0 where it is shown before it (the B pictures of an MPEG-1 or MPEG-2 group that is not closed).
+    // than 0 where it is shown before it (the B pictures of an MPEG-1 or MPEG-2 group that is not closed). Either way
+    // for MPEG-1 and MPEG-2 whose first blocks come before the first sequence header, which are not decoded.
     std::map<int64_t, int64_t> m_shownAfterFirstBlock;
     bool index_parsed;
     bool metadata_parsed;
