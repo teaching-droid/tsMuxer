@@ -902,30 +902,31 @@ void MuxerManager::writeChapterFile(const std::string& outDirName)
     }
 
     const std::string fileName = closeDirPath(toNativeSeparators(outDirName)) + "chapters.txt";
+    const std::string shownName = shownOutputName(fileName);  // the demux may be written into a temporary folder
     TextFile file;
     if (!file.open(fileName.c_str(), File::ofWrite))
     {
-        LTRACE(LT_WARN, 2, "Warning: can't write the chapter list to " << fileName);
+        LTRACE(LT_WARN, 2, "Warning: can't write the chapter list to " << shownName);
         return;
     }
     for (const auto& chapter : chapters)
         if (!file.writeLine(floatToTime(static_cast<double>(chapter.start) / 1e9)))
         {
-            LTRACE(LT_WARN, 2, "Warning: can't write the chapter list to " << fileName);
+            LTRACE(LT_WARN, 2, "Warning: can't write the chapter list to " << shownName);
             file.close();
             return;
         }
     file.close();
-    LTRACE(LT_INFO, 2, "Chapters written to " << fileName << ", " << chapters.size() << " of them");
+    LTRACE(LT_INFO, 2, "Chapters written to " << shownName << ", " << chapters.size() << " of them");
 
     // chapters.txt is deliberately left as it is: one bare time per line, because it is meant to be
     // pasted into the window's chapter box and because someone's script may be reading it. It has
     // no room for the names, so they go into a second file in the form other tools read back.
     const std::string xmlName = closeDirPath(toNativeSeparators(outDirName)) + "chapters.xml";
     if (writeChapterXml(xmlName, chapters))
-        LTRACE(LT_INFO, 2, "Chapters with their names written to " << xmlName);
+        LTRACE(LT_INFO, 2, "Chapters with their names written to " << shownOutputName(xmlName));
     else
-        LTRACE(LT_WARN, 2, "Warning: can't write the chapter list to " << xmlName);
+        LTRACE(LT_WARN, 2, "Warning: can't write the chapter list to " << shownOutputName(xmlName));
 }
 
 void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)

@@ -2563,7 +2563,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         }
     }
     unfinished.keep = true;
-    LTRACE(LT_INFO, 2, "bdmv-to-iso complete -> " << outIso);
+    LTRACE(LT_INFO, 2, "bdmv-to-iso complete -> " << shownOutputName(outIso));
     return 0;
 }
 
@@ -2848,6 +2848,7 @@ class KeepOldOutput
     KeepOldOutput& operator=(const KeepOldOutput&) = delete;
     ~KeepOldOutput()
     {
+        setShownOutputName({}, {});
         if (!m_committed)
             removeFreshOutput();
         if (!m_armed || m_committed || m_swapBegun)
@@ -2888,8 +2889,12 @@ class KeepOldOutput
         m_newPrefix = stem + ".tsmuxer-new-" + std::to_string(processId()) + ".";
         m_armed = true;
         warnRoom(dir, estimate);
+        // the messages name stem.ext and stem.split.n.ext, as the user gave them
+        const std::string written = pathStr(dir / u8path(m_newPrefix.substr(0, m_newPrefix.size() - 1)));
+        setShownOutputName(written, strEndWith(dst, ext) ? dst.substr(0, dst.size() - ext.size())
+                                                         : pathStr(dir / u8path(stem)));
         if (ext.empty())
-            return pathStr(dir / u8path(m_newPrefix.substr(0, m_newPrefix.size() - 1)));
+            return written;
         return pathStr(dir / u8path(m_newPrefix + ext.substr(1)));
     }
 
@@ -2916,6 +2921,7 @@ class KeepOldOutput
         m_folder = true;
         m_armed = true;
         warnRoom(base.has_parent_path() ? base.parent_path() : std::filesystem::path("."), estimate);
+        setShownOutputName(pathStr(m_tmp), dst);
         return pathStr(m_tmp);
     }
 
@@ -2943,6 +2949,7 @@ class KeepOldOutput
         m_demux = true;
         m_armed = true;
         warnRoom(out, estimate);
+        setShownOutputName(pathStr(m_tmp), dst);
         return pathStr(m_tmp);
     }
 

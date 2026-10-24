@@ -713,3 +713,38 @@ int finishSaveSrt(const std::string& tempName, const std::string& name, std::str
     why = ec.message();
     return 2;
 }
+
+namespace
+{
+std::string shownWritten;  // the temporary name of the output (setShownOutputName), empty when there is none
+std::string shownFinal;    // the name it stands for
+
+bool isSeparator(const char c)
+{
+#ifdef _WIN32
+    return c == '/' || c == '\\';
+#else
+    return c == '/';
+#endif
+}
+}  // namespace
+
+void setShownOutputName(const std::string& written, const std::string& shown)
+{
+    shownWritten = written;
+    shownFinal = shown;
+}
+
+std::string shownOutputName(const std::string& name)
+{
+    if (shownWritten.empty() || name.size() < shownWritten.size())
+        return name;
+    // the name may have its separators made native on the way
+    for (size_t i = 0; i < shownWritten.size(); ++i)
+        if (name[i] != shownWritten[i] && !(isSeparator(name[i]) && isSeparator(shownWritten[i])))
+            return name;
+    std::string rest = name.substr(shownWritten.size());
+    if (!rest.empty() && !shownFinal.empty() && isSeparator(rest[0]) && isSeparator(shownFinal.back()))
+        rest.erase(0, 1);
+    return shownFinal + rest;
+}

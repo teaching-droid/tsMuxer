@@ -202,6 +202,13 @@ void setSaveSrtJobSucceeded();
 // succeeded but it could not take its name (it is kept under the temporary name, reason in why)
 int finishSaveSrt(const std::string& tempName, const std::string& name, std::string& why);
 
+// An output that exists is written under a temporary name and takes its place when the job has succeeded
+// (KeepOldOutput in main). The messages of the job named the temporary name, which is gone when the job ends:
+// setShownOutputName says what the temporary name stands for, and shownOutputName gives a path written under it as the
+// path the user finds when the job has succeeded. Any other path is given back as it is.
+void setShownOutputName(const std::string& written, const std::string& shown);
+std::string shownOutputName(const std::string& name);
+
 static int64_t internalClockToPts(const int64_t value) { return value / INT_FREQ_TO_TS_FREQ; }
 
 // Sample count to internal clock ticks. The clock runs at 5.292 GHz, so the single product samples x clock passes the
