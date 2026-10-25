@@ -2,6 +2,7 @@
 
 #include <fs/systemlog.h>
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <vector>
 
@@ -278,6 +279,34 @@ uint8_t* H264StreamReader::writeNalPrefix(uint8_t* curPos) const
     return curPos;
 }
 
+// The start delay of the buffering period SEI written with insertSEI and forceSEI. It was a fixed 9.5 s, whatever
+// the HRD the SPS gives: 12.7 times the 0.75 s the HRD tsMuxeR adds allows (H.264 C.1, initial_cpb_removal_delay is at
+// most 90000 * CpbSize / BitRate), and in a field shorter than 24 bits only its low bits were kept. It is now 95 % of
+// that limit, the buffer just under full at the first picture, for each schedule, kept within the field.
+// SEIUnit::serialize_buffering_period_message writes the same value for the NAL and the VCL HRD, so it is the smaller.
+static void setInitialCpbRemovalDelay(SEIUnit& sei, const SPSUnit& sps)
+{
+    const HRDParams* params[] = {&sps.nalHrdParams, &sps.vclHrdParams};
+    for (unsigned i = 0; i < 32; i++)
+    {
+        int64_t delay = 0;  // no HRD with this schedule: nothing is written for it
+        for (const HRDParams* p : params)
+        {
+            if (!p->isPresent || i > p->cpb_cnt_minus1 || i >= p->bit_rate_value_minus1.size() ||
+                i >= p->cpb_size_value_minus1.size())
+                continue;
+            const double bitRate = (p->bit_rate_value_minus1[i] + 1.0) * std::pow(2.0, 6 + p->bit_rate_scale);
+            const double cpbSize = (p->cpb_size_value_minus1[i] + 1.0) * std::pow(2.0, 4 + p->cpb_size_scale);
+            const int64_t fieldMax = (int64_t{1} << (p->initial_cpb_removal_delay_length_minus1 + 1)) - 1;
+            int64_t v = static_cast<int64_t>(std::floor(90000.0 * cpbSize / bitRate * 0.95));
+            v = (std::max)(int64_t{1}, (std::min)(v, fieldMax));
+            delay = delay == 0 ? v : (std::min)(delay, v);
+        }
+        sei.initial_cpb_removal_delay[i] = static_cast<int>(delay);
+        sei.initial_cpb_removal_delay_offset[i] = 0;
+    }
+}
+
 int H264StreamReader::writeSEIMessage(uint8_t* dstBuffer, const uint8_t* dstEnd, const SEIUnit& sei,
                                       const uint8_t payloadType) const
 {
@@ -464,8 +493,7 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
             if (m_lastSliceIDR)
             {
                 SEIUnit sei;
-                sei.initial_cpb_removal_delay[0] = 855000;
-                sei.initial_cpb_removal_delay_offset[0] = 0;
+                setInitialCpbRemovalDelay(sei, *m_spsMap.find(m_lastSliceSPS)->second);
                 curPos += writeSEIMessage(curPos, dstEnd, sei, SEI_MSG_BUFFERING_PERIOD);
             }
 

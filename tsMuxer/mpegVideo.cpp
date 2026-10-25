@@ -514,16 +514,17 @@ void MPEGPictureHeader::setTempRef(const uint16_t number)
         ref = number;
 }
 
+// In a header held in the buffer this wrote the stored vbv_delay back, not the value given, so it changed nothing.
 void MPEGPictureHeader::setVbvDelay(const uint16_t val)
 {
     if (m_headerIncludedToBuff)
     {
         uint8_t* vbv_delay_ptr = &m_data_buffer[5];  // skip sequence header and 1-st byte of ref
         vbv_delay_ptr[0] &= 0xF8;
-        vbv_delay_ptr[0] |= vbv_delay >> 13;
-        vbv_delay_ptr[1] = static_cast<uint8_t>(vbv_delay >> 5);
+        vbv_delay_ptr[0] |= static_cast<uint8_t>(val >> 13);
+        vbv_delay_ptr[1] = static_cast<uint8_t>(val >> 5);
         vbv_delay_ptr[2] &= 0x07;
-        vbv_delay_ptr[2] |= vbv_delay << 3;
+        vbv_delay_ptr[2] |= static_cast<uint8_t>(val << 3);
     }
     else
         vbv_delay = val;

@@ -2498,11 +2498,17 @@ int TSMuxer::writeTSFrames(const int pid, const uint8_t* buffer, const int64_t l
                     m_pcrBits = 0;
                     writePATPMT(newPCR);
                     writePCR(newPCR);
+                    // The clock has passed the decoding time of the data still being written: at the constant
+                    // rate that data comes after it is due, so the decoder's buffer runs empty there (an underflow).
+                    // This was reported as "VBV buffer overflow", the opposite of what happens.
                     if (m_lastPESDTS != -1 && m_lastPCR > m_lastPESDTS)
                     {
                         LTRACE(LT_ERROR, 2,
-                               "VBV buffer overflow at position " << (double)(m_lastPCR - m_fixed_pcr_offset) / 90000.0
-                                                                  << " sec");
+                               "At " << (double)(m_lastPCR - m_fixed_pcr_offset) / 90000.0
+                                     << " s the stream needs more than --bitrate=" << m_cbrBitrate / 1000
+                                     << " kbps, so its data arrives " << latenessText(m_lastPCR - m_lastPESDTS)
+                                     << " after it is due and a player may stutter or freeze there. Give a "
+                                        "higher --bitrate.");
                     }
                     m_cbrEvalPCR = m_lastPCR;
                     m_cbrNextEvalBits = 0;  // fresh interval: evaluate on the next packet

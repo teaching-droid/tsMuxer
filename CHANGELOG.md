@@ -323,6 +323,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **Film at 59.94 with delPulldown** gets no false "irregular pulldown marks" warnings.
 
+* **The buffering period SEI that insertSEI and forceSEI add to H.264 told the decoder to wait 9.5 s before the first picture,** whatever the stream: far more than its buffer size and bitrate allow (0.75 s with the values tsMuxeR writes into the SPS), and where the stream gives the field fewer bits, only part of the number was kept. The wait now comes from the buffer size and bitrate in the SPS, just under the most they allow.
+
 ### Blu-ray and transport stream
 
 * **"Keep data on the inner disc area" padded the wrong part of a 100 GB or 128 GB disc.** On these discs the second layer change is at the centre of the disc, not at its edge, and it was padded like the edge: the data of the third layer went to its outer edge, where the option promises to keep the disc empty. Each layer now keeps its share of the data at the centre. On a 25 GB disc the option padded the middle of the disc and now leaves the image as it is. The padding of a two-layer disc is not changed.
@@ -398,6 +400,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **An ISO image:** a label longer than an image keeps is said, two names that an image would show as one are refused before the image is written, and an image a refused job made is removed.
 
 * **--minbitrate** no longer lowers the rate of --bitrate, and a --maxbitrate below --bitrate is said.
+
+* **With --bitrate, data that arrives after it is due was reported as "VBV buffer overflow",** the opposite of what happens there. The message now says that the stream needs more than the constant bitrate at that point, how late its data arrives, and to give a higher --bitrate.
 
 * **The warning about pictures that arrive late with --maxbitrate gave their delay to a tenth of a second,** so pictures less than 0.05 s late were said to be "up to 0.0 s late". It is now given in milliseconds below one second, never as 0, and in seconds to a hundredth above. (#51, thanks to @Nemesh64)
 
