@@ -536,7 +536,12 @@ int AC3Codec::decodeFrame(uint8_t* buf, uint8_t* end, int& skipBytes)
                 testDecodeTestFrame(nextFrame, end))
                 m_waitMoreData = false;
 
-            if (m_downconvertToAC3)
+            // With down-to-ac3 a TrueHD frame is skipped: it gives no frame, only bytes to step over. The detection
+            // takes a frame of no length for the end of a run of frames, so a raw file of TrueHD with its AC-3 core,
+            // with down-to-ac3, was not recognised as TrueHD before the mux. Matroska, which has no other probe,
+            // then read it as plain AC-3: every TrueHD frame was a bad frame, and the job was refused. In test mode
+            // the frame is given as it is, as without down-to-ac3.
+            if (m_downconvertToAC3 && !getTestMode())
             {
                 skipBytes = trueHDFrameLen;
                 return 0;
