@@ -99,8 +99,10 @@ class H264StreamReader final : public MPEGStreamReader
     Poc1State m_poc1;  // at the picture the reader is at
     static void fillPoc1(SliceUnit& slice, Poc1State& state);
     // poc1: the state the slices read follow on from; without one, each slice is read as if after an IDR
+    // spsMap, ppsMap: the parameter sets to read it with, where they are not those of m_spsMap and m_ppsMap
     int deserializeSliceHeader(SliceUnit& slice, const uint8_t* buff, const uint8_t* sliceEnd,
-                               Poc1State* poc1 = nullptr);
+                               Poc1State* poc1 = nullptr, const std::map<uint32_t, SPSUnit*>* spsMap = nullptr,
+                               const std::map<uint32_t, PPSUnit*>* ppsMap = nullptr);
     void checkPyramid(int frameNum, int* fullPicOrder, bool nextFrameFound);
 
     bool m_nextFrameFound;

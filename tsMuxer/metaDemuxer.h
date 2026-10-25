@@ -78,6 +78,11 @@ struct StreamInfo
     bool m_asyncMode;
     bool m_isSubStream;
     bool m_clipStartTaken;  // the start of the clip in which this stream begins has been added to m_timeShift
+    // The gaps a join put in this stream's times (takeTimeGaps), in the internal clock, the packet after each not read
+    // yet; and that packet, held back until the other streams have come up to its time (METADemuxer::readPacket)
+    std::vector<int64_t> m_joinGaps;
+    bool m_held = false;
+    AVPacket m_heldPacket;
 };
 
 enum class DemuxerReadPolicy

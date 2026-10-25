@@ -625,6 +625,19 @@ int METADemuxer::readPacket(AVPacket& avPacket)
         if (minDtsIndex != -1)
         {
             m_muxPos = (std::max)(m_muxPos, minDts);
+            StreamInfo& chosen = m_codecInfo[minDtsIndex];
+            if (chosen.m_held)
+            {
+                // the packet after a gap of a join, now that the other streams have come up to it (below)
+                avPacket = chosen.m_heldPacket;
+                chosen.m_held = false;
+                chosen.m_lastDTS =
+                    avPacket.dts +
+                    (avPacket.codecID == CODEC_S_SRT || avPacket.codecID == CODEC_S_MKVCOPY ? 0 : avPacket.duration);
+                updateReport(true);
+                return 0;
+            }
+            const int64_t endBefore = chosen.m_lastDTS;
             if (!m_flushDataMode)
             {
                 if (m_codecInfo[minDtsIndex].lastReadRez != BufferedFileReader::DATA_EOF2)
@@ -659,6 +672,33 @@ int METADemuxer::readPacket(AVPacket& avPacket)
                 m_codecInfo[minDtsIndex].m_lastDTS =
                     avPacket.dts +
                     (avPacket.codecID == CODEC_S_SRT || avPacket.codecID == CODEC_S_MKVCOPY ? 0 : avPacket.duration);
+                // ** THE SOUND AFTER THE GAP OF A JOIN WAITS FOR ITS TIME. ** A stream is chosen by where its last
+                // packet ends, and where a join put a gap in its times (takeTimeGaps), its next packet comes the gap
+                // later than that. It was handed on at once, ahead of the video before it, and a transport stream
+                // takes its clock from each packet's time: the clock went on by the gap in PCR-only packets, and the
+                // pictures of the next file arrived after their decoding times. An MPEG-2 TS joined with itself,
+                // whose sound starts 0.48 s after its picture: five PCR-only packets took the clock 0.43 s on, and
+                // 3 pictures came up to 71 ms late; three MP4 parts whose AAC is shorter than their picture: one
+                // picture 9.8 ms late at each joint. That packet is now held back until the other streams have come
+                // up to its time; the gap itself, which keeps the sound of each file against its picture, stays.
+                if (!chosen.m_joinGaps.empty() && !chosen.m_flushed && avPacket.size > 0 &&
+                    avPacket.dts - endBefore >= chosen.m_joinGaps.front() / 2)
+                {
+                    chosen.m_joinGaps.erase(chosen.m_joinGaps.begin());
+                    bool othersBehind = false;
+                    for (int i = 0; i < static_cast<int>(m_codecInfo.size()); i++)
+                        if (i != minDtsIndex && !m_codecInfo[i].m_flushed &&
+                            m_codecInfo[i].lastReadRez != BufferedFileReader::DATA_EOF2 &&
+                            m_codecInfo[i].m_lastDTS < avPacket.dts)
+                            othersBehind = true;
+                    if (othersBehind)
+                    {
+                        chosen.m_heldPacket = avPacket;
+                        chosen.m_held = true;
+                        chosen.m_lastDTS = avPacket.dts;
+                        continue;
+                    }
+                }
             }
             else
             {  // flush all streams
@@ -4871,7 +4911,11 @@ int StreamInfo::read()
         // gets that file's data
         if (auto* wrapper = dynamic_cast<ContainerToReaderWrapper*>(m_dataReader))
         {
-            for (const auto& [atNs, gapNs] : wrapper->takeTimeGaps(m_readerID)) m_streamReader->addTimeGap(atNs, gapNs);
+            for (const auto& [atNs, gapNs] : wrapper->takeTimeGaps(m_readerID))
+            {
+                m_streamReader->addTimeGap(atNs, gapNs);
+                m_joinGaps.push_back(llround(static_cast<double>(gapNs) * INTERNAL_PTS_FREQ / 1e9));
+            }
             if (auto* srt = dynamic_cast<SRTStreamReader*>(m_streamReader))
                 for (const int64_t ms : wrapper->takeTouchingCues(m_readerID)) srt->addTouchingCue(ms);
         }

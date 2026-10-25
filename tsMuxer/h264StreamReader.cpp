@@ -840,20 +840,67 @@ void H264StreamReader::additionalStreamCheck(uint8_t* buff, uint8_t* end)
     // grew in the mux after the first pictures were written, and two decoding times came out the same.
     int orderOffset = 0;
     bool firstPicture = true;
+    // ** EACH PICTURE IS READ WITH THE PARAMETER SETS IN FORCE AT IT. ** The block can hold several SPS or PPS of one
+    // id, as a stream of parts coded otherwise does, and processSPS above left the last of each in m_spsMap, with which
+    // every picture of the block was read here. A stream of High, Main and High parts (all SPS id 0, the Main part
+    // with pic_order_cnt_type 2 and P pictures only) had its Main pictures read as High ones: their order counts came
+    // out from bits that are none, never rose, and the depth grew by one at each of them up to 16, where it needs 2.
+    // Every decoding time went back 16 frames (0.64 s at 25 fps, more than --vbv-len=500), the first one
+    // before the first clock reference, and 197 of its 200 pictures came after their decoding time; 2.20.0 held the
+    // depth at 3, which hid it. The SPS and PPS met in the block are now read as they come, without the changes
+    // processSPS makes, and a picture takes the ones met last before it; one before the first of its id in the block
+    // takes the one in m_spsMap, as before.
+    std::map<uint32_t, SPSUnit*> spsInForce;
+    std::map<uint32_t, PPSUnit*> ppsInForce;
+    std::vector<std::unique_ptr<NALUnit>> setsMet;
+    const auto restartSets = [&]()
+    {
+        spsInForce = m_spsMap;
+        ppsInForce = m_ppsMap;
+    };
+    const auto meetSet = [&](uint8_t* nal, const NALUnit::NALType type)
+    {
+        uint8_t* nalEnd = NALUnit::findNALWithStartCode(nal, end, true);
+        if (type == NALUnit::NALType::nuSPS || type == NALUnit::NALType::nuSubSPS)
+        {
+            auto sps = std::make_unique<SPSUnit>();
+            sps->decodeBuffer(nal, nalEnd);
+            if (sps->deserialize() == 0)
+            {
+                spsInForce[sps->seq_parameter_set_id] = sps.get();
+                setsMet.push_back(std::move(sps));
+            }
+        }
+        else if (type == NALUnit::NALType::nuPPS)
+        {
+            auto pps = std::make_unique<PPSUnit>();
+            pps->decodeBuffer(nal, nalEnd);
+            if (pps->deserialize() == 0)
+            {
+                ppsInForce[pps->pic_parameter_set_id] = pps.get();
+                setsMet.push_back(std::move(pps));
+            }
+        }
+    };
     // Whether the stream has coded fields at all, known before the first picture: a stream can begin with a frame
     // (MBAFF) and code fields later, and the rules for a first picture without an IDR are for frames only.
+    restartSets();
     for (uint8_t* nal = NALUnit::findNextNAL(buff, end); nal != end && !m_fieldPicturesSeen;
          nal = NALUnit::findNextNAL(nal, end))
     {
         const auto type = static_cast<NALUnit::NALType>(*nal & 0x1f);
+        meetSet(nal, type);
         if ((type == NALUnit::NALType::nuSliceIDR || type == NALUnit::NALType::nuSliceNonIDR) &&
-            deserializeSliceHeader(slice, nal, end) == 0 && slice.m_field_pic_flag)
+            deserializeSliceHeader(slice, nal, end, nullptr, &spsInForce, &ppsInForce) == 0 && slice.m_field_pic_flag)
             m_fieldPicturesSeen = true;
     }
     poc1 = Poc1State();  // the counts of type 1 from the start of the stream again
+    restartSets();
     for (uint8_t* nal = NALUnit::findNextNAL(buff, end); nal != end; nal = NALUnit::findNextNAL(nal, end))
     {
-        switch (static_cast<NALUnit::NALType>(*nal & 0x1f))
+        const auto type = static_cast<NALUnit::NALType>(*nal & 0x1f);
+        meetSet(nal, type);
+        switch (type)
         {
         case NALUnit::NALType::nuSliceIDR:
         case NALUnit::NALType::nuSliceNonIDR:
@@ -861,7 +908,7 @@ void H264StreamReader::additionalStreamCheck(uint8_t* buff, uint8_t* end)
         case NALUnit::NALType::nuSliceB:
         case NALUnit::NALType::nuSliceC:
         case NALUnit::NALType::nuSliceExt:
-            rez = deserializeSliceHeader(slice, nal, end, &poc1);
+            rez = deserializeSliceHeader(slice, nal, end, &poc1, &spsInForce, &ppsInForce);
             if (rez == 0 && slice.first_mb_in_slice == 0 && slice.getSPS()->pic_order_cnt_type != 2)
             {
                 int picOrder = calcPicOrder(slice);
@@ -1511,7 +1558,8 @@ void H264StreamReader::fillPoc1(SliceUnit& slice, Poc1State& state)
 }
 
 int H264StreamReader::deserializeSliceHeader(SliceUnit& slice, const uint8_t* buff, const uint8_t* sliceEnd,
-                                             Poc1State* poc1)
+                                             Poc1State* poc1, const std::map<uint32_t, SPSUnit*>* spsMap,
+                                             const std::map<uint32_t, PPSUnit*>* ppsMap)
 {
     // A slice header is read up to the start code of the next unit, not up to the end of the data: a header cut short
     // read the next unit's bytes as its own fields and was taken as whole, and every picture time after it was
@@ -1531,7 +1579,8 @@ int H264StreamReader::deserializeSliceHeader(SliceUnit& slice, const uint8_t* bu
         const int tmpBufferSize = static_cast<int>(m_decodedSliceHeader.size());
         toDecode = FFMIN(tmpBufferSize - 8, maxHeaderSize);
         const int decodedLen = SliceUnit::decodeNAL(buff, buff + toDecode, tmpBuffer, tmpBufferSize);
-        nalRez = slice.deserialize(tmpBuffer, tmpBuffer + decodedLen, m_spsMap, m_ppsMap);
+        nalRez = slice.deserialize(tmpBuffer, tmpBuffer + decodedLen, spsMap ? *spsMap : m_spsMap,
+                                   ppsMap ? *ppsMap : m_ppsMap);
         if (nalRez == NOT_ENOUGH_BUFFER && toDecode < maxHeaderSize)
             m_decodedSliceHeader.resize(m_decodedSliceHeader.size() + 1);
     } while (nalRez == NOT_ENOUGH_BUFFER && toDecode < maxHeaderSize);
