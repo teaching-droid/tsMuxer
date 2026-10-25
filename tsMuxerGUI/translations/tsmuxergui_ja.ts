@@ -4173,6 +4173,22 @@ Build the ISO anyway?</source>
         <source> (track %1 in the file)</source>
         <translation>（ファイル内のトラック %1）</translation>
     </message>
+    <message>
+        <source>TrueHD and its AC-3 core</source>
+        <translation>TrueHD と AC-3 コア</translation>
+    </message>
+    <message>
+        <source>Track %1 (AC-3 %2, %3) looks like the AC-3 core of the TrueHD track %4. Put it on the disc as the core of the TrueHD track, or keep it as a separate audio track?</source>
+        <translation>トラック %1（AC-3 %2、%3）は TrueHD トラック %4 の AC-3 コアのようです。TrueHD トラックのコアとしてディスクに入れますか、それとも別のオーディオトラックとして残しますか？</translation>
+    </message>
+    <message>
+        <source>As the core</source>
+        <translation>コアとして</translation>
+    </message>
+    <message>
+        <source>As a separate track</source>
+        <translation>別のトラックとして</translation>
+    </message>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>

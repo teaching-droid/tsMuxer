@@ -83,6 +83,8 @@ class MatroskaDemuxer final : public IOContextDemuxer
     const uint8_t* getTrackCodecPrivate(int32_t pid, int& size) override;
 
     [[nodiscard]] int64_t getFileDurationNano() const override { return fileDuration; }
+    // The file's WritingApp (Info), empty when it has none
+    [[nodiscard]] std::string writingApplication() const { return writing_app ? writing_app : ""; }
     [[nodiscard]] int64_t getDemuxedTime() const override { return m_demuxedTime; }
     bool getVideoSpanNano(int64_t& startNano, int64_t& endNano) override;
 

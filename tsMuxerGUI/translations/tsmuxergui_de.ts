@@ -4173,6 +4173,22 @@ ISO trotzdem erstellen?</translation>
         <source> (track %1 in the file)</source>
         <translation> (Spur %1 in der Datei)</translation>
     </message>
+    <message>
+        <source>TrueHD and its AC-3 core</source>
+        <translation>TrueHD und sein AC-3-Kern</translation>
+    </message>
+    <message>
+        <source>Track %1 (AC-3 %2, %3) looks like the AC-3 core of the TrueHD track %4. Put it on the disc as the core of the TrueHD track, or keep it as a separate audio track?</source>
+        <translation>Spur %1 (AC-3 %2, %3) sieht aus wie der AC-3-Kern der TrueHD-Spur %4. Soll sie als Kern der TrueHD-Spur auf die Disc, oder als eigene Audiospur bleiben?</translation>
+    </message>
+    <message>
+        <source>As the core</source>
+        <translation>Als Kern</translation>
+    </message>
+    <message>
+        <source>As a separate track</source>
+        <translation>Als eigene Spur</translation>
+    </message>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>

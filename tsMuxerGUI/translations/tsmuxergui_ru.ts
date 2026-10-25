@@ -4174,6 +4174,22 @@ Build the ISO anyway?</source>
         <source> (track %1 in the file)</source>
         <translation> (дорожка %1 в файле)</translation>
     </message>
+    <message>
+        <source>TrueHD and its AC-3 core</source>
+        <translation>TrueHD и его ядро AC-3</translation>
+    </message>
+    <message>
+        <source>Track %1 (AC-3 %2, %3) looks like the AC-3 core of the TrueHD track %4. Put it on the disc as the core of the TrueHD track, or keep it as a separate audio track?</source>
+        <translation>Дорожка %1 (AC-3 %2, %3) похожа на ядро AC-3 дорожки TrueHD %4. Записать её на диск как ядро дорожки TrueHD или оставить отдельной звуковой дорожкой?</translation>
+    </message>
+    <message>
+        <source>As the core</source>
+        <translation>Как ядро</translation>
+    </message>
+    <message>
+        <source>As a separate track</source>
+        <translation>Как отдельную дорожку</translation>
+    </message>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>

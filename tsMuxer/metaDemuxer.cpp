@@ -3542,6 +3542,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
     AVChapters chapters;
     int64_t fileDuration = 0;
     int64_t videoStart = 0, videoEnd = 0;
+    std::string writingApp;
     vector<CheckStreamRez> streams, Vstreams;
     std::unique_ptr<AbstractDemuxer> demuxer;
     auto unquoted = unquoteStr(fileName);
@@ -3714,6 +3715,8 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             if (!demuxer->getVideoSpanNano(videoStart, videoEnd))
                 videoStart = videoEnd = 0;
         }
+        if (const auto mkv = dynamic_cast<MatroskaDemuxer*>(demuxer.get()))
+            writingApp = mkv->writingApplication();
         // A Matroska file played by its ordered edition or with the files linked after it is muxed as that timeline,
         // so its length, its marks and its video span are the timeline's: the window takes the chapters it writes
         // into the meta from the marks.
@@ -3786,6 +3789,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
     rez.fileDurationNano = fileDuration;
     rez.videoStartNano = videoStart;
     rez.videoEndNano = videoEnd;
+    rez.writingApp = writingApp;
     rez.streams = Vstreams;
     return rez;
 }

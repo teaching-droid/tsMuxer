@@ -196,6 +196,8 @@ struct DetectStreamRez
     // the container could not say.
     int64_t videoStartNano = 0;
     int64_t videoEndNano = 0;
+    // A Matroska file's WritingApp, empty for other files. The window takes it to tell a file tsMuxeR wrote.
+    std::string writingApp;
 };
 
 // ISO 639-2 gives twenty languages two codes, a bibliographic one and a terminological one,

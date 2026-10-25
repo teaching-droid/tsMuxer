@@ -4174,6 +4174,22 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source> (track %1 in the file)</source>
         <translation> (pista %1 en el archivo)</translation>
     </message>
+    <message>
+        <source>TrueHD and its AC-3 core</source>
+        <translation>TrueHD y su núcleo AC-3</translation>
+    </message>
+    <message>
+        <source>Track %1 (AC-3 %2, %3) looks like the AC-3 core of the TrueHD track %4. Put it on the disc as the core of the TrueHD track, or keep it as a separate audio track?</source>
+        <translation>La pista %1 (AC-3 %2, %3) parece el núcleo AC-3 de la pista TrueHD %4. ¿Ponerla en el disco como núcleo de la pista TrueHD, o mantenerla como una pista de audio aparte?</translation>
+    </message>
+    <message>
+        <source>As the core</source>
+        <translation>Como núcleo</translation>
+    </message>
+    <message>
+        <source>As a separate track</source>
+        <translation>Como pista aparte</translation>
+    </message>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>

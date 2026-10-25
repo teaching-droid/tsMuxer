@@ -2668,6 +2668,7 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
     mplsFileList.clear();
     chapters.clear();
     fileDuration = 0;
+    listedWritingApp.clear();
     videoStart = videoEnd = 0;
     for (int i = 0; i < procStdOutput.size(); ++i)
     {
@@ -2678,6 +2679,12 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
             if (codecInfo)
                 codecInfo->trackName = codecInfo->srcTrackName =
                     QtCompat::strMid(procStdOutput[i], QString("Stream name: ").length());
+            continue;
+        }
+        // The file's own text as well, so read first and nothing else looked for in it
+        if (procStdOutput[i].startsWith("Writing application: "))
+        {
+            listedWritingApp = QtCompat::strMid(procStdOutput[i], QString("Writing application: ").length());
             continue;
         }
         if (procStdOutput[i].startsWith("Stream flags: "))
@@ -3339,6 +3346,9 @@ void TsMuxerWindow::onAudioSubtitlesParamsChanged()
     // TrueHD + AC-3 merge (CLI meta parameters on A_MLP only)
     if (codecInfo->programName == "A_MLP")
     {
+        // A number the user puts in the box, 0 included, is theirs: the window no longer sets it.
+        if (ui->mergeAc3TrackSpinBox->value() != codecInfo->mergeAc3Track)
+            codecInfo->mergeAc3Auto = false;
         codecInfo->mergeAc3Track = ui->mergeAc3TrackSpinBox->value();
         codecInfo->mergeAc3File = ui->mergeAc3FileLineEdit->text().trimmed();
         updateMergeAc3Exclusion(codecInfo);
@@ -3745,6 +3755,7 @@ void TsMuxerWindow::trackLVItemChanged(QTableWidgetItem* item)
     // Before updateMetaLines, because unticking a layer can take the Dolby Vision selector away and
     // the meta is written from whether that selector is showing.
     updateDvProfileVisible();
+    updateAutoCoreMerge();  // a TrueHD row ticked or unticked takes its core with it
     updateMetaLines();
     updateMux3dLabel();  // a ticked or unticked 3D track makes the disc 3D or 2D
     ui->moveupBtn->setEnabled(ui->trackLV->currentItem() != 0);
@@ -3861,6 +3872,7 @@ void TsMuxerWindow::continueAddFile()
                 continue;
             }
         }
+        info.srcByTsMuxer = listedWritingApp.startsWith(QLatin1String("tsMuxeR"), Qt::CaseInsensitive);
         if (mplsFileList.isEmpty())
             info.fileList << newFileName;
         else
@@ -3966,6 +3978,7 @@ void TsMuxerWindow::continueAddFile()
     }
     chapters.clear();
     fileDuration = 0.0;
+    listedWritingApp.clear();
     videoStart = videoEnd = 0.0;
 
     ui->inputFilesLV->setCurrentItem(fileItem);
@@ -3975,6 +3988,7 @@ void TsMuxerWindow::continueAddFile()
         doAppendInt(mplsFileList[mplsCnt].name, mplsFileList[mplsCnt - 1].name, mplsFileList[mplsCnt].duration, false,
                     MPLS_M2TS);
     ui->inputFilesLV->setCurrentItem(ui->inputFilesLV->item(index));
+    updateAutoCoreMerge();
     updateMetaLines();
     ui->moveupBtn->setEnabled(ui->trackLV->currentRow() >= 0);
     ui->movedownBtn->setEnabled(ui->trackLV->currentRow() >= 0);
@@ -5030,6 +5044,115 @@ void TsMuxerWindow::followMergeRows(const int from, const int to)
         }
 }
 
+// ** A DISC MADE FROM TSMUXER'S OWN MATROSKA FILE LOST THE CORE OF ITS TRUEHD. **
+//
+// A Matroska file cannot carry the AC-3 core inside the TrueHD track the way a disc does, so tsMuxeR
+// writes it as an AC-3 track of its own, on the track number straight after the TrueHD track, with
+// the same language. Authored back to a disc, the two have to be braided again with merge-ac3-track=,
+// and the window never set it: the disc got a TrueHD track with no core, which a Blu-ray player
+// cannot rely on, and the core as a surplus AC-3 track, under a warning about MLP.
+//
+// The file says nothing more about the pair than that layout, so the layout is what is looked for, in
+// a Matroska source only (.mkv, .mka, .mks, .mk3d, .webm) and for a TrueHD track listed without a core:
+// the next track of the same file, AC-3 and not E-AC-3, in the same language, not marked as a
+// commentary, with the channels a core of this TrueHD has (as many, up to 5.1). The user is asked
+// about such a pair (updateAutoCoreMerge); anything else is left alone, and the box still takes any
+// row by hand.
+int TsMuxerWindow::coreRowOfTrueHd(const int row) const
+{
+    const auto codecAt = [this](const int i)
+    { return reinterpret_cast<const QtvCodecInfo*>(ui->trackLV->item(i, 0)->data(Qt::UserRole).toLongLong()); };
+    // "Channels: 5.1" is six, "Channels: 8" is eight
+    const auto channels = [](const QString& descr)
+    {
+        const int p = descr.indexOf("Channels: ");
+        if (p < 0)
+            return 0;
+        const QStringList parts = QtCompat::strMid(descr, p + 10).section(' ', 0, 0).split('.');
+        int n = 0;
+        for (const QString& part : parts) n += part.toInt();
+        return n;
+    };
+    // Only a TrueHD track of a Matroska file, and only one without a core of its own. A disc or a transport stream
+    // carries the core inside the TrueHD stream (listed as A_AC3, "AC3 core + TRUE-HD"), and an AC-3 track beside
+    // it there is a real track of its own, such as a compatibility mix: never paired, never asked about.
+    const QtvCodecInfo* thd = codecAt(row);
+    if (thd == nullptr || thd->programName != "A_MLP" || thd->displayName != "TRUE-HD" || thd->trackID == 0 ||
+        thd->fileList.isEmpty() || thd->descr.contains(QLatin1String("core"), Qt::CaseInsensitive) ||
+        !isMatroskaOutputName(unquoteStr(thd->fileList[0])))
+        return 0;
+    const int coreChannels = qMin(channels(thd->descr), 6);
+    for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+    {
+        const QtvCodecInfo* ac3 = codecAt(i);
+        if (i != row && ac3 != nullptr && ac3->programName == "A_AC3" && ac3->displayName == "AC3" &&
+            ac3->trackID == thd->trackID + 1 && !ac3->fileList.isEmpty() && ac3->fileList[0] == thd->fileList[0] &&
+            ac3->srcLang == thd->srcLang && !ac3->srcMkvFlags[5] && coreChannels > 0 &&
+            channels(ac3->descr) == coreChannels)
+            return i + 1;
+    }
+    return 0;
+}
+
+// A disc gets the pair braided when the user says the AC-3 track is the core, every other output keeps
+// them as they are: a Matroska output writes the core beside the TrueHD again by itself, and a demux
+// writes what the file holds. Only while the TrueHD row is ticked, so that unticking it to keep the
+// AC-3 alone still keeps the AC-3.
+//
+// The layout alone does not prove that the AC-3 track is the core, so the window asks, once per pair:
+// when a disc is first the output with the pair ticked, on adding the file or on choosing a disc. The
+// answer is kept. "As the core" is offered first for a file tsMuxeR wrote, where the pair is the core
+// it put there, and "As a separate track" for any other.
+void TsMuxerWindow::updateAutoCoreMerge()
+{
+    for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+    {
+        QtvCodecInfo* info = getCodecInfo(i);
+        if (info == nullptr || info->programName != "A_MLP" || !info->mergeAc3Auto || !info->mergeAc3File.isEmpty())
+            continue;
+        const int core = coreRowOfTrueHd(i);
+        if (core == 0 && info->mergeAc3Track == 0)
+            continue;
+        const bool disc = core > 0 && isDiskOutput() && ui->trackLV->item(i, 0)->checkState() == Qt::Checked;
+        if (disc && info->coreAnswer == 0)
+        {
+            info->coreAnswer = 2;  // while the question is open, a call from its event loop does not ask again
+            info->coreAnswer = askCoreOfTrueHd(i, core) ? 1 : 2;
+        }
+        info->mergeAc3Track = disc && info->coreAnswer == 1 ? core : 0;
+        if (i == ui->trackLV->currentRow())
+        {
+            const QSignalBlocker block(ui->mergeAc3TrackSpinBox);
+            ui->mergeAc3TrackSpinBox->setValue(info->mergeAc3Track);
+            updateMergeAc3Suffix();
+            updateMergeAc3Exclusion(info);
+        }
+    }
+}
+
+bool TsMuxerWindow::askCoreOfTrueHd(const int thdRow, const int coreRow)
+{
+    const QtvCodecInfo* thd = getCodecInfo(thdRow);
+    const QtvCodecInfo* ac3 = getCodecInfo(coreRow - 1);
+    const int p = ac3->descr.indexOf("Channels: ");
+    const QString channels = p >= 0 ? QtCompat::strMid(ac3->descr, p + 10).section(' ', 0, 0) : QString();
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle(tr("TrueHD and its AC-3 core"));
+    msgBox.setIcon(QMessageBox::Question);
+    msgBox.setText(tr("Track %1 (AC-3 %2, %3) looks like the AC-3 core of the TrueHD track %4. Put it on the disc as "
+                      "the core of the TrueHD track, or keep it as a separate audio track?")
+                       .arg(ac3->trackID)
+                       .arg(channels, ac3->srcLang.isEmpty() ? QStringLiteral("und") : ac3->srcLang)
+                       .arg(thd->trackID));
+    msgBox.setInformativeText(QDir::toNativeSeparators(unquoteStr(thd->fileList[0])));
+    QPushButton* asCore = msgBox.addButton(tr("As the core"), QMessageBox::AcceptRole);
+    QPushButton* asTrack = msgBox.addButton(tr("As a separate track"), QMessageBox::RejectRole);
+    msgBox.setDefaultButton(thd->srcByTsMuxer ? asCore : asTrack);
+    msgBox.setEscapeButton(asTrack);
+    msgBox.exec();
+    return msgBox.clickedButton() == asCore;
+}
+
 // True when this row is the one some TrueHD track is folding into itself.
 bool TsMuxerWindow::isRowMergedIntoTrueHd(const int row) const
 {
@@ -5853,6 +5976,7 @@ void TsMuxerWindow::updateOutputModeTexts()
 void TsMuxerWindow::applyOutputMode(const bool resetAudioPes)
 {
     updateOutputModeTexts();
+    updateAutoCoreMerge();  // a disc braids a TrueHD track and its core again, other outputs do not
     // A chosen output gets the usual value; a restored one keeps the tick that was remembered with it
     if (resetAudioPes)
         ui->checkBoxNewAudioPes->setChecked(!ui->radioButtonTS->isChecked());

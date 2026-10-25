@@ -4173,6 +4173,22 @@ Build the ISO anyway?</source>
         <source> (track %1 in the file)</source>
         <translation> (רצועה %1 בקובץ)</translation>
     </message>
+    <message>
+        <source>TrueHD and its AC-3 core</source>
+        <translation>TrueHD וליבת ה-AC-3 שלו</translation>
+    </message>
+    <message>
+        <source>Track %1 (AC-3 %2, %3) looks like the AC-3 core of the TrueHD track %4. Put it on the disc as the core of the TrueHD track, or keep it as a separate audio track?</source>
+        <translation>רצועה %1 (AC-3 %2, %3) נראית כמו ליבת ה-AC-3 של רצועת ה-TrueHD %4. לשים אותה על הדיסק כליבה של רצועת ה-TrueHD, או לשמור אותה כרצועת שמע נפרדת?</translation>
+    </message>
+    <message>
+        <source>As the core</source>
+        <translation>כליבה</translation>
+    </message>
+    <message>
+        <source>As a separate track</source>
+        <translation>כרצועה נפרדת</translation>
+    </message>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>

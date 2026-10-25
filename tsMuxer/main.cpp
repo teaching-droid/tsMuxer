@@ -685,9 +685,18 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
     }
 
     AVChapters& chapters = streamInfo.chapters;
-    const bool timeLines = !chapters.empty() || streamInfo.fileDurationNano > 0 || streamInfo.videoEndNano > 0;
+    // The application that wrote a Matroska file, on one line: the window asks whether an AC-3 track beside a TrueHD
+    // track is its core, and in a file tsMuxeR wrote it is. Control characters of the file's text are left out.
+    std::string writingApp;
+    for (const char c : streamInfo.writingApp)
+        if (static_cast<unsigned char>(c) >= 0x20)
+            writingApp += c;
+    const bool timeLines =
+        !chapters.empty() || streamInfo.fileDurationNano > 0 || streamInfo.videoEndNano > 0 || !writingApp.empty();
     if (timeLines)
         LTRACE(LT_INFO, 2, "");
+    if (!writingApp.empty())
+        LTRACE(LT_INFO, 2, "Writing application: " << writingApp);
     if (streamInfo.fileDurationNano)
         LTRACE(LT_INFO, 2, "Duration: " << floatToTime((double)streamInfo.fileDurationNano / 1e9));
     // Where the video starts and ends on the file's own clock. A join puts the next file where the video ends, which
@@ -4139,7 +4148,16 @@ int main(int argc, char** argv)
                     // totalSize() is the sum of source elementary-stream sizes; the muxed BD M2TS adds
                     // TS(188/184)+M2TS(192/188) framing, PSI/PCR/padding and UDF/BDMV overhead, so the
                     // real image runs ~5% larger. Compare that inflated estimate against the capacity.
-                    const int64_t estSize = muxerManager.totalSize() / 100 * 105;
+                    // A constant bitrate pads with null packets up to its rate, and then the image is the rate
+                    // times the length, however little the sources hold (paddedOutputSize). Not counted, a
+                    // constant bitrate image half as big again as the disc was reported as fitting before the mux.
+                    const int64_t estSize =
+                        (std::max)(muxerManager.totalSize() / 100 * 105, muxerManager.paddedOutputSize());
+                    if (muxerManager.paddedLengthUnknown())
+                        LTRACE(LT_INFO, 2,
+                               "Capacity guard: the sources do not state their length, so the null packets of the "
+                               "constant bitrate are not in the estimate; the finished disc is measured after the "
+                               "mux.");
                     const double estGb = estSize / 1e9;
                     const double capGb = discLimit / 1e9;
                     if (estSize > discLimit)

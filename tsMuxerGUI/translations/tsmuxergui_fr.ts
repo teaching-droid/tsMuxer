@@ -4173,6 +4173,22 @@ Créer l'ISO malgré tout ?</translation>
         <source> (track %1 in the file)</source>
         <translation> (piste %1 dans le fichier)</translation>
     </message>
+    <message>
+        <source>TrueHD and its AC-3 core</source>
+        <translation>TrueHD et son noyau AC-3</translation>
+    </message>
+    <message>
+        <source>Track %1 (AC-3 %2, %3) looks like the AC-3 core of the TrueHD track %4. Put it on the disc as the core of the TrueHD track, or keep it as a separate audio track?</source>
+        <translation>La piste %1 (AC-3 %2, %3) semble être le noyau AC-3 de la piste TrueHD %4. La mettre sur le disque comme noyau de la piste TrueHD, ou la garder comme piste audio séparée ?</translation>
+    </message>
+    <message>
+        <source>As the core</source>
+        <translation>Comme noyau</translation>
+    </message>
+    <message>
+        <source>As a separate track</source>
+        <translation>Comme piste séparée</translation>
+    </message>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>

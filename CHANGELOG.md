@@ -380,6 +380,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **The finished disc is measured against --disc-size,** as the window says: a warning when the image is larger than the disc, or, for a disc folder, the image its BDMV and CERTIFICATE folders make. Only an estimate was checked, before the mux.
 
+* **A constant bitrate disc too large for --disc-size was reported as fitting before the mux.** The estimate left out the null packets that --bitrate adds. It now counts the rate over the length of the title, so such a disc is refused before the mux, unless --allow-oversize is given. For a raw stream, whose length is not known before the mux, the log says that only the finished disc is measured.
+
 * **On Linux and macOS, a transport stream whose end filled the write buffer exactly was reported as failed,** with "Failed to write the end of the output", although the file was complete.
 
 * **Audio or video that begins after the first 64 MiB of a transport stream** is recognised: it was listed as "Can't detect stream type".
@@ -453,6 +455,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **HE-AAC from an MP4 or Matroska file** keeps its header: it was written as AAC LC at the rate of its core, half the rate it plays at, so a player that goes by the header played it without its high frequencies.
 
 ### Window
+
+* **A disc made from a Matroska file written by tsMuxeR lost the AC-3 core of its TrueHD track.** Such a file holds the core as an AC-3 track of its own, straight after the TrueHD track, and the window muxed the two apart: the disc had TrueHD without its core and an extra AC-3 track. For a disc, the window now asks whether that track goes on the disc as the core of the TrueHD track (merge-ac3-track=) or as a separate track, with "As the core" offered first for a file tsMuxeR wrote; the merge box shows the answer. The listing of a Matroska file shows the application that wrote it. The warning that MLP is not standard for BD disks now names merge-ac3-track= and merge-ac3-file=.
 
 * **The cut fields have a tick "Keep only the pictures inside the cut",** which cuts as earlier versions did.
 

@@ -4173,6 +4173,22 @@ Build the ISO anyway?</source>
         <source> (track %1 in the file)</source>
         <translation>（文件中的音轨 %1）</translation>
     </message>
+    <message>
+        <source>TrueHD and its AC-3 core</source>
+        <translation>TrueHD 及其 AC-3 核心</translation>
+    </message>
+    <message>
+        <source>Track %1 (AC-3 %2, %3) looks like the AC-3 core of the TrueHD track %4. Put it on the disc as the core of the TrueHD track, or keep it as a separate audio track?</source>
+        <translation>音轨 %1（AC-3 %2，%3）看起来是 TrueHD 音轨 %4 的 AC-3 核心。要把它作为 TrueHD 音轨的核心写入光盘，还是保留为单独的音频音轨？</translation>
+    </message>
+    <message>
+        <source>As the core</source>
+        <translation>作为核心</translation>
+    </message>
+    <message>
+        <source>As a separate track</source>
+        <translation>作为单独的音轨</translation>
+    </message>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>

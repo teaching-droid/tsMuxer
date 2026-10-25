@@ -185,6 +185,12 @@ class TsMuxerWindow : public QWidget
     [[nodiscard]] bool isRowMergedIntoTrueHd(int row) const;
     void updateMergeAc3Suffix();
     void followMergeRows(int from, int to);
+    // The row (from 1) of the AC-3 track that is the core of the TrueHD track on this row, 0 for none
+    [[nodiscard]] int coreRowOfTrueHd(int row) const;
+    // Sets or clears the merge of every TrueHD row whose merge the window chooses, for the output chosen
+    void updateAutoCoreMerge();
+    // Asks whether the AC-3 track on coreRow (from 1) goes on the disc as the core of the TrueHD track on thdRow
+    bool askCoreOfTrueHd(int thdRow, int coreRow);
     // Splitting is produced by the transport stream writer, so not every output can do it.
     [[nodiscard]] bool outputCanSplit() const;
     // Grey the Blu-ray tab's controls that the chosen output does not use.
@@ -248,6 +254,8 @@ class TsMuxerWindow : public QWidget
     QList<QtvCodecInfo> codecList;
     ChapterList chapters;
     double fileDuration;
+    // The "Writing application:" line of the listing of the file being added (a Matroska file's WritingApp)
+    QString listedWritingApp;
     // The listing's "Video start" and "Video end": where a join puts the file after this one. 0 when not listed.
     double videoStart = 0.0;
     double videoEnd = 0.0;

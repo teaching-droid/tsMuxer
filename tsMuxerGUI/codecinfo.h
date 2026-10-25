@@ -37,6 +37,16 @@ struct QtvCodecInfo
     // For A_MLP (TrueHD) only: when set (>0), adds merge-ac3-track=<n> to the meta line
     // to interleave a separate AC-3 compatibility track from the same MKV.
     int mergeAc3Track = 0;
+    // True while the merge above is the window's own choice: a TrueHD track of a Matroska file with
+    // what looks like its AC-3 core on the next track, which is how tsMuxeR writes the pair, is merged
+    // on a disc output when the user answered "As the core", and left apart on any other output. A
+    // number set or cleared by hand ends it.
+    bool mergeAc3Auto = true;
+    // The answer to the question whether that AC-3 track is the core: 0 not asked yet, 1 as the core,
+    // 2 as a separate track. Asked once per pair, not again when the output changes.
+    int coreAnswer = 0;
+    // The source is a Matroska file tsMuxeR wrote (its WritingApp), where such a pair is the core
+    bool srcByTsMuxer = false;
     // For A_MLP (TrueHD) only: when non-empty, adds merge-ac3-file="path" to the meta line
     // to interleave an external AC-3 elementary stream with a standalone TrueHD file.
     QString mergeAc3File;

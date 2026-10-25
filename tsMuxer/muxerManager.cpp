@@ -697,9 +697,14 @@ void MuxerManager::checkOtherTracks(const vector<StreamInfo>& ci) const
         if (aacFound)
             LTRACE(LT_ERROR, 2,
                    "Warning! AAC codec is not standard for BD disks, the disk will not play in a Blu-ray player.");
+        // It named no way out, though there is one: a TrueHD track from a Matroska file usually has its AC-3 core
+        // beside it as a track of its own, which is how tsMuxeR writes it, and the merge puts it back.
         if (mlpFound && !mlpMergedWithAc3)
             LTRACE(LT_ERROR, 2,
-                   "Warning! MLP codec is not standard for BD disks, the disk will not play in a Blu-ray player.");
+                   "Warning! MLP codec is not standard for BD disks, the disk will not play in a Blu-ray player. "
+                   "A disc carries TrueHD with its AC-3 core on the same stream: add merge-ac3-track=<the AC-3 "
+                   "track of the same file> or merge-ac3-file=<AC-3 file> to the A_MLP line, and leave that AC-3 "
+                   "out as a track of its own.");
         for (const auto& codec : notOnDisc)
             LTRACE(LT_ERROR, 2,
                    "Warning! " << codec << " is not a Blu-ray format, the disk will not play in a Blu-ray player.");
@@ -1509,6 +1514,18 @@ void MuxerManager::parseMuxOpt(const string& opts)
         {
             m_allowOversize = true;
         }
+        // Read here as well for the fit-to-disc estimate; the transport stream muxer reads and checks them for the mux
+        else if ((paramPair[0] == "--bitrate" || paramPair[0] == "--maxbitrate" || paramPair[0] == "--minbitrate") &&
+                 paramPair.size() > 1)
+        {
+            const auto rate = static_cast<int64_t>(strToDouble(paramPair[1].c_str()) * 1000.0);
+            if (paramPair[0] == "--bitrate")
+                m_padRateGiven = rate;
+            else if (paramPair[0] == "--maxbitrate")
+                m_padMaxRate = rate;
+            else
+                m_padMinRate = rate;
+        }
         // It was a command line option of --bdmv-to-iso only and was ignored here with a warning: an image muxed
         // directly could not keep its data on the inner part of the disc, only one made from a folder in a second step.
         else if (paramPair[0] == "--inner-only")
@@ -1798,6 +1815,46 @@ void MuxerManager::waitForWriting() const
 }
 
 std::unique_ptr<AbstractMuxer> MuxerManager::createMuxer() { return m_factory.newInstance(this); }
+
+// ** THE FIT-TO-DISC ESTIMATE DID NOT COUNT THE NULL PACKETS OF A CONSTANT BITRATE. **
+//
+// It is the size of the sources and five per cent, which holds while the muxer writes what it is given. With
+// --bitrate it pads every second up to the rate, and the output is the rate times the length, whatever the sources
+// hold: an image of 449 MB was estimated at 208 MB and passed for a disc of 300 MB. The rate padded to is the one
+// TSMuxer::parseMuxOpt settles on: --bitrate, held to --maxbitrate when that is lower; without --bitrate, --minbitrate
+// under a --maxbitrate (alone it pads nothing). The length is what the sources state, less a cut. Each 188 byte
+// packet the rate counts is 192 bytes in a disc's clip.
+static int64_t padRateOf(const int64_t given, const int64_t maxRate, const int64_t minRate)
+{
+    if (given > 0)
+        return maxRate > 0 ? (std::min)(given, maxRate) : given;
+    if (maxRate > 0 && minRate > 0)
+        return (std::min)(minRate, maxRate);
+    return 0;
+}
+
+bool MuxerManager::paddedLengthUnknown()
+{
+    return padRateOf(m_padRateGiven, m_padMaxRate, m_padMinRate) > 0 && paddedOutputSize() == 0;
+}
+
+int64_t MuxerManager::paddedOutputSize()
+{
+    const int64_t rate = padRateOf(m_padRateGiven, m_padMaxRate, m_padMinRate);
+    if (rate <= 0)
+        return 0;
+    const auto toNano = [](const int64_t pts)
+    { return static_cast<int64_t>(static_cast<double>(pts) * 1e9 / static_cast<double>(INTERNAL_PTS_FREQ)); };
+    const int64_t stated = m_metaDemuxer.statedDurationNano();
+    if (stated <= 0)
+        return 0;
+    const int64_t fromNano = m_cutStart > 0 ? toNano(m_cutStart) : 0;
+    const int64_t toEndNano = m_cutEnd > 0 ? (std::min)(toNano(m_cutEnd), stated) : stated;
+    if (toEndNano <= fromNano)
+        return 0;
+    const double bytes = static_cast<double>(rate) / 8.0 * static_cast<double>(toEndNano - fromNano) / 1e9;
+    return static_cast<int64_t>(bytes / 188.0 * 192.0);
+}
 
 AbstractMuxer* MuxerManager::getMainMuxer() const { return m_mainMuxer.get(); }
 

@@ -110,6 +110,12 @@ class MuxerManager final
     // Fit-to-disc guard: target disc capacity in bytes (0 = disabled) + oversize override.
     [[nodiscard]] int64_t getDiscSizeLimit() const { return m_discSizeLimit; }
     [[nodiscard]] bool getAllowOversize() const { return m_allowOversize; }
+    // The bytes a constant bitrate output takes, null packets included: the rate the muxer pads to (--bitrate, or
+    // --minbitrate under --maxbitrate) over the length of the title, in 192 byte packets. 0 when nothing is padded,
+    // and when the sources do not state their length (a raw stream).
+    [[nodiscard]] int64_t paddedOutputSize();
+    // A rate is padded to, and the sources do not state the length it is padded over
+    [[nodiscard]] bool paddedLengthUnknown();
 
     // Dual-layer guard band: MB of zero-fill on each side of the BD-R DL layer break (-1 = off),
     // plus an optional break-sector override for testing / non-standard geometries.
@@ -215,6 +221,9 @@ class MuxerManager final
     bool m_reproducibleIsoHeader = false;
     int64_t m_discSizeLimit = 0;         // --disc-size: target disc capacity in bytes (0 = guard off)
     bool m_allowOversize = false;        // --allow-oversize: warn instead of abort on an over-capacity image
+    int64_t m_padRateGiven = -1;         // --bitrate, in bits a second (-1 = not given)
+    int64_t m_padMaxRate = -1;           // --maxbitrate
+    int64_t m_padMinRate = -1;           // --minbitrate
     bool m_noChapters = false;           // --no-chapters: the source's own chapters are not taken over
     int m_layerBreakGuardMB = -1;        // --layer-break-guard: MB of zero-fill each side of the DL break (-1 = off)
     int m_layerBreakGuardBeforeMB = -1;  // --layer-break-guard-before: MB before the break on its own (-1 = derived)
