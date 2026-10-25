@@ -34,6 +34,7 @@ static constexpr unsigned USER_START_SHORT_CODE = 0xb2;
 static constexpr unsigned PICTURE_CODING_EXT = 0x08;
 static constexpr unsigned SEQUENCE_EXT = 0x01;
 static constexpr unsigned SEQUENCE_DISPLAY_EXT = 0x02;
+static constexpr unsigned QUANT_MATRIX_EXT = 0x03;
 
 static constexpr unsigned MAX_PICTURE_SIZE = 256 * 1024;
 static constexpr unsigned MAX_HEADER_SIZE = 1024 * 4;

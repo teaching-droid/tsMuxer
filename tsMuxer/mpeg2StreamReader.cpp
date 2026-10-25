@@ -2,8 +2,11 @@
 
 #include <fs/systemlog.h>
 
+#include <cstring>
+
 #include "avPacket.h"
 #include "nalUnits.h"
+#include "tsMuxer.h"
 #include "tsPacket.h"
 #include "vodCoreException.h"
 #include "vod_common.h"
@@ -239,10 +242,15 @@ int MPEG2StreamReader::intDecodeNAL(uint8_t* buff)
         switch (*buff)
         {
         case SEQ_START_SHORT_CODE:
+        {
             rez = processSeqStartCode(buff);
             if (rez != 0)
                 return rez;
             nextNal = MPEGHeader::findNextMarker(buff, m_bufEnd) + 3;
+            // The header as it goes out (frame rate and aspect ratio written in) and the sequence extensions after
+            // it, without user data: what is repeated at an I picture that has no header of its own
+            m_seqHeaderCopy.assign(buff - 3, nextNal - 3);
+            bool seqLevel = true;  // still in the extensions and user data of the sequence header
             while (true)
             {
                 if (nextNal >= m_bufEnd)
@@ -253,8 +261,18 @@ int MPEG2StreamReader::intDecodeNAL(uint8_t* buff)
                     rez = processExtStartCode(nextNal);
                     if (rez != 0)
                         return rez;
+                    if (seqLevel)
+                    {
+                        uint8_t* extEnd = MPEGHeader::findNextMarker(nextNal, m_bufEnd);
+                        if (extEnd >= m_bufEnd)
+                            return NOT_ENOUGH_BUFFER;
+                        m_seqHeaderCopy.insert(m_seqHeaderCopy.end(), nextNal - 3, extEnd);
+                    }
+                    break;
+                case USER_START_SHORT_CODE:
                     break;
                 case GOP_START_SHORT_CODE:
+                    seqLevel = false;
                     m_framesAtGop = -1;
                     m_lastRef = -1;
                     break;
@@ -269,12 +287,32 @@ int MPEG2StreamReader::intDecodeNAL(uint8_t* buff)
                 }
                 nextNal = MPEGHeader::findNextMarker(nextNal, m_bufEnd) + 3;
             }
+        }
         case EXT_START_SHORT_CODE:
             return processExtStartCode(buff);
         case GOP_START_SHORT_CODE:
+            // ** A GROUP OF PICTURES WITHOUT A SEQUENCE HEADER BEGINS WITH ITS GROUP HEADER. ** Its picture is decoded
+            // here, as after a sequence header, so the picture's packet begins at the group header: it was left at the
+            // end of the picture before, and the I picture's PES, where a player starts, began without it. A stream
+            // that repeats the sequence header comes here through the case above and is unchanged.
             m_framesAtGop = -1;
             m_lastRef = -1;
-            break;
+            nextNal = MPEGHeader::findNextMarker(buff, m_bufEnd) + 3;
+            while (true)
+            {
+                if (nextNal >= m_bufEnd)
+                    return NOT_ENOUGH_BUFFER;
+                if (*nextNal == PICTURE_START_SHORT_CODE)
+                {
+                    rez = decodePicture(nextNal);
+                    if (rez == 0)
+                        m_lastDecodedPos = nextNal;
+                    return rez;
+                }
+                if (*nextNal != EXT_START_SHORT_CODE && *nextNal != USER_START_SHORT_CODE)
+                    return 0;  // not the syntax of H.262 6.2.2: the group header stays where it is
+                nextNal = MPEGHeader::findNextMarker(nextNal, m_bufEnd) + 3;
+            }
         case PICTURE_START_SHORT_CODE:
             rez = decodePicture(buff);
             return rez;
@@ -324,6 +362,7 @@ int MPEG2StreamReader::processSeqStartCode(uint8_t* buff)
         }
     }
     spsFound = true;
+    m_matrixSinceSeqHeader = false;
     m_lastIFrame = true;
     return 0;
 }
@@ -340,12 +379,69 @@ int MPEG2StreamReader::processExtStartCode(uint8_t* buff)
             m_sequence.deserializeExtension(bitReader);
             m_seqExtFound = true;
         }
+        else if (extType == QUANT_MATRIX_EXT)
+            m_matrixSinceSeqHeader = true;
         return 0;
     }
     catch (BitStreamException&)
     {
         return NOT_ENOUGH_BUFFER;
     }
+}
+
+// ** AN I PICTURE WHERE A PLAYER STARTS HAS A SEQUENCE HEADER IN FRONT OF IT. ** A disc's EP map has an entry at
+// every I picture, and a player starts decoding there after a chapter jump, a seek or a resume. A decoder that starts
+// there needs the sequence header: picture size, frame rate, profile and the quantiser matrices (H.262 6.1.1.6:
+// repeating it is what makes random access into the sequence possible). H.262 lets a stream carry it at its start
+// alone, and a stream so made gave a disc whose every entry but the first began with a bare picture header, where no
+// picture decodes. On a disc, the last sequence header, with its sequence extension and display extension, is now
+// written before each I picture that has none, as for H.264 and HEVC (muxerManager.cpp, setH264SPSCont;
+// HEVCStreamReader::writeAdditionData); so is the first I picture of each part of a split and of a cut, on any
+// output. A stream that repeats the header, as every disc and DVD does, is left exactly as it is. A repeated
+// sequence header sets the quantiser matrices again (H.262 6.3.3, 6.3.11), so the copy is not written where a quant
+// matrix extension changed them after the last header: the pictures that follow would decode with other matrices.
+int MPEG2StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPacket& avPacket,
+                                         PriorityDataInfo* priorityData)
+{
+    if (!(avPacket.flags & AVPacket::IS_IFRAME) || avPacket.data == nullptr || avPacket.size < 4 ||
+        m_seqHeaderCopy.empty())
+        return 0;
+    const bool entryPoint = (V3_flags & BLURAY_OUT) != 0;
+    if (!entryPoint && !m_firstFileFrame)
+        return 0;
+    m_firstFileFrame = false;
+    // the start code of the first unit of the picture's data
+    const uint8_t* p = avPacket.data;
+    const uint8_t* end = avPacket.data + avPacket.size;
+    while (p < end && *p == 0) ++p;
+    if (p + 1 >= end || *p != 1 || p - avPacket.data < 2 || p[1] == SEQ_START_SHORT_CODE)
+        return 0;
+    if (m_matrixSinceSeqHeader)
+    {
+        if (!m_seqRepeatSkipSaid)
+        {
+            m_seqRepeatSkipSaid = true;
+            LTRACE(LT_WARN, 2,
+                   "Warning: MPEG-2 track " << m_streamIndex
+                                            << ": an I picture has no sequence header in front of it, and a quant "
+                                               "matrix extension came after the last one, so none is repeated there. "
+                                               "A player cannot start at such a picture.");
+        }
+        return 0;
+    }
+    const auto len = static_cast<int64_t>(m_seqHeaderCopy.size());
+    if (dstEnd - dstBuffer < len)
+        THROW(ERR_COMMON, "MPEG-2 stream error: not enough buffer to repeat the sequence header")
+    if (!m_seqRepeatSaid)
+    {
+        m_seqRepeatSaid = true;
+        LTRACE(LT_INFO, 2,
+               "MPEG-2 track " << m_streamIndex
+                               << ": an I picture where a player can start has no sequence header; a copy of the "
+                                  "last one is written in front of it");
+    }
+    memcpy(dstBuffer, m_seqHeaderCopy.data(), static_cast<size_t>(len));
+    return static_cast<int>(len);
 }
 
 int MPEG2StreamReader::decodePicture(uint8_t* buff)

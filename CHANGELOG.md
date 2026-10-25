@@ -317,6 +317,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **MPEG-2 with a picture coded as two I fields** counts that picture once. Each such picture was counted twice, so the video got a frame longer at each one and the pictures after it came that much late.
 
+* **A disc made from MPEG-2 with its sequence header only at the start could be started only at its beginning.** A chapter jump or a seek began at an I picture without a sequence header, where no picture decodes. On a disc, each such I picture now gets a copy of the last sequence header, and the first I picture of each part of a split or a cut gets one on any output. Make such discs again.
+
 * **What tsMuxeR inserts into H.264, HEVC and VVC** (delimiters, parameter sets, SEI) gets a start code of four bytes, as the format asks at the head of an access unit. It took three where the stream used three.
 
 * **Film at 59.94 with delPulldown** gets no false "irregular pulldown marks" warnings.
