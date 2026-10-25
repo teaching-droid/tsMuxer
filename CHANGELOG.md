@@ -406,6 +406,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Matroska output
 
+* **A track that starts late held a whole Matroska mux in memory.** An audio or video track whose first packet comes more than ten seconds in, such as a commentary that begins minutes into the film, held back the start of the file, with every packet before it kept in memory. The file now starts after ten seconds, and the entry of that track is completed when its first packet comes.
+
 * **AAC in ADTS frames of more than one raw block** goes in a block per raw block, where the frame has a CRC. Such a frame went in as one block, with the positions and CRCs of its blocks inside, and most of it did not decode.
 
 * **The display size follows the pixel shape** the H.264 or HEVC video gives. Square pixels at 720x576 or 720x480 were shown at 4:3, and HEVC at 1440x1080 with 4:3 pixels was shown at 4:3 instead of 16:9. A shape within 3 % of a common one, such as 4:3, is written as that one, and when the pixel shape changes within the stream, one shape is used for the whole track. Video that gives no pixel shape is shown as before.

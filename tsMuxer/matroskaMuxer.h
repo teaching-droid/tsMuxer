@@ -326,6 +326,13 @@ class MatroskaMuxer final : public AbstractMuxer
     void writeSegmentInfo();
     // Write Tracks element into m_segmentBody
     void writeTracks();
+    std::vector<uint8_t> buildTracksElement(std::vector<uint8_t>& allEntries,
+                                            std::map<int, int64_t>& channelsAtInEntries, int sizeBytes);
+    void noteTracksWritten(int64_t elementFilePos, const std::vector<uint8_t>& element,
+                           std::vector<uint8_t>& allEntries, const std::map<int, int64_t>& channelsAtInEntries);
+    void writeVoidExact(int64_t totalBytes);
+    void rewriteTracks();
+    void lateTrackArrived(int streamIdx);
     // Write a single TrackEntry and return its serialized bytes
     std::vector<uint8_t> buildTrackEntry(const MkvTrackInfo& track, int* channelsValueAt = nullptr);
     static int writeColourInfo(uint8_t* dst, const MkvTrackInfo& track);
@@ -520,7 +527,8 @@ class MatroskaMuxer final : public AbstractMuxer
 
     // Deferred header writing: SegmentInfo + Tracks are written once ALL tracks
     // have received at least one packet, because stream readers haven't fully
-    // initialized (e.g. audio sample rate / channels) at openDstFile time.
+    // initialized (e.g. audio sample rate / channels) at openDstFile time. A track
+    // that has sent nothing after ten seconds of packets is not waited for (muxPacket).
     bool m_headerWritten;
     // Has the destination actually been created yet? openDstFile deliberately does not create it.
     bool m_destinationOpen;
@@ -534,6 +542,12 @@ class MatroskaMuxer final : public AbstractMuxer
     static constexpr int64_t PRE_HEADER_MAX_SPAN = 10 * INTERNAL_PTS_FREQ;
     bool m_preHeaderSpanStarted = false;
     int64_t m_preHeaderMinPts = 0;
+    // Tracks the header did not wait for, because the packets held for them already spanned PRE_HEADER_MAX_SPAN with
+    // nothing from them (muxPacket). Each keeps this much room after the Tracks element, to complete its entry in.
+    std::set<int> m_lateStreams;
+    static constexpr int64_t LATE_TRACK_RESERVE = 64 * 1024;
+    // Absolute file position where the room after the Tracks element of the current file ends, 0 for none
+    int64_t m_tracksReservedEnd = 0;
 
     // Buffered packets accumulated before the header is written.
     struct BufferedPacket
@@ -549,6 +563,8 @@ class MatroskaMuxer final : public AbstractMuxer
 
     // Refresh track properties from codec readers (called when readers are initialized)
     void refreshTrackProperties();
+    void refreshTrackFromReader(MkvTrackInfo& track);
+    bool makeAc3CoreTrack(int streamIdx, MkvTrackInfo& track, MkvTrackInfo& core);
     // Is a Dolby Vision fold possible at all, in the sense that the track list does not rule it
     // out? A necessary condition only, asked before the destination is opened so that a mux which
     // cannot run does not truncate a file. The exact test lives in refreshTrackProperties.

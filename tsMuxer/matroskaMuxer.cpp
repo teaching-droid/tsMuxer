@@ -1656,10 +1656,12 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track, i
     return inner;
 }
 
-void MatroskaMuxer::writeTracks()
+// The Tracks element whole: its header, the CRC-32 and every entry. allEntries is given the entries, and
+// channelsAtInEntries where each Channels value lies among them. sizeBytes > 0 writes the size of the element in that
+// many bytes.
+std::vector<uint8_t> MatroskaMuxer::buildTracksElement(std::vector<uint8_t>& allEntries,
+                                                       std::map<int, int64_t>& channelsAtInEntries, const int sizeBytes)
 {
-    m_tracksPos = m_file.pos() - m_segmentStartPos;
-
     // Build all track entries, in TRACK NUMBER order rather than in map order. The map is keyed by
     // stream index because that is what packets are routed by, and the AC-3 core companion of a
     // TrueHD track is keyed above every real stream to stay clear of them, which would otherwise put
@@ -1677,8 +1679,8 @@ void MatroskaMuxer::writeTracks()
     std::sort(ordered.begin(), ordered.end(),
               [](const MkvTrackInfo* a, const MkvTrackInfo* b) { return a->trackNumber < b->trackNumber; });
 
-    std::vector<uint8_t> allEntries;
-    std::map<int, int64_t> channelsAtInEntries;
+    allEntries.clear();
+    channelsAtInEntries.clear();
     for (const auto* trackPtr : ordered)
     {
         int channelsAt = -1;
@@ -1694,19 +1696,123 @@ void MatroskaMuxer::writeTracks()
         allEntries.insert(allEntries.end(), entryContent.begin(), entryContent.end());
     }
 
-    // Write Tracks master element
     uint8_t header[16];
     int hdrLen = ebml_write_id(header, MATROSKA_ID_TRACKS);
-    hdrLen += ebml_write_size(header + hdrLen, allEntries.size() + CRC_ELEMENT_BYTES);
-    writeToFile(header, hdrLen);
-    beginCrc();
-    m_tracksCrcFilePos = m_crcValuePos;
-    const int64_t entriesFilePos = m_file.pos();
+    hdrLen += sizeBytes > 0 ? ebml_write_size_fixed(header + hdrLen, allEntries.size() + CRC_ELEMENT_BYTES, sizeBytes)
+                            : ebml_write_size(header + hdrLen, allEntries.size() + CRC_ELEMENT_BYTES);
+    std::vector<uint8_t> element(header, header + hdrLen);
+    uint8_t crc[CRC_ELEMENT_BYTES];
+    putCrcElement(crc, static_cast<uint32_t>(crc32(0L, allEntries.data(), static_cast<uInt>(allEntries.size()))));
+    element.insert(element.end(), crc, crc + CRC_ELEMENT_BYTES);
+    element.insert(element.end(), allEntries.begin(), allEntries.end());
+    return element;
+}
+
+// Where the Tracks element just written lies, for the patches made to it later (finishPart, rewriteTracks)
+void MatroskaMuxer::noteTracksWritten(const int64_t elementFilePos, const std::vector<uint8_t>& element,
+                                      std::vector<uint8_t>& allEntries,
+                                      const std::map<int, int64_t>& channelsAtInEntries)
+{
+    const int64_t entriesFilePos = elementFilePos + static_cast<int64_t>(element.size() - allEntries.size());
+    m_tracksCrcFilePos = entriesFilePos - 4;
     m_tracksBodyFilePos = entriesFilePos;
-    m_tracksBody = allEntries;
+    m_tracksBody = std::move(allEntries);
     for (const auto& [streamIdx, at] : channelsAtInEntries) m_channelsValueFilePos[streamIdx] = entriesFilePos + at;
-    writeToFile(allEntries);
-    endCrc();
+}
+
+// A Void element of exactly totalBytes, header included: an eight byte size from 9 bytes up, a one byte size below.
+// One byte cannot be a Void, and rewriteTracks never leaves one.
+void MatroskaMuxer::writeVoidExact(const int64_t totalBytes)
+{
+    if (totalBytes < 2)
+        return;
+    const int sizeBytes = totalBytes >= 9 ? 8 : 1;
+    uint8_t buf[16];
+    int len = ebml_write_id(buf, EBML_ID_VOID);
+    len += ebml_write_size_fixed(buf + len, static_cast<uint64_t>(totalBytes - 1 - sizeBytes), sizeBytes);
+    writeToFile(buf, len);
+    const std::vector<uint8_t> filler(static_cast<size_t>(totalBytes - len), 0);
+    writeToFile(filler);
+}
+
+void MatroskaMuxer::writeTracks()
+{
+    m_tracksPos = m_file.pos() - m_segmentStartPos;
+    std::vector<uint8_t> allEntries;
+    std::map<int, int64_t> channelsAtInEntries;
+    const std::vector<uint8_t> element = buildTracksElement(allEntries, channelsAtInEntries, 0);
+    const int64_t elementFilePos = m_file.pos();
+    writeToFile(element);
+    noteTracksWritten(elementFilePos, element, allEntries, channelsAtInEntries);
+
+    // A track that has not delivered its first packet yet (muxPacket) has an entry made of what its reader knows so
+    // far. Room is kept after the element, so that the entry can be completed in place when the packet comes.
+    m_tracksReservedEnd = 0;
+    if (!m_lateStreams.empty())
+    {
+        writeVoidExact(LATE_TRACK_RESERVE * static_cast<int64_t>(m_lateStreams.size()));
+        m_tracksReservedEnd = m_file.pos();
+    }
+}
+
+// The first packet of a track that the header did not wait for (muxPacket). Its reader has now read the start of its
+// stream, so the values of its entry are known, and the Tracks element is written again in the room kept for it.
+// Blocks of the other tracks are already in the file, so nothing that changes them is decided again: the track
+// numbers stay, and an AC-3 core found now becomes a track numbered after all the others.
+void MatroskaMuxer::lateTrackArrived(const int streamIdx)
+{
+    const auto it = m_tracks.find(streamIdx);
+    if (it == m_tracks.end())
+        return;
+    MkvTrackInfo& track = it->second;
+    refreshTrackFromReader(track);
+    buildCodecPrivate(track);
+    if (MkvTrackInfo core; track.ac3CoreStreamIndex < 0 && makeAc3CoreTrack(streamIdx, track, core))
+    {
+        int last = 0;
+        for (const auto& [index, t] : m_tracks) last = (std::max)(last, t.trackNumber);
+        core.trackNumber = last + 1;
+        m_tracks[core.streamIndex] = core;
+    }
+    // A folded view or layer: the record of the merged track is built from both readers (writeDeferredHeader)
+    const int baseIdx = track.foldedIntoStream >= 0 ? track.foldedIntoStream : streamIdx;
+    if (const auto base = m_tracks.find(baseIdx); base != m_tracks.end() && base->second.foldElStreamIndex >= 0)
+        if (const auto el = m_tracks.find(base->second.foldElStreamIndex); el != m_tracks.end())
+        {
+            if (base->second.foldKind == MkvTrackInfo::FoldKind::MvcDependent)
+                base->second.mvcConfig = buildMVCDecoderConfigRecord(base->second.codecReader, el->second.codecReader);
+            else
+                base->second.dvElConfig = el->second.codecPrivate;
+        }
+    rewriteTracks();
+}
+
+void MatroskaMuxer::rewriteTracks()
+{
+    if (m_tracksReservedEnd == 0)
+        return;
+    const int64_t elementFilePos = m_segmentStartPos + m_tracksPos;
+    const int64_t room = m_tracksReservedEnd - elementFilePos;
+    std::vector<uint8_t> allEntries;
+    std::map<int, int64_t> channelsAtInEntries;
+    std::vector<uint8_t> element = buildTracksElement(allEntries, channelsAtInEntries, 0);
+    // One byte left over cannot be a Void: the size of the element is written one byte longer instead
+    if (static_cast<int64_t>(element.size()) + 1 == room)
+        element = buildTracksElement(allEntries, channelsAtInEntries,
+                                     ebml_size_size(allEntries.size() + CRC_ELEMENT_BYTES) + 1);
+    if (static_cast<int64_t>(element.size()) > room)
+    {
+        LTRACE(LT_WARN, 2,
+               "Warning: the track entries no longer fit the room kept for them, so a track that started late keeps "
+               "the entry written before its first packet.");
+        return;
+    }
+    const int64_t resume = m_file.pos();
+    m_file.seek(elementFilePos);
+    writeToFile(element);
+    writeVoidExact(room - static_cast<int64_t>(element.size()));
+    m_file.seek(resume);
+    noteTracksWritten(elementFilePos, element, allEntries, channelsAtInEntries);
 }
 
 // ──────────────── openDstFile ────────────────────────────────────────────────
@@ -1882,6 +1988,222 @@ void MatroskaMuxer::openDestination()
     writeVoid(SEEKHEAD_RESERVE);
 }
 
+// What a track's own reader says about it: its codec ID, and the picture or sound values of its track entry. Each
+// is known once the reader has read the start of its stream. Called for every track when the header is written,
+// and again for a track whose first packet came after it (lateTrackArrived).
+void MatroskaMuxer::refreshTrackFromReader(MkvTrackInfo& track)
+{
+    // The codec ID has to be re-derived here for the same reason the sizes below do. At
+    // intAddStream time an AC-3 family reader has not seen a frame yet, so isEAC3() is still
+    // false and getCodecInfo() hands back the plain AC-3 entry: an E-AC-3 track was being
+    // declared as A_AC3 and a TrueHD track would be too. The payload was always correct, only
+    // the CodecID was wrong, so a player that trusts it would decode the wrong thing.
+    const CodecInfo& info = track.codecReader->getCodecInfo();
+    if (info.codecID != track.codecID)
+    {
+        track.codecID = info.codecID;
+        track.matroskaCodecID = codecNameToMatroskaID(info.programName, info.codecID);
+    }
+    // An AC-3 core with an E-AC-3 part beside it is E-AC-3 to a decoder, and is declared so. It
+    // went out as A_AC3, named after whichever frame happened to be read last.
+    if (const auto ac3 = dynamic_cast<AC3StreamReader*>(track.codecReader);
+        ac3 && track.ac3CoreOfStream < 0 && track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_AC3 && ac3->carriesEac3())
+        track.matroskaCodecID = MATROSKA_CODEC_ID_AUDIO_EAC3;
+    // Three formats were labelled as their bigger relatives, because one reader serves both: MPEG-1 video as
+    // V_MPEG2, MLP that is not TrueHD as A_TRUEHD, and DTS Express as plain DTS. Matroska names each on its own,
+    // and a player that trusts the label decodes the wrong thing. What a stream is, is known once its header is
+    // read.
+    if (const auto m2v = dynamic_cast<MPEG2StreamReader*>(track.codecReader);
+        m2v && track.matroskaCodecID == MATROSKA_CODEC_ID_VIDEO_MPEG2 && m2v->isMpeg1())
+        track.matroskaCodecID = MATROSKA_CODEC_ID_VIDEO_MPEG1;
+    if (const auto mlp = dynamic_cast<MLPStreamReader*>(track.codecReader);
+        mlp && track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_TRUEHD && mlp->m_subType == MlpSubType::stMLP)
+        track.matroskaCodecID = MATROSKA_CODEC_ID_AUDIO_MLP;
+    if (const auto dts = dynamic_cast<DTSStreamReader*>(track.codecReader);
+        dts && track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_DTS &&
+        dts->getDTSHDMode() == DTSStreamReader::DTSHD_SUBTYPE::DTS_SUBTYPE_EXPRESS)
+        track.matroskaCodecID = MATROSKA_CODEC_ID_AUDIO_DTS_EXPRESS;
+    // MPEG audio is one reader for three layers, and Matroska names each: an MP2 track was
+    // declared A_MPEG/L3. The layer is known once a frame has been read.
+    if (const auto mpa = dynamic_cast<MpegAudioStreamReader*>(track.codecReader); mpa && mpa->getLayer() >= 1)
+        track.matroskaCodecID = mpa->getLayer() == 1   ? "A_MPEG/L1"
+                                : mpa->getLayer() == 2 ? "A_MPEG/L2"
+                                                       : MATROSKA_CODEC_ID_AUDIO_MPEG_L3;
+
+    if (track.trackType == 1)  // video
+    {
+        // MPEG-4 Part 2 and ProRes copied from an MP4 file: the size the MP4 gave, read with the first record
+        if (const auto copy = dynamic_cast<const VideoCopyStreamReader*>(track.codecReader))
+        {
+            track.width = copy->width();
+            track.height = copy->height();
+            track.fps = copy->fps();
+        }
+        const auto mpegReader = dynamic_cast<MPEGStreamReader*>(track.codecReader);
+        if (mpegReader)
+        {
+            track.width = mpegReader->getStreamWidth();
+            track.height = mpegReader->getStreamHeight();
+            track.fps = mpegReader->getFPS();
+            track.interlaced = mpegReader->getInterlaced();
+            // HEVC coded as fields: each block is one field, a picture of half the frame's height. It was written
+            // as progressive video of that height, shown squashed; it is marked interlaced, at its frame's shape.
+            if (const auto hevc = dynamic_cast<HEVCStreamReader*>(mpegReader); hevc && hevc->fieldCoded())
+                track.interlaced = track.fieldPictures = true;
+            track.streamAR = mpegReader->getStreamAR();
+            track.sampleAR = mpegReader->getSampleAspectRatio();
+            track.arForced = mpegReader->aspectRatioForced();
+            track.hasColourDesc =
+                mpegReader->getColourDesc(track.colourPrimaries, track.colourTransfer, track.colourMatrix);
+            // getStreamHDR: 1 SDR, 2 HDR10, 4 Dolby Vision, 16 HDR10+. Everything except
+            // plain SDR carries an HDR10 base layer, so mastering metadata applies.
+            //
+            // Only HEVC answers it: every other reader says 0, which was taken for HDR, and the mastering values
+            // are the track's own. They were read from one global set, so plain H.264 beside an HDR10 HEVC track
+            // was given the HEVC track's mastering display and light levels, and two HDR10 tracks shared one set.
+            track.isHdr10 = false;
+            if (const auto hevc = dynamic_cast<HEVCStreamReader*>(track.codecReader))
+            {
+                track.isHdr10 = hevc->getStreamHDR() != 1;
+                std::copy_n(hevc->getHdr10Metadata(), 6, track.hdr10Metadata);
+            }
+            // Dolby Vision configuration, when the stream carries an RPU. Written whatever
+            // the profile, because a single layer profile 8 track is complete on its own; a
+            // profile 7 base layer without its enhancement layer is handled below.
+            if (const auto hevcReader = dynamic_cast<HEVCStreamReader*>(track.codecReader))
+                track.dvBlockAddIdType = hevcReader->buildDoViConfigRecord(track.dvConfig);
+        }
+    }
+    else if (track.trackType == 2)  // audio
+    {
+        const auto simpleReader = dynamic_cast<SimplePacketizerReader*>(track.codecReader);
+        if (simpleReader)
+        {
+            track.sampleRate = simpleReader->getFreq();
+            track.channels = simpleReader->getChannels();
+        }
+        // A DD+ 7.1 track carries channels 7 and 8 in a dependent substream, and the reader counts only the 5.1
+        // of the independent one, so the track header said 6 while the audio decodes as 7.1. The same two
+        // channels are added wherever the listing and the transport stream descriptor name the track 7.1.
+        if (const auto ac3 = dynamic_cast<AC3StreamReader*>(track.codecReader);
+            ac3 && track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_EAC3 && ac3->hasExtChannels())
+            track.channels = ac3->getChannels() + 2;
+        const auto lpcmReader = dynamic_cast<LPCMStreamReader*>(track.codecReader);
+        if (lpcmReader)
+            track.bitDepth = lpcmReader->m_bitsPerSample == 20 ? 24 : lpcmReader->m_bitsPerSample;
+        // BitDepth for the lossless codecs whose readers know it: FLAC from its STREAMINFO, DTS-HD from its
+        // extension. It was written for LPCM alone.
+        // An MP3's LAME delay and padding (muxPacket), in samples, with the 529 samples an MP3 decoder itself puts
+        // in front: what a player skips at the start, and what it drops of the last frame.
+        if (track.mp3Delay >= 0 && track.sampleRate > 0)
+        {
+            track.srcCodecDelayNs =
+                static_cast<uint64_t>(track.mp3Delay + 529) * 1000000000ULL / static_cast<uint64_t>(track.sampleRate);
+            if (track.mp3Padding > 529)
+                track.endPaddingNs = static_cast<int64_t>(track.mp3Padding - 529) * 1000000000LL / track.sampleRate;
+        }
+        // Vorbis: the first packet gives no sound, its length is the CodecDelay a player skips, so that the sound
+        // starts at the time of the second packet, as a Matroska source has it.
+        if (const auto vorbis = dynamic_cast<VorbisStreamReader*>(track.codecReader);
+            vorbis && vorbis->leadSamples() > 0 && track.sampleRate > 0)
+            track.srcCodecDelayNs =
+                static_cast<uint64_t>(vorbis->leadSamples()) * 1000000000ULL / static_cast<uint64_t>(track.sampleRate);
+        if (const auto flac = dynamic_cast<FLACStreamReader*>(track.codecReader); flac && flac->getBitsPerSample() > 0)
+            track.bitDepth = flac->getBitsPerSample();
+        if (const auto dts = dynamic_cast<DTSStreamReader*>(track.codecReader); dts && dts->getHDBitDepth() > 0)
+            track.bitDepth = dts->getHDBitDepth();
+        if (const auto alac = dynamic_cast<AlacStreamReader*>(track.codecReader); alac && alac->getBitDepth() > 0)
+            track.bitDepth = alac->getBitDepth();
+        // DefaultDuration for audio whose frames are all of one length: the step the reader moves each frame's
+        // time by, so it is the spacing of the blocks written. Not for E-AC-3, DTS-HD, TrueHD, FLAC, Opus, Vorbis
+        // or LPCM, whose frames may differ in length. ALAC's do only in the last, which says so (writeBlock).
+        const std::string kind = track.codecReader->getCodecInfo().displayName;
+        if (simpleReader &&
+            (track.codecID == CODEC_A_AAC || track.codecID == CODEC_A_MPEG_AUDIO || track.codecID == CODEC_A_ALAC ||
+             (track.codecID == CODEC_A_AC3 && kind == "AC3") || (track.codecID == CODEC_A_DTS && kind == "DTS")))
+        {
+            double frame = simpleReader->frameDurationInternal();
+            // AAC whose ADTS frames carry more than one raw block, each 1024 samples: a Matroska block holds one
+            // (writeAacRawBlocks), where the frame's CRC says where each begins
+            if (const auto aac = dynamic_cast<AACStreamReader*>(track.codecReader);
+                aac && track.codecID == CODEC_A_AAC && aac->m_rdb > 0 && aac->m_crc)
+            {
+                track.aacSplit = aac->m_rdb + 1;
+                frame /= track.aacSplit;
+            }
+            if (frame > 0)
+                track.audioFrameNs = static_cast<uint64_t>(llround(frame * 1e9 / INTERNAL_PTS_FREQ));
+        }
+    }
+}
+
+// The AC-3 core of a TrueHD track, as a track of its own (refreshTrackProperties). False when the track has none.
+bool MatroskaMuxer::makeAc3CoreTrack(const int streamIdx, MkvTrackInfo& track, MkvTrackInfo& core)
+{
+    if (track.trackType != 2 || track.matroskaCodecID != MATROSKA_CODEC_ID_AUDIO_TRUEHD || track.dropAc3Core)
+        return false;
+    // isTrueHD means "AC-3 core plus lossless", the disc arrangement. A TrueHD track read out
+    // of a Matroska file has no core, and down-to-ac3 has already turned the whole thing into
+    // plain AC-3.
+    const auto ac3 = dynamic_cast<AC3Codec*>(track.codecReader);
+    const bool discCore = ac3 != nullptr && ac3->isTrueHD() && !ac3->getDownconvertToAC3();
+
+    // ** THE SAME PAIRING ARRIVING BY THE OTHER ROUTE USED TO BE THROWN AWAY IN SILENCE. **
+    //
+    // merge-ac3-track= and merge-ac3-file= build a TrueHD track with a core beside it out of two
+    // separate sources, and they do it through a reader that is not in the AC-3 family at all,
+    // so the question above answered no, no companion track was made, and every core packet met
+    // the ac3CoreStreamIndex < 0 line in muxPacketInternal and was dropped. Measured on a
+    // 4,261,662 byte TrueHD stream with a 1,120,000 byte AC-3 companion: the output was the same
+    // size to the byte as the same TrueHD muxed with no companion at all, one track instead of
+    // two, at "Mux successful complete" with nothing said. The core the user asked for was gone.
+    //
+    // The question that decides this is whether the track has a core travelling with it, and two
+    // readers can answer it.
+    const auto merged = dynamic_cast<TrueHDAC3MergeReader*>(track.codecReader);
+    const bool mergedCore = merged != nullptr && merged->hasAc3Core();
+
+    if (!discCore && !mergedCore)
+        return false;
+
+    // Real stream indexes are small and are what packets are routed by, so they cannot be
+    // renumbered to make room. The companion is keyed above every real one instead, which also
+    // places it after its TrueHD track in the file.
+    core.streamIndex = AC3_CORE_STREAM_BASE + streamIdx;
+    core.codecReader = track.codecReader;
+    core.codecID = CODEC_A_AC3;
+    core.matroskaCodecID = MATROSKA_CODEC_ID_AUDIO_AC3;
+    core.trackType = 2;
+    core.language = track.language;
+    // The rate and channel count read from an AC-3 family reader a few lines above describe the
+    // CORE, not the lossless stream, so they belong to this track rather than the one they were
+    // read onto. A merged core is the other way round: its track was opened as A_MLP and carries
+    // the LOSSLESS figures, 8 channels where the core has 6, so the core is asked for its own.
+    core.sampleRate = mergedCore ? merged->ac3CoreSampleRate() : track.sampleRate;
+    core.channels = mergedCore ? merged->ac3CoreChannels() : track.channels;
+    core.markedDefault = false;
+    core.ac3CoreOfStream = streamIdx;
+    static std::mt19937_64 rng(std::random_device{}());
+    core.trackUID = rng() | 1ull << 63;  // 8 bytes always, as above
+
+    track.ac3CoreStreamIndex = core.streamIndex;
+
+    if (mergedCore)
+        LTRACE(LT_INFO, 2,
+               "TrueHD: the merged AC-3 core is written as its own track. Matroska cannot carry "
+               "it inside the lossless track the way a disc does, so the two travel side by "
+               "side here and merge-ac3-track= puts them back on one stream when this file is "
+               "authored to a disc. Use drop-ac3-core to leave the core out.");
+    else
+        LTRACE(LT_INFO, 2,
+               "TrueHD: keeping the AC-3 compatibility core as its own track. Matroska cannot "
+               "carry it inside the lossless track the way a disc does, and dropping it would "
+               "lose the only part a Blu-ray needs. Use merge-ac3-track= to put them back on "
+               "one stream when authoring a disc from this file, or drop-ac3-core to leave the "
+               "core out.");
+    return true;
+}
+
 void MatroskaMuxer::refreshTrackProperties()
 {
     // A track whose source stored BlockAdditions beside its frames keeps them, and so needs its MaxBlockAdditionID and
@@ -1932,153 +2254,7 @@ void MatroskaMuxer::refreshTrackProperties()
             typeDone.insert(track.trackType);
     }
 
-    for (auto& [streamIdx, track] : m_tracks)
-    {
-        // The codec ID has to be re-derived here for the same reason the sizes below do. At
-        // intAddStream time an AC-3 family reader has not seen a frame yet, so isEAC3() is still
-        // false and getCodecInfo() hands back the plain AC-3 entry: an E-AC-3 track was being
-        // declared as A_AC3 and a TrueHD track would be too. The payload was always correct, only
-        // the CodecID was wrong, so a player that trusts it would decode the wrong thing.
-        const CodecInfo& info = track.codecReader->getCodecInfo();
-        if (info.codecID != track.codecID)
-        {
-            track.codecID = info.codecID;
-            track.matroskaCodecID = codecNameToMatroskaID(info.programName, info.codecID);
-        }
-        // An AC-3 core with an E-AC-3 part beside it is E-AC-3 to a decoder, and is declared so. It
-        // went out as A_AC3, named after whichever frame happened to be read last.
-        if (const auto ac3 = dynamic_cast<AC3StreamReader*>(track.codecReader);
-            ac3 && track.ac3CoreOfStream < 0 && track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_AC3 &&
-            ac3->carriesEac3())
-            track.matroskaCodecID = MATROSKA_CODEC_ID_AUDIO_EAC3;
-        // Three formats were labelled as their bigger relatives, because one reader serves both: MPEG-1 video as
-        // V_MPEG2, MLP that is not TrueHD as A_TRUEHD, and DTS Express as plain DTS. Matroska names each on its own,
-        // and a player that trusts the label decodes the wrong thing. What a stream is, is known once its header is
-        // read.
-        if (const auto m2v = dynamic_cast<MPEG2StreamReader*>(track.codecReader);
-            m2v && track.matroskaCodecID == MATROSKA_CODEC_ID_VIDEO_MPEG2 && m2v->isMpeg1())
-            track.matroskaCodecID = MATROSKA_CODEC_ID_VIDEO_MPEG1;
-        if (const auto mlp = dynamic_cast<MLPStreamReader*>(track.codecReader);
-            mlp && track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_TRUEHD && mlp->m_subType == MlpSubType::stMLP)
-            track.matroskaCodecID = MATROSKA_CODEC_ID_AUDIO_MLP;
-        if (const auto dts = dynamic_cast<DTSStreamReader*>(track.codecReader);
-            dts && track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_DTS &&
-            dts->getDTSHDMode() == DTSStreamReader::DTSHD_SUBTYPE::DTS_SUBTYPE_EXPRESS)
-            track.matroskaCodecID = MATROSKA_CODEC_ID_AUDIO_DTS_EXPRESS;
-        // MPEG audio is one reader for three layers, and Matroska names each: an MP2 track was
-        // declared A_MPEG/L3. The layer is known once a frame has been read.
-        if (const auto mpa = dynamic_cast<MpegAudioStreamReader*>(track.codecReader); mpa && mpa->getLayer() >= 1)
-            track.matroskaCodecID = mpa->getLayer() == 1   ? "A_MPEG/L1"
-                                    : mpa->getLayer() == 2 ? "A_MPEG/L2"
-                                                           : MATROSKA_CODEC_ID_AUDIO_MPEG_L3;
-
-        if (track.trackType == 1)  // video
-        {
-            // MPEG-4 Part 2 and ProRes copied from an MP4 file: the size the MP4 gave, read with the first record
-            if (const auto copy = dynamic_cast<const VideoCopyStreamReader*>(track.codecReader))
-            {
-                track.width = copy->width();
-                track.height = copy->height();
-                track.fps = copy->fps();
-            }
-            const auto mpegReader = dynamic_cast<MPEGStreamReader*>(track.codecReader);
-            if (mpegReader)
-            {
-                track.width = mpegReader->getStreamWidth();
-                track.height = mpegReader->getStreamHeight();
-                track.fps = mpegReader->getFPS();
-                track.interlaced = mpegReader->getInterlaced();
-                // HEVC coded as fields: each block is one field, a picture of half the frame's height. It was written
-                // as progressive video of that height, shown squashed; it is marked interlaced, at its frame's shape.
-                if (const auto hevc = dynamic_cast<HEVCStreamReader*>(mpegReader); hevc && hevc->fieldCoded())
-                    track.interlaced = track.fieldPictures = true;
-                track.streamAR = mpegReader->getStreamAR();
-                track.sampleAR = mpegReader->getSampleAspectRatio();
-                track.arForced = mpegReader->aspectRatioForced();
-                track.hasColourDesc =
-                    mpegReader->getColourDesc(track.colourPrimaries, track.colourTransfer, track.colourMatrix);
-                // getStreamHDR: 1 SDR, 2 HDR10, 4 Dolby Vision, 16 HDR10+. Everything except
-                // plain SDR carries an HDR10 base layer, so mastering metadata applies.
-                //
-                // Only HEVC answers it: every other reader says 0, which was taken for HDR, and the mastering values
-                // are the track's own. They were read from one global set, so plain H.264 beside an HDR10 HEVC track
-                // was given the HEVC track's mastering display and light levels, and two HDR10 tracks shared one set.
-                track.isHdr10 = false;
-                if (const auto hevc = dynamic_cast<HEVCStreamReader*>(track.codecReader))
-                {
-                    track.isHdr10 = hevc->getStreamHDR() != 1;
-                    std::copy_n(hevc->getHdr10Metadata(), 6, track.hdr10Metadata);
-                }
-                // Dolby Vision configuration, when the stream carries an RPU. Written whatever
-                // the profile, because a single layer profile 8 track is complete on its own; a
-                // profile 7 base layer without its enhancement layer is handled below.
-                if (const auto hevcReader = dynamic_cast<HEVCStreamReader*>(track.codecReader))
-                    track.dvBlockAddIdType = hevcReader->buildDoViConfigRecord(track.dvConfig);
-            }
-        }
-        else if (track.trackType == 2)  // audio
-        {
-            const auto simpleReader = dynamic_cast<SimplePacketizerReader*>(track.codecReader);
-            if (simpleReader)
-            {
-                track.sampleRate = simpleReader->getFreq();
-                track.channels = simpleReader->getChannels();
-            }
-            // A DD+ 7.1 track carries channels 7 and 8 in a dependent substream, and the reader counts only the 5.1
-            // of the independent one, so the track header said 6 while the audio decodes as 7.1. The same two
-            // channels are added wherever the listing and the transport stream descriptor name the track 7.1.
-            if (const auto ac3 = dynamic_cast<AC3StreamReader*>(track.codecReader);
-                ac3 && track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_EAC3 && ac3->hasExtChannels())
-                track.channels = ac3->getChannels() + 2;
-            const auto lpcmReader = dynamic_cast<LPCMStreamReader*>(track.codecReader);
-            if (lpcmReader)
-                track.bitDepth = lpcmReader->m_bitsPerSample == 20 ? 24 : lpcmReader->m_bitsPerSample;
-            // BitDepth for the lossless codecs whose readers know it: FLAC from its STREAMINFO, DTS-HD from its
-            // extension. It was written for LPCM alone.
-            // An MP3's LAME delay and padding (muxPacket), in samples, with the 529 samples an MP3 decoder itself puts
-            // in front: what a player skips at the start, and what it drops of the last frame.
-            if (track.mp3Delay >= 0 && track.sampleRate > 0)
-            {
-                track.srcCodecDelayNs = static_cast<uint64_t>(track.mp3Delay + 529) * 1000000000ULL /
-                                        static_cast<uint64_t>(track.sampleRate);
-                if (track.mp3Padding > 529)
-                    track.endPaddingNs = static_cast<int64_t>(track.mp3Padding - 529) * 1000000000LL / track.sampleRate;
-            }
-            // Vorbis: the first packet gives no sound, its length is the CodecDelay a player skips, so that the sound
-            // starts at the time of the second packet, as a Matroska source has it.
-            if (const auto vorbis = dynamic_cast<VorbisStreamReader*>(track.codecReader);
-                vorbis && vorbis->leadSamples() > 0 && track.sampleRate > 0)
-                track.srcCodecDelayNs = static_cast<uint64_t>(vorbis->leadSamples()) * 1000000000ULL /
-                                        static_cast<uint64_t>(track.sampleRate);
-            if (const auto flac = dynamic_cast<FLACStreamReader*>(track.codecReader);
-                flac && flac->getBitsPerSample() > 0)
-                track.bitDepth = flac->getBitsPerSample();
-            if (const auto dts = dynamic_cast<DTSStreamReader*>(track.codecReader); dts && dts->getHDBitDepth() > 0)
-                track.bitDepth = dts->getHDBitDepth();
-            if (const auto alac = dynamic_cast<AlacStreamReader*>(track.codecReader); alac && alac->getBitDepth() > 0)
-                track.bitDepth = alac->getBitDepth();
-            // DefaultDuration for audio whose frames are all of one length: the step the reader moves each frame's
-            // time by, so it is the spacing of the blocks written. Not for E-AC-3, DTS-HD, TrueHD, FLAC, Opus, Vorbis
-            // or LPCM, whose frames may differ in length. ALAC's do only in the last, which says so (writeBlock).
-            const std::string kind = track.codecReader->getCodecInfo().displayName;
-            if (simpleReader &&
-                (track.codecID == CODEC_A_AAC || track.codecID == CODEC_A_MPEG_AUDIO || track.codecID == CODEC_A_ALAC ||
-                 (track.codecID == CODEC_A_AC3 && kind == "AC3") || (track.codecID == CODEC_A_DTS && kind == "DTS")))
-            {
-                double frame = simpleReader->frameDurationInternal();
-                // AAC whose ADTS frames carry more than one raw block, each 1024 samples: a Matroska block holds one
-                // (writeAacRawBlocks), where the frame's CRC says where each begins
-                if (const auto aac = dynamic_cast<AACStreamReader*>(track.codecReader);
-                    aac && track.codecID == CODEC_A_AAC && aac->m_rdb > 0 && aac->m_crc)
-                {
-                    track.aacSplit = aac->m_rdb + 1;
-                    frame /= track.aacSplit;
-                }
-                if (frame > 0)
-                    track.audioFrameNs = static_cast<uint64_t>(llround(frame * 1e9 / INTERNAL_PTS_FREQ));
-            }
-        }
-    }
+    for (auto& [streamIdx, track] : m_tracks) refreshTrackFromReader(track);
 
     // A Dolby Vision configuration record is a promise to the player that THIS track is playable
     // Dolby Vision. That is true of a single layer track, which carries its base layer and its RPU
@@ -2266,71 +2442,8 @@ void MatroskaMuxer::refreshTrackProperties()
     // walking it would let the walk reach the entries it is creating.
     std::vector<std::pair<int, MkvTrackInfo>> coreTracks;
     for (auto& [streamIdx, track] : m_tracks)
-    {
-        if (track.trackType != 2 || track.matroskaCodecID != MATROSKA_CODEC_ID_AUDIO_TRUEHD || track.dropAc3Core)
-            continue;
-        // isTrueHD means "AC-3 core plus lossless", the disc arrangement. A TrueHD track read out
-        // of a Matroska file has no core, and down-to-ac3 has already turned the whole thing into
-        // plain AC-3.
-        const auto ac3 = dynamic_cast<AC3Codec*>(track.codecReader);
-        const bool discCore = ac3 != nullptr && ac3->isTrueHD() && !ac3->getDownconvertToAC3();
-
-        // ** THE SAME PAIRING ARRIVING BY THE OTHER ROUTE USED TO BE THROWN AWAY IN SILENCE. **
-        //
-        // merge-ac3-track= and merge-ac3-file= build a TrueHD track with a core beside it out of two
-        // separate sources, and they do it through a reader that is not in the AC-3 family at all,
-        // so the question above answered no, no companion track was made, and every core packet met
-        // the ac3CoreStreamIndex < 0 line in muxPacketInternal and was dropped. Measured on a
-        // 4,261,662 byte TrueHD stream with a 1,120,000 byte AC-3 companion: the output was the same
-        // size to the byte as the same TrueHD muxed with no companion at all, one track instead of
-        // two, at "Mux successful complete" with nothing said. The core the user asked for was gone.
-        //
-        // The question that decides this is whether the track has a core travelling with it, and two
-        // readers can answer it.
-        const auto merged = dynamic_cast<TrueHDAC3MergeReader*>(track.codecReader);
-        const bool mergedCore = merged != nullptr && merged->hasAc3Core();
-
-        if (!discCore && !mergedCore)
-            continue;
-
-        MkvTrackInfo core;
-        // Real stream indexes are small and are what packets are routed by, so they cannot be
-        // renumbered to make room. The companion is keyed above every real one instead, which also
-        // places it after its TrueHD track in the file.
-        core.streamIndex = AC3_CORE_STREAM_BASE + streamIdx;
-        core.codecReader = track.codecReader;
-        core.codecID = CODEC_A_AC3;
-        core.matroskaCodecID = MATROSKA_CODEC_ID_AUDIO_AC3;
-        core.trackType = 2;
-        core.language = track.language;
-        // The rate and channel count read from an AC-3 family reader a few lines above describe the
-        // CORE, not the lossless stream, so they belong to this track rather than the one they were
-        // read onto. A merged core is the other way round: its track was opened as A_MLP and carries
-        // the LOSSLESS figures, 8 channels where the core has 6, so the core is asked for its own.
-        core.sampleRate = mergedCore ? merged->ac3CoreSampleRate() : track.sampleRate;
-        core.channels = mergedCore ? merged->ac3CoreChannels() : track.channels;
-        core.markedDefault = false;
-        core.ac3CoreOfStream = streamIdx;
-        static std::mt19937_64 rng(std::random_device{}());
-        core.trackUID = rng() | 1ull << 63;  // 8 bytes always, as above
-
-        track.ac3CoreStreamIndex = core.streamIndex;
-        coreTracks.emplace_back(core.streamIndex, core);
-
-        if (mergedCore)
-            LTRACE(LT_INFO, 2,
-                   "TrueHD: the merged AC-3 core is written as its own track. Matroska cannot carry "
-                   "it inside the lossless track the way a disc does, so the two travel side by "
-                   "side here and merge-ac3-track= puts them back on one stream when this file is "
-                   "authored to a disc. Use drop-ac3-core to leave the core out.");
-        else
-            LTRACE(LT_INFO, 2,
-                   "TrueHD: keeping the AC-3 compatibility core as its own track. Matroska cannot "
-                   "carry it inside the lossless track the way a disc does, and dropping it would "
-                   "lose the only part a Blu-ray needs. Use merge-ac3-track= to put them back on "
-                   "one stream when authoring a disc from this file, or drop-ac3-core to leave the "
-                   "core out.");
-    }
+        if (MkvTrackInfo core; makeAc3CoreTrack(streamIdx, track, core))
+            coreTracks.emplace_back(core.streamIndex, core);
     for (auto& [key, core] : coreTracks) m_tracks[key] = core;
 
     // Track numbers are handed out as streams are added, so folding one away leaves a gap in the
@@ -3973,7 +4086,8 @@ bool MatroskaMuxer::muxPacket(AVPacket& avPacket)
 
     // Before the header is written, buffer packets and wait until every track that needs its first
     // packet has delivered one. This ensures those codec readers are fully initialized (e.g. audio
-    // sample rate, channels) before we write the Matroska track headers.
+    // sample rate, channels) before we write the Matroska track headers. The wait ends after ten
+    // seconds of held packets, see below.
     //
     // SUBTITLE TRACKS ARE NOT WAITED FOR, and that is not a shortcut. A subtitle entry is complete
     // at intAddStream: it sets trackType and nothing else, refreshTrackProperties leaves it alone,
@@ -4024,21 +4138,51 @@ bool MatroskaMuxer::muxPacket(AVPacket& avPacket)
         // Leading pictures come a few frames late, never seconds. A video track with fewer pictures than that
         // (a short picture-in-picture, a still or a slide show) held the header back to the end of the mux, with
         // every packet of every track copied into memory meanwhile. Ten seconds of held packets are enough.
-        if (!videoReady)
+        if (!m_preHeaderSpanStarted || avPacket.pts < m_preHeaderMinPts)
+            m_preHeaderMinPts = avPacket.pts;
+        m_preHeaderSpanStarted = true;
+        const bool spanFull = avPacket.pts - m_preHeaderMinPts >= PRE_HEADER_MAX_SPAN;
+        if (spanFull)
+            videoReady = true;
+        // ** A TRACK THAT STARTS LATE IS NOT WAITED FOR EITHER, once the held packets span those ten seconds. **
+        // A commentary that begins minutes in, a second audio after a gap, a second video: the wait for their first
+        // packet held every packet of the mux in memory until it came, which is minutes of video, or the whole
+        // title for a track that never comes. The wait is for the reader, not the packet: the codec ID, sample rate,
+        // channels, picture size and CodecPrivate of an entry are what the reader finds at the start of its stream,
+        // and for a track inside a transport stream or a Matroska or MP4 file it has read nothing before the first
+        // packet of that track is reached. They cannot be had earlier without reading the source twice.
+        //
+        // So the header is written now, the entry of such a track holds what its reader knows so far, and room is
+        // kept after the Tracks element (writeTracks). When the track's first packet comes, the element is written
+        // again in that room with the entry complete (lateTrackArrived), the way the CRC-32 values and the Channels
+        // value of the header are already set after it is written. A track that comes inside the ten seconds is
+        // waited for as before, so the timeline still starts at the earliest packet of every track, and such a
+        // file is written exactly as before.
+        //
+        // What cannot be decided again once blocks are written is decided without the late track: a video track
+        // that starts late is not folded into another as a Dolby Vision layer, and the AC-3 core of a late TrueHD
+        // track is numbered after every other track rather than next to it. A split output completes the entry in
+        // the part the first packet falls into; the parts before it have no block of that track.
+        const bool allSeen = m_seenStreams.size() >= tracksNeedingFirstPacket();
+        if ((allSeen || spanFull) && videoReady)
         {
-            if (!m_preHeaderSpanStarted || avPacket.pts < m_preHeaderMinPts)
-                m_preHeaderMinPts = avPacket.pts;
-            m_preHeaderSpanStarted = true;
-            if (avPacket.pts - m_preHeaderMinPts >= PRE_HEADER_MAX_SPAN)
-                videoReady = true;
-        }
-        if (m_seenStreams.size() >= tracksNeedingFirstPacket() && videoReady)
-        {
+            if (!allSeen)
+                for (const auto& [idx, track] : m_tracks)
+                    if (track.trackType != MKV_TRACK_TYPE_SUBTITLE && !m_seenStreams.count(idx))
+                        m_lateStreams.insert(idx);
             writeDeferredHeader();
+            for (const int idx : m_lateStreams)
+                LTRACE(LT_INFO, 2,
+                       "Matroska: track " << m_tracks[idx].trackNumber
+                                          << " has no data in the first 10 seconds. The header is written without "
+                                             "waiting for it, and its entry is completed when its first packet comes.");
             replayBufferedPackets();
         }
         return true;
     }
+
+    if (!m_lateStreams.empty() && m_lateStreams.erase(avPacket.stream_index))
+        lateTrackArrived(avPacket.stream_index);
 
     // Track first timecode for relative calculations
     if (!m_firstTimecodeSet)
