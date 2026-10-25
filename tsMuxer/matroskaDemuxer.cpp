@@ -2964,6 +2964,114 @@ static bool findTopLevelElement(EbmlScan& scan, const int64_t fileSize, const ui
     return scan.readElement(id, size, bodyPos) && id == wanted && bodyPos + size <= fileSize;
 }
 
+// Every top-level element of one ID in the segment, in file order, as the position and size of its body: each one in
+// the head of the segment, before the first cluster, and each one a SeekHead there names, or, when they name none, the
+// further SeekHead one of them points to (as findTopLevelElement). For the Tags, which RFC 9559 lets occur more than
+// once (no maxOccurs, unlike Info, Tracks, Chapters, Cues and Attachments), before and after the clusters (6.8 lets
+// them follow the Attachments): findTopLevelElement gives only the first. The file may be damaged, so an entry is
+// taken only where an element of that ID starts and ends inside the file and does not overlap one already taken, each
+// place once, and at most 64 of them.
+static std::vector<std::pair<int64_t, int64_t>> findTopLevelElements(EbmlScan& scan, const int64_t fileSize,
+                                                                     const uint32_t wanted)
+{
+    std::vector<std::pair<int64_t, int64_t>> out;
+    int64_t segmentData = -1;
+    int64_t segmentEnd = fileSize;
+    scan.pos = 0;
+    while (scan.pos < fileSize)
+    {
+        uint32_t id = 0;
+        int64_t len = 0, body = 0;
+        if (!scan.readElement(id, len, body))
+            return out;
+        if (id == MATROSKA_ID_SEGMENT)
+        {
+            segmentData = body;
+            segmentEnd = (len > 0 && body + len <= fileSize) ? body + len : fileSize;
+            break;
+        }
+        scan.pos = body + len;
+    }
+    if (segmentData < 0)
+        return out;
+
+    std::vector<int64_t> starts;  // where an element of the wanted ID may start, from the start of the file
+    int64_t nextSeekHead = 0;
+    // The places one SeekHead names for the wanted element, and a further SeekHead if it names one
+    const auto readSeekHead = [&](const int64_t body, const int64_t len, int64_t& further)
+    {
+        scan.pos = body;
+        while (scan.pos < body + len)
+        {
+            uint32_t id = 0;
+            int64_t sz = 0, b = 0;
+            if (!scan.readElement(id, sz, b))
+                break;
+            uint64_t seekId = 0, seekPos = 0;
+            bool haveId = false, havePos = false;
+            while (id == MATROSKA_ID_SEEKENTRY && scan.pos < b + sz)
+            {
+                uint32_t eid = 0;
+                int64_t esz = 0, eb = 0;
+                if (!scan.readElement(eid, esz, eb))
+                    break;
+                if (eid == MATROSKA_ID_SEEKID)
+                    haveId = esz > 0 && scan.readUInt(eb, esz, seekId);
+                else if (eid == MATROSKA_ID_SEEKPOSITION)
+                    havePos = esz > 0 && scan.readUInt(eb, esz, seekPos);
+                scan.pos = eb + esz;
+            }
+            if (haveId && havePos && seekPos > 0 && seekPos < static_cast<uint64_t>(segmentEnd - segmentData))
+            {
+                if (seekId == wanted)
+                    starts.push_back(segmentData + static_cast<int64_t>(seekPos));
+                else if (seekId == MATROSKA_ID_SEEKHEAD)
+                    further = static_cast<int64_t>(seekPos);
+            }
+            scan.pos = b + sz;
+        }
+    };
+    scan.pos = segmentData;
+    while (scan.pos < segmentEnd)
+    {
+        const int64_t start = scan.pos;
+        uint32_t id = 0;
+        int64_t len = 0, body = 0;
+        if (!scan.readElement(id, len, body) || id == MATROSKA_ID_CLUSTER)
+            break;
+        if (id == wanted)
+            starts.push_back(start);
+        else if (id == MATROSKA_ID_SEEKHEAD)
+            readSeekHead(body, len, nextSeekHead);
+        scan.pos = body + len;
+    }
+    if (starts.empty() && nextSeekHead > 0)
+    {
+        scan.pos = segmentData + nextSeekHead;
+        uint32_t id = 0;
+        int64_t len = 0, body = 0;
+        int64_t ignored = 0;
+        if (scan.readElement(id, len, body) && id == MATROSKA_ID_SEEKHEAD)
+            readSeekHead(body, len, ignored);
+    }
+
+    std::sort(starts.begin(), starts.end());
+    int64_t takenEnd = 0;
+    for (const int64_t start : starts)
+    {
+        if (start < takenEnd || out.size() >= 64)
+            continue;  // the same place again (in the head and in the SeekHead), or inside one already taken
+        scan.pos = start;
+        uint32_t id = 0;
+        int64_t len = 0, body = 0;
+        if (!scan.readElement(id, len, body) || id != wanted || len < 0 || body + len > fileSize)
+            continue;
+        out.emplace_back(body, len);
+        takenEnd = body + len;
+    }
+    return out;
+}
+
 // RFC 9559 (6.1) lets the Tracks follow the clusters when a SeekHead before them says where they are, and a muxer
 // writes them there when the codec data did not fit the room it kept for them in the head. The header was read
 // up to the first cluster only, so such a file had no tracks at all: the listing showed none, and a mux of its track
@@ -4431,7 +4539,8 @@ std::vector<std::vector<uint8_t>> MatroskaDemuxer::getPassThroughAttachments()
 
 // The source's tags that are about the whole file (a Targets with no track, edition, chapter or attachment named):
 // the title, the release date and the like, each a whole Tag element. A tag about a track is left behind, because the
-// output's tracks have other UIDs, and statistics such as a track's bit rate would be wrong for the output anyway.
+// output's tracks have other UIDs, and statistics such as a track's bit rate would be wrong for the output anyway. Read
+// from every Tags element, as getTrackTags.
 std::vector<std::vector<uint8_t>> MatroskaDemuxer::getGlobalTags()
 {
     std::vector<std::vector<uint8_t>> out;
@@ -4442,8 +4551,8 @@ std::vector<std::vector<uint8_t>> MatroskaDemuxer::getGlobalTags()
         return out;
     const int64_t fileSize = f.size();
     EbmlScan scan(f);
-    int64_t body = 0, size = 0;
-    if (!findTopLevelElement(scan, fileSize, MATROSKA_ID_TAGS, body, size))
+    const auto tagsElements = findTopLevelElements(scan, fileSize, MATROSKA_ID_TAGS);
+    if (tagsElements.empty())
         return out;
     const auto nonZero = [&](const int64_t at, const int64_t width)
     {
@@ -4458,55 +4567,65 @@ std::vector<std::vector<uint8_t>> MatroskaDemuxer::getGlobalTags()
                 return true;
         return false;
     };
-    scan.pos = body;
-    while (scan.pos < body + size)
+    std::set<std::vector<uint8_t>> earlier;  // the Tag elements of the Tags elements before this one (see getTrackTags)
+    for (const auto& [body, size] : tagsElements)
     {
-        const int64_t start = scan.pos;
-        uint32_t id = 0;
-        int64_t len = 0, b = 0;
-        if (!scan.readElement(id, len, b) || b + len > body + size)
-            break;
-        const int64_t resume = b + len;
-        if (id == MATROSKA_ID_TAG)
+        std::vector<std::vector<uint8_t>> here;
+        scan.pos = body;
+        while (scan.pos < body + size)
         {
-            bool aboutPart = false;
-            scan.pos = b;
-            while (scan.pos < b + len)
+            const int64_t start = scan.pos;
+            uint32_t id = 0;
+            int64_t len = 0, b = 0;
+            if (!scan.readElement(id, len, b) || b + len > body + size)
+                break;
+            const int64_t resume = b + len;
+            if (id == MATROSKA_ID_TAG)
             {
-                uint32_t tid = 0;
-                int64_t tlen = 0, tb = 0;
-                if (!scan.readElement(tid, tlen, tb))
-                    break;
-                if (tid == MATROSKA_ID_TAGTARGETS)
+                bool aboutPart = false;
+                scan.pos = b;
+                while (scan.pos < b + len)
                 {
-                    scan.pos = tb;
-                    while (scan.pos < tb + tlen)
+                    uint32_t tid = 0;
+                    int64_t tlen = 0, tb = 0;
+                    if (!scan.readElement(tid, tlen, tb))
+                        break;
+                    if (tid == MATROSKA_ID_TAGTARGETS)
                     {
-                        uint32_t uid = 0;
-                        int64_t ulen = 0, ub = 0;
-                        if (!scan.readElement(uid, ulen, ub))
-                            break;
-                        if ((uid == 0x63C5 || uid == 0x63C9 || uid == 0x63C4 || uid == 0x63C6) && nonZero(ub, ulen))
-                            aboutPart = true;  // TagTrackUID, TagEditionUID, TagChapterUID, TagAttachmentUID
-                        scan.pos = ub + ulen;
+                        scan.pos = tb;
+                        while (scan.pos < tb + tlen)
+                        {
+                            uint32_t uid = 0;
+                            int64_t ulen = 0, ub = 0;
+                            if (!scan.readElement(uid, ulen, ub))
+                                break;
+                            if ((uid == 0x63C5 || uid == 0x63C9 || uid == 0x63C4 || uid == 0x63C6) && nonZero(ub, ulen))
+                                aboutPart = true;  // TagTrackUID, TagEditionUID, TagChapterUID, TagAttachmentUID
+                            scan.pos = ub + ulen;
+                        }
+                    }
+                    scan.pos = tb + tlen;
+                }
+                if (!aboutPart)
+                {
+                    std::vector<uint8_t> raw(static_cast<size_t>(resume - start));
+                    f.seek(start);
+                    if (f.read(raw.data(), static_cast<uint32_t>(raw.size())) == static_cast<int>(raw.size()) &&
+                        earlier.find(raw) == earlier.end())
+                    {
+                        here.push_back(raw);
+                        out.push_back(std::move(raw));
                     }
                 }
-                scan.pos = tb + tlen;
             }
-            if (!aboutPart)
-            {
-                std::vector<uint8_t> raw(static_cast<size_t>(resume - start));
-                f.seek(start);
-                if (f.read(raw.data(), static_cast<uint32_t>(raw.size())) == static_cast<int>(raw.size()))
-                    out.push_back(std::move(raw));
-            }
+            scan.pos = resume;
         }
-        scan.pos = resume;
+        earlier.insert(here.begin(), here.end());
     }
     return out;
 }
 
-// The tags about one track, read from the Tags element. Kept apart from getGlobalTags because a Matroska output gives
+// The tags about one track, read from every Tags element. Kept apart from getGlobalTags because a Matroska output gives
 // its tracks new UIDs: the muxer writes each of these again with the UID of the track it now belongs to.
 std::map<uint64_t, std::vector<AbstractDemuxer::SourceTrackTag>> MatroskaDemuxer::getTrackTags()
 {
@@ -4518,13 +4637,8 @@ std::map<uint64_t, std::vector<AbstractDemuxer::SourceTrackTag>> MatroskaDemuxer
         return out;
     const int64_t fileSize = f.size();
     EbmlScan scan(f);
-    int64_t body = 0, size = 0;
-    if (!findTopLevelElement(scan, fileSize, MATROSKA_ID_TAGS, body, size) || size <= 0 || size > (64 << 20))
-        return out;
-    std::vector<uint8_t> d(static_cast<size_t>(size));
-    f.seek(body);
-    if (f.read(d.data(), static_cast<uint32_t>(d.size())) != static_cast<int>(d.size()))
-        return out;
+    const auto tagsElements = findTopLevelElements(scan, fileSize, MATROSKA_ID_TAGS);
+    std::vector<uint8_t> d;  // the body of one Tags element
 
     // One element at i: its id (marker kept), where its body starts and where it ends; false at the end or on damage
     const auto element = [&d](size_t& i, const size_t end, uint32_t& id, size_t& b, size_t& e)
@@ -4564,96 +4678,122 @@ std::map<uint64_t, std::vector<AbstractDemuxer::SourceTrackTag>> MatroskaDemuxer
         return v;
     };
 
-    size_t i = 0;
-    uint32_t id = 0;
-    size_t b = 0, e = 0;
-    while (element(i, d.size(), id, b, e))
+    // The Tag elements of every Tags element, in file order. A file can hold several Tags elements (RFC 9559 gives
+    // them no maxOccurs; 6.8 has an editor write a new one at the end): only the first was read, and the output lost
+    // the tags of the others. A writer may also store a Tags element twice for safety, as RFC 8794 (11.1.17) lets it
+    // store an Identically Recurring Element such as the Tracks; Tags is not declared one, but a copy identical in
+    // storage says nothing new, and the first instance is the one to use. So a Tag that an earlier Tags element holds
+    // byte for byte is taken once (the tags of a track would be written twice otherwise). Within one Tags element
+    // nothing is left out, as before. Section 23.2's rule that a new Tags element resets the ones before is for a live
+    // stream's Tags between the clusters, which have no SeekHead entry and are not read here.
+    std::set<std::vector<uint8_t>> earlier;
+    for (const auto& [body, size] : tagsElements)
     {
-        if (id != MATROSKA_ID_TAG)
+        if (size <= 0 || size > (64 << 20))
             continue;
-        std::vector<uint64_t> trackUids;
-        bool aboutOther = false;
-        SourceTrackTag tag;
-        std::vector<std::pair<std::string, std::vector<uint8_t>>> simple;  // name, the whole element
-        std::string statistics;
-        size_t j = b;
-        uint32_t cid = 0;
-        size_t cb = 0, ce = 0;
-        while (element(j, e, cid, cb, ce))
+        d.resize(static_cast<size_t>(size));
+        f.seek(body);
+        if (f.read(d.data(), static_cast<uint32_t>(d.size())) != static_cast<int>(d.size()))
+            continue;
+        std::vector<std::vector<uint8_t>> here;
+        size_t i = 0;
+        uint32_t id = 0;
+        size_t b = 0, e = 0;
+        for (size_t tagStart = 0; element(i, d.size(), id, b, e); tagStart = i)
         {
-            if (cid == MATROSKA_ID_TAGTARGETS)
+            if (id != MATROSKA_ID_TAG)
+                continue;
+            std::vector<uint8_t> raw(d.begin() + static_cast<std::ptrdiff_t>(tagStart),
+                                     d.begin() + static_cast<std::ptrdiff_t>(e));
+            if (earlier.find(raw) != earlier.end())
+                continue;
+            here.push_back(std::move(raw));
+            std::vector<uint64_t> trackUids;
+            bool aboutOther = false;
+            SourceTrackTag tag;
+            std::vector<std::pair<std::string, std::vector<uint8_t>>> simple;  // name, the whole element
+            std::string statistics;
+            size_t j = b;
+            uint32_t cid = 0;
+            size_t cb = 0, ce = 0;
+            while (element(j, e, cid, cb, ce))
             {
-                size_t k = cb;
-                uint32_t tid = 0;
-                size_t tb = 0, te = 0;
-                size_t tstart = k;
-                while (element(k, ce, tid, tb, te))
+                if (cid == MATROSKA_ID_TAGTARGETS)
                 {
-                    const uint64_t value = uintOf(tb, te);
-                    if (tid == MATROSKA_ID_TAGTARGETS_TRACKUID)
+                    size_t k = cb;
+                    uint32_t tid = 0;
+                    size_t tb = 0, te = 0;
+                    size_t tstart = k;
+                    while (element(k, ce, tid, tb, te))
                     {
-                        if (value)
-                            trackUids.push_back(value);
+                        const uint64_t value = uintOf(tb, te);
+                        if (tid == MATROSKA_ID_TAGTARGETS_TRACKUID)
+                        {
+                            if (value)
+                                trackUids.push_back(value);
+                        }
+                        else
+                        {
+                            if ((tid == 0x63C9 || tid == 0x63C4 || tid == 0x63C6) && value)
+                                aboutOther = true;  // TagEditionUID, TagChapterUID, TagAttachmentUID
+                            tag.targetsRest.insert(tag.targetsRest.end(),
+                                                   d.begin() + static_cast<std::ptrdiff_t>(tstart),
+                                                   d.begin() + static_cast<std::ptrdiff_t>(te));
+                        }
+                        tstart = k;
                     }
-                    else
-                    {
-                        if ((tid == 0x63C9 || tid == 0x63C4 || tid == 0x63C6) && value)
-                            aboutOther = true;  // TagEditionUID, TagChapterUID, TagAttachmentUID
-                        tag.targetsRest.insert(tag.targetsRest.end(), d.begin() + static_cast<std::ptrdiff_t>(tstart),
-                                               d.begin() + static_cast<std::ptrdiff_t>(te));
-                    }
-                    tstart = k;
+                }
+                else if (cid == MATROSKA_ID_SIMPLETAG)
+                {
+                    std::string name, value;
+                    size_t k = cb;
+                    uint32_t sid = 0;
+                    size_t sb = 0, se = 0;
+                    while (element(k, ce, sid, sb, se))
+                        if (sid == MATROSKA_ID_TAGNAME)
+                            name.assign(d.begin() + static_cast<std::ptrdiff_t>(sb),
+                                        d.begin() + static_cast<std::ptrdiff_t>(se));
+                        else if (sid == MATROSKA_ID_TAGSTRING)
+                            value.assign(d.begin() + static_cast<std::ptrdiff_t>(sb),
+                                         d.begin() + static_cast<std::ptrdiff_t>(se));
+                    if (name == "_STATISTICS_TAGS")
+                        statistics = " " + value + " ";
                 }
             }
-            else if (cid == MATROSKA_ID_SIMPLETAG)
+            if (trackUids.empty() || aboutOther)
+                continue;
+            // The SimpleTags again, now that the list of statistics tags is known, each as it stands
+            j = b;
+            size_t start = j;
+            while (element(j, e, cid, cb, ce))
             {
-                std::string name, value;
-                size_t k = cb;
-                uint32_t sid = 0;
-                size_t sb = 0, se = 0;
-                while (element(k, ce, sid, sb, se))
-                    if (sid == MATROSKA_ID_TAGNAME)
-                        name.assign(d.begin() + static_cast<std::ptrdiff_t>(sb),
-                                    d.begin() + static_cast<std::ptrdiff_t>(se));
-                    else if (sid == MATROSKA_ID_TAGSTRING)
-                        value.assign(d.begin() + static_cast<std::ptrdiff_t>(sb),
-                                     d.begin() + static_cast<std::ptrdiff_t>(se));
-                if (name == "_STATISTICS_TAGS")
-                    statistics = " " + value + " ";
+                if (cid == MATROSKA_ID_SIMPLETAG)
+                {
+                    std::string name;
+                    size_t k = cb;
+                    uint32_t sid = 0;
+                    size_t sb = 0, se = 0;
+                    while (element(k, ce, sid, sb, se))
+                        if (sid == MATROSKA_ID_TAGNAME)
+                            name.assign(d.begin() + static_cast<std::ptrdiff_t>(sb),
+                                        d.begin() + static_cast<std::ptrdiff_t>(se));
+                    // Also the statistics a writer leaves without naming them in _STATISTICS_TAGS, as a DURATION some
+                    // muxers write for each track: kept, it gave the source's length to a cut output.
+                    const bool isStatistics =
+                        name.rfind("_STATISTICS_", 0) == 0 ||
+                        (!name.empty() && statistics.find(" " + name + " ") != std::string::npos) ||
+                        name == "DURATION" || name == "BPS" || name == "NUMBER_OF_FRAMES" || name == "NUMBER_OF_BYTES";
+                    if (!isStatistics)
+                        tag.simpleTags.insert(tag.simpleTags.end(), d.begin() + static_cast<std::ptrdiff_t>(start),
+                                              d.begin() + static_cast<std::ptrdiff_t>(ce));
+                }
+                start = j;
             }
+            if (tag.simpleTags.empty())
+                continue;
+            for (const uint64_t uid : trackUids) out[uid].push_back(tag);
         }
-        if (trackUids.empty() || aboutOther)
-            continue;
-        // The SimpleTags again, now that the list of statistics tags is known, each as it stands
-        j = b;
-        size_t start = j;
-        while (element(j, e, cid, cb, ce))
-        {
-            if (cid == MATROSKA_ID_SIMPLETAG)
-            {
-                std::string name;
-                size_t k = cb;
-                uint32_t sid = 0;
-                size_t sb = 0, se = 0;
-                while (element(k, ce, sid, sb, se))
-                    if (sid == MATROSKA_ID_TAGNAME)
-                        name.assign(d.begin() + static_cast<std::ptrdiff_t>(sb),
-                                    d.begin() + static_cast<std::ptrdiff_t>(se));
-                // Also the statistics a writer leaves without naming them in _STATISTICS_TAGS, as a DURATION some
-                // muxers write for each track: kept, it gave the source's length to a cut output.
-                const bool isStatistics = name.rfind("_STATISTICS_", 0) == 0 ||
-                                          (!name.empty() && statistics.find(" " + name + " ") != std::string::npos) ||
-                                          name == "DURATION" || name == "BPS" || name == "NUMBER_OF_FRAMES" ||
-                                          name == "NUMBER_OF_BYTES";
-                if (!isStatistics)
-                    tag.simpleTags.insert(tag.simpleTags.end(), d.begin() + static_cast<std::ptrdiff_t>(start),
-                                          d.begin() + static_cast<std::ptrdiff_t>(ce));
-            }
-            start = j;
-        }
-        if (tag.simpleTags.empty())
-            continue;
-        for (const uint64_t uid : trackUids) out[uid].push_back(tag);
+        earlier.insert(here.begin(), here.end());
     }
     return out;
 }
