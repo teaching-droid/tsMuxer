@@ -374,6 +374,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **With a very low --maxbitrate, below about 256 kbps, the clock references could come up to 0.13 s apart,** where the transport stream rules allow 0.1 s, because the tables sent with each one were not counted. They now stay within 0.1 s.
 
+* **With a small --vbv-len, the pictures of video with B frames reached the decoder after their decoding time,** because the clock started --vbv-len before the first picture shown, not before the first one decoded. It now starts that long before the first decoding time. The picture times stay the same; every clock reference comes earlier by the time the first picture is decoded before it is shown.
+
+* **3D with --maxbitrate below the rate of its video could have clock references seconds apart,** where the transport stream rules allow 0.1 s: the clock held back by the cap got one only at a picture or at the end of an interleaving block. They now stay within 0.1 s at every cap from 500 kbps up.
+
 * **The finished disc is measured against --disc-size,** as the window says: a warning when the image is larger than the disc, or, for a disc folder, the image its BDMV and CERTIFICATE folders make. Only an estimate was checked, before the mux.
 
 * **On Linux and macOS, a transport stream whose end filled the write buffer exactly was reported as failed,** with "Failed to write the end of the output", although the file was complete.

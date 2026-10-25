@@ -700,7 +700,21 @@ bool TSMuxer::doFlush(const int64_t newPCR, const int64_t pcrGAP)
         int nullCnt = 0;
         if (m_processedBlockSize % m_sectorSize)
             nullCnt = m_sectorSize - static_cast<int>(m_processedBlockSize % m_sectorSize);
-        writeNullPackets(nullCnt / m_frameSize);
+        if (m_interliaveBlockSize == 0 || m_maxBitrate == -1 || m_lastPCR == -1)
+            writeNullPackets(nullCnt / m_frameSize);
+        else
+        {
+            // The padding of an interleaving block of 3D is up to 31 packets, and the block's PCR comes after it: at
+            // a low --maxbitrate the padding alone takes longer than 0.1 s to arrive at the cap. The held clock gets
+            // its PCRs inside the padding as well (maxRateClockDue); the tables and the PCR are part of it, and the
+            // block still ends on the sector. Where no PCR comes due, the same nulls are written.
+            while (m_processedBlockSize % m_sectorSize)
+            {
+                insertHeldPCRIfDue();
+                if (m_processedBlockSize % m_sectorSize)
+                    writeNullPackets(1);
+            }
+        }
     }
 
     if (m_m2tsMode)
@@ -1304,8 +1318,10 @@ int64_t TSMuxer::pcrForMaxRate(const int64_t newPCR, const int64_t extraFrames, 
     if (!m_m2tsMode)
         return FFMAX(newPCR, m_lastPCR + static_cast<int64_t>(std::ceil(m_pcrBits * 90000.0 / m_maxBitrate)));
     const int64_t frames = calcM2tsFrameCnt() + extraFrames;
+    // Nothing since the last pass. In 3D that is a block that ends right after a PCR, and the time the block's end is
+    // given can be far behind this view's held clock, which may not go back to it.
     if (frames <= 0)
-        return newPCR;
+        return m_interliaveBlockSize > 0 ? FFMAX(newPCR, (m_prevM2TSPCR + pcrGAP + 299) / 300) : newPCR;
     const int64_t needed = m_prevM2TSPCR + pcrGAP + static_cast<int64_t>(std::ceil(frames * atsGapFloor(m_maxBitrate)));
     const int64_t minPCR = (needed + 299) / 300;  // back to the 90 kHz clock, never downwards
     return FFMAX(newPCR, minPCR);
@@ -2221,8 +2237,12 @@ bool TSMuxer::muxPacket(AVPacket& avPacket)
         if (m_firstPts[m_firstPts.size() - 1] == -1)
         {
             m_curFileStartPts = avPacket.pts;
-            const int64_t firstPtsShift = internalClockToPts(avPacket.pts);
-            m_fixed_pcr_offset = m_timeOffset - m_vbvLen + firstPtsShift;
+            // The clock starts --vbv-len before the first decoding time. It started that long before the first
+            // presentation time, but video with B frames is decoded earlier than it is shown: with a small --vbv-len
+            // the first decoding times came before the clock, and those pictures were late. Every PCR moves back by
+            // that shift; the presentation and decoding times stay as they were.
+            const int64_t firstDtsShift = internalClockToPts(avPacket.dts);
+            m_fixed_pcr_offset = m_timeOffset - m_vbvLen + firstDtsShift;
             if (m_fixed_pcr_offset < 0)
                 m_fixed_pcr_offset = 0;
             m_prevM2TSPCR = (m_fixed_pcr_offset - 100) *
@@ -2403,16 +2423,22 @@ bool TSMuxer::nextPCRChanceTooLate(const int tsIndex, const int64_t dts) const
 // the data since the last one takes m_pcr_delta to arrive at the cap, so the held clock gets a PCR as often as the
 // free one. It is checked before every packet of a stream, because one picture alone can take longer than 0.1 s to
 // arrive at the cap. A mux that stays under the cap never meets this condition first, and is written exactly as
-// before. 3D, whose two views are interleaved in blocks, is left as it was.
+// before.
 //
 // At a cap below about 256 kbps that can still be too late. PAT, PMT and SIT go out with the PCR and count in its
 // time, and at 150 kbps each packet takes 10 ms, so the eight packets that reach m_pcr_delta and those three tables
 // put the PCRs 0.11 s apart. A PCR is therefore also due when the next packet and the three tables would take the
 // time past 0.1 s, counted as pcrForMaxRate counts it, on the 188 byte packet. It can only come first where the first
 // condition with all three tables would pass 0.1 s. Everywhere else the output is the same as before.
+//
+// 3D written in interleaved blocks was left out of this at first, and there the held clock got a PCR only at a block
+// change or at a picture of the view's video: 0.12 s apart at --maxbitrate=5000 and seconds apart below. Each view is
+// its own transport stream with its own clock, held at the cap by pcrForMaxRate the same way, and these PCRs follow
+// that clock exactly, so they only fill in between the PCRs it was given before. Their packets count in the blocks
+// like any other. A mux that stays under the cap is written exactly as before.
 bool TSMuxer::maxRateClockDue() const
 {
-    if (m_maxBitrate == -1 || m_lastPCR == -1 || m_interliaveBlockSize > 0)
+    if (m_maxBitrate == -1 || m_lastPCR == -1)
         return false;
     if (static_cast<int64_t>(std::ceil(static_cast<double>(m_pcrBits) * 90000.0 / m_maxBitrate)) >= m_pcr_delta)
         return true;
