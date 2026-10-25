@@ -653,14 +653,16 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
     // The playlist's streams that are not in its clips but in a clip a sub path plays, as a disc's text subtitles
     // always are. They were left out of the listing without a word, so a playlist with subtitles of that kind seemed
     // to have none, and the user could not know a track was dropped. Under "Not supported:", which the window shows
-    // as a track that is not offered (it rebuilds the text for a text subtitle from the stream type). Subtitles only:
-    // a pop-up menu in a clip of its own is how most discs carry it, and is no track a mux could have had.
+    // as a track that is not offered (it rebuilds the text for a text subtitle from the stream type). Subtitles, audio
+    // (the music of a slideshow) and video (a picture-in-picture of a clip of its own): a pop-up menu in a clip of its
+    // own is how most discs carry it, and is no track a mux could have had.
     if (mplsParser)
     {
         for (const MPLSStreamInfo& entry : mplsParser->getOutOfMuxStreams())
         {
             const auto codingType = static_cast<int>(entry.stream_coding_type);
-            if (codingType != 0x90 && codingType != 0x92)
+            const std::string kind = MPLSParser::outOfMuxTrackKind(entry);
+            if (codingType != 0x90 && codingType != 0x92 && kind.empty())
                 continue;
             std::string clip;
             if (entry.refSubPathId >= 0 && static_cast<size_t>(entry.refSubPathId) < mplsParser->m_subPaths.size() &&
@@ -671,8 +673,9 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
             where << "stream type 0x" << std::hex << codingType << ", PID 0x" << entry.streamPID << std::dec
                   << (isLanguageCode(lang) ? ", language " + lang : std::string()) << ", " << clip << "sub path "
                   << entry.refSubPathId;
-            const char* what = codingType == 0x92 ? "Text subtitles (Text-ST)"
-                                                  : "Presentation graphics subtitles in a separate clip";
+            const std::string what = codingType == 0x92   ? "Text subtitles (Text-ST)"
+                                     : codingType == 0x90 ? "Presentation graphics subtitles in a separate clip"
+                                                          : kind + " in a separate clip";
             LTRACE(LT_INFO, 2, "");
             LTRACE(LT_INFO, 2,
                    "Not supported: " << what << " (" << where.str()
@@ -3797,6 +3800,7 @@ int main(int argc, char** argv)
                 bool switchToSsif = false;
                 for (const std::string& clip : mplsParser.m_skippedClips)
                     LTRACE(LT_INFO, 2, "Skipped clip: " << clip << mediaExt);
+                mplsParser.reportLeftOut(argv[1], true);
 
                 if (!mplsParser.m_playItems.empty())
                 {

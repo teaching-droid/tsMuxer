@@ -329,6 +329,7 @@ class METADemuxer final : public AbstractDemuxer
     int m_matroskaOutput = 0;                                       // setMatroskaOutput: 0 other, 1 Matroska, 2 WebM
     bool m_demuxOutput = false;                                     // setDemuxOutput
     bool m_quiet = false;                                           // setQuiet
+    std::set<std::string> m_pipPlacingReported;  // the playlists whose own placing of a picture-in-picture was said
     double m_lastProgress = 0.0;                                    // the last value printed
     int64_t m_totalSize;
     bool m_flushDataMode;

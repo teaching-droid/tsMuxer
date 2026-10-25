@@ -623,6 +623,10 @@ struct MPLSPlayItem
     uint8_t connection_condition = 0;
     // When only the part played is muxed, IN_time and OUT_time are moved out to the key pictures of the part
     ClipPart part;
+    // What the play item has that a mux leaves out (MPLSParser::reportLeftOut): its number of angles (only the first
+    // is muxed) and its still mode (0 none, 1 held for still_time seconds, 2 held until the viewer goes on)
+    int angles = 1;
+    uint8_t still_mode = 0;
 };
 
 // A key picture of a clip's main video, as the entry point map of its clip information file lists it: a place where
@@ -673,7 +677,18 @@ struct MPLSParser
     // The PG entry whose 3D table names `pid` as an eye or an aligned subtitle, with what it is named as ("left eye",
     // "right eye", "top aligned", "bottom aligned"); streamPID 0 when none does
     [[nodiscard]] MPLSStreamInfo getStreamReferencing(int pid, std::string& role) const;
+    // "Audio" or "Video" for an entry of getOutOfMuxStreams() of that kind, "Picture-in-picture video" for a secondary
+    // video, empty for any other
+    [[nodiscard]] static std::string outOfMuxTrackKind(const MPLSStreamInfo& entry);
+    // Prints one warning for each thing of the playlist a mux leaves out without an error: the angles after the
+    // first, the hold of still pictures and, in a mux (not in a listing), the audio and video of clips a sub path
+    // plays (the listing names those under "Not supported:"). Once for a playlist: in the listing, and where a mux
+    // reads the playlist.
+    void reportLeftOut(const std::string& playlistName, bool listing) const;
     std::vector<MPLSSubPath> m_subPaths;
+    // The playlist places a picture-in-picture video itself (ExtensionData 1/1: its position, size and moves), which
+    // is not read: a mux places it by the pip options.
+    bool hasPipMetadata = false;
 
     int PlayList_playback_type;
     int playback_count;

@@ -303,6 +303,21 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
         !(hevcReader && hevcReader->dvRpuElPresent() == 0);
     const bool isPrimaryVideo = isVideo && !isSecondary && !isDvEnhancement;
 
+    // A UHD disc (V3) carries its main video at 1080 lines or more, and progressive. The test was made where the
+    // video format code is worked out, which is done again for every table that carries it: on the WIDTH, so 1280x720
+    // passed and a 720x480 picture-in-picture warned, and the line came as often as the tables were written. Now on
+    // the height of the primary video, once for the track.
+    if (isPrimaryVideo && isV3())
+    {
+        if (const auto video = dynamic_cast<MPEGStreamReader*>(codecReader))
+        {
+            if (video->getStreamHeight() < 1080)
+                LTRACE(LT_WARN, 2, "Warning: video height < 1080 is not standard for V3 Blu-ray.");
+            if (video->getInterlaced())
+                LTRACE(LT_WARN, 2, "Warning: interlaced video is not standard for V3 Blu-ray.");
+        }
+    }
+
     const int rank = isPrimaryVideo ? 3 : (isVideo ? 2 : (codecName[0] == 'A' ? 1 : 0));
     if (rank > m_mainStreamRank)
     {

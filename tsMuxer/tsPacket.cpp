@@ -9,6 +9,7 @@
 #include <cmath>
 #include <map>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -1980,6 +1981,76 @@ MPLSStreamInfo MPLSParser::getStreamReferencing(const int pid, std::string& role
     return {};
 }
 
+std::string MPLSParser::outOfMuxTrackKind(const MPLSStreamInfo& entry)
+{
+    if (isAudioStreamType(entry.stream_coding_type))
+        return "Audio";
+    if (isVideoStreamType(entry.stream_coding_type))
+        return entry.isSecondary ? "Picture-in-picture video" : "Video";
+    return {};
+}
+
+// A mux of a playlist muxes the first angle of each play item, as moving pictures, from the clips its play items
+// play. What a playlist has beyond that was left out without a word: the other angles of a multi-angle play item,
+// the hold of a still picture (a slideshow, held until the viewer goes on or for a set time, became a flash of single
+// pictures), and the audio and video a sub path plays from a clip of its own, as the music of a slideshow. Muxing
+// them is not built yet; until then the log says what is left out.
+void MPLSParser::reportLeftOut(const std::string& playlistName, const bool listing) const
+{
+    const std::string name = extractFileName2(playlistName);
+    int angleItems = 0;
+    int anglesLeft = 0;
+    int stills = 0;
+    for (const MPLSPlayItem& item : m_playItems)
+    {
+        if (item.angles > 1)
+        {
+            ++angleItems;
+            anglesLeft += item.angles - 1;
+        }
+        if (item.still_mode != 0)
+            ++stills;
+    }
+    if (angleItems > 0)
+        LTRACE(LT_WARN, 2,
+               "Warning: playlist " << name << " has more than one angle in " << angleItems
+                                    << (angleItems == 1 ? " play item" : " play items") << ". Only the first angle is "
+                                    << (listing ? "listed and muxed" : "muxed") << ": " << anglesLeft
+                                    << (anglesLeft == 1 ? " angle is" : " angles are")
+                                    << " left out. The rest of the playlist is muxed.");
+    if (stills > 0)
+        LTRACE(LT_WARN, 2,
+               "Warning: playlist " << name << " has " << stills
+                                    << (stills == 1 ? " still picture" : " still pictures")
+                                    << ", play items held on the screen for a time or until the viewer goes on. "
+                                       "The hold is left out: each is muxed as moving video and shown only for the "
+                                       "time of its pictures. The rest of the playlist is muxed.");
+    if (listing)
+        return;
+    std::string tracks;
+    int trackCount = 0;
+    for (const MPLSStreamInfo& entry : getOutOfMuxStreams())
+    {
+        const std::string kind = outOfMuxTrackKind(entry);
+        if (kind.empty())
+            continue;
+        std::ostringstream track;
+        track << strToLowerCase(kind) << " PID 0x" << std::hex << entry.streamPID << std::dec;
+        if (entry.refSubPathId >= 0 && static_cast<size_t>(entry.refSubPathId) < m_subPaths.size() &&
+            !m_subPaths[entry.refSubPathId].clips.empty())
+            track << " (clip " << m_subPaths[entry.refSubPathId].clips[0] << ")";
+        tracks += (tracks.empty() ? "" : ", ") + track.str();
+        ++trackCount;
+    }
+    if (trackCount > 0)
+        LTRACE(LT_WARN, 2,
+               "Warning: playlist " << name << " plays " << tracks
+                                    << (trackCount == 1 ? " from a separate clip" : " from separate clips")
+                                    << ", which a mux of the playlist does not read, so "
+                                    << (trackCount == 1 ? "it is" : "they are")
+                                    << " left out. The rest of the playlist is muxed.");
+}
+
 std::vector<MPLSStreamInfo> MPLSParser::getPgStreams() const
 {
     std::vector<MPLSStreamInfo> pgStreams;
@@ -2021,7 +2092,11 @@ void MPLSParser::composePlayList(BitStreamWriter& writer)
 
     const MPLSStreamInfo& dependStreamInfo = mainStreamInfo;
 
-    for (size_t SubPath_id = 0; SubPath_id < number_of_SubPaths * dependStreamInfo.m_index.size(); SubPath_id++)
+    // One SubPath() for each sub path the count above declares. Each one already holds a sub play item for every play
+    // item (composeSubPath), and the stream entries name sub path 0. The loop ran to number_of_SubPaths times the
+    // number of play items, so a disc split into several clips, with picture-in-picture or a Dolby Vision
+    // enhancement layer, had as many SubPath() structures as clips under a count of 1.
+    for (size_t SubPath_id = 0; SubPath_id < static_cast<size_t>(number_of_SubPaths); SubPath_id++)
     {
         composeSubPath(writer, SubPath_id, dependStreamInfo.m_index, subPath_type);  // pip
     }
@@ -2402,6 +2477,10 @@ void MPLSParser::parseExtensionData(uint8_t* data, const uint8_t* dataEnd)
 
             switch (dataID)
             {
+            case 0x00010001:
+                // picture-in-picture metadata
+                hasPipMetadata = true;
+                break;
             case 0x00020001:
                 // stn table ss
                 isDependStreamExist = true;
@@ -2474,11 +2553,14 @@ void MPLSParser::parsePlayItem(BitStreamReader& reader, const int PlayItem_id)
 
     UO_mask_table(reader);
     PlayItem_random_access_flag = reader.getBit();
-    reader.skipBits(31);  // reserved_for_future_use, still_time
+    reader.skipBits(7);  // reserved_for_future_use
+    m_playItems.back().still_mode = reader.getBits<uint8_t>(8);
+    reader.skipBits(16);  // still_time, or reserved_for_future_use
 
     if (is_multi_angle == 1)
     {
         number_of_angles = reader.getBits<uint8_t>(8);
+        m_playItems.back().angles = number_of_angles;
         reader.skipBits(6);  // reserved_for_future_use
         is_different_audios = reader.getBit();
         is_seamless_angle_change = reader.getBit();
@@ -2783,14 +2865,17 @@ void MPLSParser::composeSTN_table(BitStreamWriter& writer, const size_t PlayItem
             i.composeStreamEntry(writer, PlayItem_id, secondaryVNum);
             i.composeStreamAttributes(writer);
 
-            const int useSecondaryAudio = number_of_secondary_audio_stream_entries > secondaryVNum ? 1 : 0;
-            writer.putBits(8, useSecondaryAudio);
-            writer.putBits(8, 0);  // reserved_for_word_align
-            if (useSecondaryAudio)
-            {
-                writer.putBits(8, secondaryVNum);
-                writer.putBits(8, 0);  // word align
-            }
+            // Every secondary audio stream, as a disc names its commentaries for its picture-in-picture video.
+            // Only the one with the number of this secondary video was named, so of two commentaries the second was
+            // not tied to the picture-in-picture. As with its subtitles below, the meta does not say which audio
+            // belongs to which secondary video.
+            const int secondaryAudioRefs = number_of_secondary_audio_stream_entries;
+            writer.putBits(8, secondaryAudioRefs);  // number_of_secondary_audio_ref_entries
+            writer.putBits(8, 0);                   // reserved_for_word_align
+            for (int k = 0; k < secondaryAudioRefs; ++k)
+                writer.putBits(8, k);  // secondary_audio_stream_id_ref
+            if (secondaryAudioRefs & 1)
+                writer.putBits(8, 0);  // reserved_for_word_align
 
             // The picture-in-picture subtitles by their place in the PG list, after the ordinary entries, as a real
             // disc names them. Each secondary video is given all of them: the meta does not say which belongs to
@@ -2969,11 +3054,6 @@ void M2TSStreamInfo::blurayStreamParams(const double fps, const bool interlaced,
         *video_format = interlaced ? 4 : 6;  // as 1920x1080
     else
         *video_format = 5;  // as 1280x720
-
-    if (width < 1080 && isV3())
-        LTRACE(LT_WARN, 2, "Warning: video height < 1080 is not standard for V3 Blu-ray.");
-    if (interlaced && isV3())
-        LTRACE(LT_WARN, 2, "Warning: interlaced video is not standard for V3 Blu-ray.");
 
     if (fabs(fps - 23.976) < 1e-4)
         *frame_rate_index = 1;

@@ -391,6 +391,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **The sound of a TS cut inside an audio frame** keeps its place against the picture. Its first PES begins with the rest of a frame, and the time of that PES went to the first whole frame: the sound came a frame early, about 11 ms for DTS. The few frames before the first PES that begins with a frame are left out.
 * **A Blu-ray output split into very small parts** with --split-size no longer crashes while it writes the clip information. For a part that holds no entry of a track's seek index, the list of entries was read past its end. When the first part held no picture, each part's clip information got the seek entries of the part after it, and the playlist left a part out.
 * **A .ssif output with --split-size or --split-duration** is refused before anything is written. The two views began new parts of their own: on Windows the mux stopped at the third part with "Can't create file", on Linux it ended as successful with parts numbered 1, 3, 5 and so on. A Blu-ray folder or an ISO image of 3D video is split as before.
+* **A Blu-ray output split into several clips, with picture-in-picture or a Dolby Vision enhancement layer,** wrote one sub path for each clip into its playlist, which declares only one. It writes the one sub path it declares now.
+* **A picture-in-picture video with two secondary audio tracks,** such as two commentaries, was tied to the first of them only in the playlist. It is tied to every secondary audio track now.
+* **The warning that video of fewer than 1080 lines is not standard for a UHD disc tested the width,** so 720p video got no warning, and a picture-in-picture video got it many times. It tests the height of the main video now, once.
+* **The angles after the first, the place and size of a picture-in-picture video, audio and video in a separate clip of a playlist, and the hold of still pictures are no longer left out without a word:** a warning names them, and the rest is muxed. A second video without "secondary" gets a warning that it is muxed as a second primary video.
 
 ### Matroska output
 

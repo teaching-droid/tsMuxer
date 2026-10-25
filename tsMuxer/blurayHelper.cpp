@@ -768,6 +768,32 @@ bool BlurayHelper::createMPLSFile(TSMuxer* mainMuxer, TSMuxer* subMuxer, int aut
             }
         }
     }
+    // A second video without "secondary" on its line is written as a second primary video, which a player does not
+    // show over the first, while a picture-in-picture video of a disc playlist is listed as "Secondary: 1". That was
+    // said nowhere. The first (PID 0x1011) is the main video; the PIDs of the others are named.
+    {
+        std::string extra;
+        bool first = true;
+        for (const auto& [index, si] : pidList)
+        {
+            if (!si.m_codecReader || si.m_codecReader->getCodecInfo().programName[0] != 'V' ||
+                si.m_streamType == StreamType::VIDEO_MVC || si.isSecondary || si.isDvEnhancement)
+                continue;
+            if (!first)
+            {
+                std::ostringstream pid;
+                pid << "0x" << std::hex << si.m_pid;
+                extra += (extra.empty() ? "" : ", ") + pid.str();
+            }
+            first = false;
+        }
+        if (!extra.empty())
+            LTRACE(LT_WARN, 2,
+                   "Warning: the video with PID " << extra
+                                                  << " is muxed as a second primary video, which a player does not "
+                                                     "show as a picture-in-picture. Give \"secondary\" on its line "
+                                                     "to mux it as a picture-in-picture video.");
+    }
     if (subMuxer)
     {
         mplsParser.isDependStreamExist = true;

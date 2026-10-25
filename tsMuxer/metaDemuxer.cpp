@@ -1326,6 +1326,18 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             }
 
             MPLSStreamInfo streamInfo = mplsInfo.getStreamByPID(pid);
+            // The playlist places its picture-in-picture video itself, with moves and a size of its own over time
+            // (ExtensionData 1/1). That is not read: a disc places it by the pip options, and the playlist's own
+            // placing was left out without a word.
+            if (!m_quiet && (V3_flags & BLURAY_OUT) && !codec.empty() && codec[0] == 'V' &&
+                addParams.find("secondary") != addParams.end() && mplsInfo.hasPipMetadata &&
+                m_pipPlacingReported.insert(mplsNames[k]).second)
+                LTRACE(LT_WARN, 2,
+                       "Warning: the picture-in-picture video (track "
+                           << pid << ") of playlist " << extractFileName2(unquotedStreamName)
+                           << " is placed by the pip options (pipCorner, pipHOffset, pipVOffset, pipScale, pipLumma, "
+                              "or their defaults). The position, size, moves and transparency the playlist gives it "
+                              "are left out. The rest is muxed.");
             std::map<string, string> partParams = addParams;
             const std::string partLang = applyLangCodeStyle(streamInfo.language_code);
             if (partParams.find("lang") == partParams.end() && isLanguageCode(partLang) && partLang != "und")
@@ -4591,6 +4603,8 @@ std::vector<MPLSParser> METADemuxer::getMplsInfo(const string& mplsFileName)
             MPLSParser parser;
             if (!parser.parse(unquoteStr(i).c_str()))
                 THROW(ERR_COMMON, "Can't parse play list file " << i)
+            if (!m_quiet)
+                parser.reportLeftOut(unquoteStr(i), false);
             cutPlayItems(parser, unquoteStr(i), m_playlistClipsPlayed);
             m_mplsStreamMap[i] = parser;
             result.push_back(parser);
