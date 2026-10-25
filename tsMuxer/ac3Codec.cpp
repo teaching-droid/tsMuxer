@@ -522,6 +522,14 @@ int AC3Codec::decodeFrame(uint8_t* buf, uint8_t* end, int& skipBytes)
             }
             uint8_t* nextFrame = trueHDData + trueHDFrameLen;
 
+            // With down-to-ac3 the time of a period is added at its last TrueHD frame, the one a core frame follows,
+            // so that is asked of the next header. A TrueHD frame that ends where the data read so far ends has no
+            // header behind it yet, and taking that for "not the last" gave the period no time: the next core frame
+            // got the time of the one before it, and every frame after it was 32 ms early. Where the data read ends
+            // depends only on the read blocks, so it hit one source and not another. It waits for more data instead.
+            if (m_downconvertToAC3 && !getTestMode() && end - nextFrame < 7)
+                return NOT_ENOUGH_BUFFER;
+
             // A TrueHD frame that ends where the data read so far ends has nothing behind it yet: the two bytes of a
             // sync word were read beyond the data
             if (end - nextFrame >= 2 && nextFrame[0] == 0x0B && nextFrame[1] == 0x77 &&

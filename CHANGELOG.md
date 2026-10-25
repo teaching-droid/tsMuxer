@@ -282,6 +282,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **TrueHD at a rate a disc does not have,** such as 44.1 kHz, no longer has 48 kHz in its PMT.
 
+* **TrueHD with its AC-3 core, muxed with down-to-ac3, could give an AC-3 frame the time of the frame before it,** and every frame after it then came 32 ms early against the picture. In Matroska the two frames became one block. It depended on where the file was read in blocks, so it hit some files and not others. Each frame now comes 32 ms after the one before it.
+
 * **A DTS-HD file with an encoder delay,** as the DTS-HD encoder writes its .dtshd files, starts with the picture. Its start-up samples were left out, but their time was kept, so the sound came 21 ms late (1024 samples at 48 kHz), and a disc made from it listed the track with that delay. (#49, thanks to @Nandos64 for the report and to @Moonghost-coder for the analysis)
 
 * **A DTS-HD file whose encoder delay is not a whole number of frames** keeps its sound. All of it was left out, and the mux still said it was successful: a DTS Express file with a delay of 1024 samples, for one, as its frames are 4096 samples long. A 96 kHz file also lost the first 21 ms of its sound, as twice its delay was left out. (#49, thanks to @Moonghost-coder)

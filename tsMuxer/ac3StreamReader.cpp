@@ -2,6 +2,7 @@
 
 #include <fs/systemlog.h>
 
+#include <cstring>
 #include <sstream>
 
 #include "avCodecs.h"
@@ -306,6 +307,21 @@ void AC3StreamReader::resetDecodeState()
 
 int AC3StreamReader::flushPacket(AVPacket& avPacket)
 {
+    // With down-to-ac3 the last TrueHD frame of the track is held back here, because decodeFrame waits for the header
+    // behind a TrueHD frame that ends where the data ends. The output has no TrueHD frames, so a whole one is counted
+    // as read and left out, as readPacket leaves out the others. What is behind it, the start of a core frame the end
+    // of the file cut, goes on below and is handled as before. A cut TrueHD frame goes on below as well.
+    if (m_true_hd_mode && m_downconvertToAC3 && m_tmpBufferLen >= 2 &&
+        !(m_tmpBuffer[0] == 0x0B && m_tmpBuffer[1] == 0x77))
+    {
+        const int unitLen = wholeFrameSizeAt(m_tmpBuffer.data(), m_tmpBuffer.data() + m_tmpBufferLen);
+        if (unitLen > 0 && unitLen <= m_tmpBufferLen)
+        {
+            m_processedBytes += unitLen;
+            m_tmpBufferLen -= unitLen;
+            memmove(m_tmpBuffer.data(), m_tmpBuffer.data() + unitLen, static_cast<size_t>(m_tmpBufferLen));
+        }
+    }
     const int rez = SimplePacketizerReader::flushPacket(avPacket);
     if (rez > 0 && !m_true_hd_mode)
         stampDependentFrame(avPacket);
