@@ -2378,11 +2378,20 @@ bool TSMuxer::nextPCRChanceTooLate(const int tsIndex, const int64_t dts) const
 // free one. It is checked before every packet of a stream, because one picture alone can take longer than 0.1 s to
 // arrive at the cap. A mux that stays under the cap never meets this condition first, and is written exactly as
 // before. 3D, whose two views are interleaved in blocks, is left as it was.
+//
+// At a cap below about 256 kbps that can still be too late. PAT, PMT and SIT go out with the PCR and count in its
+// time, and at 150 kbps each packet takes 10 ms, so the eight packets that reach m_pcr_delta and those three tables
+// put the PCRs 0.11 s apart. A PCR is therefore also due when the next packet and the three tables would take the
+// time past 0.1 s, counted as pcrForMaxRate counts it, on the 188 byte packet. It can only come first where the first
+// condition with all three tables would pass 0.1 s. Everywhere else the output is the same as before.
 bool TSMuxer::maxRateClockDue() const
 {
     if (m_maxBitrate == -1 || m_lastPCR == -1 || m_interliaveBlockSize > 0)
         return false;
-    return static_cast<int64_t>(std::ceil(static_cast<double>(m_pcrBits) * 90000.0 / m_maxBitrate)) >= m_pcr_delta;
+    if (static_cast<int64_t>(std::ceil(static_cast<double>(m_pcrBits) * 90000.0 / m_maxBitrate)) >= m_pcr_delta)
+        return true;
+    const double packets = static_cast<double>(m_pcrBits) / (m_frameSize * 8) + 4.0;  // the next one, PAT, PMT, SIT
+    return static_cast<int64_t>(std::ceil(packets * TS_PACKET_BITS * 90000.0 / m_maxBitrate)) > PCR_MAX_INTERVAL;
 }
 
 // The tables and the PCR go in between two packets of a picture. Inside a picture written in place, the PCR that the

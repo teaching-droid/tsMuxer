@@ -360,6 +360,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **--maxbitrate no longer replaces the rate of --bitrate.** A constant bitrate disc with the read rate limit, as the window writes it, came out slightly larger. With --maxbitrate at or above --bitrate it is now the same as without it.
 
+* **With a very low --maxbitrate, below about 256 kbps, the clock references could come up to 0.13 s apart,** where the transport stream rules allow 0.1 s, because the tables sent with each one were not counted. They now stay within 0.1 s.
+
 * **The finished disc is measured against --disc-size,** as the window says: a warning when the image is larger than the disc, or, for a disc folder, the image its BDMV and CERTIFICATE folders make. Only an estimate was checked, before the mux.
 
 * **On Linux and macOS, a transport stream whose end filled the write buffer exactly was reported as failed,** with "Failed to write the end of the output", although the file was complete.
