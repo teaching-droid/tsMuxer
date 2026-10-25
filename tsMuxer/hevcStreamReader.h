@@ -89,6 +89,7 @@ class HEVCStreamReader final : public MPEGStreamReader
     std::set<int> m_periodOrders;  // the full orders given since the last IDR or BLA picture, for a join
     bool m_joinRestart = false;    // the picture being read begins a later file of a join as a stream of its own
     static void storeBuffer(MemoryBlock& dst, const uint8_t* data, const uint8_t* dataEnd);
+    void captureHdrSei(const uint8_t* nal, const uint8_t* nalEnd);
     uint8_t* writeBuffer(MemoryBlock& srcData, uint8_t* dstBuffer, const uint8_t* dstEnd) const;
     uint8_t* writeNalPrefix(uint8_t* curPos) const;
 
@@ -146,6 +147,8 @@ class HEVCStreamReader final : public MPEGStreamReader
     MemoryBlock m_cllSeiBuffer;
     bool m_auHasMasteringSei;
     bool m_auHasCllSei;
+    // The kept mastering display unit carries the content light level as well, so repeating it repeats both.
+    bool m_cllInMasteringSei;
     bool m_hdrSeiRepeatReported;
     // Lowest slice_type seen in the current access unit, for the pic_type of a generated access
     // unit delimiter. HEVC orders them B=0, P=1, I=2, so the lowest is the most permissive.

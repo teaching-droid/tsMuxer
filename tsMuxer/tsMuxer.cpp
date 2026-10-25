@@ -605,6 +605,17 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
         if (dtsReader->getDTSHDMode() != DTSStreamReader::DTSHD_SUBTYPE::DTS_SUBTYPE_UNINITIALIZED &&
             !dtsReader->getDownconvertToDTS())
         {
+            // Which audio is secondary is the author's choice ("secondary" on the line). But a Blu-ray disc has DTS
+            // Express as secondary audio only: as primary audio it goes out as DTS-HD High Resolution, which needs
+            // the DTS core that an Express stream does not have. This used to be written without a word.
+            if (m_bluRayMode && !dtsReader->isSecondary() &&
+                dtsReader->getDTSHDMode() == DTSStreamReader::DTSHD_SUBTYPE::DTS_SUBTYPE_EXPRESS)
+                LTRACE(LT_WARN, 2,
+                       "Warning: track "
+                           << streamIndex
+                           << " (DTS Express) is muxed as primary audio. A Blu-ray disc has DTS Express as secondary "
+                              "audio only, so a player may not play it. Give \"secondary\" on its line to mux it as "
+                              "secondary audio (a commentary track, mixed over the main audio).");
             // if (dtsReader->getDTSHDMode() == DTSStreamReader::DTS_SUBTYPE_EXPRESS)
             if (dtsReader->isSecondary())
                 audioType = StreamType::AUDIO_DTS_HD_SECONDARY;

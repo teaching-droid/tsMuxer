@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <memory>
+#include <vector>
 
 #include "bitStream.h"
 #include "hevc.h"
@@ -38,6 +39,7 @@ HEVCStreamReader::HEVCStreamReader()
       m_levelChangeReported(false),
       m_auHasMasteringSei(false),
       m_auHasCllSei(false),
+      m_cllInMasteringSei(false),
       m_hdrSeiRepeatReported(false),
       m_auMinSliceType(-1),
       m_audInsertReported(false)
@@ -101,7 +103,7 @@ int HEVCStreamReader::repeatHdrSeiAtIrap(uint8_t* slicePos)
     if (!(V3_flags & BLURAY_OUT))
         return 0;
     const bool needMaster = !m_auHasMasteringSei && m_masteringSeiBuffer.size() > 0;
-    const bool needCll = !m_auHasCllSei && m_cllSeiBuffer.size() > 0;
+    const bool needCll = !m_auHasCllSei && m_cllSeiBuffer.size() > 0 && !(needMaster && m_cllInMasteringSei);
     if (!needMaster && !needCll)
         return 0;
 
@@ -1303,6 +1305,111 @@ void HEVCStreamReader::notePicOrder(const HevcUnit::NalType nalType)
         m_gopOrderOffsets.push_back(m_fullPicOrder - m_frameNum);
 }
 
+// Keeps the mastering display (137) and content light level (144) SEI of a prefix SEI unit for
+// repeatHdrSeiAtIrap. A unit may carry several sei_message()s (H.265 7.3.5), and these two may be
+// any of them, so every message is walked, on the unit with its emulation prevention bytes removed.
+//
+// A unit that carries nothing but these two is kept whole, exactly as it is in the stream. A unit
+// that also carries other messages (buffering period, picture timing, user data, ...) is not: those
+// belong to the access unit they came with and must not be repeated elsewhere. Each of the two
+// messages is then kept as a unit of its own: the same NAL header, the message's own bytes, and the
+// rbsp trailing bits.
+void HEVCStreamReader::captureHdrSei(const uint8_t* nal, const uint8_t* nalEnd)
+{
+    while (nalEnd > nal && nalEnd[-1] == 0) nalEnd--;
+    if (nalEnd - nal < 4)
+        return;
+    std::vector<uint8_t> rbsp(nalEnd - nal);
+    const int rbspLen = NALUnit::decodeNAL(nal, nalEnd, rbsp.data(), rbsp.size());
+    if (rbspLen < 4)
+        return;
+    struct Msg
+    {
+        int type;
+        size_t start, end;  // the whole sei_message: payload type and size bytes, then the payload
+    };
+    std::vector<Msg> msgs;
+    bool others = false;
+    size_t end = rbspLen;
+    while (end > 2 && rbsp[end - 1] == 0) end--;
+    size_t pos = 2;  // after the NAL header
+    // more_rbsp_data(): what is left is more than the rbsp_stop_one_bit and its alignment zeros
+    while (pos < end && !(pos + 1 == end && rbsp[pos] == 0x80))
+    {
+        const size_t start = pos;
+        int type = 0;
+        while (pos < end && rbsp[pos] == 0xFF)
+        {
+            type += 255;
+            pos++;
+        }
+        size_t size = 0;
+        if (pos < end)
+            type += rbsp[pos++];
+        while (pos < end && rbsp[pos] == 0xFF)
+        {
+            size += 255;
+            pos++;
+        }
+        if (pos >= end || static_cast<size_t>(rbsp[pos]) + size > end - pos - 1)
+        {
+            // damaged from here on: the messages before it are kept, the rest is not repeated
+            others = true;
+            break;
+        }
+        size += rbsp[pos++];
+        pos += size;
+        if (type == 137 || type == 144)
+            msgs.push_back({type, start, pos});
+        else
+            others = true;
+    }
+    if (msgs.empty())
+        return;
+    if (!others)
+    {
+        bool has137 = false, has144 = false;
+        for (const auto& m : msgs)
+        {
+            has137 |= m.type == 137;
+            has144 |= m.type == 144;
+        }
+        m_auHasMasteringSei |= has137;
+        m_auHasCllSei |= has144;
+        if (has137)
+        {
+            storeBuffer(m_masteringSeiBuffer, nal, nalEnd);
+            m_cllInMasteringSei = has144;
+        }
+        else
+            storeBuffer(m_cllSeiBuffer, nal, nalEnd);
+        return;
+    }
+    for (const auto& m : msgs)
+    {
+        std::vector<uint8_t> unit;
+        unit.push_back(rbsp[0]);
+        unit.push_back(rbsp[1]);
+        unit.insert(unit.end(), rbsp.begin() + m.start, rbsp.begin() + m.end);
+        unit.push_back(0x80);  // rbsp_trailing_bits
+        std::vector<uint8_t> coded(unit.size() * 3 / 2 + 4);
+        const int codedLen = NALUnit::encodeNAL(unit.data(), unit.data() + unit.size(), coded.data(), coded.size());
+        if (codedLen <= 0)
+            continue;
+        if (m.type == 137)
+        {
+            m_auHasMasteringSei = true;
+            storeBuffer(m_masteringSeiBuffer, coded.data(), coded.data() + codedLen);
+            m_cllInMasteringSei = false;
+        }
+        else
+        {
+            m_auHasCllSei = true;
+            storeBuffer(m_cllSeiBuffer, coded.data(), coded.data() + codedLen);
+        }
+    }
+}
+
 // dataEnd is where the start code of the next NAL begins, so the NAL is everything before it, less the zero bytes a
 // stream may put in front of a start code. It used to step back one byte first, as if dataEnd were past the next
 // start code, and so every stored parameter set and SEI lost its last byte: the VPS, SPS and PPS written at the
@@ -1551,26 +1658,7 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                 break;
             case HevcUnit::NalType::SEI_PREFIX:
             {
-                // payload_type, read straight off the bytes after the 2 byte NAL header
-                const uint8_t* pt = curPos + 2;
-                int payloadType = 0;
-                while (pt < nextNalWithStartCode && *pt == 0xFF)
-                {
-                    payloadType += 255;
-                    ++pt;
-                }
-                if (pt < nextNalWithStartCode)
-                    payloadType += *pt;
-                if (payloadType == 137)  // mastering_display_colour_volume
-                {
-                    m_auHasMasteringSei = true;
-                    storeBuffer(m_masteringSeiBuffer, curPos, nextNalWithStartCode);
-                }
-                else if (payloadType == 144)  // content_light_level_info
-                {
-                    m_auHasCllSei = true;
-                    storeBuffer(m_cllSeiBuffer, curPos, nextNalWithStartCode);
-                }
+                captureHdrSei(curPos, nextNalWithStartCode);
                 try
                 {
                     m_hdr->decodeBuffer(curPos, nextNal);

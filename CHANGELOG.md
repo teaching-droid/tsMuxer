@@ -364,6 +364,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **E-AC-3 without an AC-3 core** gets a warning on a disc: a Blu-ray player has to decode AC-3 but not E-AC-3, so a player without an E-AC-3 decoder plays no sound from it.
 
+* **DTS Express muxed to a disc without "secondary" went out as primary audio without a word,** as DTS-HD High Resolution with no core. A Blu-ray disc has DTS Express as secondary audio only. A warning now says that "secondary" on its line makes it a commentary track.
+
+* **The HDR10 data of an HEVC stream on a disc was not repeated where it was not the first message of its SEI unit:** only the first message was read, so mastering display or light level data after another message was never repeated at the random access points. Every message of the unit is read now.
+
 * **More than 32 tracks of one kind on a disc** are refused before it is written, with the number to leave out. A 33rd audio track took PID 0x1120, outside the audio range. A transport stream whose tracks need a program map table longer than the 1021 bytes a transport stream allows is refused as well.
 
 * **--maxbitrate no longer replaces the rate of --bitrate.** A constant bitrate disc with the read rate limit, as the window writes it, came out slightly larger. With --maxbitrate at or above --bitrate it is now the same as without it.
