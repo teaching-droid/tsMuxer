@@ -488,6 +488,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **An output that is a hard link to a source** is refused as one of the sources. The M2TS save dialog offers .m2ts only, and the open dialog lists VC-1, VVC, MP2, MP3 and FLAC files.
 
+* **A big file looked as if the window had stopped while it was read for its tracks:** nothing in the window changed. The pointer now shows that the window is busy.
+
+* **The start time was raised to 524280 also for MKV output,** as for a Blu-ray disc, although Matroska does not use it. It is left as given now.
+
 ### Other
 
 * **A sound track of a transport stream or a Matroska file could be listed as video, and a video track as sound,** when a check for the other kind ran first and took the data for its own: MP2 sound in a Matroska file was listed as AV1 video. A track is now read first as the kind its file declares, and within that kind the data still decides. A track that really holds the other kind is still found, with a warning.
@@ -530,7 +534,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A playlist source** is muxed in the languages its playlist gives, as it is listed.
 
-* **--bdmv-to-iso** counts folders when it makes room for the image's metadata, and takes --extra-iso-space: a disc folder with 400 extra folders was refused after the whole copy.
+* **--bdmv-to-iso** counts folders, and the length of the names in them, when it makes room for the image's metadata, and takes --extra-iso-space: a disc folder with 400 extra folders, with more than about 23,000 files, or with 6000 files of long names, was refused after the whole copy.
 
 * **Reads outside the data, and reads at addresses C++ does not allow, are gone.** The search for the start codes of a video stream read up to 15 bytes before and after its buffer, the check for the next TrueHD frame could read two bytes past the data, and many fields of two, four and eight bytes were read and written through pointers the language does not allow at their addresses. A refused job that joined files could read memory already freed while it closed, as its file reader was still opening the next part. A name shorter than the ending it was checked for was read from before its start. None of them was seen to change an output.
 

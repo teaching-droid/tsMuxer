@@ -350,19 +350,11 @@ int AC3StreamReader::flushPacket(AVPacket& avPacket)
 
 bool AC3StreamReader::needMPLSCorrection() const { return !m_true_hd_mode || m_downconvertToAC3; }
 
+// Core frames are passed on in the order the source has them. A held-back core frame, released by a count of TrueHD
+// samples, was never active: the count was back at 0 after every TrueHD unit and nothing was ever held, so that code
+// is gone.
 int AC3StreamReader::readPacketTHD(AVPacket& avPacket)
 {
-    if (m_thdDemuxWaitAc3 && !m_delayedAc3Buffer.isEmpty())
-    {
-        avPacket = m_delayedAc3Packet;
-        m_delayedAc3Buffer.clear();
-        m_thdDemuxWaitAc3 = false;
-        avPacket.dts = avPacket.pts = m_nextAc3Time;
-        avPacket.flags |= AVPacket::IS_CORE_PACKET;
-        m_nextAc3Time += m_frameDuration;
-        return 0;
-    }
-
     while (true)
     {
         const int rez = SimplePacketizerReader::readPacket(avPacket);
@@ -384,7 +376,6 @@ int AC3StreamReader::readPacketTHD(AVPacket& avPacket)
 
         if (isAc3Packet)
         {
-            m_thdDemuxWaitAc3 = false;
             avPacket.dts = avPacket.pts = m_nextAc3Time;
             avPacket.flags |= AVPacket::IS_CORE_PACKET;
             m_nextAc3Time += m_frameDuration;
@@ -399,12 +390,6 @@ int AC3StreamReader::readPacketTHD(AVPacket& avPacket)
                 avPacket.dts = avPacket.pts = samplesToInternal(m_totalTHDSamples, mlp.m_samplerate);
 
             m_totalTHDSamples += mlp.m_samples;
-            m_demuxedTHDSamples += mlp.m_samples;
-            if (m_demuxedTHDSamples >= mlp.m_samples)
-            {
-                m_demuxedTHDSamples -= mlp.m_samples;
-                m_thdDemuxWaitAc3 = true;
-            }
             return 0;
         }
     }

@@ -71,6 +71,7 @@ class TsMuxerWindow : public QWidget
     void onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
     void onProcessError(QProcess::ProcessError error);
     void showProbeRefusal();
+    void setProbeBusy(bool busy);
     void trackLVItemSelectionChanged();
     void inputFilesLVChanged();
     void trackLVItemChanged(QTableWidgetItem* item);
@@ -251,6 +252,8 @@ class TsMuxerWindow : public QWidget
     double videoStart = 0.0;
     double videoEnd = 0.0;
     bool runInMuxMode;
+    // The busy cursor of a track listing is shown (setProbeBusy).
+    bool m_probeBusy = false;
     QString lastInputDir;
     QString lastOutputDir;
     // Retranslation hooks for hand-built (non-designer) widgets; run from changeEvent(LanguageChange).

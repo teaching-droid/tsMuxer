@@ -339,7 +339,7 @@ Or run the following to build the GUI as well:
 To use compile tsMuxer on Mac natively we must first use Homebrew to install some dependencies:
 
 ```
-ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)" < /dev/null 2> /dev/null
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 brew install freetype
 brew install zlib
 ```

@@ -15,8 +15,6 @@ class AC3StreamReader final : public SimplePacketizerReader, public AC3Codec
         m_state = AC3State::stateDecodeAC3;
         m_waitMoreData = false;
 
-        m_thdDemuxWaitAc3 = true;  // wait ac3 packet
-        m_demuxedTHDSamples = 0;
         m_totalTHDSamples = 0;
         m_nextAc3Time = 0;
         m_needTrueHDProbe = false;
@@ -76,11 +74,6 @@ class AC3StreamReader final : public SimplePacketizerReader, public AC3Codec
    private:
     bool m_useNewStyleAudioPES;
 
-    bool m_thdDemuxWaitAc3;
-
-    MemoryBlock m_delayedAc3Buffer;
-    AVPacket m_delayedAc3Packet;
-    int m_demuxedTHDSamples;
     int64_t m_totalTHDSamples;
     int64_t m_nextAc3Time;
 };

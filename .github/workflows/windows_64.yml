@@ -235,6 +235,9 @@ jobs:
           $crt = Get-ChildItem "$env:VCToolsRedistDir\x64" -Filter "Microsoft.VC*.CRT" -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $crt) { $crt = Get-ChildItem "C:\Program Files\Microsoft Visual Studio" -Recurse -Filter "Microsoft.VC*.CRT" -Directory -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1 }
           if ($crt) { Copy-Item "$($crt.FullName)\*.dll" "../bin/" -Force }
+          # vccorlib140.dll is the C++/CX (WinRT) runtime: no shipped executable or DLL imports it, and it
+          # was the only file that made a scan of the folder report WinRT.
+          Remove-Item "../bin/vccorlib140.dll" -Force -ErrorAction SilentlyContinue
           # Bundle the Universal CRT so a bare Windows 7 runs with nothing installed.
           $ucrt = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Redist" -Recurse -Filter ucrtbase.dll -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
           if ($ucrt) { Copy-Item (Join-Path $ucrt.DirectoryName '*.dll') "../bin/" -Force }

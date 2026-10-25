@@ -8,11 +8,7 @@
 class MLPStreamReader : public SimplePacketizerReader, public MLPCodec
 {
    public:
-    MLPStreamReader()
-    {
-        m_demuxedTHDSamples = 0;
-        m_totalTHDSamples = 0;
-    }
+    MLPStreamReader() { m_totalTHDSamples = 0; }
     int getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdmvDescriptors) override;
     int getFreq() override { return m_samplerate; }
     uint8_t getChannels() override { return m_channels; }
@@ -32,7 +28,6 @@ class MLPStreamReader : public SimplePacketizerReader, public MLPCodec
     void addTimeGap(int64_t atNs, int64_t gapNs) override { m_thdGaps.emplace_back(atNs, gapNs); }
 
    protected:
-    int m_demuxedTHDSamples;
     int64_t m_totalTHDSamples;
     bool m_coreSaid = false;  // the AC-3 core left out was named once
     // The access units before the first major sync, which cannot be decoded and are left out, counted while no

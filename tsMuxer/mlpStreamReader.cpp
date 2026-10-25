@@ -241,11 +241,6 @@ int MLPStreamReader::readPacket(AVPacket& avPacket)
             avPacket.dts = avPacket.pts = samplesToInternal(m_totalTHDSamples, m_samplerate);
 
         m_totalTHDSamples += m_samples;
-        m_demuxedTHDSamples += m_samples;
-        if (m_demuxedTHDSamples >= m_samples)
-        {
-            m_demuxedTHDSamples -= m_samples;
-        }
         return 0;
     }
 }

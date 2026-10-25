@@ -2185,8 +2185,54 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
     for (const auto& it : items)
         for (size_t s = it.rel.find_first_of("/\\"); s != string::npos; s = it.rel.find_first_of("/\\", s + 1))
             folders.insert(strToUpperCase(it.rel.substr(0, s)));
-    const int extraISOBlocks =
-        static_cast<int>(items.size() + 2 * folders.size() + 2 * interleavedGroups) / 32 + 16 + extraIsoSpace;
+    int baseISOBlocks = static_cast<int>(items.size() + 2 * folders.size() + 2 * interleavedGroups) / 32 + 16;
+    // The estimate gives each folder one sector for its listing. A listing holds 38 bytes and the name for each
+    // entry, so a folder of many files, or of files with long names, needs many more: 6000 names of 230 characters
+    // in one folder need about 800 sectors, the image was refused at the very end, after every byte had been
+    // copied, and only --extra-iso-space helped. The listings are counted from the names now, and the area is
+    // enlarged where the estimate would not hold them; an image the estimate fits is left exactly as it was.
+    {
+        std::map<string, int64_t> listingBytes;  // folder ("" = the root) -> size of its listing
+        std::set<string> listedFolders;
+        auto addPath = [&](const string& rel)
+        {
+            string parent;
+            size_t from = 0;
+            while (from <= rel.size())
+            {
+                const size_t slash = rel.find('/', from);
+                const string part = rel.substr(from, slash == string::npos ? string::npos : slash - from);
+                const bool isFolder = slash != string::npos;
+                if (!isFolder || listedFolders.insert(parent + part).second)
+                    listingBytes[parent] += (38 + static_cast<int64_t>(udfFileIdentifier(part).size()) + 3) / 4 * 4;
+                if (!isFolder)
+                    break;
+                parent += part + "/";
+                from = slash + 1;
+            }
+        };
+        for (const auto& it : items)
+        {
+            if (it.ssifGroup >= 0 && static_cast<size_t>(it.ssifGroup) < ssifGroups.size())
+            {
+                const BdSsifGroup& g = ssifGroups[static_cast<size_t>(it.ssifGroup)];
+                for (const string* rel : {&g.ssifRel, &g.baseRel, &g.depRel}) addPath(*rel);
+            }
+            else
+                addPath(it.rel);
+        }
+        listingBytes[""];  // the root has a listing even when it holds no file
+        int64_t sectors = static_cast<int64_t>(items.size() + 2 * interleavedGroups);  // one File Entry per file
+        for (const auto& [folder, bytes] : listingBytes)
+            sectors += 1 + (40 + bytes + 2047) / 2048;  // its File Entry, and the listing behind its parent entry
+        // The file set and terminating descriptors, the system stream folder, and room for the standard folders
+        // createBluRayDirs adds
+        sectors += 16 + 64;
+        const int neededBlocks = static_cast<int>((sectors + 31) / 32);
+        if (neededBlocks > baseISOBlocks)
+            baseISOBlocks = neededBlocks;
+    }
+    const int extraISOBlocks = baseISOBlocks + extraIsoSpace;
 
     LTRACE(
         LT_INFO, 2,
@@ -2481,8 +2527,12 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         side << "image: " << shownOutputName(outIso) << "\n";
         for (const auto& pad : pads)
         {
-            const double beforeMB = static_cast<double>(pad.breakLbn - pad.padStartLbn) / 512.0;
-            const double afterMB = static_cast<double>(pad.padEndLbn - pad.breakLbn) / 512.0;
+            // The fill can start past the break: a break below the first data sector (warned about when it is read),
+            // or a write that stood inside the zone already. Then all of it lies after the break, and the "before"
+            // came out negative.
+            const int64_t fillAtBreak = (std::max)(pad.padStartLbn, static_cast<int64_t>(pad.breakLbn));
+            const double beforeMB = static_cast<double>(fillAtBreak - pad.padStartLbn) / 512.0;
+            const double afterMB = static_cast<double>(pad.padEndLbn - fillAtBreak) / 512.0;
             std::ostringstream line;
             line << "break " << pad.breakLbn << ": zeros " << pad.padStartLbn << " .. " << pad.padEndLbn << " ("
                  << std::fixed << std::setprecision(1) << beforeMB << " MB before + " << afterMB << " MB after)";

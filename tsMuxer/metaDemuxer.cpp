@@ -5126,8 +5126,10 @@ uint8_t* ContainerToReaderWrapper::readBlock(const int readerID, uint32_t& readC
                 return false;
         return true;
     };
-    if ((readCnt > 0 && (policy == DemuxerReadPolicy::drpFragmented || demuxerData.lastReadCnt[pid] == DATA_EOF2 ||
-                         demuxerData.lastReadCnt[pid] == DATA_EOF2)) ||
+    // A short rest is handed on as it is once the demuxer has reached the end: reading on cannot add to it. The test
+    // read lastReadCnt, a byte count that is always 0 here (taken above), twice against DATA_EOF2, so it never held.
+    if ((readCnt > 0 && (policy == DemuxerReadPolicy::drpFragmented || demuxerData.lastReadRez[pid] == DATA_EOF ||
+                         demuxerData.lastReadRez[pid] == DATA_EOF2)) ||
         readCnt >= MIN_READED_BLOCK)
     {
         data = streamData.data();

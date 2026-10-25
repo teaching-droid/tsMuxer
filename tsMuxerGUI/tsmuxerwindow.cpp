@@ -11,6 +11,7 @@
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QCursor>
 #include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
@@ -4171,10 +4172,25 @@ void TsMuxerWindow::myPlaySound(const QString& fileName)
 #endif
 }
 
+// Reading a file to list its tracks can take a long time (a big Matroska file is read far into it), and nothing in the
+// window changed meanwhile, so it looked frozen. A busy cursor shows that the file is being read. It is set only for
+// that listing; the mux has its own progress window.
+void TsMuxerWindow::setProbeBusy(bool busy)
+{
+    if (busy == m_probeBusy)
+        return;
+    m_probeBusy = busy;
+    if (busy)
+        QGuiApplication::setOverrideCursor(Qt::BusyCursor);
+    else
+        QGuiApplication::restoreOverrideCursor();
+}
+
 void TsMuxerWindow::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
     flushPendingOutput();
     processFinished = true;
+    setProbeBusy(false);
     if (!metaName.isEmpty())
     {
         QFile::remove(metaName);
@@ -4238,6 +4254,7 @@ void TsMuxerWindow::onProcessError(QProcess::ProcessError error)
         metaName.clear();
     }
     processFinished = true;
+    setProbeBusy(false);
     QMessageBox msgBox(this);
     QString text;
     msgBox.setWindowTitle(tr("tsMuxeR error"));
@@ -4903,10 +4920,10 @@ void TsMuxerWindow::snapMuxTimeToBdMinimum()
     // registers underflow. The muxer raises such values too; mirror it here so the
     // field never rests in the broken range. 0 keeps the default (600 s).
     constexpr int MIN_BD_START_TICKS = 524280;
-    // Only for outputs the muxer itself gates. It exempts plain TS and demux mode, so snapping
-    // there would make the GUI stricter than the CLI for the same request, silently and with no
-    // way to opt out.
-    if (ui->radioButtonTS->isChecked() || ui->radioButtonDemux->isChecked())
+    // Only for outputs the muxer itself gates. It exempts plain TS, Matroska and demux mode (a
+    // Matroska file does not use the start time at all), so snapping there would make the GUI
+    // stricter than the CLI for the same request, silently and with no way to opt out.
+    if (ui->radioButtonTS->isChecked() || ui->radioButtonMKV->isChecked() || ui->radioButtonDemux->isChecked())
         return;
     const int v = ui->muxTimeClock->value();
     if (v > 0 && v < MIN_BD_START_TICKS)
@@ -7047,6 +7064,7 @@ void TsMuxerWindow::processAddFileList(OnCodecListReadyFn onCodecListReady, Post
     connect(this, &TsMuxerWindow::codecListReady, this, onCodecListReady);
     connect(this, postActionSignal, this, postActionFn);
     runInMuxMode = false;
+    setProbeBusy(true);
     tsMuxerExecute(QStringList() << newFileName);
 }
 
