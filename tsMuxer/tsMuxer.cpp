@@ -887,6 +887,15 @@ void TSMuxer::reportLateArrival() const
                                          << " late. The video's peaks are above the cap, so a player may stutter or "
                                             "freeze there. Re-encode the video with its peak bitrate capped below the "
                                             "cap, or raise the cap.");
+    // 3D in interleaved blocks: each view is held to the cap on a clock of its own, and far below the video's rate the
+    // two clocks drift apart, so the second view's clock references can jump. Measured: none from 500 kbps up, jumps
+    // at 150 kbps, where no 3D video can play; a 3D disc allows far more than any such cap.
+    // once per job: both views report their late pictures, the 3D cause is one
+    static bool said3d = false;
+    if (m_interliaveBlockSize > 0 && !said3d && (said3d = true))
+        LTRACE(LT_WARN, 2,
+               "Warning: this is 3D video, and the cap is below what it needs. Far below that, the two views can no "
+               "longer be kept in step and the clock of the second view can jump. Give a higher --maxbitrate.");
 }
 
 // ** --maxbitrate SENDS DATA AHEAD IN THE QUIET PARTS. **
