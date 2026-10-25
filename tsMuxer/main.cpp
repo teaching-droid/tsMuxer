@@ -940,8 +940,10 @@ Additional parameters for video tracks:
                     which is what a stream taken from another source needs.
 - fps               The number of frames per second. If not defined, the value
                     is auto detected from the source stream or container
-                    metadata (e.g. MKV default_duration, MP4 timescale). If
-                    neither source is available, it defaults to 23.976.
+                    metadata (e.g. MKV default_duration, MP4 timescale), or
+                    from the times of its pictures in a TS, an M2TS or a
+                    Blu-ray playlist. If none of them gives it, it defaults
+                    to 25.
 - delPulldown       Remove pulldown from the track, if it exists. If the
                     pulldown is present, the FPS value is changed from 30 to 24.
 - ar                Override video aspect ratio. 16:9, 4:3 e.t.c.
@@ -2564,6 +2566,14 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         }
     }
     unfinished.keep = true;
+    // Written in place over an image that was there (--bdmv-to-iso), an image with no pads left the layer break map of
+    // the old image beside it, which described a disc that was no longer there. Over a temporary name (KeepOldOutput)
+    // the old map is removed when the new image takes the old one's place.
+    if (pads.empty() && unfinished.name.empty() && !opt.tempName)
+    {
+        std::error_code ec;
+        std::filesystem::remove(fsPath(outIso + ".layerbreak.txt"), ec);
+    }
     LTRACE(LT_INFO, 2, "bdmv-to-iso complete -> " << shownOutputName(outIso));
     return 0;
 }
@@ -2888,6 +2898,8 @@ class KeepOldOutput
         m_dir = dir;
         m_oldPrefix = stem + ".";
         m_newPrefix = stem + ".tsmuxer-new-" + std::to_string(processId()) + ".";
+        if (strToLowerCase(ext) == ".iso")
+            m_imageSideFile = ext.substr(1) + ".layerbreak.txt";
         m_armed = true;
         warnRoom(dir, estimate);
         // the messages name stem.ext and stem.split.n.ext, as the user gave them
@@ -3006,6 +3018,11 @@ class KeepOldOutput
             std::filesystem::remove_all(m_tmp, ec);
         }
         else
+        {
+            // An image with no layer break pads has no layer break map of its own: the map of the old image stayed
+            // beside it, and described a disc that was no longer there. It goes once the new image is in place.
+            const bool newSideFile =
+                !m_imageSideFile.empty() && std::filesystem::exists(m_dir / u8path(m_newPrefix + m_imageSideFile), ec);
             for (const auto& p : ownFiles())
             {
                 const std::string name = pathStr(p.filename());
@@ -3015,6 +3032,9 @@ class KeepOldOutput
                     throw runtime_error("The new output is complete as " + pathStr(p) + ", but it could not replace " +
                                         pathStr(to) + ": " + ec.message());
             }
+            if (!m_imageSideFile.empty() && !newSideFile)
+                std::filesystem::remove(m_dir / u8path(m_oldPrefix + m_imageSideFile), ec);
+        }
         m_committed = true;
     }
 
@@ -3182,6 +3202,7 @@ class KeepOldOutput
     std::filesystem::path m_tmp;
     std::string m_oldPrefix;
     std::string m_newPrefix;
+    std::string m_imageSideFile;  // "iso.layerbreak.txt" when the file is an ISO image, after either prefix
 };
 
 // --inner-only on a direct mux to an ISO image. The image cannot be laid out while the disc is muxed into it: the

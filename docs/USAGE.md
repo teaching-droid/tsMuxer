@@ -208,7 +208,7 @@ Additional parameters for video tracks:
 
 Parameter         | Description 
 ---               | --- 
-fps               | The number of frames per second. If not defined, the value is auto detected from the source stream or the container metadata (e.g. MKV default_duration, MP4 timescale). If neither source is available, the GUI defaults to 23.976 and the CLI defaults to 25. 
+fps               | The number of frames per second. If not defined, the value is auto detected from the source stream or the container metadata (e.g. MKV default_duration, MP4 timescale), or from the times of its pictures in a TS, an M2TS or a Blu-ray playlist. If none of them gives it, it defaults to 25. The GUI then writes no fps either; 23.976 is the value its fps box offers when it is ticked. 
 delPulldown       | Remove pulldown from the track, if it exists. If the pulldown is present, the FPS value is changed from 30 to 24. 
 ar                | Override video aspect ratio. 16:9, 4:3 e.t.c. 
 

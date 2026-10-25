@@ -324,6 +324,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **--bdmv-to-iso takes --constant-iso-hdr,** as a MUXOPT line does, so two images of one folder can be compared byte for byte.
 
+* **An ISO image made over one of the same name left the old .layerbreak.txt beside it** when the new image had no layer break zeros, so the file described a layer break that was no longer there. It is now removed. A job that fails leaves the old image and its file as they were.
+
 * **A Blu-ray or AVCHD disc made from the command line or a meta file had its AC-3, E-AC-3, DTS, DTS-HD and TrueHD-with-core audio as stream id 0xbd,** although `--help` says a disc gets 0xfd with its extension, as the Blu-ray format has it and as the window always writes it with `--new-audio-pes`. A player that finds the audio by that extension played such a disc without sound. A disc now always gets 0xfd; LPCM keeps 0xbd, and a TS or M2TS that is no disc is written as before. Mux such discs again.
 
 * **A disc from the command line or a meta file had its clock references on the last video track,** for a Dolby Vision disc on the enhancement layer, where the Blu-ray format and the window put them on a PID of their own, 0x1001. A disc now always does. The clip information files of a UHD disc no longer end with an empty extension block, which none of the UHD discs measured has.

@@ -287,6 +287,45 @@ static const QString FILE_JOIN_PREFIX(" ++ ");
 
 bool doubleCompare(double a, double b) { return qAbs(a - b) < 1e-6; }
 
+// True when a MUXOPT line of the meta text asks for a split. The line is read as tsMuxeR reads it: a tab outside quotes
+// is a space, the line is split at spaces outside quotes, and an option is the text before "=". A word inside a quoted
+// value, such as --label="no --split-size here", is no option.
+bool metaAsksForSplit(const QString& meta)
+{
+    for (const QString& rawLine : meta.split('\n'))
+    {
+        QString line = rawLine;
+        while (!line.isEmpty() && (line[0] == ' ' || line[0] == '\t'))
+            line.remove(0, 1);
+        if (!line.startsWith(QLatin1String("MUXOPT")))
+            continue;
+        QStringList tokens;
+        QString token;
+        bool quoted = false;
+        for (const QChar c : line)
+        {
+            if (c == '"')
+                quoted = !quoted;
+            if ((c == ' ' || c == '\t' || c == '\r') && !quoted)
+            {
+                tokens << token;
+                token.clear();
+            }
+            else
+                token += c;
+        }
+        tokens << token;
+        for (const QString& t : tokens)
+        {
+            const QString name = t.left(t.indexOf('='));
+            if (name == QLatin1String("--split-duration") || name == QLatin1String("--split-size") ||
+                name == QLatin1String("--split-chapters"))
+                return true;
+        }
+    }
+    return false;
+}
+
 QString closeDirPath(const QString& src)
 {
     if (src.isEmpty())
@@ -6181,11 +6220,10 @@ void TsMuxerWindow::startMuxing()
                   ui->radioButtonBluRayISO->isChecked() || ui->radioButtonMKV->isChecked();
     // A split writes name.split.1.ext, name.split.2.ext and on, never the name itself, so the question did not come
     // and the parts of an earlier split were replaced without a word. The meta text is what is run, so a split typed
-    // into it counts as well. The number of parts is known only at the end, so any part there is asked about.
+    // into it counts as well. The number of parts is known only at the end, so any part there is asked about. Only a
+    // real option counts: a label holding "--split-size" asked about parts that are not written.
     QString existingOutput = ui->outFileName->text();
-    if (isFile && !ui->radioButtonBluRayISO->isChecked() &&
-        ui->memoMeta->toPlainText().contains(QRegularExpression("^MUXOPT\\b[^\\n]*--split-(duration|size|chapters)",
-                                                                QRegularExpression::MultilineOption)))
+    if (isFile && !ui->radioButtonBluRayISO->isChecked() && metaAsksForSplit(ui->memoMeta->toPlainText()))
     {
         const QFileInfo out(ui->outFileName->text());
         const QRegularExpression partName("^" + QRegularExpression::escape(out.completeBaseName() + ".split.") +
