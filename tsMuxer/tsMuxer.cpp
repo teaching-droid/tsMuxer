@@ -158,6 +158,13 @@ TSMuxer::TSMuxer(MuxerManager* owner) : AbstractMuxer(owner)
     m_cappedPictures = 0;
     m_latePictures = 0;
     m_worstLateness = 0;
+    m_cbrGiven = false;
+    m_cbrWinBits = 0;
+    m_cbrWinTicks = 0;
+    m_cbrWinStart = 0;
+    m_cbrCarryBits = 0;
+    m_cbrPeakRate = 0;
+    m_cbrPeakAt = 0;
     m_sendAhead = false;
     m_outBufPos = 0;
     m_saHeldEnd = 0;
@@ -898,6 +905,62 @@ void TSMuxer::reportLateArrival() const
                "longer be kept in step and the clock of the second view can jump. Give a higher --maxbitrate.");
 }
 
+// --bitrate holds the output at its rate from below only: null packets fill up to it, but where the content needs
+// more, the clock follows the decoding times and the data goes out at the rate the content needs, so the output is
+// not at a constant rate there, and nothing said so. The rate a constant-rate clock would hold it to (the term in
+// writeTSFrames) only moves the clock while the PCR is small, which it is not with the usual start times. The bits of
+// content written between two PCRs (all but the null packets of the padding) are summed into windows of at least a
+// second of the clock; a window whose content is above the rate by more than four packets counts, and the highest one
+// is said once at the end. A short peak that the rate could carry over the window is not counted. The output is not
+// changed.
+void TSMuxer::noteCbrRate(const int64_t pcr, const int64_t paddingBits)
+{
+    if (!m_cbrGiven || m_lastPCR == -1 || pcr <= m_lastPCR)
+        return;
+    if (m_cbrWinTicks == 0)
+        m_cbrWinStart = m_lastPCR;
+    m_cbrWinBits += m_pcrBits - m_cbrCarryBits - paddingBits;
+    m_cbrWinTicks += pcr - m_lastPCR;
+    if (m_cbrWinTicks < 90000)
+        return;
+    const int64_t allowed = static_cast<int64_t>(m_cbrBitrate) * m_cbrWinTicks / 90000 + 4 * m_frameSize * 8;
+    if (m_cbrWinBits > allowed)
+    {
+        const int64_t rate = m_cbrWinBits * 90000 / m_cbrWinTicks;
+        if (rate > m_cbrPeakRate)
+        {
+            m_cbrPeakRate = rate;
+            m_cbrPeakAt = m_cbrWinStart + m_cbrWinTicks / 2;
+        }
+    }
+    m_cbrWinBits = 0;
+    m_cbrWinTicks = 0;
+}
+
+void TSMuxer::reportCbrExcess() const
+{
+    if (m_cbrPeakRate == 0)
+        return;
+    // once per job for 3D in interleaved blocks: both views are measured, the cause is one
+    static bool said3d = false;
+    if (m_interliaveBlockSize > 0 && said3d)
+        return;
+    if (m_interliaveBlockSize > 0)
+        said3d = true;
+    LTRACE(LT_WARN, 2,
+           "Warning: the content needs more than --bitrate=" << m_cbrBitrate / 1000 << " kbps (up to "
+                                                             << m_cbrPeakRate / 1000 << " kbps around "
+                                                             << doubleToStr(static_cast<double>(m_cbrPeakAt -
+                                                                                                m_fixed_pcr_offset) /
+                                                                                90000.0,
+                                                                            1)
+                                                             << " s), so the output is not at a constant rate there. "
+                                                             << (m_maxBitrate == -1
+                                                                     ? "Give a higher --bitrate, or use --maxbitrate "
+                                                                       "to cap it."
+                                                                     : "Give a higher --bitrate."));
+}
+
 // ** --maxbitrate SENDS DATA AHEAD IN THE QUIET PARTS. **
 //
 // The pacing gives each packet the time the picture times ask for, vbv-len before the decoding time, or later when
@@ -1253,6 +1316,7 @@ bool TSMuxer::close()
 {
     reportReadRate();
     reportLateArrival();
+    reportCbrExcess();
     reportKeyPictureGaps();
 
     if (m_isExternalFile)
@@ -2115,6 +2179,7 @@ void TSMuxer::writePESPacket()
 void TSMuxer::writePCR(const int64_t newPCR)
 {
     int bitsRest = 0;
+    int64_t paddingBits = 0;
     if (m_cbrBitrate != -1 && m_minBitrate != -1 && m_lastPCR != -1)
     {
         int expectedBits = lroundl(static_cast<double>(newPCR - m_lastPCR) / 90000.0 * m_minBitrate);
@@ -2125,6 +2190,7 @@ void TSMuxer::writePCR(const int64_t newPCR)
             if (tsFrames * m_frameSize * 8 < expectedBits)
                 tsFrames++;
             writeNullPackets(tsFrames);
+            paddingBits = static_cast<int64_t>(tsFrames) * m_frameSize * 8;
             if (m_cbrBitrate == m_minBitrate)
                 bitsRest = (tsFrames * m_frameSize * 8) - expectedBits;
         }
@@ -2136,7 +2202,9 @@ void TSMuxer::writePCR(const int64_t newPCR)
     m_saPassBits = m_pcrBits;
     if (m_sendAhead)
         m_saFloorPcr = pcrForMaxRate(0, 1, 0);
+    noteCbrRate(pcr, paddingBits);
     m_pcrBits = bitsRest;
+    m_cbrCarryBits = bitsRest;
     // assert(m_pcrBits % 8 == 0);
     writeEmptyPacketWithPCR(pcr);
     m_lastPCR = pcr;
@@ -2495,6 +2563,8 @@ int TSMuxer::writeTSFrames(const int pid, const uint8_t* buffer, const int64_t l
                 const auto newPCR = llround(static_cast<double>(m_lastPCR + m_pcrBits) * 90000.0 / m_cbrBitrate);
                 if (newPCR - m_lastPCR >= m_pcr_delta && m_lastPCR != -1)
                 {
+                    m_cbrWinBits += m_pcrBits - m_cbrCarryBits;  // counted before the count is dropped
+                    m_cbrCarryBits = 0;
                     m_pcrBits = 0;
                     writePATPMT(newPCR);
                     writePCR(newPCR);
@@ -3041,6 +3111,7 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
                                              << " kbps), so the constant rate is held at " << maxRate / 1000
                                              << " kbps.");
     }
+    m_cbrGiven = rateGiven;
     // --bitrate gives a constant rate, and --minbitrate after it lowered that rate without a word: 20000 became 10000.
     // The constant rate is kept, whatever order the two come in.
     if (rateGiven && minRateGiven)

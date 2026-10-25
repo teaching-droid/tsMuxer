@@ -403,6 +403,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **With --bitrate, data that arrives after it is due was reported as "VBV buffer overflow",** the opposite of what happens there. The message now says that the stream needs more than the constant bitrate at that point, how late its data arrives, and to give a higher --bitrate.
 
+* **With --bitrate, content that needs more than the rate made the output go above it without a word,** so the output was not at a constant rate there. A warning now says so once, with the highest rate the content needs and where, and asks for a higher --bitrate.
+
 * **The warning about pictures that arrive late with --maxbitrate gave their delay to a tenth of a second,** so pictures less than 0.05 s late were said to be "up to 0.0 s late". It is now given in milliseconds below one second, never as 0, and in seconds to a hundredth above. (#51, thanks to @Nemesh64)
 
 * **Subtitles after the wrap of a transport stream's clock** are kept: a recording whose 33 bit times go round to 0 lost every subtitle after that point.

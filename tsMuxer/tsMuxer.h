@@ -146,6 +146,8 @@ class TSMuxer final : public AbstractMuxer
     void refuseLongNonVideoPes() const;
     void noteLateArrival();
     void reportLateArrival() const;
+    void noteCbrRate(int64_t pcr, int64_t paddingBits);
+    void reportCbrExcess() const;
     // Key pictures of each video PID on a disc: the time of the last one, the longest stretch without one, the time of
     // the last picture; said once when a stretch is long (reportKeyPictureGaps).
     struct KeyGap
@@ -250,6 +252,14 @@ class TSMuxer final : public AbstractMuxer
     int64_t m_cappedPictures;       // video PES written under --maxbitrate (noteLateArrival)
     int64_t m_latePictures;         // of them, the ones whose last packet arrives after their DTS
     int64_t m_worstLateness;        // the largest such lateness, 90 kHz
+    // --bitrate: the output measured in windows of at least a second of the clock (noteCbrRate)
+    bool m_cbrGiven;                // --bitrate was given (--maxbitrate alone also sets m_cbrBitrate)
+    int64_t m_cbrWinBits;           // bits of content (not the null packets of the padding) in the current window
+    int64_t m_cbrWinTicks;          // its length so far, 90 kHz
+    int64_t m_cbrWinStart;          // the PCR it began at
+    int64_t m_cbrCarryBits;         // bits the last PCR counted into the next interval, written before it
+    int64_t m_cbrPeakRate;          // the highest rate of a window above --bitrate, bits per second; 0: none
+    int64_t m_cbrPeakAt;            // the middle of that window, on the clock
     bool m_midPesPCR;               // a PCR went in between the packets of the pending PES (insertHeldPCRIfDue)
     int m_pendingStartOffset;       // first TS packet of the pending PES in m_outBuf
     uint32_t m_pendingStartPktCnt;  // m_muxedPacketCnt at PES start, for the seek index
