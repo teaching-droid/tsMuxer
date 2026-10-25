@@ -29,7 +29,8 @@ class SimplePacketizerReader : public AbstractStreamReader
     /// seam really is dropped, and parts that do not line up are worth saying so about. Measured
     /// at 16,494 bytes of 6,449,476 for a deliberately misaligned pair, and at zero for a joined
     /// pair taken off a disc, where every part starts on a frame.
-    [[nodiscard]] int64_t getLostSize() const { return m_lostBytes; }
+    /// The bytes inside the chain of tags that ends the data (trailingTagBytes) are left out: see bytesInTrailingTags.
+    [[nodiscard]] int64_t getLostSize() const;
 
     /// Bytes handed to this reader for this track, counted where they arrive rather than where
     /// they are consumed. This is the denominator the loss report needs: "of the N read". It is
@@ -186,7 +187,8 @@ class SimplePacketizerReader : public AbstractStreamReader
     // recognised hold, and how often the sample rate or the channels were others where the stream was found again.
     // The loss leaves out on purpose what comes before the first frame and after the last; other audio read as this
     // codec is mostly that, with a frame or two found by chance. Its frames, found one by one, each say another rate.
-    [[nodiscard]] int64_t getFrameBytes() const { return m_frameBytes; }
+    // The frames found inside the chain of tags ending the data are left out: see bytesInTrailingTags
+    [[nodiscard]] int64_t getFrameBytes() const;
     // With the tags at the very end of the data (trailingTagBytes), which no frame search ever stands on
     [[nodiscard]] int64_t getTagBytes() const;
     [[nodiscard]] int64_t getSyncChanges() const { return m_syncChanges; }
@@ -223,6 +225,31 @@ class SimplePacketizerReader : public AbstractStreamReader
     // The stream offsets of the last tag chain credited going forward, so a tag credited there is not counted twice
     int64_t m_creditFrom = 0;
     int64_t m_creditTo = 0;
+    // ** A TAG FOUND FROM THE END WAS STILL LOST DATA. ** The bytes the frame search steps over inside such a tag are
+    // billed as lost when a false sync in them fails to decode, or when a false frame is found behind them, and a
+    // picture of random bytes holds several: an AC-3 file of 97 KB with a 300 KB cover in an APE tag that has only a
+    // footer was said to have lost 259,682 bytes, although its sound was byte for byte the one without the tag, and
+    // the rule that more than half of a track lost is another codec (checkEmptyTracks) refused it. Where the bytes
+    // billed lie in the stream is kept, so those inside the end chain are taken back out of the count at the end, as
+    // the frames-under-half rule takes the chain out of what is not frames. Runs that join up are one entry.
+    // The same holds for the false frames found in such a tag. The rule took the tag out of the bytes read but
+    // counted its false frames as frames, so with the loss taken out, MP2 of 40 KB with that tag, named A_AAC,
+    // passed on the tag's frames alone.
+    struct ByteRun
+    {
+        int64_t from;
+        int64_t to;
+    };
+    std::vector<ByteRun> m_lostRuns;     // billed to m_lostBytes
+    std::vector<ByteRun> m_pendingRuns;  // held in m_pendingLost, moved to m_lostRuns when it is promoted
+    std::vector<ByteRun> m_frameRuns;    // counted in m_frameBytes
+    // At most this many runs are kept: the oldest are let go, as an end chain reaches back that far only on a
+    // stream that is mostly damage, where the counts then stay as they were before
+    static constexpr size_t MAX_BYTE_RUNS = 4096;
+    // amount bytes, the last of the region that ends at regionEnd in the buffer, or at the stream offset end
+    void noteRun(std::vector<ByteRun>& runs, const uint8_t* regionEnd, int64_t amount) const;
+    static void addRun(std::vector<ByteRun>& runs, int64_t end, int64_t amount);
+    [[nodiscard]] int64_t bytesInTrailingTags(const std::vector<ByteRun>& runs) const;
 };
 
 #endif

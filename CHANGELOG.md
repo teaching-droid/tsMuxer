@@ -258,6 +258,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A few bytes after the last frame of a raw audio file** were muxed as a frame of their own. They are now left out.
 
+* **A large tag at the end of an audio file,** such as a cover picture in an APE tag, was reported as data that "could not be used and were dropped". The bytes of such a tag are no longer counted as lost.
+
 * **A WAV that ends inside a sample** got the part of a sample as its last block in Matroska and in a demux, which players report as damaged. The part is now left out, with a warning, and a WAV whose header gives more audio than the file holds says so.
 
 * **A join of WAV files whose first file holds less audio than its header says** read the next file's header as sound, and the rest of the join out of step with its samples, which is noise. The next file is now found where it begins, with a warning.

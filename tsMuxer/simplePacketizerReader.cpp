@@ -820,6 +820,54 @@ int64_t SimplePacketizerReader::trailingTagBytes() const
 
 int64_t SimplePacketizerReader::getTagBytes() const { return m_tagBytes + trailingTagBytes(); }
 
+void SimplePacketizerReader::addRun(std::vector<ByteRun>& runs, const int64_t end, const int64_t amount)
+{
+    if (amount <= 0)
+        return;
+    if (!runs.empty() && runs.back().to == end - amount)
+    {
+        runs.back().to = end;
+        return;
+    }
+    if (runs.size() >= MAX_BYTE_RUNS)
+        runs.erase(runs.begin(), runs.begin() + static_cast<std::ptrdiff_t>(MAX_BYTE_RUNS / 2));
+    runs.push_back({end - amount, end});
+}
+
+void SimplePacketizerReader::noteRun(std::vector<ByteRun>& runs, const uint8_t* const regionEnd,
+                                         const int64_t amount) const
+{
+    addRun(runs, m_readBytes - (m_bufEnd - regionEnd), amount);
+}
+
+// The bytes of the runs that lie in the chain of tags ending the data, the whole chain, as a tag the forward reading
+// stood on had its own bytes paid by its credit and never billed
+int64_t SimplePacketizerReader::bytesInTrailingTags(const std::vector<ByteRun>& runs) const
+{
+    if (m_tail.empty() || runs.empty())
+        return 0;
+    const int64_t chain = tagChainBeforeEnd(m_tail.data(), m_tail.data() + m_tail.size(), m_readBytes);
+    if (chain <= 0)
+        return 0;
+    const int64_t from = m_readBytes - chain;
+    int64_t inside = 0;
+    for (auto it = runs.rbegin(); it != runs.rend() && it->to > from; ++it)
+        inside += it->to - (std::max)(it->from, from);
+    return inside;
+}
+
+int64_t SimplePacketizerReader::getLostSize() const
+{
+    const int64_t lost = m_lostBytes - bytesInTrailingTags(m_lostRuns);
+    return lost > 0 ? lost : 0;
+}
+
+int64_t SimplePacketizerReader::getFrameBytes() const
+{
+    const int64_t frames = m_frameBytes - bytesInTrailingTags(m_frameRuns);
+    return frames > 0 ? frames : 0;
+}
+
 // The bytes of [from, to) the search steps over that are in runs of zeros or of 0xFF, the part the tag chain we stand
 // on has credit for left out, as those bytes count as the tag's already (an ID3v2 tag's padding is zeros)
 void SimplePacketizerReader::countPadding(const uint8_t* from, const uint8_t* const to)
@@ -1079,6 +1127,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                     m_tagCredit -= paid;
                     const int64_t held = region - paid - tagBytesAt(m_curPos + paid, keepFrom);
                     m_pendingLost += held > 0 ? held : 0;
+                    noteRun(m_pendingRuns, keepFrom, held);
                 }
                 memmove(m_tmpBuffer.data(), keepFrom, static_cast<size_t>(LONGEST_TAG_HEADER));
                 m_tmpBufferLen = static_cast<int>(LONGEST_TAG_HEADER);
@@ -1121,7 +1170,10 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                 const int64_t paid = m_tagCredit < skipped ? m_tagCredit : skipped;
                 m_tagCredit -= paid;
                 if (m_everSynced)
+                {
                     m_lostBytes += skipped - paid;
+                    noteRun(m_lostRuns, frame + 1, skipped - paid);
+                }
                 return 0;
             }
             if (frame + decodeRez + skipBytes + skipBeforeBytes > m_bufEnd)
@@ -1143,7 +1195,10 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                     const int64_t paid = m_tagCredit < skipped ? m_tagCredit : skipped;
                     m_tagCredit -= paid;
                     if (m_everSynced)
+                    {
                         m_pendingLost += skipped - paid;
+                        noteRun(m_pendingRuns, frame + 1, skipped - paid);
+                    }
                     return 0;
                 }
                 countPadding(m_curPos, frame);
@@ -1155,6 +1210,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                     m_tagCredit -= paid;
                     const int64_t held = region - paid - tagBytesAt(m_curPos + paid, frame);
                     m_pendingLost += held > 0 ? held : 0;
+                    noteRun(m_pendingRuns, frame, held);
                 }
                 memmove(m_tmpBuffer.data(), frame, m_bufEnd - frame);
                 m_tmpBufferLen = m_bufEnd - frame;
@@ -1184,6 +1240,10 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                 m_tagCredit -= paid;
                 const int64_t bill = region - paid - tagBytesAt(m_curPos + paid, frame);
                 m_lostBytes += bill > 0 ? bill : 0;
+                // the held runs first, as they lie before this region in the stream
+                for (const ByteRun& r : m_pendingRuns) addRun(m_lostRuns, r.to, r.to - r.from);
+                m_pendingRuns.clear();
+                noteRun(m_lostRuns, frame, bill);
             }
             else
                 m_everSynced = true;
@@ -1280,7 +1340,9 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
         avPacket.duration = nextDts - avPacket.dts;
         // doMplsCorrection();
         m_frameNum++;
-        m_frameBytes += frameLen + skipBytes + skipBeforeBytes;
+        const int taken = frameLen + skipBytes + skipBeforeBytes;
+        m_frameBytes += taken;
+        noteRun(m_frameRuns, m_curPos + taken, taken);
         if (m_frameNum % 1000 == 0)
             LTRACE(LT_DEBUG, 0, "Processed " << m_frameNum << " " << getCodecInfo().displayName << " frames");
         m_curPos += frameLen + skipBytes + skipBeforeBytes;

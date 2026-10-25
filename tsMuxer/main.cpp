@@ -3483,21 +3483,22 @@ static void checkEmptyTracks(const MuxerManager& muxerManager)
         const auto audio = dynamic_cast<const SimplePacketizerReader*>(si.m_streamReader);
         if (audio == nullptr || !strStartWith(si.m_codec, "A_"))
             continue;
+        // The tags are left aside here as in the rule below: getLostSize does not count the bytes of the tags at the
+        // end, so a big one no longer stands for lost data, and the bytes read are counted without them too.
         const int64_t lost = audio->getLostSize();
         const int64_t total = audio->getReadSize();
-        if (total > 0 && lost > total / 2)
-            THROW(ERR_COMMON, (si.m_fullStreamName.empty() ? ("\"" + si.m_streamName + "\"") : si.m_fullStreamName)
-                                  << ": " << lost << " bytes of the " << total << " read for this track as "
-                                  << si.m_codec
-                                  << " could not be used, more than half of it. The usual reason is that the codec on "
-                                     "the meta line is not the codec the file holds. List the file on its own to see "
-                                     "what tsMuxeR makes of it. The output is incomplete.")
+        const int64_t tags = (std::min)(audio->getTagBytes(), total);
+        const int64_t notTags = total - tags;
+        if (notTags > 0 && lost > notTags / 2)
+            THROW(ERR_COMMON, trackSourceName(si)
+                                  << ": " << lost << " bytes of the " << notTags << " read for this track as "
+                                  << si.m_codec << (tags > 0 ? ", its tags left aside," : "")
+                                  << " could not be used, more than half of it. " << WRONG_CODEC_HINT)
         // ** WHAT THE LOSS LEAVES OUT. ** It does not count what comes before the first frame and after the last, on
         // purpose (a stream may begin in the middle of a frame and end with a tag), so a WAV file named A_MP3 that
         // gave two frames at its start lost nothing of its 8 MB and passed with 1.7 KB of output. The frames have to
         // carry half of what was read, the tags and the padding left aside (getPadBytes: zeros or 0xFF are no codec).
         // LPCM has a reader of its own and its own loss count.
-        const int64_t tags = (std::min)(audio->getTagBytes(), total);
         const int64_t pad = (std::min)(audio->getPadBytes(), total - tags);
         const int64_t besideTags = total - tags - pad;
         const char* const aside = tags > 0 && pad > 0 ? ", its tags and padding left aside,"
