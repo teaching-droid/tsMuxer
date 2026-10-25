@@ -452,6 +452,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **"Forced only" on the default subtitle** no longer marks a whole Matroska subtitle track as forced.
 
+* **A subtitle of a 3D playlist that has no 3D plane was muxed at the depth of plane #0.** The window read it in as plane #0. It is now read in as "zero" and muxed with no plane, as on the disc.
+
 * **"Remove all"** builds the meta file from the settings again after it was edited by hand, and --keep-editions is not written for a .webm name, nor for a source that is no Matroska file, a join, a cut, a split or chapters typed in the window: the tick is greyed there. A dropped chapter file is put in time order, and from a Matroska XML file it takes the edition --chapters-file uses, without hidden chapters. The open dialog lists .m2t files. An empty tsMuxerGUI.ini takes over settings that are only under the old company name.
 
 * **The ISO label can no longer hold a double quote.** It ended the label in the meta file, and the options after it were lost.

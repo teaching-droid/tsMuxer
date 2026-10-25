@@ -3193,7 +3193,7 @@ Build the ISO anyway?</source>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1"/>
         <source>Ticked, the video of a cut holds only the pictures shown between its start and its end, as earlier versions did: the pictures from the start to the next key picture are lost, and those shown just before the end. Unticked, the video begins at the key picture before the start, and on a Blu-ray or AVCHD disc it also keeps the pictures the end needs. A disc plays only the cut; a TS, M2TS or Matroska output also shows the pictures before the start, and it ends as with the box ticked.</source>
-        <translation type="unfinished"></translation>
+        <translation>Если отмечено, видео фрагмента содержит только кадры, показываемые между его началом и концом, как в прежних версиях: кадры от начала до следующего ключевого кадра теряются, как и кадры, показываемые непосредственно перед концом. Если не отмечено, видео начинается с ключевого кадра перед началом, а на диске Blu-ray или AVCHD также сохраняет кадры, нужные для конца. Диск воспроизводит только фрагмент; вывод TS, M2TS или Matroska показывает и кадры перед началом, а заканчивается так же, как при отмеченном флажке.</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1895"/>
@@ -4048,7 +4048,7 @@ Build the ISO anyway?</source>
     </message>
     <message>
         <source>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so the data stays off the weak outer edge. On a two- or four-layer disc the image is padded to the full disc, so the burn writes the whole disc; a three-layer image ends inside its last layer, and a single-layer disc is not padded. The layer-break guard is sized automatically; needs the disc Free Sectors set.</source>
-        <translation type="unfinished">Внешний край диска является самой подверженной ошибкам частью при записи. Если этот флажок установлен, фильм смещается к внутренним дорожкам каждого слоя, а внешняя область заполняется нулями, так что данные остаются вдали от слабого внешнего края. Образ дополняется до полного диска, поэтому запись охватывает весь диск. Защитная зона смены слоя рассчитывается автоматически; должны быть заданы Free Sectors диска.</translation>
+        <translation>Внешний край диска является самой подверженной ошибкам частью при записи. Если этот флажок установлен, фильм смещается к внутренним дорожкам каждого слоя, а внешняя область заполняется нулями, так что данные остаются вдали от слабого внешнего края. На двух- или четырёхслойном диске образ дополняется до полного диска, поэтому запись охватывает весь диск; трёхслойный образ заканчивается внутри своего последнего слоя, а однослойный диск не дополняется. Защитная зона смены слоя рассчитывается автоматически; должны быть заданы Free Sectors диска.</translation>
     </message>
     <message>
         <source>3D disc: store the video once, not twice</source>
@@ -4169,6 +4169,10 @@ Build the ISO anyway?</source>
     <message>
         <source>%1 (stream type 0x%2). Muxing this stream type is not implemented.</source>
         <translation>%1 (тип потока 0x%2). Мультиплексирование этого типа не реализовано.</translation>
+    </message>
+    <message>
+        <source> (track %1 in the file)</source>
+        <translation> (дорожка %1 в файле)</translation>
     </message>
 
     <message>

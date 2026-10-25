@@ -3193,7 +3193,7 @@ Build the ISO anyway?</source>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1"/>
         <source>Ticked, the video of a cut holds only the pictures shown between its start and its end, as earlier versions did: the pictures from the start to the next key picture are lost, and those shown just before the end. Unticked, the video begins at the key picture before the start, and on a Blu-ray or AVCHD disc it also keeps the pictures the end needs. A disc plays only the cut; a TS, M2TS or Matroska output also shows the pictures before the start, and it ends as with the box ticked.</source>
-        <translation type="unfinished"></translation>
+        <translation>כשמסומן, הווידאו של חיתוך מכיל רק את התמונות שמוצגות בין ההתחלה לסוף שלו, כמו בגרסאות קודמות: התמונות מההתחלה ועד תמונת המפתח הבאה הולכות לאיבוד, וכך גם אלה שמוצגות ממש לפני הסוף. כשלא מסומן, הווידאו מתחיל בתמונת המפתח שלפני ההתחלה, ובדיסק Blu-ray או AVCHD הוא שומר גם את התמונות שהסוף צריך. דיסק מנגן רק את החיתוך; פלט TS, M2TS או Matroska מציג גם את התמונות שלפני ההתחלה, ומסתיים כמו כשהתיבה מסומנת.</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1895"/>
@@ -4047,7 +4047,7 @@ Build the ISO anyway?</source>
     </message>
     <message>
         <source>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so the data stays off the weak outer edge. On a two- or four-layer disc the image is padded to the full disc, so the burn writes the whole disc; a three-layer image ends inside its last layer, and a single-layer disc is not padded. The layer-break guard is sized automatically; needs the disc Free Sectors set.</source>
-        <translation type="unfinished">השוליים החיצוניים של דיסק הם החלק הרגיש ביותר לשגיאות בצריבה. כאשר האפשרות מסומנת, הסרט נדחס אל הרצועות הפנימיות של כל שכבה והאזור החיצוני מתמלא באפסים, כך שהנתונים נשארים הרחק מהשוליים החיצוניים החלשים. הקובץ מרופד עד לגודל הדיסק המלא, ולכן הצריבה כותבת את כל הדיסק. אזור המגן של מעבר השכבה מחושב אוטומטית; יש להגדיר את ה-Free Sectors של הדיסק.</translation>
+        <translation>השוליים החיצוניים של דיסק הם החלק הרגיש ביותר לשגיאות בצריבה. כאשר האפשרות מסומנת, הסרט נדחס אל הרצועות הפנימיות של כל שכבה והאזור החיצוני מתמלא באפסים, כך שהנתונים נשארים הרחק מהשוליים החיצוניים החלשים. בדיסק של שתי שכבות או ארבע, התמונה מרופדת עד לגודל הדיסק המלא, ולכן הצריבה כותבת את כל הדיסק; תמונה של שלוש שכבות מסתיימת בתוך השכבה האחרונה שלה, ודיסק חד-שכבתי אינו מרופד. אזור המגן של מעבר השכבה מחושב אוטומטית; יש להגדיר את ה-Free Sectors של הדיסק.</translation>
     </message>
     <message>
         <source>3D disc: store the video once, not twice</source>
@@ -4168,6 +4168,10 @@ Build the ISO anyway?</source>
     <message>
         <source>%1 (stream type 0x%2). Muxing this stream type is not implemented.</source>
         <translation>%1 (סוג מקטע 0x%2). מיזוג של סוג מקטע זה אינו ממומש.</translation>
+    </message>
+    <message>
+        <source> (track %1 in the file)</source>
+        <translation> (רצועה %1 בקובץ)</translation>
     </message>
 
     <message>

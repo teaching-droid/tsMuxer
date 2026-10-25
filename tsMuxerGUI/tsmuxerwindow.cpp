@@ -3862,7 +3862,9 @@ void TsMuxerWindow::continueAddFile()
         if (info.maxPgOffsets > 0)
             m_3dMode = true;
 
-        if (info.descr.contains("3d-plane: zero"))
+        // The listing says "undefined" for a subtitle without an offset. The window looked for "zero", which the
+        // listing never prints, and read the word as plane #0, so such a subtitle was muxed with 3d-plane=0.
+        if (info.descr.contains("3d-plane: undefined"))
             info.offsetId = -1;
         else if (info.descr.contains("3d-plane: "))
             info.offsetId = extractFloatFromDescr(info.descr, "3d-plane: ");

@@ -2472,7 +2472,8 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         };
         std::ostringstream side;
         side << "tsMuxeR layer break map (sectors of 2048 bytes)\n";
-        side << "image: " << outIso << "\n";
+        // the image's own name: over an existing image, outIso is the temporary name, gone after the swap
+        side << "image: " << shownOutputName(outIso) << "\n";
         for (const auto& pad : pads)
         {
             const double beforeMB = static_cast<double>(pad.breakLbn - pad.padStartLbn) / 512.0;

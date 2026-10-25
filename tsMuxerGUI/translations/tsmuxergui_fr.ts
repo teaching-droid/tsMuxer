@@ -3193,7 +3193,7 @@ Créer l'ISO malgré tout ?</translation>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1"/>
         <source>Ticked, the video of a cut holds only the pictures shown between its start and its end, as earlier versions did: the pictures from the start to the next key picture are lost, and those shown just before the end. Unticked, the video begins at the key picture before the start, and on a Blu-ray or AVCHD disc it also keeps the pictures the end needs. A disc plays only the cut; a TS, M2TS or Matroska output also shows the pictures before the start, and it ends as with the box ticked.</source>
-        <translation type="unfinished"></translation>
+        <translation>Coché, la vidéo d&apos;une coupe ne contient que les images affichées entre son début et sa fin, comme dans les versions précédentes : les images du début jusqu&apos;à l&apos;image clé suivante sont perdues, ainsi que celles affichées juste avant la fin. Décoché, la vidéo commence à l&apos;image clé qui précède le début et, sur un disque Blu-ray ou AVCHD, elle garde aussi les images dont la fin a besoin. Un disque ne lit que la coupe ; une sortie TS, M2TS ou Matroska montre aussi les images avant le début, et se termine comme avec la case cochée.</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1895"/>
@@ -4047,7 +4047,7 @@ Créer l'ISO malgré tout ?</translation>
     </message>
     <message>
         <source>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so the data stays off the weak outer edge. On a two- or four-layer disc the image is padded to the full disc, so the burn writes the whole disc; a three-layer image ends inside its last layer, and a single-layer disc is not padded. The layer-break guard is sized automatically; needs the disc Free Sectors set.</source>
-        <translation type="unfinished">Le bord extérieur d'un disque est la partie la plus sujette aux erreurs à la gravure. Avec cette case cochée, le film est tassé vers les pistes intérieures de chaque couche et la zone extérieure est remplie de zéros, de sorte que les données restent loin du bord extérieur fragile. L'image est complétée jusqu'au disque entier, la gravure écrit donc tout le disque. La zone de garde du changement de couche est dimensionnée automatiquement ; les Free Sectors du disque doivent être renseignés.</translation>
+        <translation>Le bord extérieur d'un disque est la partie la plus sujette aux erreurs à la gravure. Avec cette case cochée, le film est tassé vers les pistes intérieures de chaque couche et la zone extérieure est remplie de zéros, de sorte que les données restent loin du bord extérieur fragile. Sur un disque à deux ou quatre couches, l'image est complétée jusqu'au disque entier, la gravure écrit donc tout le disque ; une image à trois couches se termine à l'intérieur de sa dernière couche, et un disque à simple couche n'est pas complété. La zone de garde du changement de couche est dimensionnée automatiquement ; les Free Sectors du disque doivent être renseignés.</translation>
     </message>
     <message>
         <source>3D disc: store the video once, not twice</source>
@@ -4168,6 +4168,10 @@ Créer l'ISO malgré tout ?</translation>
     <message>
         <source>%1 (stream type 0x%2). Muxing this stream type is not implemented.</source>
         <translation>%1 (type de flux 0x%2). Le multiplexage de ce type de flux n'est pas implémenté.</translation>
+    </message>
+    <message>
+        <source> (track %1 in the file)</source>
+        <translation> (piste %1 dans le fichier)</translation>
     </message>
 
     <message>

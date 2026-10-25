@@ -4169,6 +4169,10 @@ Build the ISO anyway?</source>
         <source>%1 (stream type 0x%2). Muxing this stream type is not implemented.</source>
         <translation>%1（ストリームタイプ 0x%2）。このストリームタイプの多重化は実装されていません。</translation>
     </message>
+    <message>
+        <source> (track %1 in the file)</source>
+        <translation>（ファイル内のトラック %1）</translation>
+    </message>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>

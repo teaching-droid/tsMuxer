@@ -3193,7 +3193,7 @@ Build the ISO anyway?</source>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1"/>
         <source>Ticked, the video of a cut holds only the pictures shown between its start and its end, as earlier versions did: the pictures from the start to the next key picture are lost, and those shown just before the end. Unticked, the video begins at the key picture before the start, and on a Blu-ray or AVCHD disc it also keeps the pictures the end needs. A disc plays only the cut; a TS, M2TS or Matroska output also shows the pictures before the start, and it ends as with the box ticked.</source>
-        <translation type="unfinished"></translation>
+        <translation>勾选时，剪切的视频只包含在其起点与终点之间显示的画面，与早期版本相同：从起点到下一个关键帧之间的画面会丢失，终点前刚显示的画面也会丢失。不勾选时，视频从起点之前的关键帧开始；在 Blu-ray 或 AVCHD 光盘上，还会保留终点所需的画面。光盘只播放剪切范围；TS、M2TS 或 Matroska 输出还会显示起点之前的画面，其结尾与勾选此项时相同。</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1895"/>
@@ -4047,7 +4047,7 @@ Build the ISO anyway?</source>
     </message>
     <message>
         <source>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so the data stays off the weak outer edge. On a two- or four-layer disc the image is padded to the full disc, so the burn writes the whole disc; a three-layer image ends inside its last layer, and a single-layer disc is not padded. The layer-break guard is sized automatically; needs the disc Free Sectors set.</source>
-        <translation type="unfinished">光盘的外缘是刻录时最容易出错的部分。勾选此项后，影片会被集中到每一层的内圈轨道，外缘区域用零填充，使数据远离脆弱的外缘。映像会填充到整张光盘大小，因此刻录会写满整张盘。层切换保护区会自动调整大小；需要设置光盘的 Free Sectors。</translation>
+        <translation>光盘的外缘是刻录时最容易出错的部分。勾选此项后，影片会被集中到每一层的内圈轨道，外缘区域用零填充，使数据远离脆弱的外缘。在双层或四层光盘上，映像会填充到整张光盘大小，因此刻录会写满整张盘；三层映像在其最后一层之内结束，单层光盘则不填充。层切换保护区会自动调整大小；需要设置光盘的 Free Sectors。</translation>
     </message>
     <message>
         <source>3D disc: store the video once, not twice</source>
@@ -4168,6 +4168,10 @@ Build the ISO anyway?</source>
     <message>
         <source>%1 (stream type 0x%2). Muxing this stream type is not implemented.</source>
         <translation>%1（流类型 0x%2）。尚未实现此流类型的混流。</translation>
+    </message>
+    <message>
+        <source> (track %1 in the file)</source>
+        <translation>（文件中的音轨 %1）</translation>
     </message>
 
     <message>

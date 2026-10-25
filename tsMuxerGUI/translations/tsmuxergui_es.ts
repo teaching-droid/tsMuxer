@@ -3193,7 +3193,7 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas, seleccionables como
     <message>
         <location filename="../tsmuxerwindow.ui" line="1"/>
         <source>Ticked, the video of a cut holds only the pictures shown between its start and its end, as earlier versions did: the pictures from the start to the next key picture are lost, and those shown just before the end. Unticked, the video begins at the key picture before the start, and on a Blu-ray or AVCHD disc it also keeps the pictures the end needs. A disc plays only the cut; a TS, M2TS or Matroska output also shows the pictures before the start, and it ends as with the box ticked.</source>
-        <translation type="unfinished"></translation>
+        <translation>Marcado, el vídeo de un corte contiene solo las imágenes que se muestran entre su inicio y su final, como en versiones anteriores: se pierden las imágenes desde el inicio hasta la siguiente imagen clave, y también las que se muestran justo antes del final. Sin marcar, el vídeo empieza en la imagen clave anterior al inicio y, en un disco Blu-ray o AVCHD, conserva además las imágenes que necesita el final. Un disco reproduce solo el corte; una salida TS, M2TS o Matroska muestra también las imágenes anteriores al inicio y termina como con la casilla marcada.</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1895"/>
@@ -4048,7 +4048,7 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
     </message>
     <message>
         <source>The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is packed toward the inner tracks of every layer and the outer/rim region is filled with zeros, so the data stays off the weak outer edge. On a two- or four-layer disc the image is padded to the full disc, so the burn writes the whole disc; a three-layer image ends inside its last layer, and a single-layer disc is not padded. The layer-break guard is sized automatically; needs the disc Free Sectors set.</source>
-        <translation type="unfinished">El borde exterior de un disco es la parte más propensa a errores al grabar. Con esta casilla marcada, la película se compacta hacia las pistas interiores de cada capa y la zona exterior se rellena con ceros, de modo que los datos quedan lejos del débil borde exterior. La imagen se rellena hasta el disco completo, así que la grabación escribe todo el disco. La zona de guarda del salto de capa se dimensiona automáticamente; hay que tener definidos los Free Sectors del disco.</translation>
+        <translation>El borde exterior de un disco es la parte más propensa a errores al grabar. Con esta casilla marcada, la película se compacta hacia las pistas interiores de cada capa y la zona exterior se rellena con ceros, de modo que los datos quedan lejos del débil borde exterior. En un disco de dos o cuatro capas la imagen se rellena hasta el disco completo, así que la grabación escribe todo el disco; una imagen de tres capas termina dentro de su última capa, y un disco de una sola capa no se rellena. La zona de guarda del salto de capa se dimensiona automáticamente; hay que tener definidos los Free Sectors del disco.</translation>
     </message>
     <message>
         <source>3D disc: store the video once, not twice</source>
@@ -4169,6 +4169,10 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
     <message>
         <source>%1 (stream type 0x%2). Muxing this stream type is not implemented.</source>
         <translation>%1 (tipo de flujo 0x%2). La multiplexación de este tipo no está implementada.</translation>
+    </message>
+    <message>
+        <source> (track %1 in the file)</source>
+        <translation> (pista %1 en el archivo)</translation>
     </message>
 
     <message>
