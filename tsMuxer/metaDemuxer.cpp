@@ -85,20 +85,24 @@ static std::string manifestValue(const std::string& text, const std::string& key
 // recording that starts a minute after its picture, was "Can't detect stream type" though its PMT names it. Such a
 // track is read on alone after that window, until it has enough data to be told, the file ends, or LATE_LIMIT more
 // bytes are read. Subtitles are left out: they are often far apart, and they are told by their stream type.
+// The same for the audio and video tracks of a Matroska file, whose late track was "Can't detect stream type" as well,
+// and had no Stream delay.
 static void readLateTracks(AbstractDemuxer* demuxer, DemuxedData& demuxedData,
                            const std::map<int32_t, TrackInfo>& acceptedPidMap, int64_t& discardedSize)
 {
     static constexpr int64_t LATE_LIMIT = 1024LL * 1024 * 1024;
     static constexpr size_t ENOUGH = 256 * 1024;
-    if (dynamic_cast<TSDemuxer*>(demuxer) == nullptr || demuxer->getFileBlockSize() == 0)
+    const auto* mkv = dynamic_cast<MatroskaDemuxer*>(demuxer);
+    if ((dynamic_cast<TSDemuxer*>(demuxer) == nullptr && mkv == nullptr) || demuxer->getFileBlockSize() == 0)
         return;
     PIDSet late;
     for (const auto& [pid, info] : acceptedPidMap)
     {
         const int t = info.m_trackType;
-        const bool audioOrVideo = t == 0x01 || t == 0x02 || t == 0x03 || t == 0x04 || t == 0x0f || t == 0x10 ||
-                                  t == 0x1b || t == 0x20 || t == 0x24 || t == 0x33 || t == 0xea ||
-                                  (t >= 0x80 && t <= 0x88) || t == 0xa1 || t == 0xa2;
+        const bool audioOrVideo = mkv ? mkv->isAudioOrVideo(pid)
+                                      : t == 0x01 || t == 0x02 || t == 0x03 || t == 0x04 || t == 0x0f || t == 0x10 ||
+                                            t == 0x1b || t == 0x20 || t == 0x24 || t == 0x33 || t == 0xea ||
+                                            (t >= 0x80 && t <= 0x88) || t == 0xa1 || t == 0xa2;
         const auto data = demuxedData.find(pid);
         if (audioOrVideo && (data == demuxedData.end() || data->second.size() == 0))
             late.insert(pid);
@@ -5130,6 +5134,19 @@ uint8_t* ContainerToReaderWrapper::readBlock(const int readerID, uint32_t& readC
                 return false;
         return true;
     };
+    // ** A TRACK THAT STARTS LATE DOES NOT HOLD UP THE OTHERS. ** A track of a file whose first data comes after more
+    // than MAX_DEMUX_BUFFER_SIZE of the other tracks, as a commentary that begins 5 minutes into a film of 10 Mbit/s,
+    // read the file on alone for its first block, and the job ended with "Reading buffer overflow". While such a track
+    // has never had data, it waits (DATA_DELAYED) once another track of the file holds a quarter of that limit, and
+    // the others are muxed on; it is read again as soon as the file has given it data.
+    const bool waitsForStart = !itr->second.m_gotData && policy == DemuxerReadPolicy::drpReadSequence;
+    const auto othersHeld = [&]()
+    {
+        for (const auto& [otherPid, otherData] : demuxerData.demuxedData)
+            if (otherPid != pid && otherData.size() > MAX_DEMUX_BUFFER_SIZE / 4)
+                return true;
+        return false;
+    };
     // A short rest is handed on as it is once the demuxer has reached the end: reading on cannot add to it. The test
     // read lastReadCnt, a byte count that is always 0 here (taken above), twice against DATA_EOF2, so it never held.
     if ((readCnt > 0 && (policy == DemuxerReadPolicy::drpFragmented || demuxerData.lastReadRez[pid] == DATA_EOF ||
@@ -5139,8 +5156,10 @@ uint8_t* ContainerToReaderWrapper::readBlock(const int readerID, uint32_t& readC
         data = streamData.data();
         demuxerData.lastReadCnt[pid] = readCnt;
         demuxerData.lastReadRez[pid] = 0;
+        itr->second.m_gotData = true;
     }
-    else if (demuxerData.lastReadRez[pid] != DATA_DELAYED || demuxerData.m_allFragmented || readAhead())
+    else if (demuxerData.lastReadRez[pid] != DATA_DELAYED || demuxerData.m_allFragmented || readAhead() ||
+             (waitsForStart && readCnt > 0))
     {
         int demuxRez;
         do
@@ -5167,20 +5186,22 @@ uint8_t* ContainerToReaderWrapper::readBlock(const int readerID, uint32_t& readC
             m_discardedSize += discardSize;
             readCnt = static_cast<uint32_t>((FFMIN(streamData.size(), nFileBlockSize) - m_readBuffOffset));
         } while (demuxRez == 0 && !m_terminated &&
-                 ((readCnt < MIN_READED_BLOCK && policy != DemuxerReadPolicy::drpFragmented) ||
+                 ((readCnt < MIN_READED_BLOCK && policy != DemuxerReadPolicy::drpFragmented &&
+                   !(waitsForStart && readCnt == 0 && othersHeld())) ||
                   (readCnt == 0 && readAhead())));
 
         demuxerData.lastReadCnt[pid] = readCnt;
         data = streamData.data();
         if (readCnt > 0)
         {
+            itr->second.m_gotData = true;
             rez = demuxerData.m_demuxer->getLastReadRez();
         }
         else if (demuxerData.m_demuxer->getLastReadRez() == DATA_EOF)
             rez = DATA_EOF;
         else
         {
-            if (policy == DemuxerReadPolicy::drpReadSequence)
+            if (policy == DemuxerReadPolicy::drpReadSequence && !(waitsForStart && demuxRez == 0))
                 rez = DATA_NOT_READY;
             else
                 rez = DATA_DELAYED;

@@ -168,6 +168,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A Matroska file with more than one Tags element lost the tags of all but the first in a Matroska output.** They are all kept now. A Tags element stored twice, as an identical copy, still gives each tag once.
 
+* **A track of a Matroska file that starts late, such as a commentary that begins minutes into the film, was muxed from the start of the file:** 5 minutes early for one that begins at 300 s. In a file of high bitrate the listing said "Can't detect stream type" for it, already at 60 s. It is now looked for up to 1 GiB into the file, as in a TS, and starts at its own time in every output and in the name of a demuxed file.
 * **VC-1 from a Matroska file is timed from the picture it shows first.** Its blocks hold the pictures in the order they are decoded, so the first block is a picture that is shown a frame later. The listing measured the sound from that block: a VC-1 file that tsMuxeR wrote listed its sound a frame late, the window wrote that frame as timeshift=, and the sound came one frame late. The start of the sound against the picture is now also applied to VC-1 without timeshift=, as for other video.
 * **The sound of a Matroska file whose MPEG-1 or MPEG-2 video opens with B pictures shown before its first picture came early,** by the length of those pictures: 33 to 80 ms in the files measured. Such a group stores its I picture first, and the listed Stream delay was measured from it. It is now measured from the picture shown first, as for a TS. In a file cut inside a group, whose first pictures cannot be decoded, the sound came late instead, by up to 50 ms, and by the length of every picture before the first sequence header where that header comes groups later: 3.1 s where it came 75 pictures in. It is now right there as well. (#47, thanks to @Nandos64)
 * **The chapters of a Matroska file joined after another came early,** by the B pictures shown before its first I picture, when that file stores the two fields of each I picture in a block of its own: 80 ms in the file measured. Its start was taken from the second field. Its subtitles are placed from the same start.
@@ -521,6 +522,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **A track refused for its output** leaves no empty folders behind.
 
 * **A tab on the MUXOPT line** is read as a space. It joined the texts on either side of it: a tab after --cut-end=5s kept only one picture.
+
+* **A TS or Matroska file whose track starts after more than about 272 MiB of the other tracks stopped with "Reading buffer overflow",** in every output: a commentary that begins 5 minutes into a film of 10 Mbit/s. The other tracks are now muxed on while such a track waits for its first data.
 
 * **Every MUXOPT line counts.** With two of them, the muxers took the options of the last one only. --blu-ray or --avchd on the first of two lines gave a transport stream named .iso, or a folder of demuxed tracks where a disc folder was asked for. Lines that ask for both a Blu-ray and an AVCHD disc are refused.
 

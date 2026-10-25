@@ -124,6 +124,7 @@ class ContainerToReaderWrapper final : public AbstractReader
         DemuxerData& m_demuxerData;
         int m_pid;
         int64_t m_readAheadTo = INT64_MIN;  // setReadAhead
+        bool m_gotData = false;             // a block of this track has been handed on (readBlock)
     };
 
     ContainerToReaderWrapper(const METADemuxer& owner, const BufferedReaderManager& readManager)

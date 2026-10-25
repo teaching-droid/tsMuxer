@@ -51,6 +51,12 @@ class MatroskaDemuxer final : public IOContextDemuxer
     [[nodiscard]] SourceEditions getSourceEditions() override;
 
     [[nodiscard]] bool isPidFilterSupported() const override { return true; }
+    // Whether the track of a pid of getTrackList is audio or video
+    [[nodiscard]] bool isAudioOrVideo(const int32_t pid) const
+    {
+        return pid >= 1 && pid <= num_tracks && tracks[pid - 1] &&
+               (tracks[pid - 1]->type == MatroskaTrackType::VIDEO || tracks[pid - 1]->type == MatroskaTrackType::AUDIO);
+    }
     int64_t getTrackDelay(const int32_t pid) override
     {
         if (m_firstTimecode.find(pid) == m_firstTimecode.end())

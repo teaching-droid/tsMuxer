@@ -4406,22 +4406,29 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
     // The readers time a track from its own first frame, so a meta that gave no timeshift= muxed every track from the
     // same moment: an AC-3 track whose first block is 512 ms after the first picture came 512 ms early.
     // METADemuxer::addStream applies it where the meta gives no timeshift=, as for an MP4 source. Not for a file that
-    // plays a timeline of other files or of chapters, whose start is not that of its own blocks, nor for a track whose
-    // first block is not in the first clusters.
+    // plays a timeline of other files or of chapters, whose start is not that of its own blocks.
+    // A track with no block in the first clusters, as a commentary that begins minutes into the film, is looked for on
+    // through the clusters of the first LATE_BYTES of the file, as the listing reads a late track of a transport stream
+    // (readLateTracks): it had no start, and was muxed from the start of the file, 5 minutes early for one that begins
+    // at 300 s. Past that, as before.
     SegmentFacts facts;
     if (!readSegmentFacts(fileName, facts) || facts.firstCluster <= 0 || !facts.prevUuid.empty() ||
         !facts.nextUuid.empty() || (facts.defaultEdition() && facts.defaultEdition()->ordered))
         return;
+    static constexpr int64_t LATE_BYTES = 1024LL * 1024 * 1024;
     const auto firstBlock = [&](const int64_t number, int64_t& time)
     {
         bool found = false;
-        walkTrackBlocks(scan, facts.firstCluster, facts.segmentEnd, START_CLUSTERS, number,
-                        [&](const int64_t t, int64_t, bool, int)
-                        {
-                            time = t;
-                            found = true;
-                            return false;
-                        });
+        const auto onBlock = [&](const int64_t t, int64_t, bool, int)
+        {
+            time = t;
+            found = true;
+            return false;
+        };
+        walkTrackBlocks(scan, facts.firstCluster, facts.segmentEnd, START_CLUSTERS, number, onBlock);
+        if (!found)
+            walkTrackBlocks(scan, facts.firstCluster, (std::min)(facts.segmentEnd, facts.firstCluster + LATE_BYTES),
+                            INT_MAX, number, onBlock);
         return found;
     };
     const MatroskaTrack* video = nullptr;
