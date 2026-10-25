@@ -4247,7 +4247,10 @@ bool MatroskaMuxer::muxPacketInternal(AVPacket& avPacket)
     }
     // The DTS reader marks a frame as one a player can start from by its core, and DTS Express has no core, so not
     // one of its blocks carried the keyframe flag. Every DTS Express frame decodes on its own.
-    if (track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_DTS_EXPRESS)
+    // The LPCM reader marks no frame at all, so an LPCM block had no keyframe flag, a file of LPCM alone had no Cues
+    // and could not be split. Every PCM frame decodes on its own.
+    if (track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_DTS_EXPRESS ||
+        track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_PCM_LIT)
         track.pendingFlags |= AVPacket::IS_IFRAME;
     track.pendingFrameData.insert(track.pendingFrameData.end(), avPacket.data, avPacket.data + avPacket.size);
 

@@ -11,6 +11,66 @@ static constexpr int LPCM_FREQS[4] = {48000, 96000, 44100, 32000};
 
 // #define min(a,b) a<=b?a:b
 
+// A program stream decoder also reads ISO/IEC 11172-1 (MPEG-1) system streams (H.222.0, 2.8), whose packets have a
+// header of their own: up to 16 stuffing bytes 0xFF, the STD buffer size ('01' and 14 bits), then a PTS ('0010'), a PTS
+// and a DTS ('0011'), each coded as in a PES header, or the byte 0x0F when there is no time stamp. A PES header of
+// H.222.0 starts with '10' instead. Every packet was read as a PES header, so the payload was taken from a place that
+// is not where it starts, and a short packet at the end stopped the read with "Invalid copyLen".
+// Returns the length of an MPEG-1 packet header, with its PTS (-1 without one); 0 when the packet has none, and -1 when
+// the header goes on past end.
+static int mpeg1PacketHeader(const uint8_t* buff, const uint8_t* end, int64_t& pts)
+{
+    pts = -1;
+    if (buff[3] == PES_PRIVATE_DATA2 || (buff[6] & 0xc0) == 0x80)
+        return 0;
+    const int64_t avail = end - buff;
+    const int packetEnd = 6 + (buff[4] << 8 | buff[5]);
+    int pos = 6;
+    // A field of n bytes at pos: 1 when it is there, 0 when it would end past the packet, -1 past the data read so far
+    const auto has = [&](const int n) { return pos + n > packetEnd ? 0 : pos + n > avail ? -1 : 1; };
+    for (int stuffing = 0;; ++stuffing)
+    {
+        if (const int h = has(1); h < 1)
+            return h;
+        if (buff[pos] != 0xff)
+            break;
+        if (stuffing == 16)
+            return 0;
+        ++pos;
+    }
+    if ((buff[pos] & 0xc0) == 0x40)  // STD_buffer_scale and STD_buffer_size
+    {
+        pos += 2;
+        if (const int h = has(1); h < 1)
+            return h;
+    }
+    int fieldLen;
+    if ((buff[pos] & 0xf0) == 0x20)
+        fieldLen = 5;  // PTS
+    else if ((buff[pos] & 0xf0) == 0x30)
+        fieldLen = 10;  // PTS and DTS
+    else if (buff[pos] == 0x0f)
+        fieldLen = 1;
+    else
+        return 0;
+    if (const int h = has(fieldLen); h < 1)
+        return h;
+    if (fieldLen > 1)
+        pts = get_pts(buff + pos);
+    return pos + fieldLen;
+}
+
+// The PTS of the packet at buff, for the duration: -1 when it has none, or its header is cut by end.
+static int64_t packetPts(uint8_t* buff, const uint8_t* end)
+{
+    int64_t pts;
+    const int mpeg1Len = mpeg1PacketHeader(buff, end, pts);
+    if (mpeg1Len != 0)
+        return pts;
+    const auto pesPacket = reinterpret_cast<PESPacket*>(buff);
+    return (pesPacket->flagsLo & 0x80) == 0x80 ? pesPacket->getPts() : -1;
+}
+
 ProgramStreamDemuxer::ProgramStreamDemuxer(const BufferedReaderManager& readManager)
     : m_tmpBuffer{}, m_readManager(readManager), m_dataProcessed(0)
 {
@@ -90,7 +150,8 @@ int ProgramStreamDemuxer::mpegps_psm_parse(const uint8_t* buff, const uint8_t* e
     return 6 + psm_length;
 }
 
-int ProgramStreamDemuxer::processPES(uint8_t* buff, uint8_t* end, int& afterPesHeader)
+int ProgramStreamDemuxer::processPES(uint8_t* buff, uint8_t* end, const int headerLen, const bool mpeg1,
+                                     int& afterPesHeader)
 {
     afterPesHeader = 0;
 
@@ -117,7 +178,7 @@ int ProgramStreamDemuxer::processPES(uint8_t* buff, uint8_t* end, int& afterPesH
         curBuf++;
     if (pesPacket->flagsLo & 0x02)  // PES_CRC_flag
         curBuf += 2;
-    if (pesPacket->flagsLo & 0x01)  // PES_extension_flag
+    if (!mpeg1 && (pesPacket->flagsLo & 0x01))  // PES_extension_flag, which an MPEG-1 packet header has not
     {
         const uint8_t extFlag = *curBuf++;
         if (extFlag & 0x80)  // PES_private_data_flag
@@ -138,7 +199,7 @@ int ProgramStreamDemuxer::processPES(uint8_t* buff, uint8_t* end, int& afterPesH
                 startcode = startcode << 8 | *curBuf;
         }
     }
-    curBuf = buff + pesPacket->getHeaderLength();
+    curBuf = buff + headerLen;
     if (startcode == PES_PRIVATE_DATA1 && m_psm_es_type[startcode] == 0)
     {
         afterPesHeader++;
@@ -163,7 +224,7 @@ int ProgramStreamDemuxer::processPES(uint8_t* buff, uint8_t* end, int& afterPesH
             afterPesHeader += 6;
 
             uint8_t* payloadData = curBuf + afterPesHeader - 1;
-            const int pesPayloadLen = pesPacket->getPacketLength() - pesPacket->getHeaderLength() - afterPesHeader;
+            const int pesPayloadLen = pesPacket->getPacketLength() - headerLen - afterPesHeader;
             wave_format::toLittleEndian(payloadData, payloadData, pesPayloadLen, bitdepth);
         }
         else if (startcode >= 0x80 && startcode <= 0xcf)
@@ -262,15 +323,18 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
         if ((startcode >= 0xc0 && startcode <= 0xef) || (startcode == PES_PRIVATE_DATA1) || (startcode == PES_VC1_ID) ||
             (startcode == PES_PRIVATE_DATA2))
         {
-            if (curBuf + pesPacket->getHeaderLength() + 4 > end)
+            int64_t mpeg1Pts;
+            const int mpeg1HeaderLen = mpeg1PacketHeader(curBuf, end, mpeg1Pts);
+            const int headerLen = mpeg1HeaderLen > 0 ? mpeg1HeaderLen : pesPacket->getHeaderLength();
+            if (mpeg1HeaderLen < 0 || curBuf + headerLen + 4 > end)
                 break;
             int afterPesHeader = 0;
-            startcode = processPES(curBuf, end, afterPesHeader);
+            startcode = processPES(curBuf, end, headerLen, mpeg1HeaderLen > 0, afterPesHeader);
             if (acceptedPIDs.find(startcode) != acceptedPIDs.end())
             {
-                if ((pesPacket->flagsLo & 0x80) == 0x80)
+                if (mpeg1HeaderLen > 0 ? mpeg1Pts >= 0 : (pesPacket->flagsLo & 0x80) == 0x80)
                 {
-                    const int64_t curPts = pesPacket->getPts();
+                    const int64_t curPts = mpeg1HeaderLen > 0 ? mpeg1Pts : pesPacket->getPts();
                     if (m_firstPTS == -1 || curPts < m_firstPTS)
                         m_firstPTS = curPts;
                     if (isVideoPID(startcode) && (m_firstVideoPTS == -1 || curPts < m_firstVideoPTS))
@@ -288,8 +352,8 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
                     m_lpcpHeaderAdded[idx] = true;
                 }
 
-                const uint8_t* payloadData = curBuf + pesPacket->getHeaderLength() + afterPesHeader;
-                const int pesPayloadLen = pesPacket->getPacketLength() - pesPacket->getHeaderLength() - afterPesHeader;
+                const uint8_t* payloadData = curBuf + headerLen + afterPesHeader;
+                const int pesPayloadLen = pesPacket->getPacketLength() - headerLen - afterPesHeader;
                 const int copyLen = FFMIN(pesPayloadLen, (int)(end - payloadData));
                 if (copyLen < 0)
                 {
@@ -371,13 +435,12 @@ int64_t getLastPCR(const File& file, const int bufferSize, const int64_t fileSiz
     curPtr = MPEGHeader::findNextMarker(curPtr, bufEnd);
     while (curPtr <= bufEnd - 9 - 8)
     {
-        const auto pesPacket = reinterpret_cast<PESPacket*>(curPtr);
         const uint8_t startcode = curPtr[3];
         if ((startcode >= 0xc0 && startcode <= 0xef) || (startcode == PES_PRIVATE_DATA1) || (startcode == PES_VC1_ID) ||
             (startcode == PES_PRIVATE_DATA2))
         {
-            if ((pesPacket->flagsLo & 0x80) == 0x80)
-                lastPcrVal = pesPacket->getPts();
+            if (const int64_t pts = packetPts(curPtr, bufEnd); pts >= 0)
+                lastPcrVal = pts;
         }
         curPtr = MPEGHeader::findNextMarker(curPtr + 4, bufEnd);
     }
@@ -411,14 +474,13 @@ int64_t getPSDuration(const char* fileName)
         curPtr = MPEGHeader::findNextMarker(curPtr, bufEnd);
         while (curPtr <= bufEnd - 9)
         {
-            const auto pesPacket = reinterpret_cast<PESPacket*>(curPtr);
             const uint8_t startcode = curPtr[3];
             if ((startcode >= 0xc0 && startcode <= 0xef) || (startcode == PES_PRIVATE_DATA1) ||
                 (startcode == PES_VC1_ID) || (startcode == PES_PRIVATE_DATA2))
             {
-                if ((pesPacket->flagsLo & 0x80) == 0x80)
+                if (const int64_t pts = packetPts(curPtr, bufEnd); pts >= 0)
                 {
-                    firstPcrVal = pesPacket->getPts();
+                    firstPcrVal = pts;
                     break;
                 }
             }

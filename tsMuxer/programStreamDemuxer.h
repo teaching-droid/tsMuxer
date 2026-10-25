@@ -56,7 +56,7 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
 
     [[nodiscard]] bool isVideoPID(uint32_t pid) const;
     int mpegps_psm_parse(const uint8_t* buff, const uint8_t* end);
-    int processPES(uint8_t* buff, uint8_t* end, int& afterPesHeader);
+    int processPES(uint8_t* buff, uint8_t* end, int headerLen, bool mpeg1, int& afterPesHeader);
 };
 
 #endif

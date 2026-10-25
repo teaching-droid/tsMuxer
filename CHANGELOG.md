@@ -404,6 +404,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **20 bit LPCM** says BitDepth 24, as its samples take 3 bytes; it played as noise in other players. A LanguageBCP47 of 40 to 255 characters is kept; a longer one is left out with a warning. The DURATION tags some muxers write for each track are left out, as they give the source's length.
 
+* **A Matroska file of LPCM sound alone had no Cues for a player to seek with,** and a split of it gave a single part: its blocks carried no keyframe flag. They now carry it, as every PCM frame can be played on its own.
+
 * **A split of sound without video** goes on as long as any of the sound lasts. A subtitle line listed first decided it, and the first sound line did where it was the shorter: the split stopped where that track ended.
 
 * **A cut moves the chapters of --custom-chapters and --chapters-file** as it moves the source's own: the chapter playing at the cut start opens the output at 0. A disc had no mark at its start, and a Matroska output kept the chapters at their old times.
@@ -567,6 +569,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **A video stream whose header gives a frame rate no video has,** such as one picture in 30 years in a damaged H.264 header, no longer fills a transport stream with clock references until the disk is full. The rate is set aside with a warning, and the container's rate or 25 is used.
 
 * **A block read ahead from a source is handed over under its lock.** When it was ready already, the muxer took it without the lock, so on a processor that reorders memory writes, as ARM does, it could read the block before all of its bytes had arrived.
+
+* **An MPEG-1 system stream (.mpg, .mpeg) could not be read.** Its packet headers were read as MPEG-2 ones: tracks were not found, their data came out damaged, or the job stopped with "Invalid copyLen". It is now read.
 
 ### What is still converted or left out
 
