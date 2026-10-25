@@ -2551,6 +2551,14 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                                 << " ms into the track, so its times are moved back by that much.");
         }
     }
+    // The tags at the end of a raw audio file are not read (FileReaderData::openStream), so they are not in the size
+    // the reading is measured against either: the check that a mux read all of its sources would stop a file with a
+    // big tag, and the progress line would never reach the end
+    if (dynamic_cast<BufferedFileReader*>(dataReader) != nullptr &&
+        SimplePacketizerReader::cutsEndTags(codecReader->getCodecInfo().codecID))
+        for (const std::string& name : fileList)
+            if (File tagFile; tagFile.open(name.c_str(), File::ofRead))
+                fileSize -= SimplePacketizerReader::tagChainAtFileEnd(tagFile);
     m_totalSize += fileSize;
 
     if (auto* mergeReader = dynamic_cast<TrueHDAC3MergeReader*>(codecReader))

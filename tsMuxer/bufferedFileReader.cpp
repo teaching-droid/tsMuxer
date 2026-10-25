@@ -4,6 +4,7 @@
 
 #include <iostream>
 
+#include "simplePacketizerReader.h"
 #include "vodCoreException.h"
 #include "vod_common.h"
 
@@ -29,6 +30,19 @@ bool FileReaderData::openStream()
             rez = m_file.seek(first, File::SeekMethod::smBegin) != -1;
         m_readPos = first;
         m_readEnd = end;
+    }
+    // The tags at the end of a raw audio file, found from its last bytes, are not read: see
+    // SimplePacketizerReader::cutsEndTags. Its size is known here, and nowhere later can a reader tell a tag from data.
+    // A source without a size, such as a pipe, is read as it comes.
+    else if (int64_t size = 0; rez && m_cutEndTags && m_file.size(&size) && size > 0)
+    {
+        const int64_t chain = SimplePacketizerReader::tagChainAtFileEnd(m_file);
+        if (chain > 0)
+        {
+            m_readEnd = size - chain;
+            LTRACE(LT_DEBUG, 0, m_streamName << ": the last " << chain << " bytes are tags and are not read");
+        }
+        rez = m_file.seek(0, File::SeekMethod::smBegin) == 0;
     }
 
     if (!rez)
@@ -67,6 +81,7 @@ bool BufferedFileReader::openStream(const int readerID, const char* streamName, 
     data->m_lastBlock = false;
     data->m_streamName = streamName;
     data->m_fileHeaderSize = 0;
+    data->m_cutEndTags = codecInfo != nullptr && SimplePacketizerReader::cutsEndTags(codecInfo->codecID);
     data->closeStream();
     if (!data->openStream())
     {

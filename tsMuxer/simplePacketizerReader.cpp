@@ -716,93 +716,205 @@ void SimplePacketizerReader::setBuffer(uint8_t* data, const uint32_t dataLen, bo
 
 int64_t SimplePacketizerReader::getProcessedSize() { return m_processedBytes; }
 
-// The chain of tags that ENDS at end, read backwards from the footers, in bytes; base is where the bytes held begin
-// and dataLen how far back the data goes (a length found may reach before base, into bytes no longer held).
+// ONE tag of the chain that ENDS at e, read backwards from its footer, in bytes, or 0 if there is none; held is how
+// many bytes are held in front of e and before how far back the data goes (a length found may reach before the bytes
+// held, into bytes no longer held). kind, if given, is set to the kind found.
 // The order at the end of a file is the audio, then an APE tag or a Lyrics3 tag, then ID3v1, and each of them can be
-// found from its last bytes: ID3v1 is the last 128 and begins "TAG"; an APE footer is the last 32, "APETAGEX", with
-// the size of the items and the footer, and a header in front when its flags say so; Lyrics3 v2 ends with a six
-// digit size and "LYRICS200", v1 with "LYRICSEND" and is searched back for its "LYRICSBEGIN" as the forward reading
-// does. A size is believed as far as the data goes back, as tagRunAt believes one: it only takes bytes off the count
-// the frames are measured against, and never moves the read position.
-static int64_t tagChainBeforeEnd(const uint8_t* const base, const uint8_t* const end, const int64_t dataLen)
+// found from its last bytes: ID3v1 is the last 128 and begins "TAG", with the 227 bytes of the enhanced tag ("TAG+")
+// in front of it when there are; an APE footer is the last 32, "APETAGEX", with the size of the items and the footer,
+// and a header in front when its flags say so; Lyrics3 v2 ends with a six digit size and "LYRICS200", v1 with
+// "LYRICSEND" and is searched back for its "LYRICSBEGIN" as the forward reading does; an ID3v2.4 tag appended at the
+// end has a footer, "3DI", with the size of its frames. A size is believed as far as the data goes back, as tagRunAt
+// believes one: it only takes bytes off the count the frames are measured against, and never moves the read
+// position. A file source is cut where the chain begins, and checks the starts as well: see tagChainAtFileEnd.
+int64_t SimplePacketizerReader::oneTagBeforeEnd(const uint8_t* const e, const int64_t held, const int64_t before,
+                                                EndTagKind* const kind)
 {
     const auto le32 = [](const uint8_t* q)
     {
         return static_cast<int64_t>(q[0]) | (static_cast<int64_t>(q[1]) << 8) | (static_cast<int64_t>(q[2]) << 16) |
                (static_cast<int64_t>(q[3]) << 24);
     };
+    const auto found = [kind](const EndTagKind k, const int64_t len)
+    {
+        if (kind != nullptr)
+            *kind = k;
+        return len;
+    };
+    if (held < 15)
+        return 0;
+    // ID3v1, with the year rule of oneTagLength
+    if (held >= 128 && memcmp(e - 128, "TAG", 3) == 0)
+    {
+        const uint8_t* const t = e - 128;
+        bool yearOk = true;
+        for (int i = 93; i < 97; ++i)
+            if (!(t[i] == 0 || t[i] == ' ' || (t[i] >= '0' && t[i] <= '9')))
+                yearOk = false;
+        if (yearOk)
+        {
+            if (held >= 128 + 227 && before >= 128 + 227 && memcmp(t - 227, "TAG+", 4) == 0)
+                return found(EndTagKind::id3v1, 128 + 227);
+            return found(EndTagKind::id3v1, 128);
+        }
+    }
+    // An APE footer: bit 29 clear (this block is not the header), a version of 1.000 or 2.000
+    if (held >= 32 && memcmp(e - 32, "APETAGEX", 8) == 0)
+    {
+        const uint8_t* const f = e - 32;
+        const int64_t version = le32(f + 8);
+        const int64_t size = le32(f + 12);
+        const auto flags = static_cast<uint32_t>(le32(f + 20));
+        const int64_t len = size + ((flags & 0x80000000u) != 0 ? 32 : 0);
+        if ((version == 1000 || version == 2000) && (flags & 0x20000000u) == 0 && size >= 32 && len <= before)
+            return found(EndTagKind::ape, len);
+    }
+    // Lyrics3 v2: "LYRICSBEGIN" ... six digits of the size up to them, "LYRICS200"
+    if (memcmp(e - 9, "LYRICS200", 9) == 0)
+    {
+        int64_t size = 0;
+        bool digits = true;
+        for (int i = 15; i > 9; --i)
+        {
+            const uint8_t c = *(e - i);
+            if (c < '0' || c > '9')
+                digits = false;
+            else
+                size = size * 10 + (c - '0');
+        }
+        if (digits && size >= 11 && size + 15 <= before)
+            return found(EndTagKind::lyrics3v2, size + 15);
+    }
+    // Lyrics3 v1: its start is searched for, within the bound the forward reading uses
+    if (held >= 20 && memcmp(e - 9, "LYRICSEND", 9) == 0)
+    {
+        constexpr int64_t LYRICS3_MAX = 16384;
+        const int64_t reach = (std::min)((std::min)(held, before), LYRICS3_MAX);
+        for (int64_t back = 20; back <= reach; ++back)
+            if (memcmp(e - back, "LYRICSBEGIN", 11) == 0)
+                return found(EndTagKind::lyrics3v1, back);
+    }
+    // ID3v2.4 footer: "3DI", version 4, a revision, the flags with the footer bit, four SYNCSAFE bytes of the size of
+    // the frames, which leaves out the header and the footer (ten bytes each)
+    if (memcmp(e - 10, "3DI", 3) == 0)
+    {
+        const uint8_t* const f = e - 10;
+        if (f[3] == 4 && f[4] != 0xff && (f[5] & 0x10) != 0 && (f[6] | f[7] | f[8] | f[9]) < 0x80)
+        {
+            const int64_t size = (static_cast<int64_t>(f[6]) << 21) | (static_cast<int64_t>(f[7]) << 14) |
+                                 (static_cast<int64_t>(f[8]) << 7) | static_cast<int64_t>(f[9]);
+            if (size + 20 <= before)
+                return found(EndTagKind::id3v2, size + 20);
+        }
+    }
+    return 0;
+}
+
+// The chain of tags that ENDS at end, tag by tag (oneTagBeforeEnd); base is where the bytes held begin and dataLen how
+// far back the data goes. A tag that reaches back past what is held ends the chain: nothing before it can be read.
+static int64_t tagChainBeforeEnd(const uint8_t* const base, const uint8_t* const end, const int64_t dataLen)
+{
     int64_t total = 0;
     for (;;)
     {
         const int64_t held = (end - base) - total;  // the bytes still held in front of the chain found so far
         if (held < 15)
-            return total;  // a tag that reaches back past what is held ends the chain: nothing before it can be read
-        const uint8_t* const e = end - total;
-        // ID3v1, with the year rule of oneTagLength
-        if (held >= 128 && memcmp(e - 128, "TAG", 3) == 0)
-        {
-            const uint8_t* const t = e - 128;
-            bool yearOk = true;
-            for (int i = 93; i < 97; ++i)
-                if (!(t[i] == 0 || t[i] == ' ' || (t[i] >= '0' && t[i] <= '9')))
-                    yearOk = false;
-            if (yearOk)
-            {
-                total += 128;
-                continue;
-            }
-        }
-        // An APE footer: bit 29 clear (this block is not the header), a version of 1.000 or 2.000
-        if (held >= 32 && memcmp(e - 32, "APETAGEX", 8) == 0)
+            return total;
+        const int64_t len = SimplePacketizerReader::oneTagBeforeEnd(end - total, held, dataLen - total);
+        if (len <= 0)
+            return total;
+        total += len;
+    }
+}
+
+static bool readFileAt(const File& file, const int64_t pos, uint8_t* const buf, const uint32_t len)
+{
+    return file.seek(pos, File::SeekMethod::smBegin) == pos && file.read(buf, len) == static_cast<int>(len);
+}
+
+// The items of an APE tag fill what its footer gives them, the bytes from end - size up to the footer, exactly: each
+// is the length of its value, its flags, a key of printable ASCII ended by a zero, and the value
+static bool apeItemsFill(const File& file, const int64_t end, const int64_t size, const int64_t count)
+{
+    const int64_t footer = end - 32;
+    int64_t pos = end - size;
+    if (count < 0 || count * 10 > size - 32)
+        return false;
+    uint8_t item[8 + 256];
+    for (int64_t i = 0; i < count; ++i)
+    {
+        if (footer - pos < 10)
+            return false;
+        const auto n = static_cast<uint32_t>((std::min)(footer - pos, static_cast<int64_t>(sizeof item)));
+        if (!readFileAt(file, pos, item, n))
+            return false;
+        const int64_t valueLen = static_cast<int64_t>(item[0]) | (static_cast<int64_t>(item[1]) << 8) |
+                                 (static_cast<int64_t>(item[2]) << 16) | (static_cast<int64_t>(item[3]) << 24);
+        uint32_t k = 8;
+        while (k < n && item[k] >= 0x20 && item[k] <= 0x7e) ++k;
+        if (k == 8 || k >= n || item[k] != 0)
+            return false;
+        pos += k + 1 + valueLen;
+        if (pos > footer)
+            return false;
+    }
+    return pos == footer;
+}
+
+int64_t SimplePacketizerReader::tagChainAtFileEnd(const File& file)
+{
+    int64_t size = 0;
+    if (!file.size(&size) || size <= 0)
+        return 0;
+    std::vector<uint8_t> tail;
+    int64_t total = 0;
+    for (;;)
+    {
+        const int64_t end = size - total;  // where the chain found so far begins
+        if (end < 15)
+            return total;
+        const int64_t held = (std::min)(end, static_cast<int64_t>(TAIL_KEEP));
+        tail.resize(static_cast<size_t>(held));
+        if (!readFileAt(file, end - held, tail.data(), static_cast<uint32_t>(held)))
+            return total;
+        const uint8_t* const e = tail.data() + held;
+        EndTagKind kind = EndTagKind::id3v1;
+        const int64_t len = oneTagBeforeEnd(e, held, end, &kind);
+        if (len <= 0)
+            return total;
+        const int64_t start = end - len;
+        uint8_t head[32];
+        bool startOk = true;
+        if (kind == EndTagKind::ape)
         {
             const uint8_t* const f = e - 32;
-            const int64_t version = le32(f + 8);
-            const int64_t size = le32(f + 12);
-            const auto flags = static_cast<uint32_t>(le32(f + 20));
-            const int64_t len = size + ((flags & 0x80000000u) != 0 ? 32 : 0);
-            if ((version == 1000 || version == 2000) && (flags & 0x20000000u) == 0 && size >= 32 &&
-                len <= dataLen - total)
+            const auto le32 = [](const uint8_t* q)
             {
-                total += len;
-                continue;
-            }
+                return static_cast<int64_t>(q[0]) | (static_cast<int64_t>(q[1]) << 8) |
+                       (static_cast<int64_t>(q[2]) << 16) | (static_cast<int64_t>(q[3]) << 24);
+            };
+            const int64_t itemsSize = le32(f + 12);
+            if ((static_cast<uint32_t>(le32(f + 20)) & 0x80000000u) != 0)
+                startOk = readFileAt(file, start, head, 32) && memcmp(head, "APETAGEX", 8) == 0 &&
+                          (static_cast<uint32_t>(le32(head + 20)) & 0x20000000u) != 0 && le32(head + 12) == itemsSize;
+            startOk = startOk && apeItemsFill(file, end, itemsSize, le32(f + 16));
         }
-        // Lyrics3 v2: "LYRICSBEGIN" ... six digits of the size up to them, "LYRICS200"
-        if (held >= 15 && memcmp(e - 9, "LYRICS200", 9) == 0)
-        {
-            int64_t size = 0;
-            bool digits = true;
-            for (int i = 15; i > 9; --i)
-            {
-                const uint8_t c = *(e - i);
-                if (c < '0' || c > '9')
-                    digits = false;
-                else
-                    size = size * 10 + (c - '0');
-            }
-            if (digits && size >= 11 && size + 15 <= dataLen - total)
-            {
-                total += size + 15;
-                continue;
-            }
-        }
-        // Lyrics3 v1: its start is searched for, within the bound the forward reading uses
-        if (held >= 20 && memcmp(e - 9, "LYRICSEND", 9) == 0)
-        {
-            constexpr int64_t LYRICS3_MAX = 16384;
-            const int64_t reach = (std::min)(held, LYRICS3_MAX);
-            int64_t found = 0;
-            for (int64_t back = 20; back <= reach && found == 0; ++back)
-                if (memcmp(e - back, "LYRICSBEGIN", 11) == 0)
-                    found = back;
-            if (found > 0)
-            {
-                total += found;
-                continue;
-            }
-        }
-        return total;
+        else if (kind == EndTagKind::lyrics3v2)
+            startOk = readFileAt(file, start, head, 11) && memcmp(head, "LYRICSBEGIN", 11) == 0;
+        else if (kind == EndTagKind::id3v2)
+            startOk = readFileAt(file, start, head, 10) && memcmp(head, "ID3", 3) == 0 && head[3] == 4 &&
+                      memcmp(head + 6, e - 4, 4) == 0;
+        if (!startOk)
+            return total;
+        total += len;
     }
+}
+
+bool SimplePacketizerReader::cutsEndTags(const int codecID)
+{
+    return codecID == CODEC_A_AAC || codecID == CODEC_A_AC3 || codecID == CODEC_A_EAC3 || codecID == CODEC_A_DTS ||
+           codecID == CODEC_A_HDAC3 || codecID == CODEC_A_MPEG_AUDIO || codecID == CODEC_A_MLP ||
+           codecID == CODEC_A_FLAC;
 }
 
 int64_t SimplePacketizerReader::trailingTagBytes() const

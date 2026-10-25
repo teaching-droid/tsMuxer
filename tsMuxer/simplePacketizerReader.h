@@ -195,6 +195,32 @@ class SimplePacketizerReader : public AbstractStreamReader
     // The padding the frame search stepped over, runs of zeros or 0xFF of PAD_RUN_MIN bytes or more (countPadding)
     [[nodiscard]] int64_t getPadBytes() const { return m_padBytes; }
 
+    // ** THE TAGS AT THE END OF A FILE ARE CUT OFF BEFORE ANY READER SEES THEM. ** Counting the end chain from the
+    // last bytes that arrived (trailingTagBytes) comes when the frames in front of it have gone out, and two codecs
+    // are hurt by its bytes before that: the AAC frame search finds false ADTS frames in a cover picture of random
+    // bytes, which went into the output at other sample rates (a demux of 38,852 bytes came out at 90,486), and a FLAC
+    // frame ends where the next one begins, so any tag at the end went into the last frame. A raw file's size is
+    // known, so its chain is read once when it is opened, from its last bytes (FileReaderData::openStream), and the
+    // file is read up to where the chain begins, as the part of a clip a play item plays is read. Each file of a join
+    // has its own. A track of a container is not cut: its packets end where the container says.
+    enum class EndTagKind
+    {
+        id3v1,
+        ape,
+        lyrics3v2,
+        lyrics3v1,
+        id3v2
+    };
+    static int64_t oneTagBeforeEnd(const uint8_t* e, int64_t held, int64_t before, EndTagKind* kind = nullptr);
+    // The bytes of the chain of tags at the end of an open file: the walk of the data's tail, with a check of where
+    // each tag begins that the tail cannot make: an APE tag's items fill its size exactly and its header is there when
+    // the footer says so, a Lyrics3 v2 tag begins with "LYRICSBEGIN", an ID3v2 tag with its header. A footer that
+    // fails ends the chain there, and its bytes are read as before. Where the file is read next is not kept.
+    static int64_t tagChainAtFileEnd(const File& file);
+    // The codecs whose raw files are cut so: the audio of this reader that a file holds as frames one after another.
+    // LPCM is not: a WAV file says itself where its sound ends.
+    static bool cutsEndTags(int codecID);
+
    protected:
     int64_t m_frameBytes = 0;
     int64_t m_tagBytes = 0;
@@ -218,7 +244,9 @@ class SimplePacketizerReader : public AbstractStreamReader
     // stated limit, the bytes are held and never counted as lost. The frames-under-half rule then counted them as audio
     // that is not frames, and an MP3 of 320 KB with a 1.5 MB cover in such a tag was refused, where 2.20.0 muxed it
     // whole. The last bytes that arrived are kept so the chain of tags ending the data (ID3v1, APE footer, Lyrics3) can
-    // be read backwards from its footers, as their formats are meant to be read, for that rule alone.
+    // be read backwards from its footers, as their formats are meant to be read, for that rule alone. The chain of a
+    // raw file is cut off before it arrives (tagChainAtFileEnd); what is left for this is data of no known size, such
+    // as a pipe, and a tag whose start fails the checks there.
     [[nodiscard]] int64_t trailingTagBytes() const;
     static constexpr size_t TAIL_KEEP = 16384 + 256;  // Lyrics3 v1's search bound, and ID3v1 and the footers
     std::vector<uint8_t> m_tail;  // the last bytes given to setBuffer, TAIL_KEEP up to twice that

@@ -97,6 +97,9 @@ struct FileReaderData final : ReaderData
     uint32_t m_fileHeaderSize;
     int64_t m_readPos = 0;   // where the next read starts
     int64_t m_readEnd = -1;  // where the part of the file that is read ends; -1: at the end of the file
+    // Each file is read up to the chain of tags at its end (SimplePacketizerReader::tagChainAtFileEnd): set for the
+    // raw audio of a track, by the codec it is opened as, and kept for the later files of a join
+    bool m_cutEndTags = false;
 };
 
 class BufferedFileReader final : public BufferedReader
