@@ -3438,6 +3438,84 @@ bool isLanguageCode(const std::string& lang)
                                            { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); });
 }
 
+// The kind a track's container declares (DeclaredKind). A transport stream by its stream type, ITU-T H.222.0 Table
+// 2-34 and the Blu-ray stream_coding_type: 0x06 (private data) and 0x80 (LPCM on a disc, DigiCipher II video in ATSC)
+// name no kind. A Matroska file by the first letter of the codec ID, A_ for sound and V_ for video, as its
+// specification names them. Other containers declare nothing here.
+static DeclaredKind declaredKindOf(const AbstractStreamReader::ContainerType containerType, const TrackInfo& track)
+{
+    using CT = AbstractStreamReader::ContainerType;
+    if (containerType == CT::ctTS || containerType == CT::ctM2TS)
+    {
+        switch (track.m_trackType)
+        {
+        case 0x03:  // MPEG-1 audio
+        case 0x04:  // MPEG-2 audio
+        case 0x0F:  // AAC, ADTS
+        case 0x11:  // AAC, LATM
+        case 0x81:  // AC-3
+        case 0x82:  // DTS
+        case 0x83:  // TrueHD
+        case 0x84:  // E-AC-3
+        case 0x85:  // DTS-HD
+        case 0x86:  // DTS-HD Master Audio
+        case 0x87:  // E-AC-3 (ATSC), DRA (Blu-ray)
+        case 0x88:
+        case 0xA1:  // E-AC-3, secondary audio of a disc
+        case 0xA2:  // DTS-HD, secondary audio of a disc
+            return DeclaredKind::Sound;
+        case 0x01:  // MPEG-1 video
+        case 0x02:  // MPEG-2 video
+        case 0x10:  // MPEG-4 Part 2
+        case 0x1B:  // H.264
+        case 0x20:  // MVC
+        case 0x24:  // HEVC
+        case 0x25:  // HEVC temporal subset
+        case 0x33:  // VVC
+        case 0xEA:  // VC-1
+            return DeclaredKind::Video;
+        default:
+            return DeclaredKind::None;
+        }
+    }
+    if (containerType == CT::ctMKV)
+    {
+        const auto id = track.m_srcParams.find("srccodecid");
+        if (id != track.m_srcParams.end() && strStartWith(id->second, "A_"))
+            return DeclaredKind::Sound;
+        if (id != track.m_srcParams.end() && strStartWith(id->second, "V_"))
+            return DeclaredKind::Video;
+    }
+    return DeclaredKind::None;
+}
+
+// A track found as the other kind than its container declares: detectTrackReader found nothing of the declared kind
+// and took what the other kind's probes found, as it always did. That was said nowhere, so a sound track listed as
+// AV1 looked like any other video track. Said once for each track and file.
+static void warnKindMismatch(const std::string& fileName, const int trackId, const TrackInfo& track,
+                             const DeclaredKind declared, const CheckStreamRez& found)
+{
+    const std::string& program = found.codecInfo.programName;
+    const bool sound = strStartWith(program, "A_");
+    const bool video = strStartWith(program, "V_");
+    if (!(declared == DeclaredKind::Sound && video) && !(declared == DeclaredKind::Video && sound))
+        return;
+    static std::set<std::pair<std::string, int>> said;
+    if (!said.insert({fileName, trackId}).second)
+        return;
+    std::ostringstream how;
+    if (const auto id = track.m_srcParams.find("srccodecid"); id != track.m_srcParams.end() && !id->second.empty())
+        how << "codec ID " << id->second;
+    else
+        how << "stream type 0x" << std::hex << track.m_trackType << std::dec;
+    const char* declaredAs = declared == DeclaredKind::Sound ? "sound" : "video";
+    const char* holds = video ? "video" : "sound";
+    LTRACE(LT_WARN, 2,
+           "Warning: track " << trackId << " of " << fileName << " is declared as " << declaredAs << " (" << how.str()
+                             << "), but holds " << holds << " (" << found.codecInfo.displayName << "); it is muxed as "
+                             << holds << ".");
+}
+
 DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& readManager, const string& fileName,
                                                 bool calcDuration, const std::vector<std::string>& laterFiles)
 {
@@ -3522,8 +3600,10 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
         for (auto& itr : demuxedData)
         {
             StreamData& vect = itr.second;
+            const DeclaredKind declared = declaredKindOf(containerType, acceptedPidMap[itr.first]);
             CheckStreamRez trackRez = detectTrackReader(vect.data(), static_cast<int>(vect.size()), containerType,
-                                                        acceptedPidMap[itr.first].m_trackType, itr.first);
+                                                        acceptedPidMap[itr.first].m_trackType, itr.first, declared);
+            warnKindMismatch(unquoted, itr.first, acceptedPidMap[itr.first], declared, trackRez);
             if (!trackRez.codecInfo.programName.empty())
             {
                 if (trackRez.codecInfo.programName[0] != 'S')
@@ -3866,7 +3946,7 @@ static uint32_t parseFontColor(const std::string& text)
 
 CheckStreamRez METADemuxer::detectTrackReader(uint8_t* tmpBuffer, int len,
                                               AbstractStreamReader::ContainerType containerType, int containerDataType,
-                                              int containerStreamIndex)
+                                              int containerStreamIndex, const DeclaredKind declared)
 {
     CheckStreamRez rez;
 
@@ -3951,75 +4031,90 @@ CheckStreamRez METADemuxer::detectTrackReader(uint8_t* tmpBuffer, int len,
     if (rez.codecInfo.codecID)
         return rez;
 
-    auto lpcmReader = std::make_unique<LPCMStreamReader>();
-    rez = lpcmReader->checkStream(tmpBuffer, len, containerType, containerDataType, containerStreamIndex);
-    if (rez.codecInfo.codecID)
-        return rez;
-
-    auto h264codec = std::make_unique<H264StreamReader>();
-    rez = h264codec->checkStream(tmpBuffer, len);
-    if (rez.codecInfo.codecID)
-        return rez;
-
-    auto dtscodec = std::make_unique<DTSStreamReader>();
-    rez = dtscodec->checkStream(tmpBuffer, len, containerType, containerDataType, containerStreamIndex);
-    if (rez.codecInfo.codecID)
-        return rez;
-
-    auto ac3codec = std::make_unique<AC3StreamReader>();
-    rez = ac3codec->checkStream(tmpBuffer, len, containerType, containerDataType, containerStreamIndex);
-    if (rez.codecInfo.codecID)
-        return rez;
-
-    auto mlpcodec = std::make_unique<MLPStreamReader>();
-    rez = mlpcodec->checkStream(tmpBuffer, len, containerType, containerDataType, containerStreamIndex);
-    if (rez.codecInfo.codecID)
-        return rez;
-
-    auto aaccodec = std::make_unique<AACStreamReader>();
-    rez = aaccodec->checkStream(tmpBuffer, len, containerType, containerDataType, containerStreamIndex);
-    if (rez.codecInfo.codecID)
-        return rez;
-
-    auto flacCodec = std::make_unique<FLACStreamReader>();
-    rez = flacCodec->checkStream(tmpBuffer, len, containerType, containerDataType, containerStreamIndex);
-    if (rez.codecInfo.codecID)
-        return rez;
-
-    auto opusCodec = std::make_unique<OpusStreamReader>();
-    rez = opusCodec->checkStream(tmpBuffer, len, containerType, containerDataType, containerStreamIndex);
-    if (rez.codecInfo.codecID)
-        return rez;
-
-    auto vc1ccodec = std::make_unique<VC1StreamReader>();
-    rez = vc1ccodec->checkStream(tmpBuffer, len);
-    if (rez.codecInfo.codecID)
-        return rez;
-
-    auto hevcCodec = std::make_unique<HEVCStreamReader>();
-    rez = hevcCodec->checkStream(tmpBuffer, len);
-    if (rez.codecInfo.codecID)
-        return rez;
-
-    auto vvcCodec = std::make_unique<VVCStreamReader>();
-    rez = vvcCodec->checkStream(tmpBuffer, len);
-    if (rez.codecInfo.codecID)
-        return rez;
-
-    auto mpeg2ccodec = std::make_unique<MPEG2StreamReader>();
-    rez = mpeg2ccodec->checkStream(tmpBuffer, len);
-    if (rez.codecInfo.codecID)
-        return rez;
-
-    auto av1Codec = std::make_unique<AV1StreamReader>();
-    rez = av1Codec->checkStream(tmpBuffer, len);
-    if (rez.codecInfo.codecID)
-        return rez;
-
-    auto mpegAudioCodec = std::make_unique<MpegAudioStreamReader>();
-    rez = mpegAudioCodec->checkStream(tmpBuffer, len, containerType, containerDataType, containerStreamIndex);
-    if (rez.codecInfo.codecID)
-        return rez;
+    // ** THE KIND THE CONTAINER DECLARES IS ASKED FIRST. ** The probes ran in one order for every track, sound and
+    // pictures interleaved, and the first that answered decided: a transport stream track of stream type 0x87 (E-AC-3)
+    // or a Matroska A_EAC3 or A_DTS track could be listed as AV1, one of type 0x82 (DTS) as MPEG-2 video, an A_AC3 or
+    // A_DTS track as H.264, and a track of type 0x1B (H.264) as AC-3, DTS or MPEG audio, whenever a probe of the other
+    // kind ran first and took the data for its own. The probes of the declared kind now run first, in the order they
+    // always ran, so the data still decides within a kind (E-AC-3 under the AC-3 stream type, AC-3 in a track declared
+    // AAC). Only when none of them answers are the probes of the other kind asked, as they always were: a declaration
+    // that is wrong still finds what it found before, and DetectStreamReader names the mismatch in a warning. Nothing
+    // declared (a file of one stream, stream type 0x06 or 0x80, a container that gives no type): one pass, as before.
+    enum Probe
+    {
+        LPCM,
+        H264,
+        DTS,
+        AC3,
+        MLP,
+        AAC,
+        FLAC,
+        OPUS,
+        VC1,
+        HEVC,
+        VVC,
+        MPEG2,
+        AV1,
+        MPEG_AUDIO
+    };
+    static constexpr Probe ORDER[] = {LPCM, H264, DTS,  AC3, MLP,   AAC, FLAC,
+                                      OPUS, VC1,  HEVC, VVC, MPEG2, AV1, MPEG_AUDIO};
+    const auto probe = [&](const Probe p) -> CheckStreamRez
+    {
+        switch (p)
+        {
+        case LPCM:
+            return std::make_unique<LPCMStreamReader>()->checkStream(tmpBuffer, len, containerType, containerDataType,
+                                                                     containerStreamIndex);
+        case H264:
+            return std::make_unique<H264StreamReader>()->checkStream(tmpBuffer, len);
+        case DTS:
+            return std::make_unique<DTSStreamReader>()->checkStream(tmpBuffer, len, containerType, containerDataType,
+                                                                    containerStreamIndex);
+        case AC3:
+            return std::make_unique<AC3StreamReader>()->checkStream(tmpBuffer, len, containerType, containerDataType,
+                                                                    containerStreamIndex);
+        case MLP:
+            return std::make_unique<MLPStreamReader>()->checkStream(tmpBuffer, len, containerType, containerDataType,
+                                                                    containerStreamIndex);
+        case AAC:
+            return std::make_unique<AACStreamReader>()->checkStream(tmpBuffer, len, containerType, containerDataType,
+                                                                    containerStreamIndex);
+        case FLAC:
+            return std::make_unique<FLACStreamReader>()->checkStream(tmpBuffer, len, containerType, containerDataType,
+                                                                     containerStreamIndex);
+        case OPUS:
+            return std::make_unique<OpusStreamReader>()->checkStream(tmpBuffer, len, containerType, containerDataType,
+                                                                     containerStreamIndex);
+        case VC1:
+            return std::make_unique<VC1StreamReader>()->checkStream(tmpBuffer, len);
+        case HEVC:
+            return std::make_unique<HEVCStreamReader>()->checkStream(tmpBuffer, len);
+        case VVC:
+            return std::make_unique<VVCStreamReader>()->checkStream(tmpBuffer, len);
+        case MPEG2:
+            return std::make_unique<MPEG2StreamReader>()->checkStream(tmpBuffer, len);
+        case AV1:
+            return std::make_unique<AV1StreamReader>()->checkStream(tmpBuffer, len);
+        case MPEG_AUDIO:
+        default:
+            return std::make_unique<MpegAudioStreamReader>()->checkStream(tmpBuffer, len, containerType,
+                                                                          containerDataType, containerStreamIndex);
+        }
+    };
+    const auto isVideoProbe = [](const Probe p)
+    { return p == H264 || p == VC1 || p == HEVC || p == VVC || p == MPEG2 || p == AV1; };
+    for (const bool declaredPass : {true, false})
+        for (const Probe p : ORDER)
+        {
+            const bool ofDeclaredKind =
+                declared == DeclaredKind::None || isVideoProbe(p) == (declared == DeclaredKind::Video);
+            if (ofDeclaredKind != declaredPass)
+                continue;
+            rez = probe(p);
+            if (rez.codecInfo.codecID)
+                return rez;
+        }
 
     auto supReader = std::make_unique<DVBSubStreamReader>();
     rez = supReader->checkStream(tmpBuffer, len, containerType, containerDataType, containerStreamIndex);

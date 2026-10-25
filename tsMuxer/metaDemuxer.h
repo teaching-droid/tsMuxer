@@ -229,6 +229,15 @@ std::string iso639FromBcp47(const std::string& tag);
 // to its last, whatever part of it the playlist plays (--playlist-clips=whole).
 constexpr bool PLAYLIST_CLIPS_PLAYED_BY_DEFAULT = true;
 
+// The kind of track a container declares: a transport stream by its stream type, a Matroska file by the first letter
+// of the codec ID (A_ sound, V_ video). Detection asks the probes of that kind first (METADemuxer::detectTrackReader).
+enum class DeclaredKind
+{
+    None,  // nothing declared, or a type that names no codec: every probe in the order they always ran
+    Sound,
+    Video
+};
+
 class METADemuxer final : public AbstractDemuxer
 {
    public:
@@ -351,7 +360,7 @@ class METADemuxer final : public AbstractDemuxer
     void lineBack();
     static CheckStreamRez detectTrackReader(uint8_t* tmpBuffer, int len,
                                             AbstractStreamReader::ContainerType containerType, int containerDataType,
-                                            int containerStreamIndex);
+                                            int containerStreamIndex, DeclaredKind declared = DeclaredKind::None);
     static std::string findBluRayFile(const std::string& streamDir, const std::string& requestDir,
                                       const std::string& requestFile);
     std::vector<MPLSParser> getMplsInfo(const std::string& mplsFileName);

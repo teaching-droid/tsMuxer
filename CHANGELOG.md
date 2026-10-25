@@ -474,6 +474,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Other
 
+* **A sound track of a transport stream or a Matroska file could be listed as video, and a video track as sound,** when a check for the other kind ran first and took the data for its own: MP2 sound in a Matroska file was listed as AV1 video. A track is now read first as the kind its file declares, and within that kind the data still decides. A track that really holds the other kind is still found, with a warning.
+
 * **A demux with --cut-start says how much later the sound starts than the picture,** as the timeshift to give it when the files are muxed again.
 
 * **The log of a cut counted every picture of the source** in "Processed N video frames". It now counts the pictures muxed.

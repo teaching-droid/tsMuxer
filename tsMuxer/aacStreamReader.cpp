@@ -36,6 +36,49 @@ const std::string AACStreamReader::getStreamInfo()
     return str.str();
 }
 
+// ** AAC FROM A MATROSKA FILE IS CHECKED ON ITS OWN DATA. ** A Matroska file carries AAC without ADTS headers, and the
+// demuxer writes one in front of each block from the CodecPrivate, so the frame check of checkStream passes on any
+// data: an A_AAC track that held H.264 was listed as AAC. The first syntax element of the raw_data_block behind each
+// header is read instead, which every AAC frame has: for channel configurations 1 to 7 it is the first channel element
+// of the configuration (ISO/IEC 14496-3 Table 1.19: a single channel element for 1 and 3 to 7, a channel pair element
+// for 2), element_instance_tag 0, or a data stream or fill element, which an encoder may put before it. Data that is
+// not AAC meets that in about half of its blocks at most, and AAC in all of them; three in four is asked. Configuration
+// 0 begins with the program config element the demuxer copies into each frame and is not checked. Too few frames for a
+// share are not checked either, so a short track is listed as before.
+static bool matroskaBlocksLookLikeAac(uint8_t* buffer, uint8_t* end)
+{
+    enum
+    {
+        ID_SCE = 0,
+        ID_CPE = 1,
+        ID_DSE = 4,
+        ID_FIL = 6
+    };
+    static constexpr int MIN_FRAMES = 8;
+    static constexpr int MAX_FRAMES = 64;
+    int checked = 0;
+    int fitting = 0;
+    for (uint8_t* frame = AACCodec::findAacFrame(buffer, end, nullptr);
+         frame && end - frame > AAC_HEADER_LEN + 2 && checked < MAX_FRAMES;)
+    {
+        const int size = AACCodec::getFrameSize(frame);
+        const int headerLen = (frame[1] & 0x01) ? AAC_HEADER_LEN : AAC_HEADER_LEN + 2;
+        if (size <= headerLen || size > end - frame)
+            break;
+        if (const int channelConfig = ((frame[2] & 0x01) << 2) | (frame[3] >> 6); channelConfig != 0)
+        {
+            const int element = frame[headerLen] >> 5;
+            const int tag = (frame[headerLen] >> 1) & 0x0f;
+            const int first = channelConfig == 2 ? ID_CPE : ID_SCE;
+            if ((element == first && tag == 0) || element == ID_DSE || element == ID_FIL)
+                ++fitting;
+            ++checked;
+        }
+        frame += size;
+    }
+    return checked < MIN_FRAMES || fitting * 4 >= checked * 3;
+}
+
 CheckStreamRez AACStreamReader::checkStream(uint8_t* buffer, const int len, const ContainerType containerType,
                                             const int containerDataType, const int containerStreamIndex)
 {
@@ -43,6 +86,8 @@ CheckStreamRez AACStreamReader::checkStream(uint8_t* buffer, const int len, cons
         SimplePacketizerReader::checkStream(buffer, len, containerType, containerDataType, containerStreamIndex);
     if (!rez.codecInfo.codecID)
         return rez;
+    if (containerType == ContainerType::ctMKV && !matroskaBlocksLookLikeAac(buffer, buffer + len))
+        return {};
     // Only the frame headers are read: each one gives its own length and its number of samples. The
     // header itself (7 bytes, 9 with its CRC) is not part of the audio and is left out of the figure, which
     // is how a codec's bitrate is given; an AAC read out of an MP4 or a Matroska carries that header only
