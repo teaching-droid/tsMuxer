@@ -4595,6 +4595,10 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
                 animation.fadeOutDuration = parseFadeTime("fadeout-time", addParam.second);
             else if (addParam.first == "keep-text")
                 srtReader->setKeepText(true);
+            // A drawn subtitle is a PG stream of the disc like any other: 3d-plane= was read only on a PGS line, and
+            // the subtitles of an SRT line sat at the depth of the screen on a 3D disc, without a word.
+            else if (addParam.first == "3d-plane")
+                srtReader->setOffsetId(strToInt8u(addParam.second.c_str()));
         }
         // save-srt (#643): an SRT copy of the subtitles beside an output that gets them as pictures. Kept as text, the
         // output itself holds the text, and a demux writes the .srt.

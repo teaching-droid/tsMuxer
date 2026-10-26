@@ -55,6 +55,10 @@ class SRTStreamReader final : public AbstractStreamReader
     void setSaveSrt(const std::string& fileName);
     // The timeshift of the track, by which its pictures are moved: the .srt is written at their times
     void setSaveSrtShiftMs(const int64_t ms) { m_saveSrtShiftMs = ms; }
+    // 3d-plane: the offset sequence of the MVC video that places the drawn subtitles in depth on a 3D disc, 0xff for
+    // none, as PGSStreamReader keeps it for a PGS track
+    void setOffsetId(const uint8_t value) { m_offsetId = value; }
+    [[nodiscard]] uint8_t getOffsetId() const { return m_offsetId; }
     [[nodiscard]] bool keepText() const { return m_keepText; }
     [[nodiscard]] bool hasVideoInfo() const { return m_hasVideoInfo; }
     void setStreamIndex(const int index) override
@@ -106,6 +110,7 @@ class SRTStreamReader final : public AbstractStreamReader
     double m_outTime;
     bool m_untilNext = false;  // the timing line has no end: shown until the next subtitle
     bool m_keepText = false;
+    uint8_t m_offsetId = 0xff;
     text_subtitles::Font m_font;  // setFont's, loaded when the subtitles are drawn
     bool m_fontSet = false;
     // save-srt: the SRT file, the subtitle waiting for the next one when it has no end, and the count written

@@ -3725,8 +3725,10 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
 
             bool isPGS = codecInfo->displayName == "PGS";
             ui->checkBoxKeepFps->setVisible(isPGS);
-            ui->offsetsLabel->setVisible(isPGS);
-            ui->offsetsComboBox->setVisible(isPGS);
+            // a text subtitle is drawn into a PG stream, which a 3D disc places by a plane as well
+            const bool hasPlane = isPGS || codecInfo->displayName == "SRT";
+            ui->offsetsLabel->setVisible(hasPlane);
+            ui->offsetsComboBox->setVisible(hasPlane);
 
             ui->imageSubtitles->setVisible(!ui->dtsDwnConvert->isVisible());
             ui->imageAudio->setVisible(ui->dtsDwnConvert->isVisible());
@@ -5274,8 +5276,10 @@ QString TsMuxerWindow::buildMetaText()
             else if (!keepTextApplies() && !ui->fontsDirLineEdit->text().trimmed().isEmpty())
                 postfix +=
                     QString(", fonts-dir=\"%1\"").arg(QDir::toNativeSeparators(ui->fontsDirLineEdit->text().trimmed()));
-            if (bluray3D && codecInfo->offsetId >= 0)
-                postfix += QString(", offset=%1").arg(codecInfo->offsetId);
+            // The plane was written as offset=, which the mux does not know: the drawn subtitles sat at the depth of
+            // the screen whatever plane was chosen. Written as for a PGS track, with 255 for "zero".
+            if (bluray3D)
+                postfix += QString(", 3d-plane=%1").arg(codecInfo->offsetId >= 0 ? codecInfo->offsetId : 255);
         }
         if (codecInfo->trackID != 0)
             postfix += QString(", track=") + QString::number(codecInfo->trackID);

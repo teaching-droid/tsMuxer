@@ -12,6 +12,7 @@
 #include "iso_writer.h"
 #include "muxerManager.h"
 #include "pgsStreamReader.h"
+#include "srtStreamReader.h"
 #include "tsMuxer.h"
 #include "vodCoreException.h"
 
@@ -780,6 +781,9 @@ bool BlurayHelper::createMPLSFile(TSMuxer* mainMuxer, TSMuxer* subMuxer, int aut
                 }
             }
         }
+        // a text subtitle drawn into PGS: its 3d-plane= (SRTStreamReader::setOffsetId)
+        else if (const auto srtStream = dynamic_cast<SRTStreamReader*>(si.m_codecReader))
+            info.offsetId = srtStream->getOffsetId();
     }
     // A second video without "secondary" on its line is written as a second primary video, which a player does not
     // show over the first, while a picture-in-picture video of a disc playlist is listed as "Secondary: 1". That was
