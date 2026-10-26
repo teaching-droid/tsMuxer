@@ -505,7 +505,10 @@ void FileEntryInfo::writeEntity(ByteFileWriter& writer, const FileEntryInfo* sub
     // meant here.
     const bool isSystemFile = (subDir->m_objectId == 0);
 
-    writer.writeDescriptorTag(DescriptorTag::FileId, m_owner->absoluteSectorNum() + 1);
+    // The tag location is the block the identifier starts in. A folder of more entries than one block holds goes on in
+    // the blocks after the first, and every identifier used to name the first.
+    writer.writeDescriptorTag(DescriptorTag::FileId,
+                              m_owner->absoluteSectorNum() + 1 + static_cast<int32_t>(writer.size() / SECTOR_SIZE));
     writer.writeLE16(0x01);  // File Version Number
     writer.writeLE8(!subDir->isFile() ? 0x02
                                       : (isSystemFile ? 0x10 : 0));  // File Characteristics, 'directory' bit (1-th)
