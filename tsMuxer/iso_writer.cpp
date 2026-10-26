@@ -639,6 +639,8 @@ int32_t FileEntryInfo::write(const uint8_t* data, const int32_t len)
         if (!held.empty())
             write(held.data(), static_cast<int32_t>(held.size()));
     }
+    if (len > 0 && m_sectorBufferSize == 0 && m_owner->m_lastWritedObjectID != static_cast<int>(m_objectId))
+        m_owner->beforePiece(this);
     // Dual-layer guard band: if this write would reach the zero-fill zone around the BD-R DL
     // layer break, cut the file at a sector-aligned file offset (UDF allocation descriptors
     // only allow non-final extents to be whole sectors), pad the zone, and continue the file
@@ -649,10 +651,18 @@ int32_t FileEntryInfo::write(const uint8_t* data, const int32_t len)
         const int head = (SECTOR_SIZE - m_sectorBufferSize) % SECTOR_SIZE;
         if (head < len)
         {
+            int32_t done = head;
             if (head > 0)
                 writeImpl(data, head);  // fill the current sector to reach alignment
-            m_owner->checkLayerBreakPoint(len - head);
-            writeImpl(data + head, len - head);
+            // The data runs on up to the place of the metadata mirror, so that the mirror ends layer 0
+            const int64_t room = m_owner->bytesBeforeMirror();
+            if (room > 0 && room < len - done)
+            {
+                writeImpl(data + done, static_cast<int32_t>(room));
+                done += static_cast<int32_t>(room);
+            }
+            m_owner->checkLayerBreakPoint(len - done);
+            writeImpl(data + done, len - done);
             return len;
         }
         // write too small to reach a sector boundary: defer, a later write re-tests
@@ -690,6 +700,7 @@ int32_t FileEntryInfo::writeImpl(const uint8_t* data, const int32_t len)
         }
     }
     m_owner->m_lastWritedObjectID = m_objectId;
+    m_owner->m_lastWritedEntry = this;
     m_fileSize += len;
     int32_t writeLen = len;
 
@@ -743,6 +754,7 @@ void FileEntryInfo::close()
         m_owner->writeRawData(m_sectorBuffer, SECTOR_SIZE);
         m_sectorBufferSize = 0;
     }
+    m_closed = true;
 }
 
 void FileEntryInfo::setSubMode(const bool value) { m_subMode = value; }
@@ -1009,6 +1021,7 @@ bool IsoWriter::open(const std::string& fileName, const int64_t diskSize, const 
         (std::max)(ALLOC_BLOCK_SIZE, static_cast<int>(roundUp64(48 + 16LL * (m_metadataFileLen / SECTOR_SIZE),
                                                                 static_cast<uint64_t>(ALLOC_BLOCK_SIZE))));
     for (int i = 0; i < m_mappingReserve / SECTOR_SIZE; ++i) m_file.write(m_buffer, SECTOR_SIZE);
+    m_dataStartLbn = imageLBA();
 
     m_opened = true;
     return true;
@@ -1260,17 +1273,32 @@ void IsoWriter::close()
     writeDeferredFiles();
 
     memset(m_buffer, 0, sizeof(m_buffer));
-    while (m_file.size() % ALLOC_BLOCK_SIZE != 1024LL * 62) m_file.write(m_buffer, SECTOR_SIZE);
+    if (m_mirrorPlaced)
+    {
+        // The mirror is inside the data, at the end of layer 0 (placeMirrorHere), and its sectors are kept: its file
+        // entry goes in front of them. The partition ends on a 64 KB boundary.
+        while (m_file.size() % ALLOC_BLOCK_SIZE != 0) m_file.write(m_buffer, SECTOR_SIZE);
+        const int64_t endPos = m_file.size();
+        m_file.seek(static_cast<int64_t>(m_metadataMirrorLBN - 1) * SECTOR_SIZE);
+        m_tagLocationBaseAddr = m_partitionStartAddress;
+        writeExtendedFileEntryDescriptor(false, 0, FileTypes::MetadataMirror, m_metadataFileLen,
+                                         m_metadataMirrorLBN - m_partitionStartAddress, 0);
+        m_file.seek(endPos);
+    }
+    else
+    {
+        while (m_file.size() % ALLOC_BLOCK_SIZE != 1024LL * 62) m_file.write(m_buffer, SECTOR_SIZE);
 
-    // mirror metadata file location and length
-    m_metadataMirrorLBN = static_cast<int>(m_file.size() / SECTOR_SIZE + 1);
-    m_tagLocationBaseAddr = m_partitionStartAddress;
-    writeExtendedFileEntryDescriptor(false, 0, FileTypes::MetadataMirror, m_metadataFileLen,
-                                     m_metadataMirrorLBN - m_partitionStartAddress, 0);
+        // mirror metadata file location and length
+        m_metadataMirrorLBN = static_cast<int>(m_file.size() / SECTOR_SIZE + 1);
+        m_tagLocationBaseAddr = m_partitionStartAddress;
+        writeExtendedFileEntryDescriptor(false, 0, FileTypes::MetadataMirror, m_metadataFileLen,
+                                         m_metadataMirrorLBN - m_partitionStartAddress, 0);
 
-    // allocate space for metadata mirror file
-    memset(m_buffer, 0, sizeof(m_buffer));
-    for (int i = 0; i < m_metadataFileLen / SECTOR_SIZE; ++i) m_file.write(m_buffer, SECTOR_SIZE);
+        // allocate space for metadata mirror file
+        memset(m_buffer, 0, sizeof(m_buffer));
+        for (int i = 0; i < m_metadataFileLen / SECTOR_SIZE; ++i) m_file.write(m_buffer, SECTOR_SIZE);
+    }
 
     m_partitionEndAddress = static_cast<int>(m_file.size() / SECTOR_SIZE);
 
@@ -1892,10 +1920,12 @@ int64_t IsoWriter::currentImageLBA() const { return imageLBA(); }
 
 bool IsoWriter::nearLayerBreak(const int upcomingBytes) const
 {
-    if (m_layerBreakSuppressed || m_layerBreakPoints.empty())
+    if (m_layerBreakSuppressed)
         return false;
     const int64_t lbn = imageLBA();
     const int64_t lenSectors = (static_cast<int64_t>(upcomingBytes) + SECTOR_SIZE - 1) / SECTOR_SIZE;
+    if (int64_t mirrorStart = 0; mirrorPending(mirrorStart) && lbn + lenSectors > mirrorStart)
+        return true;
     for (size_t i = 0; i < m_layerBreakPoints.size(); ++i)
     {
         int64_t zoneStart = 0, zoneEnd = 0;
@@ -1914,6 +1944,15 @@ bool IsoWriter::nearLayerBreak(const int upcomingBytes) const
 // 128 GB has 3. Must only be called at a sector-aligned file offset - FileEntryInfo::write()
 // guarantees that.
 void IsoWriter::writeZeroPad(const int64_t sectors)
+{
+    // A pad that would run over the place of the metadata mirror leaves the mirror there and goes on behind it. The
+    // callers place it first, so this is only a backstop.
+    const int64_t endLbn = imageLBA() + sectors;
+    placeMirrorBefore(endLbn);
+    fillZeroSectors(endLbn - imageLBA());
+}
+
+void IsoWriter::fillZeroSectors(const int64_t sectors)
 {
     if (sectors <= 0)
     {
@@ -1949,10 +1988,12 @@ void IsoWriter::writeZeroPad(const int64_t sectors)
 
 void IsoWriter::checkLayerBreakPoint(const int maxExtentSize)
 {
+    const int64_t lenSectors = (static_cast<int64_t>(maxExtentSize) + SECTOR_SIZE - 1) / SECTOR_SIZE;
+    // The mirror comes first: it ends where the guard zone of the break begins
+    placeMirrorBefore(imageLBA() + lenSectors);
     if (m_layerBreakPoints.empty())
         return;
     const int64_t lbn = imageLBA();
-    const int64_t lenSectors = (static_cast<int64_t>(maxExtentSize) + SECTOR_SIZE - 1) / SECTOR_SIZE;
     for (size_t i = 0; i < m_layerBreakPoints.size(); ++i)
     {
         const int bp = m_layerBreakPoints[i];
@@ -1974,6 +2015,7 @@ void IsoWriter::padBeforeInterleavedPair(const int64_t pairBytes)
     // Clamped rather than refused: the value only decides whether the coming pair reaches the
     // guard zone, and a clamp can make that test eager, never blind.
     const int upcoming = pairBytes > INT32_MAX ? INT32_MAX : static_cast<int>(pairBytes);
+    m_pairsPlaced = true;  // the mirror, too, goes between two pairs here
     checkLayerBreakPoint(upcoming);
 }
 
@@ -2034,6 +2076,7 @@ bool IsoWriter::padOverZoneIfFileCrosses(const int64_t fileSizeBytes, const int6
         }
         if (maxEmptySectors >= 0 && zoneStart - lbn > maxEmptySectors)
             return false;
+        placeMirrorBefore(zoneEnd);
         const int64_t padStart = imageLBA();
         m_layerBreakPads.push_back({bp, padStart, zoneEnd});
         writeZeroPad(zoneEnd - padStart);
@@ -2043,6 +2086,88 @@ bool IsoWriter::padOverZoneIfFileCrosses(const int64_t fileSizeBytes, const int6
 }
 
 void IsoWriter::setLayerBreakPoints(const std::vector<int>& lbns) { m_layerBreakPoints = lbns; }
+
+// The mirror of the metadata is the second copy of the file system. Behind the data of an image of two layers it lay
+// at the end of layer 1, which on a disc of opposite track path is next to the centre, the same place as the main copy
+// at the start of layer 0, so a damaged inner edge could take both. An image whose data reaches the end of layer 0
+// holds the mirror there now, at the outer edge, and the data goes on behind it: the file that runs into it is cut
+// into two extents around it, the way a layer break guard cuts it.
+void IsoWriter::setMetadataMirrorBreak(const int lbn) { m_mirrorBreakLbn = lbn; }
+
+bool IsoWriter::mirrorGap(int64_t& from, int64_t& to) const
+{
+    from = m_mirrorGapStart;
+    to = m_mirrorGapEnd;
+    return m_mirrorPlaced;
+}
+
+// Whether the mirror is still to go inside the data, and the first sector of its place: one 64 KB block for its file
+// entry, which takes the last sector of it, then the mirror itself, ending where layer 0 ends, or where the guard zone
+// in front of the break begins
+bool IsoWriter::mirrorPending(int64_t& zoneStart) const
+{
+    if (m_mirrorPlaced || m_mirrorBreakLbn <= 0)
+        return false;
+    constexpr int64_t SECTORS_PER_BLOCK = ALLOC_BLOCK_SIZE / SECTOR_SIZE;
+    int64_t end = m_mirrorBreakLbn;
+    for (size_t i = 0; i < m_layerBreakPoints.size(); ++i)
+    {
+        int64_t guardStart = 0, guardEnd = 0;
+        guardZone(i, guardStart, guardEnd);
+        if (guardStart < end && guardEnd >= end)
+            end = guardStart;
+    }
+    end -= end % SECTORS_PER_BLOCK;
+    zoneStart = end - m_metadataFileLen / SECTOR_SIZE - SECTORS_PER_BLOCK;
+    return zoneStart >= m_dataStartLbn;
+}
+
+// The whole sectors a write can still take before the place of the mirror, or -1 when there is none ahead
+int64_t IsoWriter::bytesBeforeMirror() const
+{
+    int64_t zoneStart = 0;
+    if (m_layerBreakSuppressed || !mirrorPending(zoneStart) || zoneStart <= imageLBA())
+        return -1;
+    return (zoneStart - imageLBA()) * SECTOR_SIZE;
+}
+
+// The mirror goes here: its file entry in the last sector before the next 64 KB boundary, the mirror from that
+// boundary on. Its sectors are left empty until close() writes them; the data goes on behind them.
+void IsoWriter::placeMirrorHere()
+{
+    constexpr int64_t SECTORS_PER_BLOCK = ALLOC_BLOCK_SIZE / SECTOR_SIZE;
+    const int64_t from = imageLBA();
+    const auto mirrorLbn = static_cast<int64_t>(roundUp64(from + 1, SECTORS_PER_BLOCK));
+    const int64_t to = mirrorLbn + m_metadataFileLen / SECTOR_SIZE;
+    m_mirrorPlaced = true;
+    m_metadataMirrorLBN = static_cast<int>(mirrorLbn);
+    m_mirrorGapStart = from;
+    m_mirrorGapEnd = to;
+    fillZeroSectors(to - from);
+}
+
+// Puts the mirror here when what comes next, up to endLbn, would reach its place
+void IsoWriter::placeMirrorBefore(const int64_t endLbn)
+{
+    int64_t zoneStart = 0;
+    if (!m_layerBreakSuppressed && mirrorPending(zoneStart) && endLbn > zoneStart)
+        placeMirrorHere();
+}
+
+// Called before the first write of each piece of a file. The pieces of a 3D pair are written in turn, and the mirror
+// has to fall between two pairs: cutting a piece would leave one view with a piece more than the other, and the .ssif
+// could not be made from them. So the stream that leads the pairs puts the mirror in front of a pair that could reach
+// its place. A 2D stream leads its own pieces, and only a file that starts close to the mirror is moved behind it.
+void IsoWriter::beforePiece(FileEntryInfo* entry)
+{
+    if (entry->m_fileSize == 0 && entry->m_extents.empty())
+        entry->m_leadsPieces =
+            !(m_lastWritedEntry && m_lastWritedEntry != entry &&
+              m_lastWritedEntry->m_fileType == FileTypes::RealtimeFile && !m_lastWritedEntry->m_closed);
+    if (entry->m_fileType != FileTypes::RealtimeFile || !entry->m_leadsPieces || m_pairsPlaced)
+        return;
+    placeMirrorBefore(imageLBA() + MIRROR_LOOKAHEAD_BYTES / SECTOR_SIZE);
+}
 
 void IsoWriter::setLayerBreakGuards(const std::vector<int>& beforeSectors, const std::vector<int>& afterSectors)
 {

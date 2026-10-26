@@ -2428,7 +2428,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
     }
     BlurayHelper helper;
     if (!helper.open(outIso, DiskType::BLURAY, total, extraISOBlocks, opt.reproducibleHeader, layerBreakGuardMB,
-                     layerBreakLbns, layerBreakGuardBeforeMB))
+                     layerBreakLbns, layerBreakGuardBeforeMB, discCapacitySectors > 0 ? discCapacitySectors * 2048 : 0))
     {
         LTRACE(LT_ERROR, 2, "Can't create output ISO " << outIso);
         return -1;
@@ -2535,6 +2535,8 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
     iso->writeDeferredFiles();
 
     const auto pads = iso->layerBreakPads();  // copy: helper.close() finalizes the writer
+    int64_t mirrorFrom = 0, mirrorTo = 0;     // the sectors the metadata mirror took out of the data, if any
+    const bool mirrorInData = iso->mirrorGap(mirrorFrom, mirrorTo);
     helper.close();
 
     // Human-readable map of every guard pad: which break, how much fill on each side, which file it
@@ -2575,6 +2577,8 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
                     for (const auto& p2 : pads)
                         if (p2.padStartLbn > ranges[j].startLbn && p2.padStartLbn < pad.padStartLbn)
                             off -= (p2.padEndLbn - p2.padStartLbn) * 2048;
+                    if (mirrorInData && mirrorFrom >= ranges[j].dataLbn && mirrorFrom < pad.padStartLbn)
+                        off -= (mirrorTo - mirrorFrom) * 2048;
                     loc = "inside " + items[j].rel + " at file offset " + std::to_string(off);
                     uint64_t pcr0 = 0, pcrX = 0;
                     if (isM2ts(items[j].rel) && findM2tsPcrMedian(items[j].full, 0, +1, &pcr0) &&

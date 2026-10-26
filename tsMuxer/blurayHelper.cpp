@@ -371,6 +371,17 @@ bool BlurayHelper::open(const string& dst, const DiskType dt, const int64_t disk
             else
                 m_isoWriter->setLayerBreakGuard(afterSectors);
         }
+        // The metadata mirror goes at the end of layer 0 of an image that reaches it: the first break given, or the
+        // first of the disc the size names, or that of a BD-R DL. A disc of one layer, or of a size whose breaks are
+        // not known, keeps the mirror behind the data.
+        std::vector<int> mirrorBreaks = layerBreakLbns;
+        if (mirrorBreaks.empty())
+        {
+            std::string warning, error;
+            mirrorBreaks = defaultLayerBreaks(discBytes, warning, error);
+        }
+        if (!mirrorBreaks.empty())
+            m_isoWriter->setMetadataMirrorBreak(mirrorBreaks.front());
         return m_isoWriter->open(m_dstPath, diskSize, extraISOBlocks);
     }
     // A FOLDER destination. The guard works by writing zeros at particular sector positions and only

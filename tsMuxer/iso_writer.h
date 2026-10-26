@@ -30,6 +30,10 @@ static constexpr int SUB_INTERLEAVE_BLOCKSIZE = 6144 * 1312;
 // the files they copy. Past this much the rest is written where it stands.
 static constexpr int64_t MAX_DEFERRED_BYTES = 256 * 1024 * 1024;
 
+// How far ahead of the mirror's place the start of a piece of a stream that leads a 3D pair puts the mirror: more than
+// a pair of pieces can hold, so that no piece is cut and both views stay in step
+static constexpr int64_t MIRROR_LOOKAHEAD_BYTES = 2LL * (MAIN_INTERLEAVE_BLOCKSIZE + SUB_INTERLEAVE_BLOCKSIZE);
+
 static constexpr int MAX_MAIN_MUXER_RATE = 48000000;
 static constexpr int MAX_4K_MUXER_RATE = 109000000;
 static constexpr int MAX_SUBMUXER_RATE = 35000000;
@@ -181,8 +185,10 @@ struct FileEntryInfo
     int64_t m_fileSize;
     uint8_t* m_sectorBuffer;
     int m_sectorBufferSize;
-    bool m_subMode;           // sub file in stereo interleaved mode
-    bool m_deferred = false;  // a BDMV/BACKUP copy: held in m_deferredData until IsoWriter::writeDeferredFiles
+    bool m_subMode;              // sub file in stereo interleaved mode
+    bool m_deferred = false;     // a BDMV/BACKUP copy: held in m_deferredData until IsoWriter::writeDeferredFiles
+    bool m_closed = false;       // close() has run
+    bool m_leadsPieces = false;  // a stream whose first piece followed no open stream: the first view of a 3D pair
     std::vector<uint8_t> m_deferredData;
 };
 
@@ -262,6 +268,13 @@ class IsoWriter
     void padBeforeInterleavedPair(int64_t pairBytes);
     [[nodiscard]] int64_t currentImageLBA() const;
 
+    // The first layer break of the disc, in absolute image sectors, or 0 for a disc of one layer. An image whose data
+    // reaches it holds the mirror of its metadata inside the data, at the end of layer 0, and the data goes on behind
+    // the mirror; a smaller image holds the mirror behind its data, as before.
+    void setMetadataMirrorBreak(int lbn);
+    // The sectors [from, to) the mirror took out of the data, in absolute image sectors; false when it is behind it
+    bool mirrorGap(int64_t& from, int64_t& to) const;
+
    private:
     enum class Partition
     {
@@ -273,6 +286,11 @@ class IsoWriter
     int writeRawData(const uint8_t* data, int size);
     void checkLayerBreakPoint(int maxExtentSize);
     [[nodiscard]] bool nearLayerBreak(int upcomingBytes) const;
+    [[nodiscard]] bool mirrorPending(int64_t& zoneStart) const;
+    [[nodiscard]] int64_t bytesBeforeMirror() const;
+    void placeMirrorHere();
+    void placeMirrorBefore(int64_t endLbn);
+    void beforePiece(FileEntryInfo* entry);
     [[nodiscard]] int64_t imageLBA() const;
     void writePrimaryVolumeDescriptor();
     void writeAnchorVolumeDescriptor(uint32_t endPartitionAddr);
@@ -338,6 +356,13 @@ class IsoWriter
     int m_curMetadataPos;
     int m_tagLocationBaseAddr;
     int m_lastWritedObjectID;
+    FileEntryInfo* m_lastWritedEntry = nullptr;
+    int m_mirrorBreakLbn = 0;      // setMetadataMirrorBreak
+    int64_t m_dataStartLbn = 0;    // the first sector open() leaves for data
+    bool m_mirrorPlaced = false;   // the mirror is inside the data, at m_metadataMirrorLBN
+    int64_t m_mirrorGapStart = 0;  // the sectors it took out of the data
+    int64_t m_mirrorGapEnd = 0;
+    bool m_pairsPlaced = false;  // the caller places 3D pairs itself (padBeforeInterleavedPair)
 
     std::map<int, MappingEntry> m_mappingEntries;
     std::vector<FileEntryInfo*> m_deferredFiles;  // the BDMV/BACKUP copies held back, in the order they were opened
@@ -361,6 +386,7 @@ class IsoWriter
     // may live, so moving one does not protect it, it destroys the image.
     bool m_layerBreakSuppressed;
     void writeZeroPad(int64_t sectors);  // shared zero-fill used by both pad paths
+    void fillZeroSectors(int64_t sectors);
 };
 
 class ISOFile final : public AbstractOutputStream
