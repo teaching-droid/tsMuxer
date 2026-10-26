@@ -218,6 +218,8 @@ class H264StreamReader final : public MPEGStreamReader
     uint8_t* m_OffsetMetadataPtsAddr;
     std::vector<uint8_t> m_decodedSliceHeader;
     int m_removalDelay;
+    bool m_ppsSinceAU = false;   // a PPS was read since the last access unit was written (writeAdditionData)
+    bool m_secondField = false;  // the picture read last is the second field of a frame
 
     // The coded picture buffer of H.264 Annex C, as the HRD of the SPS written describes it, for the initial delays of
     // the buffering period SEI written with insertSEI and forceSEI. One schedule per CPB of the NAL HRD (every byte of

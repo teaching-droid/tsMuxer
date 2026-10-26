@@ -588,17 +588,21 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
     {
         needInsSpsPps = spsDiscontinue || (replaceToOwnSPS() && srcSpsPpsFound);
     }
+    // With the parameter sets replaced, the stream's own PPS units are left out (skipNal), and they were written again
+    // only at an I picture. A stream that sends a changed PPS at another picture (a P picture in the middle of a GOP)
+    // had its pictures up to the next I picture decoded with the old one: a disc stream gave hundreds of decoder
+    // errors. The PPS units are now written at each picture whose own came before it.
+    const bool needInsPps = !needInsSpsPps && replaceToOwnSPS() && m_ppsSinceAU && m_lastSlicePPS != UINT_MAX;
+    m_ppsSinceAU = false;
 
-    if (needInsSpsPps)
+    if (needInsSpsPps || needInsPps)
     {
-        avPacket.flags |= AVPacket::IS_SPS_PPS_IN_GOP;
-
         // Why the check for 250 : unless we see the 2nd IDR frame, we can only see that the stream runs with open GOPs
         // (open GOPs with one IDR at start for the whole movie do happen). That's why there's also a check that there's
         // a SPS before for the first I-frame in the first GOP in a normal stream. There's nothing scary about that - we
         // simply insert one more SPS - but in order to avoid outputting messages into the console, I left the check at
         // 250.
-        if (m_firstSPSWarn && m_totalFrameNum > 250)
+        if (needInsSpsPps && m_firstSPSWarn && m_totalFrameNum > 250)
         {
             m_firstSPSWarn = false;
             if (spsDiscontinue)
@@ -606,14 +610,19 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
                 LTRACE(LT_INFO, 2, "H264 bitstream changed: insert SPS/PPS units");
             }
         }
-        SPSUnit* sps = m_spsMap.find(m_lastSliceSPS)->second;
-        if (dstEnd - curPos < 4)
-            THROW(ERR_COMMON, "H264 stream error: Not enough buffer for write headers")
-        curPos = writeNalPrefix(curPos);
-        int sRez = sps->serializeBuffer(curPos, dstEnd, false);
-        if (sRez == -1)
-            THROW(ERR_COMMON, "H264 stream error: Not enough buffer for write headers")
-        curPos += sRez;
+        int sRez;
+        if (needInsSpsPps)
+        {
+            avPacket.flags |= AVPacket::IS_SPS_PPS_IN_GOP;
+            SPSUnit* sps = m_spsMap.find(m_lastSliceSPS)->second;
+            if (dstEnd - curPos < 4)
+                THROW(ERR_COMMON, "H264 stream error: Not enough buffer for write headers")
+            curPos = writeNalPrefix(curPos);
+            sRez = sps->serializeBuffer(curPos, dstEnd, false);
+            if (sRez == -1)
+                THROW(ERR_COMMON, "H264 stream error: Not enough buffer for write headers")
+            curPos += sRez;
+        }
 
         // PPSUnit* pps = m_ppsMap.find(m_lastSlicePPS)->second;
         // curPos = writeNalPrefix(curPos);
@@ -1540,6 +1549,10 @@ bool H264StreamReader::skipNal(uint8_t* nal)
     if (!m_needSeiCorrection)
         return false;
 
+    // A PPS before the second field of a frame stays where it is: nothing is written in front of that field, and a
+    // stream may send a changed PPS there (the second field of an IDR frame), which its slices are read with.
+    if (nalType == NALUnit::NALType::nuPPS && m_secondField)
+        return false;
     if (nalType == NALUnit::NALType::nuPPS || nalType == NALUnit::NALType::nuSPS ||
         nalType == NALUnit::NALType::nuSubSPS)
     {
@@ -1852,6 +1865,13 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
 
     if (slice.first_mb_in_slice != 0)
         return 0;
+
+    // The second field of a frame goes into the packet of the first, so nothing is written in front of it, and the
+    // units the stream has in front of it are kept there (skipNal)
+    const bool secondField = slice.m_field_pic_flag && m_fieldFirst != slice.bottom_field_flag;
+    if (secondField && !m_secondField)
+        m_ppsSinceAU = false;  // a PPS read since the frame was written is one of this field, and stays in place
+    m_secondField = secondField;
 
     if (m_fieldFirst != slice.bottom_field_flag)  // insrease PTS/DTS only for whole frame
         return 0;
@@ -2456,6 +2476,7 @@ int H264StreamReader::processPPS(uint8_t* buff)
     }
     delete m_ppsMap[pps->pic_parameter_set_id];
     m_ppsMap[pps->pic_parameter_set_id] = pps;
+    m_ppsSinceAU = true;
     return 0;
 }
 
