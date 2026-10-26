@@ -2,6 +2,7 @@
 #define TS_DEMUXER_H
 
 #include <cmath>
+#include <cstdint>
 #include <map>
 #include <set>
 #include <string>
@@ -160,6 +161,9 @@ class TSDemuxer final : public AbstractDemuxer
         int64_t stepBytes = 0;     // the bytes of the sound of the PES (of one time) that gave the step
         int64_t pesBytes = 0;      // the bytes of the sound of the PES (of one time) being read
         bool sizedFrames = false;  // a constant bit rate: the size of a PES tells its length
+        // where the sound of the file being read is on the timeline of the join, less its own times; INT64_MIN: not
+        // known
+        int64_t onTimeline = INT64_MIN;
     };
     std::map<int, JoinSound> m_joinSound;
     uint8_t m_joinSoundPid[8192]{};  // the PID has a JoinSound
@@ -188,7 +192,8 @@ class TSDemuxer final : public AbstractDemuxer
     std::map<int, SoundGap> m_soundGap;
     int64_t m_gapVideoPrev = -1;  // the decoding time of the first video's PES before
     int m_videoJumps = 0;         // how often the first video's time jumped (a discontinuity), see noteSoundGap
-    void noteSoundGap(int pid, int64_t pts);
+    void noteSoundGap(int pid, int64_t pts, bool cutPart);
+    int64_t soundPause(int pid, int64_t pts, int64_t& end);
     // The sound of a file whose first PES does not begin with a frame (skipsLeadingPes)
     static constexpr uint8_t LEAD_PES_MAX = 4;
     static constexpr uint8_t LEAD_PES_DONE = 0xFF;

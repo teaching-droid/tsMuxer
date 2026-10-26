@@ -709,19 +709,27 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
         const bool joinSound = !timeline && m_joinFiles.size() > 1 && m_joinShiftKnown && blockNs != AV_NOPTS_VALUE &&
                                tracks[track]->type == IOContextTrackType::AUDIO &&
                                (isJoinTimedCodec(tracks[track]) || delayCodec || varCodec);
-        if (!timeline && m_joinFiles.size() <= 1 && blockNs != AV_NOPTS_VALUE)
+        if (!timeline && blockNs != AV_NOPTS_VALUE)
         {
             if (isVideo && (m_gapVideoTrack == -1 || m_gapVideoTrack == track))
-            {
-                // a jump of the picture's own time, forwards or back, is a discontinuity, not a gap
-                m_gapVideoTrack = track;
-                if (m_gapVideoPrev != INT64_MIN &&
-                    (blockNs - m_gapVideoPrev > INT64_C(2000000000) || blockNs < m_gapVideoPrev - INT64_C(2000000000)))
-                    m_videoJumps++;
-                m_gapVideoPrev = blockNs;
-            }
-            else if (tracks[track]->type == IOContextTrackType::AUDIO && isJoinTimedCodec(tracks[track]))
+                noteGapVideo(track, blockNs);
+            else if (tracks[track]->type == IOContextTrackType::AUDIO && isJoinTimedCodec(tracks[track]) &&
+                     m_joinFiles.size() <= 1)
                 noteSoundGap(track + 1, blockNs);
+            // A pause inside a part of a join, on the part's own clock: put where the sound before it ends on the
+            // timeline of the join (keepJoinSound)
+            else if (tracks[track]->type == IOContextTrackType::AUDIO && isJoinTimedCodec(tracks[track]))
+            {
+                if (const int64_t pause = soundPause(track + 1, blockNs); pause > 0 && joinSound)
+                    m_joinSound[track + 1].pause = true;
+                else if (pause > 0)
+                    THROW(ERR_COMMON,
+                          "Track " << track + 1 << " in file " << m_joinPart + 1 << " of the join has no data for "
+                                   << (pause + 500000) / 1000000
+                                   << " ms while the picture goes on, and where its sound after that comes cannot be "
+                                      "told: a file of the join before it has no picture to put its sound against. "
+                                      "Mux the files of the join one by one.")
+            }
         }
         const int64_t laceLenNs =
             tracks[track]->default_duration > 0 ? static_cast<int64_t>(tracks[track]->default_duration)
@@ -798,6 +806,22 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
                 }
                 if (timecode != AV_NOPTS_VALUE && m_firstTimecode.find(tracks[track]->num) == m_firstTimecode.end())
                     m_firstTimecode[tracks[track]->num] = timecode;
+                // ** A PAUSE IN A FILE READ AS ITS ORDERED EDITION STOPS THE JOB. ** The sound of its parts follows
+                // on from the sound handed on before it, not from its own picture, so where the sound after a pause
+                // of more than 10 seconds comes cannot be told there: it came straight after the sound before it.
+                if (n == 0 && laceNs != AV_NOPTS_VALUE && isVideo &&
+                    (m_gapVideoTrack == -1 || m_gapVideoTrack == track))
+                    noteGapVideo(track, laceNs);
+                else if (n == 0 && laceNs != AV_NOPTS_VALUE && tracks[track]->type == IOContextTrackType::AUDIO &&
+                         isJoinTimedCodec(tracks[track]))
+                    if (const int64_t pause = soundPause(track + 1, laceNs); pause > 0)
+                        THROW(ERR_COMMON,
+                              "Track " << track + 1 << " has no data for " << (pause + 500000) / 1000000
+                                       << " ms while the picture goes on, in a file read as its ordered edition, and "
+                                          "where its sound after that comes cannot be told there: tsMuxeR puts such "
+                                          "a pause at its own time in a file read as it is stored or in a join of "
+                                          "files only. Mux the file to Matroska with --keep-editions, which reads it "
+                                          "as it is stored and keeps its edition.")
             }
             else if (joinSound &&
                      !keepJoinSound(track + 1, frameNs, frameLenNs, leadNs, opus && n == laces - 1 ? discardNs : 0,
@@ -1491,8 +1515,16 @@ void MatroskaDemuxer::nextJoinPart()
     m_partVideoOn = m_partVideoDone = false;
     for (auto& [track, sound] : m_joinSound)
     {
-        sound.started = sound.offered = false;
+        sound.started = sound.offered = sound.pause = false;
         sound.vorbisFilePrev = 0;
+    }
+    // each file of a plain join has its own clock: a pause of the sound is looked for in each on its own
+    // (soundPause). The parts of an ordered edition are looked at as one: where the picture's time jumps from one
+    // part to the next, that is a discontinuity (noteGapVideo), not a pause.
+    if (m_joinFiles.size() > 1 && m_joinRanges.empty())
+    {
+        m_soundGap.clear();
+        m_gapVideoPrev = INT64_MIN;
     }
     if (++m_joinPart >= m_joinFiles.size())
         return;
@@ -1696,6 +1728,23 @@ bool MatroskaDemuxer::keepJoinSound(const int track, const int64_t ns, const int
         sound.started = true;
         sound.prev = -1;
     }
+    // ** AND A PAUSE INSIDE A PART OF THE JOIN GOES ON AT ITS OWN TIME TOO. ** As for the sound of one file
+    // (noteSoundGap): where the sound of a part pauses for more than 10 seconds while its picture goes on (soundPause),
+    // the track's times have a gap there. It was looked for in a file that is not joined only, so in a join the sound
+    // after such a pause came straight after the sound before it, up to a minute early. The gap begins where the sound
+    // handed on so far ends, as the reader counts it, and the frame after it comes at its place on the timeline.
+    else if (sound.pause && sound.end != -1 && ns + sound.shift > sound.end)
+    {
+        const int64_t gap = ns + sound.shift - sound.end;
+        m_timeGaps[track].emplace_back(sound.end - sound.origin, gap);
+        LTRACE(LT_INFO, 2,
+               "Track " << track << " in file " << m_joinPart + 1 << " of the join has no data from "
+                        << floatToTime(static_cast<double>(sound.end - sound.origin) / 1e9) << " for "
+                        << (gap + 500000) / 1000000
+                        << " ms, while the picture goes on: its sound goes on after a gap, at its own time.");
+        sound.end += gap;
+    }
+    sound.pause = false;
     if (sound.prev != -1 && ns > sound.prev && (sound.step <= 0 || ns - sound.prev < sound.step))
         sound.step = ns - sound.prev;
     if (sound.prev != -1 && ns > sound.prev)
@@ -1725,33 +1774,55 @@ bool MatroskaDemuxer::keepJoinSound(const int track, const int64_t ns, const int
 // Shorter gaps are left as they were. As TSDemuxer::noteSoundGap.
 void MatroskaDemuxer::noteSoundGap(const int track, const int64_t ns)
 {
+    if (const int64_t pause = soundPause(track, ns); pause > 0)
+    {
+        const int64_t end = ns - pause;
+        const int64_t origin = m_soundGap[track].origin;
+        m_timeGaps[track].emplace_back(end - origin, pause);
+        LTRACE(LT_INFO, 2,
+               "Track " << track << " has no data from " << floatToTime(static_cast<double>(end - origin) / 1e9)
+                        << " for " << (pause + 500000) / 1000000
+                        << " ms, while the picture goes on: its sound goes on after a gap, at its own time.");
+    }
+}
+
+// The first video's block at ns, for soundPause: a jump of the picture's own time, forwards or back, is a
+// discontinuity, not a gap
+void MatroskaDemuxer::noteGapVideo(const int track, const int64_t ns)
+{
+    m_gapVideoTrack = track;
+    if (m_gapVideoPrev != INT64_MIN &&
+        (ns - m_gapVideoPrev > INT64_C(2000000000) || ns < m_gapVideoPrev - INT64_C(2000000000)))
+        m_videoJumps++;
+    m_gapVideoPrev = ns;
+}
+
+// The pause of the sound of a track that ends with its block at ns, on the clock of the file: 0 for none. A pause is
+// longer than GAP_MIN, with the first video going on without a jump of its own time and near the time the sound comes
+// back at. It ends the step of its blocks after the block before it.
+int64_t MatroskaDemuxer::soundPause(const int track, const int64_t ns)
+{
     constexpr int64_t GAP_MIN = INT64_C(10000000000);
     SoundGap& sound = m_soundGap[track];
+    int64_t pause = 0;
     if (sound.origin == -1)
     {
         sound.origin = sound.prev = ns;
         sound.videoJumps = m_videoJumps;
-        return;
+        return 0;
     }
     if (ns > sound.prev)
     {
         // and the sound comes back where the picture is: a jump of the sound's own times is not a gap
         if (sound.step > 0 && ns - sound.prev > GAP_MIN && m_gapVideoTrack != -1 && sound.videoJumps == m_videoJumps &&
             std::llabs(ns - m_gapVideoPrev) < INT64_C(5000000000))
-        {
-            const int64_t end = sound.prev + sound.step;
-            m_timeGaps[track].emplace_back(end - sound.origin, ns - end);
-            LTRACE(LT_INFO, 2,
-                   "Track " << track << " has no data from "
-                            << floatToTime(static_cast<double>(end - sound.origin) / 1e9) << " for "
-                            << (ns - end + 500000) / 1000000
-                            << " ms, while the picture goes on: its sound goes on after a gap, at its own time.");
-        }
+            pause = ns - (sound.prev + sound.step);
         else if (sound.step <= 0 || ns - sound.prev < sound.step)
             sound.step = ns - sound.prev;
         sound.prev = ns;
     }
     sound.videoJumps = m_videoJumps;
+    return pause;
 }
 
 std::vector<int64_t> MatroskaDemuxer::takeTouchingCues(const int pid)

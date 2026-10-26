@@ -369,11 +369,17 @@ void TSDemuxer::endJoinFile()
                 sound.origin = sound.firstPts + onTimeline;
             sound.lastPes = sound.lastPts + onTimeline + sound.shift;
         }
-        else
+        // A file without sound of the track (a pause that lasts the whole file) keeps where the sound before ended:
+        // the sound of the next file starts after a gap, with its picture, and not where the sound before ends.
+        else if (sound.lastPts != -1 || !known || !m_joinBaseKnown)
             sound.lastPes = -1;
         sound.shift = 0;
         sound.firstPts = sound.lastPts = sound.prevPts = -1;
+        sound.onTimeline = INT64_MIN;
     }
+    // each file has its own clock: a pause of the sound is looked for in each file on its own (soundPause)
+    m_soundGap.clear();
+    m_gapVideoPrev = -1;
     memset(m_joinDrop, 0, sizeof(m_joinDrop));
     // the sound of the next file may come before its first picture in the file: that picture is looked up first
     m_joinVideoStart = -1;
@@ -442,8 +448,31 @@ bool TSDemuxer::keepJoinSound(const int pid, const StreamType type, const int64_
                                              << (gap + 45) / 90 << " ms after the sound before it ends: it starts "
                                              << "after a gap, with its picture.");
             }
+            sound.onTimeline = m_joinBase - m_joinVideoStart + sound.shift;
         }
         sound.firstPts = pts;
+    }
+    // ** AND A PAUSE INSIDE A FILE OF THE JOIN GOES ON AT ITS OWN TIME TOO. ** As for the sound of one file
+    // (noteSoundGap): where the sound of a file pauses for more than 10 seconds while its picture goes on, the track's
+    // times have a gap there. It was looked for in the first file of one only, so in a join the sound after such a
+    // pause came straight after the sound before it, up to a minute early. The pause is put where the sound before it
+    // ends on the timeline of the join: the reader of the track counts from the first frame of the file that has its
+    // first sound, and from the start of each later file, where the joint put it (onTimeline).
+    int64_t end = 0;
+    if (const int64_t pause = soundPause(pid, pts, end); pause > 0)
+    {
+        if (sound.origin != -1 && sound.onTimeline == INT64_MIN)
+            THROW(ERR_COMMON, "Track " << pid << " in file " << m_curFileNum + 1 << " of the join has no data for "
+                                       << (pause + 45) / 90
+                                       << " ms while the picture goes on, and where its sound after that comes "
+                                          "cannot be told: a file of the join before it has no picture to put its "
+                                          "sound against. Mux the files of the join one by one.")
+        const int64_t at = sound.origin == -1 ? end - sound.firstPts : end + sound.onTimeline - sound.origin;
+        m_joinGaps[pid].emplace_back(at * 100000 / 9, pause * 100000 / 9);
+        LTRACE(LT_INFO, 2,
+               "Track " << pid << " in file " << m_curFileNum + 1 << " of the join has no data from "
+                        << floatToTime(static_cast<double>(at) / 90000.0) << " for " << (pause + 45) / 90
+                        << " ms, while the picture goes on: its sound goes on after a gap, at its own time.");
     }
     // the PES of one time are one frame, as a DTS-HD frame and its extension
     if (pts != sound.prevPts)
@@ -472,19 +501,44 @@ bool TSDemuxer::keepJoinSound(const int pid, const StreamType type, const int64_
 // on without a jump of its own time and is near the time the sound comes back at, the track's times have a gap there
 // (takeTimeGaps), as at a joint of a join. A jump of the picture's time too is a discontinuity of the clock, which is
 // left as it was, as are shorter gaps.
-void TSDemuxer::noteSoundGap(const int pid, const int64_t pts)
+void TSDemuxer::noteSoundGap(const int pid, const int64_t pts, const bool cutPart)
+{
+    int64_t end = 0;
+    if (const int64_t pause = soundPause(pid, pts, end); pause > 0)
+    {
+        // A join of files looks for it in each file (keepJoinSound). The sound of a later clip of a playlist, and of a
+        // clip a playlist cuts, is not put against its picture: it follows on from the sound handed on before it, so
+        // where the sound after the pause comes is not known. It came straight after the sound before the pause.
+        if (m_curFileNum > 0 || cutPart)
+            THROW(ERR_COMMON, "Track " << pid << " has no data for " << (pause + 45) / 90 << " ms in clip "
+                                       << m_curFileNum + 1
+                                       << " of the playlist while the picture goes on, and where its sound after "
+                                          "that comes cannot be told in a playlist that plays a part of a clip: "
+                                          "tsMuxeR puts such a pause at its own time in one file or in a join of "
+                                          "whole files only. Mux the playlist with --playlist-clips=whole, or its "
+                                          "clips as a join of their files.")
+        const int64_t origin = m_soundGap[pid].origin;
+        m_joinGaps[pid].emplace_back((end - origin) * 100000 / 9, pause * 100000 / 9);
+        LTRACE(LT_INFO, 2,
+               "Track " << pid << " has no data from " << floatToTime(static_cast<double>(end - origin) / 90000.0)
+                        << " for " << (pause + 45) / 90
+                        << " ms, while the picture goes on: its sound goes on after a gap, at its own time.");
+    }
+}
+
+// The pause of the sound of a track that ends with its PES at pts, on the clock of the file: 0 for none. end: where
+// the sound before it ends. A pause is longer than GAP_MIN, with the first video going on without a jump of its own
+// time and near the time the sound comes back at.
+int64_t TSDemuxer::soundPause(const int pid, const int64_t pts, int64_t& end)
 {
     constexpr int64_t GAP_MIN = 10 * 90000;
-    // In the first file only: the clips of a playlist each have times of their own, and the sound of a later one can
-    // come before its picture has shown the jump.
-    if (m_curFileNum > 0)
-        return;
     SoundGap& sound = m_soundGap[pid];
+    int64_t pause = 0;
     if (sound.origin == -1)
     {
         sound.origin = sound.prev = pts;
         sound.videoJumps = m_videoJumps;
-        return;
+        return 0;
     }
     if (pts > sound.prev)
     {
@@ -493,19 +547,15 @@ void TSDemuxer::noteSoundGap(const int pid, const int64_t pts)
         if (sound.step > 0 && pts - sound.prev > GAP_MIN && m_firstVideoPid != -1 && sound.videoJumps == m_videoJumps &&
             std::llabs(pts - m_gapVideoPrev) < 5 * 90000)
         {
-            const int64_t end = sound.prev + sound.step;
-            m_joinGaps[pid].emplace_back((end - sound.origin) * 100000 / 9, (pts - end) * 100000 / 9);
-            LTRACE(LT_INFO, 2,
-                   "Track " << pid << " has no data from "
-                            << floatToTime(static_cast<double>(end - sound.origin) / 90000.0) << " for "
-                            << (pts - end + 45) / 90
-                            << " ms, while the picture goes on: its sound goes on after a gap, at its own time.");
+            end = sound.prev + sound.step;
+            pause = pts - end;
         }
         else if (sound.step <= 0 || pts - sound.prev < sound.step)
             sound.step = pts - sound.prev;
         sound.prev = pts;
     }
     sound.videoJumps = m_videoJumps;
+    return pause;
 }
 
 std::vector<std::pair<int64_t, int64_t>> TSDemuxer::takeTimeGaps(const int pid)
@@ -748,6 +798,11 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     {
         if (isJoinOfFiles())
             endJoinFile();
+        else
+        {
+            m_soundGap.clear();  // each clip of a playlist has its own clock (noteSoundGap)
+            m_gapVideoPrev = -1;
+        }
         handedOn = clearSubtitlesAtPartEnd(demuxedData);
         if (m_curFileNum < m_mplsInfo.size())
             m_prevFileLen +=
@@ -998,8 +1053,8 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
                 isAudioStreamType(streamInfo->second.m_streamType) && isJoinOfFiles())
                 m_joinDrop[pid] = !keepJoinSound(pid, streamInfo->second.m_streamType, curPts);
             else if (m_acceptedPidCache[pid] && streamInfo != m_pmt.pidList.end() &&
-                     isAudioStreamType(streamInfo->second.m_streamType) && part == nullptr)
-                noteSoundGap(pid, curPts);
+                     isAudioStreamType(streamInfo->second.m_streamType))
+                noteSoundGap(pid, curPts, part != nullptr);
         }
         if (m_joinDrop[pid])
             return;

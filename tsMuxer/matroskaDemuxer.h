@@ -245,6 +245,7 @@ class MatroskaDemuxer final : public IOContextDemuxer
         int64_t excess = 0;        // what is not sound at the joints so far and is still played (a codec delay)
         bool offered = false;      // a frame of the track has come in the part
         bool started = false;      // a frame of the track has been kept in the part
+        bool pause = false;        // the sound of the part pauses before the frame that comes next (soundPause)
     };
     std::map<int, JoinSound> m_joinSound;  // by track (stream index)
     bool m_joinShiftKnown = true;  // where each part is put is known (m_joinShiftNs): a part of unknown length is not
@@ -262,6 +263,8 @@ class MatroskaDemuxer final : public IOContextDemuxer
     int m_gapVideoTrack = -1;
     int m_videoJumps = 0;  // how often the first video's time jumped, see noteSoundGap
     void noteSoundGap(int track, int64_t ns);
+    int64_t soundPause(int track, int64_t ns);
+    void noteGapVideo(int track, int64_t ns);
     bool keepJoinSound(int track, int64_t ns, int64_t lengthNs, int64_t leadNs = 0, int64_t padNs = 0,
                        bool readerTrims = false, bool counted = false, bool variable = false);
     static bool isJoinTimedCodec(const MatroskaTrack* track);
