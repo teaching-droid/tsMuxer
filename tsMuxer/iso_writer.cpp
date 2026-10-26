@@ -61,7 +61,7 @@ void writeDescriptorTag(uint8_t* buffer, DescriptorTag tag, const uint32_t tagLo
     buff16[0] = static_cast<uint16_t>(tag);
     buff16[1] = 0x03;  // version
     // skip check sum and reserved byte here
-    buff16[3] = 0x01;  // Tag Serial Number
+    buff16[3] = 0x03;  // Tag Serial Number
     // skip Descriptor CRC
     // Descriptor CRC Length
 
@@ -1502,7 +1502,8 @@ void IsoWriter::writePrimaryVolumeDescriptor()
     writer.setBuffer(m_buffer, sizeof(m_buffer));
     writer.writeDescriptorTag(DescriptorTag::PrimVol, absoluteSectorNum());
 
-    writer.writeLE32(0x00);  // Volume Descriptor Sequence Number
+    // The descriptors of the sequence are numbered 1 to 5 in the order they are written: PVD, IUVD, PD, LVD and USD
+    writer.writeLE32(0x01);  // Volume Descriptor Sequence Number
     writer.writeLE32(0x00);  // Primary Volume Descriptor Number
     writer.writeDString(m_volumeLabel, 32);
 
@@ -1556,7 +1557,7 @@ void IsoWriter::writeImpUseDescriptor()
     writeDescriptorTag(m_buffer, DescriptorTag::ImplUseVol, absoluteSectorNum());
 
     const auto buff32 = UnalignedPtr<uint32_t>(m_buffer);
-    buff32[4] = 0x01;  // Descriptor Sequence Number
+    buff32[4] = 0x02;  // Volume Descriptor Sequence Number
 
     const std::string impId = std::string("*UDF LV Info");
     m_buffer[20] = 0x00;
@@ -1583,7 +1584,7 @@ void IsoWriter::writePartitionDescriptor()
 
     const auto buff32 = UnalignedPtr<uint32_t>(m_buffer);
     const auto buff16 = UnalignedPtr<uint16_t>(m_buffer);
-    buff32[4] = 0x02;                                          // Descriptor Sequence Number
+    buff32[4] = 0x03;                                          // Volume Descriptor Sequence Number
     buff16[10] = 0x01;                                         // partition flags
     buff16[11] = 0x00;                                         // Partition Number
     strcpy(reinterpret_cast<char*>(m_buffer) + 25, "+NSR03");  // Partition Contents
@@ -1606,7 +1607,7 @@ void IsoWriter::writeLogicalVolumeDescriptor()
     const auto buff32 = UnalignedPtr<uint32_t>(m_buffer);
     const auto buff16 = UnalignedPtr<uint16_t>(m_buffer);
 
-    buff32[4] = 0x03;                                                           // Volume Descriptor Sequence Number
+    buff32[4] = 0x04;                                                           // Volume Descriptor Sequence Number
     strcpy(reinterpret_cast<char*>(m_buffer) + 21, "OSTA Compressed Unicode");  // Descriptor Character Set
     // Logical Volume Identifier
     writeDString(m_buffer + 84, m_volumeLabel.c_str(), 128);
@@ -1670,7 +1671,7 @@ void IsoWriter::writeUnallocatedSpaceDescriptor()
 
     const auto buff32 = UnalignedPtr<uint32_t>(m_buffer);
 
-    buff32[4] = 0x04;  // sequence number
+    buff32[4] = 0x05;  // Volume Descriptor Sequence Number
 
     calcDescriptorCRC(m_buffer, 24);
     m_file.write(m_buffer, SECTOR_SIZE);
