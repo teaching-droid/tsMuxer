@@ -107,6 +107,7 @@ class MatroskaMuxer final : public AbstractMuxer
         int64_t lastBlockRelMs = 0;   // the time of the track's last block, for a ReferenceBlock
         unsigned srcDisplayHeight = 0;
         unsigned srcStereoMode = 0;         // the source's StereoMode (srcstereomode), 0 when it gave none
+        unsigned srcAlphaMode = 0;          // the source's AlphaMode (srcalphamode), 0 when it gave none
         int64_t endPaddingNs = 0;           // DiscardPadding for the track's last block (Opus, Vorbis), from the source
         uint64_t srcCodecDelayNs = 0;       // CodecDelay from the source's edit list (srccodecdelay), AAC from MP4
         std::vector<uint8_t> srcAacConfig;  // the AudioSpecificConfig of HE-AAC the source names (srcaacsbr)

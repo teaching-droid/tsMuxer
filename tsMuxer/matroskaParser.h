@@ -146,6 +146,8 @@ static constexpr uint16_t MATROSKA_ID_VIDEOSTEREOMODE = 0x53B9;
 static constexpr uint16_t MATROSKA_ID_VIDEOSTEREOMODE_CURRENT = 0x53B8;
 static constexpr uint64_t MATROSKA_STEREO_BOTH_EYES_LEFT_FIRST = 13;
 static constexpr uint64_t MATROSKA_STEREO_BOTH_EYES_RIGHT_FIRST = 14;
+// 1: the BlockAdditions of the track with BlockAddID 1 hold an alpha channel (RFC 9559, AlphaMode)
+static constexpr uint16_t MATROSKA_ID_VIDEOALPHAMODE = 0x53C0;
 static constexpr uint16_t MATROSKA_ID_VIDEOASPECTRATIO = 0x54B3;
 static constexpr uint32_t MATROSKA_ID_VIDEOCOLOURSPACE = 0x2EB524;
 

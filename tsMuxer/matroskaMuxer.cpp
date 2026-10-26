@@ -452,6 +452,8 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
     }
     if (const auto src = params.find("srcstereomode"); src != params.end())
         track.srcStereoMode = static_cast<unsigned>(strtoul(src->second.c_str(), nullptr, 10));
+    if (const auto src = params.find("srcalphamode"); src != params.end())
+        track.srcAlphaMode = static_cast<unsigned>(strtoul(src->second.c_str(), nullptr, 10));
     // "default" already exists and is documented for Blu-ray; it just never reached Matroska.
     // Its VALUE is read now. Testing only for presence meant default=0 marked the track as THE
     // default, and it also meant "no default for this type" could not be said at all, because a
@@ -1571,6 +1573,10 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track, i
         // two views, which only the folded 3D track above does.
         else if (track.srcStereoMode >= 1 && track.srcStereoMode < MATROSKA_STEREO_BOTH_EYES_LEFT_FIRST)
             vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEOSTEREOMODE_CURRENT, track.srcStereoMode);
+        // The source's AlphaMode, where the track keeps the BlockAdditions that hold the alpha channel. It was
+        // dropped while the alpha blocks were kept, and a player that follows it showed the picture opaque.
+        if (track.srcAlphaMode != 0 && track.copyMaxBlockAddId >= 1)
+            vPos += ebml_write_uint(videoBuf + vPos, MATROSKA_ID_VIDEOALPHAMODE, track.srcAlphaMode);
 
         // Write Video master
         pos += ebml_write_master_open(inner.data() + pos, MATROSKA_ID_TRACKVIDEO, vPos);

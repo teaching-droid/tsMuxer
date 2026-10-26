@@ -2660,7 +2660,8 @@ static bool isKnownTrackParam(const std::string& name)
         "forced", "hearing-impaired", "visual-impaired", "text-descriptions", "original", "commentary", "srclang",
         "srclangbcp47", "srcdefault", "srcname", "srcflags", "srccolour", "srcdisplay", "srcendpadding", "srcpgsrate",
         "srccrop", "srcfieldorder", "srcprojection", "srccodecdelay", "srcvideolead", "srcopusskip", "srcrighteye",
-        "langbcp47", "srcvpxprivate", "srccodecid", "srcstartdelay", "srcstereomode", "srcstartms", "srcaacsbr",
+        "langbcp47", "srcvpxprivate", "srccodecid", "srcstartdelay", "srcstereomode", "srcalphamode", "srcstartms",
+        "srcaacsbr",
         // a part of a playlist's PG track (an eye of a stereo subtitle, an aligned subtitle), a picture-in-picture one
         "srcpgpart", "srcpip"};
     return known.find(name) != known.end();

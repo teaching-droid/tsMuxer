@@ -4333,6 +4333,7 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
         std::string crop, fieldOrder, projection;
         bool rightEyeFirst = false;
         uint64_t stereoMode = 0;
+        uint64_t alphaMode = 0;
         bool encrypted = false;
         for (const auto& [id, b, len] : elementsOf(entryBody, entrySize))
         {
@@ -4377,6 +4378,10 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
                     stereoMode = readUInt(vb, vlen);
                     rightEyeFirst = stereoMode == MATROSKA_STEREO_BOTH_EYES_RIGHT_FIRST;
                 }
+                // The alpha channel of a VP8 or VP9 track is kept in BlockAdditions, which a remux keeps; the
+                // AlphaMode that says so was dropped, and a player showed the picture opaque.
+                else if (vid == MATROSKA_ID_VIDEOALPHAMODE)
+                    alphaMode = readUInt(vb, vlen);
                 else if (vid == MATROSKA_ID_VIDEOPROJECTION && vlen > 0 && vlen <= 256)
                 {
                     // the whole element body as it stands, as hex
@@ -4479,6 +4484,8 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
             extras["srcrighteye"] = "1";
         if (stereoMode > 0 && stereoMode <= MATROSKA_STEREO_BOTH_EYES_RIGHT_FIRST)
             extras["srcstereomode"] = std::to_string(stereoMode);
+        if (alphaMode > 0)
+            extras["srcalphamode"] = std::to_string(alphaMode);
     }
 
     // Where each audio and video track starts against the first video track: the time of its first block less the
