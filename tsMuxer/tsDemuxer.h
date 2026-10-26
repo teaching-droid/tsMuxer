@@ -180,8 +180,21 @@ class TSDemuxer final : public AbstractDemuxer
     static constexpr uint8_t LEAD_PES_MAX = 4;
     static constexpr uint8_t LEAD_PES_DONE = 0xFF;
     uint8_t m_leadPes[8192]{};   // 0: not decided; 1 to LEAD_PES_MAX: PES left out so far; LEAD_PES_DONE: decided
-    uint8_t m_leadDrop[8192]{};  // the PES being read of the PID is left out, and the packets that carry the rest of it
-    bool skipsLeadingPes(int pid, StreamType type, const uint8_t* payload, const uint8_t* end);
+    uint8_t m_leadDrop[8192]{};  // the PES being read of the PID is held back, and the packets carrying its rest
+    // The packets of the PES held back, by PID, until the search ends (giveBackLeadPes)
+    std::map<int, std::vector<uint8_t>> m_leadHeld;
+    uint8_t m_leadFirstSeen[8192]{};  // the first PES held back of the PID came before any other PES of the file
+    enum class LeadPes
+    {
+        Hold,     // left out for now: no frame begins it, and the search goes on
+        Keep,     // it begins with a frame: read it, and drop the PES held before it
+        GiveBack  // the search ended without a frame: read the PES held before it, then this one
+    };
+    LeadPes skipsLeadingPes(int pid, StreamType type, const uint8_t* payload, const uint8_t* end);
+    void demuxPacket(uint8_t* pkt, int pid, DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,
+                     MemoryBlock*& vect, int& lastPid);
+    void giveBackLeadPes(int pid, DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,
+                         MemoryBlock*& vect, int& lastPid);
     // A packet sent twice (ISO/IEC 13818-1, 2.4.3.3): the continuity counter and a hash of the payload of the last
     // packet with payload of each PID, the counter 0xFF before the first
     uint8_t m_lastCounter[8192];

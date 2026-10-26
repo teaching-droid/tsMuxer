@@ -98,6 +98,9 @@ struct TrackInfo
     // Whether the container marked this track as its default one: -1 when it did not say, which is
     // every container that has no such flag. Only Matroska has one.
     int m_defaultFlag;
+    // A transport stream track of stream type 0x06 whose descriptor names its sound: the stream type that names the
+    // same codec, zero for none (PMTStreamInfo::m_soundDescriptor).
+    int m_soundDescriptor = 0;
     TrackInfo() : m_trackType(0), m_delay(0), m_dvbDescriptor(0), m_defaultFlag(-1) {}
     TrackInfo(const int trackType, const char* lang, const int64_t delay, const int dvbDescriptor = 0,
               const int defaultFlag = -1)

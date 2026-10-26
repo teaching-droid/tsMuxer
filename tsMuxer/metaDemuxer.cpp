@@ -3500,9 +3500,11 @@ bool isLanguageCode(const std::string& lang)
 }
 
 // The kind a track's container declares (DeclaredKind). A transport stream by its stream type, ITU-T H.222.0 Table
-// 2-34 and the Blu-ray stream_coding_type: 0x06 (private data) and 0x80 (LPCM on a disc, DigiCipher II video in ATSC)
-// name no kind. A Matroska file by the first letter of the codec ID, A_ for sound and V_ for video, as its
-// specification names them. Other containers declare nothing here.
+// 2-34 and the Blu-ray stream_coding_type: 0x80 (LPCM on a disc, DigiCipher II video in ATSC) names no kind, and
+// neither does 0x06 (private data) on its own. A DVB stream carries AC-3, E-AC-3 and DTS as stream type 0x06 with
+// the descriptor of EN 300 468 that names the codec (TS 101 154), so 0x06 with such a descriptor is sound, as the
+// stream types 0x81, 0x87 and 0x82 are (TrackInfo::m_soundDescriptor). A Matroska file by the first letter of the
+// codec ID, A_ for sound and V_ for video, as its specification names them. Other containers declare nothing here.
 static DeclaredKind declaredKindOf(const AbstractStreamReader::ContainerType containerType, const TrackInfo& track)
 {
     using CT = AbstractStreamReader::ContainerType;
@@ -3535,6 +3537,8 @@ static DeclaredKind declaredKindOf(const AbstractStreamReader::ContainerType con
         case 0x33:  // VVC
         case 0xEA:  // VC-1
             return DeclaredKind::Video;
+        case 0x06:  // private data, sound where a descriptor names its codec
+            return track.m_soundDescriptor ? DeclaredKind::Sound : DeclaredKind::None;
         default:
             return DeclaredKind::None;
         }
@@ -3569,6 +3573,23 @@ static void warnKindMismatch(const std::string& fileName, const int trackId, con
         how << "codec ID " << id->second;
     else
         how << "stream type 0x" << std::hex << track.m_trackType << std::dec;
+    switch (static_cast<StreamType>(track.m_soundDescriptor))
+    {
+    case StreamType::AUDIO_AC3:
+        how << " with the AC-3 descriptor";
+        break;
+    case StreamType::AUDIO_EAC3_ATSC:
+        how << " with the E-AC-3 descriptor";
+        break;
+    case StreamType::AUDIO_DTS:
+        how << " with the DTS descriptor";
+        break;
+    case StreamType::AUDIO_AAC:
+        how << " with the AAC descriptor";
+        break;
+    default:
+        break;
+    }
     const char* declaredAs = declared == DeclaredKind::Sound ? "sound" : "video";
     const char* holds = video ? "video" : "sound";
     LTRACE(LT_WARN, 2,
@@ -3663,8 +3684,13 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
         {
             StreamData& vect = itr.second;
             const DeclaredKind declared = declaredKindOf(containerType, acceptedPidMap[itr.first]);
-            CheckStreamRez trackRez = detectTrackReader(vect.data(), static_cast<int>(vect.size()), containerType,
-                                                        acceptedPidMap[itr.first].m_trackType, itr.first, declared);
+            // A stream type 0x06 track whose descriptor names its sound is read as the stream type of that codec:
+            // a damaged AC-3, E-AC-3 or DTS track of a DVB stream is then found as it is under 0x81, 0x87 or 0x82
+            // (the readers' declaredByContainer)
+            const int soundDescriptor = acceptedPidMap[itr.first].m_soundDescriptor;
+            CheckStreamRez trackRez = detectTrackReader(
+                vect.data(), static_cast<int>(vect.size()), containerType,
+                soundDescriptor ? soundDescriptor : acceptedPidMap[itr.first].m_trackType, itr.first, declared);
             warnKindMismatch(unquoted, itr.first, acceptedPidMap[itr.first], declared, trackRez);
             if (!trackRez.codecInfo.programName.empty())
             {
@@ -4104,7 +4130,8 @@ CheckStreamRez METADemuxer::detectTrackReader(uint8_t* tmpBuffer, int len,
     // always ran, so the data still decides within a kind (E-AC-3 under the AC-3 stream type, AC-3 in a track declared
     // AAC). Only when none of them answers are the probes of the other kind asked, as they always were: a declaration
     // that is wrong still finds what it found before, and DetectStreamReader names the mismatch in a warning. Nothing
-    // declared (a file of one stream, stream type 0x06 or 0x80, a container that gives no type): one pass, as before.
+    // declared (a file of one stream, stream type 0x80, 0x06 without a sound descriptor, a container that gives no
+    // type): one pass, as before.
     enum Probe
     {
         LPCM,

@@ -158,10 +158,14 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                         m_pmtVersion = -2;
                         pmtBufferLen = 0;
                         for (const auto& [fst, snd] : m_pmt.pidList)
-                            trackList.insert(std::make_pair(
-                                snd.m_pid, TrackInfo(isDvbSubtitlePid(snd.m_pid) ? TRACKTYPE_PGS
-                                                                                 : static_cast<int>(snd.m_streamType),
-                                                     snd.m_lang, 0, snd.m_dvbDescriptor)));
+                        {
+                            TrackInfo track(
+                                isDvbSubtitlePid(snd.m_pid) ? TRACKTYPE_PGS : static_cast<int>(snd.m_streamType),
+                                snd.m_lang, 0, snd.m_dvbDescriptor);
+                            if (snd.m_streamType == StreamType::PRIVATE_DATA)
+                                track.m_soundDescriptor = snd.m_soundDescriptor;
+                            trackList.insert(std::make_pair(snd.m_pid, track));
+                        }
                         nonProcPMTPid.erase(pid);
                         if (nonProcPMTPid.empty() && !mvcContinueExpected())
                         {  // all pmt pids processed
@@ -204,7 +208,35 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
 // a sync word; a stream none of whose first LEAD_PES_MAX PES begins with a frame is read from where it starts, as
 // before. The ExSS sync word begins a frame of a stream without a core only, as DTS Express is: where there is a core,
 // a PES that begins with the extension of a frame carries the end of a frame whose core was before it.
-bool TSDemuxer::skipsLeadingPes(const int pid, const StreamType type, const uint8_t* payload, const uint8_t* end)
+//
+// ** A PES THAT BEGINS PICTURES IS NOT THE REST OF A SOUND FRAME. ** A track whose stream type declares sound but that
+// holds video is still found as video, with a warning (METADemuxer::detectTrackReader). Its PES begin with pictures,
+// never with a sound frame, so its first four PES were left out: the pictures that carry the parameter sets were lost,
+// and H.264, HEVC, MPEG-2 and AV1 under the AC-3, DTS or AAC stream type were listed as "Can't detect stream type",
+// where 2.20.0 found them. A PES that begins where a picture stream can be entered ends the search at once, and the
+// track is read from there, as before. Only those units count, not any start code: the sound of a mid-frame PES can
+// hold 00 00 01 by chance (a DTS frame of silence does), and leading pictures that cannot be decoded are no loss.
+static bool beginsPictures(const uint8_t* p, const uint8_t* end)
+{
+    if (end - p >= 3 && p[0] == 0x12 && p[1] == 0x00 && p[2] == 0x0A)
+        return true;  // AV1: a temporal delimiter, then a sequence header (OBU types 2 and 1, with their sizes)
+    if (end - p >= 4 && p[0] == 0 && p[1] == 0 && p[2] == 0 && p[3] == 1)
+        ++p;
+    if (end - p < 5 || p[0] != 0 || p[1] != 0 || p[2] != 1)
+        return false;
+    const uint8_t c = p[3];
+    if (c == 0xB3 || c == 0xB8 || c == 0x0F)
+        return true;  // MPEG-1/2 sequence header or GOP, VC-1 sequence header
+    if ((c & 0x80) == 0 && ((c & 0x1F) == 9 || (c & 0x1F) == 7 || (c & 0x1F) == 5 || c == 0x06))
+        return true;  // H.264 access unit delimiter, sequence parameter set, IDR slice, SEI
+    // HEVC: a random access picture, VPS, SPS, access unit delimiter or prefix SEI, of layer 0
+    const int hevcType = c >> 1 & 0x3F;
+    return (c & 0x81) == 0 && p[4] >= 1 && p[4] <= 7 &&
+           ((hevcType >= 16 && hevcType <= 21) || hevcType == 32 || hevcType == 33 || hevcType == 35 || hevcType == 39);
+}
+
+TSDemuxer::LeadPes TSDemuxer::skipsLeadingPes(const int pid, const StreamType type, const uint8_t* payload,
+                                              const uint8_t* end)
 {
     const auto at = [&](const std::initializer_list<uint8_t> bytes)
     {
@@ -239,13 +271,14 @@ bool TSDemuxer::skipsLeadingPes(const int pid, const StreamType type, const uint
     default:
         known = false;
     }
+    if (beginsPictures(payload, end))
+        known = false;
     // a PES whose payload does not reach into this packet is taken as it is
-    if (!known || frameStart || end - payload < 4 || ++m_leadPes[pid] > LEAD_PES_MAX)
-    {
-        m_leadPes[pid] = LEAD_PES_DONE;
-        return false;
-    }
-    return true;
+    if (known && !frameStart && end - payload >= 4 && ++m_leadPes[pid] <= LEAD_PES_MAX)
+        return LeadPes::Hold;
+    m_leadPes[pid] = LEAD_PES_DONE;
+    // only a PES that begins with a frame drops the PES held before it; any other end of the search gives them back
+    return frameStart ? LeadPes::Keep : LeadPes::GiveBack;
 }
 
 bool TSDemuxer::getTrackStart(const int32_t pid, const bool fromFirstPes, int64_t& ticks) const
@@ -783,158 +816,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         }
         if (pid == m_pmtVersionPid && tsPacket->payloadStart)
             checkPmtVersion(frameData, m_curPos + TS_FRAME_SIZE);
-        const bool pesStartCode = frameData[0] == 0 && frameData[1] == 0 && frameData[2] == 1 && tsPacket->payloadStart;
-        if (part != nullptr && !pesStartCode && !m_partKeep[pid])
-            continue;
-        if (!pesStartCode && (m_joinDrop[pid] || m_leadDrop[pid]))
-            continue;
-        if (pesStartCode)
-        {
-            const auto pesPacket = reinterpret_cast<PESPacket*>(frameData);
-            auto streamInfo = m_pmt.pidList.find(pid);
-            if (part != nullptr &&
-                !keptInPart(*part, pid,
-                            streamInfo != m_pmt.pidList.end() ? streamInfo->second.m_streamType : StreamType::RESERVED,
-                            pesPacket, TS_FRAME_SIZE - (frameData - m_curPos)))
-                continue;
-            m_leadDrop[pid] = m_leadPes[pid] != LEAD_PES_DONE && streamInfo != m_pmt.pidList.end() &&
-                              (pesPacket->flagsLo & 0x80) == 0x80 &&
-                              skipsLeadingPes(pid, streamInfo->second.m_streamType,
-                                              frameData + pesPacket->getHeaderLength(), m_curPos + TS_FRAME_SIZE);
-            if (m_leadDrop[pid])
-                continue;
-            m_clipStartOfPid.try_emplace(pid, m_prevFileLen);
-
-            if ((pesPacket->flagsLo & 0x80) == 0x80)
-            {
-                const int64_t curPts = fullPts(pesPacket->getPts());
-                int64_t curDts = curPts;
-
-                if ((pesPacket->flagsLo & 0xc0) == 0xc0)
-                    curDts = fullPts(pesPacket->getDts());
-
-                if (m_lastPTS == -1 || curPts > m_lastPTS)
-                    m_lastPTS = curPts;
-
-                if (m_firstPTS == -1 || curPts < m_firstPTS)
-                    m_firstPTS = curPts;
-
-                if (m_firstSeenPTS == -1)
-                    m_firstSeenPTS = curPts;
-
-                if (streamInfo != m_pmt.pidList.end() && isVideoPID(streamInfo->second.m_streamType))
-                {
-                    if (m_firstVideoPTS == -1 || curPts < m_firstVideoPTS)
-                        m_firstVideoPTS = curPts;
-                    if (m_firstSeenVideoPTS == -1)
-                        m_firstSeenVideoPTS = curPts;
-                    if (m_firstVideoPid == -1)
-                        m_firstVideoPid = pid;
-                    m_videoPesRead++;
-                    m_fileFirstDts.try_emplace(pid, curDts);
-                    if (pid == m_firstVideoPid)
-                    {
-                        if (m_videoSpanDts.first == -1)
-                            m_videoSpanDts.first = curDts;
-                        m_videoSpanDts.second = (std::max)(m_videoSpanDts.second, curDts);
-                    }
-                    if (pid == m_firstVideoPid && isJoinOfFiles())
-                    {
-                        if (m_joinFileDts.first == -1)
-                            m_joinFileDts.first = curDts;
-                        m_joinFileDts.second = (std::max)(m_joinFileDts.second, curDts);
-                    }
-                    if (curPts > m_lastVideoPTS)
-                        m_lastVideoPTS = curPts;
-                    if (m_lastVideoDTS == -1)
-                        m_lastVideoDTS = curDts;
-                    if (m_videoDtsGap == -1 && curDts > m_lastVideoDTS)
-                        m_videoDtsGap = curDts - m_lastVideoDTS;
-                    if (part != nullptr)
-                    {
-                        if (m_partLastVideoDts != -1 && curDts > m_partLastVideoDts &&
-                            (m_partVideoStep <= 0 || curDts - m_partLastVideoDts < m_partVideoStep))
-                            m_partVideoStep = curDts - m_partLastVideoDts;
-                        m_partLastVideoDts = curDts;
-                    }
-                }
-
-                if (m_firstPtsTime.find(pid) == m_firstPtsTime.end())
-                    m_firstPtsTime[pid] = curPts;
-
-                if (m_acceptedPidCache[pid] && streamInfo != m_pmt.pidList.end() &&
-                    isAudioStreamType(streamInfo->second.m_streamType) && isJoinOfFiles())
-                    m_joinDrop[pid] = !keepJoinSound(pid, streamInfo->second.m_streamType, curPts);
-            }
-            if (m_joinDrop[pid])
-                continue;
-
-            if (m_acceptedPidCache[pid] && isDvbSubtitlePid(pid))
-            {
-                DvbSubtitlePes& sub = m_dvbSubtitles[pid];
-                convertDvbSubtitlePes(pid, sub, demuxedData, false, discardSize);
-                if ((pesPacket->flagsLo & 0x80) == 0x80)
-                {
-                    // on the PGS timeline: from the first video picture, joined files one after another
-                    const int64_t ptsBase = m_firstVideoPTS != -1 ? m_firstVideoPTS : m_firstPTS;
-                    sub.pts = (fullPts(pesPacket->getPts()) - ptsBase + m_prevFileLen) * INTERNAL_PTS_FREQ / 90000;
-                }
-                else
-                    sub.pts = -1;
-            }
-            if (streamInfo != m_pmt.pidList.end() &&
-                streamInfo->second.m_streamType != StreamType::SUB_PGS)  // demux PGS with PES headers
-                frameData += pesPacket->getHeaderLength();
-            else
-            {
-                // A part cut from a clip starts at its key picture, also for a subtitle read before that picture
-                const int64_t ptsBase = part != nullptr && part->startCut ? part->firstShown()
-                                        : m_firstVideoPTS != -1           ? m_firstVideoPTS
-                                                                          : m_firstPTS;
-                if ((pesPacket->flagsLo & 0xc0) == 0xc0)
-                {
-                    const int64_t pts = fullPts(pesPacket->getPts()) - ptsBase + m_prevFileLen;
-                    int64_t dts = fullPts(pesPacket->getDts()) - ptsBase + m_prevFileLen;
-                    if (part != nullptr && dts < 0)
-                        dts = 0;  // decoded before the cut, at the start of the output
-                    pesPacket->setPtsAndDts(pts, dts);
-                }
-                else if ((pesPacket->flagsLo & 0x80) == 0x80)
-                {
-                    const int64_t pts = fullPts(pesPacket->getPts()) - ptsBase + m_prevFileLen;
-                    pesPacket->setPts(pts);
-                }
-            }
-        }
-
-        // if (acceptedPIDs.find(pid) == acceptedPIDs.end())
-        if (!m_acceptedPidCache[pid])
-            continue;
-
-        const int64_t payloadLen = TS_FRAME_SIZE - (frameData - m_curPos);
-        if (payloadLen > 0 && isDvbSubtitlePid(pid))
-        {
-            DvbSubtitlePes& sub = m_dvbSubtitles[pid];
-            sub.pes.insert(sub.pes.end(), frameData, frameData + payloadLen);
-            continue;
-        }
-        if (payloadLen > 0)
-        {
-            if (pid != lastPid)
-            {
-                vect = &demuxedData[pid];
-                lastPid = pid;
-            }
-            if (vect != nullptr)
-            {
-                vect->grow(payloadLen);
-                uint8_t* dst = vect->data() + vect->size() - payloadLen;
-                memcpy(dst, frameData, payloadLen);
-            }
-            if (m_joinSoundPid[pid])
-                m_joinSound[pid].pesBytes += payloadLen;
-        }
-        discardSize -= payloadLen;
+        demuxPacket(m_curPos, pid, demuxedData, discardSize, part, vect, lastPid);
     }
     if (m_curPos < data + readedBytes)
     {
@@ -943,6 +825,214 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     }
 
     return 0;
+}
+
+// One TS packet of a PID from its payload on: the PES header and its times, and the payload into demuxedData
+void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedData, int64_t& discardSize,
+                            const ClipPart* part, MemoryBlock*& vect, int& lastPid)
+{
+    const auto tsPacket = reinterpret_cast<TSPacket*>(pkt);
+    uint8_t* frameData = pkt + tsPacket->getHeaderSize();
+    const bool pesStartCode = frameData[0] == 0 && frameData[1] == 0 && frameData[2] == 1 && tsPacket->payloadStart;
+    if (part != nullptr && !pesStartCode && !m_partKeep[pid])
+        return;
+    if (!pesStartCode && m_leadDrop[pid])
+    {
+        m_leadHeld[pid].insert(m_leadHeld[pid].end(), pkt, pkt + TS_FRAME_SIZE);
+        return;
+    }
+    if (!pesStartCode && m_joinDrop[pid])
+        return;
+    if (pesStartCode)
+    {
+        const auto pesPacket = reinterpret_cast<PESPacket*>(frameData);
+        auto streamInfo = m_pmt.pidList.find(pid);
+        if (part != nullptr &&
+            !keptInPart(*part, pid,
+                        streamInfo != m_pmt.pidList.end() ? streamInfo->second.m_streamType : StreamType::RESERVED,
+                        pesPacket, TS_FRAME_SIZE - (frameData - pkt)))
+            return;
+        m_leadDrop[pid] = false;
+        if (m_leadPes[pid] != LEAD_PES_DONE && streamInfo != m_pmt.pidList.end())
+        {
+            if ((pesPacket->flagsLo & 0x80) == 0x80)
+            {
+                const LeadPes lead = skipsLeadingPes(pid, streamInfo->second.m_streamType,
+                                                     frameData + pesPacket->getHeaderLength(), pkt + TS_FRAME_SIZE);
+                if (lead == LeadPes::Hold)
+                {
+                    if (m_leadHeld[pid].empty())
+                        m_leadFirstSeen[pid] = m_firstSeenPTS == -1;
+                    m_leadDrop[pid] = true;
+                }
+                else if (lead == LeadPes::GiveBack)
+                    giveBackLeadPes(pid, demuxedData, discardSize, part, vect, lastPid);
+                else
+                    m_leadHeld.erase(pid);
+            }
+            else  // a PES without a time among the held ones stays with them
+                m_leadDrop[pid] = m_leadHeld.find(pid) != m_leadHeld.end();
+            if (m_leadDrop[pid])
+            {
+                m_leadHeld[pid].insert(m_leadHeld[pid].end(), pkt, pkt + TS_FRAME_SIZE);
+                return;
+            }
+        }
+        m_clipStartOfPid.try_emplace(pid, m_prevFileLen);
+
+        if ((pesPacket->flagsLo & 0x80) == 0x80)
+        {
+            const int64_t curPts = fullPts(pesPacket->getPts());
+            int64_t curDts = curPts;
+
+            if ((pesPacket->flagsLo & 0xc0) == 0xc0)
+                curDts = fullPts(pesPacket->getDts());
+
+            if (m_lastPTS == -1 || curPts > m_lastPTS)
+                m_lastPTS = curPts;
+
+            if (m_firstPTS == -1 || curPts < m_firstPTS)
+                m_firstPTS = curPts;
+
+            if (m_firstSeenPTS == -1)
+                m_firstSeenPTS = curPts;
+
+            if (streamInfo != m_pmt.pidList.end() && isVideoPID(streamInfo->second.m_streamType))
+            {
+                if (m_firstVideoPTS == -1 || curPts < m_firstVideoPTS)
+                    m_firstVideoPTS = curPts;
+                if (m_firstSeenVideoPTS == -1)
+                    m_firstSeenVideoPTS = curPts;
+                if (m_firstVideoPid == -1)
+                    m_firstVideoPid = pid;
+                m_videoPesRead++;
+                m_fileFirstDts.try_emplace(pid, curDts);
+                if (pid == m_firstVideoPid)
+                {
+                    if (m_videoSpanDts.first == -1)
+                        m_videoSpanDts.first = curDts;
+                    m_videoSpanDts.second = (std::max)(m_videoSpanDts.second, curDts);
+                }
+                if (pid == m_firstVideoPid && isJoinOfFiles())
+                {
+                    if (m_joinFileDts.first == -1)
+                        m_joinFileDts.first = curDts;
+                    m_joinFileDts.second = (std::max)(m_joinFileDts.second, curDts);
+                }
+                if (curPts > m_lastVideoPTS)
+                    m_lastVideoPTS = curPts;
+                if (m_lastVideoDTS == -1)
+                    m_lastVideoDTS = curDts;
+                if (m_videoDtsGap == -1 && curDts > m_lastVideoDTS)
+                    m_videoDtsGap = curDts - m_lastVideoDTS;
+                if (part != nullptr)
+                {
+                    if (m_partLastVideoDts != -1 && curDts > m_partLastVideoDts &&
+                        (m_partVideoStep <= 0 || curDts - m_partLastVideoDts < m_partVideoStep))
+                        m_partVideoStep = curDts - m_partLastVideoDts;
+                    m_partLastVideoDts = curDts;
+                }
+            }
+
+            if (m_firstPtsTime.find(pid) == m_firstPtsTime.end())
+                m_firstPtsTime[pid] = curPts;
+
+            if (m_acceptedPidCache[pid] && streamInfo != m_pmt.pidList.end() &&
+                isAudioStreamType(streamInfo->second.m_streamType) && isJoinOfFiles())
+                m_joinDrop[pid] = !keepJoinSound(pid, streamInfo->second.m_streamType, curPts);
+        }
+        if (m_joinDrop[pid])
+            return;
+
+        if (m_acceptedPidCache[pid] && isDvbSubtitlePid(pid))
+        {
+            DvbSubtitlePes& sub = m_dvbSubtitles[pid];
+            convertDvbSubtitlePes(pid, sub, demuxedData, false, discardSize);
+            if ((pesPacket->flagsLo & 0x80) == 0x80)
+            {
+                // on the PGS timeline: from the first video picture, joined files one after another
+                const int64_t ptsBase = m_firstVideoPTS != -1 ? m_firstVideoPTS : m_firstPTS;
+                sub.pts = (fullPts(pesPacket->getPts()) - ptsBase + m_prevFileLen) * INTERNAL_PTS_FREQ / 90000;
+            }
+            else
+                sub.pts = -1;
+        }
+        if (streamInfo != m_pmt.pidList.end() &&
+            streamInfo->second.m_streamType != StreamType::SUB_PGS)  // demux PGS with PES headers
+            frameData += pesPacket->getHeaderLength();
+        else
+        {
+            // A part cut from a clip starts at its key picture, also for a subtitle read before that picture
+            const int64_t ptsBase = part != nullptr && part->startCut ? part->firstShown()
+                                    : m_firstVideoPTS != -1           ? m_firstVideoPTS
+                                                                      : m_firstPTS;
+            if ((pesPacket->flagsLo & 0xc0) == 0xc0)
+            {
+                const int64_t pts = fullPts(pesPacket->getPts()) - ptsBase + m_prevFileLen;
+                int64_t dts = fullPts(pesPacket->getDts()) - ptsBase + m_prevFileLen;
+                if (part != nullptr && dts < 0)
+                    dts = 0;  // decoded before the cut, at the start of the output
+                pesPacket->setPtsAndDts(pts, dts);
+            }
+            else if ((pesPacket->flagsLo & 0x80) == 0x80)
+            {
+                const int64_t pts = fullPts(pesPacket->getPts()) - ptsBase + m_prevFileLen;
+                pesPacket->setPts(pts);
+            }
+        }
+    }
+
+    // if (acceptedPIDs.find(pid) == acceptedPIDs.end())
+    if (!m_acceptedPidCache[pid])
+        return;
+
+    const int64_t payloadLen = TS_FRAME_SIZE - (frameData - pkt);
+    if (payloadLen > 0 && isDvbSubtitlePid(pid))
+    {
+        DvbSubtitlePes& sub = m_dvbSubtitles[pid];
+        sub.pes.insert(sub.pes.end(), frameData, frameData + payloadLen);
+        return;
+    }
+    if (payloadLen > 0)
+    {
+        if (pid != lastPid)
+        {
+            vect = &demuxedData[pid];
+            lastPid = pid;
+        }
+        if (vect != nullptr)
+        {
+            vect->grow(payloadLen);
+            uint8_t* dst = vect->data() + vect->size() - payloadLen;
+            memcpy(dst, frameData, payloadLen);
+        }
+        if (m_joinSoundPid[pid])
+            m_joinSound[pid].pesBytes += payloadLen;
+    }
+    discardSize -= payloadLen;
+}
+
+// ** THE PES LEFT OUT AT THE START ARE GIVEN BACK WHERE NO FRAME FOLLOWS. ** skipsLeadingPes leaves out the first PES
+// of a sound stream up to the first that begins with a frame. Where none of the first LEAD_PES_MAX does, the PES of
+// the stream do not begin with frames at all, as many broadcast streams are written, and the stream is to be read
+// from where it starts, as before. But the PES left out were dropped, so such a stream lost its first four PES: on a
+// broadcast AC-3 stream of one frame in each PES, 128 ms of sound, and the stream started 128 ms later than 2.20.0
+// started it. They are now held back, packet by packet, and read here as they would have been read, times and all,
+// before the PES that ended the search. A PES that begins with a frame within the limit still drops them, which is
+// the case skipsLeadingPes is for. Where the first PES held back was the first PES of the file, its time is the
+// first time of the file again (m_firstSeenPTS, which times the sound of a file without video).
+void TSDemuxer::giveBackLeadPes(const int pid, DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,
+                                MemoryBlock*& vect, int& lastPid)
+{
+    const auto held = m_leadHeld.find(pid);
+    if (held == m_leadHeld.end())
+        return;
+    std::vector<uint8_t> packets = std::move(held->second);
+    m_leadHeld.erase(held);
+    if (m_leadFirstSeen[pid])
+        m_firstSeenPTS = -1;
+    for (size_t i = 0; i + TS_FRAME_SIZE <= packets.size(); i += TS_FRAME_SIZE)
+        demuxPacket(packets.data() + i, pid, demuxedData, discardSize, part, vect, lastPid);
 }
 
 // A clip file of a playlist begins: the state of the part before is cleared. The sound of a cut part carries where
@@ -1209,6 +1299,8 @@ void TSDemuxer::openFile(const std::string& streamName)
     m_firstPtsTime.clear();
     memset(m_leadPes, 0, sizeof(m_leadPes));
     memset(m_leadDrop, 0, sizeof(m_leadDrop));
+    memset(m_leadFirstSeen, 0, sizeof(m_leadFirstSeen));
+    m_leadHeld.clear();
     memset(m_lastCounter, 0xFF, sizeof(m_lastCounter));
     m_firstDtsTime.clear();
     m_clipStartOfPid.clear();

@@ -395,7 +395,19 @@ uint32_t TS_program_map_section::extractDescriptors(uint8_t* curPos, const int e
             // format_identifier is 4 bytes (stored as-is, not byte-swapped)
             registrationId = (static_cast<uint32_t>(descrBuf[0]) << 24) | (static_cast<uint32_t>(descrBuf[1]) << 16) |
                              (static_cast<uint32_t>(descrBuf[2]) << 8) | static_cast<uint32_t>(descrBuf[3]);
+            if (registrationId == 0x41432D33 /* 'AC-3' */)
+                pmtInfo.m_soundDescriptor = static_cast<int>(StreamType::AUDIO_AC3);
+            else if (registrationId == 0x45414333 /* 'EAC3' */)
+                pmtInfo.m_soundDescriptor = static_cast<int>(StreamType::AUDIO_EAC3_ATSC);
         }
+        else if (tag == TSDescriptorTag::DVB_AC3)
+            pmtInfo.m_soundDescriptor = static_cast<int>(StreamType::AUDIO_AC3);
+        else if (tag == TSDescriptorTag::DVB_EAC3)
+            pmtInfo.m_soundDescriptor = static_cast<int>(StreamType::AUDIO_EAC3_ATSC);
+        else if (tag == TSDescriptorTag::DVB_DTS)
+            pmtInfo.m_soundDescriptor = static_cast<int>(StreamType::AUDIO_DTS);
+        else if (tag == TSDescriptorTag::DVB_AAC)
+            pmtInfo.m_soundDescriptor = static_cast<int>(StreamType::AUDIO_AAC);
         curPos += len;
     }
     return registrationId;

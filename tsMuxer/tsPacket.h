@@ -31,6 +31,10 @@ enum class TSDescriptorTag
     DTS = 0x73,
     DVB_TELETEXT = 0x56,    // EBU teletext_descriptor, EN 300 468
     DVB_SUBTITLING = 0x59,  // subtitling_descriptor, the bitmap subtitles of EN 300 743
+    DVB_AC3 = 0x6A,         // AC-3_descriptor, EN 300 468 annex D
+    DVB_EAC3 = 0x7A,        // enhanced_AC-3_descriptor, EN 300 468 annex D
+    DVB_DTS = 0x7B,         // DTS_descriptor, EN 300 468 annex G
+    DVB_AAC = 0x7C,         // AAC_descriptor, EN 300 468 annex H
     DVB_EXTENSION = 0x7F,   // DVB extension_descriptor (used for opus_audio_descriptor)
     LPCM = 0x80,
     AC3 = 0x81,
@@ -259,7 +263,8 @@ struct PMTStreamInfo final
           m_codecReader(),
           m_mpegReader(),
           m_audioReader(),
-          m_dvbDescriptor(0)
+          m_dvbDescriptor(0),
+          m_soundDescriptor(0)
     {
     }
 
@@ -284,6 +289,7 @@ struct PMTStreamInfo final
         m_mpegReader = nullptr;
         m_audioReader = nullptr;
         m_dvbDescriptor = 0;
+        m_soundDescriptor = 0;
     }
 
     StreamType m_streamType;
@@ -298,6 +304,11 @@ struct PMTStreamInfo final
     // named by a descriptor: 0x59 is DVB bitmap subtitles, 0x56 is EBU teletext. Kept so a track
     // no reader accepts can still be named instead of reported as an unknown number.
     int m_dvbDescriptor;
+    // The sound a descriptor names, as the stream type that names the same codec (0x81 AC-3, 0x87 E-AC-3, 0x82 DTS,
+    // 0x0F AAC), zero for none: the AC-3, enhanced AC-3, DTS or AAC descriptor of EN 300 468, which is how a DVB stream
+    // declares these (TS 101 154: AC-3, E-AC-3 and DTS are carried as stream type 0x06 with the descriptor), or the
+    // registration descriptor "AC-3" or "EAC3" of ATSC A/52 annexes A and G. Read for stream type 0x06 only.
+    int m_soundDescriptor;
 
     // ---------------------
     std::vector<PMTIndex> m_index;  // blu-ray seek index. key=number of tsFrame. value=information about key frame
