@@ -3,7 +3,9 @@
 #include <fs/systemlog.h>
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
 #include <memory>
+#include <sstream>
 #include <vector>
 
 #include "avCodecs.h"
@@ -329,7 +331,31 @@ int H264StreamReader::flushPacket(AVPacket& avPacket)
     if (added == 0)
         added = addFieldTiming(avPacket);
     countHrdBytes(avPacket, added);
+    hrdWarning();
     return rez;
+}
+
+// insertSEI and forceSEI write an HRD into the SPS: the stream's own, or, for a stream that has none, 40 Mbit/s with a
+// 30 Mbit buffer, the most a Blu-ray disc allows, whatever the stream needs. A stream denser than that HRD arrives late
+// in its buffer model, and the buffering period and picture timing SEI written for it are wrong; nothing said so. Once
+// per stream, at its end: how many pictures arrive late, from when, and the most the stream needs within a second.
+void H264StreamReader::hrdWarning()
+{
+    if (m_hrdLate == 0 || m_hrdLateSaid || m_hrd.empty())
+        return;
+    m_hrdLateSaid = true;
+    const HrdSchedule& s0 = m_hrd.front();
+    std::ostringstream text;
+    text << std::fixed << std::setprecision(1) << "Warning: the H.264 stream needs more than the HRD in its SPS gives ("
+         << s0.bitRate / 1e6 << " Mbit/s, a buffer of " << s0.cpbSize / 1e6 << " Mbit"
+         << (orig_hrd_parameters_present_flag || orig_vcl_parameters_present_flag
+                 ? ")"
+                 : ", the values tsMuxeR writes for a stream without an HRD)")
+         << ": " << m_hrdLate << " pictures arrive after they are due, the first " << m_hrdFirstLate
+         << " s after the start, and the stream needs up to " << m_hrdPeakRate / 1e6
+         << " Mbit/s within one second. The buffering period and picture timing SEI that insertSEI and forceSEI write "
+            "do not fit this stream. Mux it without insertSEI and forceSEI, or encode it within that rate.";
+    LTRACE(LT_WARN, 2, text.str());
 }
 
 // A Matroska output takes the packets as they are and does not ask for writeAdditionData. With the SEI correction its
@@ -457,6 +483,19 @@ void H264StreamReader::hrdAccessUnit(const SPSUnit& sps, const bool bufferingPer
                             : (std::max)(s.taf, s.tr - static_cast<double>(m_hrdPendingBp ? s.delay : s.sum) / 90000.0);
             s.taf = tai + 8.0 * (s.vcl ? vclBytes : bytes) / s.bitRate;  // C-6
         }
+        // For the warning of hrdWarning: access units of the first schedule that arrive after they are due (C.3
+        // item 3), and the most bits that are due within one second
+        const HrdSchedule& s0 = m_hrd.front();
+        if (!m_hrdLowDelay && s0.taf > s0.tr + 1e-6 && m_hrdLate++ == 0)
+            m_hrdFirstLate = s0.tr;
+        m_hrdWindow.emplace_back(s0.tr, 8.0 * (s0.vcl ? vclBytes : bytes));
+        m_hrdWindowBits += m_hrdWindow.back().second;
+        while (m_hrdWindow.front().first <= s0.tr - 1.0)
+        {
+            m_hrdWindowBits -= m_hrdWindow.front().second;
+            m_hrdWindow.pop_front();
+        }
+        m_hrdPeakRate = (std::max)(m_hrdPeakRate, m_hrdWindowBits);
     }
     m_hrdPending = true;
     m_hrdPendingBp = bufferingPeriod;
@@ -483,6 +522,9 @@ void H264StreamReader::hrdAccessUnit(const SPSUnit& sps, const bool bufferingPer
             m_hrdParams = params;
             m_hrd.clear();
             m_hrdPendingFirst = true;
+            m_hrdLowDelay = sps.low_delay_hrd_flag != 0;
+            m_hrdWindow.clear();
+            m_hrdWindowBits = 0;
             if (tc > 0 && !m_mvcSubStream)  // the dependent view of 3D: its HRD covers both views
             {
                 for (const HRDParams* p : {&sps.nalHrdParams, &sps.vclHrdParams})
@@ -502,6 +544,7 @@ void H264StreamReader::hrdAccessUnit(const SPSUnit& sps, const bool bufferingPer
                         s.maxDelay =
                             (std::min)(fieldMax, static_cast<int64_t>(std::floor(90000.0 * cpbSize / s.bitRate)));
                         // setInitialCpbRemovalDelay has written the first delay into sei
+                        s.cpbSize = cpbSize;
                         s.first = s.delay = s.sum = sei.initial_cpb_removal_delay[i];
                         s.trPeriod = s.tr = static_cast<double>(s.first) / 90000.0;  // C-7
                         m_hrd.push_back(s);

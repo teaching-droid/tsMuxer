@@ -1,6 +1,7 @@
 #ifndef H264_STREAM_READER_H_
 #define H264_STREAM_READER_H_
 
+#include <deque>
 #include <map>
 #include <set>
 #include <vector>
@@ -232,6 +233,7 @@ class H264StreamReader final : public MPEGStreamReader
         unsigned index;    // SchedSelIdx
         bool cbr;          // arrival without a gap (C.1.1, C-2)
         double bitRate;    // bit/s
+        double cpbSize;    // bits
         int64_t maxDelay;  // 90000 * CpbSize / BitRate, or less where the field holds less
         int64_t first;     // the delay of the first buffering period: delay + offset at every later one
         int64_t delay;     // initial_cpb_removal_delay of the buffering period in force
@@ -261,6 +263,15 @@ class H264StreamReader final : public MPEGStreamReader
     // The picture timing SEI of the second field of a frame (addFieldTiming), from the one of its first field
     int addFieldTiming(AVPacket& avPacket);
     int addFrameData(AVPacket& avPacket);
+    // The pictures that arrive late in the buffer model, said once at the end of the stream (hrdWarning)
+    void hrdWarning();
+    bool m_hrdLowDelay = false;  // late pictures are allowed (low_delay_hrd_flag)
+    int64_t m_hrdLate = 0;
+    double m_hrdFirstLate = 0;
+    bool m_hrdLateSaid = false;
+    std::deque<std::pair<double, double>> m_hrdWindow;  // removal time and bits of the pictures of the last second
+    double m_hrdWindowBits = 0;
+    double m_hrdPeakRate = 0;
     bool m_addDataInPackets = false;
     bool m_addDataDtsKnown = false;
     int64_t m_addDataDts = 0;            // the frame addFrameData wrote for last
