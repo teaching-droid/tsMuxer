@@ -464,6 +464,7 @@ std::vector<uint8_t> AV1StreamReader::sequenceHeaderObu() const
 int AV1StreamReader::intDecodeNAL(uint8_t* buff)
 {
     bool frameFound = false;
+    int shownLayer = -1;  // the spatial layer of the shown frame of this temporal unit, -1 before one
     m_spsPpsFound = false;
     m_lastIFrame = false;
 
@@ -496,6 +497,21 @@ int AV1StreamReader::intDecodeNAL(uint8_t* buff)
 
         const uint8_t* payload = curPos + hdrLen;
         const int payloadLen = static_cast<int>(nextNalWithStartCode - payload);
+
+        // ** A STREAM WITHOUT TEMPORAL DELIMITERS. ** A temporal unit must begin with one (AV1 specification, 7.5),
+        // and a unit ended only at the next one, so a stream that has none became one frame of the whole file, at
+        // exit 0 and with nothing said. A temporal unit holds the frames of one time: the frames not shown, then the
+        // one shown, with its tile groups. In such a stream a unit now ends after its shown frame, where the next
+        // sequence header, metadata or frame of the same or a lower spatial layer begins.
+        if (m_noTd == 1 && shownLayer >= 0 &&
+            (obuHdr.obu_type == Av1ObuType::SEQUENCE_HEADER || obuHdr.obu_type == Av1ObuType::METADATA ||
+             ((obuHdr.obu_type == Av1ObuType::FRAME || obuHdr.obu_type == Av1ObuType::FRAME_HEADER) &&
+              obuHdr.spatial_id <= shownLayer)))
+        {
+            m_lastDecodedPos = prevPos;
+            incTimings();
+            return 0;
+        }
 
         switch (obuHdr.obu_type)
         {
@@ -538,6 +554,7 @@ int AV1StreamReader::intDecodeNAL(uint8_t* buff)
             // boundaries (not at FRAME OBU boundaries) to preserve the source's
             // frame bundling — some MKV blocks contain multiple FRAME OBUs that
             // must stay together as one temporal unit.
+            m_tdSeen = true;
             if (frameFound)
             {
                 m_lastDecodedPos = prevPos;
@@ -549,12 +566,23 @@ int AV1StreamReader::intDecodeNAL(uint8_t* buff)
         case Av1ObuType::FRAME:
         case Av1ObuType::FRAME_HEADER:
         {
+            if (m_noTd == -1)
+            {
+                m_noTd = m_tdSeen ? 0 : 1;
+                if (m_noTd == 1)
+                    LTRACE(LT_WARN, 2,
+                           "Warning: AV1: the stream has no temporal delimiters, which each temporal unit must begin "
+                           "with. Its temporal units are taken from its frame headers, and each is written with a "
+                           "temporal delimiter.");
+            }
             // Parse frame header for keyframe detection (no boundary split here).
             if (m_seqHdrFound && payloadLen > 0)
             {
                 Av1FrameHeader frmHdr;
                 if (frmHdr.deserialize(payload, payloadLen, m_seqHdr) == 0)
                 {
+                    if (frmHdr.show_frame || frmHdr.show_existing_frame)
+                        shownLayer = (std::max)(shownLayer, static_cast<int>(obuHdr.spatial_id));
                     // Exclude show_existing_frame: it doesn't signal frame_type in the
                     // bitstream (deserializer defaults to KEY_FRAME), so including it
                     // would falsely mark bundled blocks as keyframes.
@@ -684,6 +712,24 @@ int AV1StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPa
 {
     uint8_t* curPos = dstBuffer;
 
+    // A stream without temporal delimiters gets one in front of each temporal unit, as the format wants: a start code
+    // and the OBU header of an empty temporal delimiter, or for a demux, which writes this as it is, the delimiter
+    // as a file holds it, with its size field (0)
+    if (m_noTd == 1 && dstEnd - curPos >= 5)
+    {
+        const auto tdHeader = static_cast<uint8_t>(static_cast<int>(Av1ObuType::TEMPORAL_DELIMITER) << 3);
+        if (m_demuxMode)
+        {
+            *curPos++ = tdHeader | 0x02;  // obu_has_size_field
+            *curPos++ = 0;
+        }
+        else
+        {
+            curPos = writeNalPrefix(curPos);
+            *curPos++ = tdHeader;
+        }
+    }
+
     const bool needInsSeqHdr = m_firstFileFrame && !(avPacket.flags & AVPacket::IS_SPS_PPS_IN_GOP);
     if (needInsSeqHdr)
     {
@@ -736,6 +782,10 @@ int AV1StreamReader::prepareDemuxPacket(uint8_t* data, const int size, const uin
         *outData = data;
         return size;
     }
+    // A stream without temporal delimiters: writeAdditionData has written one in front of each temporal unit, so
+    // nothing is held back for one
+    if (m_noTd == 1)
+        m_demuxSawTd = true;
 
     // ** AN AV1 FILE BEGINS WITH A TEMPORAL DELIMITER AND NOTHING MAY STAND IN FRONT OF IT. **
     // A transport stream carries a sequence header ahead of the first delimiter, so writing the

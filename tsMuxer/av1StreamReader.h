@@ -89,6 +89,11 @@ class AV1StreamReader final : public MPEGStreamReader
     bool m_lastIFrame;
     bool m_firstFileFrame;
     bool m_notAv1 = false;  // checkStream saw data that does not begin as AV1
+    // A stream without temporal delimiters, which a temporal unit must begin with: -1 until its first frame is read,
+    // then 1 when no delimiter came before it. Its temporal units are then found by their frames (intDecodeNAL), and
+    // each gets a delimiter on output (writeAdditionData, prepareDemuxPacket).
+    int m_noTd = -1;
+    bool m_tdSeen = false;  // a temporal delimiter was read
     int m_frameNum;
 
     MemoryBlock m_seqHdrBuffer;
