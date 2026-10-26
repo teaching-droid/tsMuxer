@@ -394,6 +394,9 @@ CheckStreamRez HEVCStreamReader::checkStream(uint8_t* buffer, const int len)
             {
                 if (!m_picOrderStarted && nalType < HevcUnit::NalType::BLA_W_LP)
                     m_firstLeading = (std::max)(0, picturesShownBeforeFirst(nal, end));
+                if (m_picOrderStarted && nalType >= HevcUnit::NalType::BLA_W_LP &&
+                    nalType <= HevcUnit::NalType::IDR_N_LP)
+                    m_restartLeading = (std::max)(0, placesOfLeadingPictures(nal, end));
                 m_fullPicOrder = toFullPicOrder(m_slice, m_sps->log2_max_pic_order_cnt_lsb);
             }
             incTimings();
@@ -1193,6 +1196,51 @@ int HEVCStreamReader::picturesShownBeforeFirst(uint8_t* nal, uint8_t* end) const
     return m_eof ? leading : -1;
 }
 
+// The places in time the leading pictures of an IDR or BLA picture take before it: they follow it in decode order and
+// are shown before it (RADL pictures, and the RASL pictures of a BLA picture), the first of them shown as many places
+// before it as its order count is below the IRAP picture's. Counted up to the first picture that is not a leading
+// picture. Returns -1 when more data is needed and can come; it is read no further than 32 MiB past the picture.
+int HEVCStreamReader::placesOfLeadingPictures(uint8_t* nal, uint8_t* end) const
+{
+    static constexpr std::ptrdiff_t MAX_AHEAD = 32 * 1024 * 1024;
+    const int range = 1 << m_sps->log2_max_pic_order_cnt_lsb;
+    HevcSliceHeader slice;
+    int irapLsb = 0;  // an IDR picture's order count
+    const auto irapType = static_cast<HevcUnit::NalType>((*nal >> 1) & 0x3f);
+    if (irapType >= HevcUnit::NalType::BLA_W_LP && irapType <= HevcUnit::NalType::BLA_N_LP)
+    {
+        uint8_t* next = NALUnit::findNALWithStartCode(nal, end, true);
+        if (next == end && !m_eof)
+            return -1;
+        slice.decodeBuffer(nal, FFMIN(nal + MAX_SLICE_HEADER, next));
+        if (slice.deserialize(m_sps, m_pps) != 0)
+            return 0;
+        irapLsb = static_cast<int>(slice.pic_order_cnt_lsb);
+    }
+    int places = 0;
+    for (uint8_t* cur = NALUnit::findNextNAL(nal, end); cur < end - 4; cur = NALUnit::findNextNAL(cur, end))
+    {
+        const auto type = static_cast<HevcUnit::NalType>((*cur >> 1) & 0x3f);
+        if (!isSlice(type) || !(cur[2] & 0x80))
+            continue;  // not the first slice of a picture
+        if (type < HevcUnit::NalType::RADL_N || type > HevcUnit::NalType::RASL_R)
+            return places;
+        uint8_t* next = NALUnit::findNALWithStartCode(cur, end, true);
+        if (next == end && !m_eof && cur - nal < MAX_AHEAD)
+            return -1;
+        slice.decodeBuffer(cur, FFMIN(cur + MAX_SLICE_HEADER, next));
+        if (slice.deserialize(m_sps, m_pps) != 0)
+            return places;
+        int diff = static_cast<int>(slice.pic_order_cnt_lsb) - irapLsb;
+        if (diff >= range / 2)
+            diff -= range;
+        else if (diff < -range / 2)
+            diff += range;
+        places = (std::max)(places, -diff);
+    }
+    return m_eof || end - nal >= MAX_AHEAD ? places : -1;
+}
+
 // The depth incTimings will find in the period that begins at this IDR picture, from the pictures after it: up to 33
 // of them or the next IDR or BLA picture, whichever comes first. Returns -1 when more data is needed and can come;
 // it is read no further than 32 MiB past the picture.
@@ -1269,13 +1317,19 @@ int HEVCStreamReader::toFullPicOrder(const HevcSliceHeader* slice, const unsigne
             m_frameNum += gap;
             m_curDts += static_cast<int64_t>(gap) * m_pcrIncPerFrame;
         }
-        // a first picture that is not IRAP goes after the pictures shown before it (picturesShownBeforeFirst)
-        const int leading = (!m_picOrderStarted && slice->nal_unit_type < HevcUnit::NalType::BLA_W_LP) ||
-                                    (m_joinRestart && slice->nal_unit_type != HevcUnit::NalType::BLA_W_LP &&
-                                     slice->nal_unit_type != HevcUnit::NalType::BLA_W_RADL &&
-                                     slice->nal_unit_type != HevcUnit::NalType::BLA_N_LP)
-                                ? m_firstLeading
-                                : 0;
+        // A first picture that is not IRAP goes after the pictures shown before it (picturesShownBeforeFirst). An IDR
+        // or BLA picture after the first goes after its own leading pictures (placesOfLeadingPictures): the count of
+        // an IDR picture with RADL pictures used to start again at its own place, so its RADL pictures took the times
+        // of the last pictures before it, and the last times of the stream were given to no picture.
+        int leading = (!m_picOrderStarted && slice->nal_unit_type < HevcUnit::NalType::BLA_W_LP) ||
+                              (m_joinRestart && slice->nal_unit_type != HevcUnit::NalType::BLA_W_LP &&
+                               slice->nal_unit_type != HevcUnit::NalType::BLA_W_RADL &&
+                               slice->nal_unit_type != HevcUnit::NalType::BLA_N_LP)
+                          ? m_firstLeading
+                          : 0;
+        if (m_picOrderStarted && !m_joinRestart && (slice->isIDR() || bla) && !partStart)
+            leading = m_restartLeading;
+        m_restartLeading = 0;
         m_joinRestart = false;
         m_picOrderStarted = true;
         m_picOrderBase = m_frameNum + leading - static_cast<int>(slice->pic_order_cnt_lsb);
@@ -1521,15 +1575,28 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                     incTimings();
                     return 0;
                 }
+                // An IDR or BLA picture after the first one starts the count again after its leading pictures, which
+                // it has to know before it is given its order. Its period is that many places less deep than the
+                // pictures after it are in decode order (depthOfPeriod counts from the IDR picture).
+                const bool restart = nalType >= HevcUnit::NalType::BLA_W_LP && nalType <= HevcUnit::NalType::IDR_N_LP;
+                m_restartLeading = 0;
+                if (restart && m_picOrderStarted && !isPartStart())
+                {
+                    const int places = placesOfLeadingPictures(curPos, m_bufEnd);
+                    if (places == -1)
+                        return NOT_ENOUGH_BUFFER;
+                    m_restartLeading = places;
+                }
                 // A period can have a deeper B pyramid than the pictures before it: a joined file coded otherwise.
                 // Found only at its first deep picture, the larger depth moved the decoding time of that picture
                 // back behind the times already given. The period is read ahead from its IDR picture, and the
                 // decoding times catch up over its first pictures (deepenAfterOutput).
                 if (nalType == HevcUnit::NalType::IDR_W_RADL || nalType == HevcUnit::NalType::IDR_N_LP)
                 {
-                    const int ahead = (std::min)(16, depthOfPeriod(curPos, m_bufEnd));
+                    int ahead = depthOfPeriod(curPos, m_bufEnd);
                     if (ahead == -1)
                         return NOT_ENOUGH_BUFFER;
+                    ahead = (std::min)(16, ahead - m_restartLeading);
                     if (ahead > m_frameDepth)
                     {
                         const int depthBefore = m_frameDepth;

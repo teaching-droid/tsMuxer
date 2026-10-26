@@ -88,6 +88,7 @@ class HEVCStreamReader final : public MPEGStreamReader
     void incTimings();
     int toFullPicOrder(const HevcSliceHeader* slice, unsigned pic_bits);
     int picturesShownBeforeFirst(uint8_t* nal, uint8_t* end) const;
+    int placesOfLeadingPictures(uint8_t* nal, uint8_t* end) const;
     int depthOfPeriod(uint8_t* nal, uint8_t* end) const;
     // The full order a picture would get as the next of the period (toFullPicOrder, without moving its state)
     [[nodiscard]] int nextFullPicOrder(const HevcSliceHeader* slice) const;
@@ -130,6 +131,7 @@ class HEVCStreamReader final : public MPEGStreamReader
     int m_prevPicOrder;
     bool m_picOrderStarted = false;  // the first picture of the stream has set m_picOrderBase
     int m_firstLeading = 0;          // picturesShownBeforeFirst of the first picture, when it is not IRAP
+    int m_restartLeading = 0;        // placesOfLeadingPictures of an IDR or BLA picture after the first picture
     bool m_lastIFrame;
 
     MemoryBlock m_vpsBuffer;

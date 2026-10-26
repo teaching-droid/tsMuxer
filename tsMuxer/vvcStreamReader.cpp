@@ -165,6 +165,8 @@ CheckStreamRez VVCStreamReader::checkStream(uint8_t* buffer, const int len)
             {
                 if (!m_slice->picture_header_in_slice)
                     m_slice->pic_order_cnt_lsb = phPocLsb;
+                if (m_frameNum > 0 && m_slice->isIDR())
+                    m_restartLeading = (std::max)(0, placesOfLeadingPictures(nal, end));
                 m_fullPicOrder = toFullPicOrder(m_slice, m_sps->log2_max_pic_order_cnt_lsb);
             }
             incTimings();
@@ -420,9 +422,13 @@ int VVCStreamReader::toFullPicOrder(const VvcSliceHeader* slice, const int pic_b
     // An IDR picture starts the count again, and in VVC it carries its own pic_order_cnt_lsb, which need not be 0: the
     // picture order count of an IDR picture is that value. The base used to be the IDR's place alone, so an IDR with
     // a value of 8 and every picture after it were presented 8 frames late, over the pictures of the IDR before.
+    // An IDR picture after the first goes after its RADL pictures, which follow it in decode order and are shown before
+    // it (placesOfLeadingPictures). Its count used to start again at its own place, so its RADL pictures took the times
+    // of the last pictures before it, and the last times of the stream were given to no picture.
     if (slice->isIDR())
     {
-        m_picOrderBase = m_frameNum - static_cast<int>(slice->pic_order_cnt_lsb);
+        m_picOrderBase = m_frameNum + m_restartLeading - static_cast<int>(slice->pic_order_cnt_lsb);
+        m_restartLeading = 0;
         m_picOrderMsb = 0;
         m_prevPicOrder = static_cast<int>(slice->pic_order_cnt_lsb);
     }
@@ -439,6 +445,55 @@ int VVCStreamReader::toFullPicOrder(const VvcSliceHeader* slice, const int pic_b
     }
 
     return slice->pic_order_cnt_lsb + m_picOrderMsb + m_picOrderBase;
+}
+
+// The places in time the RADL pictures of an IDR picture take before it, as for HEVC: the first of them is shown as
+// many places before it as its order count is below the IDR picture's (the slice header read last). Counted up to the
+// first picture that is not a leading picture. Returns -1 when more data is needed and can come; it is read no further
+// than 32 MiB past the picture.
+int VVCStreamReader::placesOfLeadingPictures(uint8_t* nal, uint8_t* end) const
+{
+    static constexpr std::ptrdiff_t MAX_AHEAD = 32 * 1024 * 1024;
+    const int range = 1 << m_sps->log2_max_pic_order_cnt_lsb;
+    const int idrLsb = static_cast<int>(m_slice->pic_order_cnt_lsb);
+    VvcSliceHeader header;
+    int places = 0;
+    bool phPending = false;  // a picture header unit was read: the next slice begins its picture
+    int phLsb = 0;
+    for (uint8_t* cur = NALUnit::findNextNAL(nal, end); cur < end - 4; cur = NALUnit::findNextNAL(cur, end))
+    {
+        if ((cur[0] & 0x3f) != 0)
+            continue;  // a unit of a layer above the base layer
+        const auto type = static_cast<VvcUnit::NalType>(cur[1] >> 3);
+        const bool phUnit = type == VvcUnit::NalType::PH;
+        const bool phInSlice = isSlice(type) && (cur[2] & 0x80);
+        if (!phUnit && !(isSlice(type) && (phInSlice || phPending)))
+            continue;  // not a picture header, nor the first slice of a picture
+        if (isSlice(type) && type != VvcUnit::NalType::RADL && type != VvcUnit::NalType::RASL)
+            return places;
+        uint8_t* next = NALUnit::findNALWithStartCode(cur, end, true);
+        if (next == end && !m_eof && cur - nal < MAX_AHEAD)
+            return -1;
+        header.decodeBuffer(cur, FFMIN(cur + MAX_SLICE_HEADER, next));
+        if (phUnit)
+        {
+            if (header.deserializePictureHeader(m_sps) != 0)
+                return places;
+            phLsb = static_cast<int>(header.pic_order_cnt_lsb);
+            phPending = true;
+            continue;
+        }
+        if (phInSlice && header.deserialize(m_sps, m_pps) != 0)
+            return places;
+        int diff = (phInSlice ? static_cast<int>(header.pic_order_cnt_lsb) : phLsb) - idrLsb;
+        if (diff >= range / 2)
+            diff -= range;
+        else if (diff < -range / 2)
+            diff += range;
+        places = (std::max)(places, -diff);
+        phPending = false;
+    }
+    return m_eof || end - nal >= MAX_AHEAD ? places : -1;
 }
 
 int VVCStreamReader::guessPicOrder(const VvcUnit::NalType nalType)
@@ -576,6 +631,13 @@ int VVCStreamReader::intDecodeNAL(uint8_t* buff)
                         m_lastIFrame = true;
                     if (!m_slice->picture_header_in_slice)
                         m_slice->pic_order_cnt_lsb = m_phPocLsb;
+                    if (m_frameNum > 0 && m_slice->isIDR())
+                    {
+                        const int places = placesOfLeadingPictures(curPos, m_bufEnd);
+                        if (places == -1)
+                            return NOT_ENOUGH_BUFFER;
+                        m_restartLeading = places;
+                    }
                     m_fullPicOrder = toFullPicOrder(m_slice, m_sps->log2_max_pic_order_cnt_lsb);
                 }
                 notePicOrder(nalType);
