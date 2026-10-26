@@ -3104,8 +3104,10 @@ M2TSStreamInfo::M2TSStreamInfo(const PMTStreamInfo& pmtStreamInfo)
     m_index = pmtStreamInfo.m_index;
     isSecondary = pmtStreamInfo.isSecondary;
     isDvEnhancement = pmtStreamInfo.isDvEnhancement;
+    // A stream without a language is "und" (undetermined, ISO 639-2), as the listing and a Matroska output name it: the
+    // three zero bytes it got in the playlist and the clip information are no language code.
     memset(&language_code, 0, 4);
-    memcpy(language_code, pmtStreamInfo.m_lang, 3);
+    memcpy(language_code, *pmtStreamInfo.m_lang ? pmtStreamInfo.m_lang : "und", 3);
 
     character_code = 0;
     video_format = 0;

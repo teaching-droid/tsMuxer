@@ -2314,6 +2314,25 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             }
         }
     }
+    // The language the clip information file of a disc clip gives the stream, which the listing shows
+    const auto takeClipInfoLang = [&](const char* why)
+    {
+        const std::string m2ts = unquoteStr(trimStr(fileList[0]));
+        const std::string clpiFileName =
+            findBluRayFile(extractFileDir(m2ts), "CLIPINF", extractFileName(m2ts) + ".clpi");
+        CLPIParser clpi;
+        if (!clpiFileName.empty() && clpi.parse(clpiFileName.c_str()))
+            if (const auto it = clpi.m_streamInfo.find(pid); it != clpi.m_streamInfo.end())
+            {
+                const std::string clpiLang = applyLangCodeStyle(it->second.language_code);
+                if (isLanguageCode(clpiLang) && clpiLang != "und" && clpiLang != streamInfo.m_lang)
+                {
+                    LTRACE(LT_INFO, 2,
+                           "Language for track " << pid << " taken from the clip information, " << clpiLang << why);
+                    streamInfo.m_lang = clpiLang;
+                }
+            }
+    };
     // A playlist source: the language the playlist gives the stream, as the listing shows it. The mux took the clip's,
     // so a disc whose playlist and clip disagree was listed in one language and muxed in the other.
     if (!mplsInfoList.empty() && pid > 0)
@@ -2332,24 +2351,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         // now takes that one too. A stream the playlist does not declare was listed as English and muxed without a
         // language (00 00 00 in a disc's playlist, und in Matroska).
         else if (!langGiven && !(isLanguageCode(lang) && lang != "und") && !SubTrackFilter::isSubTrack(pid))
-        {
-            const std::string m2ts = unquoteStr(trimStr(fileList[0]));
-            const std::string clpiFileName =
-                findBluRayFile(extractFileDir(m2ts), "CLIPINF", extractFileName(m2ts) + ".clpi");
-            CLPIParser clpi;
-            if (!clpiFileName.empty() && clpi.parse(clpiFileName.c_str()))
-                if (const auto it = clpi.m_streamInfo.find(pid); it != clpi.m_streamInfo.end())
-                {
-                    const std::string clpiLang = applyLangCodeStyle(it->second.language_code);
-                    if (isLanguageCode(clpiLang) && clpiLang != "und" && clpiLang != streamInfo.m_lang)
-                    {
-                        LTRACE(LT_INFO, 2,
-                               "Language for track " << pid << " taken from the clip information, " << clpiLang
-                                                     << ": the playlist gives none.");
-                        streamInfo.m_lang = clpiLang;
-                    }
-                }
-        }
+            takeClipInfoLang(": the playlist gives none.");
         if (auto* pgStream = dynamic_cast<PGSStreamReader*>(codecReader); pgStream && fromPlaylist.streamPID)
         {
             // A 3D playlist names the offset sequence each subtitle is placed by, and the listing shows it
@@ -2372,6 +2374,15 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                                    "picture-in-picture list, with the picture-in-picture video.");
             }
         }
+    }
+    // A clip of a disc named on its own: the listing shows the language of its clip information file, and the mux now
+    // takes it too. A disc clip need not name the language in the clip itself (one tsMuxeR wrote does not), so its
+    // subtitles went into a Matroska file as und while the listing gave their language.
+    else if (pid > 0 && !SubTrackFilter::isSubTrack(pid) && addParams.find("lang") == addParams.end())
+    {
+        const std::string ext = strToLowerCase(extractFileExt(unquoteStr(trimStr(fileList[0]))));
+        if (ext == "m2ts" || ext == "mts")
+            takeClipInfoLang(".");
     }
     // A join: every Matroska, MP4 or transport stream file of it is asked whether it has the track, as a single file
     // is above. A join naming a track the files do not have was not checked, and made an empty output; a transport
