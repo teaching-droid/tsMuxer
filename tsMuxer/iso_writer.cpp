@@ -1083,8 +1083,9 @@ void IsoWriter::writeMetadata(const int lbn)
 {
     m_file.seek(static_cast<int64_t>(lbn) * SECTOR_SIZE);
     m_curMetadataPos = lbn;
+    // The file set descriptor is one block, and the extent the logical volume gives it is one block long, which ends
+    // the sequence: no terminating descriptor follows, and the root directory is the next block
     writeFileSetDescriptor();
-    writeTerminationDescriptor();
     writeEntity(m_rootDirInfo);
 
     // write system stream file
@@ -1093,7 +1094,7 @@ void IsoWriter::writeMetadata(const int lbn)
 
 void IsoWriter::allocateMetadata()
 {
-    constexpr int sectorNum = 2;  // reserve sector for file set descriptor and terminating descriptor
+    constexpr int sectorNum = 1;  // the file set descriptor is block 0
     m_systemStreamLBN = allocateEntity(m_rootDirInfo, sectorNum);
     allocateEntity(m_systemStreamDir, m_systemStreamLBN);
 
@@ -1484,7 +1485,7 @@ void IsoWriter::writeFileSetDescriptor()
     writer.writeDString(m_volumeLabel, 32);                     // File Set Identifier
     writer.skipBytes(32);                                       // Copyright File Identifier
     writer.skipBytes(32);                                       // Abstract File Identifier
-    writer.writeLongAD(0x0800, 2, 1, 0);                        // Root Directory ICB
+    writer.writeLongAD(0x0800, 1, 1, 0);                        // Root Directory ICB
     writer.writeUDFString("*OSTA UDF Compliant", 32);           // Domain Identifier
     m_buffer[442] = 0x03;                                       // Domain Flags: Hard and Soft Write-Protect
     writer.writeLongAD(0, 0, 0, 0);                             // Next Extent
@@ -1617,8 +1618,9 @@ void IsoWriter::writeLogicalVolumeDescriptor()
     // Domain Flags #03: Hard and Soft Write-Protect
     m_buffer[242] = 0x03;
 
-    // Logical Volume Contents Use
-    m_buffer[249] = 0x10;
+    // Logical Volume Contents Use: the extent of the file set descriptor, one block (2048 bytes) at block 0 of the
+    // metadata partition. It was two blocks, the descriptor and a terminating descriptor behind it.
+    m_buffer[249] = 0x08;
     m_buffer[256] = 0x01;
 
     m_buffer[264] = 0x46;  // partition Map Table Length ( in bytes)
