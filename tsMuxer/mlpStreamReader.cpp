@@ -136,11 +136,16 @@ int MLPStreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdm
         *dstBuff++ = static_cast<uint8_t>(StreamType::AUDIO_TRUE_HD);  // stream_coding_type
         const int audio_presentation_type = (m_channels > 2) ? 6 : (m_channels == 2) ? 3 : 1;
         // The codes of the clip information file: 48 kHz is 1, 96 kHz 4 and 192 kHz 5, and a rate a disc does not have,
-        // such as 44.1 kHz, 0. Every rate but 96 and 192 kHz was declared 48 kHz here, so the two disagreed.
-        const int sampling_frequency = m_samplerate == 192000  ? 5
-                                       : m_samplerate == 96000 ? 4
-                                       : m_samplerate == 48000 ? 1
-                                                               : 0;
+        // such as 44.1 kHz, 0. Every rate but 96 and 192 kHz was declared 48 kHz here, so the two disagreed. TrueHD
+        // given a 48 kHz AC-3 core with merge-ac3-file or merge-ac3-track is named by its core there (M2TSStreamInfo):
+        // 14 at 96 kHz, 12 at 192 kHz, and 1 at any other rate. It said 4 or 5 here.
+        const int sampling_frequency = getCoreFreq() == 48000   ? (m_samplerate == 192000  ? 12
+                                                                   : m_samplerate == 96000 ? 14
+                                                                                           : 1)
+                                       : m_samplerate == 192000 ? 5
+                                       : m_samplerate == 96000  ? 4
+                                       : m_samplerate == 48000  ? 1
+                                                                : 0;
         *dstBuff++ = static_cast<uint8_t>(audio_presentation_type << 4 | sampling_frequency);
         *dstBuff++ = 0xff;  // stuffing_bits
 
