@@ -296,6 +296,8 @@ class SEIUnit final : public NALUnit
           dpb_output_delay(0),
           initial_cpb_removal_delay(),
           initial_cpb_removal_delay_offset(),
+          vcl_initial_cpb_removal_delay(),
+          vcl_initial_cpb_removal_delay_offset(),
           number_of_offset_sequences(-1),
           metadataPtsOffset(0),
           m_mvcHeaderLen(0),
@@ -319,8 +321,10 @@ class SEIUnit final : public NALUnit
 
     uint32_t cpb_removal_delay;
     uint32_t dpb_output_delay;
-    int initial_cpb_removal_delay[32];
+    int initial_cpb_removal_delay[32];  // of the NAL HRD
     int initial_cpb_removal_delay_offset[32];
+    int vcl_initial_cpb_removal_delay[32];  // of the VCL HRD, which counts fewer bytes
+    int vcl_initial_cpb_removal_delay_offset[32];
     int number_of_offset_sequences;  // used for bluray MVC metadata
     int metadataPtsOffset;
     int m_mvcHeaderLen;

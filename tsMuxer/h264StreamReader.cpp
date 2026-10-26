@@ -282,8 +282,9 @@ uint8_t* H264StreamReader::writeNalPrefix(uint8_t* curPos) const
 // The start delay of the buffering period SEI written with insertSEI and forceSEI. It was a fixed 9.5 s, whatever
 // the HRD the SPS gives: 12.7 times the 0.75 s the HRD tsMuxeR adds allows (H.264 C.1, initial_cpb_removal_delay is at
 // most 90000 * CpbSize / BitRate), and in a field shorter than 24 bits only its low bits were kept. It is now 95 % of
-// that limit, the buffer just under full at the first picture, for each schedule, kept within the field.
-// SEIUnit::serialize_buffering_period_message writes the same value for the NAL and the VCL HRD, so it is the smaller.
+// that limit, the buffer just under full at the first picture, for each schedule, kept within the field. The NAL and
+// the VCL HRD get the same value, the smaller. This is the delay of the first buffering period; the later ones follow
+// the buffer (hrdAccessUnit).
 static void setInitialCpbRemovalDelay(SEIUnit& sei, const SPSUnit& sps)
 {
     const HRDParams* params[] = {&sps.nalHrdParams, &sps.vclHrdParams};
@@ -302,8 +303,155 @@ static void setInitialCpbRemovalDelay(SEIUnit& sei, const SPSUnit& sps)
             v = (std::max)(int64_t{1}, (std::min)(v, fieldMax));
             delay = delay == 0 ? v : (std::min)(delay, v);
         }
-        sei.initial_cpb_removal_delay[i] = static_cast<int>(delay);
-        sei.initial_cpb_removal_delay_offset[i] = 0;
+        sei.initial_cpb_removal_delay[i] = sei.vcl_initial_cpb_removal_delay[i] = static_cast<int>(delay);
+        sei.initial_cpb_removal_delay_offset[i] = sei.vcl_initial_cpb_removal_delay_offset[i] = 0;
+    }
+}
+
+int H264StreamReader::readPacket(AVPacket& avPacket)
+{
+    const int rez = MPEGStreamReader::readPacket(avPacket);
+    countHrdBytes(avPacket);
+    return rez;
+}
+
+int H264StreamReader::flushPacket(AVPacket& avPacket)
+{
+    const int rez = MPEGStreamReader::flushPacket(avPacket);
+    countHrdBytes(avPacket);
+    return rez;
+}
+
+// A packet holds one NAL unit, from its start code, or a further part of a long one. The NAL HRD counts every byte of
+// the stream, the VCL HRD the bytes of the VCL and filler NAL units, without their start codes (H.264 C.1.1, C-6).
+void H264StreamReader::countHrdBytes(const AVPacket& avPacket)
+{
+    m_hrdBytesBefore = m_hrdBytes;
+    m_hrdVclBytesBefore = m_hrdVclBytes;
+    if (!m_needSeiCorrection || !avPacket.data || avPacket.size <= 0)
+        return;
+    const uint8_t* data = avPacket.data;
+    int startCode = 0;
+    if (avPacket.size >= 4 && data[0] == 0 && data[1] == 0)
+    {
+        if (data[2] == 1)
+            startCode = 3;
+        else if (data[2] == 0 && data[3] == 1)
+            startCode = 4;
+    }
+    if (startCode > 0 && startCode < avPacket.size)
+    {
+        const auto nalType = static_cast<NALUnit::NALType>(data[startCode] & 0x1f);
+        m_hrdVclNal = (nalType >= NALUnit::NALType::nuSliceNonIDR && nalType <= NALUnit::NALType::nuSliceIDR) ||
+                      nalType == NALUnit::NALType::nuFillerData;
+    }
+    m_hrdBytes += avPacket.size;
+    if (m_hrdVclNal)
+        m_hrdVclBytes += avPacket.size - startCode;
+}
+
+// Called by writeAdditionData once per access unit, before its SEI units are written: counts the access unit written
+// before as it arrives in the coded picture buffer, takes the nominal removal time of this one (C.1.2), and, with a
+// buffering period, gives its initial delays. They were 95 % of the buffer at every buffering period, while only the
+// first starts with the buffer that full: at a later one the delay must not exceed the time from the arrival of the
+// access unit before to the removal of this one (C.3 item 1, C-15; for CBR also not fall below it, C-16). So it is
+// that time, for VBR at most the first delay, and the offset makes up the difference, so that delay + offset stays
+// the same, as the buffering period SEI semantics ask. Arrival follows C.1.1: at the bit rate, for VBR not before the
+// removal time less delay + offset (C-4), or less the delay at a buffering period (C-5). A stream denser than its HRD
+// allows arrives late, and then no delay fits: the first is kept, so that a decoder that starts there still waits for
+// its buffer. Before the first buffering period nothing is counted, and an SPS with another HRD or clock tick starts
+// the model again, as the first buffering period does.
+void H264StreamReader::hrdAccessUnit(const SPSUnit& sps, const bool bufferingPeriod, const uint32_t cpbRemovalDelay,
+                                     SEIUnit& sei)
+{
+    if (m_hrdPending && !m_hrd.empty())
+    {
+        const double bytes = static_cast<double>(m_hrdBytesBefore - m_hrdAuStart + m_hrdAuAdded);
+        const double vclBytes = static_cast<double>(m_hrdVclBytesBefore - m_hrdAuVclStart);
+        for (HrdSchedule& s : m_hrd)
+        {
+            double tai = 0;  // C-2, C-3
+            if (!m_hrdPendingFirst)
+                tai = s.cbr ? s.taf
+                            : (std::max)(s.taf, s.tr - static_cast<double>(m_hrdPendingBp ? s.delay : s.sum) / 90000.0);
+            s.taf = tai + 8.0 * (s.vcl ? vclBytes : bytes) / s.bitRate;  // C-6
+        }
+    }
+    m_hrdPending = true;
+    m_hrdPendingBp = bufferingPeriod;
+    m_hrdPendingFirst = false;
+    m_hrdAuStart = m_hrdBytesBefore;
+    m_hrdAuVclStart = m_hrdVclBytesBefore;
+    m_hrdAuAdded = 0;
+
+    const double tc = sps.time_scale > 0 ? static_cast<double>(sps.num_units_in_tick) / sps.time_scale : 0.0;
+    if (bufferingPeriod)
+    {
+        std::vector<int64_t> params{sps.num_units_in_tick, sps.time_scale};
+        for (const HRDParams* p : {&sps.nalHrdParams, &sps.vclHrdParams})
+        {
+            params.push_back(p->isPresent ? static_cast<int64_t>(p->cpb_cnt_minus1) : -1);
+            params.insert(params.end(),
+                          {p->bit_rate_scale, p->cpb_size_scale, p->initial_cpb_removal_delay_length_minus1});
+            params.insert(params.end(), p->bit_rate_value_minus1.begin(), p->bit_rate_value_minus1.end());
+            params.insert(params.end(), p->cpb_size_value_minus1.begin(), p->cpb_size_value_minus1.end());
+            params.insert(params.end(), p->cbr_flag.begin(), p->cbr_flag.end());
+        }
+        if (m_hrd.empty() || params != m_hrdParams)
+        {
+            m_hrdParams = params;
+            m_hrd.clear();
+            m_hrdPendingFirst = true;
+            if (tc > 0 && !m_mvcSubStream)  // the dependent view of 3D: its HRD covers both views
+            {
+                for (const HRDParams* p : {&sps.nalHrdParams, &sps.vclHrdParams})
+                    for (unsigned i = 0; p->isPresent && i <= p->cpb_cnt_minus1 && i < 32; i++)
+                    {
+                        if (i >= p->bit_rate_value_minus1.size() || i >= p->cpb_size_value_minus1.size() ||
+                            sei.initial_cpb_removal_delay[i] <= 0)
+                            continue;
+                        HrdSchedule s{};
+                        s.vcl = p == &sps.vclHrdParams;
+                        s.index = i;
+                        s.cbr = i < p->cbr_flag.size() && p->cbr_flag[i];
+                        s.bitRate = (p->bit_rate_value_minus1[i] + 1.0) * std::pow(2.0, 6 + p->bit_rate_scale);
+                        const double cpbSize =
+                            (p->cpb_size_value_minus1[i] + 1.0) * std::pow(2.0, 4 + p->cpb_size_scale);
+                        const int64_t fieldMax = (int64_t{1} << (p->initial_cpb_removal_delay_length_minus1 + 1)) - 1;
+                        s.maxDelay =
+                            (std::min)(fieldMax, static_cast<int64_t>(std::floor(90000.0 * cpbSize / s.bitRate)));
+                        // setInitialCpbRemovalDelay has written the first delay into sei
+                        s.first = s.delay = s.sum = sei.initial_cpb_removal_delay[i];
+                        s.trPeriod = s.tr = static_cast<double>(s.first) / 90000.0;  // C-7
+                        m_hrd.push_back(s);
+                    }
+            }
+            return;
+        }
+    }
+    if (m_hrd.empty())
+    {
+        m_hrdPending = false;
+        return;
+    }
+    for (HrdSchedule& s : m_hrd)
+    {
+        s.tr = s.trPeriod + tc * cpbRemovalDelay;  // C-8, C-9
+        if (!bufferingPeriod)
+            continue;
+        const double gap = 90000.0 * (s.tr - s.taf);  // C-14
+        int64_t delay = s.first;
+        if (gap > 0)
+            delay = (std::max)(int64_t{1}, (std::min)(static_cast<int64_t>(std::floor((std::min)(gap, 1e12) + 1e-6)),
+                                                      s.cbr ? s.maxDelay : s.first));
+        const int64_t offset = (std::max)(int64_t{0}, s.first - delay);
+        s.delay = delay;
+        s.sum = delay + offset;
+        s.trPeriod = s.tr;
+        int* delays = s.vcl ? sei.vcl_initial_cpb_removal_delay : sei.initial_cpb_removal_delay;
+        int* offsets = s.vcl ? sei.vcl_initial_cpb_removal_delay_offset : sei.initial_cpb_removal_delay_offset;
+        delays[s.index] = static_cast<int>(delay);
+        offsets[s.index] = static_cast<int>(offset);
     }
 }
 
@@ -380,6 +528,7 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
                                         PriorityDataInfo* priorityData)
 {
     uint8_t* curPos = dstBuffer;
+    int movedBytes = 0;  // a packet moved to the front, counted already when the reader handed it over
     if (avPacket.size > 4 && avPacket.size < dstEnd - dstBuffer)
     {
         // A start code is three bytes or four, and both are legal, so where the NAL header sits has
@@ -393,6 +542,7 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
         {
             // place delimiter at first place
             m_delimiterFound = true;
+            movedBytes = avPacket.size;
             memcpy(curPos, avPacket.data, avPacket.size);
             curPos += avPacket.size;
             avPacket.size = 0;
@@ -488,14 +638,16 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
             LTRACE(LT_INFO, 2, "H264 bitstream changed: insert pict timing and buffering period SEI units");
         }
 
+        const SPSUnit& sps = *m_spsMap.find(m_lastSliceSPS)->second;
+        SEIUnit bpSei;
+        const bool bufferingPeriod = m_lastIFrame && m_lastSliceIDR;
+        if (bufferingPeriod)
+            setInitialCpbRemovalDelay(bpSei, sps);
+        hrdAccessUnit(sps, bufferingPeriod, m_removalDelay, bpSei);
         if (m_lastIFrame)
         {
             if (m_lastSliceIDR)
-            {
-                SEIUnit sei;
-                setInitialCpbRemovalDelay(sei, *m_spsMap.find(m_lastSliceSPS)->second);
-                curPos += writeSEIMessage(curPos, dstEnd, sei, SEI_MSG_BUFFERING_PERIOD);
-            }
+                curPos += writeSEIMessage(curPos, dstEnd, bpSei, SEI_MSG_BUFFERING_PERIOD);
 
             if (m_mvcSubStream)
             {
@@ -528,6 +680,8 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
         m_removalDelay += 2;
         curPos += writeSEIMessage(curPos, dstEnd, sei, SEI_MSG_PIC_TIMING);
     }
+    if (m_hrdPending)
+        m_hrdAuAdded = static_cast<int>(curPos - dstBuffer) - movedBytes;
     m_firstFileFrame = false;
     return static_cast<int>(curPos - dstBuffer);
 }

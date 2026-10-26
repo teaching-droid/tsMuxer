@@ -47,6 +47,9 @@ class H264StreamReader final : public MPEGStreamReader
     // used for correction offset metadata
     void setStartPTS(const int64_t pts) { m_startPts = pts; }
     [[nodiscard]] bool needSPSForSplit() const override { return true; }
+    // Both count the bytes they hand over for the buffer model of insertSEI and forceSEI (hrdAccessUnit)
+    int readPacket(AVPacket& avPacket) override;
+    int flushPacket(AVPacket& avPacket) override;
 
    protected:
     void onSplitEvent() override { m_firstFileFrame = true; }
@@ -215,6 +218,40 @@ class H264StreamReader final : public MPEGStreamReader
     uint8_t* m_OffsetMetadataPtsAddr;
     std::vector<uint8_t> m_decodedSliceHeader;
     int m_removalDelay;
+
+    // The coded picture buffer of H.264 Annex C, as the HRD of the SPS written describes it, for the initial delays of
+    // the buffering period SEI written with insertSEI and forceSEI. One schedule per CPB of the NAL HRD (every byte of
+    // the stream counts) and of the VCL HRD (only the VCL NAL units count).
+    struct HrdSchedule
+    {
+        bool vcl;
+        unsigned index;    // SchedSelIdx
+        bool cbr;          // arrival without a gap (C.1.1, C-2)
+        double bitRate;    // bit/s
+        int64_t maxDelay;  // 90000 * CpbSize / BitRate, or less where the field holds less
+        int64_t first;     // the delay of the first buffering period: delay + offset at every later one
+        int64_t delay;     // initial_cpb_removal_delay of the buffering period in force
+        int64_t sum;       // and its delay + offset
+        double trPeriod;   // nominal removal time of the access unit of that buffering period (s)
+        double tr;         // nominal removal time of the access unit written last
+        double taf;        // final arrival time of the access unit counted last
+    };
+    std::vector<HrdSchedule> m_hrd;    // empty until the first buffering period
+    std::vector<int64_t> m_hrdParams;  // the HRD and clock tick the schedules were made from
+    bool m_hrdPending = false;         // an access unit was written and is counted when the next one is
+    bool m_hrdPendingBp = false;       // it has a buffering period
+    bool m_hrdPendingFirst = false;    // and the HRD starts with it
+    int64_t m_hrdBytes = 0;            // the bytes handed over, and the bytes of VCL NAL units among them
+    int64_t m_hrdVclBytes = 0;
+    int64_t m_hrdBytesBefore = 0;  // the same before the packet handed over last, the one a muxer writes now
+    int64_t m_hrdVclBytesBefore = 0;
+    int64_t m_hrdAuStart = 0;  // the same where the access unit written last starts
+    int64_t m_hrdAuVclStart = 0;
+    int m_hrdAuAdded = 0;      // the bytes writeAdditionData put in front of it
+    bool m_hrdVclNal = false;  // the packet handed over last is (a part of) a VCL or filler NAL unit
+    void countHrdBytes(const AVPacket& avPacket);
+    void hrdAccessUnit(const SPSUnit& sps, bool bufferingPeriod, uint32_t cpbRemovalDelay, SEIUnit& sei);
+
     bool m_spsChangeWarned;
     // Whether the two flags above hold a real stream's values yet, as opposed to the
     // constructor's false. Without it the first SPS was compared against the defaults and

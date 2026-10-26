@@ -1780,9 +1780,9 @@ void SEIUnit::serialize_buffering_period_message(const SPSUnit& sps, BitStreamWr
         for (size_t SchedSelIdx = 0; SchedSelIdx <= sps.vclHrdParams.cpb_cnt_minus1; SchedSelIdx++)
         {
             writer.putBits(sps.vclHrdParams.initial_cpb_removal_delay_length_minus1 + 1,
-                           initial_cpb_removal_delay[SchedSelIdx]);
+                           vcl_initial_cpb_removal_delay[SchedSelIdx]);
             writer.putBits(sps.vclHrdParams.initial_cpb_removal_delay_length_minus1 + 1,
-                           initial_cpb_removal_delay_offset[SchedSelIdx]);
+                           vcl_initial_cpb_removal_delay_offset[SchedSelIdx]);
         }
     }
     write_byte_align_bits(writer);
