@@ -1352,6 +1352,13 @@ int IsoWriter::writeExtendedFileEntryDescriptor(const bool namedStream, const ui
         assert(linkCount == 0);
         buff16[48 / 2] = linkCount;  // File Link Count
     }
+    else if (namedStream || fileType == FileTypes::SystemStreamDirectory)
+    {
+        // The unique ID mapping stream and the system stream folder that holds it belong to the file system, not to
+        // a user: no permissions
+        buff32[44 / 4] = 0x000000;   // Permissions
+        buff16[48 / 2] = linkCount;  // File Link Count
+    }
     else if (fileType == FileTypes::File || fileType == FileTypes::RealtimeFile)
     {
         buff32[44 / 4] = 0x1084;  // Permissions
@@ -1461,7 +1468,7 @@ void IsoWriter::writeIcbTag(const bool namedStream, uint8_t* buffer, FileTypes f
     else
         buff16[18 / 2] = 0x0020;  // flags: archive
     if (namedStream)
-        buff16[18 / 2] += 0x2000;  // flags: stream
+        buff16[18 / 2] += 0x2400;  // flags: stream and system (the unique ID mapping stream)
 }
 
 void IsoWriter::writeFileSetDescriptor()
