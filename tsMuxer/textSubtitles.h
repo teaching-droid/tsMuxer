@@ -72,7 +72,9 @@ class TextToPGSConverter  //: public TextSubtitlesRenderWin32
     int m_bottomOffset;
     uint16_t m_composition_number;
     // The window of the last text drawn, for a clear that follows it as a display set of its own
+    uint16_t m_lastWindowLeft = 0;
     uint16_t m_lastWindowTop = 0;
+    uint16_t m_lastWindowWidth = 0;
     uint16_t m_lastWindowHeight = 0;
     int64_t m_lastWindowDrawTime = 0;  // in 90 kHz ticks
     // The times of the PGS decoder model in 90 kHz ticks, each rounded up on its own: decoding an object of so many
@@ -86,11 +88,11 @@ class TextToPGSConverter  //: public TextSubtitlesRenderWin32
     uint8_t* m_pgsBuffer;
     bool m_fadeCutSaid = false;  // the warning that a fade was shortened, once
     uint8_t* m_imageBuffer;
-    long composePresentationSegment(uint8_t* buff, CompositionMode mode, int64_t pts, int64_t dts, uint16_t top,
-                                    bool needPgHeader, bool forced);
-    long composeWindowDefinition(uint8_t* buff, int64_t pts, int64_t dts, uint16_t top, uint16_t height,
-                                 bool needPgHeader = true) const;
-    long composeWindow(uint8_t* buff, uint16_t top, uint16_t height) const;
+    long composePresentationSegment(uint8_t* buff, CompositionMode mode, int64_t pts, int64_t dts, uint16_t left,
+                                    uint16_t top, bool needPgHeader, bool forced);
+    long composeWindowDefinition(uint8_t* buff, int64_t pts, int64_t dts, uint16_t left, uint16_t top, uint16_t width,
+                                 uint16_t height, bool needPgHeader = true) const;
+    static long composeWindow(uint8_t* buff, uint16_t left, uint16_t top, uint16_t width, uint16_t height);
     long composePaletteDefinition(const Palette& palette, uint8_t* buff, int64_t pts, int64_t dts,
                                   bool needPgHeader = true) const;
     long composeObjectDefinition(uint8_t* buff, int64_t pts, int64_t dts, int firstLine, int lastLine,
@@ -101,6 +103,10 @@ class TextToPGSConverter  //: public TextSubtitlesRenderWin32
     static long writePGHeader(uint8_t* buff, int64_t pts, int64_t dts);
     [[nodiscard]] double alignToGrid(double value) const;
     bool rlePack(uint32_t colorMask);
+    uint8_t* packRun(uint8_t* dst, const uint32_t* src, int repCnt, uint32_t colorMask);
+    void packDrawnBox(const uint32_t* picture, uint32_t colorMask);
+    void padLines(int above, int below);
+    void sortPalette();
     void reduceColors(uint8_t mask) const;
     [[nodiscard]] uint32_t straightColor(uint32_t premultiplied) const;
     int getRepeatCnt(const uint32_t* pos, const uint32_t* end, uint32_t colorMask) const;
@@ -119,6 +125,11 @@ class TextToPGSConverter  //: public TextSubtitlesRenderWin32
     uint8_t m_paletteVersion;
     uint16_t m_minLine;
     uint16_t m_maxLine;
+    // A drawn text is packed only where it is drawn (see packDrawnBox); a picture from a bitmap subtitle, or one drawn
+    // again at another size, keeps the full width
+    bool m_cropToText;
+    uint16_t m_objectLeft = 0;  // the columns rlePack packed: the first one, and how many
+    uint16_t m_objectWidth = 0;
 };
 };  // namespace text_subtitles
 

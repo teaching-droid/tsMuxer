@@ -37,7 +37,8 @@ TextToPGSConverter::TextToPGSConverter(const bool sourceIsText)
       m_videoWidth(0),
       m_videoHeight(0),
       m_videoFps(0),
-      m_imageBuffer()
+      m_imageBuffer(),
+      m_cropToText(sourceIsText)
 {
     m_bottomOffset = 0;
     m_renderedData = nullptr;
@@ -278,6 +279,14 @@ bool TextToPGSConverter::rlePack(const uint32_t colorMask)
         auto srcData = reinterpret_cast<uint32_t*>(m_textRender ? m_textRender->m_pData : m_imageBuffer);
         assert(srcData);
         m_rleLen = 0;
+        m_objectLeft = 0;
+        m_objectWidth = m_videoWidth;
+        if (m_cropToText)
+        {
+            packDrawnBox(srcData, colorMask);
+            sortPalette();
+            return true;
+        }
         m_minLine = UINT16_MAX;
         m_maxLine = 0;
         for (uint16_t y = 0; y < m_videoHeight; y++)
@@ -304,46 +313,8 @@ bool TextToPGSConverter::rlePack(const uint32_t colorMask)
                     m_maxLine = FFMAX(m_maxLine, y);
                 }
 
-                const uint8_t srcColor = color32To8(srcData, colorMask);
-                assert(repCnt < 16384);
-                if (srcColor)  // color exists
-                {
-                    if (repCnt > 2)
-                    {
-                        *curPtr++ = 0;
-                        if (repCnt <= 63)
-                            *curPtr++ = static_cast<uint8_t>(0x80 + repCnt);
-                        else
-                        {
-                            *curPtr++ = static_cast<uint8_t>(0xc0 + (repCnt >> 8));
-                            *curPtr++ = repCnt & 0xff;
-                        }
-                        *curPtr++ = srcColor;
-                        srcData += repCnt;
-                    }
-                    else
-                    {  // simple color
-                        *curPtr++ = srcColor;
-                        srcData++;
-                        if (repCnt == 2)
-                        {
-                            *curPtr++ = srcColor;
-                            srcData++;
-                        }
-                    }
-                }
-                else  // zero color
-                {
-                    *curPtr++ = 0;
-                    if (repCnt <= 63)
-                        *curPtr++ = repCnt & 0xff;
-                    else
-                    {
-                        *curPtr++ = static_cast<uint8_t>(0x40 | repCnt >> 8);
-                        *curPtr++ = repCnt & 0xff;
-                    }
-                    srcData += repCnt;
-                }
+                curPtr = packRun(curPtr, srcData, repCnt, colorMask);
+                srcData += repCnt;
             }
             if (m_minLine != UINT16_MAX)
             {
@@ -360,16 +331,145 @@ bool TextToPGSConverter::rlePack(const uint32_t colorMask)
         if (m_minLine == UINT16_MAX)
             m_minLine = m_maxLine = 0;
         m_rleLen = static_cast<int>(trimPos - m_renderedData);
-        // sort by colors indexes
-        m_paletteByColor.clear();
-        for (auto [fst, snd] : m_paletteYUV) m_paletteByColor.insert(std::make_pair(snd, fst));
-        assert(m_paletteByColor.size() == m_paletteYUV.size());
+        sortPalette();
         return true;
     }
     catch (VodCoreException&)
     {
         return false;
     }
+}
+
+// One run of pixels of one colour, packed as PGS packs it
+uint8_t* TextToPGSConverter::packRun(uint8_t* dst, const uint32_t* src, const int repCnt, const uint32_t colorMask)
+{
+    const uint8_t srcColor = color32To8(src, colorMask);
+    assert(repCnt < 16384);
+    if (srcColor)  // color exists
+    {
+        if (repCnt > 2)
+        {
+            *dst++ = 0;
+            if (repCnt <= 63)
+                *dst++ = static_cast<uint8_t>(0x80 + repCnt);
+            else
+            {
+                *dst++ = static_cast<uint8_t>(0xc0 + (repCnt >> 8));
+                *dst++ = repCnt & 0xff;
+            }
+            *dst++ = srcColor;
+        }
+        else
+        {  // simple color
+            *dst++ = srcColor;
+            if (repCnt == 2)
+                *dst++ = srcColor;
+        }
+    }
+    else  // zero color
+    {
+        *dst++ = 0;
+        if (repCnt <= 63)
+            *dst++ = repCnt & 0xff;
+        else
+        {
+            *dst++ = static_cast<uint8_t>(0x40 | repCnt >> 8);
+            *dst++ = repCnt & 0xff;
+        }
+    }
+    return dst;
+}
+
+// ** A TEXT SUBTITLE IS PACKED ONLY WHERE IT IS DRAWN. ** The object, and the window it is shown in, are the box
+// around the pixels that are not fully transparent, at the columns they are drawn at. They were as wide as the picture,
+// even for one word. A box narrower than 8 pixels, the least an object may have, is widened inside the picture.
+// Transparent is colour 0, whether or not the box begins with it.
+void TextToPGSConverter::packDrawnBox(const uint32_t* picture, const uint32_t colorMask)
+{
+    int left = m_videoWidth;
+    int right = -1;
+    int top = -1;
+    int bottom = -1;
+    for (int y = 0; y < m_videoHeight; ++y)
+    {
+        const uint32_t* line = picture + static_cast<size_t>(y) * m_videoWidth;
+        int first = 0;
+        while (first < m_videoWidth && maskedColor(line[first], colorMask) == 0) ++first;
+        if (first == m_videoWidth)
+            continue;
+        int last = m_videoWidth - 1;
+        while (maskedColor(line[last], colorMask) == 0) --last;
+        left = FFMIN(left, first);
+        right = FFMAX(right, last);
+        if (top < 0)
+            top = y;
+        bottom = y;
+    }
+    m_minLine = m_maxLine = 0;
+    if (bottom < 0)
+        return;  // nothing is drawn: m_rleLen stays 0
+    if (right - left + 1 < 8)
+    {
+        right = FFMIN(m_videoWidth - 1, left + 7);
+        left = FFMAX(0, right - 7);
+    }
+    const int width = right - left + 1;
+
+    m_paletteYUV.emplace(RGBAToYUVA(0, m_bt709), static_cast<uint8_t>(0));
+    uint8_t* curPtr = m_renderedData;
+    const uint8_t* bufEnd = m_renderedData + static_cast<size_t>(m_videoWidth + 16) * m_videoHeight;
+    for (int y = top; y <= bottom; ++y)
+    {
+        const uint32_t* src = picture + static_cast<size_t>(y) * m_videoWidth + left;
+        const uint32_t* lineEnd = src + width;
+        while (src < lineEnd)
+        {
+            // a run takes at most 4 bytes, and the end of the line 2 more
+            if (bufEnd - curPtr < 6)
+                THROW(ERR_COMMON, "Not enough RLE buffer for encoding picture")
+            const int repCnt = getRepeatCnt(src, lineEnd, colorMask);
+            curPtr = packRun(curPtr, src, repCnt, colorMask);
+            src += repCnt;
+        }
+        *curPtr++ = 0;  // end of line signal
+        *curPtr++ = 0;  // end of line signal
+    }
+    m_minLine = static_cast<uint16_t>(top);
+    m_maxLine = static_cast<uint16_t>(bottom);
+    m_objectLeft = static_cast<uint16_t>(left);
+    m_objectWidth = static_cast<uint16_t>(width);
+    m_rleLen = static_cast<int>(curPtr - m_renderedData);
+}
+
+// Lines of nothing but transparent pixels above and below the packed picture, for an object of fewer lines than PGS
+// allows. Colour 0 is transparent, as packDrawnBox has it.
+void TextToPGSConverter::padLines(const int above, const int below)
+{
+    uint8_t line[5];
+    int len = 0;
+    line[len++] = 0;
+    if (m_objectWidth <= 63)
+        line[len++] = static_cast<uint8_t>(m_objectWidth);
+    else
+    {
+        line[len++] = static_cast<uint8_t>(0x40 | m_objectWidth >> 8);
+        line[len++] = m_objectWidth & 0xff;
+    }
+    line[len++] = 0;  // end of line signal
+    line[len++] = 0;  // end of line signal
+    memmove(m_renderedData + above * len, m_renderedData, m_rleLen);
+    for (int i = 0; i < above; ++i) memcpy(m_renderedData + i * len, line, len);
+    uint8_t* end = m_renderedData + above * len + m_rleLen;
+    for (int i = 0; i < below; ++i) memcpy(end + i * len, line, len);
+    m_rleLen += (above + below) * len;
+}
+
+void TextToPGSConverter::sortPalette()
+{
+    // sort by colors indexes
+    m_paletteByColor.clear();
+    for (auto [fst, snd] : m_paletteYUV) m_paletteByColor.insert(std::make_pair(snd, fst));
+    assert(m_paletteByColor.size() == m_paletteYUV.size());
 }
 
 uint16_t TextToPGSConverter::renderedHeight() const { return m_maxLine - m_minLine + 1; }
@@ -412,8 +512,10 @@ uint8_t* TextToPGSConverter::doClear(const double atTimeSec, uint32_t& dstBufSiz
     palette_update_flag = false;
     const int64_t pts = llround(alignToGrid(atTimeSec) * 90000.0);
     const int64_t dts = pts - m_lastWindowDrawTime - 1;
-    curPos += composePresentationSegment(curPos, CompositionMode::Finish, pts, dts, m_lastWindowTop, true, false);
-    curPos += composeWindowDefinition(curPos, pts - m_lastWindowDrawTime, dts, m_lastWindowTop, m_lastWindowHeight);
+    curPos += composePresentationSegment(curPos, CompositionMode::Finish, pts, dts, m_lastWindowLeft, m_lastWindowTop,
+                                         true, false);
+    curPos += composeWindowDefinition(curPos, pts - m_lastWindowDrawTime, dts, m_lastWindowLeft, m_lastWindowTop,
+                                      m_lastWindowWidth, m_lastWindowHeight);
     curPos += composeEnd(curPos, dts, dts);
     dstBufSize = static_cast<uint32_t>(curPos - m_pgsBuffer);
     return m_pgsBuffer;
@@ -443,9 +545,19 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
     if (m_rleLen == 0)
         return nullptr;  // empty text
 
-    const auto objectWindowHeight = static_cast<uint16_t>(FFMAX(0, renderedHeight()));
-    const auto objectWindowTop =
-        static_cast<uint16_t>(FFMAX(0, m_textRender->m_height - objectWindowHeight - m_bottomOffset));
+    // The drawn lines are placed bottom-offset lines above the bottom of the picture, and inside it: a negative offset
+    // put them partly below it. An object of fewer than 8 lines, the least PGS allows, gets transparent lines above
+    // them, or below them at the top of the picture. The columns are those packDrawnBox kept.
+    const int drawnHeight = renderedHeight();
+    const int drawnTop =
+        FFMAX(0, FFMIN(m_textRender->m_height - drawnHeight - m_bottomOffset, m_textRender->m_height - drawnHeight));
+    const int padHeight = FFMAX(0, 8 - drawnHeight);
+    const int padAbove = FFMIN(padHeight, drawnTop);
+    padLines(padAbove, padHeight - padAbove);
+    const auto objectWindowHeight = static_cast<uint16_t>(drawnHeight + padHeight);
+    const auto objectWindowTop = static_cast<uint16_t>(drawnTop - padAbove);
+    const uint16_t objectWindowLeft = m_objectLeft;
+    const uint16_t objectWindowWidth = m_objectWidth;
 
     int fadeInFrames = lround(animation.fadeInDuration * m_videoFps);
     int fadeOutFrames = lround(animation.fadeOutDuration * m_videoFps);
@@ -487,12 +599,14 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
     // nearest tick, so that a time without a fraction (297 ticks for a window of 1920x55) came out a tick longer and
     // the window began before the composition allowed; the end of a display set without an object came at 90 ticks
     // before its presentation, after the decoding time.
-    const double objectPixels = static_cast<double>(m_maxLine - m_minLine + 1) * m_videoWidth;
+    const double objectPixels = static_cast<double>(objectWindowWidth) * objectWindowHeight;
     const int64_t decodeTime = objectDecodeTime(objectPixels);
     const int64_t drawTime = windowDrawTime(objectPixels);
     const int64_t decodeDuration =
         FFMAX(windowDrawTime(static_cast<double>(m_videoWidth) * m_videoHeight), decodeTime) + drawTime;
+    m_lastWindowLeft = objectWindowLeft;
     m_lastWindowTop = objectWindowTop;
+    m_lastWindowWidth = objectWindowWidth;
     m_lastWindowHeight = objectWindowHeight;
     m_lastWindowDrawTime = drawTime;
 
@@ -504,11 +618,13 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
     int64_t pts = llround(inTimePTS);
     int64_t dts = pts - decodeDuration;
 
-    curPos += composePresentationSegment(curPos, CompositionMode::Start, pts, dts, objectWindowTop, true, forced);
-    curPos += composeWindowDefinition(curPos, pts - drawTime, dts, objectWindowTop, objectWindowHeight);
+    curPos += composePresentationSegment(curPos, CompositionMode::Start, pts, dts, objectWindowLeft, objectWindowTop,
+                                         true, forced);
+    curPos += composeWindowDefinition(curPos, pts - drawTime, dts, objectWindowLeft, objectWindowTop, objectWindowWidth,
+                                      objectWindowHeight);
     curPos += composePaletteDefinition(buildPalette(toCurve(opacity)), curPos, dts, dts);
     const int64_t odfPTS = dts + decodeTime;
-    curPos += composeObjectDefinition(curPos, odfPTS, dts, m_minLine, m_maxLine, true);
+    curPos += composeObjectDefinition(curPos, odfPTS, dts, 0, objectWindowHeight - 1, true);
     curPos += composeEnd(curPos, odfPTS, odfPTS);
 
     // Each fade step is a presentation segment, a palette of up to 256 colours and an end: under 1.4 KB. A fade of
@@ -524,7 +640,8 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
         const bool savedFlag = palette_update_flag;
         palette_update_flag = true;
         uint8_t* p = curPos;
-        p += composePresentationSegment(p, CompositionMode::Update, pts, dts, objectWindowTop, true, forced);
+        p += composePresentationSegment(p, CompositionMode::Update, pts, dts, objectWindowLeft, objectWindowTop, true,
+                                        forced);
         p += composePaletteDefinition(buildPalette(toCurve(1.0F)), p, dts, dts);
         p += composeEnd(p, dts, dts);
         m_composition_number = savedNumber;
@@ -587,7 +704,8 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
         m_paletteVersion++;
         pts = llround(updateTime);
         dts = pts - drawTime - 1;
-        curPos += composePresentationSegment(curPos, CompositionMode::Update, pts, dts, objectWindowTop, true, forced);
+        curPos += composePresentationSegment(curPos, CompositionMode::Update, pts, dts, objectWindowLeft,
+                                             objectWindowTop, true, forced);
         curPos += composePaletteDefinition(buildPalette(toCurve(opacity)), curPos, dts, dts);
         curPos += composeEnd(curPos, dts, dts);
 
@@ -605,7 +723,8 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
         m_paletteVersion++;
         pts = llround(updateTime);
         dts = pts - drawTime - 1;
-        curPos += composePresentationSegment(curPos, CompositionMode::Update, pts, dts, objectWindowTop, true, forced);
+        curPos += composePresentationSegment(curPos, CompositionMode::Update, pts, dts, objectWindowLeft,
+                                             objectWindowTop, true, forced);
         curPos += composePaletteDefinition(buildPalette(toCurve(opacity)), curPos, dts, dts);
         curPos += composeEnd(curPos, dts, dts);
 
@@ -620,8 +739,10 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
     {
         pts = llround(outTimePTS);
         dts = pts - drawTime - 1;
-        curPos += composePresentationSegment(curPos, CompositionMode::Finish, pts, dts, objectWindowTop, true, false);
-        curPos += composeWindowDefinition(curPos, pts - drawTime, dts, objectWindowTop, objectWindowHeight);
+        curPos += composePresentationSegment(curPos, CompositionMode::Finish, pts, dts, objectWindowLeft,
+                                             objectWindowTop, true, false);
+        curPos += composeWindowDefinition(curPos, pts - drawTime, dts, objectWindowLeft, objectWindowTop,
+                                          objectWindowWidth, objectWindowHeight);
         curPos += composeEnd(curPos, dts, dts);
     }
 
@@ -632,8 +753,8 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
 }
 
 long TextToPGSConverter::composePresentationSegment(uint8_t* buff, const CompositionMode mode, const int64_t pts,
-                                                    const int64_t dts, const uint16_t top, const bool needPgHeader,
-                                                    const bool forced)
+                                                    const int64_t dts, const uint16_t left, const uint16_t top,
+                                                    const bool needPgHeader, const bool forced)
 {
     uint8_t* curPos = buff;
     if (needPgHeader)
@@ -658,8 +779,8 @@ long TextToPGSConverter::composePresentationSegment(uint8_t* buff, const Composi
             *curPos++ = 0x40;  // object_cropped_flag = false, forced_on_flag = true
         else
             *curPos++ = 0;  // object_cropped_flag = false, forced_on_flag = false
-        AV_WB16(curPos, 0);
-        curPos += 2;  // object horizontal position = 0
+        AV_WB16(curPos, left);
+        curPos += 2;  // object horizontal position
         AV_WB16(curPos, top);
         curPos += 2;  // object vertical position
     }
@@ -680,8 +801,8 @@ long TextToPGSConverter::composeVideoDescriptor(uint8_t* buff) const
 }
 
 long TextToPGSConverter::composeWindowDefinition(uint8_t* buff, const int64_t pts, const int64_t dts,
-                                                 const uint16_t top, const uint16_t height,
-                                                 const bool needPgHeader) const
+                                                 const uint16_t left, const uint16_t top, const uint16_t width,
+                                                 const uint16_t height, const bool needPgHeader) const
 {
     uint8_t* curPos = buff;
     if (needPgHeader)
@@ -690,7 +811,7 @@ long TextToPGSConverter::composeWindowDefinition(uint8_t* buff, const int64_t pt
     curPos += 2;  // skip length field
     uint8_t* startPos = curPos;
     *curPos++ = 1;  // number of windows
-    curPos += composeWindow(curPos, top, height);
+    curPos += composeWindow(curPos, left, top, width, height);
     AV_WB16(startPos - 2, static_cast<uint16_t>(curPos - startPos));
     return static_cast<long>(curPos - buff);
 }
@@ -704,15 +825,16 @@ long TextToPGSConverter::composeCompositionDescriptor(uint8_t* buff, const uint1
     return static_cast<long>(curPos - buff);
 }
 
-long TextToPGSConverter::composeWindow(uint8_t* buff, const uint16_t top, const uint16_t height) const
+long TextToPGSConverter::composeWindow(uint8_t* buff, const uint16_t left, const uint16_t top, const uint16_t width,
+                                       const uint16_t height)
 {
     uint8_t* curPos = buff;
     *curPos++ = 0;  // window ID
-    AV_WB16(curPos, 0);
+    AV_WB16(curPos, left);
     curPos += 2;
     AV_WB16(curPos, top);
     curPos += 2;
-    AV_WB16(curPos, m_videoWidth);
+    AV_WB16(curPos, width);
     curPos += 2;
     AV_WB16(curPos, height);
     curPos += 2;
@@ -770,7 +892,7 @@ long TextToPGSConverter::composeObjectDefinition(uint8_t* buff, const int64_t pt
             sizePos = curPos;
             // object data header
             curPos += 3;  // skip total size
-            AV_WB16(curPos, m_videoWidth);
+            AV_WB16(curPos, m_objectWidth);
             curPos += 2;
             AV_WB16(curPos, static_cast<uint16_t>(lastLine - firstLine + 1));
             curPos += 2;

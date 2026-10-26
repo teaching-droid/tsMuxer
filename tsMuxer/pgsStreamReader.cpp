@@ -358,13 +358,14 @@ void PGSStreamReader::renderTextShow(int64_t inTime)
     // composition segment. pts=x,  dts = x-0.0648 (pts alignment to video grid) (I get constant value from real PGS
     // track as example)
     int rLen =
-        m_render->composePresentationSegment(curPos, CompositionMode::Start, inTime, inTime - PRESENTATION_DTS_DELTA,
+        m_render->composePresentationSegment(curPos, CompositionMode::Start, inTime, inTime - PRESENTATION_DTS_DELTA, 0,
                                              m_objectWindowTop, m_demuxMode, m_forced_on_flag);
     m_renderedBlocks.emplace_back(inTime, inTime - PRESENTATION_DTS_DELTA, rLen, curPos);
     curPos += rLen;
     // window definition.   pts=x-0.001, dts = x-0.0648
-    rLen = m_render->composeWindowDefinition(curPos, inTime - windowsTransferTime, inTime - PRESENTATION_DTS_DELTA,
-                                             m_objectWindowTop, m_objectWindowHeight, m_demuxMode);
+    rLen =
+        m_render->composeWindowDefinition(curPos, inTime - windowsTransferTime, inTime - PRESENTATION_DTS_DELTA, 0,
+                                          m_objectWindowTop, m_render->m_videoWidth, m_objectWindowHeight, m_demuxMode);
     m_renderedBlocks.emplace_back(inTime - windowsTransferTime, inTime - PRESENTATION_DTS_DELTA, rLen, curPos);
     curPos += rLen;
 
@@ -396,14 +397,15 @@ void PGSStreamReader::renderTextHide(int64_t outTime)
     // hide text
     uint8_t* curPos = m_renderedData;
     // composition segment. pts=x,       dts = x-0.001 (pts alignment to video grid)
-    int rLen =
-        m_render->composePresentationSegment(curPos, CompositionMode::Finish, outTime,
-                                             outTime - windowsTransferTime - 90, m_objectWindowTop, m_demuxMode, false);
+    int rLen = m_render->composePresentationSegment(curPos, CompositionMode::Finish, outTime,
+                                                    outTime - windowsTransferTime - 90, 0, m_objectWindowTop,
+                                                    m_demuxMode, false);
     m_renderedBlocks.emplace_back(outTime, outTime - windowsTransferTime - 90, rLen, curPos);
     curPos += rLen;
     // windows              pts=x-0.001, dts = x-0.001
-    rLen = m_render->composeWindowDefinition(curPos, outTime - windowsTransferTime, outTime - windowsTransferTime - 90,
-                                             m_objectWindowTop, m_objectWindowHeight, m_demuxMode);
+    rLen =
+        m_render->composeWindowDefinition(curPos, outTime - windowsTransferTime, outTime - windowsTransferTime - 90, 0,
+                                          m_objectWindowTop, m_render->m_videoWidth, m_objectWindowHeight, m_demuxMode);
     m_renderedBlocks.emplace_back(outTime - windowsTransferTime, outTime - windowsTransferTime - 90, rLen, curPos);
     curPos += rLen;
     // end                  pts=x-0.001, dts = x-0.001

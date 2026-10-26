@@ -103,7 +103,9 @@ void BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
     const int64_t drawTime = TextToPGSConverter::windowDrawTime(objectPixels);
     const int64_t decodeDuration =
         FFMAX(TextToPGSConverter::windowDrawTime(static_cast<double>(m_width) * m_height), decodeTime) + drawTime;
+    m_pgs->m_lastWindowLeft = 0;
     m_pgs->m_lastWindowTop = top;
+    m_pgs->m_lastWindowWidth = m_width;
     m_pgs->m_lastWindowHeight = lines;
     m_pgs->m_lastWindowDrawTime = drawTime;
 
@@ -118,8 +120,8 @@ void BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
     // headers of its segments.
     std::vector<uint8_t> buf(static_cast<size_t>(m_pgs->m_rleLen) + (m_pgs->m_rleLen / 65000 + 1) * 32 + 2048);
     uint8_t* cur = buf.data();
-    cur += m_pgs->composePresentationSegment(cur, CompositionMode::Start, pts, dts, top, true, forced);
-    cur += m_pgs->composeWindowDefinition(cur, pts - drawTime, dts, top, lines);
+    cur += m_pgs->composePresentationSegment(cur, CompositionMode::Start, pts, dts, 0, top, true, forced);
+    cur += m_pgs->composeWindowDefinition(cur, pts - drawTime, dts, 0, top, m_width, lines);
     cur += m_pgs->composePaletteDefinition(m_pgs->m_paletteByColor, cur, dts, dts);
     cur += m_pgs->composeObjectDefinition(cur, odfPts, dts, m_pgs->minLine(), m_pgs->maxLine(), true);
     cur += m_pgs->composeEnd(cur, odfPts, odfPts);
