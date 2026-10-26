@@ -2,6 +2,7 @@
 
 #include <fs/systemlog.h>
 
+#include <cmath>
 #include <cstring>
 #include <sstream>
 
@@ -433,6 +434,18 @@ int AC3StreamReader::flushPacket(AVPacket& avPacket)
 
 bool AC3StreamReader::needMPLSCorrection() const { return !m_true_hd_mode || m_downconvertToAC3; }
 
+// A gap a join puts in the times of the track (addTimeGap). TrueHD with its AC-3 core stamps its core frames and its
+// access units from clocks of their own (readPacketTHD), which the gap of the base class did not reach: the join said
+// that the sound of a later file starts after a gap, and its core and its TrueHD still followed on from the sound
+// before. Each clock now takes each gap at the frame or the unit that comes at its time, within half of one, as the
+// plain TrueHD reader does. Down-to-ac3 is timed by the base class, which takes it as before.
+void AC3StreamReader::addTimeGap(const int64_t atNs, const int64_t gapNs)
+{
+    SimplePacketizerReader::addTimeGap(atNs, gapNs);
+    m_coreGaps.emplace_back(atNs, gapNs);
+    m_unitGaps.emplace_back(atNs, gapNs);
+}
+
 // Core frames are passed on in the order the source has them. A held-back core frame, released by a count of TrueHD
 // samples, was never active: the count was back at 0 after every TrueHD unit and nothing was ever held, so that code
 // is gone.
@@ -465,6 +478,13 @@ int AC3StreamReader::readPacketTHD(AVPacket& avPacket)
 
         if (isAc3Packet)
         {
+            while (!m_coreGaps.empty() &&
+                   (static_cast<double>(m_nextAc3Time) + m_frameDuration / 2.0) * 1e9 / INTERNAL_PTS_FREQ >=
+                       static_cast<double>(m_coreGaps.front().first))
+            {
+                m_nextAc3Time += llround(static_cast<double>(m_coreGaps.front().second) * INTERNAL_PTS_FREQ / 1e9);
+                m_coreGaps.erase(m_coreGaps.begin());
+            }
             avPacket.dts = avPacket.pts = m_nextAc3Time;
             avPacket.flags |= AVPacket::IS_CORE_PACKET;
             m_nextAc3Time += m_frameDuration;
@@ -472,6 +492,13 @@ int AC3StreamReader::readPacketTHD(AVPacket& avPacket)
         }
         else
         {
+            while (mlp.m_samplerate && !m_unitGaps.empty() &&
+                   (static_cast<double>(m_totalTHDSamples) + mlp.m_samples / 2.0) * 1e9 / mlp.m_samplerate >=
+                       static_cast<double>(m_unitGaps.front().first))
+            {
+                m_totalTHDSamples += llround(static_cast<double>(m_unitGaps.front().second) * mlp.m_samplerate / 1e9);
+                m_unitGaps.erase(m_unitGaps.begin());
+            }
             // thg packet
             // The plain TrueHD reader and the merge reader had the same overflow after two and a half hours at
             // 192 kHz; the conversion is shared now. A rate of 0 means no major sync was decoded yet.

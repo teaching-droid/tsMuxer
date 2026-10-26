@@ -36,6 +36,7 @@ class AC3StreamReader final : public SimplePacketizerReader, public AC3Codec
     bool isPriorityData(AVPacket* packet) override;
     bool isIFrame(AVPacket* packet) override { return isPriorityData(packet); }
     bool isSecondary() override;
+    void addTimeGap(int64_t atNs, int64_t gapNs) override;
 
    private:
     // Find the lossless substream on THIS reader. Only runs for a track the discovery phase already
@@ -84,6 +85,10 @@ class AC3StreamReader final : public SimplePacketizerReader, public AC3Codec
     bool m_leadCounted = false;
     bool m_leadApplied = false;
     void applyLeadUnits();
+    // The gaps of addTimeGap for TrueHD with its AC-3 core (readPacketTHD): its core frames and its access units are
+    // timed by clocks of their own (m_nextAc3Time, m_totalTHDSamples), not by the base class, and each takes each gap
+    std::vector<std::pair<int64_t, int64_t>> m_coreGaps;
+    std::vector<std::pair<int64_t, int64_t>> m_unitGaps;
 };
 
 #endif
