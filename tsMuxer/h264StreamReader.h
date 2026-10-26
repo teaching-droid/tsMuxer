@@ -50,6 +50,8 @@ class H264StreamReader final : public MPEGStreamReader
     // Both count the bytes they hand over for the buffer model of insertSEI and forceSEI (hrdAccessUnit)
     int readPacket(AVPacket& avPacket) override;
     int flushPacket(AVPacket& avPacket) override;
+    // For an output that does not ask for writeAdditionData (Matroska): its units go into the packets (addFrameData)
+    void setAddDataInPackets(const bool value) { m_addDataInPackets = value; }
 
    protected:
     void onSplitEvent() override { m_firstFileFrame = true; }
@@ -258,7 +260,12 @@ class H264StreamReader final : public MPEGStreamReader
 
     // The picture timing SEI of the second field of a frame (addFieldTiming), from the one of its first field
     int addFieldTiming(AVPacket& avPacket);
-    bool m_secondFieldTimed = false;  // the second field read now has its picture timing SEI
+    int addFrameData(AVPacket& avPacket);
+    bool m_addDataInPackets = false;
+    bool m_addDataDtsKnown = false;
+    int64_t m_addDataDts = 0;            // the frame addFrameData wrote for last
+    std::vector<uint8_t> m_framePacket;  // its units and the packet they go in front of
+    bool m_secondFieldTimed = false;     // the second field read now has its picture timing SEI
     bool m_fieldTimingKnown = false;
     uint32_t m_fieldCpbRemovalDelay = 0;
     uint32_t m_fieldDpbOutputDelay = 0;

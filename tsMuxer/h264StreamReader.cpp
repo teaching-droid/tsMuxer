@@ -311,7 +311,13 @@ static void setInitialCpbRemovalDelay(SEIUnit& sei, const SPSUnit& sps)
 int H264StreamReader::readPacket(AVPacket& avPacket)
 {
     const int rez = MPEGStreamReader::readPacket(avPacket);
-    const int added = rez == 0 ? addFieldTiming(avPacket) : 0;
+    int added = 0;
+    if (rez == 0)
+    {
+        added = addFrameData(avPacket);
+        if (added == 0)
+            added = addFieldTiming(avPacket);
+    }
     countHrdBytes(avPacket, added);
     return rez;
 }
@@ -319,9 +325,41 @@ int H264StreamReader::readPacket(AVPacket& avPacket)
 int H264StreamReader::flushPacket(AVPacket& avPacket)
 {
     const int rez = MPEGStreamReader::flushPacket(avPacket);
-    const int added = addFieldTiming(avPacket);
+    int added = addFrameData(avPacket);
+    if (added == 0)
+        added = addFieldTiming(avPacket);
     countHrdBytes(avPacket, added);
     return rez;
+}
+
+// A Matroska output takes the packets as they are and does not ask for writeAdditionData. With the SEI correction its
+// SPS (in CodecPrivate) has the HRD that tsMuxeR writes, while the stream's own buffering period and picture timing
+// SEI are left out (skipNal), so it had an HRD and no SEI for it. For such an output (setAddDataInPackets) the units
+// writeAdditionData gives are put in front of the first packet of each frame. Returns the bytes put in front.
+int H264StreamReader::addFrameData(AVPacket& avPacket)
+{
+    // the first packet of a frame with data, as a transport stream's packet starts with it: a delimiter that leads the
+    // frame stays in front
+    if (!m_addDataInPackets || !m_needSeiCorrection || m_mvcSubStream || m_mvcPrimaryStream || avPacket.size <= 0 ||
+        (m_addDataDtsKnown && avPacket.dts == m_addDataDts))
+        return 0;
+    m_addDataDts = avPacket.dts;
+    m_addDataDtsKnown = true;
+    // the packet is not counted yet (countHrdBytes): the frame starts here
+    m_hrdBytesBefore = m_hrdBytes;
+    m_hrdVclBytesBefore = m_hrdVclBytes;
+    std::vector<uint8_t> buffer(static_cast<size_t>(avPacket.size) + 65536);
+    const int len = writeAdditionData(buffer.data(), buffer.data() + buffer.size(), avPacket, nullptr);
+    m_hrdAuAdded = 0;  // here the units are in the packet, and counted with it
+    if (len <= 0)
+        return 0;
+    buffer.resize(len);
+    if (avPacket.size > 0)
+        buffer.insert(buffer.end(), avPacket.data, avPacket.data + avPacket.size);
+    m_framePacket.swap(buffer);
+    avPacket.data = m_framePacket.data();
+    avPacket.size = static_cast<int>(m_framePacket.size());
+    return len;
 }
 
 // The second field of a frame is an access unit of its own and needs its own picture timing SEI when the SPS has an

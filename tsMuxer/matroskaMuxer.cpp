@@ -311,6 +311,10 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
     track.trackNumber = m_nextTrackNumber++;
     track.codecReader = codecReader;
     track.codecID = codecReader->getCodecInfo().codecID;
+    // With insertSEI or forceSEI the SPS in CodecPrivate has the HRD tsMuxeR writes: the SEI units that go with it,
+    // which a transport stream gets from writeAdditionData, come in the packets
+    if (auto* h264 = dynamic_cast<H264StreamReader*>(codecReader))
+        h264->setAddDataInPackets(true);
 
     // The CodecID must describe what is IN the track, not what the meta line asked for. This used the
     // META's name, and a text subtitle is drawn into PGS pictures before it is written, so a track
