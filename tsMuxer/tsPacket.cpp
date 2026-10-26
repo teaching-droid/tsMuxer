@@ -1945,9 +1945,10 @@ int MPLSParser::pgTextIndexToFullIndex(const int value) const
 
 // Whether the stream of an STN entry is in the play item's own clip. An entry of type 1 names a stream of that clip,
 // and so does one of type 3 or 4 whose sub path plays in the same clip (SubPath_type 7, picture-in-picture in the
-// main clip, which is how secondary video and audio are usually declared, and how tsMuxeR writes them). An
-// entry of type 2 always names a stream of the clip a sub path plays (it carries the sub clip's entry number), and
-// so does one whose sub path is of type 4 (text subtitles), 5 or 6 (out-of-mux streams and picture-in-picture).
+// main clip, which is how discs usually declare their secondary video and audio; tsMuxeR writes its secondary video so,
+// and its secondary audio as type 1). An entry of type 2 always names a stream of the clip a sub path plays (it
+// carries the sub clip's entry number), and so does one whose sub path is of type 4 (text subtitles), 5 or 6
+// (out-of-mux streams and picture-in-picture).
 bool MPLSParser::isInMainClip(const MPLSStreamInfo& entry) const
 {
     if (entry.type == 2)
