@@ -1036,6 +1036,8 @@ Additional parameters for PG and SRT tracks:
 - 3d-plane          Defines the number of the '3D offset track' which is placed
                     inside the MVC track. Each message has an individual 3D
                     offset. This information is stored inside 3D offset track.
+                    A whole number from 0 up to one less than the planes of the
+                    MVC track (3d-pg-planes in its listing), or 255 for none.
 
 Additional parameters for SRT tracks:
 

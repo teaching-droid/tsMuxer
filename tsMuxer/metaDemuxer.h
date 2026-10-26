@@ -298,6 +298,8 @@ class METADemuxer final : public AbstractDemuxer
                   const std::map<std::string, std::string>& addParams);
     void openFile(const std::string& streamName) override;
     [[nodiscard]] const std::vector<StreamInfo>& getStreamInfo() const { return m_codecInfo; }
+    // 3d-plane= of a subtitle line, checked (see the definition)
+    static uint8_t parse3dPlane(const std::string& text);
     // laterFiles: the clips that follow fileName in a playlist, read for a frame rate when fileName is too short
     static DetectStreamRez DetectStreamReader(const BufferedReaderManager& readManager, const std::string& fileName,
                                               bool calcDuration, const std::vector<std::string>& laterFiles = {});
@@ -321,6 +323,9 @@ class METADemuxer final : public AbstractDemuxer
     static void cutPlayItems(MPLSParser& mpls, const std::string& mplsFileName, bool played);
     bool m_HevcFound;
     bool m_MvcFound;  // a 3D (MVC) track is in the mux
+    // The source of the first MVC track (see checkSubtitlePlanes)
+    std::string m_mvcSource;
+    void checkSubtitlePlanes() const;
 
    private:
     std::vector<FileListIterator*> m_iterators;

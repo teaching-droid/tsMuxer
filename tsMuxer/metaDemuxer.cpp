@@ -907,6 +907,8 @@ void METADemuxer::openFile(const string& streamName)
             m_HevcFound = (codec.find("HEVC") == 12);
         if (!m_MvcFound)
             m_MvcFound = codec == "V_MPEG4/ISO/MVC";
+        if (codec == "V_MPEG4/ISO/MVC" && m_mvcSource.empty())
+            m_mvcSource = unquoteStr(trimStr(splitQuotedStr(codecStreamName.c_str(), '+')[0]));
         addStream(codec, codecStreamName, addParams);
         file.readLine(str);
     }
@@ -962,6 +964,47 @@ void METADemuxer::openFile(const string& streamName)
         }
     }
     placeJoinedSubtitles();
+    checkSubtitlePlanes();
+}
+
+// ** A 3D PLANE IS ONE OF THE MVC VIDEO. ** The planes of a 3D disc are the offset sequences the MVC video carries, as
+// many as its listing gives as 3d-pg-planes. A 3d-plane= past the last of them named a plane no player has, and the
+// disc was written without a word. Read from the start of the MVC source, as the listing reads it; a source that does
+// not say (or a playlist) is not checked.
+void METADemuxer::checkSubtitlePlanes() const
+{
+    if (m_mvcSource.empty())
+        return;
+    const string ext = strToLowerCase(extractFileExt(m_mvcSource));
+    if (ext == "mpls" || ext == "mpl")
+        return;
+    bool asked = false;
+    for (const StreamInfo& si : m_codecInfo)
+        if (si.m_addParams.count("3d-plane") && parse3dPlane(si.m_addParams.at("3d-plane")) != 0xff)
+            asked = true;
+    if (!asked)
+        return;
+    int planes = -1;
+    for (const CheckStreamRez& s : DetectStreamReader(m_readManager, m_mvcSource, false).streams)
+        if (const size_t at = s.streamDescr.find("3d-pg-planes: "); at != string::npos)
+        {
+            planes = strToInt32(s.streamDescr.substr(at + 14).c_str());
+            break;
+        }
+    if (planes < 0)
+        return;
+    for (const StreamInfo& si : m_codecInfo)
+    {
+        const auto it = si.m_addParams.find("3d-plane");
+        if (it == si.m_addParams.end())
+            continue;
+        const uint8_t plane = parse3dPlane(it->second);
+        if (plane != 0xff && plane >= planes)
+            THROW(ERR_COMMON, "3d-plane=" << it->second << " on the line of " << unquoteStr(si.m_streamName)
+                                          << " is not a plane of the MVC video, which has " << planes
+                                          << (planes == 1 ? " plane, 0" : " planes, 0 to " + int32ToStr(planes - 1))
+                                          << ". Give one of them, or 3d-plane=255 for none.")
+    }
 }
 
 // ** THE SUBTITLE FILES OF A JOIN FOLLOW ITS VIDEO. ** A join of .srt or .sup files ("a.srt"+"b.srt") read each file at
@@ -4031,6 +4074,22 @@ static float parseFadeTime(const char* name, const std::string& text)
     return static_cast<float>(value);
 }
 
+// 3d-plane=: the number of a plane (offset sequence) of the MVC video, a whole number from 0, or 255 for none, which
+// the window writes for "zero". Read as a byte, 300 became plane 44, abc and 1.5 planes 0 and 1, and -1 no plane, all
+// without a word. Whether the MVC video has the plane is checked once every line is read (checkSubtitlePlanes).
+uint8_t METADemuxer::parse3dPlane(const std::string& text)
+{
+    const std::string t = trimStr(text);
+    const bool digits = !t.empty() && t.size() <= 3 && t.find_first_not_of("0123456789") == std::string::npos;
+    const long value = digits ? strtol(t.c_str(), nullptr, 10) : -1;
+    if (value < 0 || value > 255)
+        THROW(ERR_COMMON, "3d-plane=" << text
+                                      << " is not a 3D plane. Write the number of a plane of the MVC video, a whole "
+                                         "number from 0 (its listing gives how many it has as 3d-pg-planes), or 255 "
+                                         "for none.")
+    return static_cast<uint8_t>(value);
+}
+
 // font-color=: 0xAARRGGBB or xAARRGGBB in hexadecimal, #RRGGBB or #AARRGGBB as in a <font color=> tag, or a decimal
 // number. A value in no such form was read as 0: #FF0000 and FF0000 drew black text, without a word. Without 0x, x or
 // # a value is decimal, as it always was, so FF0000 is refused rather than guessed.
@@ -4524,7 +4583,7 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
 
         itr = addParams.find("3d-plane");
         if (itr != addParams.end())
-            dynamic_cast<PGSStreamReader*>(rez)->setOffsetId(strToInt8u(itr->second.c_str()));
+            dynamic_cast<PGSStreamReader*>(rez)->setOffsetId(parse3dPlane(itr->second));
 
         double fps = 0.0;
         uint16_t width = 0;
@@ -4598,7 +4657,7 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
             // A drawn subtitle is a PG stream of the disc like any other: 3d-plane= was read only on a PGS line, and
             // the subtitles of an SRT line sat at the depth of the screen on a 3D disc, without a word.
             else if (addParam.first == "3d-plane")
-                srtReader->setOffsetId(strToInt8u(addParam.second.c_str()));
+                srtReader->setOffsetId(parse3dPlane(addParam.second));
         }
         // save-srt (#643): an SRT copy of the subtitles beside an output that gets them as pictures. Kept as text, the
         // output itself holds the text, and a demux writes the .srt.

@@ -237,7 +237,7 @@ video-width       | The width of the video in pixels.
 video-height      | The height of the video in pixels. 
 default           | Mark this track as the default one. `all` (or `yes`, `1`, `true`, `on`) shows all subtitles, and `forced` shows only elements marked as "forced" in the subtitle stream; in a Matroska output the track is then marked forced as well. `none`, `no`, `0`, `false` or `off` say that it is not the default. `default` with no value is the same as `all`. The values are read in any case, and any other value is refused.
 fps               | Video fps. It is recommended to define this parameter in order to enable more careful timing processing. 
-3d-plane          | Defines the number of the '3D offset track' which is placed inside the MVC track. Each message has an individual 3D offset. This information is stored inside 3D offset track.
+3d-plane          | Defines the number of the '3D offset track' which is placed inside the MVC track. Each message has an individual 3D offset. This information is stored inside 3D offset track. A whole number from 0 up to one less than the number of planes of the MVC track (its listing gives that number as `3d-pg-planes`), or 255 for none: the subtitles are then shown at the depth of the screen. Any other value is refused. For a PG track and for text subtitles drawn into pictures; it applies to a 3D Blu-ray only.
 
 Additional parameters for SRT tracks:
 
