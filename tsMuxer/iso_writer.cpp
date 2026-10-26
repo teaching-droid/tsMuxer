@@ -623,6 +623,22 @@ void FileEntryInfo::addExtent(const Extent& extent)
 
 int32_t FileEntryInfo::write(const uint8_t* data, const int32_t len)
 {
+    if (m_deferred)
+    {
+        if (m_owner->m_deferredBytes + len <= MAX_DEFERRED_BYTES)
+        {
+            m_deferredData.insert(m_deferredData.end(), data, data + len);
+            m_owner->m_deferredBytes += len;
+            return len;
+        }
+        // No more room to hold it back: what is held is written now, and the rest follows it
+        m_deferred = false;
+        std::vector<uint8_t> held;
+        held.swap(m_deferredData);
+        m_owner->m_deferredBytes -= static_cast<int64_t>(held.size());
+        if (!held.empty())
+            write(held.data(), static_cast<int32_t>(held.size()));
+    }
     // Dual-layer guard band: if this write would reach the zero-fill zone around the BD-R DL
     // layer break, cut the file at a sector-aligned file offset (UDF allocation descriptors
     // only allow non-final extents to be whole sectors), pad the zone, and continue the file
@@ -708,6 +724,8 @@ int32_t FileEntryInfo::writeImpl(const uint8_t* data, const int32_t len)
 
 void FileEntryInfo::close()
 {
+    if (m_deferred)
+        return;  // closed when it is written, by IsoWriter::writeDeferredFiles
     if (m_sectorBufferSize)
     {
         // The tail of a file that does not end on a sector boundary is buffered and written here.
@@ -763,7 +781,20 @@ bool ISOFile::open(const char* name, unsigned int oflag, unsigned int systemDepe
     FileTypes fileType = FileTypes::File;
     if (strEndWith(name, ".m2ts") || strEndWith(name, ".ssif"))
         fileType = FileTypes::RealtimeFile;
-    m_entry = m_owner->getEntryByName(toIsoSeparator(name), fileType);
+    const std::string isoName = toIsoSeparator(name);
+    m_entry = m_owner->getEntryByName(isoName, fileType);
+    if (m_entry && m_entry->m_fileSize == 0 && m_entry->m_extents.empty() && !m_entry->m_deferred)
+    {
+        // A copy in BDMV/BACKUP is written with the other copies, behind all the data, so that one damaged place of a
+        // disc cannot take a file and its copy. They used to be written right after the file they copy.
+        if (strStartWith(strToUpperCase(isoName), "BDMV/BACKUP/"))
+        {
+            m_entry->m_deferred = true;
+            m_owner->m_deferredFiles.push_back(m_entry);
+        }
+        else if (fileType == FileTypes::RealtimeFile)
+            m_owner->alignForStream();
+    }
     return true;
 }
 
@@ -783,7 +814,10 @@ void ISOFile::setSubMode(const bool value) const
         m_entry->setSubMode(value);
 }
 
-int64_t ISOFile::size() const { return m_entry ? m_entry->m_fileSize : -1; }
+int64_t ISOFile::size() const
+{
+    return m_entry ? m_entry->m_fileSize + static_cast<int64_t>(m_entry->m_deferredData.size()) : -1;
+}
 
 // ------------------------------ IsoWriter ----------------------------------
 
@@ -1223,6 +1257,8 @@ void IsoWriter::close()
     // second time while the first refusal is on its way out.
     m_opened = false;
 
+    writeDeferredFiles();
+
     memset(m_buffer, 0, sizeof(m_buffer));
     while (m_file.size() % ALLOC_BLOCK_SIZE != 1024LL * 62) m_file.write(m_buffer, SECTOR_SIZE);
 
@@ -1275,6 +1311,55 @@ void IsoWriter::close()
                        << firstBreak * static_cast<int64_t>(SECTOR_SIZE) / 1000000000.0
                        << " GB). Choose the disc you are burning to, so the break is worked out from it, or "
                           "give the break directly with --layer-break-lbn.");
+    }
+}
+
+// A stream file starts on a 64 KB boundary (32 sectors): the zeros before it belong to no file. The second view of a
+// 3D pair opened right after the first adds nothing, as nothing has been written in between.
+void IsoWriter::alignForStream()
+{
+    constexpr int64_t SECTORS_PER_BLOCK = ALLOC_BLOCK_SIZE / SECTOR_SIZE;
+    const int64_t rest = imageLBA() % SECTORS_PER_BLOCK;
+    if (rest == 0)
+        return;
+    memset(m_buffer, 0, sizeof(m_buffer));
+    for (int64_t i = rest; i < SECTORS_PER_BLOCK; ++i) m_file.write(m_buffer, SECTOR_SIZE);
+    m_lastWritedObjectID = -1;
+}
+
+// The copies are written in the order of the BACKUP folder: BDJO, index.bdmv, MovieObject.bdmv, PLAYLIST, CLIPINF,
+// JAR, then anything else, each part in the order its files were opened
+void IsoWriter::writeDeferredFiles()
+{
+    if (m_deferredFiles.empty())
+        return;
+    auto rank = [](const FileEntryInfo* entry)
+    {
+        // the entry directly inside BACKUP that this one is, or is under
+        const FileEntryInfo* top = entry;
+        while (top->m_parent && strToUpperCase(top->m_parent->name()) != "BACKUP") top = top->m_parent;
+        const std::string name = strToUpperCase(top->name());
+        static const char* const order[] = {"BDJO", "INDEX.BDMV", "MOVIEOBJECT.BDMV", "PLAYLIST", "CLIPINF", "JAR"};
+        for (size_t i = 0; i < std::size(order); ++i)
+            if (name == order[i])
+                return i;
+        return std::size(order);
+    };
+    std::vector<FileEntryInfo*> files;
+    files.swap(m_deferredFiles);
+    std::stable_sort(files.begin(), files.end(),
+                     [&](const FileEntryInfo* a, const FileEntryInfo* b) { return rank(a) < rank(b); });
+    for (FileEntryInfo* entry : files)
+    {
+        if (!entry->m_deferred)
+            continue;  // written where it stood, when there was no more room to hold it
+        entry->m_deferred = false;
+        std::vector<uint8_t> data;
+        data.swap(entry->m_deferredData);
+        m_deferredBytes -= static_cast<int64_t>(data.size());
+        if (!data.empty())
+            entry->write(data.data(), static_cast<int32_t>(data.size()));
+        entry->close();
     }
 }
 
@@ -1893,7 +1978,8 @@ void IsoWriter::padBeforeInterleavedPair(const int64_t pairBytes)
 }
 
 bool IsoWriter::padOverZoneIfFileCrosses(const int64_t fileSizeBytes, const int64_t discCapacitySectors,
-                                         const int64_t restBytes, const int64_t maxEmptySectors)
+                                         const int64_t restBytes, const int64_t maxEmptySectors,
+                                         const bool alignedStart)
 {
     if (m_layerBreakPoints.empty() || fileSizeBytes <= 0)
         return false;
@@ -1903,7 +1989,9 @@ bool IsoWriter::padOverZoneIfFileCrosses(const int64_t fileSizeBytes, const int6
     int64_t capacity = discCapacitySectors;
     if (capacity <= 0)
         capacity = static_cast<int64_t>(m_layerBreakPoints.back()) + m_layerBreakPoints.front();
-    const int64_t lbn = imageLBA();
+    constexpr int64_t SECTORS_PER_BLOCK = ALLOC_BLOCK_SIZE / SECTOR_SIZE;
+    // Where the file's data will begin: a stream is moved to the next 64 KB boundary when it is opened
+    const int64_t lbn = alignedStart ? static_cast<int64_t>(roundUp64(imageLBA(), SECTORS_PER_BLOCK)) : imageLBA();
     const int64_t fileSectors = (fileSizeBytes + SECTOR_SIZE - 1) / SECTOR_SIZE;
     for (size_t i = 0; i < m_layerBreakPoints.size(); ++i)
     {
@@ -1946,8 +2034,9 @@ bool IsoWriter::padOverZoneIfFileCrosses(const int64_t fileSizeBytes, const int6
         }
         if (maxEmptySectors >= 0 && zoneStart - lbn > maxEmptySectors)
             return false;
-        m_layerBreakPads.push_back({bp, lbn, zoneEnd});
-        writeZeroPad(zoneEnd - lbn);
+        const int64_t padStart = imageLBA();
+        m_layerBreakPads.push_back({bp, padStart, zoneEnd});
+        writeZeroPad(zoneEnd - padStart);
         return true;
     }
     return false;

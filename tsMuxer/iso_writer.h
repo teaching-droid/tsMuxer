@@ -26,6 +26,10 @@ static constexpr int MAX_EXTENTS_IN_EXTCONT = (SECTOR_SIZE - 24 - 32) / 16;
 static constexpr int MAIN_INTERLEAVE_BLOCKSIZE = 6144 * 3168;
 static constexpr int SUB_INTERLEAVE_BLOCKSIZE = 6144 * 1312;
 
+// The copies of BDMV/BACKUP are held back and written as one group at the end of the data, so that they lie apart from
+// the files they copy. Past this much the rest is written where it stands.
+static constexpr int64_t MAX_DEFERRED_BYTES = 256 * 1024 * 1024;
+
 static constexpr int MAX_MAIN_MUXER_RATE = 48000000;
 static constexpr int MAX_4K_MUXER_RATE = 109000000;
 static constexpr int MAX_SUBMUXER_RATE = 35000000;
@@ -177,7 +181,9 @@ struct FileEntryInfo
     int64_t m_fileSize;
     uint8_t* m_sectorBuffer;
     int m_sectorBufferSize;
-    bool m_subMode;  // sub file in stereo interleaved mode
+    bool m_subMode;           // sub file in stereo interleaved mode
+    bool m_deferred = false;  // a BDMV/BACKUP copy: held in m_deferredData until IsoWriter::writeDeferredFiles
+    std::vector<uint8_t> m_deferredData;
 };
 
 struct IsoHeaderData
@@ -215,6 +221,10 @@ class IsoWriter
 
     void close();
 
+    // Writes the BDMV/BACKUP copies held back so far, as one group behind everything written before. close() does it
+    // too; a caller that reports where the data went calls it first.
+    void writeDeferredFiles();
+
     void setLayerBreakPoints(const std::vector<int>& lbns);
     void setLayerBreakGuard(int afterSectors);
     void setLayerBreakGuard(int beforeSectors, int afterSectors);
@@ -239,8 +249,9 @@ class IsoWriter
     // end so the whole file lands on the next layer. Returns true if a pad was written.
     // --inner-only gives two more limits (0 and -1 = none): restBytes, this file and every one after it, must still
     // fit on the disc behind the zone, and the file may leave at most maxEmptySectors of the layer before it unused.
+    // alignedStart: the file is a stream, which starts on the next 64 KB boundary (alignForStream)
     bool padOverZoneIfFileCrosses(int64_t fileSizeBytes, int64_t discCapacitySectors, int64_t restBytes = 0,
-                                  int64_t maxEmptySectors = -1);
+                                  int64_t maxEmptySectors = -1, bool alignedStart = false);
 
     // Interleaved 3D groups: the two views have to end up cut into the SAME number of pieces, or
     // the .ssif cannot be described as an alias over them. Left to the ordinary path a guard pad
@@ -287,6 +298,7 @@ class IsoWriter
     void writeDescriptors();
     void allocateMetadata();
     void orderBdmvFolders() const;
+    void alignForStream();
     void writeMetadata(int lbn);
 
     FileEntryInfo* mkdir(const char* name, FileEntryInfo* parent = nullptr);
@@ -328,6 +340,8 @@ class IsoWriter
     int m_lastWritedObjectID;
 
     std::map<int, MappingEntry> m_mappingEntries;
+    std::vector<FileEntryInfo*> m_deferredFiles;  // the BDMV/BACKUP copies held back, in the order they were opened
+    int64_t m_deferredBytes = 0;
     bool m_opened;
     bool m_sparseOk = false;  // image file marked sparse -> guard/inner-only pads are holes, not real zeros
     // Dual-layer guard band (--layer-break-guard): m_layerBreakPoint is the ABSOLUTE image sector

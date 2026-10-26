@@ -2022,6 +2022,15 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
     else
         std::stable_sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.size > b.size; });
 
+    // A stream file, and the first view of a 3D group, starts on a 64 KB boundary of the image: up to 31 sectors of
+    // zeros before each, which the arithmetic below keeps room for
+    auto isStreamItem = [](const Item& it)
+    {
+        const string r = strToUpperCase(it.rel);
+        return it.ssifGroup >= 0 || strEndWith(r, ".M2TS") || strEndWith(r, ".SSIF");
+    };
+    const int64_t alignSectors = 31 * static_cast<int64_t>(std::count_if(items.begin(), items.end(), isStreamItem));
+
     // The copy buffer below, named here because two pieces of arithmetic depend on its size: a guard
     // pad is laid down from wherever the current write lands to the far edge of the zone, so it can
     // begin up to one whole buffer before the zone starts and the image grows by that much more than
@@ -2097,7 +2106,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         // two-layer image comes out as before. The overrun: a pad starts wherever the current write lands, up to one
         // copy buffer before its zone.
         const int64_t payloadSectors = (total + 2047) / 2048;
-        const int64_t marginSectors = 8192;  // ~16 MB for UDF overhead + a small inner free tail
+        const int64_t marginSectors = 8192 + alignSectors;  // ~16 MB for UDF overhead + a small inner free tail
         const int nLayers = static_cast<int>(layerBreakLbns.size()) + 1;
         std::vector<int64_t> bound(1, 0);  // where each layer starts, and the end of the disc
         for (const int b : layerBreakLbns) bound.push_back(b);
@@ -2367,7 +2376,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
                 return -1;
             }
         }
-        else if (leastSectors + guardOverrunSectors + UDF_MARGIN_SECTORS > discCapacitySectors)
+        else if (leastSectors + guardOverrunSectors + alignSectors + UDF_MARGIN_SECTORS > discCapacitySectors)
             // Clear of the lower bound, but inside the band the guard overrun and the UDF structures
             // decide. Saying "it fits" here would be a guess, so say what is actually known and let
             // the exact check at the end of the run settle it.
@@ -2448,6 +2457,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
     {
         int64_t startLbn;
         int64_t endLbn;
+        int64_t dataLbn;  // where the file's data begins: a stream file starts on a 64 KB boundary, past startLbn
     };
     vector<FileRange> ranges;
     ranges.reserve(items.size());
@@ -2459,7 +2469,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         // Under --inner-only, only when the rest still fits and, on more than two layers, the shares stay even.
         if (layerFit)
             iso->padOverZoneIfFileCrosses(item.size, discCapacitySectors, innerLayers > 0 ? restBytes : 0,
-                                          innerLayers > 2 ? overrunSectors : -1);
+                                          innerLayers > 2 ? overrunSectors : -1, isStreamItem(item));
         restBytes -= item.size;
         const int64_t startLbn = iso->currentImageLBA();
         if (item.ssifGroup >= 0)
@@ -2468,7 +2478,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
             if (!writeSsifGroup(iso, srcRoot, ssifGroups[item.ssifGroup], buf, written, total, lastTenths,
                                 dataStartLbn))
                 return -1;
-            ranges.push_back({dataStartLbn, iso->currentImageLBA()});
+            ranges.push_back({dataStartLbn, iso->currentImageLBA(), dataStartLbn});
             continue;
         }
         File in;
@@ -2479,6 +2489,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         }
         ISOFile* out = iso->createFile();
         out->open(item.rel.c_str(), File::ofWrite);
+        const int64_t dataLbn = iso->currentImageLBA();
         int n;
         int64_t copied = 0;
         while ((n = in.read(buf.data(), static_cast<uint32_t>(buf.size()))) > 0)
@@ -2513,13 +2524,15 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
                              << " bytes), so the image is not finished and cannot be used.");
             return -1;
         }
-        ranges.push_back({startLbn, iso->currentImageLBA()});
+        ranges.push_back({startLbn, iso->currentImageLBA(), dataLbn});
     }
     // Lay down the standard BD folder skeleton (empty META/BDJO/JAR/AUXDATA, CERTIFICATE, and the BACKUP
     // sub-tree), exactly as tsMuxeR's own BD authoring does via the same call. createDir() is idempotent,
     // so folders that already hold copied content are left untouched.
     if (hasBdmv)
         helper.createBluRayDirs();
+    // The BACKUP copies go behind everything else, and before the pads are read, as their writing can lay one
+    iso->writeDeferredFiles();
 
     const auto pads = iso->layerBreakPads();  // copy: helper.close() finalizes the writer
     helper.close();
@@ -2558,7 +2571,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
                 if (pad.padStartLbn > ranges[j].startLbn && pad.padStartLbn < ranges[j].endLbn)
                 {
                     // pad splits this file; in-file offset excludes any earlier pads inside the same file
-                    int64_t off = (pad.padStartLbn - ranges[j].startLbn) * 2048;
+                    int64_t off = (pad.padStartLbn - ranges[j].dataLbn) * 2048;
                     for (const auto& p2 : pads)
                         if (p2.padStartLbn > ranges[j].startLbn && p2.padStartLbn < pad.padStartLbn)
                             off -= (p2.padEndLbn - p2.padStartLbn) * 2048;
