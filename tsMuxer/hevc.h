@@ -197,6 +197,9 @@ struct HevcHdrUnit : HevcUnit
     int deserialize();
 
     bool isHDR10;
+    // The stream has a mastering display SEI (137). It makes the stream HDR10 unless the VUI of its SPS gives an SDR
+    // transfer: HEVCStreamReader::markHdr10ByMasteringSei, where the SPS is known.
+    bool hasMasteringDisplay;
     bool isHDR10plus;
     bool isDVRPU;
     bool isDVEL;

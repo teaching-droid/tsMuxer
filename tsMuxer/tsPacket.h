@@ -403,8 +403,8 @@ struct M2TSStreamInfo
     unsigned width;
     unsigned height;
     int HDR;
-    // The colour space of an HEVC video stream for its stream attributes: 2 where its colour primaries are BT.2020
-    // (see the M2TSStreamInfo constructor)
+    // The colour space of an HEVC video stream for its stream attributes: 1 where its colour primaries are BT.709, 2
+    // where they are BT.2020 (see the M2TSStreamInfo constructor)
     uint8_t colour_space = 0;
     uint8_t aspect_ratio_index;
     uint8_t audio_presentation_type;
@@ -766,7 +766,7 @@ struct MPLSParser
     void composeSTN_table(BitStreamWriter& writer, size_t PlayItem_id, bool isSSEx);
     int composeSTN_tableSS(uint8_t* buffer, int bufferSize);
     int composeSubPathEntryExtension(uint8_t* buffer, int bufferSize);
-    static int composeUHD_metadata(uint8_t* buffer, int bufferSize);
+    static int composeUHD_metadata(uint8_t* buffer, int bufferSize, const MPLSStreamInfo& mainStream);
     MPLSStreamInfo& getMainStream();
     MPLSStreamInfo& getMVCDependStream();
     static int calcPlayItemID(const MPLSStreamInfo& streamInfo, uint32_t pts);

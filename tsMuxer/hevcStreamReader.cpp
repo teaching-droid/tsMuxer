@@ -337,6 +337,7 @@ CheckStreamRez HEVCStreamReader::checkStream(uint8_t* buffer, const int len)
                 m_hdr->decodeBuffer(nal, nextNal);
                 if (m_hdr->deserialize() != 0)
                     return rez;
+                markHdr10ByMasteringSei();
             }
             catch (BitStreamException&)
             {
@@ -402,6 +403,7 @@ CheckStreamRez HEVCStreamReader::checkStream(uint8_t* buffer, const int len)
     // Set HDR10 flag if PQ detected
     if (m_vps && m_sps && m_pps && m_sps->vps_id == m_vps->vps_id && m_pps->sps_id == m_sps->sps_id)
     {
+        markHdr10ByMasteringSei();  // for a mastering display SEI read before the SPS
         if (m_sps->colour_primaries == 9 && m_sps->transfer_characteristics == 16 &&
             m_sps->matrix_coeffs == 9)  // SMPTE.ST.2084 (PQ)
         {
@@ -990,6 +992,22 @@ void HEVCStreamReader::warnIfDvHasNoFallback()
                   "be correct. A player that does not will show wrong colours rather than a plain "
                   "picture, because the picture itself is coded in IPT. The mux is written as asked: "
                   "nothing here can add a fallback that the stream does not have.");
+}
+
+// A mastering display SEI (137) marks the stream as HDR10, unless the VUI of its SPS gives a transfer of SDR video:
+// BT.709 (1), BT.601 (6) or BT.2020 (14, 15). A UHD disc may carry SDR BT.709 video with such a SEI, and marks it
+// as SDR with BT.709 colours; it was marked as HDR10 with BT.2020 colours, in its playlist, its clip information and
+// its index. A stream that gives no transfer (2), or PQ (16) or HLG (18), is HDR10 by the SEI as before: an HDR10
+// stream whose VUI says nothing keeps its marking. Asked again until the SPS is there.
+void HEVCStreamReader::markHdr10ByMasteringSei()
+{
+    if (!m_hdr->hasMasteringDisplay || m_hdr->isHDR10 || !m_sps)
+        return;
+    const uint8_t transfer = m_sps->transfer_characteristics;
+    if (transfer == 1 || transfer == 6 || transfer == 14 || transfer == 15)
+        return;
+    m_hdr->isHDR10 = true;
+    V3_flags |= HDR10;
 }
 
 int HEVCStreamReader::getStreamHDR() const
@@ -1664,6 +1682,7 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                     m_hdr->decodeBuffer(curPos, nextNal);
                     if (m_hdr->deserialize() != 0)
                         return rez;
+                    markHdr10ByMasteringSei();
                 }
                 catch (BitStreamException&)
                 {

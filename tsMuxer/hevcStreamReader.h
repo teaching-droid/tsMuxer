@@ -60,6 +60,8 @@ class HEVCStreamReader final : public MPEGStreamReader
     [[nodiscard]] int getStreamHDR() const override;
     // This stream's mastering display and light level values, packed as in HDR10_metadata (zeros where none came)
     [[nodiscard]] const unsigned* getHdr10Metadata() const { return m_hdr->hdr10Metadata; }
+    // The stream carries a mastering display SEI, HDR10 or not (an SDR stream can have one too)
+    [[nodiscard]] bool hasMasteringDisplay() const { return m_hdr->hasMasteringDisplay; }
     [[nodiscard]] bool getColourDesc(uint8_t& primaries, uint8_t& transfer, uint8_t& matrix) const override;
     bool getInterlaced() override { return false; }
     // Each picture is a field (VUI field_seq_flag), for a Matroska output to say so; the disc path is left as it was
@@ -90,6 +92,8 @@ class HEVCStreamReader final : public MPEGStreamReader
     bool m_joinRestart = false;    // the picture being read begins a later file of a join as a stream of its own
     static void storeBuffer(MemoryBlock& dst, const uint8_t* data, const uint8_t* dataEnd);
     void captureHdrSei(const uint8_t* nal, const uint8_t* nalEnd);
+    // A mastering display SEI makes the stream HDR10 unless its SPS says SDR (see the definition)
+    void markHdr10ByMasteringSei();
     uint8_t* writeBuffer(MemoryBlock& srcData, uint8_t* dstBuffer, const uint8_t* dstEnd) const;
     uint8_t* writeNalPrefix(uint8_t* curPos) const;
 

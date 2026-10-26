@@ -2064,7 +2064,9 @@ void MatroskaMuxer::refreshTrackFromReader(MkvTrackInfo& track)
             track.isHdr10 = false;
             if (const auto hevc = dynamic_cast<HEVCStreamReader*>(track.codecReader))
             {
-                track.isHdr10 = hevc->getStreamHDR() != 1;
+                // The mastering display of an SDR stream (one that says SDR in its SPS) is the stream's own too, and
+                // is written as it was when such a stream counted as HDR10
+                track.isHdr10 = hevc->getStreamHDR() != 1 || hevc->hasMasteringDisplay();
                 std::copy_n(hevc->getHdr10Metadata(), 6, track.hdr10Metadata);
             }
             // Dolby Vision configuration, when the stream carries an RPU. Written whatever

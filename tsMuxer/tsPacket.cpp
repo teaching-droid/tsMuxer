@@ -621,7 +621,7 @@ void CLPIStreamInfo::composeStreamCodingInfo(BitStreamWriter& writer) const
         else if (HDR == 4)
             writer.putBits(8, 0x22);  // DV
         else
-            writer.putBits(8, colour_space);  // SDR: 0, or 2 for BT.2020
+            writer.putBits(8, colour_space);  // SDR: 1 for BT.709 HEVC, 2 for BT.2020 HEVC, else 0
         if (HDR == 16)
             writer.putBits(8, 0x80);  // HDR10plus
         else
@@ -1524,15 +1524,27 @@ int MPLSParser::composeSTN_tableSS(uint8_t* buffer, const int bufferSize)
     }
 };
 
-int MPLSParser::composeUHD_metadata(uint8_t* buffer, const int bufferSize)
+// The dynamic range of the playlist's video, with the mastering display and light levels of its stream. A UHD
+// disc writes no entry for a playlist without HEVC video, one entry of type 0 for SDR HEVC (with the stream's own
+// values, zero where it has none) and one of type 1 for HDR10, HDR10+ and Dolby Vision. Every playlist had an entry
+// of type 1, also for SDR video and for H.264.
+int MPLSParser::composeUHD_metadata(uint8_t* buffer, const int bufferSize, const MPLSStreamInfo& mainStream)
 {
     BitStreamWriter writer{};
     writer.setBuffer(buffer, buffer + bufferSize);
     try
     {
+        if (mainStream.stream_coding_type != StreamType::VIDEO_H265)
+        {
+            writer.putBits(32, 4);
+            writer.putBits(32, 0);  // no entry
+            writer.flushBits();
+            return writer.getBitsCount() / 8;
+        }
+        const bool hdr = (mainStream.HDR & 18) || mainStream.HDR == 4;  // as in the stream attributes
         writer.putBits(32, 0x20);
         writer.putBits(32, 1 << 24);
-        writer.putBits(32, 1 << 28);
+        writer.putBits(32, hdr ? 1 << 28 : 0);
         for (const unsigned i : HDR10_metadata) writer.putBits(32, i);
         writer.flushBits();
         return writer.getBitsCount() / 8;
@@ -1623,7 +1635,7 @@ int MPLSParser::compose(uint8_t* buffer, int bufferSize, const DiskType dt)
 
         if (isV3())
         {
-            bufferSize = composeUHD_metadata(buff, sizeof(buff));
+            bufferSize = composeUHD_metadata(buff, sizeof(buff), mainStreamInfo);
             const ExtDataBlockInfo extDataBlock(buff, bufferSize, 3, 5);
             blockVector.push_back(extDataBlock);
         }
@@ -3110,15 +3122,20 @@ M2TSStreamInfo::M2TSStreamInfo(const PMTStreamInfo& pmtStreamInfo)
             width = vStream->getStreamWidth();
             height = vStream->getStreamHeight();
             HDR = vStream->getStreamHDR();
-            // The low four bits of the byte after the frame rate are the colour space (2 BT.2020), the high four the
-            // dynamic range. An HDR stream wrote 0x12 and Dolby Vision 0x22; an SDR stream wrote 0x00, BT.2020 or not.
-            // A UHD disc mastered in SDR with BT.2020 colours has 0x02 there, in every playlist and clip
-            // information file, for the same signalling in its stream (BT.2020 primaries, no HDR). H.264 has no such
-            // field; the disc writes 0 there.
+            // The low four bits of the byte after the frame rate are the colour space (1 BT.709, 2 BT.2020), the high
+            // four the dynamic range. An HDR stream writes 0x12 and Dolby Vision 0x22. An SDR stream wrote 0x00, BT.709
+            // or BT.2020; a UHD disc has 0x01 there for SDR HEVC with BT.709 colours and 0x02 for BT.2020, in
+            // every playlist and clip information file, for the same signalling in its stream (the colour primaries,
+            // no HDR). HEVC that gives no primaries keeps 0. H.264 has no such field; the disc writes 0 there.
             uint8_t primaries = 0, transfer = 0, matrix = 0;
             if (pmtStreamInfo.m_streamType == StreamType::VIDEO_H265 &&
-                vStream->getColourDesc(primaries, transfer, matrix) && primaries == 9)
-                colour_space = 2;
+                vStream->getColourDesc(primaries, transfer, matrix))
+            {
+                if (primaries == 9)
+                    colour_space = 2;
+                else if (primaries == 1)
+                    colour_space = 1;
+            }
             const VideoAspectRatio ar = vStream->getStreamAR();
             blurayStreamParams(vStream->getFPS(), vStream->getInterlaced(), width, height, ar, &video_format,
                                &frame_rate_index, &aspect_ratio_index);
@@ -3375,7 +3392,7 @@ void MPLSStreamInfo::composeStreamAttributes(BitStreamWriter& writer)
         else if (HDR == 4)
             writer.putBits(8, 0x22);  // DV
         else
-            writer.putBits(8, colour_space);  // SDR: 0, or 2 for BT.2020
+            writer.putBits(8, colour_space);  // SDR: 1 for BT.709 HEVC, 2 for BT.2020 HEVC, else 0
         if (HDR == 16)
             writer.putBits(8, 0x40);  // HDR10plus
         else

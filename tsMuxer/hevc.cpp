@@ -845,7 +845,10 @@ int HevcPpsUnit::deserialize()
 }
 
 // ----------------------- HevcHdrUnit ------------------------
-HevcHdrUnit::HevcHdrUnit() : isHDR10(false), isHDR10plus(false), isDVRPU(false), isDVEL(false) {}
+HevcHdrUnit::HevcHdrUnit()
+    : isHDR10(false), hasMasteringDisplay(false), isHDR10plus(false), isDVRPU(false), isDVEL(false)
+{
+}
 
 int HevcHdrUnit::deserialize()
 {
@@ -875,10 +878,10 @@ int HevcHdrUnit::deserialize()
                 LTRACE(LT_WARN, 2, "Bad SEI detected. SEI too short");
                 return 1;
             }
-            if (payloadType == 137 && !isHDR10)  // mastering_display_colour_volume
+            if (payloadType == 137 && !isHDR10 && !hasMasteringDisplay)  // mastering_display_colour_volume
             {
-                isHDR10 = true;
-                V3_flags |= HDR10;
+                // An SDR stream can carry one too: HEVCStreamReader::markHdr10ByMasteringSei decides with the SPS
+                hasMasteringDisplay = true;
                 // SEI 137 sends the display primaries in the order GREEN, BLUE, RED, not RGB.
                 // Two of these three comments used to name the wrong colour. The values were
                 // always right, because they are read and written positionally, but anyone

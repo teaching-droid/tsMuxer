@@ -463,8 +463,9 @@ bool BlurayHelper::writeBluRayFiles(const MuxerManager& muxer, const bool usedBl
                 bdIndexData[0x94] = 0x51;
             // include HDR flags
             bdIndexData[0x96] = (V3_flags & 0x1e);
-            // no HDR10 detected => SDR flag
-            if (bdIndexData[0x96] == 0)
+            // no HDR10 detected => SDR flag, for SDR HEVC video. A disc without HEVC sets none, as its playlists
+            // name no dynamic range (MPLSParser::composeUHD_metadata): H.264 on a UHD disc does not set it.
+            if (bdIndexData[0x96] == 0 && muxer.getHevcFound())
                 bdIndexData[0x96] = 1;
         }
         else  // V2 Blu-ray
