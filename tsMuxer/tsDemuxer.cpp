@@ -886,6 +886,15 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
     }
     if (!pesStartCode && m_joinDrop[pid])
         return;
+    // ** A TRUEHD TRACK BEGINS WITH ITS FIRST PES. ** A file cut from a clip begins inside a PES, and the rest of it
+    // was handed on in front of the first PES header. Its bytes have no time, and they are the end of an access unit
+    // the cut has cut, so the readers could not count the access units from the start of the track to the time of the
+    // first PES: the TrueHD of such a cut lost the time of the units it leaves out and came 30 ms early. Only for
+    // TrueHD, whose readers count those units; a part of a playlist leaves out such bytes for every stream already.
+    if (!pesStartCode && m_clipStartOfPid.find(pid) == m_clipStartOfPid.end())
+        if (const auto info = m_pmt.pidList.find(pid);
+            info != m_pmt.pidList.end() && info->second.m_streamType == StreamType::AUDIO_TRUE_HD)
+            return;
     if (pesStartCode)
     {
         const auto pesPacket = reinterpret_cast<PESPacket*>(frameData);

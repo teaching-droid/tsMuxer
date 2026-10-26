@@ -57,7 +57,7 @@ class AC3StreamReader final : public SimplePacketizerReader, public AC3Codec
         skipBeforeBytes = 0;
         return AC3Codec::decodeFrame(buff, end, skipBytes);
     }
-    uint8_t* findFrame(uint8_t* buff, uint8_t* end) override { return AC3Codec::findFrame(buff, end); }
+    uint8_t* findFrame(uint8_t* buff, uint8_t* end) override;
     int wholeFrameSizeAt(const uint8_t* p, const uint8_t* end) override;
     [[nodiscard]] bool declaredByContainer() const override;
     void resetDecodeState() override;
@@ -78,6 +78,12 @@ class AC3StreamReader final : public SimplePacketizerReader, public AC3Codec
 
     int64_t m_totalTHDSamples;
     int64_t m_nextAc3Time;
+    // The TrueHD access units in front of the first AC-3 core frame, which are left out, counted once from the start of
+    // the track; -1 when they could not be counted
+    int m_leadUnits = 0;
+    bool m_leadCounted = false;
+    bool m_leadApplied = false;
+    void applyLeadUnits();
 };
 
 #endif

@@ -245,9 +245,76 @@ int AC3StreamReader::readPacket(AVPacket& avPacket)
     if (m_true_hd_mode && !m_downconvertToAC3)
         return readPacketTHD(avPacket);
     const int rez = SimplePacketizerReader::readPacket(avPacket);
+    if (rez == 0 && m_true_hd_mode && !m_leadApplied)
+    {
+        // down-to-ac3: the first core frame was timed at the start of the track, and the frames after it follow it
+        const int64_t before = static_cast<int64_t>(m_curPts * m_stretch);
+        applyLeadUnits();
+        const int64_t moved = static_cast<int64_t>(m_curPts * m_stretch) - before;
+        avPacket.pts += moved;
+        avPacket.dts += moved;
+    }
     if (rez == 0)
         stampDependentFrame(avPacket);
     return rez;
+}
+
+// ** A TRUEHD TRACK THAT STARTS INSIDE ITS STREAM KEEPS ITS TIME. ** A file cut from a clip begins with the access
+// units of the TrueHD in front of its first AC-3 core frame, and they are left out with the search for that frame: the
+// TrueHD is read from a core frame on. The track was timed from its first PES, which is one of those units, so all of
+// it, core and TrueHD, came the length of the units early: 21 to 33 ms in measured cuts. Each unit says its length, so
+// the units in front of the first core frame are counted from the start of the track, and its time starts after them.
+// Where they do not lead to a core frame, nothing is counted, as before. Counted once, on the first search outside test
+// mode.
+uint8_t* AC3StreamReader::findFrame(uint8_t* buff, uint8_t* end)
+{
+    uint8_t* frame = AC3Codec::findFrame(buff, end);
+    if (m_leadCounted || getTestMode() || !m_true_hd_mode || frame == nullptr)
+        return frame;
+    // The units hold 0B 77 now and then, and the search can stop there first: such a sync word is stepped over by the
+    // search that follows. The walk goes on to the first core frame that stands where a unit ends.
+    m_leadCounted = true;
+    m_leadUnits = -1;
+    int units = 0;
+    for (const uint8_t* p = buff; end - p >= 6; ++units)
+    {
+        if (frameSizeAt(p, end) > 0)
+        {
+            m_leadUnits = units;
+            break;
+        }
+        const int len = MLPCodec::getFrameSize(p);
+        if (len < 4)
+            break;
+        p += len;
+    }
+    return frame;
+}
+
+// The time of the units counted by findFrame is given to the core clock and to the TrueHD clock, before the first frame
+// is stamped. The core frames and the access units then keep the distance they have in the source, as for a track read
+// from the start of its stream.
+void AC3StreamReader::applyLeadUnits()
+{
+    if (m_leadApplied)
+        return;
+    m_leadApplied = true;
+    if (m_leadUnits <= 0 || mlp.m_samples <= 0 || mlp.m_samplerate <= 0)
+        return;
+    const int64_t samples = static_cast<int64_t>(m_leadUnits) * mlp.m_samples;
+    const int64_t lead = samplesToInternal(samples, mlp.m_samplerate);
+    if (m_downconvertToAC3)
+        m_curPts += static_cast<double>(lead);
+    else
+    {
+        m_totalTHDSamples += samples;
+        m_nextAc3Time += lead;
+    }
+    LTRACE(LT_INFO, 2,
+           getCodecInfo().displayName << " stream (track " << m_streamIndex << "): it begins with " << m_leadUnits
+                                      << " TrueHD access units in front of its first AC-3 core frame, which are left "
+                                         "out; the audio after them keeps its time ("
+                                      << samples * 1000 / mlp.m_samplerate << " ms from the start of the track).");
 }
 
 // A dependent E-AC-3 frame belongs to the independent frame before it: together they are one
@@ -376,6 +443,12 @@ int AC3StreamReader::readPacketTHD(AVPacket& avPacket)
         const int rez = SimplePacketizerReader::readPacket(avPacket);
         if (rez != 0)
             return rez;
+        applyLeadUnits();
+        // A sync word in the units in front of the first core frame that is no frame is stepped over with a packet of
+        // no data. It is no access unit, and it advanced the TrueHD clock by one: the TrueHD of such a track came a
+        // unit late against its core.
+        if (avPacket.size == 0)
+            return 0;
 
         // A core frame is recognised by WHAT IT IS, not by the state the decoder is left in after
         // sizing it. m_state only reaches stateDecodeTrueHDFirst when the NEXT frame is not another
