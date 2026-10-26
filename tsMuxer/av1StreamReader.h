@@ -48,6 +48,7 @@ class AV1StreamReader final : public MPEGStreamReader
 
    private:
     void incTimings();
+    void setHdrWcgIdc();  // m_hdrWcgIdc from m_seqHdr
     uint8_t* writeNalPrefix(uint8_t* curPos) const;
     uint8_t* writeBuffer(MemoryBlock& srcData, uint8_t* dstBuffer, const uint8_t* dstEnd) const;
 

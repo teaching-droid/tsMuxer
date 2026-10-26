@@ -409,6 +409,7 @@ CheckStreamRez AV1StreamReader::checkStream(uint8_t* buffer, const int len)
         m_seqHdr = candidateSeqHdr;
         m_seqHdrFound = true;
         m_spsPpsFound = true;
+        setHdrWcgIdc();  // getTSDescriptor writes it from here, before the first frame is read
         // Lightweight FPS extraction for probing only — the full
         // updateFPS() (with logging and 25fps fallback) runs later
         // during actual muxing in intDecodeNAL().
@@ -443,6 +444,21 @@ CheckStreamRez AV1StreamReader::checkStream(uint8_t* buffer, const int len)
     m_curDts = m_curPts = 0;
 
     return rez;
+}
+
+// The HDR/WCG indicator of the AV1 video descriptor, from the colour properties of the sequence header. It was set only
+// when the mux read the sequence header, after the PMT that carries it was written from the check of the stream, so
+// every PMT said 3 (no indication), also for PQ video in BT.2020.
+void AV1StreamReader::setHdrWcgIdc()
+{
+    if (m_seqHdr.transfer_characteristics == AV1_TC_PQ || m_seqHdr.transfer_characteristics == AV1_TC_HLG)
+        m_hdrWcgIdc = 2;  // HDR (+ WCG assumed for PQ/HLG)
+    else if (m_seqHdr.color_primaries == AV1_CP_BT_2020)
+        m_hdrWcgIdc = 1;  // WCG only
+    else if (m_seqHdr.color_primaries == AV1_CP_BT_709 || m_seqHdr.color_primaries == AV1_CP_BT_601)
+        m_hdrWcgIdc = 0;  // SDR
+    else
+        m_hdrWcgIdc = 3;  // No indication
 }
 
 // ---------------------------------------------------------------------------
@@ -537,15 +553,7 @@ int AV1StreamReader::intDecodeNAL(uint8_t* buff)
                     }
                 }
 
-                // Determine HDR/WCG indicator from color properties
-                if (m_seqHdr.transfer_characteristics == AV1_TC_PQ || m_seqHdr.transfer_characteristics == AV1_TC_HLG)
-                    m_hdrWcgIdc = 2;  // HDR (+ WCG assumed for PQ/HLG)
-                else if (m_seqHdr.color_primaries == AV1_CP_BT_2020)
-                    m_hdrWcgIdc = 1;  // WCG only
-                else if (m_seqHdr.color_primaries == AV1_CP_BT_709 || m_seqHdr.color_primaries == AV1_CP_BT_601)
-                    m_hdrWcgIdc = 0;  // SDR
-                else
-                    m_hdrWcgIdc = 3;  // No indication
+                setHdrWcgIdc();
             }
             break;
 
