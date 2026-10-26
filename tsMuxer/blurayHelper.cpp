@@ -17,6 +17,8 @@
 
 using namespace std;
 
+// The indexes at 0x4E: First Play is movie object 2, Top Menu object 1 and title 1 object 0, all HDMV. The playback
+// type of First Play (the top two bits at 0x56) is set in writeBluRayFiles.
 uint8_t bdIndexData[] = {
     0x49, 0x4e, 0x44, 0x58, 0x30, 0x32, 0x30, 0x30, 0x00, 0x00, 0x00, 0x4e, 0x00, 0x00, 0x00, 0x00,  // 0x78,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -480,6 +482,9 @@ bool BlurayHelper::writeBluRayFiles(const MuxerManager& muxer, const bool usedBl
         bdIndexData[15] = 0x78;
     }
     bdIndexData[0x2c] = stereoMode ? 0x60 : 0;  // set initial_output_mode_preference and SS_content_exist_flag
+    // First Play is a movie (playback type 0) on a Blu-ray, as discs mark it; it was interactive (1), the type of a
+    // Top Menu. AVCHD keeps 1, which is what camcorder discs write.
+    bdIndexData[0x56] = m_dt == DiskType::BLURAY ? 0x00 : 0x40;
 
     if (!file->open((prefix + "BDMV/index.bdmv").c_str(), AbstractOutputStream::ofWrite))
     {
