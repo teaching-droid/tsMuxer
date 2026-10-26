@@ -52,32 +52,58 @@ void AC3StreamReader::probeTrueHD()
         return;
 
     AC3Codec::setTestMode(true);
-    uint8_t* frame = findFrame(m_buffer, m_bufEnd);
+    decodeLeadingFrames(findFrame(m_buffer, m_bufEnd));
+    findTrueHDMajorSync();
+
+    if (m_true_hd_mode && !m_downconvertToAC3)
+        LTRACE(
+            LT_INFO, 2,
+            "TrueHD track (track " << m_streamIndex << "): the lossless substream is carried through to the output.");
+}
+
+// The first two frames of what has been read are decoded in test mode, from frame on, for what the stream is. Test
+// mode is on when this is called and off when it returns.
+//
+// ** A SYNC WORD THAT IS NOT A FRAME IS STEPPED OVER. ** A track that starts inside its stream, as a file cut from a
+// clip, can open on the lossless units of a TrueHD track, and their bytes hold 0B 77 now and then. The search for the
+// first frame landed on such a sync word, the frame did not decode and the loop gave up at once: no AC-3 frame was
+// decoded at all, so the descriptor was built from the false header, as E-AC-3 with whatever "bsid" was there, and
+// TrueHD was not found. Until a frame has decoded, the search goes on behind a sync word that does not decode, up to
+// the end of what has been read. After that a frame that does not decode ends the loop, as before, so the fields of
+// a real frame are not overwritten by a false one. A frame that decodes but is stepped over (skipBytes, the E-AC-3
+// part with down-to-ac3) counts as decoded.
+void AC3StreamReader::decodeLeadingFrames(uint8_t* frame)
+{
+    bool decoded = false;
     for (int i = 0; i < 2 && frame != nullptr && frame < m_bufEnd;)
     {
         int skipBytes = 0;
         int skipBeforeBytes = 0;
         const int len = decodeFrame(frame, m_bufEnd, skipBytes, skipBeforeBytes);
         if (len < 1)
-            break;
+        {
+            if (decoded || skipBytes > 0)
+                break;
+            frame = findFrame(frame + 1, m_bufEnd);
+            continue;
+        }
+        decoded = true;
         frame += len + skipBytes;
         if (getFrameDuration() > 0)
             i++;
     }
     m_state = AC3State::stateDecodeAC3;
     AC3Codec::setTestMode(false);
+}
 
-    // A track that does not begin where its stream begins, as a part cut from a clip of a playlist, need not have the
-    // lossless frame that says what the stream is (the one with a major sync) right behind its first core frames: it
-    // comes once in 128 frames. It is looked for in what has been read.
+// A track that does not begin where its stream begins, as a part cut from a clip of a playlist or a cut file, need not
+// have the lossless frame that says what the stream is (the one with a major sync) right behind its first core frames:
+// it comes once in 128 frames. It is looked for in what has been read.
+void AC3StreamReader::findTrueHDMajorSync()
+{
     for (uint8_t* p = m_buffer + 4; !m_true_hd_mode && p + 4 <= m_bufEnd; ++p)
         if (p[0] == 0xF8 && p[1] == 0x72 && p[2] == 0x6F && p[3] == 0xBA)
             m_true_hd_mode = mlp.decodeFrame(p - 4, m_bufEnd);
-
-    if (m_true_hd_mode && !m_downconvertToAC3)
-        LTRACE(
-            LT_INFO, 2,
-            "TrueHD track (track " << m_streamIndex << "): the lossless substream is carried through to the output.");
 }
 
 bool AC3StreamReader::isPriorityData(AVPacket* packet)
@@ -119,24 +145,14 @@ int AC3StreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdm
     uint8_t* frame = findFrame(m_buffer, m_bufEnd);
     if (frame == nullptr)
         return 0;
-    for (int i = 0; i < 2 && frame < m_bufEnd;)
-    {
-        int skipBytes = 0;
-        int skipBeforeBytes = 0;
-        const int len = decodeFrame(frame, m_bufEnd, skipBytes, skipBeforeBytes);
-        if (len < 1)
-        {
-            // m_state = stateDecodeAC3;
-            // AC3Codec::setTestMode(false);
-            // return 0;
-            break;
-        }
-        frame += len + skipBytes;
-        if (getFrameDuration() > 0)
-            i++;
-    }
-    m_state = AC3State::stateDecodeAC3;
-    AC3Codec::setTestMode(false);
+    decodeLeadingFrames(frame);
+    // The stream type is chosen from isTrueHD() as soon as this returns, and the payload path finds TrueHD only later.
+    // A TrueHD track that starts inside its stream need not have a major sync where the decoding above looks for one,
+    // behind its first core frames, and it was declared AC-3 with the lossless units in it. The discovery phase has
+    // seen TrueHD then, and the payload path's search is made here as well. Only for such a track, so no plain AC-3
+    // track is touched.
+    if (m_needTrueHDProbe)
+        findTrueHDMajorSync();
 
     // A Blu-ray player has to decode AC-3 but not E-AC-3. That is why Dolby Digital Plus on a disc is
     // an AC-3 core with the E-AC-3 part beside it: a player without an E-AC-3 decoder plays the core.

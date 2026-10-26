@@ -41,6 +41,8 @@ class AC3StreamReader final : public SimplePacketizerReader, public AC3Codec
     // Find the lossless substream on THIS reader. Only runs for a track the discovery phase already
     // identified as TrueHD, and only once.
     void probeTrueHD();
+    void decodeLeadingFrames(uint8_t* frame);
+    void findTrueHDMajorSync();
     bool m_needTrueHDProbe;
     bool m_eac3NoCoreReported = false;
     // E-AC-3 without an AC-3 core: the timestamp of the last independent frame, which the
