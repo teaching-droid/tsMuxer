@@ -332,6 +332,9 @@ class TSMuxer final : public AbstractMuxer
     MPEGStreamReader* m_v3VideoPending = nullptr;
     int m_v3VideoPendingIndex = -1;
     uint16_t m_DVvideoTrackCnt;
+    // The PIDs of the base layers that carry no Dolby Vision of their own, in order: the n-th enhancement layer
+    // belongs to the n-th of them (setDoViBaseLayerPid)
+    std::vector<int> m_dvBasePids;
     uint16_t m_videoSecondTrackCnt;
     uint16_t m_audioTrackCnt;
     uint16_t m_secondaryAudioTrackCnt;

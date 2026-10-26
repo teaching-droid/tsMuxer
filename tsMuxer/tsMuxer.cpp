@@ -403,6 +403,19 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
             }
             if (m_subMode)
                 tsStreamIndex++;
+            // The Dolby Vision descriptor of a transport stream names the base layer's PID on its enhancement layer.
+            // A single layer Dolby Vision stream (profile 5 or 8) is no one's base layer.
+            if (!isDvEnhancement && codecReader != nullptr && codecReader->getStreamHDR() != 4)
+                m_dvBasePids.push_back(tsStreamIndex);
+            if (auto* hevc = dynamic_cast<HEVCStreamReader*>(codecReader))
+            {
+                int basePid = 0;
+                if (isDvEnhancement && m_dvBasePids.empty())
+                    basePid = 0x1011;
+                else if (isDvEnhancement)
+                    basePid = m_dvBasePids[(std::min)(static_cast<size_t>(m_DVvideoTrackCnt), m_dvBasePids.size()) - 1];
+                hevc->setDoViBaseLayerPid(basePid);
+            }
         }
         else
         {

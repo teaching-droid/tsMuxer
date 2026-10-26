@@ -19,7 +19,10 @@ class HEVCStreamReader final : public MPEGStreamReader
     ~HEVCStreamReader() override;
     int getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdmvDescriptors) override;
     int setDoViDescriptor(uint8_t* dstBuff) const;
-    // Shared derivation behind both the Blu-ray descriptor and the Matroska record.
+    // The PID of the base layer when the transport stream muxer has placed this stream as a Dolby Vision enhancement
+    // layer on a PID of its own; 0 when this stream's PID carries the base layer (setDoViDescriptor)
+    void setDoViBaseLayerPid(const int pid) { m_doViBaseLayerPid = pid; }
+    // The derivation behind the Matroska record. The transport stream descriptor states its layers itself.
     bool getDoViParams(int& profile, int& level, int& compatibility, bool& isDVBLOut) const;
     // Said once per stream. doViProfileAndCompatibility is const and is called more than once, from
     // the descriptor and from the Matroska configuration record.
@@ -109,7 +112,8 @@ class HEVCStreamReader final : public MPEGStreamReader
     // enhancement layer, so describing both rows from m_sps reported the wrong picture for one.
     HevcVpsUnit* m_elVps = nullptr;
     HevcSpsUnit* m_elSps = nullptr;
-    int m_dvRpuElPresent = -1;  // dvRpuElPresent
+    int m_dvRpuElPresent = -1;   // dvRpuElPresent
+    int m_doViBaseLayerPid = 0;  // setDoViBaseLayerPid
     int m_seiParseWarns = 0;
     bool m_hdr10Override = false;  // setHdr10Override
     HevcSliceHeader* m_slice;

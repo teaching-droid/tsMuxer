@@ -584,8 +584,8 @@ int HEVCStreamReader::getTSDescriptor(uint8_t* dstBuff, const bool blurayMode, c
 }
 
 // Split out of setDoViDescriptor so the same derivation can also build the Matroska Dolby Vision
-// configuration record, which wants exactly these fields in a different container. Behaviour of
-// the Blu-ray descriptor is unchanged; it just calls this first.
+// configuration record, which wants exactly these fields in a different container. The transport
+// stream descriptor now takes the profile table below directly, with the layers it carries.
 // The profile and compatibility table, lifted out of getDoViParams UNCHANGED so that the Matroska
 // dual layer record can consult the same one table instead of carrying a second copy that would
 // drift. The only edit is that the enhancement layer question is now an argument rather than
@@ -836,37 +836,59 @@ uint32_t HEVCStreamReader::buildDoViConfigRecordProfile81(uint8_t* dst) const
     return 0x64767643;  // dvvC, which is what profile 8 uses
 }
 
+// The Dolby Vision video stream descriptor of a transport stream that is not a disc. It describes the layers that
+// travel on THIS PID: the base layer unless the muxer placed the stream as an enhancement layer beside its base
+// (setDoViBaseLayerPid), and the enhancement layer when it is that one, or when it is wrapped into the same stream.
+//
+// It used to be built through getDoViParams, which takes the layer from V3_flags & BL_TRACK. The muxer sets that flag
+// for the first base layer, and the descriptor is made again at every PMT, so a single layer stream (profile 5 or 8)
+// was then described as an enhancement layer of itself: profile 7 or 4, no base layer, dependency_pid its own PID, and
+// a level for twice its width. The last four bits were all 1, which readers of the current layout take as metadata
+// compression 3, a value profile 7 does not allow.
 int HEVCStreamReader::setDoViDescriptor(uint8_t* dstBuff) const
 {
-    int profile = 0;
-    int level = 0;
-    int compatibility = 0;
-    bool isDVBL = false;
-    if (!getDoViParams(profile, level, compatibility, isDVBL))
+    if (!m_sps || !m_hdr)
         return 0;
+
+    const bool blPresent = m_doViBaseLayerPid == 0;
+    // A merged dual layer track keeps its enhancement layer in this stream, unless its RPU was made single layer
+    const bool elPresent = !blPresent || (m_hdr->isDVEL && m_dvRpuElPresent != 0);
+    int profile = 0;
+    int compatibility = 0;
+    doViProfileAndCompatibility(elPresent, profile, compatibility);
+    // The level is that of the whole picture: a 4K disc's enhancement layer is a quarter of its base
+    unsigned width = getStreamWidth();
+    uint32_t pixelRate = doViPixelRate();
+    if (!blPresent && V3_flags & FOUR_K)
+    {
+        width *= 2;
+        pixelRate *= 4;
+    }
+    const int level = doViLevelFor(width, pixelRate);
 
     BitStreamWriter bitWriter{};
     bitWriter.setBuffer(dstBuff, dstBuff + 128);
 
-    bitWriter.putBits(8, 0xb0);            // DoVi descriptor tag
-    bitWriter.putBits(8, isDVBL ? 5 : 7);  // descriptor length
-    bitWriter.putBits(8, 1);               // dv version major
-    bitWriter.putBits(8, 0);               // dv version minor
-    bitWriter.putBits(7, profile);         // dv profile
-    bitWriter.putBits(6, level);           // dv level
-    bitWriter.putBits(1, m_hdr->isDVRPU);  // rpu_present_flag
-    bitWriter.putBits(1, m_hdr->isDVEL);   // el_present_flag
-    bitWriter.putBits(1, isDVBL);          // bl_present_flag
-    if (!isDVBL)
+    bitWriter.putBits(8, 0xb0);               // DoVi descriptor tag
+    bitWriter.putBits(8, blPresent ? 5 : 7);  // descriptor length
+    bitWriter.putBits(8, 1);                  // dv version major
+    bitWriter.putBits(8, 0);                  // dv version minor
+    bitWriter.putBits(7, profile);            // dv profile
+    bitWriter.putBits(6, level);              // dv level
+    bitWriter.putBits(1, m_hdr->isDVRPU);     // rpu_present_flag
+    bitWriter.putBits(1, elPresent);          // el_present_flag
+    bitWriter.putBits(1, blPresent);          // bl_present_flag
+    if (!blPresent)
     {
-        bitWriter.putBits(13, 0x1011);  // dependency_pid
-        bitWriter.putBits(3, 7);        // reserved
+        bitWriter.putBits(13, m_doViBaseLayerPid);  // dependency_pid
+        bitWriter.putBits(3, 7);                    // reserved
     }
-    bitWriter.putBits(4, compatibility);  // dv_bl_sigHevcUnit::NalType::compatibility_id
-    bitWriter.putBits(4, 15);             // reserved
+    bitWriter.putBits(4, compatibility);  // dv_bl_signal_compatibility_id
+    bitWriter.putBits(2, 0);              // dv_md_compression: none, the RPUs are carried as they are
+    bitWriter.putBits(2, 3);              // reserved
 
     bitWriter.flushBits();
-    return isDVBL ? 7 : 9;
+    return blPresent ? 7 : 9;
 }
 
 void HEVCStreamReader::updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* nextNal, int)
