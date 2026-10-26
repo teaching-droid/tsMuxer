@@ -2014,8 +2014,17 @@ void MatroskaMuxer::refreshTrackFromReader(MkvTrackInfo& track)
     }
     // An AC-3 core with an E-AC-3 part beside it is E-AC-3 to a decoder, and is declared so. It
     // went out as A_AC3, named after whichever frame happened to be read last.
-    if (const auto ac3 = dynamic_cast<AC3StreamReader*>(track.codecReader);
-        ac3 && track.ac3CoreOfStream < 0 && track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_AC3 && ac3->carriesEac3())
+    //
+    // ** WITH DOWN-TO-AC3 IT IS THE CORE ALONE. ** The E-AC-3 part is left out, as the TS and demux writers know, but
+    // the reader names the codec after the frames it reads, and the E-AC-3 part is among them: the track was declared
+    // A_EAC3 with the 7.1 of that part while it holds the 5.1 AC-3 core, as TrueHD with down-to-ac3 is declared A_AC3.
+    if (const auto ac3 = dynamic_cast<AC3StreamReader*>(track.codecReader); ac3 && ac3->getDownconvertToAC3())
+    {
+        if (track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_EAC3)
+            track.matroskaCodecID = MATROSKA_CODEC_ID_AUDIO_AC3;
+    }
+    else if (ac3 && track.ac3CoreOfStream < 0 && track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_AC3 &&
+             ac3->carriesEac3())
         track.matroskaCodecID = MATROSKA_CODEC_ID_AUDIO_EAC3;
     // Three formats were labelled as their bigger relatives, because one reader serves both: MPEG-1 video as
     // V_MPEG2, MLP that is not TrueHD as A_TRUEHD, and DTS Express as plain DTS. Matroska names each on its own,
