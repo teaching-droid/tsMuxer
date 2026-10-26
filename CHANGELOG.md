@@ -334,7 +334,13 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **Film at 59.94 with delPulldown** gets no false "irregular pulldown marks" warnings.
 
-* **The buffering period SEI that insertSEI and forceSEI add to H.264 told the decoder to wait 9.5 s before the first picture,** whatever the stream: far more than its buffer size and bitrate allow (0.75 s with the values tsMuxeR writes into the SPS), and where the stream gives the field fewer bits, only part of the number was kept. The wait now comes from the buffer size and bitrate in the SPS, just under the most they allow.
+* **The buffering period SEI that insertSEI and forceSEI add to H.264 told the decoder to wait 9.5 s,** at every buffering period and whatever the stream: far more than its buffer size and bitrate allow (0.75 s with the values tsMuxeR writes into the SPS), and where the stream gives the field fewer bits, only part of the number was kept. The first wait now comes from the buffer size and bitrate in the SPS, just under the most they allow, and each later one from how full the buffer is at that point.
+
+* **insertSEI and forceSEI said nothing when a stream needs more than the bitrate and buffer in its SPS,** such as a stream without them that needs more than the 40 Mbit/s tsMuxeR writes for it, the most a Blu-ray disc allows. Its buffering period and picture timing SEI then do not fit it. A warning now says how many pictures arrive after they are due and how much the stream needs, and to mux it without insertSEI and forceSEI or to encode it within that rate. The output does not change.
+
+* **insertSEI and forceSEI could break the pictures of H.264 whose PPS changes between I pictures.** The changed PPS was left out, and the pictures up to the next I picture were decoded with the old one: a field-coded 1080i stream gave hundreds of decoding errors. Such a PPS is now kept, and the pictures decode as without insertSEI and forceSEI.
+
+* **With insertSEI or forceSEI, the second field of each frame of H.264 coded as fields had no picture timing SEI.** Each field now has its own.
 
 ### Blu-ray and transport stream
 
@@ -377,6 +383,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **HEVC level=** reaches the HEVC descriptor of a transport stream made with --no-hdmv-descriptors as well: the descriptor kept the level of the source.
 
 * **Single layer Dolby Vision on a disc** gets a warning that it plays without Dolby Vision, as its HDR10, SDR or HLG base: a UHD Blu-ray player takes Dolby Vision from two layers only. The disc is written as before.
+
+* **Dolby Vision in a .ts or .m2ts that is not a disc had a wrong descriptor.** A single layer stream was declared as an enhancement layer of itself, profile 8.1 as profile 7 and profile 5 as profile 4, with a level for twice its width, and a profile 7 track that holds both layers as an enhancement layer only. The last bits of every such descriptor read as compressed metadata. Each stream is now declared with its own profile, level and layers, without compression, and a second enhancement layer names its own base layer. A Blu-ray disc does not change.
 
 * **The layer break guard goes at the breaks of the disc** given with --disc-size, or --disc-capacity for --bdmv-to-iso: on a 100 GB disc it went at half a 50 GB disc, inside the first layer. The breaks are those of BD-R DL, BD-RE DL, BD-R XL 100 GB and 128 GB, and of the first two layers of a 100 GB disc; a --disc-size close to one of them, such as 50g, gets its breaks with a warning, and another size is refused when a guard is asked for. --layer-break-guard-before on its own gives a guard before the break; it was ignored.
 
@@ -441,6 +449,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **The angles after the first, the place and size of a picture-in-picture video, audio and video in a separate clip of a playlist, and the hold of still pictures are no longer left out without a word:** a warning names them, and the rest is muxed. A second video without "secondary" gets a warning that it is muxed as a second primary video.
 
 ### Matroska output
+
+* **insertSEI and forceSEI to Matroska wrote buffer values into the SPS, but no buffering period or picture timing SEI.** The blocks of H.264 that is not 3D now have them, as a TS has, with a delimiter where the stream has none and the SPS and PPS at I pictures. Closed captions and other SEI are kept as before.
 
 * **A track that starts late held a whole Matroska mux in memory.** An audio or video track whose first packet comes more than ten seconds in, such as a commentary that begins minutes into the film, held back the start of the file, with every packet before it kept in memory. The file now starts after ten seconds, and the entry of that track is completed when its first packet comes. In a split output, the parts before that packet have no block of the track, and their entry holds only what was known before it: E-AC-3 on an A_AC3 line is listed there as AC-3.
 
