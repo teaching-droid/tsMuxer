@@ -74,6 +74,9 @@ struct AVPacket
                        // RTP/RTSP mode
     BaseAbstractStreamReader* codec;
     int codecID;
+    // Bytes at the start of data that the reader wrote itself, in front of what the source had (the SEI units of
+    // insertSEI and forceSEI for a Matroska output, H264StreamReader). Set by that reader on each of its packets.
+    int addedBytes = 0;
     static constexpr unsigned PCR_STREAM = 1;
     static constexpr unsigned IS_COMPLETE_FRAME = 2;
     static constexpr unsigned FORCE_NEW_FRAME = 4;

@@ -320,6 +320,7 @@ int H264StreamReader::readPacket(AVPacket& avPacket)
         if (added == 0)
             added = addFieldTiming(avPacket);
     }
+    avPacket.addedBytes = added;
     countHrdBytes(avPacket, added);
     return rez;
 }
@@ -330,6 +331,7 @@ int H264StreamReader::flushPacket(AVPacket& avPacket)
     int added = addFrameData(avPacket);
     if (added == 0)
         added = addFieldTiming(avPacket);
+    avPacket.addedBytes = added;
     countHrdBytes(avPacket, added);
     hrdWarning();
     return rez;
@@ -361,19 +363,41 @@ void H264StreamReader::hrdWarning()
 // A Matroska output takes the packets as they are and does not ask for writeAdditionData. With the SEI correction its
 // SPS (in CodecPrivate) has the HRD that tsMuxeR writes, while the stream's own buffering period and picture timing
 // SEI are left out (skipNal), so it had an HRD and no SEI for it. For such an output (setAddDataInPackets) the units
-// writeAdditionData gives are put in front of the first packet of each frame. Returns the bytes put in front.
+// writeAdditionData gives are put in front of the first packet of each frame that is not the stream's own
+// delimiter. Returns the bytes put in front.
 int H264StreamReader::addFrameData(AVPacket& avPacket)
 {
-    // the first packet of a frame with data, as a transport stream's packet starts with it: a delimiter that leads the
-    // frame stays in front
     if (!m_addDataInPackets || !m_needSeiCorrection || m_mvcSubStream || m_mvcPrimaryStream || avPacket.size <= 0 ||
         (m_addDataDtsKnown && avPacket.dts == m_addDataDts))
         return 0;
+    // The stream's own delimiter stays a packet of its own, first in the frame, and the units go in front of the
+    // packet after it: so only what tsMuxeR writes is put in front of a packet (AVPacket::addedBytes), and the
+    // delimiter keeps the framing the source gave it.
+    const int startCode = avPacket.size >= 4 && avPacket.data[0] == 0 && avPacket.data[1] == 0
+                              ? (avPacket.data[2] == 1                            ? 3
+                                 : avPacket.data[2] == 0 && avPacket.data[3] == 1 ? 4
+                                                                                  : 0)
+                              : 0;
+    if (startCode > 0 && startCode < avPacket.size)
+    {
+        const auto nalType = static_cast<NALUnit::NALType>(avPacket.data[startCode] & 0x1f);
+        if (nalType == NALUnit::NALType::nuDelimiter || nalType == NALUnit::NALType::nuDRD)
+        {
+            if (!m_frameStartKnown)
+            {
+                m_frameStartKnown = true;
+                m_frameStart = m_hrdBytes;
+                m_frameStartVcl = m_hrdVclBytes;
+            }
+            return 0;
+        }
+    }
     m_addDataDts = avPacket.dts;
     m_addDataDtsKnown = true;
-    // the packet is not counted yet (countHrdBytes): the frame starts here
-    m_hrdBytesBefore = m_hrdBytes;
-    m_hrdVclBytesBefore = m_hrdVclBytes;
+    // the packet is not counted yet (countHrdBytes): the frame starts here, or at its delimiter
+    m_hrdBytesBefore = m_frameStartKnown ? m_frameStart : m_hrdBytes;
+    m_hrdVclBytesBefore = m_frameStartKnown ? m_frameStartVcl : m_hrdVclBytes;
+    m_frameStartKnown = false;
     std::vector<uint8_t> buffer(static_cast<size_t>(avPacket.size) + 65536);
     const int len = writeAdditionData(buffer.data(), buffer.data() + buffer.size(), avPacket, nullptr);
     m_hrdAuAdded = 0;  // here the units are in the packet, and counted with it

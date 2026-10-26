@@ -200,6 +200,9 @@ class MatroskaMuxer final : public AbstractMuxer
         // does not reproduce the source is worse than no rule.
         std::map<int, int> startCodeByType;
         bool startCodeMixed;
+        // Where the pending frame holds units tsMuxeR wrote itself (AVPacket::addedBytes): offset and length. Their
+        // framing is tsMuxeR's, not the source's, and is left out of the record above.
+        std::vector<std::pair<int, int>> pendingAdded;
 
         // Audio-specific
         int sampleRate;
@@ -557,6 +560,7 @@ class MatroskaMuxer final : public AbstractMuxer
         int64_t dts;
         uint32_t flags;
         int64_t duration = 0;
+        int addedBytes = 0;
         std::vector<uint8_t> data;
     };
     std::vector<BufferedPacket> m_preHeaderPackets;
@@ -613,7 +617,9 @@ class MatroskaMuxer final : public AbstractMuxer
     static std::vector<uint8_t> convertAV1ToLowOverhead(const uint8_t* data, int size);
     // Not static: it records how the source framed each NAL type as it passes, which is the only
     // point at which that information still exists.
-    std::vector<uint8_t> convertAnnexBToLengthPrefixed(MkvTrackInfo& track, const uint8_t* data, int size);
+    // added: the parts of data that tsMuxeR wrote itself (offset, length), not noted as the source's framing
+    std::vector<uint8_t> convertAnnexBToLengthPrefixed(MkvTrackInfo& track, const uint8_t* data, int size,
+                                                       const std::vector<std::pair<int, int>>* added = nullptr);
     // Note one observation. len is 3 or 4.
     static void noteStartCode(MkvTrackInfo& track, int nalType, int len);
     // The NAL type of a NAL, by codec. Returns -1 when the codec has no such notion.

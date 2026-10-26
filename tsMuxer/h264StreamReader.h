@@ -274,7 +274,10 @@ class H264StreamReader final : public MPEGStreamReader
     double m_hrdPeakRate = 0;
     bool m_addDataInPackets = false;
     bool m_addDataDtsKnown = false;
-    int64_t m_addDataDts = 0;            // the frame addFrameData wrote for last
+    int64_t m_addDataDts = 0;        // the frame addFrameData wrote for last
+    bool m_frameStartKnown = false;  // the frame began with a delimiter of the stream, at these counts
+    int64_t m_frameStart = 0;
+    int64_t m_frameStartVcl = 0;
     std::vector<uint8_t> m_framePacket;  // its units and the packet they go in front of
     bool m_secondFieldTimed = false;     // the second field read now has its picture timing SEI
     bool m_fieldTimingKnown = false;

@@ -564,6 +564,7 @@ int METADemuxer::readPacket(AVPacket& avPacket)
     avPacket.stream_index = 0;
     avPacket.data = nullptr;
     avPacket.size = 0;
+    avPacket.addedBytes = 0;
     avPacket.codec = nullptr;
     m_lastReadRez = 0;
     while (true)

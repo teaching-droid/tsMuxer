@@ -3094,6 +3094,7 @@ void MatroskaMuxer::replayBufferedPackets()
         tmpPacket.dts = pkt.dts;
         tmpPacket.flags = pkt.flags;
         tmpPacket.duration = pkt.duration;
+        tmpPacket.addedBytes = pkt.addedBytes;
         tmpPacket.data = pkt.data.data();
         tmpPacket.size = static_cast<int>(pkt.data.size());
         muxPacketInternal(tmpPacket);
@@ -3323,7 +3324,8 @@ std::string MatroskaMuxer::startCodeRule(const MkvTrackInfo& track)
 }
 
 std::vector<uint8_t> MatroskaMuxer::convertAnnexBToLengthPrefixed(MkvTrackInfo& track, const uint8_t* data,
-                                                                  const int size)
+                                                                  const int size,
+                                                                  const std::vector<std::pair<int, int>>* added)
 {
     // Convert Annex B start-code-separated NALUs to 4-byte length-prefixed NALUs.
     // This is the format required for H.264/HEVC/VVC in Matroska.
@@ -3354,7 +3356,14 @@ std::vector<uint8_t> MatroskaMuxer::convertAnnexBToLengthPrefixed(MkvTrackInfo& 
             // front of the three that make it up says whether there was a fourth. Guarded, because
             // the very first NAL of the buffer may have nothing in front of it.
             const int startCodeLen = (curPos - data >= 4 && curPos[-4] == 0) ? 4 : 3;
-            noteStartCode(track, nalTypeOf(track.codecID, curPos, naluSize), startCodeLen);
+            // A unit tsMuxeR wrote itself (insertSEI, forceSEI) has tsMuxeR's framing: with it, a stream that
+            // frames its SEI with three bytes had SEI both ways, and lost its record
+            const auto at = static_cast<int>(curPos - data);
+            bool own = false;
+            if (added)
+                for (const auto& [from, len] : *added) own |= at >= from && at < from + len;
+            if (!own)
+                noteStartCode(track, nalTypeOf(track.codecID, curPos, naluSize), startCodeLen);
 
             // Write 4-byte big-endian length
             result.push_back(static_cast<uint8_t>((naluSize >> 24) & 0xFF));
@@ -3539,6 +3548,7 @@ void MatroskaMuxer::flushPendingFrame(MkvTrackInfo& track)
     {
         track.hasPendingFrame = false;
         track.pendingFrameData.clear();
+        track.pendingAdded.clear();
         return;
     }
 
@@ -3561,7 +3571,7 @@ void MatroskaMuxer::flushPendingFrame(MkvTrackInfo& track)
     case CODEC_V_MPEG4_H264:
     case CODEC_V_MPEG4_H265:
     case CODEC_V_MPEG4_H266:
-        convertedData = convertAnnexBToLengthPrefixed(track, frameData, frameSize);
+        convertedData = convertAnnexBToLengthPrefixed(track, frameData, frameSize, &track.pendingAdded);
         break;
     case CODEC_A_AAC:
         // A_AAC carries raw frames and describes them once, in CodecPrivate. The reader hands over
@@ -3607,6 +3617,7 @@ void MatroskaMuxer::flushPendingFrame(MkvTrackInfo& track)
         held.flags = track.pendingFlags;
         track.heldFrames.push_back(std::move(held));
         track.pendingFrameData.clear();
+        track.pendingAdded.clear();
         track.hasPendingFrame = false;
         drainHeldFrames(track, false);
         return;
@@ -3619,6 +3630,7 @@ void MatroskaMuxer::flushPendingFrame(MkvTrackInfo& track)
     writeBlock(track, frameData, frameSize, blockTime, track.pendingFlags);
 
     track.pendingFrameData.clear();
+    track.pendingAdded.clear();
     track.hasPendingFrame = false;
 }
 
@@ -3751,6 +3763,7 @@ bool MatroskaMuxer::writeAacRawBlocks(MkvTrackInfo& track, const uint8_t* frame,
         writeBlock(track, data + starts[i], starts[i + 1] - starts[i] - 2, track.pendingPts + i * step,
                    track.pendingFlags);
     track.pendingFrameData.clear();
+    track.pendingAdded.clear();
     track.hasPendingFrame = false;
     return true;
 }
@@ -4129,6 +4142,7 @@ bool MatroskaMuxer::muxPacket(AVPacket& avPacket)
         bp.dts = avPacket.dts;
         bp.flags = avPacket.flags;
         bp.duration = avPacket.duration;
+        bp.addedBytes = avPacket.addedBytes;
         bp.data.assign(avPacket.data, avPacket.data + avPacket.size);
         m_preHeaderPackets.push_back(std::move(bp));
 
@@ -4406,6 +4420,8 @@ bool MatroskaMuxer::muxPacketInternal(AVPacket& avPacket)
     if (track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_DTS_EXPRESS ||
         track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_PCM_LIT)
         track.pendingFlags |= AVPacket::IS_IFRAME;
+    if (avPacket.addedBytes > 0 && track.codecID == CODEC_V_MPEG4_H264)
+        track.pendingAdded.emplace_back(static_cast<int>(track.pendingFrameData.size()), avPacket.addedBytes);
     track.pendingFrameData.insert(track.pendingFrameData.end(), avPacket.data, avPacket.data + avPacket.size);
 
     return true;
