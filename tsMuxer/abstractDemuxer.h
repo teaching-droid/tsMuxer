@@ -209,6 +209,9 @@ class AbstractDemuxer
     // The text subtitles of a track that the next one follows at once, without a gap: their start times, in ms as the
     // SRT text the demuxer hands on gives them, taken out once asked for (SRTStreamReader::addTouchingCue)
     virtual std::vector<int64_t> takeTouchingCues(int pid) { return {}; }
+    // The text subtitles of a track whose next one starts after a gap: (its start, the next one's start), in ms as
+    // the SRT text the demuxer hands on gives them, taken out once asked for (SRTStreamReader::addNextCueStart)
+    virtual std::vector<std::pair<int64_t, int64_t>> takeNextCueStarts(int pid) { return {}; }
     // The time the demuxer has read the file up to, on the internal clock its packets carry; -1 where it cannot say
     [[nodiscard]] virtual int64_t getDemuxedTime() const { return -1; }
     // Keep them for this track from now on; only the tracks asked for are kept, so that nothing piles up for a

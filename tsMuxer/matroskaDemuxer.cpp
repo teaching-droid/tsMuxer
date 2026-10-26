@@ -908,12 +908,21 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
                     m_blockAddLog[track + 1][pkt->pts] = m_pendingAdditions;
                 // A text subtitle that the next one of its track follows at once is not cleared at its end
                 // (SRTStreamReader::addTouchingCue). Its block says when it ends; the next block of the track is
-                // looked for in the clusters ahead, in a file of its own (not a join, not a play timeline).
+                // looked for in the clusters ahead, in a file of its own (not a join, not a play timeline). Where
+                // the next one starts later, its start says when the clear is decoded at the latest
+                // (SRTStreamReader::addNextCueStart).
                 if (laces == 1 && duration != AV_NOPTS_VALUE && duration > 0 && timecode != AV_NOPTS_VALUE &&
                     pkt->pts != AV_NOPTS_VALUE && !timeline && m_joinFiles.size() <= 1 && m_clusterPos >= 0 &&
-                    dynamic_cast<ParsedSRTTrackData*>(tracks[track]->parsed_priv_data) &&
-                    nextBlockAt(tracks[track]->num, timecode) == timecode + duration)
-                    m_touchingCues[track + 1].push_back((pkt->pts * 1000 + INTERNAL_PTS_FREQ / 2) / INTERNAL_PTS_FREQ);
+                    dynamic_cast<ParsedSRTTrackData*>(tracks[track]->parsed_priv_data))
+                {
+                    const int64_t next = nextBlockAt(tracks[track]->num, timecode);
+                    const auto toMs = [](const int64_t internal)
+                    { return (internal * 1000 + INTERNAL_PTS_FREQ / 2) / INTERNAL_PTS_FREQ; };
+                    if (next == timecode + duration)
+                        m_touchingCues[track + 1].push_back(toMs(pkt->pts));
+                    else if (next > timecode + duration)
+                        m_nextCueStarts[track + 1].emplace_back(toMs(pkt->pts), toMs(toInternal(next)));
+                }
                 if (tracks[track]->parsed_priv_data != nullptr)
                 {
                     if (n == 0 && !m_pendingAdditions.empty())
@@ -1749,6 +1758,14 @@ std::vector<int64_t> MatroskaDemuxer::takeTouchingCues(const int pid)
 {
     std::vector<int64_t> cues;
     if (const auto it = m_touchingCues.find(pid); it != m_touchingCues.end())
+        cues.swap(it->second);
+    return cues;
+}
+
+std::vector<std::pair<int64_t, int64_t>> MatroskaDemuxer::takeNextCueStarts(const int pid)
+{
+    std::vector<std::pair<int64_t, int64_t>> cues;
+    if (const auto it = m_nextCueStarts.find(pid); it != m_nextCueStarts.end())
         cues.swap(it->second);
     return cues;
 }

@@ -29,10 +29,13 @@ class BitmapToPgs
     // The display sets that show the picture from showTime on (internal clock). First the end of the picture before,
     // where it ends before this one starts; a picture that starts first replaces it. The end of this one, endTime,
     // is held until the next picture or finish(), and is -1 when it stays until the next. A picture with nothing
-    // in it ends what is shown.
+    // in it ends what is shown; with holdEmptyEnds, that end is held in the same way.
     void addPicture(int64_t showTime, int64_t endTime, bool forced, std::vector<uint8_t>& out);
     // The end that is still held, at the end of the track.
     void finish(std::vector<uint8_t>& out);
+    // The end a picture with nothing in it makes is held until the next picture, so that its clear is decoded in time
+    // for it (see addPicture). Only where finish() surely comes at the end of the track: libass drawing from Matroska.
+    void holdEmptyEnds() { m_holdEmptyEnds = true; }
 
    private:
     std::unique_ptr<text_subtitles::TextToPGSConverter> m_pgs;
@@ -41,8 +44,9 @@ class BitmapToPgs
     uint16_t m_height = 0;
     bool m_shown = false;    // a picture is on the screen
     int64_t m_heldEnd = -1;  // when it goes, internal clock; -1 when it stays until the next
+    bool m_holdEmptyEnds = false;
     bool m_warnedColours = false;
-    void addClear(double atTimeSec, std::vector<uint8_t>& out);
+    void addClear(double atTimeSec, std::vector<uint8_t>& out, int64_t latestDts = INT64_MAX);
 };
 
 // The frame rate a PGS stream can be marked with that is nearest to fps, or 0 when none is near.

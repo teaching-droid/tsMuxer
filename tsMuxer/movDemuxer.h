@@ -123,10 +123,16 @@ class MovDemuxer final : public IOContextDemuxer
     void dropJoinPriming();
     std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(int pid) override;
     std::map<int, std::vector<int64_t>> m_touchingCues;  // by track, see takeTouchingCues
+    std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_nextCueStarts;  // by track, see takeNextCueStarts
 
    public:
     void addTouchingCue(const int pid, const int64_t ms) { m_touchingCues[pid].push_back(ms); }
     std::vector<int64_t> takeTouchingCues(int pid) override;
+    void addNextCueStart(const int pid, const int64_t ms, const int64_t nextMs)
+    {
+        m_nextCueStarts[pid].emplace_back(ms, nextMs);
+    }
+    std::vector<std::pair<int64_t, int64_t>> takeNextCueStarts(int pid) override;
 
    private:
     std::vector<std::pair<int64_t, int64_t>> topLevelMdats() const;

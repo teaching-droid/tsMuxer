@@ -707,6 +707,8 @@ uint8_t* SRTStreamReader::renderNextMessage(uint32_t& renderedLen)
         }
         if (m_toDraw.empty())
         {
+            if (m_lastBlock && m_sourceText.empty() && !m_heldTail.empty())
+                return releaseHeldTail(renderedLen);
             if (m_lastBlock && m_sourceText.empty() && !m_unseenReported)
             {
                 if (m_shrunkCues > 1)
@@ -729,6 +731,8 @@ uint8_t* SRTStreamReader::renderNextMessage(uint32_t& renderedLen)
         // A piece that draws nothing, such as a cue of tags only, is passed over
         if (uint8_t* rez = drawNext(renderedLen))
             return rez;
+        if (!m_heldTail.empty())
+            return releaseHeldTail(renderedLen);
     }
 }
 
@@ -1053,9 +1057,13 @@ void SRTStreamReader::addCue(const std::string& text, const double inTime, const
         // A cue that starts on the frame where the one before ends replaces it there. The one before was cleared at
         // that frame all the same: a clearing composition and the new subtitle at one presentation time, the
         // decoding time going back between the two.
-        if (drawable && m_containerType == ContainerType::ctNone && !m_toDraw.empty() && m_toDraw.back().hide &&
-            m_srtRender->alignToGrid(m_toDraw.back().outTime) == cue.inFrame)
-            m_toDraw.back().hide = false;
+        if (drawable && m_containerType == ContainerType::ctNone && !m_toDraw.empty() && m_toDraw.back().hide)
+        {
+            if (m_srtRender->alignToGrid(m_toDraw.back().outTime) == cue.inFrame)
+                m_toDraw.back().hide = false;
+            else
+                m_toDraw.back().nextIn = cue.inTime;  // its clear is decoded in time for this one (passOn)
+        }
     }
     m_cueGroupEnd = m_cueGroup.empty() ? cue.outFrame : (std::max)(m_cueGroupEnd, cue.outFrame);
     m_cueGroup.push_back(cue);
@@ -1074,10 +1082,16 @@ void SRTStreamReader::flushCueGroup()
         // A subtitle from a container that the next one follows at once: cleared at its end all the same, the clear
         // and the next subtitle came at one time, the decoding time going back between the two (as for an .srt
         // file above). Its container says so (addTouchingCue), as each subtitle comes on its own and is drawn at once.
-        const bool touching = m_containerType != ContainerType::ctNone &&
-                              m_touchingCues.erase(static_cast<int64_t>(std::llround(c.inTime * 1000.0))) > 0;
+        const auto startMs = static_cast<int64_t>(std::llround(c.inTime * 1000.0));
+        const bool touching = m_containerType != ContainerType::ctNone && m_touchingCues.erase(startMs) > 0;
+        double nextIn = -1;
+        if (const auto next = m_nextCueStarts.find(startMs); next != m_nextCueStarts.end())
+        {
+            nextIn = static_cast<double>(next->second) / 1000.0;
+            m_nextCueStarts.erase(next);
+        }
         if (c.outFrame > c.inFrame)
-            m_toDraw.push_back(Piece{c.text, c.inTime, c.outTime, !touching});
+            m_toDraw.push_back(Piece{c.text, c.inTime, c.outTime, !touching, nextIn});
         else if (!m_noLengthReported)
         {
             m_noLengthReported = true;
@@ -1253,7 +1267,7 @@ uint8_t* SRTStreamReader::drawNext(uint32_t& renderedLen)
     if (rez)
     {
         m_screenShown = !piece.hide;
-        return rez;
+        return passOn(rez, renderedLen, &piece);
     }
     // A subtitle with text that draws nothing is one whose text lies wholly outside the picture, which
     // is what a font size far too large does. It used to vanish without a word.
@@ -1267,9 +1281,59 @@ uint8_t* SRTStreamReader::drawNext(uint32_t& renderedLen)
     if (m_screenShown)
     {
         m_screenShown = false;
-        return m_srtRender->doClear(piece.inTime, renderedLen);
+        return passOn(m_srtRender->doClear(piece.inTime, renderedLen), renderedLen, nullptr);
     }
     return nullptr;
+}
+
+// ** THE CLEAR OF A SUBTITLE IS DECODED NO LATER THAN THE NEXT ONE. ** A subtitle is decoded for as long as the whole
+// screen takes to clear, and more, before it is shown: 65 ms on a picture of 1920x1080. Where the one before ended
+// less than that before it, the clear of the one before, decoded just before that end, came after it in decoding
+// order, and the decoding times of the stream went back (one frame between two subtitles at 1080p, or at 720p with
+// 50 or 59.94 fps). The display sets of a subtitle that could be decoded after the next one, its clear and the last
+// steps of a fade, are held until that one is drawn, and are then decoded with it at the latest, where they came
+// later. They are still shown at their own times. Only where the next subtitle is known to start that soon: from a
+// file, the next cue; from a container, the next block of the track (addNextCueStart).
+uint8_t* SRTStreamReader::passOn(uint8_t* data, uint32_t& len, const Piece* piece)
+{
+    std::vector<uint8_t> tail;
+    if (piece && piece->hide && piece->nextIn >= 0 &&
+        m_srtRender->alignToGrid(piece->nextIn) > m_srtRender->alignToGrid(piece->outTime))
+    {
+        const int64_t earliestNext =
+            llround(m_srtRender->alignToGrid(piece->nextIn) * 90000.0) - m_srtRender->longestDecodeLead();
+        const auto& sets = m_srtRender->m_displaySets;
+        for (size_t i = 1; i < sets.size(); ++i)
+            if (sets[i].second > earliestNext && sets[i].first < len)
+            {
+                tail.assign(data + sets[i].first, data + len);
+                len = sets[i].first;
+                break;
+            }
+    }
+    if (!m_heldTail.empty())
+    {
+        text_subtitles::TextToPGSConverter::capDecodingTimes(
+            m_heldTail.data(), static_cast<uint32_t>(m_heldTail.size()),
+            text_subtitles::TextToPGSConverter::firstDecodingTime(data, len));
+        m_handedOn.assign(MAX_AV_PACKET_SIZE, 0);
+        m_handedOn.insert(m_handedOn.end(), m_heldTail.begin(), m_heldTail.end());
+        m_handedOn.insert(m_handedOn.end(), data, data + len);
+        data = m_handedOn.data() + MAX_AV_PACKET_SIZE;
+        len = static_cast<uint32_t>(m_handedOn.size() - MAX_AV_PACKET_SIZE);
+    }
+    m_heldTail = std::move(tail);
+    return data;
+}
+
+// The held end of the last subtitle, as it is, where nothing is drawn after it
+uint8_t* SRTStreamReader::releaseHeldTail(uint32_t& len)
+{
+    m_handedOn.assign(MAX_AV_PACKET_SIZE, 0);
+    m_handedOn.insert(m_handedOn.end(), m_heldTail.begin(), m_heldTail.end());
+    m_heldTail.clear();
+    len = static_cast<uint32_t>(m_handedOn.size() - MAX_AV_PACKET_SIZE);
+    return m_handedOn.data() + MAX_AV_PACKET_SIZE;
 }
 
 // Whether the blank line at the front ends the subtitle being read: 1 when what follows the blank

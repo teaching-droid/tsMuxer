@@ -43,10 +43,10 @@ void BitmapToPgs::setCanvas(const uint16_t width, const uint16_t height, const d
 
 void BitmapToPgs::clearCanvas() { std::fill(m_canvas.begin(), m_canvas.end(), 0); }
 
-void BitmapToPgs::addClear(const double atTimeSec, std::vector<uint8_t>& out)
+void BitmapToPgs::addClear(const double atTimeSec, std::vector<uint8_t>& out, const int64_t latestDts)
 {
     uint32_t len = 0;
-    const uint8_t* data = m_pgs->doClear(atTimeSec, len);
+    const uint8_t* data = m_pgs->doClear(atTimeSec, len, latestDts);
     out.insert(out.end(), data, data + len);
     m_shown = false;
 }
@@ -58,13 +58,16 @@ void BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
     // The end of the picture before, when it comes before this one. When it does not, or when the two fall on the
     // same frame, the new picture replaces the old one on the screen, as a text subtitle does that follows the one
     // before without a gap.
-    if (m_shown && m_heldEnd >= 0)
+    const auto endBefore = [&](const int64_t latestDts)
     {
-        const double outSec = m_pgs->alignToGrid(static_cast<double>(m_heldEnd) / INTERNAL_PTS_FREQ);
-        if (outSec < inSec)
-            addClear(outSec, out);
-    }
-    m_heldEnd = -1;
+        if (m_shown && m_heldEnd >= 0)
+        {
+            const double outSec = m_pgs->alignToGrid(static_cast<double>(m_heldEnd) / INTERNAL_PTS_FREQ);
+            if (outSec < inSec)
+                addClear(outSec, out, latestDts);
+        }
+        m_heldEnd = -1;
+    };
 
     // Fewer colours until the picture packs: the same steps as for a text subtitle.
     uint32_t mask = 0;
@@ -78,6 +81,7 @@ void BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
                        "Warning: a subtitle picture at " << floatToTime(inSec)
                                                          << " could not be packed as PGS and was left out.");
             m_warnedColours = true;
+            endBefore(INT64_MAX);
             return;
         }
         const auto tmp = reinterpret_cast<uint8_t*>(&mask);
@@ -87,9 +91,16 @@ void BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
     }
     if (m_pgs->m_rleLen == 0)
     {
-        // nothing to show: the picture empties the screen
-        if (m_shown)
-            addClear(inSec, out);
+        // Nothing to show: the picture empties the screen. Where such ends are held, that end is held as the end of a
+        // picture is, unless the picture ends earlier: the next picture says when the clear is decoded.
+        if (m_shown && m_holdEmptyEnds && (m_heldEnd < 0 || m_heldEnd > showTime))
+            m_heldEnd = showTime;
+        else
+        {
+            endBefore(INT64_MAX);
+            if (m_shown)
+                addClear(inSec, out);
+        }
         return;
     }
 
@@ -103,14 +114,19 @@ void BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
     const int64_t drawTime = TextToPGSConverter::windowDrawTime(objectPixels);
     const int64_t decodeDuration =
         FFMAX(TextToPGSConverter::windowDrawTime(static_cast<double>(m_width) * m_height), decodeTime) + drawTime;
+    const int64_t pts = llround(inSec * 90000.0);
+    const int64_t dts = pts - decodeDuration;
+    // ** THE CLEAR BEFORE A PICTURE IS DECODED NO LATER THAN THE PICTURE. ** A picture is decoded for as long as the
+    // whole screen takes to clear, and more, before it is shown: where the one before ended less than that before
+    // it, its clear was decoded after the new picture, and the decoding times of the stream went back. The clear is
+    // then decoded with the picture, still shown at its own time.
+    endBefore(dts);
     m_pgs->m_lastWindowLeft = 0;
     m_pgs->m_lastWindowTop = top;
     m_pgs->m_lastWindowWidth = m_width;
     m_pgs->m_lastWindowHeight = lines;
     m_pgs->m_lastWindowDrawTime = drawTime;
 
-    const int64_t pts = llround(inSec * 90000.0);
-    const int64_t dts = pts - decodeDuration;
     const int64_t odfPts = dts + decodeTime;
     m_pgs->palette_update_flag = false;
     m_pgs->m_paletteID = 0;

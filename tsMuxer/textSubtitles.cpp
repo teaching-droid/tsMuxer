@@ -504,14 +504,55 @@ int64_t TextToPGSConverter::windowDrawTime(const double pixels)
     return static_cast<int64_t>(ceil(90000.0 * pixels / PIXEL_COMPOSITION_RATE));
 }
 
-uint8_t* TextToPGSConverter::doClear(const double atTimeSec, uint32_t& dstBufSize)
+int64_t TextToPGSConverter::longestDecodeLead() const
+{
+    const double picture = static_cast<double>(m_videoWidth) * m_videoHeight;
+    return FFMAX(windowDrawTime(picture), objectDecodeTime(picture)) + windowDrawTime(picture);
+}
+
+// The segments of PGS data as writePGHeader writes them: "PG", the presentation time, the decoding time (0 where it is
+// the presentation time), the segment type, its length and its data
+int64_t TextToPGSConverter::firstDecodingTime(uint8_t* data, const uint32_t len)
+{
+    if (len < 10)
+        return 0;
+    const uint32_t dts = AV_RB32(data + 6);
+    return dts != 0 ? dts : AV_RB32(data + 2);
+}
+
+void TextToPGSConverter::capDecodingTimes(uint8_t* data, const uint32_t len, const int64_t latestDts)
+{
+    const auto latest = static_cast<uint32_t>(latestDts);
+    uint32_t from = 0;  // the decoding time of the display set the segment belongs to
+    uint32_t to = 0;
+    for (uint32_t pos = 0; pos + 13 <= len; pos += 13 + AV_RB16(data + pos + 11))
+    {
+        uint8_t* seg = data + pos;
+        const uint32_t pts = AV_RB32(seg + 2);
+        const uint32_t dts = AV_RB32(seg + 6) != 0 ? AV_RB32(seg + 6) : pts;
+        if (seg[10] == PCS_DEF_SEGMENT)
+        {
+            from = dts;
+            to = static_cast<int32_t>(dts - latest) > 0 ? latest : dts;
+        }
+        if (from == to)
+            continue;
+        const uint32_t newPts = pts == from ? to : pts;
+        const uint32_t newDts = dts == from ? to : dts;
+        AV_WB32(seg + 2, newPts);
+        AV_WB32(seg + 6, newDts != newPts ? newDts : 0);
+    }
+}
+
+uint8_t* TextToPGSConverter::doClear(const double atTimeSec, uint32_t& dstBufSize, const int64_t latestDts)
 {
     // The same three segments that end a text in doConvert, for a text whose end could not be
     // written with it because the composition meant to replace it turned out to draw nothing
     uint8_t* curPos = m_pgsBuffer;
     palette_update_flag = false;
     const int64_t pts = llround(alignToGrid(atTimeSec) * 90000.0);
-    const int64_t dts = pts - m_lastWindowDrawTime - 1;
+    const int64_t dts = FFMIN(pts - m_lastWindowDrawTime - 1, latestDts);
+    m_displaySets.assign(1, {0, dts});
     curPos += composePresentationSegment(curPos, CompositionMode::Finish, pts, dts, m_lastWindowLeft, m_lastWindowTop,
                                          true, false);
     curPos += composeWindowDefinition(curPos, pts - m_lastWindowDrawTime, dts, m_lastWindowLeft, m_lastWindowTop,
@@ -617,6 +658,7 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
     m_paletteVersion = 0;
     int64_t pts = llround(inTimePTS);
     int64_t dts = pts - decodeDuration;
+    m_displaySets.assign(1, {0, dts});
 
     curPos += composePresentationSegment(curPos, CompositionMode::Start, pts, dts, objectWindowLeft, objectWindowTop,
                                          true, forced);
@@ -704,6 +746,7 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
         m_paletteVersion++;
         pts = llround(updateTime);
         dts = pts - drawTime - 1;
+        m_displaySets.emplace_back(static_cast<uint32_t>(curPos - m_pgsBuffer), dts);
         curPos += composePresentationSegment(curPos, CompositionMode::Update, pts, dts, objectWindowLeft,
                                              objectWindowTop, true, forced);
         curPos += composePaletteDefinition(buildPalette(toCurve(opacity)), curPos, dts, dts);
@@ -723,6 +766,7 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
         m_paletteVersion++;
         pts = llround(updateTime);
         dts = pts - drawTime - 1;
+        m_displaySets.emplace_back(static_cast<uint32_t>(curPos - m_pgsBuffer), dts);
         curPos += composePresentationSegment(curPos, CompositionMode::Update, pts, dts, objectWindowLeft,
                                              objectWindowTop, true, forced);
         curPos += composePaletteDefinition(buildPalette(toCurve(opacity)), curPos, dts, dts);
@@ -739,6 +783,7 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
     {
         pts = llround(outTimePTS);
         dts = pts - drawTime - 1;
+        m_displaySets.emplace_back(static_cast<uint32_t>(curPos - m_pgsBuffer), dts);
         curPos += composePresentationSegment(curPos, CompositionMode::Finish, pts, dts, objectWindowLeft,
                                              objectWindowTop, true, false);
         curPos += composeWindowDefinition(curPos, pts - drawTime, dts, objectWindowLeft, objectWindowTop,

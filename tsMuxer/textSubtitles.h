@@ -10,6 +10,8 @@
 
 #include <map>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "textSubtitlesRender.h"
 
@@ -59,8 +61,18 @@ class TextToPGSConverter  //: public TextSubtitlesRenderWin32
     void setBottomOffset(const int offset) { m_bottomOffset = offset; }
     uint8_t* doConvert(const std::string& text, const TextAnimation& animation, double inTimeSec, double outTimeSec,
                        uint32_t& dstBufSize, bool hide = true);
-    // A display set that only clears the screen, at atTimeSec, in the window of the last text drawn
-    uint8_t* doClear(double atTimeSec, uint32_t& dstBufSize);
+    // A display set that only clears the screen, at atTimeSec, in the window of the last text drawn. It is decoded no
+    // later than latestDts (90 kHz), where a display set after it has to be decoded before its usual time.
+    uint8_t* doClear(double atTimeSec, uint32_t& dstBufSize, int64_t latestDts = INT64_MAX);
+    // The display sets of the last doConvert or doClear: where each begins in its output, and its decoding time
+    std::vector<std::pair<uint32_t, int64_t>> m_displaySets;
+    // The longest time before it is shown that a display set on this picture is decoded: an epoch start whose object
+    // is as large as the picture
+    [[nodiscard]] int64_t longestDecodeLead() const;
+    // In PGS data as doConvert writes it: the decoding time of its first display set, and the decoding time of each
+    // display set moved to latestDts where it is later. Both on the 32 bits of the data's time stamps.
+    static int64_t firstDecodingTime(uint8_t* data, uint32_t len);
+    static void capDecodingTimes(uint8_t* data, uint32_t len, int64_t latestDts);
     TextSubtitlesRender* m_textRender;
     // The palette of a picture of more than 576 lines is in BT.709, as the video it is shown on: in BT.601 red came
     // out orange-red and green darker on an HD screen

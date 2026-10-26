@@ -2,6 +2,7 @@
 #define SRT_STREAM_READER_
 
 #include <deque>
+#include <map>
 #include <memory>
 #include <queue>
 #include <set>
@@ -31,6 +32,9 @@ class SRTStreamReader final : public AbstractStreamReader
     // A subtitle from a container that the next one follows at once (its start, in ms as its SRT text gives it): it is
     // not cleared, as the next one takes its place at that moment (see AbstractDemuxer::takeTouchingCues)
     void addTouchingCue(const int64_t ms) { m_touchingCues.insert(ms); }
+    // A subtitle from a container and the start of the next one of its track, where that comes later than its end (in
+    // ms as its SRT text gives them; see AbstractDemuxer::takeNextCueStarts)
+    void addNextCueStart(const int64_t ms, const int64_t nextMs) { m_nextCueStarts[ms] = nextMs; }
     CheckStreamRez checkStream(uint8_t* buffer, int len, ContainerType containerType, int containerDataType,
                                int containerStreamIndex);
     // Kept as text the track is SRT, in Matroska S_TEXT/UTF8; otherwise it is drawn into PGS
@@ -130,6 +134,7 @@ class SRTStreamReader final : public AbstractStreamReader
     // a subtitle that ends where or before it starts was said
     bool m_noLengthReported = false;
     std::set<int64_t> m_touchingCues;  // addTouchingCue
+    std::map<int64_t, int64_t> m_nextCueStarts;  // addNextCueStart
     int m_srtRecords = 0;              // demux: SRT records written so far, which numbers the next
     int64_t m_cuesRead = 0;            // subtitles read from the file
     int64_t m_skippedLines = 0;        // lines of text that are not part of any subtitle, passed over
@@ -205,11 +210,17 @@ class SRTStreamReader final : public AbstractStreamReader
         double inTime;
         double outTime;
         bool hide;
+        double nextIn = -1;  // where the next subtitle starts, after this one is cleared; -1 where not known
     };
     std::vector<Cue> m_cueGroup;
     double m_cueGroupEnd = 0;
     std::deque<Piece> m_toDraw;
     bool m_screenShown = false;  // a piece without its clear is on screen
+    // The end of the last piece drawn, held until the next piece is drawn (see passOn), and the data handed on
+    std::vector<uint8_t> m_heldTail;
+    std::vector<uint8_t> m_handedOn;
+    uint8_t* passOn(uint8_t* data, uint32_t& len, const Piece* piece);
+    uint8_t* releaseHeldTail(uint32_t& len);
     bool parseTime(const std::string& text);
     static std::string detectUTF8Lang(uint8_t* buffer, int len);
     bool detectSrcFormat(const uint8_t* dataStart, size_t len, int& prefixLen);

@@ -1096,6 +1096,16 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
         m_timeOffset = 0;
     }
 
+    // The duration getSttsVal gives next, without taking it; -1 where none is left
+    [[nodiscard]] int64_t peekSttsVal() const
+    {
+        if (sttsCnt > 0 && sttsPos >= 0)
+            return m_sc->stts_data[sttsPos].duration;
+        if (sttsPos + 1 >= static_cast<int64_t>(m_sc->stts_data.size()))
+            return fragPos < m_sc->fragDur.size() ? static_cast<int64_t>(m_sc->fragDur[fragPos]) : -1;
+        return m_sc->stts_data[sttsPos + 1].duration;
+    }
+
     int64_t getSttsVal()
     {
         if (sttsCnt == 0)
@@ -1203,9 +1213,18 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
                 // The samples of a text track follow one another without a gap, an empty one where nothing is shown.
                 // A subtitle whose next sample holds text (more than the length of an empty tx3g sample, or than a
                 // vtte box) is followed by it at once (SRTStreamReader::addTouchingCue).
-                if (commit && m_sc->sample_size == 0 && indexCur < m_sc->m_index.size() &&
-                    m_sc->m_index[indexCur] > (m_wvtt ? 8u : 2u))
-                    m_demuxer->addTouchingCue(static_cast<int>(m_sc->ffindex), startTime);
+                // One that an empty sample and then one with text follow is followed after that sample's duration
+                // (SRTStreamReader::addNextCueStart).
+                const uint32_t emptySize = m_wvtt ? 8u : 2u;
+                if (commit && m_sc->sample_size == 0 && indexCur < m_sc->m_index.size())
+                {
+                    if (m_sc->m_index[indexCur] > emptySize)
+                        m_demuxer->addTouchingCue(static_cast<int>(m_sc->ffindex), startTime);
+                    else if (indexCur + 1 < m_sc->m_index.size() && m_sc->m_index[indexCur + 1] > emptySize)
+                        if (const int64_t gap = peekSttsVal(); gap > 0)
+                            m_demuxer->addNextCueStart(static_cast<int>(m_sc->ffindex), startTime,
+                                                       (std::max)(int64_t{0}, toMs(endUnits + gap) + startMs));
+                }
             }
             timeOffset = endUnits;
             used += sampleSize;
@@ -2199,6 +2218,14 @@ std::vector<int64_t> MovDemuxer::takeTouchingCues(const int pid)
 {
     std::vector<int64_t> cues;
     if (const auto it = m_touchingCues.find(pid); it != m_touchingCues.end())
+        cues.swap(it->second);
+    return cues;
+}
+
+std::vector<std::pair<int64_t, int64_t>> MovDemuxer::takeNextCueStarts(const int pid)
+{
+    std::vector<std::pair<int64_t, int64_t>> cues;
+    if (const auto it = m_nextCueStarts.find(pid); it != m_nextCueStarts.end())
         cues.swap(it->second);
     return cues;
 }

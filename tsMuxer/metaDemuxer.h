@@ -168,6 +168,8 @@ class ContainerToReaderWrapper final : public AbstractReader
     std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(uint32_t readerID);
     // The text subtitles the next one follows at once (see AbstractDemuxer::takeTouchingCues).
     std::vector<int64_t> takeTouchingCues(uint32_t readerID);
+    // The text subtitles whose next one starts after a gap (see AbstractDemuxer::takeNextCueStarts).
+    std::vector<std::pair<int64_t, int64_t>> takeNextCueStarts(uint32_t readerID);
     // A track whose packets are sparse (subtitles) and due before the others of its file, by a negative timeshift:
     // while it has none, its file is read on up to this time (the internal clock of the demuxer's packets), so that
     // they are there when due.
