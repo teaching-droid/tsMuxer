@@ -964,7 +964,8 @@ Additional parameters for video tracks:
                     pulldown is present, the FPS value is changed from 30 to 24.
 - ar                Override video aspect ratio. 16:9, 4:3 e.t.c.
 
-Additional parameters for H.264 video tracks:
+)help"
+                            R"help(Additional parameters for H.264 video tracks:
 - level             Overwrite the level in the H264 stream. Do note that this
                     option only updates the headers and does not reencode the
                     stream, which may not meet the requirements for a lower 
