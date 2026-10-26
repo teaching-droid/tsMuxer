@@ -213,6 +213,8 @@ class MPEGStreamReader : public AbstractStreamReader
     double fallbackFps(void* curNalUnit = nullptr);
     // Whether the stream is field coded, as the parameter set being read says (see fallbackFps)
     virtual bool interlacedBy(void* curNalUnit) { return getInterlaced(); }
+    // Whether the stream is interlaced, for a rate of fields that a container gives (updateFPS)
+    virtual bool interlacedForRate(void* curNalUnit) { return interlacedBy(curNalUnit); }
     // Whether an interlaced stream codes whole frames only, so that the time of each picture is that of a frame
     virtual bool codesFramesOnly(void* curNalUnit) { return false; }
     // The rate a descriptor written before updateFPS has run must carry: the one updateFPS will take

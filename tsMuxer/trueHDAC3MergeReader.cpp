@@ -89,11 +89,13 @@ void TrueHDAC3MergeReader::extractAc3FramesFromAccum()
             {
                 const size_t keepFrom = m_ac3Accum.size() - 4096;
                 m_lostBytes += static_cast<int64_t>(keepFrom - pos);
+                countLostPadding(start, m_ac3Accum.data() + keepFrom);
                 pos = keepFrom;
             }
             break;
         }
         m_lostBytes += frame - start;  // the garbage before the sync is data that could not be used
+        countLostPadding(start, frame);
         pos += frame - start;
         int skipBytes = 0;
         const int flen = m_ac3Parser.parse(frame, end, skipBytes);

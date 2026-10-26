@@ -1040,16 +1040,20 @@ void MatroskaMuxer::parseMuxOpt(const std::string& opts)
     // --dv-profile=<7|8.1>. 7 is the default and means "carry the disc as it is", the faithful dual
     // layer track. 8.1 converts the RPU so the file plays as single layer Dolby Vision on the many
     // devices that do not understand profile 7.
+    // The option, not the text of the line, as for --title above: --title="read --dv-profile=9 for this" was refused
+    // as an invalid profile, and a valid one at the end of a quoted title took the closing quote into its value.
     const std::string key = "--dv-profile=";
-    const size_t at = opts.find(key);
-    if (at == std::string::npos)
+    bool given = false;
+    std::string value;
+    for (const std::string& token : splitQuotedStr(opts.c_str(), ' '))
+        if (const std::string option = trimStr(token); option.compare(0, key.size(), key) == 0)
+        {
+            given = true;
+            value = unquoteStr(option.substr(key.size()));
+            break;  // the first, as before
+        }
+    if (!given)
         return;
-
-    size_t valStart = at + key.size();
-    size_t valEnd = opts.find_first_of(" \t", valStart);
-    if (valEnd == std::string::npos)
-        valEnd = opts.size();
-    const std::string value = opts.substr(valStart, valEnd - valStart);
 
     if (value == "7")
     {

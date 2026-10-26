@@ -29,6 +29,12 @@ class MPEG2StreamReader final : public MPEGStreamReader
     [[nodiscard]] unsigned getStreamHeight() const override { return m_sequence.height; }
     [[nodiscard]] int getStreamHDR() const override { return 0; }
     bool getInterlaced() override { return !m_sequence.progressive_sequence; }
+    // updateFPS runs on the sequence header, before its sequence extension is read: what that extension says
+    // (m_nextProgressive), looked at ahead of it; without one, as interlacedBy
+    bool interlacedForRate(void* curNalUnit) override
+    {
+        return m_nextProgressive >= 0 ? m_nextProgressive == 0 : interlacedBy(curNalUnit);
+    }
 
     // An MPEG-1 video stream has no sequence extension; every MPEG-2 stream has one right after its sequence header
     [[nodiscard]] bool isMpeg1() const { return spsFound && !m_seqExtFound; }
@@ -53,6 +59,7 @@ class MPEG2StreamReader final : public MPEGStreamReader
     bool m_isFirstFrame;
     bool spsFound;
     bool m_seqExtFound;
+    int m_nextProgressive = -1;  // progressive_sequence of the extension after the header read last; -1: none
     bool m_noRateSaid = false;  // the warning about a sequence header without a frame rate was given
     bool m_lastIFrame;
     bool m_firstFieldPending = false;  // the last picture was the first of two fields

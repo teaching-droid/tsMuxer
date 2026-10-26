@@ -344,6 +344,11 @@ int MPEG2StreamReader::processSeqStartCode(uint8_t* buff)
         return NOT_ENOUGH_BUFFER;
     }
     constexpr int oldSpsLen = 0;
+    // sequence_extension: 4 bits of its id (1), 8 of profile and level, then progressive_sequence
+    m_nextProgressive = -1;
+    if (m_bufEnd - nextNal >= 6 && nextNal[0] == 0 && nextNal[1] == 0 && nextNal[2] == 1 && nextNal[3] == 0xB5 &&
+        nextNal[4] >> 4 == 1)
+        m_nextProgressive = nextNal[5] >> 3 & 1;
     updateFPS(nullptr, buff, nextNal, oldSpsLen);
     // ** A SEQUENCE HEADER WITHOUT A FRAME RATE. ** frame_rate_code 0 is forbidden, and the stream got the rate fps=,
     // its picture times or the default gave, but its pictures were timed by the code: every one at the same time, the

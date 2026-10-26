@@ -5203,7 +5203,16 @@ uint8_t* ContainerToReaderWrapper::readBlock(const int readerID, uint32_t& readC
     // read the file on alone for its first block, and the job ended with "Reading buffer overflow". While such a track
     // has never had data, it waits (DATA_DELAYED) once another track of the file holds a quarter of that limit, and
     // the others are muxed on; it is read again as soon as the file has given it data.
+    //
+    // ** AND A TRACK THAT STOPS FOR A WHILE DOES NOT EITHER. ** A track that has had data and then has no packet for
+    // as long, as a commentary or a second language that drops out for a minute of a recording, read the file on in
+    // the same way to fill its next block, and the job ended with the same error. It waits in the same way when it
+    // has nothing left while another track holds a quarter of the limit, and what it has left, less than a block,
+    // is handed on first. Only for a file whose demuxer says how far it has read (transport stream, Matroska): an
+    // MP4 file stores its tracks in chunks of its own and is read on as before.
     const bool waitsForStart = !itr->second.m_gotData && policy == DemuxerReadPolicy::drpReadSequence;
+    const bool waitsInGap = itr->second.m_gotData && policy == DemuxerReadPolicy::drpReadSequence &&
+                            demuxerData.m_demuxer->getDemuxedTime() >= 0;
     const auto othersHeld = [&]()
     {
         for (const auto& [otherPid, otherData] : demuxerData.demuxedData)
@@ -5223,9 +5232,12 @@ uint8_t* ContainerToReaderWrapper::readBlock(const int readerID, uint32_t& readC
         itr->second.m_gotData = true;
     }
     else if (demuxerData.lastReadRez[pid] != DATA_DELAYED || demuxerData.m_allFragmented || readAhead() ||
-             (waitsForStart && readCnt > 0))
+             ((waitsForStart || waitsInGap) && readCnt > 0))
     {
         int demuxRez;
+        // what the file has given since this track asked, for the message below
+        int64_t heldAtStart = 0;
+        for (const auto& [anyPid, anyData] : demuxerData.demuxedData) heldAtStart += anyData.size();
         do
         {
             int64_t discardSize = 0;
@@ -5237,6 +5249,25 @@ uint8_t* ContainerToReaderWrapper::readBlock(const int readerID, uint32_t& readC
                 if (itr1->second.size() > MAX_DEMUX_BUFFER_SIZE)
                 {
                     string ext = strToUpperCase(extractFileExt(demuxerData.m_streamName));
+                    // ** SAY WHICH TRACK IS WAITED FOR. ** The message sent the user to fps= also where one track
+                    // has no packets for a long stretch of the file, a track that starts late or stops for a while,
+                    // and the file was read on for it until another track overflowed: no fps= helps there.
+                    int64_t heldNow = 0;
+                    for (const auto& [anyPid, anyData] : demuxerData.demuxedData) heldNow += anyData.size();
+                    const bool waitedFor = itr1->first != pid && readCnt < MIN_READED_BLOCK &&
+                                           heldNow - heldAtStart > MAX_DEMUX_BUFFER_SIZE / 4;
+                    if (ext != "MOV" && ext != "MP4" && ext != "M4V" && ext != "M4A" && waitedFor)
+                        THROW(
+                            ERR_CONTAINER_STREAM_NOT_SYNC,
+                            "Reading buffer overflow: track "
+                                << pid << " of " << demuxerData.m_streamName << " has no data in "
+                                << (heldNow - heldAtStart) / (1024 * 1024)
+                                << " MiB of the file, as a track that starts late or stops for a while, and more "
+                                   "than "
+                                << MAX_DEMUX_BUFFER_SIZE / (1024 * 1024)
+                                << " MiB of another track of it wait to be muxed. tsMuxeR waits for such a track in a "
+                                   "transport stream or a Matroska file only: remux the file into one of them, or "
+                                   "mux the track from a file of its own.")
                     if (ext != "MOV" && ext != "MP4" && ext != "M4V" && ext != "M4A")
                         THROW(ERR_CONTAINER_STREAM_NOT_SYNC,
                               "Reading buffer overflow: more than "
@@ -5251,7 +5282,7 @@ uint8_t* ContainerToReaderWrapper::readBlock(const int readerID, uint32_t& readC
             readCnt = static_cast<uint32_t>((FFMIN(streamData.size(), nFileBlockSize) - m_readBuffOffset));
         } while (demuxRez == 0 && !m_terminated &&
                  ((readCnt < MIN_READED_BLOCK && policy != DemuxerReadPolicy::drpFragmented &&
-                   !(waitsForStart && readCnt == 0 && othersHeld())) ||
+                   !(waitsForStart && readCnt == 0 && othersHeld()) && !(waitsInGap && othersHeld())) ||
                   (readCnt == 0 && readAhead())));
 
         demuxerData.lastReadCnt[pid] = readCnt;
@@ -5265,7 +5296,7 @@ uint8_t* ContainerToReaderWrapper::readBlock(const int readerID, uint32_t& readC
             rez = DATA_EOF;
         else
         {
-            if (policy == DemuxerReadPolicy::drpReadSequence && !(waitsForStart && demuxRez == 0))
+            if (policy == DemuxerReadPolicy::drpReadSequence && !((waitsForStart || waitsInGap) && demuxRez == 0))
                 rez = DATA_NOT_READY;
             else
                 rez = DATA_DELAYED;

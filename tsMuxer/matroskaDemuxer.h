@@ -217,7 +217,10 @@ class MatroskaDemuxer final : public IOContextDemuxer
     void loadTrackExtras(const std::string& fileName);
     // Per track number, what loadTrackExtras found, under the keys the muxers read (srcflags, srccolour, ...).
     std::map<int64_t, std::map<std::string, std::string>> m_trackExtras;
-    std::map<uint32_t, double> m_estimatedFps;  // getTrackFps for a video track without DefaultDuration
+    std::map<uint32_t, double> m_estimatedFps;  // getTrackFps for a video track without DefaultDuration, or of fields
+    bool measureBlockTimes(const MatroskaTrack* track, bool& fields, double& spacingNs, size_t& count,
+                           bool* progressive = nullptr);
+    static double standardFps(double fps);
     void applyStartCodeRule();
     std::vector<std::string> m_joinFiles;  // the files of a joined input, in order; empty for a single file
     size_t m_joinPart = 0;                 // the part being read: one more for each header met inside the stream
@@ -246,6 +249,19 @@ class MatroskaDemuxer final : public IOContextDemuxer
     std::map<int, JoinSound> m_joinSound;  // by track (stream index)
     bool m_joinShiftKnown = true;  // where each part is put is known (m_joinShiftNs): a part of unknown length is not
     std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_timeGaps;  // by track, see takeTimeGaps
+    // A sound track of one file that has no block for a while, with the picture going on (see noteSoundGap), in ns
+    struct SoundGap
+    {
+        int64_t origin = -1;  // the first block of the track, the start of its reader's own clock
+        int64_t prev = -1;    // the latest block time
+        int64_t step = 0;     // the shortest step from one block to the next
+        int videoJumps = 0;   // m_videoJumps at the block before
+    };
+    std::map<int, SoundGap> m_soundGap;  // by track (stream index)
+    int64_t m_gapVideoPrev = INT64_MIN;  // the time of the first video track's block before
+    int m_gapVideoTrack = -1;
+    int m_videoJumps = 0;  // how often the first video's time jumped, see noteSoundGap
+    void noteSoundGap(int track, int64_t ns);
     bool keepJoinSound(int track, int64_t ns, int64_t lengthNs, int64_t leadNs = 0, int64_t padNs = 0,
                        bool readerTrims = false, bool counted = false, bool variable = false);
     static bool isJoinTimedCodec(const MatroskaTrack* track);

@@ -3537,6 +3537,19 @@ static constexpr const char* WRONG_CODEC_HINT =
     "The usual reason is that the codec on the meta line is not the codec the file holds. List the file on its own to "
     "see what tsMuxeR makes of it. The output is incomplete.";
 
+// ** A DAMAGED FILE OF THE RIGHT CODEC WAS CALLED ANOTHER CODEC. ** Noise over more than half of an AC-3 file is
+// refused by the rules below as it should be, but the message gave a wrong codec as the usual reason, although every
+// frame found was AC-3 at one rate. Where the frames found are many and keep one rate and channel layout, as a real
+// stream does and the frames found by chance in other data do not (see the rule for sync changes), both are said.
+static const char* lossHint(const SimplePacketizerReader& audio)
+{
+    if (audio.getDeliveredFrames() >= 20 && audio.getSyncChanges() == 0)
+        return "The frames that were found are all of this codec at one sample rate, so either the file is badly "
+               "damaged or the codec on the meta line is not the codec the file holds. List the file on its own to "
+               "see what tsMuxeR makes of it. The output is incomplete.";
+    return WRONG_CODEC_HINT;
+}
+
 static void checkEmptyTracks(const MuxerManager& muxerManager)
 {
     const bool cut = muxerManager.getCutStart() > 0 || muxerManager.getCutEnd() > 0;
@@ -3554,15 +3567,20 @@ static void checkEmptyTracks(const MuxerManager& muxerManager)
             continue;
         // The tags are left aside here as in the rule below: getLostSize does not count the bytes of the tags at the
         // end, so a big one no longer stands for lost data, and the bytes read are counted without them too.
-        const int64_t lost = audio->getLostSize();
+        // The padding among the lost bytes is left aside on both sides, as in the rule below (getLostPadBytes).
         const int64_t total = audio->getReadSize();
         const int64_t tags = (std::min)(audio->getTagBytes(), total);
-        const int64_t notTags = total - tags;
+        const int64_t lostPad = (std::min)(audio->getLostPadBytes(), total - tags);
+        const int64_t lost = audio->getLostSize() - lostPad;
+        const int64_t notTags = total - tags - lostPad;
         if (notTags > 0 && lost > notTags / 2)
-            THROW(ERR_COMMON, trackSourceName(si)
-                                  << ": " << lost << " bytes of the " << notTags << " read for this track as "
-                                  << si.m_codec << (tags > 0 ? ", its tags left aside," : "")
-                                  << " could not be used, more than half of it. " << WRONG_CODEC_HINT)
+            THROW(ERR_COMMON, trackSourceName(si) << ": " << lost << " bytes of the " << notTags
+                                                  << " read for this track as " << si.m_codec
+                                                  << (tags > 0 && lostPad > 0 ? ", its tags and padding left aside,"
+                                                      : tags > 0              ? ", its tags left aside,"
+                                                      : lostPad > 0           ? ", its padding left aside,"
+                                                                              : "")
+                                                  << " could not be used, more than half of it. " << lossHint(*audio))
         // ** WHAT THE LOSS LEAVES OUT. ** It does not count what comes before the first frame and after the last, on
         // purpose (a stream may begin in the middle of a frame and end with a tag), so a WAV file named A_MP3 that
         // gave two frames at its start lost nothing of its 8 MB and passed with 1.7 KB of output. The frames have to
@@ -3578,7 +3596,7 @@ static void checkEmptyTracks(const MuxerManager& muxerManager)
             THROW(ERR_COMMON, trackSourceName(si)
                                   << ": only " << audio->getFrameBytes() << " of the " << besideTags
                                   << " bytes read for this track as " << si.m_codec << aside
-                                  << " are frames of that codec, less than half of it. " << WRONG_CODEC_HINT)
+                                  << " are frames of that codec, less than half of it. " << lossHint(*audio))
         // ** FRAMES FOUND ONE BY ONE, EACH WITH ANOTHER RATE. ** The AAC sync word turns up in PCM often enough that
         // two thirds of a WAV file named A_AAC became "frames", every one found after the one before failed, and with
         // another sample rate or channel count nearly every time. A real stream found again after damage keeps them.

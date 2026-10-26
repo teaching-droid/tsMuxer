@@ -1,6 +1,8 @@
 #ifndef SIMPLE_PACKETIZER_READER_H_
 #define SIMPLE_PACKETIZER_READER_H_
 
+#include <algorithm>
+
 #include "abstractStreamReader.h"
 #include "avCodecs.h"
 #include "avPacket.h"
@@ -198,6 +200,8 @@ class SimplePacketizerReader : public AbstractStreamReader
     [[nodiscard]] int64_t getSyncChanges() const { return m_syncChanges; }
     // The padding the frame search stepped over, runs of zeros or 0xFF of PAD_RUN_MIN bytes or more (countPadding)
     [[nodiscard]] int64_t getPadBytes() const { return m_padBytes; }
+    // The part of getLostSize that is such padding (m_lostPadBytes), at most all of it
+    [[nodiscard]] int64_t getLostPadBytes() const { return (std::min)(m_lostPadBytes, getLostSize()); }
 
     // ** THE TAGS AT THE END OF A FILE ARE CUT OFF BEFORE ANY READER SEES THEM. ** Counting the end chain from the
     // last bytes that arrived (trailingTagBytes) comes when the frames in front of it have gone out, and two codecs
@@ -228,6 +232,9 @@ class SimplePacketizerReader : public AbstractStreamReader
    protected:
     int64_t m_frameBytes = 0;
     int64_t m_tagBytes = 0;
+    // For a reader that drops bytes by a search of its own (the AC-3 half of a TrueHD track, TrueHDAC3MergeReader):
+    // the runs of padding in [from, to), which it counts as lost, are counted as padding, and as lost padding
+    void countLostPadding(const uint8_t* from, const uint8_t* to);
 
    private:
     int64_t m_syncChanges = 0;
@@ -242,7 +249,15 @@ class SimplePacketizerReader : public AbstractStreamReader
     // has no frames at all, which the rule for empty tracks refuses.
     static constexpr int64_t PAD_RUN_MIN = 64;
     int64_t m_padBytes = 0;
-    void countPadding(const uint8_t* from, const uint8_t* to);
+    // ** AND PADDING THAT WAS BILLED AS LOST IS NOT ANOTHER CODEC EITHER. ** The rule that more than half of the
+    // data lost is another codec counted the same runs: an AC-3 file with 30 % of its 2048-byte sectors zeroed (as a
+    // rescue copy fills sectors it cannot read) lost its zeros through the "bad frame ... Resync" path and was refused
+    // as the wrong codec, where 2.20.0 muxed it with the loss warning. The part of the lost bytes that is such runs is
+    // kept here, beside the loss, which still reports it; held runs are promoted with the held loss.
+    int64_t m_lostPadBytes = 0;
+    int64_t m_pendingPad = 0;
+    // Counts the runs in [from, to) into m_padBytes and returns how many bytes of them it counted
+    int64_t countPadding(const uint8_t* from, const uint8_t* to);
     // ** A TAG AT THE END IS FOUND FROM THE END. ** An APE tag that has only a footer (APEv1 always, APEv2 as Monkey's
     // Audio writes it) begins with its items, so nothing marks its start for the forward reading: note 117 left it a
     // stated limit, the bytes are held and never counted as lost. The frames-under-half rule then counted them as audio

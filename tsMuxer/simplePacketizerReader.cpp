@@ -982,8 +982,9 @@ int64_t SimplePacketizerReader::getFrameBytes() const
 
 // The bytes of [from, to) the search steps over that are in runs of zeros or of 0xFF, the part the tag chain we stand
 // on has credit for left out, as those bytes count as the tag's already (an ID3v2 tag's padding is zeros)
-void SimplePacketizerReader::countPadding(const uint8_t* from, const uint8_t* const to)
+int64_t SimplePacketizerReader::countPadding(const uint8_t* from, const uint8_t* const to)
 {
+    int64_t counted = 0;
     from += (std::min)(m_tagCredit, static_cast<int64_t>(to - from));
     while (from < to)
     {
@@ -996,8 +997,18 @@ void SimplePacketizerReader::countPadding(const uint8_t* from, const uint8_t* co
         const uint8_t* const run = from;
         while (from < to && *from == fill) ++from;
         if (from - run >= PAD_RUN_MIN)
-            m_padBytes += from - run;
+            counted += from - run;
     }
+    m_padBytes += counted;
+    return counted;
+}
+
+void SimplePacketizerReader::countLostPadding(const uint8_t* from, const uint8_t* const to)
+{
+    const int64_t credit = m_tagCredit;  // the tag credit is that of the main stream, not of these bytes
+    m_tagCredit = 0;
+    m_lostPadBytes += countPadding(from, to);
+    m_tagCredit = credit;
 }
 
 int SimplePacketizerReader::flushPacket(AVPacket& avPacket)
@@ -1220,7 +1231,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                 // frame of a file with 2,097,151 bytes in front of it, in silence.
                 uint8_t* const keepFrom = m_bufEnd - LONGEST_TAG_HEADER;
 
-                countPadding(m_curPos, keepFrom);
+                const int64_t pad = countPadding(m_curPos, keepFrom);
                 m_processedBytes += keepFrom - m_curPos;
                 // Nothing recognisable is left in this buffer. HELD BACK, not counted: if a frame
                 // turns up later this really was a hole and it is promoted to lost; if none ever
@@ -1239,6 +1250,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                     m_tagCredit -= paid;
                     const int64_t held = region - paid - tagBytesAt(m_curPos + paid, keepFrom);
                     m_pendingLost += held > 0 ? held : 0;
+                    m_pendingPad += (std::min)(pad, held > 0 ? held : 0);
                     noteRun(m_pendingRuns, keepFrom, held);
                 }
                 memmove(m_tmpBuffer.data(), keepFrom, static_cast<size_t>(LONGEST_TAG_HEADER));
@@ -1276,7 +1288,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                 // call: whatever the tag chain has credit for is spent first, and the rest is a
                 // loss once the stream has synced at least once.
                 const int64_t skipped = frame + 1 - m_curPos;
-                countPadding(m_curPos, frame + 1);
+                const int64_t pad = countPadding(m_curPos, frame + 1);
                 m_curPos = frame + 1;
                 m_processedBytes += skipped;
                 const int64_t paid = m_tagCredit < skipped ? m_tagCredit : skipped;
@@ -1284,6 +1296,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                 if (m_everSynced)
                 {
                     m_lostBytes += skipped - paid;
+                    m_lostPadBytes += (std::min)(pad, skipped - paid);
                     noteRun(m_lostRuns, frame + 1, skipped - paid);
                 }
                 return 0;
@@ -1301,7 +1314,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                 if (m_lastBlock)
                 {
                     const int64_t skipped = frame + 1 - m_curPos;
-                    countPadding(m_curPos, frame + 1);
+                    const int64_t pad = countPadding(m_curPos, frame + 1);
                     m_curPos = frame + 1;
                     m_processedBytes += skipped;
                     const int64_t paid = m_tagCredit < skipped ? m_tagCredit : skipped;
@@ -1309,11 +1322,12 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                     if (m_everSynced)
                     {
                         m_pendingLost += skipped - paid;
+                        m_pendingPad += (std::min)(pad, skipped - paid);
                         noteRun(m_pendingRuns, frame + 1, skipped - paid);
                     }
                     return 0;
                 }
-                countPadding(m_curPos, frame);
+                const int64_t pad = countPadding(m_curPos, frame);
                 m_processedBytes += frame - m_curPos;
                 if (m_everSynced)
                 {
@@ -1322,6 +1336,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                     m_tagCredit -= paid;
                     const int64_t held = region - paid - tagBytesAt(m_curPos + paid, frame);
                     m_pendingLost += held > 0 ? held : 0;
+                    m_pendingPad += (std::min)(pad, held > 0 ? held : 0);
                     noteRun(m_pendingRuns, frame, held);
                 }
                 memmove(m_tmpBuffer.data(), frame, m_bufEnd - frame);
@@ -1329,7 +1344,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                 m_curPos = m_bufEnd;
                 return NEED_MORE_DATA;
             }
-            countPadding(m_curPos, frame);
+            const int64_t pad = countPadding(m_curPos, frame);
             m_processedBytes += frame - m_curPos;
             // The bytes stepped over to reach this frame. On the FIRST sync they are the leading
             // fragment of a stream that started mid frame, which is not a loss; on every later one
@@ -1352,6 +1367,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                 m_tagCredit -= paid;
                 const int64_t bill = region - paid - tagBytesAt(m_curPos + paid, frame);
                 m_lostBytes += bill > 0 ? bill : 0;
+                m_lostPadBytes += (std::min)(pad, bill > 0 ? bill : 0);
                 // the held runs first, as they lie before this region in the stream
                 for (const ByteRun& r : m_pendingRuns) addRun(m_lostRuns, r.to, r.to - r.from);
                 m_pendingRuns.clear();
@@ -1364,6 +1380,8 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
             // ends is never promoted, and that is exactly the trailing data.
             m_lostBytes += m_pendingLost;
             m_pendingLost = 0;
+            m_lostPadBytes += m_pendingPad;
+            m_pendingPad = 0;
             LTRACE(LT_INFO, 2,
                    "Decoding " << getCodecInfo().displayName << " stream (track " << m_streamIndex
                                << "): " << getStreamInfo());

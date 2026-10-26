@@ -541,6 +541,20 @@ void MPEGStreamReader::updateFPS(void* curNALUnit, uint8_t* buff, uint8_t* nextN
         setFPS(spsFps);
         m_fpsFromContainer = false;
     }
+    else if (spsFps != 0.0 && m_fpsFromContainer && abs_(m_fps, 2 * spsFps) <= 2 * spsFps * 0.001 &&
+             interlacedForRate(curNALUnit))
+    {
+        // ** A RATE OF FIELDS FROM THE CONTAINER. ** A Matroska writer that takes the fields of an interlaced stream
+        // for its frames gives the duration of a field as DefaultDuration: twice the stream's rate, 59.94 for 29.97.
+        // As a speed change stated on purpose it was followed, and the video played at twice its speed. Of an
+        // interlaced stream the stream's own rate is kept (MatroskaDemuxer::getTrackFps also reads the block times).
+        LTRACE(LT_INFO, 2,
+               "The container gives " << m_fps << " fps for this interlaced " << getCodecInfo().displayName
+                                      << " stream, the rate of its fields; its own rate, " << spsFps
+                                      << " fps, is kept. fps= on the track's line sets another.");
+        setFPS(spsFps);
+        m_fpsFromContainer = false;
+    }
     else if (spsFps != 0.0 && abs_(m_fps, spsFps) > EPSILON)
     {
         if (m_isFirstFpsWarn)

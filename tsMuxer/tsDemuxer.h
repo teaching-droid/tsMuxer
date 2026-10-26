@@ -176,6 +176,19 @@ class TSDemuxer final : public AbstractDemuxer
     [[nodiscard]] int64_t fileVideoStart(const std::string& fileName, int videoPid) const;
     void endJoinFile();
     bool keepJoinSound(int pid, StreamType type, int64_t pts);
+    // A sound track of one file that has no PES for a while, with the picture going on (see noteSoundGap). Times in
+    // 90 kHz ticks.
+    struct SoundGap
+    {
+        int64_t origin = -1;  // the first PES of the track, the start of its reader's own clock
+        int64_t prev = -1;    // the latest PES time
+        int64_t step = 0;     // the shortest step from one PES to the next
+        int videoJumps = 0;   // m_videoJumps at the PES before
+    };
+    std::map<int, SoundGap> m_soundGap;
+    int64_t m_gapVideoPrev = -1;  // the decoding time of the first video's PES before
+    int m_videoJumps = 0;         // how often the first video's time jumped (a discontinuity), see noteSoundGap
+    void noteSoundGap(int pid, int64_t pts);
     // The sound of a file whose first PES does not begin with a frame (skipsLeadingPes)
     static constexpr uint8_t LEAD_PES_MAX = 4;
     static constexpr uint8_t LEAD_PES_DONE = 0xFF;

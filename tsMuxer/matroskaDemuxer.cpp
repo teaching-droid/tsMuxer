@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <functional>
 #include <set>
@@ -708,6 +709,20 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
         const bool joinSound = !timeline && m_joinFiles.size() > 1 && m_joinShiftKnown && blockNs != AV_NOPTS_VALUE &&
                                tracks[track]->type == IOContextTrackType::AUDIO &&
                                (isJoinTimedCodec(tracks[track]) || delayCodec || varCodec);
+        if (!timeline && m_joinFiles.size() <= 1 && blockNs != AV_NOPTS_VALUE)
+        {
+            if (isVideo && (m_gapVideoTrack == -1 || m_gapVideoTrack == track))
+            {
+                // a jump of the picture's own time, forwards or back, is a discontinuity, not a gap
+                m_gapVideoTrack = track;
+                if (m_gapVideoPrev != INT64_MIN &&
+                    (blockNs - m_gapVideoPrev > INT64_C(2000000000) || blockNs < m_gapVideoPrev - INT64_C(2000000000)))
+                    m_videoJumps++;
+                m_gapVideoPrev = blockNs;
+            }
+            else if (tracks[track]->type == IOContextTrackType::AUDIO && isJoinTimedCodec(tracks[track]))
+                noteSoundGap(track + 1, blockNs);
+        }
         const int64_t laceLenNs =
             tracks[track]->default_duration > 0 ? static_cast<int64_t>(tracks[track]->default_duration)
             : duration != AV_NOPTS_VALUE && duration > 0 && laces > 0 && (!delayCodec || laces > 1)
@@ -1691,6 +1706,43 @@ bool MatroskaDemuxer::keepJoinSound(const int track, const int64_t ns, const int
         sound.pad = padNs;
     }
     return true;
+}
+
+// ** A SOUND TRACK THAT STOPS FOR A WHILE GOES ON AT ITS OWN TIME. ** The audio readers count the frames they are
+// given, so where a track of one file has no blocks for a while, as a commentary or a second language that drops out
+// for a minute of a recording, its sound after that came straight after the sound before: a minute early against the
+// picture, to its end. Where the next block comes more than GAP_MIN after the one before while the first video goes
+// on without a jump of its own time, the track's times have a gap there (takeTimeGaps), as at a joint of a join.
+// Shorter gaps are left as they were. As TSDemuxer::noteSoundGap.
+void MatroskaDemuxer::noteSoundGap(const int track, const int64_t ns)
+{
+    constexpr int64_t GAP_MIN = INT64_C(10000000000);
+    SoundGap& sound = m_soundGap[track];
+    if (sound.origin == -1)
+    {
+        sound.origin = sound.prev = ns;
+        sound.videoJumps = m_videoJumps;
+        return;
+    }
+    if (ns > sound.prev)
+    {
+        // and the sound comes back where the picture is: a jump of the sound's own times is not a gap
+        if (sound.step > 0 && ns - sound.prev > GAP_MIN && m_gapVideoTrack != -1 && sound.videoJumps == m_videoJumps &&
+            std::llabs(ns - m_gapVideoPrev) < INT64_C(5000000000))
+        {
+            const int64_t end = sound.prev + sound.step;
+            m_timeGaps[track].emplace_back(end - sound.origin, ns - end);
+            LTRACE(LT_INFO, 2,
+                   "Track " << track << " has no data from "
+                            << floatToTime(static_cast<double>(end - sound.origin) / 1e9) << " for "
+                            << (ns - end + 500000) / 1000000
+                            << " ms, while the picture goes on: its sound goes on after a gap, at its own time.");
+        }
+        else if (sound.step <= 0 || ns - sound.prev < sound.step)
+            sound.step = ns - sound.prev;
+        sound.prev = ns;
+    }
+    sound.videoJumps = m_videoJumps;
 }
 
 std::vector<int64_t> MatroskaDemuxer::takeTouchingCues(const int pid)
@@ -3895,7 +3947,20 @@ static FieldCheck fieldCheckOf(const MatroskaTrack* t)
     if (t->type != MatroskaTrackType::VIDEO || !t->codec_id)
         return check;
     if (!strcmp(t->codec_id, MATROSKA_CODEC_ID_VIDEO_MPEG2))
+    {
         check.codec = FieldCheck::Codec::MPEG2;
+        // A progressive sequence (progressive_sequence in the sequence extension the CodecPrivate holds) has no
+        // field pictures, and a DefaultDuration of half its frames is not that of a field (getTrackFps)
+        const uint8_t* p = t->codec_priv;
+        for (int i = 0; p && i + 5 < t->codec_priv_size; i++)
+            if (p[i] == 0 && p[i + 1] == 0 && p[i + 2] == 1 && p[i + 3] == 0xB5 && p[i + 4] >> 4 == 1)
+            {
+                if (p[i + 5] >> 3 & 1)
+                    check.codec = FieldCheck::Codec::NONE;
+                break;
+            }
+        return check;
+    }
     // avcC: version, profile, compatibility, level, 6 bits + the NAL length less 1, 3 bits + the number of SPS, then
     // the length of the first SPS and the SPS
     const uint8_t* avcc = t->codec_priv;
@@ -3995,6 +4060,21 @@ static bool holdsOneField(File& f, const FieldCheck& check, const int64_t frameA
         }
     }
     return pictures == 1 && field;
+}
+
+// Whether an MPEG-2 block holds a sequence extension that says progressive_sequence: such a stream has no fields
+static bool mpeg2ProgressiveIn(File& f, const int64_t frameAt, const int64_t frameSize)
+{
+    if (frameAt < 0 || frameSize < 10)
+        return false;
+    std::vector<uint8_t> data(static_cast<size_t>((std::min)(frameSize, int64_t{65536})));
+    f.seek(frameAt);
+    if (f.read(data.data(), static_cast<uint32_t>(data.size())) != static_cast<int>(data.size()))
+        return false;
+    for (size_t i = 0; i + 5 < data.size(); i++)
+        if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 1 && data[i + 3] == 0xB5 && data[i + 4] >> 4 == 1)
+            return (data[i + 5] >> 3 & 1) != 0;
+    return false;
 }
 
 // How many clusters from the first one the start of each track is looked for in (loadTrackExtras).
@@ -6081,8 +6161,43 @@ double MatroskaDemuxer::getTrackFps(const uint32_t trackId)
     if (trackId == 0 || static_cast<int>(trackId) > num_tracks)
         return 0.0;
     const MatroskaTrack* track = tracks[trackId - 1];
+    // ** A DEFAULTDURATION OF A FIELD. ** A writer that takes the fields of an interlaced stream for its frames gives
+    // the duration of a field as DefaultDuration, 16.683 ms for 29.97 fps, whether it stores each field in a block of
+    // its own (MPEG-2 field pictures, H.264 PAFF) or the two fields of a frame together. The rate was taken as it
+    // stood, 59.94 for a stream of 29.97, and as a rate the container states on purpose it was followed: the video
+    // played at twice its speed, its 45 frames in 0.72 s. The times of the blocks say what the pictures are: where
+    // they step by a frame of twice the DefaultDuration (a block of one field stepping by half a frame), the rate is
+    // that of the frames. Only for the codecs whose blocks can be read as fields (fieldCheckOf: MPEG-2, H.264 that is
+    // not frames only); a stream that gives its own rate is also checked against it (MPEGStreamReader::updateFPS).
     if (track->default_duration > 0)
-        return 1000000000.0 / static_cast<double>(track->default_duration);
+    {
+        const double declared = 1000000000.0 / static_cast<double>(track->default_duration);
+        if (fieldCheckOf(track).codec == FieldCheck::Codec::NONE || m_sourceName.empty())
+            return declared;
+        if (const auto known = m_estimatedFps.find(trackId); known != m_estimatedFps.end())
+            return known->second;
+        double fps = declared;
+        bool fields = false;
+        double spacingNs = 0.0;
+        size_t count = 0;
+        bool progressive = false;
+        if (measureBlockTimes(track, fields, spacingNs, count, &progressive) && !progressive)
+        {
+            const double frameNs = spacingNs * (fields ? 2 : 1);
+            const double twice = 2.0 * static_cast<double>(track->default_duration);
+            if (std::fabs(frameNs - twice) < twice * 0.01)
+            {
+                fps = standardFps(declared / 2);
+                LTRACE(LT_INFO, 2,
+                       "Track " << trackId << " gives the duration of a field as its DefaultDuration ("
+                                << static_cast<double>(track->default_duration) / 1e6 << " ms), and its blocks "
+                                << (fields ? "hold a field each" : "hold frames") << ": taken as " << fps
+                                << " fps, the rate of its frames. fps= on the track's line sets another.");
+            }
+        }
+        m_estimatedFps[trackId] = fps;
+        return fps;
+    }
 
     // A video track without DefaultDuration, as many WebM files have: the frame rate was taken to be 25 and every
     // picture retimed to it. The mean spacing of its first pictures says it instead: their times sorted, since pictures
@@ -6092,76 +6207,103 @@ double MatroskaDemuxer::getTrackFps(const uint32_t trackId)
         return 0.0;
     if (const auto known = m_estimatedFps.find(trackId); known != m_estimatedFps.end())
         return known->second;
-    static constexpr size_t PICTURES = 240;
     double fps = 0.0;
-    SegmentFacts facts;
-    File f;
-    if (readSegmentFacts(m_sourceName, facts) && facts.firstCluster > 0 && f.open(m_sourceName.c_str(), File::ofRead))
+    bool fields = false;
+    double spacingNs = 0.0;
+    size_t count = 0;
+    if (measureBlockTimes(track, fields, spacingNs, count))
     {
-        EbmlScan scan(f);
-        std::vector<int64_t> times;
-        // MPEG-2 and H.264 coded as fields can be stored with a block for each field, whose times are then those of
-        // the fields: the MPEG-2 test stream of 25 fps so stored, with no DefaultDuration, was taken to be of 50 fps
-        // and muxed at twice its speed, its 38 frames in 0.74 s; H.264 of 29.97 with no timing in its SPS, so stored,
-        // was taken to be of 59.438 fps, its 5.4 s in 2.8 s. The rate is halved where each of the first FIELD_BLOCKS
-        // blocks holds one field picture (holdsOneField).
-        static constexpr size_t FIELD_BLOCKS = 16;
-        // A walk that stops before the track ends has the B pictures of its last pictures still to come, shown before
-        // the I or P picture read last: the times after the earliest of the last REORDER_BLOCKS blocks read are left
-        // out, as not all the pictures between them were read. With them, the mean spacing of the first 240 fields of
-        // that H.264 stream was that of 59.438 fps, not 59.94.
-        static constexpr size_t REORDER_BLOCKS = 32;
-        const FieldCheck check = fieldCheckOf(track);
-        size_t fieldBlocks = 0;
-        walkTrackBlocks(scan, facts.firstCluster, facts.segmentEnd, 256, track->num,
-                        [&](const int64_t time, int64_t, bool, int, const int64_t frameAt, const int64_t frameSize)
-                        {
-                            if (check.codec != FieldCheck::Codec::NONE && times.size() < FIELD_BLOCKS &&
-                                fieldBlocks == times.size() && holdsOneField(scan.f, check, frameAt, frameSize))
-                                fieldBlocks++;
-                            times.push_back(time);
-                            return times.size() < PICTURES;
-                        });
-        bool fields = fieldBlocks >= 8 && fieldBlocks == (std::min)(times.size(), FIELD_BLOCKS);
-        // Halved only where the field blocks carry times of their own. A writer may give both fields of a frame the
-        // frame's time, and the distinct times are then those of the frames already: halved, a 29.97 H.264 stream so
-        // stored (each field a block, the second on the first one's time) came out at 14.985 fps and played at half
-        // speed, 11.0 s for 5.5 s. Its first 16 blocks hold 8 distinct times; fields with times of their own hold 16.
-        if (fields)
-        {
-            std::vector<int64_t> first(times.begin(), times.begin() + static_cast<std::ptrdiff_t>(fieldBlocks));
-            std::sort(first.begin(), first.end());
-            const size_t distinct = static_cast<size_t>(std::unique(first.begin(), first.end()) - first.begin());
-            fields = distinct * 4 > fieldBlocks * 3;
-        }
-        if (times.size() == PICTURES)
-        {
-            const int64_t complete = *std::min_element(times.end() - REORDER_BLOCKS, times.end());
-            times.erase(std::remove_if(times.begin(), times.end(), [&](const int64_t t) { return t > complete; }),
-                        times.end());
-        }
-        std::sort(times.begin(), times.end());
-        times.erase(std::unique(times.begin(), times.end()), times.end());
-        if (times.size() >= 8 && times.back() > times.front())
-        {
-            const double spacingNs = static_cast<double>(times.back() - times.front()) *
-                                     static_cast<double>(facts.timestampScale) / static_cast<double>(times.size() - 1);
-            fps = 1e9 / spacingNs / (fields ? 2 : 1);
-            // The rate the times stand for: a standard one within 0.04 % (240 pictures rounded to the millisecond are
-            // out by about 0.013 % at most; 29.97 and 30 are 0.1 % apart).
-            for (const double standard :
-                 {12.5, 15000.0 / 1001, 15.0, 24000.0 / 1001, 24.0, 25.0, 30000.0 / 1001, 30.0, 48000.0 / 1001, 48.0,
-                  50.0, 60000.0 / 1001, 60.0, 100.0, 120000.0 / 1001, 120.0})
-                if (std::fabs(fps - standard) < standard * 0.0004)
-                    fps = standard;
-            LTRACE(LT_INFO, 2,
-                   "Track " << trackId << " gives no frame rate (DefaultDuration). Taken from the times of its first "
-                            << times.size() << (fields ? " fields, a block for each" : " pictures") << ": " << fps
-                            << " fps. fps= on the track's line sets another.");
-        }
+        fps = standardFps(1e9 / spacingNs / (fields ? 2 : 1));
+        LTRACE(LT_INFO, 2,
+               "Track " << trackId << " gives no frame rate (DefaultDuration). Taken from the times of its first "
+                        << count << (fields ? " fields, a block for each" : " pictures") << ": " << fps
+                        << " fps. fps= on the track's line sets another.");
     }
     m_estimatedFps[trackId] = fps;
     return fps;
+}
+
+// The rate the times stand for: a standard one within 0.04 % (240 pictures rounded to the millisecond are out by
+// about 0.013 % at most; 29.97 and 30 are 0.1 % apart).
+double MatroskaDemuxer::standardFps(double fps)
+{
+    for (const double standard : {12.5, 15000.0 / 1001, 15.0, 24000.0 / 1001, 24.0, 25.0, 30000.0 / 1001, 30.0,
+                                  48000.0 / 1001, 48.0, 50.0, 60000.0 / 1001, 60.0, 100.0, 120000.0 / 1001, 120.0})
+        if (std::fabs(fps - standard) < standard * 0.0004)
+            fps = standard;
+    return fps;
+}
+
+// The mean step of the times of the first blocks of a video track, in ns, how many distinct times it is taken from,
+// and whether each of its first blocks holds one field picture with a time of its own (fields). progressive: an MPEG-2
+// track whose first sequence extension in its blocks says progressive_sequence (a file without CodecPrivate)
+bool MatroskaDemuxer::measureBlockTimes(const MatroskaTrack* track, bool& fields, double& spacingNs, size_t& count,
+                                        bool* progressive)
+{
+    static constexpr size_t PICTURES = 240;
+    fields = false;
+    spacingNs = 0.0;
+    count = 0;
+    if (progressive)
+        *progressive = false;
+    SegmentFacts facts;
+    File f;
+    if (!readSegmentFacts(m_sourceName, facts) || facts.firstCluster <= 0 ||
+        !f.open(m_sourceName.c_str(), File::ofRead))
+        return false;
+    EbmlScan scan(f);
+    std::vector<int64_t> times;
+    // MPEG-2 and H.264 coded as fields can be stored with a block for each field, whose times are then those of
+    // the fields: the MPEG-2 test stream of 25 fps so stored, with no DefaultDuration, was taken to be of 50 fps
+    // and muxed at twice its speed, its 38 frames in 0.74 s; H.264 of 29.97 with no timing in its SPS, so stored,
+    // was taken to be of 59.438 fps, its 5.4 s in 2.8 s. The rate is halved where each of the first FIELD_BLOCKS
+    // blocks holds one field picture (holdsOneField).
+    static constexpr size_t FIELD_BLOCKS = 16;
+    // A walk that stops before the track ends has the B pictures of its last pictures still to come, shown before
+    // the I or P picture read last: the times after the earliest of the last REORDER_BLOCKS blocks read are left
+    // out, as not all the pictures between them were read. With them, the mean spacing of the first 240 fields of
+    // that H.264 stream was that of 59.438 fps, not 59.94.
+    static constexpr size_t REORDER_BLOCKS = 32;
+    const FieldCheck check = fieldCheckOf(track);
+    size_t fieldBlocks = 0;
+    walkTrackBlocks(
+        scan, facts.firstCluster, facts.segmentEnd, 256, track->num,
+        [&](const int64_t time, int64_t, bool, int, const int64_t frameAt, const int64_t frameSize)
+        {
+            if (check.codec != FieldCheck::Codec::NONE && times.size() < FIELD_BLOCKS && fieldBlocks == times.size() &&
+                holdsOneField(scan.f, check, frameAt, frameSize))
+                fieldBlocks++;
+            if (progressive && !*progressive && times.size() < FIELD_BLOCKS && check.codec == FieldCheck::Codec::MPEG2)
+                *progressive = mpeg2ProgressiveIn(scan.f, frameAt, frameSize);
+            times.push_back(time);
+            return times.size() < PICTURES;
+        });
+    fields = fieldBlocks >= 8 && fieldBlocks == (std::min)(times.size(), FIELD_BLOCKS);
+    // Halved only where the field blocks carry times of their own. A writer may give both fields of a frame the
+    // frame's time, and the distinct times are then those of the frames already: halved, a 29.97 H.264 stream so
+    // stored (each field a block, the second on the first one's time) came out at 14.985 fps and played at half
+    // speed, 11.0 s for 5.5 s. Its first 16 blocks hold 8 distinct times; fields with times of their own hold 16.
+    if (fields)
+    {
+        std::vector<int64_t> first(times.begin(), times.begin() + static_cast<std::ptrdiff_t>(fieldBlocks));
+        std::sort(first.begin(), first.end());
+        const size_t distinct = static_cast<size_t>(std::unique(first.begin(), first.end()) - first.begin());
+        fields = distinct * 4 > fieldBlocks * 3;
+    }
+    if (times.size() == PICTURES)
+    {
+        const int64_t complete = *std::min_element(times.end() - REORDER_BLOCKS, times.end());
+        times.erase(std::remove_if(times.begin(), times.end(), [&](const int64_t t) { return t > complete; }),
+                    times.end());
+    }
+    std::sort(times.begin(), times.end());
+    times.erase(std::unique(times.begin(), times.end()), times.end());
+    if (times.size() < 8 || times.back() <= times.front())
+        return false;
+    spacingNs = static_cast<double>(times.back() - times.front()) * static_cast<double>(facts.timestampScale) /
+                static_cast<double>(times.size() - 1);
+    count = times.size();
+    return true;
 }
 
 const uint8_t* MatroskaDemuxer::getTrackCodecPrivate(const int32_t pid, int& size)

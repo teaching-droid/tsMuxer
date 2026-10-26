@@ -465,6 +465,49 @@ bool TSDemuxer::keepJoinSound(const int pid, const StreamType type, const int64_
     return true;
 }
 
+// ** A SOUND TRACK THAT STOPS FOR A WHILE GOES ON AT ITS OWN TIME. ** The audio readers count the frames they are
+// given, so where a track of one file has no packets for a while, as a commentary or a second language that drops
+// out for a minute of a recording, its sound after that came straight after the sound before: a minute early against
+// the picture, to its end. Where the next PES comes more than GAP_MIN after the one before while the first video goes
+// on without a jump of its own time and is near the time the sound comes back at, the track's times have a gap there
+// (takeTimeGaps), as at a joint of a join. A jump of the picture's time too is a discontinuity of the clock, which is
+// left as it was, as are shorter gaps.
+void TSDemuxer::noteSoundGap(const int pid, const int64_t pts)
+{
+    constexpr int64_t GAP_MIN = 10 * 90000;
+    // In the first file only: the clips of a playlist each have times of their own, and the sound of a later one can
+    // come before its picture has shown the jump.
+    if (m_curFileNum > 0)
+        return;
+    SoundGap& sound = m_soundGap[pid];
+    if (sound.origin == -1)
+    {
+        sound.origin = sound.prev = pts;
+        sound.videoJumps = m_videoJumps;
+        return;
+    }
+    if (pts > sound.prev)
+    {
+        // and the sound comes back where the picture is: a jump of the sound's own times (a broken or rewritten
+        // PES time, 6.6 hours in one test file) is not a gap
+        if (sound.step > 0 && pts - sound.prev > GAP_MIN && m_firstVideoPid != -1 && sound.videoJumps == m_videoJumps &&
+            std::llabs(pts - m_gapVideoPrev) < 5 * 90000)
+        {
+            const int64_t end = sound.prev + sound.step;
+            m_joinGaps[pid].emplace_back((end - sound.origin) * 100000 / 9, (pts - end) * 100000 / 9);
+            LTRACE(LT_INFO, 2,
+                   "Track " << pid << " has no data from "
+                            << floatToTime(static_cast<double>(end - sound.origin) / 90000.0) << " for "
+                            << (pts - end + 45) / 90
+                            << " ms, while the picture goes on: its sound goes on after a gap, at its own time.");
+        }
+        else if (sound.step <= 0 || pts - sound.prev < sound.step)
+            sound.step = pts - sound.prev;
+        sound.prev = pts;
+    }
+    sound.videoJumps = m_videoJumps;
+}
+
 std::vector<std::pair<int64_t, int64_t>> TSDemuxer::takeTimeGaps(const int pid)
 {
     // the core of a stream is a track of its own, on the same PID
@@ -909,6 +952,11 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
                 m_fileFirstDts.try_emplace(pid, curDts);
                 if (pid == m_firstVideoPid)
                 {
+                    // a jump of the picture's own time, forwards or back, is a discontinuity, not a gap
+                    if (m_gapVideoPrev != -1 &&
+                        (curDts - m_gapVideoPrev > 2 * 90000 || curDts < m_gapVideoPrev - 2 * 90000))
+                        m_videoJumps++;
+                    m_gapVideoPrev = curDts;
                     if (m_videoSpanDts.first == -1)
                         m_videoSpanDts.first = curDts;
                     m_videoSpanDts.second = (std::max)(m_videoSpanDts.second, curDts);
@@ -940,6 +988,9 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
             if (m_acceptedPidCache[pid] && streamInfo != m_pmt.pidList.end() &&
                 isAudioStreamType(streamInfo->second.m_streamType) && isJoinOfFiles())
                 m_joinDrop[pid] = !keepJoinSound(pid, streamInfo->second.m_streamType, curPts);
+            else if (m_acceptedPidCache[pid] && streamInfo != m_pmt.pidList.end() &&
+                     isAudioStreamType(streamInfo->second.m_streamType) && part == nullptr)
+                noteSoundGap(pid, curPts);
         }
         if (m_joinDrop[pid])
             return;

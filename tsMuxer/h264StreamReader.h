@@ -65,6 +65,13 @@ class H264StreamReader final : public MPEGStreamReader
         return curNalUnit ? !static_cast<SPSUnit*>(curNalUnit)->frame_mbs_only_flag : getInterlaced();
     }
     bool codesFramesOnly(void* curNalUnit) override;
+    // For a rate of fields from a container (updateFPS): also a stream coded as frames that times its pictures in
+    // fields (pic_struct_present_flag), as 3:2 pulldown does
+    bool interlacedForRate(void* curNalUnit) override
+    {
+        const auto sps = static_cast<SPSUnit*>(curNalUnit);
+        return sps ? !sps->frame_mbs_only_flag || sps->pic_struct_present_flag : getInterlaced();
+    }
 
     int writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPacket& avPacket,
                           PriorityDataInfo* priorityData) override;
