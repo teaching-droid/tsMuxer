@@ -42,7 +42,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **The window put the sound of a cut TS too early** when the cut begins with B pictures that are shown before its first picture, by their length, 40 to 100 ms. The listed Stream delay is now measured from the picture shown first.
 
-* **In a join of TS, M2TS or Matroska files ("a.ts"+"b.ts"), the sound of each later file followed on from the sound of the file before,** not from its own start against its picture: a file whose sound starts after its picture, or ends before it, moved the sound of every later file, by seconds with some files. Each file's sound now starts against its own picture. In a join of Matroska files this holds for AC-3, E-AC-3, DTS, TrueHD, LPCM, MPEG audio, AAC, Opus, Vorbis and FLAC. In a join of Matroska files whose AAC follows on from file to file, the sound of each later file also came about 32 ms later than the file before; it now stays within half a frame of its picture.
+* **In a join of TS, M2TS or Matroska files ("a.ts"+"b.ts"), the sound of each later file followed on from the sound of the file before,** not from its own start against its picture: a file whose sound starts after its picture, or ends before it, moved the sound of every later file, by seconds with some files. Each file's sound now starts against its own picture, and a file of a TS or M2TS join that has no sound of a track leaves a gap of its length in that track. In a join of Matroska files this holds for AC-3, E-AC-3, DTS, TrueHD, LPCM, MPEG audio, AAC, Opus, Vorbis and FLAC. In a join of Matroska files whose AAC follows on from file to file, the sound of each later file also came about 32 ms later than the file before; it now stays within half a frame of its picture.
 
 * **With --maxbitrate, video whose own peaks are above the cap reached the decoder after it was due,** even with the average well under the cap: the data was held back at a peak, and the quiet part before it was never used to send it ahead. It is now sent ahead, never more than --vbv-len earlier, so that it arrives in time. The packets, their order and the size of the output stay the same. In the disc cuts measured, 12 to 55 pictures that came late came in time.
 
@@ -264,6 +264,14 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **The times of a subtitle drawn into PGS broke the rules of the PGS decoder model,** by a tick for the window of a new subtitle, and the end segment of a clear or of a fade step came at the wrong time. They now follow the model, for text subtitles and for DVD, DVB and ASS subtitles turned into PGS. The times the subtitles are shown do not change.
 
+* **A subtitle drawn into PGS that starts less than about 65 ms after the one before it ends,** one frame later at 1080p, or at 720p with 50 or 59.94 fps, was decoded before the clear of the one before: the decoding times went back. The clear is now decoded in time, and both subtitles are shown at the same times as before.
+
+* **3d-plane= on a line of SRT subtitles, or of text subtitles from a Matroska or MP4 file, was ignored:** on a 3D disc the subtitles were shown at the depth of the screen, and the window wrote the plane of a text track in a form the mux does not know. It now works as on a PGS line, and the window writes it as for a PGS track.
+
+* **A 3d-plane= that is not a plane of the MVC video,** such as 300, -1, abc, or a plane past the last one the video has, was taken without a word, and another plane or none was written. It is now refused, with the value.
+
+* **font-size=0 or a negative font size drew nothing to see,** and the mux still said it had succeeded, and a negative font-border or line-spacing drew the subtitle wrong. Such values are now refused, with the value.
+
 ### Audio
 
 * **An AC-3, E-AC-3, DTS, AAC or MPEG audio track that ends inside a frame,** as a recording an encoder stopped, got the part of that frame as its last frame, which a player cannot decode, and the track came out a frame longer. The part is now left out, with a warning.
@@ -296,7 +304,13 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A raw AC-3, E-AC-3 or DTS file of ten frames or fewer** is recognised, from three frames on.
 
-* **TrueHD at a rate a disc does not have,** such as 44.1 kHz, no longer has 48 kHz in its PMT.
+* **TrueHD at a rate a disc does not have,** such as 44.1 kHz, no longer has 48 kHz in its PMT, unless it is given a 48 kHz AC-3 core with merge-ac3-file= or merge-ac3-track=: its PMT then gives the rate of its clip information.
+
+* **An AC-3 at 44.1 or 32 kHz was taken as the core of TrueHD** with merge-ac3-file= or merge-ac3-track=, without a word: a disc held 44.1 kHz AC-3 frames in its 48 kHz TrueHD track. Such an AC-3 under TrueHD at 48, 96 or 192 kHz is now refused, as E-AC-3 is.
+
+* **The AC-3 track of merge-ac3-track= lost its start in the Matroska file:** a core that starts 500 ms after its TrueHD came 500 ms early against the TrueHD and the picture. It now keeps the distance the file gives it, in every output. A file without video is muxed as before.
+
+* **In a join of TS or M2TS files, TrueHD with its AC-3 core muxed as A_AC3 followed on from the sound of the file before,** although the log said that the sound of the later file starts after a gap: its core and its TrueHD came that much early against the picture, to the end of the join. Both now take the gap, as A_MLP and the other audio do.
 
 * **TrueHD with its AC-3 core that starts inside its stream, as in a cut TS or a raw file cut from one, was declared as AC-3,** with an E-AC-3 descriptor made from a false header: its lossless part can hold the AC-3 sync word, and the first one found was taken for a frame. It is now declared as TrueHD, with the descriptor of its AC-3 core, and a demux names it .ac3+thd, as from the start of the stream. AC-3 and E-AC-3 with such false headers before their first frame got that wrong descriptor as well, and E-AC-3 was declared as AC-3; they now get their own.
 
@@ -342,6 +356,12 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **With insertSEI or forceSEI, the second field of each frame of H.264 coded as fields had no picture timing SEI.** Each field now has its own.
 
+* **HEVC and VVC with an IDR picture after the first that has leading pictures gave those pictures the times of the pictures before it.** Some times were used twice, the last times were never used, and the pictures were shown in the wrong order, in every output. The leading pictures now come just before their IDR picture.
+
+* **Multi-layer HEVC, as Dolby Vision profile 20 and 3D HEVC are coded, was muxed with the picture of each layer as a picture of its own,** with wrong times, and its listing printed hundreds of lines. It is now refused before anything is written, with a message that tsMuxeR can mux single layer HEVC only.
+
+* **An AV1 stream without temporal delimiters became one single frame,** and the mux said it had succeeded. Its frames are now found from their headers, each is written with a temporal delimiter, and a warning says that the stream lacks them.
+
 ### Blu-ray and transport stream
 
 * **"Keep data on the inner disc area" padded the wrong part of a 100 GB or 128 GB disc.** On these discs the second layer change is at the centre of the disc, not at its edge, and it was padded like the edge: the data of the third layer went to its outer edge, where the option promises to keep the disc empty. Each layer now keeps its share of the data at the centre. On a 25 GB disc the option padded the middle of the disc and now leaves the image as it is. The padding of a two-layer disc is not changed.
@@ -360,11 +380,19 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **In an ISO image, a folder with more entries than one block holds gave the entries in its later blocks a wrong tag location,** as PLAYLIST, CLIPINF or STREAM of a large disc copied with --bdmv-to-iso. Windows and Linux read such images, but a strict check of the file system reported each of those entries. Each entry now gives the block it starts in.
 
+* **A track without lang= had three zero bytes as its language on a disc,** in the playlist and the clip information, which is no language code. It is now "und".
+
+* **A track of a Blu-ray clip (.m2ts) named on its own line without lang= lost the language the listing shows for it,** from its clip information: the subtitles of a disc tsMuxeR wrote went into a Matroska file as und. The mux now takes that language, as for a clip read through its playlist.
+
+* **The tracks of a Blu-ray playlist were listed by PID, not in the order the playlist offers them,** so a remux from the window of a disc whose playlist orders its audio or subtitles otherwise changed which track came first: English became audio stream 1 where the disc offers French first. The languages were right. The tracks of a playlist are now listed in the order of its stream table, and the window keeps that order. A playlist whose order follows the PIDs is listed and muxed as before. (#52, thanks to @bulba99 for the report and to @Moonghost-coder for the analysis)
+
 * **A Blu-ray or AVCHD disc made from the command line or a meta file had its AC-3, E-AC-3, DTS, DTS-HD and TrueHD-with-core audio as stream id 0xbd,** although `--help` says a disc gets 0xfd with its extension, as the Blu-ray format has it and as the window always writes it with `--new-audio-pes`. A player that finds the audio by that extension played such a disc without sound. A disc now always gets 0xfd; LPCM keeps 0xbd, and a TS or M2TS that is no disc is written as before. Mux such discs again.
 
 * **A disc from the command line or a meta file had its clock references on the last video track,** for a Dolby Vision disc on the enhancement layer, where the Blu-ray format and the window put them on a PID of their own, 0x1001. A disc now always does. The clip information files of a UHD disc no longer end with an empty extension block, which none of the UHD discs measured has.
 
 * **The SIT of a disc's clips gave another peak rate than their clip information:** 127.9 Mbit/s with HEVC video, where the clip information gives 109 for 2160p and 48 for smaller pictures, and 48 against 35 for the second view of 3D. The SIT now gives the rate of the clip information, so the two agree. A TS or M2TS that is no disc is written as before.
+
+* **The AV1 video descriptor of a transport stream always said "no indication" for HDR and wide colour gamut,** also for PQ or HLG video in BT.2020. It now says HDR for PQ and HLG, wide colour gamut for other BT.2020 video, and SDR for BT.709 and BT.601.
 
 * **The First Play entry of a Blu-ray's index.bdmv was marked as interactive,** the type of a top menu. It is marked as a movie now, as Blu-ray discs mark it. The Top Menu and title entries are not changed, and the index of an AVCHD disc is written as before.
 
@@ -374,9 +402,9 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **SDR HEVC video** is marked with its colours, BT.709 or BT.2020, in the playlist and the clip information, as on a UHD disc mastered in SDR.
 
-* **The UHD data of a playlist always said HDR10,** also for SDR HEVC and for a disc without HEVC video. SDR HEVC is now marked as SDR, with the mastering display data of its stream where it has any, and a playlist without HEVC video has no such entry, as UHD discs have it. The index of a UHD disc without HEVC video no longer sets its SDR flag.
+* **The UHD data of a playlist always said HDR10,** also for SDR or HLG HEVC and for a disc without HEVC video. Such HEVC now gets the SDR entry, with the mastering display data of its stream where it has any, and a playlist without HEVC video has no such entry, as UHD discs have it. The index of a UHD disc without HEVC video no longer sets its SDR flag.
 
-* **SDR HEVC with mastering display data was marked as HDR10 with BT.2020 colours** in the playlist, the clip information and the index, and its subtitles got the PIDs of an HDR disc. It is now marked as SDR where its stream gives an SDR transfer (BT.709, BT.601 or BT.2020). A stream that gives no transfer is still marked as HDR10, and a Matroska output keeps the mastering display data as before.
+* **SDR HEVC with mastering display data was marked as HDR10 with BT.2020 colours** in the playlist, the clip information and the index, and its subtitles got the PIDs of an HDR disc. HLG HEVC with such data was marked as HDR10 as well. SDR HEVC is now marked as SDR where its stream gives an SDR transfer (BT.709, BT.601 or BT.2020), and HLG HEVC gets the marks of HLG without such data, which are those of SDR video with BT.2020 colours. A stream that gives no transfer is still marked as HDR10, and a Matroska output keeps the mastering display data as before.
 
 * **MPEG-2 video** declares its real picture format in the PMT: a 1080i or 1080p stream was declared 720p. With --no-hdmv-descriptors it gets the video stream descriptor of the transport stream standard in a transport stream; a disc keeps its HDMV descriptors.
 
@@ -457,6 +485,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 ### Matroska output
 
 * **insertSEI and forceSEI to Matroska wrote buffer values into the SPS, but no buffering period or picture timing SEI.** The blocks of H.264 that is not 3D now have them, as a TS has, with a delimiter where the stream has none and the SPS and PPS at I pictures. Closed captions and other SEI are kept as before.
+
+* **E-AC-3 with its AC-3 core and down-to-ac3 was declared E-AC-3 in Matroska, with the channels of its E-AC-3 part,** while the track holds the AC-3 core alone. It is now declared AC-3 with the channels and the rate of the core.
+
+* **VP8 and VP9 with an alpha channel lost the AlphaMode of their track,** though the alpha data was kept, so a player that follows it showed the picture opaque. It is now kept, in Matroska and WebM.
 
 * **A track that starts late held a whole Matroska mux in memory.** An audio or video track whose first packet comes more than ten seconds in, such as a commentary that begins minutes into the film, held back the start of the file, with every packet before it kept in memory. The file now starts after ten seconds, and the entry of that track is completed when its first packet comes. In a split output, the parts before that packet have no block of the track, and their entry holds only what was known before it: E-AC-3 on an A_AC3 line is listed there as AC-3.
 
@@ -568,7 +600,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A tab on the MUXOPT line** is read as a space. It joined the texts on either side of it: a tab after --cut-end=5s kept only one picture.
 
-* **A TS or Matroska file whose track starts after more than about 272 MiB of the other tracks, or stops for that long, stopped with "Reading buffer overflow",** in every output: a commentary that begins 5 minutes into a film of 10 Mbit/s, or a second language that stops for a minute. The other tracks are now muxed on while such a track waits for its data. An audio track that stops for more than 10 seconds while the picture goes on came back too early, straight after its sound before the gap; it now comes back at its own time (in a Matroska file: AC-3, E-AC-3, DTS, TrueHD, PCM and MPEG audio). In other files the message names the track that has no data, not fps=.
+* **A TS or Matroska file whose track starts after more than about 272 MiB of the other tracks, or stops for that long, stopped with "Reading buffer overflow",** in every output: a commentary that begins 5 minutes into a film of 10 Mbit/s, or a second language that stops for a minute. The other tracks are now muxed on while such a track waits for its data. An audio track that stops for more than 10 seconds while the picture goes on came back too early, straight after its sound before the gap; it now comes back at its own time, also in each file of a join (in a Matroska file: AC-3, E-AC-3, DTS, TrueHD, PCM and MPEG audio). A playlist that plays only a part of a clip, and a Matroska file read as its ordered edition, stop with a message instead, as the time of the sound after the gap cannot be told there. In other files the message names the track that has no data, not fps=.
 
 * **Every MUXOPT line counts.** With two of them, the muxers took the options of the last one only. --blu-ray or --avchd on the first of two lines gave a transport stream named .iso, or a folder of demuxed tracks where a disc folder was asked for. Lines that ask for both a Blu-ray and an AVCHD disc are refused.
 
