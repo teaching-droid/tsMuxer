@@ -147,9 +147,18 @@ uint32_t TextToPGSConverter::straightColor(const uint32_t premultiplied) const
     return rez;
 }
 
+// The colour a pixel is packed with. colorMask sets the lowest bits of each channel to merge colours when a picture
+// has too many, so that each colour stands for those that differ from it only in these bits. The alphas that are
+// merged with alpha 0 stand for nothing drawn: such a pixel is fully transparent. It was given the alpha of the mask,
+// so that a subtitle with many colours lay on a white box of alpha 1 of 255 or more, as wide as the picture.
+static uint32_t maskedColor(const uint32_t color, const uint32_t colorMask)
+{
+    return ((color >> 24) & ~(colorMask >> 24)) ? color | colorMask : 0;
+}
+
 uint8_t TextToPGSConverter::color32To8(const uint32_t* buff, const uint32_t colorMask)
 {
-    YUVQuad yuv = RGBAToYUVA(straightColor(*buff | colorMask), m_bt709);
+    YUVQuad yuv = RGBAToYUVA(straightColor(maskedColor(*buff, colorMask)), m_bt709);
     const auto itr = m_paletteYUV.find(yuv);
     if (itr == m_paletteYUV.end())
     {
@@ -170,11 +179,11 @@ uint8_t TextToPGSConverter::color32To8(const uint32_t* buff, const uint32_t colo
 int TextToPGSConverter::getRepeatCnt(const uint32_t* pos, const uint32_t* end, const uint32_t colorMask) const
 {
     int rez = 1;
-    if (*pos == 0)
+    if (maskedColor(*pos, colorMask) == 0)
     {
         for (const uint32_t* cur = pos + 1; cur < end; cur++)
         {
-            if (*cur == *pos)
+            if (maskedColor(*cur, colorMask) == 0)
                 rez++;
             else
                 break;
@@ -184,7 +193,7 @@ int TextToPGSConverter::getRepeatCnt(const uint32_t* pos, const uint32_t* end, c
     {
         const uint32_t rgbColor = *pos | colorMask;
         const YUVQuad color = RGBAToYUVA(straightColor(rgbColor), m_bt709);
-        for (const uint32_t* cur = pos + 1; cur < end && *cur != 0; cur++)
+        for (const uint32_t* cur = pos + 1; cur < end && maskedColor(*cur, colorMask) != 0; cur++)
         {
             const uint32_t newRGBColor = *cur | colorMask;
             if (newRGBColor == rgbColor || RGBAToYUVA(straightColor(newRGBColor), m_bt709) == color)
