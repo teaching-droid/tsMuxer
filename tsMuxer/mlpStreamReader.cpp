@@ -199,7 +199,11 @@ uint8_t* MLPStreamReader::findFrame(uint8_t* buff, uint8_t* end)
         }
         return p == frame ? units : -1;
     };
-    m_preSyncUnits = walk(buff, 0);
+    // A major sync whose unit runs past the data read is searched for again from that unit on, when more is read: the
+    // units in front of it were counted already, and the walk from it finds none
+    const int units = walk(buff, 0);
+    if (units != 0 || m_preSyncUnits <= 0)
+        m_preSyncUnits = units;
     return frame;
 }
 
@@ -226,6 +230,9 @@ int MLPStreamReader::readPacket(AVPacket& avPacket)
                                << m_totalTHDSamples * 1000 / m_samplerate << " ms from the start of the track).");
             }
         }
+        // A major sync that is no access unit is stepped over with a packet of no data, which is no unit to count
+        if (avPacket.size == 0)
+            return 0;
         // A gap the source asks for (addTimeGap) begins at the unit that comes at its time, within half a unit
         while (m_samplerate && !m_thdGaps.empty() &&
                (static_cast<double>(m_totalTHDSamples) + m_samples / 2.0) * 1e9 / m_samplerate >=
