@@ -272,11 +272,15 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
     if (m_bluRayMode && !codecName.empty() && codecName[0] == 'A')
         if (auto* audio = dynamic_cast<SimplePacketizerReader*>(codecReader))
         {
+            // The core of audio that has one, which a player without the decoder of the rest plays, is at 48 kHz
             const int freq = audio->getFreq();
-            if (freq > 0 && freq != 48000 && freq != 96000 && freq != 192000)
+            const int coreFreq = audio->getCoreFreq();
+            const bool freqBad = freq > 0 && freq != 48000 && freq != 96000 && freq != 192000;
+            if (freqBad || (coreFreq > 0 && coreFreq != 48000))
                 LTRACE(LT_WARN, 2,
-                       "Warning: track " << streamIndex << " (" << audio->getCodecInfo().displayName
-                                         << ") has a sample rate of " << freq
+                       "Warning: track " << streamIndex << " (" << audio->getCodecInfo().displayName << ") has "
+                                         << (freqBad ? "a sample rate of " : "a core at a sample rate of ")
+                                         << (freqBad ? freq : coreFreq)
                                          << " Hz. A Blu-ray disc carries audio at 48, 96 or 192 kHz only, and "
                                          << "the disc's stream information has no value for this rate, so a player may "
                                             "refuse the track. Convert the audio to 48 kHz before muxing.");

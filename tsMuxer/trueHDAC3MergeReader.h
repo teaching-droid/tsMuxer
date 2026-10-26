@@ -70,6 +70,7 @@ class TrueHDAC3MergeReader final : public MLPStreamReader
     void extractAc3FramesFromAccum();
     void fillDelayedFromQueue();
     void reportCoreCoverage();
+    void checkCoreRate(int coreRate);
 
     int m_mergeAc3Pid;
     bool m_useNewStyleAudioPES;
@@ -109,6 +110,7 @@ class TrueHDAC3MergeReader final : public MLPStreamReader
     // Taken from the first AC-3 frame that parsed, so they are a measurement and not a promise.
     int m_ac3CoreSampleRate;
     uint8_t m_ac3CoreChannels;
+    bool m_coreRateChecked = false;
 
     struct Ac3FrameParser : AC3Codec
     {

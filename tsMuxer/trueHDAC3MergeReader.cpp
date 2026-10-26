@@ -113,6 +113,8 @@ void TrueHDAC3MergeReader::extractAc3FramesFromAccum()
                   "merge-ac3-track: E-AC-3 is not supported as the TrueHD core; use a classic AC-3 track or "
                   "transcode with ffmpeg -c:a ac3 (see tsMuxer --help).")
         }
+        if (m_ac3CoreSampleRate == 0)
+            checkCoreRate(m_ac3Parser.frameSampleRate());
         const int total = flen + skipBytes;
         m_frameBytes += total;  // the core arrives here, and its bytes are counted as read here (setAc3SideData)
         Ac3QueuedFrame q;
@@ -133,6 +135,26 @@ void TrueHDAC3MergeReader::extractAc3FramesFromAccum()
     }
     if (pos > 0)
         m_ac3Accum.erase(m_ac3Accum.begin(), m_ac3Accum.begin() + pos);
+}
+
+// ** THE CORE IS THE SAME AUDIO AT 48 KHZ. ** A player that does not decode TrueHD plays the AC-3 core in its place,
+// and on a Blu-ray that core is AC-3 at 48 kHz under TrueHD at 48, 96 or 192 kHz. An AC-3 at 44.1 or 32 kHz was taken
+// as the core without a word: the disc held 44.1 kHz frames in its 48 kHz TrueHD track, and its clip information a rate
+// code a disc does not have. Such an AC-3 is refused, as E-AC-3 is. TrueHD at a rate that is no disc rate, as 44.1 kHz,
+// is warned about as before and keeps the core it is given. Checked at the first core frame, or at the first TrueHD
+// unit when the rate of the TrueHD is not known before.
+void TrueHDAC3MergeReader::checkCoreRate(const int coreRate)
+{
+    if (m_coreRateChecked || coreRate <= 0 || m_samplerate <= 0)
+        return;
+    m_coreRateChecked = true;
+    if (m_samplerate % 48000 == 0 && coreRate != 48000)
+        THROW(ERR_INVALID_CODEC_FORMAT, (m_mergeAc3Pid ? "merge-ac3-track" : "merge-ac3-file")
+                                            << ": the AC-3 has a sample rate of " << coreRate
+                                            << " Hz, so it cannot be the core of TrueHD at " << m_samplerate
+                                            << " Hz: the core is the same audio at 48 kHz, which a player that does "
+                                               "not decode TrueHD plays. Use an AC-3 at 48 kHz (transcode with "
+                                               "ffmpeg -ar 48000 -c:a ac3).")
 }
 
 void TrueHDAC3MergeReader::fillDelayedFromQueue()
@@ -243,6 +265,7 @@ int TrueHDAC3MergeReader::readPacket(AVPacket& avPacket)
         const int rez = SimplePacketizerReader::readPacket(avPacket);
         if (rez != 0)
             return rez;
+        checkCoreRate(m_ac3CoreSampleRate);
 
         if (m_samplerate)
             avPacket.dts = avPacket.pts = samplesToInternal(m_totalTHDSamples, m_samplerate);
