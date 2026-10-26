@@ -256,12 +256,25 @@ int MLPStreamReader::flushPacket(AVPacket& avPacket)
 {
     // Core frames with nothing after them at the end of the stream: decodeFrame asks for the access unit that would
     // follow, and what was held was written out as a last TrueHD unit. They are left out as the others are (a core
-    // frame as the last unit was kept in the A_MLP output).
+    // frame as the last unit was kept in the A_MLP output). So is a core frame the end of the source cut: it was
+    // written out as a last TrueHD unit of a few hundred bytes that a decoder stops on. It is said, as a cut frame of
+    // any other kind is.
     if (m_tmpBufferLen > 0)
     {
         int core = 0;
-        for (int n; m_tmpBufferLen - core >= 6 && (n = coreFrameSize(m_tmpBuffer.data() + core)) > 0;) core += n;
-        if (core == m_tmpBufferLen)
+        int last = 0;  // where the last core frame begins
+        for (int n; m_tmpBufferLen - core >= 6 && (n = coreFrameSize(m_tmpBuffer.data() + core)) > 0;)
+        {
+            last = core;
+            core += n;
+        }
+        if (core > m_tmpBufferLen)
+        {
+            m_processedBytes += last;
+            leaveOutCutFrame(m_tmpBufferLen - last);
+            m_tmpBufferLen = 0;
+        }
+        else if (core == m_tmpBufferLen)
         {
             m_processedBytes += m_tmpBufferLen;
             m_tmpBufferLen = 0;
