@@ -285,6 +285,15 @@ CheckStreamRez HEVCStreamReader::checkStream(uint8_t* buffer, const int len)
         uint8_t* nextNal = NALUnit::findNALWithStartCode(nal, end, true);
         if (!m_eof && nextNal == end)
             break;
+        // A unit of a layer above the base layer (nuh_layer_id): multi-layer HEVC, which cannot be muxed
+        // (refuseMultiLayer). It is not read: its pictures were counted as pictures of the stream, and the listing
+        // gave hundreds of lines of B-pyramid depth for them.
+        if ((nal[0] & 1) || (nal[1] >> 3))
+        {
+            if (static_cast<int>(nalType) < 32)  // VCL
+                m_multiLayer = true;
+            continue;
+        }
 
         switch (nalType)
         {
@@ -465,6 +474,8 @@ CheckStreamRez HEVCStreamReader::checkStream(uint8_t* buffer, const int len)
                 }
             }
         }
+        if (m_multiLayer)
+            rez.streamDescr += " Multi-layer (MV-HEVC): cannot be muxed";
     }
 
     return rez;
@@ -474,6 +485,8 @@ int HEVCStreamReader::getTSDescriptor(uint8_t* dstBuff, const bool blurayMode, c
 {
     if (m_firstFrame)
         CheckStreamRez rez = checkStream(m_buffer, static_cast<int>(m_bufEnd - m_buffer));
+    if (m_multiLayer)
+        refuseMultiLayer();
 
     // A disc takes HEVC as progressive pictures only: coded as fields, a player cannot decode it
     if (blurayMode && fieldCoded() && !m_fieldsOnDiscSaid)
@@ -1037,6 +1050,19 @@ void HEVCStreamReader::markHdr10ByMasteringSei()
     V3_flags |= HDR10;
 }
 
+// ** MULTI-LAYER HEVC IS REFUSED. ** A picture of a layer above the base layer (nuh_layer_id above 0) belongs to
+// multi-layer HEVC, MV-HEVC, as Dolby Vision profile 20 and stereoscopic 3D HEVC are coded: two views in each access
+// unit. tsMuxeR reads single layer HEVC. Each view was muxed as a picture of its own, with times that could not be
+// right (presented before decoded), at exit 0, and the Dolby Vision descriptor called it profile 8. A transport
+// stream, a disc and Matroska have no way here to carry the second view, so the stream is refused.
+void HEVCStreamReader::refuseMultiLayer() const
+{
+    THROW(ERR_COMMON, "Track " << m_streamIndex
+                               << ": the HEVC stream has more than one layer (multi-layer HEVC, MV-HEVC, as Dolby "
+                                  "Vision profile 20 and 3D HEVC are coded). tsMuxeR can mux single layer HEVC only, "
+                                  "so it is not muxed.")
+}
+
 int HEVCStreamReader::getStreamHDR() const
 {
     const int hdr = (m_hdr->isDVRPU || m_hdr->isDVEL) ? 4 : (m_hdr->isHDR10plus ? 16 : (m_hdr->isHDR10 ? 2 : 1));
@@ -1562,6 +1588,8 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
     while (curPos < m_bufEnd)
     {
         const auto nalType = static_cast<HevcUnit::NalType>((*curPos >> 1) & 0x3f);
+        if (static_cast<int>(nalType) < 32 && ((curPos[0] & 1) || (curPos[1] >> 3)))
+            refuseMultiLayer();  // a picture of a layer above the base layer
         if (isSlice(nalType))
         {
             // The first slice of an access unit must say so (first_slice_segment_in_pic_flag). One that does not, after

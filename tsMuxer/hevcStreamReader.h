@@ -117,6 +117,8 @@ class HEVCStreamReader final : public MPEGStreamReader
     int m_doViBaseLayerPid = 0;  // setDoViBaseLayerPid
     int m_seiParseWarns = 0;
     bool m_hdr10Override = false;  // setHdr10Override
+    bool m_multiLayer = false;     // a picture of a layer above the base layer was seen (refuseMultiLayer)
+    [[noreturn]] void refuseMultiLayer() const;
     HevcSliceHeader* m_slice;
     bool m_firstFrame;
 
