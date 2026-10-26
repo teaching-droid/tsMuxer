@@ -4091,8 +4091,10 @@ int main(int argc, char** argv)
             // --split-chapters needs them here as well, because splitting happens in the muxer.
             // Handing them over changes nothing on its own: TSMuxer keeps the list and only looks
             // at it when that option is on. A source that carries its own chapters, a playlist or
-            // a Matroska, is already covered by the fallback in preinitMux. A cut moves them as it moves the
-            // source's own, here for the split and for the disc's playlist marks alike.
+            // a Matroska, is already covered by the fallback in preinitMux. A cut moves the --custom-chapters list,
+            // with the times of --chapters-file, as it moves the source's own chapters, here for the split and for the
+            // disc's playlist marks alike. A disc's marks come only from this list or --auto-chapters, not from the
+            // source; the window writes the source's marks into --custom-chapters itself.
             muxerManager.moveChaptersByCut(customChapterList, chapterInfo);
             if (!customChapterList.empty())
                 muxerManager.setChapters(customChapterList);
