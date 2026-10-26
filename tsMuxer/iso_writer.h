@@ -286,6 +286,7 @@ class IsoWriter
     static void writeIcbTag(bool namedStream, uint8_t* buffer, FileTypes fileType);
     void writeDescriptors();
     void allocateMetadata();
+    void orderBdmvFolders() const;
     void writeMetadata(int lbn);
 
     FileEntryInfo* mkdir(const char* name, FileEntryInfo* parent = nullptr);

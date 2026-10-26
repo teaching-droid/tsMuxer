@@ -7,6 +7,7 @@
 #include <climits>
 #include <cstring>
 #include <ctime>
+#include <iterator>
 #include <sstream>
 
 #include <fs/systemlog.h>
@@ -1105,8 +1106,46 @@ void IsoWriter::writeMetadata(const int lbn)
     writeEntity(m_systemStreamDir);
 }
 
+// The entries of BDMV and of BDMV/BACKUP are listed in one fixed order: index.bdmv and MovieObject.bdmv,
+// then PLAYLIST, CLIPINF, STREAM, AUXDATA, META, BDJO, JAR and BACKUP. They were listed in the order the folders were
+// made, which depends on the job. Any other entry keeps its place after these. A reader looks a name up, so this
+// changes no file, only the order of the listing and of the entries behind it.
+void IsoWriter::orderBdmvFolders() const
+{
+    static const char* const fileOrder[] = {"INDEX.BDMV", "MOVIEOBJECT.BDMV"};
+    static const char* const folderOrder[] = {"PLAYLIST", "CLIPINF", "STREAM", "AUXDATA",
+                                              "META",     "BDJO",    "JAR",    "BACKUP"};
+    auto rank = [](const FileEntryInfo* entry, const char* const* order, const size_t count)
+    {
+        const std::string name = strToUpperCase(entry->name());
+        for (size_t i = 0; i < count; ++i)
+            if (name == order[i])
+                return i;
+        return count;
+    };
+    auto order = [&](FileEntryInfo* folder)
+    {
+        std::stable_sort(
+            folder->m_files.begin(), folder->m_files.end(), [&](const FileEntryInfo* a, const FileEntryInfo* b)
+            { return rank(a, fileOrder, std::size(fileOrder)) < rank(b, fileOrder, std::size(fileOrder)); });
+        std::stable_sort(
+            folder->m_subDirs.begin(), folder->m_subDirs.end(), [&](const FileEntryInfo* a, const FileEntryInfo* b)
+            { return rank(a, folderOrder, std::size(folderOrder)) < rank(b, folderOrder, std::size(folderOrder)); });
+    };
+    for (FileEntryInfo* bdmv : m_rootDirInfo->m_subDirs)
+    {
+        if (strToUpperCase(bdmv->name()) != "BDMV")
+            continue;
+        order(bdmv);
+        for (FileEntryInfo* backup : bdmv->m_subDirs)
+            if (strToUpperCase(backup->name()) == "BACKUP")
+                order(backup);
+    }
+}
+
 void IsoWriter::allocateMetadata()
 {
+    orderBdmvFolders();
     constexpr int sectorNum = 1;  // the file set descriptor is block 0
     m_systemStreamLBN = allocateEntity(m_rootDirInfo, sectorNum);
     allocateEntity(m_systemStreamDir, m_systemStreamLBN);
