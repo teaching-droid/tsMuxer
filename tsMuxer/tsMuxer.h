@@ -111,6 +111,9 @@ class TSMuxer final : public AbstractMuxer
     [[nodiscard]] bool isInterleaveMode() const;
     [[nodiscard]] std::vector<int32_t> getInterleaveInfo(size_t idx) const;
     [[nodiscard]] bool isSubStream() const { return m_subMode; }
+    // The rate of the clip on a disc, in bit/s: the TS_recording_rate of its clip information and the peak rate of its
+    // SIT, which a disc gives the same value
+    [[nodiscard]] int discRecordingRate() const;
 
     void setPtsOffset(int64_t value);
 
@@ -375,6 +378,7 @@ class TSMuxer final : public AbstractMuxer
     std::vector<std::vector<int32_t>> m_interleaveInfo;  // ssif interliave info, should be written to CLPI
     bool m_masterMode;
     bool m_subMode;
+    bool m_sitHevc = false;  // an HEVC track, for the SIT outside a disc
     PriorityDataInfo m_priorityData;
     int64_t m_timeOffset;
     int64_t m_lastSITPCR;

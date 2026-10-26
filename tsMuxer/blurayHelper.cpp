@@ -552,15 +552,7 @@ bool BlurayHelper::createCLPIFile(TSMuxer* muxer, int clpiNum, bool doLog) const
         if (muxer->isInterleaveMode())
             clpiParser.interleaveInfo = muxer->getInterleaveInfo(i);
 
-        if (muxer->isSubStream())
-            clpiParser.TS_recording_rate = MAX_SUBMUXER_RATE / 8;
-        else
-        {
-            if (is4K())
-                clpiParser.TS_recording_rate = MAX_4K_MUXER_RATE / 8;
-            else
-                clpiParser.TS_recording_rate = MAX_MAIN_MUXER_RATE / 8;
-        }
+        clpiParser.TS_recording_rate = muxer->discRecordingRate() / 8;
 
         clpiParser.number_of_source_packets = packetCount[i];
         clpiParser.presentation_start_time = static_cast<uint32_t>(firstPts[i] / 2);

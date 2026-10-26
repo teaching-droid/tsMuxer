@@ -7,9 +7,11 @@
 #include <fs/textfile.h>
 
 #include "ac3StreamReader.h"
+#include "crc32.h"
 #include "dtsStreamReader.h"
 #include "h264StreamReader.h"
 #include "hevcStreamReader.h"
+#include "iso_writer.h"
 #include "mpegAudioStreamReader.h"
 #include "mpegStreamReader.h"
 #include "muxerManager.h"
@@ -98,7 +100,7 @@ static constexpr int PAT_PID = 0;
 static constexpr int SIT_PID = 0x1f;
 static constexpr int NULL_PID = 8191;
 
-uint8_t DefaultSitTableOne[] = {
+static constexpr uint8_t DefaultSitTableOne[] = {
     0x47, 0x40, 0x1f, 0x10, 0x00, 0x7f, 0xf0, 0x19, 0xff, 0xff, 0xc1, 0x00, 0x00, 0xf0, 0x0a, 0x63, 0x08, 0xc1, 0xd4,
     0xc0, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x01, 0x80, 0x00, 0x03, 0x00, 0x38, 0x6d, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -110,9 +112,10 @@ uint8_t DefaultSitTableOne[] = {
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
-// for v3 Blu-ray, change "peak_rate" and CRC to 128 mbps
-uint8_t SitTableHEVC[] = {0xc4, 0xe1, 0x06, 0xff, 0xff, 0xff, 0xff, 0xff,
-                          0x00, 0x01, 0x80, 0x00, 0x24, 0xc4, 0xba, 0xf0};
+// The peak_rate of the partial transport stream descriptor in the SIT, in units of 400 bit/s, outside a disc: the
+// 48 Mbit/s of the table above, and 127.9 Mbit/s with HEVC, the top of the UHD disc's rates
+static constexpr int SIT_PEAK_RATE = 120000;
+static constexpr int SIT_PEAK_RATE_HEVC = 319750;
 
 TSMuxer::TSMuxer(MuxerManager* owner) : AbstractMuxer(owner)
 {
@@ -525,8 +528,7 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
     else if (codecName == "V_MPEGH/ISO/HEVC")
     {
         StreamType stream_type = StreamType::VIDEO_H265;
-        // Change "peak_rate" to 109 mbps + change descriptor CRC32
-        memcpy(&DefaultSitTableOne[17], SitTableHEVC, 16);
+        m_sitHevc = true;
         // For non-bluray, second Dolby Vision track must be stream_type 06 = private data
         if (!m_bluRayMode && tsStreamIndex == 0x1015 && (V3_flags & BL_TRACK))
             stream_type = StreamType::PRIVATE_DATA;
@@ -2862,8 +2864,25 @@ void TSMuxer::writeSIT()
         m_processedBlockSize += 4;
         m_pcrBits += 4 * 8;
     }
-    memcpy(m_outBuf + m_outBufLen, DefaultSitTableOne, TS_FRAME_SIZE);
-    const auto tsPacket = reinterpret_cast<TSPacket*>(m_outBuf + m_outBufLen);
+    uint8_t* sit = m_outBuf + m_outBufLen;
+    memcpy(sit, DefaultSitTableOne, TS_FRAME_SIZE);
+    // ** ON A DISC THE SIT GIVES THE RATE OF THE CLIP INFORMATION. ** The peak rate of the SIT and the
+    // TS_recording_rate of the clip information are one value on a disc, clip by clip. The SIT was a fixed packet of
+    // 48 Mbit/s, set to 127.9 for any HEVC track, so a disc with HEVC gave 127.9 here and 109 or 48 in its clip
+    // information, and the second view of a 3D disc 48 here and 35 there. Both come from discRecordingRate now. Outside
+    // a disc there is no clip information, and the packet stays as it was. The HEVC value was written into the shared
+    // table, so it reached the outputs that came after it in the same run; it belongs to this muxer now.
+    const int peakRate = m_bluRayMode ? discRecordingRate() / 400 : m_sitHevc ? SIT_PEAK_RATE_HEVC : SIT_PEAK_RATE;
+    sit[17] = static_cast<uint8_t>(0xc0 | (peakRate >> 16));  // 2 reserved bits, 22 bits of peak_rate
+    sit[18] = static_cast<uint8_t>(peakRate >> 8);
+    sit[19] = static_cast<uint8_t>(peakRate);
+    // the CRC of the section, from table_id to the end of the program loop
+    const uint32_t crc = calculateCRC32(sit + 5, 24);
+    sit[29] = static_cast<uint8_t>(crc >> 24);
+    sit[30] = static_cast<uint8_t>(crc >> 16);
+    sit[31] = static_cast<uint8_t>(crc >> 8);
+    sit[32] = static_cast<uint8_t>(crc);
+    const auto tsPacket = reinterpret_cast<TSPacket*>(sit);
     tsPacket->counter = m_sitCnt++;
     m_outBufLen += TS_FRAME_SIZE;
     m_processedBlockSize += TS_FRAME_SIZE;
@@ -3304,5 +3323,12 @@ void TSMuxer::setMuxFormat(const std::string& format)
 }
 
 bool TSMuxer::isInterleaveMode() const { return m_masterMode || m_subMode; }
+
+int TSMuxer::discRecordingRate() const
+{
+    if (m_subMode)
+        return MAX_SUBMUXER_RATE;
+    return is4K() ? MAX_4K_MUXER_RATE : MAX_MAIN_MUXER_RATE;
+}
 
 std::vector<int32_t> TSMuxer::getInterleaveInfo(const size_t idx) const { return m_interleaveInfo[idx]; }
