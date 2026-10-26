@@ -404,6 +404,53 @@ static void addTracksFromLaterClips(vector<CheckStreamRez>& streams, const MPLSP
                      });
 }
 
+// A player offers the tracks of a playlist in the order of its STN table: audio stream 1 is the first primary audio
+// entry, whatever its PID. A mux gives out the PIDs of each kind of track in the order of the meta lines, which the
+// window takes from the listing. The listing gave the tracks by PID, so a disc whose table orders them otherwise was
+// remuxed with another first audio track: English where the disc offers French first. The tracks of each list of the
+// table (primary audio, subtitles, secondary audio and so on) now take the places those tracks had, in the order of
+// the table. Video still comes first, and a track the table does not name keeps its place.
+static void orderAsPlaylist(vector<CheckStreamRez>& streams, const MPLSParser& mpls)
+{
+    // The lists in the order STN_table() stores them; the picture-in-picture subtitles follow the others in one list
+    const int counts[] = {mpls.number_of_primary_video_stream_entries,
+                          mpls.number_of_primary_audio_stream_entries,
+                          mpls.number_of_PG_textST_stream_entries + mpls.number_of_PiP_PG_textST_stream_entries_plus,
+                          mpls.number_of_IG_stream_entries,
+                          mpls.number_of_secondary_audio_stream_entries,
+                          mpls.number_of_secondary_video_stream_entries,
+                          mpls.number_of_DolbyVision_video_stream_entries};
+    // The list and the place in the table of each PID of the play item's clip; the first entry wins, as in
+    // getStreamByPID
+    std::map<int, std::pair<int, size_t>> places;
+    size_t index = 0;
+    for (int list = 0; list < static_cast<int>(std::size(counts)); ++list)
+        for (int k = 0; k < counts[list] && index < mpls.m_streamInfo.size(); ++k, ++index)
+        {
+            const MPLSStreamInfo& entry = mpls.m_streamInfo[index];
+            if (entry.streamPID && mpls.isInMainClip(entry))
+                places.emplace(entry.streamPID, std::make_pair(list, index));
+        }
+
+    for (int list = 0; list < static_cast<int>(std::size(counts)); ++list)
+    {
+        std::vector<size_t> slots;
+        std::vector<CheckStreamRez> tracks;
+        for (size_t i = 0; i < streams.size(); ++i)
+        {
+            const auto itr = places.find(streams[i].trackID);
+            if (itr != places.end() && itr->second.first == list)
+            {
+                slots.push_back(i);
+                tracks.push_back(streams[i]);
+            }
+        }
+        std::stable_sort(tracks.begin(), tracks.end(), [&](const CheckStreamRez& a, const CheckStreamRez& b)
+                         { return places.at(a.trackID).second < places.at(b.trackID).second; });
+        for (size_t k = 0; k < slots.size(); ++k) streams[slots[k]] = std::move(tracks[k]);
+    }
+}
+
 void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSubMode,
                         const vector<LaterClip>* laterClips = nullptr)
 {
@@ -417,6 +464,8 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
     vector<CheckStreamRez>& streams = streamInfo.streams;
     if (mplsParser && laterClips && !laterClips->empty())
         addTracksFromLaterClips(streams, *mplsParser, fileName, *laterClips);
+    if (mplsParser)
+        orderAsPlaylist(streams, *mplsParser);
 
     // A 3D disc's .m2ts names ONE view, so this file may be half a picture. The disc says so
     // in its playlists; say it too, on the video line, rather than leaving someone to find out
