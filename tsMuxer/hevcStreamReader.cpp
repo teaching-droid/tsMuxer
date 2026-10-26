@@ -1022,14 +1022,16 @@ void HEVCStreamReader::warnIfDvHasNoFallback()
 // A mastering display SEI (137) marks the stream as HDR10, unless the VUI of its SPS gives a transfer of SDR video:
 // BT.709 (1), BT.601 (6) or BT.2020 (14, 15). A UHD disc may carry SDR BT.709 video with such a SEI, and marks it
 // as SDR with BT.709 colours; it was marked as HDR10 with BT.2020 colours, in its playlist, its clip information and
-// its index. A stream that gives no transfer (2), or PQ (16) or HLG (18), is HDR10 by the SEI as before: an HDR10
-// stream whose VUI says nothing keeps its marking. Asked again until the SPS is there.
+// its index. Nor does it mark HLG (18) as HDR10: HLG is a high dynamic range of its own, and a player that takes it
+// for HDR10 shows it wrong. It is marked as the same stream without the SEI is, as hdr10-override leaves it. A stream
+// that gives no transfer (2), or PQ (16), is HDR10 by the SEI as before: an HDR10 stream whose VUI says nothing keeps
+// its marking. Asked again until the SPS is there.
 void HEVCStreamReader::markHdr10ByMasteringSei()
 {
     if (!m_hdr->hasMasteringDisplay || m_hdr->isHDR10 || !m_sps)
         return;
     const uint8_t transfer = m_sps->transfer_characteristics;
-    if (transfer == 1 || transfer == 6 || transfer == 14 || transfer == 15)
+    if (transfer == 1 || transfer == 6 || transfer == 14 || transfer == 15 || transfer == 18)
         return;
     m_hdr->isHDR10 = true;
     V3_flags |= HDR10;

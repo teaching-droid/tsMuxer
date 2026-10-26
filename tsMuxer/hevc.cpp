@@ -880,7 +880,7 @@ int HevcHdrUnit::deserialize()
             }
             if (payloadType == 137 && !isHDR10 && !hasMasteringDisplay)  // mastering_display_colour_volume
             {
-                // An SDR stream can carry one too: HEVCStreamReader::markHdr10ByMasteringSei decides with the SPS
+                // SDR and HLG streams carry one too: HEVCStreamReader::markHdr10ByMasteringSei decides with the SPS
                 hasMasteringDisplay = true;
                 // SEI 137 sends the display primaries in the order GREEN, BLUE, RED, not RGB.
                 // Two of these three comments used to name the wrong colour. The values were
