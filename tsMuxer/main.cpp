@@ -293,11 +293,13 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
 // before anything is written. A chapter past the end of the title gets no mark, and counted all the same, 1200
 // chapters a second apart on a 5 s title were refused: when the sources state their length, only the chapters
 // inside it count. A raw stream states none, and then every chapter given counts, as the message says.
-// createMPLSFile refuses more than 999 marks as well, for a length that was stated wrong.
+// createMPLSFile refuses more than 999 marks as well, for a length that was stated wrong. A list with no time at 0 gets
+// a mark at the start of the title as well (createMPLSFile), and it counts.
 static void refuseTooManyMarks(MuxerManager& muxerManager, const vector<double>& chapters)
 {
     constexpr size_t MAX_MARKS = 999;
-    if (chapters.size() <= MAX_MARKS)
+    const size_t startMark = !chapters.empty() && chapters.front() > 0.0 ? 1 : 0;
+    if (chapters.size() + startMark <= MAX_MARKS)
         return;
     const auto seconds = [](const int64_t pts) { return static_cast<double>(pts) / INTERNAL_PTS_FREQ; };
     const double stated = static_cast<double>(muxerManager.statedDurationNano()) / 1e9;
@@ -307,15 +309,17 @@ static void refuseTooManyMarks(MuxerManager& muxerManager, const vector<double>&
     {
         const auto inside = static_cast<size_t>(
             std::count_if(chapters.begin(), chapters.end(), [&](const double t) { return t <= end - start; }));
-        if (inside > MAX_MARKS)
+        if (inside + startMark > MAX_MARKS)
             THROW(ERR_COMMON,
                   "A Blu-ray playlist holds at most 999 chapter marks, and the chapters given within the "
                   "title are "
-                      << inside << ". Give fewer chapters.")
+                      << inside + startMark << (startMark ? ", with the mark at its start" : "")
+                      << ". Give fewer chapters.")
         return;
     }
     THROW(ERR_COMMON, "A Blu-ray playlist holds at most 999 chapter marks, and the chapters given are "
-                          << chapters.size()
+                          << chapters.size() + startMark
+                          << (startMark ? ", with the mark at the start of the title" : "")
                           << ". The length of the title is not known before the mux, as its sources do not state it, "
                              "so chapters past its end count too. Give fewer chapters.")
 }
@@ -1126,7 +1130,10 @@ All parameters in this group start with two dashes:
 --auto-chapters       Insert a chapter every <n> minutes. Used only in BD/AVCHD
                       mode.
 --custom-chapters     A semicolon delimited list of hh:mm:ss.zzz strings,
-                      representing the chapters' start times.
+                      representing the chapters' start times. On a disc the
+                      title always begins with a chapter: when the list has no
+                      time at the start, a mark is added there, so 5;10 gives
+                      three chapters.
 --chapters-file       Read the chapter list from a file instead. Two formats are
                       accepted and are told apart by what is in them: the simple
                       text form, with CHAPTER01= and CHAPTER01NAME= lines, and

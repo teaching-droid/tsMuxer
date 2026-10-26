@@ -671,6 +671,10 @@ bool BlurayHelper::createMPLSFile(TSMuxer* mainMuxer, TSMuxer* subMuxer, int aut
                 (mplsParser.m_marks.empty() || mplsParser.m_marks.back().m_markTime != mark))
                 mplsParser.m_marks.emplace_back(-1, static_cast<uint32_t>(mark));
         }
+        // A title begins with a mark, as Blu-ray titles do: a list whose first time is after the start, such as
+        // 5;10, left the part before it in no chapter. The times given are kept as they are.
+        if (!mplsParser.m_marks.empty() && mplsParser.m_marks.front().m_markTime != mplsParser.IN_time)
+            mplsParser.m_marks.emplace(mplsParser.m_marks.begin(), -1, mplsParser.IN_time);
     }
     // Counted before the mux from the length the sources state (refuseTooManyMarks in main); a length stated wrong
     // still stops here with the reason, not in the playlist's buffer with "Bitstream exception"
