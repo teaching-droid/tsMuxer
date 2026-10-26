@@ -354,6 +354,12 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **An ISO image made over one of the same name left the old .layerbreak.txt beside it** when the new image had no layer break zeros, so the file described a layer break that was no longer there. It is now removed. A job that fails leaves the old image and its file as they were.
 
+* **An ISO image larger than one layer kept the second copy of its file system behind all of its data.** On a full disc of two layers that is next to the centre, where the first copy lies at the start of layer 0, so one damaged place there could take both copies. The second copy is now written at the end of layer 0, far from the first, and the data goes on behind it. Layer 0 ends at the first break of --layer-break-lbn, --disc-size or --disc-capacity, or else at that of a BD-R DL; with a layer break guard the copy ends where the guard begins.
+
+* **Each file in BDMV/BACKUP of an ISO image was written right after the file it copies,** so one damaged place could take both. The copies are now written together after all the other files, unless they take more than 256 MB.
+
+* **In an ISO image, a folder with more entries than one block holds gave the entries in its later blocks a wrong tag location,** as PLAYLIST, CLIPINF or STREAM of a large disc copied with --bdmv-to-iso. Windows and Linux read such images, but a strict check of the file system reported each of those entries. Each entry now gives the block it starts in.
+
 * **A Blu-ray or AVCHD disc made from the command line or a meta file had its AC-3, E-AC-3, DTS, DTS-HD and TrueHD-with-core audio as stream id 0xbd,** although `--help` says a disc gets 0xfd with its extension, as the Blu-ray format has it and as the window always writes it with `--new-audio-pes`. A player that finds the audio by that extension played such a disc without sound. A disc now always gets 0xfd; LPCM keeps 0xbd, and a TS or M2TS that is no disc is written as before. Mux such discs again.
 
 * **A disc from the command line or a meta file had its clock references on the last video track,** for a Dolby Vision disc on the enhancement layer, where the Blu-ray format and the window put them on a PID of their own, 0x1001. A disc now always does. The clip information files of a UHD disc no longer end with an empty extension block, which none of the UHD discs measured has.
