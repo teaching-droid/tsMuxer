@@ -311,43 +311,86 @@ static void setInitialCpbRemovalDelay(SEIUnit& sei, const SPSUnit& sps)
 int H264StreamReader::readPacket(AVPacket& avPacket)
 {
     const int rez = MPEGStreamReader::readPacket(avPacket);
-    countHrdBytes(avPacket);
+    const int added = rez == 0 ? addFieldTiming(avPacket) : 0;
+    countHrdBytes(avPacket, added);
     return rez;
 }
 
 int H264StreamReader::flushPacket(AVPacket& avPacket)
 {
     const int rez = MPEGStreamReader::flushPacket(avPacket);
-    countHrdBytes(avPacket);
+    const int added = addFieldTiming(avPacket);
+    countHrdBytes(avPacket, added);
     return rez;
 }
 
-// A packet holds one NAL unit, from its start code, or a further part of a long one. The NAL HRD counts every byte of
-// the stream, the VCL HRD the bytes of the VCL and filler NAL units, without their start codes (H.264 C.1.1, C-6).
-void H264StreamReader::countHrdBytes(const AVPacket& avPacket)
+// The second field of a frame is an access unit of its own and needs its own picture timing SEI when the SPS has an
+// HRD (H.264 D.2.3). It goes into the packet of the first field, so writeAdditionData, which writes the timing of the
+// first, is not called for it, and the stream's own timing SEI is left out (skipNal). So the second field had none.
+// It is put in front of the first unit of the field that is not its delimiter, removed one tick after the first field
+// (the clock tick is a field) and shown one tick after it. Returns the bytes put in front of the packet.
+int H264StreamReader::addFieldTiming(AVPacket& avPacket)
+{
+    if (!m_needSeiCorrection || m_mvcSubStream || !m_secondField || m_secondFieldTimed || !m_fieldTimingKnown ||
+        !avPacket.data || avPacket.size < 4 || m_lastSliceSPS == UINT_MAX)
+        return 0;
+    const uint8_t* data = avPacket.data;
+    const int startCode = data[0] == 0 && data[1] == 0 && data[2] == 1                   ? 3
+                          : data[0] == 0 && data[1] == 0 && data[2] == 0 && data[3] == 1 ? 4
+                                                                                         : 0;
+    if (startCode == 0 || startCode >= avPacket.size)
+        return 0;
+    const auto nalType = static_cast<NALUnit::NALType>(data[startCode] & 0x1f);
+    if (nalType == NALUnit::NALType::nuDelimiter || nalType == NALUnit::NALType::nuDRD)
+        return 0;
+    m_secondFieldTimed = true;
+
+    const SPSUnit& sps = *m_spsMap.find(m_lastSliceSPS)->second;
+    SEIUnit sei;
+    sei.cpb_removal_delay = m_fieldCpbRemovalDelay;
+    sei.dpb_output_delay = m_fieldDpbOutputDelay;
+    sei.pic_struct = m_fieldPictStruct == 1 ? 2 : m_fieldPictStruct == 2 ? 1 : m_lastPictStruct;
+    hrdAccessUnit(sps, false, m_fieldCpbRemovalDelay, sei, m_hrdBytes, m_hrdVclBytes);  // the field is a unit
+
+    uint8_t seiBuffer[256];
+    const int seiLen = writeSEIMessage(seiBuffer, seiBuffer + sizeof(seiBuffer), sei, SEI_MSG_PIC_TIMING);
+    m_fieldPacket.assign(seiBuffer, seiBuffer + seiLen);
+    m_fieldPacket.insert(m_fieldPacket.end(), avPacket.data, avPacket.data + avPacket.size);
+    avPacket.data = m_fieldPacket.data();
+    avPacket.size = static_cast<int>(m_fieldPacket.size());
+    return seiLen;
+}
+
+// A packet holds one NAL unit, from its start code, or a further part of a long one, after the units addFieldTiming
+// put in front of it (added bytes). The NAL HRD counts every byte of the stream, the VCL HRD the bytes of the VCL and
+// filler NAL units, without their start codes (H.264 C.1.1, C-6).
+void H264StreamReader::countHrdBytes(const AVPacket& avPacket, const int added)
 {
     m_hrdBytesBefore = m_hrdBytes;
     m_hrdVclBytesBefore = m_hrdVclBytes;
     if (!m_needSeiCorrection || !avPacket.data || avPacket.size <= 0)
         return;
-    const uint8_t* data = avPacket.data;
+    const uint8_t* data = avPacket.data + added;
+    const int size = avPacket.size - added;
+    m_hrdBytes += avPacket.size;
+    if (size <= 0)
+        return;
     int startCode = 0;
-    if (avPacket.size >= 4 && data[0] == 0 && data[1] == 0)
+    if (size >= 4 && data[0] == 0 && data[1] == 0)
     {
         if (data[2] == 1)
             startCode = 3;
         else if (data[2] == 0 && data[3] == 1)
             startCode = 4;
     }
-    if (startCode > 0 && startCode < avPacket.size)
+    if (startCode > 0 && startCode < size)
     {
         const auto nalType = static_cast<NALUnit::NALType>(data[startCode] & 0x1f);
         m_hrdVclNal = (nalType >= NALUnit::NALType::nuSliceNonIDR && nalType <= NALUnit::NALType::nuSliceIDR) ||
                       nalType == NALUnit::NALType::nuFillerData;
     }
-    m_hrdBytes += avPacket.size;
     if (m_hrdVclNal)
-        m_hrdVclBytes += avPacket.size - startCode;
+        m_hrdVclBytes += size - startCode;
 }
 
 // Called by writeAdditionData once per access unit, before its SEI units are written: counts the access unit written
@@ -362,12 +405,12 @@ void H264StreamReader::countHrdBytes(const AVPacket& avPacket)
 // its buffer. Before the first buffering period nothing is counted, and an SPS with another HRD or clock tick starts
 // the model again, as the first buffering period does.
 void H264StreamReader::hrdAccessUnit(const SPSUnit& sps, const bool bufferingPeriod, const uint32_t cpbRemovalDelay,
-                                     SEIUnit& sei)
+                                     SEIUnit& sei, const int64_t start, const int64_t vclStart)
 {
     if (m_hrdPending && !m_hrd.empty())
     {
-        const double bytes = static_cast<double>(m_hrdBytesBefore - m_hrdAuStart + m_hrdAuAdded);
-        const double vclBytes = static_cast<double>(m_hrdVclBytesBefore - m_hrdAuVclStart);
+        const double bytes = static_cast<double>(start - m_hrdAuStart + m_hrdAuAdded);
+        const double vclBytes = static_cast<double>(vclStart - m_hrdAuVclStart);
         for (HrdSchedule& s : m_hrd)
         {
             double tai = 0;  // C-2, C-3
@@ -380,8 +423,8 @@ void H264StreamReader::hrdAccessUnit(const SPSUnit& sps, const bool bufferingPer
     m_hrdPending = true;
     m_hrdPendingBp = bufferingPeriod;
     m_hrdPendingFirst = false;
-    m_hrdAuStart = m_hrdBytesBefore;
-    m_hrdAuVclStart = m_hrdVclBytesBefore;
+    m_hrdAuStart = start;
+    m_hrdAuVclStart = vclStart;
     m_hrdAuAdded = 0;
 
     const double tc = sps.time_scale > 0 ? static_cast<double>(sps.num_units_in_tick) / sps.time_scale : 0.0;
@@ -652,7 +695,7 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
         const bool bufferingPeriod = m_lastIFrame && m_lastSliceIDR;
         if (bufferingPeriod)
             setInitialCpbRemovalDelay(bpSei, sps);
-        hrdAccessUnit(sps, bufferingPeriod, m_removalDelay, bpSei);
+        hrdAccessUnit(sps, bufferingPeriod, m_removalDelay, bpSei, m_hrdBytesBefore, m_hrdVclBytesBefore);
         if (m_lastIFrame)
         {
             if (m_lastSliceIDR)
@@ -688,6 +731,11 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
             m_removalDelay = 0;
         m_removalDelay += 2;
         curPos += writeSEIMessage(curPos, dstEnd, sei, SEI_MSG_PIC_TIMING);
+        // for a second field (addFieldTiming): one tick after this picture, from the same buffering period
+        m_fieldCpbRemovalDelay = m_removalDelay - 1;
+        m_fieldDpbOutputDelay = sei.dpb_output_delay;
+        m_fieldPictStruct = sei.pic_struct;
+        m_fieldTimingKnown = true;
     }
     if (m_hrdPending)
         m_hrdAuAdded = static_cast<int>(curPos - dstBuffer) - movedBytes;
@@ -1870,7 +1918,10 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     // units the stream has in front of it are kept there (skipNal)
     const bool secondField = slice.m_field_pic_flag && m_fieldFirst != slice.bottom_field_flag;
     if (secondField && !m_secondField)
+    {
         m_ppsSinceAU = false;  // a PPS read since the frame was written is one of this field, and stays in place
+        m_secondFieldTimed = false;
+    }
     m_secondField = secondField;
 
     if (m_fieldFirst != slice.bottom_field_flag)  // insrease PTS/DTS only for whole frame

@@ -251,8 +251,19 @@ class H264StreamReader final : public MPEGStreamReader
     int64_t m_hrdAuVclStart = 0;
     int m_hrdAuAdded = 0;      // the bytes writeAdditionData put in front of it
     bool m_hrdVclNal = false;  // the packet handed over last is (a part of) a VCL or filler NAL unit
-    void countHrdBytes(const AVPacket& avPacket);
-    void hrdAccessUnit(const SPSUnit& sps, bool bufferingPeriod, uint32_t cpbRemovalDelay, SEIUnit& sei);
+    void countHrdBytes(const AVPacket& avPacket, int added);
+    // start, vclStart: m_hrdBytes and m_hrdVclBytes where the access unit begins
+    void hrdAccessUnit(const SPSUnit& sps, bool bufferingPeriod, uint32_t cpbRemovalDelay, SEIUnit& sei, int64_t start,
+                       int64_t vclStart);
+
+    // The picture timing SEI of the second field of a frame (addFieldTiming), from the one of its first field
+    int addFieldTiming(AVPacket& avPacket);
+    bool m_secondFieldTimed = false;  // the second field read now has its picture timing SEI
+    bool m_fieldTimingKnown = false;
+    uint32_t m_fieldCpbRemovalDelay = 0;
+    uint32_t m_fieldDpbOutputDelay = 0;
+    int8_t m_fieldPictStruct = 0;
+    std::vector<uint8_t> m_fieldPacket;  // that SEI unit and the packet it goes in front of
 
     bool m_spsChangeWarned;
     // Whether the two flags above hold a real stream's values yet, as opposed to the
