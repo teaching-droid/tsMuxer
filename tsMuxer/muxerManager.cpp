@@ -1845,14 +1845,20 @@ int64_t MuxerManager::paddedOutputSize()
         return 0;
     const auto toNano = [](const int64_t pts)
     { return static_cast<int64_t>(static_cast<double>(pts) * 1e9 / static_cast<double>(INTERNAL_PTS_FREQ)); };
-    const int64_t stated = m_metaDemuxer.statedDurationNano();
+    const int64_t stated = m_metaDemuxer.statedDurationNano(true);
     if (stated <= 0)
         return 0;
     const int64_t fromNano = m_cutStart > 0 ? toNano(m_cutStart) : 0;
     const int64_t toEndNano = m_cutEnd > 0 ? (std::min)(toNano(m_cutEnd), stated) : stated;
     if (toEndNano <= fromNano)
         return 0;
-    const double bytes = static_cast<double>(rate) / 8.0 * static_cast<double>(toEndNano - fromNano) / 1e9;
+    // 3D is written as two transport streams, one for each view (preinitMux), and each is padded to the rate
+    int views = 1;
+    if (m_allowStereoMux)
+        for (const StreamInfo& si : m_metaDemuxer.getStreamInfo())
+            if (si.m_isSubStream)
+                views = 2;
+    const double bytes = static_cast<double>(rate) / 8.0 * static_cast<double>(toEndNano - fromNano) / 1e9 * views;
     return static_cast<int64_t>(bytes / 188.0 * 192.0);
 }
 

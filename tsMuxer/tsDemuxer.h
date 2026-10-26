@@ -257,4 +257,7 @@ class TSDemuxer final : public AbstractDemuxer
     bool checkForRealM2ts(const uint8_t* buffer, const uint8_t* end) const;
 };
 
+// The length of a TS or M2TS file in 90 kHz ticks, from the clock at its start and at its end
+int64_t getTSDuration(const char* fileName);
+
 #endif

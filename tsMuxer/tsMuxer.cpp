@@ -314,14 +314,20 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
     // video format code is worked out, which is done again for every table that carries it: on the WIDTH, so 1280x720
     // passed and a 720x480 picture-in-picture warned, and the line came as often as the tables were written. Now on
     // the height of the primary video, once for the track.
+    // The VC-1 reader reads its sequence header only with the first picture (getTSDescriptor reads it into a copy of
+    // its own), so its height here was 0 and 1920x1080 VC-1 got the warning. A video whose size is not known yet is
+    // tested at its first packet (muxPacket), when the reader has read it.
     if (isPrimaryVideo && isV3())
     {
         if (const auto video = dynamic_cast<MPEGStreamReader*>(codecReader))
         {
-            if (video->getStreamHeight() < 1080)
-                LTRACE(LT_WARN, 2, "Warning: video height < 1080 is not standard for V3 Blu-ray.");
-            if (video->getInterlaced())
-                LTRACE(LT_WARN, 2, "Warning: interlaced video is not standard for V3 Blu-ray.");
+            if (video->getStreamHeight() > 0)
+                warnV3Video(video);
+            else
+            {
+                m_v3VideoPending = video;
+                m_v3VideoPendingIndex = streamIndex;
+            }
         }
     }
 
@@ -2272,11 +2278,26 @@ void TSMuxer::finishFileBlock(const int64_t newPts, const int64_t newPCR, const 
 
 bool TSMuxer::blockFull() const { return m_processedBlockSize >= m_interliaveBlockSize; }
 
+void TSMuxer::warnV3Video(MPEGStreamReader* video)
+{
+    const unsigned height = video->getStreamHeight();
+    if (height > 0 && height < 1080)  // 0: never read, said nothing about
+        LTRACE(LT_WARN, 2, "Warning: video height < 1080 is not standard for V3 Blu-ray.");
+    if (video->getInterlaced())
+        LTRACE(LT_WARN, 2, "Warning: interlaced video is not standard for V3 Blu-ray.");
+}
+
 bool TSMuxer::muxPacket(AVPacket& avPacket)
 {
     if (avPacket.data == nullptr || avPacket.size == 0)
     {
         return true;
+    }
+
+    if (m_v3VideoPending && avPacket.stream_index == m_v3VideoPendingIndex)
+    {
+        warnV3Video(m_v3VideoPending);
+        m_v3VideoPending = nullptr;
     }
 
 #ifdef _DEBUG
@@ -2504,9 +2525,17 @@ bool TSMuxer::nextPCRChanceTooLate(const int tsIndex, const int64_t dts) const
 //
 // At a cap below about 256 kbps that can still be too late. PAT, PMT and SIT go out with the PCR and count in its
 // time, and at 150 kbps each packet takes 10 ms, so the eight packets that reach m_pcr_delta and those three tables
-// put the PCRs 0.11 s apart. A PCR is therefore also due when the next packet and the three tables would take the
-// time past 0.1 s, counted as pcrForMaxRate counts it, on the 188 byte packet. It can only come first where the first
-// condition with all three tables would pass 0.1 s. Everywhere else the output is the same as before.
+// put the PCRs 0.11 s apart. A PCR is therefore also due when the next packet and the tables would take the time
+// past 0.1 s, counted as pcrForMaxRate counts it, on the 188 byte packet. It can only come first where the first
+// condition with all the tables would pass 0.1 s. Everywhere else the output is the same as before.
+// The tables are counted in the packets they are written in: the PMT of six or more audio tracks takes two packets or
+// more (m_pmtFrames, four for 32 AC-3 tracks, five for 30 with a video), and counted as one, the PCRs were again up
+// to 0.17 s apart (30 tracks at 91 kbps), and still 0.1053 s at 400 kbps. PAT and SIT are one packet each. They are
+// counted where they are due with the next PCR (with every PCR of an M2TS, every 0.25 s in a TS, the SIT less often),
+// and never as fewer than the three counted before, so where the PMT takes one packet the output is the same as
+// before.
+// Where the tables alone take longer than 0.1 s at the cap, eight packets at 91 kbps, no PCR before them can help:
+// writePAT, writePMT and writeSIT put a PCR between their own packets then (pcrInsideTablesIfDue).
 //
 // 3D written in interleaved blocks was left out of this at first, and there the held clock got a PCR only at a block
 // change or at a picture of the view's video: 0.12 s apart at --maxbitrate=5000 and seconds apart below. Each view is
@@ -2519,8 +2548,31 @@ bool TSMuxer::maxRateClockDue() const
         return false;
     if (static_cast<int64_t>(std::ceil(static_cast<double>(m_pcrBits) * 90000.0 / m_maxBitrate)) >= m_pcr_delta)
         return true;
-    const double packets = static_cast<double>(m_pcrBits) / (m_frameSize * 8) + 4.0;  // the next one, PAT, PMT, SIT
+    // the next PCR comes within PCR_MAX_INTERVAL of the last one, and writePATPMT decides on it so
+    const int64_t nextPCR = m_lastPCR + PCR_MAX_INTERVAL;
+    const bool pmtDue = nextPCR - m_lastPMTPCR >= m_patPmtDelta;
+    const bool sitDue = pmtDue && nextPCR - m_lastSITPCR > SIT_INTERVAL;
+    const int64_t tables = pmtDue ? 1 + m_pmtFrames + (sitDue ? 1 : 0) : 0;
+    // the next one and the tables
+    const double packets =
+        static_cast<double>(m_pcrBits) / (m_frameSize * 8) + static_cast<double>((std::max)(int64_t{4}, 1 + tables));
     return static_cast<int64_t>(std::ceil(packets * TS_PACKET_BITS * 90000.0 / m_maxBitrate)) > PCR_MAX_INTERVAL;
+}
+
+// Before each packet of the tables: a PCR first where this packet would take the time since the last one past 0.1 s
+// at the cap. That happens only where the tables alone take that long, a PMT of many tracks at a very low
+// --maxbitrate; elsewhere maxRateClockDue has put the PCR before the tables, and nothing is written here.
+void TSMuxer::pcrInsideTablesIfDue()
+{
+    if (m_maxBitrate == -1 || m_lastPCR == -1)
+        return;
+    const double packets = static_cast<double>(m_pcrBits) / (m_frameSize * 8) + 1.0;  // with this one
+    if (static_cast<int64_t>(std::ceil(packets * TS_PACKET_BITS * 90000.0 / m_maxBitrate)) <= PCR_MAX_INTERVAL)
+        return;
+    ensureOutBufSpace(static_cast<int>(5 + m_pmtFrames) * m_frameSize);  // this PCR, the tables left and the next PCR
+    writePCR(m_lastPCR);
+    if (m_inplacePending)
+        m_midPesPCR = true;
 }
 
 // The tables and the PCR go in between two packets of a picture. Inside a picture written in place, the PCR that the
@@ -2530,7 +2582,7 @@ void TSMuxer::insertHeldPCRIfDue()
 {
     if (!maxRateClockDue())
         return;
-    ensureOutBufSpace(5 * m_frameSize);
+    ensureOutBufSpace(static_cast<int>(4 + m_pmtFrames) * m_frameSize);  // PAT, the PMT, SIT and the PCR
     // Asked for at the last PCR, so pcrForMaxRate gives exactly the time the data takes at the cap, no later.
     writePATPMT(m_lastPCR + m_pcr_delta);
     writePCR(m_lastPCR);
@@ -2760,6 +2812,7 @@ bool TSMuxer::appendM2TSNullPacketToFile(const int64_t curFileSize, int counter,
 
 void TSMuxer::writePAT()
 {
+    pcrInsideTablesIfDue();
     if (m_m2tsMode)
     {
         m_outBufLen += 4;
@@ -2781,6 +2834,7 @@ void TSMuxer::writePMT()
     const uint8_t* curPos = m_pmtBuffer;
     for (int i = 0; i < m_pmtFrames; i++)
     {
+        pcrInsideTablesIfDue();
         if (m_m2tsMode)
         {
             m_outBufLen += 4;
@@ -2801,6 +2855,7 @@ void TSMuxer::writePMT()
 
 void TSMuxer::writeSIT()
 {
+    pcrInsideTablesIfDue();
     if (m_m2tsMode)
     {
         m_outBufLen += 4;

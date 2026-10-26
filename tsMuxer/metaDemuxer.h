@@ -287,8 +287,10 @@ class METADemuxer final : public AbstractDemuxer
     bool takeBlockAdditions(int streamIndex, int64_t pts, std::vector<uint8_t>& out) override;
     // How long the sources say they run, without reading them: a playlist by its play items, a container by the
     // length it states. A join counts its first file only and an elementary stream states nothing, so this can fall
-    // short or be 0. It is only used to reckon how many parts a --split-duration makes.
-    [[nodiscard]] int64_t statedDurationNano();
+    // short or be 0. It is used to reckon how many parts a --split-duration makes, and in the checks of the clock's
+    // range and of the chapter count. With sumJoins, for the size of a constant bitrate disc, which may not fall short
+    // for a join, a join of files counts as the sum of their lengths, each file opened again for it.
+    [[nodiscard]] int64_t statedDurationNano(bool sumJoins = false);
     int64_t getDemuxedSize() override;
     int addStream(const std::string& codec, const std::string& codecStreamName,
                   const std::map<std::string, std::string>& addParams);

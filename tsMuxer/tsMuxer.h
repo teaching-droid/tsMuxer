@@ -143,6 +143,8 @@ class TSMuxer final : public AbstractMuxer
     [[nodiscard]] inline int calcM2tsFrameCnt() const;
     [[nodiscard]] bool maxRateClockDue() const;
     void insertHeldPCRIfDue();
+    void warnV3Video(MPEGStreamReader* video);
+    void pcrInsideTablesIfDue();
     void refuseLongNonVideoPes() const;
     void noteLateArrival();
     void reportLateArrival() const;
@@ -323,6 +325,9 @@ class TSMuxer final : public AbstractMuxer
     std::map<int, int> m_extIndexToTSIndex;
     uint16_t m_videoTrackCnt;
     int m_firstBaseWidth = 0;  // the width of the first primary video: an enhancement layer is never wider
+    // The primary video of a V3 disc whose picture size is not read yet at intAddStream, tested at its first packet
+    MPEGStreamReader* m_v3VideoPending = nullptr;
+    int m_v3VideoPendingIndex = -1;
     uint16_t m_DVvideoTrackCnt;
     uint16_t m_videoSecondTrackCnt;
     uint16_t m_audioTrackCnt;

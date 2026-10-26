@@ -377,7 +377,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **--maxbitrate no longer replaces the rate of --bitrate.** A constant bitrate disc with the read rate limit, as the window writes it, came out slightly larger. With --maxbitrate at or above --bitrate it is now the same as without it.
 
-* **With a very low --maxbitrate, below about 256 kbps, the clock references could come up to 0.13 s apart,** where the transport stream rules allow 0.1 s, because the tables sent with each one were not counted. They now stay within 0.1 s.
+* **With a very low --maxbitrate, below about 256 kbps, the clock references could come up to 0.13 s apart,** where the transport stream rules allow 0.1 s, because the tables sent with each one were not counted. With many audio tracks the table of the tracks is longer, and they came up to 0.2 s apart, also at 400 kbps. They now stay within 0.1 s.
 
 * **With a small --vbv-len, the pictures of video with B frames reached the decoder after their decoding time,** because the clock started --vbv-len before the first picture shown, not before the first one decoded. It now starts that long before the first decoding time. The picture times stay the same; every clock reference comes earlier by the time the first picture is decoded before it is shown.
 
@@ -403,7 +403,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **With --bitrate, data that arrives after it is due was reported as "VBV buffer overflow",** the opposite of what happens there. The message now says that the stream needs more than the constant bitrate at that point, how late its data arrives, and to give a higher --bitrate.
 
-* **With --bitrate, content that needs more than the rate made the output go above it without a word,** so the output was not at a constant rate there. A warning now says so once, with the highest rate the content needs and where, and asks for a higher --bitrate.
+* **With --bitrate, content that needs more than the rate made the output go above it without a word,** so the output was not at a constant rate there. A warning now says so once, with the highest rate the content needs and where, and asks for a higher --bitrate. The content is measured over whole seconds, so a job shorter than a second, and its last second, are not checked.
 
 * **The warning about pictures that arrive late with --maxbitrate gave their delay to a tenth of a second,** so pictures less than 0.05 s late were said to be "up to 0.0 s late". It is now given in milliseconds below one second, never as 0, and in seconds to a hundredth above. (#51, thanks to @Nemesh64)
 

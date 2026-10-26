@@ -2895,9 +2895,33 @@ std::vector<AVChapter> METADemuxer::getChapters()
     return {};
 }
 
-int64_t METADemuxer::statedDurationNano()
+// The length a container file states, opened on its own: one file of a join.
+static int64_t fileDurationNano(const BufferedReaderManager& readManager, const std::string& fileName)
+{
+    const std::string ext = strToLowerCase(extractFileExt(fileName));
+    if (ext == "ts" || ext == "m2ts" || ext == "mts" || ext == "m2t" || ext == "ssif")
+        return getTSDuration(fileName.c_str()) * 1000000000LL / 90000LL;
+    if (ext == "vob" || ext == "mpg" || ext == "mpeg" || ext == "evo")
+        return getPSDuration(fileName.c_str()) * 1000000000LL / 90000LL;
+    if (ext == "mkv" || ext == "mka" || ext == "mks" || ext == "mk3d" || ext == "webm")
+    {
+        MatroskaDemuxer part(readManager);
+        part.openFile(fileName);
+        return part.getFileDurationNano();
+    }
+    if (ext == "mp4" || ext == "m4v" || ext == "m4a" || ext == "mov")
+    {
+        MovDemuxer part(readManager);
+        part.openFile(fileName);
+        return part.getFileDurationNano();
+    }
+    return 0;  // a raw stream states no length
+}
+
+int64_t METADemuxer::statedDurationNano(const bool sumJoins)
 {
     int64_t longest = 0;
+    std::set<std::string> joinsCounted;
     for (const StreamInfo& stream : m_codecInfo)
     {
         int64_t ticks = 0;  // 45 kHz, as in getChapters
@@ -2910,6 +2934,19 @@ int64_t METADemuxer::statedDurationNano()
                 ticks += static_cast<int64_t>(item.OUT_time) - item.IN_time;
         }
         longest = (std::max)(longest, static_cast<int64_t>(ticks * 1000000000LL / 45000LL));
+        // A join of files ("a.mkv"+"b.mkv") plays them one after the other, so its length is the sum of theirs. Its
+        // demuxer, below, has only the first file open and states that file's length: a CBR disc of three joined
+        // files was estimated at a third of its size and reported as fitting before the mux. Asked for by that
+        // estimate only, as each file is opened again for it.
+        if (!sumJoins || ticks != 0)
+            continue;
+        const std::vector<std::string> files = extractFileList(stream.m_fullStreamName);
+        if (files.size() > 1 && joinsCounted.insert(stream.m_fullStreamName).second)
+        {
+            int64_t sum = 0;
+            for (const std::string& file : files) sum += (std::max)(int64_t{0}, fileDurationNano(m_readManager, file));
+            longest = (std::max)(longest, sum);
+        }
     }
     for (auto& [name, demuxerData] : m_containerReader.m_demuxers)
         if (demuxerData.m_demuxer)

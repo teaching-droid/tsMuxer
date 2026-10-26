@@ -59,4 +59,7 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
     int processPES(uint8_t* buff, uint8_t* end, int headerLen, bool mpeg1, int& afterPesHeader);
 };
 
+// The length of a program stream file in 90 kHz ticks
+int64_t getPSDuration(const char* fileName);
+
 #endif
