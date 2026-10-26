@@ -4074,6 +4074,29 @@ static float parseFadeTime(const char* name, const std::string& text)
     return static_cast<float>(value);
 }
 
+// font-size=, font-border= and line-spacing= of a drawn text subtitle. A font size of 0 or less drew nothing to see
+// and the mux said it had succeeded; a negative border drew the outline wrong and a negative spacing drew the lines
+// over each other; text such as abc was read as 0. All of them in silence. A size is a whole number of pixels from 1; a
+// border and a spacing are numbers from 0.
+static double parseFontNumber(const char* name, const std::string& text, const bool size)
+{
+    const std::string t = trimStr(text);
+    const bool number = !t.empty() && t.size() <= 9 &&
+                        t.find_first_not_of(size ? "0123456789" : "0123456789.") == std::string::npos &&
+                        std::count(t.begin(), t.end(), '.') <= 1 && t.find_first_of("0123456789") != std::string::npos;
+    const double value = number ? strToDouble(t.c_str()) : -1.0;
+    if (!(value >= (size ? 1.0 : 0.0)))
+    {
+        if (size)
+            THROW(ERR_COMMON, name << "=" << text
+                                   << " is not a font size. Write the size in pixels, a whole number from 1, such as "
+                                      "48.")
+        THROW(ERR_COMMON, name << "=" << text << " is not a number of 0 or more, such as "
+                               << (std::string(name) == "line-spacing" ? "1.2." : "2."))
+    }
+    return value;
+}
+
 // 3d-plane=: the number of a plane (offset sequence) of the MVC video, a whole number from 0, or 255 for none, which
 // the window writes for "zero". Read as a byte, 300 became plane 44, abc and 1.5 planes 0 and 1, and -1 no plane, all
 // without a word. Whether the MVC video has the plane is checked once every line is read (checkSubtitlePlanes).
@@ -4617,7 +4640,7 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
                 font.m_name = unquoteStr(addParam.second);
             }
             else if (addParam.first == "font-size")
-                font.m_size = strToInt32(addParam.second.c_str());
+                font.m_size = static_cast<int>(parseFontNumber("font-size", addParam.second, true));
             else if (addParam.first == "font-bold")
                 font.m_opts |= text_subtitles::Font::BOLD;
             else if (addParam.first == "font-italic")
@@ -4633,11 +4656,11 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
                     font.m_color |= 0xff000000u;
             }
             else if (addParam.first == "line-spacing")
-                font.m_lineSpacing = strToFloat(addParam.second.c_str());
+                font.m_lineSpacing = static_cast<float>(parseFontNumber("line-spacing", addParam.second, false));
             else if (addParam.first == "font-charset")
                 font.m_charset = strToInt32(addParam.second.c_str());
             else if (addParam.first == "font-border")
-                font.m_borderWidth = strToFloat(addParam.second.c_str());
+                font.m_borderWidth = static_cast<float>(parseFontNumber("font-border", addParam.second, false));
             else if (addParam.first == "fps")
             {
                 fps = parseFpsValue(addParam.second);

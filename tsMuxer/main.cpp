@@ -1046,7 +1046,7 @@ Additional parameters for SRT tracks:
                     24-bit long numbers (for instance 0xFF00FF) define RGB
                     components, while 32-bit long ones (for instance
                     0x80FF00FF) define ARGB components.
-- font-size         Font size in pixels.
+- font-size         Font size in pixels: a whole number from 1.
 - font-italic       Italic display text.
 - font-bold         Bold display text.
 - font-underline    Underlined text.
@@ -1054,12 +1054,13 @@ Additional parameters for SRT tracks:
 - font-charset      Font character set (numeric). Allows selection of a specific
                     character set for font rendering.
 - bottom-offset     Distance from the lower edge while displaying text.
-- font-border       Outline width.
+- font-border       Outline width: a number from 0.
 - fadein-time       Time in seconds for smooth subtitle appearance, for
                     example 0.25.
 - fadeout-time      Time in seconds for smooth subtitle disappearance, for
                     example 0.25.
-- line-spacing      Interval between subtitle lines. Default value is 1.0.
+- line-spacing      Interval between subtitle lines: a number from 0. Default
+                    value is 1.0.
 - keep-text         Keep the subtitles as text instead of drawing them into
                     pictures: each one is copied with its text, its tags and
                     its own start and end. For Matroska output, and for a

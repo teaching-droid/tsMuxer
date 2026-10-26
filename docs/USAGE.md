@@ -245,17 +245,17 @@ Parameter         | Description
 ---               | --- 
 font-name         | Font name to render. 
 font-color        | Font color, defined as a hexadecimal or decimal number. 24-bit long numbers (for instance 0xFF00FF) define RGB components, while 32-bit long ones (for instance 0x80FF00FF) define ARGB components. 
-font-size         | Font size in pixels. 
+font-size         | Font size in pixels: a whole number from 1. 
 font-italic       | Italic display text. 
 font-bold         | Bold display text. 
 font-underline    | Underlined text. 
 font-strike-out   | Strikethrough text.
 font-charset      | Font character set (numeric). Allows selection of a specific character set for font rendering.
 bottom-offset     | Distance from the lower edge while displaying text.
-font-border       | Outline width. 
+font-border       | Outline width: a number from 0. 
 fadein-time       | Time in seconds for smooth subtitle appearance, for example 0.25.
 fadeout-time      | Time in seconds for smooth subtitle disappearance, for example 0.25.
-line-spacing      | Interval between subtitle lines. Default value is 1.0.
+line-spacing      | Interval between subtitle lines: a number from 0. Default value is 1.0.
 keep-text         | Keep the subtitles as text instead of drawing them into pictures. Each subtitle is copied into the track as text, with its tags and its own start and end, and the font and picture parameters are not needed. For Matroska output, and for a demux, which then writes an SRT file (UTF-8, numbered from 1); ASS, SSA and WebVTT subtitles from a Matroska file are written as .ass, .ssa and .vtt files instead, in their own form. Other outputs draw the subtitles as usual, with a warning, which needs `video-width`, `video-height` and `fps`.
 save-srt          | `save-srt="name.srt"`: while the subtitles are drawn into pictures, also write them as text to that SRT file (UTF-8, numbered from 1), as a demux with `keep-text` would write them. Ignored, with a warning, on a line with `keep-text`. In the window: "Also save drawn SRT subtitles as .srt files" on the Subtitles tab.
 fonts-dir         | `fonts-dir="folder"`: a folder of fonts that ASS and SSA subtitles drawn with libass may use, besides the fonts attached to the file and the fonts installed in the system (see below). In the window: "Fonts folder for ASS and SSA subtitles" on the Subtitles tab.
