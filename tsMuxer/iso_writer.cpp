@@ -612,7 +612,7 @@ void FileEntryInfo::addExtent(const Extent& extent)
     else
     {
         const int lastLBN = m_extents.rbegin()->lbnPos + static_cast<int>(m_extents.rbegin()->size / SECTOR_SIZE);
-        if (lastLBN == extent.lbnPos && m_extents.rbegin()->size + extent.size < MAX_EXTENT_SIZE)
+        if (lastLBN == extent.lbnPos && m_extents.rbegin()->size + extent.size <= MAX_EXTENT_SIZE)
             m_extents.rbegin()->size += extent.size;
         else
             m_extents.push_back(extent);
@@ -645,13 +645,26 @@ int32_t FileEntryInfo::write(const uint8_t* data, const int32_t len)
 
 int32_t FileEntryInfo::writeImpl(const uint8_t* data, const int32_t len)
 {
+    // An extent is filled up to MAX_EXTENT_SIZE exactly, and the rest of the write begins the next one. A write that
+    // would have passed it used to begin the next extent itself, so the extents of a large file came out one write
+    // short of the size: 0x3FE00000 with the writes of a mux.
+    if (m_owner->m_lastWritedObjectID == m_objectId && !m_extents.empty())
+    {
+        const int64_t room = MAX_EXTENT_SIZE - m_extents.rbegin()->size;
+        if (room > 0 && len > room)
+        {
+            const auto head = static_cast<int32_t>(room);
+            writeImpl(data, head);
+            return head + writeImpl(data + head, len - head);
+        }
+    }
     if (m_owner->m_lastWritedObjectID != m_objectId)
     {
         m_extents.emplace_back(m_owner->absoluteSectorNum(), len);
     }
     else
     {
-        if (m_extents.rbegin()->size + len < MAX_EXTENT_SIZE)
+        if (m_extents.rbegin()->size + len <= MAX_EXTENT_SIZE)
             m_extents.rbegin()->size += len;
         else
         {

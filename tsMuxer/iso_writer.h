@@ -9,7 +9,9 @@
 static constexpr int SECTOR_SIZE = 2048;
 static constexpr int ALLOC_BLOCK_SIZE = 1024 * 64;
 static constexpr int METADATA_START_ADDR = 1024 * 640 / SECTOR_SIZE;
-static constexpr int MAX_EXTENT_SIZE = 0x40000000;
+// The longest extent a file is cut into: the largest multiple of both 64 KB and the 6144 byte aligned unit of a stream
+// that is below 1 GB, where the 30 bit length of an extent ends
+static constexpr int MAX_EXTENT_SIZE = 0x3FFF0000;
 static constexpr uint32_t NEXT_EXTENT = 0xc0000000;
 
 static constexpr int64_t META_BLOCK_PER_DATA = 16 * 1000000000ll;
