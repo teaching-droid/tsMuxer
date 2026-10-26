@@ -55,6 +55,10 @@ class DTSStreamReader final : public SimplePacketizerReader
     [[nodiscard]] DTSHD_SUBTYPE getDTSHDMode() const { return m_hdType; }
     void setNewStyleAudioPES(const bool value) { m_useNewStyleAudioPES = value; }
     int getFreq() override { return hd_pi_sample_rate ? hd_pi_sample_rate : pi_sample_rate; }
+    // The core's rate where a DTS-HD part above it has its own. With down-to-dts only the core is written, so the
+    // higher rate is not named either.
+    int getCoreFreq() override { return m_isCoreExists && hd_pi_sample_rate ? pi_sample_rate : 0; }
+    int getAltFreq() override { return m_downconvertToDTS && getCoreFreq() ? getCoreFreq() : getFreq(); }
     uint8_t getChannels() override { return hd_pi_channels ? hd_pi_channels : pi_channels; }
     void applyDiscoveryData(const StreamDiscoveryData& data) override;
     void fillDiscoveryData(StreamDiscoveryData& data) override;

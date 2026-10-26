@@ -42,6 +42,9 @@ class TrueHDAC3MergeReader final : public MLPStreamReader
     [[nodiscard]] bool hasAc3Core() const { return m_ac3CoreSampleRate > 0; }
     [[nodiscard]] int ac3CoreSampleRate() const { return m_ac3CoreSampleRate; }
     [[nodiscard]] uint8_t ac3CoreChannels() const { return m_ac3CoreChannels; }
+    // The playlist and the clip information name the core's rate with the lossless one, as for a TrueHD track
+    // from a disc
+    int getCoreFreq() override { return m_ac3CoreSampleRate; }
 
     void setNewStyleAudioPES(bool value) { m_useNewStyleAudioPES = value; }
 

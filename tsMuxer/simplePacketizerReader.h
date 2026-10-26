@@ -52,6 +52,10 @@ class SimplePacketizerReader : public AbstractStreamReader
     // times go by. 0 where it is not known yet.
     double frameDurationInternal() { return getFrameDuration(); }
     virtual int getAltFreq() { return getFreq(); }
+    // The sample rate of a core that the stream carries under a part at a higher rate, for the sample rate code of
+    // the playlist and the clip information: a DTS core under DTS-HD, an AC-3 core merged under TrueHD. 0 when there
+    // is none, or when getFreq() is already the core's rate. getFreq() stays the rate the frames are timed by.
+    virtual int getCoreFreq() { return 0; }
     virtual uint8_t getChannels() = 0;
     void setStretch(const double value) { m_stretch = value; }
     void addTimeGap(int64_t atNs, int64_t gapNs) override;
