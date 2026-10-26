@@ -394,18 +394,27 @@ float toCurve(const float value)
     return result;
 }
 
+int64_t TextToPGSConverter::objectDecodeTime(const double pixels)
+{
+    return static_cast<int64_t>(ceil(90000.0 * pixels / PIXEL_DECODING_RATE));
+}
+
+int64_t TextToPGSConverter::windowDrawTime(const double pixels)
+{
+    return static_cast<int64_t>(ceil(90000.0 * pixels / PIXEL_COMPOSITION_RATE));
+}
+
 uint8_t* TextToPGSConverter::doClear(const double atTimeSec, uint32_t& dstBufSize)
 {
     // The same three segments that end a text in doConvert, for a text whose end could not be
     // written with it because the composition meant to replace it turned out to draw nothing
-    const double outTimePTS = alignToGrid(atTimeSec) * 90000.0;
     uint8_t* curPos = m_pgsBuffer;
     palette_update_flag = false;
-    const int64_t pts = llround(outTimePTS);
-    const int64_t dts = llround(outTimePTS - m_lastWindowsTransferTime);
-    curPos += composePresentationSegment(curPos, CompositionMode::Finish, pts, dts - 90, m_lastWindowTop, true, false);
-    curPos += composeWindowDefinition(curPos, dts, dts - 90, m_lastWindowTop, m_lastWindowHeight);
-    curPos += composeEnd(curPos, pts - 90, pts - 90);
+    const int64_t pts = llround(alignToGrid(atTimeSec) * 90000.0);
+    const int64_t dts = pts - m_lastWindowDrawTime - 1;
+    curPos += composePresentationSegment(curPos, CompositionMode::Finish, pts, dts, m_lastWindowTop, true, false);
+    curPos += composeWindowDefinition(curPos, pts - m_lastWindowDrawTime, dts, m_lastWindowTop, m_lastWindowHeight);
+    curPos += composeEnd(curPos, dts, dts);
     dstBufSize = static_cast<uint32_t>(curPos - m_pgsBuffer);
     return m_pgsBuffer;
 }
@@ -471,15 +480,21 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
     float opacityOutDelta = 1.0F / static_cast<float>(fadeOutFrames);
     float opacity = opacityInDelta;
 
-    const double decodedObjectSize = (m_maxLine - m_minLine + 1) * m_videoWidth;
-    const double compositionDecodeTime = 90000.0 * decodedObjectSize / PIXEL_DECODING_RATE + 0.999;
-    const double windowsTransferTime = 90000.0 * decodedObjectSize / PIXEL_COMPOSITION_RATE + 0.999;
-
-    const double PLANEINITIALIZATIONTIME = 90000.0 * (m_videoWidth * m_videoHeight) / PIXEL_COMPOSITION_RATE + 0.999;
-    const double PRESENTATION_DTS_DELTA = PLANEINITIALIZATIONTIME + windowsTransferTime;
+    // ** THE TIMES OF THE PGS DECODER MODEL. ** The plane is cleared while the object is decoded, then the window is
+    // drawn: the composition is decoded that long before it is shown, and the window is drawn in the time before it. A
+    // display set without an object (a fade step, or the clear at the end) takes the drawing of the window and one
+    // tick, and ends with its decoding. Each time is rounded up on its own. They were rounded up and then to the
+    // nearest tick, so that a time without a fraction (297 ticks for a window of 1920x55) came out a tick longer and
+    // the window began before the composition allowed; the end of a display set without an object came at 90 ticks
+    // before its presentation, after the decoding time.
+    const double objectPixels = static_cast<double>(m_maxLine - m_minLine + 1) * m_videoWidth;
+    const int64_t decodeTime = objectDecodeTime(objectPixels);
+    const int64_t drawTime = windowDrawTime(objectPixels);
+    const int64_t decodeDuration =
+        FFMAX(windowDrawTime(static_cast<double>(m_videoWidth) * m_videoHeight), decodeTime) + drawTime;
     m_lastWindowTop = objectWindowTop;
     m_lastWindowHeight = objectWindowHeight;
-    m_lastWindowsTransferTime = windowsTransferTime;
+    m_lastWindowDrawTime = drawTime;
 
     // 1. show text
     uint8_t* curPos = m_pgsBuffer;
@@ -487,13 +502,12 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
     m_paletteID = 0;
     m_paletteVersion = 0;
     int64_t pts = llround(inTimePTS);
-    int64_t dts = llround(inTimePTS - PRESENTATION_DTS_DELTA);
+    int64_t dts = pts - decodeDuration;
 
     curPos += composePresentationSegment(curPos, CompositionMode::Start, pts, dts, objectWindowTop, true, forced);
-    curPos += composeWindowDefinition(curPos, llround(inTimePTS - windowsTransferTime), dts, objectWindowTop,
-                                      objectWindowHeight);
+    curPos += composeWindowDefinition(curPos, pts - drawTime, dts, objectWindowTop, objectWindowHeight);
     curPos += composePaletteDefinition(buildPalette(toCurve(opacity)), curPos, dts, dts);
-    const int64_t odfPTS = llround(inTimePTS - PRESENTATION_DTS_DELTA + compositionDecodeTime);
+    const int64_t odfPTS = dts + decodeTime;
     curPos += composeObjectDefinition(curPos, odfPTS, dts, m_minLine, m_maxLine, true);
     curPos += composeEnd(curPos, odfPTS, odfPTS);
 
@@ -512,7 +526,7 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
         uint8_t* p = curPos;
         p += composePresentationSegment(p, CompositionMode::Update, pts, dts, objectWindowTop, true, forced);
         p += composePaletteDefinition(buildPalette(toCurve(1.0F)), p, dts, dts);
-        p += composeEnd(p, pts - 90, pts - 90);
+        p += composeEnd(p, dts, dts);
         m_composition_number = savedNumber;
         palette_update_flag = savedFlag;
         if (p - curPos > 0 && p - curPos <= FADE_STEP_MAX)
@@ -572,10 +586,10 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
         palette_update_flag = true;
         m_paletteVersion++;
         pts = llround(updateTime);
-        dts = llround(updateTime - windowsTransferTime);
+        dts = pts - drawTime - 1;
         curPos += composePresentationSegment(curPos, CompositionMode::Update, pts, dts, objectWindowTop, true, forced);
         curPos += composePaletteDefinition(buildPalette(toCurve(opacity)), curPos, dts, dts);
-        curPos += composeEnd(curPos, pts - 90, pts - 90);
+        curPos += composeEnd(curPos, dts, dts);
 
         updateTime = alignToGrid(updateTime + fpsPts);
         opacity += opacityInDelta;
@@ -590,10 +604,10 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
         palette_update_flag = true;
         m_paletteVersion++;
         pts = llround(updateTime);
-        dts = llround(updateTime - windowsTransferTime);
+        dts = pts - drawTime - 1;
         curPos += composePresentationSegment(curPos, CompositionMode::Update, pts, dts, objectWindowTop, true, forced);
         curPos += composePaletteDefinition(buildPalette(toCurve(opacity)), curPos, dts, dts);
-        curPos += composeEnd(curPos, pts - 90, pts - 90);
+        curPos += composeEnd(curPos, dts, dts);
 
         updateTime = alignToGrid(updateTime + fpsPts);
         opacity -= opacityOutDelta;
@@ -605,11 +619,10 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
     if (hide)
     {
         pts = llround(outTimePTS);
-        dts = llround(outTimePTS - windowsTransferTime);
-        curPos +=
-            composePresentationSegment(curPos, CompositionMode::Finish, pts, dts - 90, objectWindowTop, true, false);
-        curPos += composeWindowDefinition(curPos, dts, dts - 90, objectWindowTop, objectWindowHeight);
-        curPos += composeEnd(curPos, pts - 90, pts - 90);
+        dts = pts - drawTime - 1;
+        curPos += composePresentationSegment(curPos, CompositionMode::Finish, pts, dts, objectWindowTop, true, false);
+        curPos += composeWindowDefinition(curPos, pts - drawTime, dts, objectWindowTop, objectWindowHeight);
+        curPos += composeEnd(curPos, dts, dts);
     }
 
     assert(curPos - m_pgsBuffer < PG_BUFFER_SIZE);

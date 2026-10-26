@@ -13,8 +13,6 @@
 #include "vod_common.h"
 
 using text_subtitles::CompositionMode;
-using text_subtitles::PIXEL_COMPOSITION_RATE;
-using text_subtitles::PIXEL_DECODING_RATE;
 using text_subtitles::TextToPGSConverter;
 using text_subtitles::YUVQuad;
 #ifndef _WIN32
@@ -100,20 +98,18 @@ void BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
     // and the object are where the picture's lines are, across the full width.
     const uint16_t top = m_pgs->minLine();
     const uint16_t lines = m_pgs->renderedHeight();
-    const double decodedObjectSize = static_cast<double>(lines) * m_width;
-    const double compositionDecodeTime = 90000.0 * decodedObjectSize / PIXEL_DECODING_RATE + 0.999;
-    const double windowsTransferTime = 90000.0 * decodedObjectSize / PIXEL_COMPOSITION_RATE + 0.999;
-    const double planeInitializationTime =
-        90000.0 * (static_cast<double>(m_width) * m_height) / PIXEL_COMPOSITION_RATE + 0.999;
-    const double presentationDtsDelta = planeInitializationTime + windowsTransferTime;
+    const double objectPixels = static_cast<double>(lines) * m_width;
+    const int64_t decodeTime = TextToPGSConverter::objectDecodeTime(objectPixels);
+    const int64_t drawTime = TextToPGSConverter::windowDrawTime(objectPixels);
+    const int64_t decodeDuration =
+        FFMAX(TextToPGSConverter::windowDrawTime(static_cast<double>(m_width) * m_height), decodeTime) + drawTime;
     m_pgs->m_lastWindowTop = top;
     m_pgs->m_lastWindowHeight = lines;
-    m_pgs->m_lastWindowsTransferTime = windowsTransferTime;
+    m_pgs->m_lastWindowDrawTime = drawTime;
 
-    const double inPts = inSec * 90000.0;
-    const int64_t pts = llround(inPts);
-    const int64_t dts = llround(inPts - presentationDtsDelta);
-    const int64_t odfPts = llround(inPts - presentationDtsDelta + compositionDecodeTime);
+    const int64_t pts = llround(inSec * 90000.0);
+    const int64_t dts = pts - decodeDuration;
+    const int64_t odfPts = dts + decodeTime;
     m_pgs->palette_update_flag = false;
     m_pgs->m_paletteID = 0;
     m_pgs->m_paletteVersion = 0;
@@ -123,7 +119,7 @@ void BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
     std::vector<uint8_t> buf(static_cast<size_t>(m_pgs->m_rleLen) + (m_pgs->m_rleLen / 65000 + 1) * 32 + 2048);
     uint8_t* cur = buf.data();
     cur += m_pgs->composePresentationSegment(cur, CompositionMode::Start, pts, dts, top, true, forced);
-    cur += m_pgs->composeWindowDefinition(cur, llround(inPts - windowsTransferTime), dts, top, lines);
+    cur += m_pgs->composeWindowDefinition(cur, pts - drawTime, dts, top, lines);
     cur += m_pgs->composePaletteDefinition(m_pgs->m_paletteByColor, cur, dts, dts);
     cur += m_pgs->composeObjectDefinition(cur, odfPts, dts, m_pgs->minLine(), m_pgs->maxLine(), true);
     cur += m_pgs->composeEnd(cur, odfPts, odfPts);

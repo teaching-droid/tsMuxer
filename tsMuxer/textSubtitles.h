@@ -74,7 +74,11 @@ class TextToPGSConverter  //: public TextSubtitlesRenderWin32
     // The window of the last text drawn, for a clear that follows it as a display set of its own
     uint16_t m_lastWindowTop = 0;
     uint16_t m_lastWindowHeight = 0;
-    double m_lastWindowsTransferTime = 0;
+    int64_t m_lastWindowDrawTime = 0;  // in 90 kHz ticks
+    // The times of the PGS decoder model in 90 kHz ticks, each rounded up on its own: decoding an object of so many
+    // pixels, and drawing or clearing a window of so many
+    static int64_t objectDecodeTime(double pixels);
+    static int64_t windowDrawTime(double pixels);
     uint16_t m_videoWidth;
     uint16_t m_videoHeight;
     double m_videoFps;
