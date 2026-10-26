@@ -185,7 +185,7 @@ struct FileEntryInfo
     int64_t m_fileSize;
     uint8_t* m_sectorBuffer;
     int m_sectorBufferSize;
-    bool m_subMode;              // sub file in stereo interleaved mode
+    bool m_subMode;              // a view of a 3D mux, written in pieces in turn with the other view (TSMuxer)
     bool m_deferred = false;     // a BDMV/BACKUP copy: held in m_deferredData until IsoWriter::writeDeferredFiles
     bool m_closed = false;       // close() has run
     bool m_leadsPieces = false;  // a stream whose first piece followed no open stream: the first view of a 3D pair

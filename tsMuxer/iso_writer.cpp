@@ -2157,17 +2157,19 @@ void IsoWriter::placeMirrorBefore(const int64_t endLbn)
         placeMirrorHere();
 }
 
-// Called before the first write of each piece of a file. The pieces of a 3D pair are written in turn, and the mirror
-// has to fall between two pairs: cutting a piece would leave one view with a piece more than the other, and the .ssif
-// could not be made from them. So the stream that leads the pairs puts the mirror in front of a pair that could reach
-// its place. A 2D stream leads its own pieces, and only a file that starts close to the mirror is moved behind it.
+// Called before the first write of each piece of a file. The pieces of the two views of a 3D mux are written in turn,
+// and the mirror has to fall between two pairs: cutting a piece would leave one view with a piece more than the other,
+// and the .ssif could not be made from them. So the view that leads the pairs puts the mirror in front of a pair that
+// could reach its place. Any other file is cut where its data reaches the place, and moves nothing before that: the
+// look ahead put the mirror in front of a 2D stream that only started within that distance of it, also when the data
+// of the image ended long before the end of layer 0.
 void IsoWriter::beforePiece(FileEntryInfo* entry)
 {
     if (entry->m_fileSize == 0 && entry->m_extents.empty())
         entry->m_leadsPieces =
             !(m_lastWritedEntry && m_lastWritedEntry != entry &&
               m_lastWritedEntry->m_fileType == FileTypes::RealtimeFile && !m_lastWritedEntry->m_closed);
-    if (entry->m_fileType != FileTypes::RealtimeFile || !entry->m_leadsPieces || m_pairsPlaced)
+    if (!entry->m_subMode || !entry->m_leadsPieces || m_pairsPlaced)
         return;
     placeMirrorBefore(imageLBA() + MIRROR_LOOKAHEAD_BYTES / SECTOR_SIZE);
 }

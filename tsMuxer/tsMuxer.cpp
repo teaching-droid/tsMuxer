@@ -3268,6 +3268,10 @@ void TSMuxer::openDstFile()
 #endif
     if (!m_muxFile->open(m_outFileName.c_str(), File::ofWrite, systemFlags))
         THROW(ERR_CANT_CREATE_FILE, "Can't create file " << m_outFileName)
+    // In an image the pieces of the two views of a 3D mux have to stay whole (IsoWriter::beforePiece)
+    if (isInterleaveMode())
+        if (const auto isoFile = dynamic_cast<ISOFile*>(m_muxFile))
+            isoFile->setSubMode(true);
 }
 
 vector<int64_t> TSMuxer::getFirstPts() const
