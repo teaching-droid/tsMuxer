@@ -48,6 +48,10 @@ class TrueHDAC3MergeReader final : public MLPStreamReader
 
     void setNewStyleAudioPES(bool value) { m_useNewStyleAudioPES = value; }
 
+    // Where the core starts against the TrueHD, in the internal clock: the start of the AC-3 track of merge-ac3-track
+    // less that of the TrueHD track, in their Matroska file
+    void setCoreStart(int64_t start);
+
     void setAc3SideData(const uint8_t* data, uint32_t len);
     void setAc3SideEof() { m_ac3SideEof = true; }
     [[nodiscard]] bool ac3SideEof() const { return m_ac3SideEof; }
@@ -93,6 +97,9 @@ class TrueHDAC3MergeReader final : public MLPStreamReader
     // so the two clocks are compared exactly (see readPacket).
     int64_t m_demuxedTHDTimeForAc3;
     int64_t m_nextAc3Time;
+    int64_t m_coreStart = 0;  // setCoreStart
+    int64_t m_coreDelayLeft =
+        0;  // the TrueHD time still to go out before the first core frame of a core that starts later
     int m_ac3SamplesPerSyncFrame;
     int m_pendingEmitSamples;
     int m_pendingEmitSampleRate;

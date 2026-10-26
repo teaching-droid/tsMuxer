@@ -36,6 +36,21 @@ TrueHDAC3MergeReader::TrueHDAC3MergeReader(const std::map<std::string, std::stri
 
 TrueHDAC3MergeReader::~TrueHDAC3MergeReader() { reportCoreCoverage(); }
 
+// ** THE CORE KEEPS ITS OWN START. ** The AC-3 track of merge-ac3-track was timed from 0, from the first TrueHD unit,
+// whatever its start in the Matroska file: a core that starts 500 ms after its TrueHD came 500 ms early against the
+// TrueHD and the picture, where the same track muxed as a track of its own keeps its start. Its frames now keep the
+// distance to the TrueHD that the file gives them, and a core that starts later goes out when the TrueHD has reached
+// its start, so that each core frame lies by the TrueHD units of its time.
+void TrueHDAC3MergeReader::setCoreStart(const int64_t start)
+{
+    m_coreStart = m_nextAc3Time = start;
+    if (start > 0)
+    {
+        m_coreDelayLeft = start;
+        m_thdDemuxWaitAc3 = false;
+    }
+}
+
 const CodecInfo& TrueHDAC3MergeReader::getCodecInfo() { return trueHDCodecInfo; }
 
 void TrueHDAC3MergeReader::setAc3SideData(const uint8_t* data, const uint32_t len)
@@ -271,6 +286,14 @@ int TrueHDAC3MergeReader::readPacket(AVPacket& avPacket)
             avPacket.dts = avPacket.pts = samplesToInternal(m_totalTHDSamples, m_samplerate);
 
         m_totalTHDSamples += m_samples;
+        if (m_coreDelayLeft > 0)
+        {
+            if (m_samplerate > 0)
+                m_coreDelayLeft -= samplesToInternal(m_samples, m_samplerate);
+            if (m_coreDelayLeft <= 0)
+                m_thdDemuxWaitAc3 = true;
+            return 0;
+        }
         // A core frame is due when the lossless audio sent since the last one has PLAYED for as long
         // as one core frame plays. Counting samples compared two clocks: a 96 or 192 kHz TrueHD unit
         // holds 80 or 160 samples, so the 1,536 of a 48 kHz core frame were reached two or four times
@@ -378,7 +401,8 @@ void TrueHDAC3MergeReader::reportCoreCoverage()
 
     const double losslessSec = static_cast<double>(m_totalTHDSamples) / m_samplerate;
     const double coreSec = static_cast<double>(m_nextAc3Time) / INTERNAL_PTS_FREQ;
-    const double coreFrameSec = coreSec / m_ac3FramesEmitted;
+    const double coreFrameSec =
+        static_cast<double>(m_nextAc3Time - m_coreStart) / INTERNAL_PTS_FREQ / m_ac3FramesEmitted;
     if (losslessSec - coreSec <= coreFrameSec)
         return;
 

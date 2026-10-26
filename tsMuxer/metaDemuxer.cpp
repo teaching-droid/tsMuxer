@@ -2149,6 +2149,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         streamInfo.m_lang = langFromFileName(fileList[0]);
         LTRACE(LT_INFO, 2, "Applying language " << streamInfo.m_lang << " taken from the file name");
     }
+    int64_t mergeAc3StartNs = 0;  // where the AC-3 track of merge-ac3-track starts against the TrueHD track
     if (dataReader == &m_containerReader)
     {
         // Ask the container about the track, exactly as the FPS block above asks it for a frame rate: its language
@@ -2195,6 +2196,21 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         {
             std::map<int32_t, TrackInfo> trackList;
             factsDemuxer->getTrackList(trackList);
+            // Each track's start against the first video track (srcstartdelay), of the AC-3 track merged into this
+            // TrueHD track by merge-ac3-track as of the TrueHD track itself (TrueHDAC3MergeReader::setCoreStart)
+            if (const auto merge = addParams.find("merge-ac3-track");
+                merge != addParams.end() && !merge->second.empty())
+            {
+                const auto startOf = [&](const int32_t id) -> int64_t
+                {
+                    const auto t = trackList.find(id);
+                    if (t == trackList.end())
+                        return 0;
+                    const auto d = t->second.m_srcParams.find("srcstartdelay");
+                    return d == t->second.m_srcParams.end() ? 0 : strtoll(d->second.c_str(), nullptr, 10);
+                };
+                mergeAc3StartNs = startOf(strToInt32(merge->second.c_str())) - startOf(pid);
+            }
             // A line naming a track the file does not have, or one its reader leaves out, made an empty output: the
             // job went on, said it was successful, and warned that the codec on the line was not the codec of the
             // track. It stops here, before anything is written. Only for Matroska and MP4, whose headers list every
@@ -2585,6 +2601,20 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                 THROW(ERR_CANT_OPEN_STREAM, "Can't open merge-ac3-track stream: " << fileList[0])
             streamInfo.m_mergeAc3ReaderId = r2;
             streamInfo.m_mergeAc3DataReader = &m_containerReader;
+            if (mergeAc3StartNs != 0)
+            {
+                mergeReader->setCoreStart(
+                    static_cast<int64_t>(static_cast<double>(mergeAc3StartNs) * INTERNAL_PTS_FREQ / 1e9 +
+                                         (mergeAc3StartNs > 0 ? 0.5 : -0.5)));
+                LTRACE(
+                    LT_INFO, 2,
+                    "Track " << mergeReader->mergeAc3TrackPid() << " of " << unquoteStr(fileList[0]) << " starts "
+                             << doubleToStr(
+                                    static_cast<double>(mergeAc3StartNs > 0 ? mergeAc3StartNs : -mergeAc3StartNs) / 1e6,
+                                    3)
+                             << " ms " << (mergeAc3StartNs > 0 ? "after" : "before") << " track " << pid
+                             << ", so its AC-3 core frames are moved by that much against the TrueHD.");
+            }
         }
         else if (haveFile)
         {
