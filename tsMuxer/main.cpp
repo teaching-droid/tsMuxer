@@ -66,9 +66,13 @@ static constexpr char EXCEPTION_ERR_MSG[] =
     }                                         \
     }
 // A meta file saved in UTF-16, as some editors save text, was refused as "Invalid codec format" with the raw bytes of
-// its first line. It is said as what it is, before anything reads the file.
+// its first line, and a folder given as the meta file was read as an empty one and said "No tracks selected". Both are
+// said as what they are, before anything reads the file.
 static void refuseUnreadableMeta(const std::string& metaFileName)
 {
+    std::error_code ec;
+    if (std::filesystem::is_directory(fsPath(metaFileName), ec))
+        THROW(ERR_COMMON, metaFileName << " is a folder, not a meta file.")
     File file;
     uint8_t bom[2] = {};
     if (!file.open(metaFileName.c_str(), File::ofRead) || file.read(bom, 2) != 2)
