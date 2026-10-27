@@ -877,6 +877,8 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     if (readedBytes < TS_FRAME_SIZE)
     {
         discardSize += readedBytes;
+        if (readedBytes > 0 && m_endInsidePacket == 0)
+            m_endInsidePacket = static_cast<int>(readedBytes);
         return 0;
     }
 
@@ -909,6 +911,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         while (m_curPos <= lastFrameAddr && *m_curPos != 0x47)
         {
             discardSize++;
+            m_noPacketBytes++;
             m_curPos++;
         }
         if (m_curPos > lastFrameAddr)
@@ -1546,6 +1549,19 @@ void TSDemuxer::reportDamage()
     m_damageReported = true;
     const auto where = [](const int64_t at)
     { return at < 0 ? std::string() : ", the first at " + floatToTime(static_cast<double>(at) / 90000.0, '.'); };
+    // A rest of a packet at the start of a file cut at any byte is passed over without a word; more than two packets
+    // of no packet at all are a damaged part, which a TS cut off or overwritten with zeros lost without a word
+    if (m_noPacketBytes > 2 * 192)
+        LTRACE(LT_WARN, 2,
+               "Warning: " << m_noPacketBytes << " bytes of \"" << m_streamName
+                           << "\" are not TS packets and were passed over, as in a damaged part of the file or one "
+                              "overwritten with zeros. What the tracks held there is lost, and the frames around it "
+                              "may be damaged.");
+    if (m_endInsidePacket > 0)
+        LTRACE(LT_WARN, 2,
+               "Warning: \"" << m_streamName << "\" ends " << m_endInsidePacket
+                             << " bytes into a TS packet: the file was cut off, so the last frames of its tracks may "
+                                "be damaged.");
     for (const auto& [pid, damage] : m_damage)
     {
         if (damage.packets > 0 && damage.scrambled == damage.packets)

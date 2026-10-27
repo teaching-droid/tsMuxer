@@ -307,6 +307,10 @@ class TSDemuxer final : public AbstractDemuxer
     bool m_damageReported = false;
     std::map<int, PidDamage> m_damage;
     std::map<int, int64_t> m_damagePts;  // the last PES time of each such track, for where the damage starts
+    // Bytes that are no TS packet, passed over to find the next sync byte (a part of the file overwritten with zeros or
+    // lost), and the bytes of a packet the file ends inside (a file cut off): said at the end with the other damage.
+    int64_t m_noPacketBytes = 0;
+    int m_endInsidePacket = 0;
     void noteDamage(const TSPacket* tsPacket, int pid);
     void reportDamage();
 
