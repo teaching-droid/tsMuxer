@@ -717,7 +717,7 @@ void CLPIParser::composeProgramInfo(BitStreamWriter& writer, const bool isSsExt)
         }
     }
 
-    if (isSsExt && writer.getBitsCount() % 32 != 0)
+    if (isSsExt && (writer.getBitsCount() - m_extensionDataStart) % 32 != 0)
         writer.putBits(16, 0);
 
     *lengthPos = my_htonl(writer.getBitsCount() / 8 - beforeCount);
@@ -929,7 +929,7 @@ void CLPIParser::composeCPI(BitStreamWriter& writer, const bool isCPIExt)
     writer.putBits(4, 1);   // CPI_type
     composeEP_map(writer, isCPIExt);
 
-    if (isCPIExt && writer.getBitsCount() % 32 != 0)
+    if (isCPIExt && (writer.getBitsCount() - m_extensionDataStart) % 32 != 0)
         writer.putBits(16, 0);
 
     *lengthPos = my_htonl(writer.getBitsCount() / 8 - beforeCount);
@@ -1179,6 +1179,7 @@ void CLPIParser::composeExtentInfo(BitStreamWriter& writer)
 {
     const auto lengthPos = UnalignedPtr<uint32_t>(writer.getBuffer() + writer.getBitsCount() / 8);
     const int beforeCount = writer.getBitsCount() / 8;
+    m_extensionDataStart = writer.getBitsCount();
 
     writer.putBits(32, 0);  // length
 
@@ -1218,7 +1219,7 @@ void CLPIParser::composeExtentInfo(BitStreamWriter& writer)
         writer.putBits(32, 0);  // skip extent dataLen
     }
 
-    if (writer.getBitsCount() % 32)
+    if ((writer.getBitsCount() - m_extensionDataStart) % 32)
         writer.putBits(16, 0);
 
     lengthPos[1] =
@@ -1337,23 +1338,25 @@ int CLPIParser::compose(uint8_t* buffer, const int bufferSize)
     writer.putBits(32, 0);                              // extent info
     for (int i = 0; i < 3; i++) writer.putBits(32, 0);  // reserved_for_future_use
 
+    // The blocks follow each other without a gap, as the format has it: the format pads between blocks in 16-bit words
+    // only, and padding to 32 bits left 2 bytes free after a block whose length was not a multiple of 4.
     composeClipInfo(writer);
-    while (writer.getBitsCount() % 32 != 0) writer.putBits(8, 0);
+    while (writer.getBitsCount() % 16 != 0) writer.putBits(8, 0);
     *sequenceInfo_pos = my_htonl(writer.getBitsCount() / 8);
     composeSequenceInfo(writer);
-    while (writer.getBitsCount() % 32 != 0) writer.putBits(8, 0);
+    while (writer.getBitsCount() % 16 != 0) writer.putBits(8, 0);
 
     *programInfo_pos = my_htonl(writer.getBitsCount() / 8);
     composeProgramInfo(writer, false);
-    while (writer.getBitsCount() % 32 != 0) writer.putBits(8, 0);
+    while (writer.getBitsCount() % 16 != 0) writer.putBits(8, 0);
 
     *CPI_pos = my_htonl(writer.getBitsCount() / 8);
     composeCPI(writer, false);
-    while (writer.getBitsCount() % 32 != 0) writer.putBits(8, 0);
+    while (writer.getBitsCount() % 16 != 0) writer.putBits(8, 0);
 
     *clipMark_pos = my_htonl(writer.getBitsCount() / 8);
     composeClipMark(writer);
-    while (writer.getBitsCount() % 32 != 0) writer.putBits(8, 0);
+    while (writer.getBitsCount() % 16 != 0) writer.putBits(8, 0);
 
     // A UHD clip (version 0300) has ExtensionData only where there is some, as on the UHD discs seen, none of which has
     // the empty one written for every clip. A Blu-ray clip keeps the empty one, as most Blu-ray discs seen have it.
@@ -1361,7 +1364,7 @@ int CLPIParser::compose(uint8_t* buffer, const int bufferSize)
     {
         *extentInfo_pos = my_htonl(writer.getBitsCount() / 8);
         composeExtentInfo(writer);
-        while (writer.getBitsCount() % 32 != 0) writer.putBits(8, 0);
+        while (writer.getBitsCount() % 16 != 0) writer.putBits(8, 0);
     }
 
     writer.flushBits();

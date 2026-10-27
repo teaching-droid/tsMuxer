@@ -550,6 +550,10 @@ class CLPIParser
     void composeEP_map(BitStreamWriter& writer, bool isSSExt);
     std::vector<BluRayCoarseInfo> buildCoarseInfo(M2TSStreamInfo& streamInfo) const;
     void composeEP_map_for_one_stream_PID(BitStreamWriter& writer, M2TSStreamInfo& streamInfo) const;
+
+    // where ExtensionData starts, in bits: its own blocks are aligned to 32 bits counted from there, since it can start
+    // on any 16-bit boundary of the file
+    unsigned m_extensionDataStart = 0;
 };
 
 struct MPLSStreamInfo : M2TSStreamInfo
