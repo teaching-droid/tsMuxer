@@ -3038,6 +3038,7 @@ class KeepOldOutput
         }
         m_dir = dir;
         m_oldPrefix = stem + ".";
+        m_ext = ext;
         m_newPrefix = stem + ".tsmuxer-new-" + std::to_string(processId()) + ".";
         if (strToLowerCase(ext) == ".iso")
             m_imageSideFile = ext.substr(1) + ".layerbreak.txt";
@@ -3164,10 +3165,14 @@ class KeepOldOutput
             // beside it, and described a disc that was no longer there. It goes once the new image is in place.
             const bool newSideFile =
                 !m_imageSideFile.empty() && std::filesystem::exists(m_dir / u8path(m_newPrefix + m_imageSideFile), ec);
+            std::vector<std::string> written;
+            bool split = false;
             for (const auto& p : ownFiles())
             {
                 const std::string name = pathStr(p.filename());
-                const std::filesystem::path to = m_dir / u8path(m_oldPrefix + name.substr(m_newPrefix.size()));
+                written.push_back(m_oldPrefix + name.substr(m_newPrefix.size()));
+                split = split || isSplitPart(written.back());
+                const std::filesystem::path to = m_dir / u8path(written.back());
                 std::filesystem::rename(p, to, ec);
                 if (ec)
                     throw runtime_error("The new output is complete as " + pathStr(p) + ", but it could not replace " +
@@ -3175,6 +3180,11 @@ class KeepOldOutput
             }
             if (!m_imageSideFile.empty() && !newSideFile)
                 std::filesystem::remove(m_dir / u8path(m_oldPrefix + m_imageSideFile), ec);
+            // A split job over the parts of an earlier one replaced parts 1 to n, and parts n+1 and on stayed beside
+            // them without a word: the folder held one set of parts made by two jobs. Those parts go, and only parts
+            // named as this job names its own (name.split.<number>.ext).
+            if (split)
+                removeStaleParts(written);
         }
         m_committed = true;
     }
@@ -3201,6 +3211,43 @@ class KeepOldOutput
 #else
         return static_cast<unsigned long>(getpid());
 #endif
+    }
+    // name.split.<number>.ext, with the name and extension of this output
+    bool isSplitPart(const std::string& name) const
+    {
+        const std::string prefix = m_oldPrefix + "split.";
+        if (!startsWithName(name, prefix) || name.size() <= prefix.size() + m_ext.size() ||
+            !startsWithName(name.substr(name.size() - m_ext.size()), m_ext))
+            return false;
+        const std::string number = name.substr(prefix.size(), name.size() - prefix.size() - m_ext.size());
+        return std::all_of(number.begin(), number.end(), [](const char c) { return c >= '0' && c <= '9'; });
+    }
+    void removeStaleParts(const std::vector<std::string>& written) const
+    {
+        std::vector<std::filesystem::path> stale;
+        std::error_code ec;
+        for (const auto& e : std::filesystem::directory_iterator(m_dir, ec))
+        {
+            const std::string name = pathStr(e.path().filename());
+            if (!e.is_regular_file(ec) || !isSplitPart(name))
+                continue;
+            if (std::none_of(written.begin(), written.end(),
+                             [&](const std::string& w) { return w.size() == name.size() && startsWithName(name, w); }))
+                stale.push_back(e.path());
+        }
+        std::sort(stale.begin(), stale.end());
+        for (const auto& p : stale)
+        {
+            std::filesystem::remove(p, ec);
+            if (ec)
+                LTRACE(LT_WARN, 2,
+                       "Warning: " << pathStr(p) << ", a part of an earlier output that this job did not write, could "
+                                   << "not be removed: " << ec.message());
+            else
+                LTRACE(LT_INFO, 2,
+                       "Removed " << pathStr(p) << ", a part of an earlier output that this job did not "
+                                  << "write.");
+        }
     }
     std::vector<std::filesystem::path> ownFiles() const
     {
@@ -3342,6 +3389,7 @@ class KeepOldOutput
     std::filesystem::path m_dir;
     std::filesystem::path m_tmp;
     std::string m_oldPrefix;
+    std::string m_ext;  // the output's extension with its dot, as the user gave it
     std::string m_newPrefix;
     std::string m_imageSideFile;  // "iso.layerbreak.txt" when the file is an ISO image, after either prefix
 };
