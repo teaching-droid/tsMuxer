@@ -1599,6 +1599,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         for (size_t i = 0; i < fileList.size(); ++i)
         {
             const string& fileName = fileList[i];
+            if (const std::string hint = discSourceHint(fileName); !hint.empty())
+                THROW(ERR_INVALID_CODEC_FORMAT, "Can't use " << fileName << " as a source: " << hint << ".")
             if (!tmpFile.open(fileName.c_str(), File::ofRead))
                 THROW(ERR_INVALID_CODEC_FORMAT, "Can't open file: " << fileName << openFailureReason(fileName))
             int64_t tmpSize = 0;
@@ -3710,6 +3712,31 @@ const Iso639_1 ISO639_1[] = {
 
 // why, as far as it can be told: the message named the file and nothing else, also for a file that is there and has a
 // path too long for the system
+// An image of a disc or a disc folder given as a source: an .iso was read as raw video ("Bad SEI detected", then a
+// picture "larger than 256 MiB"), and a folder as an empty file on Linux, and nothing said what to give instead. The
+// text says what the name is and what to give; empty for any other name.
+std::string discSourceHint(const std::string& fileName)
+{
+    std::error_code ec;
+    const std::filesystem::path path(std::u8string(fileName.begin(), fileName.end()));
+    if (std::filesystem::is_directory(path, ec))
+    {
+        std::string name = fileName;
+        while (!name.empty() && (name.back() == '/' || name.back() == '\\')) name.pop_back();
+        const std::string last = strToUpperCase(name.substr(name.find_last_of("/\\") + 1));
+        if (last == "BDMV" || std::filesystem::is_directory(path / "BDMV", ec))
+            return "it is a Blu-ray folder. Give the playlist of the title as the source, BDMV/PLAYLIST/<number>.mpls, "
+                   "or use --bdmv-to-iso to write the folder into an ISO image";
+        if (last == "VIDEO_TS" || std::filesystem::is_directory(path / "VIDEO_TS", ec))
+            return "it is a DVD folder. Give the .vob files of the title in VIDEO_TS as the source";
+        return "it is a folder. Give a file as the source";
+    }
+    if (strToLowerCase(extractFileExt(fileName)) == "iso" && std::filesystem::is_regular_file(path, ec))
+        return "it is a disc image, which is not read as a source. Open (mount) the image and give the playlist of "
+               "the title, BDMV/PLAYLIST/<number>.mpls of a Blu-ray or the .vob files of VIDEO_TS of a DVD";
+    return {};
+}
+
 std::string openFailureReason(const std::string& fileName)
 {
     std::error_code ec;
@@ -3717,7 +3744,7 @@ std::string openFailureReason(const std::string& fileName)
     if (!std::filesystem::exists(path, ec) && !ec)
         return " (it does not exist)";
     if (std::filesystem::is_directory(path, ec))
-        return " (it is a folder)";
+        return " (" + discSourceHint(fileName) + ")";
 #ifdef _WIN32
     if (fileName.size() >= 260)
         return " (its path has " + std::to_string(fileName.size()) +

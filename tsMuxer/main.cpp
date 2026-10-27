@@ -4306,6 +4306,8 @@ int main(int argc, char** argv)
                 // script read "no tracks". It is said why, as the mux says it, and the exit is an error.
                 File file;
                 std::error_code ec;
+                if (const std::string hint = discSourceHint(str); !hint.empty())
+                    THROW(ERR_FILE_NOT_FOUND, "Can't list " << str << ": " << hint << ".")
                 if (std::filesystem::is_directory(fsPath(str), ec) || !file.open(argv[1], File::ofRead))
                     THROW(ERR_FILE_NOT_FOUND, "Can't open file: " << str << openFailureReason(str))
                 file.close();

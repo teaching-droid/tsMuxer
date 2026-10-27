@@ -231,6 +231,8 @@ bool isLanguageCode(const std::string& lang);
 std::string iso639FromBcp47(const std::string& tag);
 // Why a file could not be opened, as far as it can be told, in brackets after a space: " (it does not exist)"
 std::string openFailureReason(const std::string& fileName);
+// What a disc image or a disc folder given as a source is, and what to give instead; empty for other names
+std::string discSourceHint(const std::string& fileName);
 
 // ** THE DEFAULT OF --playlist-clips, IN THIS ONE PLACE. ** true: a Blu-ray playlist that plays only a part of a clip
 // gets only that part (--playlist-clips=played). false: every clip of a playlist is muxed whole, from its first picture
