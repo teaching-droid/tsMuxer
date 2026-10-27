@@ -219,7 +219,7 @@ CheckStreamRez MPEG2StreamReader::checkStream(uint8_t* buffer, int len)
     if (spsFound && pictures > 0 && sliceFound && fewDamaged)
     {
         rez.codecInfo = mpeg2CodecInfo;
-        rez.streamDescr = m_sequence.getStreamDescr();
+        rez.streamDescr = m_sequence.getStreamDescr(isMpeg1());
         // A picture coding extension in a lost packet can say repeat_first_field by chance: with damage, pulldown is
         // only named where at least one picture in 16 repeats a field (3:2 pulldown repeats one in every two). Raw
         // MPEG-2 without pulldown, 40 percent of its blocks overwritten, was listed "(pulldown)" from one such picture.

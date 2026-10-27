@@ -201,9 +201,21 @@ uint8_t* MPEGSequenceHeader::deserializeDisplayExtension(BitStreamReader& bitRea
     return skipProcessedBytes(bitReader);
 }
 
-std::string MPEGSequenceHeader::getStreamDescr() const
+// An MPEG-1 stream has no sequence extension, so no profile and no interlaced coding: it was listed as "Profile:
+// Unspecified. Resolution: 352:288i" (mpeg1 true: said as what it is, progressive)
+std::string MPEGSequenceHeader::getStreamDescr(const bool mpeg1) const
 {
     std::ostringstream rez;
+    if (mpeg1)
+    {
+        rez << "MPEG-1 video. Resolution: " << width << ':' << height << "p. Frame rate: ";
+        const double fps = getFrameRate();
+        if (fps > 0)
+            rez << fps;
+        else
+            rez << "not found";
+        return rez.str();
+    }
     rez << "Profile: ";
     switch (profile)
     {

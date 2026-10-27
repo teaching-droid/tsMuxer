@@ -130,7 +130,7 @@ class MPEGSequenceHeader final : public MPEGRawDataHeader
     [[nodiscard]] double getFrameRate() const;
     void setFrameRate(uint8_t* buff, double fps);
     static void setAspectRatio(uint8_t* buff, VideoAspectRatio ar);
-    [[nodiscard]] std::string getStreamDescr() const;
+    [[nodiscard]] std::string getStreamDescr(bool mpeg1 = false) const;
 };
 
 class MPEGGOPHeader final : public MPEGHeader
