@@ -18,7 +18,6 @@
 
 #include "ac3StreamReader.h"
 #include "chapterFile.h"
-#include "dtsStreamReader.h"
 #include "h264StreamReader.h"
 #include "hevcStreamReader.h"
 #include "iso_writer.h"
@@ -768,31 +767,6 @@ void MuxerManager::checkOtherTracks(const vector<StreamInfo>& ci) const
             LTRACE(LT_ERROR, 2,
                    "Warning! Dolby Vision Double Layer Single Tracks are not standard for BD disks, the disk will "
                    "not play in a Blu-ray player.");
-        // The secondary audio of a disc is E-AC-3 or DTS Express, as the usage says. An AC-3 or LPCM track marked
-        // secondary was put among the secondary audio of the playlist with its own coding type, without a word.
-        for (const StreamInfo& si : ci)
-        {
-            AbstractStreamReader* reader = si.m_streamReader;
-            if (reader == nullptr || si.m_codec.empty() || si.m_codec[0] != 'A' || !reader->isSecondary())
-                continue;
-            const auto* ac3 = dynamic_cast<const AC3StreamReader*>(reader);
-            const auto* dts = dynamic_cast<const DTSStreamReader*>(reader);
-            const bool eac3 = ac3 && ac3->isEAC3() && !ac3->isTrueHD() && !ac3->getDownconvertToAC3();
-            const bool dtsExpress = dts && dts->getDTSHDMode() == DTSStreamReader::DTSHD_SUBTYPE::DTS_SUBTYPE_EXPRESS;
-            if (eac3 || dtsExpress)
-                continue;
-            const auto trackParam = si.m_addParams.find("track");
-            const std::string what = ac3                                       ? (ac3->isTrueHD() ? "TrueHD" : "AC-3")
-                                     : dts                                     ? "DTS that is not DTS Express"
-                                     : si.m_codec == lpcmCodecInfo.programName ? "LPCM"
-                                                                               : si.m_codec;
-            LTRACE(LT_ERROR, 2,
-                   "Warning! The secondary audio "
-                       << (trackParam != si.m_addParams.end() ? "track " + trackParam->second + " of " : "")
-                       << si.m_streamName << " is " << what
-                       << ", and the secondary audio of a Blu-ray disc is E-AC-3 (DD+) or DTS Express only, so a "
-                          "Blu-ray player may not play it. Leave out \"secondary\" to mux it as primary audio.");
-        }
     }
     // An AVCHD player plays H.264 video with AC-3 or LPCM sound. The codecs a Blu-ray player plays beyond those were
     // taken for an AVCHD disc without a word (decided: a warning, as a Blu-ray disc gets for the codecs it lacks).
