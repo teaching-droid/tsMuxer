@@ -23,6 +23,11 @@ enum class SourceFormat
 // The text in UTF-8. A UTF-16 or UTF-32 code unit that is no character becomes U+FFFD, and *replaced, when given, says
 // whether one did.
 std::string toUtf8(const uint8_t* start, size_t numBytes, SourceFormat srcFormat, bool* replaced = nullptr);
+// Valid UTF-8: a byte that does not begin or continue a valid sequence (RFC 3629) becomes U+FFFD. Returns whether a
+// byte was replaced.
+bool makeValidUtf8(std::string& text);
+// A text from the meta file in valid UTF-8, read in the active code page on Windows. Returns whether it was not UTF-8.
+bool metaTextToUtf8(std::string& text);
 }  // namespace UtfConverter
 
 #endif

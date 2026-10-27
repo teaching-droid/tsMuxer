@@ -12,6 +12,7 @@
 #include "convertUTF.h"
 #include "fs/systemlog.h"
 #include "matroskaParser.h"
+#include "utf8Converter.h"
 #include "vodCoreException.h"
 #include "vod_common.h"
 
@@ -474,64 +475,6 @@ int SRTStreamReader::flushPacket(AVPacket& avPacket)
     return 0;
 }
 
-// Valid UTF-8, which a Matroska text track must hold: a byte that does not begin or continue a valid
-// sequence (RFC 3629) becomes U+FFFD. The text has already been converted from the file's encoding;
-// this catches a file whose encoding was judged from its first part and changes later, and a file
-// that is not UTF-8 on a system with no code page to fall back to. Returns whether a byte was replaced.
-static bool makeValidUtf8(std::string& text)
-{
-    std::string out;
-    bool replaced = false;
-    size_t i = 0;
-    while (i < text.size())
-    {
-        const auto b = static_cast<uint8_t>(text[i]);
-        size_t len = 0;
-        uint8_t lo = 0x80;  // the allowed range of the second byte
-        uint8_t hi = 0xBF;
-        if (b < 0x80)
-            len = 1;
-        else if (b >= 0xC2 && b <= 0xDF)
-            len = 2;
-        else if (b >= 0xE0 && b <= 0xEF)
-        {
-            len = 3;
-            if (b == 0xE0)
-                lo = 0xA0;  // no overlong form
-            else if (b == 0xED)
-                hi = 0x9F;  // no surrogate
-        }
-        else if (b >= 0xF0 && b <= 0xF4)
-        {
-            len = 4;
-            if (b == 0xF0)
-                lo = 0x90;
-            else if (b == 0xF4)
-                hi = 0x8F;  // nothing above U+10FFFF
-        }
-        bool ok = len > 0 && i + len <= text.size();
-        for (size_t k = 1; ok && k < len; ++k)
-        {
-            const auto c = static_cast<uint8_t>(text[i + k]);
-            ok = k == 1 ? c >= lo && c <= hi : c >= 0x80 && c <= 0xBF;
-        }
-        if (ok)
-        {
-            out.append(text, i, len);
-            i += len;
-            continue;
-        }
-        out += static_cast<char>(0xEF);
-        out += static_cast<char>(0xBF);
-        out += static_cast<char>(0xBD);
-        replaced = true;
-        ++i;
-    }
-    if (replaced)
-        text.swap(out);
-    return replaced;
-}
-
 void SRTStreamReader::startTextPacket(AVPacket& avPacket)
 {
     avPacket.codec = this;
@@ -576,7 +519,7 @@ bool SRTStreamReader::prepareTextCue(TextCue& cue, const int64_t nextStartMs, in
                                      << " ends when it starts or earlier. It is never shown, so it is left out.");
         return false;
     }
-    if (makeValidUtf8(cue.text) && m_invalidUtf8Cues++ == 0)
+    if (UtfConverter::makeValidUtf8(cue.text) && m_invalidUtf8Cues++ == 0)
         LTRACE(LT_WARN, 2,
                "Warning: track " << m_streamIndex << ": the subtitle at " << floatToTime(cue.inTime, ',')
                                  << " holds bytes that are not valid UTF-8, written as the replacement "

@@ -40,6 +40,7 @@ extern "C"
 #include "simplePacketizerReader.h"
 #include "trueHDAC3MergeReader.h"
 #include "tsMuxer.h"  // HDR10_metadata, filled from the HEVC SEI while parsing
+#include "utf8Converter.h"
 #include "vc1StreamReader.h"
 #include "videoCopyStreamReader.h"
 #include "vodCoreException.h"
@@ -361,7 +362,13 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
 
     // A name with a comma in it has to be quoted in the meta, and the quotes stayed in the name.
     if (const auto nm = params.find("track-name"); nm != params.end())
+    {
         track.name = unquoteStr(nm->second);
+        if (UtfConverter::metaTextToUtf8(track.name))
+            LTRACE(LT_WARN, 2,
+                   "Warning: the track-name= of track " << streamIndex << " is not UTF-8. It is written as \""
+                                                        << track.name << "\". Save the meta file as UTF-8.");
+    }
     else if (const auto src = params.find("srcname"); src != params.end())
         track.name = src->second;  // the source's own name, which a remux used to drop
 
@@ -1043,6 +1050,10 @@ void MatroskaMuxer::parseMuxOpt(const std::string& opts)
         {
             m_title = unquoteStr(token.substr(8));
             m_titleFromMuxOpt = true;
+            if (UtfConverter::metaTextToUtf8(m_title))
+                LTRACE(LT_WARN, 2,
+                       "Warning: the --title= is not UTF-8. It is written as \"" << m_title
+                                                                                 << "\". Save the meta file as UTF-8.");
         }
 
     // --dv-profile=<7|8.1>. 7 is the default and means "carry the disc as it is", the faithful dual
@@ -2965,6 +2976,8 @@ void MatroskaMuxer::writeChapters()
         {
             if (title.empty())
                 title = name;
+            // a chapter name from the meta file, or a source's, in another encoding than UTF-8
+            UtfConverter::metaTextToUtf8(title);
             // The source's own language where it gave one. "und" otherwise, which is what tsMuxeR
             // already uses for an unknown track language, rather than claiming a language it guessed.
             if (lang.empty())

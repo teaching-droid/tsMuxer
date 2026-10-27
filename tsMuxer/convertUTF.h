@@ -185,7 +185,7 @@ constexpr UTF32 offsetsFromUTF8[6] = {0x00000000UL, 0x00003080UL, 0x000E2080UL,
 //
 // A byte that does not begin a valid sequence (RFC 3629: no overlong form, no surrogate, nothing above U+10FFFF), or
 // begins one the text cuts short, is now one U+FFFD REPLACEMENT CHARACTER, and the next byte is read. That is the rule
-// a subtitle kept as text is written by (makeValidUtf8 in srtStreamReader.cpp), so a subtitle drawn and the same one
+// a subtitle kept as text is written by (makeValidUtf8 in utf8Converter.cpp), so a subtitle drawn and the same one
 // kept as text show the same characters. Valid UTF-8 reads exactly as before. The replacement character, not each
 // byte taken as a letter of some code page: Linux and macOS have no code page to take, a guess such as cp1252 would
 // draw Cyrillic or CJK text as other letters with no sign that anything is wrong, and the mark shows at a glance that
