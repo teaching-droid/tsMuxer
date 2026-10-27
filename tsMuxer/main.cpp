@@ -116,6 +116,15 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                     THROW(ERR_COMMON, previous << " is followed by " << paramPair[0]
                                                << " on the MUXOPT line: a value is written without spaces, such as "
                                                   "--layer-break-lbn=12219392.")
+                // A time after --custom-chapters is the rest of its list, written with a space after a semicolon:
+                // --custom-chapters=00:00:01.000; 00:00:03.000 lost the second chapter, with a warning about an
+                // unknown option only
+                if (strStartWith(previous, "--custom-chapters") && paramPair.size() == 1 &&
+                    paramPair[0].find_first_not_of("0123456789:.;") == std::string::npos)
+                    THROW(ERR_COMMON, previous << " is followed by " << paramPair[0]
+                                               << " on the MUXOPT line: write the chapter times without spaces, such "
+                                                  "as --custom-chapters=00:00:01.000;00:00:03.000, or put the list "
+                                                  "in quotes.")
                 previous = paramPair.size() > 1 ? trimStr(param) : std::string();
                 // ** A NUMBER IS READ WHOLE OR REFUSED. ** These were read up to their first other character, so
                 // --start-time=10s was 10 ticks of 45 kHz, --vbv-len=0.5s was 0, --extra-iso-space=64K was 64 and -50
@@ -182,11 +191,13 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                 }
                 else if (paramPair[0] == "--custom-chapters" && paramPair.size() > 1)
                 {
-                    vector<string> chapList = splitStr(paramPair[1].c_str(), ';');
+                    // A list in quotes, which may have spaces after its semicolons, was read with the quotes as part
+                    // of its first and last times, and refused showing them
+                    vector<string> chapList = splitStr(unquoteStr(trimStr(paramPair[1])).c_str(), ';');
                     // An empty place between two semicolons is no chapter: it was read as a chapter at 0:00
                     for (const string& chap : chapList)
                         if (!trimStr(chap).empty())
-                            customChaptersList.push_back(chapterTimeToSeconds(chap, "--custom-chapters"));
+                            customChaptersList.push_back(chapterTimeToSeconds(trimStr(chap), "--custom-chapters"));
                 }
                 else if (paramPair[0] == "--chapters-file")
                 {
