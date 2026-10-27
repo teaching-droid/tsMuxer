@@ -1243,6 +1243,7 @@ int LPCMStreamReader::readPacket(AVPacket& avPacket)
     }
     skipBytes = 0;
     skipBeforeBytes = 0;
+    const bool restOfFrame = m_frameRest > 0;
     const int frameLen = decodeFrame(m_curPos, m_bufEnd, skipBytes, skipBeforeBytes);
     if (frameLen == NOT_ENOUGH_BUFFER)
     {
@@ -1293,8 +1294,15 @@ int LPCMStreamReader::readPacket(AVPacket& avPacket)
         LTRACE(LT_DEBUG, 0, "Processed " << m_frameNum << " " << getCodecInfo().displayName << " frames");
     m_curPos += frameLen + skipBytes + skipBeforeBytes;
     m_processedBytes += frameLen + skipBytes + skipBeforeBytes;
+    // ** THE REST OF A 5 MS FRAME GOES IN THE PES OF ITS FIRST PART. ** A file of a join that does not end on a whole
+    // frame leaves a part of one, which the next file fills up; only the first part carries the LPCM header. The rest
+    // was forced into a PES of its own, with no header, and a player took its first 4 bytes for one: the start of
+    // the next file was lost at the joint, one sample frame of a 16 bit stereo track, all 144 of a 24 bit 7.1 one.
+    // It is added to the PES of its first part, which has the same time, so a join gives 5 ms frames as one file.
     if (m_frameRest == 0)
-        avPacket.flags = m_flags + (AVPacket::IS_COMPLETE_FRAME | AVPacket::FORCE_NEW_FRAME);
+        avPacket.flags =
+            m_flags + (restOfFrame && !m_demuxMode ? AVPacket::IS_COMPLETE_FRAME
+                                                   : AVPacket::IS_COMPLETE_FRAME | AVPacket::FORCE_NEW_FRAME);
     return 0;
 }
 
