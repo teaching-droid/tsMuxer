@@ -553,12 +553,11 @@ void CLPIStreamInfo::ISRC(BitStreamReader& reader)
     readString(recording_number, reader, 5);
 }
 
+// No ISRC is known for a stream, and a disc without one has zero bytes there, not the character "0"
 void CLPIStreamInfo::composeISRC(BitStreamWriter& writer)
 {
-    writeString(R"(00)", writer, 2);     // country_code
-    writeString(R"(000)", writer, 3);    // copyright_holder
-    writeString(R"(00)", writer, 2);     // recording_year
-    writeString(R"(00000)", writer, 5);  // recording_number
+    // country_code, copyright_holder, recording_year, recording_number
+    for (int i = 0; i < 12; i++) writer.putBits(8, 0);
 }
 
 void CLPIStreamInfo::parseStreamCodingInfo(BitStreamReader& reader)
