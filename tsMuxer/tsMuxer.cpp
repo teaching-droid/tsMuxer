@@ -1,5 +1,6 @@
 #include "tsMuxer.h"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -339,6 +340,14 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
             }
         }
     }
+
+    // The format of the main video of any disc, at its first packet, when its rate is known as well
+    if (isPrimaryVideo && m_bluRayMode && m_discVideoPending == nullptr && m_discVideoPendingIndex < 0)
+        if (const auto video = dynamic_cast<MPEGStreamReader*>(codecReader))
+        {
+            m_discVideoPending = video;
+            m_discVideoPendingIndex = streamIndex;
+        }
 
     const int rank = isPrimaryVideo ? 3 : (isVideo ? 2 : (codecName[0] == 'A' ? 1 : 0));
     if (rank > m_mainStreamRank)
@@ -2336,6 +2345,51 @@ void TSMuxer::warnV3Video(MPEGStreamReader* video)
         LTRACE(LT_WARN, 2, "Warning: interlaced video is not standard for V3 Blu-ray.");
 }
 
+// A disc carries its main video in a few sizes and rates only. 640x360, 720p at 25, 576p at 50, H.264 at 2160 lines,
+// and HEVC at 120 or 240 pictures a second or at 7680x4320 went onto a disc without a word, with a frame rate code of 0
+// or a size code the picture does not have. The disc is written as asked; the warning says that a player may not play
+// it. Heights below 1080 and interlaced video on a UHD disc have their warnings in warnV3Video.
+void TSMuxer::warnDiscVideo(MPEGStreamReader* video)
+{
+    const unsigned width = video->getStreamWidth();
+    const unsigned height = video->getStreamHeight();
+    const double fps = video->getFPS();
+    if (width == 0 || height == 0 || fps <= 0)
+        return;
+    const auto rateIn = [fps](std::initializer_list<double> rates)
+    { return std::any_of(rates.begin(), rates.end(), [fps](const double r) { return std::fabs(fps - r) < 0.01; }); };
+    const bool hevc = dynamic_cast<HEVCStreamReader*>(video) != nullptr;
+    std::string why;
+    if (hevc && isV3())
+    {
+        if (width > 3840 || height > 2160)
+            why = "a UHD disc carries at most 3840x2160";
+        else if (!rateIn({23.976, 24, 25, 29.97, 50, 59.94, 60}))
+            why = "a UHD disc carries 23.976, 24, 25, 29.97, 50 or 59.94 pictures a second";
+    }
+    else if (height > 1080)
+        why =
+            "a Blu-ray disc carries H.264, MPEG-2 and VC-1 video up to 1920x1080, and a UHD disc carries 2160 lines "
+            "as HEVC only";
+    else if (!((width == 1920 || width == 1440) && height == 1080) && !(width == 1280 && height == 720) &&
+             !(width == 720 && (height == 576 || height == 480)))
+        why = "the picture sizes of a Blu-ray disc are 1920x1080, 1440x1080, 1280x720, 720x576 and 720x480";
+    else if (height == 720 && !rateIn({23.976, 24, 50, 59.94}))
+        why = "720p on a Blu-ray disc is 23.976, 24, 50 or 59.94 pictures a second";
+    else if (height == 576 && !rateIn({25}))
+        why = "576 lines on a Blu-ray disc are 25 pictures a second (interlaced)";
+    else if (height == 480 && !rateIn({23.976, 29.97}))
+        why = "480 lines on a Blu-ray disc are 29.97 pictures a second (interlaced), or 23.976 with pulldown";
+    else if (height == 1080 && !rateIn({23.976, 24, 25, 29.97, 50, 59.94}))
+        why = "1080 lines on a Blu-ray disc are 23.976, 24, 25, 29.97, 50 or 59.94 pictures a second";
+    if (why.empty())
+        return;
+    LTRACE(LT_WARN, 2,
+           "Warning: the main video is " << width << "x" << height << " at " << doubleToStr(fps, 3)
+                                         << " pictures a second, which is not a format of the disc: " << why
+                                         << ". The disc is written as asked, and a disc player may not play it.");
+}
+
 bool TSMuxer::muxPacket(AVPacket& avPacket)
 {
     if (avPacket.data == nullptr || avPacket.size == 0)
@@ -2347,6 +2401,11 @@ bool TSMuxer::muxPacket(AVPacket& avPacket)
     {
         warnV3Video(m_v3VideoPending);
         m_v3VideoPending = nullptr;
+    }
+    if (m_discVideoPending && avPacket.stream_index == m_discVideoPendingIndex)
+    {
+        warnDiscVideo(m_discVideoPending);
+        m_discVideoPending = nullptr;
     }
 
 #ifdef _DEBUG

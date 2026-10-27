@@ -147,6 +147,7 @@ class TSMuxer final : public AbstractMuxer
     [[nodiscard]] bool maxRateClockDue() const;
     void insertHeldPCRIfDue();
     void warnV3Video(MPEGStreamReader* video);
+    void warnDiscVideo(MPEGStreamReader* video);
     void pcrInsideTablesIfDue();
     void refuseLongNonVideoPes() const;
     void noteLateArrival();
@@ -334,6 +335,8 @@ class TSMuxer final : public AbstractMuxer
     // The primary video of a V3 disc whose picture size is not read yet at intAddStream, tested at its first packet
     MPEGStreamReader* m_v3VideoPending = nullptr;
     int m_v3VideoPendingIndex = -1;
+    MPEGStreamReader* m_discVideoPending = nullptr;  // the primary video of a disc, checked at its first packet
+    int m_discVideoPendingIndex = -1;
     uint16_t m_DVvideoTrackCnt;
     // The PIDs of the base layers that carry no Dolby Vision of their own, in order: the n-th enhancement layer
     // belongs to the n-th of them (setDoViBaseLayerPid)
