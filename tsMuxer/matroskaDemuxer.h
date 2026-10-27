@@ -132,6 +132,12 @@ class MatroskaDemuxer final : public IOContextDemuxer
     bool getBlockAdditionInfo(int pid, uint64_t& maxId, std::vector<std::vector<uint8_t>>& mappings) const override;
     bool takeBlockAdditions(int pid, int64_t pts, std::vector<uint8_t>& out) override;
     void keepBlockAdditions(const int pid) override { m_keepAdditionPids.insert(pid); }
+    // The BlockAdditions of a track that a later file of a join declares and the first does not, as if the first did
+    void declareBlockAdditions(const int pid, const uint64_t maxId, const std::vector<std::vector<uint8_t>>& mappings)
+    {
+        m_maxAddIds[pid] = maxId;
+        m_addMappings[pid] = mappings;
+    }
     // A file cut off inside a block: from when (s, in the file's own time) and in which track (as track= counts) the
     // first of it is missing. Asked once the mux is over (main.cpp), as MovDemuxer::cutOffFiles.
     struct CutOff

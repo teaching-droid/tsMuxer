@@ -1999,6 +1999,11 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             streamInfo.m_srcTrackUid = it->second.m_demuxer->getTrackUid(pid);
     // A video or audio track of a Matroska output keeps the BlockAdditions of its frames: asked for before anything of
     // the file is read, so that none is missed and none is kept for a track nobody muxes
+    // Of a join, the header of each file is asked in turn until one declares them: a join of a VP9 file without alpha
+    // and then one with alpha lost the alpha of the second, its BlockAdditions and its AlphaMode, as the track's header
+    // is written from the first file. The track gets the declaration and the AlphaMode of the first file that has them;
+    // the blocks of a file without them have none, as RFC 9559 allows (AlphaMode, BlockAdditions).
+    std::string joinAlphaMode;
     if (m_matroskaOutput && dataReader == &m_containerReader && pid > 0 && !SubTrackFilter::isSubTrack(pid) &&
         (codec[0] == 'V' || codec[0] == 'A'))
         if (const auto it = m_containerReader.m_demuxers.find(fileList[0]);
@@ -2006,11 +2011,35 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         {
             uint64_t maxId = 0;
             std::vector<std::vector<uint8_t>> mappings;
-            if (it->second.m_demuxer->getBlockAdditionInfo(pid, maxId, mappings))  // the header declares them
+            // the first file's header declares them
+            bool declared = it->second.m_demuxer->getBlockAdditionInfo(pid, maxId, mappings);
+            auto* const mkvJoin = dynamic_cast<MatroskaDemuxer*>(it->second.m_demuxer);
+            for (size_t i = 1; i < fileList.size() && !declared && mkvJoin; ++i)
+            {
+                const std::string file = unquoteStr(trimStr(fileList[i]));
+                const std::string ext = strToUpperCase(extractFileExt(file));
+                if (ext != "MKV" && ext != "MKA" && ext != "MKS" && ext != "MK3D" && ext != "WEBM")
+                    continue;
+                MatroskaDemuxer probe(m_readManager);
+                probe.openFile(file);
+                if (!probe.getBlockAdditionInfo(pid, maxId, mappings))
+                    continue;
+                mkvJoin->declareBlockAdditions(pid, maxId, mappings);
+                declared = true;
+                std::map<int32_t, TrackInfo> trackList;
+                probe.getTrackList(trackList);
+                if (const auto t = trackList.find(pid); t != trackList.end())
+                    if (const auto mode = t->second.m_srcParams.find("srcalphamode");
+                        mode != t->second.m_srcParams.end())
+                        joinAlphaMode = mode->second;
+            }
+            if (declared)
                 it->second.m_demuxer->keepBlockAdditions(pid);
         }
     streamInfo.m_codec = codec;
     streamInfo.m_addParams = addParams;
+    if (!joinAlphaMode.empty() && addParams.find("srcalphamode") == addParams.end())
+        streamInfo.m_addParams["srcalphamode"] = joinAlphaMode;
     int streamIndex = codecReader->getStreamIndex();
 
     // If the codec is a video stream reader with no manually specified FPS,
