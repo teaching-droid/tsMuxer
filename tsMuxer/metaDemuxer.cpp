@@ -4594,6 +4594,8 @@ VideoAspectRatio arNameToCode(const string& arName)
                                "and 2.21:1, also written with x, such as 16x9.")
 }
 
+// A value the help does not list (pipCorner=Middle, pipScale=2/3) was taken as BottomLeft or as no scale, without a
+// word
 PIPParams::PipCorner pipCornerFromStr(const std::string& value)
 {
     const std::string v = trimStr(strToLowerCase(value));
@@ -4603,14 +4605,19 @@ PIPParams::PipCorner pipCornerFromStr(const std::string& value)
         return PIPParams::PipCorner::TopRight;
     if (v == "bottomright")
         return PIPParams::PipCorner::BottomRight;
-
-    return PIPParams::PipCorner::BottomLeft;
+    if (v == "bottomleft")
+        return PIPParams::PipCorner::BottomLeft;
+    THROW(ERR_COMMON, "pipCorner=" << value
+                                   << " is not a corner. The corners are TopLeft, TopRight, BottomRight and "
+                                      "BottomLeft.")
 }
 
 int pipScaleFromStr(const std::string& value)
 {
     const std::string v = trimStr(strToLowerCase(value));
 
+    if (v == "1")
+        return 1;
     if (v == "1/2" || v == "0.5")
         return 2;
     if (v == "1/4" || v == "0.25")
@@ -4619,8 +4626,20 @@ int pipScaleFromStr(const std::string& value)
         return 4;
     if (v == "fullscreen")
         return 5;
+    THROW(ERR_COMMON,
+          "pipScale=" << value << " is not a scale a disc has. The scales are 1, 1/2, 1/4, 1.5 and fullScreen.")
+}
 
-    return 1;  // default
+// pipHOffset, pipVOffset and pipLumma were read up to their first other character and written into fields of 12 and 8
+// bits, where -1 became 4095 and a pipLumma of 256 became 0, without a word. They are whole numbers within the field.
+static int pipNumber(const std::string& name, const std::string& value, const int most, const char* meaning)
+{
+    const std::string v = trimStr(value);
+    if (v.empty() || v.find_first_not_of("0123456789") != std::string::npos || v.size() > 5 ||
+        strToInt32(v.c_str()) > most)
+        THROW(ERR_COMMON,
+              name << "=" << value << " is not " << meaning << ": write a whole number from 0 to " << most << ".")
+    return strToInt32(v.c_str());
 }
 
 // Whether two names are one existing file, also when they differ in case, slashes or a relative part
@@ -5003,13 +5022,13 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
         pipParams.corner = pipCornerFromStr(itr->second);
     itr = addParams.find("pipHOffset");
     if (itr != addParams.end())
-        pipParams.hOffset = strToInt32(itr->second);
+        pipParams.hOffset = pipNumber("pipHOffset", itr->second, 4095, "an offset in pixels");
     itr = addParams.find("pipVOffset");
     if (itr != addParams.end())
-        pipParams.vOffset = strToInt32(itr->second);
+        pipParams.vOffset = pipNumber("pipVOffset", itr->second, 4095, "an offset in pixels");
     itr = addParams.find("pipLumma");
     if (itr != addParams.end())
-        pipParams.lumma = strToInt32(itr->second);
+        pipParams.lumma = pipNumber("pipLumma", itr->second, 255, "a luma value");
     itr = addParams.find("pipScale");
     if (itr != addParams.end())
         pipParams.scaleIndex = pipScaleFromStr(itr->second);

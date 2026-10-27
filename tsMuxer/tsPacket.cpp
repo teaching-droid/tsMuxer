@@ -2293,6 +2293,18 @@ int MPLSParser::composePip_metadata(uint8_t* buffer, const int bufferSize,
                     if (pipParams.corner == PIPParams::PipCorner::BottomRight ||
                         pipParams.corner == PIPParams::PipCorner::BottomLeft)
                         vPos = mainVSize - pipHeight - pipParams.vOffset;
+                    // An offset or a scale that puts the window outside the main picture was written without a
+                    // word, where a position before the picture's edge wrapped round in its 12 bits
+                    const int64_t left = static_cast<int64_t>(pipParams.hOffset) + pipWidth;
+                    const int64_t top = static_cast<int64_t>(pipParams.vOffset) + pipHeight;
+                    if (i == 0 && mainHSize > 0 && mainVSize > 0 && (left > mainHSize || top > mainVSize))
+                        LTRACE(LT_WARN, 2,
+                               "Warning: the picture-in-picture window of secondary video "
+                                   << k + 1 << " (" << pipWidth << "x" << pipHeight
+                                   << " at pipHOffset=" << pipParams.hOffset << ", pipVOffset=" << pipParams.vOffset
+                                   << ") does not fit in the main picture of " << mainHSize << "x" << mainVSize
+                                   << ", so a player shows it cut off or in the wrong place. Use smaller offsets or "
+                                      "a smaller pipScale.");
                 }
 
                 writer.putBits(12, hPos);
