@@ -286,6 +286,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A join of WAV files whose first file holds less audio than its header says** read the next file's header as sound, and the rest of the join out of step with its samples, which is noise. The next file is now found where it begins, with a warning.
 
+* **A join of WAV files to a TS, M2TS or disc lost sound at each joint** where a file did not end on a whole 5 ms frame: the rest of that frame, from the next file, went into a packet without the LPCM header, and a player took its first bytes for one. One sample was lost at each joint of 16 bit stereo, 3 ms of 24 bit 7.1. Every sample is now played once. Matroska output and demux were right and do not change.
+
+* **A WAV of floating point samples was refused with "Bit depth 32 is not supported for LPCM format",** for every output. The message now says that the file holds floating point samples, which no output takes, and to convert it to 16 or 24 bit integer PCM.
+
 * **Damage near the start of an AC-3, E-AC-3, DTS or AAC track of a transport stream,** even one lost packet, made the whole track unrecognised: the listing said "Can't detect stream type" and the track was left out without a warning. The check now goes on past the damage. A track the stream declares as AC-3, E-AC-3, TrueHD or DTS is also found when packets are lost all through it, and a damaged TrueHD track keeps its AC-3 core.
 
 * **In a join of DTS files whose first file ends inside a frame,** the part of that frame and the start of the next file went out as one frame, which a player cannot decode. The part is now left out, with a warning; of DTS-HD the whole core is kept. A DTS frame that loses a TS packet inside it is left out the same way.
@@ -303,6 +307,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **An AC-3 stream that changes its channel layout,** as a join of 2.0 and 5.1, says so; its description keeps the first layout.
 
 * **A raw AC-3, E-AC-3 or DTS file of ten frames or fewer** is recognised, from three frames on.
+
+* **The Xing or Info frame at the start of an MP3 was muxed as sound,** a frame of silence, so the sound came one frame (24 ms at 48 kHz) late, and again at the start of each later file of a join. Such a frame, or a VBRI one, is now left out of a TS, a disc and a Matroska output, and the next frame takes its time. A demux keeps it, as it writes an MP3 file.
 
 * **TrueHD at a rate a disc does not have,** such as 44.1 kHz, no longer has 48 kHz in its PMT, unless it is given a 48 kHz AC-3 core with merge-ac3-file= or merge-ac3-track=: its PMT then gives the rate of its clip information.
 
@@ -431,6 +437,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **HEVC coded as fields** gets a warning on a disc: a Blu-ray or UHD disc takes HEVC as progressive pictures only, and a disc player cannot play it.
 
 * **E-AC-3 without an AC-3 core** gets a warning on a disc: a Blu-ray player has to decode AC-3 but not E-AC-3, so a player without an E-AC-3 decoder plays no sound from it.
+
+* **Opus on a Blu-ray or AVCHD disc was taken with a warning,** and its entry in the clip information was written without a stream coding type, as a disc has none for Opus; a disc of Opus alone was refused with "Can't create EP map". Opus is now refused on a disc with that reason, before anything is written. A TS, M2TS or Matroska output takes it as before. Other sound a Blu-ray player does not play, such as AAC or MP3, is still muxed with a warning.
 
 * **DTS Express muxed to a disc without "secondary" went out as primary audio without a word,** as DTS-HD High Resolution with no core. A Blu-ray disc has DTS Express as secondary audio only. A warning now says that "secondary" on its line makes it a commentary track.
 
