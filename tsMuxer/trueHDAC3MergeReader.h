@@ -62,6 +62,7 @@ class TrueHDAC3MergeReader final : public MLPStreamReader
     void writePESExtension(PESPacket* pesPacket, const AVPacket& avPacket) override;
     [[nodiscard]] bool needMPLSCorrection() const override;
     const std::string getStreamInfo() override;
+    int getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdmvDescriptors) override;
 
    private:
     struct Ac3QueuedFrame
@@ -117,6 +118,7 @@ class TrueHDAC3MergeReader final : public MLPStreamReader
     // Taken from the first AC-3 frame that parsed, so they are a measurement and not a promise.
     int m_ac3CoreSampleRate;
     uint8_t m_ac3CoreChannels;
+    uint8_t m_coreHeader[7]{};  // the first 7 bytes of the first core frame, for the AC-3 descriptor (getTSDescriptor)
     bool m_coreRateChecked = false;
 
     struct Ac3FrameParser : AC3Codec

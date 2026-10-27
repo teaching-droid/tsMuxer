@@ -2,12 +2,14 @@
 
 #include <fs/systemlog.h>
 
+#include <cstring>
 #include <iomanip>
 #include <sstream>
 
 #include "abstractStreamReader.h"
 #include "avCodecs.h"
 #include "pesPacket.h"
+#include "tsPacket.h"
 #include "vodCoreException.h"
 #include "vod_common.h"
 
@@ -144,6 +146,8 @@ void TrueHDAC3MergeReader::extractAc3FramesFromAccum()
         {
             m_ac3CoreSampleRate = q.sample_rate;
             m_ac3CoreChannels = m_ac3Parser.frameChannels();
+            if (total >= static_cast<int>(sizeof(m_coreHeader)))
+                memcpy(m_coreHeader, frame, sizeof(m_coreHeader));
         }
         m_ac3FrameQueue.push_back(std::move(q));
         pos += total;
@@ -442,4 +446,36 @@ const std::string TrueHDAC3MergeReader::getStreamInfo()
     str << "TRUE-HD + AC-3 core (merged from track " << m_mergeAc3Pid << "). ";
     str << MLPStreamReader::getStreamInfo();
     return str.str();
+}
+
+// ** THE DISC FORM OF TRUEHD WITH ITS CORE IS DECLARED BY ITS CORE. ** A Blu-ray declares a TrueHD stream that
+// carries an AC-3 core with the AC-3 registration and the AC-3 audio descriptor of that core (ATSC A/52 annex A),
+// and so does tsMuxeR for the same stream read from a disc as A_AC3. Built with merge-ac3-file or merge-ac3-track,
+// the same kind of stream had the HDMV registration of a TrueHD stream without a core: two declarations for one kind
+// of stream. It now has the disc's, from the first core frame; where no core frame was read yet, the HDMV one stays.
+int TrueHDAC3MergeReader::getTSDescriptor(uint8_t* dstBuff, const bool blurayMode, const bool hdmvDescriptors)
+{
+    const int len = MLPStreamReader::getTSDescriptor(dstBuff, blurayMode, hdmvDescriptors);
+    if (!hdmvDescriptors || len <= 0 || m_coreHeader[0] != 0x0B || m_coreHeader[1] != 0x77)
+        return len;
+    const uint8_t fscod = m_coreHeader[4] >> 6;
+    const uint8_t frmsizecod = m_coreHeader[4] & 0x3F;
+    const uint8_t bsid = m_coreHeader[5] >> 3;
+    const uint8_t bsmod = m_coreHeader[5] & 0x07;
+    const uint8_t acmod = m_coreHeader[6] >> 5;
+    const uint8_t dsurmod = acmod == 2 ? (m_coreHeader[6] >> 3) & 0x03 : 0;  // 2/0: dsurmod follows acmod at once
+    uint8_t* p = dstBuff;
+    *p++ = static_cast<uint8_t>(TSDescriptorTag::REGISTRATION);
+    *p++ = 4;
+    *p++ = 'A';
+    *p++ = 'C';
+    *p++ = '-';
+    *p++ = '3';
+    *p++ = static_cast<uint8_t>(TSDescriptorTag::AC3);
+    *p++ = 4;
+    *p++ = static_cast<uint8_t>(fscod << 5 | bsid);                 // sample_rate_code (3), bsid (5)
+    *p++ = static_cast<uint8_t>((frmsizecod >> 1) << 2 | dsurmod);  // bit_rate_code (6, exact), surround_mode (2)
+    *p++ = static_cast<uint8_t>(bsmod << 5 | acmod << 1);           // bsmod (3), num_channels (4), full_svc (1)
+    *p++ = 0;                                                       // langcod
+    return static_cast<int>(p - dstBuff);
 }
