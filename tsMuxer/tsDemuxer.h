@@ -170,6 +170,7 @@ class TSDemuxer final : public AbstractDemuxer
     std::map<int, JoinSound> m_joinSound;
     uint8_t m_joinSoundPid[8192]{};  // the PID has a JoinSound
     uint8_t m_joinDrop[8192]{};  // the PES being read of the PID is left out, and the packets that carry the rest of it
+    std::map<int, int64_t> m_joinSkip;  // bytes of sound left out at the start of the PES being read (keepJoinSound)
     int64_t m_joinVideoStart = -1;  // the first decoding time of the video of the file being read (fileVideoStart)
     int64_t m_joinBase = 0;         // where the first decoding time of the video of the file being read is
     bool m_joinBaseKnown = true;
@@ -182,7 +183,8 @@ class TSDemuxer final : public AbstractDemuxer
     [[nodiscard]] bool isJoinOfFiles() const;
     [[nodiscard]] int64_t fileVideoStart(const std::string& fileName, int videoPid) const;
     void endJoinFile();
-    bool keepJoinSound(int pid, StreamType type, int64_t pts);
+    bool keepJoinSound(int pid, StreamType type, int64_t pts, const uint8_t* data = nullptr,
+                       const uint8_t* dataEnd = nullptr, int64_t pesPayload = -1);
     // A sound track of one file that has no PES for a while, with the picture going on (see noteSoundGap). Times in
     // 90 kHz ticks.
     struct SoundGap

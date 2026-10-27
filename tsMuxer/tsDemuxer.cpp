@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "abstractStreamReader.h"
+#include "ac3Codec.h"
 #include "bitmapSubtitles.h"
 #include "bufferedFileReader.h"
 #include "matroskaParser.h"
@@ -381,6 +382,7 @@ void TSDemuxer::endJoinFile()
     m_soundGap.clear();
     m_gapVideoPrev = -1;
     memset(m_joinDrop, 0, sizeof(m_joinDrop));
+    m_joinSkip.clear();
     // the sound of the next file may come before its first picture in the file: that picture is looked up first
     m_joinVideoStart = -1;
     if (known && m_joinBaseKnown && !m_joinSound.empty() && m_curFileNum + 1 < m_joinFiles.size())
@@ -409,14 +411,16 @@ void TSDemuxer::endJoinFile()
 // ends earlier, the track's times have a gap there (takeTimeGaps), and where it ends later, the PES of the file that
 // it overlaps are left out, as a reader that counts frames cannot go back. A file whose sound follows on from the
 // sound before, as it does where a recording was split into files, is muxed as before.
-bool TSDemuxer::keepJoinSound(const int pid, const StreamType type, const int64_t pts)
+bool TSDemuxer::keepJoinSound(const int pid, const StreamType type, const int64_t pts, const uint8_t* data,
+                              const uint8_t* dataEnd, const int64_t pesPayload)
 {
     JoinSound& sound = m_joinSound[pid];
+    m_joinSkip.erase(pid);
     if (sound.firstPts == -1)
     {
         if (m_curFileNum > 0 && sound.lastPes != -1 && m_joinVideoStart != -1 && m_joinBaseKnown)
         {
-            const int64_t due = pts - m_joinVideoStart + m_joinBase;
+            int64_t due = pts - m_joinVideoStart + m_joinBase;
             // A PES at the time of the last one of the file before carries the rest of the same frame (the
             // extension of a DTS-HD frame, the TrueHD unit after an AC-3 frame), as where a recording was split
             // into files: kept with it, and the time of the next one decides. Only where both files are on one
@@ -440,7 +444,33 @@ bool TSDemuxer::keepJoinSound(const int pid, const StreamType type, const int64_
             }
             // half a frame, but at least a millisecond: the end of TrueHD, whose units of under a millisecond come
             // in PES of their own and with the AC-3 frames of its core, is not known closer than that
-            const int64_t within = (std::max)(sound.step / 2, int64_t{90});
+            int64_t within = (std::max)(sound.step / 2, int64_t{90});
+            // ** A PES OF SEVERAL FRAMES IS CUT AT THE FRAME. ** A PES was kept or left out whole, so where it holds
+            // several frames, as AC-3 in the transport streams of some tools does (three, 96 ms), the sound of a
+            // later file was up to half a PES off its picture: 32 ms early or late at alternate joints. Where the PES
+            // begins with an AC-3 or E-AC-3 frame and holds a whole number of frames of that size, its frames are
+            // taken one by one: those the sound before overlaps by more than half a frame are left out at the start
+            // of the PES (m_joinSkip), and the next frame is due within half a frame.
+            const bool ac3 = type == StreamType::AUDIO_AC3 || type == StreamType::AUDIO_EAC3 ||
+                             type == StreamType::AUDIO_EAC3_SECONDARY || type == StreamType::AUDIO_EAC3_ATSC;
+            const int frameBytes = ac3 && data != nullptr ? AC3Codec::frameSizeAt(data, dataEnd) : 0;
+            const int64_t frames = frameBytes > 0 && pesPayload > 0 && pesPayload % frameBytes == 0
+                                       ? pesPayload / frameBytes
+                                       : 0;
+            if (frames >= 2 && sound.step > 0 && sound.step % frames == 0)
+            {
+                const int64_t frameLen = sound.step / frames;
+                within = (std::max)(frameLen / 2, int64_t{90});
+                int64_t skip = 0;
+                while (skip < frames && due + skip * frameLen + within < sound.end) ++skip;
+                if (skip == frames)
+                    return false;
+                if (skip > 0)
+                {
+                    m_joinSkip[pid] = skip * frameBytes;
+                    due += skip * frameLen;
+                }
+            }
             if (due + within < sound.end)
                 return false;
             // within that the sound goes on where the sound before ends: the times of this file's sound are that
@@ -1065,7 +1095,13 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
 
             if (m_acceptedPidCache[pid] && streamInfo != m_pmt.pidList.end() &&
                 isAudioStreamType(streamInfo->second.m_streamType) && isJoinOfFiles())
-                m_joinDrop[pid] = !keepJoinSound(pid, streamInfo->second.m_streamType, curPts);
+                m_joinDrop[pid] =
+                    !keepJoinSound(pid, streamInfo->second.m_streamType, curPts,
+                                   frameData + pesPacket->getHeaderLength(), pkt + TS_FRAME_SIZE,
+                                   (pesPacket->m_pesPacketLenHi << 8 | pesPacket->m_pesPacketLenLo) != 0
+                                       ? (pesPacket->m_pesPacketLenHi << 8 | pesPacket->m_pesPacketLenLo) + 6 -
+                                             pesPacket->getHeaderLength()
+                                       : -1);
             else if (m_acceptedPidCache[pid] && streamInfo != m_pmt.pidList.end() &&
                      isAudioStreamType(streamInfo->second.m_streamType))
                 noteSoundGap(pid, curPts, part != nullptr);
@@ -1129,14 +1165,25 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
             vect = &demuxedData[pid];
             lastPid = pid;
         }
-        if (vect != nullptr)
+        // the frames of a PES left out at a joint of a join (keepJoinSound) are not handed on
+        int64_t skip = 0;
+        if (m_joinSoundPid[pid])
+            if (const auto joint = m_joinSkip.find(pid); joint != m_joinSkip.end())
+            {
+                skip = (std::min)(joint->second, payloadLen);
+                if ((joint->second -= skip) == 0)
+                    m_joinSkip.erase(joint);
+            }
+        if (vect != nullptr && payloadLen > skip)
         {
-            vect->grow(payloadLen);
-            uint8_t* dst = vect->data() + vect->size() - payloadLen;
-            memcpy(dst, frameData, payloadLen);
+            vect->grow(payloadLen - skip);
+            uint8_t* dst = vect->data() + vect->size() - (payloadLen - skip);
+            memcpy(dst, frameData + skip, payloadLen - skip);
         }
         if (m_joinSoundPid[pid])
             m_joinSound[pid].pesBytes += payloadLen;
+        discardSize -= payloadLen - skip;
+        return;
     }
     discardSize -= payloadLen;
 }
