@@ -625,56 +625,21 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
         }
         else if (waveFormatPCMEx->wFormatTag == 0x01)
         {  // standard format
+            // ** SAID ONCE. ** The header is read again after the first read (m_needSync) and for the stream's
+            // descriptor, and each read printed this warning again; so did the reader that only looks at the file to
+            // tell what it holds (stream 0), before the track's own.
+            static const char* const defaultLayout[] = {
+                "L R LFE", "L R BL BR", "L R C BL BR", "L R C LFE BL BR", "L R C BL BR SL SR", "L R C LFE BL BR SL SR"};
             if (m_channels > 2)
             {
-                if (m_channels == 3)
-                {
+                m_lfeExists = m_channels == 3 || m_channels == 6 || m_channels == 8;
+                if (!m_noMaskSaid && m_streamIndex > 0)
                     LTRACE(LT_WARN, 2,
                            "Warning! Multi channels WAVE file for stream "
                                << m_streamIndex
-                               << " do not contain channels configuration info. Applying default value: L R LFE");
-                    m_lfeExists = true;
-                }
-                else if (m_channels == 4)
-                {
-                    LTRACE(LT_WARN, 2,
-                           "Warning! Multi channels WAVE file for stream "
-                               << m_streamIndex
-                               << " do not contain channels configuration info. Applying default value: L R BL BR");
-                }
-                else if (m_channels == 5)
-                {
-                    LTRACE(LT_WARN, 2,
-                           "Warning! Multi channels WAVE file for stream "
-                               << m_streamIndex
-                               << " do not contain channels configuration info. Applying default value: L R C BL BR");
-                }
-                else if (m_channels == 6)
-                {
-                    LTRACE(
-                        LT_WARN, 2,
-                        "Warning! Multi channels WAVE file for stream "
-                            << m_streamIndex
-                            << " do not contain channels configuration info. Applying default value: L R C LFE BL BR");
-                    m_lfeExists = true;
-                }
-                else if (m_channels == 7)
-                {
-                    LTRACE(LT_WARN, 2,
-                           "Warning! Multi channels WAVE file for stream "
-                               << m_streamIndex
-                               << " do not contain channels configuration info. Applying default value: L R C BL BR SL "
-                                  "SR");
-                }
-                else if (m_channels == 8)
-                {
-                    LTRACE(LT_WARN, 2,
-                           "Warning! Multi channels WAVE file for stream "
-                               << m_streamIndex
-                               << " do not contain channels configuration info. Applying default value: L R C LFE BL "
-                                  "BR SL SR");
-                    m_lfeExists = true;
-                }
+                               << " do not contain channels configuration info. Applying default value: "
+                               << defaultLayout[m_channels - 3]);
+                m_noMaskSaid = true;
             }
         }
         else

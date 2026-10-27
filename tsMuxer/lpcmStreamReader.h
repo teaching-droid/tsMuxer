@@ -92,6 +92,7 @@ class LPCMStreamReader final : public SimplePacketizerReader
     std::vector<int> m_bdMap;
     std::vector<uint8_t> m_bdBuffer;
     bool m_backCentre = false;
+    bool m_noMaskSaid = false;  // the warning for a WAV of more than 2 channels without a channel mask was given
     [[nodiscard]] int bdChannels() const { return m_bdMap.empty() ? m_channels : static_cast<int>(m_bdMap.size()); }
     void planBdLayout(uint32_t mask);
     int64_t m_curChunkLen;
