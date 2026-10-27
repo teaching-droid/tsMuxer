@@ -5,6 +5,9 @@
 
 #include <fs/textfile.h>
 #include <types/types.h>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 #include <algorithm>
 #include <climits>
 #include <cmath>
@@ -5544,7 +5547,9 @@ void METADemuxer::lineBack()
     else
         m_lastProgressY = csbi.dwCursorPosition.Y + 1;
 #else
-    if (!sLastMsg)
+    // ESC M takes the cursor up a line, over the last progress line. In a file or a pipe it is two bytes in front of
+    // the next line, and a script that reads "NN.N% complete" at the start of a line missed every one.
+    if (!sLastMsg && isatty(STDOUT_FILENO))
         std::cout << "\x1bM";
     sLastMsg = false;
 #endif
