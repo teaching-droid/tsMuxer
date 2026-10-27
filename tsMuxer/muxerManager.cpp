@@ -653,18 +653,28 @@ void MuxerManager::checkTrackList(const vector<StreamInfo>& ci) const
 // only one that can carry them. A demux writes VP8 and VP9 into an IVF file, Vorbis into an Ogg file and FLAC into a
 // .flac file; only ALAC has no file of its own. FLAC was refused by the transport stream writer, after the folders
 // of a disc or an ISO image of the same name had been made.
+// The refusal said of all of them that a demux has no file to write them to, also where a demux writes one: VP9 to a
+// disc was told so, and the demux of the same line works. It now says what a demux does for the codec at hand.
 void MuxerManager::checkMatroskaOnlyCodecs(const vector<StreamInfo>& ci, const bool notMatroska) const
 {
     if (notMatroska)
         for (const StreamInfo& si : ci)
             for (const CodecInfo* only : {&vp8CodecInfo, &vp9CodecInfo, &vorbisCodecInfo, &flacCodecInfo,
                                           &alacCodecInfo, &mpeg4AspCodecInfo, &proresCodecInfo})
-                if (si.m_codec == only->programName &&
-                    !(m_demuxMode && only != &alacCodecInfo && only != &mpeg4AspCodecInfo && only != &proresCodecInfo))
+            {
+                const bool demuxWrites =
+                    only != &alacCodecInfo && only != &mpeg4AspCodecInfo && only != &proresCodecInfo;
+                if (si.m_codec != only->programName || (m_demuxMode && demuxWrites))
+                    continue;
+                if (m_demuxMode)
                     THROW(ERR_COMMON, only->displayName
-                                          << " can only be muxed into a Matroska file (.mkv). It has no form in a "
-                                             "transport stream or on a Blu-ray disc, and a demux has no file to write "
-                                             "it to. Choose MKV output, or leave the track out.")
+                                          << " can only be muxed into a Matroska file (.mkv): a demux has no file "
+                                             "of its own to write it to. Choose MKV output, or leave the track out.")
+                THROW(ERR_COMMON, only->displayName
+                                      << " can only be muxed into a Matroska file (.mkv). It has no form in a "
+                                         "transport stream or on a Blu-ray disc. Choose MKV output"
+                                      << (demuxWrites ? ", a demux (--demux)" : "") << ", or leave the track out.")
+            }
 }
 
 void MuxerManager::checkOtherTracks(const vector<StreamInfo>& ci) const
