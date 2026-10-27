@@ -1952,6 +1952,49 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         LTRACE(LT_ERROR, 2, "No files found under " << srcRoot);
         return -1;
     }
+    // The order of the listing decides the order of the entries and their unique ids in the image, and a folder lists
+    // its names in no fixed order on Linux and macOS (on Windows too, off NTFS). One order on every system, the one an
+    // NTFS folder gives: the files of a folder before its subfolders, each by name with the letters a-z taken as A-Z,
+    // then byte for byte, so the same folder gives the same image everywhere.
+    {
+        auto lessName = [](const string& a, const string& b)
+        {
+            auto up = [](unsigned char c) { return c >= 'a' && c <= 'z' ? c - 'a' + 'A' : c; };
+            const size_t n = (std::min)(a.size(), b.size());
+            for (size_t i = 0; i < n; ++i)
+                if (up(a[i]) != up(b[i]))
+                    return up(a[i]) < up(b[i]);
+            return a.size() != b.size() ? a.size() < b.size() : a < b;
+        };
+        auto lessPath = [&lessName](const string& a, const string& b)
+        {
+            size_t pa = 0, pb = 0;
+            for (;;)
+            {
+                const size_t ea = a.find('/', pa), eb = b.find('/', pb);
+                const string na = a.substr(pa, ea == string::npos ? string::npos : ea - pa);
+                const string nb = b.substr(pb, eb == string::npos ? string::npos : eb - pb);
+                if (na != nb)
+                {
+                    // a file of this folder comes before a subfolder of it
+                    if ((ea == string::npos) != (eb == string::npos))
+                        return ea == string::npos;
+                    return lessName(na, nb);
+                }
+                if (ea == string::npos || eb == string::npos)
+                    return ea == string::npos && eb != string::npos;
+                pa = ea + 1;
+                pb = eb + 1;
+            }
+        };
+        vector<std::pair<string, string>> listed;
+        listed.reserve(files.size());
+        for (auto& f : files) listed.emplace_back(toRel(f), std::move(f));
+        std::sort(listed.begin(), listed.end(),
+                  [&lessPath](const std::pair<string, string>& a, const std::pair<string, string>& b)
+                  { return lessPath(a.first, b.first); });
+        for (size_t i = 0; i < listed.size(); ++i) files[i] = std::move(listed[i].second);
+    }
 
     // keep BD structure only (drop MakeMKV/other helper folders); precompute disc-relative paths + sizes
     struct Item
