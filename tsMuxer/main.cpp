@@ -135,15 +135,20 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                         chapterTimeToSeconds(v, "--start-time");
                     if (paramPair[0] == "--start-time" && digits && v.size() > 15)
                         THROW(ERR_COMMON, "--start-time=" << v << " is past the clock's limit of about 26.5 hours.")
+                    // The numbers of a disc's files as well: --mplsOffset=5abc was read as 5, --m2tsOffset=1e3 as 1
+                    // and 0x10 as 0, without a word
                     if ((paramPair[0] == "--vbv-len" || paramPair[0] == "--extra-iso-space" ||
-                         paramPair[0] == "--auto-chapters") &&
+                         paramPair[0] == "--auto-chapters" || paramPair[0] == "--mplsOffset" ||
+                         paramPair[0] == "--m2tsOffset" || paramPair[0] == "--blankOffset") &&
                         !digits)
                         THROW(ERR_COMMON, paramPair[0]
                                               << "=" << v
                                               << " is not a whole number of 0 or more. Write digits alone, such as "
                                               << (paramPair[0] == "--vbv-len"           ? "--vbv-len=500 (ms)"
                                                   : paramPair[0] == "--extra-iso-space" ? "--extra-iso-space=64"
-                                                                                        : "--auto-chapters=5")
+                                                  : paramPair[0] == "--auto-chapters"   ? "--auto-chapters=5"
+                                                  : paramPair[0] == "--m2tsOffset"      ? "--m2tsOffset=100"
+                                                                                        : paramPair[0] + "=5")
                                               << ".")
                     // strtol held a larger --vbv-len at 2147483647 ms without a word
                     if (paramPair[0] == "--vbv-len" && (v.size() > 10 || strtoll(v.c_str(), nullptr, 10) > INT_MAX))
