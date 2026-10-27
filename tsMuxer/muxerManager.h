@@ -78,6 +78,8 @@ class MuxerManager final
     // --split-duration, --split-size or --split-chapters was given with a value the split takes
     [[nodiscard]] bool splitAsked() const { return m_isoSplitBytes > 0 || m_isoSplitTicks > 0 || m_isoSplitChapters; }
     [[nodiscard]] const std::string& demuxFolder() const { return m_demuxFolder; }
+    // The line doMux prints when the sources are read and the output is being finished; none when empty
+    void setFinishingNote(const std::string& note) { m_finishingNote = note; }
     // The length the containers of the sources state, 0 when none does (a raw stream)
     [[nodiscard]] int64_t statedDurationNano() { return m_metaDemuxer.statedDurationNano(); }
     [[nodiscard]] bool getHevcFound() const { return m_metaDemuxer.m_HevcFound; }
@@ -218,6 +220,7 @@ class MuxerManager final
     bool m_bluRayMode;
     bool m_demuxMode;
     std::string m_demuxFolder;
+    std::string m_finishingNote;  // setFinishingNote
     bool m_reproducibleIsoHeader = false;
     int64_t m_discSizeLimit = 0;         // --disc-size: target disc capacity in bytes (0 = guard off)
     bool m_allowOversize = false;        // --allow-oversize: warn instead of abort on an over-capacity image

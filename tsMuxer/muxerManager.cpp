@@ -1095,7 +1095,10 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
             m_mainMuxer->muxPacket(avPacket);
     }
 
-    LTRACE(LT_INFO, 2, "Flushing write buffer");
+    // Everything is read. What follows can take a while on a large output and can still fail, so the progress line
+    // stays below 100 percent (METADemuxer::updateReport) and this says what is going on.
+    if (!m_finishingNote.empty())
+        LTRACE(LT_INFO, 2, m_finishingNote);
 
     // A demux writes no times: its files all start at 0. The sound of a --cut-start begins at the cut, and the picture
     // at a key picture, before the cut (--cut-pictures=cover) or after it (inside), and nothing said by how much they

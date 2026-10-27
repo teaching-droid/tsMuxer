@@ -1570,7 +1570,9 @@ static bool writeSsifGroup(IsoWriter* iso, const string& srcRoot, const BdSsifGr
             written += rd;
             if (total > 0)
             {
-                const int tenths = static_cast<int>(static_cast<double>(written) / static_cast<double>(total) * 1000.0);
+                // 99.9 at most, as for the plain files (buildGuardedIso)
+                const int tenths = (std::min)(
+                    999, static_cast<int>(static_cast<double>(written) / static_cast<double>(total) * 1000.0));
                 if (tenths != lastTenths)
                 {
                     lastTenths = tenths;
@@ -1671,6 +1673,11 @@ static void printRemovedOutputNotes(const bool lineOpen = false)
 
 // sizeRefused, when given, comes back true when the finished image was refused because it does not fit the disc
 static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused = nullptr);
+
+// "100.0% complete" was printed when the sources were read, and a job that then failed, a track found empty, an image
+// too big for the disc, had shown it before its error. The progress lines stop at 99.9 percent, and this is printed
+// once every final check has passed, right before the job says it has succeeded. A job that fails never shows it.
+static void reportJobComplete() { cout << "100.0% complete" << std::endl; }
 
 static int bdmvFolderToGuardedIso(const int argc, char** argv)
 {
@@ -2576,7 +2583,10 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
             written += n;
             if (total > 0)
             {
-                const int tenths = static_cast<int>(static_cast<double>(written) / static_cast<double>(total) * 1000.0);
+                // The copy stops at 99.9 percent: the file system is still to be written and the size checked, and
+                // either can fail. 100.0 is printed when the image is finished (reportJobComplete).
+                const int tenths = (std::min)(
+                    999, static_cast<int>(static_cast<double>(written) / static_cast<double>(total) * 1000.0));
                 if (tenths != lastTenths)
                 {
                     lastTenths = tenths;
@@ -2599,6 +2609,9 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         }
         ranges.push_back({startLbn, iso->currentImageLBA(), dataLbn});
     }
+    LTRACE(LT_INFO, 2,
+           "Finishing the image: writing the last folders and files and the file system"
+               << (discCapacitySectors > 0 ? ", and checking that it fits the disc..." : "..."));
     // Lay down the standard BD folder skeleton (empty META/BDJO/JAR/AUXDATA, CERTIFICATE, and the BACKUP
     // sub-tree), exactly as tsMuxeR's own BD authoring does via the same call. createDir() is idempotent,
     // so folders that already hold copied content are left untouched.
@@ -2733,6 +2746,8 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         std::error_code ec;
         std::filesystem::remove(fsPath(outIso + ".layerbreak.txt"), ec);
     }
+    if (!opt.partOfMux)  // a mux prints it with its own success
+        reportJobComplete();
     LTRACE(LT_INFO, 2, "bdmv-to-iso complete -> " << shownOutputName(outIso));
     return 0;
 }
@@ -4237,6 +4252,8 @@ int main(int argc, char** argv)
                 muxerManager.setChapters(customChapterList);
             if (!chapterInfo.empty())
                 muxerManager.setChapterInfo(chapterInfo);
+            muxerManager.setFinishingNote(
+                "Finishing the output: writing the index, closing the file and checking the tracks...");
             muxerManager.doMux(keepOld.forFile(dstFile, muxerManager.totalSize()), nullptr);
 
             checkSourceConsumed(muxerManager);
@@ -4252,6 +4269,7 @@ int main(int argc, char** argv)
             checkEmptyTracks(muxerManager);
             keepOld.commit();
             setSaveSrtJobSucceeded();
+            reportJobComplete();
             LTRACE(LT_INFO, 2, "Mux successful complete");
             reportSplitWithoutParameterSets(muxerManager);
             reportLostData(muxerManager);
@@ -4415,6 +4433,16 @@ int main(int argc, char** argv)
             }
             else
                 dstFile = keepOld.forFile(dstFile, muxerManager.totalSize());
+            if (dt != DiskType::NONE)
+                muxerManager.setFinishingNote(
+                    std::string("Finishing the output: closing the clips, writing the clip information and the "
+                                "playlists") +
+                    (!innerIso && strToUpperCase(extractFileExt(outputRoot)) == "ISO" ? ", finishing the image" : "") +
+                    " and checking the tracks...");
+            else
+                muxerManager.setFinishingNote(std::string("Finishing the output: closing the ") +
+                                              (muxerManager.splitAsked() ? "files" : "file") +
+                                              " and checking the tracks...");
             muxerManager.doMux(dstFile, dt != DiskType::NONE ? &blurayHelper : nullptr);
             if (dt != DiskType::NONE)
             {
@@ -4521,6 +4549,7 @@ int main(int argc, char** argv)
             setSaveSrtJobSucceeded();
             if (dt != DiskType::NONE)
                 reportFinishedDiscSize(outputRoot, muxerManager.getDiscSizeLimit(), muxerManager.getExtraISOBlocks());
+            reportJobComplete();
             LTRACE(LT_INFO, 2, "Mux successful complete");
             reportSplitWithoutParameterSets(muxerManager);
             reportLostData(muxerManager);
@@ -4553,10 +4582,12 @@ int main(int argc, char** argv)
             sMuxer.setDemuxFolder(dstFile);
             const std::string demuxDir = keepOld.forDemuxFolder(dstFile, sMuxer.totalSize());
             createDir(demuxDir, true);
+            sMuxer.setFinishingNote("Finishing the demux: closing the track files and checking the tracks...");
             sMuxer.doMux(demuxDir, nullptr);
             checkEmptyTracks(sMuxer);
             keepOld.commit();
             setSaveSrtJobSucceeded();
+            reportJobComplete();
             LTRACE(LT_INFO, 2, "Demux complete.");
             reportLostData(sMuxer);
             reportEmptyTracks(sMuxer);

@@ -5127,13 +5127,16 @@ void METADemuxer::updateReport(const bool checkTime)
     const auto currentTime = std::chrono::steady_clock::now();
     if (!checkTime || currentTime - m_lastReportTime > std::chrono::microseconds(250000))
     {
-        double progress = 100.0;
+        // The figure is the data read, and it stops at 99.9 percent: the files are still to be closed and the tracks
+        // checked after the last byte is read, and that can fail. It said "100.0% complete" over a job that then
+        // ended with an error. 100.0 is printed by the job itself, once every final check has passed.
+        double progress = 99.9;
         if (m_totalSize > 0)
         {
             const int64_t currentProcessedSize = getDemuxedSize();
             progress = static_cast<double>(currentProcessedSize) / static_cast<double>(m_totalSize) * 100.0;
-            if (progress > 100.0)
-                progress = 100.0;
+            if (progress > 99.9)
+                progress = 99.9;
             // Never below what was shown already. A converted subtitle track hands on more bytes than it read, which
             // the count makes up with bytes it takes as discarded before the codec has used the ones it was given:
             // the line went below zero, to -145 percent for a DVB track alone. The count itself stays as it is,
