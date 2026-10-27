@@ -521,6 +521,8 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
             // exactly the payload this codec ID promises.
             lpcmReader->setDemuxMode(true);
         }
+        if (const auto mp3Reader = dynamic_cast<MpegAudioStreamReader*>(codecReader))
+            mp3Reader->keepInfoFrames();  // muxPacket reads the encoder delay and padding from it
     }
     else if (codecName[0] == 'S')
     {

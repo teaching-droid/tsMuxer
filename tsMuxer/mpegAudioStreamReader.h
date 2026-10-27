@@ -15,6 +15,9 @@ class MpegAudioStreamReader final : public SimplePacketizerReader, MP3Codec
     uint8_t getChannels() override { return static_cast<uint8_t>(m_nb_channels); }
     void applyDiscoveryData(const StreamDiscoveryData& data) override;
     void fillDiscoveryData(StreamDiscoveryData& data) override;
+    int readPacket(AVPacket& avPacket) override;
+    // Matroska reads the encoder delay and padding from the first Xing or Info frame and leaves it out itself.
+    void keepInfoFrames() { m_keepInfoFrames = true; }
 
    protected:
     int getHeaderLen() override { return MPEG_AUDIO_HEADER_SIZE; }
@@ -27,6 +30,7 @@ class MpegAudioStreamReader final : public SimplePacketizerReader, MP3Codec
 
    private:
     static constexpr int MPEG_AUDIO_HEADER_SIZE = 4;
+    bool m_keepInfoFrames = false;
 };
 
 #endif
