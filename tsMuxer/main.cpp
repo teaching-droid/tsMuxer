@@ -1489,7 +1489,7 @@ All parameters in this group start with two dashes:
                               segments should stay physically close to their playback order.
                         --no-layer-fit  Do not move a file that would cross the layer break to
                               start after it; split it instead.
-                        --label=<string>  Volume label for the image.
+                        --label=<string>  Volume label for the image; Blu-Ray when not given.
 )help";
     LTRACE(LT_INFO, 2, help);
 }
@@ -2613,10 +2613,9 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
     IsoWriter* iso = helper.isoWriter();
     if (!innerBefore.empty())
         iso->setLayerBreakGuards(innerBefore, innerAfter);
-    // Give the volume a label when one was requested. The direct ISO path already supports this;
-    // BDMV-to-ISO simply reuses the same BlurayHelper call. Empty label keeps the previous behaviour.
-    if (!discLabel.empty())
-        helper.setVolumeLabel(discLabel);
+    // The volume label, as the direct ISO path sets it: "Blu-Ray" when none is given. Without --label, or with an empty
+    // one, the image had a label of one space, which a file manager shows as a drive with no name.
+    helper.setVolumeLabel(discLabel);
 
     // Emit "<pct>% complete" as the copy runs so the GUI progress bar advances. The copy is the slow
     // part (it may be reading an optical disc at only a few MB/s), so without this the bar sits at 0.0%
