@@ -1248,7 +1248,22 @@ std::string METADemuxer::mplsTrackToFullName(const std::string& mplsFileName, co
     const string mplsExt = strToLowerCase(extractFileExt(mplsFileName));
     const string m2tsExt = (mplsExt == "mpls") ? "m2ts" : "mts";
 
-    return path + mplsNum + string(".") + m2tsExt;
+    return clipNameAsOnDisc(path + mplsNum + string("."), m2tsExt);
+}
+
+// A camera's card names its clips in capitals, 00000.MTS beside 00000.MPL, and the listing named them so, but the mux
+// opened 00000.mts, which a file system that tells case apart (Linux, macOS) does not have. The name is taken in the
+// case that exists, lower case first; lower case when neither does, for the message that it cannot be opened.
+std::string METADemuxer::clipNameAsOnDisc(const std::string& stem, const std::string& lowerExt)
+{
+    const string lower = stem + lowerExt;
+    if (!fileExists(lower))
+    {
+        const string upper = stem + strToUpperCase(lowerExt);
+        if (fileExists(upper))
+            return upper;
+    }
+    return lower;
 }
 
 std::string METADemuxer::mplsTrackToSSIFName(const std::string& mplsFileName, const std::string& mplsNum)
@@ -1258,7 +1273,7 @@ std::string METADemuxer::mplsTrackToSSIFName(const std::string& mplsFileName, co
     const string mplsExt = strToLowerCase(extractFileExt(mplsFileName));
     const string ssifExt = mplsExt == "mpls" ? "ssif" : "sif";
 
-    return path + mplsNum + string(".") + ssifExt;
+    return clipNameAsOnDisc(path + mplsNum + string("."), ssifExt);
 }
 
 int METADemuxer::addPGSubStream(const string& codec, const string& _codecStreamName,

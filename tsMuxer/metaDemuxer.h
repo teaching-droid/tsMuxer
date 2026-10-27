@@ -325,6 +325,8 @@ class METADemuxer final : public AbstractDemuxer
     static std::string playlistStreamDir(const std::string& mplsFileName);
     static std::string mplsTrackToFullName(const std::string& mplsFileName, const std::string& mplsNum);
     static std::string mplsTrackToSSIFName(const std::string& mplsFileName, const std::string& mplsNum);
+    // stem + lowerExt, or stem + the extension in capitals when only that file exists (a camera card)
+    static std::string clipNameAsOnDisc(const std::string& stem, const std::string& lowerExt);
     // --playlist-clips=played (played true): the play items of a playlist that plays only parts of its clips are cut
     // to those parts; the listing does it as the mux does by default, so that the lengths and marks it gives are the
     // ones of the output

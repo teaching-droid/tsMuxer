@@ -4245,6 +4245,9 @@ int main(int argc, char** argv)
 
                 size_t markIndex = 0;
                 int64_t prevFileOffset = 0;
+                // A clip of the playlist that is not there was listed with its duration and no word; the mux then
+                // stops at it ("Can't open file"), so a window user learned it only there
+                std::vector<std::string> missingClips;
                 for (size_t i = 0; i < mplsParser.m_playItems.size(); i++)
                 {
                     MPLSPlayItem& item = mplsParser.m_playItems[i];
@@ -4259,9 +4262,17 @@ int main(int argc, char** argv)
                         // lines into its playlist file list (tsmuxerwindow.cpp), so the wrong names
                         // were user visible. The 3D branch above already builds a temporary.
                         itemName = streamDir + item.fileName + mediaExt;  // 2d mode
+                    // The name in the case the disc has, as the mux opens it (clipNameAsOnDisc)
+                    if (!mode3D && !fileExists(itemName))
+                        itemName =
+                            METADemuxer::clipNameAsOnDisc(itemName.substr(0, itemName.size() - mediaExt.size() + 1),
+                                                          strToLowerCase(mediaExt.substr(1)));
 
                     LTRACE(LT_INFO, 2, "");
                     LTRACE(LT_INFO, 2, "File #" << strPadLeft(int64ToStr(i), 5, '0') << " name=" << itemName);
+                    if (!fileExists(itemName) &&
+                        std::find(missingClips.begin(), missingClips.end(), itemName) == missingClips.end())
+                        missingClips.push_back(itemName);
                     LTRACE(LT_INFO, 2,
                            "Duration: " << floatToTime(
                                (mplsParser.m_playItems[i].OUT_time - mplsParser.m_playItems[i].IN_time) /
@@ -4298,6 +4309,16 @@ int main(int argc, char** argv)
                     if (marksPerFile > 0)
                         LTRACE(LT_INFO, 2, "");
                     prevFileOffset += mplsParser.m_playItems[i].OUT_time - mplsParser.m_playItems[i].IN_time;
+                }
+                if (!missingClips.empty())
+                {
+                    LTRACE(LT_INFO, 2, "");
+                    for (const std::string& clip : missingClips)
+                        LTRACE(LT_WARN, 2,
+                               "Warning: the clip " << clip
+                                                    << " of this playlist does not exist, so a mux of the playlist "
+                                                       "cannot read it. Copy the whole disc folder, or choose a "
+                                                       "playlist whose clips are all there.");
                 }
             }
             else
