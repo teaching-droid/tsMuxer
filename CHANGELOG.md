@@ -76,6 +76,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A job that fails no longer leaves a new output behind.** When a job ended with an error after it had begun to write, such as a mux that stopped before its sources were read or a track that gave no frames of the codec on its line, the part it had written stayed: a TS, M2TS or Matroska file with its split parts, a disc folder or a demux folder. What the job wrote is now removed, with the folders it made for it, and one line says so. A folder that was there before, and any file in it that the job did not write, is kept. A source that is cut off is the exception: the output holds what the file has and is kept, as the error says.
 
+* **Ctrl+C and SIGTERM left the unfinished output under its final name.** During the mux they now stop the job as a failure does: the unfinished output is removed, a line says so, and the exit code is still that of the signal.
+
 * **A subtitle with a long fade could end the mux with a crash,** for example at 59.94 fps. The steps of a fade are written into a buffer of fixed size, and a fade of minutes on a long subtitle ran past its end. A fade that does not fit is now shortened, with a warning.
 
 * **H.264 with pulldown and B pictures got times that were out of order or used twice,** and a Matroska output joined pictures that had the same time: with frame doubling, 60 of 144 times were used twice. Each picture now comes when the pictures before it in the order shown have been shown for their own time. Pulldown that begins later in the stream gets such times from the next IDR picture on, after a gap of a few frames there. The first decoding times of such a stream no longer repeat.
@@ -278,6 +280,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A subtitle track that read nothing ended without a word.** An empty .sup or .srt, or an SRT file on an S_HDMV/PGS line, gave an empty subtitle track and "Mux successful complete". Such a track now gets the warning that it produced no frames. Data that looks like PGS only by chance, with a picture size or a frame rate no PGS stream has, is refused as not PGS.
 
+* **A WebVTT file was read as SRT.** Its header, notes and styles were named as skipped lines, and tags such as <v Bob> and <c.yellow> and references such as &amp; were drawn into the pictures as text. A file whose first line is WEBVTT is now read as the WebVTT of a Matroska file is, and the listing gives it as WebVTT text subtitles; its cue settings are not used.
+
+* **The clear of a PGS track drawn at another size ended 90 ticks before its own time,** after the time it is decoded at. It now ends at that decoding time, as every other display set does.
+
 * **A warning about a line of an SRT file that is not part of a subtitle quoted the line as it was,** control characters and bytes that are not UTF-8 among them, so a terminal could take escape sequences from the file. Such characters are now shown as \xNN, and a quoted line is cut short after 120 bytes.
 
 ### Audio
@@ -329,6 +335,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **In a join of TS or M2TS files, TrueHD with its AC-3 core muxed as A_AC3 followed on from the sound of the file before,** although the log said that the sound of the later file starts after a gap: its core and its TrueHD came that much early against the picture, to the end of the join. Both now take the gap, as A_MLP and the other audio do.
 
 * **TrueHD with its AC-3 core that starts inside its stream, as in a cut TS or a raw file cut from one, was declared as AC-3,** with an E-AC-3 descriptor made from a false header: its lossless part can hold the AC-3 sync word, and the first one found was taken for a frame. It is now declared as TrueHD, with the descriptor of its AC-3 core, and a demux names it .ac3+thd, as from the start of the stream. AC-3 and E-AC-3 with such false headers before their first frame got that wrong descriptor as well, and E-AC-3 was declared as AC-3; they now get their own.
+
+* **LPCM and DTS Express of a TS cut that starts inside a clip were not found, and LPCM lost most of its sound.** Such a file begins inside a PES. Multichannel LPCM and DTS Express were listed as "Can't detect stream type", a typed LPCM line muxed the rest of the first PES as if it were the start of the stream, and DTS Express produced no frames. Both tracks now begin with their first PES.
 
 * **TrueHD with its AC-3 core, muxed with down-to-ac3, could give an AC-3 frame the time of the frame before it,** and every frame after it then came 32 ms early against the picture. In Matroska the two frames became one block. It depended on where the file was read in blocks, so it hit some files and not others. Each frame now comes 32 ms after the one before it.
 
@@ -384,6 +392,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **An AV1 stream without temporal delimiters became one single frame,** and the mux said it had succeeded. Its frames are now found from their headers, each is written with a temporal delimiter, and a warning says that the stream lacks them.
 
+* **AV1 in the Annex B form is read.** An .obu file of length delimited temporal units was refused as not AV1, or as a track that produced no frames. The same stream in either form now gives the same output.
+
 ### Blu-ray and transport stream
 
 * **An ISO image whose data crosses a layer break now gets the layer break guard without being asked:** 288 MB after the break and 18 MB before it are left empty, as a burnt dual-layer disc often reads badly at the layer change, and a player can then stall there. This holds for a direct mux to an .iso and for --bdmv-to-iso. The break is the one --layer-break-lbn gives, else that of the disc size, else that of a BD-R DL, and one line in the log says when the guard is written. An image that would not fit the disc with the guard is written without it, with a warning. The fit of a direct mux is reckoned from the part of the sources it takes, so a cut of a large source keeps the guard. --no-layer-break-guard, or "Leave out the layer-break guard" in the window, leaves it out, and --layer-break-guard=<MB> sets its size as before. --inner-only and a folder, TS or MKV output are not changed.
@@ -422,6 +432,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **The tracks of a Blu-ray playlist were listed by PID, not in the order the playlist offers them,** so a remux from the window of a disc whose playlist orders its audio or subtitles otherwise changed which track came first: English became audio stream 1 where the disc offers French first. The languages were right. The tracks of a playlist are now listed in the order of its stream table, and the window keeps that order. A playlist whose order follows the PIDs is listed and muxed as before. (#52, thanks to @bulba99 for the report and to @Moonghost-coder for the analysis)
 
+* **A camera card's playlist whose clips are named in capitals, as 00000.MTS, stopped with "Can't open file" on Linux and macOS.** A clip is now opened in the case that exists, and the listing warns of a clip file that is missing.
+
 * **A Blu-ray or AVCHD disc made from the command line or a meta file had its AC-3, E-AC-3, DTS, DTS-HD and TrueHD-with-core audio as stream id 0xbd,** although `--help` says a disc gets 0xfd with its extension, as the Blu-ray format has it and as the window always writes it with `--new-audio-pes`. A player that finds the audio by that extension played such a disc without sound. A disc now always gets 0xfd; LPCM keeps 0xbd, and a TS or M2TS that is no disc is written as before. Mux such discs again.
 
 * **A disc from the command line or a meta file had its clock references on the last video track,** for a Dolby Vision disc on the enhancement layer, where the Blu-ray format and the window put them on a PID of their own, 0x1001. A disc now always does. The clip information files of a UHD disc no longer end with an empty extension block, which none of the UHD discs measured has.
@@ -430,13 +442,21 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **The AV1 video descriptor of a transport stream always said "no indication" for HDR and wide colour gamut,** also for PQ or HLG video in BT.2020. It now says HDR for PQ and HLG, wide colour gamut for other BT.2020 video, and SDR for BT.709 and BT.601.
 
+* **TrueHD with an AC-3 core added by merge-ac3-file= or merge-ac3-track= was declared in the PMT as TrueHD without a core.** It now has the AC-3 registration and the AC-3 descriptor of its core, as a disc has for such a stream. The clip information and the playlist do not change.
+
+* **With --no-hdmv-descriptors, DTS was declared with the tag 0x73,** which EN 300 468 gives to another descriptor, and DTS Express got the registration of a DTS core it does not have. The DTS descriptor now has its own tag, 0x7B, and a stream without a core gets neither.
+
 * **The First Play entry of a Blu-ray's index.bdmv was marked as interactive,** the type of a top menu. It is marked as a movie now, as Blu-ray discs mark it. The Top Menu and title entries are not changed, and the index of an AVCHD disc is written as before.
 
 * **A transport stream packet sent twice** (the same continuity counter and payload, as the standard allows) is read once. Both were read, and the track could be damaged or not recognised.
 
 * **Scrambled and lost packets in a transport stream were muxed without a word.** The recording of an encrypted channel, or one with lost packets, gave damaged pictures and exit code 0. A warning now names the track, the number of packets and the time of the first. A track that is scrambled from start to end is refused with that reason.
 
+* **A TS that is cut off, or has a stretch of bytes that are no packets, was muxed without a word,** as a part overwritten with zeros: seconds of picture and sound were lost there, and the last frames of a file cut inside a packet were damaged, with "Mux successful". Each now gives a warning.
+
 * **A join of audio files with different layouts was described two ways on a disc.** The PMT gave the layout of the first file, and the clip information and the playlist that of the last: 5.1 and then 2.0 was stereo in the playlist, and 48 kHz and then 44.1 kHz got the code of 44.1 kHz. All three now give the first layout.
+
+* **A join of files with different sample rates was reported only for a Blu-ray,** and only where the later rate is no disc rate. A Matroska file and a TS give one rate for the track, the first, so the warning is now given for every output but a demux. A join of H.264 files that changes the picture size inside one disc clip gets a warning as well.
 
 * **A split of a disc into more than 999 parts wrote a playlist that a player does not read,** as a playlist holds at most 999 play items. Such a split now stops with a message that asks for a larger --split-duration or --split-size.
 
@@ -479,6 +499,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **E-AC-3 without an AC-3 core** gets a warning on a disc: a Blu-ray player has to decode AC-3 but not E-AC-3, so a player without an E-AC-3 decoder plays no sound from it.
 
 * **Opus on a Blu-ray or AVCHD disc was taken with a warning,** and its entry in the clip information was written without a stream coding type, as a disc has none for Opus; a disc of Opus alone was refused with "Can't create EP map". Opus is now refused on a disc with that reason, before anything is written. A TS, M2TS or Matroska output takes it as before. Other sound a Blu-ray player does not play, such as AAC or MP3, is still muxed with a warning.
+
+* **AV1 on a Blu-ray or AVCHD disc is refused before the mux,** as Opus is, as a disc has no stream coding type for it. AV1 alone ended with "Can't create EP map" after the whole mux, and AV1 beside a sound track ended "successful" with a playlist that had no video.
+
+* **More discs that a player may not play get a warning:** main video in a size or rate no disc has (640x360, 720p at 25, 576 lines at 50, H.264 at 2160 lines, HEVC at 120 pictures a second or at 8K), HEVC whose picture size changes inside the stream, audio marked secondary that a disc does not carry as secondary audio (only DTS Express and Dolby Digital Plus without an AC-3 core are), a merged dual layer Dolby Vision track on one meta line, and on --avchd the codecs an AVCHD player does not play (MPEG-2, VC-1, HEVC, DTS, DTS-HD, E-AC-3, TrueHD). The discs are written as before.
 
 * **DTS Express muxed to a disc without "secondary" went out as primary audio without a word,** as DTS-HD High Resolution with no core. A Blu-ray disc has DTS Express as secondary audio only. A warning now says that "secondary" on its line makes it a commentary track.
 
@@ -707,6 +731,14 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **A split job left the higher-numbered parts of an earlier job in place,** without a word: 3 new parts over 9 old ones left a folder of 9 parts made by two jobs. The old parts the new job did not write are now removed, each with a line that names it. Only files named as the job names its own parts are touched, and a job that fails removes nothing.
 
 * **Some refusals of a wrong video codec said little,** such as "VC1 stream error: Not enough buffer for write headers" and "Only ADVANCED profile are supported now", and an H.264 track that could not write its parameter sets again said only that a buffer was too small. They now name the track and what was found, and give the usual reason that the codec on the meta line is not the codec the file holds.
+
+* **Options and values that did nothing were taken without a word.** These now give a warning: --auto-chapters on a Matroska, TS or demux output; --custom-chapters and --chapters-file on a demux; --title, track-name= and the Matroska flags on a TS, a disc or a demux; a track of a kind an .mka or .mks output does not hold; default= on a second Matroska track of one type; a track parameter or --lang-codes given twice (the last is used); level= on a track other than H.264 or HEVC; split-ac3-core outside a demux or on a track it cannot split; drop-ac3-core on a TS or Blu-ray; merge-ac3-file= or merge-ac3-track= on a line other than A_MLP; and a 16 bit stereo WAV that holds AC-3 or DTS as IEC 61937 bursts, which is muxed as noise.
+
+* **More values are checked and refused with the reason:** forced=2, original=bogus and the like (the Matroska flags took any value as a yes); subTrack= other than 1 or 2, or on a stream file without track=; --mplsOffset, --m2tsOffset and --blankOffset that are not whole numbers (5abc was 5); picture-in-picture values outside what a disc takes (pipHOffset=-1 became 4095, pipLumma=256 became 0, an unknown pipCorner became BottomLeft); --keep-editions with --no-chapters; and --custom-chapters with a space after a semicolon, which lost the chapters after it. A quoted list with spaces is now read.
+
+* **A source tsMuxeR cannot read says what to give instead:** an .iso image or a disc folder, a TS or Matroska file without an extension, and raw AC-3 or DTS named as a container. The listing names more tracks: the subpictures of a DVD and the JPEG picture tracks of an MP4 file under "Not supported:", and an MP4 track of one H.264 picture as H.264.
+
+* **Some messages gave the wrong reason or none at all.** A 44.1 kHz WAV for a Matroska output was refused with the Blu-ray rate list; the message now says that the PCM reader takes 48, 96 and 192 kHz for every output. merge-ac3-file= with no value stopped with a message about the inner workings of the program. down-to-ac3 next to merge-ac3-track= said the stream has no core. A .sup of one END segment was refused as "stopped before the source was finished". A DTS-HD Master Audio stream without a core was listed as "0Kbps core + MLP data". On Linux and macOS each progress line in a log file or a pipe began with ESC M. The help said --split-size gives each part a maximum size; a part ends at the first key picture after it.
 
 * **A chapter file with more than one edition** uses the edition a Matroska file would: the one marked as the default, also when the mark follows its chapters, without its hidden and disabled chapters. It used the first edition with them.
 
