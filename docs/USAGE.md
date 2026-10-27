@@ -175,7 +175,7 @@ down-to-ac3       | For TRUE-HD and E-AC3 (DD+) tracks. Keep the AC-3 core, drop
 secondary         | Mux as secondary audio.  Available for DD+ and DTS-Express. 
 default           | Mark this track as the default one. `none`, `no`, `0`, `false` or `off` say that it is not.
 w64               | **Demux only, LPCM only.** Write the track as Wave64 (`.w64`) instead of WAV. A WAV header states its sizes in 32 bits and so cannot describe a file past 4 GiB, which is why a long track is otherwise written as two; Wave64 is the same audio with 64 bit sizes and stays one file.
-stretch           | Stretch audio by a given factor. Can be a decimal value or a fraction (e.g. 25/24). Useful for fixing A/V sync issues caused by frame rate discrepancies.
+stretch           | Stretch audio by a given factor. Can be a decimal value or a fraction (e.g. 25/24), from 0.5 up to 2. Useful for fixing A/V sync issues caused by frame rate discrepancies. Audio tracks only: on a video or subtitle track it is ignored with a warning.
 merge-ac3-track   | **MKV only, A_MLP only.** Matroska track number of a classic AC-3 stream to interleave with this TrueHD track for Blu-ray-style muxing. Requires `track=<TrueHD track number>`. Do not add the AC-3 track as a separate meta line.
 merge-ac3-file    | **A_MLP only.** Path to an external classic AC-3 (`.ac3`) file to interleave with a standalone TrueHD (`.thd`) stream for Blu-ray-style muxing.
 

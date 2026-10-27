@@ -4039,6 +4039,42 @@ static double parseFpsValue(const std::string& text)
     return fps;
 }
 
+// stretch= of an audio track: a number with an optional decimal point, or a fraction written with "/", such as 25/24.
+// Only a 0 below the bar was refused: stretch=0 and text such as abc gave every frame the same time, stretch=-1 made
+// the times run backwards and stretch=1000 spread 10 s of sound over 2.7 hours, all without a word. The factor is meant
+// for the gap between two frame rates (25/24, 24000/25025), so it is kept from 0.5 up to 2.
+static double parseStretchValue(const std::string& text)
+{
+    const std::string t = trimStr(text);
+    auto number = [](const std::string& s, double& value)
+    {
+        if (s.empty() || s.find_first_not_of("0123456789.") != std::string::npos ||
+            std::count(s.begin(), s.end(), '.') > 1 || s.find_first_of("0123456789") == std::string::npos)
+            return false;
+        value = strToDouble(s.c_str());
+        return true;
+    };
+    double stretch = 0;
+    const size_t bar = t.find('/');
+    bool ok;
+    if (bar == std::string::npos)
+        ok = number(t, stretch);
+    else
+    {
+        double num = 0, den = 0;
+        ok = number(t.substr(0, bar), num) && number(t.substr(bar + 1), den);
+        if (ok && den == 0.0)
+            THROW(ERR_COMMON, "Second argument at stretch parameter can not be 0")
+        if (ok)
+            stretch = num / den;
+    }
+    if (!ok || !(stretch >= 0.5) || stretch > 2.0)
+        THROW(ERR_COMMON, "stretch=" << text
+                                     << " is not a factor tsMuxeR can stretch the sound by. Write it as a number such "
+                                        "as 1.04 or as a fraction such as 25/24, from 0.5 up to 2.")
+    return stretch;
+}
+
 // video-width= and video-height= of a subtitle track: a whole number of pixels. A negative size wrapped round to a
 // large one (-720 became 64816, and the subtitles were drawn for 1920x1080), and text such as abc was read as 0, both
 // in silence.
@@ -4749,26 +4785,12 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
     {
         auto itr = addParams.find("stretch");
         if (itr != addParams.end())
-        {
-            double stretch;
-            size_t divPos = itr->second.find('/');
-            if (divPos == std::string::npos)
-                stretch = strToDouble(itr->second.c_str());
-            else
-            {
-                string firstStr = itr->second.substr(0, divPos);
-                string secondStr = itr->second.substr(divPos + 1, itr->second.size() - divPos - 1);
-                double dFirst = strToDouble(firstStr.c_str());
-                double dSecond = strToDouble(secondStr.c_str());
-                if (dSecond != 0.0)
-                    stretch = dFirst / dSecond;
-                else
-                    THROW(ERR_COMMON, "Second argument at stretch parameter can not be 0")
-            }
-            if (itr != addParams.end())
-                dynamic_cast<SimplePacketizerReader*>(rez)->setStretch(stretch);
-        }
+            dynamic_cast<SimplePacketizerReader*>(rez)->setStretch(parseStretchValue(itr->second));
     }
+    // Only an audio track is stretched; on a video or subtitle line the parameter was taken and did nothing
+    else if (addParams.find("stretch") != addParams.end() && !quiet)
+        LTRACE(LT_WARN, 2,
+               "Warning: stretch= applies to audio tracks only, and is ignored on the " << codecName << " track.");
     auto itr = addParams.find("secondary");
     if (itr != addParams.end())
         rez->setIsSecondary(true);

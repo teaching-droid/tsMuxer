@@ -980,8 +980,8 @@ Additional parameters for audio tracks:
                     the original language, commentary. =1 (or the name alone) sets the
                     flag, =0 clears it. A Matroska source's own flags are kept otherwise.
 - stretch           Stretch audio by a given factor. Can be a decimal value or a
-                    fraction (e.g. 25/24). Useful for fixing A/V sync issues
-                    caused by frame rate discrepancies.
+                    fraction (e.g. 25/24), from 0.5 up to 2. Useful for fixing A/V
+                    sync issues caused by frame rate discrepancies. Audio tracks only.
 
 TrueHD + AC-3 core merge (MKV only):
 - merge-ac3-track   Matroska track number of a classic AC-3 (Dolby Digital) stream to interleave with this A_MLP
