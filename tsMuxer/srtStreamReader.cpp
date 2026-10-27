@@ -702,7 +702,8 @@ void SRTStreamReader::skipNonCueLine()
             what << "Warning: track " << m_streamIndex;
             if (!m_streamName.empty())
                 what << " (" << m_streamName << ")";
-            what << ", line " << lineNumber << ": \"" << line << "\" is not part of a subtitle and is skipped.";
+            what << ", line " << lineNumber << ": \"" << UtfConverter::quotedForMessage(line)
+                 << "\" is not part of a subtitle and is skipped.";
             LTRACE(LT_WARN, 2, what.str());
         }
     }
@@ -746,7 +747,8 @@ void SRTStreamReader::reportSkippedLines()
         if (!m_streamName.empty())
             what << " (" << m_streamName << ")";
         what << ". The first line that is not part of a subtitle is line " << m_firstSkippedLine << ", \""
-             << m_firstSkippedText << "\". A subtitle starts with a timing line like 00:00:20,000 --> 00:00:24,400";
+             << UtfConverter::quotedForMessage(m_firstSkippedText)
+             << "\". A subtitle starts with a timing line like 00:00:20,000 --> 00:00:24,400";
         THROW(ERR_COMMON, what.str())
     }
     if (m_skippedLines > 5)

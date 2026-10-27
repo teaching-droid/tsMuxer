@@ -28,6 +28,9 @@ std::string toUtf8(const uint8_t* start, size_t numBytes, SourceFormat srcFormat
 bool makeValidUtf8(std::string& text);
 // A text from the meta file in valid UTF-8, read in the active code page on Windows. Returns whether it was not UTF-8.
 bool metaTextToUtf8(std::string& text);
+// A line of a source file as a message quotes it: a control character or a byte that is not UTF-8 as \xNN, and at
+// most maxBytes of it, then "...".
+std::string quotedForMessage(const std::string& text, size_t maxBytes = 120);
 }  // namespace UtfConverter
 
 #endif

@@ -97,6 +97,42 @@ std::string from_utf_nn(std::vector<InputType>&& vec, bool& replaced)
 namespace UtfConverter
 {
 
+// The length of the valid UTF-8 sequence (RFC 3629) that begins at text[i], or 0 where none does
+static size_t validSequenceAt(const std::string& text, const size_t i)
+{
+    const auto b = static_cast<uint8_t>(text[i]);
+    size_t len = 0;
+    uint8_t lo = 0x80;  // the allowed range of the second byte
+    uint8_t hi = 0xBF;
+    if (b < 0x80)
+        len = 1;
+    else if (b >= 0xC2 && b <= 0xDF)
+        len = 2;
+    else if (b >= 0xE0 && b <= 0xEF)
+    {
+        len = 3;
+        if (b == 0xE0)
+            lo = 0xA0;  // no overlong form
+        else if (b == 0xED)
+            hi = 0x9F;  // no surrogate
+    }
+    else if (b >= 0xF0 && b <= 0xF4)
+    {
+        len = 4;
+        if (b == 0xF0)
+            lo = 0x90;
+        else if (b == 0xF4)
+            hi = 0x8F;  // nothing above U+10FFFF
+    }
+    bool ok = len > 0 && i + len <= text.size();
+    for (size_t k = 1; ok && k < len; ++k)
+    {
+        const auto c = static_cast<uint8_t>(text[i + k]);
+        ok = k == 1 ? c >= lo && c <= hi : c >= 0x80 && c <= 0xBF;
+    }
+    return ok ? len : 0;
+}
+
 // Valid UTF-8, which a Matroska text track must hold: a byte that does not begin or continue a valid
 // sequence (RFC 3629) becomes U+FFFD. The text has already been converted from the file's encoding;
 // this catches a file whose encoding was judged from its first part and changes later, and a file
@@ -108,37 +144,7 @@ bool makeValidUtf8(std::string& text)
     size_t i = 0;
     while (i < text.size())
     {
-        const auto b = static_cast<uint8_t>(text[i]);
-        size_t len = 0;
-        uint8_t lo = 0x80;  // the allowed range of the second byte
-        uint8_t hi = 0xBF;
-        if (b < 0x80)
-            len = 1;
-        else if (b >= 0xC2 && b <= 0xDF)
-            len = 2;
-        else if (b >= 0xE0 && b <= 0xEF)
-        {
-            len = 3;
-            if (b == 0xE0)
-                lo = 0xA0;  // no overlong form
-            else if (b == 0xED)
-                hi = 0x9F;  // no surrogate
-        }
-        else if (b >= 0xF0 && b <= 0xF4)
-        {
-            len = 4;
-            if (b == 0xF0)
-                lo = 0x90;
-            else if (b == 0xF4)
-                hi = 0x8F;  // nothing above U+10FFFF
-        }
-        bool ok = len > 0 && i + len <= text.size();
-        for (size_t k = 1; ok && k < len; ++k)
-        {
-            const auto c = static_cast<uint8_t>(text[i + k]);
-            ok = k == 1 ? c >= lo && c <= hi : c >= 0x80 && c <= 0xBF;
-        }
-        if (ok)
+        if (const size_t len = validSequenceAt(text, i))
         {
             out.append(text, i, len);
             i += len;
@@ -153,6 +159,35 @@ bool makeValidUtf8(std::string& text)
     if (replaced)
         text.swap(out);
     return replaced;
+}
+
+// A line of a source file quoted in a message. Random data on a subtitle line was quoted whole, several hundred bytes
+// with an ESC and bytes that are not UTF-8 among them: the message was not valid UTF-8, and a terminal took escape
+// sequences from the file. A control character or a byte that is not valid UTF-8 is now written as \xNN, and a line
+// longer than maxBytes is cut short with "...".
+std::string quotedForMessage(const std::string& text, const size_t maxBytes)
+{
+    static const char HEX[] = "0123456789ABCDEF";
+    std::string out;
+    size_t i = 0;
+    while (i < text.size() && out.size() < maxBytes)
+    {
+        const auto b = static_cast<uint8_t>(text[i]);
+        const size_t len = validSequenceAt(text, i);
+        if (len == 0 || b < 0x20 || b == 0x7F)
+        {
+            out += "\\x";
+            out += HEX[b >> 4];
+            out += HEX[b & 15];
+            ++i;
+            continue;
+        }
+        out.append(text, i, len);
+        i += len;
+    }
+    if (i < text.size())
+        out += "...";
+    return out;
 }
 
 // A meta file is read as UTF-8. One saved in another encoding, as Latin-1 on Linux or the ANSI code page of an older
