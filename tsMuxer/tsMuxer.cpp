@@ -502,10 +502,15 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
     m_extIndexToTSIndex[streamIndex] = tsStreamIndex;
 
     m_pmt.program_number = 1;
+    // The PCR goes on the video PID. A mux without video put it on PID 0, the PID of the program association table,
+    // which the PCR_PID of the program map then named: it goes on a PID of its own, as with --no-pcr-on-video-pid,
+    // until a video track takes it.
     if (m_pcrOnVideo)
     {
         if (codecName[0] == 'V')
             m_pmt.pcr_pid = tsStreamIndex;
+        else if (m_pmt.pcr_pid == 0)
+            m_pmt.pcr_pid = DEFAULT_PCR_PID;
     }
     else
         m_pmt.pcr_pid = DEFAULT_PCR_PID;
@@ -1547,16 +1552,13 @@ void TSMuxer::noteAtsPass(const int frames, const double gap)
 
 // The continuity counter of a packet that carries only a PCR. A packet without payload repeats the counter of the last
 // packet of its PID (ISO/IEC 13818-1, 2.4.3.3). m_tsCnt holds the counter of the NEXT packet, so a PCR packet on the
-// video PID took the counter of the payload packet after it, and every PCR cost two continuity errors there. Without
-// video and without --no-pcr-on-video-pid the PCR goes out on PID 0, whose packets count with m_patCnt. A PCR PID of
-// its own carries no payload at all and keeps the counter it always had.
+// video PID took the counter of the payload packet after it, and every PCR cost two continuity errors there. A PCR
+// PID of its own, also that of a mux without video, carries no payload at all and keeps the counter it always had.
 int TSMuxer::pcrOnlyPacketCounter()
 {
     const int pid = m_pmt.pcr_pid;
     if (pid == DEFAULT_PCR_PID)
         return m_streamInfo[pid].m_tsCnt & 15;
-    if (pid == 0)
-        return (m_patCnt - 1) & 15;
     return (m_streamInfo[pid].m_tsCnt - 1) & 15;
 }
 
