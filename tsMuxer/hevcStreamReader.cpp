@@ -488,8 +488,9 @@ int HEVCStreamReader::getTSDescriptor(uint8_t* dstBuff, const bool blurayMode, c
     if (m_multiLayer)
         refuseMultiLayer();
 
-    // A disc takes HEVC as progressive pictures only: coded as fields, a player cannot decode it
-    if (blurayMode && fieldCoded() && !m_fieldsOnDiscSaid)
+    // A disc takes HEVC as progressive pictures only: coded as fields, a player cannot decode it. A demux asks with
+    // blurayMode set as well, and was given the warning about a disc it does not write.
+    if (blurayMode && !m_demuxMode && fieldCoded() && !m_fieldsOnDiscSaid)
     {
         LTRACE(LT_WARN, 2,
                "Warning: this HEVC stream is coded as fields (interlaced). A Blu-ray or UHD disc takes HEVC as "
@@ -1098,15 +1099,23 @@ int HEVCStreamReader::getStreamHDR() const
     if (!said)
     {
         said = true;
-        // PQ without the BT.2020 colours and matrix HDR10 names is not SDR either: it is said as it is
+        // PQ without the BT.2020 colours and matrix HDR10 names is not SDR either: it is said as it is. Neither is
+        // 2, which means unspecified (a stream without a colour description has it): it was called SDR.
         const bool pq = m_sps->transfer_characteristics == 16;
+        const bool unspecified = m_sps->transfer_characteristics == 2;
         LTRACE(LT_WARN, 2,
                "Warning: hdr10-override: the HEVC stream "
-                   << (pq ? "is PQ without the BT.2020 colours of HDR10" : "says SDR") << " (transfer characteristics "
-                   << static_cast<int>(m_sps->transfer_characteristics)
+                   << (pq            ? "is PQ without the BT.2020 colours of HDR10"
+                       : unspecified ? "does not say how its picture is coded"
+                                     : "says SDR")
+                   << " (transfer characteristics " << static_cast<int>(m_sps->transfer_characteristics)
+                   << (unspecified ? ", unspecified" : "")
                    << "), and the disc marks it as HDR10 as asked. A player will switch the screen to HDR while the "
                       "picture is coded "
-                   << (pq ? "otherwise" : "for SDR") << "; check how it looks before using the disc.");
+                   << (pq            ? "otherwise"
+                       : unspecified ? "as the stream does not say"
+                                     : "for SDR")
+                   << "; check how it looks before using the disc.");
     }
     V3_flags |= HDR10;
     return 2;
