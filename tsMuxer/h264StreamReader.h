@@ -287,6 +287,9 @@ class H264StreamReader final : public MPEGStreamReader
     std::vector<uint8_t> m_fieldPacket;  // that SEI unit and the packet it goes in front of
 
     bool m_spsChangeWarned;
+    int m_firstSpsWidth = 0;  // the picture size of the first SPS: a join of files of other sizes changes it
+    int m_firstSpsHeight = 0;
+    bool m_sizeChangeSaid = false;
     // Whether the two flags above hold a real stream's values yet, as opposed to the
     // constructor's false. Without it the first SPS was compared against the defaults and
     // reported as a change.

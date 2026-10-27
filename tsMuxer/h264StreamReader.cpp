@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "avCodecs.h"
+#include "tsMuxer.h"
 #include "tsPacket.h"
 #include "vodCoreException.h"
 #include "vod_common.h"
@@ -2609,6 +2610,26 @@ int H264StreamReader::processSPS(uint8_t* buff)
         return nalRez;  // not enough buffer
     }
 
+    // A clip of a disc has one picture size. A join of files of other sizes changed it in the middle of the clip, and
+    // the job ended "Mux successful" without a word.
+    if (m_firstSpsWidth == 0)
+    {
+        m_firstSpsWidth = static_cast<int>(sps->getWidth());
+        m_firstSpsHeight = static_cast<int>(sps->getHeight());
+    }
+    else if ((static_cast<int>(sps->getWidth()) != m_firstSpsWidth ||
+              static_cast<int>(sps->getHeight()) != m_firstSpsHeight) &&
+             !m_sizeChangeSaid && (V3_flags & BLURAY_OUT) && !m_demuxMode)
+    {
+        m_sizeChangeSaid = true;
+        LTRACE(LT_WARN, 2,
+               "Warning: H264 stream (track " << m_streamIndex << ") changes its picture size from " << m_firstSpsWidth
+                                              << "x" << m_firstSpsHeight << " to " << sps->getWidth() << "x"
+                                              << sps->getHeight()
+                                              << ", as a join of files of different sizes does. A clip of a Blu-ray "
+                                                 "disc has one picture size, so a player may not play the part after "
+                                                 "the change. Join files of one size only.");
+    }
     if (m_spsMap.find(sps->seq_parameter_set_id) == m_spsMap.end())
     {
         LTRACE(LT_INFO, 2, "Decoding H264 stream (track " << m_streamIndex << "): " << sps->getStreamDescr());
