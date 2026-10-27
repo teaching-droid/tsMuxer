@@ -912,12 +912,20 @@ void H264StreamReader::updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* ne
     auto tmpBuffer = std::make_unique<uint8_t[]>(oldSpsLen + 16);
     const long newSpsLen = sps->serializeBuffer(tmpBuffer.get(), tmpBuffer.get() + oldSpsLen + 16, false);
     if (newSpsLen == -1)
-        THROW(ERR_COMMON, "Not enough buffer")
+        THROW(ERR_COMMON, "Track " << m_streamIndex
+                                   << ": its H.264 sequence parameter set could not be written again with the frame "
+                                      "rate, as it does not hold what an H.264 stream holds there. "
+                                   << "The usual reason is that the codec on the meta line is not the codec the file "
+                                      "holds. List the file on its own to see what tsMuxeR makes of it.")
     if (newSpsLen != oldSpsLen)
     {
         const int sizeDiff = newSpsLen - oldSpsLen;
         if (m_bufEnd + sizeDiff > m_tmpBuffer + m_tmpBufferSize)
-            THROW(ERR_COMMON, "Not enough buffer")
+            THROW(ERR_COMMON, "Track " << m_streamIndex
+                                       << ": its H.264 sequence parameter set could not be written again with the "
+                                          "frame rate, as it does not hold what an H.264 stream holds there. "
+                                       << "The usual reason is that the codec on the meta line is not the codec the "
+                                          "file holds. List the file on its own to see what tsMuxeR makes of it.")
         memmove(nextNal + sizeDiff, nextNal, m_bufEnd - nextNal);
         m_bufEnd += sizeDiff;
         // m_dataLen += sizeDiff;

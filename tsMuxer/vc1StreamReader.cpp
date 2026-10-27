@@ -37,14 +37,26 @@ int VC1StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPa
         if (!m_seqBuffer.empty())
         {
             if (static_cast<size_t>(dstEnd - curPtr) < m_seqBuffer.size())
-                THROW(ERR_COMMON, "VC1 stream error: Not enough buffer for write headers")
+                THROW(ERR_COMMON,
+                      "Track "
+                          << m_streamIndex << ": its VC-1 sequence header of " << m_seqBuffer.size()
+                          << " bytes does not fit the room kept for it in front of a picture, "
+                             "which no VC-1 stream needs. The usual reason is that the codec on the meta line is not "
+                             "the codec the file holds. List the file on its own to see what tsMuxeR "
+                             "makes of it.")
             memcpy(curPtr, m_seqBuffer.data(), m_seqBuffer.size());
             curPtr += m_seqBuffer.size();
         }
         if (!m_entryPointBuffer.empty())
         {
             if (static_cast<size_t>(dstEnd - curPtr) < m_entryPointBuffer.size())
-                THROW(ERR_COMMON, "VC1 stream error: Not enough buffer for write headers")
+                THROW(ERR_COMMON,
+                      "Track "
+                          << m_streamIndex << ": its VC-1 entry point header of " << m_entryPointBuffer.size()
+                          << " bytes does not fit the room kept for it in front of a picture, "
+                             "which no VC-1 stream needs. The usual reason is that the codec on the meta line is not "
+                             "the codec the file holds. List the file on its own to see what tsMuxeR "
+                             "makes of it.")
             memcpy(curPtr, m_entryPointBuffer.data(), m_entryPointBuffer.size());
             curPtr += m_entryPointBuffer.size();
         }
@@ -243,8 +255,11 @@ int VC1StreamReader::decodeSeqHeader(uint8_t* buff)
         LTRACE(LT_INFO, 2, "Decoding VC-1 stream (track " << m_streamIndex << "): " << m_sequence.getStreamDescr());
     }
     if (m_sequence.profile != Profile::ADVANCED)
-        THROW(ERR_VC1_ERR_PROFILE,
-              "Only ADVANCED profile are supported now. For feature request contat to: r_vasilenko@smlabs.net.")
+        THROW(ERR_VC1_ERR_PROFILE, "Track " << m_streamIndex
+                                            << ": only VC-1 of the Advanced profile is supported, and this stream "
+                                               "gives another profile. If the file is not VC-1 at all, the codec on "
+                                               "the meta line is not the codec the file holds. List the file on its "
+                                               "own to see what tsMuxeR makes of it.")
 
     m_spsFound++;
     nextNal = VC1Unit::findNextMarker(buff, m_bufEnd);

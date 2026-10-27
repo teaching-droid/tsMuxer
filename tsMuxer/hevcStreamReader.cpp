@@ -474,7 +474,7 @@ CheckStreamRez HEVCStreamReader::checkStream(uint8_t* buffer, const int len)
                 }
             }
         }
-        if (m_multiLayer)
+        if (m_multiLayer && m_sps)
             rez.streamDescr += " Multi-layer (MV-HEVC): cannot be muxed";
     }
 
@@ -1055,8 +1055,17 @@ void HEVCStreamReader::markHdr10ByMasteringSei()
 // unit. tsMuxeR reads single layer HEVC. Each view was muxed as a picture of its own, with times that could not be
 // right (presented before decoded), at exit 0, and the Dolby Vision descriptor called it profile 8. A transport
 // stream, a disc and Matroska have no way here to carry the second view, so the stream is refused.
+// Data that is not HEVC at all, H.264, AC-3 or DTS on a V_MPEGH/ISO/HEVC line, has such a "layer" by chance in its
+// first bytes, and was refused with this text about MV-HEVC and Dolby Vision. A stream with layers has a sequence
+// parameter set of its base layer before any picture: without one, the data is refused as not HEVC.
 void HEVCStreamReader::refuseMultiLayer() const
 {
+    if (!m_sps)
+        THROW(ERR_COMMON, "Track " << m_streamIndex
+                                   << " is not HEVC: no sequence parameter set came before its first picture, as "
+                                      "one does in an HEVC stream. The usual reason is that the codec on the meta "
+                                      "line is not the codec the file holds. List the file on its own to see what "
+                                      "tsMuxeR makes of it.")
     THROW(ERR_COMMON, "Track " << m_streamIndex
                                << ": the HEVC stream has more than one layer (multi-layer HEVC, MV-HEVC, as Dolby "
                                   "Vision profile 20 and 3D HEVC are coded). tsMuxeR can mux single layer HEVC only, "
