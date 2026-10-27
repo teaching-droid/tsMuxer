@@ -4438,9 +4438,37 @@ int main(int argc, char** argv)
 
                     LTRACE(LT_INFO, 2, "");
                     LTRACE(LT_INFO, 2, "File #" << strPadLeft(int64ToStr(i), 5, '0') << " name=" << itemName);
-                    if (!fileExists(itemName) &&
-                        std::find(missingClips.begin(), missingClips.end(), itemName) == missingClips.end())
-                        missingClips.push_back(itemName);
+                    // A 3D clip is read from its two .m2ts, as the mux reads it, and from the .ssif only when one of
+                    // them is missing; a folder without the SSIF folder is complete
+                    string missingName;
+                    if (!mode3D)
+                    {
+                        if (!fileExists(itemName))
+                            missingName = itemName;
+                    }
+                    else
+                    {
+                        const string ssifName = METADemuxer::clipNameAsOnDisc(
+                            streamDir + string("SSIF") + getDirSeparator() + item.fileName + ".",
+                            strToLowerCase(ssifExt.substr(1)));
+                        if (!fileExists(ssifName))
+                        {
+                            const string lowerMediaExt = strToLowerCase(mediaExt.substr(1));
+                            const string baseName =
+                                METADemuxer::clipNameAsOnDisc(streamDir + item.fileName + ".", lowerMediaExt);
+                            const string depName = i < mplsParser.m_mvcFiles.size() && !mplsParser.m_mvcFiles[i].empty()
+                                                       ? METADemuxer::clipNameAsOnDisc(
+                                                             streamDir + mplsParser.m_mvcFiles[i] + ".", lowerMediaExt)
+                                                       : string();
+                            if (!fileExists(baseName))
+                                missingName = baseName;
+                            else if (!depName.empty() && !fileExists(depName))
+                                missingName = depName;
+                        }
+                    }
+                    if (!missingName.empty() &&
+                        std::find(missingClips.begin(), missingClips.end(), missingName) == missingClips.end())
+                        missingClips.push_back(missingName);
                     LTRACE(LT_INFO, 2,
                            "Duration: " << floatToTime(
                                (mplsParser.m_playItems[i].OUT_time - mplsParser.m_playItems[i].IN_time) /
