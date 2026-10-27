@@ -649,6 +649,9 @@ int HevcSpsUnit::deserialize()
         if (pic_width_in_luma_samples >= 3840)
             V3_flags |= FOUR_K;
 
+        // Without a conformance window the offsets are 0 (7.4.3.2.1). The unit is read again for each SPS of the
+        // stream, so a 720p SPS after a 1080p one kept the 1080p crop and was taken for 1280x712.
+        conf_win_left_offset = conf_win_right_offset = conf_win_top_offset = conf_win_bottom_offset = 0;
         if (m_reader.getBit())  // conformance_window_flag
         {
             conf_win_left_offset = extractUEGolombCode();

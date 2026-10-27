@@ -1073,6 +1073,29 @@ void HEVCStreamReader::refuseMultiLayer() const
                                   "so it is not muxed.")
 }
 
+// A disc clip has one picture size. A stream whose size changes inside it (1080p, then 720p) went onto a disc as one
+// clip with the first size in its clip information, without a word. Said once, for a disc only.
+void HEVCStreamReader::warnSizeChangeOnDisc()
+{
+    const unsigned width = getStreamWidth();
+    const unsigned height = getStreamHeight();
+    if (m_firstSpsWidth == 0)
+    {
+        m_firstSpsWidth = width;
+        m_firstSpsHeight = height;
+        return;
+    }
+    if (m_sizeChangeSaid || (width == m_firstSpsWidth && height == m_firstSpsHeight) || !(V3_flags & BLURAY_OUT) ||
+        m_demuxMode)
+        return;
+    m_sizeChangeSaid = true;
+    LTRACE(LT_WARN, 2,
+           "Warning: the HEVC stream changes its picture size from "
+               << m_firstSpsWidth << "x" << m_firstSpsHeight << " to " << width << "x" << height
+               << " within the stream. A disc clip has one picture size, and a disc player may show the pictures "
+                  "after the change wrongly or stop. Mux the parts of different sizes as titles of their own.");
+}
+
 // An HEVC stream without a VPS has its SPS and its pictures, and none of them can be written without it. It was refused
 // with the usual reason for an empty track, a codec on the meta line that is not the codec of the file, which is wrong.
 std::string HEVCStreamReader::emptyTrackReason() const
@@ -1794,6 +1817,7 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                 if (rez)
                     return rez;
                 noteSampleAspectRatio(m_sps->sar);
+                warnSizeChangeOnDisc();
                 m_spsPpsFound = true;
                 m_vpsSizeDiff = 0;
                 updateFPS(m_sps, curPos, nextNalWithStartCode, 0);
