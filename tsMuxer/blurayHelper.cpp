@@ -316,7 +316,7 @@ void BlurayHelper::close()
 bool BlurayHelper::open(const string& dst, const DiskType dt, const int64_t diskSize, const int extraISOBlocks,
                         const bool useReproducibleIsoHeader, const int layerBreakGuardMB,
                         const std::vector<int>& layerBreakLbns, const int layerBreakGuardBeforeMB,
-                        const int64_t discBytes)
+                        const int64_t discBytes, const bool defaultGuard)
 {
     m_dstPath = toNativeSeparators(dst);
 
@@ -338,20 +338,24 @@ bool BlurayHelper::open(const string& dst, const DiskType dt, const int64_t disk
         {
             std::string warning, error;
             breaks = defaultLayerBreaks(discBytes, warning, error);
-            if (!error.empty())
+            // The guard given by default says nothing here: a disc of one layer, or one whose breaks are not known,
+            // has no break for it, and an image that crosses one is told so when it is finished (IsoWriter::close).
+            if (defaultGuard && !error.empty())
+                breaks.clear();
+            else if (!error.empty())
                 THROW(ERR_COMMON, error)
-            if (!warning.empty())
+            if (!warning.empty() && !defaultGuard)
                 LTRACE(LT_WARN, 2, warning);
             std::string list;
             for (const int b : breaks) list += (list.empty() ? "" : ",") + std::to_string(b);
             // The option given is named: with --layer-break-guard-before alone, the warning of a single layer disc
             // named the other one.
-            if (breaks.empty())
+            if (!defaultGuard && breaks.empty())
                 LTRACE(LT_WARN, 2,
                        "Warning: a single layer disc has no layer break, so "
                            << (layerBreakGuardMB < 0 ? "--layer-break-guard-before" : "--layer-break-guard")
                            << " is not applied.");
-            else
+            else if (!defaultGuard)
                 LTRACE(LT_INFO, 2,
                        "Layer break guard at sector(s) " << list
                                                          << (discBytes > 0 ? ", the break(s) of the disc size"
@@ -364,6 +368,7 @@ bool BlurayHelper::open(const string& dst, const DiskType dt, const int64_t disk
         if (afterMB >= 0 && !breaks.empty())
         {
             m_isoWriter->setLayerBreakPoints(breaks);
+            m_isoWriter->setDefaultGuard(defaultGuard);
             const int afterSectors = static_cast<int>(static_cast<int64_t>(afterMB) * 1024 * 1024 / SECTOR_SIZE);
             if (layerBreakGuardBeforeMB >= 0)
                 m_isoWriter->setLayerBreakGuard(
@@ -390,7 +395,7 @@ bool BlurayHelper::open(const string& dst, const DiskType dt, const int64_t disk
     // the feature rather than a defect. The defect was staying silent about it: the option parses, the
     // mux succeeds, and the disc is burned without the guard the user asked for. The interface already
     // greys these out for folder output, so this catches a meta file or a command line.
-    if (layerBreakGuardMB >= 0 || layerBreakGuardBeforeMB >= 0)
+    if (!defaultGuard && (layerBreakGuardMB >= 0 || layerBreakGuardBeforeMB >= 0))
         LTRACE(LT_WARN, 2,
                "Warning: --layer-break-guard applies to an .iso destination and is being ignored, because "
                "this mux writes a folder and only a disc image has sector positions to reserve. Author the "

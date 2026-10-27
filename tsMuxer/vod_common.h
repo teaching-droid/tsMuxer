@@ -192,6 +192,10 @@ std::string parseLayerBreakList(const std::string& value, std::vector<int>& lbns
 // and in the window's boxes; a meta file refused more than 1024, which the window offers for defects near 1.5 GB.
 // Returns an error text, or an empty one with mb set.
 std::string parseGuardMB(const std::string& option, const std::string& value, int& mb);
+// The guard an ISO image crossing a layer break gets when no guard is given and --no-layer-break-guard is not, after
+// the break, on the layer that reads worst on a burnt disc, as the window's guard box offers. The zone before the break
+// is worked out from it as for any guard given without --layer-break-guard-before: a sixteenth, at least 4 MB (18 MB).
+constexpr int DEFAULT_GUARD_AFTER_MB = 288;
 
 // save-srt writes its file under a temporary name beside the name asked for, and the file takes that name only when the
 // job has succeeded. A job that failed after its first subtitle had written over a file of that name.

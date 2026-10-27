@@ -237,6 +237,9 @@ class IsoWriter
     // One zone per break, given in the order of setLayerBreakPoints: --inner-only sizes each one from the layers on
     // its two sides. A break left out of the list keeps the zone of setLayerBreakGuard.
     void setLayerBreakGuards(const std::vector<int>& beforeSectors, const std::vector<int>& afterSectors);
+    // The guard is the one an image crossing a layer break gets when none is given: close() says so once, when it was
+    // written, and says nothing when the image ends before the break.
+    void setDefaultGuard(const bool defaultGuard) { m_defaultGuard = defaultGuard; }
 
     // One record per zero-fill actually written for a layer break, in absolute image sectors.
     // padStartLbn can be well before zoneStart (the fill starts wherever the interrupted write
@@ -378,6 +381,7 @@ class IsoWriter
     int m_layerBreakGuardAfterSectors;    // zero-fill AFTER each break (next layer side; main defect protection)
     std::vector<int> m_breakGuardBefore;  // per break, when setLayerBreakGuards gave one (else the two above)
     std::vector<int> m_breakGuardAfter;
+    bool m_defaultGuard = false;  // the guard was not asked for (see setDefaultGuard)
     // The zone of break i in absolute image sectors: [break - before, break + after)
     void guardZone(size_t i, int64_t& zoneStart, int64_t& zoneEnd) const;
     std::vector<LayerBreakPad> m_layerBreakPads;  // where zeros were actually written (for reporting)

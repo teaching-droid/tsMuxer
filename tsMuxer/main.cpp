@@ -1356,14 +1356,22 @@ All parameters in this group start with two dashes:
                       hard error to a warning and build the (oversized) image anyway.
 --layer-break-guard   Dual-layer safety padding for ISO output: place <n> megabytes
                       of zero-filler AFTER the BD-R/RE DL layer break (the start of
-                      layer 1, where physical discs are defect-prone), plus a small 4 MB
-                      margin before it, so no file data sits on those sectors. The
-                      crossing file (usually the movie) stays logically contiguous
-                      and plays seamlessly. Real-hardware data shows the layer-1
-                      defect can be ~35 MB, so 64 is recommended. 0 aligns to the
-                      break without filler. Off when not specified. BD-R/RE DL only.
+                      layer 1, where physical discs are defect-prone), plus a sixteenth
+                      of it (at least 4 MB) before it, so no file data sits on those
+                      sectors. The crossing file (usually the movie) stays logically
+                      contiguous and plays without a pause. 0 aligns to the break without
+                      filler. Without this option, an ISO image whose data crosses a
+                      layer break gets 288 MB after it and 18 MB before it (306 MB),
+                      as a burnt dual-layer disc often reads badly at the layer
+                      change and a player then stalls there. An image that would not
+                      fit the disc with that guard is written without it, with a
+                      warning. Not with --inner-only, which pads in its own way.
+--no-layer-break-guard  ISO output: leave out the guard an image crossing a layer
+                      break gets by default. A guard given with --layer-break-guard
+                      is still written.
 --layer-break-guard-before  Optional: size the BEFORE-break zone (MB) on its own instead
-                      of the default small 4 MB margin, making the guard symmetric or custom.
+                      of a sixteenth of --layer-break-guard (at least 4 MB), making the
+                      guard symmetric or custom.
                       Use when a disc is also defect-prone just before the layer break.
 --layer-break-lbn     Layer break sector(s) for --layer-break-guard, in 2048-byte LBA
                       sectors = the disc's TOTAL sectors / number of layers.
@@ -1409,6 +1417,7 @@ All parameters in this group start with two dashes:
                       Options for this mode:
                         --layer-break-guard=<MB>         see above
                         --layer-break-guard-before=<MB>  see above
+                        --no-layer-break-guard           see above
                         --layer-break-lbn=<s[,s...]>     see above
                         --disc-capacity=<sectors>  Total sectors of the target disc. Read it from
                               the disc's FULL formatted capacity. Needed by --inner-only, used to
@@ -1633,6 +1642,7 @@ struct GuardedIsoOptions
     bool keepExtras = false;
     bool singleCopy3d = false;
     bool innerOnly = false;
+    bool noLayerBreakGuard = false;  // --no-layer-break-guard: no guard unless one is given
     bool allowOversize = false;
     bool reproducibleHeader = false;  // --constant-iso-hdr
     int extraIsoSpace = 0;            // --extra-iso-space, in 64K blocks, on top of the estimate
@@ -1690,6 +1700,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     bool keepExtras = false;
     bool singleCopy3d = false;
     bool innerOnly = false;
+    bool noLayerBreakGuard = false;
     bool allowOversize = false;
     bool reproducibleHeader = false;
     int extraIsoSpace = 0;  // --extra-iso-space, in 64K blocks, on top of the estimate
@@ -1748,6 +1759,8 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                 singleCopy3d = true;
             else if (a == "--inner-only")
                 innerOnly = true;
+            else if (a == "--no-layer-break-guard")
+                noLayerBreakGuard = true;
             else if (a == "--allow-oversize")
                 allowOversize = true;
             // The header of the image was always random on this route, so two builds of one folder could not be
@@ -1805,6 +1818,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     opt.keepExtras = keepExtras;
     opt.singleCopy3d = singleCopy3d;
     opt.innerOnly = innerOnly;
+    opt.noLayerBreakGuard = noLayerBreakGuard;
     opt.allowOversize = allowOversize;
     opt.reproducibleHeader = reproducibleHeader;
     opt.extraIsoSpace = extraIsoSpace;
@@ -2339,10 +2353,52 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
     }
     const int extraISOBlocks = baseISOBlocks + extraIsoSpace;
 
+    // An image whose data crosses a layer break gets a guard of 288 MB after each break and 18 MB before it when none
+    // is given, as a burnt dual-layer disc often reads badly at the layer change and a player then stalls there. The
+    // breaks are found as for a guard given. --inner-only lays out zeros of its own, and an image that ends before the
+    // break is left as it was. An image that would not fit the disc with the guard is written without it, with a
+    // warning: only a guard asked for may refuse the build below.
+    bool defaultGuard = false;
+    if (!opt.noLayerBreakGuard && !opt.innerOnly && layerBreakGuardMB < 0 && layerBreakGuardBeforeMB < 0)
+    {
+        std::string warning, error;
+        const std::vector<int> breaks =
+            !layerBreakLbns.empty()
+                ? layerBreakLbns
+                : defaultLayerBreaks(discCapacitySectors > 0 ? discCapacitySectors * 2048 : 0, warning, error);
+        // the before-zone of IsoWriter::setLayerBreakGuard(afterSectors): a sixteenth, at least 4 MB
+        constexpr int64_t afterSectors = static_cast<int64_t>(DEFAULT_GUARD_AFTER_MB) * 1024 * 1024 / 2048;
+        constexpr int64_t beforeSectors =
+            std::min(afterSectors, std::max<int64_t>(4 * 1024 * 1024 / 2048, afterSectors / 16));
+        constexpr int64_t udfSectors = 8192;  // the UDF reserve of the capacity check below
+        const int64_t dataSectors = (total + 2047) / 2048 + alignSectors + udfSectors;
+        if (error.empty() && !breaks.empty() && dataSectors > static_cast<int64_t>(breaks.front()) - beforeSectors)
+        {
+            // Without a disc, the one the breaks belong to: the layers hold the data evenly, so the disc ends one
+            // layer past the last break.
+            const int64_t capacity =
+                discCapacitySectors > 0 ? discCapacitySectors : static_cast<int64_t>(breaks.back()) + breaks.front();
+            int64_t guardSectors = 0;
+            for (const int bp : breaks)
+                if (dataSectors > static_cast<int64_t>(bp) - beforeSectors)
+                    guardSectors += beforeSectors + afterSectors + overrunSectors;
+            if (dataSectors + guardSectors > capacity)
+                LTRACE(LT_WARN, 2,
+                       "Warning: the image does not fit the disc with the layer break guard, so it is written without "
+                       "it. A burnt dual-layer disc may then read badly at the layer change.");
+            else
+            {
+                defaultGuard = true;
+                layerBreakLbns = breaks;
+                layerBreakGuardMB = DEFAULT_GUARD_AFTER_MB;
+            }
+        }
+    }
+
     LTRACE(
         LT_INFO, 2,
         "bdmv-to-iso: " << items.size() << " files, " << static_cast<int64_t>(total / 1000000) << " MB -> " << outIso);
-    if (layerBreakGuardMB >= 0)
+    if (layerBreakGuardMB >= 0 && !defaultGuard)
     {
         // the first-file size is only meaningful for largest-first (it names the main movie);
         // in original order the first file is typically a tiny playlist and "0 MB" reads broken
@@ -2508,7 +2564,8 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
     }
     BlurayHelper helper;
     if (!helper.open(outIso, DiskType::BLURAY, total, extraISOBlocks, opt.reproducibleHeader, layerBreakGuardMB,
-                     layerBreakLbns, layerBreakGuardBeforeMB, discCapacitySectors > 0 ? discCapacitySectors * 2048 : 0))
+                     layerBreakLbns, layerBreakGuardBeforeMB, discCapacitySectors > 0 ? discCapacitySectors * 2048 : 0,
+                     defaultGuard))
     {
         LTRACE(LT_ERROR, 2, "Can't create output ISO " << outIso);
         return -1;
@@ -4420,12 +4477,22 @@ int main(int argc, char** argv)
                     dstFile = strToUpperCase(extractFileExt(dstFile)) == "ISO"
                                   ? keepOld.forFile(dstFile, muxerManager.totalSize())
                                   : keepOld.forDiscFolder(dstFile, muxerManager.totalSize());
-                // The guard of an --inner-only image is laid out in step 2, and the folder has no sectors for it
-                if (!blurayHelper.open(
-                        dstFile, dt, muxerManager.totalSize(), muxerManager.getExtraISOBlocks(),
-                        muxerManager.useReproducibleIsoHeader(), innerIso ? -1 : muxerManager.getLayerBreakGuardMB(),
-                        innerIso ? std::vector<int>() : muxerManager.getLayerBreakLbns(),
-                        innerIso ? -1 : muxerManager.getLayerBreakGuardBeforeMB(), muxerManager.getDiscSizeLimit()))
+                // The guard of an --inner-only image is laid out in step 2, and the folder has no sectors for it.
+                // A Blu-ray image gets a guard of 288 MB after each break and 18 MB before it when none is given: a
+                // burnt dual-layer disc often reads badly at the layer change, and a player then stalls there. It
+                // is only written when the data reaches the break, so a single layer image is the same as before.
+                const bool defaultGuard =
+                    !innerIso && dt == DiskType::BLURAY && strToUpperCase(extractFileExt(outputRoot)) == "ISO" &&
+                    !muxerManager.getNoLayerBreakGuard() && muxerManager.getLayerBreakGuardMB() < 0 &&
+                    muxerManager.getLayerBreakGuardBeforeMB() < 0;
+                if (!blurayHelper.open(dstFile, dt, muxerManager.totalSize(), muxerManager.getExtraISOBlocks(),
+                                       muxerManager.useReproducibleIsoHeader(),
+                                       innerIso       ? -1
+                                       : defaultGuard ? DEFAULT_GUARD_AFTER_MB
+                                                      : muxerManager.getLayerBreakGuardMB(),
+                                       innerIso ? std::vector<int>() : muxerManager.getLayerBreakLbns(),
+                                       innerIso || defaultGuard ? -1 : muxerManager.getLayerBreakGuardBeforeMB(),
+                                       muxerManager.getDiscSizeLimit(), defaultGuard))
                     throw runtime_error(string("Can't create output file ") + dstFile);
                 blurayHelper.setVolumeLabel(isoDiskLabel);
                 blurayHelper.createBluRayDirs();

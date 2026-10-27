@@ -13,6 +13,14 @@ This fork adds a "BDMV folder to ISO" tab and the `--bdmv-to-iso`, `--layer-brea
 BD-R XL discs. See [DISC_AUTHORING.md](DISC_AUTHORING.md) (also available in German as
 [DISC_AUTHORING_DE.md](DISC_AUTHORING_DE.md)) for the details and the layer-break calculator.
 
+An ISO image whose data crosses a layer break gets a layer-break guard by default: 288 MB after the break and
+18 MB before it (306 MB) are left empty, as a burnt dual-layer disc often reads badly at the layer change and a
+player then stalls there. The break is the one of `--layer-break-lbn`, else of `--disc-size` (`--disc-capacity` for
+`--bdmv-to-iso`), else that of a BD-R DL. An image that would not fit the disc with the guard is written without it,
+with a warning. `--no-layer-break-guard` leaves the guard out; `--layer-break-guard=<MB>` sets its size (the zone
+before the break is a sixteenth of it, at least 4 MB, unless `--layer-break-guard-before` gives it). Folder, TS and
+MKV output, images that end before the break and `--inner-only` are not affected.
+
 A step-by-step guide to the "BDMV folder to ISO" tab, with screenshots of every stage, is in
 [BDMV_TO_ISO.md](BDMV_TO_ISO.md) (also available in German as
 [BDMV_TO_ISO_DE.md](BDMV_TO_ISO_DE.md) and in Japanese as
@@ -324,3 +332,4 @@ Parameter           | Description
 --extra-iso-space   | Allocate extra space in 64K units for ISO metadata (file and directory names). Normally, tsMuxeR allocates this space automatically, and for a split it counts the parts from the split size, the split length or the chapters. A split it cannot count, such as --split-duration on a source that states no length, may need this option. When the space is too small, the mux ends with a message saying so.
 --constant-iso-hdr  | Generates an ISO header that does not depend on the program version or the current time. Normally, the ISO header's "application ID", "implementation ID", and "volume ID" fields are set to strings containing the program version and/or a random number, while the access/modification/creation times of the files in the image are set to the current time. This option disables this behaviour by filling these fields with hardcoded values and setting the file times to the equivalent of `Wed 1 Jul 20:00:00 UTC 2020` in the local timezone. Using this option is not recommended for normal usage, as it is meant only for testing ISO output validity.
 --inner-only        | ISO output with --disc-size: keep the data on the inner part of every layer and fill the outer edge of the disc with zeros. The disc is muxed into a folder beside the image first and the image is then laid out from it, as --bdmv-to-iso --inner-only lays it out, so the drive needs room for both while it runs. Replaces --layer-break-guard; a MUXOPT line with both is refused. See [DISC_AUTHORING.md](DISC_AUTHORING.md).
+--no-layer-break-guard | ISO output: leave out the layer-break guard an image crossing a layer break gets by default (288 MB after the break, 18 MB before it). A guard given with --layer-break-guard is still written.

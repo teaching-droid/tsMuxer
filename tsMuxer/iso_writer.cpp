@@ -1329,8 +1329,19 @@ void IsoWriter::close()
     // normal outcome of leaving the disc unset: with no disc, the break defaults to half a BD50, so
     // anything smaller than about 25 GB never reaches it. The image then comes out byte for byte the
     // size it would have been without the option, which is exactly what it looks like from outside.
-    if ((m_layerBreakGuardAfterSectors > 0 || m_layerBreakGuardBeforeSectors > 0) && m_layerBreakPads.empty() &&
-        !m_layerBreakPoints.empty())
+    // The guard given by default is said once, where it was written; an image that ends before the break is one
+    // that never needed it, and is not warned about.
+    if (m_defaultGuard && !m_layerBreakPads.empty())
+        LTRACE(LT_INFO, 2,
+               "Layer break guard: " << (static_cast<int64_t>(m_layerBreakGuardBeforeSectors) +
+                                         m_layerBreakGuardAfterSectors) *
+                                            SECTOR_SIZE / (1024 * 1024)
+                                     << (m_layerBreakPads.size() > 1 ? " MB at each layer change"
+                                                                     : " MB at the layer change")
+                                     << " are left empty, as a burnt dual-layer disc often reads badly there "
+                                        "and a player then stalls. --no-layer-break-guard leaves it out.");
+    if (!m_defaultGuard && (m_layerBreakGuardAfterSectors > 0 || m_layerBreakGuardBeforeSectors > 0) &&
+        m_layerBreakPads.empty() && !m_layerBreakPoints.empty())
     {
         const int64_t imageSectors = m_file.size() / SECTOR_SIZE;
         const int64_t firstBreak = m_layerBreakPoints.front();

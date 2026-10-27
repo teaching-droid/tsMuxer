@@ -123,6 +123,8 @@ class MuxerManager final
     // plus an optional break-sector override for testing / non-standard geometries.
     [[nodiscard]] int getLayerBreakGuardMB() const { return m_layerBreakGuardMB; }
     [[nodiscard]] int getLayerBreakGuardBeforeMB() const { return m_layerBreakGuardBeforeMB; }
+    // --no-layer-break-guard: an ISO image that crosses a layer break is written without the guard it gets by default
+    [[nodiscard]] bool getNoLayerBreakGuard() const { return m_noLayerBreakGuard; }
     [[nodiscard]] const std::vector<int>& getLayerBreakLbns() const { return m_layerBreakLbns; }
     // --inner-only: a disc image keeps its data on the inner part of each layer (see innerOnlyIsoAsked in main.cpp)
     [[nodiscard]] bool getInnerOnly() const { return m_innerOnly; }
@@ -232,6 +234,7 @@ class MuxerManager final
     int m_layerBreakGuardBeforeMB = -1;  // --layer-break-guard-before: MB before the break on its own (-1 = derived)
     std::vector<int> m_layerBreakLbns;   // --layer-break-lbn: break sector(s); empty = BD-R/RE DL default
     bool m_innerOnly = false;            // --inner-only
+    bool m_noLayerBreakGuard = false;    // --no-layer-break-guard
 
     /// Results of the discovery (probe) phase, indexed by stream index.
     std::vector<StreamDiscoveryData> m_discoveryData;

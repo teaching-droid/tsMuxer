@@ -1388,6 +1388,7 @@ void MuxerManager::warnUnknownMuxOpts(const string& opts)
                                                       "--no-asyncio",
                                                       "--no-chapters",
                                                       "--no-hdmv-descriptors",
+                                                      "--no-layer-break-guard",
                                                       "--no-pcr-on-video-pid",
                                                       "--playlist-clips",
                                                       "--right-eye",
@@ -1550,6 +1551,8 @@ void MuxerManager::parseMuxOpt(const string& opts)
         // directly could not keep its data on the inner part of the disc, only one made from a folder in a second step.
         else if (paramPair[0] == "--inner-only")
             m_innerOnly = true;
+        else if (paramPair[0] == "--no-layer-break-guard")
+            m_noLayerBreakGuard = true;
         else if (paramPair[0] == "--layer-break-guard")
         {
             if (paramPair.size() < 2)
