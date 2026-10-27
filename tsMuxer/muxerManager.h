@@ -80,6 +80,8 @@ class MuxerManager final
     [[nodiscard]] const std::string& demuxFolder() const { return m_demuxFolder; }
     // The line doMux prints when the sources are read and the output is being finished; none when empty
     void setFinishingNote(const std::string& note) { m_finishingNote = note; }
+    // A mux of the program's own making, as the blank playlist's: no progress lines, and no notes of its readers
+    void setQuiet() { m_metaDemuxer.setQuiet(true); }
     // The length the containers of the sources state, 0 when none does (a raw stream)
     [[nodiscard]] int64_t statedDurationNano() { return m_metaDemuxer.statedDurationNano(); }
     [[nodiscard]] bool getHevcFound() const { return m_metaDemuxer.m_HevcFound; }

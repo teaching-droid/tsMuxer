@@ -911,6 +911,9 @@ void muxBlankPL(const string& appDir, BlurayHelper& blurayHelper, const PIDListM
     videoParams["fps"] = fpsText.str();
     {
         MuxerManager muxerManager(readManager, tsMuxerFactory);
+        // Its progress lines came after the finishing line of the main mux, from 0 percent again, with no finishing
+        // line of their own: a window that shows the figure went back to 0 at the end of the job
+        muxerManager.setQuiet();
         muxerManager.parseMuxOpt("MUXOPT --no-pcr-on-video-pid --vbr --avchd --vbv-len=500");
         muxerManager.addStream("V_MPEG4/ISO/AVC", tmpFileName, videoParams);
         string dstFile = blurayHelper.m2tsFileName(blankNum);

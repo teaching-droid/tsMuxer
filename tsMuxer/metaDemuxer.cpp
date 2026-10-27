@@ -664,7 +664,8 @@ int METADemuxer::readPacket(AVPacket& avPacket)
                 chosen.m_lastDTS =
                     avPacket.dts +
                     (avPacket.codecID == CODEC_S_SRT || avPacket.codecID == CODEC_S_MKVCOPY ? 0 : avPacket.duration);
-                updateReport(true);
+                if (!m_quiet)
+                    updateReport(true);
                 return 0;
             }
             const int64_t endBefore = chosen.m_lastDTS;
