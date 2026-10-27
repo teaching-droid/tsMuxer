@@ -177,7 +177,7 @@ Additional parameters for audio tracks:
 
 Parameter         | Description 
 ---               | --- 
-timeshift         | Shift the track by the given time: a number followed by ns, us, ms or s, such as -120ms or 1.5s. A number alone is in milliseconds. Can be negative. 
+timeshift         | Shift the track by the given time: a number followed by ns, us, ms or s, such as -120ms or 1.5s. A number alone is in milliseconds. Can be negative. Without it, the start of a track against the picture is taken from the source; a Matroska file without video has no picture to measure against, so its tracks start together unless timeshift= says otherwise. 
 down-to-dts       | Available only for DTS-HD tracks. Filter out HD part. 
 down-to-ac3       | For TRUE-HD and E-AC3 (DD+) tracks. Keep the AC-3 core, drop the HD part. 
 drop-ac3-core     | **Matroska output or demux, TrueHD only.** A Blu-ray TrueHD stream carries an AC-3 core beside its lossless part. Matroska writes the core as a track of its own; with drop-ac3-core it is left out and the lossless stream is kept alone. A demux then writes `.thd` instead of `.ac3+thd`. A TS or a Blu-ray keeps the core, so it is ignored there with a warning.
