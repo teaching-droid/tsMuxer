@@ -5097,10 +5097,16 @@ void METADemuxer::cutPlayItems(MPLSParser& mpls, const string& mplsFileName, con
     // in twice. The first one now ends where the next one starts, and the next one goes on from it with nothing left
     // out. One that starts at the same key picture as the one before leaves nothing to that one, and goes on from the
     // one before that when that one is continued.
+    // A play item that starts earlier in the stretch of the one before, or at the same time, plays a part of it again:
+    // that is no continuation. It was taken for one, as its start lay between the first and the last key picture of
+    // the one before, which was then cut back to it: a stretch played twice was muxed once, the first play item
+    // listed with a length of 0, and two play items that overlap gave only the stretch from the start of the first to
+    // the end of the second. Such a play item is now muxed as a part of its own, as a player plays it.
     std::vector<bool> continues(plans.size(), false);
     for (size_t i = 0; i + 1 < plans.size(); ++i)
         if (mpls.m_playItems[i + 1].fileName == mpls.m_playItems[i].fileName && plans[i + 1].first >= plans[i].first &&
-            plans[i + 1].first <= plans[i].last)
+            plans[i + 1].first <= plans[i].last && plans[i + 1].first + 1 >= plans[i].last &&
+            mpls.m_playItems[i + 1].IN_time > mpls.m_playItems[i].IN_time)
         {
             plans[i].last = plans[i + 1].first;
             continues[i + 1] = plans[i + 1].first > plans[i].first || continues[i];
