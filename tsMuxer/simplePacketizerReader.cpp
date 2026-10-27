@@ -1460,6 +1460,22 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
                               "or 192 kHz only, and its stream information gives one rate for the track, so a player "
                               "may not play this part. Convert the audio to 48 kHz before muxing.");
             }
+            // Every other output, and a disc whose later rate is one a disc has, states one rate for the track as well:
+            // the Matroska header and the descriptor of a TS give the first. Such a join went on without a word. A
+            // demux writes the frames as they are, each with its own rate. Only once a later file of the join has
+            // begun: within one file another rate is a damaged frame or a file of another codec.
+            else if (freq != m_firstFreq && !m_laterFreqSaid && !m_demuxMode && m_joinSeen)
+            {
+                m_laterFreqSaid = true;
+                LTRACE(LT_WARN, 2,
+                       "Warning: track "
+                           << m_streamIndex << " (" << getCodecInfo().displayName << ") changes its sample rate from "
+                           << m_firstFreq << " to " << freq << " Hz at "
+                           << floatToTime(static_cast<double>(avPacket.pts - PTS_CONST_OFFSET) / INTERNAL_PTS_FREQ, ',')
+                           << ", as a join of files with different rates does. The output gives one rate for the "
+                              "track, the first, so a player may play this part at the wrong speed or not at all. "
+                              "Convert the audio of the joined files to one rate before muxing.");
+            }
         }
 
         if (m_halfFrameLen == 0.0)

@@ -49,6 +49,7 @@ class SimplePacketizerReader : public AbstractStreamReader
     StreamDiscoveryData probeStream(uint8_t* buffer, int len, ContainerType containerType, int containerDataType,
                                     int containerStreamIndex);
 
+    void onJoinedFileStart() override { m_joinSeen = true; }
     virtual int getFreq() = 0;
     // The length of one frame in the internal clock, as far as the stream read so far tells: the step the frame
     // times go by. 0 where it is not known yet.
@@ -175,6 +176,7 @@ class SimplePacketizerReader : public AbstractStreamReader
     uint64_t m_frameNum;
     int m_firstFreq = 0;  // the sample rate of the first frame, for the warning of a later one (readPacket)
     bool m_laterFreqSaid = false;
+    bool m_joinSeen = false;  // onJoinedFileStart: a later file of a join has begun, whose rate may differ
     bool m_needSync;
     double m_curPts;
     std::vector<std::pair<int64_t, int64_t>> m_timeGaps;  // addTimeGap, in the order they come
