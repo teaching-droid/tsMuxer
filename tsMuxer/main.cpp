@@ -1900,6 +1900,29 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     return buildGuardedIso(opt);
 }
 
+// Without a disc size and without --layer-break-lbn, an image is laid out for the layer break of a BD-R DL: the second
+// copy of its file system and any layer break guard go there (BlurayHelper::open). An image larger than that disc is
+// burnt to a 66 GB or 100 GB disc, which changes layer elsewhere, and nothing said so. The disc is not chosen from the
+// size: an image of 60 GB fits both, and their breaks differ. Breaks given with --layer-break-lbn are the user's, so
+// the image is laid out for the disc they belong to.
+static void reportBd50Layout(const std::string& image, const char* bd100, const char* bd66)
+{
+    const auto size = static_cast<int64_t>(getFileSize(image));
+    if (size <= BD50_CAPACITY)
+        return;
+    std::string warning, error;
+    const std::vector<int> breaks = defaultLayerBreaks(0, warning, error);
+    if (breaks.empty())
+        return;
+    LTRACE(LT_WARN, 2,
+           "Warning: the finished image is "
+               << size << " bytes, more than the " << BD50_CAPACITY
+               << " bytes of a BD-R DL (50 GB), and it is laid out for the layer break of that disc, at sector "
+               << breaks.front()
+               << ", as no disc size was given. A disc of 66 GB or 100 GB changes layer elsewhere. Give " << bd100
+               << " for a 100 GB disc or " << bd66 << " for a 66 GB one, to lay the image out for it.");
+}
+
 static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
 {
     int layerBreakGuardMB = opt.layerBreakGuardMB;
@@ -2918,6 +2941,8 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
                                                                     << " MB to spare");
         }
     }
+    else if (opt.layerBreakLbns.empty())
+        reportBd50Layout(outIso, "--disc-capacity=48878592", "--disc-capacity=32585728");
     unfinished.keep = true;
     // Written in place over an image that was there (--bdmv-to-iso), an image with no pads left the layer break map of
     // the old image beside it, which described a disc that was no longer there. Over a temporary name (KeepOldOutput)
@@ -4995,6 +5020,9 @@ int main(int argc, char** argv)
             setSaveSrtJobSucceeded();
             if (dt != DiskType::NONE)
                 reportFinishedDiscSize(outputRoot, muxerManager.getDiscSizeLimit(), muxerManager.getExtraISOBlocks());
+            if (dt != DiskType::NONE && strToUpperCase(extractFileExt(outputRoot)) == "ISO" &&
+                muxerManager.getDiscSizeLimit() <= 0 && muxerManager.getLayerBreakLbns().empty())
+                reportBd50Layout(outputRoot, "--disc-size=bd100", "--disc-size=66735570944");
             reportJobComplete();
             LTRACE(LT_INFO, 2, "Mux successful complete");
             reportSplitWithoutParameterSets(muxerManager);
