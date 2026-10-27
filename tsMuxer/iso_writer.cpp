@@ -1293,6 +1293,7 @@ void IsoWriter::close()
     // second time while the first refusal is on its way out.
     m_opened = false;
 
+    moveBackLookAhead();
     writeDeferredFiles();
 
     memset(m_buffer, 0, sizeof(m_buffer));
@@ -2219,7 +2220,98 @@ void IsoWriter::beforePiece(FileEntryInfo* entry)
     // piece of one view, which then had a piece more than the other, and the mux was refused at its end ("Can't
     // interleave"). That happened when the break lay within the look ahead of the start of the data: the mirror was
     // put in front of the first pair, and nothing kept the zone between two pairs.
+    const int64_t from = imageLBA();
+    const bool mirrorPlaced = m_mirrorPlaced;
+    const size_t pads = m_layerBreakPads.size();
     checkLayerBreakPoint(static_cast<int>(MIRROR_LOOKAHEAD_BYTES));
+    if (imageLBA() == from)
+        return;
+    // The data may still end before it reaches the mirror's place: close() then moves the pairs back
+    if (m_lookAheadGaps.empty())
+        m_padsBeforeLookAhead = pads;
+    if (m_mirrorPlaced && !mirrorPlaced)
+        m_mirrorByLookAhead = true;
+    m_lookAheadGaps.emplace_back(from, imageLBA());
+}
+
+// A 3D mux that ended within the look ahead of the mirror's place had the mirror, and the zeros of a guard zone, put
+// in front of its last pairs, and those pairs behind the break: the image grew by up to 55 MB and the zone, and
+// crossed a break its data never reached. When everything written behind those gaps fits in front of the mirror's
+// place, it is moved back over them, by whole 64 KB blocks so that every piece keeps its alignment, and the mirror
+// goes behind the data, as for an image that never reaches the end of layer 0. Otherwise nothing changes.
+void IsoWriter::moveBackLookAhead()
+{
+    if (m_lookAheadGaps.empty())
+        return;
+    constexpr int64_t SECTORS_PER_BLOCK = ALLOC_BLOCK_SIZE / SECTOR_SIZE;
+    // Every zero fill and the mirror behind the first gap have to be the look ahead's own
+    if (m_layerBreakPads.size() < m_padsBeforeLookAhead || (m_mirrorPlaced && !m_mirrorByLookAhead))
+        return;
+    const int64_t end = imageLBA();
+    if (m_file.pos() % SECTOR_SIZE != 0 || m_file.size() != static_cast<int64_t>(m_file.pos()))
+        return;
+    int64_t moved = 0;
+    for (const auto& [from, to] : m_lookAheadGaps) moved += (to - from) / SECTORS_PER_BLOCK * SECTORS_PER_BLOCK;
+    for (size_t i = m_padsBeforeLookAhead; i < m_layerBreakPads.size(); ++i)
+    {
+        const LayerBreakPad& pad = m_layerBreakPads[i];
+        const bool inGap = std::any_of(m_lookAheadGaps.begin(), m_lookAheadGaps.end(), [&](const auto& gap)
+                                       { return pad.padStartLbn >= gap.first && pad.padEndLbn <= gap.second; });
+        if (!inGap)
+            return;
+    }
+    // Where the mirror goes when the data does not reach it
+    const bool mirrorPlaced = m_mirrorPlaced;
+    m_mirrorPlaced = false;
+    int64_t mirrorStart = 0;
+    const bool pending = mirrorPending(mirrorStart);
+    m_mirrorPlaced = mirrorPlaced;
+    if (!pending || end - moved > mirrorStart)
+        return;
+
+    File reader;
+    if (!reader.open(m_file.getName().c_str(), File::ofRead | File::ofOpenExisting))
+        return;
+    std::vector<uint8_t> buffer(4 * 1024 * 1024);
+    int64_t dataEnd = end;
+    for (auto gap = m_lookAheadGaps.rbegin(); gap != m_lookAheadGaps.rend(); ++gap)
+    {
+        const int64_t shift = (gap->second - gap->first) / SECTORS_PER_BLOCK * SECTORS_PER_BLOCK;
+        if (shift == 0)
+            continue;
+        // Low to high: a block is read before anything is written over it
+        for (int64_t pos = gap->second * SECTOR_SIZE; pos < dataEnd * SECTOR_SIZE;)
+        {
+            const auto len = static_cast<uint32_t>(
+                (std::min<int64_t>)(dataEnd * SECTOR_SIZE - pos, static_cast<int64_t>(buffer.size())));
+            reader.seek(pos);
+            if (reader.read(buffer.data(), len) != static_cast<int>(len))
+                throw std::runtime_error("Can't read back " + m_file.getName() + " to move its last pairs");
+            m_file.seek(pos - shift * SECTOR_SIZE);
+            m_file.write(buffer.data(), len);
+            pos += len;
+        }
+        dataEnd -= shift;
+        auto shiftEntry = [&](FileEntryInfo* entry, auto& self) -> void
+        {
+            for (Extent& extent : entry->m_extents)
+                if (extent.lbnPos + m_partitionStartAddress >= gap->second)  // lbnPos counts from the partition
+                    extent.lbnPos -= static_cast<int>(shift);
+            for (FileEntryInfo* file : entry->m_files) self(file, self);
+            for (FileEntryInfo* dir : entry->m_subDirs) self(dir, self);
+        };
+        shiftEntry(m_rootDirInfo, shiftEntry);
+        if (m_systemStreamDir)
+            shiftEntry(m_systemStreamDir, shiftEntry);
+    }
+    reader.close();
+    m_file.truncate(static_cast<uint64_t>(dataEnd) * SECTOR_SIZE);
+    m_file.seek(dataEnd * SECTOR_SIZE);
+    m_layerBreakPads.resize(m_padsBeforeLookAhead);
+    m_mirrorPlaced = false;
+    m_mirrorGapStart = m_mirrorGapEnd = 0;
+    m_lastWritedObjectID = -1;
+    m_lookAheadGaps.clear();
 }
 
 void IsoWriter::setLayerBreakGuards(const std::vector<int>& beforeSectors, const std::vector<int>& afterSectors)

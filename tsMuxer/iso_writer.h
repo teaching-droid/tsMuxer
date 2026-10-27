@@ -297,6 +297,7 @@ class IsoWriter
     void placeMirrorHere();
     void placeMirrorBefore(int64_t endLbn);
     void beforePiece(FileEntryInfo* entry);
+    void moveBackLookAhead();
     [[nodiscard]] int64_t imageLBA() const;
     void writePrimaryVolumeDescriptor();
     void writeAnchorVolumeDescriptor(uint32_t endPartitionAddr);
@@ -370,6 +371,11 @@ class IsoWriter
     int64_t m_mirrorGapStart = 0;  // the sectors it took out of the data
     int64_t m_mirrorGapEnd = 0;
     bool m_pairsPlaced = false;  // the caller places 3D pairs itself (padBeforeInterleavedPair)
+    // The sectors [first, second) beforePiece left empty in front of a pair, for the mirror or the zeros of a zone,
+    // before the data had reached them (moveBackLookAhead)
+    std::vector<std::pair<int64_t, int64_t>> m_lookAheadGaps;
+    size_t m_padsBeforeLookAhead = 0;  // the zeros written for a break before the first of these gaps
+    bool m_mirrorByLookAhead = false;  // the mirror lies in one of these gaps
 
     std::map<int, MappingEntry> m_mappingEntries;
     std::vector<FileEntryInfo*> m_deferredFiles;  // the BDMV/BACKUP copies held back, in the order they were opened
