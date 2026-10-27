@@ -543,7 +543,7 @@ void MuxerManager::checkTimeshiftFitsClock()
         const int64_t needed = -mostNegativeShift / (INTERNAL_PTS_FREQ / 90000) + 1;
         // The length of the sources where their containers say it; a raw stream does not, and then the start alone
         // may not pass half the clock, which leaves more than 13 hours for the mux itself.
-        const int64_t length = m_metaDemuxer.statedDurationNano() / 1000000 * 90 / 1000;  // 90 kHz ticks
+        const int64_t length = m_metaDemuxer.statedDurationNano() / 1000000 * 90;  // ns to ms to 90 kHz ticks
         if (std::max(needed, m_ptsOffset) + (length > 0 ? length : CLOCK_WRAP / 2) >= CLOCK_WRAP)
             THROW(ERR_COMMON, "A timeshift of " << (-mostNegativeShift * 1000 / INTERNAL_PTS_FREQ)
                                                 << " ms needs the start of the mux raised so far that the times would "
@@ -558,7 +558,7 @@ void MuxerManager::checkTimeshiftFitsClock()
     {
         static constexpr int64_t CLOCK_WRAP = 1LL << 33;  // 90 kHz ticks
         const int64_t shift = mostPositiveShift / (INTERNAL_PTS_FREQ / 90000);
-        const int64_t length = m_metaDemuxer.statedDurationNano() / 1000000 * 90 / 1000;  // 90 kHz ticks
+        const int64_t length = m_metaDemuxer.statedDurationNano() / 1000000 * 90;  // ns to ms to 90 kHz ticks
         if (m_ptsOffset >= CLOCK_WRAP || shift >= CLOCK_WRAP ||
             m_ptsOffset + shift + (length > 0 ? length : CLOCK_WRAP / 2) >= CLOCK_WRAP)
             THROW(ERR_COMMON, "--start-time (" << m_ptsOffset / 90000 << " s) and a timeshift of "
