@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <csignal>
 #include <filesystem>
 #include <iostream>
 #include <iterator>
@@ -1098,8 +1099,21 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
             video->frameLeftOut();
     };
 
+    // Only this loop looks at the signal: a signal before or after it ends the program as before (main)
+    struct StopWatch
+    {
+        StopWatch() { setStopWatched(true); }
+        ~StopWatch() { setStopWatched(false); }
+        StopWatch(const StopWatch&) = delete;
+        StopWatch& operator=(const StopWatch&) = delete;
+    } stopWatch;
     while (true)
     {
+        // Ctrl+C or SIGTERM ended the program where it stood, and the part written so far stayed under the name of
+        // the output with no word. It now ends as a failed job does: the unfinished output is removed and said so.
+        if (const int sig = stopSignal(); sig != 0)
+            THROW(ERR_COMMON, "The job was stopped by " << (sig == SIGINT ? "Ctrl+C (SIGINT)" : "SIGTERM")
+                                                        << " before it was finished.")
         const int avRez = m_metaDemuxer.readPacket(avPacket);
 
         if (avRez == BufferedReader::DATA_EOF)

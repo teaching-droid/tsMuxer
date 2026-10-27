@@ -15,6 +15,8 @@
 
 #include <climits>
 #include <cmath>
+#include <csignal>
+#include <cstdlib>
 #include "bdSsifImport.h"
 #include "blank_patterns.h"
 #include "blurayHelper.h"
@@ -4138,6 +4140,36 @@ static void reportLostData(const MuxerManager& muxerManager)
     LTRACE(LT_WARN, 2, why + advice);
 }
 
+// Ctrl+C (SIGINT) and SIGTERM during the mux loop stop the job there (MuxerManager::doMux), so that it ends as a failed
+// job does and its unfinished output is removed; outside the loop, and at a second signal, the program ends at once,
+// as it always did. The exit code stays that of the signal (endBySignal).
+static void onStopSignal(const int sig)
+{
+    if (!stopWatched() || stopSignal() != 0)
+    {
+        std::signal(sig, SIG_DFL);
+        std::raise(sig);
+        return;
+    }
+    setStopSignal(sig);
+}
+
+static void endBySignal()
+{
+    if (const int sig = stopSignal(); sig != 0)
+    {
+        std::cout.flush();  // the signal ends the program without flushing, and a log in a file lost the last lines
+        std::cerr.flush();
+#ifdef _WIN32
+        // Raised again, SIGINT ends the program with code 3 here; Ctrl+C ended it with STATUS_CONTROL_C_EXIT
+        std::_Exit(static_cast<int>(0xC000013AU));
+#else
+        std::signal(sig, SIG_DFL);
+        std::raise(sig);
+#endif
+    }
+}
+
 int main(int argc, char** argv)
 {
 #ifdef _WIN32
@@ -4158,6 +4190,10 @@ int main(int argc, char** argv)
     argv = argv_vec.data();
 #endif
     LTRACE(LT_INFO, 2, "tsMuxeR version " TSMUXER_VERSION << ". github.com/teaching-droid/tsMuxer");
+    // A signal the program was started with ignored, as a job in the background of a script is for Ctrl+C, stays so
+    for (const int sig : {SIGINT, SIGTERM})
+        if (std::signal(sig, onStopSignal) == SIG_IGN)
+            std::signal(sig, SIG_IGN);
 
     // Which form a language read out of a source is reported in. It has to work when LISTING a
     // file as well as when muxing one, and listing is invoked as "tsMuxeR <file>" with no meta
@@ -4927,6 +4963,7 @@ int main(int argc, char** argv)
             LTRACE2(LT_ERROR, "Error: ")
         LTRACE(LT_ERROR, 2, e.m_errStr.c_str());
         printRemovedOutputNotes();
+        endBySignal();
         return -2;
     }
     catch (BitStreamException& e)

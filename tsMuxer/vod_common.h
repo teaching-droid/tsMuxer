@@ -203,6 +203,12 @@ std::string saveSrtTempName(const std::string& name);
 // Called where the job has succeeded, before the readers are closed
 void setSaveSrtJobSucceeded();
 bool saveSrtJobSucceeded();
+// Ctrl+C or SIGTERM: the signal number, set by the handler main installs; the mux stops at its next packet
+int stopSignal();
+void setStopSignal(int sig);
+// Whether a mux loop is running, which looks at stopSignal: outside one, the signal ends the program as before
+bool stopWatched();
+void setStopWatched(bool value);
 // For a save-srt file its writer has closed: 0 it took its name, 1 the job failed and it was removed, 2 the job
 // succeeded but it could not take its name (it is kept under the temporary name, reason in why)
 int finishSaveSrt(const std::string& tempName, const std::string& name, std::string& why);

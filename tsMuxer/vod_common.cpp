@@ -700,6 +700,14 @@ std::string saveSrtTempName(const std::string& name)
 void setSaveSrtJobSucceeded() { saveSrtSucceeded = true; }
 bool saveSrtJobSucceeded() { return saveSrtSucceeded; }
 
+// Set from a signal handler, so a lock-free atomic and nothing else
+static std::atomic<int> stopSignalNumber{0};
+int stopSignal() { return stopSignalNumber.load(); }
+void setStopSignal(const int sig) { stopSignalNumber.store(sig); }
+static std::atomic<bool> stopWatchedNow{false};
+bool stopWatched() { return stopWatchedNow.load(); }
+void setStopWatched(const bool value) { stopWatchedNow.store(value); }
+
 int finishSaveSrt(const std::string& tempName, const std::string& name, std::string& why)
 {
     std::error_code ec;
