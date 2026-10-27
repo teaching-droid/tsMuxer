@@ -2229,15 +2229,25 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             if (const auto merge = addParams.find("merge-ac3-track");
                 merge != addParams.end() && !merge->second.empty())
             {
-                const auto startOf = [&](const int32_t id) -> int64_t
+                const auto listed = [&](const int32_t id)
                 {
                     const auto t = trackList.find(id);
-                    if (t == trackList.end())
-                        return 0;
-                    const auto d = t->second.m_srcParams.find("srcstartdelay");
-                    return d == t->second.m_srcParams.end() ? 0 : strtoll(d->second.c_str(), nullptr, 10);
+                    return t != trackList.end() && t->second.m_srcParams.count("srcstartdelay") > 0;
                 };
-                mergeAc3StartNs = startOf(strToInt32(merge->second.c_str())) - startOf(pid);
+                const auto startOf = [&](const int32_t id) -> int64_t
+                {
+                    if (!listed(id))
+                        return 0;
+                    return strtoll(trackList.at(id).m_srcParams.at("srcstartdelay").c_str(), nullptr, 10);
+                };
+                const int32_t ac3Track = strToInt32(merge->second.c_str());
+                mergeAc3StartNs = startOf(ac3Track) - startOf(pid);
+                // Neither start listed: both start with the video, or the file has none and lists no start at all. A
+                // TrueHD and AC-3 file without video gave the core the TrueHD's start, 500 ms early for one 500 ms
+                // after it; the two first blocks give the distance in either case.
+                if (!listed(ac3Track) && !listed(pid))
+                    if (const auto* mkv = dynamic_cast<MatroskaDemuxer*>(factsDemuxer))
+                        mkv->trackStartAgainstNano(ac3Track, pid, mergeAc3StartNs);
             }
             // A line naming a track the file does not have, or one its reader leaves out, made an empty output: the
             // job went on, said it was successful, and warned that the codec on the line was not the codec of the

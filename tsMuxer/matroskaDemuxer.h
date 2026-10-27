@@ -93,6 +93,9 @@ class MatroskaDemuxer final : public IOContextDemuxer
     [[nodiscard]] std::string writingApplication() const { return writing_app ? writing_app : ""; }
     [[nodiscard]] int64_t getDemuxedTime() const override { return m_demuxedTime; }
     bool getVideoSpanNano(int64_t& startNano, int64_t& endNano) override;
+    // The first block of one track against the first block of another, in ns, read as the start of a track is read
+    // against the video (srcstartdelay); false where that start is not read or either track has no block
+    bool trackStartAgainstNano(int64_t track, int64_t reference, int64_t& nano) const;
 
     // Fetch an attached file by name. The bytes are read from the file when asked for, not held
     // from the header parse: one of these attachments is the preserved Dolby Vision metadata of a

@@ -4675,6 +4675,42 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
     }
 }
 
+// A file without video gives its tracks no start (srcstartdelay): there is no picture to put the sound against, and
+// each track is muxed from its own first frame. An AC-3 track merged into a TrueHD track by merge-ac3-track still has
+// its place against the TrueHD track, read here from the first blocks of the two, with the same limits as that start.
+bool MatroskaDemuxer::trackStartAgainstNano(const int64_t track, const int64_t reference, int64_t& nano) const
+{
+    File f;
+    if (m_sourceName.empty() || !f.open(m_sourceName.c_str(), File::ofRead))
+        return false;
+    EbmlScan scan(f);
+    SegmentFacts facts;
+    if (!readSegmentFacts(m_sourceName, facts) || facts.firstCluster <= 0 || !facts.prevUuid.empty() ||
+        !facts.nextUuid.empty() || (facts.defaultEdition() && facts.defaultEdition()->ordered))
+        return false;
+    static constexpr int64_t LATE_BYTES = 1024LL * 1024 * 1024;
+    const auto firstBlock = [&](const int64_t number, int64_t& time)
+    {
+        bool found = false;
+        const auto onBlock = [&](const int64_t t, int64_t, bool, int)
+        {
+            time = t;
+            found = true;
+            return false;
+        };
+        walkTrackBlocks(scan, facts.firstCluster, facts.segmentEnd, START_CLUSTERS, number, onBlock);
+        if (!found)
+            walkTrackBlocks(scan, facts.firstCluster, (std::min)(facts.segmentEnd, facts.firstCluster + LATE_BYTES),
+                            INT_MAX, number, onBlock);
+        return found;
+    };
+    int64_t time = 0, referenceTime = 0;
+    if (!firstBlock(track, time) || !firstBlock(reference, referenceTime))
+        return false;
+    nano = (time - referenceTime) * static_cast<int64_t>(facts.timestampScale);
+    return true;
+}
+
 // The source's attachments, each a whole AttachedFile element as it stands in the file, for a Matroska output to
 // carry: cover art, the fonts of styled subtitles and the like, which a remux used to drop. tsMuxeR's own Dolby Vision
 // files are left out: a profile 8.1 output writes them again from the stream, and anything else has no use for them.
