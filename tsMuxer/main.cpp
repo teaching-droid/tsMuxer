@@ -2639,15 +2639,23 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
     vector<FileRange> ranges;
     ranges.reserve(items.size());
     int64_t restBytes = total;  // this item and every one after it
+    int64_t restStreams = std::count_if(items.begin(), items.end(), isStreamItem);  // of them, the stream files
     for (auto& item : items)
     {
         // Layer-fit: start the file after the break instead of splitting it, when it fits there.
         // A folded 3D group is treated as one file here, which is what it is on the disc.
-        // Under --inner-only, only when the rest still fits and, on more than two layers, the shares stay even.
+        // Only when the rest still fits behind the zone and, under --inner-only on more than two layers, the shares
+        // stay even. The rest was checked under --inner-only only: a move leaves the end of the layer in front of the
+        // zone unused, the capacity check above counts the data running on without that gap, and an image it said fits
+        // came out too big after the whole copy. The rest counts the 64 KB start of each stream file and the overrun
+        // of each zone still ahead, as the capacity check does; --inner-only keeps the reserve it sized its zones with.
         if (layerFit)
-            iso->padOverZoneIfFileCrosses(item.size, discCapacitySectors, innerLayers > 0 ? restBytes : 0,
-                                          innerLayers > 2 ? overrunSectors : -1, isStreamItem(item));
+            iso->padOverZoneIfFileCrosses(
+                item.size, discCapacitySectors, innerLayers > 0 ? restBytes : restBytes + restStreams * 31 * 2048,
+                innerLayers > 2 ? overrunSectors : -1, isStreamItem(item), innerLayers > 0 ? 0 : overrunSectors);
         restBytes -= item.size;
+        if (isStreamItem(item))
+            --restStreams;
         const int64_t startLbn = iso->currentImageLBA();
         if (item.ssifGroup >= 0)
         {

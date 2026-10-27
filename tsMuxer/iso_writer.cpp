@@ -2035,7 +2035,7 @@ void IsoWriter::padBeforeInterleavedPair(const int64_t pairBytes)
 
 bool IsoWriter::padOverZoneIfFileCrosses(const int64_t fileSizeBytes, const int64_t discCapacitySectors,
                                          const int64_t restBytes, const int64_t maxEmptySectors,
-                                         const bool alignedStart)
+                                         const bool alignedStart, const int64_t laterOverrunSectors)
 {
     if (m_layerBreakPoints.empty() || fileSizeBytes <= 0)
         return false;
@@ -2076,6 +2076,8 @@ bool IsoWriter::padOverZoneIfFileCrosses(const int64_t fileSizeBytes, const int6
         // refused once it had been written. So the rest of the data has to fit behind the zone, with every zone it
         // will still reach and a few MB for the volume structures written at the end; and on a disc of more layers,
         // where each layer keeps an even share, the move may leave no more of the layer unused than a pad's overrun.
+        // The same holds for any guard: a file moved behind the default guard of a disc that was nearly full left the
+        // rest without room, and the image came out too big after the whole copy.
         if (restBytes > 0)
         {
             int64_t need = zoneEnd + (restBytes + SECTOR_SIZE - 1) / SECTOR_SIZE + 4096;
@@ -2083,8 +2085,11 @@ bool IsoWriter::padOverZoneIfFileCrosses(const int64_t fileSizeBytes, const int6
             {
                 int64_t laterStart = 0, laterEnd = 0;
                 guardZone(k, laterStart, laterEnd);
-                need += laterEnd - laterStart;
+                need += laterEnd - laterStart + laterOverrunSectors;
             }
+            // the mirror, when it has no place in front of a zone and goes behind the data
+            if (int64_t mirrorStart = 0; !m_mirrorPlaced && !mirrorPending(mirrorStart))
+                need += m_metadataFileLen / SECTOR_SIZE + ALLOC_BLOCK_SIZE / SECTOR_SIZE;
             if (need > capacity)
                 return false;
         }

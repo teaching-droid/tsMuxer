@@ -256,11 +256,13 @@ class IsoWriter
     // current position, would run into a guard zone AND it fits completely between that zone's
     // end and the next zone (and the disc capacity, when known), pad with zeros up to the zone
     // end so the whole file lands on the next layer. Returns true if a pad was written.
-    // --inner-only gives two more limits (0 and -1 = none): restBytes, this file and every one after it, must still
-    // fit on the disc behind the zone, and the file may leave at most maxEmptySectors of the layer before it unused.
+    // Two more limits (0 and -1 = none): restBytes, this file and every one after it, must still fit on the disc
+    // behind the zone, with laterOverrunSectors for each zone still ahead; and the file may leave at most
+    // maxEmptySectors of the layer before it unused (--inner-only on more than two layers).
     // alignedStart: the file is a stream, which starts on the next 64 KB boundary (alignForStream)
     bool padOverZoneIfFileCrosses(int64_t fileSizeBytes, int64_t discCapacitySectors, int64_t restBytes = 0,
-                                  int64_t maxEmptySectors = -1, bool alignedStart = false);
+                                  int64_t maxEmptySectors = -1, bool alignedStart = false,
+                                  int64_t laterOverrunSectors = 0);
 
     // Interleaved 3D groups: the two views have to end up cut into the SAME number of pieces, or
     // the .ssif cannot be described as an alias over them. Left to the ordinary path a guard pad
