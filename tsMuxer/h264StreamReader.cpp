@@ -2388,6 +2388,8 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
 
     if (m_removePulldown)
     {
+        if (m_lastDtsInc != m_pcrIncPerFrame)
+            m_pulldownMarkSeen = true;
         checkPulldownSync();
         m_testPulldownDts += m_lastDtsInc;
         m_lastDtsInc = m_pcrIncPerFrame;

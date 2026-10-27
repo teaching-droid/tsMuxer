@@ -554,6 +554,8 @@ int MPEG2StreamReader::decodePicture(uint8_t* buff)
 
         if (m_removePulldown)
         {
+            if (shownFor != m_pcrIncPerFrame)
+                m_pulldownMarkSeen = true;
             checkPulldownSync();
             m_testPulldownDts += shownFor;
         }

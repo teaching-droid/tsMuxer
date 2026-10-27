@@ -626,7 +626,10 @@ void MPEGStreamReader::checkPulldownSync()
     if (repeatedFrames)
         asyncValue = (std::max)(int64_t{0}, asyncValue - 5 * 2 * m_pcrIncPerFrame);
 
-    if (m_testPulldownDts != 0 && asyncValue > 5 * MAX_PULLDOWN_ASYNC * m_pulldownWarnCnt)
+    // A stream without one pulldown mark has nothing irregular to warn of: its pictures are shown for one frame each,
+    // the times never part, and delPulldown leaves it as it is. Its times were compared with fps/1.25 all the same, and
+    // a stream of plain 23.976 or 29.97 got up to 5 warnings of irregular pulldown marks.
+    if (m_pulldownMarkSeen && m_testPulldownDts != 0 && asyncValue > 5 * MAX_PULLDOWN_ASYNC * m_pulldownWarnCnt)
     {
         LTRACE(LT_ERROR, 2,
                "Warning! Source stream contain irregular pulldown marks. Mistiming between original fps and "
