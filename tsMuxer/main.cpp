@@ -1161,7 +1161,8 @@ All parameters in this group start with two dashes:
 --maxbitrate          Set a ceiling on the muxing rate, in kbps. The stream is
                       paced so it never asks to be read faster than that. The
                       rate counts what is written. For a fixed rate use
-                      --bitrate instead. Must be above 90.
+                      --bitrate instead. A --bitrate or --minbitrate above it
+                      is lowered to it, with a warning. Must be above 90.
 --cbr                 Ask for a fixed bitrate. The rate comes from --bitrate, so
                       --cbr on its own does nothing. --vbr and --cbr ask for
                       opposite things: given both, a warning says so, and
