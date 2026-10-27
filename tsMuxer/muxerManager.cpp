@@ -630,6 +630,18 @@ void MuxerManager::checkTracksBeforeOutput()
 void MuxerManager::checkTrackList(const vector<StreamInfo>& ci) const
 {
     checkMatroskaOnlyCodecs(ci, m_demuxMode || !dynamic_cast<MatroskaMuxer*>(m_mainMuxer.get()));
+    // w64 names the file a demux writes for an LPCM track. On any other track, or on a mux, it did nothing, without a
+    // word.
+    for (const StreamInfo& si : ci)
+        if (si.m_addParams.count("w64"))
+        {
+            if (si.m_codec != lpcmCodecInfo.programName)
+                LTRACE(LT_WARN, 2,
+                       "Warning: w64 applies to an A_LPCM track only, and is ignored for this " << si.m_codec
+                                                                                                << " track.");
+            else if (!m_demuxMode)
+                LTRACE(LT_WARN, 2, "Warning: w64 applies to a demux only (--demux), and is ignored for this mux.");
+        }
     if (m_demuxMode)
         return;
     checkOtherTracks(ci);
