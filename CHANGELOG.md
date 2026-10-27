@@ -512,6 +512,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **More discs that a player may not play get a warning:** main video in a size or rate no disc has (640x360, 720p at 25, 576 lines at 50, H.264 at 2160 lines, HEVC at 120 pictures a second or at 8K), HEVC whose picture size changes inside the stream, audio marked secondary that a disc does not carry as secondary audio (only DTS Express and Dolby Digital Plus without an AC-3 core are), a merged dual layer Dolby Vision track on one meta line, and on --avchd the codecs an AVCHD player does not play (MPEG-2, VC-1, HEVC, DTS, DTS-HD, E-AC-3, TrueHD). The discs are written as before.
 
+* **HLG video on a disc gets a warning.** A Blu-ray disc has no HLG dynamic range, so the disc marks HLG video as SDR, and a player shows it as SDR. This covers HEVC, H.264 and Dolby Vision with an HLG picture. The disc is written as before.
+
 * **DTS Express muxed to a disc without "secondary" went out as primary audio without a word,** as DTS-HD High Resolution with no core. A Blu-ray disc has DTS Express as secondary audio only. A warning now says that "secondary" on its line makes it a commentary track.
 
 * **The HDR10 data of an HEVC stream on a disc was not repeated where it was not the first message of its SEI unit:** only the first message was read, so mastering display or light level data after another message was never repeated at the random access points. Every message of the unit is read now.
