@@ -2215,7 +2215,11 @@ void IsoWriter::beforePiece(FileEntryInfo* entry)
               m_lastWritedEntry->m_fileType == FileTypes::RealtimeFile && !m_lastWritedEntry->m_closed);
     if (!entry->m_subMode || !entry->m_leadsPieces || m_pairsPlaced)
         return;
-    placeMirrorBefore(imageLBA() + MIRROR_LOOKAHEAD_BYTES / SECTOR_SIZE);
+    // The guard zone of a break goes in front of such a pair as well. It was laid down where a write met it, inside a
+    // piece of one view, which then had a piece more than the other, and the mux was refused at its end ("Can't
+    // interleave"). That happened when the break lay within the look ahead of the start of the data: the mirror was
+    // put in front of the first pair, and nothing kept the zone between two pairs.
+    checkLayerBreakPoint(static_cast<int>(MIRROR_LOOKAHEAD_BYTES));
 }
 
 void IsoWriter::setLayerBreakGuards(const std::vector<int>& beforeSectors, const std::vector<int>& afterSectors)
