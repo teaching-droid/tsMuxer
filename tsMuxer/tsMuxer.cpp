@@ -1857,6 +1857,12 @@ void TSMuxer::gotoNextFile(const int64_t newPts)
     m_muxFile = nullptr;
 
     // 3. open new file
+    // Each part of a disc is a play item of the one playlist, and a playlist holds at most 999 play items. A split into
+    // more parts wrote a playlist of 1000 or more, which no player reads, at exit 0.
+    if (m_bluRayMode && m_fileNames.size() >= 999)
+        THROW(ERR_COMMON,
+              "The split needs more than 999 parts, and a disc playlist holds at most 999 play items. Give "
+              "a larger --split-duration or --split-size.")
     m_outFileName = getNextName(m_outFileName);
     if (m_sublingMuxer)
         m_outFileName = getNextName(m_outFileName);  // inc by 2
