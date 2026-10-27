@@ -3195,12 +3195,29 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
         if (rateGiven)
             setMuxRate(cbrRate);
         // A ceiling below the constant rate holds the stream to the ceiling, and nothing said so: --bitrate=40000 with
-        // --maxbitrate=20000 gave 20000
+        // --maxbitrate=20000 gave 20000. The padding still filled each gap between two PCRs to the higher rate, and
+        // the ceiling then held the next PCR back until that padding could have arrived: --bitrate=20000 with
+        // --maxbitrate=5000 put the PCRs 0.39 s apart, where 0.1 s is the most the rules allow. The constant rate and
+        // its padding are lowered to the ceiling, as if --bitrate had given it.
         if (rateGiven && maxRate < cbrRate)
+        {
             LTRACE(LT_WARN, 2,
                    "Warning: --maxbitrate (" << maxRate / 1000 << " kbps) is below --bitrate (" << cbrRate / 1000
-                                             << " kbps), so the constant rate is held at " << maxRate / 1000
-                                             << " kbps.");
+                                             << " kbps), so the constant rate and its padding are lowered to "
+                                             << maxRate / 1000 << " kbps.");
+            setMuxRate(maxRate);
+            setMinBitrate(maxRate);
+        }
+        // The same for a padding floor above the ceiling, which nothing said at all: --minbitrate=20000 with
+        // --maxbitrate=10000 put the PCRs 0.18 s apart
+        else if (!rateGiven && minRateGiven && m_minBitrate > maxRate)
+        {
+            LTRACE(LT_WARN, 2,
+                   "Warning: --minbitrate (" << m_minBitrate / 1000 << " kbps) is above --maxbitrate ("
+                                             << maxRate / 1000 << " kbps), so the padding is lowered to "
+                                             << maxRate / 1000 << " kbps.");
+            setMinBitrate(maxRate);
+        }
     }
     m_cbrGiven = rateGiven;
     // --bitrate gives a constant rate, and --minbitrate after it lowered that rate without a word: 20000 became 10000.
