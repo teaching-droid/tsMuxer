@@ -442,6 +442,34 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
     {
         if (isSecondary)
         {
+            // A disc's secondary audio is mixed over the main audio by the player, and is DTS Express or Dolby Digital
+            // Plus without an AC-3 core, as the help says. Any other track marked so was declared secondary without a
+            // word: DTS-HD High Resolution or Master Audio as secondary DTS-HD, a Dolby Digital Plus track with its
+            // core as secondary Dolby Digital Plus, AC-3 or LPCM with the stream type of primary audio.
+            const auto dts = dynamic_cast<DTSStreamReader*>(codecReader);
+            const auto ac3 = dynamic_cast<AC3StreamReader*>(codecReader);
+            const char* what = nullptr;
+            if (dts && dts->getDTSHDMode() != DTSStreamReader::DTSHD_SUBTYPE::DTS_SUBTYPE_EXPRESS)
+                what = dts->getDTSHDMode() == DTSStreamReader::DTSHD_SUBTYPE::DTS_SUBTYPE_MASTER_AUDIO
+                           ? "DTS-HD Master Audio"
+                       : dts->getDTSHDMode() == DTSStreamReader::DTSHD_SUBTYPE::DTS_SUBTYPE_UNINITIALIZED
+                           ? "DTS"
+                           : "DTS-HD High Resolution";
+            else if (ac3 && ac3->isTrueHD())
+                what = "TrueHD";
+            else if (ac3 && ac3->isEAC3() && ac3->isAC3() && !ac3->getDownconvertToAC3())
+                what = "Dolby Digital Plus with an AC-3 core";
+            else if (ac3 && (!ac3->isEAC3() || ac3->getDownconvertToAC3()))
+                what = "AC-3";
+            else if (!dts && !ac3)
+                what = codecName.c_str();
+            if (what && m_bluRayMode)
+                LTRACE(LT_WARN, 2,
+                       "Warning: track "
+                           << streamIndex << " (" << what
+                           << ") is marked secondary. A Blu-ray disc's secondary audio is DTS Express or Dolby "
+                              "Digital Plus without an AC-3 core, which the player mixes over the main audio, so a "
+                              "player may not play this track. Leave out \"secondary\" to mux it as primary audio.");
             tsStreamIndex = 0x1A00 + m_secondaryAudioTrackCnt;
             m_secondaryAudioTrackCnt++;
         }
