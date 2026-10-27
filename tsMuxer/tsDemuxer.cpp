@@ -21,6 +21,25 @@
 
 using namespace std;
 
+namespace
+{
+// ** A FILE CUT AT ANY BYTE IS READ FROM ITS FIRST WHOLE PACKET. ** The next packet from cur on. Where cur is not the
+// sync byte of a packet, as at the start of a file cut inside a packet or after a damaged part, the search went to the
+// next 0x47 byte, and a 0x47 inside the payload in front of the first packet was taken for one: its header said a
+// size no packet has, and the file could not even be listed. A 0x47 is now taken when the packet after it, step bytes
+// on, begins with 0x47 too (or lies beyond the block). checkFirst asks the same of the first packet of a file, whose
+// start may be any byte. A packet found where it was expected is taken as before.
+uint8_t* findPacket(uint8_t* cur, const uint8_t* lastFrameAddr, const int step, const bool checkFirst)
+{
+    if (!checkFirst && cur <= lastFrameAddr && *cur == 0x47)
+        return cur;
+    for (; cur <= lastFrameAddr; ++cur)
+        if (*cur == 0x47 && (cur + step > lastFrameAddr || cur[step] == 0x47))
+            break;
+    return cur;
+}
+}  // namespace
+
 bool isM2TSExt(const std::string& streamName)
 {
     const string sName = strToLowerCase(unquoteStr(streamName));
@@ -81,6 +100,7 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
     std::map<int, int> nonProcPMTPid;
 
     bool m2tsHdrDiscarded = false;
+    bool firstPacket = true;
     int lastReadRez = 0;
     uint8_t* curPos = nullptr;
     while (totalReadedBytes < DETECT_STREAM_BUFFER_SIZE && lastReadRez != BufferedReader::DATA_EOF)
@@ -109,13 +129,14 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
         {
             if (!m2tsHdrDiscarded && m_m2tsMode)
                 curPos += 4;
-            while (*curPos != 0x47 && curPos <= lastFrameAddr) curPos++;
+            curPos = findPacket(curPos, lastFrameAddr, m_m2tsMode ? 192 : TS_FRAME_SIZE, firstPacket);
             if (curPos > lastFrameAddr)
             {
                 m2tsHdrDiscarded = true;
                 break;
             }
             m2tsHdrDiscarded = false;
+            firstPacket = false;
             auto tsPacket = reinterpret_cast<TSPacket*>(curPos);
             int pid = tsPacket->getPID();
 
@@ -636,18 +657,26 @@ bool TSDemuxer::isVideoPID(const StreamType streamType)
 // static uint64_t prevDts = 0;
 // static int ggCnt = 0;
 
+// A file of 192-byte packets under another name than .m2ts. Each grid is looked for from any of the first bytes, as a
+// file cut at any byte starts inside a packet; it was looked for from the first byte only, and such a cut was read as
+// 188-byte packets.
 bool TSDemuxer::checkForRealM2ts(const uint8_t* buffer, const uint8_t* end) const
 {
-    for (const uint8_t* cur = buffer; cur < end; cur += 192)
-        if (cur[4] != 0x47)
-            return false;
-    for (const uint8_t* cur = buffer; cur < end; cur += 188)
-        if (*cur != 0x47)
+    auto gridFound = [buffer, end](const int step)
+    {
+        for (int first = 0; first < step && buffer + first < end; ++first)
         {
-            LTRACE(LT_WARN, 2, "Warning! The file " << m_streamName << " has a M2TS format.");
-            return true;
+            const uint8_t* cur = buffer + first;
+            while (cur < end && *cur == 0x47) cur += step;
+            if (cur >= end)
+                return true;
         }
-    return false;
+        return false;
+    };
+    if (!gridFound(192) || gridFound(188))
+        return false;
+    LTRACE(LT_WARN, 2, "Warning! The file " << m_streamName << " has a M2TS format.");
+    return true;
 }
 
 // The PAT and PMT of one block. For the first clip the PMT becomes the list of streams, as it always has. For a
@@ -656,20 +685,23 @@ bool TSDemuxer::checkForRealM2ts(const uint8_t* buffer, const uint8_t* end) cons
 // on, and a stream missing from the list keeps its PES headers in the data: the audio reader took each of them
 // for a broken frame. A later clip only ever adds: a PMT that does not parse adds nothing, and a packet that stops
 // the scan of the first clip ends the scan of a later one quietly, so no mux that ran before can stop here.
-void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, const bool laterClip)
+void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, const bool laterClip,
+                                  const bool firstBlock)
 {
     uint8_t pmtBuffer[4096]{0};
     int pmtBufferLen = 0;
     bool hdrDiscarded = m_m2tsHdrDiscarded;
+    bool firstPacket = firstBlock;
     TS_program_association_section pat;
     for (uint8_t* cur = data; cur <= lastFrameAddr; cur += TS_FRAME_SIZE)
     {
         if (!hdrDiscarded && m_m2tsMode)
             cur += 4;
-        while (cur <= lastFrameAddr && *cur != 0x47) cur++;
+        cur = findPacket(cur, lastFrameAddr, m_m2tsMode ? 192 : TS_FRAME_SIZE, firstPacket);
         if (cur > lastFrameAddr)
             break;
         hdrDiscarded = false;
+        firstPacket = false;
 
         const auto tsPacket = reinterpret_cast<TSPacket*>(cur);
         const int pid = tsPacket->getPID();
@@ -910,9 +942,9 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     }
 
     if (m_pmt.pidList.empty() || mvcContinueExpected())
-        readProgramTables(data, lastFrameAddr, false);
+        readProgramTables(data, lastFrameAddr, false, isFirstBlock);
     else if (isFirstBlock)
-        readProgramTables(data, lastFrameAddr, true);
+        readProgramTables(data, lastFrameAddr, true, true);
     if (isFirstBlock && m_pmtVersion != -1)
         m_pmtVersion = -2;  // each clip of a playlist has a program map of its own
 
@@ -920,6 +952,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     const ClipPart* part =
         m_curFileNum < m_clipParts.size() && m_clipParts[m_curFileNum].isCut() ? &m_clipParts[m_curFileNum] : nullptr;
 
+    bool firstPacket = isFirstBlock;
     for (m_curPos = data; m_curPos <= lastFrameAddr; m_curPos += TS_FRAME_SIZE)
     {
         if (!m_m2tsHdrDiscarded && m_m2tsMode)
@@ -927,18 +960,17 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
             discardSize += 4;
             m_curPos += 4;
         }
-        while (m_curPos <= lastFrameAddr && *m_curPos != 0x47)
-        {
-            discardSize++;
-            m_noPacketBytes++;
-            m_curPos++;
-        }
+        uint8_t* const found = findPacket(m_curPos, lastFrameAddr, m_m2tsMode ? 192 : TS_FRAME_SIZE, firstPacket);
+        discardSize += found - m_curPos;
+        m_noPacketBytes += found - m_curPos;
+        m_curPos = found;
         if (m_curPos > lastFrameAddr)
         {
             m_m2tsHdrDiscarded = true;
             break;
         }
         m_m2tsHdrDiscarded = false;
+        firstPacket = false;
 
         const auto tsPacket = reinterpret_cast<TSPacket*>(m_curPos);
         int pid = tsPacket->getPID();

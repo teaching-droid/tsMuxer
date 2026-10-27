@@ -116,7 +116,7 @@ class TSDemuxer final : public AbstractDemuxer
     // The PGS handed on is read by the PGS reader and counted as read there; the DVB bytes it came from count as
     // discarded, less what was handed on, so that the two add up to the file.
     void convertDvbSubtitlePes(int pid, DvbSubtitlePes& sub, DemuxedData& demuxedData, bool last, int64_t& discardSize);
-    void readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, bool laterClip);
+    void readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, bool laterClip, bool firstBlock);
 
     // A playlist of which only the part each play item plays is muxed: one ClipPart for each clip file, and what is
     // kept of each stream in the part being read (see keptInPart)
