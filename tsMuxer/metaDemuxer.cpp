@@ -1575,23 +1575,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         {
             const string& fileName = fileList[i];
             if (!tmpFile.open(fileName.c_str(), File::ofRead))
-            {
-                // why, as far as it can be told: the message named the file and nothing else, also for a file that is
-                // there and has a path too long for the system
-                std::error_code ec;
-                const std::filesystem::path path(std::u8string(fileName.begin(), fileName.end()));
-                std::string why = " (the system refused to open it; check that it can be read and is not in use)";
-                if (!std::filesystem::exists(path, ec) && !ec)
-                    why = " (it does not exist)";
-                else if (std::filesystem::is_directory(path, ec))
-                    why = " (it is a folder)";
-#ifdef _WIN32
-                else if (fileName.size() >= 260)
-                    why = " (its path has " + std::to_string(fileName.size()) +
-                          " characters, more than this system opens by default)";
-#endif
-                THROW(ERR_INVALID_CODEC_FORMAT, "Can't open file: " << fileName << why)
-            }
+                THROW(ERR_INVALID_CODEC_FORMAT, "Can't open file: " << fileName << openFailureReason(fileName))
             int64_t tmpSize = 0;
             tmpFile.size(&tmpSize);
             // of a clip cut to a part, the bytes that are read
@@ -3527,6 +3511,24 @@ const Iso639_1 ISO639_1[] = {
 
     {"za", "zha", "zha"}, {"zh", "zho", "chi"}, {"zu", "zul", "zul"}};
 }  // namespace
+
+// why, as far as it can be told: the message named the file and nothing else, also for a file that is there and has a
+// path too long for the system
+std::string openFailureReason(const std::string& fileName)
+{
+    std::error_code ec;
+    const std::filesystem::path path(std::u8string(fileName.begin(), fileName.end()));
+    if (!std::filesystem::exists(path, ec) && !ec)
+        return " (it does not exist)";
+    if (std::filesystem::is_directory(path, ec))
+        return " (it is a folder)";
+#ifdef _WIN32
+    if (fileName.size() >= 260)
+        return " (its path has " + std::to_string(fileName.size()) +
+               " characters, more than this system opens by default)";
+#endif
+    return " (the system refused to open it; check that it can be read and is not in use)";
+}
 
 std::string iso639FromBcp47(const std::string& tag)
 {

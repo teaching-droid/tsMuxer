@@ -228,6 +228,8 @@ std::string applyLangCodeStyle(const std::string& lang);
 bool isLanguageCode(const std::string& lang);
 // The ISO 639-2 code (terminological form) of a BCP 47 language tag, from its primary subtag; empty when it has none.
 std::string iso639FromBcp47(const std::string& tag);
+// Why a file could not be opened, as far as it can be told, in brackets after a space: " (it does not exist)"
+std::string openFailureReason(const std::string& fileName);
 
 // ** THE DEFAULT OF --playlist-clips, IN THIS ONE PLACE. ** true: a Blu-ray playlist that plays only a part of a clip
 // gets only that part (--playlist-clips=played). false: every clip of a playlist is muxed whole, from its first picture

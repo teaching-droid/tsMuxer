@@ -3985,10 +3985,17 @@ int main(int argc, char** argv)
             string str = argv[1];
             // --help, -h and -? show the help a call without arguments shows. They were taken as the name of a file to
             // list, which printed the version line and nothing else.
-            if (str == "--help" || str == "-h" || str == "-?" || str == "/?")
+            // In any case, as -H and --HELP were also taken for a file name; a name of blanks only names no file.
+            const string lower = strToLowerCase(str);
+            if (lower == "--help" || lower == "-h" || lower == "-?" || lower == "/?")
             {
                 showHelp();
                 return 0;
+            }
+            if (trimStr(str).empty())
+            {
+                showHelp();
+                return -1;
             }
             string fileExt = extractFileExt(str);
             fileExt = strToLowerCase(fileExt);
@@ -4108,7 +4115,16 @@ int main(int argc, char** argv)
                 }
             }
             else
+            {
+                // A file that cannot be opened, missing or not readable, printed the version line only, at exit 0: a
+                // script read "no tracks". It is said why, as the mux says it, and the exit is an error.
+                File file;
+                std::error_code ec;
+                if (std::filesystem::is_directory(fsPath(str), ec) || !file.open(argv[1], File::ofRead))
+                    THROW(ERR_FILE_NOT_FOUND, "Can't open file: " << str << openFailureReason(str))
+                file.close();
                 detectStreamReader(argv[1], nullptr, false);
+            }
             cout << endl;
             return 0;
         }
