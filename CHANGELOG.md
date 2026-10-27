@@ -272,6 +272,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **font-size=0 or a negative font size drew nothing to see,** and the mux still said it had succeeded, and a negative font-border or line-spacing drew the subtitle wrong. Such values are now refused, with the value.
 
+* **A subtitle track that read nothing ended without a word.** An empty .sup or .srt, or an SRT file on an S_HDMV/PGS line, gave an empty subtitle track and "Mux successful complete". Such a track now gets the warning that it produced no frames. Data that looks like PGS only by chance, with a picture size or a frame rate no PGS stream has, is refused as not PGS.
+
+* **A warning about a line of an SRT file that is not part of a subtitle quoted the line as it was,** control characters and bytes that are not UTF-8 among them, so a terminal could take escape sequences from the file. Such characters are now shown as \xNN, and a quoted line is cut short after 120 bytes.
+
 ### Audio
 
 * **An AC-3, E-AC-3, DTS, AAC or MPEG audio track that ends inside a frame,** as a recording an encoder stopped, got the part of that frame as its last frame, which a player cannot decode, and the track came out a frame longer. The part is now left out, with a warning.
@@ -297,6 +301,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **A file of a few bytes, of any kind, was listed as a subtitle stream (SUP).** It now gives "Can't detect stream type".
 
 * **An empty .dts file** stops with "produced no frames at all". The mux crashed.
+
+* **An RF64 or BW64 file, the WAV of more than 4 GB, was listed as "Can't detect stream type".** The listing and a mux now say that it is an RF64 WAV, which tsMuxeR does not read, and ask for it as W64, or as WAV when it holds less than 4 GB of audio.
 
 * **AAC whose channel layout is given by a program config element,** such as 6.0, 6.1 or 7.1 with front wide speakers, is muxed: from an MP4 or Matroska file it gave an empty output said to be successful, and a raw file of it was not recognised.
 
@@ -550,6 +556,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **HE-AAC from an MP4 or Matroska file** keeps its header: it was written as AAC LC at the rate of its core, half the rate it plays at, so a player that goes by the header played it without its high frequencies.
 
+* **A title or track name in a meta file that is not UTF-8 went into a Matroska file as it was,** which is not valid UTF-8, and a player showed a replacement character. On Windows such a text is now read in the active code page, as a file name in the same meta file is, and elsewhere each byte that is not UTF-8 becomes the replacement character; a warning asks for the meta file in UTF-8. Chapter names are made valid UTF-8 the same way.
+
 ### Window
 
 * **A disc made from a Matroska file written by tsMuxeR lost the AC-3 core of its TrueHD track.** Such a file holds the core as an AC-3 track of its own, straight after the TrueHD track, and the window muxed the two apart: the disc had TrueHD without its core and an extra AC-3 track. For a disc, the window now asks whether that track goes on the disc as the core of the TrueHD track (merge-ac3-track=) or as a separate track, with "As the core" offered first for a file tsMuxeR wrote; the merge box shows the answer. The listing of a Matroska file shows the application that wrote it. The warning that MLP is not standard for BD disks now names merge-ac3-track= and merge-ac3-file=.
@@ -663,6 +671,14 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **A track number above 8191 for a transport stream** wrote past a table in memory. It ends like any other track the file does not have.
 
 * **tsMuxeR --help** (also -h and -?) shows the help. It printed the version line only, as if --help were a file to list. The help also names --3d-single-copy and --title now.
+
+* **A listing of a file that could not be opened said nothing.** A missing file, or one the system did not let tsMuxeR read, printed the version line only, and a folder said "Can't detect stream type", both with exit code 0. The listing now says why the file cannot be opened and ends with an error. -H and --HELP show the help, as -h and --help do.
+
+* **A meta file saved in UTF-16 was refused as "Invalid codec format",** followed by the raw bytes of its first line, and a folder given as the meta file ended with "No tracks selected". Both now say what they are, before anything is read.
+
+* **A split job left the higher-numbered parts of an earlier job in place,** without a word: 3 new parts over 9 old ones left a folder of 9 parts made by two jobs. The old parts the new job did not write are now removed, each with a line that names it. Only files named as the job names its own parts are touched, and a job that fails removes nothing.
+
+* **Some refusals of a wrong video codec said little,** such as "VC1 stream error: Not enough buffer for write headers" and "Only ADVANCED profile are supported now", and an H.264 track that could not write its parameter sets again said only that a buffer was too small. They now name the track and what was found, and give the usual reason that the codec on the meta line is not the codec the file holds.
 
 * **A chapter file with more than one edition** uses the edition a Matroska file would: the one marked as the default, also when the mark follows its chapters, without its hidden and disabled chapters. It used the first edition with them.
 
