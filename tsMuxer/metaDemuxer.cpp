@@ -3094,14 +3094,14 @@ static double transportStreamShare(const std::string& fileName, const std::map<i
     file.size(&fileSize);
     std::set<int> wanted;
     for (const auto& [pid, policy] : pids) wanted.insert(SubTrackFilter::isSubTrack(pid) ? pid >> 16 : pid);
-    constexpr int WINDOWS = 32;
+    constexpr int WINDOW_COUNT = 32;
     constexpr uint32_t WINDOW_BYTES = 1024 * 1024;
     std::vector<uint8_t> buf(WINDOW_BYTES);
     int64_t all = 0;
     int64_t kept = 0;
-    for (int w = 0; w < WINDOWS; ++w)
+    for (int w = 0; w < WINDOW_COUNT; ++w)
     {
-        const int64_t pos = fileSize > WINDOW_BYTES ? (fileSize - WINDOW_BYTES) / (WINDOWS - 1) * w : 0;
+        const int64_t pos = fileSize > WINDOW_BYTES ? (fileSize - WINDOW_BYTES) / (WINDOW_COUNT - 1) * w : 0;
         if (file.seek(pos) != pos)
             break;
         const int n = file.read(buf.data(), WINDOW_BYTES);
