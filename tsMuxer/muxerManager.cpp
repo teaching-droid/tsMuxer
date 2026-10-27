@@ -672,8 +672,13 @@ void MuxerManager::checkOtherTracks(const vector<StreamInfo>& ci) const
             aacFound = true;
         else if (si.m_codec == mpegAudioCodecInfo.programName)
             notOnDisc.emplace_back("MPEG audio (MP1, MP2 or MP3)");
-        else if (si.m_codec == opusCodecInfo.programName)
-            notOnDisc.emplace_back("Opus");
+        // ** OPUS HAS NO FORM ON A DISC. ** A disc's clip information has no stream coding type for it, so its entry
+        // there was written without one, and a disc of Opus alone was refused for want of "one audio or video stream"
+        // to index, though there was one. It is refused as what it is, as the usage says: TS, MKV and demux only.
+        else if (si.m_codec == opusCodecInfo.programName && m_bluRayMode)
+            THROW(ERR_COMMON,
+                  "Opus has no form on a Blu-ray or AVCHD disc: the clip information of a disc has no "
+                  "stream coding type for it. Choose TS or MKV output, or leave the track out.")
         else if (si.m_codec == vvcCodecInfo.programName)
             notOnDisc.emplace_back("VVC (H.266)");
         else if (si.m_codec == av1CodecInfo.programName)
