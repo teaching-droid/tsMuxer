@@ -28,6 +28,8 @@ class TSDemuxer final : public AbstractDemuxer
     int simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& acceptedPIDs, int64_t& discardSize) override;
     void getTrackList(std::map<int32_t, TrackInfo>& trackList) override;
     int getLastReadRez() override { return m_lastReadRez; }
+    // The demuxer of a mux (not of a listing or a probe) says at the end of the file what of its tracks was damaged
+    void setReportDamage() { m_reportDamage = true; }
     void setFileIterator(FileNameIterator* itr) override;
     int64_t getTrackDelay(const int32_t pid) override
     {
@@ -283,6 +285,27 @@ class TSDemuxer final : public AbstractDemuxer
     int m_pmtVersionPid = -1;
     bool m_pmtChangeReported = false;
     void checkPmtVersion(uint8_t* payload, const uint8_t* end);
+
+    // ** DAMAGE A DECODER SEES AND THE MUX DID NOT. ** Packets marked scrambled (transport_scrambling_control, the
+    // recording of an encrypted channel without its key) and packets lost (the continuity counter skips) went into the
+    // tracks without a word: the pictures were damaged at exit 0. Counted for each track muxed, and said once at the
+    // end of the file (reportDamage); a track whose every packet is scrambled is refused. Lost packets of a sound track
+    // are left to its reader, which says how many bytes it could not use.
+    struct PidDamage
+    {
+        int64_t packets = 0;    // with payload
+        int64_t scrambled = 0;  // of those, marked scrambled
+        int64_t lost = 0;       // packets missing by the continuity counter (at least)
+        int64_t scrambledAt = -1;
+        int64_t lostAt = -1;
+        int lastCounter = -1;  // -1 at the start of each file
+    };
+    bool m_reportDamage = false;
+    bool m_damageReported = false;
+    std::map<int, PidDamage> m_damage;
+    std::map<int, int64_t> m_damagePts;  // the last PES time of each such track, for where the damage starts
+    void noteDamage(const TSPacket* tsPacket, int pid);
+    void reportDamage();
 
     static bool isVideoPID(StreamType streamType);
     bool checkForRealM2ts(const uint8_t* buffer, const uint8_t* end) const;

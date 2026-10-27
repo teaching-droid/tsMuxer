@@ -5673,6 +5673,7 @@ bool ContainerToReaderWrapper::openStream(int readerID, const char* streamName, 
     auto tsDemuxer = dynamic_cast<TSDemuxer*>(demuxer);
     if (tsDemuxer)
     {
+        tsDemuxer->setReportDamage();
         auto itr = m_owner.m_mplsStreamMap.find(streamName);
         if (itr != m_owner.m_mplsStreamMap.end())
             tsDemuxer->setMPLSInfo(itr->second.m_playItems);

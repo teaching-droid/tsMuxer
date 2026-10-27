@@ -779,6 +779,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
             return 0;
         }
         m_lastReadRez = readRez;
+        reportDamage();
         return BufferedReader::DATA_EOF;
     }
     if (readedBytes > 0)
@@ -830,6 +831,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         m_curFileNum++;
         startPart();
         m_fileFirstDts.clear();
+        for (auto& [pid, damage] : m_damage) damage.lastCounter = -1;  // each file counts on its own
     }
 
     discardSize = -handedOn;
@@ -914,6 +916,8 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         }
         if (pid == m_pmtVersionPid && tsPacket->payloadStart)
             checkPmtVersion(frameData, m_curPos + TS_FRAME_SIZE);
+        if (m_reportDamage && m_acceptedPidCache[pid])
+            noteDamage(tsPacket, pid);
         demuxPacket(m_curPos, pid, demuxedData, discardSize, part, vect, lastPid);
     }
     if (m_curPos < data + readedBytes)
@@ -1048,6 +1052,8 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
 
             if (m_firstPtsTime.find(pid) == m_firstPtsTime.end())
                 m_firstPtsTime[pid] = curPts;
+            if (m_reportDamage && m_acceptedPidCache[pid])
+                m_damagePts[pid] = curPts;
 
             if (m_acceptedPidCache[pid] && streamInfo != m_pmt.pidList.end() &&
                 isAudioStreamType(streamInfo->second.m_streamType) && isJoinOfFiles())
@@ -1436,7 +1442,76 @@ void TSDemuxer::openFile(const std::string& streamName)
 
 void TSDemuxer::readClose() {}
 
-TSDemuxer::~TSDemuxer() { m_bufferedReader->deleteReader(m_readerID); }
+TSDemuxer::~TSDemuxer()
+{
+    try
+    {
+        reportDamage();  // a mux that ends before the end of the file, as with --cut-end
+    }
+    catch (...)
+    {
+    }
+    m_bufferedReader->deleteReader(m_readerID);
+}
+
+void TSDemuxer::noteDamage(const TSPacket* tsPacket, const int pid)
+{
+    if (!tsPacket->dataExists)
+        return;  // the counter goes on with a payload only
+    PidDamage& damage = m_damage[pid];
+    // the time of the last PES of the track, from its first one: where the damage begins
+    const auto at = [&]
+    {
+        const auto last = m_damagePts.find(pid);
+        const auto first = m_firstPtsTime.find(pid);
+        return last != m_damagePts.end() && first != m_firstPtsTime.end() ? last->second - first->second : -1;
+    };
+    damage.packets++;
+    if (tsPacket->sc != 0 && damage.scrambled++ == 0)
+        damage.scrambledAt = at();
+    // A discontinuity the stream declares (discontinuity_indicator) starts the count again
+    const bool declared =
+        tsPacket->afExists && tsPacket->adaptiveField.length > 0 && tsPacket->adaptiveField.discontinuityIndicator;
+    // The same counter again is a packet sent twice with another payload (one with the same payload is passed over
+    // before this is called, simpleDemuxBlock): no packet is missing.
+    if (damage.lastCounter >= 0 && !declared && static_cast<int>(tsPacket->counter) != damage.lastCounter)
+    {
+        const int lost = (static_cast<int>(tsPacket->counter) - damage.lastCounter - 1) & 15;
+        if (lost > 0 && damage.lost == 0)
+            damage.lostAt = at();
+        damage.lost += lost;
+    }
+    damage.lastCounter = static_cast<int>(tsPacket->counter);
+}
+
+void TSDemuxer::reportDamage()
+{
+    if (!m_reportDamage || m_damageReported)
+        return;
+    m_damageReported = true;
+    const auto where = [](const int64_t at)
+    { return at < 0 ? std::string() : ", the first at " + floatToTime(static_cast<double>(at) / 90000.0, '.'); };
+    for (const auto& [pid, damage] : m_damage)
+    {
+        if (damage.packets > 0 && damage.scrambled == damage.packets)
+            THROW(ERR_COMMON, "Track " << pid << " of \"" << m_streamName << "\" is scrambled: all " << damage.packets
+                                       << " of its packets are marked so (transport_scrambling_control), and what "
+                                          "they hold cannot be read. A recording of an encrypted channel needs to be "
+                                          "decrypted before muxing; or leave the track out.")
+        if (damage.scrambled > 0)
+            LTRACE(LT_WARN, 2,
+                   "Warning: " << damage.scrambled << " of the " << damage.packets << " packets of track " << pid
+                               << " of \"" << m_streamName << "\""
+                               << " are marked scrambled (transport_scrambling_control)" << where(damage.scrambledAt)
+                               << ". What they hold cannot be read, and the frames they belong to are damaged.");
+        const auto info = m_pmt.pidList.find(pid);
+        if (damage.lost > 0 && info != m_pmt.pidList.end() && isVideoPID(info->second.m_streamType))
+            LTRACE(LT_WARN, 2,
+                   "Warning: at least " << damage.lost << " packets of track " << pid << " of \"" << m_streamName
+                                        << "\" are missing: its continuity counter skips" << where(damage.lostAt)
+                                        << ". The pictures they belong to are damaged.");
+    }
+}
 
 int64_t TSDemuxer::getDemuxedSize() { return m_dataProcessed; }
 
