@@ -991,6 +991,9 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     std::map<int, int64_t> firstMuxed;  // the time of each stream's first packet muxed (the demux of a --cut-start)
     int64_t mainVideoDts = -1;          // the decoding time of the main video's last packet (--cut-end)
     std::set<int> shownBeforeEnd;       // the video streams that have given a picture shown before --cut-end
+    std::set<int> mutedByCut;           // --cut-start: the video streams that gave pictures, none of them kept
+    std::map<int, int64_t> lastPicture;  // --cut-start: per video stream, the time of its last picture, and
+    std::map<int, int64_t> lastKey;      // of its last key picture
     // A picture a cut leaves out is not counted in the reader's "Processed N video frames", which counted every
     // picture of the source: part 2 of a film cut in two said 15000 for its 7488
     const auto leftOut = [](const AVPacket& packet)
@@ -1019,11 +1022,20 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
             // less than half a millisecond before the cut is at it.
             if (key == m_cutKeyFrom.end() && isCutVideo(avPacket.codec))
                 from -= INTERNAL_PTS_FREQ / 2000;
+            if (isCutVideo(avPacket.codec))
+            {
+                lastPicture[avPacket.stream_index] = (std::max)(lastPicture[avPacket.stream_index], avPacket.pts);
+                if (avPacket.flags & AVPacket::IS_IFRAME)
+                    lastKey[avPacket.stream_index] = avPacket.pts;
+                if (firstMuxed.count(avPacket.stream_index) == 0)
+                    mutedByCut.insert(avPacket.stream_index);
+            }
             if (avPacket.pts < from || !keptAfterCutStart(avPacket))
             {
                 leftOut(avPacket);
                 continue;
             }
+            mutedByCut.erase(avPacket.stream_index);
         }
         if (m_cutEnd > 0)
         {
@@ -1167,6 +1179,35 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
                    "there is none after the cut. The output holds no media. Choose an earlier start.";
         else
             msg << "is at or past the end of the sources: the output holds no media.";
+        throw std::runtime_error(msg.str());
+    }
+    // ** A CUT THAT LEAVES THE MAIN VIDEO OUT IS NOT A SUCCESS EITHER. ** A cut inside the last picture of a film, or
+    // with --cut-pictures=inside after its last key picture, kept no picture but the sound that runs a frame or two
+    // past it, and the output was reported as a finished mux: a TS with one AC-3 frame and no video, a disc playlist
+    // without a play item. The rule above saw that something was muxed. The track empty after a cut is not checked
+    // later (checkEmptyTracks), so it is said here, with the latest start that keeps a picture.
+    if (m_cutStart > 0 && !mutedByCut.empty())
+        findCutLayers(m_metaDemuxer.getStreamInfo());
+    if (m_cutStart > 0 && mutedByCut.count(m_cutMainVideo) != 0)
+    {
+        const bool cover = m_cutCover && !m_cutPassFailed;
+        const auto at = [](const int64_t t) { return floatToTime(static_cast<double>(t) / INTERNAL_PTS_FREQ); };
+        const auto key = lastKey.find(m_cutMainVideo);
+        std::ostringstream msg;
+        msg << "--cut-start (" << static_cast<double>(m_cutStart) / INTERNAL_PTS_FREQ << "s) leaves no picture of track "
+            << m_cutMainVideo << ", the video: ";
+        if (cover || key == lastKey.end())
+            msg << "its last picture is shown from " << at(lastPicture[m_cutMainVideo])
+                << ", before the cut, and nothing of it after the cut.";
+        else
+            msg << "with --cut-pictures=inside a video begins at a key picture at or after the cut, and its last key "
+                   "picture is at "
+                << at(key->second) << ".";
+        msg << " The output would hold no video. Choose a start at or before "
+            << at(cover || key == lastKey.end() ? lastPicture[m_cutMainVideo] : key->second);
+        if (cover && key != lastKey.end())
+            msg << ", where the picture begins at the key picture at " << at(key->second);
+        msg << (cover ? "." : ", or --cut-pictures=cover.");
         throw std::runtime_error(msg.str());
     }
 }
@@ -1744,6 +1785,7 @@ void MuxerManager::findCutKeyPictures()
             failure = "unknown error";
         }
     }
+    m_cutPassFailed = !failure.empty();
     if (!failure.empty())
     {
         LTRACE(LT_WARN, 2,
