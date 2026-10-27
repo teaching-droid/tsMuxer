@@ -1519,11 +1519,17 @@ const std::string DTSStreamReader::getStreamInfo()
         str << "Loseless. ";
         break;
     default:
-        str << (pi_bit_rate + m_hdBitrate) / 1000 << "Kbps  ";
+        // A Master Audio stream without a core has no fixed rate to give: its lossless part is variable and the
+        // core's rate is the number given otherwise, which was 0 here.
+        if (!m_isCoreExists && m_hdType == DTSHD_SUBTYPE::DTS_SUBTYPE_MASTER_AUDIO)
+            str << "VBR. ";
+        else
+            str << (pi_bit_rate + m_hdBitrate) / 1000 << "Kbps  ";
     }
 
+    // The window offers down-to-dts when this text names a core, so the form without one does not use the word.
     if (m_hdType == DTSHD_SUBTYPE::DTS_SUBTYPE_MASTER_AUDIO)
-        str << "core + MLP data.";
+        str << (m_isCoreExists ? "core + MLP data." : "MLP data only. ");
     str << "Sample Rate: " << (hd_pi_sample_rate ? hd_pi_sample_rate : pi_sample_rate) / 1000 << "KHz  ";
     str << "Channels: ";
     if (hd_pi_channels)
