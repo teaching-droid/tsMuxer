@@ -3790,6 +3790,17 @@ bool isLanguageCode(const std::string& lang)
 // the descriptor of EN 300 468 that names the codec (TS 101 154), so 0x06 with such a descriptor is sound, as the
 // stream types 0x81, 0x87 and 0x82 are (TrackInfo::m_soundDescriptor). A Matroska file by the first letter of the
 // codec ID, A_ for sound and V_ for video, as its specification names them. Other containers declare nothing here.
+// The descriptor of a stream type 0x06 track that names its sound codec, or 0. A subtitling or teletext descriptor
+// beside it says what the track is: a DVB subtitle track whose PMT entry also held an AC-3 descriptor was probed as
+// AC-3 only and listed "Can't detect stream type".
+static int soundDescriptorOf(const TrackInfo& track)
+{
+    if (track.m_dvbDescriptor == static_cast<int>(TSDescriptorTag::DVB_SUBTITLING) ||
+        track.m_dvbDescriptor == static_cast<int>(TSDescriptorTag::DVB_TELETEXT))
+        return 0;
+    return track.m_soundDescriptor;
+}
+
 static DeclaredKind declaredKindOf(const AbstractStreamReader::ContainerType containerType, const TrackInfo& track)
 {
     using CT = AbstractStreamReader::ContainerType;
@@ -3823,7 +3834,7 @@ static DeclaredKind declaredKindOf(const AbstractStreamReader::ContainerType con
         case 0xEA:  // VC-1
             return DeclaredKind::Video;
         case 0x06:  // private data, sound where a descriptor names its codec
-            return track.m_soundDescriptor ? DeclaredKind::Sound : DeclaredKind::None;
+            return soundDescriptorOf(track) ? DeclaredKind::Sound : DeclaredKind::None;
         default:
             return DeclaredKind::None;
         }
@@ -3972,7 +3983,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             // A stream type 0x06 track whose descriptor names its sound is read as the stream type of that codec:
             // a damaged AC-3, E-AC-3 or DTS track of a DVB stream is then found as it is under 0x81, 0x87 or 0x82
             // (the readers' declaredByContainer)
-            const int soundDescriptor = acceptedPidMap[itr.first].m_soundDescriptor;
+            const int soundDescriptor = soundDescriptorOf(acceptedPidMap[itr.first]);
             CheckStreamRez trackRez = detectTrackReader(
                 vect.data(), static_cast<int>(vect.size()), containerType,
                 soundDescriptor ? soundDescriptor : acceptedPidMap[itr.first].m_trackType, itr.first, declared);
