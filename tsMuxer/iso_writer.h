@@ -102,7 +102,7 @@ class ByteFileWriter
     void skipBytes(int value);
     void writeBytes(const uint8_t* data, size_t len);
     void doPadding(int padSize);
-    void writeTimestamp(time_t time);
+    void writeTimestamp(time_t time, bool utc);
 
     [[nodiscard]] int64_t size() const;
 
@@ -198,6 +198,7 @@ struct IsoHeaderData
     std::string impId;
     time_t fileTime;
     uint32_t volumeId;
+    bool utcTime;  // the times in UTC, the same in every time zone, rather than in the zone of the machine
 
     static IsoHeaderData normal();
     static IsoHeaderData reproducible();
@@ -339,6 +340,7 @@ class IsoWriter
     File m_file;
     uint8_t m_buffer[SECTOR_SIZE];
     time_t m_currentTime;
+    bool m_utcTime;  // IsoHeaderData::utcTime
 
     uint32_t m_objectUniqId;
     uint32_t m_totalFiles;

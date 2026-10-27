@@ -94,23 +94,42 @@ void calcDescriptorCRC(uint8_t* buffer, const uint16_t len)
     buffer[4] = sum;
 }
 
-void writeTimestamp(uint8_t* buffer, const time_t time)
+// The local time of the machine with its offset from UTC in minutes (ECMA-167 1/7.3, type 1 = local time), or with utc
+// the time in UTC with an offset of 0, which is the same in every time zone (--constant-iso-hdr). The fields were read
+// from the struct tm of localtime(), which gmtime() had overwritten by then, as the two share it: every time had the
+// clock of UTC and the offset of the zone, so it was wrong by that offset anywhere but in UTC, and the constant header
+// changed with the zone.
+void writeTimestamp(uint8_t* buffer, const time_t time, const bool utc)
 {
     const auto buff16 = UnalignedPtr<uint16_t>(buffer);
 
-    const tm* parts = localtime(&time);
-
-    const time_t lt = mktime(localtime(&time));
-    const time_t gt = mktime(gmtime(&time));
-    const auto timeZone = static_cast<int16_t>((lt - gt) / 60);
+    tm universal{};
+    tm parts{};
+#ifdef _WIN32
+    gmtime_s(&universal, &time);
+    if (!utc)
+        localtime_s(&parts, &time);
+#else
+    gmtime_r(&time, &universal);
+    if (!utc)
+        localtime_r(&time, &parts);
+#endif
+    if (utc)
+        parts = universal;
+    // The two clocks apart, with the day between them when the dates differ
+    int days = parts.tm_yday - universal.tm_yday;
+    if (parts.tm_year != universal.tm_year)
+        days = parts.tm_year > universal.tm_year ? 1 : -1;
+    const auto timeZone =
+        static_cast<int16_t>((days * 24 + parts.tm_hour - universal.tm_hour) * 60 + parts.tm_min - universal.tm_min);
 
     buff16[0] = (1 << 12) + (timeZone & 0x0fff);
-    buff16[1] = static_cast<int16_t>(parts->tm_year + 1900);
-    buffer[4] = static_cast<uint8_t>(parts->tm_mon + 1);
-    buffer[5] = static_cast<uint8_t>(parts->tm_mday);
-    buffer[6] = static_cast<uint8_t>(parts->tm_hour);
-    buffer[7] = static_cast<uint8_t>(parts->tm_min);
-    buffer[8] = static_cast<uint8_t>(parts->tm_sec);
+    buff16[1] = static_cast<int16_t>(parts.tm_year + 1900);
+    buffer[4] = static_cast<uint8_t>(parts.tm_mon + 1);
+    buffer[5] = static_cast<uint8_t>(parts.tm_mday);
+    buffer[6] = static_cast<uint8_t>(parts.tm_hour);
+    buffer[7] = static_cast<uint8_t>(parts.tm_min);
+    buffer[8] = static_cast<uint8_t>(parts.tm_sec);
     buffer[9] = 0;  // ms parts
     buffer[10] = 0;
     buffer[11] = 0;
@@ -416,9 +435,9 @@ void ByteFileWriter::writeUDFString(const char* value, const int len)
 
 void ByteFileWriter::skipBytes(const int value) { m_curPos += value; }
 
-void ByteFileWriter::writeTimestamp(const time_t time)
+void ByteFileWriter::writeTimestamp(const time_t time, const bool utc)
 {
-    ::writeTimestamp(m_curPos, time);
+    ::writeTimestamp(m_curPos, time, utc);
     m_curPos += 12;
 };
 
@@ -842,6 +861,7 @@ IsoWriter::IsoWriter(const IsoHeaderData& hdrData)
       m_volumeId(hdrData.volumeId),
       m_buffer{},
       m_currentTime(hdrData.fileTime),
+      m_utcTime(hdrData.utcTime),
       m_metadataMappingFile(nullptr),
       m_partitionStartAddress(0),
       m_partitionEndAddress(0),
@@ -1561,10 +1581,10 @@ int IsoWriter::writeExtendedFileEntryDescriptor(const bool namedStream, const ui
         static_cast<uint32_t>(roundUp64(len, SECTOR_SIZE) / SECTOR_SIZE);  // blocks recorded (matched to bytes)
     buff32[76 / 4] = 0x00;                                                 // high part of blocks recorded
 
-    writeTimestamp(m_buffer + 80, m_currentTime);   // access datetime
-    writeTimestamp(m_buffer + 92, m_currentTime);   // modification datetime
-    writeTimestamp(m_buffer + 104, m_currentTime);  // creation datetime
-    writeTimestamp(m_buffer + 116, m_currentTime);  // attributes datetime
+    writeTimestamp(m_buffer + 80, m_currentTime, m_utcTime);   // access datetime
+    writeTimestamp(m_buffer + 92, m_currentTime, m_utcTime);   // modification datetime
+    writeTimestamp(m_buffer + 104, m_currentTime, m_utcTime);  // creation datetime
+    writeTimestamp(m_buffer + 116, m_currentTime, m_utcTime);  // attributes datetime
     buff32[128 / 4] = 0x01;                         // Checkpoint
     // skip Extended Attribute ICB
     // skip Stream Directory ICB
@@ -1658,7 +1678,7 @@ void IsoWriter::writeFileSetDescriptor()
     writer.setBuffer(m_buffer, sizeof(m_buffer));
     writer.writeDescriptorTag(DescriptorTag::FileSet, absoluteSectorNum());
 
-    writer.writeTimestamp(m_currentTime);  // Recording Date and Time
+    writer.writeTimestamp(m_currentTime, m_utcTime);  // Recording Date and Time
     writer.writeLE16(0x03);                // Interchange Level
     writer.writeLE16(0x03);                // Maximum Interchange Level
     writer.writeLE32(0x01);                // Character Set List
@@ -1721,7 +1741,7 @@ void IsoWriter::writePrimaryVolumeDescriptor()
     m_buffer[344] = 0x00;  // CS0 coded character set
     strcpy(reinterpret_cast<char*>(m_buffer) + 345, m_appId.c_str());
 
-    writeTimestamp(m_buffer + 376, m_currentTime);  // timestamp
+    writeTimestamp(m_buffer + 376, m_currentTime, m_utcTime);  // timestamp
 
     // Implementation Identifier
     m_buffer[388] = 0x00;  // CS0 coded character set
@@ -1882,7 +1902,7 @@ void IsoWriter::writeLogicalVolumeIntegrityDescriptor()
     const auto buff32 = UnalignedPtr<uint32_t>(m_buffer);
     const auto buff16 = UnalignedPtr<uint16_t>(m_buffer);
 
-    writeTimestamp(m_buffer + 16, m_currentTime);
+    writeTimestamp(m_buffer + 16, m_currentTime, m_utcTime);
     buff32[7] = 0x01;              // Integrity Type
     buff32[8] = buff32[9] = 0x00;  // Next Integrity Extent
     // Logical Volume Contents Use (32 bytes)
@@ -2239,7 +2259,7 @@ void IsoWriter::setLayerBreakGuard(const int beforeSectors, const int afterSecto
 IsoHeaderData IsoHeaderData::normal()
 {
     return IsoHeaderData{"*tsMuxeR " TSMUXER_VERSION, std::string("*tsMuxeR ") + int32uToHex(random32()), time(nullptr),
-                         random32()};
+                         random32(), false};
 }
 
-IsoHeaderData IsoHeaderData::reproducible() { return IsoHeaderData{"*tsMuxeR", "*tsMuxeR", 1, 1593630000}; }
+IsoHeaderData IsoHeaderData::reproducible() { return IsoHeaderData{"*tsMuxeR", "*tsMuxeR", 1, 1593630000, true}; }
