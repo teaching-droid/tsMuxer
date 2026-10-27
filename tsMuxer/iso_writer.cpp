@@ -2095,7 +2095,15 @@ bool IsoWriter::padOverZoneIfFileCrosses(const int64_t fileSizeBytes, const int6
         }
         if (maxEmptySectors >= 0 && zoneStart - lbn > maxEmptySectors)
             return false;
-        placeMirrorBefore(zoneEnd);
+        // The mirror ends where the zone begins, as when the data runs on up to it: the end of layer 0 the move leaves
+        // empty is filled up to the place of the mirror first. It was put where the data stopped, which was next to
+        // the main copy when the file moved was the first large one.
+        if (int64_t mirrorStart = 0; !m_layerBreakSuppressed && mirrorPending(mirrorStart) && zoneEnd > mirrorStart)
+        {
+            if (mirrorStart > imageLBA())
+                fillZeroSectors(mirrorStart - imageLBA());
+            placeMirrorHere();
+        }
         const int64_t padStart = imageLBA();
         m_layerBreakPads.push_back({bp, padStart, zoneEnd});
         writeZeroPad(zoneEnd - padStart);
