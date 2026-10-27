@@ -132,7 +132,7 @@ class MuxerManager final
     // --inner-only: a disc image keeps its data on the inner part of each layer (see innerOnlyIsoAsked in main.cpp)
     [[nodiscard]] bool getInnerOnly() const { return m_innerOnly; }
     // --extra-iso-space as it was given, 0 without it, for an image laid out from a folder
-    [[nodiscard]] int getExtraIsoSpaceGiven() const { return m_extraIsoBlocksGiven ? m_extraIsoBlocks : 0; }
+    [[nodiscard]] int getExtraIsoSpaceGiven() const { return m_extraIsoBlocksGiven ? m_extraIsoSpace : 0; }
 
     enum class SubTrackMode
     {
@@ -217,8 +217,9 @@ class MuxerManager final
     bool m_mainBlockFinished;
     bool m_mvcBaseViewR;
     int64_t m_ptsOffset;
-    int m_extraIsoBlocks;
-    bool m_extraIsoBlocksGiven = false;  // --extra-iso-space was given, and is taken as it is
+    int m_extraIsoBlocks;                // the room a split gets by default, before its parts are counted
+    int m_extraIsoSpace = 0;             // --extra-iso-space, on top of the room getExtraISOBlocks works out
+    bool m_extraIsoBlocksGiven = false;  // --extra-iso-space was given
     int64_t m_isoSplitBytes = 0;         // --split-size, in bytes
     int64_t m_isoSplitTicks = 0;         // --split-duration, in INTERNAL_PTS_FREQ ticks
     bool m_isoSplitChapters = false;     // --split-chapters

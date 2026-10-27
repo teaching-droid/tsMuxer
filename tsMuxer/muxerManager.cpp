@@ -864,12 +864,13 @@ std::vector<AVChapter> MuxerManager::readSourceChapters()
 // 79 parts of a disc feature cut every 2 seconds did. So the parts are reckoned before the mux where that can be done:
 // the sources' size over the part size, the length of the cut (or the length the sources state) over the part length,
 // or the number of chapters. The room grows only when the default would not hold them, so a split into a few parts
-// gives the same image as before. An --extra-iso-space that is given is taken as it is, and a split that could not be
-// reckoned still gets the plain refusal when the image is finished.
+// gives the same image as before. A split that could not be reckoned still gets the plain refusal when the image is
+// finished, which asks for --extra-iso-space, and that is added on top of the room worked out here. It replaced that
+// room: the room of a split fell by the 4 blocks of its default, the message's own figure was too small, and a split
+// counted from the length its source states was refused with --extra-iso-space=1 although it fit without the option.
 int MuxerManager::getExtraISOBlocks()
 {
-    if (m_extraIsoBlocksGiven)
-        return m_extraIsoBlocks;
+    const int given = m_extraIsoBlocksGiven ? m_extraIsoSpace : 0;
     int64_t parts = 0;
     if (m_isoSplitBytes > 0)
         // A part is cut at the first key frame past the size, so none is smaller, and the transport stream adds
@@ -892,15 +893,15 @@ int MuxerManager::getExtraISOBlocks()
         parts = (std::max)(parts, static_cast<int64_t>(marks) + 1);
     }
     if (parts <= 1)
-        return m_extraIsoBlocks;
+        return m_extraIsoBlocks + given;
 
     // About twenty sectors for what every disc has, and three a part in 2D, seven in 3D; counted with room to spare.
     constexpr int64_t SECTORS_PER_BLOCK = ALLOC_BLOCK_SIZE / SECTOR_SIZE;
     const int64_t needed = 64 + parts * (getMvcFound() ? 8 : 4);
     const int64_t room = IsoWriter::metadataBlocks(totalSize(), m_extraIsoBlocks) * SECTORS_PER_BLOCK;
     if (needed <= room)
-        return m_extraIsoBlocks;
-    return m_extraIsoBlocks + static_cast<int>((needed - room + SECTORS_PER_BLOCK - 1) / SECTORS_PER_BLOCK);
+        return m_extraIsoBlocks + given;
+    return m_extraIsoBlocks + static_cast<int>((needed - room + SECTORS_PER_BLOCK - 1) / SECTORS_PER_BLOCK) + given;
 }
 
 void MuxerManager::writeChapterFile(const std::string& outDirName)
@@ -1543,7 +1544,7 @@ void MuxerManager::parseMuxOpt(const string& opts)
         {
             if (paramPair.size() < 2)
                 THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
-            m_extraIsoBlocks = strToInt32(paramPair[1]);
+            m_extraIsoSpace = strToInt32(paramPair[1]);
             m_extraIsoBlocksGiven = true;
         }
         else if (paramPair[0] == "--blu-ray" || paramPair[0] == "--blu-ray-v3" || paramPair[0] == "--avchd")
