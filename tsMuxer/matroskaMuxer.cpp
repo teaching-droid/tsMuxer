@@ -468,6 +468,7 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
     const auto defaultParam = params.find("default");
     track.defaultExplicit = defaultParam != params.end();
     track.markedDefault = track.defaultExplicit && !defaultParamMeansNo(defaultParam->second);
+    track.defaultTyped = track.markedDefault;
     // default=forced, also set from a subtitle file named "forced", is the forced track. Matroska has a flag for that,
     // FlagForced, and it was not written: the track came out as the default one and nothing more.
     if (track.defaultExplicit && defaultParamKind(defaultParam->second) == 2)
@@ -2290,6 +2291,18 @@ void MatroskaMuxer::refreshTrackProperties()
         track.isDefault = wantIt && !typeDone.count(track.trackType);
         if (track.isDefault)
             typeDone.insert(track.trackType);
+        // default= on a second track of a type left it out without a word
+        else if (track.defaultTyped && typeDone.count(track.trackType))
+        {
+            track.defaultTyped = false;  // said once, though the header of each split part comes here
+            LTRACE(LT_WARN, 2,
+                   "Warning: track " << streamIdx << " has default=, but an earlier "
+                                     << (track.trackType == 1   ? "video"
+                                         : track.trackType == 2 ? "audio"
+                                                                : "subtitle")
+                                     << " track is the default already. A Matroska file has one default track of "
+                                        "each type, so this one is not marked; leave default= on one track only.");
+        }
     }
 
     for (auto& [streamIdx, track] : m_tracks) refreshTrackFromReader(track);

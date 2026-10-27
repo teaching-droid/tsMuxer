@@ -1352,8 +1352,10 @@ All parameters in this group start with two dashes:
                       As with the other two, a split happens at the first key
                       frame at or after the mark, never in the middle of a
                       picture.
---split-size          Split the output into several files, with each of them
-                      having a given maximum size. KB, KiB, MB, MiB, GB, GiB, TB
+--split-size          Split the output into several files of about the given
+                      size each: a part ends at the first key picture after the
+                      size is reached, so it can be larger by up to one group of
+                      pictures. KB, KiB, MB, MiB, GB, GiB, TB
                       and TiB are accepted as size units, and K, M, G and T as
                       KB, MB, GB and TB.
                       Matroska output is split by all three the same way, into
@@ -2947,6 +2949,55 @@ static void reportDvProfileIgnored(const MuxerManager& muxerManager, const char*
                   "to convert. The output is byte for byte what it would have been without the option.");
 }
 
+// Options that do nothing for the output at hand were ignored without a word: --auto-chapters outside a disc, chapter
+// times on a demux, the Matroska title, track names and flags outside a Matroska file, and a track of a kind the
+// Matroska file name leaves out (.mka for sound, .mks for subtitles).
+static void reportOptionsIgnored(const MuxerManager& muxerManager, const int autoChapterLen, const bool disc,
+                                 const bool demux, const bool chaptersGiven, const std::string& mkvExt)
+{
+    if (autoChapterLen > 0 && !disc)
+        LTRACE(LT_WARN, 2,
+               "Warning: --auto-chapters is used for a Blu-ray or AVCHD only, and is ignored for this output. Give "
+               "the chapter times with --custom-chapters instead: a Matroska file writes them, and --split-chapters "
+               "splits at them.");
+    if (demux && chaptersGiven)
+        LTRACE(LT_WARN, 2,
+               "Warning: --custom-chapters and --chapters-file are not used on a demux. A demux writes chapters.txt "
+               "from the source's own chapters only.");
+    if (mkvExt.empty())
+    {
+        bool title = false;
+        for (const std::string& token : splitQuotedStr(muxerManager.getMuxOpts().c_str(), ' '))
+            if (const vector<string> option = splitOption(trimStr(token)); !option.empty() && option[0] == "--title")
+                title = true;
+        if (title)
+            LTRACE(LT_WARN, 2,
+                   "Warning: --title is written into a Matroska file only, and is ignored for this output.");
+        for (const StreamInfo& si : muxerManager.getStreamInfo())
+            for (const char* name :
+                 {"track-name", "hearing-impaired", "visual-impaired", "text-descriptions", "original", "commentary"})
+                if (si.m_addParams.count(name))
+                    LTRACE(LT_WARN, 2,
+                           "Warning: " << name << " is written into a Matroska file only, and is ignored for track "
+                                       << si.m_streamReader->getStreamIndex() << " of this output.");
+        return;
+    }
+    const char kind = mkvExt == "MKA" ? 'A' : mkvExt == "MKS" ? 'S' : 0;
+    if (kind == 0)
+        return;
+    for (const StreamInfo& si : muxerManager.getStreamInfo())
+        if (!si.m_codec.empty() && si.m_codec[0] != kind && (si.m_codec[0] == 'V' || si.m_codec[0] == 'A'))
+        {
+            LTRACE(LT_WARN, 2,
+                   "Warning: the output is named ." << strToLowerCase(mkvExt) << ", the name of a Matroska file of "
+                                                    << (kind == 'A' ? "sound" : "subtitles") << " only, and track "
+                                                    << si.m_streamReader->getStreamIndex() << " is "
+                                                    << (si.m_codec[0] == 'V' ? "video" : "audio")
+                                                    << ". Name it .mkv so that a player expects every track.");
+            return;
+        }
+}
+
 // A single layer Dolby Vision stream (profile 8) on a disc: the Dolby Vision data travels inside the HDR10 picture,
 // and a UHD Blu-ray player takes Dolby Vision from two layers only, so the disc plays as its HDR10, SDR or HLG base.
 // The disc is written as asked; this only says so, which was left to be found out on a television. A disc with an
@@ -4433,6 +4484,7 @@ int main(int argc, char** argv)
 
             if (muxerManager.getTrackCnt() == 0)
                 THROW(ERR_COMMON, "No tracks selected")
+            reportOptionsIgnored(muxerManager, autoChapterLen, false, false, false, fileExt2);
             // Same list the Blu-ray path hands to createMPLSFile. checkBluRayMux() has already
             // parsed --custom-chapters out of the meta above, whatever the output format is.
             muxerManager.moveChaptersByCut(customChapterList, chapterInfo);
@@ -4489,6 +4541,7 @@ int main(int argc, char** argv)
             if (dt != DiskType::NONE)
                 refuseTooManyMarks(muxerManager, customChapterList);
             reportDvProfileIgnored(muxerManager, dt != DiskType::NONE ? "a disc" : "a transport stream");
+            reportOptionsIgnored(muxerManager, autoChapterLen, dt != DiskType::NONE, false, false, std::string());
             if (!isV3() && dt == DiskType::BLURAY && muxerManager.getHevcFound())
             {
                 LTRACE(LT_INFO, 2, "HEVC stream detected: changing Blu-Ray version to V3.");
@@ -4800,6 +4853,8 @@ int main(int argc, char** argv)
             MuxerManager sMuxer(readManager, singleFileMuxerFactory);
             sMuxer.openMetaFile(argv[1]);
             reportDvProfileIgnored(sMuxer, "a demux");
+            reportOptionsIgnored(sMuxer, autoChapterLen, false, true,
+                                 !customChapterList.empty() || !chapterInfo.empty(), std::string());
             if (sMuxer.getTrackCnt() == 0)
                 THROW(ERR_COMMON, "No tracks selected")
 

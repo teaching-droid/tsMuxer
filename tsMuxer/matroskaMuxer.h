@@ -91,6 +91,7 @@ class MatroskaMuxer final : public AbstractMuxer
         bool defaultExplicit;         // the meta carried "default" on this track at all
         bool markedDefault;           // and it did not say none, no, 0, false or off
         bool isDefault;               // resolved: exactly one per track type
+        bool defaultTyped = false;    // the meta's own default= said yes (not the source's flag)
         // FlagForced and the five accessibility and origin flags, by element id, as the source or the meta gave them.
         std::map<uint32_t, int> flags;
         // From the source container, for what the stream itself does not say (srccolour, srcdisplay).
