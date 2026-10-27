@@ -223,8 +223,6 @@ QString fileDialogFilter()
 
 QString TI_DEFAULT_TAB_NAME() { return TsMuxerWindow::tr("General track options"); }
 
-QString TI_DEMUX_TAB_NAME() { return TsMuxerWindow::tr("Demux options"); }
-
 QString TI_MKV_TAB_NAME() { return TsMuxerWindow::tr("Matroska options"); }
 
 // The meta keys of the six Matroska track flags, in the order of QtvCodecInfo::mkvFlags.
@@ -3690,8 +3688,6 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
         else
         {
             ui->tabWidgetTracks->addTab(ui->tabSheetAudio, TI_DEFAULT_TAB_NAME());
-            if (codecInfo->displayName == "LPCM")
-                ui->tabWidgetTracks->addTab(ui->demuxLpcmOptions, TI_DEMUX_TAB_NAME());
             showMkvTrackOptions(codecInfo);
 
             // ** IT DOES NOT CONVERT ANYTHING. ** These tracks carry a plain core inside the HD
@@ -6118,7 +6114,6 @@ void TsMuxerWindow::updateKeepTextControls()
     ui->fontsDirBrowseButton->setEnabled(libass);
     ui->groupBox_8->setEnabled(!asText);
     ui->groupBox_9->setEnabled(!asText);
-    ui->groupBox_10->setEnabled(!asText);
 }
 
 void TsMuxerWindow::RadioButtonMuxClick()

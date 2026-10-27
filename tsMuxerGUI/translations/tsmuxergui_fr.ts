@@ -2789,27 +2789,6 @@ Créer l'ISO malgré tout ?</translation>
         <translation>Langue :</translation>
     </message>
     <message>
-        <location filename="../tsmuxerwindow.ui" line="821"/>
-        <location filename="../tsmuxerwindow.cpp" line="144"/>
-        <source>Demux options</source>
-        <translation>Options de démuxage</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="833"/>
-        <source>Demux to multi channels WAVE file</source>
-        <translation>Démuxer vers un fichier audio WAV multicanal</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="846"/>
-        <source>Demux to several mono WAVE files</source>
-        <translation>Démuxer vers plusieurs fichiers WAV en mono</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="856"/>
-        <source>Demux to RAW PCM stream</source>
-        <translation>Démuxer vers un flux PCM en RAW</translation>
-    </message>
-    <message>
         <location filename="../tsmuxerwindow.ui" line="873"/>
         <location filename="../tsmuxerwindow.ui" line="1134"/>
         <source>General</source>
@@ -3271,22 +3250,6 @@ Créer l'ISO malgré tout ?</translation>
         <translation> Position verticale : </translation>
     </message>
     <message>
-        <location filename="../tsmuxerwindow.ui" line="2205"/>
-        <source>Top of screen</source>
-        <translation>En haut de l&apos;écran</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2239"/>
-        <source>top offset, pixels:</source>
-        <translation>Nombre de pixels depuis le haut de l&apos;écran :</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2273"/>
-        <location filename="../tsmuxerwindow.ui" line="2445"/>
-        <source>Screen center</source>
-        <translation>Au centre de l&apos;écran</translation>
-    </message>
-    <message>
         <location filename="../tsmuxerwindow.ui" line="2280"/>
         <source>Bottom of screen</source>
         <translation>En bas de l&apos;écran</translation>
@@ -3295,31 +3258,6 @@ Créer l'ISO malgré tout ?</translation>
         <location filename="../tsmuxerwindow.ui" line="2314"/>
         <source>bottom offset, pixels:</source>
         <translation>Nombre de pixels depuis le bas de l&apos;écran :</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2366"/>
-        <source> Horizontal position: </source>
-        <translation> Position horizontale : </translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2377"/>
-        <source>Left of screen</source>
-        <translation>À gauche de l&apos;écran</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2411"/>
-        <source>left offset, pixels:</source>
-        <translation>Nombre de pixels depuis la gauche de l&apos;écran :</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2458"/>
-        <source>Right of screen</source>
-        <translation>À droite de l&apos;écran</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2495"/>
-        <source>right offset, pixels:</source>
-        <translation>Nombre de pixels depuis la droite de l&apos;écran :</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="2560"/>

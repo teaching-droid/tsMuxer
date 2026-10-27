@@ -2681,27 +2681,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../tsmuxerwindow.ui" line="821"/>
-        <location filename="../tsmuxerwindow.cpp" line="144"/>
-        <source>Demux options</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="833"/>
-        <source>Demux to multi channels WAVE file</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="846"/>
-        <source>Demux to several mono WAVE files</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="856"/>
-        <source>Demux to RAW PCM stream</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location filename="../tsmuxerwindow.ui" line="873"/>
         <location filename="../tsmuxerwindow.ui" line="1134"/>
         <source>General</source>
@@ -3163,22 +3142,6 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../tsmuxerwindow.ui" line="2205"/>
-        <source>Top of screen</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2239"/>
-        <source>top offset, pixels:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2273"/>
-        <location filename="../tsmuxerwindow.ui" line="2445"/>
-        <source>Screen center</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
         <location filename="../tsmuxerwindow.ui" line="2280"/>
         <source>Bottom of screen</source>
         <translation type="unfinished"></translation>
@@ -3186,31 +3149,6 @@
     <message>
         <location filename="../tsmuxerwindow.ui" line="2314"/>
         <source>bottom offset, pixels:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2366"/>
-        <source> Horizontal position: </source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2377"/>
-        <source>Left of screen</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2411"/>
-        <source>left offset, pixels:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2458"/>
-        <source>Right of screen</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2495"/>
-        <source>right offset, pixels:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

@@ -2789,27 +2789,6 @@ Build the ISO anyway?</source>
         <translation>Язык:</translation>
     </message>
     <message>
-        <location filename="../tsmuxerwindow.ui" line="821"/>
-        <location filename="../tsmuxerwindow.cpp" line="144"/>
-        <source>Demux options</source>
-        <translation>Параметры записи дорожек</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="833"/>
-        <source>Demux to multi channels WAVE file</source>
-        <translation>Записать как многоканальный WAVE файл</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="846"/>
-        <source>Demux to several mono WAVE files</source>
-        <translation>Записать как несколько одноканальных WAVE файлов</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="856"/>
-        <source>Demux to RAW PCM stream</source>
-        <translation>Записать как RAW PCM поток</translation>
-    </message>
-    <message>
         <location filename="../tsmuxerwindow.ui" line="873"/>
         <location filename="../tsmuxerwindow.ui" line="1134"/>
         <source>General</source>
@@ -3271,22 +3250,6 @@ Build the ISO anyway?</source>
         <translation> Позиция по вертикали: </translation>
     </message>
     <message>
-        <location filename="../tsmuxerwindow.ui" line="2205"/>
-        <source>Top of screen</source>
-        <translation>Верх экрана</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2239"/>
-        <source>top offset, pixels:</source>
-        <translation>отступ от верха, пикселей:</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2273"/>
-        <location filename="../tsmuxerwindow.ui" line="2445"/>
-        <source>Screen center</source>
-        <translation>Центр экрана</translation>
-    </message>
-    <message>
         <location filename="../tsmuxerwindow.ui" line="2280"/>
         <source>Bottom of screen</source>
         <translation>Низ экрана</translation>
@@ -3295,31 +3258,6 @@ Build the ISO anyway?</source>
         <location filename="../tsmuxerwindow.ui" line="2314"/>
         <source>bottom offset, pixels:</source>
         <translation>отступ от низа, пикселей:</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2366"/>
-        <source> Horizontal position: </source>
-        <translation> Позиция по горизонтали: </translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2377"/>
-        <source>Left of screen</source>
-        <translation>слева экрана</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2411"/>
-        <source>left offset, pixels:</source>
-        <translation>отступ слева, пикселей:</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2458"/>
-        <source>Right of screen</source>
-        <translation>справа экрана</translation>
-    </message>
-    <message>
-        <location filename="../tsmuxerwindow.ui" line="2495"/>
-        <source>right offset, pixels:</source>
-        <translation>отступ справа, пикселей:</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="2560"/>
