@@ -741,6 +741,27 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
         setDataChunkSize(dataSize, dataSize > 0);
         curPos += 8;
     }
+    // AC-3, DTS and other coded sound is carried over S/PDIF and HDMI as IEC 61937 bursts in 16 bit stereo PCM, and a
+    // WAV can hold such a capture. It was muxed as 2.0 LPCM without a word, which a player plays as noise. A burst
+    // begins with the preamble words Pa 0xF872 and Pb 0x4E1F (IEC 61937-1), stored little-endian in a WAV.
+    // Said by the reader of the track only (its number is 1 or more), not again by the one that probes the file first.
+    if (!m_burstsSaid && m_streamIndex > 0 && m_bitsPerSample == 16 && m_channels == 2 && end - curPos >= 4)
+    {
+        static constexpr uint8_t PREAMBLE[] = {0x72, 0xF8, 0x1F, 0x4E};
+        const uint8_t* scanEnd = curPos + (std::min)(static_cast<ptrdiff_t>(65536), end - curPos) - 4;
+        for (const uint8_t* p = curPos; p <= scanEnd; p += 4)
+            if (memcmp(p, PREAMBLE, 4) == 0)
+            {
+                m_burstsSaid = true;
+                LTRACE(LT_WARN, 2,
+                       "Warning: the WAVE file of track "
+                           << m_streamIndex
+                           << " holds coded sound, such as AC-3 or DTS, packed as IEC 61937 bursts for S/PDIF or "
+                              "HDMI, not PCM. It is muxed as 2.0 LPCM, which a player plays as noise. Take the coded "
+                              "sound out of the file first and mux that.");
+                break;
+            }
+    }
     return static_cast<int>(curPos - buff);
 }
 

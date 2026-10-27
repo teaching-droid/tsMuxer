@@ -97,6 +97,7 @@ class LPCMStreamReader final : public SimplePacketizerReader
     void planBdLayout(uint32_t mask);
     int64_t m_curChunkLen;
     bool m_openSizeWaveFormat;
+    bool m_burstsSaid = false;  // decodeWaveHeader: the PCM holds IEC 61937 bursts of coded sound
     // The data chunk's size was given, so m_curChunkLen reaching 0 is the end of the audio and not
     // "size unknown". m_afterData is set at that end: the bytes that follow are a pad byte, a chunk
     // of tags, another data chunk or another file, and are looked at before any is taken for audio.
