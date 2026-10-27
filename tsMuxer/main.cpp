@@ -3827,6 +3827,11 @@ static void checkSourceConsumed(MuxerManager& muxerManager)
     const double pct = static_cast<double>(done) / static_cast<double>(total) * 100.0;
     if (pct >= 99.0)
         return;
+    // Nothing of the sources at all, as from a .sup of one END segment: "0.0 percent read" said that the job had
+    // stopped early, where the sources hold nothing to mux.
+    if (done == 0)
+        THROW(ERR_COMMON, "No track of the meta file gave anything to mux: its sources hold "
+                              << total << " bytes, and none of them is data of its track. Nothing was written.")
     THROW(ERR_COMMON, "The mux stopped before the source was finished: "
                           << doubleToStr(pct, 1) << " percent read, " << done << " bytes of " << total
                           << ". The output is incomplete. This is not a warning: the job did not do "
