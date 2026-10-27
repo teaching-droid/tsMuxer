@@ -5306,6 +5306,9 @@ void MatroskaMuxer::startNextPart(MkvTrackInfo& current, const int64_t origin)
     m_startingPart = false;
     flushHeldText(origin);
     finishPart(origin);
+    // A part of one cluster was moved back by the flush in finishPart; that shift is the ending part's own, and taken
+    // by the next part's first cluster it put the keyframe a frame before the pictures after it.
+    m_partShiftApplied = 0;
 
     m_partNum++;
     m_fileName = partFileName(m_partNum);
