@@ -28,7 +28,6 @@ enum class TSDescriptorTag
     AAC2 = 0x2B,          // MPEG-2_AAC_audio_descriptor
     HEVC = 0x38,
     VVC = 0x39,
-    DTS = 0x73,
     DVB_TELETEXT = 0x56,    // EBU teletext_descriptor, EN 300 468
     DVB_SUBTITLING = 0x59,  // subtitling_descriptor, the bitmap subtitles of EN 300 743
     DVB_AC3 = 0x6A,         // AC-3_descriptor, EN 300 468 annex D

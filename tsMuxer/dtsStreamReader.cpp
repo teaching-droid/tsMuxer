@@ -89,33 +89,24 @@ int DTSStreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, const bo
     if (hdmvDescriptors)
         return 0;
 
-    // ETSI TS 101 154 F.4.2 DTS registration descriptor
+    // The DTS_descriptor of EN 300 468 annex G (tag 0x7B, table G.1) describes the core substream, and the
+    // registration names it by its frame length (DTS1, DTS2, DTS3). The descriptor went out with the tag 0x73, which
+    // EN 300 468 gives to the default_authority_descriptor, so a receiver did not take it for DTS, nor did tsMuxeR's
+    // own reader; and a stream of another frame length, or without a core as DTS Express is, got the registration
+    // "DTS " and the values of a core it does not have. Such a stream is left without both.
+    if (!m_isCoreExists || (pi_frame_length != 512 && pi_frame_length != 1024 && pi_frame_length != 2048))
+        return 0;
     *dstBuff++ = static_cast<int>(TSDescriptorTag::REGISTRATION);  // descriptor tag
     *dstBuff++ = 4;                                                // descriptor length
     *dstBuff++ = 'D';
     *dstBuff++ = 'T';
     *dstBuff++ = 'S';
+    *dstBuff++ = pi_frame_length == 512 ? '1' : pi_frame_length == 1024 ? '2' : '3';
 
-    switch (pi_frame_length)
-    {
-    case 512:
-        *dstBuff++ = '1';
-        break;
-    case 1024:
-        *dstBuff++ = '2';
-        break;
-    case 2048:
-        *dstBuff++ = '3';
-        break;
-    default:
-        *dstBuff++ = ' ';
-    }
-
-    // ETSI TS 101 154 F.4.3 DTS audio descriptor
     BitStreamWriter bitWriter{};
 
-    *dstBuff++ = static_cast<uint8_t>(TSDescriptorTag::DTS);  // descriptor tag;
-    *dstBuff++ = 5;                                           // descriptor length
+    *dstBuff++ = static_cast<uint8_t>(TSDescriptorTag::DVB_DTS);  // descriptor tag;
+    *dstBuff++ = 5;                                               // descriptor length
     bitWriter.setBuffer(dstBuff, dstBuff + 5);
     bitWriter.putBits(4, pi_sample_rate_index);
     bitWriter.putBits(6, pi_bit_rate_index);
