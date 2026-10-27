@@ -1605,6 +1605,11 @@ void MuxerManager::parseMuxOpt(const string& opts)
                                                  "the layer break from the size of the disc. Remove one of the two. "
                                                  "Nothing has been written.")
     }
+    // Decided 27 Oct: a guard given by size is written, and the line says the other option is not used.
+    if (m_noLayerBreakGuard && (m_layerBreakGuardMB >= 0 || m_layerBreakGuardBeforeMB >= 0))
+        LTRACE(LT_WARN, 2,
+               "Warning: --no-layer-break-guard and a guard size are both given; the guard of the size given is "
+               "used.");
 }
 
 void MuxerManager::findCutLayers(const std::vector<StreamInfo>& ci)

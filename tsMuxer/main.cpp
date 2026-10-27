@@ -1819,6 +1819,11 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     opt.singleCopy3d = singleCopy3d;
     opt.innerOnly = innerOnly;
     opt.noLayerBreakGuard = noLayerBreakGuard;
+    // Decided 27 Oct: a guard given by size is written, and the line says the other option is not used.
+    if (noLayerBreakGuard && (layerBreakGuardMB >= 0 || layerBreakGuardBeforeMB >= 0))
+        LTRACE(LT_WARN, 2,
+               "Warning: --no-layer-break-guard and a guard size are both given; the guard of the size given is "
+               "used.");
     opt.allowOversize = allowOversize;
     opt.reproducibleHeader = reproducibleHeader;
     opt.extraIsoSpace = extraIsoSpace;
@@ -4481,10 +4486,48 @@ int main(int argc, char** argv)
                 // A Blu-ray image gets a guard of 288 MB after each break and 18 MB before it when none is given: a
                 // burnt dual-layer disc often reads badly at the layer change, and a player then stalls there. It
                 // is only written when the data reaches the break, so a single layer image is the same as before.
-                const bool defaultGuard =
-                    !innerIso && dt == DiskType::BLURAY && strToUpperCase(extractFileExt(outputRoot)) == "ISO" &&
-                    !muxerManager.getNoLayerBreakGuard() && muxerManager.getLayerBreakGuardMB() < 0 &&
-                    muxerManager.getLayerBreakGuardBeforeMB() < 0;
+                bool defaultGuard = !innerIso && dt == DiskType::BLURAY &&
+                                    strToUpperCase(extractFileExt(outputRoot)) == "ISO" &&
+                                    !muxerManager.getNoLayerBreakGuard() && muxerManager.getLayerBreakGuardMB() < 0 &&
+                                    muxerManager.getLayerBreakGuardBeforeMB() < 0;
+                // An image that would not fit the disc with that guard is muxed without it, with a warning, as
+                // --bdmv-to-iso writes it. The size is not known while the guard is written, so it is decided here,
+                // from the estimate of the capacity check above, the zones of each break it reaches, the UDF reserve
+                // and one copy buffer. The disc is the one --disc-size names, else the one the breaks belong to.
+                if (defaultGuard)
+                {
+                    std::string warning, error;
+                    const std::vector<int> breaks =
+                        !muxerManager.getLayerBreakLbns().empty()
+                            ? muxerManager.getLayerBreakLbns()
+                            : defaultLayerBreaks(muxerManager.getDiscSizeLimit(), warning, error);
+                    if (error.empty() && !breaks.empty())
+                    {
+                        constexpr int64_t afterSectors =
+                            static_cast<int64_t>(DEFAULT_GUARD_AFTER_MB) * 1024 * 1024 / 2048;
+                        constexpr int64_t beforeSectors =
+                            std::min(afterSectors, std::max<int64_t>(4 * 1024 * 1024 / 2048, afterSectors / 16));
+                        constexpr int64_t reserveSectors = 8192 + 8192;
+                        const int64_t estSize =
+                            (std::max)(muxerManager.totalSize() / 100 * 105, muxerManager.paddedOutputSize());
+                        const int64_t dataSectors = (estSize + 2047) / 2048 + reserveSectors;
+                        const int64_t capacity = muxerManager.getDiscSizeLimit() > 0
+                                                     ? muxerManager.getDiscSizeLimit() / 2048
+                                                     : static_cast<int64_t>(breaks.back()) + breaks.front();
+                        int64_t guardSectors = 0;
+                        for (const int bp : breaks)
+                            if (dataSectors > static_cast<int64_t>(bp) - beforeSectors)
+                                guardSectors += beforeSectors + afterSectors;
+                        if (guardSectors > 0 && dataSectors + guardSectors > capacity)
+                        {
+                            LTRACE(LT_WARN, 2,
+                                   "Warning: the image does not fit the disc with the layer break guard, so it is "
+                                   "written without it. A burnt dual-layer disc may then read badly at the layer "
+                                   "change.");
+                            defaultGuard = false;
+                        }
+                    }
+                }
                 if (!blurayHelper.open(dstFile, dt, muxerManager.totalSize(), muxerManager.getExtraISOBlocks(),
                                        muxerManager.useReproducibleIsoHeader(),
                                        innerIso       ? -1
