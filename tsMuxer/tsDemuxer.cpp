@@ -807,6 +807,25 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     }
     if (readedBytes + m_tmpBufferLen == 0 || (readedBytes == 0 && m_lastReadRez == BufferedReader::DATA_EOF))
     {
+        // A track of LEAD_PES_MAX or fewer PES in the whole file, none of which begins with a frame, was still held
+        // back when the file ended, and was lost: the search for a PES that begins with a frame ends here, and they
+        // are given back as at any other end of it (giveBackLeadPes).
+        if (!m_leadHeld.empty())
+        {
+            const ClipPart* part = m_curFileNum < m_clipParts.size() && m_clipParts[m_curFileNum].isCut()
+                                       ? &m_clipParts[m_curFileNum]
+                                       : nullptr;
+            std::vector<int> pids;
+            for (const auto& [pid, held] : m_leadHeld) pids.push_back(pid);
+            for (const int pid : pids)
+            {
+                m_leadPes[pid] = LEAD_PES_DONE;
+                m_leadDrop[pid] = false;
+                giveBackLeadPes(pid, demuxedData, discardSize, part, vect, lastPid);
+            }
+            m_lastReadRez = readRez;
+            return 0;
+        }
         if (!m_dvbSubtitles.empty() && !m_dvbSubtitlesFinished)
         {
             m_dvbSubtitlesFinished = true;
