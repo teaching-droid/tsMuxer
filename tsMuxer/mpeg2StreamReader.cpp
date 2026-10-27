@@ -55,6 +55,18 @@ int MPEG2StreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool h
         m_streamAR = m_ar;
     }
 
+    // frame_rate_code 0: the stream is muxed at the rate fps=, the times of its pictures or the default of 25 give, and
+    // that code is written into its sequence headers as they are muxed (processSeqStartCode). The header read here
+    // still has 0, and both descriptors gave rate 0 where no fps= was on the line, while the clip information file
+    // and the stream itself gave the rate. Before updateFPS has run, getFPS() is still 0, so the rate the mux will
+    // take is asked for, as H.264 does it.
+    uint8_t rateCode = m_sequence.frame_rate_index;
+    const double fps = headerFps(m_sequence.getFrameRate());
+    if (m_sequence.getFrameRate() == 0.0)
+        for (uint8_t i = 1; i < 9; i++)
+            if (std::abs(frame_rates[i] - fps) < 3e-5)
+                rateCode = i;
+
     // Without HDMV descriptors (--no-hdmv-descriptors), the video stream descriptor of Rec. ITU-T H.222.0 (2.6.2,
     // Table 2-46), as H.264 and HEVC write their own standard descriptor then. The HDMV descriptor was written all the
     // same, so the option did nothing for MPEG-2 video.
@@ -65,7 +77,7 @@ int MPEG2StreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool h
         *dstBuff++ = mpeg1Only ? 1 : 3;
         // multiple_frame_rate_flag 0, frame_rate_code, MPEG_1_only_flag, constrained_parameter_flag (1 for MPEG-2
         // video, as the standard requires), still_picture_flag 0
-        *dstBuff++ = static_cast<uint8_t>((m_sequence.frame_rate_index & 0x0f) << 3 | (mpeg1Only ? 1 : 0) << 2 |
+        *dstBuff++ = static_cast<uint8_t>((rateCode & 0x0f) << 3 | (mpeg1Only ? 1 : 0) << 2 |
                                           (mpeg1Only ? (m_sequence.constParameterFlag ? 1 : 0) : 1) << 1);
         if (mpeg1Only)
             return 3;
@@ -92,13 +104,11 @@ int MPEG2StreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool h
     // line stream was declared 720p while the clip information file said 1080. The frame rate and aspect ratio codes
     // of MPEG-2 are the ones Blu-ray uses.
     uint8_t video_format = 0, frame_rate_index = 0, aspect_ratio_index = 0;
-    const double fps = getFPS() > 0 ? getFPS() : m_sequence.getFrameRate();
     M2TSStreamInfo::blurayStreamParams(fps, getInterlaced(), getStreamWidth(), getStreamHeight(), getStreamAR(),
                                        &video_format, &frame_rate_index, &aspect_ratio_index);
     // The rate the stream is muxed at, as the clip information file gives it: with fps= or delPulldown the stream's own
     // code was written here, so the two disagreed (24 against 23.976, 29.97 against 23.976)
-    *dstBuff++ = static_cast<uint8_t>(video_format << 4 |
-                                      (frame_rate_index != 0 ? frame_rate_index : m_sequence.frame_rate_index));
+    *dstBuff++ = static_cast<uint8_t>(video_format << 4 | (frame_rate_index != 0 ? frame_rate_index : rateCode));
     *dstBuff = static_cast<uint8_t>(m_sequence.aspect_ratio_info << 4 | 0xf);
 
     return 10;  // total descriptor length
