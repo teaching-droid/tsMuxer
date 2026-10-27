@@ -320,7 +320,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **An AC-3 at 44.1 or 32 kHz was taken as the core of TrueHD** with merge-ac3-file= or merge-ac3-track=, without a word: a disc held 44.1 kHz AC-3 frames in its 48 kHz TrueHD track. Such an AC-3 under TrueHD at 48, 96 or 192 kHz is now refused, as E-AC-3 is.
 
-* **The AC-3 track of merge-ac3-track= lost its start in the Matroska file:** a core that starts 500 ms after its TrueHD came 500 ms early against the TrueHD and the picture. It now keeps the distance the file gives it, in every output. A file without video is muxed as before.
+* **The AC-3 track of merge-ac3-track= lost its start in the Matroska file:** a core that starts 500 ms after its TrueHD came 500 ms early against the TrueHD and the picture. It now keeps the distance the file gives it, in every output, also in a file without video.
 
 * **In a join of TS or M2TS files, TrueHD with its AC-3 core muxed as A_AC3 followed on from the sound of the file before,** although the log said that the sound of the later file starts after a gap: its core and its TrueHD came that much early against the picture, to the end of the join. Both now take the gap, as A_MLP and the other audio do.
 
@@ -381,6 +381,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **An AV1 stream without temporal delimiters became one single frame,** and the mux said it had succeeded. Its frames are now found from their headers, each is written with a temporal delimiter, and a warning says that the stream lacks them.
 
 ### Blu-ray and transport stream
+
+* **An ISO image whose data crosses a layer break now gets the layer break guard without being asked:** 288 MB after the break and 18 MB before it are left empty, as a burnt dual-layer disc often reads badly at the layer change, and a player can then stall there. This holds for a direct mux to an .iso and for --bdmv-to-iso. The break is the one --layer-break-lbn gives, else that of the disc size, else that of a BD-R DL, and one line in the log says when the guard is written. An image that would not fit the disc with the guard is written without it, with a warning. --no-layer-break-guard, or "Leave out the layer-break guard" in the window, leaves it out, and --layer-break-guard=<MB> sets its size as before. --inner-only and a folder, TS or MKV output are not changed.
 
 * **"Keep data on the inner disc area" padded the wrong part of a 100 GB or 128 GB disc.** On these discs the second layer change is at the centre of the disc, not at its edge, and it was padded like the edge: the data of the third layer went to its outer edge, where the option promises to keep the disc empty. Each layer now keeps its share of the data at the centre. On a 25 GB disc the option padded the middle of the disc and now leaves the image as it is. The padding of a two-layer disc is not changed.
 
@@ -512,7 +514,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **E-AC-3 with its AC-3 core and down-to-ac3 was declared E-AC-3 in Matroska, with the channels of its E-AC-3 part,** while the track holds the AC-3 core alone. It is now declared AC-3 with the channels and the rate of the core.
 
-* **VP8 and VP9 with an alpha channel lost the AlphaMode of their track,** though the alpha data was kept, so a player that follows it showed the picture opaque. It is now kept, in Matroska and WebM.
+* **VP8 and VP9 with an alpha channel lost the AlphaMode of their track,** though the alpha data was kept, so a player that follows it showed the picture opaque. It is now kept, in Matroska and WebM. A join in which a file with alpha follows one without it lost the alpha of that file, its data as well; it is now kept.
 
 * **A track that starts late held a whole Matroska mux in memory.** An audio or video track whose first packet comes more than ten seconds in, such as a commentary that begins minutes into the film, held back the start of the file, with every packet before it kept in memory. The file now starts after ten seconds, and the entry of that track is completed when its first packet comes. In a split output, the parts before that packet have no block of the track, and their entry holds only what was known before it: E-AC-3 on an A_AC3 line is listed there as AC-3.
 
@@ -709,6 +711,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **A video stream whose header gives a frame rate no video has,** such as one picture in 30 years in a damaged H.264 header, no longer fills a transport stream with clock references until the disk is full. The rate is set aside with a warning, and the container's rate or 25 is used.
 
 * **A block read ahead from a source is handed over under its lock.** When it was ready already, the muxer took it without the lock, so on a processor that reorders memory writes, as ARM does, it could read the block before all of its bytes had arrived.
+
+* **"100.0% complete" came before an error.** The progress line reached 100 percent when the sources were read, so a job that then failed, as with a track that produced no frames or an image too big for the disc, showed it beside the error. The line now stops at 99.9 percent, one line says that the output is being finished, and 100.0 comes only when the job has succeeded.
 
 * **An MPEG-1 system stream (.mpg, .mpeg) could not be read.** Its packet headers were read as MPEG-2 ones: tracks were not found, their data came out damaged, or the job stopped with "Invalid copyLen". It is now read.
 
