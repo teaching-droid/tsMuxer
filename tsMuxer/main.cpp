@@ -1163,8 +1163,9 @@ All parameters in this group start with two dashes:
                       rate counts what is written. For a fixed rate use
                       --bitrate instead. Must be above 90.
 --cbr                 Ask for a fixed bitrate. The rate comes from --bitrate, so
-                      --cbr on its own does nothing. --vbr and --cbr must not be
-                      used together.
+                      --cbr on its own does nothing. --vbr and --cbr ask for
+                      opposite things: given both, a warning says so, and
+                      --bitrate decides as always.
 --bitrate             Set a fixed bitrate in kbps, so --bitrate=35000 means
                       35 Mbps. This sets both the minimum and the maximum to
                       that value. Where the streams need less, null packets pad
