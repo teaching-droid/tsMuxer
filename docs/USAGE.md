@@ -210,7 +210,7 @@ Parameter         | Description
 ---               | --- 
 fps               | The number of frames per second. If not defined, the value is auto detected from the source stream or the container metadata (e.g. MKV default_duration, MP4 timescale), or from the times of its pictures in a TS, an M2TS or a Blu-ray playlist. If none of them gives it, it defaults to 25. The GUI then writes no fps either; 23.976 is the value its fps box offers when it is ticked. 
 delPulldown       | Remove pulldown from the track, if it exists. If the pulldown is present, the FPS value is changed from 30 to 24. 
-ar                | Override video aspect ratio. 16:9, 4:3 e.t.c. 
+ar                | Override video aspect ratio: 1:1, 4:3, 16:9 or 2.21:1 (also written with x, such as 16x9). Any other value is refused. 
 
 Additional parameters for H.264 video tracks:
 

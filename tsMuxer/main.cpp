@@ -1011,7 +1011,7 @@ Additional parameters for video tracks:
                     to 25.
 - delPulldown       Remove pulldown from the track, if it exists. If the
                     pulldown is present, the FPS value is changed from 30 to 24.
-- ar                Override video aspect ratio. 16:9, 4:3 e.t.c.
+- ar                Override video aspect ratio: 1:1, 4:3, 16:9 or 2.21:1.
 
 )help"
                             R"help(Additional parameters for H.264 video tracks:

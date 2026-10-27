@@ -1854,8 +1854,9 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     if (const auto mpegVideo = dynamic_cast<MPEGStreamReader*>(codecReader);
         mpegVideo && codec != "V_MPEG-2" && addParams.find("ar") != addParams.end())
     {
+        const VideoAspectRatio ar = arNameToCode(addParams.find("ar")->second);  // a value it does not know is refused
         if (m_matroskaOutput)
-            mpegVideo->setAspectRatio(arNameToCode(addParams.find("ar")->second));
+            mpegVideo->setAspectRatio(ar);
         else
             LTRACE(LT_WARN, 2,
                    "Warning: ar= on the line of " << codec
@@ -4388,8 +4389,11 @@ VideoAspectRatio arNameToCode(const string& arName)
     if (arName == "WIDE" || arName == "1x2,21" || arName == "1x2.21" || arName == "1:2.21" || arName == "1:2,21" ||
         arName == "2.21:1" || arName == "2,21:1" || arName == "2.21x1" || arName == "2,21x1")
         return VideoAspectRatio::AR_221_100;
-
-    return VideoAspectRatio::AR_KEEP_DEFAULT;
+    // Any other value kept the stream's own shape without a word: ar=2.35:1 on a 16:9 stream gave 16:9, as did
+    // ar=bogus and ar=0:0. These four are the shapes an MPEG-2 sequence header and a disc can give.
+    THROW(ERR_COMMON, "ar=" << arName
+                            << " is not an aspect ratio tsMuxeR can give the video. The values are 1:1, 4:3, 16:9 "
+                               "and 2.21:1, also written with x, such as 16x9.")
 }
 
 PIPParams::PipCorner pipCornerFromStr(const std::string& value)
