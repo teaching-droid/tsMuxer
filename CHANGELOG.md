@@ -328,6 +328,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A DTS-HD stream of 96 or 192 kHz without a core** keeps its length. Its frames were timed at a half or a quarter of their length, so the sound ran two or four times too fast against the picture.
 
+* **stretch= took 0, a negative factor, text and absurd factors without a word:** stretch=0 or stretch=abc gave every audio frame the same time, stretch=-1 made the times run backwards, and stretch=1000 spread 8 s of sound over more than two hours. The factor is now a number or a fraction from 0.5 up to 2, anything else is refused, and stretch= on a video or subtitle track, where it does nothing, gets a warning.
+
 ### Video
 
 * **The Dolby Vision enhancement layer of a cut began two pictures after its base layer** when its pictures are reordered differently. It now begins with the base layer.
@@ -353,6 +355,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **What tsMuxeR inserts into H.264, HEVC and VVC** (delimiters, parameter sets, SEI) gets a start code of four bytes, as the format asks at the head of an access unit. It took three where the stream used three.
 
 * **Film at 59.94 with delPulldown** gets no false "irregular pulldown marks" warnings.
+
+* **delPulldown on video without pulldown gave up to 10 warnings of "irregular pulldown marks",** although the output was right. Only a stream with a picture shown for longer than a frame is checked now.
+
+* **An ar= value tsMuxeR does not know, such as 2.35:1, was ignored without a word,** and the video kept its own shape. Such a value is now refused with the list of those there are: 1:1, 4:3, 16:9 and 2.21:1.
 
 * **The buffering period SEI that insertSEI and forceSEI add to H.264 told the decoder to wait 9.5 s,** at every buffering period and whatever the stream: far more than its buffer size and bitrate allow (0.75 s with the values tsMuxeR writes into the SPS), and where the stream gives the field fewer bits, only part of the number was kept. The first wait now comes from the buffer size and bitrate in the SPS, just under the most they allow, and each later one from how full the buffer is at that point.
 
@@ -471,6 +477,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **An ISO image:** a label longer than an image keeps is said, two names that an image would show as one are refused before the image is written, and an image a refused job made is removed.
 
 * **--minbitrate** no longer lowers the rate of --bitrate, and a --maxbitrate below --bitrate is said.
+
+* **A --bitrate or --minbitrate above --maxbitrate put the clock references up to 0.39 s apart,** where the transport stream rules allow 0.1 s: the padding was still written for the higher rate, and the cap then held the next clock reference back until all of it could have arrived. Both are now lowered to the cap, with a warning.
+
+* **--bitrate wrote its padding in a burst at the start of each part of a split and of each block of a 3D disc:** hundreds of null packets 1 or 2 ticks apart, or with the arrival time of the packet before them, far above the rate asked for. The padding now goes into the gap it belongs to and arrives at the rate.
 
 * **With --bitrate, data that arrives after it is due was reported as "VBV buffer overflow",** the opposite of what happens there. The message now says that the stream needs more than the constant bitrate at that point, how late its data arrives, and to give a higher --bitrate.
 
@@ -658,7 +668,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A meta line that shares some, but not all, of its files with an earlier line for the same track** is refused, with the file it shares, whatever its name or place in either line, as in a join of a.ts and b.ts after a line with a.ts alone, or a.ts alone after the join. Those files were left out without a word.
 
-* **A timeshift or a --start-time so large that the times would wrap round** the 26.5 hour limit of the clock of a transport stream is refused before anything is written. The times went backwards.
+* **A timeshift or a --start-time so large that the times would wrap round** the 26.5 hour limit of the clock of a transport stream is refused before anything is written. The times went backwards, and the playlist of a disc ended before it began.
 
 * **An AC-3 or DTS frame at the end of a 2 MB read block** was read past the end of the block before more data was asked for.
 
