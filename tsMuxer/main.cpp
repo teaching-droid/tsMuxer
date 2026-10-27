@@ -1521,6 +1521,8 @@ All parameters in this group start with two dashes:
                         --no-layer-fit  Do not move a file that would cross the layer break to
                               start after it; split it instead.
                         --label=<string>  Volume label for the image; Blu-Ray when not given.
+                        --extra-iso-space=<64K blocks>  More room for the file system, on
+                              top of what is counted from the folder's files and names.
 )help";
     LTRACE(LT_INFO, 2, help);
 }
