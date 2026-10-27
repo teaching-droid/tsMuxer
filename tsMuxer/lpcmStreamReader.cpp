@@ -592,9 +592,15 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
         if (m_channels == 0)
             THROW(ERR_COMMON, "Invalid channels count: 0. WAVE header is invalid.")
         m_freq = waveFormatPCMEx->nSamplesPerSec;
+        // The reader cuts the audio into the frames of a disc's LPCM, which other rates do not fill evenly, so this
+        // holds for every output. The message gave the list without saying so, and a Matroska output looked
+        // refused by a disc rule.
         if (m_freq != 48000 && m_freq != 96000 && m_freq != 192000)
-            THROW(ERR_COMMON,
-                  "Sample rate " << m_freq << " is not supported for LPCM format. Allowed values: 48000, 96000, 192000")
+            THROW(ERR_COMMON, "The WAVE file has a sample rate of "
+                                  << m_freq
+                                  << " Hz. tsMuxeR reads PCM audio at 48000, 96000 or 192000 Hz only, the rates of a "
+                                     "Blu-ray disc, for every output, Matroska and a demux included. Convert the "
+                                     "audio to 48000 Hz first.")
         m_bitsPerSample = waveFormatPCMEx->wBitsPerSample;
         // A WAV of floating point samples was refused as "Bit depth 32 is not supported for LPCM format", for a
         // Matroska output as well, which said neither what the file holds nor that no output takes it.
