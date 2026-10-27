@@ -25,6 +25,8 @@ class SRTStreamReader final : public AbstractStreamReader
     int flushPacket(AVPacket& avPacket) override;
     void setBuffer(uint8_t* data, uint32_t dataLen, bool lastBlock = false) override;
     int64_t getProcessedSize() override { return m_processedSize; }
+    // the subtitles read: 0 for an empty file or one that holds no subtitle at all
+    [[nodiscard]] int64_t getDeliveredFrames() const override { return m_cuesRead; }
     // A join of subtitle files ("a.srt"+"b.srt"): where each file starts in the output, in ns, the first file at 0
     // (METADemuxer gives it from the video joined from as many files). Each file's cues are moved by it.
     void setJoinStarts(std::vector<int64_t> ns) { m_joinStartsNs = std::move(ns); }

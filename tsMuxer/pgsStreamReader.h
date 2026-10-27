@@ -50,6 +50,8 @@ class PGSStreamReader final : public AbstractStreamReader
     CheckStreamRez checkStream(uint8_t* buffer, int len, ContainerType containerType, int containerDataType,
                                int containerStreamIndex);
     const CodecInfo& getCodecInfo() override { return pgsCodecInfo; }
+    // the display sets read (one Presentation Composition Segment each): 0 for a file that is no PGS at all
+    [[nodiscard]] int64_t getDeliveredFrames() const override { return m_compositions; }
     // void setDemuxMode(bool value) {m_demuxMode = value;}
     static int calcFpsIndex(double fps);
 
@@ -146,6 +148,8 @@ class PGSStreamReader final : public AbstractStreamReader
     bool m_replaceRate = false;
     int m_firstRateIndex = -1;     // the frame rate code of the first PCS
     bool m_mixedRateSaid = false;  // the warning that the PCS give more than one rate, once
+    int64_t m_compositions = 0;    // the PCS read (getDeliveredFrames)
+    bool m_badDescriptor = false;  // the first PCS gives a size or a frame rate code no PGS stream has
 
     text_subtitles::TextToPGSConverter* m_render;
     uint8_t* m_renderedData;

@@ -71,6 +71,7 @@ void PGSStreamReader::video_descriptor(BitStreamReader& bitReader)
     const auto frame_rate_index = bitReader.getBits<uint8_t>(4);
     m_frame_rate = pgs_frame_rates[frame_rate_index];
     bitReader.skipBits(4);
+    m_badDescriptor = frame_rate_index > 8 || m_video_width == 0 || m_video_width > 4096 || m_video_height > 4096;
 }
 
 void PGSStreamReader::composition_descriptor(BitStreamReader& bitReader)
@@ -504,6 +505,14 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
         intDecodeStream(from, m_bufEnd - from);
         if (m_video_height == 0)
             return NEED_MORE_DATA;
+        // Random bytes on an S_HDMV/PGS line hold a "PG" and a segment code 0x16 by chance, and their "size" of
+        // 15162:26915 at frame rate 0 was scaled to 1920:1080 and muxed as subtitles, at exit 0
+        if (m_badDescriptor)
+            THROW(ERR_COMMON, "Track " << m_streamIndex << " is not PGS: its first composition gives a picture of "
+                                       << m_video_width << ':' << m_video_height << " at frame rate " << m_frame_rate
+                                       << ", which no PGS stream has. The usual reason is that the codec on the meta "
+                                          "line is not the codec the file holds. List the file on its own to see what "
+                                          "tsMuxeR makes of it.")
 
         if (m_newFps == 0.0 && m_scaled_width && m_scaled_height)
         {
@@ -779,6 +788,7 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
             // more than one rate kept the others as they were. With fps= every PCS gets its rate; the times are
             // scaled as the first PCS decided.
             {
+                ++m_compositions;
                 const int ownIndex = m_curPos[4] >> 4;
                 if (m_firstRateIndex < 0)
                     m_firstRateIndex = ownIndex;
