@@ -4093,6 +4093,7 @@ int main(int argc, char** argv)
     //
     // It is taken OUT of the list before anything below counts the arguments, because the modes
     // are chosen by how many there are: two means list, three means mux.
+    std::string langCodesGiven;  // the value of an earlier --lang-codes: given twice, the last won without a word
     for (int i = 1; i < argc;)
     {
         const std::string arg = argv[i];
@@ -4102,6 +4103,11 @@ int main(int argc, char** argv)
             continue;
         }
         const std::string value = arg.substr(13);
+        if (!langCodesGiven.empty())
+            LTRACE(LT_WARN, 2,
+                   "Warning: --lang-codes is given twice (" << langCodesGiven << " and " << value
+                                                            << "). The last one is used; remove the other.");
+        langCodesGiven = value;
         if (value == "source")
             setLangCodeStyle(LangCodeStyle::Source);
         else if (value == "bibliographic")

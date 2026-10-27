@@ -814,7 +814,15 @@ void METADemuxer::openFile(const string& streamName)
             // The value is everything after the first '=': a track-name with an '=' in it was cut there.
             const size_t eq = params[i].find('=');
             const string paramName = trimStr(params[i].substr(0, eq));
-            addParams[paramName] = trimStr(eq == string::npos ? "" : params[i].substr(eq + 1));
+            const string paramValue = trimStr(eq == string::npos ? "" : params[i].substr(eq + 1));
+            // A parameter given twice, such as lang=eng and lang=ger, took the last value without a word
+            if (const auto twice = addParams.find(paramName); twice != addParams.end() && !paramName.empty())
+                LTRACE(LT_WARN, 2,
+                       "Warning: " << paramName << " is given twice on the line of " << trimStr(params[1]) << " ("
+                                   << (twice->second.empty() ? paramName : paramName + "=" + twice->second) << " and "
+                                   << (paramValue.empty() ? paramName : paramName + "=" + paramValue)
+                                   << "). The last one is used; remove the other.");
+            addParams[paramName] = paramValue;
             // Digits alone, or digits and a unit, with no name: the part after a decimal comma, as the parameters are
             // parted at commas. fps=23,976 became fps=23, and timeshift=1,5s timeshift=1 (1 ms), with only a warning
             // about "976" or "5s".
@@ -837,6 +845,18 @@ void METADemuxer::openFile(const string& streamName)
                 THROW(ERR_COMMON, "track=" << addParams[paramName]
                                            << " is not a track number. Write the number the listing gives, digits "
                                               "alone, such as track=1 or track=4113.")
+            // The Matroska flags took any value that is not a "no" word as a yes: forced=2 and original=bogus set them
+            if (paramName == "forced" || paramName == "hearing-impaired" || paramName == "visual-impaired" ||
+                paramName == "text-descriptions" || paramName == "original" || paramName == "commentary")
+            {
+                const string lower = strToLowerCase(addParams[paramName]);
+                if (!lower.empty() && !defaultParamMeansNo(lower) && lower != "1" && lower != "yes" &&
+                    lower != "true" && lower != "on")
+                    THROW(ERR_COMMON, paramName << "=" << addParams[paramName] << " is not a value of " << paramName
+                                                << ". Write " << paramName
+                                                << " alone (or =1, =yes) to set the flag, or " << paramName
+                                                << "=0 (or =no) to clear it.")
+            }
             if (paramName == "default" && defaultParamKind(addParams[paramName]) < 0)
                 THROW(ERR_COMMON, "default=" << addParams[paramName]
                                              << " is not a value of default. Write all (or yes) for the default track, "
