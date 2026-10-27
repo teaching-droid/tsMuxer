@@ -5068,6 +5068,25 @@ void METADemuxer::cutPlayItems(MPLSParser& mpls, const string& mplsFileName, con
     }
     if (cutItems == 0)
         return;
+    // ** A CLIP MUXED WHOLE IS PLACED AS A WHOLE CLIP. ** The play items kept their IN_time and OUT_time, so the
+    // chapters, the listing and the place each clip starts at were those of the parts the playlist plays, while the
+    // output holds the whole clips: a mark 10.4 s into a clip played from there was a chapter at 0, and the marks of
+    // the next clip came as much early as the parts before them were short of their clips. Each play item now spans
+    // its clip as the clip information gives it (SequenceInfo), where the play item lies inside that span.
+    const auto wholeClips = [&]()
+    {
+        for (MPLSPlayItem& item : mpls.m_playItems)
+        {
+            const string clpiName = findBluRayFile(streamDir, "CLIPINF", item.fileName + ".clpi");
+            CLPIParser clpi;
+            if (clpiName.empty() || !clpi.parse(clpiName.c_str()) ||
+                clpi.presentation_start_time >= clpi.presentation_end_time ||
+                item.IN_time < clpi.presentation_start_time || item.OUT_time > clpi.presentation_end_time)
+                continue;
+            item.IN_time = clpi.presentation_start_time;
+            item.OUT_time = clpi.presentation_end_time;
+        }
+    };
     const string name = extractFileName2(mplsFileName, true);
     std::ostringstream what;
     what << name << " plays only a part of its clip in " << cutItems << " of its " << plans.size() << " play items";
@@ -5077,12 +5096,14 @@ void METADemuxer::cutPlayItems(MPLSParser& mpls, const string& mplsFileName, con
                "Playlist " << what.str()
                            << ". Each clip is muxed whole (--playlist-clips=whole); --playlist-clips=played muxes only "
                               "the parts the playlist plays.");
+        wholeClips();
         return;
     }
     if (mpls.isDependStreamExist)
     {
         LTRACE(LT_WARN, 2,
                "Warning: playlist " << what.str() << ", but it is a 3D playlist, and its clips are muxed whole.");
+        wholeClips();
         return;
     }
     if (!unread.empty())
@@ -5090,6 +5111,7 @@ void METADemuxer::cutPlayItems(MPLSParser& mpls, const string& mplsFileName, con
         LTRACE(LT_WARN, 2,
                "Warning: playlist " << what.str() << ", but the clip information of clip " << unread
                                     << " gives no map of its key pictures, so the clips are muxed whole.");
+        wholeClips();
         return;
     }
     // A play item that goes on in the same clip where the one before it ends, or inside its last group of pictures,
@@ -5176,6 +5198,7 @@ void METADemuxer::cutPlayItems(MPLSParser& mpls, const string& mplsFileName, con
                    "Warning: playlist " << what.str() << ", but clip " << items[i].fileName
                                         << " does not have a key picture where its clip information says, so the "
                                            "clips are muxed whole.");
+            wholeClips();
             return;
         }
         if (part.startCut)
