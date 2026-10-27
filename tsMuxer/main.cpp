@@ -3107,6 +3107,38 @@ static void reportSingleLayerDvOnDisc(const MuxerManager& muxerManager)
     }
 }
 
+// HLG video (transfer characteristics 18) on a Blu-ray or AVCHD disc. The playlist and clip information of a disc have
+// no dynamic range for HLG (they know SDR, HDR10 and Dolby Vision): the stream is marked as SDR with its colours
+// (composeStreamCodingInfo), and a disc player shows it as SDR. It went onto the disc without a word. The disc is
+// written as asked; this only says so, once for each track. H.264 is asked as well: its VUI gives the same value. A
+// Dolby Vision stream with an HLG base is asked too: the disc marks it as Dolby Vision, but a player without Dolby
+// Vision plays its HLG base, and so does a UHD Blu-ray player for single layer Dolby Vision (above). Transfer 14 and 15
+// are the SDR transfer of BT.2020 (the reader takes them as SDR in markHdr10ByMasteringSei), so they are not HLG here.
+static void reportHlgOnDisc(const MuxerManager& muxerManager)
+{
+    for (const StreamInfo& si : muxerManager.getStreamInfo())
+    {
+        if (si.m_codec.empty() || si.m_codec[0] != 'V' || si.m_isSubStream)
+            continue;
+        const auto* video = dynamic_cast<const MPEGStreamReader*>(si.m_streamReader);
+        uint8_t primaries = 0, transfer = 0, matrix = 0;
+        if (video == nullptr || !video->getColourDesc(primaries, transfer, matrix) || transfer != 18)
+            continue;
+        const auto trackParam = si.m_addParams.find("track");
+        std::ostringstream who;
+        if (trackParam != si.m_addParams.end() && !trackParam->second.empty())
+            who << "track " << trackParam->second << " of ";
+        who << (si.m_fullStreamName.empty() ? ("\"" + si.m_streamName + "\"") : si.m_fullStreamName);
+        const bool dv = si.m_streamReader->getStreamHDR() == 4;
+        LTRACE(LT_WARN, 2,
+               "Warning: the video of " << who.str() << " is " << (dv ? "Dolby Vision with an HLG picture" : "HLG")
+                                        << " (transfer characteristics 18). A disc has no HLG dynamic range, "
+                                        << (dv ? "and a player that plays the HLG picture shows it as SDR."
+                                               : "so the disc marks it as SDR and a player shows it as SDR.")
+                                        << " The disc is written as asked.");
+    }
+}
+
 // --disc-size is checked before the mux against an estimate, the sources and five per cent, which counts neither a
 // layer break guard, nor the null packets of a constant bitrate, nor the file system. The window promises that the
 // finished size is checked against the disc and that it warns when it does not fit, and nothing did. The finished image
@@ -4970,6 +5002,8 @@ int main(int argc, char** argv)
             reportEmptyTracks(muxerManager);
             if (dt == DiskType::BLURAY)
                 reportSingleLayerDvOnDisc(muxerManager);
+            if (dt != DiskType::NONE)
+                reportHlgOnDisc(muxerManager);
         }
         else
         {
