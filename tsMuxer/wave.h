@@ -75,6 +75,8 @@ typedef struct
 constexpr uint16_t WAVE_FORMAT_EXTENSIBLE = 0xFFFE;
 
 static GUID KSDATAFORMAT_SUBTYPE_PCM(0x00000001, 0x0000, 0x0010, "\x80\x00\x00\xaa\x00\x38\x9b\x71");
+static GUID KSDATAFORMAT_SUBTYPE_IEEE_FLOAT(0x00000003, 0x0000, 0x0010, "\x80\x00\x00\xaa\x00\x38\x9b\x71");
+constexpr uint16_t WAVE_FORMAT_IEEE_FLOAT = 0x0003;
 static GUID WAVE64GUID(0x66666972, 0x912E, 0x11CF, "\xA5\xD6\x28\xDB\x04\xC1\x00\x00");
 
 void buildWaveHeader(MemoryBlock& waveBuffer, int samplerate, uint16_t channels, bool lfeExist, uint16_t bitdepth);

@@ -596,6 +596,16 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
             THROW(ERR_COMMON,
                   "Sample rate " << m_freq << " is not supported for LPCM format. Allowed values: 48000, 96000, 192000")
         m_bitsPerSample = waveFormatPCMEx->wBitsPerSample;
+        // A WAV of floating point samples was refused as "Bit depth 32 is not supported for LPCM format", for a
+        // Matroska output as well, which said neither what the file holds nor that no output takes it.
+        if (waveFormatPCMEx->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||
+            (waveFormatPCMEx->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
+             waveFormatPCMEx->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT))
+            THROW(ERR_COMMON, "The WAVE file holds floating point samples ("
+                                  << m_bitsPerSample
+                                  << " bit float), which no output takes: a disc, a TS and the Matroska output carry "
+                                     "integer PCM, and so does the file a demux writes. Convert it to 16 or 24 bit "
+                                     "integer PCM.")
         if (m_bitsPerSample != 16 && m_bitsPerSample != 20 && m_bitsPerSample != 24)
             THROW(ERR_COMMON, "Bit depth " << m_bitsPerSample
                                            << " is not supported for LPCM format. Allowed values: 16bit, 20bit, 24bit")
