@@ -387,10 +387,14 @@ void TSDemuxer::endJoinFile()
         m_joinVideoStart = fileVideoStart(unquoteStr(m_joinFiles[m_curFileNum + 1]), m_firstVideoPid);
     const int64_t step = (std::max)(m_videoDtsGap, int64_t{0});
     const int64_t runOn = m_joinVideoStart - m_joinFileDts.second;
+    m_joinOneClock = false;
     if (!known || !m_joinBaseKnown)
         m_joinBaseKnown = false;
     else if (m_joinVideoStart != -1 && step > 0 && runOn > step / 2 && runOn < step + step / 2)
+    {
         m_joinBase += m_joinVideoStart - m_joinFileDts.first;  // one clock
+        m_joinOneClock = true;
+    }
     else
         m_joinBase += m_joinFileDts.second - m_joinFileDts.first + step;
     m_joinFileDts = {-1, -1};
@@ -415,8 +419,12 @@ bool TSDemuxer::keepJoinSound(const int pid, const StreamType type, const int64_
             const int64_t due = pts - m_joinVideoStart + m_joinBase;
             // A PES at the time of the last one of the file before carries the rest of the same frame (the
             // extension of a DTS-HD frame, the TrueHD unit after an AC-3 frame), as where a recording was split
-            // into files: kept with it, and the time of the next one decides.
-            if (due == sound.lastPes && sound.pesBytes >= 0)
+            // into files: kept with it, and the time of the next one decides. Only where both files are on one
+            // clock: files of their own clocks whose sound runs one frame past the picture, as a 60 s film with
+            // 60.032 s of AC-3, have the first frame of the next file due where the last frame of the file before
+            // starts. That frame was kept as the rest of the one before, and every frame after it with it: the
+            // sound of each later file came a frame later than its picture, and over 8 files 224 ms.
+            if (due == sound.lastPes && sound.pesBytes >= 0 && m_joinOneClock)
                 return true;
             // Where the sound before ends: the last PES of the file before may hold fewer frames than the others,
             // which for a sound of a constant bit rate its size tells, against the PES that gave the step. A PES

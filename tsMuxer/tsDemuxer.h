@@ -173,6 +173,7 @@ class TSDemuxer final : public AbstractDemuxer
     int64_t m_joinVideoStart = -1;  // the first decoding time of the video of the file being read (fileVideoStart)
     int64_t m_joinBase = 0;         // where the first decoding time of the video of the file being read is
     bool m_joinBaseKnown = true;
+    bool m_joinOneClock = false;  // the file being read goes on from the clock of the file before (endJoinFile)
     std::pair<int64_t, int64_t> m_joinFileDts{-1, -1};  // the first and the last decoding time of the video in the file
     std::map<int, int64_t> m_fileFirstDts;              // the first decoding time of each video stream in the file
     std::pair<int64_t, int64_t> m_videoSpanDts{-1, -1};  // the first and the last decoding time of the first video
