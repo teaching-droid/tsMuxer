@@ -837,6 +837,13 @@ void METADemuxer::openFile(const string& streamName)
             LTRACE(
                 LT_WARN, 2,
                 "Warning: hdr10-override applies to HEVC video only, and is ignored for this " << codec << " track.");
+        // level= is written into H.264 and HEVC streams only; on VVC, AV1, VP9 or any other track it did nothing,
+        // without a word
+        if (addParams.count("level") && codec != "V_MPEG4/ISO/AVC" && codec != "V_MPEG4/ISO/MVC" &&
+            codec != "V_MPEGH/ISO/HEVC")
+            LTRACE(
+                LT_WARN, 2,
+                "Warning: level= applies to H.264 and HEVC video only, and is ignored for this " << codec << " track.");
         // ** THE KEY IS THE FILE THE LINE OPENS, NOT THE TEXT THAT NAMES IT. **
         //
         // The guard below refuses a track that is both merged into a TrueHD line and muxed on its

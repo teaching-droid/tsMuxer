@@ -224,7 +224,7 @@ Additional parameters for H.264 video tracks:
 
 Parameter         | Description 
 ---               | --- 
-level             | Overwrite the level in the H264 stream. Do note that this option only updates the headers and does not reencode the stream, which may not meet the requirements for a lower  level. 
+level             | Overwrite the level in the H264 or HEVC stream (level=4.1, level=5.1). Do note that this option only updates the headers and does not reencode the stream, which may not meet the requirements for a lower  level. Ignored, with a warning, for any other codec (VVC, AV1, VP9 and so on). 
 insertSEI         | If the original stream does not contain SEI picture timing, SEI buffering period or VUI parameters, add this data to the stream. This option is recommended for BD muxing. 
 forceSEI          | Add SEI picture timing, buffering period and VUI parameters to the stream and rebuild this data if it already exists. 
 contSPS           | If the original video doesn't contain repetitive SPS/PPS, then SPS/PPS will be added to the stream before each key frame. This option is recommended for BD muxing. 
