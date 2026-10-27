@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstring>
 #include <iterator>
 #include <map>
 #include <set>
@@ -687,8 +688,24 @@ void SRTStreamReader::skipNonCueLine()
     // A counter that carries a byte order mark (two files joined byte for byte) is still only a counter: it was named
     // as skipped text although its subtitle was kept.
     const size_t from = line.size() >= 3 && line.compare(0, 3, "\xEF\xBB\xBF") == 0 ? 3 : 0;
-    if (!std::all_of(line.begin() + static_cast<std::ptrdiff_t>(from), line.end(),
-                     [](const char c) { return (c >= '0' && c <= '9') || c == ' '; }))
+    // A WebVTT file named on an S_TEXT/UTF8 line was read as SRT: its header, notes, styles and cue identifiers were
+    // each named as skipped text, and the tags and character references of its cues were drawn as text. Its cues are
+    // now read as those of WebVTT in a Matroska file are (addCue), and the lines between them are passed over.
+    if (m_cuesRead == 0 && m_skippedLines == 0 && !m_webVtt &&
+        (m_containerType == ContainerType::ctNone || m_containerType == ContainerType::ctSRT) &&
+        line.compare(from, 6, "WEBVTT") == 0 && m_linesRead - static_cast<int64_t>(m_sourceText.size()) == 0)
+    {
+        m_webVtt = true;
+        LTRACE(LT_INFO, 2,
+               "Track " << m_streamIndex
+                        << " is a WebVTT file. Its cues are read with their tags as WebVTT; their settings, such as "
+                           "line: and align:, are not used, and the header, notes, styles and cue identifiers are "
+                           "passed over.");
+    }
+    if (m_webVtt)
+        ++m_skippedLines;
+    else if (!std::all_of(line.begin() + static_cast<std::ptrdiff_t>(from), line.end(),
+                          [](const char c) { return (c >= '0' && c <= '9') || c == ' '; }))
     {
         const int64_t lineNumber = m_linesRead - static_cast<int64_t>(m_sourceText.size()) + 1;
         if (m_skippedLines == 0)
@@ -751,7 +768,7 @@ void SRTStreamReader::reportSkippedLines()
              << "\". A subtitle starts with a timing line like 00:00:20,000 --> 00:00:24,400";
         THROW(ERR_COMMON, what.str())
     }
-    if (m_skippedLines > 5)
+    if (m_skippedLines > 5 && !m_webVtt)
         LTRACE(LT_WARN, 2,
                "Warning: track " << m_streamIndex << ": " << m_skippedLines
                                  << " lines in all that are not part of any subtitle were skipped.");
@@ -941,8 +958,9 @@ static bool hasVisibleText(const std::string& text)
     return false;
 }
 
-void SRTStreamReader::addCue(const std::string& text, const double inTime, const double outTime)
+void SRTStreamReader::addCue(const std::string& cueText, const double inTime, const double outTime)
 {
+    const std::string text = m_webVtt ? webVttToSrtText(cueText) : cueText;
     ++m_cuesRead;
     // save-srt is asked for by its file name: the file itself is made with the first subtitle written
     if (!m_saveSrtName.empty() && !m_keepText)
@@ -1619,6 +1637,9 @@ CheckStreamRez SRTStreamReader::checkStream(uint8_t* buffer, const int len, cons
     {
         rez.codecInfo = srtCodecInfo;
         rez.streamDescr = "SRT text subtitles";
+        const int bom = len >= 3 && buffer[0] == 0xEF && buffer[1] == 0xBB && buffer[2] == 0xBF ? 3 : 0;
+        if (containerType == ContainerType::ctSRT && len >= bom + 6 && memcmp(buffer + bom, "WEBVTT", 6) == 0)
+            rez.streamDescr = "WebVTT text subtitles";
         if (containerType == ContainerType::ctSRT)
             rez.lang = detectUTF8Lang(buffer, len);
     }

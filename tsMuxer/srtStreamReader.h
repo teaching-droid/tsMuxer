@@ -145,6 +145,7 @@ class SRTStreamReader final : public AbstractStreamReader
     int m_srtRecords = 0;              // demux: SRT records written so far, which numbers the next
     int64_t m_cuesRead = 0;            // subtitles read from the file
     int64_t m_skippedLines = 0;        // lines of text that are not part of any subtitle, passed over
+    bool m_webVtt = false;             // a WebVTT file of its own, known by its first line (skipNonCueLine)
     int64_t m_firstSkippedLine = 0;
     std::string m_firstSkippedText;
     int64_t m_counterLine = 0;  // the line of the counter of the subtitle being read

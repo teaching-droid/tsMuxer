@@ -4246,7 +4246,8 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             containerType = AbstractStreamReader::ContainerType::ctSUP;
         else if (fileExt == "pcm" || fileExt == "lpcm" || fileExt == "wav" || fileExt == "w64")
             containerType = AbstractStreamReader::ContainerType::ctLPCM;
-        else if (fileExt == "srt")
+        // A WebVTT file is read by the SRT reader (SRTStreamReader::skipNonCueLine); it was listed as "Can't detect"
+        else if (fileExt == "srt" || fileExt == "vtt")
             containerType = AbstractStreamReader::ContainerType::ctSRT;
         CheckStreamRez trackRez = detectTrackReader(tmpBuffer.get(), len, containerType, 0, 0);
 
