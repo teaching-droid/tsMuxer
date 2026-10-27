@@ -426,6 +426,19 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
     {
         const StreamInfo& si = ci[i];
         const bool trueHD = i < m_discoveryData.size() && m_discoveryData[i].discovered && m_discoveryData[i].isTrueHD;
+        // split-ac3-core works on a demux only (SingleFileMuxer says when the track has no pair to split), and
+        // drop-ac3-core on a Matroska output or a demux: a TS or a disc keeps the core, which is what a player needs.
+        // Both were ignored there without a word.
+        if (!m_demuxMode && si.m_addParams.count("split-ac3-core"))
+            LTRACE(LT_WARN, 2,
+                   "Warning: split-ac3-core is used on a demux only, and is ignored for track "
+                       << si.m_streamReader->getStreamIndex() << ". Add --demux to get the .thd and .ac3 files.");
+        if (!m_demuxMode && si.m_addParams.count("drop-ac3-core") && trueHD && si.m_codec != "A_MLP" &&
+            dynamic_cast<TSMuxer*>(m_mainMuxer.get()) != nullptr)
+            LTRACE(LT_WARN, 2,
+                   "Warning: drop-ac3-core is used for a Matroska output or a demux only. It is ignored for track "
+                       << si.m_streamReader->getStreamIndex()
+                       << ": a TS or a Blu-ray keeps the AC-3 core of a TrueHD track, as a player needs it.");
         // Every track that is not TrueHD is told so: only AC-3 and Dolby Digital Plus were, and DTS, AAC or LPCM
         // took the parameter without a word. With down-to-ac3 the track is not kept
         // whole, as the warning said: the core is kept alone.
@@ -441,8 +454,8 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
             rest = " It is ignored; down-to-ac3 keeps the AC-3 core alone.";
         else
             rest =
-                " It is ignored, and the track is kept whole. In a disc's Dolby Digital Plus the E-AC-3 part cannot "
-                "be played without its AC-3 core; to keep the core alone, use down-to-ac3.";
+                " It is ignored, and the track is kept whole. If the track is Dolby Digital Plus with an AC-3 core, "
+                "down-to-ac3 keeps the core alone; the E-AC-3 part cannot be played without it.";
         LTRACE(LT_WARN, 2,
                "Warning: drop-ac3-core applies to TrueHD only, and track " << si.m_streamReader->getStreamIndex()
                                                                            << " is not TrueHD." << rest);

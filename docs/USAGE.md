@@ -180,6 +180,8 @@ Parameter         | Description
 timeshift         | Shift the track by the given time: a number followed by ns, us, ms or s, such as -120ms or 1.5s. A number alone is in milliseconds. Can be negative. 
 down-to-dts       | Available only for DTS-HD tracks. Filter out HD part. 
 down-to-ac3       | For TRUE-HD and E-AC3 (DD+) tracks. Keep the AC-3 core, drop the HD part. 
+drop-ac3-core     | **Matroska output or demux, TrueHD only.** A Blu-ray TrueHD stream carries an AC-3 core beside its lossless part. Matroska writes the core as a track of its own; with drop-ac3-core it is left out and the lossless stream is kept alone. A demux then writes `.thd` instead of `.ac3+thd`. A TS or a Blu-ray keeps the core, so it is ignored there with a warning.
+split-ac3-core    | **Demux only, disc TrueHD with its core only** (an A_AC3 line, without drop-ac3-core or down-to-ac3). Writes the two halves as `.thd` and `.ac3` files of their own beside the `.ac3+thd` file that holds the pair, in one pass. Anywhere else it is ignored with a warning.
 secondary         | Mux as secondary audio.  Available for DD+ and DTS-Express. 
 default           | Mark this track as the default one. `none`, `no`, `0`, `false` or `off` say that it is not.
 w64               | **Demux only, LPCM only.** Write the track as Wave64 (`.w64`) instead of WAV. A WAV header states its sizes in 32 bits and so cannot describe a file past 4 GiB, which is why a long track is otherwise written as two; Wave64 is the same audio with 64 bit sizes and stays one file.

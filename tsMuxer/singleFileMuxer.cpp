@@ -247,6 +247,13 @@ void SingleFileMuxer::intAddStream(const std::string& streamName, const std::str
     // split-ac3-core: write the two halves as files of their own beside the pair, in the same
     // pass. A disc TrueHD track is the only thing that has halves, and only when it really
     // carries a core, which is what the .ac3+thd name means here.
+    if (fileExt != ".ac3+thd" && params.find("split-ac3-core") != params.end())
+        LTRACE(LT_WARN, 2,
+               "Warning: split-ac3-core is ignored for track "
+                   << codecReader->getStreamIndex()
+                   << ": it splits a TrueHD track that holds its AC-3 core (the disc form on an A_AC3 line, without "
+                      "drop-ac3-core or down-to-ac3), and this track is written as "
+                   << fileExt << ".");
     if (fileExt == ".ac3+thd" && params.find("split-ac3-core") != params.end())
     {
         for (const auto& [part, ext] : {std::pair{StreamInfo::Part::LosslessOnly, string(".thd")},
