@@ -1010,9 +1010,14 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
     // the cut has cut, so the readers could not count the access units from the start of the track to the time of the
     // first PES: the TrueHD of such a cut lost the time of the units it leaves out and came 30 ms early. Only for
     // TrueHD, whose readers count those units; a part of a playlist leaves out such bytes for every stream already.
+    // The same for LPCM, each PES of which begins with its header of the samples' layout, and for DTS Express, whose
+    // reader tells a stream without a core by the first bytes it is given: from the rest of a PES before the first
+    // header neither was found, and a cut of a disc clip listed both as "Can't detect stream type".
     if (!pesStartCode && m_clipStartOfPid.find(pid) == m_clipStartOfPid.end())
         if (const auto info = m_pmt.pidList.find(pid);
-            info != m_pmt.pidList.end() && info->second.m_streamType == StreamType::AUDIO_TRUE_HD)
+            info != m_pmt.pidList.end() && (info->second.m_streamType == StreamType::AUDIO_TRUE_HD ||
+                                            info->second.m_streamType == StreamType::AUDIO_LPCM ||
+                                            info->second.m_streamType == StreamType::AUDIO_DTS_HD_SECONDARY))
             return;
     if (pesStartCode)
     {
