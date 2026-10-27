@@ -1073,6 +1073,17 @@ void HEVCStreamReader::refuseMultiLayer() const
                                   "so it is not muxed.")
 }
 
+// An HEVC stream without a VPS has its SPS and its pictures, and none of them can be written without it. It was refused
+// with the usual reason for an empty track, a codec on the meta line that is not the codec of the file, which is wrong.
+std::string HEVCStreamReader::emptyTrackReason() const
+{
+    if (m_vps == nullptr && m_sps != nullptr)
+        return "The stream is HEVC, but it has no video parameter set (VPS), which an HEVC stream carries before its "
+               "first picture, so not one picture could be written. The file is damaged or was cut out of a stream "
+               "without its parameter sets; take the stream again from its source.";
+    return {};
+}
+
 int HEVCStreamReader::getStreamHDR() const
 {
     const int hdr = (m_hdr->isDVRPU || m_hdr->isDVEL) ? 4 : (m_hdr->isHDR10plus ? 16 : (m_hdr->isHDR10 ? 2 : 1));

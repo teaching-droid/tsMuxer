@@ -3803,9 +3803,13 @@ static std::string emptyTrackText(const StreamInfo& si)
     if (trackParam != si.m_addParams.end() && !trackParam->second.empty())
         who << "track " << trackParam->second << " of ";
     who << (si.m_fullStreamName.empty() ? ("\"" + si.m_streamName + "\"") : si.m_fullStreamName);
-    who << " produced no frames at all. It was read as " << si.m_codec
-        << ", and nothing in it was recognised as that. The usual reason is that the codec on the meta line is not the "
-           "codec the file holds. List the file on its own to see what tsMuxeR makes of it.";
+    const std::string reason = si.m_streamReader ? si.m_streamReader->emptyTrackReason() : std::string();
+    if (!reason.empty())
+        who << " produced no frames at all. " << reason;
+    else
+        who << " produced no frames at all. It was read as " << si.m_codec
+            << ", and nothing in it was recognised as that. The usual reason is that the codec on the meta line is "
+               "not the codec the file holds. List the file on its own to see what tsMuxeR makes of it.";
     return who.str();
 }
 
@@ -3926,6 +3930,7 @@ static void checkEmptyTracks(const MuxerManager& muxerManager)
 
 static void reportEmptyTracks(const MuxerManager& muxerManager)
 {
+    const bool cut = muxerManager.getCutStart() > 0 || muxerManager.getCutEnd() > 0;
     for (const StreamInfo& si : muxerManager.getStreamInfo())
     {
         const AbstractStreamReader* reader = si.m_streamReader;
@@ -3941,6 +3946,21 @@ static void reportEmptyTracks(const MuxerManager& muxerManager)
             who << "track " << trackParam->second << " of ";
         who << (si.m_fullStreamName.empty() ? ("\"" + si.m_streamName + "\"") : si.m_fullStreamName);
 
+        // A subtitle track of a cut may have nothing in the cut's range, which is no fault of its codec: it was given
+        // the wrong-codec text all the same
+        if (cut && strStartWith(si.m_codec, "S_"))
+        {
+            LTRACE(LT_WARN, 2,
+                   "Warning: " << who.str() << " (" << si.m_codec
+                               << ") has no subtitle in the muxed range (--cut-start/--cut-end), so its track in the "
+                                  "output is empty. Leave the track out if it is not wanted.");
+            continue;
+        }
+        if (const std::string reason = reader->emptyTrackReason(); !reason.empty())
+        {
+            LTRACE(LT_WARN, 2, "Warning: " << who.str() << " produced no frames at all. " << reason);
+            continue;
+        }
         LTRACE(LT_WARN, 2,
                "Warning: " << who.str() << " produced no frames at all. It was read as " << si.m_codec
                            << ", and nothing in it was recognised as that. The usual reason is that the "

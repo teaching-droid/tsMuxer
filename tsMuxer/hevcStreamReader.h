@@ -53,6 +53,7 @@ class HEVCStreamReader final : public MPEGStreamReader
     // counts them: an RPU made single layer (--dv-profile=8.1) leaves the enhancement layer out of what plays
     [[nodiscard]] bool holdsDvEnhancementLayer() const { return m_hdr && m_hdr->isDVEL && m_dvRpuElPresent != 0; }
     [[nodiscard]] bool needSPSForSplit() const override { return false; }
+    [[nodiscard]] std::string emptyTrackReason() const override;
 
    protected:
     const CodecInfo& getCodecInfo() override { return hevcCodecInfo; }

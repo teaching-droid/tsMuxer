@@ -91,6 +91,9 @@ class AbstractStreamReader : public BaseAbstractStreamReader
     virtual bool isPriorityData(AVPacket* packet) { return false; }
     [[nodiscard]] virtual bool needSPSForSplit() const { return false; }
     virtual bool isSecondary() { return m_secondary; }
+    // Why a track of the right codec gave no frame at all, when the reader can tell (a stream that lacks a unit every
+    // stream of its codec has); empty when it cannot, and the usual reason, a wrong codec on the meta line, is given
+    [[nodiscard]] virtual std::string emptyTrackReason() const { return {}; }
     void setIsSecondary(const bool value) { m_secondary = value; }
     void setPipParams(const PIPParams& params) { m_pipParams = params; }
     [[nodiscard]] PIPParams getPipParams() const { return m_pipParams; }
