@@ -695,8 +695,15 @@ void MuxerManager::checkOtherTracks(const vector<StreamInfo>& ci) const
                   "stream coding type for it. Choose TS or MKV output, or leave the track out.")
         else if (si.m_codec == vvcCodecInfo.programName)
             notOnDisc.emplace_back("VVC (H.266)");
-        else if (si.m_codec == av1CodecInfo.programName)
-            notOnDisc.emplace_back("AV1");
+        // ** AV1 HAS NO FORM ON A DISC EITHER. ** As with Opus, the clip information has no stream coding type for it:
+        // a disc of AV1 alone was refused for want of "one audio or video stream" to index, and AV1 beside an audio
+        // track ended "Mux successful" with a playlist that has no video entry, a clip information entry of length 0
+        // and a line about menus and DVB subtitles. It is refused as what it is.
+        else if (si.m_codec == av1CodecInfo.programName && m_bluRayMode)
+            THROW(ERR_COMMON,
+                  "AV1 has no form on a Blu-ray or AVCHD disc: the clip information of a disc has no stream coding "
+                  "type for it, so a disc could not index or list the video. Choose TS or MKV output, or leave the "
+                  "track out.")
         else if (si.m_codec == mlpCodecInfo.programName)
         {
             mlpFound = true;
