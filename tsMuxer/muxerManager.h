@@ -236,6 +236,7 @@ class MuxerManager final
     int64_t m_padMaxRate = -1;           // --maxbitrate
     int64_t m_padMinRate = -1;           // --minbitrate
     bool m_noChapters = false;           // --no-chapters: the source's own chapters are not taken over
+    bool m_noChaptersTyped = false;      // --no-chapters itself, not an empty --custom-chapters
     int m_layerBreakGuardMB = -1;        // --layer-break-guard: MB of zero-fill each side of the DL break (-1 = off)
     int m_layerBreakGuardBeforeMB = -1;  // --layer-break-guard-before: MB before the break on its own (-1 = derived)
     std::vector<int> m_layerBreakLbns;   // --layer-break-lbn: break sector(s); empty = BD-R/RE DL default

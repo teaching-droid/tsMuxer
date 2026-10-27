@@ -271,6 +271,11 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
                         THROW(ERR_COMMON,
                               "--keep-editions keeps the source's own chapters, and cannot be used with "
                               "--custom-chapters or --chapters-file.")
+                    // --no-chapters was ignored without a word, and the chapters kept
+                    if (m_noChaptersTyped)
+                        THROW(ERR_COMMON,
+                              "--keep-editions keeps the source's own chapters, and --no-chapters leaves them out: "
+                              "use one of the two.")
                     // An MP4 source was taken: the option kept nothing, and its chapters were left out as well.
                     bool fromMatroska = false;
                     for (const auto& si : m_metaDemuxer.getStreamInfo())
@@ -1704,7 +1709,7 @@ void MuxerManager::parseMuxOpt(const string& opts)
                 THROW(ERR_COMMON, err);
         }
         else if (paramPair[0] == "--no-chapters")
-            m_noChapters = true;
+            m_noChapters = m_noChaptersTyped = true;
         // An empty list is a list: the window writes it when every line of its chapter box was deleted. It was read as
         // no list at all, and the source's chapters came back. A list of empty places only (;) is empty as well.
         else if (paramPair[0] == "--custom-chapters" &&
