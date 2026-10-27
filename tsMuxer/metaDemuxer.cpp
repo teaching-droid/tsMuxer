@@ -891,6 +891,13 @@ void METADemuxer::openFile(const string& streamName)
                 addParams.find("merge-ac3-file") != addParams.end() && !addParams.at("merge-ac3-file").empty();
             if (haveTrack && haveFile)
                 THROW(ERR_INVALID_CODEC_FORMAT, "Specify only one of merge-ac3-track or merge-ac3-file.")
+            // An empty value reached the merge reader, which stopped with a message of its own inner workings
+            if (!haveTrack && !haveFile)
+                THROW(ERR_INVALID_CODEC_FORMAT,
+                      (addParams.count("merge-ac3-file") ? "merge-ac3-file=" : "merge-ac3-track=")
+                          << " has no value on the A_MLP line of " << codecStreamName
+                          << ". Give the AC-3 file, such as merge-ac3-file=\"compat.ac3\", or the number of the AC-3 "
+                             "track, such as merge-ac3-track=3, or leave the parameter out.")
 
             if (haveTrack)
             {
@@ -915,6 +922,17 @@ void METADemuxer::openFile(const string& streamName)
                                  "Blu-ray expects it.")
                 mergeSources.insert({streamKey, ac3Pid});
             }
+        }
+        else if (codec != "A_MLP")
+        {
+            // Only an A_MLP line builds a TrueHD track with a core from two sources; on another line the
+            // parameter did nothing, without a word.
+            for (const char* name : {"merge-ac3-file", "merge-ac3-track"})
+                if (addParams.count(name))
+                    LTRACE(LT_WARN, 2,
+                           "Warning: " << name << " is used on an A_MLP line only, and is ignored on this " << codec
+                                       << " line of " << codecStreamName
+                                       << ". To give a TrueHD stream its AC-3 core, name the TrueHD on an A_MLP line.");
         }
         {
             // The same rule seen from the other side, for a plain track line that names a track an
@@ -4913,7 +4931,15 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
         // option still yields a correct TrueHD track: exactly what the user already had,
         // because the option has always been a no-op on this codec. Failing would break
         // existing meta files for no gain. The defect was that it was ignored SILENTLY.
-        if (addParams.find("down-to-ac3") != addParams.end() && !quiet)
+        // With merge-ac3-track or merge-ac3-file the line names its core itself, and the text below did not fit it.
+        const bool mergedCore =
+            addParams.find("merge-ac3-track") != addParams.end() || addParams.find("merge-ac3-file") != addParams.end();
+        if (addParams.find("down-to-ac3") != addParams.end() && !quiet && mergedCore)
+            LTRACE(LT_WARN, 2,
+                   "Warning: down-to-ac3 has no effect on an A_MLP track and is being ignored. The TrueHD is "
+                   "written together with the AC-3 core that merge-ac3-track or merge-ac3-file names. To keep the "
+                   "AC-3 alone, mux that AC-3 on an A_AC3 line of its own instead of this line.");
+        else if (addParams.find("down-to-ac3") != addParams.end() && !quiet)
             LTRACE(LT_WARN, 2,
                    "Warning: down-to-ac3 has no effect on an A_MLP track and is being ignored. "
                    "A standalone TrueHD stream has no AC-3 core to keep, and tsMuxeR does not "
@@ -4924,7 +4950,7 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
                    "(ffmpeg -i in -c:a ac3 -b:a 640k -ac 6 compat.ac3) and either mux compat.ac3 "
                    "on its own line, or pass merge-ac3-file=\"compat.ac3\" here to keep the "
                    "TrueHD track with a compatible core alongside it.");
-        if (addParams.find("merge-ac3-track") != addParams.end() || addParams.find("merge-ac3-file") != addParams.end())
+        if (mergedCore)
             rez = new TrueHDAC3MergeReader(addParams);
         else
             rez = new MLPStreamReader();
