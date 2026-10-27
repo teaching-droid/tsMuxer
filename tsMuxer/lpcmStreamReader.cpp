@@ -1019,6 +1019,14 @@ bool LPCMStreamReader::detectLPCMType(uint8_t* buffer, const int64_t len)
     }
 
     const uint8_t* end = buffer + len;
+    // An RF64 or BW64 file, the WAV of more than 4 GB, begins "RF64" or "BW64" in place of "RIFF", and gives its sizes
+    // in a ds64 chunk. It was taken for no WAV at all: "produced no frames ... the codec on the meta line is not the
+    // codec the file holds" for an A_LPCM line, which is the right codec, and "Can't detect stream type" in a listing.
+    if (len >= 4 && (memcmp(buffer, "RF64", 4) == 0 || memcmp(buffer, "BW64", 4) == 0))
+        THROW(ERR_COMMON, "The file is an RF64 WAV (it begins \""
+                              << std::string(reinterpret_cast<const char*>(buffer), 4)
+                              << "\"), which tsMuxeR does not read. Convert it to W64, or to WAV when it holds "
+                                 "less than 4 GB of audio.")
     // 1. test for WAVEHeader
     uint8_t* curPos = buffer;
     if ((curPos[0] == 'R' && curPos[1] == 'I' && curPos[2] == 'F' && curPos[3] == 'F') ||
