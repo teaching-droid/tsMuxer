@@ -2204,6 +2204,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         // Only the last token before the extension, and only if it really is an ISO 639-2 code, so
         // a name that merely contains three such letters is not mistaken for a tagged one.
         streamInfo.m_lang = langFromFileName(fileList[0]);
+        streamInfo.m_langFromName = true;
         LTRACE(LT_INFO, 2, "Applying language " << streamInfo.m_lang << " taken from the file name");
     }
     int64_t mergeAc3StartNs = 0;  // where the AC-3 track of merge-ac3-track starts against the TrueHD track

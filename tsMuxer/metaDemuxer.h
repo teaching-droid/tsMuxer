@@ -72,6 +72,7 @@ struct StreamInfo
     uint64_t m_srcTrackUid = 0;  // the source's TrackUID, for the tags about this track (getTrackTags)
     std::string m_lang;
     std::string m_langBCP47;  // the source container's BCP 47 tag, when it had one
+    bool m_langFromName = false;  // m_lang was typed into the file name: it is written as typed (--lang-codes)
     std::string m_codec;
     std::map<std::string, std::string> m_addParams;
     bool m_isEOF;

@@ -477,10 +477,12 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
         // In the form asked for with --lang-codes, terminological unless said otherwise, as the track list shows it and
         // as the window writes it. The code went on as the source spelled it, so a Matroska track tagged "ger" became
         // "ger" on a disc from the command line and "deu" from the window. The discs measured all carry the
-        // terminological form. A BCP 47 tag the source had travels beside it, for Matroska output.
+        // terminological form. A BCP 47 tag the source had travels beside it, for Matroska output. A language typed
+        // into the file name of a raw stream is written as typed, as the listing shows it and as USAGE says: ger in a
+        // name was listed as ger and written as deu.
         if (!si.m_lang.empty() && si.m_addParams.find("lang") == si.m_addParams.end())
         {
-            si.m_addParams["srclang"] = applyLangCodeStyle(si.m_lang);
+            si.m_addParams["srclang"] = si.m_langFromName ? si.m_lang : applyLangCodeStyle(si.m_lang);
             if (!si.m_langBCP47.empty())
                 si.m_addParams["srclangbcp47"] = si.m_langBCP47;
         }
