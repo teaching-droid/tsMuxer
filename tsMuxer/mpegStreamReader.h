@@ -76,6 +76,8 @@ class MPEGStreamReader : public AbstractStreamReader
     void setPartStartSource(std::function<bool(int64_t)> source) { m_partStartSource = std::move(source); }
 
     [[nodiscard]] double getFPS() const { return m_fps; }
+    // For a probe (checkStream) whose data is all the stream holds: its last unit is whole, not cut off
+    void setProbeHoldsAll() { m_eof = true; }
     [[nodiscard]] VideoAspectRatio getStreamAR() const
     {
         return m_ar != VideoAspectRatio::AR_KEEP_DEFAULT ? m_ar : m_streamAR;

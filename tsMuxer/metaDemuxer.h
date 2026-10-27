@@ -381,9 +381,11 @@ class METADemuxer final : public AbstractDemuxer
                                              const std::vector<MPLSPlayItem>& mplsInfo, bool quiet = false);
     inline void updateReport(bool checkTime);
     void lineBack();
+    // wholeTrack: the data is all the track holds (the probe read the file to its end)
     static CheckStreamRez detectTrackReader(uint8_t* tmpBuffer, int len,
                                             AbstractStreamReader::ContainerType containerType, int containerDataType,
-                                            int containerStreamIndex, DeclaredKind declared = DeclaredKind::None);
+                                            int containerStreamIndex, DeclaredKind declared = DeclaredKind::None,
+                                            bool wholeTrack = false);
     static std::string findBluRayFile(const std::string& streamDir, const std::string& requestDir,
                                       const std::string& requestFile);
     std::vector<MPLSParser> getMplsInfo(const std::string& mplsFileName);

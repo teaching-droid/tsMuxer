@@ -4026,8 +4026,10 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             vect.reserve(fileBlockSize);
         }
 
+        bool wholeTracks = false;  // the file was read to its end: the data of each track is all of it
         for (unsigned i = 0; i < DETECT_STREAM_BUFFER_SIZE / fileBlockSize; i++)
-            demuxer->simpleDemuxBlock(demuxedData, acceptedPidSet, discardedSize);
+            if (demuxer->simpleDemuxBlock(demuxedData, acceptedPidSet, discardedSize) == BufferedReader::DATA_EOF)
+                wholeTracks = true;
         readLateTracks(demuxer.get(), demuxedData, acceptedPidMap, discardedSize);
         // The Stream delay of the sound is taken against the picture the video reader shows first, as the mux takes it
         // (tsTrackStart): an HEVC stream that begins with a random access picture is timed from that picture
@@ -4048,9 +4050,10 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             // a damaged AC-3, E-AC-3 or DTS track of a DVB stream is then found as it is under 0x81, 0x87 or 0x82
             // (the readers' declaredByContainer)
             const int soundDescriptor = soundDescriptorOf(acceptedPidMap[itr.first]);
-            CheckStreamRez trackRez = detectTrackReader(
-                vect.data(), static_cast<int>(vect.size()), containerType,
-                soundDescriptor ? soundDescriptor : acceptedPidMap[itr.first].m_trackType, itr.first, declared);
+            CheckStreamRez trackRez =
+                detectTrackReader(vect.data(), static_cast<int>(vect.size()), containerType,
+                                  soundDescriptor ? soundDescriptor : acceptedPidMap[itr.first].m_trackType, itr.first,
+                                  declared, wholeTracks);
             warnKindMismatch(unquoted, itr.first, acceptedPidMap[itr.first], declared, trackRez);
             if (!trackRez.codecInfo.programName.empty())
             {
@@ -4474,7 +4477,8 @@ static uint32_t parseFontColor(const std::string& text)
 
 CheckStreamRez METADemuxer::detectTrackReader(uint8_t* tmpBuffer, int len,
                                               AbstractStreamReader::ContainerType containerType, int containerDataType,
-                                              int containerStreamIndex, const DeclaredKind declared)
+                                              int containerStreamIndex, const DeclaredKind declared,
+                                              const bool wholeTrack)
 {
     CheckStreamRez rez;
 
@@ -4596,7 +4600,14 @@ CheckStreamRez METADemuxer::detectTrackReader(uint8_t* tmpBuffer, int len,
             return std::make_unique<LPCMStreamReader>()->checkStream(tmpBuffer, len, containerType, containerDataType,
                                                                      containerStreamIndex);
         case H264:
-            return std::make_unique<H264StreamReader>()->checkStream(tmpBuffer, len);
+        {
+            // The probe takes the last unit of its data as cut off unless the data ends the track, so a track of one
+            // picture, whose slice is its last unit, was "Can't detect stream type" though a typed line muxes it
+            auto h264 = std::make_unique<H264StreamReader>();
+            if (wholeTrack)
+                h264->setProbeHoldsAll();
+            return h264->checkStream(tmpBuffer, len);
+        }
         case DTS:
             return std::make_unique<DTSStreamReader>()->checkStream(tmpBuffer, len, containerType, containerDataType,
                                                                     containerStreamIndex);
