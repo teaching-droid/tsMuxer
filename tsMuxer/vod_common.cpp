@@ -698,6 +698,7 @@ std::string saveSrtTempName(const std::string& name)
 }
 
 void setSaveSrtJobSucceeded() { saveSrtSucceeded = true; }
+bool saveSrtJobSucceeded() { return saveSrtSucceeded; }
 
 int finishSaveSrt(const std::string& tempName, const std::string& name, std::string& why)
 {

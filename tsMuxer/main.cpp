@@ -3794,11 +3794,12 @@ static void refuseSaveSrtClash(const MuxerManager& muxerManager, const std::stri
             continue;
         for (const std::string& other : saved)
             if (sameName(name, other))
-                throw runtime_error("Two tracks write their subtitles with save-srt to the same file " + name +
-                                    ". Give each track a file of its own.");
+                THROW(ERR_COMMON, "Two tracks write their subtitles with save-srt to the same file "
+                                      << name << ". Give each track a file of its own.")
         if (sameName(name, dstFile))
-            throw runtime_error("save-srt names the output " + dstFile +
-                                ", and the subtitles would be written over it. Give the .srt another name.");
+            THROW(ERR_COMMON, "save-srt names the output "
+                                  << dstFile
+                                  << ", and the subtitles would be written over it. Give the .srt another name.")
         for (const auto& src : muxerManager.getStreamInfo())
         {
             std::vector<std::string> names;
@@ -3807,8 +3808,9 @@ static void refuseSaveSrtClash(const MuxerManager& muxerManager, const std::stri
             names.insert(names.end(), src.m_sourceFiles.begin(), src.m_sourceFiles.end());
             for (const std::string& srcName : names)
                 if (sameName(name, srcName))
-                    throw runtime_error("save-srt names the source " + srcName +
-                                        ", and writing the subtitles would destroy it. Give the .srt another name.");
+                    THROW(ERR_COMMON,
+                          "save-srt names the source "
+                              << srcName << ", and writing the subtitles would destroy it. Give the .srt another name.")
         }
         saved.push_back(name);
     }

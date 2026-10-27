@@ -183,7 +183,8 @@ SaveSrtFile::~SaveSrtFile()
                    "The ASS subtitles were written as text to "
                        << saveSrtTempName(m_name) << ", which could not replace " << m_name << ": " << why);
     }
-    else
+    // Only for a job that was done: after a refusal it followed the reason as if the track had held no subtitle
+    else if (saveSrtJobSucceeded())
         LTRACE(LT_INFO, 2, "No ASS subtitle was written to " << m_name << ".");
 }
 

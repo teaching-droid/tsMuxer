@@ -67,7 +67,8 @@ SRTStreamReader::~SRTStreamReader()
                                                  << saveSrtTempName(m_saveSrtName) << ", which could not replace "
                                                  << m_saveSrtName << ": " << why);
         }
-        else
+        // Only for a job that was done: after a refusal it followed the reason as if the track had held no subtitle
+        else if (saveSrtJobSucceeded())
             LTRACE(LT_INFO, 2, "No subtitle of track " << m_streamIndex << " was written to " << m_saveSrtName << ".");
     }
     delete m_dstSubCodec;

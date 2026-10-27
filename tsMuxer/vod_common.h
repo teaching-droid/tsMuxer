@@ -202,6 +202,7 @@ constexpr int DEFAULT_GUARD_AFTER_MB = 288;
 std::string saveSrtTempName(const std::string& name);
 // Called where the job has succeeded, before the readers are closed
 void setSaveSrtJobSucceeded();
+bool saveSrtJobSucceeded();
 // For a save-srt file its writer has closed: 0 it took its name, 1 the job failed and it was removed, 2 the job
 // succeeded but it could not take its name (it is kept under the temporary name, reason in why)
 int finishSaveSrt(const std::string& tempName, const std::string& name, std::string& why);
