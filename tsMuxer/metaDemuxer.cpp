@@ -494,15 +494,27 @@ static NamedAs familyOfContent(const uint8_t* buf, const int len, const char** n
                 "container extension, for example .264";
             return NamedAs::ctElementary;
         }
+        // Raw AC-3 or DTS under a container's name: AC-3 named .mp4 was read as an mp4 file, "moov atom not found"
+        if (buf[0] == 0x0B && buf[1] == 0x77)
+        {
+            *name = "a raw AC-3 stream and not a container at all, so rename it to .ac3";
+            return NamedAs::ctElementary;
+        }
+        if (buf[0] == 0x7F && buf[1] == 0xFE && buf[2] == 0x80 && buf[3] == 0x01)
+        {
+            *name = "a raw DTS stream and not a container at all, so rename it to .dts";
+            return NamedAs::ctElementary;
+        }
     }
     return NamedAs::ctUnknown;
 }
 
+// A name without an extension, or with one tsMuxeR does not know, sends the file to the raw stream readers. A transport
+// stream or a Matroska file named so was "Can't detect stream type", or read as junk frames: such a name is now told
+// when the file is a container. Any other content under such a name is left to the readers, as before.
 static void checkNameMatchesContent(const std::string& fileName, const std::string& ext)
 {
     const NamedAs named = familyOfExt(ext);
-    if (named == NamedAs::ctUnknown)
-        return;
 
     File file;
     if (!file.open(fileName.c_str(), File::ofRead))
@@ -518,6 +530,16 @@ static void checkNameMatchesContent(const std::string& fileName, const std::stri
     const NamedAs found = familyOfContent(buf, len, &what, &contentIsM2ts);
     if (found == NamedAs::ctUnknown)
         return;
+    if (named == NamedAs::ctUnknown)
+    {
+        if (found == NamedAs::ctElementary)
+            return;
+        if (ext.empty())
+            THROW(ERR_COMMON, "The file " << fileName
+                                          << " has no extension, and the name is what decides how it is read, but it "
+                                             "is "
+                                          << what << " and try again.")
+    }
 
     if (found == named)
     {
