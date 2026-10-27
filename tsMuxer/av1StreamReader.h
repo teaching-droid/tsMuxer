@@ -68,12 +68,14 @@ class AV1StreamReader final : public MPEGStreamReader
         UNDECIDED,
         START_CODES,
         LOW_OVERHEAD,
-        IVF  // low overhead temporal units, each behind the 12 byte frame header of an IVF file
+        IVF,     // low overhead temporal units, each behind the 12 byte frame header of an IVF file
+        ANNEX_B  // length delimited temporal units (Annex B of the AV1 specification), read as IVF is
     };
+    static bool isAnnexB(const uint8_t* buf, const uint8_t* end);
     Av1Framing m_framing;
     bool m_brokenObuWarned;
     std::vector<uint8_t> m_pending;      // source bytes not yet converted, an OBU may span blocks
-    std::vector<uint8_t> m_ivfRaw;       // IVF bytes whose frame is not complete yet
+    std::vector<uint8_t> m_ivfRaw;       // IVF (or Annex B) bytes whose frame is not complete yet
     int m_ivfHeaderLeft = 0;             // bytes of the IVF file header still to skip
     int64_t m_ivfRead = 0;               // the bytes of an IVF file handed over so far
     int64_t m_ivfLeftOut = 0;            // of them, the bytes left out after a damaged frame size

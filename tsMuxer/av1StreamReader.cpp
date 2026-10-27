@@ -196,9 +196,141 @@ static size_t takeIvfFrames(const std::vector<uint8_t>& raw, size_t at, std::vec
     return at;
 }
 
+// ** AV1 IN THE ANNEX B FORM. ** Annex B of the AV1 specification frames a stream by lengths instead of the size field
+// of each OBU: a temporal unit is its size and its frame units, a frame unit its size and its OBUs, and an OBU its
+// length (obu_length) and the OBU, usually without a size field. Such a file was refused as "not AV1". Its temporal
+// units are taken apart here, each OBU given the size field of the low overhead form, and the result is read as a low
+// overhead stream, as the frames of an IVF file are. Sizes that do not add up end the reading there, as for IVF.
+static bool readLeb(const std::vector<uint8_t>& raw, const size_t at, const size_t end, uint64_t& value, size_t& len)
+{
+    int n = 0;
+    if (at >= end)
+        return false;
+    const int64_t v = decodeLeb128(raw.data() + at, raw.data() + end, n);
+    if (v < 0 || n <= 0)
+        return false;
+    value = static_cast<uint64_t>(v);
+    len = static_cast<size_t>(n);
+    return true;
+}
+
+static void putLeb(std::vector<uint8_t>& out, uint64_t value)
+{
+    do
+    {
+        uint8_t b = value & 0x7f;
+        value >>= 7;
+        if (value)
+            b |= 0x80;
+        out.push_back(b);
+    } while (value);
+}
+
+static size_t takeAnnexBUnits(const std::vector<uint8_t>& raw, size_t at, std::vector<uint8_t>& out, bool& damaged)
+{
+    constexpr uint64_t maxUnitSize = 256u * 1024 * 1024;
+    while (at < raw.size())
+    {
+        uint64_t tuSize = 0;
+        size_t tuLeb = 0;
+        if (!readLeb(raw, at, raw.size(), tuSize, tuLeb))
+        {
+            damaged = raw.size() - at >= 8;  // more than a leb128 can take, and still no end of it
+            return at;
+        }
+        if (tuSize > maxUnitSize)
+        {
+            damaged = true;
+            return at;
+        }
+        if (at + tuLeb + tuSize > raw.size())
+            break;  // the rest of the unit comes with the next block
+        const size_t tuEnd = at + tuLeb + static_cast<size_t>(tuSize);
+        std::vector<uint8_t> unit;
+        size_t p = at + tuLeb;
+        while (p < tuEnd)
+        {
+            uint64_t fuSize = 0;
+            size_t fuLeb = 0;
+            if (!readLeb(raw, p, tuEnd, fuSize, fuLeb) || p + fuLeb + fuSize > tuEnd)
+            {
+                damaged = true;
+                return at;
+            }
+            const size_t fuEnd = p + fuLeb + static_cast<size_t>(fuSize);
+            p += fuLeb;
+            while (p < fuEnd)
+            {
+                uint64_t obuLength = 0;
+                size_t obuLeb = 0;
+                if (!readLeb(raw, p, fuEnd, obuLength, obuLeb) || obuLength == 0 || p + obuLeb + obuLength > fuEnd)
+                {
+                    damaged = true;
+                    return at;
+                }
+                const size_t obu = p + obuLeb;
+                const size_t obuEnd = obu + static_cast<size_t>(obuLength);
+                const uint8_t header = raw[obu];
+                const size_t headerLen = (header & 0x04) ? 2 : 1;  // obu_extension_flag
+                if ((header & 0x80) || obu + headerLen > obuEnd)   // obu_forbidden_bit
+                {
+                    damaged = true;
+                    return at;
+                }
+                if (header & 0x02)  // obu_has_size_field: already in the low overhead form
+                    unit.insert(unit.end(), raw.begin() + static_cast<std::ptrdiff_t>(obu),
+                                raw.begin() + static_cast<std::ptrdiff_t>(obuEnd));
+                else
+                {
+                    unit.push_back(header | 0x02);
+                    if (headerLen == 2)
+                        unit.push_back(raw[obu + 1]);
+                    putLeb(unit, obuEnd - obu - headerLen);
+                    unit.insert(unit.end(), raw.begin() + static_cast<std::ptrdiff_t>(obu + headerLen),
+                                raw.begin() + static_cast<std::ptrdiff_t>(obuEnd));
+                }
+                p = obuEnd;
+            }
+        }
+        out.insert(out.end(), unit.begin(), unit.end());
+        at = tuEnd;
+    }
+    return at;
+}
+
+// Whether the data begins as an Annex B stream: two temporal units in a row (or one that fills the data), each opening
+// with a frame unit whose first OBU is a temporal delimiter of the length it has, as a temporal unit begins (7.5)
+bool AV1StreamReader::isAnnexB(const uint8_t* buf, const uint8_t* end)
+{
+    const std::vector<uint8_t> raw(buf, end);
+    size_t at = 0;
+    for (int units = 0; units < 2; ++units)
+    {
+        uint64_t tuSize = 0, fuSize = 0, obuLength = 0;
+        size_t tuLeb = 0, fuLeb = 0, obuLeb = 0;
+        if (!readLeb(raw, at, raw.size(), tuSize, tuLeb) || tuSize < 3)
+            return false;
+        const size_t fu = at + tuLeb;
+        if (!readLeb(raw, fu, raw.size(), fuSize, fuLeb) || fuSize < 2 || fuSize + fuLeb > tuSize)
+            return false;
+        const size_t obu = fu + fuLeb;
+        if (!readLeb(raw, obu, raw.size(), obuLength, obuLeb) || obu + obuLeb >= raw.size())
+            return false;
+        const uint8_t header = raw[obu + obuLeb];
+        const bool td = (header & 0x80) == 0 && ((header >> 3) & 0x0f) == 2;      // OBU_TEMPORAL_DELIMITER
+        const uint64_t tdLength = 1 + ((header >> 2) & 1) + ((header >> 1) & 1);  // header, extension, size 0
+        if (!td || obuLength != tdLength)
+            return false;
+        at = fu + static_cast<size_t>(tuSize);
+        if (at >= raw.size())
+            return true;  // a unit that fills the data or runs past it: checkStream still has to find the AV1 in it
+    }
+    return true;
+}
+
 int64_t AV1StreamReader::getProcessedSize()
 {
-    if (m_framing != Av1Framing::IVF)
+    if (m_framing != Av1Framing::IVF && m_framing != Av1Framing::ANNEX_B)
         return MPEGStreamReader::getProcessedSize();
     return m_ivfRead - m_ivfLeftOut;
 }
@@ -219,6 +351,11 @@ void AV1StreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const boo
                 setFPS(correctFps(ivfFps));
             LTRACE(LT_INFO, 2, "AV1 in an IVF file, converting OBU framing on read");
         }
+        else if (isAnnexB(block, block + dataLen))
+        {
+            m_framing = Av1Framing::ANNEX_B;
+            LTRACE(LT_INFO, 2, "AV1 elementary stream in the Annex B format, converting OBU framing on read");
+        }
         else
         {
             m_framing = isLowOverhead(block, block + dataLen) ? Av1Framing::LOW_OVERHEAD : Av1Framing::START_CODES;
@@ -227,8 +364,9 @@ void AV1StreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const boo
         }
     }
 
-    if (m_framing == Av1Framing::IVF)
+    if (m_framing == Av1Framing::IVF || m_framing == Av1Framing::ANNEX_B)
     {
+        const bool annexB = m_framing == Av1Framing::ANNEX_B;
         m_ivfRead += dataLen;
         if (m_ivfDamaged)
         {
@@ -245,20 +383,29 @@ void AV1StreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const boo
             m_ivfHeaderLeft -= static_cast<int>(at);
         }
         bool damaged = false;
-        at = takeIvfFrames(m_ivfRaw, at, m_pending, damaged);
+        at = annexB ? takeAnnexBUnits(m_ivfRaw, at, m_pending, damaged)
+                    : takeIvfFrames(m_ivfRaw, at, m_pending, damaged);
         if (damaged)
         {
             m_ivfDamaged = true;
             m_ivfLeftOut += static_cast<int64_t>(m_ivfRaw.size() - at);
             at = m_ivfRaw.size();
-            LTRACE(LT_WARN, 2,
-                   "Warning: IVF: a frame gives a size no frame can have, so the file is damaged there. The frames "
-                   "before it are kept; the rest of the file is left out.");
+            if (annexB)
+                LTRACE(LT_WARN, 2,
+                       "Warning: AV1 Annex B: a temporal unit gives sizes that do not add up, so the file is damaged "
+                       "there. The units before it are kept; the rest of the file is left out.");
+            else
+                LTRACE(LT_WARN, 2,
+                       "Warning: IVF: a frame gives a size no frame can have, so the file is damaged there. The frames "
+                       "before it are kept; the rest of the file is left out.");
         }
         m_ivfRaw.erase(m_ivfRaw.begin(), m_ivfRaw.begin() + static_cast<std::ptrdiff_t>(at));
         if (lastBlock && !m_ivfRaw.empty())
         {
-            LTRACE(LT_WARN, 2, "IVF: the file ends inside a frame, " << m_ivfRaw.size() << " bytes left out");
+            LTRACE(
+                LT_WARN, 2,
+                (annexB ? "AV1 Annex B: the file ends inside a temporal unit, " : "IVF: the file ends inside a frame, ")
+                    << m_ivfRaw.size() << " bytes left out");
             m_ivfRaw.clear();
         }
         const size_t converted = convertPending(lastBlock);
@@ -309,6 +456,16 @@ CheckStreamRez AV1StreamReader::checkStream(uint8_t* buffer, const int len)
             return rez;
         if (m_fps == 0.0 && ivfFps > 0)
             setFPS(correctFps(ivfFps));
+        scanBuf = ivfFrames.data();
+        scanLen = static_cast<int>(ivfFrames.size());
+    }
+    else if (len > 0 && isAnnexB(buffer, buffer + len))
+    {
+        const std::vector<uint8_t> raw(buffer, buffer + len);
+        bool damaged = false;
+        takeAnnexBUnits(raw, 0, ivfFrames, damaged);
+        if (ivfFrames.empty())
+            return rez;
         scanBuf = ivfFrames.data();
         scanLen = static_cast<int>(ivfFrames.size());
     }

@@ -147,7 +147,7 @@ V_MPEG4/ISO/AVC   | H.264/AVC
 V_MPEG4/ISO/MVC   | H.264/MVC 
 V_MS/VFW/WVC1     | VC1 
 V_MPEG-2          | MPEG2 
-V_AV1             | AV1 
+V_AV1             | AV1 (read from MKV, WebM, MP4 and .ivf files, and from .obu files in the low overhead form or the length delimited form of Annex B; not on a disc) 
 V_VP8             | VP8 (read from MKV, WebM and .ivf files; MKV output, or demuxed to an .ivf file)
 V_VP9             | VP9 (read from MKV, WebM, MP4 and .ivf files; MKV output, or demuxed to an .ivf file)
 V_MPEG4/ISO/ASP   | MPEG-4 Part 2 video (read from MP4 and MOV; copied into MKV output only)
