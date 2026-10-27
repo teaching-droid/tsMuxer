@@ -12,7 +12,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A film cut in two parts with --cut-end and --cut-start lost up to one group of pictures between them,** up to about half a second on a DVD source. A video that is not encoded again can begin only at a key picture. The second part began at the first key picture after the cut, and the first part lost the B pictures shown just before its end. The second part now begins at the key picture before the cut, and on a Blu-ray or AVCHD disc the first part also keeps the pictures decoded before its end. The sound and subtitles still start and stop at the cut. A Blu-ray or AVCHD playlist plays only the cut, so these pictures are not shown, and no picture is lost between the parts. A TS, M2TS or Matroska output shows the pictures before the cut at the start of the second part, and its first part ends as before, as no playlist stops it at the cut: only a cut exactly on a key picture can still leave the few pictures shown just before it and made from it in neither part. `--cut-pictures=inside` keeps only the pictures inside the cut, as before. (#49, thanks to @Nandos64)
 
-* **A Blu-ray playlist muxed each clip whole, also where it plays only a part of it.** The pictures a disc never shows were in the output, a clip played in several parts came in that many times, and the length and the chapters did not match: a path of three items through three clips came out 16 times as long. A playlist now muxes only the parts of its clips that it plays, from the key picture at or before where a player starts to the one at or after where it stops. `--playlist-clips=whole` muxes the clips whole, as before, also in a listing; in the window it is the box "Mux only the parts of a playlist's clips that it plays" in the General box. Mux such playlists again.
+* **A Blu-ray playlist muxed each clip whole, also where it plays only a part of it.** The pictures a disc never shows were in the output, a clip played in several parts came in that many times, and the length and the chapters did not match: a path of three items through three clips came out 16 times as long. A playlist now muxes only the parts of its clips that it plays, from the key picture at or before where a player starts to the one at or after where it stops. A stretch that a playlist plays twice, and play items that overlap, are muxed as a player plays them. `--playlist-clips=whole` muxes the clips whole, as before, also in a listing; in the window it is the box "Mux only the parts of a playlist's clips that it plays" in the General box. Mux such playlists again.
 
 * **Interlaced H.264 coded as frames with the bottom field first was muxed at twice its length,** so it played at half speed. Each frame now lasts one frame. Mux such files again.
 
@@ -26,7 +26,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **An audio or video track that gave nothing ended "successful".** A meta line naming a codec the file does not hold left an output without that track, or an empty one, with only a warning and exit code 0. Such a job, and one whose audio was mostly unusable as the codec named, now ends with an error before success is said.
 
-* **A meta line naming the wrong codec could still end "successful" with an output of noise.** HEVC, H.264 or VC-1 named over DTS, TrueHD or MPEG-2 video, and AAC, DTS or MP3 named over WAV, DTS or MP3, gave exit code 0. Such a track now ends the job with an error, as does audio whose frames are less than half of the file, tags and padding not counted; a damaged file of the right codec still muxes. These checks, and the one for a track that gives nothing, are not made in a job with --cut-start or --cut-end.
+* **A meta line naming the wrong codec could still end "successful" with an output of noise.** HEVC, H.264 or VC-1 named over DTS, TrueHD or MPEG-2 video, and AAC, DTS or MP3 named over WAV, DTS or MP3, gave exit code 0. Such a track now ends the job with an error, as does audio whose frames are less than half of the file, tags and padding not counted; a damaged file of the right codec still muxes. A file of a join of elementary files that holds another video codec than its line, as an HEVC file joined to an H.264 file, is refused before anything is written. These checks, and the one for a track that gives nothing, are not made in a job with --cut-start or --cut-end.
 
 * **MPEG-2 video with repeated fields (soft pulldown) got uneven picture times:** some pictures got the time of the one before them, others left a gap of two. Each picture now lasts the two or three fields it is shown for. MPEG-2 with a second I picture in a group of pictures is timed right as well.
 
@@ -43,6 +43,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **The window put the sound of a cut TS too early** when the cut begins with B pictures that are shown before its first picture, by their length, 40 to 100 ms. The listed Stream delay is now measured from the picture shown first.
 
 * **In a join of TS, M2TS or Matroska files ("a.ts"+"b.ts"), the sound of each later file followed on from the sound of the file before,** not from its own start against its picture: a file whose sound starts after its picture, or ends before it, moved the sound of every later file, by seconds with some files. Each file's sound now starts against its own picture, and a file of a TS or M2TS join that has no sound of a track leaves a gap of its length in that track. In a join of Matroska files this holds for AC-3, E-AC-3, DTS, TrueHD, LPCM, MPEG audio, AAC, Opus, Vorbis and FLAC. In a join of Matroska files whose AAC follows on from file to file, the sound of each later file also came about 32 ms later than the file before; it now stays within half a frame of its picture.
+
+* **In a join of TS or M2TS files, the sound of each later file came a frame later than the file before** where the sound of a file runs one frame past its picture, as 60.032 s of AC-3 with a 60 s film: 32 ms per joint, 224 ms over eight files, on every output. Where a PES holds several AC-3 frames, the sound of a later file was up to half a PES off its picture. Each later file's sound now starts within half a frame of its picture.
 
 * **With --maxbitrate, video whose own peaks are above the cap reached the decoder after it was due,** even with the average well under the cap: the data was held back at a peak, and the quiet part before it was never used to send it ahead. It is now sent ahead, never more than --vbv-len earlier, so that it arrives in time. The packets, their order and the size of the output stay the same. In the disc cuts measured, 12 to 55 pictures that came late came in time.
 
@@ -108,7 +110,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A Blu-ray split past clip 99999 wrote clip names of six digits** that the playlist could not name. Such a split now stops with a message.
 
-* **--cut-start at or past the end of the sources wrote an empty file** and reported success. It ends with an error now.
+* **--cut-start at or past the end of the sources wrote an empty file** and reported success, and a --cut-start inside the last picture of the video, or with --cut-pictures=inside after its last key picture, wrote an output without the video, a disc playlist without a play item. Both end with an error now, and an old output of the same name is kept.
 
 * **AV1 from Matroska lost every picture** when the last OBU of each block had no size field. Such an OBU is read to the end of its block now.
 
@@ -220,6 +222,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A word of a title after a space or a hyphen is no longer read as a language.** "Pebble Man.ac3" was Mandingo and "Clockwork-Men.srt" Mende. After a space or a hyphen, a code that is also an English word, such as man, men or war, is read only in brackets ([man]); other codes are read there as before ("Movie - eng.ac3"), and after "_" or "." every code is (Movie_spa.ac3, movie.eng.srt). A name with both a language and "forced" (movie_eng_forced.srt, "Movie (forced) [eng].srt") gives both.
 
+* **A language typed into a file name was written in the --lang-codes form,** Movie_Ger.srt as deu, while the listing showed it as typed. It is now written as typed, as the usage says.
+
 * **SRT:** a number alone after an empty line in a subtitle, as a year, is kept as text, also in the last subtitle of a file and in SRT from a Matroska file; it was lost without a word. A block whose timing line has a mistyped arrow is skipped with a warning; it was drawn inside the subtitle before it.
 
 * **Font tags:** colours in single quotes, #RGB and an upper case </FONT> are read. #f00 was drawn dark green.
@@ -310,7 +314,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **An E-AC-3 stream of more than one program** keeps the time of the first: a stream of two programs was muxed at twice its length.
 
-* **An AC-3 stream that changes its channel layout,** as a join of 2.0 and 5.1, says so; its description keeps the first layout.
+* **An AC-3 stream that changes its channel layout or its sample rate,** as a join of 2.0 and 5.1, says so; its description keeps the first layout.
 
 * **A raw AC-3, E-AC-3 or DTS file of ten frames or fewer** is recognised, from three frames on.
 
@@ -382,7 +386,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Blu-ray and transport stream
 
-* **An ISO image whose data crosses a layer break now gets the layer break guard without being asked:** 288 MB after the break and 18 MB before it are left empty, as a burnt dual-layer disc often reads badly at the layer change, and a player can then stall there. This holds for a direct mux to an .iso and for --bdmv-to-iso. The break is the one --layer-break-lbn gives, else that of the disc size, else that of a BD-R DL, and one line in the log says when the guard is written. An image that would not fit the disc with the guard is written without it, with a warning. --no-layer-break-guard, or "Leave out the layer-break guard" in the window, leaves it out, and --layer-break-guard=<MB> sets its size as before. --inner-only and a folder, TS or MKV output are not changed.
+* **An ISO image whose data crosses a layer break now gets the layer break guard without being asked:** 288 MB after the break and 18 MB before it are left empty, as a burnt dual-layer disc often reads badly at the layer change, and a player can then stall there. This holds for a direct mux to an .iso and for --bdmv-to-iso. The break is the one --layer-break-lbn gives, else that of the disc size, else that of a BD-R DL, and one line in the log says when the guard is written. An image that would not fit the disc with the guard is written without it, with a warning. The fit of a direct mux is reckoned from the part of the sources it takes, so a cut of a large source keeps the guard. --no-layer-break-guard, or "Leave out the layer-break guard" in the window, leaves it out, and --layer-break-guard=<MB> sets its size as before. --inner-only and a folder, TS or MKV output are not changed.
 
 * **"Keep data on the inner disc area" padded the wrong part of a 100 GB or 128 GB disc.** On these discs the second layer change is at the centre of the disc, not at its edge, and it was padded like the edge: the data of the third layer went to its outer edge, where the option promises to keep the disc empty. Each layer now keeps its share of the data at the centre. On a 25 GB disc the option padded the middle of the disc and now leaves the image as it is. The padding of a two-layer disc is not changed.
 
@@ -391,6 +395,18 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **"Keep data on the inner disc area" works when muxing straight to an ISO image.** Tick it in the dual-layer group beside the meta file, or add --inner-only to the MUXOPT line together with --disc-size; it sizes the zeros itself, so a --layer-break-guard on the same line is refused. The disc is muxed into a folder beside the image first and the image is then laid out from it, the same way as on the BDMV folder to ISO tab, so both give the same image. While it runs, the drive needs room for that folder as well as the image. A finished image too big for the disc is not kept, and the folder is kept as an ordinary Blu-ray folder, unless --allow-oversize keeps the image. (#3, thanks to @DreckSoft)
 
 * **--bdmv-to-iso takes --constant-iso-hdr,** as a MUXOPT line does, so two images of one folder can be compared byte for byte.
+
+* **Every time in an ISO image was off by the time zone of the computer.** The times had the clock of UTC with the offset of the local time zone, so an image made in UTC+8 said it was made eight hours earlier, and --constant-iso-hdr gave other bytes in another time zone. The times are now the local time with its own offset, and --constant-iso-hdr writes 1 January 1970 00:00:01 UTC in every time zone.
+
+* **A 3D disc muxed to an ISO image with a layer break near the start of its data was refused after the whole mux** ("Can't interleave ..."), as the guard was laid inside a piece of one view. The guard is now laid between two pairs of pieces of the two views.
+
+* **--extra-iso-space replaced the room a split gets instead of adding to it.** The figure the "not enough space" message leads to was too small, and a split that fit without the option was refused after the mux with --extra-iso-space=1. The value is now added on top.
+
+* **--bdmv-to-iso without --label gave the image a blank label,** which shows as a drive without a name. The label is now Blu-Ray, as for a mux to an ISO image.
+
+* **--disc-size refused a cut, or a few tracks of a large source, before the mux:** the estimate counted the whole source files, so a one minute cut of a 78 GB clip was refused for a 25 GB disc. It now counts the share of the cut, and of the tracks taken from a transport stream file of its own.
+
+* **--bdmv-to-iso with a layer break guard could make an image too big for the disc** when a file was moved behind the guard: the rest of the data no longer fitted, and the image was said to fit before the copy and refused after it. A file is now moved only when the rest still fits; otherwise it is cut around the guard, as with --no-layer-fit.
 
 * **An ISO image made over one of the same name left the old .layerbreak.txt beside it** when the new image had no layer break zeros, so the file described a layer break that was no longer there. It is now removed. A job that fails leaves the old image and its file as they were.
 
@@ -417,6 +433,16 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **The First Play entry of a Blu-ray's index.bdmv was marked as interactive,** the type of a top menu. It is marked as a movie now, as Blu-ray discs mark it. The Top Menu and title entries are not changed, and the index of an AVCHD disc is written as before.
 
 * **A transport stream packet sent twice** (the same continuity counter and payload, as the standard allows) is read once. Both were read, and the track could be damaged or not recognised.
+
+* **Scrambled and lost packets in a transport stream were muxed without a word.** The recording of an encrypted channel, or one with lost packets, gave damaged pictures and exit code 0. A warning now names the track, the number of packets and the time of the first. A track that is scrambled from start to end is refused with that reason.
+
+* **A join of audio files with different layouts was described two ways on a disc.** The PMT gave the layout of the first file, and the clip information and the playlist that of the last: 5.1 and then 2.0 was stereo in the playlist, and 48 kHz and then 44.1 kHz got the code of 44.1 kHz. All three now give the first layout.
+
+* **A split of a disc into more than 999 parts wrote a playlist that a player does not read,** as a playlist holds at most 999 play items. Such a split now stops with a message that asks for a larger --split-duration or --split-size.
+
+* **The blank playlist of --insertBlankPL was always 23.976 progressive,** whatever the title, so a player could change its output mode between the blank and the title, and a 480i title got a 480p blank, which is no disc format. The blank now has the frame rate of the title and, for an interlaced title, is interlaced too.
+
+* **A playlist that plays only parts of its clips, muxed with its clips whole as earlier versions did and as --playlist-clips=whole does, had its chapters and its listing placed on those parts,** while the output holds the whole clips: a chapter could come tens of seconds away from its picture. Each chapter is now where its picture is, and the listing gives the lengths of the whole clips.
 
 * **hdr10-override** marks an SDR HEVC track as HDR10 on a UHD disc. In the window: "Mark as HDR10 on a UHD disc" on the HEVC track. (#6)
 
