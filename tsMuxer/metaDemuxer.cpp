@@ -1598,17 +1598,22 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     // in MPEG-2 data, and the mux said it was successful. Where the stream type the PMT gives is not the codec of the
     // line, the track is detected as the listing detects it, by its data (a PMT can name the wrong codec, and the
     // listing and the window then give the right one), and a line naming another video codec stops here.
+    const auto videoCodecId = [](const std::string& name)
+    {
+        return name == "V_MPEG-2"                                       ? CODEC_V_MPEG2
+               : name == "V_MPEG4/ISO/AVC" || name == "V_MPEG4/ISO/MVC" ? CODEC_V_MPEG4_H264
+               : name == "V_MPEGH/ISO/HEVC"                             ? CODEC_V_MPEG4_H265
+               : name == "V_MPEGI/ISO/VVC"                              ? CODEC_V_MPEG4_H266
+               : name == "V_MS/VFW/WVC1"                                ? CODEC_V_VC1
+                                                                        : 0;
+    };
+    const auto isVideoCodecId = [](const int id)
+    {
+        return id == CODEC_V_MPEG2 || id == CODEC_V_MPEG4_H264 || id == CODEC_V_MPEG4_H265 ||
+               id == CODEC_V_MPEG4_H266 || id == CODEC_V_VC1;
+    };
     if (pid > 0 && !SubTrackFilter::isSubTrack(pid) && fileList.size() == 1)
     {
-        const auto videoCodecId = [](const std::string& name)
-        {
-            return name == "V_MPEG-2"                                       ? CODEC_V_MPEG2
-                   : name == "V_MPEG4/ISO/AVC" || name == "V_MPEG4/ISO/MVC" ? CODEC_V_MPEG4_H264
-                   : name == "V_MPEGH/ISO/HEVC"                             ? CODEC_V_MPEG4_H265
-                   : name == "V_MPEGI/ISO/VVC"                              ? CODEC_V_MPEG4_H266
-                   : name == "V_MS/VFW/WVC1"                                ? CODEC_V_VC1
-                                                                            : 0;
-        };
         const std::string ext = strToUpperCase(extractFileExt(unquoteStr(trimStr(fileList[0]))));
         const int named = videoCodecId(codec);
         int pmtCodec = 0;
@@ -1650,9 +1655,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                     continue;
                 const int found =
                     s.codecInfo.codecID == CODEC_V_MPEG4_H264_DEP ? CODEC_V_MPEG4_H264 : s.codecInfo.codecID;
-                if (found != named &&
-                    (found == CODEC_V_MPEG2 || found == CODEC_V_MPEG4_H264 || found == CODEC_V_MPEG4_H265 ||
-                     found == CODEC_V_MPEG4_H266 || found == CODEC_V_VC1))
+                if (found != named && isVideoCodecId(found))
                     THROW(ERR_COMMON, "Track " << pid << " of " << unquoteStr(fileList[0]) << " is "
                                                << s.codecInfo.programName << ", but the line names " << codec
                                                << ". Name the track as the listing gives it. Nothing was written.")
@@ -1660,6 +1663,56 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             }
         }
     }
+
+    // ** EVERY FILE OF A JOIN HOLDS THE CODEC OF ITS LINE. ** A join of elementary files is one stream to the reader,
+    // which read the files after the first as the codec of the line too: an HEVC file joined to an H.264 one on an
+    // H.264 line gave pictures of HEVC data, and "Mux successful complete", as the pictures of the first file were
+    // enough for every check of the track. Joined the other way, the H.264 file was refused as multi-layer HEVC. Each
+    // file of such a join is detected as the listing detects it, and a file of another video codec stops here.
+    // The probe says nothing: what its reader has to say about the stream, the mux says again, and a file it cannot
+    // read is left to the rules that follow.
+    if (const int named = videoCodecId(codec); pid == 0 && named != 0 && fileList.size() > 1)
+        for (size_t i = 0; i < fileList.size(); ++i)
+        {
+            const std::string file = unquoteStr(trimStr(fileList[i]));
+            struct Silence
+            {
+                struct NullBuffer final : std::streambuf
+                {
+                    int overflow(const int c) override { return traits_type::not_eof(c); }
+                } null;
+                std::streambuf* out = std::cout.rdbuf(&null);
+                std::streambuf* err = std::cerr.rdbuf(&null);
+                const bool lastMsg = sLastMsg;
+                Silence() = default;
+                Silence(const Silence&) = delete;
+                Silence& operator=(const Silence&) = delete;
+                ~Silence()
+                {
+                    std::cout.rdbuf(out);
+                    std::cerr.rdbuf(err);
+                    sLastMsg = lastMsg;
+                }
+            };
+            DetectStreamRez probe;
+            try
+            {
+                Silence silence;
+                probe = DetectStreamReader(m_readManager, file, false);
+            }
+            catch (...)
+            {
+                continue;
+            }
+            if (probe.streams.size() != 1)
+                continue;  // a container: its tracks are named by track=
+            const CodecInfo& found = probe.streams[0].codecInfo;
+            const int foundId = found.codecID == CODEC_V_MPEG4_H264_DEP ? CODEC_V_MPEG4_H264 : found.codecID;
+            if (foundId != named && isVideoCodecId(foundId))
+                THROW(ERR_COMMON, "File " << i + 1 << " of the join on the " << codec << " line, " << file << ", is "
+                                          << found.displayName << ", not the codec of the line. Every file of a "
+                                          << "join has to hold the codec of its line. Nothing was written.")
+        }
 
     map<string, string> readerParams = addParams;
     bool fpsFromPulldown = false;
