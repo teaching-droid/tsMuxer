@@ -245,6 +245,11 @@ void ProgramStreamDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             trackList[i] = TrackInfo(static_cast<int>(StreamType::AUDIO_LPCM), "", 0);  // set track hint
         else
             trackList[i] = TrackInfo(0, "", 0);  // autodetect
+        // Sub-streams 0x20 to 0x3F of private stream 1 are DVD subpictures, which no reader takes: they were listed
+        // with no type at all (METADemuxer, CheckStreamRez::notSupported)
+        if (i >= 0x20 && i <= 0x3f)
+            trackList[i].m_srcParams["srcnotsupported"] =
+                "DVD subpictures (sub-stream " + std::to_string(i - 0x20) + ")";
     }
 }
 

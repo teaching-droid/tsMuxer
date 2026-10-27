@@ -698,7 +698,11 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
             default:
                 break;
             }
-            if (known)
+            if (!streams[i].notSupported.empty())
+                LTRACE(LT_INFO, 2,
+                       "Not supported: " << streams[i].notSupported
+                                         << ". Muxing this kind of track is not implemented, so the track is skipped.");
+            else if (known)
             {
                 // The descriptor goes in the line as well as the stream type. The window rebuilds
                 // this sentence in its own language from the numbers, and stream type 0x06 on its

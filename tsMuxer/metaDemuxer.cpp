@@ -4067,6 +4067,8 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
                     trackRez.flags = flags->second;
                 if (const auto id = srcParams.find("srccodecid"); id != srcParams.end())
                     trackRez.codecId = id->second;
+                if (const auto what = srcParams.find("srcnotsupported"); what != srcParams.end())
+                    trackRez.notSupported = what->second;
             }
             // ASS, SSA and WebVTT from a Matroska file go through the SRT reader, which called every one of them
             // "SRT text subtitles". The listing names what the file holds. Stream type and Stream ID stay SRT and

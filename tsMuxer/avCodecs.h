@@ -101,6 +101,9 @@ struct CheckStreamRez
     std::string name;
     std::string flags;
     std::string codecId;  // a Matroska track's CodecID (srccodecid), for a track no reader accepts
+    // What a track no reader accepts is, where its container says it (srcnotsupported): the subpictures of a DVD, the
+    // JPEG pictures of an MP4 file. Such a track was listed "Can't detect stream type", as if it were damaged.
+    std::string notSupported;
 };
 
 const static CodecInfo vvcCodecInfo(CODEC_V_MPEG4_H266, "VVC", "V_MPEGI/ISO/VVC");

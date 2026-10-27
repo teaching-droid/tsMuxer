@@ -156,6 +156,7 @@ struct MOVStreamContext : Track
     int64_t fragNextDts = 0;
     std::string name;          // the track's name, from its hdlr, when it is not an encoder's generic one
     std::string leftOut;       // why the track cannot be read, for a meta line that names it (getTrackList)
+    std::string notMuxed;      // a kind of picture track no reader takes, named in the listing (srcnotsupported)
     bool hasEditList = false;  // an elst was read for the track
     bool isOpus = false;       // an Opus sample entry: its dOps (codec_priv) gives the pre-skip
     std::map<std::string, std::string> colour;  // srccolour items (m, t, p, r, cll, fall, rx ... lmin) of the entry
@@ -2297,6 +2298,14 @@ void MovDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                     trackList[i + 1].m_srcParams["srcaacsbr"] = sbr;
             if (!mst->leftOut.empty())
                 trackList[i + 1].m_srcParams["srcleftout"] = mst->leftOut;
+            // and a meta line that names such a track is refused with what it is (srcleftout)
+            if (!mst->notMuxed.empty())
+            {
+                trackList[i + 1].m_srcParams["srcnotsupported"] = mst->notMuxed;
+                if (mst->leftOut.empty())
+                    trackList[i + 1].m_srcParams["srcleftout"] =
+                        "it holds " + mst->notMuxed + ", which tsMuxeR does not mux";
+            }
             std::string colour;
             for (const auto& [key, value] : mst->colour) colour += (colour.empty() ? "" : ";") + key + "=" + value;
             if (!colour.empty())
@@ -3661,6 +3670,13 @@ int MovDemuxer::mov_read_stsd(MOVAtom atom)
             st->type = IOContextTrackType::VIDEO;
             st->isMp4v = true;
             break;
+        // Motion JPEG, as QuickTime names it: a track of pictures no reader takes, listed "Can't detect stream type". It
+        // stays a track of data, as before, so that it is not taken for the first video of the file.
+        case MKTAG('j', 'p', 'e', 'g'):
+        case MKTAG('m', 'j', 'p', 'a'):
+        case MKTAG('m', 'j', 'p', 'b'):
+            st->notMuxed = "JPEG pictures (Motion JPEG video track)";
+            break;
         case MKTAG('w', 'v', 't', 't'):  // WebVTT, ISO/IEC 14496-30
             st->type = IOContextTrackType::SUBTITLE;
             st->parsed_priv_data = new MovParsedSRTTrackData(this, st, true);
@@ -4296,6 +4312,12 @@ int MovDemuxer::mov_read_esds(MOVAtom atom)
     if (tag == MP4DecConfigDescrTag)
     {
         const uint8_t object_type_id = get_byte();
+        // JPEG, PNG and JPEG 2000 pictures in an mp4v sample entry (object types 0x6C, 0x6D and 0x6E): no reader takes
+        // them, and the track was listed "Can't detect stream type", as if it were damaged
+        if (st->isMp4v && object_type_id >= 0x6C && object_type_id <= 0x6E)
+            st->notMuxed = object_type_id == 0x6C   ? "JPEG pictures (video track)"
+                           : object_type_id == 0x6D ? "PNG pictures (video track)"
+                                                    : "JPEG 2000 pictures (video track)";
         // The object type says what the track holds (ISO/IEC 14496-1, 7.2.6.6.2, and the MP4 registration
         // authority's list). Only AAC carries the decoder specific information below, and the track was left marked as
         // AAC whenever that was missing: MP3, MP2 and DTS in an mp4a sample entry got an ADTS header on every frame,
