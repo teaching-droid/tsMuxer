@@ -414,6 +414,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **--bdmv-to-iso without --label gave the image a blank label,** which shows as a drive without a name. The label is now Blu-Ray, as for a mux to an ISO image.
 
+* **--bdmv-to-iso of one folder gave another image on Linux and macOS than on Windows.** The entries of a folder and their numbers in the image followed the order in which the system listed the folder, and Linux and macOS list it in no fixed order. The folder is now taken in one order on every system, the one Windows gives, so the same folder gives the same image everywhere.
+
 * **--disc-size refused a cut, or a few tracks of a large source, before the mux:** the estimate counted the whole source files, so a one minute cut of a 78 GB clip was refused for a 25 GB disc. It now counts the share of the cut, and of the tracks taken from a transport stream file of its own.
 
 * **--bdmv-to-iso with a layer break guard could make an image too big for the disc** when a file was moved behind the guard: the rest of the data no longer fitted, and the image was said to fit before the copy and refused after it. A file is now moved only when the rest still fits; otherwise it is cut around the guard, as with --no-layer-fit.
@@ -440,6 +442,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **The SIT of a disc's clips gave another peak rate than their clip information:** 127.9 Mbit/s with HEVC video, where the clip information gives 109 for 2160p and 48 for smaller pictures, and 48 against 35 for the second view of 3D. The SIT now gives the rate of the clip information, so the two agree. A TS or M2TS that is no disc is written as before.
 
+* **The clip information files had 2 unused bytes in front of two of their parts, and the ISRC of each stream was written as the character "0",** where a disc has zero bytes. The parts now follow each other and the ISRC is zero bytes, as the format has it.
+
 * **The AV1 video descriptor of a transport stream always said "no indication" for HDR and wide colour gamut,** also for PQ or HLG video in BT.2020. It now says HDR for PQ and HLG, wide colour gamut for other BT.2020 video, and SDR for BT.709 and BT.601.
 
 * **TrueHD with an AC-3 core added by merge-ac3-file= or merge-ac3-track= was declared in the PMT as TrueHD without a core.** It now has the AC-3 registration and the AC-3 descriptor of its core, as a disc has for such a stream. The clip information and the playlist do not change.
@@ -452,7 +456,11 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **Scrambled and lost packets in a transport stream were muxed without a word.** The recording of an encrypted channel, or one with lost packets, gave damaged pictures and exit code 0. A warning now names the track, the number of packets and the time of the first. A track that is scrambled from start to end is refused with that reason.
 
+* **A TS or M2TS without video carried its clock references on PID 0,** the PID of the program association table, unless --no-pcr-on-video-pid was given. They now go on a PID of their own, 0x1001, as with that option and as on a disc. The window always writes the option, so files muxed in the window were not affected.
+
 * **A TS that is cut off, or has a stretch of bytes that are no packets, was muxed without a word,** as a part overwritten with zeros: seconds of picture and sound were lost there, and the last frames of a file cut inside a packet were damaged, with "Mux successful". Each now gives a warning.
+
+* **A TS or M2TS file cut at any byte, not at the start of a packet, often could not be muxed or even listed** ("Invalid tsPacket->getHeaderSize"): a byte inside the first, partial packet was taken for the start of a packet. Such a file is now read from its first whole packet, with the same tracks as the same file cut at that packet.
 
 * **A join of audio files with different layouts was described two ways on a disc.** The PMT gave the layout of the first file, and the clip information and the playlist that of the last: 5.1 and then 2.0 was stereo in the playlist, and 48 kHz and then 44.1 kHz got the code of 44.1 kHz. All three now give the first layout.
 
@@ -659,6 +667,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **An output that is a hard link to a source** is refused as one of the sources. The M2TS save dialog offers .m2ts only, and the open dialog lists VC-1, VVC, MP2, MP3 and FLAC files.
 
 * **A big file looked as if the window had stopped while it was read for its tracks:** nothing in the window changed. The pointer now shows that the window is busy.
+
+* **The window showed choices that could never be used:** a greyed "Demux options" tab for an LPCM track (WAVE files or raw PCM) and greyed subtitle positions (top, centre, and a whole horizontal position group). They did nothing and are gone; the bottom position and its offset stay.
 
 * **The start time was raised to 524280 also for MKV output,** as for a Blu-ray disc, although Matroska does not use it. It is left as given now.
 
