@@ -3039,7 +3039,16 @@ class KeepOldOutput
         m_dir = dir;
         m_oldPrefix = stem + ".";
         m_ext = ext;
-        m_newPrefix = stem + ".tsmuxer-new-" + std::to_string(processId()) + ".";
+        // A name of up to 255 bytes, as a file name may have, made a temporary name longer than that: it could not be
+        // created, and an existing output of such a name could no longer be replaced. The stem is cut short in the
+        // temporary name, at a character, so that it, its split parts (".split.<n>") and the layer break map of an
+        // image stay within 255 bytes.
+        const std::string tag = ".tsmuxer-new-" + std::to_string(processId()) + ".";
+        const size_t longest = tag.size() + std::string("split.99999.layerbreak.txt").size() + ext.size();
+        size_t keep = longest < 255 ? (std::min)(stem.size(), 255 - longest) : 0;
+        while (keep > 0 && keep < stem.size() && (static_cast<uint8_t>(stem[keep]) & 0xC0) == 0x80)
+            --keep;  // not inside a UTF-8 sequence
+        m_newPrefix = stem.substr(0, keep) + tag;
         if (strToLowerCase(ext) == ".iso")
             m_imageSideFile = ext.substr(1) + ".layerbreak.txt";
         m_armed = true;
