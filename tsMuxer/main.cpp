@@ -2374,7 +2374,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         // the before-zone of IsoWriter::setLayerBreakGuard(afterSectors): a sixteenth, at least 4 MB
         constexpr int64_t afterSectors = static_cast<int64_t>(DEFAULT_GUARD_AFTER_MB) * 1024 * 1024 / 2048;
         constexpr int64_t beforeSectors =
-            std::min(afterSectors, std::max<int64_t>(4 * 1024 * 1024 / 2048, afterSectors / 16));
+            (std::min)(afterSectors, (std::max<int64_t>)(4 * 1024 * 1024 / 2048, afterSectors / 16));
         constexpr int64_t udfSectors = 8192;  // the UDF reserve of the capacity check below
         const int64_t dataSectors = (total + 2047) / 2048 + alignSectors + udfSectors;
         if (error.empty() && !breaks.empty() && dataSectors > static_cast<int64_t>(breaks.front()) - beforeSectors)
@@ -4506,7 +4506,7 @@ int main(int argc, char** argv)
                         constexpr int64_t afterSectors =
                             static_cast<int64_t>(DEFAULT_GUARD_AFTER_MB) * 1024 * 1024 / 2048;
                         constexpr int64_t beforeSectors =
-                            std::min(afterSectors, std::max<int64_t>(4 * 1024 * 1024 / 2048, afterSectors / 16));
+                            (std::min)(afterSectors, (std::max<int64_t>)(4 * 1024 * 1024 / 2048, afterSectors / 16));
                         constexpr int64_t reserveSectors = 8192 + 8192;
                         const int64_t estSize =
                             (std::max)(muxerManager.totalSize() / 100 * 105, muxerManager.paddedOutputSize());
