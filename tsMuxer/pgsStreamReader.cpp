@@ -409,9 +409,11 @@ void PGSStreamReader::renderTextHide(int64_t outTime)
                                           m_objectWindowTop, m_render->m_videoWidth, m_objectWindowHeight, m_demuxMode);
     m_renderedBlocks.emplace_back(outTime - windowsTransferTime, outTime - windowsTransferTime - 90, rLen, curPos);
     curPos += rLen;
-    // end                  pts=x-0.001, dts = x-0.001
-    rLen = m_render->composeEnd(curPos, outTime - 90, outTime - 90, m_demuxMode);
-    m_renderedBlocks.emplace_back(outTime - 90, outTime - 90, rLen, curPos);
+    // end                  pts = dts = the decoding time of the set, as the end of a clear of drawn text has it
+    // (TextToPGSConverter): it was 90 ticks before the clear's own time, after the time the set is decoded at
+    rLen = m_render->composeEnd(curPos, outTime - windowsTransferTime - 90, outTime - windowsTransferTime - 90,
+                                m_demuxMode);
+    m_renderedBlocks.emplace_back(outTime - windowsTransferTime - 90, outTime - windowsTransferTime - 90, rLen, curPos);
 }
 
 int64_t getTimeValueNano(uint8_t* pos)
