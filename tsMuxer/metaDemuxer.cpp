@@ -1315,9 +1315,27 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     if (tmpitr != addParams.end())
         pid = strToInt32(tmpitr->second.c_str());
 
+    // A track has two parts, 1 and 2. subTrack=0 or 3 was taken as asked, the track then gave nothing, and the job was
+    // refused as if the codec on the line were wrong. Without track= the line names an elementary stream, which is
+    // read whole: subTrack= on it was dropped without a word, where the same stream in an MP4 file is refused.
     tmpitr = addParams.find("subTrack");
     if (tmpitr != addParams.end())
-        pid = SubTrackFilter::pidToSubPid(pid, strToInt32(tmpitr->second));
+    {
+        const std::string part = trimStr(tmpitr->second);
+        if (part != "1" && part != "2")
+            THROW(ERR_COMMON, "subTrack=" << tmpitr->second << " on the " << codec << " line of "
+                                          << unquoteStr(codecStreamName)
+                                          << " is not a part of a track: subTrack is 1 or 2. For a dual layer Dolby "
+                                             "Vision track 1 is the base layer and 2 the enhancement layer; for a "
+                                             "combined AVC/MVC track 1 is the MVC part and 2 the AVC part.")
+        if (pid == 0)
+            THROW(ERR_COMMON, "subTrack= on the " << codec << " line of " << unquoteStr(codecStreamName)
+                                                  << " picks a part of the track that track= names in a container "
+                                                     "file (MKV, MP4, TS), and this line names no track. A stream "
+                                                     "file of its own is read whole: leave subTrack= out, or add "
+                                                     "track= for a container.")
+        pid = SubTrackFilter::pidToSubPid(pid, strToInt32(part));
+    }
 
     vector<string> fileList;
     string unquotedStreamName = unquoteStr(codecStreamName);
