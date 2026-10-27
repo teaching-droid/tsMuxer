@@ -65,6 +65,20 @@ static constexpr char EXCEPTION_ERR_MSG[] =
         sLastMsg = true;                      \
     }                                         \
     }
+// A meta file saved in UTF-16, as some editors save text, was refused as "Invalid codec format" with the raw bytes of
+// its first line. It is said as what it is, before anything reads the file.
+static void refuseUnreadableMeta(const std::string& metaFileName)
+{
+    File file;
+    uint8_t bom[2] = {};
+    if (!file.open(metaFileName.c_str(), File::ofRead) || file.read(bom, 2) != 2)
+        return;  // said as before by the reader of the meta file
+    if ((bom[0] == 0xFF && bom[1] == 0xFE) || (bom[0] == 0xFE && bom[1] == 0xFF))
+        THROW(ERR_COMMON, "The meta file " << metaFileName
+                                           << " is saved in UTF-16. tsMuxeR reads meta files in UTF-8: save it as "
+                                              "UTF-8.")
+}
+
 DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<double>& customChaptersList,
                         vector<AVChapter>& chapterInfo, int& firstMplsOffset, int& firstM2tsOffset, bool& insertBlankPL,
                         int& blankNum, bool& stereoMode, std::string& isoDiskLabel, bool& demux)
@@ -4166,6 +4180,7 @@ int main(int argc, char** argv)
         bool stereoMode = false;
         string isoDiskLabel;
         bool demuxAsked = false;
+        refuseUnreadableMeta(argv[1]);
         DiskType dt = checkBluRayMux(argv[1], autoChapterLen, customChapterList, chapterInfo, firstMplsOffset,
                                      firstM2tsOffset, insertBlankPL, blankNum, stereoMode, isoDiskLabel, demuxAsked);
         // --demux asks for a folder of tracks whatever the output is named, as --help says: the name decided, so
