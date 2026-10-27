@@ -672,11 +672,30 @@ int H264StreamReader::writeSEIMessage(uint8_t* dstBuffer, const uint8_t* dstEnd,
     return static_cast<int>(curPos - dstBuffer);
 }
 
+// Whether the access unit that begins at auStart holds an SPS and a PPS of its own, before its first slice. The packet
+// handed over is one unit, its delimiter, and the units after it are still in the buffer, not read yet.
+static bool holdsSpsAndPps(uint8_t* auStart, uint8_t* end)
+{
+    bool sps = false;
+    bool pps = false;
+    for (uint8_t* nal = NALUnit::findNextNAL(auStart, end); nal < end; nal = NALUnit::findNextNAL(nal, end))
+    {
+        const auto type = static_cast<NALUnit::NALType>(*nal & 0x1f);
+        if ((type >= NALUnit::NALType::nuSliceNonIDR && type <= NALUnit::NALType::nuSliceIDR) ||
+            (type == NALUnit::NALType::nuDelimiter && nal > auStart + 4))
+            break;
+        sps = sps || type == NALUnit::NALType::nuSPS;
+        pps = pps || type == NALUnit::NALType::nuPPS;
+    }
+    return sps && pps;
+}
+
 int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPacket& avPacket,
                                         PriorityDataInfo* priorityData)
 {
     uint8_t* curPos = dstBuffer;
     int movedBytes = 0;  // a packet moved to the front, counted already when the reader handed it over
+    uint8_t* const auStart = avPacket.data;  // in the reader's buffer (holdsSpsAndPps)
     if (avPacket.size > 4 && avPacket.size < dstEnd - dstBuffer)
     {
         // A start code is three bytes or four, and both are legal, so where the NAL header sits has
@@ -731,6 +750,13 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
         (m_h264SPSCont &&
          ((m_spsCounter < 2 && ((m_totalFrameNum > 1 && m_lastSliceIDR) || (m_totalFrameNum > 250 && isIFrame()))) ||
           (m_firstFileFrame && !srcSpsPpsFound)));
+    // A picture that carries its own SPS and PPS needs no copy of them. The first IDR picture of a stream taken up in
+    // the middle of a group (a cut of a disc clip) came after other pictures and got the copy ahead of its own: SPS
+    // and PPS twice in one access unit. Where the stream's own are replaced (replaceToOwnSPS), they are left out and
+    // the copy stays.
+    if (spsDiscontinue && !replaceToOwnSPS() && auStart != nullptr && auStart >= m_buffer && auStart < m_bufEnd &&
+        holdsSpsAndPps(auStart, m_bufEnd))
+        spsDiscontinue = false;
     bool needInsSpsPps = false;
     if (isIFrame() && m_lastSliceSPS != UINT_MAX && m_lastSlicePPS != UINT_MAX)
     {
