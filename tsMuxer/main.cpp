@@ -794,41 +794,71 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
 // The same answer as the meta path gives, from one place (METADemuxer::playlistStreamDir).
 string getBlurayStreamDir(const string& mplsName) { return METADemuxer::playlistStreamDir(mplsName); }
 
+// A blank pattern with the frame rate in its sequence parameter set (the first NAL unit) set to fps, as the H.264
+// reader sets it for fps= on a track: the pattern states 23.976 (or 29.97 or 25 when interlaced), and the blank of a
+// title at another rate was decoded as "Frame rate: 23.976" with a line that the rate was changed.
+static std::vector<uint8_t> blankPatternAt(uint8_t* pattern, const int patternSize, const double fps)
+{
+    uint8_t* const end = pattern + patternSize;
+    uint8_t* const nal = pattern + 4;  // after the start code 00 00 00 01
+    uint8_t* const spsEnd = NALUnit::findNALWithStartCode(nal, end, true);
+    SPSUnit sps;
+    sps.decodeBuffer(nal, spsEnd);
+    std::vector<uint8_t> rez(static_cast<size_t>(patternSize) + 64);
+    long spsLen = -1;
+    if (sps.deserialize() == 0 && fabs(sps.getFPS() - fps) > 5e-5)  // the reader's margin (mpegStreamReader.cpp)
+    {
+        sps.setFps(fps);
+        spsLen = sps.serializeBuffer(rez.data(), rez.data() + 64 + (spsEnd - pattern), true);
+    }
+    if (spsLen <= 0)
+        return std::vector<uint8_t>(pattern, end);
+    std::copy(spsEnd, end, rez.begin() + spsLen);
+    rez.resize(static_cast<size_t>(spsLen) + (end - spsEnd));
+    return rez;
+}
+
 void muxBlankPL(const string& appDir, BlurayHelper& blurayHelper, const PIDListMap& pidList, DiskType dt, int blankNum)
 {
     unsigned videoWidth = 1920;
     unsigned videoHeight = 1080;
     double fps = 23.976;
+    bool interlaced = false;
     for (const auto& [pid, si] : pidList)
     {
         const PMTStreamInfo& streamInfo = si;
-        const auto streamReader = dynamic_cast<const MPEGStreamReader*>(streamInfo.m_codecReader);
+        const auto streamReader = dynamic_cast<MPEGStreamReader*>(streamInfo.m_codecReader);
         if (streamReader)
         {
             videoWidth = streamReader->getStreamWidth();
             videoHeight = streamReader->getStreamHeight();
-            fps = streamReader->getFPS();
+            if (streamReader->getFPS() > 0)
+                fps = streamReader->getFPS();
+            interlaced = streamReader->getInterlaced();
             break;
         }
     }
+    // The blank has the title's frame rate and scan, so that a player keeps its output mode from the blank to the
+    // title. It was 23.976 progressive for every title: a 480i title got a 480p blank, which is no disc format, and a
+    // 1080i, 576i or 720p 59.94 title a blank in another mode.
     uint8_t* pattern;
     int patternSize;
     bool isNtsc = videoWidth <= 854 && videoHeight <= 480 && (fabs(25 - fps) >= 0.5 && fabs(50 - fps) >= 0.5);
     bool isPal = videoWidth <= 1024 && videoHeight <= 576 && (fabs(25 - fps) < 0.5 || fabs(50 - fps) < 0.5);
     if (isNtsc)
     {
-        pattern = pattern_ntsc;
-        patternSize = sizeof(pattern_ntsc);
+        pattern = interlaced ? pattern_ntsc_i : pattern_ntsc;
+        patternSize = interlaced ? sizeof(pattern_ntsc_i) : sizeof(pattern_ntsc);
     }
     else if (isPal)
     {
-        pattern = pattern_pal;
-        patternSize = sizeof(pattern_pal);
+        pattern = interlaced ? pattern_pal_i : pattern_pal;
+        patternSize = interlaced ? sizeof(pattern_pal_i) : sizeof(pattern_pal);
     }
     else if (videoWidth >= 1300)
     {
-        pattern = pattern_1920;
-        patternSize = sizeof(pattern_1920);
+        pattern = interlaced ? pattern_1920_i : pattern_1920;
+        patternSize = interlaced ? sizeof(pattern_1920_i) : sizeof(pattern_1920);
     }
     else
     {
@@ -842,9 +872,12 @@ void muxBlankPL(const string& appDir, BlurayHelper& blurayHelper, const PIDListM
     File file;
     if (!file.open(tmpFileName.c_str(), File::ofWrite))
         THROW(ERR_COMMON, "can't create file " << tmpFileName)
-    for (int i = 0; i < 3; ++i)
+    // About half a second, as three patterns of four pictures are at 23.976: more of them at a higher rate
+    const std::vector<uint8_t> blank = blankPatternAt(pattern, patternSize, fps);
+    const int repeats = (std::max)(3, static_cast<int>(lround(fps / 8.0)));
+    for (int i = 0; i < repeats; ++i)
     {
-        if (file.write(pattern, patternSize) != patternSize)
+        if (file.write(blank.data(), static_cast<uint32_t>(blank.size())) != static_cast<int>(blank.size()))
         {
             deleteFile(tmpFileName);
             THROW(ERR_COMMON, "can't write data to file " << tmpFileName)
@@ -853,7 +886,9 @@ void muxBlankPL(const string& appDir, BlurayHelper& blurayHelper, const PIDListM
     file.close();
     map<string, string> videoParams;
     videoParams["insertSEI"];
-    videoParams["fps"] = "23.976";
+    std::ostringstream fpsText;
+    fpsText << std::setprecision(15) << fps;
+    videoParams["fps"] = fpsText.str();
     {
         MuxerManager muxerManager(readManager, tsMuxerFactory);
         muxerManager.parseMuxOpt("MUXOPT --no-pcr-on-video-pid --vbr --avchd --vbv-len=500");
