@@ -225,6 +225,7 @@ class MuxerManager final
     bool m_isoSplitChapters = false;     // --split-chapters
     std::optional<std::vector<AVChapter>> m_sourceChapters;
     bool m_bluRayMode;
+    bool m_avchdMode = false;  // --avchd: m_bluRayMode is set too
     bool m_demuxMode;
     std::string m_demuxFolder;
     std::string m_finishingNote;  // setFinishingNote

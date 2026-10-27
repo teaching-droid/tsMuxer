@@ -749,6 +749,40 @@ void MuxerManager::checkOtherTracks(const vector<StreamInfo>& ci) const
                    "Warning! Dolby Vision Double Layer Single Tracks are not standard for BD disks, the disk will "
                    "not play in a Blu-ray player.");
     }
+    // An AVCHD player plays H.264 video with AC-3 or LPCM sound. The codecs a Blu-ray player plays beyond those were
+    // taken for an AVCHD disc without a word (decided: a warning, as a Blu-ray disc gets for the codecs it lacks).
+    if (m_avchdMode)
+    {
+        std::vector<std::string> notOnAvchd;
+        for (const StreamInfo& si : ci)
+        {
+            std::string what;
+            if (si.m_codec == "V_MPEG-2")
+                what = "MPEG-2 video";
+            else if (si.m_codec == hevcCodecInfo.programName)
+                what = "HEVC (H.265)";
+            else if (si.m_codec == "V_MS/VFW/WVC1")
+                what = "VC-1";
+            else if (si.m_codec == mlpCodecInfo.programName)
+                what = "TrueHD";
+            else if (si.m_codec == "A_DTS")
+                what = "DTS";
+            else if (const auto* ac3 = dynamic_cast<const AC3StreamReader*>(si.m_streamReader))
+            {
+                if (ac3->isTrueHD() && si.m_addParams.find("down-to-ac3") == si.m_addParams.end())
+                    what = "TrueHD";
+                else if (ac3->isEAC3() && si.m_addParams.find("down-to-ac3") == si.m_addParams.end())
+                    what = "E-AC-3 (Dolby Digital Plus)";
+            }
+            if (!what.empty() && std::find(notOnAvchd.begin(), notOnAvchd.end(), what) == notOnAvchd.end())
+                notOnAvchd.push_back(what);
+        }
+        for (const auto& codec : notOnAvchd)
+            LTRACE(LT_ERROR, 2,
+                   "Warning! " << codec
+                               << " is not an AVCHD format, the disk will not play in an AVCHD player, which plays "
+                                  "H.264 video with AC-3 or LPCM sound. Choose --blu-ray for it, or convert it.");
+    }
     if (!avcFound && mvcFound)
         THROW(ERR_INVALID_STREAMS_SELECTED,
               "Fatal error: MVC depended view track can't be muxed without AVC base view track")
@@ -1567,6 +1601,7 @@ void MuxerManager::parseMuxOpt(const string& opts)
         else if (paramPair[0] == "--blu-ray" || paramPair[0] == "--blu-ray-v3" || paramPair[0] == "--avchd")
         {
             m_bluRayMode = true;
+            m_avchdMode = paramPair[0] == "--avchd";
             V3_flags |= BLURAY_OUT;
         }
         else if (paramPair[0] == "--demux")
