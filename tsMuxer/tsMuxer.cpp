@@ -166,6 +166,8 @@ TSMuxer::TSMuxer(MuxerManager* owner) : AbstractMuxer(owner)
     m_cbrWinTicks = 0;
     m_cbrWinStart = 0;
     m_cbrCarryBits = 0;
+    m_floorPadBits = 0;
+    m_floorPadRest = 0;
     m_cbrPeakRate = 0;
     m_cbrPeakAt = 0;
     m_sendAhead = false;
@@ -2201,25 +2203,39 @@ void TSMuxer::writePESPacket()
     }
 }
 
+// The null packets that hold --bitrate or --minbitrate from the last PCR up to newPCR. Written right before the PCR,
+// and also where a block of 3D or a part of a split ends (finishFileBlock): the interval's padding came after the end,
+// in the next block or part behind its PAT and PMT, and was given the arrival times of the few ticks between the two,
+// 360 packets 1 or 2 ticks apart at the start of each part of a split at --bitrate=10000, and runs of equal times in
+// both views of a 3D disc. A second call in the same interval finds the floor reached and writes nothing; the bits
+// the tables after the padding add to it are carried as what the padding wrote beyond the floor.
+void TSMuxer::writeFloorPadding(const int64_t newPCR)
+{
+    if (m_cbrBitrate == -1 || m_minBitrate == -1 || m_lastPCR == -1)
+        return;
+    int expectedBits = lroundl(static_cast<double>(newPCR - m_lastPCR) / 90000.0 * m_minBitrate);
+    expectedBits -= m_pcrBits;
+    if (expectedBits > 0)
+    {
+        int tsFrames = expectedBits / 8 / m_frameSize;
+        if (tsFrames * m_frameSize * 8 < expectedBits)
+            tsFrames++;
+        writeNullPackets(tsFrames);
+        m_floorPadBits += static_cast<int64_t>(tsFrames) * m_frameSize * 8;
+        if (m_cbrBitrate == m_minBitrate)
+            m_floorPadRest = (tsFrames * m_frameSize * 8) - expectedBits;
+    }
+    else if (m_floorPadBits > 0 && m_cbrBitrate == m_minBitrate)
+        m_floorPadRest = -expectedBits;
+}
+
 void TSMuxer::writePCR(const int64_t newPCR)
 {
-    int bitsRest = 0;
-    int64_t paddingBits = 0;
-    if (m_cbrBitrate != -1 && m_minBitrate != -1 && m_lastPCR != -1)
-    {
-        int expectedBits = lroundl(static_cast<double>(newPCR - m_lastPCR) / 90000.0 * m_minBitrate);
-        expectedBits -= m_pcrBits;
-        if (expectedBits > 0)
-        {
-            int tsFrames = expectedBits / 8 / m_frameSize;
-            if (tsFrames * m_frameSize * 8 < expectedBits)
-                tsFrames++;
-            writeNullPackets(tsFrames);
-            paddingBits = static_cast<int64_t>(tsFrames) * m_frameSize * 8;
-            if (m_cbrBitrate == m_minBitrate)
-                bitsRest = (tsFrames * m_frameSize * 8) - expectedBits;
-        }
-    }
+    writeFloorPadding(newPCR);
+    const int bitsRest = m_floorPadRest;
+    const int64_t paddingBits = m_floorPadBits;
+    m_floorPadRest = 0;
+    m_floorPadBits = 0;
     // One more packet than the buffer holds, because writeEmptyPacketWithPCR is about to add the
     // PCR packet and then run the arrival pass over the lot. Computed before m_pcrBits is cleared,
     // because the transport stream branch of it reads that count.
@@ -2261,6 +2277,7 @@ void TSMuxer::finishFileBlock(const int64_t newPts, const int64_t newPCR, const 
     if (m_processedBlockSize > 0)
     {
         constexpr auto gapForPATPMT = static_cast<int64_t>((192 * 4.0) / 35000000.0 * 27000000.0);
+        writeFloorPadding(newPCR);
         doFlush(newPCR, gapForPATPMT);
         if (!doChangeFile)
             m_interleaveInfo.rbegin()->push_back(static_cast<int32_t>(m_processedBlockSize / 192));

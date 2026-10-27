@@ -186,6 +186,7 @@ class TSMuxer final : public AbstractMuxer
     }
     void writePATPMT(int64_t pcr, bool force = false);
     void writePCR(int64_t newPCR);
+    void writeFloorPadding(int64_t newPCR);
     std::string getNextName(std::string curName) override;
     void writeEmptyPacketWithPCRTest(int64_t pcrVal);
     bool appendM2TSNullPacketToFile(int64_t curFileSize, int counter, int* packetsWrited) const;
@@ -263,6 +264,8 @@ class TSMuxer final : public AbstractMuxer
     int64_t m_cbrWinTicks;          // its length so far, 90 kHz
     int64_t m_cbrWinStart;          // the PCR it began at
     int64_t m_cbrCarryBits;         // bits the last PCR counted into the next interval, written before it
+    int64_t m_floorPadBits;         // null packets the floor padding wrote since the last PCR (writeFloorPadding)
+    int m_floorPadRest;             // what that padding wrote beyond the floor, carried into the next interval
     int64_t m_cbrPeakRate;          // the highest rate of a window above --bitrate, bits per second; 0: none
     int64_t m_cbrPeakAt;            // the middle of that window, on the clock
     bool m_midPesPCR;               // a PCR went in between the packets of the pending PES (insertHeldPCRIfDue)
