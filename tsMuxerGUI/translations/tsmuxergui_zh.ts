@@ -4189,6 +4189,18 @@ Build the ISO anyway?</source>
         <source>As a separate track</source>
         <translation>作为单独的音轨</translation>
     </message>
+    <message>
+        <source>Leave out the layer-break guard</source>
+        <translation>不加层切换保护</translation>
+    </message>
+    <message>
+        <source>An ISO image whose data crosses a layer break gets the layer-break guard without being asked: 288 MB after the break and 18 MB before it are left empty, as a burnt dual-layer disc often reads badly there and a player then stalls. Tick this to leave it out. A guard ticked above is used instead.</source>
+        <translation>数据跨越层切换点的 ISO 镜像会自动加上层切换保护：切换点之后 288 MB、之前 18 MB 留空，因为刻录的双层光盘在那里常常读取不良，播放器会卡住。勾选此项可不加保护。若上面勾选了保护，则使用该保护。</translation>
+    </message>
+    <message>
+        <source>An image whose data crosses a layer break gets the layer-break guard set above, as a burnt dual-layer disc often reads badly at the layer change and a player then stalls there. Tick this to leave it out: the image is then written without zeros at the break.</source>
+        <translation>数据跨越层切换点的镜像会加上上面设置的层切换保护，因为刻录的双层光盘在层切换处常常读取不良，播放器会在那里卡住。勾选此项可不加保护：镜像写入时切换点不填零。</translation>
+    </message>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>

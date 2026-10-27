@@ -4189,6 +4189,18 @@ Créer l'ISO malgré tout ?</translation>
         <source>As a separate track</source>
         <translation>Comme piste séparée</translation>
     </message>
+    <message>
+        <source>Leave out the layer-break guard</source>
+        <translation>Ne pas mettre la protection du changement de couche</translation>
+    </message>
+    <message>
+        <source>An ISO image whose data crosses a layer break gets the layer-break guard without being asked: 288 MB after the break and 18 MB before it are left empty, as a burnt dual-layer disc often reads badly there and a player then stalls. Tick this to leave it out. A guard ticked above is used instead.</source>
+        <translation>Une image ISO dont les données franchissent un changement de couche reçoit la protection du changement de couche sans la demander : 288 Mo après le changement et 18 Mo avant restent vides, car un disque double couche gravé se lit souvent mal à cet endroit et le lecteur s&apos;y bloque. Cochez pour ne pas la mettre. Une protection cochée plus haut est utilisée à la place.</translation>
+    </message>
+    <message>
+        <source>An image whose data crosses a layer break gets the layer-break guard set above, as a burnt dual-layer disc often reads badly at the layer change and a player then stalls there. Tick this to leave it out: the image is then written without zeros at the break.</source>
+        <translation>Une image dont les données franchissent un changement de couche reçoit la protection du changement de couche réglée plus haut, car un disque double couche gravé se lit souvent mal au changement de couche et le lecteur s&apos;y bloque. Cochez pour ne pas la mettre : l&apos;image est alors écrite sans zéros au changement.</translation>
+    </message>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>

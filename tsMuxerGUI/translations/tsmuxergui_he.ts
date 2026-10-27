@@ -4189,6 +4189,18 @@ Build the ISO anyway?</source>
         <source>As a separate track</source>
         <translation>כרצועה נפרדת</translation>
     </message>
+    <message>
+        <source>Leave out the layer-break guard</source>
+        <translation>ללא הגנת מעבר השכבה</translation>
+    </message>
+    <message>
+        <source>An ISO image whose data crosses a layer break gets the layer-break guard without being asked: 288 MB after the break and 18 MB before it are left empty, as a burnt dual-layer disc often reads badly there and a player then stalls. Tick this to leave it out. A guard ticked above is used instead.</source>
+        <translation>קובץ ISO שהנתונים שלו חוצים מעבר שכבה מקבל את הגנת מעבר השכבה גם בלי לבקש: 288 MB אחרי המעבר ו-18 MB לפניו נשארים ריקים, כי דיסק דו-שכבתי צרוב נקרא שם לעיתים קרובות בצורה גרועה והנגן נתקע. סמן כדי לוותר עליה. הגנה שסומנה למעלה משמשת במקומה.</translation>
+    </message>
+    <message>
+        <source>An image whose data crosses a layer break gets the layer-break guard set above, as a burnt dual-layer disc often reads badly at the layer change and a player then stalls there. Tick this to leave it out: the image is then written without zeros at the break.</source>
+        <translation>קובץ שהנתונים שלו חוצים מעבר שכבה מקבל את הגנת מעבר השכבה שנקבעה למעלה, כי דיסק דו-שכבתי צרוב נקרא לעיתים קרובות בצורה גרועה במעבר השכבה והנגן נתקע שם. סמן כדי לוותר עליה: הקובץ נכתב אז בלי אפסים במעבר.</translation>
+    </message>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>

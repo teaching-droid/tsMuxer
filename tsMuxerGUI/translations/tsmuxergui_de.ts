@@ -4189,6 +4189,18 @@ ISO trotzdem erstellen?</translation>
         <source>As a separate track</source>
         <translation>Als eigene Spur</translation>
     </message>
+    <message>
+        <source>Leave out the layer-break guard</source>
+        <translation>Layer-Break-Schutz weglassen</translation>
+    </message>
+    <message>
+        <source>An ISO image whose data crosses a layer break gets the layer-break guard without being asked: 288 MB after the break and 18 MB before it are left empty, as a burnt dual-layer disc often reads badly there and a player then stalls. Tick this to leave it out. A guard ticked above is used instead.</source>
+        <translation>Ein ISO-Abbild, dessen Daten über einen Layer-Break reichen, bekommt den Layer-Break-Schutz ohne Nachfrage: 288 MB nach dem Break und 18 MB davor bleiben leer, da eine gebrannte Dual-Layer-Disc dort oft schlecht gelesen wird und ein Player dann hängen bleibt. Ankreuzen, um ihn wegzulassen. Ein oben angekreuzter Schutz wird stattdessen verwendet.</translation>
+    </message>
+    <message>
+        <source>An image whose data crosses a layer break gets the layer-break guard set above, as a burnt dual-layer disc often reads badly at the layer change and a player then stalls there. Tick this to leave it out: the image is then written without zeros at the break.</source>
+        <translation>Ein Abbild, dessen Daten über einen Layer-Break reichen, bekommt den oben eingestellten Layer-Break-Schutz, da eine gebrannte Dual-Layer-Disc am Layerwechsel oft schlecht gelesen wird und ein Player dann dort hängen bleibt. Ankreuzen, um ihn wegzulassen: das Abbild wird dann ohne Nullen am Break geschrieben.</translation>
+    </message>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>

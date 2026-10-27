@@ -4189,6 +4189,18 @@ Build the ISO anyway?</source>
         <source>As a separate track</source>
         <translation>別のトラックとして</translation>
     </message>
+    <message>
+        <source>Leave out the layer-break guard</source>
+        <translation>レイヤーブレイクガードを入れない</translation>
+    </message>
+    <message>
+        <source>An ISO image whose data crosses a layer break gets the layer-break guard without being asked: 288 MB after the break and 18 MB before it are left empty, as a burnt dual-layer disc often reads badly there and a player then stalls. Tick this to leave it out. A guard ticked above is used instead.</source>
+        <translation>データがレイヤーブレイクをまたぐ ISO イメージには、指定しなくてもレイヤーブレイクガードが入ります：ブレイクの後 288 MB と前 18 MB が空けられます。焼いた2層ディスクはそこで読み取りにくいことが多く、プレーヤーが止まるためです。入れない場合はチェックしてください。上でガードをチェックした場合はそちらが使われます。</translation>
+    </message>
+    <message>
+        <source>An image whose data crosses a layer break gets the layer-break guard set above, as a burnt dual-layer disc often reads badly at the layer change and a player then stalls there. Tick this to leave it out: the image is then written without zeros at the break.</source>
+        <translation>データがレイヤーブレイクをまたぐイメージには、上で設定したレイヤーブレイクガードが入ります。焼いた2層ディスクはレイヤーの切り替わりで読み取りにくいことが多く、プレーヤーがそこで止まるためです。入れない場合はチェックしてください：イメージはブレイクにゼロを入れずに書き込まれます。</translation>
+    </message>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>

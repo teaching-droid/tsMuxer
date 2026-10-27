@@ -4190,6 +4190,18 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>As a separate track</source>
         <translation>Como pista aparte</translation>
     </message>
+    <message>
+        <source>Leave out the layer-break guard</source>
+        <translation>Omitir la protección del cambio de capa</translation>
+    </message>
+    <message>
+        <source>An ISO image whose data crosses a layer break gets the layer-break guard without being asked: 288 MB after the break and 18 MB before it are left empty, as a burnt dual-layer disc often reads badly there and a player then stalls. Tick this to leave it out. A guard ticked above is used instead.</source>
+        <translation>Una imagen ISO cuyos datos cruzan un cambio de capa recibe la protección del cambio de capa sin pedirla: se dejan vacíos 288 MB después del cambio y 18 MB antes, ya que un disco de doble capa grabado suele leerse mal ahí y el reproductor se detiene. Márquelo para omitirla. Si arriba se marca una protección, se usa esa.</translation>
+    </message>
+    <message>
+        <source>An image whose data crosses a layer break gets the layer-break guard set above, as a burnt dual-layer disc often reads badly at the layer change and a player then stalls there. Tick this to leave it out: the image is then written without zeros at the break.</source>
+        <translation>Una imagen cuyos datos cruzan un cambio de capa recibe la protección del cambio de capa indicada arriba, ya que un disco de doble capa grabado suele leerse mal en el cambio de capa y el reproductor se detiene ahí. Márquelo para omitirla: la imagen se escribe entonces sin ceros en el cambio.</translation>
+    </message>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>

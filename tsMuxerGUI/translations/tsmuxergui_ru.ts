@@ -4190,6 +4190,18 @@ Build the ISO anyway?</source>
         <source>As a separate track</source>
         <translation>Как отдельную дорожку</translation>
     </message>
+    <message>
+        <source>Leave out the layer-break guard</source>
+        <translation>Без защиты перехода слоя</translation>
+    </message>
+    <message>
+        <source>An ISO image whose data crosses a layer break gets the layer-break guard without being asked: 288 MB after the break and 18 MB before it are left empty, as a burnt dual-layer disc often reads badly there and a player then stalls. Tick this to leave it out. A guard ticked above is used instead.</source>
+        <translation>ISO-образ, данные которого пересекают переход слоя, получает защиту перехода слоя без запроса: 288 МБ после перехода и 18 МБ до него остаются пустыми, так как записанный двухслойный диск там часто плохо читается и плеер останавливается. Отметьте, чтобы не добавлять её. Защита, отмеченная выше, используется вместо неё.</translation>
+    </message>
+    <message>
+        <source>An image whose data crosses a layer break gets the layer-break guard set above, as a burnt dual-layer disc often reads badly at the layer change and a player then stalls there. Tick this to leave it out: the image is then written without zeros at the break.</source>
+        <translation>Образ, данные которого пересекают переход слоя, получает защиту перехода слоя, заданную выше, так как записанный двухслойный диск часто плохо читается на переходе слоя и плеер там останавливается. Отметьте, чтобы не добавлять её: образ тогда записывается без нулей на переходе.</translation>
+    </message>
 
     <message>
         <source>Hold the disc to the rate a player can read:</source>

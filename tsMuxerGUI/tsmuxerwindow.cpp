@@ -1289,6 +1289,12 @@ TsMuxerWindow::TsMuxerWindow()
                "disc, so the burn writes the whole disc; a three-layer image ends inside its last layer, and a "
                "single-layer disc is not padded. The layer-break guard is sized automatically; needs the disc Free "
                "Sectors set.")));
+        auto* noGuardCheck = new QCheckBox(tr("Leave out the layer-break guard"), bdmvTab);
+        noGuardCheck->setObjectName("isoNoGuard");  // a remembered choice
+        noGuardCheck->setToolTip(wrapTip(
+            tr("An image whose data crosses a layer break gets the layer-break guard set above, as a burnt dual-layer "
+               "disc often reads badly at the layer change and a player then stalls there. Tick this to leave it out: "
+               "the image is then written without zeros at the break.")));
         auto* singleCopy3dCheck = new QCheckBox(tr("3D disc: store the video once, not twice"), bdmvTab);
         singleCopy3dCheck->setToolTip(wrapTip(
             tr("A 3D disc stores its video once and gives it three names: the .ssif and the two .m2ts are the "
@@ -1571,7 +1577,7 @@ TsMuxerWindow::TsMuxerWindow()
             }
         };
         auto updateFit = [folderBytes, readFreeSectors, discTypeCombo, guardSpin, beforeCheck, guardBeforeSpin,
-                          fitLabel, innerOnlyCheck]()
+                          fitLabel, innerOnlyCheck, noGuardCheck]()
         {
             const qint64 fb = *folderBytes;
             const qint64 freeSec = readFreeSectors();
@@ -1589,8 +1595,10 @@ TsMuxerWindow::TsMuxerWindow()
                 beforeCheck->isChecked() ? guardBeforeSpin->value() : qMin(afterMB, qMax(4, afterMB / 16));
             // Inner-only sizes its zeros from what is left on the disc, so they never make the image too big. The
             // guard set above is not used then, and counting it said "Does NOT fit" of a folder that fits.
-            const qint64 guardBytes =
-                innerOnlyCheck->isChecked() ? 0 : static_cast<qint64>(afterMB + beforeMB) * breaks * 1024 * 1024;
+            // Nor is it with the guard left out.
+            const qint64 guardBytes = innerOnlyCheck->isChecked() || noGuardCheck->isChecked()
+                                          ? 0
+                                          : static_cast<qint64>(afterMB + beforeMB) * breaks * 1024 * 1024;
             const qint64 overhead = 16LL * 1024 * 1024;  // approximate UDF metadata
             const qint64 occupied = fb + guardBytes + overhead;
             const qint64 capacity = freeSec * 2048LL;
@@ -1647,6 +1655,7 @@ TsMuxerWindow::TsMuxerWindow()
         g->addWidget(labelEdit, r++, 1, 1, 2);
         g->addWidget(keepExtrasCheck, r++, 0, 1, 3);
         g->addWidget(innerOnlyCheck, r++, 0, 1, 3);
+        g->addWidget(noGuardCheck, r++, 0, 1, 3);
         g->addWidget(singleCopy3dCheck, r++, 0, 1, 3);
         g->addWidget(orderCheck, r++, 0, 1, 3);
         g->addWidget(buildBtn, r++, 1);
@@ -1721,12 +1730,28 @@ TsMuxerWindow::TsMuxerWindow()
             });
         connect(innerOnlyCheck, &QCheckBox::toggled, bdmvTab,
                 [guardSpin, guardLabel, guardHintLabel, beforeCheck, guardBeforeLabel, guardBeforeSpin, guardBeforeHint,
-                 updateFit](bool on)
+                 updateFit, noGuardCheck](bool on)
                 {
+                    on = on || noGuardCheck->isChecked();  // the guard left out greys them as well
                     // inner-only takes over the layer break: it sizes the guard automatically from the disc
                     // type and the content, so the WHOLE manual guard mechanism (after-guard + the advanced
                     // before-guard) is greyed out while it is active. Disc type / Free Sectors stay active
                     // because inner-only reads them.
+                    guardSpin->setEnabled(!on);
+                    guardLabel->setEnabled(!on);
+                    guardHintLabel->setEnabled(!on);
+                    beforeCheck->setEnabled(!on);
+                    guardBeforeLabel->setEnabled(!on);
+                    guardBeforeSpin->setEnabled(!on);
+                    guardBeforeHint->setEnabled(!on);
+                    updateFit();
+                });
+        // The guard left out greys the guard boxes as inner-only does; the size set stays for when it is unticked
+        connect(noGuardCheck, &QCheckBox::toggled, bdmvTab,
+                [guardSpin, guardLabel, guardHintLabel, beforeCheck, guardBeforeLabel, guardBeforeSpin, guardBeforeHint,
+                 updateFit, innerOnlyCheck](bool on)
+                {
+                    on = on || innerOnlyCheck->isChecked();
                     guardSpin->setEnabled(!on);
                     guardLabel->setEnabled(!on);
                     guardHintLabel->setEnabled(!on);
@@ -1774,7 +1799,8 @@ TsMuxerWindow::TsMuxerWindow()
             [this, bdmvTab, info, folderLabel, outputLabel, guardLabel, discTypeLabel, freeSectorsLabel, folderBtn,
              isoBtn, helpBtn, buildBtn, discTypeCombo, freeSectorsEdit, manualCheck, orderCheck, keepExtrasCheck,
              innerOnlyCheck, singleCopy3dCheck, discLabelLabel, labelEdit, guardSpin, refresh, updateGuard, beforeCheck,
-             guardBeforeLabel, guardBeforeSpin, guardBeforeHint, fitLabel, updateFit, updateFolderStatus]()
+             guardBeforeLabel, guardBeforeSpin, guardBeforeHint, fitLabel, updateFit, updateFolderStatus,
+             noGuardCheck]()
             {
                 ui->tabWidget->setTabText(ui->tabWidget->indexOf(bdmvTab), tr("BDMV folder -> ISO"));
                 info->setText(
@@ -1826,6 +1852,11 @@ TsMuxerWindow::TsMuxerWindow()
                     "disc, so the burn writes the whole disc; a three-layer image ends inside its last layer, and a "
                     "single-layer disc is not padded. The layer-break guard is sized automatically; needs the disc "
                     "Free Sectors set.")));
+                noGuardCheck->setText(tr("Leave out the layer-break guard"));
+                noGuardCheck->setToolTip(wrapTip(
+                    tr("An image whose data crosses a layer break gets the layer-break guard set above, as a burnt "
+                       "dual-layer disc often reads badly at the layer change and a player then stalls there. Tick "
+                       "this to leave it out: the image is then written without zeros at the break.")));
                 singleCopy3dCheck->setText(tr("3D disc: store the video once, not twice"));
                 singleCopy3dCheck->setToolTip(wrapTip(
                     tr("A 3D disc stores its video once and gives it three names: the .ssif and the two .m2ts are the "
@@ -1931,7 +1962,7 @@ TsMuxerWindow::TsMuxerWindow()
             buildBtn, &QPushButton::clicked, this,
             [this, folderEdit, isoEdit, guardSpin, discTypeCombo, freeSectorsEdit, breaksList, buildBtn, beforeCheck,
              guardBeforeSpin, orderCheck, keepExtrasCheck, innerOnlyCheck, singleCopy3dCheck, labelEdit,
-             readFreeSectors]
+             readFreeSectors, noGuardCheck]
             {
                 const QString folder = folderEdit->text().trimmed();
                 const QString iso = isoEdit->text().trimmed();
@@ -1981,9 +2012,16 @@ TsMuxerWindow::TsMuxerWindow()
                 muxForm->show();
                 runInMuxMode = true;
                 QStringList args;
-                args << "--bdmv-to-iso" << ("--layer-break-guard=" + QString::number(guardSpin->value()));
-                if (beforeCheck->isChecked())
-                    args << ("--layer-break-guard-before=" + QString::number(guardBeforeSpin->value()));
+                args << "--bdmv-to-iso";
+                // The guard is the engine's default too; ticked off, the tab says so instead of sending a size
+                if (noGuardCheck->isChecked())
+                    args << "--no-layer-break-guard";
+                else
+                {
+                    args << ("--layer-break-guard=" + QString::number(guardSpin->value()));
+                    if (beforeCheck->isChecked())
+                        args << ("--layer-break-guard-before=" + QString::number(guardBeforeSpin->value()));
+                }
                 if (!breaks.isEmpty())
                     args << ("--layer-break-lbn=" + breaks.join(","));
                 if (orderCheck->isChecked())
@@ -2097,6 +2135,14 @@ TsMuxerWindow::TsMuxerWindow()
         // from a folder it muxes first, the same way that tab does.
         auto* innerCheck = new QCheckBox(tr("Keep data on the inner disc area (pad the outer edge)"), dlBox);
         innerCheck->setObjectName("dlInnerOnly");
+        // The guard an image crossing a layer break gets when none is ticked above, and the way to leave it out
+        auto* noGuardCheck = new QCheckBox(tr("Leave out the layer-break guard"), dlBox);
+        noGuardCheck->setObjectName("dlNoGuard");
+        noGuardCheck->setToolTip(wrapTip(
+            tr("An ISO image whose data crosses a layer break gets the layer-break guard without being asked: 288 MB "
+               "after the break and 18 MB before it are left empty, as a burnt dual-layer disc often reads "
+               "badly there and a player then stalls. Tick this to leave it out. A guard ticked above is used "
+               "instead.")));
         innerCheck->setToolTip(wrapTip(
             tr("The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is kept on "
                "the inner part of every layer and the outer edge is filled with zeros. The disc is muxed into a folder "
@@ -2152,6 +2198,7 @@ TsMuxerWindow::TsMuxerWindow()
         dl->addWidget(beforeCheck, rr, 0);
         dl->addWidget(beforeSpin, rr++, 1);
         dl->addWidget(innerCheck, rr++, 0, 1, 2);
+        dl->addWidget(noGuardCheck, rr++, 0, 1, 2);
         dl->addWidget(oversizeCheck, rr++, 0, 1, 2);
         dl->addWidget(breaksLabel, rr++, 0, 1, 2);
 
@@ -2200,7 +2247,8 @@ TsMuxerWindow::TsMuxerWindow()
         // The inner-only tick is shown for ISO output only, as the guard is, and can be ticked only for a disc with a
         // layer break: a single layer disc has no outer layer edge to pad. While it is on it sizes the zeros at the
         // breaks itself, so the guard boxes are greyed, as on the BDMV -> ISO tab.
-        auto updateDlInner = [this, innerCheck, discSizeCombo, guardCheck, guardSpin, beforeCheck, beforeSpin]()
+        auto updateDlInner =
+            [this, innerCheck, discSizeCombo, guardCheck, guardSpin, beforeCheck, beforeSpin, noGuardCheck]()
         {
             const bool iso = ui->radioButtonBluRayISO->isChecked();
             innerCheck->setVisible(iso);
@@ -2210,6 +2258,9 @@ TsMuxerWindow::TsMuxerWindow()
             guardSpin->setEnabled(iso && !inner && guardCheck->isChecked());
             beforeCheck->setEnabled(iso && !inner && guardCheck->isChecked());
             beforeSpin->setEnabled(iso && !inner && guardCheck->isChecked() && beforeCheck->isChecked());
+            // Leaving out the guard is a choice of an image without a guard ticked: inner-only pads its own way
+            noGuardCheck->setVisible(iso);
+            noGuardCheck->setEnabled(iso && !inner && !guardCheck->isChecked());
         };
         dlFillFreeSectors();
         updateDlFreeSectorsRow();
@@ -2354,13 +2405,14 @@ TsMuxerWindow::TsMuxerWindow()
         connect(beforeSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &TsMuxerWindow::updateMetaLines);
         connect(oversizeCheck, &QCheckBox::toggled, this, &TsMuxerWindow::updateMetaLines);
         connect(innerCheck, &QCheckBox::toggled, this, &TsMuxerWindow::updateMetaLines);
+        connect(noGuardCheck, &QCheckBox::toggled, this, &TsMuxerWindow::updateMetaLines);
         connect(dlManualCheck, &QCheckBox::toggled, this, &TsMuxerWindow::updateMetaLines);
         connect(dlFreeSectorsEdit, &QLineEdit::textChanged, this, [this](const QString&) { updateMetaLines(); });
 
         // Re-translate this groupbox on a runtime language change (see the BDMV->ISO tab hook above).
         m_retranslateHooks.push_back(
             [dlBox, fitLabel, guardCheck, guardSpin, oversizeCheck, discSizeCombo, beforeCheck, beforeSpin,
-             updateDlBreaks, dlFreeSectorsLabel, dlFreeSectorsEdit, dlManualCheck, innerCheck]()
+             updateDlBreaks, dlFreeSectorsLabel, dlFreeSectorsEdit, dlManualCheck, innerCheck, noGuardCheck]()
             {
                 dlBox->setTitle(tr("Dual-layer (BD-R/RE DL)"));
                 fitLabel->setText(tr("Fit to disc:"));
@@ -2377,6 +2429,12 @@ TsMuxerWindow::TsMuxerWindow()
                 guardCheck->setText(tr("Layer-break guard"));
                 beforeCheck->setText(tr("Also fill before the break"));
                 oversizeCheck->setText(tr("Allow oversize"));
+                noGuardCheck->setText(tr("Leave out the layer-break guard"));
+                noGuardCheck->setToolTip(wrapTip(
+                    tr("An ISO image whose data crosses a layer break gets the layer-break guard without being asked: "
+                       "288 MB after the break and 18 MB before it are left empty, as a burnt dual-layer disc often "
+                       "reads badly there and a player then stalls. Tick this to leave it out. A guard ticked above is "
+                       "used instead.")));
                 innerCheck->setText(tr("Keep data on the inner disc area (pad the outer edge)"));
                 innerCheck->setToolTip(wrapTip(
                     tr("The outer edge of a disc is the most error-prone part to burn. With this ticked, the movie is "
@@ -2505,10 +2563,10 @@ static const char* const CHOICE_WIDGETS[] = {
     "comboBoxDvProfile",
     // the dual-layer group beside the Meta file box
     "dlDiscSize", "dlGuardCheck", "dlGuardSpin", "dlGuardBeforeCheck", "dlGuardBeforeSpin", "dlFreeSectorsManual",
-    "dlFreeSectors", "dlAllowOversize", "dlInnerOnly",
+    "dlFreeSectors", "dlAllowOversize", "dlInnerOnly", "dlNoGuard",
     // the BDMV folder -> ISO tab
     "isoDiscType", "isoFreeSectorsManual", "isoFreeSectors", "isoGuard", "isoGuardBeforeCheck", "isoGuardBefore",
-    "isoInnerOnly", "isoKeepOrder", "isoKeepExtras"};
+    "isoInnerOnly", "isoKeepOrder", "isoKeepExtras", "isoNoGuard"};
 
 void TsMuxerWindow::saveChoices()
 {
@@ -4514,6 +4572,7 @@ QString TsMuxerWindow::getMuxOpts()
         // Inner-only takes the place of the guard: it needs the disc and its breaks, and sizes the zeros itself.
         // ISO output and a disc of two or more layers only, as the tick box is offered.
         const auto* innerCheck = findChild<QCheckBox*>("dlInnerOnly");
+        const auto* noGuardCheck = findChild<QCheckBox*>("dlNoGuard");
         if (innerCheck && innerCheck->isChecked() && ui->radioButtonBluRayISO->isChecked() && discSectors > 0 &&
             discSizeCombo->currentData().toInt() >= 2)
         {
@@ -4542,6 +4601,9 @@ QString TsMuxerWindow::getMuxOpts()
             if (beforeCheck && beforeSpin && beforeCheck->isChecked())
                 rez += " --layer-break-guard-before=" + QString::number(beforeSpin->value());
         }
+        // Without a guard ticked, an image crossing a layer break gets the guard by default; this leaves it out
+        else if (noGuardCheck && noGuardCheck->isChecked() && ui->radioButtonBluRayISO->isChecked())
+            rez += " --no-layer-break-guard";
         auto* oversizeCheck = findChild<QCheckBox*>("dlAllowOversize");
         if (oversizeCheck && oversizeCheck->isChecked())
             rez += " --allow-oversize";
