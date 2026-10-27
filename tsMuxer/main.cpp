@@ -1001,12 +1001,16 @@ Names of codecs in the meta file:
 - V_AV1             AV1
 - V_VP8             VP8, from MKV/WebM/IVF, to MKV output or demuxed to .ivf
 - V_VP9             VP9, from MKV/WebM/IVF, to MKV output or demuxed to .ivf
+- V_MPEG4/ISO/ASP   MPEG-4 Part 2 video, from MP4/MOV, copied into MKV output only
+- V_PRORES          Apple ProRes, from MOV, copied into MKV output only
 - A_AC3             AC3/AC3+/TRUE-HD
 - A_MLP             TRUE-HD (standalone TrueHD stream). For Blu-ray style TrueHD + AC-3 core from an MKV that
                     stores them as separate tracks, use merge-ac3-track=<n> with track=<TrueHD n> (see below).
 - A_AAC             AAC
 - A_DTS             DTS/DTS-Express/DTS-HD
 - A_MP3             MPEG audio layer 1/2/3
+- A_FLAC            FLAC, to MKV output or demuxed only
+- A_OPUS            Opus, to TS or MKV output or demuxed only
 - A_VORBIS          Vorbis, from MKV/WebM, to MKV output or demuxed to .ogg
 - A_ALAC            Apple Lossless, from MKV, to MKV output only
 - A_LPCM            raw pcm data or PCM WAV file
