@@ -152,11 +152,28 @@ CheckStreamRez MPEG2StreamReader::checkStream(uint8_t* buffer, int len)
     int damagedUnits = 0;
     int sequences = 0;
     int pictures = 0;
+    // MPEG-1 video (ISO/IEC 11172-2) has no sequence extension, and MPEG-2 video has one right after every sequence
+    // header (ISO/IEC 13818-2, 6.2.2: the start code after the header decides). isMpeg1() could not tell them apart
+    // here, as only the mux sets m_seqExtFound, so every MPEG-2 stream was listed as "MPEG-1 video", a Main@8 720:576i
+    // one of a broadcast or a disc as "720:576p". MPEG-1 now only where a sequence header of the probe is followed by
+    // another unit and none by a sequence extension; a header at the end of the probe, its extension cut off, decides
+    // nothing.
+    bool afterSequence = false;  // the unit before was a sequence header
+    bool sequenceExtended = false;
+    bool sequenceAlone = false;
     for (uint8_t* nal = MPEGHeader::findNextMarker(buffer, end); nal <= end - 32;
          nal = MPEGHeader::findNextMarker(nal + 4, end))
     {
         uint8_t unitType = nal[3];
         ++units;
+        if (afterSequence)
+        {
+            if (unitType == EXT_START_SHORT_CODE && (nal[4] >> 4) == SEQUENCE_EXT)
+                sequenceExtended = true;
+            else
+                sequenceAlone = true;
+            afterSequence = false;
+        }
         try
         {
             if (unitType >= SLICE_MIN_START_SHORT_CODE && unitType <= SLICE_MAX_START_SHORT_CODE)
@@ -201,6 +218,7 @@ CheckStreamRez MPEG2StreamReader::checkStream(uint8_t* buffer, int len)
                     m_sequence.deserialize(nal + 4, nextNal - nal - 4);
                     m_streamAR = static_cast<VideoAspectRatio>(m_sequence.aspect_ratio_info);
                     spsFound = true;
+                    afterSequence = true;
                     ++sequences;
                     break;
                 }
@@ -219,7 +237,7 @@ CheckStreamRez MPEG2StreamReader::checkStream(uint8_t* buffer, int len)
     if (spsFound && pictures > 0 && sliceFound && fewDamaged)
     {
         rez.codecInfo = mpeg2CodecInfo;
-        rez.streamDescr = m_sequence.getStreamDescr(isMpeg1());
+        rez.streamDescr = m_sequence.getStreamDescr(sequenceAlone && !sequenceExtended);
         // A picture coding extension in a lost packet can say repeat_first_field by chance: with damage, pulldown is
         // only named where at least one picture in 16 repeats a field (3:2 pulldown repeats one in every two). Raw
         // MPEG-2 without pulldown, 40 percent of its blocks overwritten, was listed "(pulldown)" from one such picture.
