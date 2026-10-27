@@ -4459,14 +4459,15 @@ int main(int argc, char** argv)
                 const int64_t discLimit = muxerManager.getDiscSizeLimit();
                 if (discLimit > 0)
                 {
-                    // totalSize() is the sum of source elementary-stream sizes; the muxed BD M2TS adds
+                    // muxedSourceSize() is the sum of source elementary-stream sizes the mux takes (a cut, the
+                    // tracks of a transport stream that are taken); the muxed BD M2TS adds
                     // TS(188/184)+M2TS(192/188) framing, PSI/PCR/padding and UDF/BDMV overhead, so the
                     // real image runs ~5% larger. Compare that inflated estimate against the capacity.
                     // A constant bitrate pads with null packets up to its rate, and then the image is the rate
                     // times the length, however little the sources hold (paddedOutputSize). Not counted, a
                     // constant bitrate image half as big again as the disc was reported as fitting before the mux.
                     const int64_t estSize =
-                        (std::max)(muxerManager.totalSize() / 100 * 105, muxerManager.paddedOutputSize());
+                        (std::max)(muxerManager.muxedSourceSize() / 100 * 105, muxerManager.paddedOutputSize());
                     if (muxerManager.paddedLengthUnknown())
                         LTRACE(LT_INFO, 2,
                                "Capacity guard: the sources do not state their length, so the null packets of the "
@@ -4552,7 +4553,7 @@ int main(int argc, char** argv)
                             (std::min)(afterSectors, (std::max<int64_t>)(4 * 1024 * 1024 / 2048, afterSectors / 16));
                         constexpr int64_t reserveSectors = 8192 + 8192;
                         const int64_t estSize =
-                            (std::max)(muxerManager.totalSize() / 100 * 105, muxerManager.paddedOutputSize());
+                            (std::max)(muxerManager.muxedSourceSize() / 100 * 105, muxerManager.paddedOutputSize());
                         const int64_t dataSectors = (estSize + 2047) / 2048 + reserveSectors;
                         const int64_t capacity = muxerManager.getDiscSizeLimit() > 0
                                                      ? muxerManager.getDiscSizeLimit() / 2048

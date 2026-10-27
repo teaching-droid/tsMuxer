@@ -1934,6 +1934,31 @@ int64_t MuxerManager::paddedOutputSize()
     return static_cast<int64_t>(bytes / 188.0 * 192.0);
 }
 
+// ** THE FIT-TO-DISC ESTIMATE COUNTED THE WHOLE SOURCE FILES. **
+//
+// A cut of a minute out of a clip of 78.5 GB was estimated at 82 GB and refused for a BD-25 before the mux, and a cut
+// of 28 GB lost the layer break guard as "not fitting" a BD-50. The cut takes its share of the stated length, a quarter
+// more and a point, as the rate of a part can run above the average of the whole; without a stated length the whole
+// sources are counted, as before.
+int64_t MuxerManager::muxedSourceSize()
+{
+    const int64_t size = m_metaDemuxer.selectedSourceSize();
+    if (m_cutStart <= 0 && m_cutEnd <= 0)
+        return size;
+    const auto toNano = [](const int64_t pts)
+    { return static_cast<int64_t>(static_cast<double>(pts) * 1e9 / static_cast<double>(INTERNAL_PTS_FREQ)); };
+    const int64_t stated = m_metaDemuxer.statedDurationNano(true);
+    if (stated <= 0)
+        return size;
+    const int64_t fromNano = m_cutStart > 0 ? toNano(m_cutStart) : 0;
+    const int64_t toEndNano = m_cutEnd > 0 ? (std::min)(toNano(m_cutEnd), stated) : stated;
+    if (toEndNano <= fromNano)
+        return size;
+    const double share =
+        (std::min)(1.0, static_cast<double>(toEndNano - fromNano) / static_cast<double>(stated) * 1.25 + 0.01);
+    return static_cast<int64_t>(static_cast<double>(size) * share);
+}
+
 AbstractMuxer* MuxerManager::getMainMuxer() const { return m_mainMuxer.get(); }
 
 AbstractMuxer* MuxerManager::getSubMuxer() const { return m_subMuxer.get(); }

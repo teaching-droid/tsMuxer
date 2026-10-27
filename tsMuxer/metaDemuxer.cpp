@@ -3082,6 +3082,84 @@ static int64_t fileDurationNano(const BufferedReaderManager& readManager, const 
     return 0;  // a raw stream states no length
 }
 
+// The share of a transport stream file that the given tracks take, from the packets of 32 windows of 1 MB spread over
+// the file; -1 when the file cannot be read or holds no packets there. pids as the meta gives them: a sub track is the
+// stream of pid >> 16.
+static double transportStreamShare(const std::string& fileName, const std::map<int32_t, DemuxerReadPolicy>& pids)
+{
+    File file;
+    if (!file.open(fileName.c_str(), File::ofRead))
+        return -1.0;
+    int64_t fileSize = 0;
+    file.size(&fileSize);
+    std::set<int> wanted;
+    for (const auto& [pid, policy] : pids) wanted.insert(SubTrackFilter::isSubTrack(pid) ? pid >> 16 : pid);
+    constexpr int WINDOWS = 32;
+    constexpr uint32_t WINDOW_BYTES = 1024 * 1024;
+    std::vector<uint8_t> buf(WINDOW_BYTES);
+    int64_t all = 0;
+    int64_t kept = 0;
+    for (int w = 0; w < WINDOWS; ++w)
+    {
+        const int64_t pos = fileSize > WINDOW_BYTES ? (fileSize - WINDOW_BYTES) / (WINDOWS - 1) * w : 0;
+        if (file.seek(pos) != pos)
+            break;
+        const int n = file.read(buf.data(), WINDOW_BYTES);
+        if (n <= 0)
+            break;
+        // the first sync byte that is followed by two more at the distance of a packet, of 188 or 192 bytes
+        for (int i = 0; i + 2 * 192 < n;)
+        {
+            int size = 0;
+            for (const int ps : {188, 192})
+                if (buf[i] == 0x47 && buf[i + ps] == 0x47 && buf[i + 2 * ps] == 0x47)
+                    size = ps;
+            if (size == 0)
+            {
+                ++i;
+                continue;
+            }
+            for (; i + size <= n && buf[i] == 0x47; i += size)
+            {
+                ++all;
+                if (wanted.count((buf[i + 1] & 0x1f) << 8 | buf[i + 2]))
+                    ++kept;
+            }
+        }
+        if (fileSize <= WINDOW_BYTES)
+            break;
+    }
+    file.close();
+    return all > 0 ? static_cast<double>(kept) / static_cast<double>(all) : -1.0;
+}
+
+int64_t METADemuxer::selectedSourceSize()
+{
+    int64_t size = m_totalSize;
+    for (const auto& [name, demuxerData] : m_containerReader.m_demuxers)
+    {
+        // A file of its own, not a join or the clips of a playlist, which keep their whole size
+        if (!demuxerData.m_demuxer || demuxerData.m_iterator || demuxerData.m_pids.empty())
+            continue;
+        const std::string ext = strToUpperCase(extractFileExt(name));
+        if (ext != "TS" && ext != "M2TS" && ext != "MTS" && ext != "M2T")
+            continue;
+        const double share = transportStreamShare(name, demuxerData.m_pids);
+        if (share < 0)
+            continue;
+        int64_t fileSize = 0;
+        if (File file; file.open(name.c_str(), File::ofRead))
+        {
+            file.size(&fileSize);
+            file.close();
+        }
+        // a tenth more and a point, as the windows are a sample of the file
+        const double keep = (std::min)(1.0, share * 1.1 + 0.01);
+        size -= static_cast<int64_t>(static_cast<double>(fileSize) * (1.0 - keep));
+    }
+    return (std::max)(int64_t{0}, size);
+}
+
 int64_t METADemuxer::statedDurationNano(const bool sumJoins)
 {
     int64_t longest = 0;

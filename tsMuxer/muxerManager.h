@@ -116,6 +116,9 @@ class MuxerManager final
     // --minbitrate under --maxbitrate) over the length of the title, in 192 byte packets. 0 when nothing is padded,
     // and when the sources do not state their length (a raw stream).
     [[nodiscard]] int64_t paddedOutputSize();
+    // The source bytes the mux takes, for the fit-to-disc estimate: the sources less the tracks left out of a transport
+    // stream file (METADemuxer::selectedSourceSize), and of a cut the part its length takes of the stated length
+    [[nodiscard]] int64_t muxedSourceSize();
     // A rate is padded to, and the sources do not state the length it is padded over
     [[nodiscard]] bool paddedLengthUnknown();
 
