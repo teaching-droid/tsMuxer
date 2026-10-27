@@ -3156,7 +3156,9 @@ M2TSStreamInfo::M2TSStreamInfo(const PMTStreamInfo& pmtStreamInfo)
         const auto aStream = dynamic_cast<SimplePacketizerReader*>(pmtStreamInfo.m_codecReader);
         if (aStream)
         {
-            audio_presentation_type = aStream->getChannels();
+            // The first layout, the one the PMT gives (PMTStreamInfo::m_firstChannels); the reader holds the last.
+            const bool first = pmtStreamInfo.m_firstFreq > 0;
+            audio_presentation_type = first ? pmtStreamInfo.m_firstChannels : aStream->getChannels();
             if (audio_presentation_type == 2)
                 audio_presentation_type = 3;
             else if (audio_presentation_type > 3)
@@ -3164,20 +3166,21 @@ M2TSStreamInfo::M2TSStreamInfo(const PMTStreamInfo& pmtStreamInfo)
             // A 48 kHz core under a part at 96 or 192 kHz is code 14 or 12, as a disc writes it: an AC-3 reader gives
             // its core as the rate, and DTS-HD and TrueHD merged with an AC-3 core give it apart. They were 4 or 5,
             // as for a stream without a core, and the DTS core alone of down-to-dts was 4 at 48 kHz.
-            const int coreFreq = aStream->getCoreFreq();
-            const int freq = coreFreq ? coreFreq : aStream->getFreq();
+            const int coreFreq = first ? pmtStreamInfo.m_firstCoreFreq : aStream->getCoreFreq();
+            const int freq = coreFreq ? coreFreq : (first ? pmtStreamInfo.m_firstFreq : aStream->getFreq());
+            const int altFreq = first ? pmtStreamInfo.m_firstAltFreq : aStream->getAltFreq();
             switch (freq)
             {
             case 48000:
-                if (aStream->getAltFreq() == 96000)
+                if (altFreq == 96000)
                     sampling_frequency_index = 14;
-                else if (aStream->getAltFreq() == 192000)
+                else if (altFreq == 192000)
                     sampling_frequency_index = 12;
                 else
                     sampling_frequency_index = 1;
                 break;
             case 96000:
-                if (aStream->getAltFreq() == 192000)
+                if (altFreq == 192000)
                     sampling_frequency_index = 12;
                 else
                     sampling_frequency_index = 4;

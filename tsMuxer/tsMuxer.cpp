@@ -685,6 +685,13 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
     {
         itPid->second.m_mpegReader = dynamic_cast<MPEGStreamReader*>(codecReader);
         itPid->second.m_audioReader = dynamic_cast<SimplePacketizerReader*>(codecReader);
+        if (auto* audio = itPid->second.m_audioReader)
+        {
+            itPid->second.m_firstChannels = audio->getChannels();
+            itPid->second.m_firstFreq = audio->getFreq();
+            itPid->second.m_firstCoreFreq = audio->getCoreFreq();
+            itPid->second.m_firstAltFreq = audio->getAltFreq();
+        }
         // Carried to the playlist and the clip info, which used to decide this for themselves from the
         // presence of Dolby Vision and so described a single layer stream as an enhancement layer: no
         // primary video entry at all, and a subpath for a layer that is not there.

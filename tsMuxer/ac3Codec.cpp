@@ -401,20 +401,24 @@ AC3Codec::AC3ParseError AC3Codec::parseHeader(uint8_t* buf, const uint8_t* end)
         m_sample_rate = ff_ac3_freqs[m_fscod] >> m_halfratecod;
         m_bit_rate = (ff_ac3_bitratetab[m_frmsizecod >> 1] * 1000) >> m_halfratecod;
         m_channels = static_cast<uint8_t>(ff_ac3_channels[m_acmod] + m_lfeon);
-        // A layout that changes inside the stream, as a 2.0 programme with 5.1 parts, is muxed frame by frame, but
-        // the description of the stream (PMT, clip info, Matroska header) keeps the layout of the first frame.
+        // A layout that changes inside the stream, as a 2.0 programme with 5.1 parts or a join of files at different
+        // rates, is muxed frame by frame, but the description of the stream (PMT, clip info, playlist, Matroska header)
+        // keeps the layout of the first frame. A change of rate alone was not reported.
         if (!m_testMode)
         {
             if (m_firstAc3Channels == 0)
+            {
                 m_firstAc3Channels = m_channels;
-            else if (m_channels != m_firstAc3Channels && !m_layoutChangeReported)
+                m_firstAc3Rate = m_sample_rate;
+            }
+            else if ((m_channels != m_firstAc3Channels || m_sample_rate != m_firstAc3Rate) && !m_layoutChangeReported)
             {
                 m_layoutChangeReported = true;
                 LTRACE(LT_WARN, 2,
-                       "Warning: the AC-3 stream changes from " << static_cast<int>(m_firstAc3Channels) << " to "
-                                                                << static_cast<int>(m_channels)
-                                                                << " channels. Every frame is kept; the description "
-                                                                   "of the stream keeps the first layout.");
+                       "Warning: the AC-3 stream changes from "
+                           << static_cast<int>(m_firstAc3Channels) << " channels at " << m_firstAc3Rate << " Hz to "
+                           << static_cast<int>(m_channels) << " channels at " << m_sample_rate
+                           << " Hz. Every frame is kept; the description of the stream keeps the first layout.");
             }
         }
     }

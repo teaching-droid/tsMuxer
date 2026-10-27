@@ -309,6 +309,14 @@ struct PMTStreamInfo final
     // declares these (TS 101 154: AC-3, E-AC-3 and DTS are carried as stream type 0x06 with the descriptor), or the
     // registration descriptor "AC-3" or "EAC3" of ATSC A/52 annexes A and G. Read for stream type 0x06 only.
     int m_soundDescriptor;
+    // The layout of an audio stream when its PMT descriptor was made, from the first frames of its first file. The
+    // clip information and the playlist describe the stream by these, as the PMT does: they read the reader at the end
+    // of the mux, and a join of files with different layouts got the last file's layout there and the first file's in
+    // the PMT. Zero when unknown; the reader is asked then.
+    int m_firstChannels = 0;
+    int m_firstFreq = 0;
+    int m_firstCoreFreq = 0;
+    int m_firstAltFreq = 0;
 
     // ---------------------
     std::vector<PMTIndex> m_index;  // blu-ray seek index. key=number of tsFrame. value=information about key frame
