@@ -286,6 +286,14 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **The clear of a PGS track drawn at another size ended 90 ticks before its own time,** after the time it is decoded at. It now ends at that decoding time, as every other display set does.
 
+* **A PGS track drawn at another size showed only one of two pictures shown together,** such as a sign at the top and a line of dialogue at the bottom: the first was lost, and the second was drawn at the place of the first. Both are now shown together, each at its own place.
+
+* **A PGS track drawn at another size that starts with a clear got a clear of an empty window before its first picture.** A clear is now written only while a picture is on the screen, and a display set that starts afresh with nothing to show now clears the screen.
+
+* **The times of a PGS track drawn at another size did not follow the PGS decoder model:** a clear was decoded about 90 ticks too early, a large picture got too little time to be decoded, and the times could lie a few ticks beside the frames. They now follow the same rules as text subtitles drawn into PGS.
+
+* **A .sup made with --demux from subtitles with a picture at 0 s got a decoding time near 13 hours 15 minutes for it.** That picture is now decoded from the start and shown as soon as it can be, usually less than a tenth of a second later; every later picture keeps its time.
+
 * **A warning about a line of an SRT file that is not part of a subtitle quoted the line as it was,** control characters and bytes that are not UTF-8 among them, so a terminal could take escape sequences from the file. Such characters are now shown as \xNN, and a quoted line is cut short after 120 bytes.
 
 ### Audio
