@@ -6,6 +6,7 @@
 #include <string>
 
 #include "avCodecs.h"
+#include "bitmapSubtitles.h"
 #include "ioContextDemuxer.h"
 #include "tsMuxer.h"
 #include "vodCoreException.h"
@@ -224,7 +225,10 @@ static constexpr int Y_THRESHOLD = 33;
 
 int PGSStreamReader::readObjectDef(const uint8_t* pos, const uint8_t* end)
 {
-    pos += 4;  // skip object ID and version number
+    // The object is drawn at the place its own id has in the PCS. The id of the first segment was skipped and 0 used,
+    // so a second object of a display set, or an object with id 1, was drawn at the place of object 0.
+    uint16_t object_id = AV_RB16(pos);
+    pos += 4;  // object ID, version number and sequence flags
     const uint32_t objectSize = AV_RB24(pos);
     pos += 3;
     const uint8_t* objEnd = pos + objectSize;
@@ -239,7 +243,6 @@ int PGSStreamReader::readObjectDef(const uint8_t* pos, const uint8_t* end)
     pos += 2;
     object_height = AV_RB16(pos);
     pos += 2;
-    uint16_t object_id = 0;
     while (pos < objEnd)
     {
         if (pos >= end)
@@ -259,8 +262,25 @@ int PGSStreamReader::readObjectDef(const uint8_t* pos, const uint8_t* end)
     }
     if (m_needRescale)
     {
+        // into the picture of the display set; it is scaled when the set ends (renderDisplaySet)
         decodeRleData(composition_object_horizontal_position[object_id],
                       composition_object_vertical_position[object_id]);
+        m_dsDrawn = true;
+    }
+    return 0;
+}
+
+// ** A DISPLAY SET OF A PGS STREAM DRAWN AT ANOTHER SIZE IS DRAWN ONCE, AT ITS END. ** Each object was scaled and
+// written as an epoch start of its own when it was read, so of a set with two objects only the second stayed on the
+// screen, and the first was lost. Every object of the set is now drawn into one picture at its own place, and that
+// picture is written as one object in one window, the box around all that is drawn. A set that shows nothing is a
+// clear, written only while a picture is on the screen: a stream that began with a clear got a clear of a window of 0x0
+// before any picture. An epoch start without an object clears the screen as well; the picture stayed on it.
+void PGSStreamReader::renderDisplaySet()
+{
+    m_dsOpen = false;
+    if (m_dsDrawn)
+    {
         yuvToRgb(m_fontBorder ? Y_THRESHOLD : 0);
         BitmapInfo bmpDest;
         BitmapInfo bmpRef;
@@ -275,9 +295,28 @@ int PGSStreamReader::readObjectDef(const uint8_t* pos, const uint8_t* end)
         rescaleRGB(&bmpDest, &bmpRef);
         if (m_fontBorder)
             TextSubtitlesRender::addBorder(m_fontBorder, m_scaledRgbBuffer, m_scaled_width, m_scaled_height);
-        // memcpy(bmpDest.buffer, bmpRef.buffer, bmpDest.Width * bmpDest.Height * 4);
+        renderTextShow(m_dsTime);
+        m_pictureShown = true;
     }
-    return 0;
+    else if (m_dsClears && m_pictureShown)
+    {
+        renderTextHide(m_dsTime);
+        m_pictureShown = false;
+    }
+}
+
+// The time of a display set on the frame grid of the video, in 90 kHz ticks: rounded to the nearest frame as
+// TextToPGSConverter::alignToGrid does, at the exact rate of the PGS frame rate code (24000/1001 for fps=23.976), as
+// the bitmap path has it. At 23.976 itself the grid would drift from the frames by a tick every 6.5 frames.
+int64_t PGSStreamReader::gridTime(const int64_t internalTime) const
+{
+    const double sec = static_cast<double>(internalTime) / INTERNAL_PTS_FREQ;
+    double rate = nearestPgsFrameRate(m_render->m_videoFps);
+    if (rate == 0.0)
+        rate = m_render->m_videoFps;
+    if (rate <= 0.0)
+        return llround(sec * PCR_FREQUENCY);
+    return llround(round(sec * rate + 1e-6) / rate * PCR_FREQUENCY);
 }
 
 void PGSStreamReader::rescaleRGB(const BitmapInfo* bmpDest, const BitmapInfo* bmpRef)
@@ -340,11 +379,9 @@ void PGSStreamReader::renderTextShow(int64_t inTime)
         tmp[idx] <<= 1;
         tmp[idx]++;
     }
-    inTime = inTime / INT_FREQ_TO_TS_FREQ;
-
     // The window and the object are the box around what the scaled picture draws, at its place in that picture
-    // (TextToPGSConverter::packDrawnBox): they were as wide as the picture. Each object starts an epoch here, which
-    // only the clear of renderTextHide continues, with the same window. Where nothing is drawn, the object is 8x8
+    // (TextToPGSConverter::packDrawnBox): they were as wide as the picture. Each drawn display set starts an epoch,
+    // which only the clear of renderTextHide continues, with the same window. Where nothing is drawn, the object is 8x8
     // transparent pixels.
     // The window and the object start at the picture's first line. They were placed at its last line, so a rescaled
     // picture lay below its place and partly or wholly outside the frame.
@@ -354,73 +391,74 @@ void PGSStreamReader::renderTextShow(int64_t inTime)
     m_objectWindowHeight = static_cast<uint16_t>(FFMAX(8, m_render->renderedHeight()));
     m_objectWindowLeft = m_render->m_objectLeft;
     m_objectWindowWidth = m_render->m_objectWidth;
-    const double decodedObjectSize = static_cast<double>(m_objectWindowHeight) * m_objectWindowWidth;
-    const auto compositionDecodeTime = static_cast<int64_t>(90000.0 * decodedObjectSize / PIXEL_DECODING_RATE + 0.999);
-    const auto windowsTransferTime = static_cast<int64_t>(90000.0 * decodedObjectSize / PIXEL_COMPOSITION_RATE + 0.999);
-    const auto PLANEINITIALIZATIONTIME =
-        static_cast<int64_t>(90000.0 * (m_scaled_width * m_scaled_height) / PIXEL_COMPOSITION_RATE + 0.999);
-    const int64_t PRESENTATION_DTS_DELTA = PLANEINITIALIZATIONTIME + windowsTransferTime;
+    // ** THE TIMES ARE THOSE OF THE TEXT AND BITMAP PATHS. ** The time is on the frame grid of the video; the plane is
+    // cleared while the object is decoded, then the window is drawn, each time rounded up on its own. The set was
+    // decoded the clearing and the drawing before it, and the times were rounded up by adding 0.999.
+    const double objectPixels = static_cast<double>(m_objectWindowHeight) * m_objectWindowWidth;
+    const int64_t decodeTime = TextToPGSConverter::objectDecodeTime(objectPixels);
+    const int64_t drawTime = TextToPGSConverter::windowDrawTime(objectPixels);
+    const int64_t decodeDuration =
+        FFMAX(TextToPGSConverter::windowDrawTime(static_cast<double>(m_scaled_width) * m_scaled_height), decodeTime) +
+        drawTime;
+    int64_t pts = gridTime(inTime);
+    int64_t dts = pts - decodeDuration;
+    // --demux: a .sup holds no time below 0, and a decoding time of 0 there stands for the presentation time. A picture
+    // at the start was written with a decoding time below 0, which came out as a time near 13 hours 15 minutes. The set
+    // is moved later until it is decoded from the first tick: it is shown as soon as it can be decoded, and every
+    // later set keeps its time.
+    if (m_demuxMode && dts < 1)
+    {
+        pts += 1 - dts;
+        dts = 1;
+    }
+    const int64_t odfPTS = dts + decodeTime;
 
-    // show text
     uint8_t* curPos = m_renderedData;
-    // composition segment. pts=x,  dts = x-0.0648 (pts alignment to video grid) (I get constant value from real PGS
-    // track as example)
-    int rLen =
-        m_render->composePresentationSegment(curPos, CompositionMode::Start, inTime, inTime - PRESENTATION_DTS_DELTA,
-                                             m_objectWindowLeft, m_objectWindowTop, m_demuxMode, m_forced_on_flag);
-    m_renderedBlocks.emplace_back(inTime, inTime - PRESENTATION_DTS_DELTA, rLen, curPos);
+    int rLen = m_render->composePresentationSegment(curPos, CompositionMode::Start, pts, dts, m_objectWindowLeft,
+                                                    m_objectWindowTop, m_demuxMode, m_dsForced);
+    m_renderedBlocks.emplace_back(pts, dts, rLen, curPos);
     curPos += rLen;
-    // window definition.   pts=x-0.001, dts = x-0.0648
-    rLen = m_render->composeWindowDefinition(curPos, inTime - windowsTransferTime, inTime - PRESENTATION_DTS_DELTA,
-                                             m_objectWindowLeft, m_objectWindowTop, m_objectWindowWidth,
-                                             m_objectWindowHeight, m_demuxMode);
-    m_renderedBlocks.emplace_back(inTime - windowsTransferTime, inTime - PRESENTATION_DTS_DELTA, rLen, curPos);
+    rLen = m_render->composeWindowDefinition(curPos, pts - drawTime, dts, m_objectWindowLeft, m_objectWindowTop,
+                                             m_objectWindowWidth, m_objectWindowHeight, m_demuxMode);
+    m_renderedBlocks.emplace_back(pts - drawTime, dts, rLen, curPos);
     curPos += rLen;
-
-    // palette.             pts=x-0.0648, dts = x-0.0648
-    rLen = m_render->composePaletteDefinition(m_render->m_paletteByColor, curPos, inTime - PRESENTATION_DTS_DELTA,
-                                              inTime - PRESENTATION_DTS_DELTA, m_demuxMode);
-    m_renderedBlocks.emplace_back(inTime - PRESENTATION_DTS_DELTA, inTime - PRESENTATION_DTS_DELTA, rLen, curPos);
+    rLen = m_render->composePaletteDefinition(m_render->m_paletteByColor, curPos, dts, dts, m_demuxMode);
+    m_renderedBlocks.emplace_back(dts, dts, rLen, curPos);
     curPos += rLen;
-    // object               pts=x-0.0627, dts = x-0.0648
-    // inTime - 5643
-    const int64_t odfPTS = inTime - PRESENTATION_DTS_DELTA + compositionDecodeTime;
-    rLen = m_render->composeObjectDefinition(curPos, odfPTS, inTime - PRESENTATION_DTS_DELTA, 0,
-                                             m_objectWindowHeight - 1, m_demuxMode);
-    m_renderedBlocks.emplace_back(odfPTS, inTime - PRESENTATION_DTS_DELTA, rLen, curPos);
+    rLen = m_render->composeObjectDefinition(curPos, odfPTS, dts, 0, m_objectWindowHeight - 1, m_demuxMode);
+    m_renderedBlocks.emplace_back(odfPTS, dts, rLen, curPos);
     curPos += rLen;
-    // end                  pts=x-0.0627, dts = x-0.0627
     rLen = m_render->composeEnd(curPos, odfPTS, odfPTS, m_demuxMode);
     m_renderedBlocks.emplace_back(odfPTS, odfPTS, rLen, curPos);
 }
 
 void PGSStreamReader::renderTextHide(int64_t outTime)
 {
-    const double decodedObjectSize = static_cast<double>(m_objectWindowHeight) * m_objectWindowWidth;
-    const auto windowsTransferTime = static_cast<int64_t>(90000.0 * decodedObjectSize / PIXEL_COMPOSITION_RATE + 0.999);
+    // The clear takes the drawing of the window and one tick, and ends at its decoding time, as the clear of a drawn
+    // text does. It was decoded 90 ticks before that.
+    const int64_t drawTime =
+        TextToPGSConverter::windowDrawTime(static_cast<double>(m_objectWindowHeight) * m_objectWindowWidth);
+    int64_t pts = gridTime(outTime);
+    int64_t dts = pts - drawTime - 1;
+    if (m_demuxMode && dts < 1)
+    {
+        pts += 1 - dts;
+        dts = 1;
+    }
 
     m_firstRenderedPacket = true;
-    outTime = outTime / INT_FREQ_TO_TS_FREQ;
     m_renderedBlocks.clear();
-    // hide text
     uint8_t* curPos = m_renderedData;
-    // composition segment. pts=x,       dts = x-0.001 (pts alignment to video grid)
-    int rLen = m_render->composePresentationSegment(curPos, CompositionMode::Finish, outTime,
-                                                    outTime - windowsTransferTime - 90, m_objectWindowLeft,
+    int rLen = m_render->composePresentationSegment(curPos, CompositionMode::Finish, pts, dts, m_objectWindowLeft,
                                                     m_objectWindowTop, m_demuxMode, false);
-    m_renderedBlocks.emplace_back(outTime, outTime - windowsTransferTime - 90, rLen, curPos);
+    m_renderedBlocks.emplace_back(pts, dts, rLen, curPos);
     curPos += rLen;
-    // windows              pts=x-0.001, dts = x-0.001
-    rLen = m_render->composeWindowDefinition(curPos, outTime - windowsTransferTime, outTime - windowsTransferTime - 90,
-                                             m_objectWindowLeft, m_objectWindowTop, m_objectWindowWidth,
-                                             m_objectWindowHeight, m_demuxMode);
-    m_renderedBlocks.emplace_back(outTime - windowsTransferTime, outTime - windowsTransferTime - 90, rLen, curPos);
+    rLen = m_render->composeWindowDefinition(curPos, pts - drawTime, dts, m_objectWindowLeft, m_objectWindowTop,
+                                             m_objectWindowWidth, m_objectWindowHeight, m_demuxMode);
+    m_renderedBlocks.emplace_back(pts - drawTime, dts, rLen, curPos);
     curPos += rLen;
-    // end                  pts = dts = the decoding time of the set, as the end of a clear of drawn text has it
-    // (TextToPGSConverter): it was 90 ticks before the clear's own time, after the time the set is decoded at
-    rLen = m_render->composeEnd(curPos, outTime - windowsTransferTime - 90, outTime - windowsTransferTime - 90,
-                                m_demuxMode);
-    m_renderedBlocks.emplace_back(outTime - windowsTransferTime - 90, outTime - windowsTransferTime - 90, rLen, curPos);
+    rLen = m_render->composeEnd(curPos, dts, dts, m_demuxMode);
+    m_renderedBlocks.emplace_back(dts, dts, rLen, curPos);
 }
 
 int64_t getTimeValueNano(uint8_t* pos)
@@ -777,18 +815,14 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
             // object definition
             // LTRACE(LT_INFO, 2, "PGS #" << m_streamIndex << " object definition size " << segment_len
             //	  << " objectID=" << (int)m_curPos[0] << " version=" << (int) m_curPos[2]);
-            if (m_needRescale)
+            if (m_needRescale && m_dsOpen)
             {
-                memset(m_imgBuffer, 0xff, static_cast<size_t>(m_video_width) * m_video_height);
-                memset(m_rgbBuffer, 0x00, static_cast<size_t>(m_video_width) * m_video_height * 4);
-                memset(m_scaledRgbBuffer, 0x00, static_cast<size_t>(m_scaled_width) * m_scaled_height * 4);
                 if (readObjectDef(m_curPos, m_curPos + segment_len) == NEED_MORE_DATA)
                 {
                     m_tmpBufferLen = m_bufEnd - m_curPos;
                     memmove(m_tmpBuffer.data(), m_curPos, m_tmpBufferLen);
                     return NEED_MORE_DATA;
                 }
-                renderTextShow(m_maxPTS);
             }
             break;
         case PCS_DEF_SEGMENT:
@@ -824,12 +858,26 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
 
             bitReader.skipBits(16);  // palette_update_flag, palette_id_ref
             number_of_composition_objects = bitReader.getBits<uint8_t>(8);
+            m_dsForced = false;
             for (int i = 0; i < number_of_composition_objects; i++)
             {
                 composition_object(bitReader);
+                m_dsForced = m_dsForced || m_forced_on_flag;
             }
-            if (composition_state != CompositionState::csEpochStart && m_needRescale)
-                renderTextHide(m_maxPTS);
+            // --demux: a display set whose decoding would start before 0 is written that much later (writeAdditionData)
+            m_demuxDtsShift = m_demuxMode && m_lastDTS < 0 ? INT_FREQ_TO_TS_FREQ - m_lastDTS : 0;
+            if (m_needRescale)
+            {
+                if (m_dsOpen)  // the set before had no END
+                    renderDisplaySet();
+                memset(m_imgBuffer, 0xff, static_cast<size_t>(m_video_width) * m_video_height);
+                memset(m_rgbBuffer, 0x00, static_cast<size_t>(m_video_width) * m_video_height * 4);
+                memset(m_scaledRgbBuffer, 0x00, static_cast<size_t>(m_scaled_width) * m_scaled_height * 4);
+                m_dsOpen = true;
+                m_dsDrawn = false;
+                m_dsTime = m_maxPTS;
+                m_dsClears = composition_state != CompositionState::csEpochStart || number_of_composition_objects == 0;
+            }
             break;
         case WINDOWS_DEF_SEGMENT:
             // Window Definition Segment
@@ -838,14 +886,13 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
             for (int i = 0; i < number_of_windows; i++) pgs_window(bitReader);
             // LTRACE(LT_INFO, 2, "PGS #" << m_streamIndex << " Window Definition Segment");
             break;
+        case END_DEF_SEGMENT:
+            if (m_needRescale && m_dsOpen)
+                renderDisplaySet();
+            break;
         case 0x18:
             // Interactive Composition Segment
             // LTRACE(LT_INFO, 2, "PGS #" << m_streamIndex << " Interactive Composition Segment");
-        case 0x80:
-            // End of Display Set Segment
-            // m_end_display_time = get_pts(curPos);
-            // curPos += 5;
-            // LTRACE(LT_INFO, 2, "PGS #" << m_streamIndex << " END");
         case 0x81:
         case 0x82:
             // Used by HDMV Text subtitle streams
@@ -1005,8 +1052,12 @@ int PGSStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPa
         *dstBuffer++ = 'P';
         *dstBuffer++ = 'G';
         auto data = UnalignedPtr<uint32_t>(dstBuffer);
-        *data++ = my_htonl(static_cast<uint32_t>(internalClockToPts(m_lastPTS)));
-        *data = my_htonl(static_cast<uint32_t>(internalClockToPts(m_lastDTS)));
+        // A display set at the start was written with a decoding time below 0, which a .sup cannot hold: it came out
+        // as a time near 13 hours 15 minutes. The set is written that much later, so that it is decoded from the first
+        // tick (a decoding time of 0 stands for the presentation time) and shown as soon as it can be decoded; every
+        // later set keeps its time.
+        *data++ = my_htonl(static_cast<uint32_t>(internalClockToPts(m_lastPTS + m_demuxDtsShift)));
+        *data = my_htonl(static_cast<uint32_t>(internalClockToPts(m_lastDTS + m_demuxDtsShift)));
         return 10;
     }
     return 0;

@@ -159,6 +159,17 @@ class PGSStreamReader final : public AbstractStreamReader
     std::map<uint16_t, uint16_t> composition_object_vertical_position;
     void renderTextShow(int64_t inTime);
     void renderTextHide(int64_t outTime);
+    void renderDisplaySet();
+    int64_t gridTime(int64_t internalTime) const;
+
+    // A PGS stream drawn at another size: the display set being read, from its PCS to its END
+    bool m_dsOpen = false;        // a PCS was read, its display set is not drawn yet
+    bool m_dsDrawn = false;       // an object of the set was drawn into the picture
+    bool m_dsForced = false;      // an object of the set is forced
+    bool m_dsClears = false;      // the set shows nothing (no object, or not an epoch start without an object)
+    int64_t m_dsTime = 0;         // its presentation time, on the internal clock
+    bool m_pictureShown = false;  // a drawn picture is on the screen
+    int64_t m_demuxDtsShift = 0;  // --demux: how much later the display set being read is written
 
     void video_descriptor(BitStreamReader& bitReader);
     void composition_descriptor(BitStreamReader& bitReader);
