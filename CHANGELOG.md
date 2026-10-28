@@ -644,6 +644,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Window
 
+* **A file opened with "Open with" or "Send to" whose name has a letter outside the system code page, such as a German umlaut or Japanese, was refused as a file that does not exist.** Dropping the same file onto the window worked. Both now add it.
+
 * **A disc made from a Matroska file written by tsMuxeR lost the AC-3 core of its TrueHD track.** Such a file holds the core as an AC-3 track of its own, straight after the TrueHD track, and the window muxed the two apart: the disc had TrueHD without its core and an extra AC-3 track. For a disc, the window now asks whether that track goes on the disc as the core of the TrueHD track (merge-ac3-track=) or as a separate track, with "As the core" offered first for a file tsMuxeR wrote; the merge box shows the answer. The listing of a Matroska file shows the application that wrote it. The warning that MLP is not standard for BD disks now names merge-ac3-track= and merge-ac3-file=.
 
 * **The cut fields have a tick "Keep only the pictures inside the cut",** which cuts as earlier versions did.
