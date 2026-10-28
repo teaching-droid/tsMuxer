@@ -296,6 +296,7 @@ struct AssDecoder::Impl
     std::multiset<std::pair<int64_t, int64_t>> ends;  // the end frames and times of the events on the screen
     int64_t frame = 0;                                // the first frame not drawn yet
     bool shown = false;
+    bool waiting = false;  // the screen changed, and the picture waits until a player can decode it in time
     int64_t pictures = 0;
     // save-srt: the text of every event, as an SRT file
     std::shared_ptr<ass_render::SaveSrtFile> srt;
@@ -324,6 +325,7 @@ AssDecoder::AssDecoder(const uint8_t* header, const int headerSize, const ass_re
     m->srt = drawing.srtFile;
     setUp(drawing.width, drawing.height, drawing.fps, drawing.fps);
     m_pgs.holdEmptyEnds();  // a frame with nothing drawn waits for the next picture (BitmapToPgs::addPicture)
+    m_pgs.waitUntilShown();  // a frame decoded too late for the frame shown before is left out: a later one shows
     m->width = drawing.width;
     m->height = drawing.height;
     if (drawing.fps > 0)
@@ -386,7 +388,8 @@ void AssDecoder::finish(std::vector<uint8_t>& out)
 }
 
 // Frame by frame while anything is on the screen, a picture wherever libass draws something else than on the frame
-// before: an event that starts or ends, and every frame of a fade, a move or karaoke
+// before: an event that starts or ends, and every frame of a fade, a move or karaoke that a player can decode in time
+// after the picture before (BitmapToPgs::waitUntilShown)
 void AssDecoder::drawUpTo(const int64_t endFrame, std::vector<uint8_t>& out)
 {
     const Lib& l = lib();
@@ -418,13 +421,14 @@ void AssDecoder::drawUpTo(const int64_t endFrame, std::vector<uint8_t>& out)
                 m_pgs.addPicture(m->ptsOf(f), -1, false, out);
                 m->shown = false;
             }
+            m->waiting = false;
             const int64_t next = m->nextEvent < m->events.size() ? m->events[m->nextEvent].startFrame : endFrame;
             m->frame = (std::max)(f + 1, (std::min)(next, endFrame));
             continue;
         }
         int changed = 0;
         const ASS_Image* img = l.render_frame(m->renderer, m->track, ms, &changed);
-        if (changed || !m->shown)
+        if (changed || !m->shown || m->waiting)
         {
             m_pgs.clearCanvas();
             uint32_t* canvas = m_pgs.pixels();
@@ -455,9 +459,12 @@ void AssDecoder::drawUpTo(const int64_t endFrame, std::vector<uint8_t>& out)
                     }
                 }
             }
-            m_pgs.addPicture(m->ptsOf(f), -1, false, out);
-            m->shown = true;
-            ++m->pictures;
+            m->waiting = !m_pgs.addPicture(m->ptsOf(f), -1, false, out);
+            if (!m->waiting)
+            {
+                m->shown = true;
+                ++m->pictures;
+            }
         }
         m->frame = f + 1;
     }

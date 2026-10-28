@@ -29,13 +29,18 @@ class BitmapToPgs
     // The display sets that show the picture from showTime on (internal clock). First the end of the picture before,
     // where it ends before this one starts; a picture that starts first replaces it. The end of this one, endTime,
     // is held until the next picture or finish(), and is -1 when it stays until the next. A picture with nothing
-    // in it ends what is shown; with holdEmptyEnds, that end is held in the same way.
-    void addPicture(int64_t showTime, int64_t endTime, bool forced, std::vector<uint8_t>& out);
+    // in it ends what is shown; with holdEmptyEnds, that end is held in the same way. False when nothing was written
+    // because the picture waits (waitUntilShown).
+    bool addPicture(int64_t showTime, int64_t endTime, bool forced, std::vector<uint8_t>& out);
     // The end that is still held, at the end of the track.
     void finish(std::vector<uint8_t>& out);
     // The end a picture with nothing in it makes is held until the next picture, so that its clear is decoded in time
     // for it (see addPicture). Only where finish() surely comes at the end of the track: libass drawing from Matroska.
     void holdEmptyEnds() { m_holdEmptyEnds = true; }
+    // A picture is written only when a player can decode it after the display set before it is shown; otherwise
+    // addPicture writes nothing and returns false, and a later picture is shown in its place. For pictures that come
+    // frame by frame: libass drawing a fade, a move or karaoke.
+    void waitUntilShown() { m_waitUntilShown = true; }
 
    private:
     std::unique_ptr<text_subtitles::TextToPGSConverter> m_pgs;
@@ -45,6 +50,8 @@ class BitmapToPgs
     bool m_shown = false;    // a picture is on the screen
     int64_t m_heldEnd = -1;  // when it goes, internal clock; -1 when it stays until the next
     bool m_holdEmptyEnds = false;
+    bool m_waitUntilShown = false;
+    int64_t m_lastPts = -1;  // when the last display set written is shown, 90 kHz; -1 before the first
     bool m_warnedColours = false;
     void addClear(double atTimeSec, std::vector<uint8_t>& out, int64_t latestDts = INT64_MAX);
 };

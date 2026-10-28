@@ -49,9 +49,10 @@ void BitmapToPgs::addClear(const double atTimeSec, std::vector<uint8_t>& out, co
     const uint8_t* data = m_pgs->doClear(atTimeSec, len, latestDts);
     out.insert(out.end(), data, data + len);
     m_shown = false;
+    m_lastPts = llround(m_pgs->alignToGrid(atTimeSec) * 90000.0);
 }
 
-void BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, const bool forced,
+bool BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, const bool forced,
                              std::vector<uint8_t>& out)
 {
     const double inSec = m_pgs->alignToGrid(static_cast<double>(showTime) / INTERNAL_PTS_FREQ);
@@ -82,7 +83,7 @@ void BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
                                                          << " could not be packed as PGS and was left out.");
             m_warnedColours = true;
             endBefore(INT64_MAX);
-            return;
+            return true;
         }
         const auto tmp = reinterpret_cast<uint8_t*>(&mask);
         const int idx = (step - 1) % 4;
@@ -101,7 +102,7 @@ void BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
             if (m_shown)
                 addClear(inSec, out);
         }
-        return;
+        return true;
     }
 
     // As for a text subtitle (TextToPGSConverter::doConvert): the presentation, the window, the palette and the
@@ -120,6 +121,19 @@ void BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
         FFMAX(TextToPGSConverter::windowDrawTime(static_cast<double>(m_width) * m_height), decodeTime) + drawTime;
     const int64_t pts = llround(inSec * 90000.0);
     const int64_t dts = pts - decodeDuration;
+    if (m_waitUntilShown)
+    {
+        // ** A DISPLAY SET IS DECODED AFTER THE ONE BEFORE IT IS SHOWN. ** Every picture starts an epoch, and a player
+        // decodes it (clearing the whole screen first) only once the display set before is on the screen. A picture
+        // that would have to be decoded earlier waits: a later frame of the fade or move takes its place.
+        if (m_lastPts >= 0 && dts <= m_lastPts)
+            return false;
+        // The same for the clear of a picture that ended a few frames before this one: the clear is left out, and
+        // this picture replaces the one before at its own time, which stays on the screen until then.
+        if (m_shown && m_heldEnd >= 0 &&
+            dts <= llround(m_pgs->alignToGrid(static_cast<double>(m_heldEnd) / INTERNAL_PTS_FREQ) * 90000.0))
+            m_heldEnd = -1;
+    }
     // ** THE CLEAR BEFORE A PICTURE IS DECODED NO LATER THAN THE PICTURE. ** A picture is decoded for as long as the
     // whole screen takes to clear, and more, before it is shown: where the one before ended less than that before
     // it, its clear was decoded after the new picture, and the decoding times of the stream went back. The clear is
@@ -148,6 +162,8 @@ void BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
     out.insert(out.end(), buf.data(), cur);
     m_shown = true;
     m_heldEnd = endTime;
+    m_lastPts = pts;
+    return true;
 }
 
 void BitmapToPgs::finish(std::vector<uint8_t>& out)
