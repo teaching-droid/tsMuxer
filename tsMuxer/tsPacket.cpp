@@ -493,8 +493,13 @@ uint32_t TS_program_map_section::serialize(uint8_t* buffer, const int max_buf_si
 
     for (const auto& [pid, si] : pidList)
     {
-        if (si.m_streamType == StreamType::SUB_PGS && !hdmvDescriptors)
+        // Once a run: the PMT is written again every few tenths of a second, and the warning came with each copy
+        static bool saidPgs = false;
+        if (si.m_streamType == StreamType::SUB_PGS && !hdmvDescriptors && !saidPgs)
+        {
             LTRACE(LT_WARN, 2, "Warning: PGS might not work without HDMV descriptors.");
+            saidPgs = true;
+        }
 
         bitWriter.putBits(8, static_cast<int>(si.m_streamType));
         bitWriter.putBits(3, 7);  // reserved
