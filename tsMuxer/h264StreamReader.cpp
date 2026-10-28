@@ -2107,12 +2107,15 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
                 m_forceLsbDiv = 0;
                 LTRACE(LT_WARN, 2, "H264 warn: Force frame_mbs_only_flag division invalid detected. Cancel this flag.");
             }
-            else
+            else if (!m_oddLsbSaid)
             {
+                // Once for the track: a stream like this has such a value in every slice from here on, and the
+                // line came for each of them, hundreds of times
+                m_oddLsbSaid = true;
                 LTRACE(LT_WARN, 2,
                        "H264 warn: Unexpected pic_order_cnt_lsb value "
-                           << slice.pic_order_cnt_lsb << ". FrameNum: " << m_totalFrameNum
-                           << " slice type: " << sliceTypeStr[slice.slice_type]);
+                           << slice.pic_order_cnt_lsb << ". FrameNum: " << m_totalFrameNum << " slice type: "
+                           << sliceTypeStr[slice.slice_type] << ". Later slices with such a value are not listed.");
             }
         }
     }

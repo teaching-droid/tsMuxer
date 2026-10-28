@@ -163,6 +163,7 @@ class H264StreamReader final : public MPEGStreamReader
     std::map<uint32_t, std::vector<uint8_t>> m_spsSource;
     std::map<uint32_t, std::vector<uint8_t>> m_spsRewritten;  // the same SPS after a new rate was written into it
     bool m_spsChangeSaid = false;
+    bool m_oddLsbSaid = false;  // the odd pic_order_cnt_lsb warning, once for the track
     std::vector<uint8_t> m_lastSeiMvcHeader;
     // The SPS of the last IDR, as stored in m_spsMap. An IDR with a different one begins a new stream,
     // and processSliceNal decides the picture order count step again there.
