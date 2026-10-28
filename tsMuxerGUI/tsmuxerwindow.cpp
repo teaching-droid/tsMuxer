@@ -550,6 +550,70 @@ QString TsMuxerWindow::getDefaultOutputFileName() const
 // wrapper turns on word wrapping without touching the translated strings themselves.
 static QString wrapTip(const QString& text) { return QStringLiteral("<p>") + text + QStringLiteral("</p>"); }
 
+// A simple text chapter file can be pasted in as it is. eac3to and MKVToolNix both write CHAPTER01=00:00:00.000
+// followed by CHAPTER01NAME=, and every one of those lines used to be rejected because this box wants a bare time. The
+// time is taken from a CHAPTERnn= line and a CHAPTERnnNAME= line is skipped (empty); the names are dropped because a
+// disc has nowhere to put them and the meta line carries times only.
+static QString chapterLineTime(const QString& line)
+{
+    QString tmpStr = line.trimmed();
+    if (tmpStr.startsWith(QLatin1String("CHAPTER"), Qt::CaseInsensitive))
+    {
+        const int eq = tmpStr.indexOf(QLatin1Char('='));
+        if (eq > 0)
+        {
+            const QString key = tmpStr.left(eq).trimmed();
+            if (key.endsWith(QLatin1String("NAME"), Qt::CaseInsensitive))
+                return QString();
+            tmpStr = QtCompat::strMid(tmpStr, eq + 1).trimmed();
+        }
+    }
+    return tmpStr;
+}
+
+// The rule tsMuxeR applies to each time of --custom-chapters (chapterTimeToSeconds): up to three parts between colons,
+// each starting with a digit, only digits and one decimal point in the seconds, minutes and seconds below 60, and
+// from 0 to 100000 hours. A space ends the value on the meta line, so a time with one in it is refused too.
+static bool isChapterTime(const QString& t)
+{
+    const QStringList parts = t.split(QLatin1Char(':'));
+    if (parts.size() > 3)
+        return false;
+    double seconds = 0.0;
+    for (int i = 0; i < parts.size(); ++i)
+    {
+        const QString& part = parts[i];
+        if (part.isEmpty() || part[0] < QLatin1Char('0') || part[0] > QLatin1Char('9') ||
+            part.count(QLatin1Char('.')) > (i == parts.size() - 1 ? 1 : 0))
+            return false;
+        for (const QChar c : part)
+            if ((c < QLatin1Char('0') || c > QLatin1Char('9')) && c != QLatin1Char('.'))
+                return false;
+        const double v = part.toDouble();
+        if (i > 0 && v >= 60.0)
+            return false;
+        seconds = seconds * 60.0 + v;
+    }
+    return seconds <= 100000.0 * 3600.0;
+}
+
+// A red frame and the reason as the tooltip, or the field as it was
+static void markWrongValue(QWidget* field, const QString& problem)
+{
+    if (!field->property("plainToolTip").isValid())
+        field->setProperty("plainToolTip", field->toolTip());
+    if (problem.isEmpty())
+    {
+        field->setStyleSheet(QString());
+        field->setToolTip(field->property("plainToolTip").toString());
+    }
+    else
+    {
+        field->setStyleSheet(QStringLiteral("%1 { border: 2px solid #c0392b; }").arg(field->metaObject()->className()));
+        field->setToolTip(wrapTip(problem));
+    }
+}
+
 // The 3D titles of a BDMV folder, read from its playlists as the command line reads them: a playlist with a
 // stereoscopic sub path (extension data 2/2, sub path type 8) plays its clips in 3D, and each such clip has its .ssif
 // in BDMV/STREAM/SSIF. Only the playlist files are read. clips counts those clips, missing the ones without a .ssif.
@@ -974,6 +1038,12 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->cutStartTimeEdit, &QTimeEdit::timeChanged, this, &TsMuxerWindow::onSplitCutParamsChanged);
     connect(ui->cutEndTimeEdit, &QTimeEdit::timeChanged, this, &TsMuxerWindow::onSplitCutParamsChanged);
     connect(ui->checkBoxCutInside, &QAbstractButton::clicked, this, &TsMuxerWindow::onSplitCutParamsChanged);
+    connect(ui->cutStartTimeEdit, &QTimeEdit::editingFinished, this, &TsMuxerWindow::checkCut);
+    connect(ui->cutEndTimeEdit, &QTimeEdit::editingFinished, this, &TsMuxerWindow::checkCut);
+    connect(ui->checkBoxCut, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::checkCut);
+    connect(ui->radioButtonAutoChapter, &QAbstractButton::clicked, this, &TsMuxerWindow::checkCustomChapters);
+    connect(ui->radioButtonNoChapters, &QAbstractButton::clicked, this, &TsMuxerWindow::checkCustomChapters);
+    connect(ui->radioButtonCustomChapters, &QAbstractButton::clicked, this, &TsMuxerWindow::checkCustomChapters);
     connect(ui->spinEditBorder, spinBoxValueChanged, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->comboBoxAnimation, comboBoxIndexChanged, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->lineSpacing, doubleSpinBoxValueChanged, this, &TsMuxerWindow::onSavedParamChanged);
@@ -1136,6 +1206,7 @@ TsMuxerWindow::TsMuxerWindow()
 
     ui->label_Donate->installEventFilter(this);
     ui->trackLV->installEventFilter(this);
+    ui->memoChapters->installEventFilter(this);  // checked when it is left
 
     ui->trackLV->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(ui->trackLV, &QWidget::customContextMenuRequested, this, &TsMuxerWindow::onTrackContextMenu);
@@ -4681,25 +4752,7 @@ QString TsMuxerWindow::getMuxOpts()
         splitLines(ui->memoChapters->toPlainText(), lines);
         for (int i = 0; i < lines.size(); ++i)
         {
-            QString tmpStr = lines[i].trimmed();
-
-            // A simple text chapter file can be pasted in as it is. eac3to and MKVToolNix both write
-            // CHAPTER01=00:00:00.000 followed by CHAPTER01NAME=, and every one of those lines used to
-            // be rejected because this box wants a bare time. The time is taken from a CHAPTERnn=
-            // line and a CHAPTERnnNAME= line is skipped; the names are dropped because a disc has
-            // nowhere to put them and the meta line carries times only.
-            if (tmpStr.startsWith(QLatin1String("CHAPTER"), Qt::CaseInsensitive))
-            {
-                const int eq = tmpStr.indexOf(QLatin1Char('='));
-                if (eq > 0)
-                {
-                    const QString key = tmpStr.left(eq).trimmed();
-                    if (key.endsWith(QLatin1String("NAME"), Qt::CaseInsensitive))
-                        continue;
-                    tmpStr = QtCompat::strMid(tmpStr, eq + 1).trimmed();
-                }
-            }
-
+            const QString tmpStr = chapterLineTime(lines[i]);
             if (!tmpStr.isEmpty())
             {
                 if (!custChapStr.isEmpty())
@@ -5535,6 +5588,44 @@ void TsMuxerWindow::onChapterParamsChanged()
 // settings aimed at .ts gave nine parts. Matroska output splits by all three options, and is offered them.
 bool TsMuxerWindow::outputCanSplit() const { return !ui->radioButtonDemux->isChecked(); }
 
+// The custom chapters and the cut were written into the meta line unchecked, and only tsMuxeR refused a wrong one
+// after Start. Each is now checked when it is left, with tsMuxeR's own rules: a wrong value gets a red frame and its
+// reason as the tooltip, and Start shows the reason and does not run.
+QString TsMuxerWindow::customChaptersProblem() const
+{
+    if (!ui->radioButtonCustomChapters->isChecked())
+        return QString();
+    QList<QString> lines;
+    splitLines(ui->memoChapters->toPlainText(), lines);
+    for (const QString& line : lines)
+        for (const QString& time : chapterLineTime(line).split(QLatin1Char(';')))
+            if (!time.trimmed().isEmpty() && !isChapterTime(time))
+                return tr("Custom chapters: \"%1\" is not a time from 0 to 100000 hours, written as HH:MM:SS.mmm.")
+                    .arg(time.trimmed());
+    return QString();
+}
+
+QString TsMuxerWindow::cutProblem() const
+{
+    const int startCut = qTimeToMsec(ui->cutStartTimeEdit->time());
+    const int endCut = qTimeToMsec(ui->cutEndTimeEdit->time());
+    // as tsMuxeR has it: an end of 0 means no end
+    if (!ui->checkBoxCut->isChecked() || endCut <= 0 || endCut > startCut)
+        return QString();
+    return tr("The cut end (%1) is not after the cut start (%2). Both are positions from the start of the source, so "
+              "the end must be the later of the two.")
+        .arg(ui->cutEndTimeEdit->text(), ui->cutStartTimeEdit->text());
+}
+
+void TsMuxerWindow::checkCustomChapters() { markWrongValue(ui->memoChapters, customChaptersProblem()); }
+
+void TsMuxerWindow::checkCut()
+{
+    const QString problem = cutProblem();
+    markWrongValue(ui->cutStartTimeEdit, problem);
+    markWrongValue(ui->cutEndTimeEdit, problem);
+}
+
 void TsMuxerWindow::onSplitCutParamsChanged()
 {
     // Grey the whole group where it cannot work, rather than leave it looking live. The tick itself
@@ -6341,6 +6432,22 @@ void TsMuxerWindow::saveFileDialog()
 
 void TsMuxerWindow::startMuxing()
 {
+    checkCustomChapters();
+    checkCut();
+    // the chapter list stops the mux only where it goes into the meta line
+    const bool chaptersWritten = isDiskOutput() || (ui->radioButtonMKV->isChecked() && m_customChaptersUserOverride);
+    const QString problem =
+        chaptersWritten && !customChaptersProblem().isEmpty() ? customChaptersProblem() : cutProblem();
+    if (!problem.isEmpty())
+    {
+        QMessageBox msgBox(this);
+        msgBox.setWindowTitle(tr("Wrong value"));
+        msgBox.setText(problem);
+        msgBox.setIcon(QMessageBox::Warning);
+        msgBox.setStandardButtons(QMessageBox::Ok);
+        msgBox.exec();
+        return;
+    }
     QString outputName = unquoteStr(ui->outFileName->text().trimmed());
     ui->outFileName->setText(outputName);
     lastOutputDir = QFileInfo(outputName).absolutePath();
@@ -6959,6 +7066,8 @@ bool TsMuxerWindow::eventFilter(QObject* obj, QEvent* event)
             return true;
         }
     }
+    if (obj == ui->memoChapters && event->type() == QEvent::FocusOut)
+        checkCustomChapters();
     return QWidget::eventFilter(obj, event);
 }
 

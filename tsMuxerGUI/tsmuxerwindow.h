@@ -89,6 +89,8 @@ class TsMuxerWindow : public QWidget
     void onGeneralSpinboxValueChanged();
     void onChapterParamsChanged();
     void onSplitCutParamsChanged();
+    void checkCustomChapters();
+    void checkCut();
     void onSavedParamChanged();
     void onFontParamsChanged();
     void onPlaylistPartsChanged();
@@ -132,6 +134,8 @@ class TsMuxerWindow : public QWidget
     void showEvent(QShowEvent* event) override;
     void changeEvent(QEvent* event) override;
     bool eventFilter(QObject* obj, QEvent* event) override;
+    QString customChaptersProblem() const;
+    QString cutProblem() const;
     void updateMaxOffsets();
     void updateMux3dLabel();
     void updateCustomChapters();
