@@ -294,6 +294,14 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **A .sup made with --demux from subtitles with a picture at 0 s got a decoding time near 13 hours 15 minutes for it.** That picture is now decoded from the start and shown as soon as it can be, usually less than a tenth of a second later; every later picture keeps its time.
 
+* **Text subtitles at fps=23.976, 29.97 or 59.94 drifted away from the frames of the video,** by about 0.1 of a frame an hour. They now stay on the frames.
+
+* **A PGS track drawn at another size with several display sets at one time wrote them out of order,** with decoding times that go back. They now keep their order, each on the first frame where it can be decoded.
+
+* **A PGS track drawn at another size lost its picture at a new palette or a repeated display set without the picture data.** The picture now stays, in its new colours.
+
+* **A PGS track drawn at another size showed a cropped picture whole, and a .sup with a picture of more than 64 KB stopped the mux** with "Unexpected byte P". Both now work.
+
 * **A warning about a line of an SRT file that is not part of a subtitle quoted the line as it was,** control characters and bytes that are not UTF-8 among them, so a terminal could take escape sequences from the file. Such characters are now shown as \xNN, and a quoted line is cut short after 120 bytes.
 
 ### Audio
