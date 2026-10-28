@@ -368,6 +368,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Video
 
+* **"H264 warn: Unexpected pic_order_cnt_lsb" came for every slice of such a stream,** hundreds of times. It now comes once for the track and says that later ones are not listed.
+
 * **The Dolby Vision enhancement layer of a cut began two pictures after its base layer** when its pictures are reordered differently. It now begins with the base layer.
 
 * **MPEG-2 video with a few damaged packets was not recognised:** one damaged picture header in the first part of the track made the listing say "Can't detect stream type". It is now recognised when such damage is rare.
@@ -413,6 +415,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **AV1 in the Annex B form is read.** An .obu file of length delimited temporal units was refused as not AV1, or as a track that produced no frames. The same stream in either form now gives the same output.
 
 ### Blu-ray and transport stream
+
+* **"PGS might not work without HDMV descriptors" came once for each subtitle track every time the stream table was written,** dozens or hundreds of times in one mux. It now comes once.
 
 * **An ISO image whose data crosses a layer break now gets the layer break guard without being asked:** 288 MB after the break and 18 MB before it are left empty, as a burnt dual-layer disc often reads badly at the layer change, and a player can then stall there. This holds for a direct mux to an .iso and for --bdmv-to-iso. The break is the one --layer-break-lbn gives, else that of the disc size, else that of a BD-R DL, and one line in the log says when the guard is written. An image that would not fit the disc with the guard is written without it, with a warning. The fit of a direct mux is reckoned from the part of the sources it takes, so a cut of a large source keeps the guard. --no-layer-break-guard, or "Leave out the layer-break guard" in the window, leaves it out, and --layer-break-guard=<MB> sets its size as before. --inner-only and a folder, TS or MKV output are not changed.
 
