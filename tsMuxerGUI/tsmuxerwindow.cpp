@@ -6815,6 +6815,18 @@ void TsMuxerWindow::updateMetaState()
 
 void TsMuxerWindow::closeEvent(QCloseEvent* event)
 {
+    // Closing the window during a mux ended tsMuxeR without a word and left its unfinished output. It is asked now,
+    // and Yes stops the mux as Abort does, with the same removal of the unfinished output.
+    if (runInMuxMode && proc.state() != QProcess::NotRunning)
+    {
+        if (QMessageBox::question(this, tr("tsMuxeR"), tr("A mux is running. Stop it and close the window?")) !=
+            QMessageBox::Yes)
+        {
+            event->ignore();
+            return;
+        }
+        muxForm->abort();
+    }
     if (!metaName.isEmpty())
     {
         QFile::remove(metaName);

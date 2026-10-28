@@ -18,6 +18,7 @@ class MuxForm : public QDialog  // QWidget
     void muxFinished(int exitCode, const QString& prefix);
     void setProcess(QProcess* proc);
     void showStopped(const QString& label, const QString& outputLine);
+    void abort() { onAbort(); }  // as the Abort button
 
    signals:
     // tsMuxeR was stopped with Abort, or with the dialog closed, and has ended
