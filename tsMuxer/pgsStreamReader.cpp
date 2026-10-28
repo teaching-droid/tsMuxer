@@ -342,31 +342,38 @@ void PGSStreamReader::renderTextShow(int64_t inTime)
     }
     inTime = inTime / INT_FREQ_TO_TS_FREQ;
 
-    const double decodedObjectSize = m_render->renderedHeight() * m_scaled_width;
+    // The window and the object are the box around what the scaled picture draws, at its place in that picture
+    // (TextToPGSConverter::packDrawnBox): they were as wide as the picture. Each object starts an epoch here, which
+    // only the clear of renderTextHide continues, with the same window. Where nothing is drawn, the object is 8x8
+    // transparent pixels.
+    // The window and the object start at the picture's first line. They were placed at its last line, so a rescaled
+    // picture lay below its place and partly or wholly outside the frame.
+    if (m_render->m_rleLen == 0)
+        m_render->m_objectWidth = 8;
+    m_objectWindowTop = m_render->padToLeastHeight(m_render->minLine());
+    m_objectWindowHeight = static_cast<uint16_t>(FFMAX(8, m_render->renderedHeight()));
+    m_objectWindowLeft = m_render->m_objectLeft;
+    m_objectWindowWidth = m_render->m_objectWidth;
+    const double decodedObjectSize = static_cast<double>(m_objectWindowHeight) * m_objectWindowWidth;
     const auto compositionDecodeTime = static_cast<int64_t>(90000.0 * decodedObjectSize / PIXEL_DECODING_RATE + 0.999);
     const auto windowsTransferTime = static_cast<int64_t>(90000.0 * decodedObjectSize / PIXEL_COMPOSITION_RATE + 0.999);
     const auto PLANEINITIALIZATIONTIME =
         static_cast<int64_t>(90000.0 * (m_scaled_width * m_scaled_height) / PIXEL_COMPOSITION_RATE + 0.999);
     const int64_t PRESENTATION_DTS_DELTA = PLANEINITIALIZATIONTIME + windowsTransferTime;
 
-    m_objectWindowHeight = FFMAX(0, m_render->renderedHeight());
-    // The window and the object start at the picture's first line. They were placed at its last line, so a rescaled
-    // picture lay below its place and partly or wholly outside the frame.
-    m_objectWindowTop = m_render->minLine();
-
     // show text
     uint8_t* curPos = m_renderedData;
     // composition segment. pts=x,  dts = x-0.0648 (pts alignment to video grid) (I get constant value from real PGS
     // track as example)
     int rLen =
-        m_render->composePresentationSegment(curPos, CompositionMode::Start, inTime, inTime - PRESENTATION_DTS_DELTA, 0,
-                                             m_objectWindowTop, m_demuxMode, m_forced_on_flag);
+        m_render->composePresentationSegment(curPos, CompositionMode::Start, inTime, inTime - PRESENTATION_DTS_DELTA,
+                                             m_objectWindowLeft, m_objectWindowTop, m_demuxMode, m_forced_on_flag);
     m_renderedBlocks.emplace_back(inTime, inTime - PRESENTATION_DTS_DELTA, rLen, curPos);
     curPos += rLen;
     // window definition.   pts=x-0.001, dts = x-0.0648
-    rLen =
-        m_render->composeWindowDefinition(curPos, inTime - windowsTransferTime, inTime - PRESENTATION_DTS_DELTA, 0,
-                                          m_objectWindowTop, m_render->m_videoWidth, m_objectWindowHeight, m_demuxMode);
+    rLen = m_render->composeWindowDefinition(curPos, inTime - windowsTransferTime, inTime - PRESENTATION_DTS_DELTA,
+                                             m_objectWindowLeft, m_objectWindowTop, m_objectWindowWidth,
+                                             m_objectWindowHeight, m_demuxMode);
     m_renderedBlocks.emplace_back(inTime - windowsTransferTime, inTime - PRESENTATION_DTS_DELTA, rLen, curPos);
     curPos += rLen;
 
@@ -378,8 +385,8 @@ void PGSStreamReader::renderTextShow(int64_t inTime)
     // object               pts=x-0.0627, dts = x-0.0648
     // inTime - 5643
     const int64_t odfPTS = inTime - PRESENTATION_DTS_DELTA + compositionDecodeTime;
-    rLen = m_render->composeObjectDefinition(curPos, odfPTS, inTime - PRESENTATION_DTS_DELTA, m_render->minLine(),
-                                             m_render->maxLine(), m_demuxMode);
+    rLen = m_render->composeObjectDefinition(curPos, odfPTS, inTime - PRESENTATION_DTS_DELTA, 0,
+                                             m_objectWindowHeight - 1, m_demuxMode);
     m_renderedBlocks.emplace_back(odfPTS, inTime - PRESENTATION_DTS_DELTA, rLen, curPos);
     curPos += rLen;
     // end                  pts=x-0.0627, dts = x-0.0627
@@ -389,7 +396,7 @@ void PGSStreamReader::renderTextShow(int64_t inTime)
 
 void PGSStreamReader::renderTextHide(int64_t outTime)
 {
-    const double decodedObjectSize = m_render->renderedHeight() * m_scaled_width;
+    const double decodedObjectSize = static_cast<double>(m_objectWindowHeight) * m_objectWindowWidth;
     const auto windowsTransferTime = static_cast<int64_t>(90000.0 * decodedObjectSize / PIXEL_COMPOSITION_RATE + 0.999);
 
     m_firstRenderedPacket = true;
@@ -399,14 +406,14 @@ void PGSStreamReader::renderTextHide(int64_t outTime)
     uint8_t* curPos = m_renderedData;
     // composition segment. pts=x,       dts = x-0.001 (pts alignment to video grid)
     int rLen = m_render->composePresentationSegment(curPos, CompositionMode::Finish, outTime,
-                                                    outTime - windowsTransferTime - 90, 0, m_objectWindowTop,
-                                                    m_demuxMode, false);
+                                                    outTime - windowsTransferTime - 90, m_objectWindowLeft,
+                                                    m_objectWindowTop, m_demuxMode, false);
     m_renderedBlocks.emplace_back(outTime, outTime - windowsTransferTime - 90, rLen, curPos);
     curPos += rLen;
     // windows              pts=x-0.001, dts = x-0.001
-    rLen =
-        m_render->composeWindowDefinition(curPos, outTime - windowsTransferTime, outTime - windowsTransferTime - 90, 0,
-                                          m_objectWindowTop, m_render->m_videoWidth, m_objectWindowHeight, m_demuxMode);
+    rLen = m_render->composeWindowDefinition(curPos, outTime - windowsTransferTime, outTime - windowsTransferTime - 90,
+                                             m_objectWindowLeft, m_objectWindowTop, m_objectWindowWidth,
+                                             m_objectWindowHeight, m_demuxMode);
     m_renderedBlocks.emplace_back(outTime - windowsTransferTime, outTime - windowsTransferTime - 90, rLen, curPos);
     curPos += rLen;
     // end                  pts = dts = the decoding time of the set, as the end of a clear of drawn text has it

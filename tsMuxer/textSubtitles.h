@@ -118,6 +118,7 @@ class TextToPGSConverter  //: public TextSubtitlesRenderWin32
     uint8_t* packRun(uint8_t* dst, const uint32_t* src, int repCnt, uint32_t colorMask);
     void packDrawnBox(const uint32_t* picture, uint32_t colorMask);
     void padLines(int above, int below);
+    uint16_t padToLeastHeight(int drawnTop);
     void sortPalette();
     void reduceColors(uint8_t mask) const;
     [[nodiscard]] uint32_t straightColor(uint32_t premultiplied) const;
@@ -137,9 +138,6 @@ class TextToPGSConverter  //: public TextSubtitlesRenderWin32
     uint8_t m_paletteVersion;
     uint16_t m_minLine;
     uint16_t m_maxLine;
-    // A drawn text is packed only where it is drawn (see packDrawnBox); a picture from a bitmap subtitle, or one drawn
-    // again at another size, keeps the full width
-    bool m_cropToText;
     uint16_t m_objectLeft = 0;  // the columns rlePack packed: the first one, and how many
     uint16_t m_objectWidth = 0;
 };

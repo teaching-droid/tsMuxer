@@ -37,8 +37,7 @@ TextToPGSConverter::TextToPGSConverter(const bool sourceIsText)
       m_videoWidth(0),
       m_videoHeight(0),
       m_videoFps(0),
-      m_imageBuffer(),
-      m_cropToText(sourceIsText)
+      m_imageBuffer()
 {
     m_bottomOffset = 0;
     m_renderedData = nullptr;
@@ -272,65 +271,12 @@ bool TextToPGSConverter::rlePack(const uint32_t colorMask)
     try
     {
         m_paletteYUV.clear();
-        // compress render buffer by RLE
-
-        uint8_t* curPtr = m_renderedData;
-        const uint8_t* trimPos = m_renderedData;
-        auto srcData = reinterpret_cast<uint32_t*>(m_textRender ? m_textRender->m_pData : m_imageBuffer);
+        const auto srcData = reinterpret_cast<uint32_t*>(m_textRender ? m_textRender->m_pData : m_imageBuffer);
         assert(srcData);
         m_rleLen = 0;
         m_objectLeft = 0;
         m_objectWidth = m_videoWidth;
-        if (m_cropToText)
-        {
-            packDrawnBox(srcData, colorMask);
-            sortPalette();
-            return true;
-        }
-        m_minLine = UINT16_MAX;
-        m_maxLine = 0;
-        for (uint16_t y = 0; y < m_videoHeight; y++)
-        {
-            const uint32_t* srcLineEnd = srcData + m_videoWidth;
-            const uint8_t* dstLineEnd = curPtr + m_videoWidth + 16;
-            bool isEmptyLine = false;
-            while (srcData < srcLineEnd)
-            {
-                const int repCnt = getRepeatCnt(srcData, srcLineEnd, colorMask);
-
-                if (repCnt == m_videoWidth)
-                {
-                    isEmptyLine = true;
-                    if (curPtr == m_renderedData)
-                    {
-                        srcData += repCnt;
-                        continue;
-                    }
-                }
-                else
-                {
-                    m_minLine = FFMIN(m_minLine, y);
-                    m_maxLine = FFMAX(m_maxLine, y);
-                }
-
-                curPtr = packRun(curPtr, srcData, repCnt, colorMask);
-                srcData += repCnt;
-            }
-            if (m_minLine != UINT16_MAX)
-            {
-                *curPtr++ = 0;  // end of line signal
-                *curPtr++ = 0;  // end of line signal
-                if (curPtr >= dstLineEnd)
-                {
-                    THROW(ERR_COMMON, "Not enough RLE buffer for encoding picture (RLE line length > width + 16)")
-                }
-            }
-            if (!isEmptyLine)
-                trimPos = curPtr;
-        }
-        if (m_minLine == UINT16_MAX)
-            m_minLine = m_maxLine = 0;
-        m_rleLen = static_cast<int>(trimPos - m_renderedData);
+        packDrawnBox(srcData, colorMask);
         sortPalette();
         return true;
     }
@@ -380,10 +326,11 @@ uint8_t* TextToPGSConverter::packRun(uint8_t* dst, const uint32_t* src, const in
     return dst;
 }
 
-// ** A TEXT SUBTITLE IS PACKED ONLY WHERE IT IS DRAWN. ** The object, and the window it is shown in, are the box
+// ** A SUBTITLE PICTURE IS PACKED ONLY WHERE IT IS DRAWN. ** The object, and the window it is shown in, are the box
 // around the pixels that are not fully transparent, at the columns they are drawn at. They were as wide as the picture,
-// even for one word. A box narrower than 8 pixels, the least an object may have, is widened inside the picture.
-// Transparent is colour 0, whether or not the box begins with it.
+// even for one word: for drawn text, for DVD, DVB and ASS subtitles, and for PGS drawn again at another size. A box
+// narrower than 8 pixels, the least an object may have, is widened inside the picture. Transparent is colour 0,
+// whether or not the box begins with it.
 void TextToPGSConverter::packDrawnBox(const uint32_t* picture, const uint32_t colorMask)
 {
     int left = m_videoWidth;
@@ -462,6 +409,18 @@ void TextToPGSConverter::padLines(const int above, const int below)
     uint8_t* end = m_renderedData + above * len + m_rleLen;
     for (int i = 0; i < below; ++i) memcpy(end + i * len, line, len);
     m_rleLen += (above + below) * len;
+}
+
+// An object of fewer than 8 lines, the least PGS allows, gets transparent lines above the drawn lines, or below them at
+// the top of the picture. drawnTop is the line the drawn lines are shown at; the object's first line is returned, and
+// it has (std::max)(8, renderedHeight()) lines. Where nothing is drawn, the object is 8 lines of nothing.
+uint16_t TextToPGSConverter::padToLeastHeight(const int drawnTop)
+{
+    const int drawnHeight = m_rleLen ? renderedHeight() : 0;
+    const int padHeight = FFMAX(0, 8 - drawnHeight);
+    const int padAbove = FFMIN(padHeight, drawnTop);
+    padLines(padAbove, padHeight - padAbove);
+    return static_cast<uint16_t>(drawnTop - padAbove);
 }
 
 void TextToPGSConverter::sortPalette()
@@ -592,11 +551,8 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
     const int drawnHeight = renderedHeight();
     const int drawnTop =
         FFMAX(0, FFMIN(m_textRender->m_height - drawnHeight - m_bottomOffset, m_textRender->m_height - drawnHeight));
-    const int padHeight = FFMAX(0, 8 - drawnHeight);
-    const int padAbove = FFMIN(padHeight, drawnTop);
-    padLines(padAbove, padHeight - padAbove);
-    const auto objectWindowHeight = static_cast<uint16_t>(drawnHeight + padHeight);
-    const auto objectWindowTop = static_cast<uint16_t>(drawnTop - padAbove);
+    const uint16_t objectWindowTop = padToLeastHeight(drawnTop);
+    const auto objectWindowHeight = static_cast<uint16_t>(FFMAX(8, drawnHeight));
     const uint16_t objectWindowLeft = m_objectLeft;
     const uint16_t objectWindowWidth = m_objectWidth;
 

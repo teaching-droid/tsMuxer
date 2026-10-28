@@ -176,6 +176,8 @@ class PGSStreamReader final : public AbstractStreamReader
     bool m_isNewFrame;
     uint16_t m_objectWindowHeight;
     uint16_t m_objectWindowTop;
+    uint16_t m_objectWindowLeft = 0;
+    uint16_t m_objectWindowWidth = 0;
     uint8_t m_offsetId;
     bool m_forced_on_flag;
 

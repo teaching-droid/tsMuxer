@@ -106,10 +106,14 @@ void BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
 
     // As for a text subtitle (TextToPGSConverter::doConvert): the presentation, the window, the palette and the
     // object, each with the times a player needs to decode and draw it, then the end of the display set. The window
-    // and the object are where the picture's lines are, across the full width.
-    const uint16_t top = m_pgs->minLine();
-    const uint16_t lines = m_pgs->renderedHeight();
-    const double objectPixels = static_cast<double>(lines) * m_width;
+    // and the object are the box around what the picture draws, at the place it has in the picture (packDrawnBox);
+    // they were as wide as the picture. Every picture starts an epoch, which only its clear continues, so the window
+    // may change from one picture to the next: also on each frame of a fade, a move or karaoke that libass draws.
+    const uint16_t top = m_pgs->padToLeastHeight(m_pgs->minLine());
+    const auto lines = static_cast<uint16_t>(FFMAX(8, m_pgs->renderedHeight()));
+    const uint16_t left = m_pgs->m_objectLeft;
+    const uint16_t width = m_pgs->m_objectWidth;
+    const double objectPixels = static_cast<double>(lines) * width;
     const int64_t decodeTime = TextToPGSConverter::objectDecodeTime(objectPixels);
     const int64_t drawTime = TextToPGSConverter::windowDrawTime(objectPixels);
     const int64_t decodeDuration =
@@ -121,9 +125,9 @@ void BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
     // it, its clear was decoded after the new picture, and the decoding times of the stream went back. The clear is
     // then decoded with the picture, still shown at its own time.
     endBefore(dts);
-    m_pgs->m_lastWindowLeft = 0;
+    m_pgs->m_lastWindowLeft = left;
     m_pgs->m_lastWindowTop = top;
-    m_pgs->m_lastWindowWidth = m_width;
+    m_pgs->m_lastWindowWidth = width;
     m_pgs->m_lastWindowHeight = lines;
     m_pgs->m_lastWindowDrawTime = drawTime;
 
@@ -136,10 +140,10 @@ void BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
     // headers of its segments.
     std::vector<uint8_t> buf(static_cast<size_t>(m_pgs->m_rleLen) + (m_pgs->m_rleLen / 65000 + 1) * 32 + 2048);
     uint8_t* cur = buf.data();
-    cur += m_pgs->composePresentationSegment(cur, CompositionMode::Start, pts, dts, 0, top, true, forced);
-    cur += m_pgs->composeWindowDefinition(cur, pts - drawTime, dts, 0, top, m_width, lines);
+    cur += m_pgs->composePresentationSegment(cur, CompositionMode::Start, pts, dts, left, top, true, forced);
+    cur += m_pgs->composeWindowDefinition(cur, pts - drawTime, dts, left, top, width, lines);
     cur += m_pgs->composePaletteDefinition(m_pgs->m_paletteByColor, cur, dts, dts);
-    cur += m_pgs->composeObjectDefinition(cur, odfPts, dts, m_pgs->minLine(), m_pgs->maxLine(), true);
+    cur += m_pgs->composeObjectDefinition(cur, odfPts, dts, 0, lines - 1, true);
     cur += m_pgs->composeEnd(cur, odfPts, odfPts);
     out.insert(out.end(), buf.data(), cur);
     m_shown = true;
