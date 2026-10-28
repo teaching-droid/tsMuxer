@@ -1887,6 +1887,9 @@ void MPLSParser::dropContradictingPlayItems()
             continue;
         m_skippedClips.push_back(m_playItems[index].fileName);
         m_playItems.erase(m_playItems.begin() + index);
+        // The chosen play item is never dropped; it keeps naming the same play item
+        if (index < m_chosenStnItem)
+            --m_chosenStnItem;
         // m_mvcFiles holds each dependent clip at the play item its sub play item names
         // (sync_PlayItem_id), so the dropped play item's entry goes with it whenever there is one.
         // This used to be done only when the list was exactly as long as the play items, a test

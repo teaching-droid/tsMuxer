@@ -381,6 +381,7 @@ struct LaterClip
 {
     std::string media;
     std::string clipInfo;
+    bool chosen = false;  // the clip of the play item whose STN table describes the playlist (chosenStnItem)
 };
 
 // A playlist may open with a clip that does not carry every stream: a short logo without the film's audio, for one.
@@ -487,8 +488,62 @@ static void orderAsPlaylist(vector<CheckStreamRez>& streams, const MPLSParser& m
     }
 }
 
+// The playlist's details (languages, track order) come from its longest play item (chosenStnItem), but every track
+// was described as the first clip has it. A short first clip whose sound is coded otherwise, a stereo intro before the
+// 5.1 film, listed "Channels: 2" for the film's track. An audio track whose clip information gives the two clips
+// another coding, layout or sample rate is now described as the chosen clip has it. Only then is that clip read, and
+// quietly: what its readers report belongs to no line of the listing.
+static void describeAsChosenClip(vector<CheckStreamRez>& streams, const string& firstClipInfo,
+                                 const vector<LaterClip>& laterClips)
+{
+    const auto clip = std::find_if(laterClips.begin(), laterClips.end(), [](const LaterClip& c) { return c.chosen; });
+    if (clip == laterClips.end() || firstClipInfo.empty() || clip->clipInfo == firstClipInfo)
+        return;
+    CLPIParser first, chosen;
+    if (!first.parse(firstClipInfo.c_str()) || !chosen.parse(clip->clipInfo.c_str()))
+        return;
+    std::set<int> differ;
+    for (const auto& [pid, a] : first.m_streamInfo)
+    {
+        const auto itr = chosen.m_streamInfo.find(pid);
+        if (itr != chosen.m_streamInfo.end() && isAudioStreamType(a.stream_coding_type) &&
+            (itr->second.stream_coding_type != a.stream_coding_type ||
+             itr->second.audio_presentation_type != a.audio_presentation_type ||
+             itr->second.sampling_frequency_index != a.sampling_frequency_index))
+            differ.insert(pid);
+    }
+    if (differ.empty())
+        return;
+    DetectStreamRez rez;
+    std::streambuf* const out = std::cout.rdbuf(nullptr);
+    std::streambuf* const err = std::cerr.rdbuf(nullptr);
+    const bool lastMsg = sLastMsg;
+    try
+    {
+        rez = METADemuxer::DetectStreamReader(readManager, clip->media, false);
+    }
+    catch (...)
+    {
+    }
+    std::cout.rdbuf(out);
+    std::cerr.rdbuf(err);
+    sLastMsg = lastMsg;
+    for (CheckStreamRez& s : streams)
+    {
+        if (!differ.count(s.trackID))
+            continue;
+        for (const CheckStreamRez& c : rez.streams)
+            if (c.trackID == s.trackID && c.codecInfo.codecID == s.codecInfo.codecID && c.subTrack == s.subTrack &&
+                !c.streamDescr.empty())
+            {
+                s.streamDescr = c.streamDescr;
+                break;
+            }
+    }
+}
+
 void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSubMode,
-                        const vector<LaterClip>* laterClips = nullptr)
+                        const vector<LaterClip>* laterClips = nullptr, const string& firstClipInfo = string())
 {
     // The later clips of a playlist also give a frame rate that a short first clip cannot give: the listing shows the
     // rate the mux takes, and the window writes it
@@ -499,7 +554,10 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
         METADemuxer::DetectStreamReader(readManager, fileName, mplsParser == nullptr, laterFiles);
     vector<CheckStreamRez>& streams = streamInfo.streams;
     if (mplsParser && laterClips && !laterClips->empty())
+    {
         addTracksFromLaterClips(streams, *mplsParser, fileName, *laterClips);
+        describeAsChosenClip(streams, firstClipInfo, *laterClips);
+    }
     if (mplsParser)
         orderAsPlaylist(streams, *mplsParser);
 
@@ -4461,9 +4519,11 @@ int main(int argc, char** argv)
                         if (!fileExists(media))
                             media = streamDir + string("SSIF") + getDirSeparator() + name + ssifExt;
                         if (fileExists(media))
-                            laterClips.push_back({media, clipInfoDir + name + (shortExt ? ".CPI" : ".clpi")});
+                            laterClips.push_back({media, clipInfoDir + name + (shortExt ? ".CPI" : ".clpi"),
+                                                  i == mplsParser.chosenStnItem()});
                     }
-                    detectStreamReader(itemName.c_str(), &mplsParser, false, &laterClips);
+                    detectStreamReader(itemName.c_str(), &mplsParser, false, &laterClips,
+                                       clipInfoDir + item.fileName + (shortExt ? ".CPI" : ".clpi"));
                 }
                 // The lengths and marks of the play items, as the mux places them (the default of --playlist-clips)
                 METADemuxer::cutPlayItems(mplsParser, argv[1], listPlaylistPlayed);

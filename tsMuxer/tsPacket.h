@@ -751,6 +751,9 @@ struct MPLSParser
     // say which ones and why. Empty for every playlist whose clips agree, which is nearly all.
     std::vector<std::string> m_skippedClips;
 
+    // The play item whose STN table describes the playlist, an index into m_playItems
+    [[nodiscard]] size_t chosenStnItem() const { return m_chosenStnItem; }
+
    private:
     void composeSubPlayItem(BitStreamWriter& writer, size_t playItemNum, size_t subPathNum,
                             const std::vector<PMTIndex>& pmtIndexList) const;
