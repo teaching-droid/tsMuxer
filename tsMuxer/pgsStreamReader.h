@@ -159,15 +159,20 @@ class PGSStreamReader final : public AbstractStreamReader
         uint16_t width = 0;
         uint16_t height = 0;
         std::vector<uint8_t> rle;
+        bool open = false;  // its last segment is still to come
     };
     std::map<uint16_t, PgsObject> m_objects;
-    // the objects the PCS of the display set shows: the object and its place
+    // the objects the PCS of the display set shows: the object, its place and the part of it shown
     struct PgsPlacedObject
     {
         uint16_t id = 0;
         uint16_t x = 0;
         uint16_t y = 0;
         bool cropped = false;
+        uint16_t cropX = 0;
+        uint16_t cropY = 0;
+        uint16_t cropWidth = 0;
+        uint16_t cropHeight = 0;
     };
     std::vector<PgsPlacedObject> m_dsObjects;
     std::vector<uint8_t> m_shownPicture;                        // the picture on the screen, as the source's colours

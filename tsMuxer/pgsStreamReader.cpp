@@ -92,8 +92,10 @@ void PGSStreamReader::composition_object(BitStreamReader& bitReader)
     placed.y = bitReader.getBits<uint16_t>(16);
     if (placed.cropped)
     {
-        bitReader.skipBits(32);  // object_cropping_horizontal_position, object_cropping_vertical_position
-        bitReader.skipBits(32);  // object_cropping_width, object_cropping_height
+        placed.cropX = bitReader.getBits<uint16_t>(16);
+        placed.cropY = bitReader.getBits<uint16_t>(16);
+        placed.cropWidth = bitReader.getBits<uint16_t>(16);
+        placed.cropHeight = bitReader.getBits<uint16_t>(16);
     }
     m_dsObjects.push_back(placed);
 }
@@ -224,28 +226,43 @@ void PGSStreamReader::decodeRleData(const std::vector<uint8_t>& rle, uint8_t* ds
 
 static constexpr int Y_THRESHOLD = 33;
 
-// ** AN OBJECT IS KEPT UNTIL THE NEXT EPOCH. ** Each object was drawn as its segment was read, at the place of its id
-// in the PCS, and then forgotten: a display set that shows the objects of its epoch again without their data (a new
-// palette, or the same picture at an acquisition point) found nothing to draw and cleared the picture. The object is
-// now kept by its id until an epoch start, and the display set is drawn from the objects its PCS shows
-// (composeDisplaySet).
+// ** AN OBJECT IS KEPT UNTIL THE NEXT EPOCH, AND MAY COME IN SEVERAL SEGMENTS. ** Each object was drawn as its segment
+// was read, at the place of its id in the PCS, and then forgotten: a display set that shows the objects of its epoch
+// again without their data (a new palette, or the same picture at an acquisition point) found nothing to draw and
+// cleared the picture. An object of more than one segment (over 64 KB) was looked for in the bytes after its first
+// segment, where the next segment's own header stood, and was lost. The segments of an object are now joined by their
+// sequence flags (first 0x80, last 0x40), and the object is kept by its id until an epoch start; the display set is
+// drawn from the objects its PCS shows (composeDisplaySet).
 void PGSStreamReader::readObjectDef(const uint8_t* pos, const uint8_t* end)
 {
-    if (end - pos < 11)
+    if (end - pos < 4)
         return;
-    PgsObject& object = m_objects[AV_RB16(pos)];
+    const uint16_t objectId = AV_RB16(pos);
+    const uint8_t sequence = pos[3];
     pos += 4;  // object ID, version number and sequence flags
-    object = PgsObject();
-    object.width = AV_RB16(pos + 3);
-    object.height = AV_RB16(pos + 5);
-    pos += 7;  // object data length, width and height
-    object.rle.assign(pos, end);
+    PgsObject& object = m_objects[objectId];
+    // a segment not marked as the first one begins an object as well where none of that id is open: a single segment
+    // written without its flags is drawn as before
+    if ((sequence & 0x80) || !object.open)
+    {
+        if (end - pos < 7)
+            return;
+        object = PgsObject();
+        object.width = AV_RB16(pos + 3);
+        object.height = AV_RB16(pos + 5);
+        object.rle.reserve((std::min)(AV_RB24(pos), 1u << 24));
+        pos += 7;  // object data length, width and height
+    }
+    object.rle.insert(object.rle.end(), pos, end);
+    object.open = !(sequence & 0x40);
 }
 
-// The picture of the display set, of the objects its PCS shows, each at its place. False when it shows none.
+// The picture of the display set, of the objects its PCS shows: each at its place, and of a cropped object only the
+// part the PCS gives (the cropping was not read, and the whole object was drawn). False when it shows none.
 bool PGSStreamReader::composeDisplaySet()
 {
     bool drawn = false;
+    std::vector<uint8_t> whole;
     for (const PgsPlacedObject& placed : m_dsObjects)
     {
         const auto found = m_objects.find(placed.id);
@@ -253,7 +270,29 @@ bool PGSStreamReader::composeDisplaySet()
             continue;
         const PgsObject& object = found->second;
         drawn = true;
-        decodeRleData(object.rle, m_imgBuffer, m_video_width, m_video_height, placed.x, placed.y);
+        if (!placed.cropped)
+        {
+            decodeRleData(object.rle, m_imgBuffer, m_video_width, m_video_height, placed.x, placed.y);
+            continue;
+        }
+        whole.assign(static_cast<size_t>(object.width) * object.height, 0xff);
+        decodeRleData(object.rle, whole.data(), object.width, object.height, 0, 0);
+        const int right = (std::min)(placed.cropX + placed.cropWidth, static_cast<int>(object.width));
+        const int bottom = (std::min)(placed.cropY + placed.cropHeight, static_cast<int>(object.height));
+        for (int y = placed.cropY; y < bottom; ++y)
+        {
+            const int py = placed.y + y - placed.cropY;
+            if (py >= m_video_height)
+                break;
+            for (int x = placed.cropX; x < right; ++x)
+            {
+                const int px = placed.x + x - placed.cropX;
+                if (px >= m_video_width)
+                    break;
+                m_imgBuffer[static_cast<size_t>(py) * m_video_width + px] =
+                    whole[static_cast<size_t>(y) * object.width + x];
+            }
+        }
     }
     return drawn;
 }
@@ -909,6 +948,7 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
             {
                 if (composition_state == CompositionState::csEpochStart)
                     m_objects.clear();
+                for (auto& object : m_objects) object.second.open = false;  // no object goes on into another set
                 m_dsOpen = true;
                 m_dsDrawn = false;
                 m_dsHasObjectData = false;
