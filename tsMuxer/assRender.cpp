@@ -328,8 +328,10 @@ AssDecoder::AssDecoder(const uint8_t* header, const int headerSize, const ass_re
     m_pgs.waitUntilShown();  // a frame decoded too late for the frame shown before is left out: a later one shows
     m->width = drawing.width;
     m->height = drawing.height;
+    // the frames at the exact rate, as the PGS times are (TextToPGSConverter::setVideoInfo): fps=23.976 as written
+    // chose the frame of a time on a grid that left the frames of the video by 324 ticks an hour
     if (drawing.fps > 0)
-        m->fps = drawing.fps;
+        m->fps = nearestPgsFrameRate(drawing.fps) != 0.0 ? nearestPgsFrameRate(drawing.fps) : drawing.fps;
     m->library = l.library_init();
     l.set_message_cb(m->library, onMessage, nullptr);
     l.set_extract_fonts(m->library, 1);  // fonts in the script's own [Fonts] section

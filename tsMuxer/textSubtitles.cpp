@@ -16,6 +16,7 @@
 #include <cmath>
 
 #include <fs/systemlog.h>
+#include "bitmapSubtitles.h"
 #include "pgsStreamReader.h"
 #include "vodCoreException.h"
 #include "vod_common.h"
@@ -101,7 +102,12 @@ void TextToPGSConverter::enlargeCrop(const uint16_t width, const uint16_t height
 void TextToPGSConverter::setVideoInfo(const uint16_t width, const uint16_t height, const double fps)
 {
     enlargeCrop(width, height, fps, &m_videoWidth, &m_videoHeight);
-    m_videoFps = fps;
+    // ** THE TIMES ARE ON THE FRAMES OF THE VIDEO. ** fps=23.976 was taken as written, and every time was put on a grid
+    // of 1/23.976 s, while the video runs at 24000/1001: the grid left its frames by a tick every 267 frames, 324 ticks
+    // (0.09 of a frame) an hour, so that a subtitle came later than its frame (29.97 and 59.94 alike). A standard rate
+    // is taken at its exact value, as the bitmap path takes it (nearestPgsFrameRate); any other rate as given.
+    const double exactFps = nearestPgsFrameRate(fps);
+    m_videoFps = exactFps != 0.0 ? exactFps : fps;
     m_bt709 = m_videoHeight > 576;
     if (m_textRender)
         m_textRender->setRenderSize(m_videoWidth, m_videoHeight);
