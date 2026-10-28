@@ -22,8 +22,6 @@ double pgs_frame_rates[16] = {
 
 PGSStreamReader::PGSStreamReader()
     : m_avFragmentEnd(nullptr),
-      object_width(0),
-      object_height(0),
       m_firstRenderedPacket(true),
       m_palleteID(0),
       m_paletteVersion(0),
@@ -84,18 +82,20 @@ void PGSStreamReader::composition_descriptor(BitStreamReader& bitReader)
 
 void PGSStreamReader::composition_object(BitStreamReader& bitReader)
 {
-    const auto object_id_ref = bitReader.getBits<uint16_t>(16);
+    PgsPlacedObject placed;
+    placed.id = bitReader.getBits<uint16_t>(16);
     bitReader.skipBits(8);  // window_id_ref
-    const bool object_cropped_flag = bitReader.getBit();
+    placed.cropped = bitReader.getBit();
     m_forced_on_flag = bitReader.getBit();
     bitReader.skipBits(6);
-    composition_object_horizontal_position[object_id_ref] = bitReader.getBits<uint16_t>(16);
-    composition_object_vertical_position[object_id_ref] = bitReader.getBits<uint16_t>(16);
-    if (object_cropped_flag)
+    placed.x = bitReader.getBits<uint16_t>(16);
+    placed.y = bitReader.getBits<uint16_t>(16);
+    if (placed.cropped)
     {
         bitReader.skipBits(32);  // object_cropping_horizontal_position, object_cropping_vertical_position
         bitReader.skipBits(32);  // object_cropping_width, object_cropping_height
     }
+    m_dsObjects.push_back(placed);
 }
 
 void PGSStreamReader::pgs_window(BitStreamReader& bitReader)
@@ -164,12 +164,13 @@ void PGSStreamReader::yuvToRgb(const int minY) const
 // lines hold more pixels than its stated width, was written past the end of the picture buffer. Each pixel now has its
 // own column and line, and what lies outside the picture is left out. The lengths in the data are checked against its
 // end the same way. An object inside the picture is drawn as before.
-void PGSStreamReader::decodeRleData(const int xOffset, const int yOffset) const
+void PGSStreamReader::decodeRleData(const std::vector<uint8_t>& rle, uint8_t* dst, const int dstWidth,
+                                    const int dstHeight, const int xOffset, const int yOffset) const
 {
-    if (m_dstRle.empty())
+    if (rle.empty())
         return;
-    const uint8_t* src = m_dstRle.data();
-    const uint8_t* srcEnd = src + m_dstRle.size();
+    const uint8_t* src = rle.data();
+    const uint8_t* srcEnd = src + rle.size();
 
     int x = 0;
     int y = 0;
@@ -179,8 +180,8 @@ void PGSStreamReader::decodeRleData(const int xOffset, const int yOffset) const
         {
             const int px = xOffset + x;
             const int py = yOffset + y;
-            if (px < m_video_width && py < m_video_height)
-                m_imgBuffer[static_cast<size_t>(py) * m_video_width + px] = color;
+            if (px < dstWidth && py < dstHeight)
+                dst[static_cast<size_t>(py) * dstWidth + px] = color;
         }
     };
     while (src < srcEnd)
@@ -223,51 +224,38 @@ void PGSStreamReader::decodeRleData(const int xOffset, const int yOffset) const
 
 static constexpr int Y_THRESHOLD = 33;
 
-int PGSStreamReader::readObjectDef(const uint8_t* pos, const uint8_t* end)
+// ** AN OBJECT IS KEPT UNTIL THE NEXT EPOCH. ** Each object was drawn as its segment was read, at the place of its id
+// in the PCS, and then forgotten: a display set that shows the objects of its epoch again without their data (a new
+// palette, or the same picture at an acquisition point) found nothing to draw and cleared the picture. The object is
+// now kept by its id until an epoch start, and the display set is drawn from the objects its PCS shows
+// (composeDisplaySet).
+void PGSStreamReader::readObjectDef(const uint8_t* pos, const uint8_t* end)
 {
-    // The object is drawn at the place its own id has in the PCS. The id of the first segment was skipped and 0 used,
-    // so a second object of a display set, or an object with id 1, was drawn at the place of object 0.
-    uint16_t object_id = AV_RB16(pos);
+    if (end - pos < 11)
+        return;
+    PgsObject& object = m_objects[AV_RB16(pos)];
     pos += 4;  // object ID, version number and sequence flags
-    const uint32_t objectSize = AV_RB24(pos);
-    pos += 3;
-    const uint8_t* objEnd = pos + objectSize;
+    object = PgsObject();
+    object.width = AV_RB16(pos + 3);
+    object.height = AV_RB16(pos + 5);
+    pos += 7;  // object data length, width and height
+    object.rle.assign(pos, end);
+}
 
-    if (m_bufEnd < objEnd)
-        return NEED_MORE_DATA;
-
-    m_dstRle.clear();
-    m_dstRle.reserve(objectSize);
-
-    object_width = AV_RB16(pos);
-    pos += 2;
-    object_height = AV_RB16(pos);
-    pos += 2;
-    while (pos < objEnd)
+// The picture of the display set, of the objects its PCS shows, each at its place. False when it shows none.
+bool PGSStreamReader::composeDisplaySet()
+{
+    bool drawn = false;
+    for (const PgsPlacedObject& placed : m_dsObjects)
     {
-        if (pos >= end)
-        {
-            if (*pos != OBJECT_DEF_SEGMENT)
-                THROW(ERR_COMMON, "Unexpected byte " << *pos << " during parsing Object definition segment")
-            pos++;  // skip OBJECT_DEF_SEGMENT
-            end = pos + AV_RB16(pos);
-            pos += 2;
-            object_id = AV_RB16(pos);
-            pos += 4;  // skip object ID and version number
-        }
-        const size_t oldSize = m_dstRle.size();
-        m_dstRle.resize(oldSize + end - pos);
-        memcpy(&m_dstRle[oldSize], pos, end - pos);
-        pos += end - pos;
+        const auto found = m_objects.find(placed.id);
+        if (found == m_objects.end() || found->second.rle.empty())
+            continue;
+        const PgsObject& object = found->second;
+        drawn = true;
+        decodeRleData(object.rle, m_imgBuffer, m_video_width, m_video_height, placed.x, placed.y);
     }
-    if (m_needRescale)
-    {
-        // into the picture of the display set; it is scaled when the set ends (renderDisplaySet)
-        decodeRleData(composition_object_horizontal_position[object_id],
-                      composition_object_vertical_position[object_id]);
-        m_dsDrawn = true;
-    }
-    return 0;
+    return drawn;
 }
 
 // ** A DISPLAY SET OF A PGS STREAM DRAWN AT ANOTHER SIZE IS DRAWN ONCE, AT ITS END. ** Each object was scaled and
@@ -279,8 +267,19 @@ int PGSStreamReader::readObjectDef(const uint8_t* pos, const uint8_t* end)
 void PGSStreamReader::renderDisplaySet()
 {
     m_dsOpen = false;
+    const size_t size = static_cast<size_t>(m_video_width) * m_video_height;
+    memset(m_imgBuffer, 0xff, size);
+    memset(m_rgbBuffer, 0x00, size * 4);
+    memset(m_scaledRgbBuffer, 0x00, static_cast<size_t>(m_scaled_width) * m_scaled_height * 4);
+    m_dsDrawn = composeDisplaySet();
     if (m_dsDrawn)
     {
+        // the same picture in the same colours, shown again without object data: it stays on the screen as it is
+        if (!m_dsHasObjectData && m_pictureShown && m_palette == m_shownPalette && m_shownPicture.size() == size &&
+            memcmp(m_shownPicture.data(), m_imgBuffer, size) == 0)
+            return;
+        m_shownPicture.assign(m_imgBuffer, m_imgBuffer + size);
+        m_shownPalette = m_palette;
         yuvToRgb(m_fontBorder ? Y_THRESHOLD : 0);
         BitmapInfo bmpDest;
         BitmapInfo bmpRef;
@@ -857,12 +856,8 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
             //	  << " objectID=" << (int)m_curPos[0] << " version=" << (int) m_curPos[2]);
             if (m_needRescale && m_dsOpen)
             {
-                if (readObjectDef(m_curPos, m_curPos + segment_len) == NEED_MORE_DATA)
-                {
-                    m_tmpBufferLen = m_bufEnd - m_curPos;
-                    memmove(m_tmpBuffer.data(), m_curPos, m_tmpBufferLen);
-                    return NEED_MORE_DATA;
-                }
+                readObjectDef(m_curPos, m_curPos + segment_len);
+                m_dsHasObjectData = true;
             }
             break;
         case PCS_DEF_SEGMENT:
@@ -892,6 +887,9 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
                     (m_newFps != 0.0 && ownIndex != calcFpsIndex(m_newFps)))
                     m_curPos[4] = static_cast<uint8_t>(calcFpsIndex(m_newFps) << 4);
             }
+            // the set before had no END: it is drawn before this PCS gives other objects and places
+            if (m_needRescale && m_dsOpen)
+                renderDisplaySet();
             bitReader.setBuffer(m_curPos, m_bufEnd);
             video_descriptor(bitReader);
             composition_descriptor(bitReader);
@@ -899,6 +897,7 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
             bitReader.skipBits(16);  // palette_update_flag, palette_id_ref
             number_of_composition_objects = bitReader.getBits<uint8_t>(8);
             m_dsForced = false;
+            m_dsObjects.clear();
             for (int i = 0; i < number_of_composition_objects; i++)
             {
                 composition_object(bitReader);
@@ -908,13 +907,11 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
             m_demuxDtsShift = m_demuxMode && m_lastDTS < 0 ? INT_FREQ_TO_TS_FREQ - m_lastDTS : 0;
             if (m_needRescale)
             {
-                if (m_dsOpen)  // the set before had no END
-                    renderDisplaySet();
-                memset(m_imgBuffer, 0xff, static_cast<size_t>(m_video_width) * m_video_height);
-                memset(m_rgbBuffer, 0x00, static_cast<size_t>(m_video_width) * m_video_height * 4);
-                memset(m_scaledRgbBuffer, 0x00, static_cast<size_t>(m_scaled_width) * m_scaled_height * 4);
+                if (composition_state == CompositionState::csEpochStart)
+                    m_objects.clear();
                 m_dsOpen = true;
                 m_dsDrawn = false;
+                m_dsHasObjectData = false;
                 m_dsTime = m_maxPTS;
                 m_dsClears = composition_state != CompositionState::csEpochStart || number_of_composition_objects == 0;
             }

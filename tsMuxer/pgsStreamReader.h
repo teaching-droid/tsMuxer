@@ -130,11 +130,8 @@ class PGSStreamReader final : public AbstractStreamReader
     double m_frame_rate;
     double m_newFps;
     double m_scale;
-    std::vector<uint8_t> m_dstRle;
     bool m_needRescale;
 
-    uint16_t object_width;
-    uint16_t object_height;
     uint8_t* m_imgBuffer;
     uint8_t* m_rgbBuffer;
     uint8_t* m_scaledRgbBuffer;
@@ -155,8 +152,27 @@ class PGSStreamReader final : public AbstractStreamReader
     uint8_t* m_renderedData;
     std::vector<PGSRenderedBlock> m_renderedBlocks;
 
-    std::map<uint16_t, uint16_t> composition_object_horizontal_position;
-    std::map<uint16_t, uint16_t> composition_object_vertical_position;
+    // A PGS stream drawn at another size: the objects of the epoch, kept until the next epoch starts, so that a display
+    // set that shows them again without their data (a new palette, or the same picture) still has them
+    struct PgsObject
+    {
+        uint16_t width = 0;
+        uint16_t height = 0;
+        std::vector<uint8_t> rle;
+    };
+    std::map<uint16_t, PgsObject> m_objects;
+    // the objects the PCS of the display set shows: the object and its place
+    struct PgsPlacedObject
+    {
+        uint16_t id = 0;
+        uint16_t x = 0;
+        uint16_t y = 0;
+        bool cropped = false;
+    };
+    std::vector<PgsPlacedObject> m_dsObjects;
+    std::vector<uint8_t> m_shownPicture;                        // the picture on the screen, as the source's colours
+    std::map<uint8_t, text_subtitles::YUVQuad> m_shownPalette;  // and their palette
+
     int64_t m_lastSetPts = 0;     // the display set written last: its presentation time
     int64_t m_lastSetEndDts = 0;  // and the decoding time of its END
     bool m_setWritten = false;    // a display set was written
@@ -172,6 +188,7 @@ class PGSStreamReader final : public AbstractStreamReader
     bool m_dsDrawn = false;       // an object of the set was drawn into the picture
     bool m_dsForced = false;      // an object of the set is forced
     bool m_dsClears = false;      // the set shows nothing (no object, or not an epoch start without an object)
+    bool m_dsHasObjectData = false;  // an ODS was read in the set
     int64_t m_dsTime = 0;         // its presentation time, on the internal clock
     bool m_pictureShown = false;  // a drawn picture is on the screen
     int64_t m_demuxDtsShift = 0;  // --demux: how much later the display set being read is written
@@ -181,8 +198,10 @@ class PGSStreamReader final : public AbstractStreamReader
     void composition_object(BitStreamReader& bitReader);
     static void pgs_window(BitStreamReader& bitReader);
     void readPalette(const uint8_t* pos, const uint8_t* end);
-    int readObjectDef(const uint8_t* pos, const uint8_t* end);
-    void decodeRleData(int xOffset, int yOffset) const;
+    void readObjectDef(const uint8_t* pos, const uint8_t* end);
+    void decodeRleData(const std::vector<uint8_t>& rle, uint8_t* dst, int dstWidth, int dstHeight, int xOffset,
+                       int yOffset) const;
+    bool composeDisplaySet();
     void yuvToRgb(int minY) const;
     static void rescaleRGB(const BitmapInfo* bmpDest, const BitmapInfo* bmpRef);
     void intDecodeStream(uint8_t* buffer, size_t len);
