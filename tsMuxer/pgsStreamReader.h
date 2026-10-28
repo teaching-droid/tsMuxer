@@ -157,6 +157,11 @@ class PGSStreamReader final : public AbstractStreamReader
 
     std::map<uint16_t, uint16_t> composition_object_horizontal_position;
     std::map<uint16_t, uint16_t> composition_object_vertical_position;
+    int64_t m_lastSetPts = 0;     // the display set written last: its presentation time
+    int64_t m_lastSetEndDts = 0;  // and the decoding time of its END
+    bool m_setWritten = false;    // a display set was written
+    void keepSetOrder(int64_t& pts, int64_t& dts, int64_t drawTime) const;
+    int64_t gridTimeFrom(int64_t ticks) const;
     void renderTextShow(int64_t inTime);
     void renderTextHide(int64_t outTime);
     void renderDisplaySet();

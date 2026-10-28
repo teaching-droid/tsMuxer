@@ -319,6 +319,38 @@ int64_t PGSStreamReader::gridTime(const int64_t internalTime) const
     return llround(round(sec * rate + 1e-6) / rate * PCR_FREQUENCY);
 }
 
+// The first time of the frame grid at or after a time in 90 kHz ticks
+int64_t PGSStreamReader::gridTimeFrom(const int64_t ticks) const
+{
+    double rate = nearestPgsFrameRate(m_render->m_videoFps);
+    if (rate == 0.0)
+        rate = m_render->m_videoFps;
+    if (rate <= 0.0)
+        return ticks;
+    auto frame = static_cast<int64_t>(ceil(static_cast<double>(ticks) * rate / PCR_FREQUENCY - 1e-6));
+    while (llround(static_cast<double>(frame) / rate * PCR_FREQUENCY) < ticks) ++frame;
+    return llround(static_cast<double>(frame) / rate * PCR_FREQUENCY);
+}
+
+// ** THE DISPLAY SETS ARE WRITTEN IN THEIR ORDER. ** Each set was timed on its own, back from its presentation time by
+// its decoding, and in a demux moved on its own to be decoded from the first tick. Several sets at one time (a picture,
+// a clear and the next picture, all at 0 s) came out with decoding times that go back, and in a demux at 5988, 157 and
+// 6031. A set is now decoded after the END of the set before and shown later than that set by the drawing of its
+// window, at the first frame where it can be; a set that already was is not moved.
+void PGSStreamReader::keepSetOrder(int64_t& pts, int64_t& dts, const int64_t drawTime) const
+{
+    if (!m_setWritten)
+        return;
+    int64_t later = (std::max)(int64_t{0}, m_lastSetEndDts - dts);
+    if (pts + later <= m_lastSetPts + drawTime)
+        later = m_lastSetPts + drawTime + 1 - pts;
+    if (later == 0)
+        return;
+    const int64_t newPts = gridTimeFrom(pts + later);
+    dts += newPts - pts;
+    pts = newPts;
+}
+
 void PGSStreamReader::rescaleRGB(const BitmapInfo* bmpDest, const BitmapInfo* bmpRef)
 {
     const double xFactor = static_cast<double>(bmpRef->Width) / static_cast<double>(bmpDest->Width);
@@ -411,7 +443,11 @@ void PGSStreamReader::renderTextShow(int64_t inTime)
         pts += 1 - dts;
         dts = 1;
     }
+    keepSetOrder(pts, dts, drawTime);
     const int64_t odfPTS = dts + decodeTime;
+    m_setWritten = true;
+    m_lastSetPts = pts;
+    m_lastSetEndDts = odfPTS;
 
     uint8_t* curPos = m_renderedData;
     int rLen = m_render->composePresentationSegment(curPos, CompositionMode::Start, pts, dts, m_objectWindowLeft,
@@ -445,6 +481,10 @@ void PGSStreamReader::renderTextHide(int64_t outTime)
         pts += 1 - dts;
         dts = 1;
     }
+    keepSetOrder(pts, dts, drawTime);
+    m_setWritten = true;
+    m_lastSetPts = pts;
+    m_lastSetEndDts = dts;
 
     m_firstRenderedPacket = true;
     m_renderedBlocks.clear();
