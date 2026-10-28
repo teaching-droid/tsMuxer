@@ -1012,6 +1012,10 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->DiskLabelEdit, &QLineEdit::textChanged, this, &TsMuxerWindow::onGeneralCheckboxClicked);
     connect(ui->btnBrowse, &QAbstractButton::clicked, this, &TsMuxerWindow::saveFileDialog);
     connect(ui->buttonMux, &QAbstractButton::clicked, this, &TsMuxerWindow::startMuxing);
+    connect(ui->trackLV->model(), &QAbstractItemModel::rowsInserted, this, &TsMuxerWindow::updateMuxButton);
+    connect(ui->trackLV->model(), &QAbstractItemModel::rowsRemoved, this, &TsMuxerWindow::updateMuxButton);
+    connect(ui->trackLV->model(), &QAbstractItemModel::modelReset, this, &TsMuxerWindow::updateMuxButton);
+    updateMuxButton();
     connect(ui->buttonSaveMeta, &QAbstractButton::clicked, this, &TsMuxerWindow::saveMetaFileBtnClick);
     connect(ui->buttonOpenMeta, &QAbstractButton::clicked, this, &TsMuxerWindow::openMetaFileBtnClick);
     connect(ui->metaAutoCheckBox, &QAbstractButton::clicked, this,
@@ -3841,6 +3845,13 @@ void TsMuxerWindow::trackLVItemChanged(QTableWidgetItem* item)
     disableUpdatesCnt--;
 }
 
+// "Start muxing" with an empty track list ran tsMuxeR only for it to stop with "No tracks selected". The button is
+// greyed until the list has a track, and while tsMuxeR runs.
+void TsMuxerWindow::updateMuxButton()
+{
+    ui->buttonMux->setEnabled(ui->trackLV->rowCount() > 0 && proc.state() == QProcess::NotRunning);
+}
+
 void TsMuxerWindow::inputFilesLVChanged()
 {
     QListWidgetItem* itm = ui->inputFilesLV->currentItem();
@@ -3850,7 +3861,7 @@ void TsMuxerWindow::inputFilesLVChanged()
         ui->removeFile->setEnabled(false);
         return;
     }
-    ui->btnAppend->setEnabled(itm->data(MplsItemRole).toInt() != MPLS_M2TS && ui->buttonMux->isEnabled());
+    ui->btnAppend->setEnabled(itm->data(MplsItemRole).toInt() != MPLS_M2TS && proc.state() == QProcess::NotRunning);
     ui->removeFile->setEnabled(itm->data(MplsItemRole).toInt() != MPLS_M2TS);
 }
 
@@ -4276,7 +4287,7 @@ void TsMuxerWindow::onProcessFinished(int exitCode, QProcess::ExitStatus exitSta
     processExitCode = exitCode;
     processExitStatus = exitStatus;
     muxForm->muxFinished(processExitCode, ui->radioButtonDemux->isChecked() ? tr("Demux") : tr("Mux"));
-    ui->buttonMux->setEnabled(true);
+    updateMuxButton();
     ui->addBtn->setEnabled(true);
     inputFilesLVChanged();
     if (processExitCode == 0)
@@ -4332,7 +4343,7 @@ void TsMuxerWindow::onProcessError(QProcess::ProcessError error)
     {
     case QProcess::FailedToStart:
         msgBox.setText(tr("tsMuxeR not found!"));
-        ui->buttonMux->setEnabled(true);
+        updateMuxButton();
         ui->addBtn->setEnabled(true);
         inputFilesLVChanged();
         break;

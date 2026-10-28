@@ -74,6 +74,7 @@ class TsMuxerWindow : public QWidget
     void setProbeBusy(bool busy);
     void trackLVItemSelectionChanged();
     void inputFilesLVChanged();
+    void updateMuxButton();
     void trackLVItemChanged(QTableWidgetItem* item);
     void onVideoCheckBoxChanged();
     void onPulldownCheckBoxChanged();
