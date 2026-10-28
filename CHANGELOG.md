@@ -644,6 +644,16 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Window
 
+* **"Start muxing" could be pressed with no track in the list,** and tsMuxeR then stopped with "No tracks selected". The button is now greyed until the list has a track.
+
+* **A wrong custom chapter time or a cut end before the cut start was found only by tsMuxeR after Start.** The field now gets a red frame and the reason as its tooltip when it is left, and Start shows the reason and does not run.
+
+* **After Abort the dialog still read "Muxing in progress" with the last percentage, and the unfinished output stayed.** The dialog now says that the mux was stopped and that the unfinished output was removed, and its button reads Close. Only what the stopped job wrote is removed; an output that was there before is kept as it was.
+
+* **Closing the window during a mux stopped it without a question** and left the unfinished output. The window now asks first. Yes stops the mux as Abort does, No keeps it running.
+
+* **An unknown language in the settings left the language box empty,** and it was saved back empty. It now falls back to the system's language when the window has it, else English. An unknown list of language codes falls back to the default list.
+
 * **A file opened with "Open with" or "Send to" whose name has a letter outside the system code page, such as a German umlaut or Japanese, was refused as a file that does not exist.** Dropping the same file onto the window worked. Both now add it.
 
 * **A disc made from a Matroska file written by tsMuxeR lost the AC-3 core of its TrueHD track.** Such a file holds the core as an AC-3 track of its own, straight after the TrueHD track, and the window muxed the two apart: the disc had TrueHD without its core and an extra AC-3 track. For a disc, the window now asks whether that track goes on the disc as the core of the TrueHD track (merge-ac3-track=) or as a separate track, with "As the core" offered first for a file tsMuxeR wrote; the merge box shows the answer. The listing of a Matroska file shows the application that wrote it. The warning that MLP is not standard for BD disks now names merge-ac3-track= and merge-ac3-file=.
