@@ -7203,8 +7203,11 @@ void TsMuxerWindow::writeSettings()
 
     settings->setValue("outputToInputFolder", ui->radioButtonOutoutInInput->isChecked());
     settings->setValue("outputMode", currentOutputMode());
-    settings->setValue("language", ui->languageSelectComboBox->currentText());
-    settings->setValue("langCodes", ui->langCodesComboBox->currentData().toString());
+    // never an empty value: read back, it left the boxes empty on every later start
+    if (!ui->languageSelectComboBox->currentText().isEmpty())
+        settings->setValue("language", ui->languageSelectComboBox->currentText());
+    if (!ui->langCodesComboBox->currentData().toString().isEmpty())
+        settings->setValue("langCodes", ui->langCodesComboBox->currentData().toString());
     if (m_wasShown)
     {
         settings->setValue("windowSize", size());
@@ -7388,7 +7391,25 @@ bool TsMuxerWindow::readGeneralSettings(const QString& prefix)
     auto lang = settings->value("language");
     if (lang.isValid())
     {
-        ui->languageSelectComboBox->setCurrentText(lang.toString());
+        // A language the window does not have ("xx", or an empty value) left the box empty, and it was saved back
+        // empty, so the box stayed empty on every later start. It now takes the system's language when the window has
+        // it, else English.
+        int idx = ui->languageSelectComboBox->findText(lang.toString());
+        if (idx < 0)
+        {
+            idx = 0;
+            for (const QString& name : QLocale::system().uiLanguages())
+            {
+                const int found = ui->languageSelectComboBox->findData(
+                    name.section(QLatin1Char('-'), 0, 0).section(QLatin1Char('_'), 0, 0).toLower());
+                if (found >= 0)
+                {
+                    idx = found;
+                    break;
+                }
+            }
+        }
+        ui->languageSelectComboBox->setCurrentIndex(idx);
     }
     else if (ui->languageSelectComboBox->currentIndex() < 0)
     {
@@ -7400,7 +7421,9 @@ bool TsMuxerWindow::readGeneralSettings(const QString& prefix)
     const QVariant langCodes = settings->value("langCodes");
     if (langCodes.isValid())
     {
-        const int idx = ui->langCodesComboBox->findData(langCodes.toString());
+        int idx = ui->langCodesComboBox->findData(langCodes.toString());
+        if (idx < 0)  // an unknown value: the default list
+            idx = ui->langCodesComboBox->findData("terminological");
         if (idx >= 0)
             ui->langCodesComboBox->setCurrentIndex(idx);
     }
