@@ -1,6 +1,7 @@
 #include "muxForm.h"
 
 #include <QCloseEvent>
+#include <QCoreApplication>
 #include <QProcess>
 
 #include "ui_muxForm.h"
@@ -45,10 +46,12 @@ void MuxForm::prepare(const QString& label)
     setWindowTitle(label);
     ui->muxLabel->setText(label + '.');
     ui->progressBar->setValue(0);
+    onProgressChanged();  // the line an Abort left
     ui->stdoutText->clear();
     ui->stderrText->clear();
     ui->abortBtn->setEnabled(true);
     ui->okBtn->setEnabled(false);
+    ui->okBtn->setText(QCoreApplication::translate("muxForm", "OK"));
 }
 
 void MuxForm::onProgressChanged()
@@ -119,7 +122,8 @@ void MuxForm::muxFinished(int exitCode, const QString&)
 
 void MuxForm::onAbort()
 {
-    if (muxProcess == nullptr)
+    // only a job that still runs: closing the dialog after the end must not take its output away
+    if (muxProcess == nullptr || muxProcess->state() == QProcess::NotRunning)
         return;
     ui->abortBtn->setEnabled(false);
     ui->okBtn->setEnabled(true);
@@ -128,6 +132,16 @@ void MuxForm::onAbort()
     muxProcess->waitForFinished();
     setWindowTitle(QObject::tr("tsMuxeR is terminated"));
     muxProcess = nullptr;
+    emit stopped();
+}
+
+// After Abort the dialog still read "Muxing in progress. Progress: 33.0%". It now says that the job was stopped and
+// what became of its unfinished output, and the button closes it.
+void MuxForm::showStopped(const QString& label, const QString& outputLine)
+{
+    ui->muxLabel->setText(label);
+    ui->progressLabel->setText(outputLine);
+    ui->okBtn->setText(QObject::tr("Close"));
 }
 
 void MuxForm::setProcess(QProcess* proc) { muxProcess = proc; }

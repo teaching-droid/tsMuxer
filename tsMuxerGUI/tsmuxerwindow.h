@@ -74,6 +74,9 @@ class TsMuxerWindow : public QWidget
     void setProbeBusy(bool busy);
     void trackLVItemSelectionChanged();
     void inputFilesLVChanged();
+    void noteRunOutput(const QString& output, bool discFolder);
+    QString removeUnfinishedOutput();
+    void onMuxStopped();
     void updateMuxButton();
     void trackLVItemChanged(QTableWidgetItem* item);
     void onVideoCheckBoxChanged();
@@ -236,6 +239,14 @@ class TsMuxerWindow : public QWidget
     void setUiMetaItemsData();
 
     QString metaName;
+    // The output of the job that runs, as it was before the start: what an Abort may remove (removeUnfinishedOutput)
+    QString m_runOutput;
+    bool m_runOutputExisted = false;
+    bool m_runDiscFolder = false;
+    QStringList m_runDirBefore;       // the entries of the folder that holds the output
+    QStringList m_runOutputBefore;    // the entries of an output folder that was there
+    QStringList m_runMissingFolders;  // the folders above the output that were not there, the deepest first
+    qint64 m_runPid = 0;
     Ui::TsMuxerWindow* ui;
     int disableUpdatesCnt;
     bool processFinished;

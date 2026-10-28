@@ -1082,6 +1082,7 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->DiskLabelEdit, &QLineEdit::textChanged, this, &TsMuxerWindow::onGeneralCheckboxClicked);
     connect(ui->btnBrowse, &QAbstractButton::clicked, this, &TsMuxerWindow::saveFileDialog);
     connect(ui->buttonMux, &QAbstractButton::clicked, this, &TsMuxerWindow::startMuxing);
+    connect(muxForm, &MuxForm::stopped, this, &TsMuxerWindow::onMuxStopped);
     connect(ui->trackLV->model(), &QAbstractItemModel::rowsInserted, this, &TsMuxerWindow::updateMuxButton);
     connect(ui->trackLV->model(), &QAbstractItemModel::rowsRemoved, this, &TsMuxerWindow::updateMuxButton);
     connect(ui->trackLV->model(), &QAbstractItemModel::modelReset, this, &TsMuxerWindow::updateMuxButton);
@@ -2112,6 +2113,7 @@ TsMuxerWindow::TsMuxerWindow()
                 if (const QString lbl = labelEdit->text().trimmed(); !lbl.isEmpty())
                     args << ("--label=" + lbl);
                 args << folder << iso;
+                noteRunOutput(iso, false);
                 tsMuxerExecute(args);
             });
         // re-enable the Build button whenever the tsMuxer process finishes
@@ -3923,6 +3925,87 @@ void TsMuxerWindow::updateMuxButton()
     ui->buttonMux->setEnabled(ui->trackLV->rowCount() > 0 && proc.state() == QProcess::NotRunning);
 }
 
+static const QDir::Filters ALL_ENTRIES = QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System;
+
+// tsMuxeR removes what a failed job wrote, but a job stopped with Abort is ended at once (QProcess::kill), so it
+// cannot: the output that was being written stayed. The window removes it, and only what this run made. So what was
+// there is noted before the start, and tsMuxeR's own names for what it writes are used: the output itself, its split
+// parts, names that begin with the output's name and a dot (an image's .layerbreak.txt and --inner-only folder), and
+// the temporary names ".tsmuxer-new-<process id>" that stand for an output that was there before. A folder output
+// that was there keeps everything but the new BDMV and CERTIFICATE folders of a disc and the temporary folder.
+void TsMuxerWindow::noteRunOutput(const QString& output, bool discFolder)
+{
+    const QFileInfo out(QDir::cleanPath(QFileInfo(unquoteStr(output.trimmed())).absoluteFilePath()));
+    m_runOutput = out.absoluteFilePath();
+    m_runOutputExisted = out.exists();
+    m_runDiscFolder = discFolder && !ui->radioButtonDemux->isChecked();
+    m_runDirBefore = out.absoluteDir().entryList(ALL_ENTRIES);
+    m_runOutputBefore = out.isDir() ? QDir(m_runOutput).entryList(ALL_ENTRIES) : QStringList();
+    m_runMissingFolders.clear();
+    // QDir::cdUp() does not go into a folder that is not there, so the names are taken apart instead
+    for (QString folder = out.absolutePath(); !QFileInfo::exists(folder);)
+    {
+        m_runMissingFolders << folder;
+        const QString up = QFileInfo(folder).absolutePath();
+        if (up == folder)
+            break;
+        folder = up;
+    }
+}
+
+QString TsMuxerWindow::removeUnfinishedOutput()
+{
+    if (m_runOutput.isEmpty())
+        return QString();
+    const QFileInfo out(m_runOutput);
+    if (out.fileName().isEmpty())  // the root of a drive: nothing there is told apart safely
+    {
+        m_runOutput.clear();
+        return tr("The unfinished output was kept: %1").arg(QDir::toNativeSeparators(out.absoluteFilePath()));
+    }
+    const QString tempTag = QLatin1String(".tsmuxer-new-") + QString::number(m_runPid);
+    const QRegularExpression splitPart("^" + QRegularExpression::escape(out.completeBaseName() + ".split.") +
+                                           "[0-9]+\\." + QRegularExpression::escape(out.suffix()) + "$",
+                                       QRegularExpression::CaseInsensitiveOption);
+    QStringList removed;
+    QStringList kept;
+    const auto removeEntry = [&](const QString& path)
+    {
+        const QFileInfo fi(path);
+        if (fi.isDir() && !fi.isSymLink() ? QDir(path).removeRecursively() : QFile::remove(path))
+            removed << path;
+        else
+            kept << QDir::toNativeSeparators(path);
+    };
+    const QDir dir = out.absoluteDir();
+    for (const QString& name : dir.entryList(ALL_ENTRIES))
+        if (!m_runDirBefore.contains(name) && (name == out.fileName() || name.startsWith(out.fileName() + '.') ||
+                                               name.contains(tempTag) || splitPart.match(name).hasMatch()))
+            removeEntry(dir.filePath(name));
+    if (m_runOutputExisted && out.isDir())
+    {
+        const QDir outDir(m_runOutput);
+        for (const QString& name : outDir.entryList(ALL_ENTRIES))
+            if (!m_runOutputBefore.contains(name) &&
+                (name.contains(tempTag) || (m_runDiscFolder && (name == "BDMV" || name == "CERTIFICATE"))))
+                removeEntry(outDir.filePath(name));
+    }
+    for (const QString& folder : m_runMissingFolders) QDir().rmdir(folder);  // only when empty
+    m_runOutput.clear();
+    if (!kept.isEmpty())
+        return tr("The unfinished output was kept: %1").arg(kept.join(", "));
+    if (!removed.isEmpty())
+        return tr("The unfinished output was removed.");
+    return tr("No output was written.");
+}
+
+void TsMuxerWindow::onMuxStopped()
+{
+    const QString outputLine = removeUnfinishedOutput();
+    muxForm->showStopped(ui->radioButtonDemux->isChecked() ? tr("The demux was stopped.") : tr("The mux was stopped."),
+                         outputLine);
+}
+
 void TsMuxerWindow::inputFilesLVChanged()
 {
     QListWidgetItem* itm = ui->inputFilesLV->currentItem();
@@ -4357,6 +4440,8 @@ void TsMuxerWindow::onProcessFinished(int exitCode, QProcess::ExitStatus exitSta
     }
     processExitCode = exitCode;
     processExitStatus = exitStatus;
+    if (exitStatus == QProcess::NormalExit)
+        m_runOutput.clear();  // ended by itself: tsMuxeR has dealt with its output
     muxForm->muxFinished(processExitCode, ui->radioButtonDemux->isChecked() ? tr("Demux") : tr("Mux"));
     updateMuxButton();
     ui->addBtn->setEnabled(true);
@@ -4487,6 +4572,7 @@ void TsMuxerWindow::tsMuxerExecute(const QStringList& args)
     processFinished = false;
     processExitCode = -1;
     proc.start(exePath, allArgs);
+    m_runPid = proc.processId();
     if (muxForm->isVisible())
         muxForm->setProcess(&proc);
 }
@@ -6587,6 +6673,8 @@ void TsMuxerWindow::startMuxing()
     disconnect();
     // QCoreApplication::dir
     runInMuxMode = true;
+    noteRunOutput(ui->outFileName->text(), ui->radioButtonBluRay->isChecked() || ui->radioButtonAVCHD->isChecked() ||
+                                               ui->radioButtonDemux->isChecked());
     tsMuxerExecute(QStringList() << metaName << quoteStr(ui->outFileName->text()));
 }
 
@@ -7369,6 +7457,7 @@ void TsMuxerWindow::processAddFileList(OnCodecListReadyFn onCodecListReady, Post
     connect(this, &TsMuxerWindow::codecListReady, this, onCodecListReady);
     connect(this, postActionSignal, this, postActionFn);
     runInMuxMode = false;
+    m_runOutput.clear();
     setProbeBusy(true);
     tsMuxerExecute(QStringList() << newFileName);
 }
