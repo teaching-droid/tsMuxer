@@ -2516,6 +2516,10 @@
         <source>tsMuxeR is terminated</source>
         <translation>tsMuxeR a terminé</translation>
     </message>
+    <message>
+        <source>Close</source>
+        <translation>Fermer</translation>
+    </message>
 </context>
 <context>
     <name>TsMuxerWindow</name>
@@ -4434,6 +4438,42 @@ Créer l'ISO malgré tout ?</translation>
     <message>
         <source>The output file &quot;%1&quot; is one of the source files. Please choose another name.</source>
         <translation>Le fichier de sortie &quot;%1&quot; est l'un des fichiers source. Veuillez choisir un autre nom.</translation>
+    </message>
+    <message>
+        <source>Custom chapters: &quot;%1&quot; is not a time from 0 to 100000 hours, written as HH:MM:SS.mmm.</source>
+        <translation>Chapitres personnalisés : &quot;%1&quot; n'est pas une durée de 0 à 100000 heures, au format HH:MM:SS.mmm.</translation>
+    </message>
+    <message>
+        <source>The cut end (%1) is not after the cut start (%2). Both are positions from the start of the source, so the end must be the later of the two.</source>
+        <translation>La fin de la découpe (%1) n'est pas après son début (%2). Les deux sont des positions depuis le début de la source, la fin doit donc être la plus tardive.</translation>
+    </message>
+    <message>
+        <source>Wrong value</source>
+        <translation>Valeur incorrecte</translation>
+    </message>
+    <message>
+        <source>The unfinished output was kept: %1</source>
+        <translation>La sortie inachevée a été conservée : %1</translation>
+    </message>
+    <message>
+        <source>The unfinished output was removed.</source>
+        <translation>La sortie inachevée a été supprimée.</translation>
+    </message>
+    <message>
+        <source>No output was written.</source>
+        <translation>Aucune sortie n'a été écrite.</translation>
+    </message>
+    <message>
+        <source>The demux was stopped.</source>
+        <translation>Le démultiplexage a été arrêté.</translation>
+    </message>
+    <message>
+        <source>The mux was stopped.</source>
+        <translation>Le multiplexage a été arrêté.</translation>
+    </message>
+    <message>
+        <source>A mux is running. Stop it and close the window?</source>
+        <translation>Un multiplexage est en cours. L'arrêter et fermer la fenêtre ?</translation>
     </message>
 </context>
 <context>

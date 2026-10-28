@@ -2516,6 +2516,10 @@
         <source>tsMuxeR is terminated</source>
         <translation>tsMuxeRを終了しました</translation>
     </message>
+    <message>
+        <source>Close</source>
+        <translation>閉じる</translation>
+    </message>
 </context>
 <context>
     <name>TsMuxerWindow</name>
@@ -4434,6 +4438,42 @@ Build the ISO anyway?</source>
     <message>
         <source>The output file &quot;%1&quot; is one of the source files. Please choose another name.</source>
         <translation>出力ファイル &quot;%1&quot; は入力ファイルの一つです。別の名前を選んでください。</translation>
+    </message>
+    <message>
+        <source>Custom chapters: &quot;%1&quot; is not a time from 0 to 100000 hours, written as HH:MM:SS.mmm.</source>
+        <translation>カスタムチャプター: 「%1」は 0 から 100000 時間までの HH:MM:SS.mmm 形式の時間ではありません。</translation>
+    </message>
+    <message>
+        <source>The cut end (%1) is not after the cut start (%2). Both are positions from the start of the source, so the end must be the later of the two.</source>
+        <translation>カット終了 (%1) がカット開始 (%2) より後ではありません。どちらもソースの先頭からの位置なので、終了の方が後でなければなりません。</translation>
+    </message>
+    <message>
+        <source>Wrong value</source>
+        <translation>不正な値</translation>
+    </message>
+    <message>
+        <source>The unfinished output was kept: %1</source>
+        <translation>未完成の出力を残しました: %1</translation>
+    </message>
+    <message>
+        <source>The unfinished output was removed.</source>
+        <translation>未完成の出力を削除しました。</translation>
+    </message>
+    <message>
+        <source>No output was written.</source>
+        <translation>出力は書き込まれていません。</translation>
+    </message>
+    <message>
+        <source>The demux was stopped.</source>
+        <translation>Demuxを中止しました。</translation>
+    </message>
+    <message>
+        <source>The mux was stopped.</source>
+        <translation>多重化を中止しました。</translation>
+    </message>
+    <message>
+        <source>A mux is running. Stop it and close the window?</source>
+        <translation>多重化を実行中です。中止してウィンドウを閉じますか?</translation>
     </message>
 </context>
 <context>

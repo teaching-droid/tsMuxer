@@ -2516,6 +2516,10 @@
         <source>tsMuxeR is terminated</source>
         <translation>tsMuxeR завершился</translation>
     </message>
+    <message>
+        <source>Close</source>
+        <translation>Закрыть</translation>
+    </message>
 </context>
 <context>
     <name>TsMuxerWindow</name>
@@ -4435,6 +4439,42 @@ Build the ISO anyway?</source>
     <message>
         <source>The output file &quot;%1&quot; is one of the source files. Please choose another name.</source>
         <translation>Выходной файл &quot;%1&quot; является одним из исходных файлов. Выберите другое имя.</translation>
+    </message>
+    <message>
+        <source>Custom chapters: &quot;%1&quot; is not a time from 0 to 100000 hours, written as HH:MM:SS.mmm.</source>
+        <translation>Свои главы: «%1» не является временем от 0 до 100000 часов в формате HH:MM:SS.mmm.</translation>
+    </message>
+    <message>
+        <source>The cut end (%1) is not after the cut start (%2). Both are positions from the start of the source, so the end must be the later of the two.</source>
+        <translation>Конец обрезки (%1) не позже начала обрезки (%2). Оба значения: позиции от начала источника, поэтому конец должен быть позже.</translation>
+    </message>
+    <message>
+        <source>Wrong value</source>
+        <translation>Неверное значение</translation>
+    </message>
+    <message>
+        <source>The unfinished output was kept: %1</source>
+        <translation>Незавершённый результат сохранён: %1</translation>
+    </message>
+    <message>
+        <source>The unfinished output was removed.</source>
+        <translation>Незавершённый результат удалён.</translation>
+    </message>
+    <message>
+        <source>No output was written.</source>
+        <translation>Ничего не было записано.</translation>
+    </message>
+    <message>
+        <source>The demux was stopped.</source>
+        <translation>Демуксинг остановлен.</translation>
+    </message>
+    <message>
+        <source>The mux was stopped.</source>
+        <translation>Муксинг остановлен.</translation>
+    </message>
+    <message>
+        <source>A mux is running. Stop it and close the window?</source>
+        <translation>Выполняется муксинг. Остановить его и закрыть окно?</translation>
     </message>
 </context>
 <context>

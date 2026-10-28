@@ -2516,6 +2516,10 @@
         <source>tsMuxeR is terminated</source>
         <translation>tsMuxeR הופסק</translation>
     </message>
+    <message>
+        <source>Close</source>
+        <translation>סגור</translation>
+    </message>
 </context>
 <context>
     <name>TsMuxerWindow</name>
@@ -4434,6 +4438,42 @@ Build the ISO anyway?</source>
     <message>
         <source>The output file &quot;%1&quot; is one of the source files. Please choose another name.</source>
         <translation>קובץ הפלט &quot;%1&quot; הוא אחד מקובצי המקור. נא לבחור שם אחר.</translation>
+    </message>
+    <message>
+        <source>Custom chapters: &quot;%1&quot; is not a time from 0 to 100000 hours, written as HH:MM:SS.mmm.</source>
+        <translation>פרקים מותאמים: &quot;%1&quot; אינו זמן בין 0 ל-100000 שעות בתבנית HH:MM:SS.mmm.</translation>
+    </message>
+    <message>
+        <source>The cut end (%1) is not after the cut start (%2). Both are positions from the start of the source, so the end must be the later of the two.</source>
+        <translation>סוף החיתוך (%1) אינו אחרי תחילת החיתוך (%2). שניהם מיקומים מתחילת המקור, לכן הסוף חייב להיות המאוחר מביניהם.</translation>
+    </message>
+    <message>
+        <source>Wrong value</source>
+        <translation>ערך שגוי</translation>
+    </message>
+    <message>
+        <source>The unfinished output was kept: %1</source>
+        <translation>הפלט שלא הושלם נשמר: %1</translation>
+    </message>
+    <message>
+        <source>The unfinished output was removed.</source>
+        <translation>הפלט שלא הושלם הוסר.</translation>
+    </message>
+    <message>
+        <source>No output was written.</source>
+        <translation>לא נכתב פלט.</translation>
+    </message>
+    <message>
+        <source>The demux was stopped.</source>
+        <translation>שחרור הממקס הופסק.</translation>
+    </message>
+    <message>
+        <source>The mux was stopped.</source>
+        <translation>המוקסינג הופסק.</translation>
+    </message>
+    <message>
+        <source>A mux is running. Stop it and close the window?</source>
+        <translation>מוקסינג בתהליך. לעצור אותו ולסגור את החלון?</translation>
     </message>
 </context>
 <context>

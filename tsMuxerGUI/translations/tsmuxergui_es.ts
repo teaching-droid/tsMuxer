@@ -2516,6 +2516,10 @@
         <source>tsMuxeR is terminated</source>
         <translation>tsMuxeR ha terminado</translation>
     </message>
+    <message>
+        <source>Close</source>
+        <translation>Cerrar</translation>
+    </message>
 </context>
 <context>
     <name>TsMuxerWindow</name>
@@ -4435,6 +4439,42 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
     <message>
         <source>The output file &quot;%1&quot; is one of the source files. Please choose another name.</source>
         <translation>El archivo de salida &quot;%1&quot; es uno de los archivos de origen. Elija otro nombre.</translation>
+    </message>
+    <message>
+        <source>Custom chapters: &quot;%1&quot; is not a time from 0 to 100000 hours, written as HH:MM:SS.mmm.</source>
+        <translation>Capítulos personalizados: &quot;%1&quot; no es un tiempo de 0 a 100000 horas, escrito como HH:MM:SS.mmm.</translation>
+    </message>
+    <message>
+        <source>The cut end (%1) is not after the cut start (%2). Both are positions from the start of the source, so the end must be the later of the two.</source>
+        <translation>El final del corte (%1) no es posterior al inicio del corte (%2). Ambos son posiciones desde el inicio de la fuente, así que el final debe ser el más tardío.</translation>
+    </message>
+    <message>
+        <source>Wrong value</source>
+        <translation>Valor incorrecto</translation>
+    </message>
+    <message>
+        <source>The unfinished output was kept: %1</source>
+        <translation>Se conservó la salida incompleta: %1</translation>
+    </message>
+    <message>
+        <source>The unfinished output was removed.</source>
+        <translation>Se eliminó la salida incompleta.</translation>
+    </message>
+    <message>
+        <source>No output was written.</source>
+        <translation>No se escribió ninguna salida.</translation>
+    </message>
+    <message>
+        <source>The demux was stopped.</source>
+        <translation>El demux se detuvo.</translation>
+    </message>
+    <message>
+        <source>The mux was stopped.</source>
+        <translation>El mux se detuvo.</translation>
+    </message>
+    <message>
+        <source>A mux is running. Stop it and close the window?</source>
+        <translation>Hay un mux en curso. ¿Detenerlo y cerrar la ventana?</translation>
     </message>
 </context>
 <context>

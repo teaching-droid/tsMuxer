@@ -2516,6 +2516,10 @@
         <source>tsMuxeR is terminated</source>
         <translation>tsMuxeR 已终止</translation>
     </message>
+    <message>
+        <source>Close</source>
+        <translation>关闭</translation>
+    </message>
 </context>
 <context>
     <name>TsMuxerWindow</name>
@@ -4434,6 +4438,42 @@ Build the ISO anyway?</source>
     <message>
         <source>The output file &quot;%1&quot; is one of the source files. Please choose another name.</source>
         <translation>输出文件 &quot;%1&quot; 是源文件之一。请选择其他名称。</translation>
+    </message>
+    <message>
+        <source>Custom chapters: &quot;%1&quot; is not a time from 0 to 100000 hours, written as HH:MM:SS.mmm.</source>
+        <translation>自定义章节：&quot;%1&quot; 不是 0 到 100000 小时之间、格式为 HH:MM:SS.mmm 的时间。</translation>
+    </message>
+    <message>
+        <source>The cut end (%1) is not after the cut start (%2). Both are positions from the start of the source, so the end must be the later of the two.</source>
+        <translation>剪切结束 (%1) 不在剪切开始 (%2) 之后。两者都是从源开头算起的位置，因此结束必须晚于开始。</translation>
+    </message>
+    <message>
+        <source>Wrong value</source>
+        <translation>错误的值</translation>
+    </message>
+    <message>
+        <source>The unfinished output was kept: %1</source>
+        <translation>未完成的输出已保留：%1</translation>
+    </message>
+    <message>
+        <source>The unfinished output was removed.</source>
+        <translation>未完成的输出已删除。</translation>
+    </message>
+    <message>
+        <source>No output was written.</source>
+        <translation>没有写入任何输出。</translation>
+    </message>
+    <message>
+        <source>The demux was stopped.</source>
+        <translation>Demuxing已停止。</translation>
+    </message>
+    <message>
+        <source>The mux was stopped.</source>
+        <translation>Muxing已停止。</translation>
+    </message>
+    <message>
+        <source>A mux is running. Stop it and close the window?</source>
+        <translation>正在进行Muxing。要停止它并关闭窗口吗？</translation>
     </message>
 </context>
 <context>
