@@ -36,9 +36,13 @@ int main(int argc, char* argv[])
     TsMuxerWindow win;
     win.show();
     QList<QUrl> files;
-    for (int i = 1; i < argc; ++i)
+    // The names come from QApplication: on Windows argv is in the ANSI code page, so a file opened
+    // with "Open with" or "Send to" whose name has a character outside it (even a German umlaut was read wrongly
+    // as UTF-8) was refused as a file that does not exist. Dropping the same file worked.
+    const QStringList args = QApplication::arguments();
+    for (int i = 1; i < args.size(); ++i)
     {
-        const QString arg = QString::fromUtf8(argv[i]);
+        const QString& arg = args.at(i);
         // Every argument became a file name, so "tsMuxerGUI --version" opened a dialog saying it
         // could not recognise the format of a file called --version. Anything starting with a
         // dash that is not actually a file on disk is an option and is not a track. Checking the
