@@ -266,6 +266,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **Text subtitles drawn into PGS were as wide as the picture,** even for one word, from SRT and from the text tracks of Matroska and MP4 files. Each subtitle picture is now only as large as its text, and it is shown at the same place. A negative bottom-offset put the lower lines of a subtitle below the picture; they now stay inside it. ([justdan96/tsMuxer#538](https://github.com/justdan96/tsMuxer/issues/538))
 
+* **DVD, DVB and ASS subtitles drawn into PGS, and PGS drawn at another size, were as wide as the picture.** Each picture is now only as large as what it shows, and it is shown at the same place. Smaller pictures take less of a player's memory for subtitles.
+
 * **A subtitle drawn into PGS with more colours than its palette holds lay on a white box of almost no opacity,** as wide as the picture, which a player can show as a faint band. Where nothing is drawn, the picture is now fully transparent. Its other colours do not change.
 
 * **The times of a subtitle drawn into PGS broke the rules of the PGS decoder model,** by a tick for the window of a new subtitle, and the end segment of a clear or of a fade step came at the wrong time. They now follow the model, for text subtitles and for DVD, DVB and ASS subtitles turned into PGS. The times the subtitles are shown do not change.
