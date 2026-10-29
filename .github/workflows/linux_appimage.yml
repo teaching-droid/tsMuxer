@@ -1,0 +1,313 @@
+name: Build AppImage for Linux
+
+# One file that runs on most current Linux distributions (glibc 2.35 or newer), with the window and the command line
+# program inside, and the update information an update tool such as AppImageUpdate or Gear Lever needs. It comes on
+# top of the Linux zip, which is built as before by linux.yml.
+
+on:
+  # A build by hand from the Actions tab gives the files as artifacts only, under a dev version name.
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+  # A change of this file in a pull request builds and tests the AppImage, without publishing anything.
+  pull_request:
+    branches: [master]
+    paths:
+    - '.github/workflows/linux_appimage.yml'
+
+permissions:
+  contents: write
+
+env:
+  # The tools come from fixed releases, and each download is checked against the sha256 written here, so a moved tag
+  # or a changed file stops the build instead of going into the AppImage.
+  LINUXDEPLOY_URL: https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage
+  LINUXDEPLOY_SHA256: c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d
+  LINUXDEPLOY_QT_URL: https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-qt-x86_64.AppImage
+  LINUXDEPLOY_QT_SHA256: 15106be885c1c48a021198e7e1e9a48ce9d02a86dd0a1848f00bdbf3c1c92724
+  APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+  APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+  # appimagetool would fetch the runtime from a release that moves; this one is fixed.
+  RUNTIME_URL: https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
+  RUNTIME_SHA256: 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
+  # "latest" is the newest full release: an update tool never offers a prerelease.
+  UPDATE_INFO: gh-releases-zsync|teaching-droid|tsMuxer|latest|tsMuxeR-*-x86_64.AppImage.zsync
+
+jobs:
+  build-appimage:
+
+    # The oldest glibc the AppImage needs is the one it is built on: 2.35 here.
+    runs-on: ubuntu-22.04
+
+    steps:
+    - uses: actions/checkout@v5
+      name: checkout
+
+    - name: Version
+      run: |
+        # The first heading of CHANGELOG.md names the version this code becomes.
+        base="$(sed -n 's/^## tsMuxeR \([0-9][0-9.]*\).*/\1/p' CHANGELOG.md | head -n 1)"
+        if [ -z "$base" ]; then
+          echo "::error::CHANGELOG.md has no '## tsMuxeR <version>' heading."
+          exit 1
+        fi
+        if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+          ver="${GITHUB_REF_NAME#v}"
+          # A tag that does not match the changelog would publish a file under the wrong version.
+          if [ "$ver" != "$base" ]; then
+            echo "::error::The tag says $ver, but CHANGELOG.md opens with $base."
+            exit 1
+          fi
+        else
+          sha="${{ github.event.pull_request.head.sha || github.sha }}"
+          ver="${base}-dev-${sha:0:8}"
+        fi
+        echo "APPIMAGE=tsMuxeR-${ver}-x86_64.AppImage" >> "$GITHUB_ENV"
+        echo "Version: ${ver}"
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        # The first two as in linux.yml. The xcb and xkbcommon libraries are what the Qt window needs on X11 and
+        # Wayland (through XWayland); they are installed here so that linuxdeploy finds them and puts them in the
+        # AppImage, as a desktop does not always have libxcb-cursor and the like.
+        sudo apt-get install -y libfreetype-dev zlib1g-dev ninja-build \
+          libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-shape0 \
+          libxcb-xinerama0 libxcb-xkb1 libxcb-randr0 libxcb-xfixes0 libxcb-sync1 libxkbcommon-x11-0 libegl1
+
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: '6.7.*'
+        modules: 'qtmultimedia'
+
+    - name: build-for-linux
+      run: ./scripts/rebuild_linux_with_gui.sh
+
+    - name: Check the build
+      run: |
+        mkdir -p bin
+        find build -maxdepth 3 -type f -iname tsmuxer    -exec cp {} bin/tsMuxeR \;
+        find build -maxdepth 3 -type f -iname tsmuxergui -exec cp {} bin/tsMuxerGUI \;
+        for f in tsMuxeR tsMuxerGUI; do
+          if [ ! -f "bin/$f" ]; then
+            echo "::error::$f was not built. Refusing to make an AppImage without it."
+            exit 1
+          fi
+        done
+        chmod +x bin/tsMuxeR bin/tsMuxerGUI
+
+    - name: Get the packaging tools
+      run: |
+        mkdir -p tools
+        cd tools
+        get() {
+          curl -fsSL --retry 3 -o "$1" "$2"
+          if ! echo "$3  $1" | sha256sum -c -; then
+            echo "::error::$1 does not have the expected sha256. Refusing to use it."
+            exit 1
+          fi
+        }
+        get linuxdeploy-x86_64.AppImage "$LINUXDEPLOY_URL" "$LINUXDEPLOY_SHA256"
+        get linuxdeploy-plugin-qt-x86_64.AppImage "$LINUXDEPLOY_QT_URL" "$LINUXDEPLOY_QT_SHA256"
+        get appimagetool-x86_64.AppImage "$APPIMAGETOOL_URL" "$APPIMAGETOOL_SHA256"
+        get runtime-x86_64 "$RUNTIME_URL" "$RUNTIME_SHA256"
+        chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage appimagetool-x86_64.AppImage
+
+    - name: Make the AppDir
+      run: |
+        mkdir -p AppDir/usr/bin
+        install -m 755 bin/tsMuxerGUI AppDir/usr/bin/tsMuxerGUI
+        # The window looks for the command line program next to itself.
+        install -m 755 bin/tsMuxeR AppDir/usr/bin/tsMuxeR
+        cp tsMuxerGUI/images/icon.png tsmuxergui.png
+
+        cat > tsmuxergui.desktop <<'EOF'
+        [Desktop Entry]
+        Type=Application
+        Name=tsMuxeR
+        GenericName=Transport stream muxer
+        Comment=Mux video, audio and subtitles into TS, M2TS, Blu-ray, AVCHD and Matroska
+        Exec=tsMuxerGUI %F
+        Icon=tsmuxergui
+        Terminal=false
+        Categories=AudioVideo;Video;
+        EOF
+
+        cat > AppRun <<'EOF'
+        #!/bin/sh
+        # Starts the window, or the command line program when the first argument is tsMuxeR or tsmuxer:
+        #   ./tsMuxeR-x86_64.AppImage tsMuxeR movie.meta out.ts
+        HERE="$(dirname "$(readlink -f "$0")")"
+        export APPDIR="${APPDIR:-$HERE}"
+        export PATH="$APPDIR/usr/bin:$PATH"
+        # The environment the Qt plugin of linuxdeploy prepares: where Qt finds its plugins.
+        for hook in "$APPDIR"/apprun-hooks/*.sh; do
+          [ -f "$hook" ] && . "$hook"
+        done
+        case "$1" in
+          tsMuxeR|tsmuxer)
+            shift
+            exec "$APPDIR/usr/bin/tsMuxeR" "$@"
+            ;;
+        esac
+        exec "$APPDIR/usr/bin/tsMuxerGUI" "$@"
+        EOF
+        chmod +x AppRun
+
+    - name: Bundle the libraries
+      env:
+        # No FUSE on the runner: the tools unpack themselves instead.
+        APPIMAGE_EXTRACT_AND_RUN: 1
+        # Besides the X11 one, the plugin that draws without a screen, which the test job uses.
+        EXTRA_PLATFORM_PLUGINS: libqoffscreen.so
+      run: |
+        export PATH="$PWD/tools:$PATH"
+        export QMAKE="$QT_ROOT_DIR/bin/qmake"
+        linuxdeploy-x86_64.AppImage --appdir AppDir \
+          --executable AppDir/usr/bin/tsMuxerGUI \
+          --executable AppDir/usr/bin/tsMuxeR \
+          --desktop-file tsmuxergui.desktop \
+          --icon-file tsmuxergui.png \
+          --custom-apprun AppRun \
+          --plugin qt
+
+    - name: Make the AppImage
+      env:
+        APPIMAGE_EXTRACT_AND_RUN: 1
+        ARCH: x86_64
+      run: |
+        mkdir -p out
+        ./tools/appimagetool-x86_64.AppImage --runtime-file tools/runtime-x86_64 -u "$UPDATE_INFO" \
+          AppDir "out/$APPIMAGE"
+        # appimagetool writes the .zsync file when it is given update information; an update tool needs it.
+        if [ ! -f "out/$APPIMAGE.zsync" ] && [ -f "$APPIMAGE.zsync" ]; then
+          mv "$APPIMAGE.zsync" out/
+        fi
+        for f in "$APPIMAGE" "$APPIMAGE.zsync"; do
+          if [ ! -f "out/$f" ]; then
+            echo "::error::$f was not made. Refusing to publish a partial result."
+            exit 1
+          fi
+        done
+        info="$(./out/"$APPIMAGE" --appimage-updateinformation)"
+        if [ "$info" != "$UPDATE_INFO" ]; then
+          echo "::error::The AppImage carries the update information '$info', not '$UPDATE_INFO'."
+          exit 1
+        fi
+        cd out
+        # A published file gets a .sha256 beside it so a download can be checked.
+        sha256sum "$APPIMAGE" > "$APPIMAGE.sha256"
+        cat "$APPIMAGE.sha256"
+        ls -la
+
+    - uses: actions/upload-artifact@v6
+      with:
+         name: tsMuxeR-linux-appimage
+         path: |
+           out/${{ env.APPIMAGE }}
+           out/${{ env.APPIMAGE }}.zsync
+           out/${{ env.APPIMAGE }}.sha256
+         retention-days: 30
+      name: upload-artefact
+
+  test-appimage:
+
+    needs: build-appimage
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["debian:12", "fedora:latest", "archlinux:latest", "ubuntu:22.04"]
+
+    container: ${{ matrix.image }}
+
+    steps:
+    - name: Install what a desktop has
+      run: |
+        # Only what an AppImage leaves to the system on purpose: OpenGL, fonts, the X11 client libraries and D-Bus.
+        # Anything else the AppImage needs has to be inside it, and this test is there to catch it if not.
+        if command -v apt-get >/dev/null; then
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libgl1 libegl1 libfontconfig1 libfreetype6 libx11-6 libx11-xcb1 libxcb1 libxkbcommon0 libdbus-1-3
+        elif command -v dnf >/dev/null; then
+          dnf -y install mesa-libGL mesa-libEGL fontconfig freetype libX11 libX11-xcb libxcb libxkbcommon dbus-libs findutils
+        elif command -v pacman >/dev/null; then
+          pacman -Syu --noconfirm mesa fontconfig freetype2 libx11 libxcb libxkbcommon dbus
+        fi
+
+    - uses: actions/download-artifact@v6
+      with:
+        name: tsMuxeR-linux-appimage
+
+    - name: Check the download
+      run: |
+        sha256sum -c tsMuxeR-*-x86_64.AppImage.sha256
+        chmod +x tsMuxeR-*-x86_64.AppImage
+
+    - name: Run the command line program
+      run: |
+        app="$(ls tsMuxeR-*-x86_64.AppImage)"
+        # A container has no FUSE, so the AppImage unpacks itself and runs from there.
+        out="$(./"$app" --appimage-extract-and-run tsMuxeR 2>&1 || true)"
+        echo "$out" | head -n 5
+        if ! echo "$out" | grep -q "tsMuxeR version"; then
+          echo "::error::The tsMuxeR inside the AppImage did not start on ${{ matrix.image }}."
+          exit 1
+        fi
+
+    - name: Check the libraries
+      run: |
+        app="$(ls tsMuxeR-*-x86_64.AppImage)"
+        ./"$app" --appimage-extract > /dev/null
+        # Every program and library inside, the Qt plugins included, must find what it links against.
+        missing="$(find squashfs-root -type f \( -name '*.so*' -o -path '*/usr/bin/*' \) -exec ldd {} \; 2>/dev/null \
+          | grep 'not found' | sort -u || true)"
+        if [ -n "$missing" ]; then
+          echo "$missing"
+          echo "::error::Libraries missing on ${{ matrix.image }}."
+          exit 1
+        fi
+
+    - name: Start the window
+      run: |
+        app="$(ls tsMuxeR-*-x86_64.AppImage)"
+        # The window starts with the plugin that draws without a screen. Still running after 15 s is a pass;
+        # ending before that, or a plugin that does not load, is a fail.
+        set +e
+        QT_QPA_PLATFORM=offscreen QT_DEBUG_PLUGINS=1 timeout 15 ./"$app" --appimage-extract-and-run > gui.log 2>&1
+        rc=$?
+        set -e
+        tail -n 20 gui.log
+        if grep -Eiq "could not load the qt platform plugin|cannot open shared object file|undefined symbol" gui.log; then
+          echo "::error::The window could not load its Qt libraries or plugins on ${{ matrix.image }}."
+          exit 1
+        fi
+        if [ "$rc" -ne 124 ]; then
+          echo "::error::The window ended after less than 15 s (exit code $rc) on ${{ matrix.image }}."
+          exit 1
+        fi
+
+  release-appimage:
+
+    needs: test-appimage
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/download-artifact@v6
+      with:
+        name: tsMuxeR-linux-appimage
+        path: out
+
+    - name: Upload to Release
+      uses: softprops/action-gh-release@v3
+      with:
+        files: |
+          out/*.AppImage
+          out/*.AppImage.zsync
+          out/*.AppImage.sha256
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
