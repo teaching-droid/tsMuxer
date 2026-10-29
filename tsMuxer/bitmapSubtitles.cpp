@@ -52,6 +52,18 @@ void BitmapToPgs::addClear(const double atTimeSec, std::vector<uint8_t>& out, co
     m_lastPts = llround(m_pgs->alignToGrid(atTimeSec) * 90000.0);
 }
 
+double BitmapToPgs::clearTime(const int64_t end) const
+{
+    double sec = m_pgs->alignToGrid(static_cast<double>(end) / INTERNAL_PTS_FREQ);
+    // ** A CLEAR, TOO, IS DECODED AFTER THE DISPLAY SET BEFORE IT IS SHOWN. ** Its window is cleared for as long as it
+    // takes to draw: a large one (two lines far apart) takes more than a frame. Where the picture before was shown
+    // less than that before the end, the line stays until the first frame the clear can follow it.
+    if (m_waitUntilShown && m_lastPts >= 0 && m_pgs->m_videoFps > 0)
+        while (llround(sec * 90000.0) - m_pgs->m_lastWindowDrawTime - 1 <= m_lastPts)
+            sec = m_pgs->alignToGrid(sec + 1.0 / m_pgs->m_videoFps);
+    return sec;
+}
+
 bool BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, const bool forced,
                              std::vector<uint8_t>& out)
 {
@@ -63,7 +75,7 @@ bool BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
     {
         if (m_shown && m_heldEnd >= 0)
         {
-            const double outSec = m_pgs->alignToGrid(static_cast<double>(m_heldEnd) / INTERNAL_PTS_FREQ);
+            const double outSec = clearTime(m_heldEnd);
             if (outSec < inSec)
                 addClear(outSec, out, latestDts);
         }
@@ -130,8 +142,7 @@ bool BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
             return false;
         // The same for the clear of a picture that ended a few frames before this one: the clear is left out, and
         // this picture replaces the one before at its own time, which stays on the screen until then.
-        if (m_shown && m_heldEnd >= 0 &&
-            dts <= llround(m_pgs->alignToGrid(static_cast<double>(m_heldEnd) / INTERNAL_PTS_FREQ) * 90000.0))
+        if (m_shown && m_heldEnd >= 0 && dts <= llround(clearTime(m_heldEnd) * 90000.0))
             m_heldEnd = -1;
     }
     // ** THE CLEAR BEFORE A PICTURE IS DECODED NO LATER THAN THE PICTURE. ** A picture is decoded for as long as the
@@ -169,7 +180,7 @@ bool BitmapToPgs::addPicture(const int64_t showTime, const int64_t endTime, cons
 void BitmapToPgs::finish(std::vector<uint8_t>& out)
 {
     if (m_shown && m_heldEnd >= 0)
-        addClear(m_pgs->alignToGrid(static_cast<double>(m_heldEnd) / INTERNAL_PTS_FREQ), out);
+        addClear(clearTime(m_heldEnd), out);
     m_heldEnd = -1;
 }
 

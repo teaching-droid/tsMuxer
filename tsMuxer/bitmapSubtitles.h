@@ -54,6 +54,9 @@ class BitmapToPgs
     int64_t m_lastPts = -1;  // when the last display set written is shown, 90 kHz; -1 before the first
     bool m_warnedColours = false;
     void addClear(double atTimeSec, std::vector<uint8_t>& out, int64_t latestDts = INT64_MAX);
+    // When the clear of an end, internal clock, is shown, in seconds: the frame of the end, or with waitUntilShown
+    // the first frame after it that a player can decode the clear for after the display set before is shown.
+    [[nodiscard]] double clearTime(int64_t end) const;
 };
 
 // The frame rate a PGS stream can be marked with that is nearest to fps, or 0 when none is near.
