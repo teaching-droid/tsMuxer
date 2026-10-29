@@ -5840,6 +5840,15 @@ uint8_t* ContainerToReaderWrapper::readBlock(const int readerID, uint32_t& readC
         {
             itr->second.m_gotData = true;
             rez = demuxerData.m_demuxer->getLastReadRez();
+            // ** THE END COMES WITH THE LAST BLOCK, NOT WITH ONE BEFORE IT. ** The demuxer can reach the end of its
+            // file with more than a block of this track still held. The first block was handed on as the end, the
+            // reader took no more, and the rest of the track was lost. An AC-3 track alone in a Matroska file lost up
+            // to 30 KB at its end, without a word, when the last read of the file came just under a block. An ASS
+            // track drawn with libass gives the pictures of its last event at the end of its file, 2.4 MB in one
+            // packet for a fade with a move: the last animation was missing and the job ended with "The mux stopped
+            // before the source was finished".
+            if (rez == DATA_EOF && streamData.size() > nFileBlockSize)
+                rez = 0;
         }
         else if (demuxerData.m_demuxer->getLastReadRez() == DATA_EOF)
             rez = DATA_EOF;
