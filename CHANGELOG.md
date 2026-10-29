@@ -166,6 +166,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Matroska input
 
+* **A track of a Matroska file could lose its last part without a word,** up to 30 KB: 0.4 s of AC-3 at 640 kbit/s. This happened when the end of the file fell at one place in the read of its last 2 MB. The track is now muxed to its end.
+
 * **A join of Matroska files** takes the language, the flags, the colour, the display size and the eye of a 3D base view of each track from its first file: a joined German track came out without a language, and a joined 3D file whose base view is the right eye had its eyes swapped.
 
 * **A file cut off inside a block** is muxed as far as it goes, and the job then ends with an error that says the source is cut off: it was refused whole, with every frame before the cut.
