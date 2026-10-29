@@ -650,7 +650,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Window
 
-* **"Start muxing" could be pressed with no track in the list,** and tsMuxeR then stopped with "No tracks selected". The button is now greyed until the list has a track.
+* **"Start muxing" could be pressed with no track in the list,** and tsMuxeR then stopped with "No tracks selected". The button is now greyed until the list has a track, or the meta box holds a meta file opened or written by hand.
 
 * **A wrong custom chapter time or a cut end before the cut start was found only by tsMuxeR after Start.** The field now gets a red frame and the reason as its tooltip when it is left, and Start shows the reason and does not run.
 
