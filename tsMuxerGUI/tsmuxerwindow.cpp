@@ -3919,10 +3919,25 @@ void TsMuxerWindow::trackLVItemChanged(QTableWidgetItem* item)
 }
 
 // "Start muxing" with an empty track list ran tsMuxeR only for it to stop with "No tracks selected". The button is
-// greyed until the list has a track, and while tsMuxeR runs.
+// greyed until the list has a track, and while tsMuxeR runs. A meta file opened or written by hand is muxed as it is,
+// with no track in the list: then a track line in the meta box is enough.
 void TsMuxerWindow::updateMuxButton()
 {
-    ui->buttonMux->setEnabled(ui->trackLV->rowCount() > 0 && proc.state() == QProcess::NotRunning);
+    bool hasTrack = ui->trackLV->rowCount() > 0;
+    if (!hasTrack && m_metaUserOverride)
+    {
+        const QStringList lines = ui->memoMeta->toPlainText().split('\n');
+        for (const QString& line : lines)
+        {
+            const QString t = line.trimmed();
+            if (!t.isEmpty() && !t.startsWith(QLatin1String("MUXOPT")) && !t.startsWith('#'))
+            {
+                hasTrack = true;
+                break;
+            }
+        }
+    }
+    ui->buttonMux->setEnabled(hasTrack && proc.state() == QProcess::NotRunning);
 }
 
 static const QDir::Filters ALL_ENTRIES = QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System;
@@ -6786,10 +6801,12 @@ bool TsMuxerWindow::saveMetaFile(const QString& metaName)
 
 void TsMuxerWindow::onMetaTextChanged()
 {
-    if (m_metaUserOverride)
-        return;
-    m_metaUserOverride = true;
-    updateMetaState();
+    if (!m_metaUserOverride)
+    {
+        m_metaUserOverride = true;
+        updateMetaState();
+    }
+    updateMuxButton();  // a meta box with tracks can be muxed with an empty track list
 }
 
 // The meta file built from the settings again: what was edited by hand is replaced
@@ -6798,6 +6815,7 @@ void TsMuxerWindow::onResetMetaBtnClick()
     m_metaUserOverride = false;
     updateMetaLines();
     updateMetaState();
+    updateMuxButton();
 }
 
 // The box above the meta file, the title of its group and the line about changes not applied, as the meta file stands
