@@ -19,7 +19,9 @@ on:
 jobs:
   build-linux-gui:
 
-    runs-on: ubuntu-latest
+    # Not ubuntu-latest: a program needs the glibc of the system it is built on or newer, and ubuntu-latest
+    # moved to Ubuntu 26 (glibc 2.43), so the Linux programs no longer started on Ubuntu 24.04 or Debian 12.
+    runs-on: ubuntu-22.04
     
     steps:
     - uses: actions/checkout@v5
