@@ -17,6 +17,7 @@
 #include "bitStream.h"
 #include "crc32.h"
 #include "h264StreamReader.h"
+#include "metaDemuxer.h"
 #include "mpegStreamReader.h"
 #include "simplePacketizerReader.h"
 #include "tsMuxer.h"
@@ -2084,6 +2085,31 @@ void MPLSParser::reportLeftOut(const std::string& playlistName, const bool listi
                                     << ", which a mux of the playlist does not read, so "
                                     << (trackCount == 1 ? "it is" : "they are")
                                     << " left out. The rest of the playlist is muxed.");
+    // Subtitles from a clip of their own, as a disc's text subtitles always are: the listing says "Not supported" for
+    // each, and a mux left them out without a word. One warning for each track, with what the listing gives for it.
+    // A pop-up menu (interactive graphics) is no track a mux could have had, as in the listing.
+    for (const MPLSStreamInfo& entry : getOutOfMuxStreams())
+    {
+        const auto codingType = static_cast<int>(entry.stream_coding_type);
+        if (codingType != 0x90 && codingType != 0x92)
+            continue;
+        std::string clip;
+        if (entry.refSubPathId >= 0 && static_cast<size_t>(entry.refSubPathId) < m_subPaths.size() &&
+            !m_subPaths[entry.refSubPathId].clips.empty())
+            clip = "clip " + m_subPaths[entry.refSubPathId].clips[0] + ", ";
+        const std::string lang = applyLangCodeStyle(entry.language_code);
+        std::ostringstream where;
+        where << "stream type 0x" << std::hex << codingType << ", PID 0x" << entry.streamPID << std::dec
+              << (isLanguageCode(lang) ? ", language " + lang : std::string()) << ", " << clip << "sub path "
+              << entry.refSubPathId;
+        LTRACE(LT_WARN, 2,
+               "Warning: playlist " << name << " plays "
+                                    << (codingType == 0x92 ? "text subtitles (Text-ST)"
+                                                           : "presentation graphics subtitles")
+                                    << " (" << where.str()
+                                    << ") from a separate clip, which a mux of the playlist does not read, so the "
+                                       "track is left out. The rest of the playlist is muxed.");
+    }
 }
 
 std::vector<MPLSStreamInfo> MPLSParser::getPgStreams() const
