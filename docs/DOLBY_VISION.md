@@ -3,7 +3,7 @@
 tsMuxeR can store a dual layer Dolby Vision disc in a single Matroska file and build the disc again
 from that file. This page explains what the options do and what is and is not preserved.
 
-Updated through 2.18.
+Updated through 3.0.0.
 
 ## What a dual layer Dolby Vision disc looks like
 
@@ -39,7 +39,9 @@ V_MPEGH/ISO/HEVC, "film.mkv", track=1, subTrack=1, fps=23.976
 V_MPEGH/ISO/HEVC, "film.mkv", track=1, subTrack=2, fps=23.976
 ```
 
-`subTrack=1` is the base layer and `subTrack=2` is the enhancement layer.
+`subTrack=1` is the base layer and `subTrack=2` is the enhancement layer. The order of the two lines
+does not matter: an enhancement layer listed before its base layer stays the enhancement layer, as it
+is told by its size.
 
 ## The Dolby Vision profile
 
@@ -73,9 +75,9 @@ tool for that.
 ### Why the original metadata has to be kept
 
 Converting profile 7 metadata to 8.1 is **many to one**: different originals produce the same
-result. Measured on one profile 7 disc, two thirds of the converted metadata became indistinguishable,
-with as many as 91 different originals landing on one result. Nothing can undo that afterwards, at
-any quality of implementation.
+result. Measured on a profile 7 disc, most of the converted metadata could no longer be told apart,
+with many different originals landing on one result. Nothing can undo that afterwards, at any
+quality of implementation.
 
 So the originals are kept verbatim rather than reconstructed. That is what makes the round trip
 possible, and it is why the file does not shrink.
@@ -86,7 +88,7 @@ Profile 8.1 uses the **libdovi** library, which is not part of tsMuxeR.
 
 | platform | what to do |
 |---|---|
-| Windows 64-bit | put `dovi.dll` beside `tsMuxeR.exe`. A prebuilt one is published. |
+| Windows 64-bit | put `dovi.dll` beside `tsMuxeR.exe`. A prebuilt one is published; it needs Windows 8 or newer, so on Windows 7 `--dv-profile=8.1` may not work. |
 | Linux, macOS | build libdovi from source, or install a package if your distribution has one |
 | Windows 32-bit | not available. There is no 32-bit build of the library. |
 
@@ -110,12 +112,11 @@ saying so, rather than failing part way through a feature.
 Measured on whole titles rather than short clips, because a clip cannot exercise the end of a
 stream or a join between segments, and both turned out to matter:
 
-- a whole feature, 73 GB, both layers: the rebuilt streams are **byte for byte identical** to the
-  disc, 59.33 GB of base layer and 4.25 GB of enhancement layer with nothing left over on either
-  side, and all 166,928 of the disc's original metadata records restored. Through profile 7 and
-  through profile 8.1 alike, so the disc comes back exactly while its metadata is converted and
-  put back
-- a whole **seamless branching** title, 23 clips joined at 22 points: the profile 7 rebuild and the
+- a whole feature, both layers: the rebuilt streams are **byte for byte identical** to the disc,
+  with nothing left over on either side, and every one of the disc's original metadata records
+  restored. Through profile 7 and through profile 8.1 alike, so the disc comes back exactly while
+  its metadata is converted and put back
+- a whole **seamless branching** title, many clips joined into one: the profile 7 rebuild and the
   profile 8.1 rebuild are byte for byte identical on both layers
 
 In plain terms: **the disc that comes out is the disc that went in.**
@@ -172,3 +173,7 @@ the Dolby Vision data needed to rebuild the disc is gone. Keep the original.
 A file that is already single layer, profile 5 or profile 8, has no enhancement layer to separate.
 Asking for a split is refused with an explanation rather than producing an empty second track.
 Mux it as one track instead.
+
+On a Blu-ray disc, single layer Dolby Vision plays **without** Dolby Vision: a UHD Blu-ray player
+takes Dolby Vision from two layers only, and shows the HDR10, SDR or HLG base instead. tsMuxeR says
+so with a warning, and writes the disc as before. To keep Dolby Vision, mux it to Matroska instead.

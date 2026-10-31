@@ -4,7 +4,7 @@ tsMuxeR kann eine Dual-Layer-Disc mit Dolby Vision in einer einzigen Matroska-Da
 die Disc aus dieser Datei wieder erstellen. Diese Seite erklärt, was die Optionen bewirken und was
 dabei erhalten bleibt und was nicht.
 
-Aktualisiert bis 2.18.
+Aktualisiert bis 3.0.0.
 
 ## Wie eine Dual-Layer-Disc mit Dolby Vision aufgebaut ist
 
@@ -43,7 +43,9 @@ V_MPEGH/ISO/HEVC, "film.mkv", track=1, subTrack=1, fps=23.976
 V_MPEGH/ISO/HEVC, "film.mkv", track=1, subTrack=2, fps=23.976
 ```
 
-`subTrack=1` ist der Base Layer und `subTrack=2` der Enhancement Layer.
+`subTrack=1` ist der Base Layer und `subTrack=2` der Enhancement Layer. Die Reihenfolge der beiden
+Zeilen spielt keine Rolle: Ein Enhancement Layer, der vor seinem Base Layer steht, bleibt der
+Enhancement Layer, denn er wird an seiner Größe erkannt.
 
 ## Das Dolby-Vision-Profil
 
@@ -77,9 +79,9 @@ nicht das richtige Werkzeug dafür.
 ### Warum die ursprünglichen Metadaten aufbewahrt werden müssen
 
 Die Umwandlung von Profil-7-Metadaten nach 8.1 ist **viele zu eins**: Verschiedene Originale
-ergeben dasselbe Ergebnis. Auf einer Disc mit Profil 7 gemessen, wurden zwei Drittel der gewandelten
-Metadaten ununterscheidbar, wobei bis zu 91 verschiedene Originale auf einem einzigen Ergebnis
-landeten. Das lässt sich hinterher durch nichts rückgängig machen, wie gut eine Umsetzung auch sein
+ergeben dasselbe Ergebnis. Auf einer Disc mit Profil 7 gemessen, war der größte Teil der gewandelten
+Metadaten nicht mehr zu unterscheiden, und viele verschiedene Originale landeten auf einem einzigen
+Ergebnis. Das lässt sich hinterher durch nichts rückgängig machen, wie gut eine Umsetzung auch sein
 mag.
 
 Die Originale werden deshalb unverändert aufbewahrt statt rekonstruiert. Genau das macht den Hin-
@@ -91,7 +93,7 @@ Profil 8.1 nutzt die Bibliothek **libdovi**, die nicht Teil von tsMuxeR ist.
 
 | Plattform | was zu tun ist |
 |---|---|
-| Windows 64-Bit | `dovi.dll` neben `tsMuxeR.exe` legen. Eine fertig gebaute Version wird veröffentlicht. |
+| Windows 64-Bit | `dovi.dll` neben `tsMuxeR.exe` legen. Eine fertig gebaute Version wird veröffentlicht; sie braucht Windows 8 oder neuer, unter Windows 7 funktioniert `--dv-profile=8.1` daher möglicherweise nicht. |
 | Linux, macOS | libdovi aus dem Quelltext bauen oder ein Paket installieren, falls Ihre Distribution eines hat |
 | Windows 32-Bit | nicht verfügbar. Es gibt keinen 32-Bit-Build der Bibliothek. |
 
@@ -117,12 +119,12 @@ Meldung abgelehnt, statt mitten in einem Spielfilm zu scheitern.
 Gemessen wurde an ganzen Titeln statt an kurzen Clips, denn ein Clip kann weder das Ende eines
 Streams noch eine Naht zwischen Segmenten prüfen, und beides erwies sich als wichtig:
 
-- ein ganzer Spielfilm, 73 GB, beide Layer: die neu aufgebauten Streams sind **Byte für Byte
-  identisch** mit der Disc, 59,33 GB Base Layer und 4,25 GB Enhancement Layer, auf beiden Seiten
-  ohne Rest, und alle 166.928 ursprünglichen Metadatensätze der Disc wiederhergestellt. Mit Profil 7
+- ein ganzer Spielfilm, beide Layer: die neu aufgebauten Streams sind **Byte für Byte identisch**
+  mit der Disc, auf beiden Seiten ohne Rest, und jeder ursprüngliche Metadatensatz der Disc
+  wiederhergestellt. Mit Profil 7
   ebenso wie mit Profil 8.1, die Disc kommt also exakt zurück, während ihre Metadaten umgewandelt
   und wieder eingesetzt werden
-- ein ganzer Titel mit **Seamless Branching**, 23 an 22 Stellen aneinandergefügte Clips: der
+- ein ganzer Titel mit **Seamless Branching**, viele zu einem aneinandergefügte Clips: der
   Neuaufbau mit Profil 7 und der mit Profil 8.1 sind auf beiden Layern Byte für Byte identisch
 
 Im Klartext: **Die Disc, die herauskommt, ist die Disc, die hineingegangen ist.**
@@ -183,3 +185,8 @@ Bewahren Sie das Original auf.
 Eine Datei, die bereits Single Layer ist, Profil 5 oder Profil 8, hat keinen Enhancement Layer, den
 man abtrennen könnte. Eine angeforderte Aufteilung wird mit einer Erklärung abgelehnt, statt eine
 leere zweite Spur zu erzeugen. Muxen Sie sie stattdessen als eine einzige Spur.
+
+Auf einer Blu-ray-Disc spielt Single-Layer-Dolby-Vision **ohne** Dolby Vision: Ein UHD-Blu-ray-Player
+nimmt Dolby Vision nur aus zwei Layern und zeigt stattdessen die Basis in HDR10, SDR oder HLG.
+tsMuxeR weist mit einer Warnung darauf hin und schreibt die Disc wie bisher. Um Dolby Vision zu
+behalten, muxen Sie stattdessen nach Matroska.
