@@ -190,7 +190,11 @@ jobs:
             exit 1
           fi
         done
-        info="$(./out/"$APPIMAGE" --appimage-updateinformation)"
+        # Read straight from the file: with APPIMAGE_EXTRACT_AND_RUN set, the AppImage would unpack itself and start
+        # the window instead of answering --appimage-updateinformation.
+        objcopy -O binary --only-section=.upd_info "out/$APPIMAGE" upd_info.bin
+        info="$(tr -d '\000' < upd_info.bin)"
+        rm -f upd_info.bin
         if [ "$info" != "$UPDATE_INFO" ]; then
           echo "::error::The AppImage carries the update information '$info', not '$UPDATE_INFO'."
           exit 1
