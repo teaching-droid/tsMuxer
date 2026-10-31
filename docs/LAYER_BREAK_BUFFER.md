@@ -44,7 +44,7 @@ film. It does not, and the reason is worth understanding:
    burned disc has unreadable sectors there, it changes nothing: no part of the movie was
    ever stored on them.
 
-5. **So playback stays seamless.** The drive performs the physical layer change while the
+5. **So playback does not pause.** The drive performs the physical layer change while the
    player is skipping over padding it would ignore anyway. By the time the player needs
    part 2, the laser is already reading the good sectors of the next layer.
 
@@ -114,8 +114,8 @@ rather than between two.
 
 The layer-break buffer is a block of zeros placed over the disc's most defect-prone sectors;
 the movie is stored as two fragments on either side of it, the player jumps straight from one
-to the other without ever reading the zeros, and so the picture plays seamlessly across the
-break no matter what happens to those sectors on a burned disc.
+to the other without ever reading the zeros, and so the picture plays across the break
+without a pause, no matter what happens to those sectors on a burned disc.
 
 ---
 

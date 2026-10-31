@@ -1633,9 +1633,9 @@ static bool findM2tsPcrNear(const string& fileName, const int64_t startOffset, c
     return false;
 }
 
-// Robust playback-position read. A single PCR read near a pad boundary can land in a small block
-// with a foreign timeline (measured on a real UHD stream: one spot answered 1:47 where the movie
-// time was 0:47), so sample several offsets spread over ~32 MB and take the median; an isolated
+// The playback position, read so that one odd spot cannot mislead it. A single PCR read near a pad boundary can land
+// in a small block with a foreign timeline (measured on a UHD stream: one spot answered a time a minute after the
+// film's), so sample several offsets spread over ~32 MB and take the median; an isolated
 // stray block cannot win a median.
 static bool findM2tsPcrMedian(const string& fileName, const int64_t offset, const int dir, uint64_t* pcrOut)
 {

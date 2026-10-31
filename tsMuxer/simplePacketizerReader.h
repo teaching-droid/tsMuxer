@@ -42,7 +42,7 @@ class SimplePacketizerReader : public AbstractStreamReader
     virtual CheckStreamRez checkStream(uint8_t* buffer, int len, ContainerType containerType, int containerDataType,
                                        int containerStreamIndex);
 
-    /// Enhanced detection: runs checkStream(), then extracts codec-specific
+    /// Detection with the details: runs checkStream(), then extracts codec-specific
     /// properties (channels, sample rate, resolution, etc.) into a
     /// StreamDiscoveryData struct.  Subclasses override fillDiscoveryData()
     /// to add codec-specific fields.

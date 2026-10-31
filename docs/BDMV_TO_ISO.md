@@ -4,7 +4,7 @@ This guide shows how to turn a BDMV disc folder into a BD-ROM ISO that is safe t
 
 ## What this tab does
 
-The `BDMV folder -> ISO` tab wraps an existing BDMV disc folder into a burnable BD-ROM ISO, byte for byte. BD-J menus and every stream are kept intact; nothing is re-muxed. On a multi-layer disc (dual-layer BD-R DL, or triple and quad-layer BD-R XL) the layer-break guard fills the defect-prone sectors at each layer transition with zeros, so the movie plays seamlessly across the break instead of landing on the worst sectors of the disc.
+The `BDMV folder -> ISO` tab wraps an existing BDMV disc folder into a burnable BD-ROM ISO, byte for byte. BD-J menus and every stream are kept intact; nothing is re-muxed. On a multi-layer disc (dual-layer BD-R DL, or triple and quad-layer BD-R XL) the layer-break guard fills the defect-prone sectors at each layer transition with zeros, so the movie plays across the break without a pause instead of landing on the worst sectors of the disc.
 
 ## Before you start
 
@@ -95,9 +95,9 @@ The outer rim of an optical disc is the hardest part to burn well: it is written
 When you tick it:
 
 * tsMuxeR sizes the guard automatically from the disc type and the amount of content and pads the outer edge, so the manual `Layer-break guard` field and the advanced `Also fill before the break` option grey out (both ringed above). There is nothing to set by hand.
-* The movie still plays seamlessly across the layer break, exactly like the fixed guard; the zero fill simply moves to the outer edge instead of sitting in a band right after the break.
+* The movie still plays across the layer break without a pause, exactly like the fixed guard; the zero fill simply moves to the outer edge instead of sitting in a band right after the break.
 
-Use it when your priority is the most robust possible burn and you do not mind a large image: on a disc of two or four layers the image fills the whole disc, and on three layers it ends inside the third layer (see below). Leave it off if you would rather keep the image small and place a fixed guard yourself. It was verified on dual-layer BD-R DL: a disc that verified with a 41 MB uncorrectable defect right at the layer transition still played the movie flawlessly, because the defect fell inside the zero band. Requested by DreckSoft.
+Use it when the burn matters most to you and you do not mind a large image: on a disc of two or four layers the image fills the whole disc, and on three layers it ends inside the third layer (see below). Leave it off if you would rather keep the image small and place a fixed guard yourself. It was verified on dual-layer BD-R DL: a disc that verified with a 41 MB uncorrectable defect right at the layer transition still played the movie flawlessly, because the defect fell inside the zero band. Requested by DreckSoft.
 
 On a disc of three or four layers (BD-R XL 100 GB and 128 GB) each layer keeps an even share of the movie at the centre of the disc. These discs are written from the centre outward on the first layer, back inward on the second, outward again on the third and inward on the fourth, so the first and the third layer change are at the outer edge and are padded, while the second is at the centre and gets no zeros. On a three-layer disc the image ends inside the third layer, and the rest of that layer stays unwritten. A single-layer disc has no layer change and nothing to pad, so the image is built as without the option.
 

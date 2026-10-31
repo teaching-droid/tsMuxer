@@ -4151,7 +4151,7 @@ bool MatroskaMuxer::muxPacket(AVPacket& avPacket)
     }
 
     // Before the header is written, buffer packets and wait until every track that needs its first
-    // packet has delivered one. This ensures those codec readers are fully initialized (e.g. audio
+    // packet has delivered one, so that those codec readers are fully initialized (e.g. audio
     // sample rate, channels) before we write the Matroska track headers. The wait ends after ten
     // seconds of held packets, see below.
     //

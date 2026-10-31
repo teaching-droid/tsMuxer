@@ -1225,7 +1225,7 @@ TsMuxerWindow::TsMuxerWindow()
                "every stream are kept intact (no re-mux). Works with any unprotected BDMV, whether you "
                "authored it yourself or it is an already-readable disc copy. On a multi-layer disc (dual-layer "
                "BD-R DL, or triple and quad-layer BD-R XL) the layer-break guard fills the defect-prone sectors "
-               "at each layer transition with zeros, so the movie plays seamlessly across the break. Point it at "
+               "at each layer transition with zeros, so the movie plays across the break without a pause. Point it at "
                "the folder that contains BDMV/ (and CERTIFICATE/ if present)."),
             bdmvTab);
         info->setWordWrap(true);
@@ -1882,7 +1882,7 @@ TsMuxerWindow::TsMuxerWindow()
                        "unprotected BDMV, whether you authored it yourself or it is an already-readable "
                        "disc copy. On a multi-layer disc (dual-layer BD-R DL, or triple and quad-layer "
                        "BD-R XL) the layer-break guard fills the defect-prone sectors at each layer "
-                       "transition with zeros, so the movie plays seamlessly across the break. Point it "
+                       "transition with zeros, so the movie plays across the break without a pause. Point it "
                        "at the folder that contains BDMV/ (and CERTIFICATE/ if present)."));
                 folderLabel->setText(tr("BDMV folder:"));
                 outputLabel->setText(tr("Output ISO:"));

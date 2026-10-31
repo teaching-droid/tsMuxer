@@ -3302,7 +3302,7 @@
     <message>
         <location filename="../tsmuxerwindow.cpp" line="565"/>
         <location filename="../tsmuxerwindow.cpp" line="779"/>
-        <source>Wrap an existing BDMV disc folder into a burnable BD-ROM ISO, byte-for-byte, so BD-J menus and every stream are kept intact (no re-mux). Works with any unprotected BDMV, whether you authored it yourself or it is an already-readable disc copy. On a multi-layer disc (dual-layer BD-R DL, or triple and quad-layer BD-R XL) the layer-break guard fills the defect-prone sectors at each layer transition with zeros, so the movie plays seamlessly across the break. Point it at the folder that contains BDMV/ (and CERTIFICATE/ if present).</source>
+        <source>Wrap an existing BDMV disc folder into a burnable BD-ROM ISO, byte-for-byte, so BD-J menus and every stream are kept intact (no re-mux). Works with any unprotected BDMV, whether you authored it yourself or it is an already-readable disc copy. On a multi-layer disc (dual-layer BD-R DL, or triple and quad-layer BD-R XL) the layer-break guard fills the defect-prone sectors at each layer transition with zeros, so the movie plays across the break without a pause. Point it at the folder that contains BDMV/ (and CERTIFICATE/ if present).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

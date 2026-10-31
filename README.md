@@ -35,7 +35,7 @@ Some of the major features include:
 Additions in this fork (see [DISC_AUTHORING.md](docs/DISC_AUTHORING.md) for details):
 
 * `--bdmv-to-iso`: wrap an existing unprotected BDMV folder into a burnable BD-ROM ISO byte-for-byte, keeping BD-J menus and all clip/playlist references intact
-* `--layer-break-guard`: zero-fill the defect-prone sectors around each layer transition of BD-R/RE DL and BD-R XL media, so the movie plays seamlessly across the break (validated on real hardware)
+* `--layer-break-guard`: zero-fill the defect-prone sectors around each layer transition of BD-R/RE DL and BD-R XL media, so the movie plays across the break without a pause (checked on burnt discs in players)
 * `--layer-break-lbn`: set the layer break sector(s); takes a comma list for 100/128 GB BD-R XL (2 or 3 breaks)
 * `--disc-size` / `--allow-oversize`: abort (or warn) before muxing if the image will not fit the target disc
 * `--3d-single-copy`: store a 3D disc's video once instead of twice, the way the source disc holds it, so the image is about half the size and fits back onto the disc it came from

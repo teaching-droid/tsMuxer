@@ -3410,7 +3410,7 @@ Build the ISO anyway?</source>
     <message>
         <location filename="../tsmuxerwindow.cpp" line="565"/>
         <location filename="../tsmuxerwindow.cpp" line="779"/>
-        <source>Wrap an existing BDMV disc folder into a burnable BD-ROM ISO, byte-for-byte, so BD-J menus and every stream are kept intact (no re-mux). Works with any unprotected BDMV, whether you authored it yourself or it is an already-readable disc copy. On a multi-layer disc (dual-layer BD-R DL, or triple and quad-layer BD-R XL) the layer-break guard fills the defect-prone sectors at each layer transition with zeros, so the movie plays seamlessly across the break. Point it at the folder that contains BDMV/ (and CERTIFICATE/ if present).</source>
+        <source>Wrap an existing BDMV disc folder into a burnable BD-ROM ISO, byte-for-byte, so BD-J menus and every stream are kept intact (no re-mux). Works with any unprotected BDMV, whether you authored it yourself or it is an already-readable disc copy. On a multi-layer disc (dual-layer BD-R DL, or triple and quad-layer BD-R XL) the layer-break guard fills the defect-prone sectors at each layer transition with zeros, so the movie plays across the break without a pause. Point it at the folder that contains BDMV/ (and CERTIFICATE/ if present).</source>
         <translation>既存のBDMVディスクフォルダーを、バイト単位そのままの書き込み可能なBD-ROM ISOにまとめます。再多重化を行わないため、BD-Jメニューを含むすべてのストリームが元のまま保持されます。自分でオーサリングしたものでも、すでに読み取り可能なディスクのコピーでも、保護されていないBDMVならそのまま使えます。多層ディスク（2層のBD-R DL、3層・4層のBD-R XL）では、レイヤーブレイクガードが層の切り替わり付近の不良が起きやすいセクターをゼロで埋めるため、層の境界をまたいでも映像は途切れずに再生されます。BDMV/（あればCERTIFICATE/も）を含むフォルダーを指定してください。</translation>
     </message>
     <message>
