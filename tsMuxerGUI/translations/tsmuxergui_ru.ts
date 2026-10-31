@@ -4476,6 +4476,34 @@ Build the ISO anyway?</source>
         <source>A mux is running. Stop it and close the window?</source>
         <translation>Выполняется муксинг. Остановить его и закрыть окно?</translation>
     </message>
+    <message>
+        <source>Disc title and pictures:</source>
+        <translation>Название и изображения диска:</translation>
+    </message>
+    <message>
+        <source>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL). From the source disc: those of the Blu-ray disc the tracks come from, when it has them. From a folder: bdmt_eng.xml and the like, with the pictures they name. Or no title and no pictures.</source>
+        <translation>Название диска и изображения, которые показывает проигрыватель, например PS3 (BDMV/META/DL). С исходного диска: те, что есть на диске Blu-ray, с которого взяты дорожки. Из папки: bdmt_eng.xml и подобные файлы с изображениями, на которые они ссылаются. Или без названия и изображений.</translation>
+    </message>
+    <message>
+        <source>From the source disc</source>
+        <translation>С исходного диска</translation>
+    </message>
+    <message>
+        <source>From a folder</source>
+        <translation>Из папки</translation>
+    </message>
+    <message>
+        <source>No title and no pictures</source>
+        <translation>Без названия и изображений</translation>
+    </message>
+    <message>
+        <source>Folder with bdmt_eng.xml and its pictures</source>
+        <translation>Папка с bdmt_eng.xml и его изображениями</translation>
+    </message>
+    <message>
+        <source>Folder with the disc&apos;s title and pictures</source>
+        <translation>Папка с названием и изображениями диска</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

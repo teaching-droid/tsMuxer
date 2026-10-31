@@ -183,6 +183,7 @@ class TsMuxerWindow : public QWidget
     void updateHdr10OverrideEnabled(const QtvCodecInfo* codecInfo);
     QString saveSrtFileName(const QtvCodecInfo* codecInfo, int row) const;
     void updateMkvOutputOptions();
+    void updateDiscMetaOptions();
     QString langForTrack(const QComboBox* box, const QString& current);
     void setComboBoxText(QComboBox* comboBox, const QString& text);
     QtvCodecInfo* getCodecInfo(int idx);

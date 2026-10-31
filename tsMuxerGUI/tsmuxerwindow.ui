@@ -2768,6 +2768,34 @@ p, li { white-space: pre-wrap; }
            </layout>
           </item>
           <item>
+           <layout class="QHBoxLayout" name="horizontalLayoutDiscMeta">
+            <item>
+             <widget class="QLabel" name="discMetaLabel">
+              <property name="text">
+               <string>Disc title and pictures:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QComboBox" name="comboDiscMeta">
+              <property name="toolTip">
+               <string>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL). From the source disc: those of the Blu-ray disc the tracks come from, when it has them. From a folder: bdmt_eng.xml and the like, with the pictures they name. Or no title and no pictures.</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="discMetaDirEdit"/>
+            </item>
+            <item>
+             <widget class="QPushButton" name="btnDiscMetaBrowse">
+              <property name="text">
+               <string>Browse</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
            <layout class="QHBoxLayout" name="horizontalLayoutDvProfile">
             <item>
              <widget class="QLabel" name="labelDvProfile">

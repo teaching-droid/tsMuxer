@@ -4475,6 +4475,34 @@ Créer l'ISO malgré tout ?</translation>
         <source>A mux is running. Stop it and close the window?</source>
         <translation>Un multiplexage est en cours. L'arrêter et fermer la fenêtre ?</translation>
     </message>
+    <message>
+        <source>Disc title and pictures:</source>
+        <translation>Titre et images du disque :</translation>
+    </message>
+    <message>
+        <source>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL). From the source disc: those of the Blu-ray disc the tracks come from, when it has them. From a folder: bdmt_eng.xml and the like, with the pictures they name. Or no title and no pictures.</source>
+        <translation>Le titre du disque et les images qu&apos;affiche un lecteur comme la PS3 (BDMV/META/DL). Du disque source : ceux du disque Blu-ray dont viennent les pistes, s&apos;il en a. D&apos;un dossier : bdmt_eng.xml et les fichiers semblables, avec les images qu&apos;ils désignent. Ou ni titre ni images.</translation>
+    </message>
+    <message>
+        <source>From the source disc</source>
+        <translation>Du disque source</translation>
+    </message>
+    <message>
+        <source>From a folder</source>
+        <translation>D&apos;un dossier</translation>
+    </message>
+    <message>
+        <source>No title and no pictures</source>
+        <translation>Ni titre ni images</translation>
+    </message>
+    <message>
+        <source>Folder with bdmt_eng.xml and its pictures</source>
+        <translation>Dossier contenant bdmt_eng.xml et ses images</translation>
+    </message>
+    <message>
+        <source>Folder with the disc&apos;s title and pictures</source>
+        <translation>Dossier du titre et des images du disque</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

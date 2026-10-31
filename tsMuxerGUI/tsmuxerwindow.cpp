@@ -1200,7 +1200,32 @@ TsMuxerWindow::TsMuxerWindow()
         new QRegularExpressionValidator(QRegularExpression(QStringLiteral("[^\"]*")), ui->mkvTitleEdit));
     connect(ui->mkvTitleEdit, &QLineEdit::textChanged, this, &TsMuxerWindow::updateMetaLines);
     connect(ui->mkvKeepEditionsCheck, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::updateMetaLines);
+    // The disc's title and pictures (BDMV/META/DL, #30), shown for a Blu-ray folder or image only. Not remembered: like
+    // the disc label, the folder belongs to one job. A double quote would end the quoted folder in the meta.
+    ui->comboDiscMeta->addItem(tr("From the source disc"));
+    ui->comboDiscMeta->addItem(tr("From a folder"));
+    ui->comboDiscMeta->addItem(tr("No title and no pictures"));
+    ui->discMetaDirEdit->setPlaceholderText(tr("Folder with bdmt_eng.xml and its pictures"));
+    ui->discMetaDirEdit->setValidator(
+        new QRegularExpressionValidator(QRegularExpression(QStringLiteral("[^\"]*")), ui->discMetaDirEdit));
+    connect(ui->comboDiscMeta, &QComboBox::currentIndexChanged, this,
+            [this]
+            {
+                updateDiscMetaOptions();
+                updateMetaLines();
+            });
+    connect(ui->discMetaDirEdit, &QLineEdit::textChanged, this, &TsMuxerWindow::updateMetaLines);
+    connect(ui->btnDiscMetaBrowse, &QAbstractButton::clicked, this,
+            [this]
+            {
+                const QString current = ui->discMetaDirEdit->text().trimmed();
+                const QString dir = QFileDialog::getExistingDirectory(
+                    this, tr("Folder with the disc's title and pictures"), current.isEmpty() ? lastInputDir : current);
+                if (!dir.isEmpty())
+                    ui->discMetaDirEdit->setText(QDir::toNativeSeparators(dir));
+            });
     updateMkvOutputOptions();
+    updateDiscMetaOptions();
     // Nothing has been loaded yet, so nothing about Dolby Vision applies. The designer file hides
     // this row too, so it is never seen even for a frame; the call is here so the state comes from
     // the same rule that maintains it afterwards rather than from a designer default.
@@ -3658,6 +3683,16 @@ void TsMuxerWindow::updateMkvOutputOptions()
     ui->mkvKeepEditionsCheck->setVisible(mkv);
 }
 
+void TsMuxerWindow::updateDiscMetaOptions()
+{
+    const bool bluRay = ui->radioButtonBluRay->isChecked() || ui->radioButtonBluRayISO->isChecked();
+    const bool fromFolder = ui->comboDiscMeta->currentIndex() == 1;
+    ui->discMetaLabel->setVisible(bluRay);
+    ui->comboDiscMeta->setVisible(bluRay);
+    ui->discMetaDirEdit->setVisible(bluRay && fromFolder);
+    ui->btnDiscMetaBrowse->setVisible(bluRay && fromFolder);
+}
+
 void TsMuxerWindow::updateMkvTrackOptionsEnabled()
 {
     const bool mkv = ui->radioButtonMKV->isChecked();
@@ -4686,6 +4721,15 @@ QString TsMuxerWindow::getMuxOpts()
         rez += (ui->checkBoxV3->isChecked() ? " --blu-ray-v3" : " --blu-ray");
         if (!ui->DiskLabelEdit->text().isEmpty())
             rez += QString(" --label=\"%1\" ").arg(ui->DiskLabelEdit->text());
+    }
+    // The disc's title and pictures (#30): kept from the source disc unless a folder or none is chosen
+    if (ui->radioButtonBluRay->isChecked() || ui->radioButtonBluRayISO->isChecked())
+    {
+        const QString metaDir = ui->discMetaDirEdit->text().trimmed();
+        if (ui->comboDiscMeta->currentIndex() == 1 && !metaDir.isEmpty())
+            rez += QString(" --meta-dir=\"%1\"").arg(metaDir);
+        else if (ui->comboDiscMeta->currentIndex() == 2)
+            rez += " --meta-dir=none";
     }
     else if (ui->radioButtonAVCHD->isChecked())
         rez += " --avchd";
@@ -6384,6 +6428,7 @@ void TsMuxerWindow::RadioButtonMuxClick()
     ui->DiskLabel->setVisible(ui->radioButtonBluRayISO->isChecked());
     ui->DiskLabelEdit->setVisible(ui->radioButtonBluRayISO->isChecked());
     updateMkvOutputOptions();
+    updateDiscMetaOptions();
     ui->editDelay->setEnabled(!ui->radioButtonDemux->isChecked());
     updateMkvTrackOptionsEnabled();
     updateHdr10OverrideEnabled(getCurrentCodec());
@@ -6439,6 +6484,7 @@ void TsMuxerWindow::outFileNameChanged()
     ui->DiskLabel->setVisible(ui->radioButtonBluRayISO->isChecked());
     ui->DiskLabelEdit->setVisible(ui->radioButtonBluRayISO->isChecked());
     updateMkvOutputOptions();
+    updateDiscMetaOptions();
     // A name whose extension chooses another output changes everything the output decides, exactly
     // as a click on that output's button does. Only the switch to or from ISO used to rebuild the
     // meta, so a name ending in .mkv typed while TS was chosen left the meta as it was for TS: a

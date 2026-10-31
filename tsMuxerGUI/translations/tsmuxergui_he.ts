@@ -4475,6 +4475,34 @@ Build the ISO anyway?</source>
         <source>A mux is running. Stop it and close the window?</source>
         <translation>מוקסינג בתהליך. לעצור אותו ולסגור את החלון?</translation>
     </message>
+    <message>
+        <source>Disc title and pictures:</source>
+        <translation>כותרת ותמונות הדיסק:</translation>
+    </message>
+    <message>
+        <source>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL). From the source disc: those of the Blu-ray disc the tracks come from, when it has them. From a folder: bdmt_eng.xml and the like, with the pictures they name. Or no title and no pictures.</source>
+        <translation>כותרת הדיסק והתמונות שנגן כמו PS3 מציג (BDMV/META/DL). מדיסק המקור: אלה של דיסק ה-Blu-ray שממנו באות הרצועות, אם יש לו. מתיקייה: bdmt_eng.xml וקבצים דומים, עם התמונות שהם מציינים. או ללא כותרת וללא תמונות.</translation>
+    </message>
+    <message>
+        <source>From the source disc</source>
+        <translation>מדיסק המקור</translation>
+    </message>
+    <message>
+        <source>From a folder</source>
+        <translation>מתיקייה</translation>
+    </message>
+    <message>
+        <source>No title and no pictures</source>
+        <translation>ללא כותרת וללא תמונות</translation>
+    </message>
+    <message>
+        <source>Folder with bdmt_eng.xml and its pictures</source>
+        <translation>תיקייה עם bdmt_eng.xml והתמונות שלו</translation>
+    </message>
+    <message>
+        <source>Folder with the disc&apos;s title and pictures</source>
+        <translation>תיקייה עם כותרת ותמונות הדיסק</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

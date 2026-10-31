@@ -4476,6 +4476,34 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>A mux is running. Stop it and close the window?</source>
         <translation>Hay un mux en curso. ¿Detenerlo y cerrar la ventana?</translation>
     </message>
+    <message>
+        <source>Disc title and pictures:</source>
+        <translation>Título e imágenes del disco:</translation>
+    </message>
+    <message>
+        <source>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL). From the source disc: those of the Blu-ray disc the tracks come from, when it has them. From a folder: bdmt_eng.xml and the like, with the pictures they name. Or no title and no pictures.</source>
+        <translation>El título del disco y las imágenes que muestra un reproductor como la PS3 (BDMV/META/DL). Del disco de origen: los del disco Blu-ray del que vienen las pistas, si los tiene. De una carpeta: bdmt_eng.xml y similares, con las imágenes que nombran. O sin título ni imágenes.</translation>
+    </message>
+    <message>
+        <source>From the source disc</source>
+        <translation>Del disco de origen</translation>
+    </message>
+    <message>
+        <source>From a folder</source>
+        <translation>De una carpeta</translation>
+    </message>
+    <message>
+        <source>No title and no pictures</source>
+        <translation>Sin título ni imágenes</translation>
+    </message>
+    <message>
+        <source>Folder with bdmt_eng.xml and its pictures</source>
+        <translation>Carpeta con bdmt_eng.xml y sus imágenes</translation>
+    </message>
+    <message>
+        <source>Folder with the disc&apos;s title and pictures</source>
+        <translation>Carpeta con el título y las imágenes del disco</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

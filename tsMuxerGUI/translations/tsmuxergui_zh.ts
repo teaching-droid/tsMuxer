@@ -4475,6 +4475,34 @@ Build the ISO anyway?</source>
         <source>A mux is running. Stop it and close the window?</source>
         <translation>正在进行Muxing。要停止它并关闭窗口吗？</translation>
     </message>
+    <message>
+        <source>Disc title and pictures:</source>
+        <translation>光盘标题和图片：</translation>
+    </message>
+    <message>
+        <source>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL). From the source disc: those of the Blu-ray disc the tracks come from, when it has them. From a folder: bdmt_eng.xml and the like, with the pictures they name. Or no title and no pictures.</source>
+        <translation>光盘标题以及 PS3 等播放器显示的图片 (BDMV/META/DL)。来自源光盘：轨道所来自的蓝光光盘中的标题和图片（如有）。来自文件夹：bdmt_eng.xml 等文件及其指定的图片。或者没有标题和图片。</translation>
+    </message>
+    <message>
+        <source>From the source disc</source>
+        <translation>来自源光盘</translation>
+    </message>
+    <message>
+        <source>From a folder</source>
+        <translation>来自文件夹</translation>
+    </message>
+    <message>
+        <source>No title and no pictures</source>
+        <translation>没有标题和图片</translation>
+    </message>
+    <message>
+        <source>Folder with bdmt_eng.xml and its pictures</source>
+        <translation>包含 bdmt_eng.xml 及其图片的文件夹</translation>
+    </message>
+    <message>
+        <source>Folder with the disc&apos;s title and pictures</source>
+        <translation>包含光盘标题和图片的文件夹</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

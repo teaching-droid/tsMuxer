@@ -4475,6 +4475,34 @@ Build the ISO anyway?</source>
         <source>A mux is running. Stop it and close the window?</source>
         <translation>多重化を実行中です。中止してウィンドウを閉じますか?</translation>
     </message>
+    <message>
+        <source>Disc title and pictures:</source>
+        <translation>ディスクのタイトルと画像:</translation>
+    </message>
+    <message>
+        <source>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL). From the source disc: those of the Blu-ray disc the tracks come from, when it has them. From a folder: bdmt_eng.xml and the like, with the pictures they name. Or no title and no pictures.</source>
+        <translation>PS3 などのプレーヤーが表示するディスクのタイトルと画像 (BDMV/META/DL)。元のディスクから: トラックの元になった Blu-ray ディスクにあれば、そのタイトルと画像。フォルダーから: bdmt_eng.xml などのファイルと、それらが指す画像。またはタイトルも画像もなし。</translation>
+    </message>
+    <message>
+        <source>From the source disc</source>
+        <translation>元のディスクから</translation>
+    </message>
+    <message>
+        <source>From a folder</source>
+        <translation>フォルダーから</translation>
+    </message>
+    <message>
+        <source>No title and no pictures</source>
+        <translation>タイトルも画像もなし</translation>
+    </message>
+    <message>
+        <source>Folder with bdmt_eng.xml and its pictures</source>
+        <translation>bdmt_eng.xml とその画像があるフォルダー</translation>
+    </message>
+    <message>
+        <source>Folder with the disc&apos;s title and pictures</source>
+        <translation>ディスクのタイトルと画像のフォルダー</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
