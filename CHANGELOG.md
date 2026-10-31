@@ -450,7 +450,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **--bdmv-to-iso of one folder gave another image on Linux and macOS than on Windows.** The entries of a folder and their numbers in the image followed the order in which the system listed the folder, and Linux and macOS list it in no fixed order. The folder is now taken in one order on every system, the one Windows gives, so the same folder gives the same image everywhere.
 
-* **--disc-size refused a cut, or a few tracks of a large source, before the mux:** the estimate counted the whole source files, so a one minute cut of a 78 GB clip was refused for a 25 GB disc. It now counts the share of the cut, and of the tracks taken from a transport stream file of its own.
+* **--disc-size refused a cut, or a few tracks of a large source, before the mux:** the estimate counted the whole source files, so a one minute cut of a clip larger than the disc was refused. It now counts the share of the cut, and of the tracks taken from a transport stream file of its own.
 
 * **--bdmv-to-iso with a layer break guard could make an image too big for the disc** when a file was moved behind the guard: the rest of the data no longer fitted, and the image was said to fit before the copy and refused after it. A file is now moved only when the rest still fits; otherwise it is cut around the guard, as with --no-layer-fit.
 
@@ -2312,9 +2312,9 @@ so that the codec readers were initialised before the track headers were written
 that wait.
 
 On a disc whose third subtitle track has its first packet three quarters of the way into a long
-title, that meant holding three quarters of the film in memory: 42 GB on a machine with 64 GB,
-with the output file not created at all and not one byte written. It then spent 178 seconds writing
-those packets out and 127 more freeing them. Nothing was read during either, so the progress figure
+title, that meant holding three quarters of the film in memory, most of the memory the machine had,
+with the output file not created at all and not one byte written. It then spent minutes writing
+those packets out and freeing them. Nothing was read during either, so the progress figure
 sat at 75.0 percent for five minutes and the program looked hung.
 
 The percentage where it stops is not a threshold in the program. It is where that subtitle track
@@ -2628,17 +2628,17 @@ tsMuxeR can also recognise these files now, where it used to answer "Can't detec
 
 The same difference, from the other side. When you pull an AV1 track out of a disc or a transport
 stream, tsMuxeR wrote the file in its own internal arrangement with the start markers still in it.
-ffmpeg refuses such a file outright, and refuses it even when told to expect AV1, while it reads a
-file from any encoder without complaint. The mux said it was complete.
+An AV1 reader refuses such a file outright, while it reads a file from any encoder without
+complaint. The mux said it was complete.
 
 It writes the real thing now. There was a second half to it: an AV1 file is a chain of picture
 groups and each one has to begin with a small marker of its own, with nothing in front of the very
 first. A transport stream carries a header ahead of that marker, so writing the pieces out in the
-order they arrive still produced a file ffmpeg would not open. That header is now written just
-after the marker instead, so nothing is dropped.
+order they arrive still produced a file an AV1 reader would not open. That header is now written
+just after the marker instead, so nothing is dropped.
 
-Measured: ffmpeg reads the file now and gets all 50 pictures, and the pictures that come out are
-the same ones that went in. Take away the one header the transport stream adds and the file is
+Measured: the file is read now with every picture, and the pictures that come out are the same
+ones that went in. Take away the one header the transport stream adds and the file is
 byte for byte the encoder's original. Every other kind of track comes out of a demux exactly as
 before.
 
@@ -2788,7 +2788,7 @@ and both decode the same, but discs differ, and Matroska does not store start co
 disc rebuilt through Matroska always came out in the four byte form.
 
 The program now notes which form the source used, for each kind of piece, and writes it back the
-same way. A whole 73 GB film now comes back **byte for byte identical** on both video layers,
+same way. A whole film now comes back **byte for byte identical** on both video layers,
 through both Dolby Vision profiles.
 
 This is not only a Dolby Vision matter. Any single layer disc taken to Matroska and back now keeps
