@@ -24,6 +24,7 @@
 #include "blurayHelper.h"
 #include "chapterFile.h"
 #include "convertUTF.h"
+#include "discMeta.h"
 #include "h264StreamReader.h"
 #include "hevcStreamReader.h"
 #include "iso_writer.h"
@@ -1465,6 +1466,11 @@ All parameters in this group start with two dashes:
                       and from the main title's clips (from --m2tsOffset on, one
                       a part when the output is split).
 --label               Disk label when muxing to ISO.
+--meta-dir            Blu-ray: the disc's title and the pictures a player such as
+                      the PS3 shows, from this folder: bdmt_eng.xml and the like,
+                      with the pictures they name (BDMV/META/DL of a disc). Without
+                      it, a disc muxed from a Blu-ray disc keeps that disc's own.
+                      --meta-dir=none writes none.
 --extra-iso-space     Allocate extra space in 64K units for ISO metadata (file
                       and directory names). Normally, tsMuxeR allocates this space
                       automatically, and for a split it counts the parts from the
@@ -1582,6 +1588,8 @@ All parameters in this group start with two dashes:
                         --no-layer-fit  Do not move a file that would cross the layer break to
                               start after it; split it instead.
                         --label=<string>  Volume label for the image; Blu-Ray when not given.
+                        --meta-dir=<folder>  The disc's title and pictures from this folder, in
+                              place of the folder's own BDMV/META/DL; none leaves them out.
                         --extra-iso-space=<64K blocks>  More room for the file system, on
                               top of what is counted from the folder's files and names.
 )help";
@@ -1776,6 +1784,7 @@ struct GuardedIsoOptions
     bool reproducibleHeader = false;  // --constant-iso-hdr
     int extraIsoSpace = 0;            // --extra-iso-space, in 64K blocks, on top of the estimate
     std::string discLabel;
+    std::string metaDir;          // --meta-dir: the disc's title and pictures from this folder; "none" for none (#30)
     bool keepTooBigImage = true;  // an image refused by the final size check stays where it was written
     // Set by a mux with --inner-only, which ends with an error of its own when the image fails: an unfinished image
     // removed is said after that error, and not at all when outIso is the temporary name of KeepOldOutput
@@ -1834,6 +1843,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     bool reproducibleHeader = false;
     int extraIsoSpace = 0;  // --extra-iso-space, in 64K blocks, on top of the estimate
     string discLabel;
+    string metaDir;
     vector<string> positional;
     for (int i = 2; i < argc; ++i)
     {
@@ -1898,6 +1908,8 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                 reproducibleHeader = true;
             else if (a.rfind("--label=", 0) == 0)
                 discLabel = a.substr(8);
+            else if (a.rfind("--meta-dir=", 0) == 0)
+                metaDir = unquoteStr(a.substr(11));
             // The refusal of an image whose metadata does not fit advises this option, which was not taken here.
             else if (a.rfind("--extra-iso-space=", 0) == 0)
             {
@@ -1931,7 +1943,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                "Usage: tsMuxeR --bdmv-to-iso [--layer-break-guard=<MB>] [--layer-break-guard-before=<MB>] "
                "[--layer-break-lbn=<sector>] [--disc-capacity=<sectors>] [--original-order] [--no-layer-fit] "
                "[--keep-extra-files] [--3d-single-copy] [--inner-only] [--allow-oversize] [--label=<string>] "
-               "[--extra-iso-space=<64K blocks>] [--constant-iso-hdr] "
+               "[--extra-iso-space=<64K blocks>] [--constant-iso-hdr] [--meta-dir=<folder>|none] "
                "<BDMV_folder> <out.iso>");
         return -1;
     }
@@ -1957,6 +1969,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     opt.reproducibleHeader = reproducibleHeader;
     opt.extraIsoSpace = extraIsoSpace;
     opt.discLabel = discLabel;
+    opt.metaDir = metaDir;
     return buildGuardedIso(opt);
 }
 
@@ -2021,8 +2034,12 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
 
     // normalize a full source path to a forward-slash, disc-relative path (strip srcRoot prefix, unify
     // separators, collapse the '//' that findFiles() leaves where the recursion concatenates paths)
-    auto toRel = [&srcRoot](const string& full)
+    // --meta-dir: each file of the folder given, and its place on the disc
+    std::map<string, string> metaRel;
+    auto toRel = [&srcRoot, &metaRel](const string& full)
     {
+        if (const auto it = metaRel.find(full); it != metaRel.end())
+            return it->second;
         string out;
         for (char c : full.substr(srcRoot.size()))
         {
@@ -2041,6 +2058,35 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
     {
         LTRACE(LT_ERROR, 2, "No files found under " << srcRoot);
         return -1;
+    }
+    // --meta-dir: the disc's title and pictures from a folder of one's own, in place of the folder's BDMV/META/DL
+    if (!opt.metaDir.empty())
+    {
+        const size_t before = files.size();
+        files.erase(std::remove_if(files.begin(), files.end(), [&toRel](const string& f)
+                                   { return strToUpperCase(toRel(f)).rfind("BDMV/META/DL/", 0) == 0; }),
+                    files.end());
+        const size_t replaced = before - files.size();
+        if (strToLowerCase(opt.metaDir) == "none")
+            LTRACE(
+                LT_INFO, 2,
+                "--meta-dir=none: the image gets no title and no pictures (BDMV/META/DL)"
+                    << (replaced ? ", and its own " + std::to_string(replaced) + " files there are left out." : "."));
+        else
+        {
+            const DiscMeta meta = readGivenDiscMeta(opt.metaDir);
+            LTRACE(
+                LT_INFO, 2,
+                "The disc's title and pictures, from --meta-dir: "
+                    << describeDiscMeta(meta)
+                    << (replaced ? ", in place of the folder's own " + std::to_string(replaced) + " files there" : ""));
+            for (const auto& name : meta.files)
+            {
+                const string full = meta.folder + getDirSeparator() + name;
+                metaRel[full] = "BDMV/META/DL/" + name;
+                files.push_back(full);
+            }
+        }
     }
     // The order of the listing decides the order of the entries and their unique ids in the image, and a folder lists
     // its names in no fixed order on Linux and macOS (on Windows too, off NTFS). One order on every system, the one an
@@ -3989,6 +4035,44 @@ static void refuseSaveSrtClash(const MuxerManager& muxerManager, const std::stri
     }
 }
 
+// ** THE DISC'S TITLE AND PICTURES, BDMV/META/DL (#30). ** A Blu-ray disc muxed from a disc keeps the title and the
+// pictures of that disc, which a player such as the PS3 shows; they were left behind, and the disc showed as a blank
+// one named BDMV. --meta-dir names a folder of one's own instead, and --meta-dir=none writes none, as earlier versions
+// did. Read before the mux, so that a folder that cannot be used stops the job before the hours of the mux.
+static DiscMeta discMetaForMux(const MuxerManager& muxerManager)
+{
+    const std::string& dir = muxerManager.getMetaDir();
+    if (strToLowerCase(dir) == "none")
+    {
+        LTRACE(LT_INFO, 2, "--meta-dir=none: the disc gets no title and no pictures (BDMV/META/DL).");
+        return {};
+    }
+    if (!dir.empty())
+    {
+        DiscMeta meta = readGivenDiscMeta(dir);
+        LTRACE(LT_INFO, 2, "The disc's title and pictures, from --meta-dir: " << describeDiscMeta(meta));
+        return meta;
+    }
+    // The first source on a disc that has them, in the order of the tracks: the video's disc, as a rule
+    for (const auto& si : muxerManager.getStreamInfo())
+        for (const auto& source : si.m_sourceFiles)
+            if (DiscMeta meta = discMetaOfSource(source); !meta.empty())
+            {
+                LTRACE(LT_INFO, 2,
+                       "The disc's title and pictures are kept from the source disc: " << describeDiscMeta(meta));
+                return meta;
+            }
+    return {};
+}
+
+static void warnMetaDirIgnored(const MuxerManager& muxerManager)
+{
+    if (!muxerManager.getMetaDir().empty())
+        LTRACE(LT_WARN, 2,
+               "Warning: --meta-dir gives a Blu-ray disc its title and pictures, and this job makes no Blu-ray disc. "
+               "It was ignored.");
+}
+
 static void checkSourceConsumed(MuxerManager& muxerManager)
 {
     const int64_t total = muxerManager.totalSize();
@@ -4704,6 +4788,7 @@ int main(int argc, char** argv)
             MuxerManager muxerManager(readManager, matroskaMuxerFactory);
             muxerManager.setMatroskaOutput(fileExt2 == "WEBM" ? 2 : 1);
             muxerManager.openMetaFile(argv[1]);
+            warnMetaDirIgnored(muxerManager);
 
             string dstFile = unquoteStr(argv[2]);
             if (!isValidFileName(dstFile))
@@ -4755,6 +4840,11 @@ int main(int argc, char** argv)
             MuxerManager muxerManager(readManager, tsMuxerFactory);
             muxerManager.setAllowStereoMux(fileExt2 == "SSIF" || dt != DiskType::NONE);
             muxerManager.openMetaFile(argv[1]);
+            DiscMeta discMeta;
+            if (dt == DiskType::BLURAY)
+                discMeta = discMetaForMux(muxerManager);
+            else
+                warnMetaDirIgnored(muxerManager);
             // The Matroska branch above hands this list over because Matroska WRITES chapters. A
             // transport stream has nowhere to put them, so this branch never did, and the disc
             // path passes the same list separately to createMPLSFile.
@@ -4968,6 +5058,7 @@ int main(int argc, char** argv)
             if (dt != DiskType::NONE)
             {
                 blurayHelper.writeBluRayFiles(muxerManager, insertBlankPL, firstMplsOffset, blankNum, stereoMode);
+                blurayHelper.writeDiscMeta(discMeta);
                 auto mainMuxer = dynamic_cast<TSMuxer*>(muxerManager.getMainMuxer());
                 auto subMuxer = dynamic_cast<TSMuxer*>(muxerManager.getSubMuxer());
 
@@ -5088,6 +5179,7 @@ int main(int argc, char** argv)
             KeepOldOutput keepOld;  // made first, so it is ended last: the demux has closed its files by then
             MuxerManager sMuxer(readManager, singleFileMuxerFactory);
             sMuxer.openMetaFile(argv[1]);
+            warnMetaDirIgnored(sMuxer);
             reportDvProfileIgnored(sMuxer, "a demux");
             reportOptionsIgnored(sMuxer, autoChapterLen, false, true,
                                  !customChapterList.empty() || !chapterInfo.empty(), std::string());

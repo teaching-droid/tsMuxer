@@ -11,6 +11,7 @@
 #include <fs/systemlog.h>
 #include <array>
 
+#include "discMeta.h"
 #include "iso_writer.h"
 #include "muxerManager.h"
 #include "pgsStreamReader.h"
@@ -907,6 +908,34 @@ string BlurayHelper::ssifFileName(const int num) const
 }
 
 IsoWriter* BlurayHelper::isoWriter() const { return m_isoWriter; }
+
+void BlurayHelper::writeDiscMeta(const DiscMeta& meta) const
+{
+    if (meta.empty())
+        return;
+    // Not in BDMV/BACKUP: no disc has META there
+    if (m_isoWriter)
+        m_isoWriter->createDir("BDMV/META/DL");
+    else
+        createDir(m_dstPath + toNativeSeparators("BDMV/META/DL"), true);
+    const string prefix = m_isoWriter ? "" : m_dstPath;
+    for (const auto& name : meta.files)
+    {
+        const std::vector<uint8_t> data = readDiscMetaFile(meta, name);
+        std::unique_ptr<AbstractOutputStream> file;
+        if (m_isoWriter)
+            file.reset(m_isoWriter->createFile());
+        else
+            file = std::make_unique<File>();
+        const string dst = prefix + "BDMV/META/DL/" + name;
+        if (!file->open(dst.c_str(), AbstractOutputStream::ofWrite))
+            THROW(ERR_CANT_CREATE_FILE, "Can't create file " << dst)
+        if (!data.empty() &&
+            file->write(data.data(), static_cast<uint32_t>(data.size())) != static_cast<int>(data.size()))
+            THROW(ERR_CANT_CREATE_FILE, "Can't write file " << dst)
+        file->close();
+    }
+}
 
 AbstractOutputStream* BlurayHelper::createFile()
 {

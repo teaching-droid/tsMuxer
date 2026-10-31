@@ -30,6 +30,7 @@ add_executable (tsmuxer
   bufferedReaderManager.cpp
   combinedH264Demuxer.cpp
   convertUTF.cpp
+  discMeta.cpp
   doviLib.cpp
   dtsStreamReader.cpp
   dvbSubStreamReader.cpp

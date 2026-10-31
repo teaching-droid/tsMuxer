@@ -10,6 +10,7 @@
 #include "vod_common.h"
 
 class IsoWriter;
+struct DiscMeta;
 struct FileEntryInfo;
 class TSMuxer;
 class AbstractOutputStream;
@@ -29,6 +30,8 @@ class BlurayHelper final : public FileFactory
     bool writeBluRayFiles(const MuxerManager& muxer, bool usedBlankPL, int mplsNum, int blankNum,
                           bool stereoMode) const;
     bool createCLPIFile(TSMuxer* muxer, int clpiNum, bool doLog) const;
+    // The disc's title and pictures into BDMV/META/DL (#30); nothing when meta is empty
+    void writeDiscMeta(const DiscMeta& meta) const;
     bool createMPLSFile(TSMuxer* mainMuxer, TSMuxer* subMuxer, int autoChapterLen,
                         const std::vector<double>& customChapters, DiskType dt, int mplsOffset,
                         bool isMvcBaseViewR) const;

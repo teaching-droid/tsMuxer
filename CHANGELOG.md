@@ -1,3 +1,9 @@
+## tsMuxeR 3.1.0
+
+### Blu-ray and transport stream
+
+* **A Blu-ray disc muxed from a Blu-ray disc keeps that disc's title and pictures** (BDMV/META/DL), which a player such as the PS3 shows. They were left behind, and the new disc showed as a blank one named BDMV. `--meta-dir=<folder>` gives the disc a title and pictures of one's own: bdmt_eng.xml and the like, with the pictures they name, as a disc keeps them. `--meta-dir=none` writes none. It works with `--bdmv-to-iso` too, in place of the folder's own. Only the bdmt files and the pictures they name are copied. (#30, thanks to @NTMPowers for the request)
+
 ## tsMuxeR 3.0.1
 
 A packaging release: every package now carries the licence of tsMuxeR and the notices and licence texts of what it bundles, and the guides are brought up to date. The programs work exactly as in 3.0.0.

@@ -27,6 +27,7 @@
 #include "mpegStreamReader.h"
 #include "subTrackFilter.h"
 #include "tsMuxer.h"
+#include "utf8Converter.h"
 #include "videoCopyStreamReader.h"
 #include "vodCoreException.h"
 
@@ -1511,6 +1512,7 @@ void MuxerManager::warnUnknownMuxOpts(const string& opts)
                                                       "--layer-break-lbn",
                                                       "--m2tsOffset",
                                                       "--maxbitrate",
+                                                      "--meta-dir",
                                                       "--minbitrate",
                                                       "--mplsOffset",
                                                       "--new-audio-pes",
@@ -1681,6 +1683,13 @@ void MuxerManager::parseMuxOpt(const string& opts)
         // directly could not keep its data on the inner part of the disc, only one made from a folder in a second step.
         else if (paramPair[0] == "--inner-only")
             m_innerOnly = true;
+        else if (paramPair[0] == "--meta-dir")
+        {
+            if (paramPair.size() < 2)
+                THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
+            m_metaDir = unquoteStr(trimStr(paramPair[1]));
+            UtfConverter::metaTextToUtf8(m_metaDir);
+        }
         else if (paramPair[0] == "--no-layer-break-guard")
             m_noLayerBreakGuard = true;
         else if (paramPair[0] == "--layer-break-guard")
