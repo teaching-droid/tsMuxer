@@ -3649,6 +3649,18 @@ int MovDemuxer::mov_read_stsd(MOVAtom atom)
             st->pcmBigEndian = format != MKTAG('s', 'o', 'w', 't');
             st->parsed_priv_data = new MovParsedPCMTrackData(st, format);
             break;
+        // Floating point PCM, which no output takes: QuickTime's fl32 and fl64 and ISO/IEC 23003-5's fpcm. They were
+        // listed as "Can't detect stream type" and left out without a word; the listing now names them, and a meta
+        // line that names one is refused with what it holds (a float lpcm entry: see the end of the entry).
+        case MKTAG('f', 'l', '3', '2'):
+            st->notMuxed = "floating point PCM, 32 bit (fl32)";
+            break;
+        case MKTAG('f', 'l', '6', '4'):
+            st->notMuxed = "floating point PCM, 64 bit (fl64)";
+            break;
+        case MKTAG('f', 'p', 'c', 'm'):
+            st->notMuxed = "floating point PCM (fpcm)";
+            break;
         case MKTAG('t', 'x', '3', 'g'):
             st->type = IOContextTrackType::SUBTITLE;
             st->parsed_priv_data = new MovParsedSRTTrackData(this, st);
@@ -3791,6 +3803,17 @@ if (bits_per_sample) {
         {
             // other codec type, just skip (rtp, mp4s, tmcd ...)
             skip_bytes(size - (m_processedBytes - start_pos));
+        }
+
+        // A QuickTime lpcm entry says in its flags (version 2) whether its samples are floating point. Such a track
+        // stopped the listing of the whole file, and a mux at its first packet, with "floating point PCM is not
+        // supported". It is left out as fl32 and fl64 are.
+        if (format == MKTAG('l', 'p', 'c', 'm') && st->type == IOContextTrackType::AUDIO && (st->lpcmFlags & 1))
+        {
+            st->notMuxed = "floating point PCM, " + std::to_string(st->bits_per_coded_sample) + " bit (lpcm)";
+            delete st->parsed_priv_data;
+            st->parsed_priv_data = nullptr;
+            st->type = IOContextTrackType::DATA;
         }
 
         // For mp4a tracks, seed AAC codec defaults from stsd fields so that
