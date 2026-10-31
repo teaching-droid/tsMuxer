@@ -5,6 +5,7 @@
 #include "../directory.h"
 #include "../directory_priv.h"
 
+#include "../discImage.h"
 #include "../file.h"
 
 using namespace std;
@@ -97,6 +98,17 @@ bool deleteFile(const string& fileName)
 
 bool findFiles(const string& path, const string& fileMask, vector<string>* fileList, const bool savePaths)
 {
+    if (discImage::split(path, nullptr, nullptr))
+    {
+        vector<discImage::Entry> entries;
+        if (!discImage::list(path, &entries))
+            return false;
+        for (const auto& e : entries)
+            if (!e.dir && discImage::matchMask(e.name, fileMask))
+                fileList->push_back(savePaths ? (path + '/' + e.name) : e.name);
+        return true;
+    }
+
     WIN32_FIND_DATA fileData;  // Data structure describes the file found
     // Search handle returned by FindFirstFile
 
@@ -121,6 +133,17 @@ bool findFiles(const string& path, const string& fileMask, vector<string>* fileL
 
 bool findDirs(const string& path, vector<string>* dirsList)
 {
+    if (discImage::split(path, nullptr, nullptr))
+    {
+        vector<discImage::Entry> entries;
+        if (!discImage::list(path, &entries))
+            return false;
+        for (const auto& e : entries)
+            if (e.dir)
+                dirsList->push_back(path + e.name + "/");
+        return true;
+    }
+
     WIN32_FIND_DATA fileData;  // Data structure describes the file found
     // Search handle returned by FindFirstFile
 

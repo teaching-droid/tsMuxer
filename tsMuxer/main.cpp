@@ -1,6 +1,7 @@
 // Largely rewritten by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer).
 // Apache License 2.0, see LICENSE and NOTICE.
 #include <fs/directory.h>
+#include <fs/discImage.h>
 #include <fs/systemlog.h>
 #include <fs/textfile.h>
 
@@ -1025,6 +1026,9 @@ with only one argument, then the program displays track information required to
 construct a meta file. When running with two arguments, tsMuxeR starts the
 muxing or demuxing process.
 
+A file inside a disc image is read without mounting the image: give its path
+after the image, as film.iso/BDMV/PLAYLIST/00800.mpls.
+
 Meta file format:
 File MUST have the .meta extension and be encoded in UTF-8 (but see README.md).
 This file defines the files you want to multiplex.
@@ -1542,6 +1546,7 @@ All parameters in this group start with two dashes:
                       breaks at the outer edge (the 1st and 3rd) are padded. A single
                       layer disc has nothing to pad.
 --bdmv-to-iso         Separate mode: tsMuxeR --bdmv-to-iso [options] <BDMV_folder> <out.iso>
+                      The folder can also be a disc image, read without mounting it.
                       Wrap an existing BDMV folder into a UDF 2.50 BD-ROM ISO byte-for-byte
                       - no re-mux, no re-numbering - so BD-J menus and
                       all clip/playlist references stay valid, while applying the
@@ -2029,6 +2034,18 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
                 srcRoot = srcRoot.substr(0, sep);
                 LTRACE(LT_INFO, 2, "The selected folder is BDMV itself; using its parent " << srcRoot);
             }
+        }
+    }
+    // A disc image as the source is read where it is; written over by the new image, it would be gone.
+    if (std::string image; discImage::split(srcRoot, &image, nullptr))
+    {
+        std::error_code ec;
+        if (std::filesystem::equivalent(fsPath(image), fsPath(outIso), ec) && !ec)
+        {
+            LTRACE(LT_ERROR, 2,
+                   "The output " << outIso << " is the disc image the folder is read from, and writing it would "
+                                 << "destroy that source. Choose another output name.");
+            return -1;
         }
     }
 
@@ -3972,6 +3989,12 @@ static void refuseSourceAsOutput(const MuxerManager& muxerManager, const std::st
             if (std::filesystem::equivalent(src, out, ec) && !ec)
                 throw runtime_error("The output " + dstFile + " is one of the source files (" + name +
                                     "), and writing it would destroy that source. Choose another output name.");
+            if (std::string image; discImage::split(name, &image, nullptr) &&
+                                   std::filesystem::equivalent(std::u8string(image.begin(), image.end()), out, ec) &&
+                                   !ec)
+                throw runtime_error("The output " + dstFile + " is the disc image the source " + name +
+                                    " is read from, and writing it would destroy that source. Choose another output "
+                                    "name.");
             if (outIsFolder)
                 for (const char* sub : {"BDMV", "CERTIFICATE"})
                     if (pathIsInside(src, out / sub))

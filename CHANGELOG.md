@@ -1,5 +1,9 @@
 ## tsMuxeR 3.1.0
 
+### Disc images
+
+* **A disc image is read without mounting it.** A file inside an .iso is named by its path after the image, `film.iso/BDMV/PLAYLIST/00800.mpls`, as a source on the command line and in a meta file, and `--bdmv-to-iso` takes an image as its source too. Blu-ray, UHD Blu-ray and DVD images are read, and the stream files are read in place, without a copy. An image had to be mounted before, which Windows 7 cannot do without extra software. An output named as the image a source is read from is refused, and `tsMuxeR film.iso` says which path to give.
+
 ### Matroska input
 
 * **A Matroska title longer than 1023 bytes was cut,** and so was a chapter name of more than 1024 bytes in an ordered edition or a linked file. A Matroska output got the cut text, broken inside a letter outside ASCII where the cut fell in one. Both are read whole now.

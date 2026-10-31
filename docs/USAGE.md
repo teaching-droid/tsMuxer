@@ -95,6 +95,8 @@ Examples:
 
 tsMuxeR can be run in track detection mode or muxing mode. If tsMuxeR is run with only one argument, then the program displays track information required to construct a meta file. When running with two arguments, tsMuxeR starts the muxing or demuxing process.
 
+A file inside a disc image (.iso) is read without mounting the image: give the path of the file after the name of the image, for example `tsMuxeR film.iso/BDMV/PLAYLIST/00800.mpls`, and the same in a meta file. Blu-ray, UHD Blu-ray and DVD images are read, and the stream files are read in place, without a copy. The names inside an image are found without regard to case.
+
 Supported output formats:
 * **TS** - MPEG Transport Stream
 * **M2TS** - Blu-ray MPEG-2 Transport Stream
@@ -366,3 +368,5 @@ Option              | Description
 --original-order    | Write the files in disc order instead of the largest .m2ts first. Better for seamless branching titles.
 --no-layer-fit      | Do not move a file that would cross the layer break to after it; split it instead.
 --meta-dir          | The disc's title and pictures from this folder, in place of the source folder's own BDMV/META/DL; `none` leaves them out.
+
+The source can also be a disc image, `tsMuxeR --bdmv-to-iso film.iso new.iso`, which is read without mounting it, for a copy with a new layout, a guard or other disc pictures.

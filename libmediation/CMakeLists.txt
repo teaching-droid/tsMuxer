@@ -4,6 +4,8 @@ project(mediation)
 add_library(mediation STATIC
   types/types.cpp
   system/terminatablethread.cpp
+  fs/discImage.cpp
+  fs/file_image.cpp
 )
 
 IF(WIN32)

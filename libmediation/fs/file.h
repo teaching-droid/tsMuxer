@@ -147,9 +147,19 @@ class File : public AbstractOutputStream
     uint64_t pos() const { return m_pos; }
 
    private:
+    // A file inside a disc image (film.iso/BDMV/STREAM/00001.m2ts) is read through its places in the image file
+    // (discImage.h); these do the reading for it on every system.
+    struct ImageView;
+    bool openInImage(const char* fName, unsigned int oflag);
+    void closeInImage();
+    int readInImage(void* buffer, uint32_t count) const;
+    int64_t seekInImage(int64_t offset, SeekMethod whence) const;
+    int64_t sizeInImage() const;
+
     void* m_impl;
     std::string m_name;
     mutable int64_t m_pos;
+    ImageView* m_view = nullptr;
 };
 
 class FileFactory

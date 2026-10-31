@@ -18,6 +18,7 @@
 #include <sstream>
 
 #include "../directory.h"
+#include "../discImage.h"
 #include "../file.h"
 
 namespace
@@ -64,8 +65,15 @@ static void openAtEnd(const int fd, const unsigned int oflag)
 
 File::File() : m_impl(from_fd(-1)), m_pos(0) {}
 
-File::File(const char* fName, unsigned int oflag, unsigned int systemDependentFlags) : m_name(fName), m_pos(0)
+File::File(const char* fName, unsigned int oflag, unsigned int systemDependentFlags)
+    : m_impl(from_fd(-1)), m_name(fName), m_pos(0)
 {
+    if (discImage::isInside(fName))
+    {
+        if (!openInImage(fName, oflag))
+            throw std::runtime_error(std::string("Can't open ") + fName + ": the disc image has no such file");
+        return;
+    }
     int sysFlags = makeUnixOpenFlags(oflag);
     auto fd = ::open(fName, sysFlags | systemDependentFlags, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
     openAtEnd(fd, oflag);
@@ -96,6 +104,8 @@ bool File::open(const char* fName, unsigned int oflag, unsigned int systemDepend
 
     if (isOpen())
         close();
+    if (discImage::isInside(fName))
+        return openInImage(fName, oflag);
 
     int sysFlags = makeUnixOpenFlags(oflag);
     // The folder is made only for a file the open may create, as on Windows: a source that does not exist got its
@@ -110,6 +120,11 @@ bool File::open(const char* fName, unsigned int oflag, unsigned int systemDepend
 
 bool File::close()
 {
+    if (m_view)
+    {
+        closeInImage();
+        return true;
+    }
     if (::close(to_fd(m_impl)) == 0)
     {
         m_impl = from_fd(-1);
@@ -123,6 +138,8 @@ int File::read(void* buffer, uint32_t count) const
 {
     if (!isOpen())
         return -1;
+    if (m_view)
+        return readInImage(buffer, count);
     m_pos += count;
     return ::read(to_fd(m_impl), buffer, count);
 }
@@ -133,7 +150,7 @@ int File::read(void* buffer, uint32_t count) const
 // reason, and the job stops on it.
 int File::write(const void* buffer, uint32_t count)
 {
-    if (!isOpen())
+    if (!isOpen() || m_view)
         return -1;
     const auto* data = static_cast<const char*>(buffer);
     uint32_t left = count;
@@ -158,7 +175,7 @@ int File::write(const void* buffer, uint32_t count)
     return static_cast<int>(count);
 }
 
-bool File::isOpen() const { return to_fd(m_impl) != -1; }
+bool File::isOpen() const { return m_view || to_fd(m_impl) != -1; }
 
 bool File::size(int64_t* const fileSize) const
 {
@@ -166,6 +183,11 @@ bool File::size(int64_t* const fileSize) const
 
     struct stat buf;
 
+    if (m_view)
+    {
+        *fileSize = sizeInImage();
+        return true;
+    }
     if (isOpen() && (fstat(to_fd(m_impl), &buf) == 0))
     {
         *fileSize = buf.st_size;
@@ -179,6 +201,8 @@ int64_t File::seek(const int64_t offset, const SeekMethod whence) const
 {
     if (!isOpen())
         return UINT64_C(-1);
+    if (m_view)
+        return seekInImage(offset, whence);
 
     int sWhence = 0;
     switch (whence)
@@ -197,15 +221,19 @@ int64_t File::seek(const int64_t offset, const SeekMethod whence) const
     return lseek(to_fd(m_impl), offset, sWhence);
 }
 
-bool File::truncate(const uint64_t newFileSize) const { return ftruncate(to_fd(m_impl), newFileSize) == 0; }
+bool File::truncate(const uint64_t newFileSize) const { return !m_view && ftruncate(to_fd(m_impl), newFileSize) == 0; }
 
 // POSIX files are sparse by default: extending with ftruncate() leaves a hole, and writing past a gap
 // keeps earlier gaps as holes. Nothing to enable, so just report that sparse behaviour is available.
-bool File::setSparse() const { return isOpen(); }
+bool File::setSparse() const { return isOpen() && !m_view; }
 
 // Only Windows writes unbuffered (FILE_FLAG_NO_BUFFERING), so only there does the sector size matter.
 uint32_t File::volumeSectorSize(const char*) { return 0; }
 
-void File::sync() { ::sync(); }
+void File::sync()
+{
+    if (!m_view)
+        ::sync();
+}
 
 #endif

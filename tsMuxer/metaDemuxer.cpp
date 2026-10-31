@@ -3,6 +3,7 @@
 #include "metaDemuxer.h"
 
 #include <fs/directory.h>
+#include <fs/discImage.h>
 #include <fs/systemlog.h>
 
 #include <fs/textfile.h>
@@ -1286,6 +1287,11 @@ std::string METADemuxer::playlistStreamDir(const std::string& mplsFileName)
     // A folder that holds something: an empty STREAM folder elsewhere is not the disc's
     const auto isFolder = [&](const string& d)
     {
+        if (discImage::split(d, nullptr, nullptr))
+        {
+            std::vector<discImage::Entry> entries;
+            return discImage::list(d, &entries) && !entries.empty();
+        }
         std::error_code ec;
         return std::filesystem::is_directory(toPath(d), ec) && !std::filesystem::is_empty(toPath(d), ec) && !ec;
     };
@@ -3833,21 +3839,40 @@ std::string discSourceHint(const std::string& fileName)
 {
     std::error_code ec;
     const std::filesystem::path path(std::u8string(fileName.begin(), fileName.end()));
-    if (std::filesystem::is_directory(path, ec))
+    std::string name = fileName;
+    while (!name.empty() && (name.back() == '/' || name.back() == '\\')) name.pop_back();
+    // A folder inside a disc image counts as one on the drive.
+    const bool inImage = discImage::isInside(name);
+    const auto folderAt = [&](const std::string& sub)
     {
-        std::string name = fileName;
-        while (!name.empty() && (name.back() == '/' || name.back() == '\\')) name.pop_back();
+        if (inImage)
+            return discImage::isDir(sub.empty() ? name : name + "/" + sub);
+        return std::filesystem::is_directory(sub.empty() ? path : path / sub, ec);
+    };
+    if (folderAt(""))
+    {
         const std::string last = strToUpperCase(name.substr(name.find_last_of("/\\") + 1));
-        if (last == "BDMV" || std::filesystem::is_directory(path / "BDMV", ec))
+        if (last == "BDMV" || folderAt("BDMV"))
             return "it is a Blu-ray folder. Give the playlist of the title as the source, BDMV/PLAYLIST/<number>.mpls, "
                    "or use --bdmv-to-iso to write the folder into an ISO image";
-        if (last == "VIDEO_TS" || std::filesystem::is_directory(path / "VIDEO_TS", ec))
+        if (last == "VIDEO_TS" || folderAt("VIDEO_TS"))
             return "it is a DVD folder. Give the .vob files of the title in VIDEO_TS as the source";
         return "it is a folder. Give a file as the source";
     }
-    if (strToLowerCase(extractFileExt(fileName)) == "iso" && std::filesystem::is_regular_file(path, ec))
-        return "it is a disc image, which is not read as a source. Open (mount) the image and give the playlist of "
-               "the title, BDMV/PLAYLIST/<number>.mpls of a Blu-ray or the .vob files of VIDEO_TS of a DVD";
+    if (!inImage && strToLowerCase(extractFileExt(name)) == "iso" &&
+        std::filesystem::is_regular_file(std::u8string(name.begin(), name.end()), ec))
+    {
+        // An image is read where the path goes on inside it.
+        if (discImage::isDir(name + "/BDMV"))
+            return "it is a disc image. Give the playlist of the title inside it as the source, " + name +
+                   "/BDMV/PLAYLIST/<number>.mpls";
+        if (discImage::isDir(name + "/VIDEO_TS"))
+            return "it is a disc image. Give the .vob files of the title inside it as the source, " + name +
+                   "/VIDEO_TS/VTS_<number>_<part>.VOB";
+        if (const std::string reason = discImage::unreadableReason(name); !reason.empty())
+            return "it is a disc image that cannot be read: " + reason;
+        return "it is a disc image with no Blu-ray or DVD folder";
+    }
     return {};
 }
 
@@ -3855,6 +3880,9 @@ std::string openFailureReason(const std::string& fileName)
 {
     std::error_code ec;
     const std::filesystem::path path(std::u8string(fileName.begin(), fileName.end()));
+    if (discImage::isInside(fileName))
+        return discImage::isDir(fileName) ? " (" + discSourceHint(fileName) + ")"
+                                          : " (the disc image has no such file)";
     if (!std::filesystem::exists(path, ec) && !ec)
         return " (it does not exist)";
     if (std::filesystem::is_directory(path, ec))
