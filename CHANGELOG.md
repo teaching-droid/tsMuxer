@@ -716,6 +716,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Other
 
+* **The Linux programs were built without compiler optimisation,** as the Linux build gave CMake no build type, so they ran slower than the Windows and macOS ones. A build without a type is now an optimised Release build, and a Blu-ray mux of an H.264 file took about half the time. The output is the same.
+
 * **A sound track of a transport stream or a Matroska file could be listed as video, and a video track as sound,** when a check for the other kind ran first and took the data for its own: MP2 sound in a Matroska file was listed as AV1 video. A track is now read first as the kind its file declares, and within that kind the data still decides. A track that really holds the other kind is still found, with a warning. A DVB stream declares AC-3, E-AC-3, DTS and AAC by a descriptor beside the stream type 0x06, and that now counts as a declaration too.
 
 * **A demux with --cut-start says how much later the sound starts than the picture,** as the timeshift to give it when the files are muxed again.
