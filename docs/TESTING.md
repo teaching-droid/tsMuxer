@@ -1,44 +1,58 @@
 # tsMuxer : Testing
 
-In absence of a full test suite currently we are creating some basic tests that can be performed. 
+There is no automatic test suite. A build can be checked by hand with the steps below, on any short file of your
+own: a minute or two of H.264 or HEVC video with AC-3 sound is enough.
 
-The first test is a simple MKV to M2TS test with the first 2 minutes of Big Buck Bunny. 
+## The programs start
 
-You need the file bbb-2mins.mkv and to either use the M2TS option in tsMuxerGUI or use the following meta file:
+`tsMuxeR` with no arguments prints its version on the first line, such as `tsMuxeR version 3.0.0 (git-1234abc)`.
+`tsMuxeR source.mkv` lists the tracks of a file: the Stream ID and the Track ID of each are what its line in a meta
+file needs.
 
-```
-MUXOPT --no-pcr-on-video-pid --new-audio-pes --vbr  --vbv-len=500
-V_MPEG-2, "bbb-2mins.mkv", track=1, lang=und
-A_AC3, "bbb-2mins.mkv", track=2, lang=und
-```
+## A mux
 
-The MD5 sums of the original file and the output file should be:
-```
-a239a724cba1381a5956b50cb8b46754  bbb-2mins.mkv
-62342b056d37e44fae4e48161d6208bf  bbb-2mins-from-linux-meta.m2ts
-```
-
-### MKV Muxing Test
-
-You can also test muxing to MKV using the same Big Buck Bunny file. Use the MKV option in tsMuxerGUI or use the following meta file:
+Write a meta file, `test.meta`, from the listing:
 
 ```
-MUXOPT --vbr
-V_MPEG-2, "bbb-2mins.mkv", track=1, lang=und
-A_AC3, "bbb-2mins.mkv", track=2, lang=und
+MUXOPT --no-pcr-on-video-pid --new-audio-pes --vbr --vbv-len=500
+V_MPEG4/ISO/AVC, "source.mkv", track=1
+A_AC3, "source.mkv", track=2
 ```
 
-Save the output as `bbb-2mins-remuxed.mkv` and verify:
-1. The output file plays correctly in VLC or mpv
-2. Both the video and audio tracks are present (check with `mediainfo` or `ffprobe`)
-3. Seeking works correctly (the MKV file should have Cues for seeking)
+(`V_MPEGH/ISO/HEVC` for HEVC video.) A file named without its folder is looked for in the current folder, so run
+the commands from the folder that holds it. Then mux it to each kind of output:
 
-### Life Untouched Test
-
-We will have also done the same with the test file [Life Untouched](https://4kmedia.org/life-untouched-hdr-uhd-4k-demo). Results of the MD5 sums for the original and output file are below:
 ```
-f2db8f6647f4f2a0b2417aed296fee73  Life Untouched 4K Demo.mp4
-aba9ee3a3211cd09ba4833a610faff22  Life Untouched 4K Demo.m2ts
+tsMuxeR test.meta out.m2ts
+tsMuxeR test.meta out.mkv
 ```
 
-We need more sample files with 3D and multiple subtitle tracks if possible so if you have any ways of testing these files (particularly in relation to the bugs in the TODO section) please let us know?
+and, with `--blu-ray` added to the MUXOPT line, to a Blu-ray folder and an image:
+
+```
+tsMuxeR test.meta out_folder
+tsMuxeR test.meta out.iso
+```
+
+Each ends with `Mux successful complete` and exit code 0. Then check that:
+
+1. each output plays, and seeking works in it
+2. `tsMuxeR out.m2ts` (or `out.mkv`, or the `.m2ts` in `out_folder/BDMV/STREAM`) lists the same tracks as the source
+3. the log has no warning that you do not expect
+
+## Two builds compared
+
+The same meta file and source give the same output byte for byte, run after run, for a TS, an M2TS and a Blu-ray
+folder, so two builds can be compared with a checksum of each file. An ISO image is the same when `--constant-iso-hdr`
+is on the MUXOPT line. A Matroska file is not: its unique IDs are new on every run, so two Matroska files differ in
+a few bytes even from the same build.
+
+## The window
+
+Start `tsMuxerGUI`, add the file, choose an output and press Start muxing. The meta file box shows what is muxed;
+Save meta file writes it, and the command line gives the same output from it.
+
+## If something fails
+
+Please report it with the bug report form on GitHub, with the version line and the full log, the meta file, what
+you expected and what happened instead. A short sample of the source helps most.
