@@ -194,7 +194,9 @@ class MatroskaDemuxer final : public IOContextDemuxer
     int64_t m_joinShiftNs = 0;      // a plain join: where the part being read is put, against its own clock
     bool m_tracksFinished = false;  // the converters were asked for what they still held
     bool queueFinalPackets();
-    char m_title[1024];
+    // The segment title, whole: a char[1024] cut a longer one at 1023 bytes, inside a letter outside ASCII if one was
+    // there, and a Matroska output carried the cut title (K20)
+    std::string m_title;
 
     uint64_t segment_start;
     uint64_t created;

@@ -2525,7 +2525,7 @@ int MatroskaDemuxer::matroska_parse_info()
             char* text;
             if ((res = ebml_read_utf8(&id, &text)) < 0)
                 break;
-            strncpy(m_title, text, sizeof(m_title) - 1);
+            m_title = text;
             delete[] text;
             break;
         }
@@ -3367,9 +3367,11 @@ bool readSegmentFacts(const std::string& path, SegmentFacts& facts)
         }
         return out;
     };
+    // At most what a text element may hold (ebml_read_ascii): 1024 bytes cut the chapter name of an ordered edition or
+    // a linked file, as the title was cut (K20)
     const auto bytes = [&](const int64_t at, const int64_t len)
     {
-        std::string out(static_cast<size_t>((std::max)(int64_t{0}, (std::min)(len, int64_t{1024}))), '\0');
+        std::string out(static_cast<size_t>((std::max)(int64_t{0}, (std::min)(len, int64_t{16} * 1024 * 1024))), '\0');
         scan.f.seek(at);
         if (!out.empty() && scan.f.read(out.data(), static_cast<uint32_t>(out.size())) != static_cast<int>(out.size()))
             out.clear();

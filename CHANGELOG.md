@@ -1,5 +1,9 @@
 ## tsMuxeR 3.1.0
 
+### Matroska input
+
+* **A Matroska title longer than 1023 bytes was cut,** and so was a chapter name of more than 1024 bytes in an ordered edition or a linked file. A Matroska output got the cut text, broken inside a letter outside ASCII where the cut fell in one. Both are read whole now.
+
 ### Blu-ray and transport stream
 
 * **A Blu-ray disc muxed from a Blu-ray disc keeps that disc's title and pictures** (BDMV/META/DL), which a player such as the PS3 shows. They were left behind, and the new disc showed as a blank one named BDMV. `--meta-dir=<folder>` gives the disc a title and pictures of one's own: bdmt_eng.xml and the like, with the pictures they name, as a disc keeps them. `--meta-dir=none` writes none. It works with `--bdmv-to-iso` too, in place of the folder's own. Only the bdmt files and the pictures they name are copied. In the window it is the "Disc title and pictures" choice in the Output area, for a Blu-ray folder or image, and on the BDMV folder to ISO tab. (#30, thanks to @NTMPowers for the request)
