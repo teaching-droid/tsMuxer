@@ -8,8 +8,8 @@ This project is for tsMuxer - a transport stream muxer for remuxing/muxing eleme
 
 EVO/VOB/MPG, MKV/MKA/MK3D, WebM, MP4/MOV, TS, M2TS and IVF to TS, M2TS, MKV or WebM.
 
-Supported video codecs H.264/AVC, H.265/HEVC, H.266/VVC (Alpha release), AV1, VC-1, MPEG2, and VP8 and VP9 (from MKV, WebM or IVF; to MKV, or demuxed to IVF). 
-Supported audio codecs AAC, AC3 / E-AC3(DD+), DTS/ DTS-HD, TrueHD, Opus, FLAC, LPCM, MP3, Vorbis (from MKV or WebM; to MKV, or demuxed to Ogg) and ALAC (from MKV, to MKV).
+Supported video codecs H.264/AVC, H.265/HEVC, H.266/VVC (Alpha release), AV1, VC-1, MPEG2, and VP8 and VP9 (from MKV, WebM, MP4 or IVF; to MKV, or demuxed to IVF). MPEG-4 Part 2 (from MP4 or MOV) and ProRes (from MOV) are copied into an MKV output. 
+Supported audio codecs AAC, AC3 / E-AC3(DD+), DTS/ DTS-HD, TrueHD, Opus, FLAC, LPCM, MP3, Vorbis (from MKV, WebM or MP4; to MKV, or demuxed to Ogg) and ALAC (from MKV or MP4, to MKV).
 
 **TrueHD note (Blu-ray output):** Blu-ray players typically expect Dolby TrueHD to be muxed in a Blu-ray style
 interleaved stream with an AC-3 compatibility core. If your MKV stores TrueHD and AC-3 as separate tracks, tsMuxer
@@ -26,9 +26,11 @@ Some of the major features include:
 * Output/Author to compliant Blu-ray Disc or AVCHD
 * Matroska (MKV/MKA) output, with track names and flags, chapters and ordered editions, attachments and tags, and splitting by size, duration or chapters
 * WebM output, for VP8, VP9 and AV1 video, Opus and Vorbis audio, and text subtitles as WebVTT
-* Subtitles from Matroska in SRT, ASS, SSA, WebVTT, DVD (VobSub) and DVB form, kept in their own form in a Matroska output, or turned into PGS for a disc. ASS and SSA are drawn with libass, with their styles, positions and animations and the fonts attached to the file (the Windows packages include libass; on Linux and Mac it is the system's). DVB subtitles from a TS recording become PGS as well
+* Subtitles from Matroska in SRT, ASS, SSA, WebVTT, DVD (VobSub) and DVB form, and from MP4 as timed text or WebVTT, kept in their own form in a Matroska output, or turned into PGS for a disc. ASS and SSA are drawn with libass, with their styles, positions and animations and the fonts attached to the file (the Windows packages include libass; on Linux and Mac it is the system's). DVB subtitles from a TS recording become PGS as well
 * A remux of a Matroska file into a Matroska file keeps the tags about each track, the data stored beside each frame (BlockAdditions, such as HDR10+ metadata), and every edition and chapter of a single file that is not played as an ordered edition
 * Blu-ray 3D support
+* MP4 and MOV input with what the file says about itself: track names, the title, chapters, the cover picture and the colour and HDR data go into a Matroska output
+* A Linux AppImage that runs on most current distributions, with what an update tool needs to fetch the next release
 
 Additions in this fork (see [DISC_AUTHORING.md](docs/DISC_AUTHORING.md) for details):
 
@@ -42,7 +44,7 @@ Additions in this fork (see [DISC_AUTHORING.md](docs/DISC_AUTHORING.md) for deta
 
 Dolby Vision and Blu-ray conformance:
 
-* Carry a dual layer Dolby Vision disc in a single Matroska track, and split it back into two layers to author a disc again. A merged track is listed as its two layers, so it can be separated in the interface without hand writing a meta file. The rebuilt streams are byte for byte identical to the disc, measured over a whole 73 GB feature and over a seamless branching title, through both Dolby Vision profiles; see [docs/DOLBY_VISION.md](docs/DOLBY_VISION.md)
+* Carry a dual layer Dolby Vision disc in a single Matroska track, and split it back into two layers to author a disc again. A merged track is listed as its two layers, so it can be separated in the interface without hand writing a meta file. The rebuilt streams are byte for byte identical to the disc, measured over a whole feature and over a seamless branching title, through both Dolby Vision profiles; see [docs/DOLBY_VISION.md](docs/DOLBY_VISION.md)
 * Store such a disc as Dolby Vision profile 8.1, which many more devices accept, while keeping the disc's own metadata alongside so the original disc can still be built from the file. The file does not get smaller, and that is the point of it
 * Keep the AC-3 core of a TrueHD track in Matroska as its own track, instead of dropping it
 * Name the IMAX variant of a DTS:X track
