@@ -1298,7 +1298,7 @@ TsMuxerWindow::TsMuxerWindow()
         // same disc size exists at two different capacities and picking the wrong one puts the guard in the
         // wrong place. A BD-R XL reports its full capacity, while a defect-managed disc keeps 1 GiB per layer
         // back as ISA/OSA spare and reports 47,305,728 (100 GB) or 60,403,712 (128 GB) instead. Both have been
-        // measured here on real discs, so neither can be assumed: the field is unlockable for exactly that.
+        // measured here on physical discs, so neither can be assumed: the field is unlockable for exactly that.
         // BD-RE reserves spare area as well, which is why BD-R DL and BD-RE DL are separate entries.
         //
         // The two-layer 100 GB entry is for a 66 GB burn on a 100 GB disc, which exists because there is no
@@ -2190,7 +2190,7 @@ TsMuxerWindow::TsMuxerWindow()
         beforeSpin->setSuffix(tr(" MB"));
         beforeSpin->setEnabled(false);
         beforeCheck->setEnabled(false);
-        // The capacity of a real disc, and the field that lets a user correct it. The same disc size
+        // The capacity of a physical disc, and the field that lets a user correct it. The same disc size
         // exists at two capacities, and the layer break is computed from whatever is here, so a
         // figure that does not match the disc in the drive puts the guard in the wrong place. The
         // value is pre-filled from the disc above and locked, exactly as in the BDMV -> ISO tab, so

@@ -165,7 +165,7 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
     // Blu-ray navigation needs the mux start time at or above 524280 ticks of the 45 kHz
     // clock (11.65 s). Below that, players subtract the decoder preroll from timestamps
     // near zero and their 32-bit 45 kHz registers underflow, so skipping back to the start
-    // of the disc fails. Commercial discs never master lower (Universal uses exactly
+    // of the disc fails. No disc measured starts lower (the lowest start at exactly
     // 524280). Raise a lower explicit value for every output except plain *.ts; an absent
     // --start-time already falls back to the safe 600 s default before this point.
     static constexpr int64_t MIN_BD_PTS_OFFSET = 524280ll * 2;  // 45 kHz -> 90 kHz ticks

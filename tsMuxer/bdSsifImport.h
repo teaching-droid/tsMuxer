@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-// Reading a pressed 3D Blu-ray's own description of how its two video views are laid out.
+// Reading a 3D Blu-ray's own description of how its two video views are laid out.
 //
 // A 3D disc stores its video ONCE and gives it three names. The base view and the dependent view are
 // cut into chunks and written alternately, dependent first, and that single run of sectors is what
@@ -20,7 +20,7 @@
 //   where the chunks divide   the clip info file, extension data id 2/4, a list of start points
 //   which two clips pair up   the playlist, extension data id 2/2, a sub path of type 8
 //
-// Measured on two pressed discs from different studios: the pairing rule held 36 times out of 36,
+// Measured on two full-size 3D disc structures: the pairing rule held 36 times out of 36,
 // every chunk size was a multiple of 6144, and a 43 GB .ssif was rebuilt byte for byte from these
 // tables alone.
 

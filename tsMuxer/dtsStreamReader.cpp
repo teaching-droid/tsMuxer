@@ -456,8 +456,8 @@ int DTSStreamReader::decodeHdInfo(uint8_t* buff, const uint8_t* end)
 // variant, where the low nibble is not part of the sync word, so comparing all
 // 32 bits against 0xF14000D0 misses real streams, which carry 0xF14000D3.
 //
-// Measured on a pressed disc carrying a DTS:X 7.1 track and a plain DTS-HD MA
-// 5.1 track side by side, three DTS:X trailers, and a second pressed disc
+// Measured on a disc carrying a DTS:X 7.1 track and a plain DTS-HD MA
+// 5.1 track side by side, three DTS:X trailers, and a second disc
 // carrying all four DTS flavours (MA 7.1, MA 5.1, HR 5.1 and Express): 99,883
 // DTS:X frames carry a marker on 100% of frames and 74,881 plain MA frames
 // carry nothing in that slot. It is the position that carries the meaning and

@@ -4161,8 +4161,8 @@ bool MatroskaMuxer::muxPacket(AVPacket& avPacket)
     // carries nothing for a long stretch, because a forced subtitle track only has content in the
     // scenes that need it.
     //
-    // Waiting for one was measured on a pressed disc whose third subtitle track has its first packet
-    // 74.99 percent of the way into a 72 GB title: the muxer held 42 GB of packets in memory on a
+    // Waiting for one was measured on a disc whose third subtitle track has its first packet
+    // three quarters of the way into a long title: the muxer held 42 GB of packets in memory on a
     // 64 GB machine, then spent 178 seconds writing them out and 127 more freeing them, with the
     // progress figure stopped at 75.0 percent the whole time because nothing was being read.
     if (!m_headerWritten)

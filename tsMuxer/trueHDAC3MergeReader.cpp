@@ -367,7 +367,7 @@ int TrueHDAC3MergeReader::flushPacket(AVPacket& avPacket)
 // frame on every merge, 32 ms, so that the warning could not fire on it. That defect is fixed, so
 // the allowance goes back to what the format itself asks for. The core is emitted in whole frames,
 // so a lossless track whose length is not an exact multiple of one frame can legitimately come up a
-// fraction of a frame short; more than a whole frame is a real gap. A pressed disc has no shortfall
+// fraction of a frame short; more than a whole frame is a real gap. A disc track with its core has no shortfall
 // at all: 938 core frames for 938 over a measured cut, the core being constant bitrate and therefore
 // a clock. At one second the warning stayed silent on a core a full second short of its track.
 void TrueHDAC3MergeReader::reportCoreCoverage()

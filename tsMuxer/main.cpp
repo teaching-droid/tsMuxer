@@ -1659,7 +1659,7 @@ static bool findM2tsPcrMedian(const string& fileName, const int64_t offset, cons
     return true;
 }
 
-// Write one 3D group into the image the way a pressed disc holds it. The base view and the
+// Write one 3D group into the image the way a 3D Blu-ray holds it. The base view and the
 // dependent view are cut into the chunks their own clip info files name and written alternately,
 // dependent chunk first, and the .ssif is then given those same sectors under its own name. The
 // video is stored once and all three names resolve to it, so the group costs what the two views

@@ -889,7 +889,7 @@ int HevcHdrUnit::deserialize()
                 // Two of these three comments used to name the wrong colour. The values were
                 // always right, because they are read and written positionally, but anyone
                 // reading the old comments would have "corrected" working code. Confirmed
-                // against a pressed disc: index 0 is (8500, 39850) BT.2020 green, index 1 is
+                // against a UHD disc stream: index 0 is (8500, 39850) BT.2020 green, index 1 is
                 // (6550, 2300) blue and index 2 is (35400, 14600) red.
                 HDR10_metadata[0] = m_reader.getBits(32);  // display_primaries Green
                 HDR10_metadata[1] = m_reader.getBits(32);  // display_primaries Blue

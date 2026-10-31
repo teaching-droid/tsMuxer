@@ -64,7 +64,7 @@ static constexpr int DEGENERATE_MUX_RATE = PCR_FREQUENCY;
 // 49.02 Mbit/s once each carries its timestamp, and that fits with headroom. Reading the limit the
 // other way would leave nearly 6 Mbit/s of the physical rate unused, which is not how it is meant.
 //
-// The HD figure is also measured rather than only read: three commercially authored discs were
+// The HD figure is also measured rather than only read: three HD disc structures were
 // checked and none of the 3.3 million packets between them has a gap below 846 ticks, which is
 // exactly 48 Mbit/s on the 188 byte packet.
 //
@@ -72,7 +72,7 @@ static constexpr int DEGENERATE_MUX_RATE = PCR_FREQUENCY;
 // rate of the transport stream is given per disc capacity and per zone: 64 and 81.7 Mbit/s for a
 // 50 GB disc, 81.7 and 109 for 66 and 100 GB, and 127.9 in the high transfer rate zone of the two
 // larger ones. 109 is therefore not the only legal answer, it is the one that fits the capacities
-// UHD titles are actually pressed on. A single number is a simplification and this is the useful
+// UHD titles actually come on. A single number is a simplification and this is the useful
 // place to put it.
 //
 // Which of the two applies is decided by isV3(), and that is set for ANY HEVC on a disc, not only
@@ -544,7 +544,7 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
             m_pesType[tsStreamIndex] = PES_INT_AC3_ID;
         else if (codecName == "A_MLP")
             // Only the AC-3 core merge gets the AC3 id, which --new-audio-pes then maps to
-            // stream id 0xfd as on commercial discs. A merged track writes the matching PES
+            // stream id 0xfd as the Blu-ray format has it. A merged track writes the matching PES
             // extension (TrueHDAC3MergeReader::writePESExtension), so 0xfd is honest there.
             // Plain TrueHD has no such extension, and giving it 0xfd would announce an
             // extended_stream_id that is not present, which is malformed per H.222.0 Table
@@ -870,7 +870,7 @@ int TSMuxer::writeOutFile(const uint8_t* buffer, const int len) const
 // This says so, and it does not change a byte of the output.
 //
 // ** IT IS NOT ALWAYS THE SOURCE. ** An earlier version of this warning said the rate came from the
-// source and not from muxing, and sent people off to re-encode. Measured on a pressed HD Blu-ray
+// source and not from muxing, and sent people off to re-encode. Measured on an HD Blu-ray structure
 // whose own packets never go above the limit, 846 ticks and 0 of 2,399,999 over: remuxing two
 // minutes of it from its own playlist asks for 92.5 Mbit/s, with 28.2 per cent over. The muxer
 // computes arrival times from its own model rather than preserving the pace the disc was authored
@@ -1448,8 +1448,8 @@ int64_t TSMuxer::pcrForMaxRate(const int64_t newPCR, const int64_t extraFrames, 
     {
         // Without --maxbitrate nothing holds the rate, and the muxer's own tables could come out as a burst: when
         // they are written right after a PCR, PAT, PMT, SIT and the next PCR packet share a span of a few
-        // microseconds, four packets 148 ticks apart, 274 Mbit/s, every few seconds on every Blu-ray. A pressed
-        // disc never goes below the read-rate floor even there. Such a short pass is now held at the floor the
+        // microseconds, four packets 148 ticks apart, 274 Mbit/s, every few seconds on every Blu-ray. The disc
+        // format allows nothing below the read-rate floor even there. Such a short pass is now held at the floor the
         // way --maxbitrate holds every pass, which moves its PCR later by at most a few hundred ticks of the
         // 27 MHz clock. A pass that carries the streams is left exactly as it was.
         if (!m_m2tsMode || !m_bluRayMode)

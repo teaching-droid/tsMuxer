@@ -84,7 +84,7 @@ void HEVCStreamReader::applyForcedLevel(HevcUnitWithProfile* unit, uint8_t* buff
 }
 
 // A source that writes mastering_display_colour_volume and content_light_level_info ONCE, at the
-// head of the stream, leaves a player with no HDR10 metadata at all after a seek. Every pressed disc
+// head of the stream, leaves a player with no HDR10 metadata at all after a seek. A UHD Blu-ray
 // repeats both at EVERY IRAP. This puts them back.
 //
 // Nothing is fabricated: the bytes are the stream's own, captured when they first went past. A
@@ -1941,7 +1941,7 @@ int HEVCStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
     }
 
     // A source without access unit delimiters is legal HEVC, where the delimiter is optional, but
-    // every pressed Blu-ray carries exactly one per picture in every video layer, and the H.264
+    // the Blu-ray format has exactly one per picture in every video layer, and the H.264
     // reader has always inserted them when a source lacked them (h264StreamReader.cpp, the
     // m_delimiterFound path). HEVC never did, so an elementary stream from a source that omits them
     // was authored to disc without any. This closes that gap.
@@ -1949,7 +1949,7 @@ int HEVCStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
     // pic_type must not over-claim: it declares the SET of slice types the picture may contain, so
     // announcing B for an all-I picture would be wrong. m_auMinSliceType carries the lowest
     // slice_type seen for this access unit, and the mapping is exactly 2 minus that value, giving
-    // the same 0x10, 0x30 and 0x50 payload bytes a pressed disc uses. If no slice was seen, 2 is
+    // the same 0x10, 0x30 and 0x50 payload bytes Blu-ray discs carry. If no slice was seen, 2 is
     // the safe answer because its set contains every type.
     if (!audFound)
     {

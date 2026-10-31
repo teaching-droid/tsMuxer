@@ -12,7 +12,7 @@
 
 namespace
 {
-// Everything below reads files off a pressed disc, so every field is treated as hostile: no read is
+// Everything below reads files off a disc tsMuxeR did not write, so every field is treated as hostile: no read is
 // made without checking it is inside the buffer first. A malformed disc must give an empty answer,
 // never a crash and never a wrong number.
 
