@@ -12,7 +12,12 @@ export MACOSX_DEPLOYMENT_TARGET=10.15
 
 FREETYPE_EXTRA_LDFLAGS=""
 
-if [ "${CMAKE_OSX_ARCHITECTURES:-}" = "x86_64" ]; then
+# Both architectures build the same pinned freetype from source. The arm64 leg took Homebrew's, which is
+# updated under the build: a later Homebrew freetype needs Brotli and an HVF renderer that the static link
+# did not name, and the arm64 package failed to link with no change on this side. TSMUXER_FREETYPE_FROM_BREW=1
+# keeps the Homebrew way for a local build.
+FT_ARCH="${CMAKE_OSX_ARCHITECTURES:-$(uname -m)}"
+if [ "${TSMUXER_FREETYPE_FROM_BREW:-}" != "1" ]; then
   # Homebrew will not install on Intel macOS at all any more. Its installer does not fail while
   # fetching a package: it refuses outright, printing
   #
@@ -42,7 +47,7 @@ if [ "${CMAKE_OSX_ARCHITECTURES:-}" = "x86_64" ]; then
   # E306 7470 7856 409F F194 8010 BE6C 3AAC 63AD 8E3F) is good on them. A changed or damaged
   # download stops the build here instead of being compiled into the package.
   FREETYPE_SHA256=36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f
-  DEPS="${PWD}/deps-x86_64"
+  DEPS="${PWD}/deps-${FT_ARCH}"
   mkdir -p "${DEPS}/src"
   pushd "${DEPS}/src"
   curl -fsSL -o freetype.tar.xz \
@@ -51,7 +56,7 @@ if [ "${CMAKE_OSX_ARCHITECTURES:-}" = "x86_64" ]; then
   tar xf freetype.tar.xz
   cmake -S "freetype-${FREETYPE_VERSION}" -B ft-build \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+    -DCMAKE_OSX_ARCHITECTURES="${FT_ARCH}" \
     -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET}" \
     -DCMAKE_INSTALL_PREFIX="${DEPS}" \
     -DBUILD_SHARED_LIBS=OFF \
@@ -67,12 +72,12 @@ if [ "${CMAKE_OSX_ARCHITECTURES:-}" = "x86_64" ]; then
   # A known answer, because the way this goes wrong is silent: CMake happily produces an arm64
   # library if the architecture flag does not reach it, and the only symptom is an undefined symbol
   # a hundred lines into the tsMuxeR link, which reads as a tsMuxeR fault.
-  if ! lipo -info "${DEPS}/lib/libfreetype.a" | grep -q 'x86_64'; then
-    echo "ERROR: the freetype built here is not x86_64:" >&2
+  if ! lipo -info "${DEPS}/lib/libfreetype.a" | grep -q "${FT_ARCH}"; then
+    echo "ERROR: the freetype built here is not ${FT_ARCH}:" >&2
     lipo -info "${DEPS}/lib/libfreetype.a" >&2
     exit 1
   fi
-  echo "freetype for x86_64: $(lipo -info "${DEPS}/lib/libfreetype.a")"
+  echo "freetype for ${FT_ARCH}: $(lipo -info "${DEPS}/lib/libfreetype.a")"
 
   BREW_PREFIX="${DEPS}"
 else
