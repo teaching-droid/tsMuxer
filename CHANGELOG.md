@@ -723,6 +723,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 ### Other
 
+* **A Linux AppImage,** tsMuxeR-3.0.0-x86_64.AppImage, with the window and the command line program in one file. It runs on most current distributions (glibc 2.35 or newer) and carries the information an update tool such as AppImageUpdate or Gear Lever needs to fetch a new release; an update downloads only the changed parts. `tsMuxeR-<version>-x86_64.AppImage tsMuxeR <arguments>` runs the command line program. (#29, thanks to @technician77 for the request)
+
 * **The Linux programs were built without compiler optimisation,** as the Linux build gave CMake no build type, so they ran slower than the Windows and macOS ones. A build without a type is now an optimised Release build, and a Blu-ray mux of an H.264 file took about half the time. The output is the same.
 
 * **A sound track of a transport stream or a Matroska file could be listed as video, and a video track as sound,** when a check for the other kind ran first and took the data for its own: MP2 sound in a Matroska file was listed as AV1 video. A track is now read first as the kind its file declares, and within that kind the data still decides. A track that really holds the other kind is still found, with a warning. A DVB stream declares AC-3, E-AC-3, DTS and AAC by a descriptor beside the stream type 0x06, and that now counts as a declaration too.
