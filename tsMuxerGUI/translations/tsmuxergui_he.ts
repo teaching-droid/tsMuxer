@@ -4503,6 +4503,14 @@ Build the ISO anyway?</source>
         <source>Folder with the disc&apos;s title and pictures</source>
         <translation>תיקייה עם כותרת ותמונות הדיסק</translation>
     </message>
+    <message>
+        <source>Keep the folder&apos;s own</source>
+        <translation>לשמור את אלה של התיקייה</translation>
+    </message>
+    <message>
+        <source>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL): kept as the folder has them, or taken from a folder of your own, with bdmt_eng.xml and the like and the pictures they name. Or no title and no pictures.</source>
+        <translation>כותרת הדיסק והתמונות שנגן כמו PS3 מציג (BDMV/META/DL): נשמרים כפי שהם בתיקייה, או נלקחים מתיקייה משלך, עם bdmt_eng.xml וקבצים דומים והתמונות שהם מציינים. או ללא כותרת וללא תמונות.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

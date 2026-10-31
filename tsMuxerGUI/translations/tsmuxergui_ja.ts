@@ -4503,6 +4503,14 @@ Build the ISO anyway?</source>
         <source>Folder with the disc&apos;s title and pictures</source>
         <translation>ディスクのタイトルと画像のフォルダー</translation>
     </message>
+    <message>
+        <source>Keep the folder&apos;s own</source>
+        <translation>フォルダーのものを保持</translation>
+    </message>
+    <message>
+        <source>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL): kept as the folder has them, or taken from a folder of your own, with bdmt_eng.xml and the like and the pictures they name. Or no title and no pictures.</source>
+        <translation>PS3 などのプレーヤーが表示するディスクのタイトルと画像 (BDMV/META/DL): フォルダーにあるものをそのまま保持するか、自分のフォルダーから bdmt_eng.xml などのファイルとそれらが指す画像を取ります。またはタイトルも画像もなし。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

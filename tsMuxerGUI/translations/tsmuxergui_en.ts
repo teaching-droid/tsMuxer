@@ -4359,6 +4359,14 @@ Build the ISO anyway?</source>
         <source>Folder with the disc&apos;s title and pictures</source>
         <translation>Folder with the disc&apos;s title and pictures</translation>
     </message>
+    <message>
+        <source>Keep the folder&apos;s own</source>
+        <translation>Keep the folder&apos;s own</translation>
+    </message>
+    <message>
+        <source>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL): kept as the folder has them, or taken from a folder of your own, with bdmt_eng.xml and the like and the pictures they name. Or no title and no pictures.</source>
+        <translation>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL): kept as the folder has them, or taken from a folder of your own, with bdmt_eng.xml and the like and the pictures they name. Or no title and no pictures.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

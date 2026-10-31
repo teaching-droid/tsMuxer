@@ -1257,6 +1257,7 @@ TsMuxerWindow::TsMuxerWindow()
             bdmvTab);
         info->setWordWrap(true);
         auto* folderEdit = new QLineEdit(bdmvTab);
+        folderEdit->setObjectName("isoSourceFolder");  // a name for UI Automation, not remembered
         auto* folderBtn = new QPushButton(tr("Browse..."), bdmvTab);
         // Icon-only refresh: re-reads the selected folder (size, status, fit) after its contents
         // changed on disk, since re-picking the same path fires no change signal.
@@ -1264,6 +1265,7 @@ TsMuxerWindow::TsMuxerWindow()
         folderRefreshBtn->setIcon(style()->standardIcon(QStyle::SP_BrowserReload));
         folderRefreshBtn->setFixedWidth(folderRefreshBtn->sizeHint().height() + 8);
         auto* isoEdit = new QLineEdit(bdmvTab);
+        isoEdit->setObjectName("isoOutputFile");  // a name for UI Automation, not remembered
         auto* isoBtn = new QPushButton(tr("Browse..."), bdmvTab);
         auto* folderStatusLabel = new QLabel(bdmvTab);
         folderStatusLabel->setWordWrap(true);
@@ -1407,6 +1409,37 @@ TsMuxerWindow::TsMuxerWindow()
         auto* discLabelLabel = new QLabel(tr("Disc label (optional):"), bdmvTab);
         auto* labelEdit = new QLineEdit(bdmvTab);
         labelEdit->setToolTip(wrapTip(tr("Volume label written into the ISO. Leave empty to keep the default.")));
+        // The disc's title and pictures (BDMV/META/DL, #30): the folder's own are kept, or a folder of one's own or
+        // none takes their place. Not remembered: like the label, it belongs to one image.
+        auto* metaLabel = new QLabel(tr("Disc title and pictures:"), bdmvTab);
+        auto* metaCombo = new QComboBox(bdmvTab);
+        metaCombo->setObjectName("isoMetaChoice");  // a name for UI Automation, not remembered
+        metaCombo->addItems({tr("Keep the folder's own"), tr("From a folder"), tr("No title and no pictures")});
+        metaCombo->setToolTip(wrapTip(
+            tr("The disc's title and the pictures a player such as the PS3 shows (BDMV/META/DL): kept as the folder "
+               "has them, or taken from a folder of your own, with bdmt_eng.xml and the like and the pictures "
+               "they name. Or no title and no pictures.")));
+        auto* metaEdit = new QLineEdit(bdmvTab);
+        metaEdit->setObjectName("isoMetaFolder");
+        metaEdit->setPlaceholderText(tr("Folder with bdmt_eng.xml and its pictures"));
+        auto* metaBtn = new QPushButton(tr("Browse..."), bdmvTab);
+        const auto updateMetaRow = [metaCombo, metaEdit, metaBtn]
+        {
+            metaEdit->setVisible(metaCombo->currentIndex() == 1);
+            metaBtn->setVisible(metaCombo->currentIndex() == 1);
+        };
+        connect(metaCombo, &QComboBox::currentIndexChanged, this, updateMetaRow);
+        updateMetaRow();
+        connect(metaBtn, &QPushButton::clicked, this,
+                [this, metaEdit]
+                {
+                    const QString current = metaEdit->text().trimmed();
+                    const QString dir =
+                        QFileDialog::getExistingDirectory(this, tr("Folder with the disc's title and pictures"),
+                                                          current.isEmpty() ? lastInputDir : current);
+                    if (!dir.isEmpty())
+                        metaEdit->setText(QDir::toNativeSeparators(dir));
+                });
         auto* helpBtn = new QPushButton(tr("Where do I find this?"), bdmvTab);
         auto* breaksLabel = new QLabel(bdmvTab);
         breaksLabel->setWordWrap(true);
@@ -1753,6 +1786,10 @@ TsMuxerWindow::TsMuxerWindow()
         g->addWidget(fitLabel, r++, 0, 1, 3);
         g->addWidget(discLabelLabel, r, 0);
         g->addWidget(labelEdit, r++, 1, 1, 2);
+        g->addWidget(metaLabel, r, 0);
+        g->addWidget(metaCombo, r++, 1, 1, 2);
+        g->addWidget(metaEdit, r, 1);
+        g->addWidget(metaBtn, r++, 2);
         g->addWidget(keepExtrasCheck, r++, 0, 1, 3);
         g->addWidget(innerOnlyCheck, r++, 0, 1, 3);
         g->addWidget(noGuardCheck, r++, 0, 1, 3);
@@ -1899,8 +1936,8 @@ TsMuxerWindow::TsMuxerWindow()
             [this, bdmvTab, info, folderLabel, outputLabel, guardLabel, discTypeLabel, freeSectorsLabel, folderBtn,
              isoBtn, helpBtn, buildBtn, discTypeCombo, freeSectorsEdit, manualCheck, orderCheck, keepExtrasCheck,
              innerOnlyCheck, singleCopy3dCheck, discLabelLabel, labelEdit, guardSpin, refresh, updateGuard, beforeCheck,
-             guardBeforeLabel, guardBeforeSpin, guardBeforeHint, fitLabel, updateFit, updateFolderStatus,
-             noGuardCheck]()
+             guardBeforeLabel, guardBeforeSpin, guardBeforeHint, fitLabel, updateFit, updateFolderStatus, noGuardCheck,
+             metaLabel, metaCombo, metaEdit, metaBtn]()
             {
                 ui->tabWidget->setTabText(ui->tabWidget->indexOf(bdmvTab), tr("BDMV folder -> ISO"));
                 info->setText(
@@ -1968,6 +2005,16 @@ TsMuxerWindow::TsMuxerWindow()
                        "Unticked, the folder is copied as it is, both views and any .ssif files, and the disc "
                        "stays 3D.")));
                 discLabelLabel->setText(tr("Disc label (optional):"));
+                metaLabel->setText(tr("Disc title and pictures:"));
+                metaCombo->setItemText(0, tr("Keep the folder's own"));
+                metaCombo->setItemText(1, tr("From a folder"));
+                metaCombo->setItemText(2, tr("No title and no pictures"));
+                metaCombo->setToolTip(wrapTip(
+                    tr("The disc's title and the pictures a player such as the PS3 shows (BDMV/META/DL): kept as the "
+                       "folder has them, or taken from a folder of your own, with bdmt_eng.xml and the like and the "
+                       "pictures they name. Or no title and no pictures.")));
+                metaEdit->setPlaceholderText(tr("Folder with bdmt_eng.xml and its pictures"));
+                metaBtn->setText(tr("Browse..."));
                 labelEdit->setToolTip(
                     wrapTip(tr("Volume label written into the ISO. Leave empty to keep the default.")));
                 manualCheck->setText(tr("Enter Free Sectors manually (advanced)"));
@@ -2063,7 +2110,7 @@ TsMuxerWindow::TsMuxerWindow()
             buildBtn, &QPushButton::clicked, this,
             [this, folderEdit, isoEdit, guardSpin, discTypeCombo, freeSectorsEdit, breaksList, buildBtn, beforeCheck,
              guardBeforeSpin, orderCheck, keepExtrasCheck, innerOnlyCheck, singleCopy3dCheck, labelEdit,
-             readFreeSectors, noGuardCheck]
+             readFreeSectors, noGuardCheck, metaCombo, metaEdit]
             {
                 const QString folder = folderEdit->text().trimmed();
                 const QString iso = isoEdit->text().trimmed();
@@ -2139,6 +2186,11 @@ TsMuxerWindow::TsMuxerWindow()
                     args << "--3d-single-copy";
                 if (const QString lbl = labelEdit->text().trimmed(); !lbl.isEmpty())
                     args << ("--label=" + lbl);
+                if (const QString metaDir = metaEdit->text().trimmed();
+                    metaCombo->currentIndex() == 1 && !metaDir.isEmpty())
+                    args << ("--meta-dir=" + metaDir);
+                else if (metaCombo->currentIndex() == 2)
+                    args << "--meta-dir=none";
                 args << folder << iso;
                 noteRunOutput(iso, false);
                 tsMuxerExecute(args);

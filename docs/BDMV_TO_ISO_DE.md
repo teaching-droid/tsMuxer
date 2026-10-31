@@ -113,9 +113,10 @@ Dasselbe Kontrollkästchen gibt es im Reiter Input, in der Dual-Layer-Gruppe neb
 
 ## Datenträgerbezeichnung und einbezogene Dateien
 
-Unten im Reiter sitzen zwei weitere Optionen:
+Unten im Reiter sitzen vier weitere Optionen:
 
 * `Datenträgerbezeichnung (optional)`: die Volume-Bezeichnung, die in die ISO geschrieben wird. Bleibt das Feld leer, lautet sie `Blu-Ray`, wie beim Muxen in ein ISO-Abbild.
+* `Titel und Bilder der Disc`: der Titel der Disc und die Bilder, die ein Player wie die PS3 zeigt, abgelegt in `BDMV/META/DL`. `Die des Ordners behalten` übernimmt sie so, wie der Ordner sie hat. `Aus einem Ordner` nimmt sie stattdessen aus einem eigenen Ordner: `bdmt_eng.xml` und weitere, mit den Bildern, die sie nennen. `Kein Titel und keine Bilder` lässt sie weg.
 * `Alle Dateien aus dem Ordner einschließen (nicht nur BDMV)`: Standardmäßig enthält das Image die Disc-Struktur-Ordner (`BDMV`, `CERTIFICATE`, `AACS`). Mit diesem Haken kommen auch alle übrigen Dateien und Ordner neben `BDMV` hinzu, etwa Readme-Dateien oder Cover-Bilder.
 * `3D-Disc: Video einmal speichern, nicht zweimal`: Eine 3D-Disc hält ihr Video einmal unter drei Namen; die `.ssif` und die beiden `.m2ts` sind dieselben Sektoren, dreifach betrachtet. Werden alle drei über ihren Namen kopiert, landet es zweimal im Abbild und dieses wird etwa doppelt so groß, sodass eine 3D-Disc von einer BD50 nicht mehr auf eine BD50 passt. Mit diesem Haken wird es einmal gespeichert, so wie die Quelldisc es hält. Bei einer 2D-Disc ohne Wirkung.
 

@@ -4504,6 +4504,14 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>Folder with the disc&apos;s title and pictures</source>
         <translation>Carpeta con el título y las imágenes del disco</translation>
     </message>
+    <message>
+        <source>Keep the folder&apos;s own</source>
+        <translation>Conservar los de la carpeta</translation>
+    </message>
+    <message>
+        <source>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL): kept as the folder has them, or taken from a folder of your own, with bdmt_eng.xml and the like and the pictures they name. Or no title and no pictures.</source>
+        <translation>El título del disco y las imágenes que muestra un reproductor como la PS3 (BDMV/META/DL): se conservan tal como los tiene la carpeta, o se toman de una carpeta propia, con bdmt_eng.xml y similares y las imágenes que nombran. O sin título ni imágenes.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -4503,6 +4503,14 @@ Créer l'ISO malgré tout ?</translation>
         <source>Folder with the disc&apos;s title and pictures</source>
         <translation>Dossier du titre et des images du disque</translation>
     </message>
+    <message>
+        <source>Keep the folder&apos;s own</source>
+        <translation>Garder ceux du dossier</translation>
+    </message>
+    <message>
+        <source>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL): kept as the folder has them, or taken from a folder of your own, with bdmt_eng.xml and the like and the pictures they name. Or no title and no pictures.</source>
+        <translation>Le titre du disque et les images qu&apos;affiche un lecteur comme la PS3 (BDMV/META/DL) : gardés tels que le dossier les a, ou pris dans un dossier à vous, avec bdmt_eng.xml et les fichiers semblables et les images qu&apos;ils désignent. Ou ni titre ni images.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
