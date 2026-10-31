@@ -90,7 +90,7 @@ static int64_t internalToRoundedMs(const int64_t value)
 int ebml_id_size(uint32_t id)
 {
     if (id < 0x80)
-        return 0;  // invalid – IDs always have the VINT marker bit
+        return 0;  // invalid: IDs always have the VINT marker bit
     if (id <= 0xFF)
         return 1;
     if (id <= 0xFFFF)
@@ -1014,7 +1014,7 @@ void MatroskaMuxer::buildCodecPrivate(MkvTrackInfo& track)
             track.codecPrivate = copy->codecPrivate();
         break;
     default:
-        // AC3, DTS, LPCM, SRT, PGS, MPEG-2, VC-1 etc. – no codec private needed in MKV
+        // AC3, DTS, LPCM, SRT, PGS, MPEG-2, VC-1 etc.: no codec private needed in MKV
         // (or it's handled differently)
         break;
     }
@@ -1263,7 +1263,7 @@ void MatroskaMuxer::writeSegmentInfo()
     m_infoBodyFilePos = m_file.pos();
     m_infoBody.assign(buf, buf + pos);
 
-    // MATROSKA_ID_DURATION (0x4489) = 2-byte ID + 1-byte size → float64 at offset +3
+    // MATROSKA_ID_DURATION (0x4489) = 2-byte ID + 1-byte size -> float64 at offset +3
     m_durationValueFilePos = m_file.pos() + durationElementStart + 3;
 
     writeToFile(buf, pos);
@@ -4162,9 +4162,9 @@ bool MatroskaMuxer::muxPacket(AVPacket& avPacket)
     // scenes that need it.
     //
     // Waiting for one was measured on a disc whose third subtitle track has its first packet
-    // three quarters of the way into a long title: the muxer held 42 GB of packets in memory on a
-    // 64 GB machine, then spent 178 seconds writing them out and 127 more freeing them, with the
-    // progress figure stopped at 75.0 percent the whole time because nothing was being read.
+    // three quarters of the way into a long title: the muxer held most of the machine's memory in
+    // packets, then spent minutes writing them out and freeing them, with the progress figure
+    // stopped at 75.0 percent the whole time because nothing was being read.
     if (!m_headerWritten)
     {
         if (it->second.trackType != MKV_TRACK_TYPE_SUBTITLE)

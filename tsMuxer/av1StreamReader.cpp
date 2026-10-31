@@ -567,7 +567,7 @@ CheckStreamRez AV1StreamReader::checkStream(uint8_t* buffer, const int len)
         m_seqHdrFound = true;
         m_spsPpsFound = true;
         setHdrWcgIdc();  // getTSDescriptor writes it from here, before the first frame is read
-        // Lightweight FPS extraction for probing only — the full
+        // Lightweight FPS extraction for probing only: the full
         // updateFPS() (with logging and 25fps fallback) runs later
         // during actual muxing in intDecodeNAL().
         {
@@ -717,7 +717,7 @@ int AV1StreamReader::intDecodeNAL(uint8_t* buff)
         case Av1ObuType::TEMPORAL_DELIMITER:
             // TD marks the start of a new temporal unit.  We split only at TD
             // boundaries (not at FRAME OBU boundaries) to preserve the source's
-            // frame bundling — some MKV blocks contain multiple FRAME OBUs that
+            // frame bundling: some MKV blocks contain multiple FRAME OBUs that
             // must stay together as one temporal unit.
             m_tdSeen = true;
             if (frameFound)

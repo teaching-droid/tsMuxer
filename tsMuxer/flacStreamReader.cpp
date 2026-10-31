@@ -527,7 +527,7 @@ int FLACStreamReader::testFrameLength(uint8_t* buff, uint8_t* end, const FrameFi
 }
 
 // ---------------------------------------------------------------------------
-// Frame decoding — determine frame length by finding the next sync code
+// Frame decoding: determine frame length by finding the next sync code
 // ---------------------------------------------------------------------------
 
 int FLACStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, int& skipBeforeBytes)
@@ -675,11 +675,11 @@ int FLACStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
     // max block size (16 bits)
     *p++ = static_cast<uint8_t>((blkSize >> 8) & 0xFF);
     *p++ = static_cast<uint8_t>(blkSize & 0xFF);
-    // min frame size (24 bits) — unknown, set to 0
+    // min frame size (24 bits): unknown, set to 0
     *p++ = 0;
     *p++ = 0;
     *p++ = 0;
-    // max frame size (24 bits) — unknown, set to 0
+    // max frame size (24 bits): unknown, set to 0
     *p++ = 0;
     *p++ = 0;
     *p++ = 0;

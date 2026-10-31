@@ -1538,7 +1538,7 @@ StreamDiscoveryData SimplePacketizerReader::probeStream(uint8_t* buffer, const i
     StreamDiscoveryData data;
     const CheckStreamRez rez = checkStream(buffer, len, containerType, containerDataType, containerStreamIndex);
     if (!rez.codecInfo.codecID)
-        return data;  // detection failed – return empty data
+        return data;  // detection failed: return empty data
 
     data.discovered = true;
     data.codecName = rez.codecInfo.programName;

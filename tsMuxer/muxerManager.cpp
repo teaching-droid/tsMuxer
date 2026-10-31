@@ -2021,10 +2021,10 @@ int64_t MuxerManager::paddedOutputSize()
 
 // ** THE FIT-TO-DISC ESTIMATE COUNTED THE WHOLE SOURCE FILES. **
 //
-// A cut of a minute out of a clip of 78.5 GB was estimated at 82 GB and refused for a BD-25 before the mux, and a cut
-// of 28 GB lost the layer break guard as "not fitting" a BD-50. The cut takes its share of the stated length, a quarter
-// more and a point, as the rate of a part can run above the average of the whole; without a stated length the whole
-// sources are counted, as before.
+// A cut of a minute out of a clip larger than a BD-25 was estimated at more than the whole clip and refused for a
+// BD-25 before the mux, and a cut that fits a BD-50 lost the layer break guard as "not fitting" it. The cut takes its
+// share of the stated length, a quarter more and a point, as the rate of a part can run above the average of the whole;
+// without a stated length the whole sources are counted, as before.
 int64_t MuxerManager::muxedSourceSize()
 {
     const int64_t size = m_metaDemuxer.selectedSourceSize();

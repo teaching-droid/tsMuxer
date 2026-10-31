@@ -1830,7 +1830,7 @@ fixed, and it had been happening since 2.18.0.
 
 * **Opening a Matroska file could take minutes.** Every mkv that was opened had its whole top
 level walked, cluster by cluster, to look for attachments. On a long file that is thousands of
-seeks before the track list appears, and a 36.6 GB file holds 7,293 clusters. On a local SSD it
+seeks before the track list appears, as a file of tens of gigabytes holds thousands of clusters. On a local SSD it
 takes under a second, which is why it went unnoticed. On an external or network drive it is
 minutes, and it looks like a program that has hung. The file's own index is now read instead,
 which answers the same question in 6 element reads rather than 7,302. Files that carry no index
@@ -2016,14 +2016,9 @@ with      188,088,320 bytes, every chunk present ONCE, dependent view first
 All 18 files read back byte for byte identical to the source, checked twice with two independent
 readers: 7-Zip, and the operating system's own UDF driver, which is what a player uses.
 
-Then on a full-size 3D structure, 852 files and 40.8 GiB, its main title interleaved in 1,774
-chunk pairs:
-
-```
-image        43,796,791,296 bytes, against 43,800,002,560 for the source it was built from
-a plain copy would have written 87.2 GB
-files        852 of 852 byte for byte identical, 0 different, 0 missing, 0 added
-```
+Then on a full-size 3D structure, its main title interleaved in many chunk pairs: every file came
+back byte for byte identical, none different, missing or added, and the image was the size of the
+source, about half of what a plain copy would have written.
 
 The source stores its video once, and the rebuilt image lands 3.21 MB from the same size, which
 is the difference in UDF overhead and nothing else. `0 added` says the source's own `BACKUP` came
@@ -2110,7 +2105,7 @@ rebuilt at all. Reproduced on real chunk tables, which have 125 chunks over 16 M
 title alone:
 
 ```
-Can't interleave BDMV/STREAM/SSIF/00019.ssif: 5 pieces against 4
+Can't interleave BDMV/STREAM/SSIF/00011.ssif: 5 pieces against 4
 ```
 
 The pad is now placed at the boundary between one pair of chunks and the next, where both views are
@@ -2293,8 +2288,8 @@ row keeps its tick: it is still in the output, just inside the TrueHD track rath
 
 **The progress figure could never reach the end when a track was merged in.** Those bytes reach the
 reader by a different path and were counted nowhere, so the bar stopped short by exactly the share
-of the file that stream takes up. On a 60 GB file with a 339 MiB AC-3 track, 0.589 percent of it,
-the bar stopped at 99.4 and stayed there while the mux finished normally. Nothing written to disk
+of the file that stream takes up. On a large file with a merged AC-3 track, the bar stopped just
+short of the end and stayed there while the mux finished normally. Nothing written to disk
 changes: the same job through 2.18.0 and through this gives byte identical output.
 
 **The enhancement layer of a Dolby Vision file was listed at the base layer's resolution.** A
@@ -2330,11 +2325,11 @@ even their codec id are not known until the first frame.
 The same title, the same meta file, before and after:
 
 ```
-                    before          after
-wall time           9 min 11 s      3 min 49 s
-longest pause       305.4 s         1.0 s
-peak memory         42.95 GB        0.054 GB
-output              60,290,004,931 bytes, both
+                    before                      after
+wall time           more than twice as long
+longest pause       about five minutes          about a second
+peak memory         most of the machine's       well under a gigabyte
+output              the same, byte for byte
 ```
 
 The output is unchanged. Five track combinations were muxed from the same source before and after:
@@ -2916,7 +2911,7 @@ affected. It now updates when the code moves.
 ## tsMuxeR 2.15.0
 
 - Fixed the mastering-display luminance written into a UHD Blu-ray playlist having its maximum and minimum swapped. A disc mastered at 4000 nits was described to the player as 610 nits with a black level of 2.3040 instead of 0.0050. This affects every UHD Blu-ray tsMuxeR has authored from an HDR10 source, not just recent versions. A disc authored with this build now carries the same value as a reference disc. The picture primaries, white point, MaxCLL and MaxFALL were always correct.
-- The delay of a demuxed audio track is now recorded in its file name, using the long established DELAY convention: "00294.track_4353 DELAY -17ms.ac3". Muxing a file named that way applies the delay again. A raw elementary stream has nowhere to keep a timestamp, so a track that was offset against the video used to come back at zero after a demux and remux, which is a real loss of sync on discs that use one. An explicit timeshift= on the meta line still wins, and the demuxed audio itself is unchanged.
+- The delay of a demuxed audio track is now recorded in its file name, using the long established DELAY convention: "00011.track_4352 DELAY -20ms.ac3". Muxing a file named that way applies the delay again. A raw elementary stream has nowhere to keep a timestamp, so a track that was offset against the video used to come back at zero after a demux and remux, which is a real loss of sync on discs that use one. An explicit timeshift= on the meta line still wins, and the demuxed audio itself is unchanged.
 - Fixed a stream parsing fault that could make a whole H.264 track disappear on the Linux and macOS builds. Two values were read from the bitstream in an order the compiler was free to choose, and reversing them inverted a check that rejects the stream. The Windows builds were never affected.
 - down-to-dts on a track with no DTS core, which is every DTS Express stream, wrote an empty file and reported success. In a mux with other tracks it left an entry in the stream table with nothing behind it. It now reports that there is no core to keep. DTS-HD Master Audio and High Resolution tracks are unaffected.
 - down-to-ac3 on an A_MLP track was accepted and quietly did nothing. A standalone TrueHD stream has no AC-3 core to keep and tsMuxeR does not encode audio, so it now says so and names the two things that do work, while still muxing the track as before.

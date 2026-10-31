@@ -20,12 +20,11 @@
 //   where the chunks divide   the clip info file, extension data id 2/4, a list of start points
 //   which two clips pair up   the playlist, extension data id 2/2, a sub path of type 8
 //
-// Measured on two full-size 3D disc structures: the pairing rule held 36 times out of 36,
-// every chunk size was a multiple of 6144, and a 43 GB .ssif was rebuilt byte for byte from these
-// tables alone.
+// Measured on full-size 3D disc structures: the pairing rule held every time, every chunk size was a
+// multiple of 6144, and a whole .ssif was rebuilt byte for byte from these tables alone.
 
 // One interleaved group: an .ssif and the two clips it is made of. Paths are disc relative with
-// forward slashes, e.g. "BDMV/STREAM/00800.m2ts".
+// forward slashes, e.g. "BDMV/STREAM/00011.m2ts".
 struct BdSsifGroup
 {
     std::string ssifRel;
@@ -51,7 +50,7 @@ struct BdSsifGroup
 bool bdReadClipChunkSizes(const std::string& clpiPath, std::vector<int64_t>& sizes);
 
 // The base and dependent clip ids of every play item of one playlist that has a dependent view, in play item order,
-// e.g. {"00800", "01064"}. False, with none, when the playlist describes no stereoscopic sub path, which is every 2D
+// e.g. {"00011", "00012"}. False, with none, when the playlist describes no stereoscopic sub path, which is every 2D
 // playlist. A playlist of several clips (a 3D mux split into parts) has a pair for each.
 bool bdReadPlaylistStereoPairs(const std::string& mplsPath, std::vector<std::pair<std::string, std::string>>& pairs);
 

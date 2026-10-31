@@ -234,7 +234,7 @@ std::string toDiscRel(const std::string& root, const std::string& full)
         if (ch == '\\')
             ch = '/';
     // The walk can hand back a path with a doubled separator where the root already ended in
-    // one. Left in, it makes "BDMV/STREAM//00800.m2ts", which matches nothing later.
+    // one. Left in, it makes "BDMV/STREAM//00011.m2ts", which matches nothing later.
     for (size_t i = 1; i < rel.size();)
         if (rel[i] == '/' && rel[i - 1] == '/')
             rel.erase(i, 1);

@@ -33,7 +33,7 @@ int ebml_write_size_fixed(uint8_t* dst, uint64_t size, int bytes);
 // "Unknown" size encoded as 0xFF (1 byte) or all-ones for the given width.
 int ebml_write_unknown_size(uint8_t* dst, int bytes);
 
-// Write helpers for typed EBML elements – each writes <ID><size><payload>.
+// Write helpers for typed EBML elements: each writes <ID><size><payload>.
 // Returns total bytes written.
 int ebml_write_uint(uint8_t* dst, uint32_t id, uint64_t value);
 int ebml_write_sint(uint8_t* dst, uint32_t id, int64_t value);
@@ -613,8 +613,8 @@ class MatroskaMuxer final : public AbstractMuxer
     bool muxPacketInternal(AVPacket& avPacket);
 
     // Convert frame data from internal start-code format to MKV format.
-    // For AV1: start-code OBUs → low-overhead OBUs (obu_has_size_field + LEB128)
-    // For H.264/HEVC/VVC: Annex B start codes → 4-byte length-prefixed NALUs
+    // For AV1: start-code OBUs -> low-overhead OBUs (obu_has_size_field + LEB128)
+    // For H.264/HEVC/VVC: Annex B start codes -> 4-byte length-prefixed NALUs
     // Returns empty vector if no conversion needed (data is passed through as-is).
     static std::vector<uint8_t> convertAV1ToLowOverhead(const uint8_t* data, int size);
     // Not static: it records how the source framed each NAL type as it passes, which is the only

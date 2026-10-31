@@ -214,7 +214,7 @@ void SingleFileMuxer::intAddStream(const std::string& streamName, const std::str
     // A raw elementary stream cannot carry a timestamp, so a track that was offset against
     // the video in its container comes out of a demux with that offset lost, and muxing it
     // back puts it at zero. Record the offset in the file name using the convention eac3to
-    // established, e.g. "00294.track_4353 DELAY -17ms.ac3", so the round trip stays in sync
+    // established, e.g. "00011.track_4352 DELAY -20ms.ac3", so the round trip stays in sync
     // and other tools that already speak this convention can read it.
     // Any stale token in the source name is stripped first, or a file that has been through
     // the loop once accumulates one token per generation.

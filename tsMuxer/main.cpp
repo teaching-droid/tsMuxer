@@ -4427,19 +4427,6 @@ int main(int argc, char** argv)
     int firstM2tsOffset = 0;
     int blankNum = 1900;
     bool insertBlankPL = false;
-    // createBluRayDirs("c:/workshop/");
-
-    // MPLSParser parser;
-    // parser.parse("d:/hdtv/SHERLOCK_HOLMES/BDMV/PLAYLIST/00100.mpls");
-
-    // CLPIParser parser;
-    // parser.parse("h:/BDMV/CLIPINF/00000.clpi");
-    // parser.parse("d:/workshop/test_orig_disk2/BDMV/CLIPINF/00003.clpi");
-
-    // uint8_t moBuffer[1024];
-    // MovieObject mo;
-    // mo.parse("h:/BDMV/MovieObject.bdmv");
-    // int moLen = mo.compose(moBuffer, sizeof(moBuffer));
     // file.write(moBuffer, moLen);
 
     try

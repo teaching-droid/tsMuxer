@@ -158,7 +158,7 @@ int OpusStreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hd
         }
         else if (mappingFamily == 1 && m_channels <= 8)
         {
-            // Standard Vorbis mapping — use channel count directly
+            // Standard Vorbis mapping: use channel count directly
             channelConfig = m_channels;
         }
     }
@@ -235,7 +235,7 @@ void OpusStreamReader::applyDiscoveryData(const StreamDiscoveryData& data)
 }
 
 // ---------------------------------------------------------------------------
-// Frame detection — find length-prefixed Opus packets
+// Frame detection: find length-prefixed Opus packets
 // ---------------------------------------------------------------------------
 
 uint8_t* OpusStreamReader::findFrame(uint8_t* buff, uint8_t* end)
@@ -303,7 +303,7 @@ int OpusStreamReader::parseFrameSamples(const uint8_t* opusData, const int size)
     case 2:
         return samplesPerFrame * 2;  // 2 frames
     case 3:
-        // Arbitrary number of frames — count is in the second byte
+        // Arbitrary number of frames: count is in the second byte
         if (size < 2)
             return samplesPerFrame;  // fallback
         return samplesPerFrame * (opusData[1] & 0x3F);
@@ -526,7 +526,7 @@ int OpusStreamReader::writeOggPageHeader(uint8_t* dst, uint8_t* dstEnd, const in
 
     // Note: CRC cannot be computed here because the payload hasn't been
     // written yet.  We store the header size so the caller can patch it later.
-    // Actually — the CRC needs to be correct for valid OGG.  Since we know
+    // Actually: the CRC needs to be correct for valid OGG.  Since we know
     // the payload (it's in the current AVPacket), compute over both parts.
     // We leave the CRC as 0 for now and patch it in writeAdditionData()
     // where we have access to both the header and the payload.

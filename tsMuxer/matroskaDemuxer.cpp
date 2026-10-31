@@ -2973,7 +2973,7 @@ int64_t MatroskaDemuxer::nextBlockAt(const int64_t trackNumber, const int64_t af
 // This runs on every Matroska file that is opened, so what it costs is what every file costs
 // before its track list appears. It used to walk the top level from front to back, stepping over
 // each cluster by its declared size. That is correct, and on a long file it is thousands of seeks:
-// a 36.6 GB file here holds 7,293 clusters, so about 29,000 seeks and reads to answer a question
+// a file of tens of gigabytes holds thousands of clusters, so tens of thousands of seeks and reads to answer a question
 // the format already answers. On a local SSD that is under a second. On an external or network
 // drive it is minutes, and it looks like the program has hung.
 //

@@ -13,7 +13,7 @@
 #include "mlpStreamReader.h"
 
 // Interleaves a standalone TrueHD (A_MLP) track with a separate AC-3 track from the
-// same MKV for Blu-ray–style TrueHD + core muxing (merge-ac3-track meta option).
+// same MKV for Blu-ray style TrueHD + core muxing (merge-ac3-track meta option).
 
 class TrueHDAC3MergeReader final : public MLPStreamReader
 {
