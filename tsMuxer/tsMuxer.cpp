@@ -898,9 +898,9 @@ void TSMuxer::reportReadRate() const
         << " Mbit/s. It will play from a hard disk, where the rate does not matter, and may stutter or refuse "
            "to start on a standalone player. Add --maxbitrate="
         << doubleToStr(limit / 1e3, 0)
-        << " to hold it at the limit: the muxer then paces the disc to that rate, which is what a pressed "
-           "disc does. If the video's own peak is already above the limit the muxer cannot invent room for "
-           "it, and only a re-encode with the peak bitrate capped will help.";
+        << " to hold it at the limit: the muxer then spreads the data so that no second asks for more than that "
+           "rate, as the disc format requires. If the video's own peak is already above the limit the muxer "
+           "cannot invent room for it, and only a re-encode with the peak bitrate capped will help.";
     LTRACE(LT_WARN, 2, msg.str());
 }
 

@@ -1447,13 +1447,13 @@ All parameters in this group start with two dashes:
                       newer, so on Windows 7 this option may not work; that is a
                       limit of the library build, not of tsMuxeR.
 )help"
-                            R"help(--start-time          Timestamp of the first video frame. May be defined as 45Khz
+                            R"help(--start-time          Timestamp of the first video frame. May be defined as 45 kHz
                       clock (just a number) or as time in hh:mm:ss.zzz format.
                       If not set, muxing starts at 600 s (27000000 ticks). For every
                       output except plain *.ts, values below 524280 ticks (11.65 s)
                       are raised to 524280: below that point Blu-ray players cannot
-                      navigate back to the start of the disc (their 32-bit 45 Khz
-                      registers underflow), and commercial discs never start lower.
+                      navigate back to the start of the disc (their 32-bit 45 kHz
+                      registers underflow).
 --mplsOffset          The number of the first MPLS file.  Used for BD disc mode.
 --m2tsOffset          The number of the first M2TS file.  Used for BD disc mode.
 --insertBlankPL       Add an additional short playlist. Used for cropped video
