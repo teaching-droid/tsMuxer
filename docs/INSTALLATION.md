@@ -2,18 +2,27 @@
 
 The following executables are created to be portable, so you can just save and extract the compressed package for your platform. 
 
-Builds are produced by GitHub Actions. Download them from the newest run's artifacts on the
-[Actions](https://github.com/teaching-droid/tsMuxer/actions) tab, or, for tagged versions, from the
-[releases](https://github.com/teaching-droid/tsMuxer/releases) page.
+Download a release from the [releases](https://github.com/teaching-droid/tsMuxer/releases) page.
+Each package has a `.sha256` file beside it, to check the download with. Builds between releases are
+on the [Actions](https://github.com/teaching-droid/tsMuxer/actions) tab, as the artifacts of the
+newest run of each build.
+
+| System | Package |
+|--------|---------|
+| Windows, 64-bit | `tsMuxeR-<version>-windows-x64.zip` |
+| Windows, 32-bit | `tsMuxeR-<version>-windows-x86.zip` |
+| Linux, any current distribution | `tsMuxeR-<version>-x86_64.AppImage` |
+| Linux, with Qt 6.7 or newer installed | `tsMuxeR-<version>-linux-x64.zip` |
+| macOS, Apple silicon | `tsMuxeR-<version>-macos-arm64.zip` |
+| macOS, Intel | `tsMuxeR-<version>-macos-x86_64.zip` |
 
 ## Windows
 
 The ZIP file for Windows can just be unzipped and the executables can be used straight away, there
 are no dependencies. The Windows binaries are built with Qt 6.8 and the
 [qt6windows7](https://github.com/crystalidea/qt6windows7) patches, so the standard builds run on
-Windows 7 and newer:
-- `tsMuxer-w64*.zip` - 64-bit
-- `tsMuxer-w32*.zip` - 32-bit
+Windows 7 and newer. libass, which draws ASS and SSA subtitles with their styles, is in the package
+too.
 
 ### If your antivirus flags it
 
@@ -41,11 +50,38 @@ project.
 
 ## Linux
 
-The ZIP file for Linux can just be unzipped and the executables can be used straight away - there are no dependencies.
+### AppImage
+
+The AppImage holds the window and the command line program in one file, with the Qt libraries the
+window needs. It runs on most current distributions (glibc 2.35 or newer). Make it executable and
+start it:
+```
+chmod +x tsMuxeR-<version>-x86_64.AppImage
+./tsMuxeR-<version>-x86_64.AppImage
+```
+`./tsMuxeR-<version>-x86_64.AppImage tsMuxeR <arguments>` runs the command line program. An
+AppImage needs FUSE to start; where it is missing, as in a container,
+`--appimage-extract-and-run` before the other arguments runs it without. An update tool such as
+AppImageUpdate or Gear Lever can fetch the next release, and an update downloads only the changed
+parts.
+
+### ZIP
+
+The ZIP file holds the two programs on their own (glibc 2.34 or newer):
+- `tsMuxeR`, the command line program, needs FreeType and zlib, which every desktop has.
+- `tsMuxerGUI`, the window, needs the Qt 6.7 or newer libraries of the system (Qt Widgets and
+  Qt Multimedia). Many distributions have an older Qt, such as Ubuntu 24.04 and Debian 12 (Qt 6.4),
+  and there the window does not start (`version 'Qt_6.7' not found`): take the AppImage instead.
+
+### Drawing ASS and SSA subtitles
+
+On Linux, ASS and SSA subtitles are drawn with the libass of the system, with both packages. Install
+it from the distribution (`libass9` on Debian and Ubuntu, `libass` on Fedora and Arch). Without it they are drawn as plain text, without their styles, and a warning says so.
 
 ## MacOS
 
-The ZIP file for MacOS can just be unzipped, as the executables should be relocatable. 
+The ZIP file for MacOS can just be unzipped. The window, `tsMuxerGUI.app`, holds the Qt frameworks
+it needs, and `tsMuxeR` is the command line program; nothing else needs installing.
 
 ### The first time you open it
 
@@ -57,12 +93,10 @@ If it says the app is **damaged** rather than unverified, the download is from 2
 Every arm64 build before 2.18.10 was packaged without a signature and with the symbolic links in
 its frameworks flattened, which macOS rejects outright.
 
-### Missing dependencies
+### Drawing ASS and SSA subtitles
 
-If you receive missing dependency errors you may need to install a couple of dependencies, using
-the commands below in the Terminal:
+ASS and SSA subtitles are drawn with libass from [Homebrew](https://brew.sh), when it is installed:
 ```
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-brew install freetype
-brew install zlib
+brew install libass
 ```
+Without it they are drawn as plain text, without their styles, and a warning says so.
