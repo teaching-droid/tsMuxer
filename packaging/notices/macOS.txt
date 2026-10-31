@@ -1,0 +1,57 @@
+THIRD-PARTY NOTICES (macOS package)
+
+This package includes third-party software. The notices below are provided to
+comply with the licenses of that software. tsMuxeR itself is under the Apache
+License 2.0, in LICENSE. Full license texts are in the licenses/ folder.
+
+================================================================================
+Qt 6.7  (used by the graphical interface, tsMuxerGUI.app)
+================================================================================
+
+The graphical interface uses the Qt framework version 6.7, licensed under the
+GNU Lesser General Public License version 3 (LGPLv3). The full LGPLv3 text, and
+the GNU General Public License version 3 that it incorporates by reference, are
+included:
+
+    licenses/LGPL-3.0.txt
+    licenses/GPL-3.0.txt
+
+Qt is a product of The Qt Company Ltd and the Qt Project contributors.
+
+Dynamic linking / replacement:
+    The Qt libraries are shipped as separate frameworks and plugins inside
+    tsMuxerGUI.app/Contents/Frameworks and tsMuxerGUI.app/Contents/PlugIns.
+    You may replace them with your own build of a compatible version of Qt.
+
+Corresponding source:
+    The Qt in this package is the unmodified Qt 6.7 for macOS published by The
+    Qt Company, installed by .github/workflows/mac.yml in this repository. Its
+    source is published by the Qt Project:
+        https://download.qt.io/archive/qt/6.7/
+        https://code.qt.io/
+
+Qt's own bundled third-party components:
+    Qt itself includes further third-party software, among them FFmpeg in its
+    multimedia plugin (LGPL 2.1 or later, licenses/LGPL-2.1.txt). Their
+    licenses are listed at:
+        https://doc.qt.io/qt-6/licenses-used-in-qt.html
+
+================================================================================
+FreeType 2.14.3  (linked into tsMuxeR, draws text subtitles)
+================================================================================
+
+FreeType is linked into tsMuxeR and the copy of it inside tsMuxerGUI.app. It is
+used under the FreeType License (FTL), licenses/FreeType-FTL.txt.
+
+    https://freetype.org
+
+Portions of this software are copyright (C) 2026 The FreeType Project
+(https://freetype.org). All rights reserved.
+
+================================================================================
+zlib, libass
+================================================================================
+
+zlib is the one macOS provides, and is not part of this package. ASS and SSA
+subtitles are drawn with libass when it is installed, from Homebrew; it is not
+part of this package either.

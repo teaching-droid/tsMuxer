@@ -1,0 +1,50 @@
+THIRD-PARTY NOTICES (Linux AppImage)
+
+This AppImage includes third-party software. The notices below are provided to
+comply with the licenses of that software. tsMuxeR itself is under the Apache
+License 2.0, in LICENSE beside this file.
+
+================================================================================
+Qt 6.7  (used by the graphical interface, tsMuxerGUI)
+================================================================================
+
+The graphical interface uses the Qt framework version 6.7, licensed under the
+GNU Lesser General Public License version 3 (LGPLv3). The full LGPLv3 text, and
+the GNU General Public License version 3 that it incorporates by reference, are
+included beside this file:
+
+    licenses/LGPL-3.0.txt
+    licenses/GPL-3.0.txt
+
+Qt is a product of The Qt Company Ltd and the Qt Project contributors.
+
+Dynamic linking / replacement:
+    The Qt libraries are shipped as separate shared libraries in usr/lib and
+    plugins in usr/plugins of the AppImage. You may replace them with your own
+    build of a compatible version of Qt: --appimage-extract unpacks the
+    AppImage into a folder, where they can be exchanged.
+
+Corresponding source:
+    The Qt in this AppImage is the unmodified Qt 6.7 for Linux published by The
+    Qt Company, installed by .github/workflows/linux_appimage.yml in this
+    repository, together with the ICU libraries it is built against. Its source
+    is published by the Qt Project:
+        https://download.qt.io/archive/qt/6.7/
+        https://code.qt.io/
+
+Qt's own bundled third-party components:
+    Qt itself includes further third-party software, among them FFmpeg in its
+    multimedia plugin (LGPL 2.1 or later, licenses/LGPL-2.1.txt). Their
+    licenses are listed at:
+        https://doc.qt.io/qt-6/licenses-used-in-qt.html
+
+================================================================================
+The other libraries
+================================================================================
+
+The other libraries in usr/lib are taken from the Ubuntu 22.04 packages they
+belong to, unmodified. The copyright and license file of each of those packages
+is in usr/share/doc/<package>/copyright, and PACKAGES.txt beside this file names
+each package and its version. Their source is available from Ubuntu, for
+example with "apt-get source <package>=<version>" on Ubuntu 22.04, and at:
+    https://packages.ubuntu.com/jammy/

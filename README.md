@@ -175,7 +175,7 @@ Version numbering follows the [Semantic versioning](https://semver.org/) approac
 
 We're using the Apache 2.0 license for simplicity and flexibility. You are free to use it in your own project.
 
-Distributed builds bundle third-party software. In particular, the graphical interface links the Qt framework under the LGPLv3. See [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) and the [licenses/](licenses/) folder for the full license texts and the corresponding-source pointers.
+Distributed builds bundle third-party software. In particular, the graphical interface links the Qt framework under the LGPLv3. Each package holds the notices and license texts of what it bundles: [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) for Windows, [packaging/notices/macOS.txt](packaging/notices/macOS.txt) for macOS and [packaging/notices/AppImage.txt](packaging/notices/AppImage.txt) for the AppImage, with the full license texts in the [licenses/](licenses/) folder.
 
 ## Credits
 

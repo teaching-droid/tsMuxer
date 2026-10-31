@@ -63,7 +63,10 @@ jobs:
           echo "::error::tsMuxerGUI needs libOpenGL.so.0, which many systems do not have."
           exit 1
         fi
-        zip -9 "$asset" tsMuxeR tsMuxerGUI
+        # tsMuxeR's own license: the Apache License asks for a copy of it with every copy of the program. The two
+        # programs use the libraries of the system, so the package holds no other software.
+        cp ../LICENSE LICENSE
+        zip -9 "$asset" tsMuxeR tsMuxerGUI LICENSE
         ls -la
 
     - name: Checksum the package

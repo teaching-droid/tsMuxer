@@ -178,6 +178,37 @@ jobs:
           --custom-apprun AppRun \
           --plugin qt
 
+    - name: Add the licence notices
+      run: |
+        # tsMuxeR's license, the notices of Qt, and for every other library linuxdeploy put in the AppImage the
+        # copyright file of the Ubuntu package it came from, with the package and its version in PACKAGES.txt. A
+        # library that is neither Qt's nor from a package stops the build, so nothing is shipped without its license.
+        doc=AppDir/usr/share/doc/tsMuxeR
+        mkdir -p "$doc/licenses"
+        cp LICENSE "$doc/LICENSE"
+        cp packaging/notices/AppImage.txt "$doc/THIRD-PARTY-NOTICES.txt"
+        cp licenses/LGPL-3.0.txt licenses/GPL-3.0.txt licenses/LGPL-2.1.txt "$doc/licenses/"
+        : > packages.txt
+        missing=0
+        for lib in $(find AppDir/usr/lib -type f -name '*.so*' | sort); do
+          name="$(basename "$lib")"
+          # Qt and the ICU it is built against, from the Qt installation: their notice is above
+          [ -e "$QT_ROOT_DIR/lib/$name" ] && continue
+          pkg="$(dpkg -S "*/$name" 2>/dev/null | head -n 1 | cut -d: -f1)"
+          if [ -z "$pkg" ] || [ ! -e "/usr/share/doc/$pkg/copyright" ]; then
+            echo "::error::$name is neither Qt's nor from an Ubuntu package with a copyright file."
+            missing=1
+            continue
+          fi
+          mkdir -p "AppDir/usr/share/doc/$pkg"
+          cp -L "/usr/share/doc/$pkg/copyright" "AppDir/usr/share/doc/$pkg/copyright"
+          dpkg-query -W -f='${Package} ${Version}\n' "$pkg" >> packages.txt
+        done
+        sort -u packages.txt > "$doc/PACKAGES.txt"
+        rm -f packages.txt
+        [ "$missing" = 0 ] || exit 1
+        echo "$(wc -l < "$doc/PACKAGES.txt") packages, each with its copyright file"
+
     - name: Make the AppImage
       env:
         APPIMAGE_EXTRACT_AND_RUN: 1

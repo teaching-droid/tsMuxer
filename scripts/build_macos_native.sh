@@ -142,7 +142,13 @@ codesign --verify --deep --strict tsMuxerGUI.app
 # Versions/Current/QtCore. Written as real files the bundle is structurally invalid, which is a
 # second route to "damaged", and it also stored every Qt library three times. Measured on the
 # 2.18.9 arm64 package: 127 entries, zero symlinks, and 98 MB of duplication.
-zip -9 -r -y mac.zip tsMuxeR tsMuxerGUI.app
+# tsMuxeR's own license, and the notices and license texts of what the package holds: the Qt frameworks in the
+# app (LGPLv3) and the FreeType linked into tsMuxeR.
+cp ../../LICENSE LICENSE
+cp ../../packaging/notices/macOS.txt THIRD-PARTY-NOTICES.txt
+mkdir -p licenses
+cp ../../licenses/LGPL-3.0.txt ../../licenses/GPL-3.0.txt ../../licenses/LGPL-2.1.txt ../../licenses/FreeType-FTL.txt licenses/
+zip -9 -r -y mac.zip tsMuxeR tsMuxerGUI.app LICENSE THIRD-PARTY-NOTICES.txt licenses
 
 # Check the package rather than trusting the flags, because both faults this replaces were
 # silent: the build succeeded, the zip uploaded, and the app would not open. zipinfo marks a
