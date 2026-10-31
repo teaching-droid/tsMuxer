@@ -1,3 +1,19 @@
+## tsMuxeR 3.0.1
+
+A packaging release: every package now carries the licence of tsMuxeR and the notices and licence texts of what it bundles, and the guides are brought up to date. The programs work exactly as in 3.0.0.
+
+**The Intel macOS build has been back since 2.19.0, and Mac users are still asked to test.** It has been built and checked, but it has not been run on an Intel Mac, because no Mac is available here. If you have an Intel Mac, please try it and report whether it works. On any Mac, please also report whether ASS subtitles are drawn with libass after `brew install libass`, and what happens when you change the subtitle font and colour in the window.
+
+**If something goes wrong, please report it** with the bug report form on GitHub, and include as much as you can: the version line and the full log, the meta file (the text in the Meta file box of the window), what you expected and what happened instead, and the player you used. A short sample of the source helps most. If you cannot share a sample, the listing tsMuxeR gives for the source helps nearly as much: open the file in the window and copy the text it shows, or run `tsMuxeR <file>` on the command line. Also say where the file comes from, for example a camera, an encoder and its settings, or a disc.
+
+### Packages
+
+* **Every package carries the licence of tsMuxeR, and the notices and licence texts of what it bundles.** The macOS packages and the Linux AppImage hold the Qt libraries of the window and carried no licence text at all, the Linux ZIP had none either, and the Windows packages lacked the licence of tsMuxeR itself. Each package now has LICENSE. The macOS packages add the notices and licence texts of Qt and of FreeType, and the AppImage those of Qt and the copyright file of each Ubuntu package whose library it holds, with a list of the packages and their versions.
+
+### Documentation
+
+* **The guides describe 3.0.0.** The install guide names the packages of a release and what each needs: the window in the Linux ZIP needs Qt 6.7 or newer from the system, where the AppImage brings its own. The usage guide lists the options it lacked, among them track-name and the Matroska track flags, --disc-size, --layer-break-guard, --layer-break-lbn and --dv-profile, and the --bdmv-to-iso mode with its options. The build guide describes how the release builds are made, the testing guide how to check a build, and the Dolby Vision guide covers 3.0.0.
+
 ## tsMuxeR 3.0.0
 
 This release is about MP4 and MOV. tsMuxeR now reads much more of what these files can hold: more codecs, track names, chapters, cover pictures and colour data, fragmented files, joins, and damaged or unusual files. ASS and SSA subtitles are now drawn with libass, with their styles and animations. The changes are grouped below by area.
