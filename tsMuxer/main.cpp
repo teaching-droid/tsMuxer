@@ -60,16 +60,12 @@ static std::filesystem::path fsPath(const string& utf8)
 static constexpr char EXCEPTION_ERR_MSG[] =
     ". It does not have to be! Please contact application support team for more information.";
 
-#define LTRACE2(level, msg)              \
-    {                                    \
-        {                                \
-            if ((level) <= LT_WARN)      \
-                cerr << msg;             \
-            else if ((level) == LT_INFO) \
-                cout << msg;             \
-            if ((level) <= LT_INFO)      \
-                sLastMsg = true;         \
-        }                                \
+#define LTRACE2(level, msg)                   \
+    {{if ((level) <= LT_WARN) cerr << msg;    \
+    else if ((level) == LT_INFO) cout << msg; \
+    if ((level) <= LT_INFO)                   \
+        sLastMsg = true;                      \
+    }                                         \
     }
 // A meta file saved in UTF-16, as some editors save text, was refused as "Invalid codec format" with the raw bytes of
 // its first line, and a folder given as the meta file was read as an empty one and said "No tracks selected". Both are
