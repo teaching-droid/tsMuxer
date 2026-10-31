@@ -164,6 +164,10 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **An edit list that plays a track in parts,** as 0 to 5 s and then 10 to 15 s, gets a warning: the output holds the whole track from where the first part starts.
 
+* **The edit list start of a plain MP4 track,** such as the start-up samples of AAC, was not listed as its Stream delay and not put in the name of a demuxed file, as it is for a fragmented file. The demuxed files muxed again had the sound that much late: 21 to 23 ms for AAC. The listing and the file name now carry it, and a timeshift= on such a track stands for the listed delay, as for a fragmented file.
+
+* **Floating point PCM in an MP4 or MOV file** was listed as "Can't detect stream type", and one form of it stopped the listing of the whole file. The listing now names it as not supported, and a meta line that names it is refused with the reason.
+
 ### Matroska input
 
 * **A track of a Matroska file could lose its last part without a word,** up to 30 KB: 0.4 s of AC-3 at 640 kbit/s. This happened when the end of the file fell at one place in the read of its last 2 MB. The track is now muxed to its end.
@@ -365,6 +369,8 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **A DTS-HD file whose encoder delay is not a whole number of frames** keeps its sound. All of it was left out, and the mux still said it was successful: a DTS Express file with a delay of 1024 samples, for one, as its frames are 4096 samples long. A 96 kHz file also lost the first 21 ms of its sound, as twice its delay was left out. (#49, thanks to @Moonghost-coder)
 
 * **A DTS-HD stream of 96 or 192 kHz without a core** keeps its length. Its frames were timed at a half or a quarter of their length, so the sound ran two or four times too fast against the picture.
+
+* **DTS in 16-bit little-endian byte order** was listed as "Can't detect stream type", and a mux said that the file produced no frames. The listing and a mux now say that this byte order is not supported.
 
 * **stretch= took 0, a negative factor, text and absurd factors without a word:** stretch=0 or stretch=abc gave every audio frame the same time, stretch=-1 made the times run backwards, and stretch=1000 spread 8 s of sound over more than two hours. The factor is now a number or a fraction from 0.5 up to 2, anything else is refused, and stretch= on a video or subtitle track, where it does nothing, gets a warning.
 
@@ -595,6 +601,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 * **A picture-in-picture video with two secondary audio tracks,** such as two commentaries, was tied to the first of them only in the playlist. It is tied to every secondary audio track now.
 * **The warning that video of fewer than 1080 lines is not standard for a UHD disc tested the width,** so 720p video got no warning, and a picture-in-picture video got it many times. It tests the height of the main video now, once.
 * **The angles after the first, the place and size of a picture-in-picture video, audio and video in a separate clip of a playlist, and the hold of still pictures are no longer left out without a word:** a warning names them, and the rest is muxed. A second video without "secondary" gets a warning that it is muxed as a second primary video.
+* **PG and Text-ST subtitles in a separate clip of a playlist** were left out of a mux without a word; only the listing named them. A warning now names each one, and the rest is muxed.
 
 ### Matroska output
 
@@ -832,7 +839,7 @@ This release is about MP4 and MOV. tsMuxeR now reads much more of what these fil
 
 * **WebVTT from an MP4 file** goes into a Matroska output as SRT text, without its cue settings.
 
-* **Floating point PCM** in an MP4 or MOV file is not read, and 32 bit PCM is refused, as from Matroska. Only one form of floating point PCM is refused with a message; the others are left out without a word.
+* **Floating point PCM** in an MP4 or MOV file is not read, and 32 bit PCM is refused, as from Matroska. **DTS in 16-bit little-endian byte order** is not read either.
 
 ## tsMuxeR 2.20.0
 
