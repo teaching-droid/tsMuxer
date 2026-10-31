@@ -2852,7 +2852,7 @@
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1464"/>
-        <source>45 Khz clock:</source>
+        <source>45 kHz clock:</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

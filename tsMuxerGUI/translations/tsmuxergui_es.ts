@@ -2960,7 +2960,7 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas, seleccionables como
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1464"/>
-        <source>45 Khz clock:</source>
+        <source>45 kHz clock:</source>
         <translation>Reloj de 45 khz:</translation>
     </message>
     <message>

@@ -2960,7 +2960,7 @@ Build the ISO anyway?</source>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1464"/>
-        <source>45 Khz clock:</source>
+        <source>45 kHz clock:</source>
         <translation>שעון 45 קילו-הרץ:</translation>
     </message>
     <message>

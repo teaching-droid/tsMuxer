@@ -2960,8 +2960,8 @@ ISO trotzdem erstellen?</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1464"/>
-        <source>45 Khz clock:</source>
-        <translation>Uhr 45 Khz:</translation>
+        <source>45 kHz clock:</source>
+        <translation>Uhr 45 kHz:</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1489"/>
