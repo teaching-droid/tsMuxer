@@ -4251,6 +4251,10 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
         else if (fileExt == "srt" || fileExt == "vtt")
             containerType = AbstractStreamReader::ContainerType::ctSRT;
         CheckStreamRez trackRez = detectTrackReader(tmpBuffer.get(), len, containerType, 0, 0);
+        // DTS in 16-bit little-endian byte order, which tsMuxeR does not read, was "Can't detect stream type"
+        if (trackRez.codecInfo.programName.empty() && len > 0 &&
+            DTSStreamReader::isLittleEndianCore(tmpBuffer.get(), tmpBuffer.get() + len))
+            trackRez.notSupported = "DTS in 16-bit little-endian byte order";
 
         if (strStartWith(trackRez.codecInfo.programName, "V_"))
             addTrack(Vstreams, trackRez);

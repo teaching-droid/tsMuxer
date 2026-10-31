@@ -2,6 +2,7 @@
 
 #include <bit>
 #include <cmath>
+#include <cstddef>
 #include <sstream>
 
 #include "pgsStreamReader.h"
@@ -243,6 +244,12 @@ uint8_t* DTSStreamReader::findFrame(uint8_t* buff, uint8_t* end)
     if (m_firstCall)
     {
         m_firstCall = false;
+        // a mux of DTS in a form tsMuxeR does not read is refused at its first frame (isLittleEndianCore); not the
+        // probe, which goes on to the other readers
+        if (!m_testMode && isLittleEndianCore(buff, end))
+            THROW(ERR_COMMON,
+                  "DTS in 16-bit little-endian byte order is not supported. tsMuxeR reads DTS in "
+                  "big-endian byte order only, the order a Blu-ray disc and a TS carry.")
         checkIfOnlyHDDataExists(buff, end);
     }
 
@@ -1432,6 +1439,36 @@ void DTSStreamReader::BufLeToBe(uint8_t* p_out, const uint8_t* p_in, const int i
         p_out[j] = p_in[j + 1];
         p_out[j + 1] = p_in[j];
     }
+}
+
+// ** DTS IN 16-BIT LITTLE-ENDIAN BYTE ORDER. ** A DTS core can be stored in 16-bit words of the other byte order.
+// tsMuxeR reads the big-endian order only, which a disc and a TS carry, and passes the frames on as they are. A
+// little-endian file was not recognised: the listing said "Can't detect stream type", and a mux with A_DTS said that
+// the file produced no frames. (The branch of decodeFrame for such frames reads the header before its bytes are
+// swapped, so it never takes a frame.) A first frame in that order, with a second one where its length says, is named,
+// so the listing and a mux can say that it is not supported.
+bool DTSStreamReader::isLittleEndianCore(const uint8_t* buff, const uint8_t* end)
+{
+    if (buff == nullptr || end == nullptr)
+        return false;
+    for (const uint8_t* p = buff; end - p >= static_cast<std::ptrdiff_t>(DTS_HEADER_SIZE); ++p)
+    {
+        if ((p[0] == 0x7f && p[1] == 0xfe && p[2] == 0x80 && p[3] == 0x01) ||
+            (p[0] == 0x1f && p[1] == 0xff && p[2] == 0xe8 && p[3] == 0x00) ||
+            (p[0] == 0xff && p[1] == 0x1f && p[2] == 0x00 && p[3] == 0xe8))
+            return false;  // a frame in a form the reader takes, 16-bit big endian or 14-bit
+        if (!(p[0] == 0xfe && p[1] == 0x7f && p[2] == 0x01 && p[3] == 0x80))
+            continue;
+        uint8_t header[DTS_HEADER_SIZE] = {};
+        BufLeToBe(header, p, DTS_HEADER_SIZE);
+        const int frameSize = ((header[5] & 0x03) << 12 | header[6] << 4 | header[7] >> 4) + 1;  // FSIZE
+        if (frameSize < 96 || end - p < frameSize + 4)
+            continue;
+        const uint8_t* next = p + frameSize;
+        if (next[0] == p[0] && next[1] == p[1] && next[2] == p[2] && next[3] == p[3])
+            return true;
+    }
+    return false;
 }
 
 double DTSStreamReader::getFrameDuration()

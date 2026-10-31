@@ -68,6 +68,9 @@ class DTSStreamReader final : public SimplePacketizerReader
     bool isSecondary() override;
     // The bit depth of the DTS-HD extension, 0 without one.
     [[nodiscard]] int getHDBitDepth() const { return hd_bitDepth; }
+    // The first DTS core frame in [buff, end) is in 16-bit little-endian byte order, which tsMuxeR does not read, and
+    // a second one follows it
+    static bool isLittleEndianCore(const uint8_t* buff, const uint8_t* end);
 
    protected:
     int getHeaderLen() override { return DTS_HEADER_SIZE; }
