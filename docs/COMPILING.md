@@ -1,25 +1,27 @@
 # Compiling
 
-The following sections outline how to build tsMuxer and tsMuxerGUI for your chosen platform.
+The release binaries are made by the workflows under `.github/workflows/`. The sections Linux, Linux AppImage, MacOS (Native) and Windows (native, Visual Studio) describe what they do. The other sections come from earlier versions; the release builds do not use them, and they are not checked.
 
 ## Requirements
 
-- **CMake**: 3.12 or later
+- **CMake**: 3.12 or later, and Ninja where the scripts use it
 - **C++ Compiler**: C++20 support required
-  - GCC 10 or later
+  - GCC 10 or later (the Linux release builds use GCC 11 on Ubuntu 22.04)
   - Clang 11 or later
   - MSVC 2019 or later (the Windows release builds use Visual Studio 2022)
-- **Qt**: Qt 6 for the GUI component. The Windows release builds use Qt 6.8.3 with the
-  [qt6windows7](https://github.com/crystalidea/qt6windows7) patches, linked statically and built
-  from source with **Ninja** (the Visual Studio generator cannot build Qt, because Qt uses
-  per-configuration `EXCLUDE_FROM_ALL` targets that multi-config generators reject).
+- **FreeType** and **zlib** for the command line program
+- **Qt**: Qt 6.7 or later for the window, with Qt Multimedia for the sound at the end of a mux (optional). The
+  Windows release builds use Qt 6.8.3 with the [qt6windows7](https://github.com/crystalidea/qt6windows7) patches,
+  built from source with **Ninja** (the Visual Studio generator cannot build Qt, because Qt uses per-configuration
+  `EXCLUDE_FROM_ALL` targets that multi-config generators reject) and shipped as DLLs beside the window.
+- **libass** is not linked: the program loads it at run time when it is there, to draw ASS and SSA subtitles.
 
-**Note on Windows Compatibility:** the Windows binaries are built against Qt 6.8 with the
-[qt6windows7](https://github.com/crystalidea/qt6windows7) compatibility patches, so the standard
-32-bit and 64-bit builds run on Windows 7 and newer. No separate Qt5 build is needed. See the
-Windows (native) section below.
+**Note on Windows Compatibility:** with the [qt6windows7](https://github.com/crystalidea/qt6windows7) patches, the
+32-bit and 64-bit builds run on Windows 7 and newer. See the Windows (native) section below.
 
 ## Docker (Linux build)
+
+*This way is not used by the release builds, and it is not checked for this version. The workflows under `.github/workflows/` show how the release binaries are made.*
 
 You can use the [Docker container](https://github.com/jaminmc/tsmuxer_build) to build the Linux
 binaries. Browse to the tsMuxer repository and run:
@@ -29,102 +31,50 @@ docker run -it --rm -v $(pwd):/workdir -w="/workdir" jaminmc/tsmuxer_build bash 
 ```
 
 The executables will be saved to the "bin" folder. Windows and Mac builds do not use Docker in
-this repository; see their own sections below (the CI workflows under `.github/workflows/` are
-the reference for how the release binaries are produced).
+this repository; see their own sections below.
 
 ## Linux
 
-For these examples we have successfully used Ubuntu 19 64-bit and Debian 10 64-bit. 
+The release builds run on Ubuntu 22.04, so that the programs also start on older systems: a program needs the glibc of
+the system it was built on, or a newer one. On Debian or Ubuntu, install the tools and the libraries:
 
-First we have to install the pre-requisites. On Debian 10 you have to enable the "buster-backports" repo. Then on Debian or Ubuntu you can run the following to install all required packages for your chosen platform:
-
-Common:
 ```
 sudo apt-get update
-sudo apt-get install build-essential g++-multilib ninja-build cmake
-
-# on Ubuntu:
-sudo apt-get install checkinstall
-
-# on Debian:
-sudo apt-get -t buster-backports install checkinstall
+sudo apt-get install build-essential cmake ninja-build libfreetype-dev zlib1g-dev
 ```
 
-32-bit:
-```
-# add 32-bit architecture 
-sudo dpkg --add-architecture i386
-sudo apt-get update
-
-# download/install dependencies
-sudo apt-get install libc6-dev-i386 \
-sudo apt-get install libfreetype6-dev:i386
-```
-
-64-bit:
-```
-sudo apt-get update
-sudo apt-get install libc6-dev \
-libfreetype6-dev \
-zlib1g-dev \
-```
-
-If you also intend to build the GUI then you require Qt6:
-```
-sudo apt-get install qt6-base-dev \
-qt6-tools-dev \
-qt6-tools-dev-tools \
-qt6-l10n-tools \
-qt6-multimedia-dev \
-libqt6multimedia6
-```
-
-With all the dependencies set up we can now actually compile the code.
-
-Open the folder where the git repo is stored in a terminal and run the following to build just the command-line program:
+The window needs Qt 6.7 or later with Qt Multimedia. Take it from the distribution where it has one that new, or
+install it with [aqtinstall](https://github.com/miurahr/aqtinstall), as the release builds do:
 
 ```
-# build the project
+pip install aqtinstall
+aqt install-qt linux desktop 6.7.3 linux_gcc_64 -m qtmultimedia -O ~/Qt
+export CMAKE_PREFIX_PATH=~/Qt/6.7.3/gcc_64
+```
+
+Then build from the repository folder:
+
+```
+# the command line program and the window, in build/tsMuxer/tsmuxer and build/tsMuxerGUI/tsMuxerGUI
+./scripts/rebuild_linux_with_gui.sh
+# or the command line program alone, as bin/tsMuxeR
 ./scripts/rebuild_linux.sh
 ```
 
-Or run the following to build the GUI as well:
+A build without a build type is made as Release.
 
-```
-# build the project
-./scripts/rebuild_linux_with_gui.sh
-```
+## Linux AppImage
 
-Next run the below to create a DEB file:
-```
-# create lower case links, then create installable deb package and move it to $HOME
-cd ../bin
-cp ../build/tsMuxer/tsmuxer .
-cp ../build/tsMuxerGUI/tsmuxergui .
-ln -s tsMuxeR tsmuxer
-ln -s tsMuxerGUI tsmuxergui
-sudo checkinstall \
-    --pkgname=tsmuxer \
-    --pkgversion="1:$(./tsmuxer | \
-                      grep "tsMuxeR version" | \
-                      cut -f3 -d " " | \
-                      sed 's/.$//')-git-$(\
-                      git rev-parse --short HEAD)-$(\
-                      date --rfc-3339=date | sed 's/-//g')" \
-    --backup=no \
-    --deldoc=yes \
-    --delspec=yes \
-    --deldesc=yes \
-    --strip=yes \
-    --stripso=yes \
-    --addso=yes \
-    --fstrans=no \
-    --default cp -R * /usr/bin && \
-mv *.deb ~/
-cd $HOME
-```
+The AppImage is made by `.github/workflows/linux_appimage.yml` on Ubuntu 22.04. It builds the two programs as above,
+gathers the window's Qt libraries and plugins with [linuxdeploy](https://github.com/linuxdeploy/linuxdeploy) and its
+Qt plugin, and packs the result with [appimagetool](https://github.com/AppImage/appimagetool), with the update
+information an update tool reads. Each of these tools is a pinned release, checked against its SHA-256 before it is
+run. The workflow then starts the AppImage in clean Debian, Fedora, Arch and Ubuntu containers. To make one, run the
+workflow from the Actions tab of a fork, or follow its steps on Ubuntu 22.04.
 
 ## Windows (MXE on Linux)
+
+*This way is not used by the release builds, and it is not checked for this version. The workflows under `.github/workflows/` show how the release binaries are made.*
 
 To compile tsMuxer and tsMuxerGUI for Windows using MXE on Linux you must follow the steps below on Ubuntu:
 
@@ -187,18 +137,16 @@ Or run the following to build the GUI as well:
 
 You need Visual Studio 2022 with the C++ workload, CMake, and Ninja.
 
-The single-file, Windows 7 capable release binaries are produced by the CI workflow
-`.github/workflows/windows_64.yml`: it builds Qt 6.8.3 from source (with the
-[qt6windows7](https://github.com/crystalidea/qt6windows7) patches) and links it statically. That
-Qt build takes roughly 40 minutes; the workflow is the reference if you want to reproduce it
-locally. Qt must be configured with the Ninja generator, from a Visual Studio developer command
-prompt (so `cl.exe` is on `PATH`); the Visual Studio generator cannot build Qt.
+The release binaries are produced by `.github/workflows/windows_64.yml` and `windows_32.yml`. They build Qt 6.8.3
+from source with the [qt6windows7](https://github.com/crystalidea/qt6windows7) patches, which takes roughly 40
+minutes, and the libass that draws ASS and SSA subtitles with vcpkg. The package holds the two programs, the Qt and
+libass DLLs and the Visual C++ runtime beside them, and runs on Windows 7 and newer. Qt must be configured with the
+Ninja generator, from a Visual Studio developer command prompt (so `cl.exe` is on `PATH`); the Visual Studio
+generator cannot build Qt. The workflows are the reference if you want to reproduce it locally.
 
-For day-to-day development it is much quicker to configure tsMuxer against a regular Qt 6
-installation (for example one installed with aqtinstall). Those prebuilt Qt packages are shared
-libraries, so the result needs `windeployqt` to gather the Qt DLLs beside the executable and runs
-on Windows 10 and later; only the static qt6windows7 route above yields the single-file Windows 7
-capable executable.
+For day-to-day development it is much quicker to configure tsMuxer against a regular Qt 6.7 or later installation
+(for example one installed with aqtinstall). Run `windeployqt` to gather its DLLs beside the window; a build with
+those runs on Windows 10 and later.
 
 ```
 cmake -B build -DTSMUXER_GUI=ON -DCMAKE_PREFIX_PATH=C:/Qt/6.8.3/msvc2022_64
@@ -206,6 +154,8 @@ cmake --build build --config Release
 ```
 
 ## Windows (Msys2)
+
+*This way is not used by the release builds, and it is not checked for this version. The workflows under `.github/workflows/` show how the release binaries are made.*
 
 To compile tsMuxer and tsMuxerGUI on Windows with Msys2, you must download and install [Msys2](https://www.msys2.org/). Once you have Msys2 fully configured, open an Msys2 prompt and run the following commands, depending on which build you require:
 
@@ -252,6 +202,8 @@ Then run:
 This will create in tsMuxer/bin statically compiled versions of tsMuxer and tsMuxerGUI - so no external DLL files are required.
 
 ## MacOS (osxcross on Linux)
+
+*This way is not used by the release builds, and it is not checked for this version. The workflows under `.github/workflows/` show how the release binaries are made.*
 
 To use osxcross on Ubuntu to compile for OSX, first run the following commands:
 
@@ -336,38 +288,18 @@ Or run the following to build the GUI as well:
 
 ## MacOS (Native)
 
-To use compile tsMuxer on Mac natively we must first use Homebrew to install some dependencies:
+You need the Xcode command line tools, CMake, and Qt 6.7 or later with Qt Multimedia. Qt from Homebrew has issues
+with `macdeployqt` and is *not* supported; install the official Qt package with
+[aqtinstall](https://github.com/miurahr/aqtinstall), as the release builds do:
 
 ```
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-brew install freetype
-brew install zlib
+pip3 install aqtinstall
+aqt install-qt mac desktop 6.7.3 clang_64 -m qtmultimedia -O ~/Qt
+export PATH=~/Qt/6.7.3/macos/bin:$PATH
 ```
 
-Next we need to install Qt. Please note that Qt through Homebrew has issues with `macdeployqt` so is *not* supported. To ensure it is not installed at all run the commands below:
-
-```
-brew uninstall qt
-```
-
-We will use `aqtinstall` to download and install the offical Qt for Mac package. Qt 6.6 or later officially supports Apple silicon and is the recommended version. To install Qt6 for Mac we will need to install `pip`, use that to install `aqtinstall`, use `aqtinstall` to download the latest version of Qt for Mac before finally copying the installation and enabling it to be used system-wide.
-
-```
-# install pip
-curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
-python3 get-pip.py
-# install aqtinstall and download Qt 6.6
-pip install aqtinstall
-aqt install-qt mac desktop 6.6.2 -m qtmultimedia
-# install Qt to /opt/qt
-sudo mkdir /opt/qt
-sudo cp -r ./6.6.2/macos/* /opt/qt/
-# make Qt bin folder available in PATH
-echo 'export PATH=/opt/qt/bin:$PATH' >> $HOME/.zprofile
-. $HOME/.zprofile
-# cleanup temporary files
-rm -f get-pip.py
-rm -rf ./6.6.2
-```
-
-With all of those requirements met we can now compile the programs. Simply run `./scripts/build_macos_native.sh` from the repository folder. Upon completion the executables will be available in the ./build/bin folder.
+Then run `./scripts/build_macos_native.sh` from the repository folder. It builds FreeType 2.14.3 from its source
+release, checked against its SHA-256, and links it statically, so nothing has to be installed with Homebrew; zlib is
+the one that comes with macOS. `CMAKE_OSX_ARCHITECTURES=arm64` or `x86_64` chooses the architecture, and
+`TSMUXER_FREETYPE_FROM_BREW=1` takes Homebrew's FreeType instead. The result is `build/bin/mac.zip`, with `tsMuxeR`
+and `tsMuxerGUI.app`, signed ad hoc.
