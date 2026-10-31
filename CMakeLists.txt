@@ -113,6 +113,15 @@ endif()
 add_subdirectory(libmediation)
 add_subdirectory(tsMuxer)
 
+# Qt's Gui target passes OpenGL on to every program that links it. With the GLVND libraries CMake prefers,
+# that named libOpenGL.so.0 and libGLX.so.0 in tsMuxerGUI, which calls no OpenGL function itself, and the
+# window did not start on a system without the separate libOpenGL package (libopengl0 on Debian and Ubuntu,
+# libglvnd-opengl on Fedora). libGL.so.1, which Qt's Gui library needs anyway, is enough. Qt only sets its
+# own preference when none is set, so this has to come before Qt is looked for.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(OpenGL_GL_PREFERENCE LEGACY CACHE STRING "OpenGL libraries to link on Linux: LEGACY or GLVND")
+endif()
+
 # Auto-detect Qt6 and enable the GUI by default if found
 if(NOT DEFINED TSMUXER_GUI)
   find_package(Qt6 QUIET COMPONENTS Widgets)

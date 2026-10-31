@@ -95,6 +95,12 @@ jobs:
             exit 1
           fi
         done
+        # The window calls no OpenGL function. If it names libOpenGL.so.0, it does not start on a system
+        # without that separate package; CMakeLists.txt says why it is not linked.
+        if readelf -d bin/tsMuxerGUI | grep -q 'libOpenGL\.so'; then
+          echo "::error::tsMuxerGUI needs libOpenGL.so.0, which many systems do not have."
+          exit 1
+        fi
         chmod +x bin/tsMuxeR bin/tsMuxerGUI
 
     - name: Get the packaging tools
@@ -285,7 +291,10 @@ jobs:
         rc=$?
         set -e
         tail -n 20 gui.log
-        if grep -Eiq "could not load the qt platform plugin|cannot open shared object file|undefined symbol" gui.log; then
+        # Qt also tries libraries it can do without, such as the VA-API video ones, and logs each that is not
+        # there with "cannot open shared object file". Only a plugin inside the AppImage that does not load,
+        # a program that does not find its libraries, or a symbol that is not found is a fail.
+        if grep -Eiq "could not load the qt platform plugin|cannot load library .*/usr/plugins/|error while loading shared libraries|undefined symbol" gui.log; then
           echo "::error::The window could not load its Qt libraries or plugins on ${{ matrix.image }}."
           exit 1
         fi

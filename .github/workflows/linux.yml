@@ -57,6 +57,12 @@ jobs:
             exit 1
           fi
         done
+        # The window calls no OpenGL function. If it names libOpenGL.so.0, it does not start on a system
+        # without that separate package; CMakeLists.txt says why it is not linked.
+        if readelf -d tsMuxerGUI | grep -q 'libOpenGL\.so'; then
+          echo "::error::tsMuxerGUI needs libOpenGL.so.0, which many systems do not have."
+          exit 1
+        fi
         zip -9 "$asset" tsMuxeR tsMuxerGUI
         ls -la
 
