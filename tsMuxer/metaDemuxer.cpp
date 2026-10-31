@@ -2728,6 +2728,37 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     // the sound of such a part is cut to the time of its first picture (TSDemuxer::keptInPart). Only for the sound, as
     // the window writes it: a second video track of a transport stream is the other view, the enhancement layer or the
     // picture in picture, which go with the main video.
+    // ** THE EDIT LIST START OF AN MP4 IS PART OF ITS LISTED DELAY. ** The listing gives the sound of an MP4 track with
+    // an edit list start (srccodecdelay) the delay it is muxed with (MovDemuxer::getTrackDelay): its start, less what
+    // the edit list skips, plus the pictures a cut file's video keeps. The window writes that delay as timeshift=, so a
+    // timeshift= on such a line stands for the listed delay, as for a fragmented file: the track is put where the file
+    // says, moved by the difference. A line with the listed delay muxes as one without timeshift=, and a demux names
+    // the file with that delay, so the demuxed files muxed again keep it (it was lost).
+    bool mp4EditStart = false;
+    int64_t mp4ListedMs = 0;
+    if (pid > 0 && !codec.empty() && codec[0] == 'A' && !fileList.empty() &&
+        streamInfo.m_addParams.find("srccodecdelay") != streamInfo.m_addParams.end())
+    {
+        const std::string ext = strToLowerCase(extractFileExt(unquoteStr(trimStr(fileList[0]))));
+        mp4EditStart = ext == "mp4" || ext == "mov" || ext == "m4a" || ext == "m4v";
+    }
+    if (mp4EditStart)
+    {
+        const auto paramNs = [&](const char* key) -> int64_t
+        {
+            const auto it = streamInfo.m_addParams.find(key);
+            return it == streamInfo.m_addParams.end() ? 0 : strtoll(it->second.c_str(), nullptr, 10);
+        };
+        const int64_t lead = paramNs("srcvideolead");
+        const int64_t listedNs = paramNs("srcstartdelay") + (lead > 0 ? lead : 0) - paramNs("srccodecdelay");
+        mp4ListedMs = (listedNs >= 0 ? listedNs + 500000 : listedNs - 500000) / 1000000;
+        if (timeShiftGiven)
+        {
+            streamInfo.m_timeShift -= mp4ListedMs * (INTERNAL_PTS_FREQ / 1000);
+            streamInfo.m_lastDTS = (std::max)(streamInfo.m_timeShift, int64_t{0});
+            timeShiftGiven = false;
+        }
+    }
     int64_t tsStart = 0;  // 90 kHz ticks
     if (!timeShiftGiven && pid > 0 && !codec.empty() && codec[0] == 'A' && !fileList.empty() &&
         streamInfo.m_addParams.find("srcstartdelay") == streamInfo.m_addParams.end() &&
@@ -2761,6 +2792,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                                 << " the first video track of the file, so its times are moved by that much.");
             }
         }
+    if (mp4EditStart)
+        streamInfo.m_addParams["srcstartms"] = int64ToStr(mp4ListedMs);
     // A cut file's video keeps the pictures before the cut (srcvideolead, see MovDemuxer::mov_read_moov), so the sound
     // is moved back by its edit list start less that pre-roll. A Matroska output of AAC says the edit list start as
     // CodecDelay, and one of Opus says the pre-skip of its OpusHead (srcopusskip): only the rest is moved.

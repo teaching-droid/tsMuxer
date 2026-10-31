@@ -34,7 +34,14 @@ class MovDemuxer final : public IOContextDemuxer
     int64_t getTrackDelay(const int32_t pid) override
     {
         // This track's start relative to the first video track's, in ms (rounded), as the TS and PS demuxers give it.
-        const int64_t ns = trackStartFromVideoNs(pid);
+        // For a track with an edit list start (srccodecdelay), less what it skips and plus the pictures a cut file's
+        // video keeps (srcvideolead): where its sound is put when no timeshift= is given (METADemuxer::addStream). It
+        // was left out, so the listing gave a plain MP4's sound no delay, and a demux and a mux of the demuxed files
+        // lost it, the priming of AAC (23 ms at 44.1 kHz) put the sound that much late. A fragmented file says the same
+        // start in its tfdt, which was listed.
+        int64_t ns = trackStartFromVideoNs(pid);
+        if (const auto edit = m_codecDelayNs.find(pid); edit != m_codecDelayNs.end() && edit->second > 0)
+            ns += (m_videoLeadNs > 0 ? m_videoLeadNs : 0) - edit->second;
         return (ns >= 0 ? ns + 500000 : ns - 500000) / 1000000;
     }
     double getTrackFps(uint32_t trackId) override;
