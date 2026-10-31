@@ -1120,7 +1120,11 @@ bool CLPIParser::parse(const char* fileName)
     int64_t fileSize;
     if (!file.size(&fileSize))
         return false;
-    const auto buffer = new uint8_t[fileSize];
+    // A playlist or clip information file is small: one of more than 64 MiB is not one, and on a 32 bit build its
+    // size would not fit the buffer
+    if (fileSize < 0 || fileSize > 64 * 1024 * 1024)
+        return false;
+    const auto buffer = new uint8_t[static_cast<size_t>(fileSize)];
     if (!file.read(buffer, static_cast<uint32_t>(fileSize)))
     {
         delete[] buffer;
@@ -1416,7 +1420,11 @@ bool MPLSParser::parse(const char* fileName)
     int64_t fileSize;
     if (!file.size(&fileSize))
         return false;
-    const auto buffer = new uint8_t[fileSize];
+    // A playlist or clip information file is small: one of more than 64 MiB is not one, and on a 32 bit build its
+    // size would not fit the buffer
+    if (fileSize < 0 || fileSize > 64 * 1024 * 1024)
+        return false;
+    const auto buffer = new uint8_t[static_cast<size_t>(fileSize)];
     if (!file.read(buffer, static_cast<uint32_t>(fileSize)))
     {
         delete[] buffer;

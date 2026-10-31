@@ -53,9 +53,11 @@ CheckStreamRez VideoCopyStreamReader::checkStream(const uint8_t* buffer, const i
     const auto height = static_cast<unsigned>(readBe(buffer + 6, 2));
     const auto fourcc = static_cast<uint32_t>(readBe(buffer + 8, 4));
     rez.codecInfo = prores ? proresCodecInfo : mpeg4AspCodecInfo;
-    rez.streamDescr = std::string(prores ? proresName(fourcc) : "MPEG-4 Part 2 video") +
-                      ". Resolution: " + std::to_string(width) + ":" + std::to_string(height) +
-                      ". Copied into a Matroska output only";
+    // Appended one part at a time: GCC 11 took the chain of + for a write of 14 bytes into 4 (-Wstringop-overflow)
+    rez.streamDescr = prores ? proresName(fourcc) : "MPEG-4 Part 2 video";
+    rez.streamDescr += ". Resolution: ";
+    rez.streamDescr += std::to_string(width) + ":" + std::to_string(height);
+    rez.streamDescr += ". Copied into a Matroska output only";
     return rez;
 }
 

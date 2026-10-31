@@ -1103,10 +1103,10 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
     [[nodiscard]] int64_t peekSttsVal() const
     {
         if (sttsCnt > 0 && sttsPos >= 0)
-            return m_sc->stts_data[sttsPos].duration;
+            return m_sc->stts_data[static_cast<size_t>(sttsPos)].duration;
         if (sttsPos + 1 >= static_cast<int64_t>(m_sc->stts_data.size()))
             return fragPos < m_sc->fragDur.size() ? static_cast<int64_t>(m_sc->fragDur[fragPos]) : -1;
-        return m_sc->stts_data[sttsPos + 1].duration;
+        return m_sc->stts_data[static_cast<size_t>(sttsPos + 1)].duration;
     }
 
     int64_t getSttsVal()
@@ -1127,7 +1127,7 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
                 THROW(ERR_MOV_PARSE, "MP4/MOV error: invalid stts index for SRT track #"
                                          << m_sc->ffindex << " at position " << m_demuxer->getProcessedBytes())
 
-            sttsCnt = m_sc->stts_data[sttsPos].count;
+            sttsCnt = m_sc->stts_data[static_cast<size_t>(sttsPos)].count;
         }
         sttsCnt--;
         // The text track's own time scale, from its media header. Zero ended the program on the spot
@@ -1135,7 +1135,7 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
         if (m_sc->time_scale == 0)
             THROW(ERR_MOV_PARSE,
                   "MP4/MOV error: text track #" << m_sc->ffindex << " has a time scale of 0 in its media header (mdhd)")
-        return m_sc->stts_data[sttsPos].duration;  // in the track's time scale
+        return m_sc->stts_data[static_cast<size_t>(sttsPos)].duration;  // in the track's time scale
     }
 
     void setPrivData(uint8_t* buff, const int size) override
@@ -3336,12 +3336,12 @@ int MovDemuxer::mov_read_extradata(MOVAtom atom)
         return -1;
 
     const int64_t oldSize = st->codec_priv_size;
-    const auto tmp = new uint8_t[oldSize];
+    const auto tmp = new uint8_t[static_cast<size_t>(oldSize)];
     if (oldSize > 0)
-        memcpy(tmp, st->codec_priv, oldSize);
+        memcpy(tmp, st->codec_priv, static_cast<size_t>(oldSize));
     delete[] st->codec_priv;
-    st->codec_priv = new uint8_t[newSize];
-    memcpy(st->codec_priv, tmp, oldSize);
+    st->codec_priv = new uint8_t[static_cast<size_t>(newSize)];
+    memcpy(st->codec_priv, tmp, static_cast<size_t>(oldSize));
     delete[] tmp;
     uint8_t* buf = st->codec_priv + oldSize;
 
@@ -3875,7 +3875,7 @@ int MovDemuxer::mov_read_glbl(MOVAtom atom)
         return -1;
     Track* st = tracks[num_tracks - 1];
     delete[] st->codec_priv;
-    st->codec_priv = new unsigned char[atom.size];
+    st->codec_priv = new unsigned char[static_cast<size_t>(atom.size)];
     st->codec_priv_size = static_cast<int>(atom.size);
     get_buffer(st->codec_priv, static_cast<int>(atom.size));
     if (st->parsed_priv_data)

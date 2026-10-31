@@ -436,7 +436,7 @@ void VC1StreamReader::updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* nex
         memmove(nextNal + sizeDiff, nextNal, m_bufEnd - nextNal);
         m_bufEnd += sizeDiff;
     }
-    memcpy(buff + 1, tmpBuffer.get(), newSpsLen);
+    memcpy(buff + 1, tmpBuffer.get(), static_cast<size_t>(newSpsLen));
 }
 
 // ** THE UNITS THAT CANNOT BE VC-1 (see MPEGStreamReader::unusableUnit). ** SMPTE ST 421 Annex E (Table E.1): the BDU

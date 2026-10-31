@@ -394,7 +394,7 @@ void ByteFileWriter::writeLongAD(const uint32_t lenBytes, const uint32_t pos, co
 
 void ByteFileWriter::writeDString(const char* value, const int64_t len)
 {
-    const size_t writeLen = (len == -1) ? strlen(value) + 2 : len;
+    const size_t writeLen = (len == -1) ? strlen(value) + 2 : static_cast<size_t>(len);
     ::writeDString(m_curPos, value, writeLen);
     m_curPos += writeLen;
 }

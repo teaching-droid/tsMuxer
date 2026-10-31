@@ -1929,7 +1929,8 @@ void H264StreamReader::fillPoc1(SliceUnit& slice, Poc1State& state)
         int64_t perCycle = 0;
         for (const int offset : sps->offset_for_ref_frame) perCycle += offset;
         expected = (absFrameNum - 1) / cycle * perCycle;
-        for (int64_t i = 0; i <= (absFrameNum - 1) % cycle; ++i) expected += sps->offset_for_ref_frame[i];
+        for (int64_t i = 0; i <= (absFrameNum - 1) % cycle; ++i)
+            expected += sps->offset_for_ref_frame[static_cast<size_t>(i)];
     }
     if (slice.nal_ref_idc == 0)
         expected += sps->offset_for_non_ref_pic;

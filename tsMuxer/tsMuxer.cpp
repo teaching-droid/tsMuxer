@@ -316,10 +316,10 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
     // listed after a plain 4K video went to 0x1015.
     const auto* mpegReader = dynamic_cast<MPEGStreamReader*>(codecReader);
     const auto* hevcReader = dynamic_cast<HEVCStreamReader*>(codecReader);
-    const bool isDvEnhancement =
-        codecReader != nullptr && codecReader->getStreamHDR() == 4 && m_videoTrackCnt > 0 &&
-        !(mpegReader && m_firstBaseWidth > 0 && mpegReader->getStreamWidth() > m_firstBaseWidth) &&
-        !(hevcReader && hevcReader->dvRpuElPresent() == 0);
+    const bool isDvEnhancement = codecReader != nullptr && codecReader->getStreamHDR() == 4 && m_videoTrackCnt > 0 &&
+                                 !(mpegReader && m_firstBaseWidth > 0 &&
+                                   mpegReader->getStreamWidth() > static_cast<unsigned>(m_firstBaseWidth)) &&
+                                 !(hevcReader && hevcReader->dvRpuElPresent() == 0);
     const bool isPrimaryVideo = isVideo && !isSecondary && !isDvEnhancement;
 
     // A UHD disc (V3) carries its main video at 1080 lines or more, and progressive. The test was made where the
@@ -1943,11 +1943,11 @@ void TSMuxer::ensureOutBufSpace(const int needed)
     while (newCap < want) newCap *= 2;
     if (newCap > INT32_MAX - 1024)
         THROW(ERR_COMMON, "Pes packet len too large (>2Gb) . Bad stream or invalid codec speciffed")
-    const auto newBuf = new uint8_t[newCap];
+    const auto newBuf = new uint8_t[static_cast<size_t>(newCap)];
     memcpy(newBuf, m_outBuf, m_outBufLen);
     delete[] m_outBuf;
     m_outBuf = newBuf;
-    m_outBufCapacity = newCap;
+    m_outBufCapacity = static_cast<int>(newCap);  // below INT32_MAX, checked above
 }
 
 // One TS packet of the pending PES, replicating the writeTSFrames packet body exactly.
@@ -1992,11 +1992,12 @@ void TSMuxer::emitInplacePacket(const uint8_t* payload, const int payloadLen, co
                 capacity -= 2;
             }
         }
-        memset(reinterpret_cast<uint8_t*>(tsPacket) + tsPacket->getHeaderSize(), 0xff, capacity - payloadLen);
+        memset(reinterpret_cast<uint8_t*>(tsPacket) + tsPacket->getHeaderSize(), 0xff,
+               static_cast<size_t>(capacity - payloadLen));
         tsPacket->adaptiveField.length += static_cast<unsigned>(capacity - payloadLen);
         capacity = payloadLen;
     }
-    memcpy(m_outBuf + m_outBufLen + tsPacket->getHeaderSize(), payload, capacity);
+    memcpy(m_outBuf + m_outBufLen + tsPacket->getHeaderSize(), payload, static_cast<size_t>(capacity));
     m_outBufLen += TS_FRAME_SIZE;
     m_processedBlockSize += TS_FRAME_SIZE;
     m_pcrBits += TS_FRAME_SIZE * 8;
@@ -2046,7 +2047,7 @@ void TSMuxer::emitInplacePayload(const uint8_t* data, int64_t len, const bool pr
     }
     if (len > 0)
     {
-        memcpy(m_pendingTail, data, len);
+        memcpy(m_pendingTail, data, static_cast<size_t>(len));
         m_pendingTailLen = static_cast<int>(len);
     }
 }
@@ -2814,12 +2815,13 @@ int TSMuxer::writeTSFrames(const int pid, const uint8_t* buffer, const int64_t l
                     payloadLen -= 2;
                 }
             }
-            memset(reinterpret_cast<uint8_t*>(tsPacket) + tsPacket->getHeaderSize(), 0xff, payloadLen - tmpBufferLen);
+            memset(reinterpret_cast<uint8_t*>(tsPacket) + tsPacket->getHeaderSize(), 0xff,
+                   static_cast<size_t>(payloadLen - tmpBufferLen));
             tsPacket->adaptiveField.length += static_cast<unsigned>(payloadLen - tmpBufferLen);
             payloadLen = tmpBufferLen;
         }
         const int tsHeaderSize = tsPacket->getHeaderSize();
-        memcpy(m_outBuf + m_outBufLen + tsHeaderSize, curPos, payloadLen);
+        memcpy(m_outBuf + m_outBufLen + tsHeaderSize, curPos, static_cast<size_t>(payloadLen));
 
         curPos += payloadLen;
         m_outBufLen += TS_FRAME_SIZE;
@@ -2893,7 +2895,7 @@ void TSMuxer::buildPMT()
     int64_t roundSize = pmtEnd - m_pmtBuffer;
     if (roundSize % TS_FRAME_SIZE != 0)
         roundSize = (roundSize / TS_FRAME_SIZE + 1) * TS_FRAME_SIZE;
-    memset(pmtEnd, 0xff, roundSize - oldPmtSize);
+    memset(pmtEnd, 0xff, static_cast<size_t>(roundSize - oldPmtSize));
     m_pmtFrames = roundSize / TS_FRAME_SIZE;
 }
 

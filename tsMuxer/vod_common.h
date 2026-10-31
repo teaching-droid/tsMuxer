@@ -17,7 +17,7 @@ extern bool sLastMsg;
     do                                             \
     {                                              \
         {                                          \
-            if ((errIndex) & 2)                    \
+            if (((errIndex) & 2) != 0)             \
             {                                      \
                 if ((level) <= LT_WARN)            \
                     std::cerr << msg << std::endl; \
@@ -27,7 +27,7 @@ extern bool sLastMsg;
                     sLastMsg = true;               \
             }                                      \
         }                                          \
-    } while (0)
+    } while (false)
 
 class Process
 {

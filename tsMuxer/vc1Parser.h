@@ -74,11 +74,11 @@ class VC1Unit
     int64_t vc1_unescape_buffer(uint8_t* src, const int64_t size)
     {
         delete[] m_nalBuffer;
-        m_nalBuffer = new uint8_t[size];
+        m_nalBuffer = new uint8_t[static_cast<size_t>(size)];
         if (size < 4)
         {
             std::copy_n(src, size, m_nalBuffer);
-            m_nalBufferLen = size;
+            m_nalBufferLen = static_cast<size_t>(size);
             return size;
         }
         int64_t dsize = 0;
@@ -93,7 +93,7 @@ class VC1Unit
             else
                 m_nalBuffer[dsize++] = *src;
         }
-        m_nalBufferLen = dsize;
+        m_nalBufferLen = static_cast<size_t>(dsize);
         return dsize;
     }
 

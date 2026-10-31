@@ -4,6 +4,7 @@
 #define ISO_WRITER_H_
 
 #include <fs/file.h>
+#include <types/types.h>
 
 #include <map>
 #include <string>
@@ -174,7 +175,8 @@ struct FileEntryInfo
 
     std::vector<FileEntryInfo*> m_subDirs;
     std::vector<FileEntryInfo*> m_files;
-    std::map<std::vector<uint8_t>, std::string> m_childIdentifiers;  // UDF identifier -> name, of the children
+    // UDF identifier -> name, of the children
+    std::map<std::vector<uint8_t>, std::string, ByteVectorLess> m_childIdentifiers;
     IsoWriter* m_owner;
     FileEntryInfo* m_parent;
     int m_sectorNum;

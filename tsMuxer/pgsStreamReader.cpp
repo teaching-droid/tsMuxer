@@ -729,7 +729,7 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
     if (m_bufEnd - m_curPos < 3)
     {
         m_tmpBufferLen = m_bufEnd - m_curPos;
-        memmove(m_tmpBuffer.data(), m_curPos, m_tmpBufferLen);
+        memmove(m_tmpBuffer.data(), m_curPos, static_cast<size_t>(m_tmpBufferLen));
         return NEED_MORE_DATA;
     }
     bool pgStartCode = m_curPos[0] == 'P' && m_curPos[1] == 'G';
@@ -749,7 +749,7 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
                 m_curPos = m_bufEnd - 12;
             }
             m_tmpBufferLen = m_bufEnd - m_curPos;
-            memmove(m_tmpBuffer.data(), m_curPos, m_tmpBufferLen);
+            memmove(m_tmpBuffer.data(), m_curPos, static_cast<size_t>(m_tmpBufferLen));
             return NEED_MORE_DATA;
         }
         warnSupDamage();
@@ -764,7 +764,7 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
         if (m_bufEnd - m_curPos < 10)
         {
             m_tmpBufferLen = m_bufEnd - m_curPos;
-            memmove(m_tmpBuffer.data(), m_curPos, m_tmpBufferLen);
+            memmove(m_tmpBuffer.data(), m_curPos, static_cast<size_t>(m_tmpBufferLen));
             return NEED_MORE_DATA;
         }
         // ** A LATER .SUP OF A JOIN STARTS WHERE ITS VIDEO DOES. ** Its segments came at their own times, those of
@@ -806,7 +806,7 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
         if (m_bufEnd - m_curPos < 8)
         {
             m_tmpBufferLen = m_bufEnd - m_curPos;
-            memmove(m_tmpBuffer.data(), m_curPos, m_tmpBufferLen);
+            memmove(m_tmpBuffer.data(), m_curPos, static_cast<size_t>(m_tmpBufferLen));
             return NEED_MORE_DATA;
         }
         const auto pesPacket = reinterpret_cast<PESPacket*>(m_curPos);
@@ -815,7 +815,7 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
         if (m_bufEnd - m_curPos < pesHeaderLen)
         {
             m_tmpBufferLen = m_bufEnd - m_curPos;
-            memmove(m_tmpBuffer.data(), m_curPos, m_tmpBufferLen);
+            memmove(m_tmpBuffer.data(), m_curPos, static_cast<size_t>(m_tmpBufferLen));
             return NEED_MORE_DATA;
         }
         if (pesPacket->flagsLo & 0x80)
@@ -845,7 +845,7 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
     if (m_bufEnd - m_curPos < 3)
     {
         m_tmpBufferLen = m_bufEnd - m_curPos;
-        memmove(m_tmpBuffer.data(), m_curPos, m_tmpBufferLen);
+        memmove(m_tmpBuffer.data(), m_curPos, static_cast<size_t>(m_tmpBufferLen));
         return NEED_MORE_DATA;
     }
     const uint8_t segment_type = *m_curPos;
@@ -853,7 +853,7 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
     if (m_bufEnd - m_curPos < 3ll + segment_len)
     {
         m_tmpBufferLen = m_bufEnd - m_curPos;
-        memmove(m_tmpBuffer.data(), m_curPos, m_tmpBufferLen);
+        memmove(m_tmpBuffer.data(), m_curPos, static_cast<size_t>(m_tmpBufferLen));
         return NEED_MORE_DATA;
     }
     if (m_containerType == ContainerType::ctSUP)
@@ -1026,7 +1026,7 @@ int PGSStreamReader::flushPacket(AVPacket& avPacket) { return 0; }
 void PGSStreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, bool lastBlock)
 {
     if (m_tmpBufferLen + dataLen > static_cast<int64_t>(m_tmpBuffer.size()))
-        m_tmpBuffer.resize(m_tmpBufferLen + dataLen);
+        m_tmpBuffer.resize(static_cast<size_t>(m_tmpBufferLen + dataLen));
 
     if (!m_tmpBuffer.empty())
         memmove(m_tmpBuffer.data() + m_tmpBufferLen, data + MAX_AV_PACKET_SIZE, dataLen);

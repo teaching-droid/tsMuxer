@@ -373,7 +373,7 @@ void ParsedAV1TrackData::extractData(AVPacket* pkt, uint8_t* buff, const int siz
             else
             {
                 // Fallback: copy raw (shouldn't happen with proper buffer sizing)
-                memcpy(dst, payload, obuPayloadSize);
+                memcpy(dst, payload, static_cast<size_t>(obuPayloadSize));
                 dst += obuPayloadSize;
             }
         }

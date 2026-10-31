@@ -178,7 +178,9 @@ static int sint_size(int64_t value)
 int ebml_write_uint(uint8_t* dst, const uint32_t id, uint64_t value)
 {
     int pos = ebml_write_id(dst, id);
-    const int valSize = uint_size(value);
+    // At most 8 bytes, which uint_size never exceeds: said so that a compiler sees the bound, as a later GCC took the
+    // loop below for a 16 byte write into the 16 byte buffer of a TrackUID (-Wstringop-overflow)
+    const int valSize = (std::min)(uint_size(value), 8);
     pos += ebml_write_size(dst + pos, valSize);
     for (int i = valSize - 1; i >= 0; --i) dst[pos++] = static_cast<uint8_t>((value >> (i * 8)) & 0xFF);
     return pos;
@@ -5293,7 +5295,7 @@ bool MatroskaMuxer::drivesSplit(const MkvTrackInfo& track) const
 bool MatroskaMuxer::splitDue(const int64_t pts)
 {
     if (m_splitSize > 0)
-        return m_file.pos() + static_cast<int64_t>(m_clusterBuf.size()) > m_splitSize;
+        return static_cast<int64_t>(m_file.pos()) + static_cast<int64_t>(m_clusterBuf.size()) > m_splitSize;
     // At the first keyframe at or after the length asked for: a keyframe exactly on it starts the next part.
     if (m_splitDuration > 0)
         return pts - m_firstTimecode >= m_splitDuration;

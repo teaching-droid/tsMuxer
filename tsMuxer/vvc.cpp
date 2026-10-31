@@ -766,7 +766,7 @@ int VvcSpsUnit::deserialize()
         inter_layer_prediction_enabled_flag = (vps_id != 0) ? m_reader.getBit() : false;
         m_reader.skipBit();  // sps_idr_rpl_present_flag
         const bool sps_rpl1_same_as_rpl0_flag = m_reader.getBit();
-        for (size_t i = 0; i < (sps_rpl1_same_as_rpl0_flag ? 1 : 2); i++)
+        for (size_t i = 0; i < (sps_rpl1_same_as_rpl0_flag ? 1U : 2U); i++)
         {
             sps_num_ref_pic_lists = extractUEGolombCode();
             if (sps_num_ref_pic_lists > 64)

@@ -257,7 +257,7 @@ int TrueHDAC3MergeReader::readPacket(AVPacket& avPacket)
             if (m_curPos < m_bufEnd)
             {
                 m_tmpBufferLen = static_cast<uint32_t>(m_bufEnd - m_curPos);
-                memmove(m_tmpBuffer.data(), m_curPos, m_tmpBufferLen);
+                memmove(m_tmpBuffer.data(), m_curPos, static_cast<size_t>(m_tmpBufferLen));
                 m_curPos = m_bufEnd;
             }
             // Say where the stream stands, as SimplePacketizerReader does before asking for more data. The muxer

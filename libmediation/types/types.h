@@ -46,6 +46,19 @@ void splitStr(std::vector<std::string>& rez, const char* str, char splitter);
 // An option "name=value" split at its first '=' only, so a value may hold '=' itself
 std::vector<std::string> splitOption(const std::string& option);
 
+// An order of byte strings for a set or a map that only looks them up: by length, then by bytes. The order of
+// std::vector's own operator< is not needed there, and GCC 13 took its memcmp for a read of 2^63 bytes
+// (-Wstringop-overread).
+struct ByteVectorLess
+{
+    bool operator()(const std::vector<uint8_t>& a, const std::vector<uint8_t>& b) const
+    {
+        if (a.size() != b.size())
+            return a.size() < b.size();
+        return !a.empty() && std::memcmp(a.data(), b.data(), a.size()) < 0;
+    }
+};
+
 std::string trimStr(const std::string& value);
 
 std::string extractFileExt(const std::string& src);

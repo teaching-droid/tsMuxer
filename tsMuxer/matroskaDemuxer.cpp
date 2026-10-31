@@ -4789,7 +4789,8 @@ std::vector<std::vector<uint8_t>> MatroskaDemuxer::getGlobalTags()
                 return true;
         return false;
     };
-    std::set<std::vector<uint8_t>> earlier;  // the Tag elements of the Tags elements before this one (see getTrackTags)
+    // the Tag elements of the Tags elements before this one (see getTrackTags)
+    std::set<std::vector<uint8_t>, ByteVectorLess> earlier;
     for (const auto& [body, size] : tagsElements)
     {
         std::vector<std::vector<uint8_t>> here;
@@ -4908,7 +4909,7 @@ std::map<uint64_t, std::vector<AbstractDemuxer::SourceTrackTag>> MatroskaDemuxer
     // byte for byte is taken once (the tags of a track would be written twice otherwise). Within one Tags element
     // nothing is left out, as before. Section 23.2's rule that a new Tags element resets the ones before is for a live
     // stream's Tags between the clusters, which have no SeekHead entry and are not read here.
-    std::set<std::vector<uint8_t>> earlier;
+    std::set<std::vector<uint8_t>, ByteVectorLess> earlier;
     for (const auto& [body, size] : tagsElements)
     {
         if (size <= 0 || size > (64 << 20))

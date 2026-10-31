@@ -360,7 +360,7 @@ int LPCMStreamReader::convertWavToPCM(uint8_t* start, uint8_t* end)
     // 2. Remap channels to Blu-ray standard
     if (ch == 6)
     {
-        const auto tmpData = new uint8_t[chFullSize];
+        const auto tmpData = new uint8_t[static_cast<size_t>(chFullSize)];
         storeChannelData(start, end, 4, tmpData, ch);    // copy channel 6(LFE) to tmpData
         copyChannelData(start, end, 5, 4, ch);           // Shift RS
         copyChannelData(start, end, 6, 5, ch);           // Shift LS
@@ -369,7 +369,7 @@ int LPCMStreamReader::convertWavToPCM(uint8_t* start, uint8_t* end)
     }
     else if (ch == 7)
     {
-        const auto tmpData = new uint8_t[chFullSize];
+        const auto tmpData = new uint8_t[static_cast<size_t>(chFullSize)];
 
         storeChannelData(start, end, 4, tmpData, ch);  // copy channel 8(LFE) to tmpData
         copyChannelData(start, end, 6, 4, ch);
@@ -380,7 +380,7 @@ int LPCMStreamReader::convertWavToPCM(uint8_t* start, uint8_t* end)
     }
     else if (ch == 8)
     {
-        const auto lfeData = new uint8_t[chFullSize];
+        const auto lfeData = new uint8_t[static_cast<size_t>(chFullSize)];
 
         storeChannelData(start, end, 4, lfeData, ch);  // copy channel 8(LFE) to tmpData
         copyChannelData(start, end, 7, 4, ch);
@@ -498,7 +498,7 @@ int LPCMStreamReader::convertLPCMToWAV(uint8_t* start, uint8_t* end)
         }
         else if (m_channels == 6)
         {
-            const auto tmpData = new uint8_t[ch1FullSize];
+            const auto tmpData = new uint8_t[static_cast<size_t>(ch1FullSize)];
             storeChannelData(start, end, 6, tmpData, mch);    // copy channel 6(LFE) to tmpData
             copyChannelData(start, end, 5, 6, mch);           // Shift RS
             copyChannelData(start, end, 4, 5, mch);           // Shift LS
@@ -507,7 +507,7 @@ int LPCMStreamReader::convertLPCMToWAV(uint8_t* start, uint8_t* end)
         }
         else if (m_channels == 7)
         {
-            const auto tmpData = new uint8_t[ch1FullSize];
+            const auto tmpData = new uint8_t[static_cast<size_t>(ch1FullSize)];
 
             storeChannelData(start, end, 4, tmpData, mch);  // copy channel 8(LFE) to tmpData
             copyChannelData(start, end, 5, 4, mch);
@@ -518,7 +518,7 @@ int LPCMStreamReader::convertLPCMToWAV(uint8_t* start, uint8_t* end)
         }
         else if (m_channels == 8)
         {
-            const auto lfeData = new uint8_t[ch1FullSize];
+            const auto lfeData = new uint8_t[static_cast<size_t>(ch1FullSize)];
 
             storeChannelData(start, end, 8, lfeData, mch);
             copyChannelData(start, end, 7, 8, mch);

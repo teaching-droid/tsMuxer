@@ -702,7 +702,7 @@ void SimplePacketizerReader::setBuffer(uint8_t* data, const uint32_t dataLen, bo
     }
 
     if (static_cast<size_t>(m_tmpBufferLen + dataLen) > m_tmpBuffer.size())
-        m_tmpBuffer.resize(m_tmpBufferLen + dataLen);
+        m_tmpBuffer.resize(static_cast<size_t>(m_tmpBufferLen + dataLen));
 
     if (!m_tmpBuffer.empty())
         memcpy(m_tmpBuffer.data() + m_tmpBufferLen, data + MAX_AV_PACKET_SIZE, dataLen);

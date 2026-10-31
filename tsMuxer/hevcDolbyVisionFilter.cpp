@@ -157,8 +157,8 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
 
                     // Rebuild the NAL: the attachment stores the payload with its two byte header
                     // removed, which is what an extracted RPU file holds, so the header goes back.
-                    const uint8_t* payload = m_originals.data.data() + m_originals.offsets[entry];
-                    const uint32_t len = m_originals.lengths[entry];
+                    const uint8_t* payload = m_originals.data.data() + m_originals.offsets[static_cast<size_t>(entry)];
+                    const uint32_t len = m_originals.lengths[static_cast<size_t>(entry)];
                     std::vector<uint8_t> nal;
                     nal.reserve(len + 2);
                     nal.push_back(curNal[0]);

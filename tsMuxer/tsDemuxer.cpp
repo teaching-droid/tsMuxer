@@ -878,7 +878,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     data += TS_FRAME_SIZE;
     if (m_tmpBufferLen > 0)
     {
-        memcpy(data - m_tmpBufferLen, m_tmpBuffer, m_tmpBufferLen);
+        memcpy(data - m_tmpBufferLen, m_tmpBuffer, static_cast<size_t>(m_tmpBufferLen));
         data -= m_tmpBufferLen;
         readedBytes += static_cast<uint32_t>(m_tmpBufferLen);
         m_tmpBufferLen = 0;
@@ -1016,7 +1016,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     if (m_curPos < data + readedBytes)
     {
         m_tmpBufferLen = data + readedBytes - m_curPos;
-        memmove(m_tmpBuffer, m_curPos, m_tmpBufferLen);
+        memmove(m_tmpBuffer, m_curPos, static_cast<size_t>(m_tmpBufferLen));
     }
 
     return 0;
@@ -1236,9 +1236,9 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
             }
         if (vect != nullptr && payloadLen > skip)
         {
-            vect->grow(payloadLen - skip);
+            vect->grow(static_cast<size_t>(payloadLen - skip));
             uint8_t* dst = vect->data() + vect->size() - (payloadLen - skip);
-            memcpy(dst, frameData + skip, payloadLen - skip);
+            memcpy(dst, frameData + skip, static_cast<size_t>(payloadLen - skip));
         }
         if (m_joinSoundPid[pid])
             m_joinSound[pid].pesBytes += payloadLen;
