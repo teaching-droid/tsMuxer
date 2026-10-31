@@ -6,6 +6,8 @@
 
 ### Blu-ray and transport stream
 
+* **--bitrate holds the stream to its rate.** It only padded up to the rate: data above it went out as fast as the streams asked, so --cbr --bitrate=40000 over a 90 Mbit/s video was muxed at about 94 Mbit/s, and only a warning said so. The data now waits for the rate, as with --maxbitrate, and a warning counts the pictures that arrive after they are due and says by how much. A stream that never goes above the rate is muxed as before.
+
 * **A Blu-ray disc muxed from a Blu-ray disc keeps that disc's title and pictures** (BDMV/META/DL), which a player such as the PS3 shows. They were left behind, and the new disc showed as a blank one named BDMV. `--meta-dir=<folder>` gives the disc a title and pictures of one's own: bdmt_eng.xml and the like, with the pictures they name, as a disc keeps them. `--meta-dir=none` writes none. It works with `--bdmv-to-iso` too, in place of the folder's own. Only the bdmt files and the pictures they name are copied. In the window it is the "Disc title and pictures" choice in the Output area, for a Blu-ray folder or image, and on the BDMV folder to ISO tab. (#30, thanks to @NTMPowers for the request)
 
 ## tsMuxeR 3.0.1

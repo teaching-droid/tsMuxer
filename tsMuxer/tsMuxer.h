@@ -168,6 +168,8 @@ class TSMuxer final : public AbstractMuxer
     bool m_keyGapsReported = false;
     void noteKeyGap(int pid, int64_t pts, bool key);
     void reportKeyPictureGaps();
+    [[nodiscard]] int64_t cbrClock() const;
+    [[nodiscard]] int ceilingRate() const;
     [[nodiscard]] int64_t pcrForMaxRate(int64_t newPCR, int64_t extraFrames, int64_t pcrGAP) const;
     [[nodiscard]] bool nextPCRChanceTooLate(int tsIndex, int64_t dts) const;
     void noteAtsPass(int frames, double gap);
@@ -263,6 +265,7 @@ class TSMuxer final : public AbstractMuxer
     int64_t m_worstLateness;   // the largest such lateness, 90 kHz
     // --bitrate: the output measured in windows of at least a second of the clock (noteCbrRate)
     bool m_cbrGiven;                // --bitrate was given (--maxbitrate alone also sets m_cbrBitrate)
+    bool m_ceilingFromBitrate;      // --bitrate holds the clock and is the ceiling of the late count (K18)
     int64_t m_cbrWinBits;           // bits of content (not the null packets of the padding) in the current window
     int64_t m_cbrWinTicks;          // its length so far, 90 kHz
     int64_t m_cbrWinStart;          // the PCR it began at

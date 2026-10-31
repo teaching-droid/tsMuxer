@@ -165,6 +165,7 @@ TSMuxer::TSMuxer(MuxerManager* owner) : AbstractMuxer(owner)
     m_latePictures = 0;
     m_worstLateness = 0;
     m_cbrGiven = false;
+    m_ceilingFromBitrate = false;
     m_cbrWinBits = 0;
     m_cbrWinTicks = 0;
     m_cbrWinStart = 0;
@@ -768,7 +769,7 @@ bool TSMuxer::doFlush()
         newPCR = (m_endStreamDTS - m_minDts) / INT_FREQ_TO_TS_FREQ + m_fixed_pcr_offset;
         if (m_cbrBitrate != -1 && m_lastPCR != -1)
         {
-            const auto cbrPCR = llround(static_cast<double>(m_lastPCR + m_pcrBits) * 90000.0 / m_cbrBitrate);
+            const auto cbrPCR = cbrClock();
             newPCR = FFMAX(newPCR, cbrPCR);
         }
     }
@@ -935,14 +936,15 @@ void TSMuxer::noteLateArrival()
         sendAheadNotePes();  // counted when its time is final (sendAheadFinalizeFront)
         return;
     }
-    if (m_maxBitrate == -1 || m_lastPCR == -1 || m_lastPESDTS == -1)
+    const int ceiling = ceilingRate();
+    if (ceiling == -1 || m_lastPCR == -1 || m_lastPESDTS == -1)
         return;
     const auto it = m_pmt.pidList.find(m_pesPID);
     if (it == m_pmt.pidList.end() || !isVideoStreamType(it->second.m_streamType))
         return;
     m_cappedPictures++;
     const int64_t arrival =
-        m_lastPCR + static_cast<int64_t>(std::ceil(static_cast<double>(m_pcrBits) * 90000.0 / m_maxBitrate));
+        m_lastPCR + static_cast<int64_t>(std::ceil(static_cast<double>(m_pcrBits) * 90000.0 / ceiling));
     if (arrival > m_lastPESDTS)
     {
         m_latePictures++;
@@ -966,12 +968,12 @@ void TSMuxer::reportLateArrival() const
     if (m_latePictures == 0)
         return;
     LTRACE(LT_WARN, 2,
-           "Warning: with --maxbitrate=" << m_maxBitrate / 1000 << ", " << m_latePictures << " of " << m_cappedPictures
-                                         << " video pictures arrive after they are due, up to "
-                                         << latenessText(m_worstLateness)
-                                         << " late. The video's peaks are above the cap, so a player may stutter or "
-                                            "freeze there. Re-encode the video with its peak bitrate capped below the "
-                                            "cap, or raise the cap.");
+           "Warning: with " << (m_ceilingFromBitrate ? "--bitrate=" : "--maxbitrate=") << ceilingRate() / 1000 << ", "
+                            << m_latePictures << " of " << m_cappedPictures
+                            << " video pictures arrive after they are due, up to " << latenessText(m_worstLateness)
+                            << " late. The video's peaks are above the cap, so a player may stutter or "
+                               "freeze there. Re-encode the video with its peak bitrate capped below the "
+                               "cap, or raise the cap.");
     // 3D in interleaved blocks: each view is held to the cap on a clock of its own, and far below the video's rate the
     // two clocks drift apart, so the second view's clock references can jump. Measured: none from 500 kbps up, jumps
     // at 150 kbps, where no 3D video can play; a 3D disc allows far more than any such cap.
@@ -1017,7 +1019,9 @@ void TSMuxer::noteCbrRate(const int64_t pcr, const int64_t paddingBits)
 
 void TSMuxer::reportCbrExcess() const
 {
-    if (m_cbrPeakRate == 0)
+    // With --bitrate holding the clock the output never runs above the rate; what does not fit in time is late, and
+    // reportLateArrival says that
+    if (m_cbrPeakRate == 0 || m_cbrGiven)
         return;
     // once per job for 3D in interleaved blocks: both views are measured, the cause is one
     static bool said3d = false;
@@ -1438,6 +1442,22 @@ int TSMuxer::calcM2tsFrameCnt() const
 // was short by the two to four packets those add, every interval.
 //
 // extraFrames is what the caller is about to add and has not added yet.
+// ** THE CLOCK OF A CONSTANT RATE (K18). ** With --bitrate the clock may not run ahead of the bits written since the
+// last PCR at that rate. The term was (m_lastPCR + m_pcrBits) * 90000 / rate, which adds bits to 90 kHz ticks: it moved
+// the clock only near the start of the clock, so data above the rate went out faster and the output was not at a
+// constant rate. --maxbitrate alone also sets m_cbrBitrate; its term is kept as it was, as pcrForMaxRate holds that
+// rate, so its outputs do not change.
+int64_t TSMuxer::cbrClock() const
+{
+    if (m_cbrGiven)
+        return m_lastPCR + llround(static_cast<double>(m_pcrBits) * 90000.0 / m_cbrBitrate);
+    return llround(static_cast<double>(m_lastPCR + m_pcrBits) * 90000.0 / m_cbrBitrate);
+}
+
+// The rate the pictures are counted against for the late picture warning: --bitrate where it holds the clock, else
+// --maxbitrate, else none
+int TSMuxer::ceilingRate() const { return m_ceilingFromBitrate ? m_cbrBitrate : m_maxBitrate; }
+
 int64_t TSMuxer::pcrForMaxRate(const int64_t newPCR, const int64_t extraFrames, const int64_t pcrGAP) const
 {
     if (m_lastPCR == -1)
@@ -2544,7 +2564,7 @@ bool TSMuxer::muxPacket(AVPacket& avPacket)
 
     if (m_cbrBitrate != -1 && m_lastPCR != -1)
     {
-        const auto cbrPCR = llround(static_cast<double>(m_lastPCR + m_pcrBits) * 90000.0 / m_cbrBitrate);
+        const auto cbrPCR = cbrClock();
         newPCR = FFMAX(newPCR, cbrPCR);
     }
 
@@ -2748,18 +2768,24 @@ int TSMuxer::writeTSFrames(const int pid, const uint8_t* buffer, const int64_t l
             // expression still decides every crossing, so the output is unchanged.
             if (m_lastPCR != m_cbrEvalPCR || m_pcrBits >= m_cbrNextEvalBits)
             {
-                const auto newPCR = llround(static_cast<double>(m_lastPCR + m_pcrBits) * 90000.0 / m_cbrBitrate);
+                const auto newPCR = cbrClock();
                 if (newPCR - m_lastPCR >= m_pcr_delta && m_lastPCR != -1)
                 {
-                    m_cbrWinBits += m_pcrBits - m_cbrCarryBits;  // counted before the count is dropped
-                    m_cbrCarryBits = 0;
-                    m_pcrBits = 0;
+                    // With --bitrate the bits of the interval stay counted: the padding that writePCR writes is the
+                    // rate over the interval less those bits, and with the count dropped it padded the whole
+                    // interval, doubling a stream held to the rate (K18). writePCR counts them itself.
+                    if (!m_cbrGiven)
+                    {
+                        m_cbrWinBits += m_pcrBits - m_cbrCarryBits;  // counted before the count is dropped
+                        m_cbrCarryBits = 0;
+                        m_pcrBits = 0;
+                    }
                     writePATPMT(newPCR);
                     writePCR(newPCR);
                     // The clock has passed the decoding time of the data still being written: at the constant
                     // rate that data comes after it is due, so the decoder's buffer runs empty there (an underflow).
                     // This was reported as "VBV buffer overflow", the opposite of what happens.
-                    if (m_lastPESDTS != -1 && m_lastPCR > m_lastPESDTS)
+                    if (!m_cbrGiven && m_lastPESDTS != -1 && m_lastPCR > m_lastPESDTS)
                     {
                         LTRACE(LT_ERROR, 2,
                                "At " << (double)(m_lastPCR - m_fixed_pcr_offset) / 90000.0
@@ -3338,6 +3364,11 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
         }
     }
     m_cbrGiven = rateGiven;
+    // ** --bitrate IS A CEILING TOO (K18). ** A constant rate was kept only from below, by padding: data above it went
+    // out as fast as the streams asked, so --cbr --bitrate=40000 over a 90 Mbit/s video muxed at 94 Mbit/s, the
+    // rate of --vbr, and only a warning said so. The clock now may not run ahead of the bits at that rate (cbrClock),
+    // and pictures the rate cannot carry in time are counted and said, as for --maxbitrate (ceilingRate).
+    m_ceilingFromBitrate = rateGiven && (m_maxBitrate == -1 || m_cbrBitrate < m_maxBitrate);
     // --bitrate gives a constant rate, and --minbitrate after it lowered that rate without a word: 20000 became 10000.
     // The constant rate is kept, whatever order the two come in.
     if (rateGiven && minRateGiven)
