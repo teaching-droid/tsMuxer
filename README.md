@@ -118,10 +118,10 @@ Please see [USAGE.md](docs/USAGE.md) for usage instructions.
 
 The following is a list of changes that will need to be made to the original source code and project in general:
 
-* the program doesn't support MPEG-4 ASP, even though MPEG-4 ASP is defined in the TS specification
+* MPEG-4 ASP (Part 2) is read from MP4 and MOV into a Matroska output only; it cannot go into a TS, though the TS specification defines it
 * has issues with 24-bit DTS Express
 * issues with the 3D plane lists when there are mismatches between the MPLS and M2TS
-* AV1 in MPEG-TS playback depends on player/demuxer support for the AOM draft specification (not yet widely supported as of 2026)
+* AV1 in MPEG-TS plays only where the player or demuxer supports the AOM draft specification for it, which few do
 
 ## Contributing
 
