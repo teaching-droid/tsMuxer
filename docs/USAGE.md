@@ -11,7 +11,8 @@ The simplest thing to do is to use the tsMuxerGUI. A screenshot of that can be s
 This fork adds a "BDMV folder to ISO" tab and the `--bdmv-to-iso`, `--layer-break-guard`,
 `--layer-break-lbn`, `--disc-size`, `--allow-oversize` and `--inner-only` options for authoring dual-layer and
 BD-R XL discs. See [DISC_AUTHORING.md](DISC_AUTHORING.md) (also available in German as
-[DISC_AUTHORING_DE.md](DISC_AUTHORING_DE.md)) for the details and the layer-break calculator.
+[DISC_AUTHORING_DE.md](DISC_AUTHORING_DE.md) and in Japanese as [DISC_AUTHORING_JA.md](DISC_AUTHORING_JA.md)) for
+the details and the layer-break calculator.
 
 An ISO image whose data crosses a layer break gets a layer-break guard by default: 288 MB after the break and
 18 MB before it (306 MB) are left empty, as a burnt dual-layer disc often reads badly at the layer change and a
@@ -98,8 +99,11 @@ Supported output formats:
 * **TS** - MPEG Transport Stream
 * **M2TS** - Blu-ray MPEG-2 Transport Stream
 * **MKV/MKA** - Matroska Video/Audio container
+* **WebM** - the Matroska form for VP8, VP9 and AV1 video, Opus and Vorbis audio, and WebVTT subtitles
 * **ISO** - Blu-ray disc image
 * **Blu-ray folder structure** - BDMV directory layout
+* **AVCHD folder structure** - with `--avchd` in the meta file
+* **Demux** - each track as a file of its own, with `--demux`
 
 The output format is determined by the file extension of the output file name (e.g. `.ts`, `.m2ts`, `.mts`, `.m2t`, `.mkv`, `.mka`, `.mks`, `.mk3d`, `.webm`, `.iso`).
 
@@ -172,6 +176,8 @@ Parameter         | Description
 ---               | --- 
 track             | track number if input file is a container.
 lang              | track language: three letters, an ISO 639-2 code such as eng or deu, or a BCP 47 tag such as de, pt-BR or zh-Hant. A tag becomes its ISO 639-2 code (in the form --lang-codes asks for) on a disc, in a transport stream and in a demuxed file name; a Matroska output writes the tag as well. 
+track-name        | **MKV output only.** The name of the track, shown by players in the track list. Put it in quotes when it has a comma: `track-name="Director, commentary"`.
+forced, hearing-impaired, visual-impaired, text-descriptions, original, commentary | **MKV output only.** The Matroska track flags: forced subtitles, made for the hearing or the visually impaired, text descriptions of the picture, the original language, commentary. `=1` (or the name alone) sets the flag, `=0` clears it. A Matroska source's own flags are kept otherwise.
 
 Additional parameters for audio tracks:
 
@@ -335,3 +341,26 @@ Parameter           | Description
 --constant-iso-hdr  | Generates an ISO header that does not depend on the program version or the current time. Normally, the ISO header's "application ID", "implementation ID", and "volume ID" fields are set to strings containing the program version and/or a random number, while the access/modification/creation times of the files in the image are set to the current time. This option disables this behaviour by filling these fields with hardcoded values and setting the file times to `1 Jan 1970 00:00:01 UTC`, written as UTC, so the header is the same in every time zone. Using this option is not recommended for normal usage, as it is meant only for testing ISO output validity.
 --inner-only        | ISO output with --disc-size: keep the data on the inner part of every layer and fill the outer edge of the disc with zeros. The disc is muxed into a folder beside the image first and the image is then laid out from it, as --bdmv-to-iso --inner-only lays it out, so the drive needs room for both while it runs. Replaces --layer-break-guard; a MUXOPT line with both is refused. See [DISC_AUTHORING.md](DISC_AUTHORING.md).
 --no-layer-break-guard | ISO output: leave out the layer-break guard an image crossing a layer break gets by default (288 MB after the break, 18 MB before it). A guard given with --layer-break-guard is still written.
+--disc-size         | Blu-ray or ISO output: refuse the job before muxing when the estimated image does not fit the target disc. Takes `bd25`, `bd50`, `bd100`, `bd128`, or a byte count with an optional k, m, g (decimal) or ki, mi, gi (binary) suffix, such as `25000000000`, `24g` or `23gib`. It also chooses the layer breaks of the image.
+--allow-oversize    | With --disc-size, an image too large for the disc is a warning instead of an error, and it is built anyway.
+--layer-break-guard | ISO output: the size in MB of the zeros AFTER each layer break of a BD-R/RE DL or BD-R XL, where a burnt disc is most often defective, plus a sixteenth of it (at least 4 MB) before the break. The film crossing the break stays one file and plays without a pause. 0 aligns to the break without zeros. Without the option an image crossing a break gets 288 MB after it and 18 MB before it. Not with --inner-only.
+--layer-break-guard-before | ISO output: the size in MB of the zeros BEFORE the break, in place of a sixteenth of --layer-break-guard.
+--layer-break-lbn   | The layer break sector(s), in 2048 byte sectors: the total sectors of the disc divided by its layers. Write the number without grouping: a comma separates breaks, so `12,219,392` is refused. One value for a BD-R/RE DL (`12219392` for a full 50 GB disc, the default), two for a 100 GB BD-R XL, three for 128 GB. Work them out from the "Free Sectors" your own disc reports when it is fully formatted. See [DISC_AUTHORING.md](DISC_AUTHORING.md).
+--dv-profile        | **MKV output only, from a dual layer Dolby Vision source.** `7`, the default, keeps the disc as it is. `8.1` converts the Dolby Vision metadata so the file plays as single layer profile 8.1, while the disc can still be built again from it; the file is not smaller. Needs the libdovi library (dovi.dll on Windows) beside tsMuxeR. See [DOLBY_VISION.md](DOLBY_VISION.md).
+
+### BDMV folder to ISO
+
+A mode of its own, without a meta file:
+```
+    tsMuxeR --bdmv-to-iso [options] <BDMV_folder> <out.iso>
+```
+It wraps an existing BDMV folder into a UDF 2.50 BD-ROM ISO image byte for byte, with no remux and no renumbering, so BD-J menus and every clip and playlist reference stay valid, and lays the image out for the layer break of the disc. The "BDMV folder -> ISO" tab of the window does the same. Its options:
+
+Option              | Description
+---                 | ---
+--layer-break-guard, --layer-break-guard-before, --no-layer-break-guard, --layer-break-lbn, --allow-oversize, --inner-only, --constant-iso-hdr, --label, --extra-iso-space | As in the MUXOPT line above.
+--disc-capacity     | The total sectors of the target disc, from its full formatted capacity. Needed by --inner-only; with it the image is also checked against the disc before and after it is built.
+--keep-extra-files  | Copy everything in the source folder, not only BDMV, CERTIFICATE and AACS.
+--3d-single-copy    | Store a 3D disc's video once instead of twice, as the source disc does.
+--original-order    | Write the files in disc order instead of the largest .m2ts first. Better for seamless branching titles.
+--no-layer-fit      | Do not move a file that would cross the layer break to after it; split it instead.
