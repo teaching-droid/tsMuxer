@@ -681,8 +681,8 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
         }
         LTRACE(LT_INFO, 2,
                (m_renderedFromText ? "Drawing text subtitles into pictures (track " : "Decoding PGS stream (track ")
-                   << m_streamIndex << "): "
-                   << " Resolution: " << m_video_width << ':' << m_video_height << "  Frame rate: " << m_frame_rate);
+                   << m_streamIndex << "): " << " Resolution: " << m_video_width << ':' << m_video_height
+                   << "  Frame rate: " << m_frame_rate);
         if (m_newFps != 0.0 && fabs(m_newFps - m_frame_rate) > 1e-4 && m_rateGuessed)
         {
             LTRACE(LT_INFO, 2, "PGS stream #" << m_streamIndex << " is marked with frame rate " << m_newFps);

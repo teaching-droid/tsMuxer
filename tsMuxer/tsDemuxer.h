@@ -171,8 +171,8 @@ class TSDemuxer final : public AbstractDemuxer
     uint8_t m_joinSoundPid[8192]{};  // the PID has a JoinSound
     uint8_t m_joinDrop[8192]{};  // the PES being read of the PID is left out, and the packets that carry the rest of it
     std::map<int, int64_t> m_joinSkip;  // bytes of sound left out at the start of the PES being read (keepJoinSound)
-    int64_t m_joinVideoStart = -1;  // the first decoding time of the video of the file being read (fileVideoStart)
-    int64_t m_joinBase = 0;         // where the first decoding time of the video of the file being read is
+    int64_t m_joinVideoStart = -1;      // the first decoding time of the video of the file being read (fileVideoStart)
+    int64_t m_joinBase = 0;             // where the first decoding time of the video of the file being read is
     bool m_joinBaseKnown = true;
     bool m_joinOneClock = false;  // the file being read goes on from the clock of the file before (endJoinFile)
     std::pair<int64_t, int64_t> m_joinFileDts{-1, -1};  // the first and the last decoding time of the video in the file

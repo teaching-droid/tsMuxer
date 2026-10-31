@@ -1586,7 +1586,7 @@ int IsoWriter::writeExtendedFileEntryDescriptor(const bool namedStream, const ui
     writeTimestamp(m_buffer + 92, m_currentTime, m_utcTime);   // modification datetime
     writeTimestamp(m_buffer + 104, m_currentTime, m_utcTime);  // creation datetime
     writeTimestamp(m_buffer + 116, m_currentTime, m_utcTime);  // attributes datetime
-    buff32[128 / 4] = 0x01;                         // Checkpoint
+    buff32[128 / 4] = 0x01;                                    // Checkpoint
     // skip Extended Attribute ICB
     // skip Stream Directory ICB
 
@@ -1680,12 +1680,12 @@ void IsoWriter::writeFileSetDescriptor()
     writer.writeDescriptorTag(DescriptorTag::FileSet, absoluteSectorNum());
 
     writer.writeTimestamp(m_currentTime, m_utcTime);  // Recording Date and Time
-    writer.writeLE16(0x03);                // Interchange Level
-    writer.writeLE16(0x03);                // Maximum Interchange Level
-    writer.writeLE32(0x01);                // Character Set List
-    writer.writeLE32(0x01);                // Maximum Character Set List
-    writer.writeLE32(0x00);                // File Set Number
-    writer.writeLE32(0x00);                // File Set Descriptor Number
+    writer.writeLE16(0x03);                           // Interchange Level
+    writer.writeLE16(0x03);                           // Maximum Interchange Level
+    writer.writeLE32(0x01);                           // Character Set List
+    writer.writeLE32(0x01);                           // Maximum Character Set List
+    writer.writeLE32(0x00);                           // File Set Number
+    writer.writeLE32(0x00);                           // File Set Descriptor Number
     writer.writeCharSpecString("OSTA Compressed Unicode", 64);
     writer.writeDString(m_volumeLabel, 128);                    // Logical Volume Identifier
     writer.writeCharSpecString("OSTA Compressed Unicode", 64);  // File Set Character Set

@@ -5314,8 +5314,8 @@ void METADemuxer::cutPlayItems(MPLSParser& mpls, const string& mplsFileName, con
     {
         int pid = -1;
         std::vector<ClipEntryPoint> keys;
-        size_t first = 0;  // the key picture the part starts at
-        size_t last = 0;   // the key picture the part ends at; keys.size() at the end of the clip
+        size_t first = 0;      // the key picture the part starts at
+        size_t last = 0;       // the key picture the part ends at; keys.size() at the end of the clip
         bool inFirst = false;  // IN_time is after the first key picture, inside its group of pictures
     };
     const string streamDir = playlistStreamDir(mplsFileName);
@@ -5358,8 +5358,7 @@ void METADemuxer::cutPlayItems(MPLSParser& mpls, const string& mplsFileName, con
         {
             int64_t keyPts = -1, firstShown = -1, lastBefore = -1;
             const string m2ts = mplsTrackToFullName(mplsFileName, item.fileName);
-            plan.inFirst =
-                keyPictureTimes(m2ts, plan.pid, plan.keys[0], keyPts, firstShown, lastBefore) && in > keyPts;
+            plan.inFirst = keyPictureTimes(m2ts, plan.pid, plan.keys[0], keyPts, firstShown, lastBefore) && in > keyPts;
         }
         if (plan.first > 0 || plan.inFirst || plan.last < plan.keys.size())
             ++cutItems;

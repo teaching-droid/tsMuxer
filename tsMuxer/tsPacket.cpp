@@ -1744,8 +1744,8 @@ void MPLSParser::parseSubPaths(const uint8_t* data, const int len, const int cou
     {
         if (pos + 10 > len)
             return;
-        const int64_t length = static_cast<int64_t>(data[pos]) << 24 | data[pos + 1] << 16 | data[pos + 2] << 8 |
-                               data[pos + 3];
+        const int64_t length =
+            static_cast<int64_t>(data[pos]) << 24 | data[pos + 1] << 16 | data[pos + 2] << 8 | data[pos + 3];
         const int64_t end = pos + 4 + length;
         if (end > len)
             return;
@@ -2056,8 +2056,7 @@ void MPLSParser::reportLeftOut(const std::string& playlistName, const bool listi
                                     << " left out. The rest of the playlist is muxed.");
     if (stills > 0)
         LTRACE(LT_WARN, 2,
-               "Warning: playlist " << name << " has " << stills
-                                    << (stills == 1 ? " still picture" : " still pictures")
+               "Warning: playlist " << name << " has " << stills << (stills == 1 ? " still picture" : " still pictures")
                                     << ", play items held on the screen for a time or until the viewer goes on. "
                                        "The hold is left out: each is muxed as moving video and shown only for the "
                                        "time of its pictures. The rest of the playlist is muxed.");
@@ -2943,10 +2942,9 @@ void MPLSParser::composeSTN_table(BitStreamWriter& writer, const size_t PlayItem
             // not tied to the picture-in-picture. As with its subtitles below, the meta does not say which audio
             // belongs to which secondary video.
             const int secondaryAudioRefs = number_of_secondary_audio_stream_entries;
-            writer.putBits(8, secondaryAudioRefs);  // number_of_secondary_audio_ref_entries
-            writer.putBits(8, 0);                   // reserved_for_word_align
-            for (int k = 0; k < secondaryAudioRefs; ++k)
-                writer.putBits(8, k);  // secondary_audio_stream_id_ref
+            writer.putBits(8, secondaryAudioRefs);                              // number_of_secondary_audio_ref_entries
+            writer.putBits(8, 0);                                               // reserved_for_word_align
+            for (int k = 0; k < secondaryAudioRefs; ++k) writer.putBits(8, k);  // secondary_audio_stream_id_ref
             if (secondaryAudioRefs & 1)
                 writer.putBits(8, 0);  // reserved_for_word_align
 
@@ -3338,9 +3336,9 @@ void MPLSStreamInfo::parseStreamEntry(BitStreamReader& reader)
 void MPLSStreamInfo::composePGS_SS_StreamEntry(BitStreamWriter& writer, const size_t entryNum) const
 {
     writer.putBits(8, offsetId);
-    writer.putBits(4, 0);   // reserved
-    writer.putBit(0);       // dialog region offset valid
-    writer.putBit(isSSPG);  // is SS PG
+    writer.putBits(4, 0);              // reserved
+    writer.putBit(0);                  // dialog region offset valid
+    writer.putBit(isSSPG);             // is SS PG
     writer.putBit(topAS.pid != 0);     // top AS PG
     writer.putBit(bottomAS.pid != 0);  // bottom AS PG
     if (isSSPG)

@@ -3682,8 +3682,8 @@ int MovDemuxer::mov_read_stsd(MOVAtom atom)
             st->type = IOContextTrackType::VIDEO;
             st->isMp4v = true;
             break;
-        // Motion JPEG, as QuickTime names it: a track of pictures no reader takes, listed "Can't detect stream type". It
-        // stays a track of data, as before, so that it is not taken for the first video of the file.
+        // Motion JPEG, as QuickTime names it: a track of pictures no reader takes, listed "Can't detect stream type".
+        // It stays a track of data, as before, so that it is not taken for the first video of the file.
         case MKTAG('j', 'p', 'e', 'g'):
         case MKTAG('m', 'j', 'p', 'a'):
         case MKTAG('m', 'j', 'p', 'b'):

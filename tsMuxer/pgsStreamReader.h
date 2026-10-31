@@ -189,14 +189,14 @@ class PGSStreamReader final : public AbstractStreamReader
     int64_t gridTime(int64_t internalTime) const;
 
     // A PGS stream drawn at another size: the display set being read, from its PCS to its END
-    bool m_dsOpen = false;        // a PCS was read, its display set is not drawn yet
-    bool m_dsDrawn = false;       // an object of the set was drawn into the picture
-    bool m_dsForced = false;      // an object of the set is forced
-    bool m_dsClears = false;      // the set shows nothing (no object, or not an epoch start without an object)
+    bool m_dsOpen = false;           // a PCS was read, its display set is not drawn yet
+    bool m_dsDrawn = false;          // an object of the set was drawn into the picture
+    bool m_dsForced = false;         // an object of the set is forced
+    bool m_dsClears = false;         // the set shows nothing (no object, or not an epoch start without an object)
     bool m_dsHasObjectData = false;  // an ODS was read in the set
-    int64_t m_dsTime = 0;         // its presentation time, on the internal clock
-    bool m_pictureShown = false;  // a drawn picture is on the screen
-    int64_t m_demuxDtsShift = 0;  // --demux: how much later the display set being read is written
+    int64_t m_dsTime = 0;            // its presentation time, on the internal clock
+    bool m_pictureShown = false;     // a drawn picture is on the screen
+    int64_t m_demuxDtsShift = 0;     // --demux: how much later the display set being read is written
 
     void video_descriptor(BitStreamReader& bitReader);
     void composition_descriptor(BitStreamReader& bitReader);

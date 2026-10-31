@@ -60,12 +60,16 @@ static std::filesystem::path fsPath(const string& utf8)
 static constexpr char EXCEPTION_ERR_MSG[] =
     ". It does not have to be! Please contact application support team for more information.";
 
-#define LTRACE2(level, msg)                   \
-    {{if ((level) <= LT_WARN) cerr << msg;    \
-    else if ((level) == LT_INFO) cout << msg; \
-    if ((level) <= LT_INFO)                   \
-        sLastMsg = true;                      \
-    }                                         \
+#define LTRACE2(level, msg)              \
+    {                                    \
+        {                                \
+            if ((level) <= LT_WARN)      \
+                cerr << msg;             \
+            else if ((level) == LT_INFO) \
+                cout << msg;             \
+            if ((level) <= LT_INFO)      \
+                sLastMsg = true;         \
+        }                                \
     }
 // A meta file saved in UTF-16, as some editors save text, was refused as "Invalid codec format" with the raw bytes of
 // its first line, and a folder given as the meta file was read as an empty one and said "No tracks selected". Both are
@@ -2429,10 +2433,10 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         for (const int64_t g : guard)
             if (g <= 0)
                 room = false;
-        // "Keeping the normal guard" was said whatever was given. Only a guard asked for with --layer-break-guard (taken
-        // by --bdmv-to-iso beside --inner-only) is kept here; without one there is no guard to keep, and a direct mux
-        // never has one, since a meta line refuses the two together. Measured: a 355 MB image on the direct route
-        // said it kept the guard and was written with no zeros at the break.
+        // "Keeping the normal guard" was said whatever was given. Only a guard asked for with --layer-break-guard
+        // (taken by --bdmv-to-iso beside --inner-only) is kept here; without one there is no guard to keep, and a
+        // direct mux never has one, since a meta line refuses the two together. Measured: a 355 MB image on the direct
+        // route said it kept the guard and was written with no zeros at the break.
         if (!room && layerBreakGuardMB >= 0)
             LTRACE(LT_WARN, 2,
                    "--inner-only: the disc is (nearly) full, so there is no room to pad; the guard given by "
@@ -2446,8 +2450,9 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
             // whole MB, as the guard has always been given
             std::vector<int> guardMB;
             for (const int64_t g : guard) guardMB.push_back(static_cast<int>(g * 2048 / (1024 * 1024)));
-            // With --bdmv-to-iso a guard is taken beside --inner-only, as it was when released, with a warning (decided 12 Oct).
-            // The guard was replaced without a word. A meta line refuses the two together, so this is that route only.
+            // With --bdmv-to-iso a guard is taken beside --inner-only, as it was when released, with a warning (decided
+            // 12 Oct). The guard was replaced without a word. A meta line refuses the two together, so this is that
+            // route only.
             if (layerBreakGuardMB >= 0)
                 LTRACE(LT_WARN, 2,
                        "Warning: --inner-only works out the zeros at the layer break from the disc and the data, so "
@@ -2795,7 +2800,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
     };
     vector<FileRange> ranges;
     ranges.reserve(items.size());
-    int64_t restBytes = total;  // this item and every one after it
+    int64_t restBytes = total;                                                      // this item and every one after it
     int64_t restStreams = std::count_if(items.begin(), items.end(), isStreamItem);  // of them, the stream files
     for (auto& item : items)
     {
@@ -3448,8 +3453,8 @@ class KeepOldOutput
         warnRoom(dir, estimate);
         // the messages name stem.ext and stem.split.n.ext, as the user gave them
         const std::string written = pathStr(dir / u8path(m_newPrefix.substr(0, m_newPrefix.size() - 1)));
-        setShownOutputName(written, strEndWith(dst, ext) ? dst.substr(0, dst.size() - ext.size())
-                                                         : pathStr(dir / u8path(stem)));
+        setShownOutputName(written,
+                           strEndWith(dst, ext) ? dst.substr(0, dst.size() - ext.size()) : pathStr(dir / u8path(stem)));
         if (ext.empty())
             return written;
         return pathStr(dir / u8path(m_newPrefix + ext.substr(1)));
@@ -3647,8 +3652,7 @@ class KeepOldOutput
                                    << "not be removed: " << ec.message());
             else
                 LTRACE(LT_INFO, 2,
-                       "Removed " << pathStr(p) << ", a part of an earlier output that this job did not "
-                                  << "write.");
+                       "Removed " << pathStr(p) << ", a part of an earlier output that this job did not " << "write.");
         }
     }
     std::vector<std::filesystem::path> ownFiles() const
@@ -3784,8 +3788,9 @@ class KeepOldOutput
     std::string m_freshSplitPrefix;
     bool m_freshIsImage = false;
     std::string m_freshName;  // the output as the job names it, for the line that says it was removed
-    std::vector<std::filesystem::path> m_createdDirs;  // the folders the output needs that were not there, deepest first
-    bool m_keepNew = false;                            // keepNewOutput
+    std::vector<std::filesystem::path>
+        m_createdDirs;       // the folders the output needs that were not there, deepest first
+    bool m_keepNew = false;  // keepNewOutput
     bool m_freshFolderExisted = false;
     bool m_demux = false;
     std::filesystem::path m_dir;
@@ -4135,10 +4140,10 @@ static void checkEmptyTracks(const MuxerManager& muxerManager)
         // another sample rate or channel count nearly every time. A real stream found again after damage keeps them.
         const int64_t frames = audio->getDeliveredFrames();
         if (frames >= 20 && audio->getSyncChanges() * 10 > frames)
-            THROW(ERR_COMMON, trackSourceName(si) << ": the sample rate or the channels changed at "
-                                                  << audio->getSyncChanges() << " of the " << frames
-                                                  << " frames read as " << si.m_codec << "; a real stream keeps them. "
-                                                  << WRONG_CODEC_HINT)
+            THROW(ERR_COMMON, trackSourceName(si)
+                                  << ": the sample rate or the channels changed at " << audio->getSyncChanges()
+                                  << " of the " << frames << " frames read as " << si.m_codec
+                                  << "; a real stream keeps them. " << WRONG_CODEC_HINT)
     }
     // ** VIDEO OF ANOTHER CODEC. ** A video reader passed a track as soon as one picture was found, and other data
     // has start codes too (DTS, TrueHD and MPEG-2 video have many), some of them followed by what passes for a

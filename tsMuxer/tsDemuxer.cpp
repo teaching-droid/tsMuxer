@@ -475,9 +475,8 @@ bool TSDemuxer::keepJoinSound(const int pid, const StreamType type, const int64_
             const bool ac3 = type == StreamType::AUDIO_AC3 || type == StreamType::AUDIO_EAC3 ||
                              type == StreamType::AUDIO_EAC3_SECONDARY || type == StreamType::AUDIO_EAC3_ATSC;
             const int frameBytes = ac3 && data != nullptr ? AC3Codec::frameSizeAt(data, dataEnd) : 0;
-            const int64_t frames = frameBytes > 0 && pesPayload > 0 && pesPayload % frameBytes == 0
-                                       ? pesPayload / frameBytes
-                                       : 0;
+            const int64_t frames =
+                frameBytes > 0 && pesPayload > 0 && pesPayload % frameBytes == 0 ? pesPayload / frameBytes : 0;
             if (frames >= 2 && sound.step > 0 && sound.step % frames == 0)
             {
                 const int64_t frameLen = sound.step / frames;

@@ -324,7 +324,7 @@ AssDecoder::AssDecoder(const uint8_t* header, const int headerSize, const ass_re
     }
     m->srt = drawing.srtFile;
     setUp(drawing.width, drawing.height, drawing.fps, drawing.fps);
-    m_pgs.holdEmptyEnds();  // a frame with nothing drawn waits for the next picture (BitmapToPgs::addPicture)
+    m_pgs.holdEmptyEnds();   // a frame with nothing drawn waits for the next picture (BitmapToPgs::addPicture)
     m_pgs.waitUntilShown();  // a frame decoded too late for the frame shown before is left out: a later one shows
     m->width = drawing.width;
     m->height = drawing.height;

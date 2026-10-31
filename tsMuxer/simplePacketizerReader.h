@@ -270,7 +270,7 @@ class SimplePacketizerReader : public AbstractStreamReader
     // as a pipe, and a tag whose start fails the checks there.
     [[nodiscard]] int64_t trailingTagBytes() const;
     static constexpr size_t TAIL_KEEP = 16384 + 256;  // Lyrics3 v1's search bound, and ID3v1 and the footers
-    std::vector<uint8_t> m_tail;  // the last bytes given to setBuffer, TAIL_KEEP up to twice that
+    std::vector<uint8_t> m_tail;                      // the last bytes given to setBuffer, TAIL_KEEP up to twice that
     // The stream offsets of the last tag chain credited going forward, so a tag credited there is not counted twice
     int64_t m_creditFrom = 0;
     int64_t m_creditTo = 0;

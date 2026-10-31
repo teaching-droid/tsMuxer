@@ -60,7 +60,7 @@ class MPEG2StreamReader final : public MPEGStreamReader
     bool spsFound;
     bool m_seqExtFound;
     int m_nextProgressive = -1;  // progressive_sequence of the extension after the header read last; -1: none
-    bool m_noRateSaid = false;  // the warning about a sequence header without a frame rate was given
+    bool m_noRateSaid = false;   // the warning about a sequence header without a frame rate was given
     bool m_lastIFrame;
     bool m_firstFieldPending = false;  // the last picture was the first of two fields
     // The last sequence header with its sequence extensions, repeated at an I picture that has none (writeAdditionData)

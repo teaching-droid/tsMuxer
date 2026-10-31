@@ -129,7 +129,7 @@ class MovDemuxer final : public IOContextDemuxer
     void accountJoinPart();
     void dropJoinPriming();
     std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(int pid) override;
-    std::map<int, std::vector<int64_t>> m_touchingCues;  // by track, see takeTouchingCues
+    std::map<int, std::vector<int64_t>> m_touchingCues;                       // by track, see takeTouchingCues
     std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_nextCueStarts;  // by track, see takeNextCueStarts
 
    public:

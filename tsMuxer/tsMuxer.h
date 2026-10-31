@@ -256,9 +256,9 @@ class TSMuxer final : public AbstractMuxer
     // 65541 bytes (no PES length patch possible), its remaining payload is packetized
     // straight into m_outBuf instead of being staged in m_pesData first.
     bool m_inplacePending;
-    int64_t m_cappedPictures;       // video PES written under --maxbitrate (noteLateArrival)
-    int64_t m_latePictures;         // of them, the ones whose last packet arrives after their DTS
-    int64_t m_worstLateness;        // the largest such lateness, 90 kHz
+    int64_t m_cappedPictures;  // video PES written under --maxbitrate (noteLateArrival)
+    int64_t m_latePictures;    // of them, the ones whose last packet arrives after their DTS
+    int64_t m_worstLateness;   // the largest such lateness, 90 kHz
     // --bitrate: the output measured in windows of at least a second of the clock (noteCbrRate)
     bool m_cbrGiven;                // --bitrate was given (--maxbitrate alone also sets m_cbrBitrate)
     int64_t m_cbrWinBits;           // bits of content (not the null packets of the padding) in the current window

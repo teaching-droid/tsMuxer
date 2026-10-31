@@ -71,7 +71,7 @@ struct StreamInfo
     int64_t m_timeShift;
     uint64_t m_srcTrackUid = 0;  // the source's TrackUID, for the tags about this track (getTrackTags)
     std::string m_lang;
-    std::string m_langBCP47;  // the source container's BCP 47 tag, when it had one
+    std::string m_langBCP47;      // the source container's BCP 47 tag, when it had one
     bool m_langFromName = false;  // m_lang was typed into the file name: it is written as typed (--lang-codes)
     std::string m_codec;
     std::map<std::string, std::string> m_addParams;
@@ -352,7 +352,7 @@ class METADemuxer final : public AbstractDemuxer
     bool m_demuxOutput = false;                                     // setDemuxOutput
     bool m_quiet = false;                                           // setQuiet
     std::set<std::string> m_pipPlacingReported;  // the playlists whose own placing of a picture-in-picture was said
-    double m_lastProgress = 0.0;                                    // the last value printed
+    double m_lastProgress = 0.0;                 // the last value printed
     int64_t m_totalSize;
     bool m_flushDataMode;
     int64_t m_muxPos = 0;  // the time of the packet given out last, for setReadAhead

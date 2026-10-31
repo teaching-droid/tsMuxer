@@ -1056,13 +1056,13 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     m_fileWriter = std::make_unique<BufferedFileWriter>();
     AVPacket avPacket;
     bool anyMuxed = false;
-    bool anyAfterCutStart = false;  // a packet of the sources at or after --cut-start, kept or not
-    std::set<int> endedByCut;       // streams that have reached --cut-end
-    std::set<int> withPackets;      // streams that have given a packet, subtitles left out (--cut-end)
-    std::map<int, int64_t> firstMuxed;  // the time of each stream's first packet muxed (the demux of a --cut-start)
-    int64_t mainVideoDts = -1;          // the decoding time of the main video's last packet (--cut-end)
-    std::set<int> shownBeforeEnd;       // the video streams that have given a picture shown before --cut-end
-    std::set<int> mutedByCut;           // --cut-start: the video streams that gave pictures, none of them kept
+    bool anyAfterCutStart = false;       // a packet of the sources at or after --cut-start, kept or not
+    std::set<int> endedByCut;            // streams that have reached --cut-end
+    std::set<int> withPackets;           // streams that have given a packet, subtitles left out (--cut-end)
+    std::map<int, int64_t> firstMuxed;   // the time of each stream's first packet muxed (the demux of a --cut-start)
+    int64_t mainVideoDts = -1;           // the decoding time of the main video's last packet (--cut-end)
+    std::set<int> shownBeforeEnd;        // the video streams that have given a picture shown before --cut-end
+    std::set<int> mutedByCut;            // --cut-start: the video streams that gave pictures, none of them kept
     std::map<int, int64_t> lastPicture;  // --cut-start: per video stream, the time of its last picture, and
     std::map<int, int64_t> lastKey;      // of its last key picture
     // A picture a cut leaves out is not counted in the reader's "Processed N video frames", which counted every
@@ -1278,8 +1278,8 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
         const auto at = [](const int64_t t) { return floatToTime(static_cast<double>(t) / INTERNAL_PTS_FREQ); };
         const auto key = lastKey.find(m_cutMainVideo);
         std::ostringstream msg;
-        msg << "--cut-start (" << static_cast<double>(m_cutStart) / INTERNAL_PTS_FREQ << "s) leaves no picture of track "
-            << m_cutMainVideo << ", the video: ";
+        msg << "--cut-start (" << static_cast<double>(m_cutStart) / INTERNAL_PTS_FREQ
+            << "s) leaves no picture of track " << m_cutMainVideo << ", the video: ";
         if (cover || key == lastKey.end())
             msg << "its last picture is shown from " << at(lastPicture[m_cutMainVideo])
                 << ", before the cut, and nothing of it after the cut.";

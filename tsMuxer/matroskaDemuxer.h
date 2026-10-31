@@ -76,8 +76,8 @@ class MatroskaDemuxer final : public IOContextDemuxer
                 const auto shown = m_shownAfterFirstBlock.find(tracks[i]->num);
                 const auto own = m_shownAfterFirstBlock.find(pid);
                 if (it != m_firstTimecode.end() && tracks[i]->num != pid)
-                    return m_firstTimecode[pid] + (own == m_shownAfterFirstBlock.end() ? 0 : own->second) -
-                           it->second - (shown == m_shownAfterFirstBlock.end() ? 0 : shown->second);
+                    return m_firstTimecode[pid] + (own == m_shownAfterFirstBlock.end() ? 0 : own->second) - it->second -
+                           (shown == m_shownAfterFirstBlock.end() ? 0 : shown->second);
                 if (it != m_firstTimecode.end())
                     return 0;
             }
@@ -295,10 +295,10 @@ class MatroskaDemuxer final : public IOContextDemuxer
 
    private:
     std::vector<int64_t> m_joinStartsNs;
-    std::map<int, std::vector<int64_t>> m_touchingCues;  // by track, see takeTouchingCues
+    std::map<int, std::vector<int64_t>> m_touchingCues;                       // by track, see takeTouchingCues
     std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_nextCueStarts;  // by track, see takeNextCueStarts
-    int64_t m_clusterPos = -1;                           // where the cluster being read begins in the file
-    std::unique_ptr<File> m_aheadFile;                   // the file again, for nextBlockAt
+    int64_t m_clusterPos = -1;          // where the cluster being read begins in the file
+    std::unique_ptr<File> m_aheadFile;  // the file again, for nextBlockAt
     std::string m_aheadName;
     int64_t m_aheadEnd = 0;
     int64_t nextBlockAt(int64_t trackNumber, int64_t after);

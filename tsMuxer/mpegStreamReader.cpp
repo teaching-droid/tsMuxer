@@ -401,9 +401,8 @@ void MPEGStreamReader::countUnits(const uint8_t* from, const uint8_t* end)
             else if (m_longCodesAllowed && end - p >= 4 && p[2] == 0 && p[3] == 1)
                 startCodeLen = 4;
         }
-        const uint8_t* next =
-            NALUnit::findNALWithStartCode(const_cast<uint8_t*>(p + (startCodeLen ? startCodeLen : 1)),
-                                          const_cast<uint8_t*>(end), m_longCodesAllowed);
+        const uint8_t* next = NALUnit::findNALWithStartCode(const_cast<uint8_t*>(p + (startCodeLen ? startCodeLen : 1)),
+                                                            const_cast<uint8_t*>(end), m_longCodesAllowed);
         countUnitBytes(p, next - p, startCodeLen);
         p = next;
     }

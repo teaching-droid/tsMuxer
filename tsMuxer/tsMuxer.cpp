@@ -1024,17 +1024,13 @@ void TSMuxer::reportCbrExcess() const
     if (m_interliaveBlockSize > 0)
         said3d = true;
     LTRACE(LT_WARN, 2,
-           "Warning: the content needs more than --bitrate=" << m_cbrBitrate / 1000 << " kbps (up to "
-                                                             << m_cbrPeakRate / 1000 << " kbps around "
-                                                             << doubleToStr(static_cast<double>(m_cbrPeakAt -
-                                                                                                m_fixed_pcr_offset) /
-                                                                                90000.0,
-                                                                            1)
-                                                             << " s), so the output is not at a constant rate there. "
-                                                             << (m_maxBitrate == -1
-                                                                     ? "Give a higher --bitrate, or use --maxbitrate "
-                                                                       "to cap it."
-                                                                     : "Give a higher --bitrate."));
+           "Warning: the content needs more than --bitrate="
+               << m_cbrBitrate / 1000 << " kbps (up to " << m_cbrPeakRate / 1000 << " kbps around "
+               << doubleToStr(static_cast<double>(m_cbrPeakAt - m_fixed_pcr_offset) / 90000.0, 1)
+               << " s), so the output is not at a constant rate there. "
+               << (m_maxBitrate == -1 ? "Give a higher --bitrate, or use --maxbitrate "
+                                        "to cap it."
+                                      : "Give a higher --bitrate."));
 }
 
 // ** --maxbitrate SENDS DATA AHEAD IN THE QUIET PARTS. **
@@ -1884,8 +1880,7 @@ void TSMuxer::gotoNextFile(const int64_t newPts)
     if (m_splitByChapters && !m_firstPts.empty() && m_firstPts[0] != -1)
     {
         const int64_t origin = m_chapterOrigin >= 0 ? m_chapterOrigin : m_firstPts[0];
-        while (m_nextChapter < m_chapterPts.size() && newPts - origin >= m_chapterPts[m_nextChapter])
-            m_nextChapter++;
+        while (m_nextChapter < m_chapterPts.size() && newPts - origin >= m_chapterPts[m_nextChapter]) m_nextChapter++;
     }
 
     // 2. CloseCurrentFile

@@ -677,8 +677,8 @@ bool BlurayHelper::createMPLSFile(TSMuxer* mainMuxer, TSMuxer* subMuxer, int aut
                 continue;
             // On the clip's clock; one before the start of the playlist (the chapter playing at a --cut-start, when the
             // playlist starts after it) is at the start
-            const int64_t mark = (std::max)(static_cast<int64_t>(ticks) + chapterOrigin / 2,
-                                            static_cast<int64_t>(mplsParser.IN_time));
+            const int64_t mark =
+                (std::max)(static_cast<int64_t>(ticks) + chapterOrigin / 2, static_cast<int64_t>(mplsParser.IN_time));
             // The list is in time order with no time twice, but two times a few microseconds apart become one tick of
             // the playlist's clock: they gave two marks at one time, which a player shows as an empty chapter
             if (mark <= mplsParser.OUT_time &&

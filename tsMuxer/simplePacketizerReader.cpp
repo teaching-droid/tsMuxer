@@ -947,7 +947,7 @@ void SimplePacketizerReader::addRun(std::vector<ByteRun>& runs, const int64_t en
 }
 
 void SimplePacketizerReader::noteRun(std::vector<ByteRun>& runs, const uint8_t* const regionEnd,
-                                         const int64_t amount) const
+                                     const int64_t amount) const
 {
     addRun(runs, m_readBytes - (m_bufEnd - regionEnd), amount);
 }

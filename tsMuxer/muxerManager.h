@@ -201,11 +201,11 @@ class MuxerManager final
     bool m_cutCover = true;               // --cut-pictures
     int m_cutMainVideo = -1;              // the stream index of the main video, the one a disc playlist follows
     std::map<int, int64_t> m_cutKeyFrom;  // cover: per video stream, the time of its key picture at or before the cut
-    bool m_cutStartCovered = false;  // cover: the main video begins at its key picture at or before --cut-start
-    bool m_cutPassFailed = false;    // cover: findCutKeyPictures could not read the sources, and inside applies
-    int64_t m_cutShownFrom = -1;     // cover: the first picture of the main video shown at or after --cut-start
-    int64_t m_cutShownTo = -1;    // cover: the first picture of the main video shown at or after --cut-end
-    std::string m_metaFileName;   // the meta file, read again by findCutKeyPictures
+    bool m_cutStartCovered = false;       // cover: the main video begins at its key picture at or before --cut-start
+    bool m_cutPassFailed = false;         // cover: findCutKeyPictures could not read the sources, and inside applies
+    int64_t m_cutShownFrom = -1;          // cover: the first picture of the main video shown at or after --cut-start
+    int64_t m_cutShownTo = -1;            // cover: the first picture of the main video shown at or after --cut-end
+    std::string m_metaFileName;           // the meta file, read again by findCutKeyPictures
     const BufferedReaderManager& m_readManager;
     std::unique_ptr<BufferedFileWriter> m_fileWriter;
     AbstractMuxerFactory& m_factory;

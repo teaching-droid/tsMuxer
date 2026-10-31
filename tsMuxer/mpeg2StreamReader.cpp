@@ -134,8 +134,8 @@ void MPEG2StreamReader::applyDiscoveryData(const StreamDiscoveryData& data)
 // start codes of which 0.03 to 0.08 percent are out of place but no sequence header or picture; other video has no
 // sequence header at all (0xB3 is not a unit header of H.264 or HEVC). A track in which no unit is out of place is
 // decided exactly as before, from a sequence header, a picture and a slice.
-static constexpr int DAMAGED_SHARE_DIVISOR = 64;   // at most one start code in 64 out of place
-static constexpr int DAMAGED_MIN_SEQUENCES = 2;    // a disc or a broadcast repeats it at every group of pictures
+static constexpr int DAMAGED_SHARE_DIVISOR = 64;  // at most one start code in 64 out of place
+static constexpr int DAMAGED_MIN_SEQUENCES = 2;   // a disc or a broadcast repeats it at every group of pictures
 static constexpr int DAMAGED_MIN_PICTURES = 16;
 
 CheckStreamRez MPEG2StreamReader::checkStream(uint8_t* buffer, int len)
@@ -231,9 +231,9 @@ CheckStreamRez MPEG2StreamReader::checkStream(uint8_t* buffer, int len)
         {
         }
     }
-    const bool fewDamaged = damagedUnits == 0 ||
-                            (static_cast<int64_t>(damagedUnits) * DAMAGED_SHARE_DIVISOR <= units &&
-                             sequences >= DAMAGED_MIN_SEQUENCES && pictures >= DAMAGED_MIN_PICTURES);
+    const bool fewDamaged =
+        damagedUnits == 0 || (static_cast<int64_t>(damagedUnits) * DAMAGED_SHARE_DIVISOR <= units &&
+                              sequences >= DAMAGED_MIN_SEQUENCES && pictures >= DAMAGED_MIN_PICTURES);
     if (spsFound && pictures > 0 && sliceFound && fewDamaged)
     {
         rez.codecInfo = mpeg2CodecInfo;
