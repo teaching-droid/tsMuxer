@@ -365,3 +365,4 @@ Option              | Description
 --3d-single-copy    | Store a 3D disc's video once instead of twice, as the source disc does.
 --original-order    | Write the files in disc order instead of the largest .m2ts first. Better for seamless branching titles.
 --no-layer-fit      | Do not move a file that would cross the layer break to after it; split it instead.
+--meta-dir          | The disc's title and pictures from this folder, in place of the source folder's own BDMV/META/DL; `none` leaves them out.
