@@ -1,6 +1,13 @@
 cmake_minimum_required (VERSION 3.12)
 project (tsmuxer_main CXX)
 
+# A build without a build type is compiled without optimisation. The Linux release script gave
+# none, so the Linux programs ran slower than the Windows and macOS ones, built as Release, and
+# slower than the builds the tests run. Release is the default now; a type that is given wins.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_EXTENSIONS FALSE)
