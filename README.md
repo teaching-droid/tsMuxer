@@ -47,7 +47,7 @@ Dolby Vision and Blu-ray conformance:
 * Keep the AC-3 core of a TrueHD track in Matroska as its own track, instead of dropping it
 * Name the IMAX variant of a DTS:X track
 * HEVC: change the stream level without re-encoding, the way the H.264 path always could. A whole 4K track no longer has to be re-encoded to alter one byte
-* HEVC: write access unit delimiters when a source has none. Every pressed disc carries one per picture, and the H.264 path has always added them
+* HEVC: write access unit delimiters when a source has none. The Blu-ray format has one per picture, and the H.264 path has always added them
 * HEVC: repeat the HDR mastering display and content light level at every random access point when authoring a disc. A source that states them only once leaves a player with no HDR10 metadata after a seek
 
 **How does the layer-break guard work?** [The layer-break buffer](docs/LAYER_BREAK_BUFFER.md)

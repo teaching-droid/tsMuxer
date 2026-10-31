@@ -73,7 +73,7 @@ tool for that.
 ### Why the original metadata has to be kept
 
 Converting profile 7 metadata to 8.1 is **many to one**: different originals produce the same
-result. Measured on a pressed disc, two thirds of the converted metadata became indistinguishable,
+result. Measured on one profile 7 disc, two thirds of the converted metadata became indistinguishable,
 with as many as 91 different originals landing on one result. Nothing can undo that afterwards, at
 any quality of implementation.
 

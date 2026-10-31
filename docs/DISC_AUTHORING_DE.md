@@ -44,8 +44,8 @@ würde, vollständig zwischen das Ende dieser Zone und die nächste Zone passt (
 Disc-Kapazität), wird sie im Ganzen jenseits des Breaks platziert, statt geteilt zu werden.
 Zwei typische Gewinne: Eine Disc mit zwei großen Titeln (Kinofassung und Director's Cut)
 bekommt einen Titel pro Layer mit dem Break sauber dazwischen, und die vielen Segmente einer
-Seamless-Branching-Disc ordnen sich so an, dass der Break zwischen Segmente fällt, genauso
-wie kommerziell erstellte Discs ihn platzieren. Eine Datei, die größer als ein Layer ist,
+Seamless-Branching-Disc ordnen sich so an, dass der Break zwischen Segmente fällt, die
+übliche Stelle für einen Layer-Break bei solchen Discs. Eine Datei, die größer als ein Layer ist,
 überquert den Break weiterhin mit der Schutzzone darin, wie bisher.
 
 Nach dem Bau melden das Log und eine Begleitdatei `<out.iso>.layerbreak.txt` die Position
@@ -100,7 +100,7 @@ tsMuxeR --bdmv-to-iso --layer-break-guard=64 --layer-break-lbn=<Sektor[,Sektor..
 
 tsMuxeR liest die Dateien vom eingebundenen Laufwerk und schreibt in einem Durchgang ein
 neues ISO mit Schutzzone, byte-genau und ohne neues Muxen. Das funktioniert nur mit
-unverschlüsseltem Material: ein eingebundenes Kaufdisc-Image, das noch AACS trägt, ist so
+unverschlüsseltem Material: ein eingebundenes Disc-Image, das noch AACS trägt, ist so
 nicht als normale Dateien lesbar. Diesen Schritt brauchst du nur, wenn du auf Dual-Layer-
 oder BD-R-XL-Medien brennst und die Layer-Break-Schutzzone willst. Ein Single-Layer-Image,
 das bereits läuft, kannst du direkt brennen.
@@ -189,7 +189,7 @@ Die grafische Oberfläche bietet dieselben Funktionen ganz ohne Kommandozeile. A
   Reihenfolge liegen, in der sie abgespielt werden, wie auf der Original-Disc. In beiden Modi
   gilt: Passt die Datei, die den Break überqueren würde, vollständig auf den nächsten Layer,
   wird sie dort im Ganzen platziert; der Break fällt dann sauber zwischen zwei Dateien, statt
-  eine zu teilen. Genauso platzieren auch kommerziell erstellte Discs ihre Layer-Breaks.
+  eine zu teilen. So wird ein Layer-Break üblicherweise platziert.
 - **Include all files from the folder (not just BDMV).** Ohne dieses Häkchen kommen nur die
   Disc-Ordner (`BDMV`, `CERTIFICATE`, `AACS`) ins Abbild; alles andere in der obersten Ebene
   des Ordners wird mit einer Zeile "skipping ..." im Log übersprungen. Manche Discs haben
@@ -224,8 +224,8 @@ gespeichert wäre.
 die Dateien normalerweise mit der größten zuerst, auf einer Branching-Disc landen die
 Segmente also nach Größe statt nach Wiedergabereihenfolge sortiert, was auf einem langsamen
 Laufwerk etwas Suchweg kostet; genau dafür ist die Option „Keep original file order" da. Mit
-der Layer-Fit-Platzierung fällt der Break so oder so zwischen zwei Segmente, dieselbe
-Stelle, an der auch kommerzielles Authoring ihn platziert. Und die Wiedergabezeit im
+der Layer-Fit-Platzierung fällt der Break so oder so zwischen zwei Segmente, die
+übliche Stelle für einen Layer-Break bei solchen Discs. Und die Wiedergabezeit im
 Layer-Break-Bericht ist relativ zu der Segmentdatei, die er nennt, nicht zum ganzen Film
 (siehe den Hinweis zum Bericht oben).
 
@@ -267,7 +267,7 @@ verschiedenen Kapazitäten, und der Layer-Break wird aus genau der Zahl im Feld 
 die falsche setzt die Schutzzone an die falsche Stelle. Eine Disc mit Fehlerverwaltung hält
 1 GiB pro Layer als ISA/OSA-Ersatzbereich zurück und meldet stattdessen **47.305.728**
 (100 GB), **60.403.712** (128 GB) oder **23.652.352** (BD-RE DL). Beide Varianten wurden
-hier auf echten Discs gemessen, keine davon lässt sich voraussetzen. Zeigt ImgBurn etwas
+hier auf physischen Discs gemessen, keine davon lässt sich voraussetzen. Zeigt ImgBurn etwas
 anderes als den eingetragenen Wert, setze das Häkchen bei **Enter Free Sectors manually
 (advanced)** und gib die Zahl von ImgBurn ein.
 
@@ -303,7 +303,7 @@ nicht aus einem Datenblatt übernommen:
   Ersatzbereiche können ungleich auf die Layer verteilt sein (eine echte ImgBurn-Formatierung
   ergab ISA0 4.096 + OSA0 6.144 auf Layer 0, aber ISA1 8.192 + OSA1 6.144 auf Layer 1). Jeder
   Layer fasst dann unterschiedlich viele Nutzdaten, und der wahre Wechsel liegt bei
-  `Layer-Größe minus (ISA0+OSA0) x 32` Sektoren; auf einer echten Disc wurde er 128 MB NACH
+  `Layer-Größe minus (ISA0+OSA0) x 32` Sektoren; auf einer physischen Disc wurde er 128 MB NACH
   Kapazität/2 gemessen (ein Lesezeit-Scan zeigt die Refokus-Pause des Laufwerks am Übergang).
   BDXL-Formatierungen mit 100/128 GB haben symmetrische Ersatzbereiche pro Layer, dort stimmt
   die gleichmäßige Teilung exakt.

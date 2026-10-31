@@ -43,7 +43,7 @@ completely between that zone's end and the next zone (and within the disc capaci
 placed whole on the far side of the break instead of being split. Two typical wins: a disc
 with two big titles (theatrical and director's cut) gets one title per layer with the break
 cleanly between them, and a seamless-branching disc's many segments arrange so the break
-falls between segments, the same way commercially authored discs place it. A file larger
+falls between segments, the usual place for a layer break on such discs. A file larger
 than a layer still straddles the break with the guard inside it, as before.
 
 After the build, the log and a `<out.iso>.layerbreak.txt` sidecar report each guard's
@@ -94,7 +94,7 @@ tsMuxeR --bdmv-to-iso --layer-break-guard=64 --layer-break-lbn=<breaks> E:\ out.
 ```
 
 tsMuxeR reads the files from the mounted drive and writes a new guarded ISO in one pass, byte
-for byte, with no re-mux. This only works with unencrypted material: a mounted retail image
+for byte, with no re-mux. This only works with unencrypted material: a mounted image
 that still carries AACS is not readable as plain files. You only need this step when you are
 burning to dual-layer or BD-R XL media and want the layer-break guard. A single-layer image
 that already plays can be burned directly.
@@ -173,8 +173,7 @@ The GUI exposes the same features with no command line. On the "BDMV folder -> I
   files in their numeric (playback) order so segments stay physically close to the order they
   play in, like on the original disc. In both modes, when the file that would cross the break
   fits entirely on the next layer it is placed there whole, so the break falls cleanly between
-  files instead of splitting one; this is how commercially authored discs place their layer
-  breaks too.
+  files instead of splitting one; this is the usual way to place a layer break.
 - **Include all files from the folder (not just BDMV).** Only the disc folders (`BDMV`,
   `CERTIFICATE`, `AACS`) go into the image unless this is ticked; anything else at the top of
   the folder is skipped with a "skipping ..." line in the log. Some discs keep folders beside
@@ -205,7 +204,7 @@ choreography, not anything stored differently in the bytes.
 files largest first, so on a branching disc the segments end up ordered by size rather than
 by playback order, which costs some seek distance on a slow drive; that is exactly what the
 "Keep original file order" option is for. With layer-fit placement the break falls between
-two segments either way, the same spot commercial authoring uses. And the playback time in
+two segments either way, the usual spot for a layer break on such discs. And the playback time in
 the layer break report is relative to the segment file it names, not to the whole movie (see
 the report note above).
 
@@ -243,7 +242,7 @@ be changed by accident:
 and the layer break is worked out from whichever number is in the field, so the wrong one
 puts the guard in the wrong place. A defect-managed disc keeps 1 GiB per layer back as
 ISA/OSA spare area and reports **47,305,728** (100 GB), **60,403,712** (128 GB) or
-**23,652,352** (BD-RE DL) instead. Both kinds have been measured here on real discs, so
+**23,652,352** (BD-RE DL) instead. Both kinds have been measured here on physical discs, so
 neither can be assumed. If ImgBurn shows something other than the pre-filled value, tick
 **Enter Free Sectors manually (advanced)** and type what ImgBurn shows.
 
@@ -277,7 +276,7 @@ and both effects were measured on a real burned disc, not taken from a datasheet
   unevenly between the layers (a real ImgBurn format produced ISA0 4,096 + OSA0 6,144 on layer
   0 but ISA1 8,192 + OSA1 6,144 on layer 1). Each layer then holds a different amount of user
   data, and the true switch sits at `layer size minus (ISA0+OSA0) x 32` sectors, which was
-  measured 128 MB AFTER capacity/2 on a real disc (a read-timing scan shows the drive's
+  measured 128 MB AFTER capacity/2 on a physical disc (a read-timing scan shows the drive's
   refocus pause at the transition). BDXL 100/128 GB formats have symmetric spares per layer,
   so their even split IS exact.
 - **What to do.** Nothing special: the default 288 MB guard covers the shifted switch with

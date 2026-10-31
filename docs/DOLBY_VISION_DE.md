@@ -77,7 +77,7 @@ nicht das richtige Werkzeug dafür.
 ### Warum die ursprünglichen Metadaten aufbewahrt werden müssen
 
 Die Umwandlung von Profil-7-Metadaten nach 8.1 ist **viele zu eins**: Verschiedene Originale
-ergeben dasselbe Ergebnis. Auf einer gepressten Disc gemessen, wurden zwei Drittel der gewandelten
+ergeben dasselbe Ergebnis. Auf einer Disc mit Profil 7 gemessen, wurden zwei Drittel der gewandelten
 Metadaten ununterscheidbar, wobei bis zu 91 verschiedene Originale auf einem einzigen Ergebnis
 landeten. Das lässt sich hinterher durch nichts rückgängig machen, wie gut eine Umsetzung auch sein
 mag.
