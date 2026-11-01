@@ -4684,7 +4684,16 @@ int main(int argc, char** argv)
             {
                 bool shortExt = fileExt == "mpl";
                 MPLSParser mplsParser;
-                mplsParser.parse(argv[1]);
+                // A playlist that is not there, or cannot be read, printed the version line only, at exit 0, where a
+                // missing clip says so: it is said here as for any file, and the exit is an error
+                if (!mplsParser.parse(argv[1]))
+                {
+                    if (File file; !file.open(argv[1], File::ofRead))
+                        THROW(ERR_FILE_NOT_FOUND, "Can't open file: " << str << openFailureReason(str))
+                    THROW(ERR_COMMON, "Can't parse play list file " << str
+                                                                    << ": it is no Blu-ray playlist (MPLS), or "
+                                                                       "it is damaged.")
+                }
                 string streamDir = getBlurayStreamDir(argv[1]);
                 std::string mediaExt = shortExt ? ".MTS" : ".m2ts";
                 std::string ssifExt = shortExt ? ".SIF" : ".ssif";

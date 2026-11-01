@@ -30,6 +30,8 @@
 
 * **A recording of H.264 that begins before its first parameter sets is in sync.** A broadcast recording that started some pictures before its first key picture and parameter sets kept those pictures, which no player can show, and on a recording coded partly as fields the sound came up to 80 ms late against the picture. The pictures before the first parameter sets are now left out, and the pictures shown before the first key picture keep their times, also when fields follow later.
 
+* **A playlist that is not there is said to be missing.** `tsMuxeR <disc>/BDMV/PLAYLIST/99999.mpls` printed only the version line and ended without an error, and a meta line that named it said "Can't parse play list file". Both now say that the file does not exist, or that the disc image has no such file, and end with an error.
+
 * **A source that is still encrypted is said to be so.** A Blu-ray .m2ts still encrypted stopped with "Invalid tsPacket->getHeaderSize", or was listed as if it were whole when its first part was clear; a DVD VOB still encrypted was muxed into noise; and an encrypted MP4 track was listed as Opus or as the codec it had. Such a file is now refused with one message when most of the places tested in it are encrypted, with a warning when some are; an encrypted MP4 track is listed as encrypted, and a meta line that names it is refused. Nothing is decrypted: a file needs to be decrypted before muxing.
 ## tsMuxeR 3.0.1
 

@@ -5324,7 +5324,13 @@ std::vector<MPLSParser> METADemuxer::getMplsInfo(const string& mplsFileName)
         {
             MPLSParser parser;
             if (!parser.parse(unquoteStr(i).c_str()))
+            {
+                // A playlist that is not there was "Can't parse play list file", as if it were damaged
+                const std::string name = unquoteStr(i);
+                if (File file; !file.open(name.c_str(), File::ofRead))
+                    THROW(ERR_FILE_NOT_FOUND, "Can't open file: " << name << openFailureReason(name))
                 THROW(ERR_COMMON, "Can't parse play list file " << i)
+            }
             if (!m_quiet)
                 parser.reportLeftOut(unquoteStr(i), false);
             cutPlayItems(parser, unquoteStr(i), m_playlistClipsPlayed);
