@@ -97,6 +97,13 @@ tsMuxeR can be run in track detection mode or muxing mode. If tsMuxeR is run wit
 
 A file inside a disc image (.iso) is read without mounting the image: give the path of the file after the name of the image, for example `tsMuxeR film.iso/BDMV/PLAYLIST/00800.mpls`, and the same in a meta file. Blu-ray, UHD Blu-ray and DVD images are read, and the stream files are read in place, without a copy. The names inside an image are found without regard to case.
 
+A Blu-ray disc folder or image given alone lists its titles instead of tracks: `tsMuxeR film.iso` or `tsMuxeR D:/discs/film`. Each title is shown with its playlist, length, chapters, clips and audio languages, the main film first. Playlists that are no title are listed under "Left out" with the reason (one clip repeated, many short pieces, a copy of another playlist, the same clips in another order, shorter than 2 minutes). Options before the name: `--all-playlists` lists every playlist as a title, `--min-title-length=<seconds>` sets the length a title needs (120 by default). Give the playlist of a title as the source to list its tracks, or name the disc on a meta line with `title=main` or `title=<number>`:
+```
+MUXOPT --blu-ray
+V_MPEG4/ISO/AVC, "film.iso", title=main, track=4113
+A_AC3, "film.iso", title=main, track=4352
+```
+
 Supported output formats:
 * **TS** - MPEG Transport Stream
 * **M2TS** - Blu-ray MPEG-2 Transport Stream

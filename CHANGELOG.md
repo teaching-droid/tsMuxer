@@ -2,7 +2,9 @@
 
 ### Disc images
 
-* **A disc image is read without mounting it.** A file inside an .iso is named by its path after the image, `film.iso/BDMV/PLAYLIST/00800.mpls`, as a source on the command line and in a meta file, and `--bdmv-to-iso` takes an image as its source too. Blu-ray, UHD Blu-ray and DVD images are read, and the stream files are read in place, without a copy. An image had to be mounted before, which Windows 7 cannot do without extra software. An output named as the image a source is read from is refused, and `tsMuxeR film.iso` says which path to give.
+* **A disc image is read without mounting it.** A file inside an .iso is named by its path after the image, `film.iso/BDMV/PLAYLIST/00800.mpls`, as a source on the command line and in a meta file, and `--bdmv-to-iso` takes an image as its source too. Blu-ray, UHD Blu-ray and DVD images are read, and the stream files are read in place, without a copy. An image had to be mounted before, which Windows 7 cannot do without extra software. An output named as the image a source is read from is refused.
+
+* **A disc folder or image given alone lists its titles.** `tsMuxeR film.iso` or `tsMuxeR <disc folder>` stopped with "give the playlist of the title", and a disc can hold hundreds of playlists. The listing now shows each title with its length, chapters, clips and audio languages, the main film first, then the other cuts of it and the versions with other audio or subtitles. A playlist that is no title is left out with the reason: one clip repeated, many short pieces, a copy of another playlist, the same clips in another order, or shorter than 2 minutes. A title whose clips are not all there says which are missing. `--all-playlists` lists every playlist as a title, and `--min-title-length=<seconds>` sets the length a title needs. In a meta file, `title=main` or `title=<number>` on the line of a disc folder or image takes the playlist of that title.
 
 ### Matroska input
 

@@ -26,6 +26,7 @@
 #include "chapterFile.h"
 #include "convertUTF.h"
 #include "discMeta.h"
+#include "discTitles.h"
 #include "h264StreamReader.h"
 #include "hevcStreamReader.h"
 #include "iso_writer.h"
@@ -1028,6 +1029,10 @@ muxing or demuxing process.
 
 A file inside a disc image is read without mounting the image: give its path
 after the image, as film.iso/BDMV/PLAYLIST/00800.mpls.
+A Blu-ray disc folder or image given alone lists its titles, the main film
+first: tsMuxeR [--all-playlists] [--min-title-length=<seconds>] <disc>
+On a meta line, title=main or title=<number> after a disc folder or image
+takes the playlist of that title.
 
 Meta file format:
 File MUST have the .meta extension and be encoded in UTF-8 (but see README.md).
@@ -4546,6 +4551,42 @@ int main(int argc, char** argv)
         // instead of saying what the mode expects.
         if (argc >= 2 && string(argv[1]) == "--bdmv-to-iso")
             return bdmvFolderToGuardedIso(argc, argv);
+        // A Blu-ray disc folder or image given alone lists its titles (discTitles.h); --all-playlists and
+        // --min-title-length=<seconds> may come before it.
+        {
+            bool all = false;
+            double minSeconds = 120;
+            bool titleOptions = false;
+            int a = 1;
+            for (; a < argc - 1; ++a)
+            {
+                const string option = argv[a];
+                if (option == "--all-playlists")
+                    all = true;
+                else if (strStartWith(option, "--min-title-length="))
+                {
+                    const string value = option.substr(19);
+                    if (value.empty() || value.size() > 5 || value.find_first_not_of("0123456789") != string::npos)
+                        THROW(ERR_COMMON, option << ": give the length in whole seconds, such as "
+                                                    "--min-title-length=600.")
+                    minSeconds = std::stod(value);
+                }
+                else
+                    break;
+                titleOptions = true;
+            }
+            if (a == argc - 1 && (titleOptions || argc == 2))
+            {
+                if (const string root = blurayDiscRoot(argv[a]); !root.empty())
+                {
+                    cout << describeDiscTitles(listDiscTitles(root, minSeconds, all));
+                    return 0;
+                }
+                if (titleOptions)
+                    THROW(ERR_COMMON, argv[a] << " is no Blu-ray disc folder or image. --all-playlists and "
+                                                 "--min-title-length list the titles of one.")
+            }
+        }
         if (argc == 2)
         {
             string str = argv[1];

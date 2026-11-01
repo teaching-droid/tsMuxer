@@ -29,6 +29,7 @@ static bool isKnownTrackParam(const std::string& name);
 #include "avCodecs.h"
 #include "bufferedReaderManager.h"
 #include "combinedH264Demuxer.h"
+#include "discTitles.h"
 #include "dtsStreamReader.h"
 #include "dvbSubStreamReader.h"
 #include "flacStreamReader.h"
@@ -879,6 +880,23 @@ void METADemuxer::openFile(const string& streamName)
         }
         string codec = trimStr(params[0]);
         string codecStreamName = trimStr(params[1]);
+        // title= names a title of a Blu-ray disc folder or image (discTitles.h): the line reads that title's playlist
+        if (const auto title = addParams.find("title"); title != addParams.end())
+        {
+            const string disc = unquoteStr(codecStreamName);
+            string playlist;
+            try
+            {
+                playlist = discTitlePlaylist(disc, title->second);
+            }
+            catch (const std::exception& e)
+            {
+                THROW(ERR_COMMON, e.what() << ".")
+            }
+            LTRACE(LT_INFO, 2, "title=" << title->second << " of " << disc << " is the playlist " << playlist << ".");
+            codecStreamName = "\"" + playlist + "\"";
+            addParams.erase(title);
+        }
         codec = strToUpperCase(codec);
         // Only an HEVC reader takes hdr10-override; on another track, such as H.264 on a disc, it did nothing, without
         // a word.
@@ -2922,7 +2940,7 @@ static bool isKnownTrackParam(const std::string& name)
 {
     static const std::set<std::string> known = {
         // general
-        "track", "subTrack", "lang", "timeshift", "default", "secondary", "subClip", "track-name",
+        "track", "subTrack", "lang", "timeshift", "default", "secondary", "subClip", "track-name", "title",
         // video
         "fps", "ar", "level", "video-width", "video-height", "insertSEI", "forceSEI", "autoSEI", "contSPS",
         "delPulldown", "stretch", "3d-plane", "hdr10-override", "save-srt",
@@ -3854,7 +3872,8 @@ std::string discSourceHint(const std::string& fileName)
         const std::string last = strToUpperCase(name.substr(name.find_last_of("/\\") + 1));
         if (last == "BDMV" || folderAt("BDMV"))
             return "it is a Blu-ray folder. Give the playlist of the title as the source, BDMV/PLAYLIST/<number>.mpls, "
-                   "or use --bdmv-to-iso to write the folder into an ISO image";
+                   "or add title=main or title=<number> to the line (tsMuxeR <folder> lists the titles), or use "
+                   "--bdmv-to-iso to write the folder into an ISO image";
         if (last == "VIDEO_TS" || folderAt("VIDEO_TS"))
             return "it is a DVD folder. Give the .vob files of the title in VIDEO_TS as the source";
         return "it is a folder. Give a file as the source";
@@ -3865,7 +3884,8 @@ std::string discSourceHint(const std::string& fileName)
         // An image is read where the path goes on inside it.
         if (discImage::isDir(name + "/BDMV"))
             return "it is a disc image. Give the playlist of the title inside it as the source, " + name +
-                   "/BDMV/PLAYLIST/<number>.mpls";
+                   "/BDMV/PLAYLIST/<number>.mpls, or add title=main or title=<number> to the line (tsMuxeR <image> "
+                   "lists the titles)";
         if (discImage::isDir(name + "/VIDEO_TS"))
             return "it is a disc image. Give the .vob files of the title inside it as the source, " + name +
                    "/VIDEO_TS/VTS_<number>_<part>.VOB";
