@@ -5789,6 +5789,7 @@ void METADemuxer::updateReport(const bool checkTime)
         }
         lineBack();
         cout << doubleToStr(progress, 1) << "% complete" << std::endl;
+        diagReport::progress(progress);
         m_lastReportTime = currentTime;
     }
 }

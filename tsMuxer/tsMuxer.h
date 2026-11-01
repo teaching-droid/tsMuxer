@@ -122,6 +122,8 @@ class TSMuxer final : public AbstractMuxer
 
    protected:
     bool muxPacket(AVPacket& avPacket) override;
+    void reportFrame(const AVPacket& avPacket, int pid, int64_t clock, bool newPES);
+    void flushReportFrame();
     void internalReset();
     void setMuxFormat(const std::string& format);
     [[nodiscard]] bool isSplitPoint(const AVPacket& avPacket) const;
@@ -353,6 +355,10 @@ class TSMuxer final : public AbstractMuxer
     uint16_t m_pgsTrackCnt;
     int64_t m_lastPCR;
     std::map<int, StreamInfo> m_streamInfo;
+    // the PES of the frames file (--report-frames) not yet written: its line without the byte count, and the count
+    std::string m_reportFrameHead;
+    std::string m_reportFrameTail;
+    int64_t m_reportFrameBytes = 0;
     int64_t m_lastPMTPCR;
     uint8_t* m_outBuf;
     int32_t m_outBufLen;

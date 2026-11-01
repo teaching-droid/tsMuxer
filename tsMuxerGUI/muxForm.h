@@ -21,6 +21,8 @@ class MuxForm : public QDialog  // QWidget
     void setProcess(QProcess* proc);
     void showStopped(const QString& label, const QString& outputLine);
     void abort() { onAbort(); }  // as the Abort button
+    // The report tsMuxeR writes for this job (--report), or none: Save report... keeps a copy when the job has ended
+    void setReportFile(const QString& fileName);
 
    signals:
     // tsMuxeR was stopped with Abort, or with the dialog closed, and has ended
@@ -32,6 +34,7 @@ class MuxForm : public QDialog  // QWidget
    private slots:
     void onProgressChanged();
     void onAbort();
+    void onSaveReport();
 
    private:
     int errCnt;
@@ -39,6 +42,7 @@ class MuxForm : public QDialog  // QWidget
     QStringList m_hiddenTail;  // the last of those, shown when the mux ends
     Ui_muxForm* ui;
     QProcess* muxProcess;
+    QString m_reportFile;
 };
 
 #endif

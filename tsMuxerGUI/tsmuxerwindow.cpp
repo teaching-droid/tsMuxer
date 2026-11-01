@@ -2311,6 +2311,14 @@ TsMuxerWindow::TsMuxerWindow()
                     args << ("--meta-dir=" + metaDir);
                 else if (metaCombo->currentIndex() == 2)
                     args << "--meta-dir=none";
+                if (ui->checkBoxReport->isChecked())
+                {
+                    const QString report = QDir::toNativeSeparators(QDir::tempPath()) + QDir::separator() + "tsMuxeR_" +
+                                           QFileInfo(iso).completeBaseName() + "_report.txt";
+                    QFile::remove(report);
+                    args << (QLatin1String("--report=") + report);
+                    muxForm->setReportFile(report);
+                }
                 args << folder << iso;
                 noteRunOutput(iso, false);
                 tsMuxerExecute(args);
@@ -7073,7 +7081,18 @@ void TsMuxerWindow::startMuxing()
     runInMuxMode = true;
     noteRunOutput(ui->outFileName->text(), ui->radioButtonBluRay->isChecked() || ui->radioButtonAVCHD->isChecked() ||
                                                ui->radioButtonDemux->isChecked());
-    tsMuxerExecute(QStringList() << metaName << quoteStr(ui->outFileName->text()));
+    QStringList args;
+    // A report of the job for a problem report (--report): in the temp folder, Save report... in the progress window
+    // keeps a copy
+    if (ui->checkBoxReport->isChecked())
+    {
+        const QString report = QDir::toNativeSeparators(QDir::tempPath()) + QDir::separator() + "tsMuxeR_" +
+                               fi.completeBaseName() + "_report.txt";
+        QFile::remove(report);
+        args << (QLatin1String("--report=") + report);
+        muxForm->setReportFile(report);
+    }
+    tsMuxerExecute(args << metaName << quoteStr(ui->outFileName->text()));
 }
 
 // A meta file could only ever be handed to the command line version, and that is what blocks the
@@ -7597,6 +7616,7 @@ void TsMuxerWindow::writeSettings()
     if (ui->checkBoxCrop->isEnabled())
         settings->setValue("restoreCropEnabled", ui->checkBoxCrop->isChecked());
     settings->setValue("playlistParts", ui->checkBoxPlaylistParts->isChecked());
+    settings->setValue("writeReport", ui->checkBoxReport->isChecked());
     settings->setValue("inputDir", lastInputDir);
     settings->setValue("outputDir", lastOutputDir);
     settings->setValue("useBlankPL", ui->checkBoxBlankPL->isChecked());
@@ -7848,6 +7868,7 @@ bool TsMuxerWindow::readGeneralSettings(const QString& prefix)
     ui->checkBoxCrop->setChecked(settings->value("restoreCropEnabled").toBool());
     ui->checkBoxPlaylistParts->setChecked(
         settings->value("playlistParts", ui->checkBoxPlaylistParts->isChecked()).toBool());
+    ui->checkBoxReport->setChecked(settings->value("writeReport", false).toBool());
     ui->checkBoxBlankPL->setChecked(settings->value("useBlankPL", ui->checkBoxBlankPL->isChecked()).toBool());
     // 0 is a playlist number like any other: it was skipped, and the box kept its default of 1900
     if (settings->contains("blankPLNum"))

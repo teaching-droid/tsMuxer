@@ -58,6 +58,7 @@ class TStdCheck
         double ebOut = 0;     // offset of the payload removed
         double payTotal = 0;  // payload bytes seen
         double now = 0;
+        int pid = 0;  // for the frames file of the report
         bool started = false;
         // access units: end offset, decoding time, arrival of the first byte
         struct Au

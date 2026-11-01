@@ -66,12 +66,23 @@ static std::filesystem::path fsPath(const string& utf8)
 static constexpr char EXCEPTION_ERR_MSG[] =
     ". It does not have to be! Please contact application support team for more information.";
 
-#define LTRACE2(level, msg)                   \
-    {{if ((level) <= LT_WARN) cerr << msg;    \
-    else if ((level) == LT_INFO) cout << msg; \
-    if ((level) <= LT_INFO)                   \
-        sLastMsg = true;                      \
-    }                                         \
+#define LTRACE2(level, msg)                              \
+    {                                                    \
+        if (diagReport::active)                          \
+        {                                                \
+            std::ostringstream ltrace_;                  \
+            ltrace_ << msg;                              \
+            diagReport::partial((level), ltrace_.str()); \
+        }                                                \
+        else                                             \
+        {                                                \
+            if ((level) <= LT_WARN)                      \
+                cerr << msg;                             \
+            else if ((level) == LT_INFO)                 \
+                cout << msg;                             \
+            if ((level) <= LT_INFO)                      \
+                sLastMsg = true;                         \
+        }                                                \
     }
 // An option the command line does not know, given before a source or a meta file, was taken as the name of the meta
 // file ("Error opening file --foo=1: ...") or listed as a file that does not exist: it is said to be an option
@@ -1447,6 +1458,23 @@ All parameters in this group start with two dashes:
                       versions did. It is a MUXOPT entry and also a command line
                       argument, as --lang-codes is, so that a listing of a
                       playlist gives the lengths and marks of the same parts.
+--report=<file>       Write a report of the run to <file>, for a problem report
+                      in place of the source itself: the version and system,
+                      the command line, the meta file, the size, first bytes
+                      and listing of each source, every message with its time,
+                      the lines not shown on the screen too, what each track
+                      read, used and left out, and what was written. Folders
+                      are left out of every path. A command line argument, not
+                      a MUXOPT entry.
+--report-full-paths   Keep the folders in the paths of the report.
+--report-frames[=<from>-<to>] With --report: a file beside the report,
+                      <file>.frames.tsv, with a line for each PES of a
+                      transport stream mux (track, PTS, DTS, size, the packet
+                      it begins in, the PCR), and for MPEG-2 video a line for
+                      each picture as the decoder's buffer takes it out (how
+                      full the buffer is, whether the picture is late). A time
+                      range of the output, as h:mm:ss or seconds, keeps it
+                      small: a film gives millions of lines.
 --keep-editions       Matroska output only, from one Matroska file: keep its
                       chapters exactly as they are, every edition of them and
                       every link to another file, and its segment identity
@@ -4357,6 +4385,114 @@ static void reportEmptyTracks(const MuxerManager& muxerManager)
     }
 }
 
+// The tracks of a run in the report (--report): what each was read as, what it handed on and what it left out
+static void writeReportTracks(const MuxerManager& muxerManager)
+{
+    diagReport::section("Tracks");
+    int number = 0;
+    for (const StreamInfo& si : muxerManager.getStreamInfo())
+    {
+        std::ostringstream line;
+        line << "Track " << ++number << ": " << si.m_codec << ", "
+             << (si.m_fullStreamName.empty() ? "\"" + si.m_streamName + "\"" : si.m_fullStreamName);
+        for (const auto& [key, value] : si.m_addParams) line << ", " << key << (value.empty() ? "" : "=" + value);
+        diagReport::text(line.str());
+        AbstractStreamReader* const reader = si.m_streamReader;
+        if (reader == nullptr)
+        {
+            diagReport::text("  not opened");
+            continue;
+        }
+        std::ostringstream counts;
+        const int64_t frames = reader->getDeliveredFrames();
+        counts << "  read as " << reader->getCodecInfo().displayName << ", frames handed on "
+               << (frames < 0 ? std::string("not counted") : std::to_string(frames)) << ", bytes used "
+               << reader->getProcessedSize();
+        const auto audio = dynamic_cast<SimplePacketizerReader*>(reader);
+        if (audio)
+            counts << ", bytes read " << audio->getReadSize() << ", lost " << audio->getLostSize() << " (padding "
+                   << audio->getLostPadBytes() << "), tags " << audio->getTagBytes() << ", padding "
+                   << audio->getPadBytes() << ", frame sync changes " << audio->getSyncChanges();
+        diagReport::text(counts.str());
+        if (audio == nullptr || audio->getLostSize() <= 0)
+            continue;
+        // where the lost bytes are, in the data of the track: for a file of its own, offsets in the file
+        const auto ranges = audio->getLostRanges();
+        constexpr size_t MAX_RANGES = 50;
+        for (size_t i = 0; i < ranges.size() && i < MAX_RANGES; ++i)
+            diagReport::text("    lost bytes " + std::to_string(ranges[i].first) + " to " +
+                             std::to_string(ranges[i].second - 1));
+        if (ranges.size() > MAX_RANGES)
+            diagReport::text("    and " + std::to_string(ranges.size() - MAX_RANGES) + " more ranges");
+    }
+}
+
+// Writes the tracks to the report when the run ends, by an error as well: made after the muxer, it is ended first
+class ReportTracks
+{
+   public:
+    explicit ReportTracks(const MuxerManager& muxerManager) : m_muxerManager(muxerManager) {}
+    ~ReportTracks()
+    {
+        if (!diagReport::active)
+            return;
+        try
+        {
+            writeReportTracks(m_muxerManager);
+        }
+        catch (...)
+        {
+        }
+    }
+    ReportTracks(const ReportTracks&) = delete;
+    ReportTracks& operator=(const ReportTracks&) = delete;
+
+   private:
+    const MuxerManager& m_muxerManager;
+};
+
+// The listing of each source of a mux in the report, as tsMuxeR <file> gives it: the parameters of every track of it,
+// which the messages of a mux do not give
+static void writeReportListings()
+{
+    if (!diagReport::active || !diagReport::muxRun())
+        return;
+    for (const std::string& source : diagReport::metaSources())
+    {
+        diagReport::section("Listing of " + source);
+        std::streambuf* const out = std::cout.rdbuf(nullptr);
+        std::streambuf* const err = std::cerr.rdbuf(nullptr);
+        const bool lastMsg = sLastMsg;
+        diagReport::setListing(true);
+        try
+        {
+            // a disc folder or image: its titles, as tsMuxeR <disc> lists them; the meta line names the title taken
+            if (const std::string root = blurayDiscRoot(source); !root.empty())
+                diagReport::text(describeDiscTitles(listDiscTitles(root, 120, false)));
+            else if (const std::string videoTs = dvdVideoTs(source); !videoTs.empty())
+                diagReport::text(describeDvdTitles(listDvdTitles(videoTs, 120, false)));
+            else
+                detectStreamReader(source.c_str(), nullptr, false);
+        }
+        catch (VodCoreException& e)
+        {
+            diagReport::text("Error: " + e.m_errStr);
+        }
+        catch (std::exception& e)
+        {
+            diagReport::text(std::string("Error: ") + e.what());
+        }
+        catch (...)
+        {
+            diagReport::text("Error of an unknown kind");
+        }
+        diagReport::setListing(false);
+        std::cout.rdbuf(out);
+        std::cerr.rdbuf(err);
+        sLastMsg = lastMsg;
+    }
+}
+
 static void reportLostData(const MuxerManager& muxerManager)
 {
     struct Entry
@@ -4457,6 +4593,7 @@ static void onStopSignal(const int sig)
 {
     if (!stopWatched() || stopSignal() != 0)
     {
+        diagReport::signalNote(sig);
         std::signal(sig, SIG_DFL);
         std::raise(sig);
         return;
@@ -4470,6 +4607,7 @@ static void endBySignal()
     {
         std::cout.flush();  // the signal ends the program without flushing, and a log in a file lost the last lines
         std::cerr.flush();
+        diagReport::stopped(sig);
 #ifdef _WIN32
         // Raised again, SIGINT ends the program with code 3 here; Ctrl+C ended it with STATUS_CONTROL_C_EXIT
         std::_Exit(static_cast<int>(0xC000013AU));
@@ -4479,6 +4617,8 @@ static void endBySignal()
 #endif
     }
 }
+
+static int runTsMuxer(int argc, char** argv);
 
 int main(int argc, char** argv)
 {
@@ -4499,6 +4639,18 @@ int main(int argc, char** argv)
     }
     argv = argv_vec.data();
 #endif
+    if (!diagReport::takeOptions(argc, argv))
+        return -2;
+    diagReport::writeStart(argc, argv);
+    const int exitCode = runTsMuxer(argc, argv);
+    // after the run, so that reading the sources again changes nothing the run says or writes
+    writeReportListings();
+    diagReport::close(exitCode);
+    return exitCode;
+}
+
+static int runTsMuxer(int argc, char** argv)
+{
     LTRACE(LT_INFO, 2, "tsMuxeR version " TSMUXER_VERSION << ". github.com/teaching-droid/tsMuxer");
     // A signal the program was started with ignored, as a job in the background of a script is for Ctrl+C, stays so
     for (const int sig : {SIGINT, SIGTERM})
@@ -4963,6 +5115,7 @@ int main(int argc, char** argv)
         {
             KeepOldOutput keepOld;  // made first, so it is ended last: the muxers have closed their files by then
             MuxerManager muxerManager(readManager, matroskaMuxerFactory);
+            const ReportTracks reportTracks(muxerManager);
             muxerManager.setMatroskaOutput(fileExt2 == "WEBM" ? 2 : 1);
             muxerManager.openMetaFile(argv[1]);
             warnMetaDirIgnored(muxerManager);
@@ -5015,6 +5168,7 @@ int main(int argc, char** argv)
             BlurayHelper blurayHelper;
 
             MuxerManager muxerManager(readManager, tsMuxerFactory);
+            const ReportTracks reportTracks(muxerManager);
             muxerManager.setAllowStereoMux(fileExt2 == "SSIF" || dt != DiskType::NONE);
             muxerManager.openMetaFile(argv[1]);
             DiscMeta discMeta;
@@ -5355,6 +5509,7 @@ int main(int argc, char** argv)
         {
             KeepOldOutput keepOld;  // made first, so it is ended last: the demux has closed its files by then
             MuxerManager sMuxer(readManager, singleFileMuxerFactory);
+            const ReportTracks reportTracks(sMuxer);
             sMuxer.openMetaFile(argv[1]);
             warnMetaDirIgnored(sMuxer);
             reportDvProfileIgnored(sMuxer, "a demux");

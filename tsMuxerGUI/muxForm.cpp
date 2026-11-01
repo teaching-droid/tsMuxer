@@ -4,6 +4,11 @@
 
 #include <QCloseEvent>
 #include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QMessageBox>
 #include <QProcess>
 
 #include "ui_muxForm.h"
@@ -22,6 +27,8 @@ MuxForm::MuxForm(QWidget* parent) : QDialog(parent, Qt::WindowMaximizeButtonHint
     connect(ui->progressBar, &QProgressBar::valueChanged, this, &MuxForm::onProgressChanged);
     connect(ui->abortBtn, &QPushButton::clicked, this, &MuxForm::onAbort);
     connect(ui->okBtn, &QPushButton::clicked, this, &MuxForm::close);
+    connect(ui->reportBtn, &QPushButton::clicked, this, &MuxForm::onSaveReport);
+    ui->reportBtn->setVisible(false);
 }
 
 void MuxForm::closeEvent(QCloseEvent* event)
@@ -54,6 +61,38 @@ void MuxForm::prepare(const QString& label)
     ui->abortBtn->setEnabled(true);
     ui->okBtn->setEnabled(false);
     ui->okBtn->setText(QCoreApplication::translate("muxForm", "OK"));
+    setReportFile(QString());
+}
+
+void MuxForm::setReportFile(const QString& fileName)
+{
+    m_reportFile = fileName;
+    ui->reportBtn->setVisible(!fileName.isEmpty());
+    ui->reportBtn->setEnabled(false);  // until the job has ended and the report is complete
+}
+
+void MuxForm::onSaveReport()
+{
+    if (m_reportFile.isEmpty() || !QFile::exists(m_reportFile))
+    {
+        QMessageBox::warning(this, tr("Save report"), tr("tsMuxeR wrote no report for this job."));
+        return;
+    }
+    const QString target = QFileDialog::getSaveFileName(
+        this, tr("Save report"), QDir::home().filePath(QFileInfo(m_reportFile).fileName()), tr("Text files (*.txt)"));
+    if (target.isEmpty())
+        return;
+    if (QFile::exists(target))
+        QFile::remove(target);
+    if (!QFile::copy(m_reportFile, target))
+    {
+        QMessageBox::warning(this, tr("Save report"), tr("The report could not be saved as \"%1\".").arg(target));
+        return;
+    }
+    QMessageBox::information(this, tr("Save report"),
+                             tr("The report is saved as \"%1\". Attach this file to the problem report. It holds "
+                                "no folder names, only the names of the files.")
+                                 .arg(QDir::toNativeSeparators(target)));
 }
 
 void MuxForm::onProgressChanged()
@@ -120,6 +159,7 @@ void MuxForm::muxFinished(int exitCode, const QString&)
         ui->abortBtn->setEnabled(false);
         ui->okBtn->setEnabled(true);
     }
+    ui->reportBtn->setEnabled(!m_reportFile.isEmpty());
 }
 
 void MuxForm::onAbort()
@@ -134,6 +174,7 @@ void MuxForm::onAbort()
     muxProcess->waitForFinished();
     setWindowTitle(QObject::tr("tsMuxeR is terminated"));
     muxProcess = nullptr;
+    ui->reportBtn->setEnabled(!m_reportFile.isEmpty());  // the lines up to the stop are in it
     emit stopped();
 }
 

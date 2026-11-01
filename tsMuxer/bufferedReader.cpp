@@ -251,6 +251,7 @@ void BufferedReader::thread_main()
                                 data->m_streamName = nextFileName;
                                 if (!data->m_streamName.empty() && data->openStream())
                                 {
+                                    LTRACE(LT_DEBUG, 0, "Join: the next file, " << nextFileName << ", is opened");
                                     if (bytesReaded == 0)
                                     {
                                         // data->m_nextFileInfo = NEXT_FILE_FIRST_BLOCK;

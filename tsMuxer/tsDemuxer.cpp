@@ -9,6 +9,7 @@
 #include <cstring>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <set>
 #include <vector>
 
@@ -40,6 +41,40 @@ uint8_t* findPacket(uint8_t* cur, const uint8_t* lastFrameAddr, const int step, 
         if (*cur == 0x47 && (cur + step > lastFrameAddr || cur[step] == 0x47))
             break;
     return cur;
+}
+
+// The streams of a PMT, for the report (--report)
+std::string pmtText(const TS_program_map_section& pmt, const int pmtPid);
+
+// A PMT is read again in every block of a file: the report gets it once for each file and each content
+void tracePmt(const std::string& streamName, const TS_program_map_section& pmt, const int pmtPid)
+{
+    if (!diagReport::active)
+        return;
+    static std::mutex lock;
+    static std::set<std::string> said;
+    const std::string line = "TS \"" + streamName + "\": " + pmtText(pmt, pmtPid);
+    {
+        const std::lock_guard<std::mutex> guard(lock);
+        if (!said.insert(line).second)
+            return;
+    }
+    LTRACE(LT_DEBUG, 0, line);
+}
+
+std::string pmtText(const TS_program_map_section& pmt, const int pmtPid)
+{
+    std::ostringstream s;
+    s << "PMT on PID " << pmtPid << ", program " << pmt.program_number << ", PCR on PID " << pmt.pcr_pid << ":";
+    for (const auto& [pid, info] : pmt.pidList)
+    {
+        s << " PID " << pid << " type 0x" << std::hex << static_cast<int>(info.m_streamType) << std::dec;
+        if (info.m_lang[0] != 0)
+            s << " " << std::string(info.m_lang, strnlen(info.m_lang, 3));
+        if (info.isSecondary)
+            s << " secondary";
+    }
+    return s.str();
 }
 }  // namespace
 
@@ -182,6 +217,7 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                         m_pmtVersionPid = pid;
                         m_pmtVersion = -2;
                         pmtBufferLen = 0;
+                        tracePmt(m_streamName, m_pmt, pid);
                         for (const auto& [fst, snd] : m_pmt.pidList)
                         {
                             TrackInfo track(
@@ -759,6 +795,7 @@ void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, c
                             m_nonMVCVideoFound = true;
                         m_pmtVersionPid = pid;
                         m_pmtVersion = -2;
+                        tracePmt(m_streamName, m_pmt, pid);
                     }
                     else
                     {
@@ -1670,6 +1707,10 @@ void TSDemuxer::reportDamage()
                                 "be damaged.");
     for (const auto& [pid, damage] : m_damage)
     {
+        LTRACE(LT_DEBUG, 0,
+               "TS \"" << m_streamName << "\" PID " << pid << ": " << damage.packets << " packets, " << damage.lost
+                       << " missing by the continuity counter" << where(damage.lostAt) << ", " << damage.scrambled
+                       << " marked scrambled");
         if (damage.packets > 0 && damage.scrambled == damage.packets)
             THROW(ERR_COMMON, "Track " << pid << " of \"" << m_streamName << "\" is scrambled: all " << damage.packets
                                        << " of its packets are marked so (transport_scrambling_control), and what "

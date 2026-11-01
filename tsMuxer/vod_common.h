@@ -7,26 +7,34 @@
 
 #include <chrono>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
 
+#include "diagnosticReport.h"
+
 #if 1
 extern bool sLastMsg;
-#define LTRACE(level, errIndex, msg)               \
-    do                                             \
-    {                                              \
-        {                                          \
-            if (((errIndex) & 2) != 0)             \
-            {                                      \
-                if ((level) <= LT_WARN)            \
-                    std::cerr << msg << std::endl; \
-                else if ((level) == LT_INFO)       \
-                    std::cout << msg << std::endl; \
-                if ((level) <= LT_INFO)            \
-                    sLastMsg = true;               \
-            }                                      \
-        }                                          \
+// With --report every line goes to the report as well, the ones not shown included (diagnosticReport.h)
+#define LTRACE(level, errIndex, msg)                               \
+    do                                                             \
+    {                                                              \
+        if (diagReport::active)                                    \
+        {                                                          \
+            std::ostringstream ltrace_;                            \
+            ltrace_ << msg;                                        \
+            diagReport::trace((level), (errIndex), ltrace_.str()); \
+        }                                                          \
+        else if (((errIndex) & 2) != 0)                            \
+        {                                                          \
+            if ((level) <= LT_WARN)                                \
+                std::cerr << msg << std::endl;                     \
+            else if ((level) == LT_INFO)                           \
+                std::cout << msg << std::endl;                     \
+            if ((level) <= LT_INFO)                                \
+                sLastMsg = true;                                   \
+        }                                                          \
     } while (false)
 
 class Process

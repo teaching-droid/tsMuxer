@@ -131,6 +131,20 @@ The output of the program is encoded in UTF-8, which means that non-ASCII charac
 
 An Ogg file (`.ogg`, `.oga`, `.opus`) of Opus or Vorbis sound is read as a source: each of its streams is a track, numbered from 1 in the order of the file, so `A_OPUS, "song.opus", track=1`; without `track=` the first one is taken. The pre-skip of Opus and the samples the last page cuts off are kept as in a Matroska file, and a LANGUAGE comment of three letters gives the track's language. Other streams in an Ogg file (Theora, FLAC, Speex) are left out with a warning, and a chained Ogg file, of several streams one after the other, is refused: split it and join the parts with `+`. Opus and Vorbis go to a Matroska output or a demux, and Opus to a TS as well; a Blu-ray disc has no form for either. A damaged page is left out with a warning; in an Opus track of one or two channels the time it held is filled with empty frames, which a decoder fills in by itself, so the sound after it stays at its time.
 
+### Report for a problem report
+
+A problem with a mux can often be looked into without the source file, which may be too big to send. `--report=<file>` writes a text file of the run to attach to the problem report instead:
+
+```
+tsMuxeR --report=report.txt film.meta film.ts
+```
+
+It holds the tsMuxeR version, the system, the command line, the meta file, the size and first 32 bytes of each source and its listing, every message of the run with its time in seconds, the lines tsMuxeR does not show on the screen as well (a lower-case letter marks them), what each track read, used and left out, with where the left-out bytes lie, and the files written with their sizes. Folders are left out of every path: a file is written by its name alone, such as `film.ts`; `--report-full-paths` keeps them. Nothing of the sound or the pictures is in it. A run that stops with an error, by Ctrl+C or with a crash still leaves the report up to that point.
+
+`--report-frames` adds a second file, `<file>.frames.tsv`, tab-separated for a spreadsheet: a line for each PES a transport stream mux writes, with its track, PTS and DTS, size, the output file and packet it begins in, the PCR there and how long before its DTS it was written; and for MPEG-2 video a line for each picture as the decoder's buffer (the T-STD of H.222.0) takes it out, with how full the buffer is and whether the picture is late. A film gives millions of lines, so a range of the output's time keeps the file small: `--report-frames=0:10:00-0:12:00` or `--report-frames=600-720`.
+
+In the window, "Write a report of each mux for a problem report" in the options does the same, and "Save report..." in the progress window keeps a copy when the job has ended.
+
 ## Meta file format
 File MUST have the .meta extension. This file defines files you want to multiplex. The first line of a meta file contains additional parameters that apply to all tracks. In this case the first line should begin with the word MUXOPT.
 
@@ -354,6 +368,9 @@ Parameter           | Description
 --title             | Matroska output: the title of the file. Without it a Matroska source's own title is kept.
 --lang-codes        | Which form a language read from a disc or a container is reported in. Twenty languages have two codes in ISO 639-2, Greek being ell or gre. Takes source (no conversion either way), terminological (ell, deu, nld, the default and what earlier versions did) or bibliographic (gre, ger, dut, what eac3to shows). Unlike the other options this is an argument rather than a MUXOPT entry, so it also applies when simply listing a file. A language typed into a file name is left exactly as typed. 
 --playlist-clips    | How the clips of a Blu-ray playlist are muxed. `played`, the default, takes from each clip only the part its play item plays: from the key picture at or before the point where a player starts to the one at or after the point where it stops. `whole` takes every clip whole, as earlier versions did. It is a MUXOPT entry and also an argument, as --lang-codes is, so that a listing of a playlist gives the lengths and marks of the same parts. 
+--report            | `--report=<file>` writes a report of the run to the file, to attach to a problem report in place of the source: see [Report for a problem report](#report-for-a-problem-report). A command line argument, not a MUXOPT entry. 
+--report-full-paths | Keeps the folders in the paths of the report, which are left out otherwise. 
+--report-frames     | With --report, a file of every PES and of the decoder's buffer for MPEG-2 video, beside the report. `--report-frames=<from>-<to>` takes only that time range of the output. 
 --right-eye         | Use base video stream for right eye. Used for 3DBD only.
 --start-time        | Timestamp of the first video frame. May be defined as 45 kHz clock (just a number) or as time in hh:mm:ss.zzz format. If not set, muxing starts at 600 s (27000000 ticks). For every output except plain \*.ts, values below 524280 ticks (11.65 s) are raised to 524280: below that point Blu-ray players cannot navigate back to the start of the disc (their 32-bit 45 kHz registers underflow).
 --mplsOffset        | The number of the first MPLS file. Used for BD disc mode.

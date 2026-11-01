@@ -1296,6 +1296,16 @@
               </widget>
              </item>
              <item>
+              <widget class="QCheckBox" name="checkBoxReport">
+               <property name="toolTip">
+                <string>tsMuxeR writes a text file of each mux: what it was given, every message, what each track read and left out, and what it wrote. Save report... in the progress window keeps it, to attach to a problem report in place of the file itself. Folder names are left out of it.</string>
+               </property>
+               <property name="text">
+                <string>Write a report of each mux for a problem report</string>
+               </property>
+              </widget>
+             </item>
+             <item>
               <layout class="QHBoxLayout" name="langCodesLayout">
                <item>
                 <widget class="QLabel" name="langCodesLabel">

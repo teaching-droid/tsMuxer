@@ -206,6 +206,13 @@ class SimplePacketizerReader : public AbstractStreamReader
     [[nodiscard]] int64_t getPadBytes() const { return m_padBytes; }
     // The part of getLostSize that is such padding (m_lostPadBytes), at most all of it
     [[nodiscard]] int64_t getLostPadBytes() const { return (std::min)(m_lostPadBytes, getLostSize()); }
+    // Where the lost bytes lie in the data of the track, as byte ranges from and to: for the report (--report)
+    [[nodiscard]] std::vector<std::pair<int64_t, int64_t>> getLostRanges() const
+    {
+        std::vector<std::pair<int64_t, int64_t>> ranges;
+        for (const ByteRun& r : m_lostRuns) ranges.emplace_back(r.from, r.to);
+        return ranges;
+    }
 
     // ** THE TAGS AT THE END OF A FILE ARE CUT OFF BEFORE ANY READER SEES THEM. ** Counting the end chain from the
     // last bytes that arrived (trailingTagBytes) comes when the frames in front of it have gone out, and two codecs

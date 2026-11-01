@@ -66,6 +66,8 @@
 
 ### Other
 
+* **A report of a run for a problem report.** A problem could mostly be looked into only with the source file, which is often too big to send. `--report=<file>` writes a text file of the run: the version and system, the command line, the meta file, the size, first bytes and listing of each source, every message with its time, the lines not shown on the screen as well, what each track read, used and left out, and the files written. Folders are left out of every path unless `--report-full-paths` is given. `--report-frames` adds a file with every PES of a transport stream mux (PTS, DTS, size, packet, PCR) and, for MPEG-2 video, the fill of the decoder's buffer at each picture, for the whole output or a time range of it. In the window, a tick in the options writes the report, and "Save report..." in the progress window keeps it. Without these options a run is as before.
+
 * **An unknown option is said to be one.** `tsMuxeR --foo=1 <source>` took the option as the name of a meta file and stopped with "Error opening file --foo=1", and errors of that kind ended without a line end, so the prompt of the shell followed the text. An argument that starts with "-" and is neither an option nor a file is now named as an unknown option, and those errors end their line.
 
 ## tsMuxeR 3.0.1

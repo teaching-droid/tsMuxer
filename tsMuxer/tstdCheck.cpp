@@ -222,6 +222,7 @@ bool TStdCheck::readSequence(Video& v, const std::vector<uint8_t>& es)
 
 void TStdCheck::videoPacket(Video& v, const int pid, const bool start, const uint8_t* payload, const int len)
 {
+    v.pid = pid;
     Packet pk{pid, m_index - 1, 0, len, false, 0, m_lastPcrRaw, m_lastPcrLine};
     if (start)
     {
@@ -387,6 +388,22 @@ void TStdCheck::advance(Video& v, const double to)
 void TStdCheck::removeAu(Video& v, const Video::Au& au)
 {
     ++v.aus;
+    if (diagReport::framesActive)
+    {
+        // the picture as the model takes it out: the buffer then, and how long its first byte waited
+        const auto dts = static_cast<int64_t>(std::llround(au.td / 300));
+        const double time = diagReport::frameTime(dts);
+        if (diagReport::framesWanted(time))
+        {
+            const bool late = (au.late || v.ebIn + 0.5 < au.end) && !v.lowDelay;
+            std::ostringstream row;
+            row << "buffer			" << v.pid << "	MPEG-2			" << dts << '	'
+                << doubleToStr(time, 6) << '	' << std::llround(au.end - v.ebOut) << "		"
+                << doubleToStr((au.td - au.firstArrival) / 27000, 3) << '	' << std::llround(v.ebIn - v.ebOut)
+                << '	' << std::llround(v.ebs) << '	' << (late ? "late" : "");
+            diagReport::frameRow(row.str());
+        }
+    }
     // where the picture began: the end of the one before
     v.largest = (std::max)(v.largest, au.end - v.ebOut);
     const double wait = au.td - au.firstArrival;

@@ -1398,6 +1398,8 @@ void TSMuxer::reportKeyPictureGaps()
 
 bool TSMuxer::close()
 {
+    if (diagReport::framesActive)
+        flushReportFrame();
     reportReadRate();
     reportLateArrival();
     reportCbrExcess();
@@ -1936,6 +1938,9 @@ void TSMuxer::gotoNextFile(const int64_t newPts)
     if (m_sublingMuxer)
         m_outFileName = getNextName(m_outFileName);  // inc by 2
     m_fileNames.push_back(m_outFileName);
+    LTRACE(LT_DEBUG, 0,
+           "Split: the next output file, " << m_outFileName << ", begins at "
+                                           << doubleToStr(static_cast<double>(newPts) / INTERNAL_PTS_FREQ, 3) << " s");
     openDstFile();
 
     for (auto& [pid, si] : m_pmt.pidList)
@@ -2628,6 +2633,8 @@ bool TSMuxer::muxPacket(AVPacket& avPacket)
             pesStreamID = PES_PRIVATE_DATA1;
     }
 
+    if (diagReport::framesActive)
+        reportFrame(avPacket, tsIndex, newPCR, newPES);
     addData(pesStreamID, tsIndex, avPacket);
 
     if (avPacket.duration > 0)
@@ -2638,6 +2645,44 @@ bool TSMuxer::muxPacket(AVPacket& avPacket)
         m_endStreamDTS = avPacket.dts;
 
     return true;
+}
+
+// A line of the frames file of the report (--report-frames) for each PES: begun before its data, so the packet count
+// is that of its first packet, in the output file of the split it goes to, and written when the next PES begins, with
+// the bytes of all its packets (a picture comes in several)
+void TSMuxer::reportFrame(const AVPacket& avPacket, const int pid, const int64_t clock, const bool newPES)
+{
+    if (!newPES)
+    {
+        m_reportFrameBytes += avPacket.size;
+        return;
+    }
+    flushReportFrame();
+    const int64_t pts = internalClockToPts(avPacket.pts) + m_timeOffset;
+    const int64_t dts = internalClockToPts(avPacket.dts) + m_timeOffset;
+    const double time = diagReport::frameTime(pts);
+    if (!diagReport::framesWanted(time))
+        return;
+    const auto info = m_pmt.pidList.find(pid);
+    std::string codec;
+    if (info != m_pmt.pidList.end() && info->second.m_codecReader)
+        codec = info->second.m_codecReader->getCodecInfo().displayName;
+    std::ostringstream head;
+    head << "pes	" << m_muxedPacketCnt.size() << '	' << m_muxedPacketCnt[m_muxedPacketCnt.size() - 1]
+         << '	' << pid << '	' << codec << '	' << ((avPacket.flags & AVPacket::IS_IFRAME) ? "key" : "") << '	' << pts
+         << '	' << dts << '	' << doubleToStr(time, 6) << '	';
+    m_reportFrameHead = head.str();
+    m_reportFrameTail = '	' + std::to_string(m_lastPCR) + '	' +
+                        doubleToStr(static_cast<double>(dts - clock) / 90.0, 3) + "			";
+    m_reportFrameBytes = avPacket.size;
+}
+
+void TSMuxer::flushReportFrame()
+{
+    if (m_reportFrameHead.empty())
+        return;
+    diagReport::frameRow(m_reportFrameHead + std::to_string(m_reportFrameBytes) + m_reportFrameTail);
+    m_reportFrameHead.clear();
 }
 
 // A variable rate mux writes a PCR only where a PES begins, once M_PCR_DELTA has passed since the last one. Where the
