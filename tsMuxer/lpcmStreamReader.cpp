@@ -567,6 +567,23 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
         const auto* waveFormatPCMEx = reinterpret_cast<const WAVEFORMATPCMEX*>(fmtCopy);
         const uint8_t* fmtPos;
         uint64_t fmtSize;
+        // A WAV whose audio comes with no format chunk before it ended in a division by zero ("Floating point
+        // exception"): the format of its samples, which the format chunk gives, was never known. The chunks are
+        // walked by their sizes from the header on; one that runs past the data read stops the walk.
+        if (m_headerType == LPCMHeaderType::htWAVE && end - buff >= 12)
+            for (const uint8_t* c = buff + 12; end - c >= 8;)
+            {
+                if (memcmp(c, "fmt ", 4) == 0)
+                    break;
+                if (memcmp(c, "data", 4) == 0)
+                    THROW(ERR_COMMON,
+                          "The WAVE file has no format chunk before its audio, so the format of its "
+                          "samples is not known. The file is damaged or is no WAV file.")
+                const uint32_t size = loadUnaligned<uint32_t>(c + 4);
+                if (size > static_cast<uint32_t>(end - c - 8))
+                    break;
+                c += 8 + size + (size & 1);
+            }
         if (m_headerType == LPCMHeaderType::htWAVE64)
         {
             curPos = findSubstr("fmt ", buff, end);

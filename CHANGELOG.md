@@ -48,6 +48,8 @@
 
 * **An RF64 or BW64 file, the WAV of more than 4 GB, is read.** It was refused with the advice to convert it to W64. It is read as a WAV now, the length of its audio taken from its ds64 chunk, so the chunks a BW64 file carries after its audio are not taken for sound.
 
+* **A WAV file with no format chunk before its audio stopped tsMuxeR with a crash.** It now stops with a message that the format of its samples is not known.
+
 ### Video
 
 * **A raw video file that ends inside a picture says so.** A raw MPEG-2, H.264 or HEVC file (.m2v, .264, .hevc and the like) cut at a byte position ends with part of a picture, which was muxed as the last picture without a word, and a player shows it damaged or skips it. The slices of the last picture are now read to their end, and where the data stops inside the picture, a warning gives the row of macroblocks or coding tree units it stops in. A file that ends between two pictures gives none.
