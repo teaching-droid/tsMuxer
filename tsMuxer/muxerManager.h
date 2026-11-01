@@ -10,6 +10,7 @@
 #include "bufferedFileWriter.h"
 #include "bufferedReaderManager.h"
 #include "metaDemuxer.h"
+#include "tstdCheck.h"
 
 class FileFactory;
 
@@ -187,6 +188,9 @@ class MuxerManager final
     std::unique_ptr<AbstractMuxer> m_mainMuxer;
     bool m_keepEditions = false;  // --keep-editions
     std::unique_ptr<AbstractMuxer> m_subMuxer;
+    // The decoder's buffers of H.222.0 for the MPEG-2 video of each TS muxer, from the bytes it writes (tstdCheck.h)
+    mutable std::map<const AbstractMuxer*, std::unique_ptr<TStdCheck>> m_tstd;
+    void checkTStd(const AbstractMuxer* muxer, const uint8_t* buff, int len) const;
 
     bool m_asyncMode;
     // int32_t m_fileBlockSize;

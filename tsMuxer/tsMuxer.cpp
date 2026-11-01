@@ -15,6 +15,7 @@
 #include "h264StreamReader.h"
 #include "hevcStreamReader.h"
 #include "iso_writer.h"
+#include "mpeg2StreamReader.h"
 #include "mpegAudioStreamReader.h"
 #include "mpegStreamReader.h"
 #include "muxerManager.h"
@@ -967,6 +968,11 @@ void TSMuxer::reportLateArrival() const
 {
     if (m_latePictures == 0)
         return;
+    // MPEG-2 video is judged by the T-STD check of the output (tstdCheck.h), which counts the buffer's leak as well:
+    // the same late pictures would be said twice
+    for (const auto& [pid, info] : m_streamInfo)
+        if (dynamic_cast<const MPEG2StreamReader*>(info.m_mpegReader))
+            return;
     LTRACE(LT_WARN, 2,
            "Warning: with " << (m_ceilingFromBitrate ? "--bitrate=" : "--maxbitrate=") << ceilingRate() / 1000 << ", "
                             << m_latePictures << " of " << m_cappedPictures

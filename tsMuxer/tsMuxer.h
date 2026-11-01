@@ -64,6 +64,7 @@ class TSMuxer final : public AbstractMuxer
     [[nodiscard]] int64_t getVBVLength() const { return m_vbvLen / 90; }
     void setNewStyleAudioPES(const bool val) { m_useNewStyleAudioPES = val; }
     void setM2TSMode(const bool val) { m_m2tsMode = val; }
+    [[nodiscard]] bool isM2TSMode() const { return m_m2tsMode; }
     void setPCROnVideoPID(const bool val) { m_pcrOnVideo = val; }
     // --bitrate feeds this. It drives the CBR clock and, with a minimum, the null padding.
     void setMuxRate(const int val) { m_cbrBitrate = val; }

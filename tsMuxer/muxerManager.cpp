@@ -1238,6 +1238,7 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     bool closed = m_mainMuxer->close();
     if (m_subMuxer && !m_subMuxer->close())
         closed = false;
+    for (auto& [muxer, check] : m_tstd) check->finish();
 
     // Drain any writes the muxers queued during flush/close, then surface a failed
     // async write (e.g. disk full at the tail of a large image) instead of silently
@@ -1369,9 +1370,25 @@ void MuxerManager::muxBlockFinished(const AbstractMuxer* muxer)
     }
 }
 
+// The bytes a TS muxer writes, in the order of its file, to the T-STD check of its MPEG-2 video. A buffer handed on
+// is not changed after, so what is read here is what is written.
+void MuxerManager::checkTStd(const AbstractMuxer* muxer, const uint8_t* buff, const int len) const
+{
+    auto it = m_tstd.find(muxer);
+    if (it == m_tstd.end())
+    {
+        const auto* ts = dynamic_cast<const TSMuxer*>(muxer);
+        if (!ts)
+            return;
+        it = m_tstd.emplace(muxer, std::make_unique<TStdCheck>(ts->isM2TSMode() ? 192 : 188)).first;
+    }
+    it->second->feed(buff, static_cast<size_t>(len));
+}
+
 void MuxerManager::asyncWriteBuffer(const AbstractMuxer* muxer, uint8_t* buff, const int len,
                                     AbstractOutputStream* dstFile)
 {
+    checkTStd(muxer, buff, len);
     WriterData data;
     data.m_buffer = buff;
     data.m_bufferLen = len;
@@ -1402,6 +1419,7 @@ int MuxerManager::syncWriteBuffer(AbstractMuxer* muxer, const uint8_t* buff, con
                                   AbstractOutputStream* dstFile) const
 {
     assert(m_interleave == 0);
+    checkTStd(muxer, buff, len);
     const int rez = dstFile->write(buff, len);
     dstFile->sync();
     return rez;

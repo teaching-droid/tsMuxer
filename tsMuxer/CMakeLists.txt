@@ -73,6 +73,7 @@ add_executable (tsmuxer
   textSubtitlesRender.cpp
   tsDemuxer.cpp
   tsMuxer.cpp
+  tstdCheck.cpp
   tsPacket.cpp
   utf8Converter.cpp
   vc1Parser.cpp
