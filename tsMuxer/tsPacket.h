@@ -793,6 +793,8 @@ struct MPLSParser
 
     std::vector<MPLSStnTable> m_stnTables;
     std::vector<size_t> m_playItemsToSkip;
+    // Why each of m_playItemsToSkip is left out, said in its warning; empty for a codec that differs
+    std::vector<std::string> m_skipReasons;
     size_t m_chosenStnItem = 0;  // the play item whose STN table m_streamInfo is (chooseRepresentativeStnTable)
     void parseSubPaths(const uint8_t* data, int len, int count);
     void parseStnTableSSItem(BitStreamReader& reader);

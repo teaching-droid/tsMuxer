@@ -1790,15 +1790,24 @@ void MPLSParser::chooseRepresentativeStnTable()
         return;
     m_stnTables.resize(m_playItems.size());
 
+    // A video stream counts with its picture format and frame rate: a short intro at 24 or 25 fps before an episode at
+    // 23.976 shares the PIDs and codecs of the episode, and with them alone the intro could describe the playlist and
+    // give its rate to the whole output, which then played the episode too fast and away from its sound
+    // (justdan96/tsMuxer#900).
     auto signatureOf = [](const MPLSStnTable& table)
     {
-        std::vector<std::pair<int, int>> pairs;
+        std::vector<std::pair<int, std::string>> pairs;
         pairs.reserve(table.streams.size());
         for (const MPLSStreamInfo& stream : table.streams)
-            pairs.emplace_back(stream.streamPID, static_cast<int>(stream.stream_coding_type));
+        {
+            std::string kind = int32ToStr(static_cast<int>(stream.stream_coding_type));
+            if (isVideoStreamType(stream.stream_coding_type))
+                kind += '/' + int32ToStr(stream.video_format) + '/' + int32ToStr(stream.frame_rate_index);
+            pairs.emplace_back(stream.streamPID, kind);
+        }
         std::sort(pairs.begin(), pairs.end());
         std::string rez;
-        for (const auto& [pid, codingType] : pairs) rez += int32ToStr(pid) + ':' + int32ToStr(codingType) + ',';
+        for (const auto& [pid, kind] : pairs) rez += int32ToStr(pid) + ':' + kind + ',';
         return rez;
     };
 
@@ -1866,10 +1875,22 @@ void MPLSParser::chooseRepresentativeStnTable()
 
     // A clip that declares a DIFFERENT codec on a PID the chosen set also uses cannot be muxed
     // into the same track: its payload would reach the wrong reader. A clip that merely carries
-    // fewer streams is left alone, because that costs nothing but a gap.
-    std::map<int, int> chosenCodingType;
-    for (const MPLSStreamInfo& stream : m_streamInfo)
-        chosenCodingType[stream.streamPID] = static_cast<int>(stream.stream_coding_type);
+    // fewer streams is left alone, because that costs nothing but a gap. Nor can a clip whose
+    // video on such a PID has another picture format or frame rate: an output has one rate, and
+    // the clip's pictures would be timed by the rate of the rest. A value of 0 (not given) is
+    // taken to agree with any.
+    std::map<int, const MPLSStreamInfo*> chosenStream;
+    for (const MPLSStreamInfo& stream : m_streamInfo) chosenStream[stream.streamPID] = &stream;
+    const auto videoText = [](const MPLSStreamInfo& s)
+    {
+        static const char* const formats[] = {"", "480i", "576i", "480p", "1080i", "720p", "1080p", "576p", "2160p"};
+        static const char* const rates[] = {"", "23.976", "24", "25", "29.97", "", "50", "59.94"};
+        std::string text = s.video_format < 9 ? formats[s.video_format] : "";
+        const std::string rate = s.frame_rate_index < 8 ? rates[s.frame_rate_index] : "";
+        if (!rate.empty())
+            text += (text.empty() ? "" : " at ") + rate + " fps";
+        return text.empty() ? std::string("another format") : text;
+    };
 
     for (size_t i = 0; i < m_stnTables.size(); ++i)
     {
@@ -1877,10 +1898,25 @@ void MPLSParser::chooseRepresentativeStnTable()
             continue;
         for (const MPLSStreamInfo& stream : m_stnTables[i].streams)
         {
-            const auto itr = chosenCodingType.find(stream.streamPID);
-            if (itr != chosenCodingType.end() && itr->second != static_cast<int>(stream.stream_coding_type))
+            const auto itr = chosenStream.find(stream.streamPID);
+            if (itr == chosenStream.end())
+                continue;
+            const MPLSStreamInfo& chosenOne = *itr->second;
+            if (chosenOne.stream_coding_type != stream.stream_coding_type)
             {
                 m_playItemsToSkip.push_back(i);
+                m_skipReasons.emplace_back();
+                break;
+            }
+            const auto differ = [](const uint8_t a, const uint8_t b) { return a != 0 && b != 0 && a != b; };
+            if (isVideoStreamType(stream.stream_coding_type) &&
+                (differ(chosenOne.video_format, stream.video_format) ||
+                 differ(chosenOne.frame_rate_index, stream.frame_rate_index)))
+            {
+                m_playItemsToSkip.push_back(i);
+                m_skipReasons.push_back("its video is " + videoText(stream) + " and that of the rest of the playlist " +
+                                        videoText(chosenOne) +
+                                        ", and a single output cannot change that part way through");
                 break;
             }
         }
@@ -1896,12 +1932,14 @@ void MPLSParser::dropContradictingPlayItems()
     if (m_playItemsToSkip.empty())
         return;
 
+    std::vector<std::string> reasons;
     for (size_t k = m_playItemsToSkip.size(); k-- > 0;)
     {
         const size_t index = m_playItemsToSkip[k];
         if (index >= m_playItems.size())
             continue;
         m_skippedClips.push_back(m_playItems[index].fileName);
+        reasons.push_back(k < m_skipReasons.size() ? m_skipReasons[k] : std::string());
         m_playItems.erase(m_playItems.begin() + index);
         // The chosen play item is never dropped; it keeps naming the same play item
         if (index < m_chosenStnItem)
@@ -1928,12 +1966,19 @@ void MPLSParser::dropContradictingPlayItems()
         }
     }
     std::reverse(m_skippedClips.begin(), m_skippedClips.end());
+    std::reverse(reasons.begin(), reasons.end());
 
-    for (const std::string& clip : m_skippedClips)
-        LTRACE(LT_WARN, 2,
-               "Warning: clip " << clip
-                                << " is left out of this playlist. Its streams are not the ones the rest of the "
-                                   "playlist uses, and a single output cannot change codec part way through.");
+    for (size_t k = 0; k < m_skippedClips.size(); ++k)
+    {
+        if (!reasons[k].empty())
+            LTRACE(LT_WARN, 2,
+                   "Warning: clip " << m_skippedClips[k] << " is left out of this playlist: " << reasons[k] << ".");
+        else
+            LTRACE(LT_WARN, 2,
+                   "Warning: clip " << m_skippedClips[k]
+                                    << " is left out of this playlist. Its streams are not the ones the rest of the "
+                                       "playlist uses, and a single output cannot change codec part way through.");
+    }
 }
 
 MPLSStreamInfo& MPLSParser::getMainStream()
