@@ -3549,6 +3549,18 @@ int MovDemuxer::mov_read_mdhd(MOVAtom atom)
     return 0;
 }
 
+// A box or sample entry type as its four letters (MKTAG order: the first letter in the lowest byte)
+static std::string fourccText(const uint32_t tag)
+{
+    std::string text;
+    for (int i = 0; i < 4; ++i)
+    {
+        const auto c = static_cast<char>(tag >> (8 * i) & 0xFF);
+        text += c >= 0x20 && c < 0x7F ? c : '?';
+    }
+    return text;
+}
+
 int MovDemuxer::mov_read_stsd(MOVAtom atom)
 {
     if (num_tracks == 0)
@@ -3697,6 +3709,21 @@ int MovDemuxer::mov_read_stsd(MOVAtom atom)
             break;
         case MKTAG('t', 'm', 'c', 'd'):
             st->type = IOContextTrackType::CONTROL;
+            break;
+        // An encrypted track: its sample entry is replaced by one of these (ISO/IEC 23001-7, 14496-12 8.12), and its
+        // samples cannot be read. The video was listed as Opus and the sound as the codec it was, and a mux of either
+        // gave noise. It is named now, and a meta line that names it is refused (srcleftout).
+        case MKTAG('e', 'n', 'c', 'v'):
+        case MKTAG('d', 'r', 'm', 'i'):
+            st->notMuxed = "encrypted video (sample entry " + fourccText(format) + ")";
+            break;
+        case MKTAG('e', 'n', 'c', 'a'):
+        case MKTAG('d', 'r', 'm', 's'):
+            st->notMuxed = "encrypted audio (sample entry " + fourccText(format) + ")";
+            break;
+        case MKTAG('e', 'n', 'c', 't'):
+        case MKTAG('e', 'n', 'c', 's'):
+            st->notMuxed = "an encrypted track (sample entry " + fourccText(format) + ")";
             break;
         default:;
         }

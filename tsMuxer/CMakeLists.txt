@@ -34,6 +34,7 @@ add_executable (tsmuxer
   discTitles.cpp
   doviLib.cpp
   dvdTitles.cpp
+  encryptedInput.cpp
   dtsStreamReader.cpp
   dvbSubStreamReader.cpp
   flacStreamReader.cpp

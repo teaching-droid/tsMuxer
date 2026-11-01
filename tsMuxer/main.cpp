@@ -784,7 +784,10 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
             if (!streams[i].notSupported.empty())
                 LTRACE(LT_INFO, 2,
                        "Not supported: " << streams[i].notSupported
-                                         << ". Muxing this kind of track is not implemented, so the track is skipped.");
+                                         << (streams[i].notSupported.find("encrypted") != std::string::npos
+                                                 ? ". tsMuxeR cannot read an encrypted track, so the track is skipped."
+                                                 : ". Muxing this kind of track is not implemented, so the track is "
+                                                   "skipped."));
             else if (known)
             {
                 // The descriptor goes in the line as well as the stream type. The window rebuilds

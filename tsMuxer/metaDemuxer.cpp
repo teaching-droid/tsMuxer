@@ -4233,8 +4233,14 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
                     trackRez.flags = flags->second;
                 if (const auto id = srcParams.find("srccodecid"); id != srcParams.end())
                     trackRez.codecId = id->second;
+                // What the container says it cannot give is not guessed from its bytes: an encrypted MP4 video track
+                // was listed as Opus and its audio as the codec it had, from noise
                 if (const auto what = srcParams.find("srcnotsupported"); what != srcParams.end())
+                {
                     trackRez.notSupported = what->second;
+                    trackRez.codecInfo = CodecInfo();
+                    trackRez.streamDescr.clear();
+                }
             }
             // ASS, SSA and WebVTT from a Matroska file go through the SRT reader, which called every one of them
             // "SRT text subtitles". The listing names what the file holds. Stream type and Stream ID stay SRT and

@@ -28,6 +28,8 @@
 
 * **A Blu-ray disc muxed from a Blu-ray disc keeps that disc's title and pictures** (BDMV/META/DL), which a player such as the PS3 shows. They were left behind, and the new disc showed as a blank one named BDMV. `--meta-dir=<folder>` gives the disc a title and pictures of one's own: bdmt_eng.xml and the like, with the pictures they name, as a disc keeps them. `--meta-dir=none` writes none. It works with `--bdmv-to-iso` too, in place of the folder's own. Only the bdmt files and the pictures they name are copied. In the window it is the "Disc title and pictures" choice in the Output area, for a Blu-ray folder or image, and on the BDMV folder to ISO tab. (#30, thanks to @NTMPowers for the request)
 
+
+* **A source that is still encrypted is said to be so.** A Blu-ray .m2ts still encrypted stopped with "Invalid tsPacket->getHeaderSize", or was listed as if it were whole when its first part was clear; a DVD VOB still encrypted was muxed into noise; and an encrypted MP4 track was listed as Opus or as the codec it had. Such a file is now refused with one message when most of the places tested in it are encrypted, with a warning when some are; an encrypted MP4 track is listed as encrypted, and a meta line that names it is refused. Nothing is decrypted: a file needs to be decrypted before muxing.
 ## tsMuxeR 3.0.1
 
 A packaging release: every package now carries the licence of tsMuxeR and the notices and licence texts of what it bundles, and the guides are brought up to date. The programs work exactly as in 3.0.0.

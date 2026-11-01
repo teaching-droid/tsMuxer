@@ -2,6 +2,7 @@
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "programStreamDemuxer.h"
 
+#include "encryptedInput.h"
 #include "mpegVideo.h"
 #include "pesPacket.h"
 #include "tsPacket.h"
@@ -110,6 +111,7 @@ void ProgramStreamDemuxer::openFile(const std::string& streamName)
     // BufferedFileReader* fileReader = dynamic_cast <BufferedFileReader*> (m_bufferedReader);
     if (!m_bufferedReader->openStream(m_readerID, m_streamName.c_str()))
         THROW(ERR_FILE_NOT_FOUND, "Can't open stream " << m_streamName)
+    checkEncryptedInput(m_streamName, false);  // a VOB still encrypted (encryptedInput.h)
     m_dataProcessed = 0;
 }
 

@@ -16,6 +16,7 @@
 #include "ac3Codec.h"
 #include "bitmapSubtitles.h"
 #include "bufferedFileReader.h"
+#include "encryptedInput.h"
 #include "matroskaParser.h"
 #include "nalUnits.h"
 #include "vodCoreException.h"
@@ -1569,6 +1570,8 @@ void TSDemuxer::openFile(const std::string& streamName)
 
     if (!m_bufferedReader->openStream(m_readerID, m_streamName.c_str()))
         THROW(ERR_FILE_NOT_FOUND, "Can't open stream " << m_streamName)
+    if (m_m2tsMode)
+        checkEncryptedInput(m_streamName, true);  // a .m2ts still encrypted (encryptedInput.h)
 
     m_pmtPid = -1;
     m_codecReady = false;
