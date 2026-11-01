@@ -260,9 +260,33 @@ static bool beginsPictures(const uint8_t* p, const uint8_t* end)
            ((hevcType >= 16 && hevcType <= 21) || hevcType == 32 || hevcType == 33 || hevcType == 35 || hevcType == 39);
 }
 
+// Whether the start of a PES of H.264 holds a sequence parameter set (NAL unit type 7)
+static bool holdsH264Sps(const uint8_t* p, const uint8_t* end)
+{
+    for (; end - p >= 4; ++p)
+        if (p[0] == 0 && p[1] == 0 && p[2] == 1 && (p[3] & 0x80) == 0 && (p[3] & 0x1F) == 7)
+            return true;
+    return false;
+}
+
 TSDemuxer::LeadPes TSDemuxer::skipsLeadingPes(const int pid, const StreamType type, const uint8_t* payload,
                                               const uint8_t* end)
 {
+    // A recording of H.264 that begins before its first parameter sets: its pictures up to there cannot be decoded,
+    // having no picture parameter set, and the reader passed them on with times of its own. Of coded fields these came
+    // out of step with the PES times, which the delay of the sound is measured against (getTrackDelay): the sound of
+    // a broadcast recording that began 27 fields before its first parameter sets came 80 ms late. They are left out,
+    // from the first file of the source only: the next part of a split recording goes on with the parameter sets of
+    // the part before, and its first pictures can be decoded. A stream whose parameter sets do not come within the
+    // first LEAD_VIDEO_PES_MAX PES, or not at the start of a PES, is read whole, as before.
+    if (type == StreamType::VIDEO_H264)
+    {
+        const bool parameterSets = holdsH264Sps(payload, end);
+        if (!parameterSets && ++m_leadPes[pid] <= LEAD_VIDEO_PES_MAX)
+            return LeadPes::Hold;
+        m_leadPes[pid] = LEAD_PES_DONE;
+        return parameterSets ? LeadPes::Keep : LeadPes::GiveBack;
+    }
     const auto at = [&](const std::initializer_list<uint8_t> bytes)
     {
         if (end - payload < static_cast<int64_t>(bytes.size()))

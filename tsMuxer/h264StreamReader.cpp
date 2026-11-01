@@ -2208,7 +2208,8 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     // writes each field as a block of its own, see secondFieldStart), and this count placed them apart (a 1080i
     // capture cut mid stream got its first field pair in two packets).
     if ((joinStart || (m_totalFrameNum == 0 && m_idrSliceCnt == 0)) && !guessOrder && !damaged && !slice.isIDR() &&
-        !slice.m_field_pic_flag && !m_fieldPicturesSeen && slice.getSPS()->pic_order_cnt_type != 2)
+        !slice.m_field_pic_flag && (!m_fieldPicturesSeen || m_totalFrameNum == 0) &&
+        slice.getSPS()->pic_order_cnt_type != 2)
     {
         firstLeading = leadingPicturesOfFirst(slice, buff);
         if (firstLeading == -1)

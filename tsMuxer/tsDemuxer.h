@@ -204,6 +204,8 @@ class TSDemuxer final : public AbstractDemuxer
     int64_t soundPause(int pid, int64_t pts, int64_t& end);
     // The sound of a file whose first PES does not begin with a frame (skipsLeadingPes)
     static constexpr uint8_t LEAD_PES_MAX = 4;
+    // H.264 video held until the PES that brings its parameter sets: up to about five seconds of fields
+    static constexpr uint8_t LEAD_VIDEO_PES_MAX = 250;
     static constexpr uint8_t LEAD_PES_DONE = 0xFF;
     uint8_t m_leadPes[8192]{};   // 0: not decided; 1 to LEAD_PES_MAX: PES left out so far; LEAD_PES_DONE: decided
     uint8_t m_leadDrop[8192]{};  // the PES being read of the PID is held back, and the packets carrying its rest
