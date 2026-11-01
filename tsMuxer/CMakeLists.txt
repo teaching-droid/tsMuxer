@@ -42,6 +42,7 @@ add_executable (tsmuxer
   hevcStreamReader.cpp
   ioContextDemuxer.cpp
   iso_writer.cpp
+  latm.cpp
   lpcmStreamReader.cpp
   main.cpp
   matroskaDemuxer.cpp

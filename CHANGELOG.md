@@ -16,6 +16,8 @@
 
 ### Blu-ray and transport stream
 
+* **AAC in LATM, the form DVB broadcasts carry, is read.** A recording of a channel that sends its sound as AAC in LATM (stream type 0x11) listed it as "Can't detect stream type", and the sound could not be muxed. Its frames are now read and written as ADTS AAC to TS and M2TS, and as AAC to Matroska, each frame as the recording carries it. A form DVB does not use (more than one program, layer or access unit in a frame, or another audioMuxVersion) is named in a warning. A Blu-ray disc takes no AAC.
+
 * **A playlist that plays an intro at another frame rate before the title is muxed at the title's rate.** A series disc may play a short logo or recap at 24, 25 or 29.97 fps before an episode at 23.976, and the rate of that first clip was used for the whole output: the episode played too fast and its sound fell behind, by a quarter with a 29.97 intro. A playlist is now described by the clips that make up most of it also in the picture format and frame rate of its video, and a clip whose video differs in either is left out with a warning that names both rates, as a clip with another codec already is. ([justdan96/tsMuxer#900](https://github.com/justdan96/tsMuxer/issues/900), thanks to @Nemesh64)
 
 * **--bitrate holds the stream to its rate.** It only padded up to the rate: data above it went out as fast as the streams asked, so --cbr --bitrate=40000 over a 90 Mbit/s video was muxed at about 94 Mbit/s, and only a warning said so. The data now waits for the rate, as with --maxbitrate, and a warning counts the pictures that arrive after they are due and says by how much. A stream that never goes above the rate is muxed as before.

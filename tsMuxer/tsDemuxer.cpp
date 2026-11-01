@@ -1234,7 +1234,29 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
                 if ((joint->second -= skip) == 0)
                     m_joinSkip.erase(joint);
             }
-        if (vect != nullptr && payloadLen > skip)
+        if (m_latmPid[pid] == 0)
+        {
+            const auto info = m_pmt.pidList.find(pid);
+            m_latmPid[pid] =
+                info != m_pmt.pidList.end() && info->second.m_streamType == StreamType::AUDIO_AAC_RAW ? 2 : 1;
+        }
+        if (vect != nullptr && payloadLen > skip && m_latmPid[pid] == 2)
+        {
+            // AAC in LATM: the AAC reader is given ADTS frames (latm.h)
+            LatmToAdts& latm = m_latm[pid];
+            std::vector<uint8_t> adts;
+            latm.convert(frameData + skip, static_cast<size_t>(payloadLen - skip), adts);
+            if (!adts.empty())
+            {
+                vect->grow(adts.size());
+                memcpy(vect->data() + vect->size() - adts.size(), adts.data(), adts.size());
+            }
+            if (!latm.problem().empty() && m_latmProblemSaid.insert(pid).second)
+                LTRACE(LT_WARN, 2,
+                       "Warning: track " << pid << " of \"" << m_streamName << "\" is AAC in LATM, and "
+                                         << latm.problem() << ". The track gives no sound.");
+        }
+        else if (vect != nullptr && payloadLen > skip)
         {
             vect->grow(static_cast<size_t>(payloadLen - skip));
             uint8_t* dst = vect->data() + vect->size() - (payloadLen - skip);

@@ -18,6 +18,11 @@ struct AacProgramConfig
     int channels = 0;
 };
 
+class BitStreamReader;
+// Reads a program config element from its first field on. Its byte alignment counts from the start of the reader's
+// buffer, which is where the frame or the AudioSpecificConfig begins. False when it names no channel.
+bool readProgramConfig(BitStreamReader& reader, AacProgramConfig& pce);
+
 class AACCodec
 {
    public:

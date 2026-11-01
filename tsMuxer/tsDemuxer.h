@@ -15,6 +15,7 @@
 #include "bufferedReader.h"
 #include "bufferedReaderManager.h"
 #include "ioContextDemuxer.h"
+#include "latm.h"
 #include "pesPacket.h"
 #include "tsPacket.h"
 
@@ -276,6 +277,11 @@ class TSDemuxer final : public AbstractDemuxer
 
     // cache to improve speed
     uint8_t m_acceptedPidCache[8192];
+    // AAC in LATM (stream type 0x11), turned into ADTS for the AAC reader (latm.h): 0 not looked at yet, 1 not LATM,
+    // 2 LATM; the converter of each such PID, and whether its problem has been said
+    uint8_t m_latmPid[8192]{};
+    std::map<int, LatmToAdts> m_latm;
+    std::set<int> m_latmProblemSaid;
     bool m_firstDemuxCall;
 
     // The times of the file on one line: a PES time is 33 bits and goes round to 0 every 26.5 hours, as it can do in

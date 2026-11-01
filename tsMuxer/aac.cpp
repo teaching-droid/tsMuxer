@@ -15,7 +15,7 @@ static constexpr uint8_t aac_channels[16] = {0, 1, 2, 3, 4, 5, 6, 8, 0, 0, 0, 7,
 
 // Reads a program config element from its first field on. Its byte alignment counts from the start of the reader's
 // buffer, which is where the frame or the AudioSpecificConfig begins. False when it names no channel.
-static bool readProgramConfig(BitStreamReader& reader, AacProgramConfig& pce)
+bool readProgramConfig(BitStreamReader& reader, AacProgramConfig& pce)
 {
     pce = {};
     auto take = [&](const unsigned n)
