@@ -40,6 +40,10 @@
 
 * **The window shows where a playlist puts each track.** Two columns of the track list, "playlist" and "clip", give a track's number among the tracks of its kind (audio, subtitles) in the playlist, which is the number a player gives it, and in its clip, by PID. They show while a playlist is in the list. The listing of a playlist gives the same in a "Stream order" line. (#52, thanks to @bulba99 for the request)
 
+### Other
+
+* **An unknown option is said to be one.** `tsMuxeR --foo=1 <source>` took the option as the name of a meta file and stopped with "Error opening file --foo=1", and errors of that kind ended without a line end, so the prompt of the shell followed the text. An argument that starts with "-" and is neither an option nor a file is now named as an unknown option, and those errors end their line.
+
 ## tsMuxeR 3.0.1
 
 A packaging release: every package now carries the licence of tsMuxeR and the notices and licence texts of what it bundles, and the guides are brought up to date. The programs work exactly as in 3.0.0.

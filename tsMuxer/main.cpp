@@ -73,6 +73,18 @@ static constexpr char EXCEPTION_ERR_MSG[] =
         sLastMsg = true;                      \
     }                                         \
     }
+// An option the command line does not know, given before a source or a meta file, was taken as the name of the meta
+// file ("Error opening file --foo=1: ...") or listed as a file that does not exist: it is said to be an option
+static void refuseUnknownOption(const std::string& arg)
+{
+    std::error_code ec;
+    if (arg.size() < 2 || arg[0] != '-' || std::filesystem::exists(fsPath(arg), ec))
+        return;
+    THROW(ERR_COMMON, "Unknown option " << arg
+                                        << ". tsMuxeR --help lists the options of the command line; the options of a "
+                                           "mux go on the MUXOPT line of the meta file.")
+}
+
 // A meta file saved in UTF-16, as some editors save text, was refused as "Invalid codec format" with the raw bytes of
 // its first line, and a folder given as the meta file was read as an empty one and said "No tracks selected". Both are
 // said as what they are, before anything reads the file.
@@ -1840,11 +1852,8 @@ static void noteRemovedOutput(const std::string& name, const bool afterError = f
         LTRACE(LT_WARN, 2, line);
 }
 
-// lineOpen: the error before it was written without an end of line, so the note begins one of its own
-static void printRemovedOutputNotes(const bool lineOpen = false)
+static void printRemovedOutputNotes()
 {
-    if (lineOpen && !removedOutputNotes().empty())
-        LTRACE2(LT_ERROR, "\n")
     for (const std::string& line : removedOutputNotes()) LTRACE(LT_WARN, 2, line);
     removedOutputNotes().clear();
 }
@@ -4600,6 +4609,8 @@ int main(int argc, char** argv)
                     break;
                 titleOptions = true;
             }
+            if (a < argc - 1)
+                refuseUnknownOption(argv[a]);
             if (a == argc - 1 && !oneTitle.empty())
             {
                 // One title: listed as its playlist, or as the first run of cells of the DVD title, as any source is.
@@ -4686,6 +4697,7 @@ int main(int argc, char** argv)
                 showHelp();
                 return -1;
             }
+            refuseUnknownOption(str);
             string fileExt = extractFileExt(str);
             fileExt = strToLowerCase(fileExt);
             if (fileExt == "mpls" || fileExt == "mpl")
@@ -5390,8 +5402,9 @@ int main(int argc, char** argv)
     {
         if (argc == 2)
             LTRACE2(LT_ERROR, "Error: ")
-        LTRACE2(LT_ERROR, e.what())
-        printRemovedOutputNotes(true);
+        // on a line of its own, as the other errors are: the shell prompt followed the text
+        LTRACE(LT_ERROR, 2, e.what());
+        printRemovedOutputNotes();
         return -1;
     }
     catch (VodCoreException& e)
