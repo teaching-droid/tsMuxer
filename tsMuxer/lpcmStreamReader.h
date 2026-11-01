@@ -99,6 +99,8 @@ class LPCMStreamReader final : public SimplePacketizerReader
     void planBdLayout(uint32_t mask);
     int64_t m_curChunkLen;
     bool m_openSizeWaveFormat;
+    // An RF64 or BW64 file: its sizes are in the ds64 chunk, the data chunk saying 0xFFFFFFFF
+    bool m_rf64 = false;
     bool m_burstsSaid = false;  // decodeWaveHeader: the PCM holds IEC 61937 bursts of coded sound
     // The data chunk's size was given, so m_curChunkLen reaching 0 is the end of the audio and not
     // "size unknown". m_afterData is set at that end: the bytes that follow are a pad byte, a chunk

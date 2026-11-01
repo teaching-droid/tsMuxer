@@ -72,6 +72,10 @@ static constexpr int MAX_HEADER_SIZE = 192;
 
 static const uint32_t RIFF_SMALL = FOUR_CC('r', 'i', 'f', 'f');
 static const uint32_t RIFF_LARGE = FOUR_CC('R', 'I', 'F', 'F');
+static const uint32_t RF64_ID = FOUR_CC('R', 'F', '6', '4');
+static const uint32_t BW64_ID = FOUR_CC('B', 'W', '6', '4');
+// the first four bytes of a WAV, Wave64, RF64 or BW64 file
+static bool riffId(const uint32_t id) { return id == RIFF_SMALL || id == RIFF_LARGE || id == RF64_ID || id == BW64_ID; }
 
 using namespace wave_format;
 
@@ -728,9 +732,18 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
         const uint32_t dataSize = loadUnaligned<uint32_t>(curPos);
         if (dataSize == 0)
             m_openSizeWaveFormat = true;
-        // 0 and 0xFFFFFFFF are written when the size is not known yet, by a stream writer or for
-        // a file past 4 GB: the audio then runs to the end of the file.
-        setDataChunkSize(dataSize, dataSize != 0 && dataSize != UINT32_MAX);
+        // RF64 and BW64: the data chunk says 0xFFFFFFFF, and the ds64 chunk, right after the header, gives the size
+        // (riffSize, dataSize, sampleCount, each 64 bits). A BW64 file carries chunks after its audio (chna, axml),
+        // which would be read as audio up to the end of the file.
+        if (m_rf64 && dataSize == UINT32_MAX && end - buff >= 12 + 8 + 16 && memcmp(buff + 12, "ds64", 4) == 0)
+        {
+            const uint64_t ds64Data = loadUnaligned<uint64_t>(buff + 12 + 8 + 8);
+            setDataChunkSize(static_cast<int64_t>(ds64Data), ds64Data != 0);
+        }
+        else
+            // 0 and 0xFFFFFFFF are written when the size is not known yet, by a stream writer or for
+            // a file past 4 GB: the audio then runs to the end of the file.
+            setDataChunkSize(dataSize, dataSize != 0 && dataSize != UINT32_MAX);
         curPos += 4;
     }
     else
@@ -800,7 +813,7 @@ int LPCMStreamReader::stepAfterData(uint8_t* buff, uint8_t* end)
     if (end - buff < 4)
         return NOT_ENOUGH_BUFFER;
     const uint32_t id = loadUnaligned<uint32_t>(buff);
-    if (id == RIFF_SMALL || id == RIFF_LARGE)
+    if (riffId(id))
     {
         m_afterData = false;  // another file: its header is read as at the start
         return 0;
@@ -868,7 +881,7 @@ int LPCMStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, i
             return NOT_ENOUGH_BUFFER;
 
         const auto curPtr32 = UnalignedPtr<uint32_t>(buff);
-        if (m_curChunkLen == 0 && (*curPtr32 == RIFF_SMALL || *curPtr32 == RIFF_LARGE))
+        if (m_curChunkLen == 0 && riffId(*curPtr32))
         {
             if (end - buff < 8)
                 return NOT_ENOUGH_BUFFER;
@@ -1048,14 +1061,16 @@ bool LPCMStreamReader::detectLPCMType(uint8_t* buffer, const int64_t len)
     }
 
     const uint8_t* end = buffer + len;
-    // An RF64 or BW64 file, the WAV of more than 4 GB, begins "RF64" or "BW64" in place of "RIFF", and gives its sizes
-    // in a ds64 chunk. It was taken for no WAV at all: "produced no frames ... the codec on the meta line is not the
-    // codec the file holds" for an A_LPCM line, which is the right codec, and "Can't detect stream type" in a listing.
-    if (len >= 4 && (memcmp(buffer, "RF64", 4) == 0 || memcmp(buffer, "BW64", 4) == 0))
-        THROW(ERR_COMMON, "The file is an RF64 WAV (it begins \""
-                              << std::string(reinterpret_cast<const char*>(buffer), 4)
-                              << "\"), which tsMuxeR does not read. Convert it to W64, or to WAV when it holds "
-                                 "less than 4 GB of audio.")
+    // An RF64 or BW64 file (EBU Tech 3306, ITU-R BS.2088), the WAV of more than 4 GB, begins "RF64" or "BW64" in place
+    // of "RIFF" and gives its sizes in a ds64 chunk. It was refused; it is read as a WAV now, the size of its audio
+    // taken from the ds64 chunk (decodeWaveHeader).
+    if (len >= 12 && (memcmp(buffer, "RF64", 4) == 0 || memcmp(buffer, "BW64", 4) == 0) &&
+        memcmp(buffer + 8, "WAVE", 4) == 0)
+    {
+        m_headerType = LPCMHeaderType::htWAVE;
+        m_rf64 = true;
+        return true;
+    }
     // 1. test for WAVEHeader
     uint8_t* curPos = buffer;
     if ((curPos[0] == 'R' && curPos[1] == 'I' && curPos[2] == 'F' && curPos[3] == 'F') ||
@@ -1397,7 +1412,7 @@ int LPCMStreamReader::flushPacket(AVPacket& avPacket)
         sampleSize > 0)
     {
         const auto first = UnalignedPtr<uint32_t>(m_tmpBuffer.data());
-        const bool header = m_tmpBufferLen >= 4 && (*first == RIFF_SMALL || *first == RIFF_LARGE);
+        const bool header = m_tmpBufferLen >= 4 && riffId(*first);
         const int partial = header ? 0 : static_cast<int>(m_tmpBufferLen % sampleSize);
         const int64_t notThere = m_chunkSizeKnown && !header ? m_curChunkLen - m_tmpBufferLen : 0;
         if (notThere > 0)

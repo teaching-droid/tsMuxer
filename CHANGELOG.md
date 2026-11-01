@@ -46,6 +46,8 @@
 
 * **DTS stored little-endian or 14 bits to a word is read, also from the WAV of a DTS music CD.** A DTS file in 16-bit little-endian words was refused, a file with 14 bits of the stream in each 16-bit word was muxed as it was, which a player cannot decode, and the WAV of a DTS music CD was listed as PCM and refused for its 44.1 kHz rate. Such a stream is now written in 16-bit big-endian words, the form a disc carries; the DTS frames themselves stay as they are, bit for bit. The listing says how the stream was stored.
 
+* **An RF64 or BW64 file, the WAV of more than 4 GB, is read.** It was refused with the advice to convert it to W64. It is read as a WAV now, the length of its audio taken from its ds64 chunk, so the chunks a BW64 file carries after its audio are not taken for sound.
+
 ### Video
 
 * **A raw video file that ends inside a picture says so.** A raw MPEG-2, H.264 or HEVC file (.m2v, .264, .hevc and the like) cut at a byte position ends with part of a picture, which was muxed as the last picture without a word, and a player shows it damaged or skips it. The slices of the last picture are now read to their end, and where the data stops inside the picture, a warning gives the row of macroblocks or coding tree units it stops in. A file that ends between two pictures gives none.
