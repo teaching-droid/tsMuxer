@@ -25,6 +25,7 @@ static bool isKnownTrackParam(const std::string& name);
 #include "aacStreamReader.h"
 #include "ac3StreamReader.h"
 #include "alacStreamReader.h"
+#include "assFile.h"
 #include "av1StreamReader.h"
 #include "avCodecs.h"
 #include "bufferedReaderManager.h"
@@ -361,7 +362,9 @@ static NamedAs familyOfExt(const std::string& ext)
     if (ext == "mp4" || ext == "mov" || ext == "m4v" || ext == "m4a")
         return NamedAs::ctMP4;
     // WebM is Matroska with a narrower set of codecs, and .mk3d is the name used for 3D Matroska files.
-    if (ext == "mkv" || ext == "mka" || ext == "mks" || ext == "mk3d" || ext == "webm")
+    // an ASS or SSA script is read as the Matroska file of its track (assFile.h)
+    if (ext == "mkv" || ext == "mka" || ext == "mks" || ext == "mk3d" || ext == "webm" || ext == "ass" ||
+        ext == "ssa")
         return NamedAs::ctMKV;
     // The only elementary extensions the dispatch acts on. Every other unknown extension already
     // reaches the reader that works the codec out from the bytes, so naming one would gain nothing.
@@ -1262,7 +1265,7 @@ void METADemuxer::placeJoinedSubtitles()
                     part.openFile(file);
                     end = part.videoLengthNs();
                 }
-                else if (ext == "MKV" || ext == "MKS" || ext == "MK3D" || ext == "WEBM")
+                else if (ext == "MKV" || ext == "MKS" || ext == "MK3D" || ext == "WEBM" || isAssFileExt(ext))
                 {
                     MatroskaDemuxer part(m_readManager);
                     part.openFile(file);
@@ -1467,6 +1470,12 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     auto tmpitr = addParams.find("track");
     if (tmpitr != addParams.end())
         pid = strToInt32(tmpitr->second.c_str());
+    // An ASS or SSA script file is read as the Matroska file of its one track (assFile.h): track 1 without track=
+    bool assFile = false;
+    for (const std::string& part : splitQuotedStr(codecStreamName.c_str(), '+'))
+        assFile = prepareAssFile(unquoteStr(trimStr(part))) || assFile;
+    if (assFile && pid == 0)
+        pid = 1;
 
     // A track has two parts, 1 and 2. subTrack=0 or 3 was taken as asked, the track then gave nothing, and the job was
     // refused as if the codec on the line were wrong. Without track= the line names an elementary stream, which is
@@ -1946,7 +1955,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         ((m_matroskaOutput && codec == "S_HDMV/PGS") || (codec == "S_TEXT/UTF8" && addParams.count("keep-text"))))
     {
         const std::string srcExt = strToUpperCase(extractFileExt(unquoteStr(trimStr(fileList[0]))));
-        if (srcExt == "MKV" || srcExt == "MKA" || srcExt == "MKS" || srcExt == "MK3D" || srcExt == "WEBM")
+        if (srcExt == "MKV" || srcExt == "MKA" || srcExt == "MKS" || srcExt == "MK3D" || srcExt == "WEBM" ||
+            isAssFileExt(srcExt))
         {
             MatroskaDemuxer probe(m_readManager);
             probe.openFile(fileList[0]);
@@ -1983,7 +1993,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     {
         const std::string srcExt = strToUpperCase(extractFileExt(unquoteStr(trimStr(fileList[0]))));
         // A Matroska file of any name: an ASS track in a .mka was drawn as plain text without a word
-        if (srcExt == "MKV" || srcExt == "MKA" || srcExt == "MKS" || srcExt == "MK3D")
+        if (srcExt == "MKV" || srcExt == "MKA" || srcExt == "MKS" || srcExt == "MK3D" || isAssFileExt(srcExt))
         {
             MatroskaDemuxer probe(m_readManager);
             probe.openFile(fileList[0]);
@@ -2162,7 +2172,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             codecReader->setSrcContainerType(AbstractStreamReader::ContainerType::ctVOB);
     }
     else if (strEndWith(tmpname, ".mkv") || strEndWith(tmpname, ".mka") || strEndWith(tmpname, ".mks") ||
-             strEndWith(tmpname, ".mk3d") || strEndWith(tmpname, ".webm"))
+             strEndWith(tmpname, ".mk3d") || strEndWith(tmpname, ".webm") || assFile)
     {
         if (pid)
             dataReader = ownReader ? &m_shiftedSubReader : &m_containerReader;
@@ -2244,7 +2254,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             {
                 const std::string file = unquoteStr(trimStr(fileList[i]));
                 const std::string ext = strToUpperCase(extractFileExt(file));
-                if (ext != "MKV" && ext != "MKA" && ext != "MKS" && ext != "MK3D" && ext != "WEBM")
+                if (ext != "MKV" && ext != "MKA" && ext != "MKS" && ext != "MK3D" && ext != "WEBM" &&
+                    !isAssFileExt(ext))
                     continue;
                 MatroskaDemuxer probe(m_readManager);
                 probe.openFile(file);
@@ -2469,7 +2480,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         {
             const std::string first = unquoteStr(trimStr(fileList[0]));
             const std::string ext = strToUpperCase(extractFileExt(first));
-            if (ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM")
+            if (ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM" ||
+                isAssFileExt(ext))
             {
                 joinProbe = std::make_unique<MatroskaDemuxer>(m_readManager);
                 joinProbe->openFile(first);
@@ -2678,7 +2690,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             const std::string ext = strToUpperCase(extractFileExt(file));
             std::unique_ptr<AbstractDemuxer> probe;
             std::string container;
-            if (ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM")
+            if (ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM" ||
+                isAssFileExt(ext))
             {
                 probe = std::make_unique<MatroskaDemuxer>(m_readManager);
                 container = "MKV";
@@ -2736,7 +2749,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                 // .mks and .mk3d are Matroska as well, and an MP4 gives the padding by the end of its edit list: a
                 // join of such files got no correction, and each later file came 20 ms later
                 std::unique_ptr<AbstractDemuxer> probe;
-                if (ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM")
+                if (ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM" ||
+                    isAssFileExt(ext))
                     probe = std::make_unique<MatroskaDemuxer>(m_readManager);
                 else if (ext == "MP4" || ext == "M4A" || ext == "M4V" || ext == "MOV")
                     probe = std::make_unique<MovDemuxer>(m_readManager);
@@ -3557,7 +3571,8 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
             demuxer = std::make_unique<ProgramStreamDemuxer>(m_readManager);
             containerType = AbstractStreamReader::ContainerType::ctEVOB;
         }
-        else if (fileExt == "mkv" || fileExt == "mka" || fileExt == "mks" || fileExt == "mk3d" || fileExt == "webm")
+        else if (fileExt == "mkv" || fileExt == "mka" || fileExt == "mks" || fileExt == "mk3d" || fileExt == "webm" ||
+                 isAssFileExt(strToUpperCase(fileExt)))
         {
             demuxer = std::make_unique<MatroskaDemuxer>(m_readManager);
             containerType = AbstractStreamReader::ContainerType::ctMKV;
@@ -4169,6 +4184,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
     std::unique_ptr<AbstractDemuxer> demuxer;
     auto unquoted = unquoteStr(fileName);
     string fileExt = strToLowerCase(extractFileExt(unquoted));
+    prepareAssFile(unquoted);  // listed as the Matroska file of its one track
     checkNameMatchesContent(unquoted, fileExt);
     AbstractStreamReader::ContainerType containerType = AbstractStreamReader::ContainerType::ctNone;
     CLPIParser clpi;
@@ -4196,7 +4212,8 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
         demuxer = std::make_unique<ProgramStreamDemuxer>(readManager);
         containerType = AbstractStreamReader::ContainerType::ctEVOB;
     }
-    else if (fileExt == "mkv" || fileExt == "mka" || fileExt == "mks" || fileExt == "mk3d" || fileExt == "webm")
+    else if (fileExt == "mkv" || fileExt == "mka" || fileExt == "mks" || fileExt == "mk3d" || fileExt == "webm" ||
+             isAssFileExt(strToUpperCase(fileExt)))
     {
         demuxer = std::make_unique<MatroskaDemuxer>(readManager);
         containerType = AbstractStreamReader::ContainerType::ctMKV;
@@ -6182,7 +6199,8 @@ bool ContainerToReaderWrapper::openStream(int readerID, const char* streamName, 
             demuxer = m_demuxers[streamName].m_demuxer = new ProgramStreamDemuxer(m_readManager);
             m_demuxers[streamName].m_streamName = streamName;
         }
-        else if (ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM")
+        else if (ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM" ||
+                 isAssFileExt(ext))
         {
             demuxer = m_demuxers[streamName].m_demuxer = new MatroskaDemuxer(m_readManager);
             m_demuxers[streamName].m_streamName = streamName;

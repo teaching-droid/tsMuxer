@@ -648,15 +648,40 @@ std::map<std::string, std::vector<Piece>>& virtualFiles()
     return files;
 }
 
+std::map<std::string, std::shared_ptr<const std::vector<uint8_t>>>& memoryFiles()
+{
+    static std::map<std::string, std::shared_ptr<const std::vector<uint8_t>>> files;
+    return files;
+}
+
+std::shared_ptr<const std::vector<uint8_t>> memoryFile(const std::string& name)
+{
+    std::lock_guard<std::mutex> guard(virtualLock);
+    const auto it = memoryFiles().find(name);
+    return it == memoryFiles().end() ? nullptr : it->second;
+}
+
 bool virtualFile(const std::string& name, std::vector<Piece>* pieces)
 {
     std::lock_guard<std::mutex> guard(virtualLock);
+    if (memoryFiles().count(name))
+    {
+        if (pieces)
+            pieces->clear();
+        return true;
+    }
     const auto it = virtualFiles().find(name);
     if (it == virtualFiles().end())
         return false;
     if (pieces)
         *pieces = it->second;
     return true;
+}
+
+void addMemoryFile(const std::string& name, std::vector<uint8_t> bytes)
+{
+    std::lock_guard<std::mutex> guard(virtualLock);
+    memoryFiles()[name] = std::make_shared<const std::vector<uint8_t>>(std::move(bytes));
 }
 
 void addVirtualFile(const std::string& name, const std::vector<Piece>& pieces)
@@ -678,6 +703,16 @@ bool isInside(const std::string& path)
 
 bool openFile(const std::string& path, FileView* view)
 {
+    if (const auto bytes = memoryFile(path))
+    {
+        view->imageFile.clear();
+        view->files.clear();
+        view->extents.clear();
+        view->data = bytes;
+        view->size = bytes->size();
+        view->inEntry = true;
+        return true;
+    }
     if (std::vector<Piece> pieces; virtualFile(path, &pieces))
     {
         view->imageFile.clear();
@@ -712,7 +747,7 @@ bool openFile(const std::string& path, FileView* view)
     view->files = {imageFile};
     view->size = node->size;
     view->inEntry = node->inEntry;
-    view->data = node->data;
+    view->data = node->inEntry ? std::make_shared<const std::vector<uint8_t>>(node->data) : nullptr;
     view->extents = node->extents;
     return true;
 }

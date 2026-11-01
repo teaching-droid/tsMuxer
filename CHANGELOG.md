@@ -50,6 +50,10 @@
 
 * **A WAV file with no format chunk before its audio stopped tsMuxeR with a crash.** It now stops with a message that the format of its samples is not known.
 
+### Subtitles
+
+* **An ASS or SSA script is read as a file of its own.** A .ass or .ssa file was "Can't detect stream type", and only ASS and SSA from a Matroska file were read. A script file is now read as that track is: listed as track 1, drawn with libass for a disc or a TS, and kept as it is with `keep-text` in a Matroska output or a demux, its comments included. Cuts and joins work as for any subtitle track. The window offers .ass and .ssa files when adding. ([justdan96/tsMuxer#731](https://github.com/justdan96/tsMuxer/issues/731))
+
 ### Video
 
 * **A raw video file that ends inside a picture says so.** A raw MPEG-2, H.264 or HEVC file (.m2v, .264, .hevc and the like) cut at a byte position ends with part of a picture, which was muxed as the last picture without a word, and a player shows it damaged or skips it. The slices of the last picture are now read to their end, and where the data stops inside the picture, a warning gives the row of macroblocks or coding tree units it stops in. A file that ends between two pictures gives none.

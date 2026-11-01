@@ -7,6 +7,7 @@
 // read through the file's places in the image, so a stream file is never copied out.
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -29,7 +30,9 @@ struct FileView
     std::vector<std::string> files;  // the files the extents are in: the image file, or those of a virtual file
     uint64_t size = 0;
     std::vector<Extent> extents;
-    std::vector<uint8_t> data;
+    // its bytes when inEntry, shared: a file built in memory (addMemoryFile) can be large, and every open of it read
+    // the same bytes as a copy of its own
+    std::shared_ptr<const std::vector<uint8_t>> data;
     bool inEntry = false;
 };
 
@@ -64,6 +67,10 @@ struct Piece
     uint64_t length = 0;
 };
 void addVirtualFile(const std::string& name, const std::vector<Piece>& pieces);
+
+// A file whose bytes are held in memory: reading `name`, also where a file of that name is on the drive, reads them.
+// A subtitle script is read this way as the Matroska file that holds it (assFile.h).
+void addMemoryFile(const std::string& name, std::vector<uint8_t> bytes);
 
 // For a path inside an image: whether it names a folder or a file there.
 bool isDir(const std::string& path);

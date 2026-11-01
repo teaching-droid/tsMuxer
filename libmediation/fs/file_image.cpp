@@ -60,7 +60,7 @@ int File::readInImage(void* buffer, const uint32_t count) const
     auto* out = static_cast<uint8_t*>(buffer);
     if (file.inEntry)
     {
-        memcpy(out, file.data.data() + m_pos, want);
+        memcpy(out, file.data->data() + m_pos, want);
         m_pos += want;
         return static_cast<int>(want);
     }
