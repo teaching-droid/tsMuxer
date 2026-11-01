@@ -4631,6 +4631,22 @@ Build the ISO anyway?</source>
         <source>This TrueHD track carries no AC-3 core. If the file has an AC-3 track, take that one instead.</source>
         <translation>רצועת TrueHD זו אינה נושאת ליבת AC-3. אם בקובץ יש רצועת AC-3, השתמשו בה במקום.</translation>
     </message>
+    <message>
+        <source>playlist</source>
+        <translation>פלייליסט</translation>
+    </message>
+    <message>
+        <source>clip</source>
+        <translation>קליפ</translation>
+    </message>
+    <message>
+        <source>The track&apos;s number among the tracks of its kind (audio, subtitles) in the playlist: the number a player gives it. The tracks are muxed in this order.</source>
+        <translation>מספר הרצועה בין הרצועות מסוגה (שמע, כתוביות) בפלייליסט: המספר שנגן נותן לה. הרצועות מומקסות בסדר הזה.</translation>
+    </message>
+    <message>
+        <source>The track&apos;s number among the tracks of its kind in the clip (the .m2ts file), by PID. It can differ from the playlist&apos;s.</source>
+        <translation>מספר הרצועה בין הרצועות מסוגה בקליפ (קובץ ה-.m2ts), לפי PID. הוא יכול להיות שונה מזה של הפלייליסט.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -4631,6 +4631,22 @@ Build the ISO anyway?</source>
         <source>This TrueHD track carries no AC-3 core. If the file has an AC-3 track, take that one instead.</source>
         <translation>此 TrueHD 音轨不含 AC-3 核心。如果文件中有 AC-3 音轨，请改用该音轨。</translation>
     </message>
+    <message>
+        <source>playlist</source>
+        <translation>播放列表</translation>
+    </message>
+    <message>
+        <source>clip</source>
+        <translation>片段</translation>
+    </message>
+    <message>
+        <source>The track&apos;s number among the tracks of its kind (audio, subtitles) in the playlist: the number a player gives it. The tracks are muxed in this order.</source>
+        <translation>此音轨在播放列表中同类音轨（音频、字幕）里的编号：即播放器给它的编号。音轨按此顺序混流。</translation>
+    </message>
+    <message>
+        <source>The track&apos;s number among the tracks of its kind in the clip (the .m2ts file), by PID. It can differ from the playlist&apos;s.</source>
+        <translation>此音轨在片段（.m2ts 文件）中同类音轨里的编号，按 PID 排列。它可能与播放列表中的不同。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

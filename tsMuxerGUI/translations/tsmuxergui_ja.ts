@@ -4631,6 +4631,22 @@ Build the ISO anyway?</source>
         <source>This TrueHD track carries no AC-3 core. If the file has an AC-3 track, take that one instead.</source>
         <translation>この TrueHD トラックには AC-3 コアがありません。ファイルに AC-3 トラックがあれば、代わりにそちらを使ってください。</translation>
     </message>
+    <message>
+        <source>playlist</source>
+        <translation>プレイリスト</translation>
+    </message>
+    <message>
+        <source>clip</source>
+        <translation>クリップ</translation>
+    </message>
+    <message>
+        <source>The track&apos;s number among the tracks of its kind (audio, subtitles) in the playlist: the number a player gives it. The tracks are muxed in this order.</source>
+        <translation>プレイリストの中での、同じ種類 (音声、字幕) のトラックの中のこのトラックの番号です。プレーヤーが付ける番号です。トラックはこの順で mux されます。</translation>
+    </message>
+    <message>
+        <source>The track&apos;s number among the tracks of its kind in the clip (the .m2ts file), by PID. It can differ from the playlist&apos;s.</source>
+        <translation>クリップ (.m2ts ファイル) の中での、同じ種類のトラックの中のこのトラックの番号 (PID 順) です。プレイリストの番号と異なることがあります。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

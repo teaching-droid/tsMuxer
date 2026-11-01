@@ -37,6 +37,9 @@
 * **A source that is still encrypted is said to be so.** A Blu-ray .m2ts still encrypted stopped with "Invalid tsPacket->getHeaderSize", or was listed as if it were whole when its first part was clear; a DVD VOB still encrypted was muxed into noise; and an encrypted MP4 track was listed as Opus or as the codec it had. Such a file is now refused with one message when most of the places tested in it are encrypted, with a warning when some are; an encrypted MP4 track is listed as encrypted, and a meta line that names it is refused. Nothing is decrypted: a file needs to be decrypted before muxing.
 
 * **MPEG-2 video is checked against the decoder's buffers of H.222.0.** A TS, M2TS or Blu-ray output with MPEG-2 video could have pictures late at a player, which then pauses or shows damaged pictures, when --maxbitrate was below the video's peaks, and its data could wait longer than the one second H.222.0 allows when --vbv-len was above a second. Nothing said so, or only that some pictures arrived after they were due, without counting the buffer's leak. The buffers (the T-STD) are now followed from the bytes of the output, and a warning says how many pictures are late and by how much, and how many wait longer than a second. The output is not changed.
+
+* **The window shows where a playlist puts each track.** Two columns of the track list, "playlist" and "clip", give a track's number among the tracks of its kind (audio, subtitles) in the playlist, which is the number a player gives it, and in its clip, by PID. They show while a playlist is in the list. The listing of a playlist gives the same in a "Stream order" line. (#52, thanks to @bulba99 for the request)
+
 ## tsMuxeR 3.0.1
 
 A packaging release: every package now carries the licence of tsMuxeR and the notices and licence texts of what it bundles, and the guides are brought up to date. The programs work exactly as in 3.0.0.

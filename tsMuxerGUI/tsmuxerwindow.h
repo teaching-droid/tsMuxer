@@ -123,6 +123,7 @@ class TsMuxerWindow : public QWidget
     void continueAddFile();
     void onTsMuxerCodecInfoReceived();
     void listDiscTitles();
+    void updateOrderColumns();
     void onDiscTitlesReceived();
     void addFile();
     void appendFile();

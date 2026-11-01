@@ -4632,6 +4632,22 @@ Build the ISO anyway?</source>
         <source>This TrueHD track carries no AC-3 core. If the file has an AC-3 track, take that one instead.</source>
         <translation>Эта дорожка TrueHD не содержит ядра AC-3. Если в файле есть дорожка AC-3, возьмите её.</translation>
     </message>
+    <message>
+        <source>playlist</source>
+        <translation>плейлист</translation>
+    </message>
+    <message>
+        <source>clip</source>
+        <translation>клип</translation>
+    </message>
+    <message>
+        <source>The track&apos;s number among the tracks of its kind (audio, subtitles) in the playlist: the number a player gives it. The tracks are muxed in this order.</source>
+        <translation>Номер дорожки среди дорожек её вида (звук, субтитры) в плейлисте: номер, который ей даёт плеер. Дорожки муксируются в этом порядке.</translation>
+    </message>
+    <message>
+        <source>The track&apos;s number among the tracks of its kind in the clip (the .m2ts file), by PID. It can differ from the playlist&apos;s.</source>
+        <translation>Номер дорожки среди дорожек её вида в клипе (файле .m2ts), по PID. Он может отличаться от номера в плейлисте.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -4631,6 +4631,22 @@ ISO trotzdem erstellen?</translation>
         <source>This TrueHD track carries no AC-3 core. If the file has an AC-3 track, take that one instead.</source>
         <translation>Diese TrueHD-Spur trägt keinen AC-3-Kern. Wenn die Datei eine AC-3-Spur hat, nehmen Sie stattdessen diese.</translation>
     </message>
+    <message>
+        <source>playlist</source>
+        <translation>Playlist</translation>
+    </message>
+    <message>
+        <source>clip</source>
+        <translation>Clip</translation>
+    </message>
+    <message>
+        <source>The track&apos;s number among the tracks of its kind (audio, subtitles) in the playlist: the number a player gives it. The tracks are muxed in this order.</source>
+        <translation>Die Nummer der Spur unter den Spuren ihrer Art (Ton, Untertitel) in der Playlist: die Nummer, die ein Player ihr gibt. Die Spuren werden in dieser Reihenfolge gemuxt.</translation>
+    </message>
+    <message>
+        <source>The track&apos;s number among the tracks of its kind in the clip (the .m2ts file), by PID. It can differ from the playlist&apos;s.</source>
+        <translation>Die Nummer der Spur unter den Spuren ihrer Art im Clip (der .m2ts-Datei), nach PID. Sie kann von der der Playlist abweichen.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

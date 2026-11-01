@@ -221,6 +221,16 @@
                 </column>
                 <column>
                  <property name="text">
+                  <string>playlist</string>
+                 </property>
+                </column>
+                <column>
+                 <property name="text">
+                  <string>clip</string>
+                 </property>
+                </column>
+                <column>
+                 <property name="text">
                   <string>track info</string>
                  </property>
                 </column>

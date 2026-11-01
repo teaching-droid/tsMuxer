@@ -889,9 +889,25 @@ TsMuxerWindow::TsMuxerWindow()
     /////////////////////////////////////////////////////////////
     for (int i = 0; i <= 3600; i += 5 * 60) ui->memoChapters->insertPlainText(floatToTime(i, '.') + '\n');
 
-    const static int colWidths[] = {31, 200, 62, 62, 10};
+    const static int colWidths[] = {31, 200, 62, 62, 52, 40, 10};
     for (unsigned i = 0u; i < sizeof(colWidths) / sizeof(int); ++i)
         ui->trackLV->horizontalHeader()->resizeSection(i, colWidths[i]);
+    // The order columns (#52) say where a playlist puts a track among its kind and where its clip has it; they show
+    // only while a track of a playlist is in the list
+    const auto orderTips = [this]()
+    {
+        if (auto* h = ui->trackLV->horizontalHeaderItem(4))
+            h->setToolTip(
+                wrapTip(tr("The track's number among the tracks of its kind (audio, subtitles) in the "
+                           "playlist: the number a player gives it. The tracks are muxed in this order.")));
+        if (auto* h = ui->trackLV->horizontalHeaderItem(5))
+            h->setToolTip(
+                wrapTip(tr("The track's number among the tracks of its kind in the clip (the .m2ts file), "
+                           "by PID. It can differ from the playlist's.")));
+    };
+    orderTips();
+    m_retranslateHooks.push_back(orderTips);
+    updateOrderColumns();
     ui->trackLV->setWordWrap(false);
 
     ui->fontSettingsTableView->setModel(fontSettingsModel);
@@ -3056,6 +3072,16 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
         if (p >= 0)
             codecInfo->lang = codecInfo->srcLang =
                 QtCompat::strMid(procStdOutput[i], QString("Stream lang: ").length());
+        // "Stream order: playlist 2, clip 4": a playlist's track among its kind, in the playlist and in its clip (#52)
+        if (codecInfo && procStdOutput[i].startsWith(QLatin1String("Stream order: playlist ")))
+        {
+            static const QRegularExpression order(QStringLiteral("^Stream order: playlist (\\d+), clip (\\d+)"));
+            if (const auto m = order.match(procStdOutput[i]); m.hasMatch())
+            {
+                codecInfo->playlistPlace = m.captured(1).toInt();
+                codecInfo->clipPlace = m.captured(2).toInt();
+            }
+        }
         p = procStdOutput[i].indexOf("Stream delay: ");
         if (p >= 0)
         {
@@ -4490,18 +4516,28 @@ void TsMuxerWindow::continueAddFile()
         item = new QTableWidgetItem(info.lang);
         item->setFlags(item->flags() & (~Qt::ItemIsEditable));
         ui->trackLV->setItem(newTrackRowIdx, 3, item);
+        // where a playlist and its clip put the track among its kind (#52); empty for another source
+        for (const auto& [column, place] : {std::pair{4, info.playlistPlace}, std::pair{5, info.clipPlace}})
+        {
+            item = new QTableWidgetItem(place > 0 ? QString::number(place) : QString());
+            item->setFlags(item->flags() & (~Qt::ItemIsEditable));
+            item->setTextAlignment(Qt::AlignCenter);
+            ui->trackLV->setItem(newTrackRowIdx, column, item);
+        }
         item = new QTableWidgetItem(info.descr);
         item->setFlags(item->flags() & (~Qt::ItemIsEditable));
-        ui->trackLV->setItem(newTrackRowIdx, 4, item);
+        ui->trackLV->setItem(newTrackRowIdx, 6, item);
         if (firstAddedIndex == -1)
             firstAddedIndex = newTrackRowIdx;
         colorizeCurrentRow(&info, newTrackRowIdx);
         addTrackToDefaultComboBox(newTrackRowIdx);
     }
+    updateOrderColumns();
     if (firstAddedIndex >= 0)
     {
-        ui->trackLV->setRangeSelected(QTableWidgetSelectionRange(firstAddedIndex, 0, ui->trackLV->rowCount() - 1, 4),
-                                      true);
+        ui->trackLV->setRangeSelected(
+            QTableWidgetSelectionRange(firstAddedIndex, 0, ui->trackLV->rowCount() - 1, ui->trackLV->columnCount() - 1),
+            true);
         ui->trackLV->setCurrentCell(firstAddedIndex, 0);
     }
     QString displayName = newFileName;
@@ -6192,6 +6228,16 @@ void TsMuxerWindow::delTracksByFileName(const QString& fileName, const int dvdTi
     updateMetaLines();
 }
 
+void TsMuxerWindow::updateOrderColumns()
+{
+    bool any = false;
+    for (int row = 0; row < ui->trackLV->rowCount() && !any; ++row)
+        if (const auto* info = getCodecInfo(row))
+            any = info->playlistPlace > 0;
+    ui->trackLV->setColumnHidden(4, !any);
+    ui->trackLV->setColumnHidden(5, !any);
+}
+
 void TsMuxerWindow::deleteTrack(int idx)
 {
     disableUpdatesCnt++;
@@ -6215,11 +6261,13 @@ void TsMuxerWindow::deleteTrack(int idx)
         if (lastItemIndex >= 0)
         {
             ui->trackLV->setCurrentCell(lastItemIndex, 0);
-            ui->trackLV->setRangeSelected(QTableWidgetSelectionRange(lastItemIndex, 0, lastItemIndex, 4), true);
+            ui->trackLV->setRangeSelected(
+                QTableWidgetSelectionRange(lastItemIndex, 0, lastItemIndex, ui->trackLV->columnCount() - 1), true);
         }
         updateNum();
     }
 
+    updateOrderColumns();
     updateMaxOffsets();
     // Removing a track can take away the layer that made the Dolby Vision selector apply. Without
     // this the selector stayed visible and --dv-profile=8.1 went on being written into a mux with
@@ -6496,7 +6544,7 @@ void TsMuxerWindow::moveRow(int index, int index2)
     ui->trackLV->removeRow(index);
     if (index2 > index)
         index2--;
-    ui->trackLV->setRangeSelected(QTableWidgetSelectionRange(index2, 0, index2, 4), true);
+    ui->trackLV->setRangeSelected(QTableWidgetSelectionRange(index2, 0, index2, ui->trackLV->columnCount() - 1), true);
     ui->trackLV->setCurrentCell(index2, 0);
 }
 

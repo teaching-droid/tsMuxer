@@ -4631,6 +4631,22 @@ Créer l'ISO malgré tout ?</translation>
         <source>This TrueHD track carries no AC-3 core. If the file has an AC-3 track, take that one instead.</source>
         <translation>Cette piste TrueHD ne contient pas de cœur AC-3. Si le fichier a une piste AC-3, prenez plutôt celle-ci.</translation>
     </message>
+    <message>
+        <source>playlist</source>
+        <translation>liste</translation>
+    </message>
+    <message>
+        <source>clip</source>
+        <translation>clip</translation>
+    </message>
+    <message>
+        <source>The track&apos;s number among the tracks of its kind (audio, subtitles) in the playlist: the number a player gives it. The tracks are muxed in this order.</source>
+        <translation>Le numéro de la piste parmi les pistes de son type (audio, sous-titres) dans la liste de lecture : le numéro que lui donne un lecteur. Les pistes sont multiplexées dans cet ordre.</translation>
+    </message>
+    <message>
+        <source>The track&apos;s number among the tracks of its kind in the clip (the .m2ts file), by PID. It can differ from the playlist&apos;s.</source>
+        <translation>Le numéro de la piste parmi les pistes de son type dans le clip (le fichier .m2ts), par PID. Il peut différer de celui de la liste de lecture.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

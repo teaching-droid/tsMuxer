@@ -488,8 +488,11 @@ static void orderAsPlaylist(vector<CheckStreamRez>& streams, const MPLSParser& m
                 tracks.push_back(streams[i]);
             }
         }
+        // the place of each track among its kind in the clip, before they take the playlist's order, and then in it
+        for (size_t k = 0; k < tracks.size(); ++k) tracks[k].clipPlace = static_cast<int>(k + 1);
         std::stable_sort(tracks.begin(), tracks.end(), [&](const CheckStreamRez& a, const CheckStreamRez& b)
                          { return places.at(a.trackID).second < places.at(b.trackID).second; });
+        for (size_t k = 0; k < tracks.size(); ++k) tracks[k].playlistPlace = static_cast<int>(k + 1);
         for (size_t k = 0; k < slots.size(); ++k) streams[slots[k]] = std::move(tracks[k]);
     }
 }
@@ -716,6 +719,11 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                                         : "   3D: dependent view only, both views are in " + ssifPartner;
             LTRACE(LT_INFO, 2, "Stream info: " << descr);
             LTRACE(LT_INFO, 2, "Stream lang: " << streams[i].lang);
+            // Where a playlist puts the track among its kind, against where its clip has it (#52): a player numbers the
+            // tracks in the playlist's order, which may differ from the clip's
+            if (streams[i].playlistPlace > 0)
+                LTRACE(LT_INFO, 2,
+                       "Stream order: playlist " << streams[i].playlistPlace << ", clip " << streams[i].clipPlace);
             // A Matroska track's name and the flags it has set, under the names the meta takes, so the window can
             // start from them. The name is the file's own text, on one line.
             if (!streams[i].name.empty())

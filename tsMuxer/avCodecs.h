@@ -83,6 +83,10 @@ struct CheckStreamRez
     // An interlaced H.264 stream whose pictures read are all coded frames (MBAFF), no fields: the time a container
     // gives each picture is that of a frame, as for a progressive stream
     bool framesOnly = false;
+    // A track of a playlist: its number among the tracks of its kind (primary audio, subtitles, ...) in the order of
+    // the playlist's stream table, the number a player gives it, and in the order of the clip (by PID); 0 otherwise
+    int playlistPlace = 0;
+    int clipPlace = 0;
 
     bool multiSubStream;
     // Which half of a combined track this entry is, as it appears in subTrack= on a meta line.

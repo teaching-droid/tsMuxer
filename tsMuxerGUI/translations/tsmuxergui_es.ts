@@ -4632,6 +4632,22 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>This TrueHD track carries no AC-3 core. If the file has an AC-3 track, take that one instead.</source>
         <translation>Esta pista TrueHD no lleva núcleo AC-3. Si el archivo tiene una pista AC-3, use esa en su lugar.</translation>
     </message>
+    <message>
+        <source>playlist</source>
+        <translation>lista</translation>
+    </message>
+    <message>
+        <source>clip</source>
+        <translation>clip</translation>
+    </message>
+    <message>
+        <source>The track&apos;s number among the tracks of its kind (audio, subtitles) in the playlist: the number a player gives it. The tracks are muxed in this order.</source>
+        <translation>El número de la pista entre las pistas de su tipo (audio, subtítulos) en la lista de reproducción: el número que le da un reproductor. Las pistas se multiplexan en este orden.</translation>
+    </message>
+    <message>
+        <source>The track&apos;s number among the tracks of its kind in the clip (the .m2ts file), by PID. It can differ from the playlist&apos;s.</source>
+        <translation>El número de la pista entre las pistas de su tipo en el clip (el archivo .m2ts), por PID. Puede diferir del de la lista de reproducción.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
