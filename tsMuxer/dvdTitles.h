@@ -43,9 +43,14 @@ struct DvdTitle
     std::vector<DvdCell> cells;
     std::vector<DvdAudio> audio;           // the streams its first program chain enables, in order
     std::vector<std::string> subpictures;  // their languages
-    bool encrypted = false;                // its title set's video is still encrypted
-    double missingShare = 0;               // the part of its cells beyond the end of the VOB files
-    bool isMain = false;                   // a main title: the film, or one of the episodes or films of the disc
+    // the sub-stream ids (0x20 + stream number) its sub-pictures are in, with their languages: a stream can be in
+    // several, one for each form of the picture (4:3, wide, letterbox, pan-scan)
+    std::vector<std::pair<int, std::string>> subpictureTracks;
+    std::array<uint32_t, 16> palette{};  // the colours of its sub-pictures, 0x00YYCrCb, from its first program chain
+    int pictureWidth = 720, pictureHeight = 480;
+    bool encrypted = false;   // its title set's video is still encrypted
+    double missingShare = 0;  // the part of its cells beyond the end of the VOB files
+    bool isMain = false;      // a main title: the film, or one of the episodes or films of the disc
     std::string note;
 };
 
@@ -82,5 +87,14 @@ std::string dvdTitleSource(const std::string& videoTs, const std::string& title,
                            std::vector<std::pair<int, std::string>>* languages = nullptr,
                            std::vector<double>* chapters = nullptr, bool discNumber = false, double minSeconds = 120,
                            bool all = false, int* discTitle = nullptr);
+
+// The .idx text the DVD subtitles of a VOB file are drawn with (VobSubDecoder): "size: 720x480" from its title set
+// and "palette: rrggbb, ..." of the program chain that plays it. For the VOB files of a title (dvdTitleSource) the
+// title's own colours, for a VTS_nn_k.VOB those of the first program chain of its title set that has cells. Empty when
+// no IFO file of it can be read.
+std::string dvdSubtitleIdx(const std::string& vobPath);
+// The sub-picture streams the same program chain enables, as track numbers (0x20 + stream) with their languages: the
+// listing gives a stream whose first subtitle comes after the part of the file it reads as well
+std::vector<std::pair<int, std::string>> dvdSubtitleTracks(const std::string& vobPath);
 
 #endif  // DVD_TITLES_H_

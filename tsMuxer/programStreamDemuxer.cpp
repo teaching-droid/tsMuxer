@@ -2,6 +2,9 @@
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "programStreamDemuxer.h"
 
+#include <fs/systemlog.h>
+
+#include "dvdTitles.h"
 #include "encryptedInput.h"
 #include "mpegVideo.h"
 #include "pesPacket.h"
@@ -249,11 +252,9 @@ void ProgramStreamDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             trackList[i] = TrackInfo(static_cast<int>(StreamType::AUDIO_LPCM), "", 0);  // set track hint
         else
             trackList[i] = TrackInfo(0, "", 0);  // autodetect
-        // Sub-streams 0x20 to 0x3F of private stream 1 are DVD subpictures, which no reader takes: they were listed
-        // with no type at all (METADemuxer, CheckStreamRez::notSupported)
+        // Sub-streams 0x20 to 0x3F of private stream 1 are DVD subpictures, read as PGS (addSubPicture)
         if (i >= 0x20 && i <= 0x3f)
-            trackList[i].m_srcParams["srcnotsupported"] =
-                "DVD subpictures (sub-stream " + std::to_string(i - 0x20) + ")";
+            trackList[i] = TrackInfo(static_cast<int>(StreamType::SUB_PGS), "", 0);
     }
 }
 
@@ -281,6 +282,7 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
     if (readedBytes + m_tmpBufferLen == 0 || (readedBytes == 0 && m_lastReadRez == BufferedReader::DATA_EOF))
     {
         m_lastReadRez = readRez;
+        flushSubPictures(demuxedData, acceptedPIDs);  // the end of the file came with no data
         return BufferedReader::DATA_EOF;
     }
     if (readedBytes > 0)
@@ -303,7 +305,12 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
     if (m_lastPesLen > 0)
     {
         const int copyLen = FFMIN(readedBytes, m_lastPesLen);
-        if (m_lastPID > 0)
+        if (m_lastPID >= 0x20 && m_lastPID <= 0x3f)
+        {
+            addSubPicture(m_lastPID, curBuf, copyLen, -1, demuxedData[m_lastPID]);
+            m_dataProcessed += copyLen;
+        }
+        else if (m_lastPID > 0)
         {
             StreamData& vect = demuxedData[m_lastPID];
             vect.append(curBuf, copyLen);
@@ -311,6 +318,8 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
         }
         else
             discardSize += copyLen;
+        if (m_lastPesVideo)
+            scanVideo(curBuf, copyLen);
         curBuf += copyLen;
         m_lastPesLen -= copyLen;
         if (m_lastPesLen > 0)
@@ -339,9 +348,50 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
                 break;
             int afterPesHeader = 0;
             startcode = processPES(curBuf, end, headerLen, mpeg1HeaderLen > 0, afterPesHeader);
-            if (acceptedPIDs.find(startcode) != acceptedPIDs.end())
+            const bool hasPts = mpeg1HeaderLen > 0 ? mpeg1Pts >= 0 : (pesPacket->flagsLo & 0x80) == 0x80;
+            m_lastPesVideo = false;
+            if (startcode == 0xe0)  // the video of a DVD: the time line of its subtitles
             {
-                if (mpeg1HeaderLen > 0 ? mpeg1Pts >= 0 : (pesPacket->flagsLo & 0x80) == 0x80)
+                m_pesPts = -1;
+                if (hasPts)
+                {
+                    const int64_t pts = mpeg1HeaderLen > 0 ? mpeg1Pts : pesPacket->getPts();
+                    noteVideoTime(
+                        pts, mpeg1HeaderLen == 0 && (pesPacket->flagsLo & 0xc0) == 0xc0 ? pesPacket->getDts() : pts);
+                }
+                const uint8_t* p = curBuf + headerLen + afterPesHeader;
+                const int len = pesPacket->getPacketLength() - headerLen - afterPesHeader;
+                const int have = static_cast<int>((std::min)(static_cast<int64_t>(len), static_cast<int64_t>(end - p)));
+                if (have > 0)
+                    scanVideo(p, have);
+                m_lastPesVideo = have < len;
+            }
+            const bool subPicture = startcode >= 0x20 && startcode <= 0x3f;
+            if (subPicture && acceptedPIDs.find(startcode) != acceptedPIDs.end())
+            {
+                const uint8_t* payloadData = curBuf + headerLen + afterPesHeader;
+                const int pesPayloadLen = pesPacket->getPacketLength() - headerLen - afterPesHeader;
+                const int copyLen = FFMIN(pesPayloadLen, (int)(end - payloadData));
+                if (copyLen < 0)
+                    THROW(ERR_COMMON, "Invalid copyLen")
+                addSubPicture(startcode, payloadData, copyLen,
+                              !hasPts              ? -1
+                              : mpeg1HeaderLen > 0 ? mpeg1Pts
+                                                   : pesPacket->getPts(),
+                              demuxedData[startcode]);
+                m_dataProcessed += copyLen;
+                discardSize += payloadData - curBuf;
+                if (copyLen < pesPayloadLen)
+                {
+                    m_lastPesLen = pesPayloadLen - copyLen;
+                    m_lastPID = startcode;
+                    return 0;
+                }
+                curBuf += pesPacket->getPacketLength();
+            }
+            else if (acceptedPIDs.find(startcode) != acceptedPIDs.end())
+            {
+                if (hasPts)
                 {
                     const int64_t curPts = mpeg1HeaderLen > 0 ? mpeg1Pts : pesPacket->getPts();
                     if (m_firstPTS == -1 || curPts < m_firstPTS)
@@ -427,7 +477,153 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
     m_tmpBufferLen = static_cast<uint32_t>(end - curBuf);
     if (m_tmpBufferLen > 0)
         memmove(m_tmpBuffer, curBuf, end - curBuf);
+    if (readRez == BufferedReader::DATA_EOF)
+        flushSubPictures(demuxedData, acceptedPIDs);
     return 0;
+}
+
+void ProgramStreamDemuxer::noteVideoTime(const int64_t pts, const int64_t dts)
+{
+    // The decoding time of a picture only goes forward within a part, its presentation time does not: a picture that
+    // is decoded no later than the one before, or a second after it, begins a new part, the next file of a join or
+    // the clock of the VOB starting again (a title of the disc parted at a break of its clock, dvdTitleSource). The
+    // part before is as long as the fields its pictures show.
+    if (m_lastDts >= 0 && (dts <= m_lastDts || dts > m_lastDts + 90000))
+    {
+        const double length = static_cast<double>(m_segFields) * m_frameTicks / 2;
+        LTRACE(LT_DEBUG, 0,
+               "VOB " << m_streamName << " (or a file joined to it): the clock starts again at decoding time " << dts
+                      << " after " << m_lastDts << "; the part before began at " << m_segFirst << " and showed "
+                      << m_segFields << " fields, the next one starts at " << llround(m_segBase + length)
+                      << " on the time line (90 kHz)");
+        m_segBase += length;
+        m_segFirst = -1;
+        m_segFields = 0;
+    }
+    m_lastDts = dts;
+    m_pesPts = pts;
+}
+
+// The start codes of the video (ISO/IEC 13818-2 6.2): the bytes after each are collected, across packets, for
+// videoStartCode
+void ProgramStreamDemuxer::scanVideo(const uint8_t* data, const int len)
+{
+    for (int i = 0; i < len; ++i)
+    {
+        const uint8_t b = data[i];
+        if (m_scanWant > 0)
+        {
+            m_scanBytes[m_scanHave++] = b;
+            if (m_scanHave == m_scanWant)
+            {
+                m_scanWant = 0;
+                videoStartCode(m_scanCode, m_scanBytes);
+            }
+        }
+        m_scanShift = m_scanShift << 8 | b;
+        if ((m_scanShift & 0xffffff00) == 0x00000100)
+        {
+            m_scanCode = b;
+            m_scanHave = 0;
+            m_scanWant = b == 0x00 ? 2 : b == 0xb5 ? 4 : b == 0xb3 ? 4 : 0;
+            if (b == 0x00)
+                m_segFields += 2;  // a frame picture, or MPEG-1; corrected by its coding extension
+        }
+    }
+}
+
+void ProgramStreamDemuxer::videoStartCode(const uint8_t code, const uint8_t* b)
+{
+    if (code == 0xb3)
+    {
+        // sequence header: the picture height and the frame rate (Table 6-4)
+        static constexpr double FRAME_TICKS[9] = {0, 3753.75, 3750, 3600, 3003, 3000, 1800, 1501.5, 1500};
+        m_videoHeight = (b[1] & 0x0f) << 8 | b[2];
+        if (const int rate = b[3] & 0x0f; rate >= 1 && rate <= 8)
+            m_frameTicks = FRAME_TICKS[rate];
+    }
+    else if (code == 0xb5 && b[0] >> 4 == 1)
+        m_progressiveSequence = (b[1] >> 3 & 1) != 0;  // sequence extension
+    else if (code == 0xb5 && b[0] >> 4 == 8)
+    {
+        // picture coding extension: a field picture shows one field, a frame picture two and repeat_first_field one
+        // more; in a progressive sequence repeat_first_field doubles or (with top_field_first) triples the frame
+        const int structure = b[2] & 3;
+        const bool repeat = (b[3] >> 1 & 1) != 0, topFirst = (b[3] >> 7 & 1) != 0;
+        int fields = 2;
+        if (structure != 3)
+            fields = 1;
+        else if (repeat)
+            fields = m_progressiveSequence ? (topFirst ? 6 : 4) : 3;
+        m_segFields += fields - 2;
+    }
+    else if (code == 0x00 && m_pesPts >= 0)
+    {
+        // the first picture that starts in a PES with a time: temporal_reference pictures are shown before it in its
+        // group of pictures, so the part begins that much earlier
+        const int temporalReference = b[0] << 2 | b[1] >> 6;
+        const auto shown = static_cast<int64_t>(static_cast<double>(m_pesPts) - temporalReference * m_frameTicks);
+        if (m_segFirst < 0 || shown < m_segFirst)
+            m_segFirst = shown;
+        m_pesPts = -1;
+    }
+}
+
+void ProgramStreamDemuxer::addSubPicture(const int stream, const uint8_t* data, const int len, const int64_t pts,
+                                         StreamData& out)
+{
+    SubPicture& sp = m_subPictures[stream];
+    if (!sp.decoder)
+    {
+        // Without an IFO file (said where the track is muxed, METADemuxer) grey, at the size of the video
+        std::string idx = dvdSubtitleIdx(m_streamName);
+        if (idx.empty())
+            idx = "size: 720x" + std::to_string(m_videoHeight > 0 ? m_videoHeight : 480) +
+                  "\npalette: 000000, ffffff, 808080, 404040, 000000, ffffff, 808080, 404040, 000000, ffffff, "
+                  "808080, 404040, 000000, ffffff, 808080, 404040\n";
+        sp.decoder = std::make_unique<VobSubDecoder>(reinterpret_cast<const uint8_t*>(idx.data()),
+                                                     static_cast<int>(idx.size()), 0.0);
+    }
+    // A packet with a time begins a unit; one without goes on with the unit begun. A unit not whole when the next
+    // begins is damaged, and one whose start is lost is passed over.
+    if (pts >= 0)
+    {
+        sp.unit.clear();
+        sp.pts = pts;
+    }
+    else if (sp.unit.empty() && sp.pts < 0)
+        return;
+    sp.unit.insert(sp.unit.end(), data, data + len);
+    if (sp.unit.size() < 2)
+        return;
+    const size_t size = static_cast<size_t>(sp.unit[0]) << 8 | sp.unit[1];
+    if (sp.unit.size() < size)
+        return;
+    // on the time line of the video: where its part begins, and the time from the first picture of the part
+    const int64_t first = m_segFirst >= 0 ? m_segFirst : sp.pts;
+    const int64_t at = llround(m_segBase) + (sp.pts - first);
+    std::vector<uint8_t> pgs;
+    if (size >= 4)
+        sp.decoder->decode(sp.unit.data(), static_cast<int>(size), at * (INTERNAL_PTS_FREQ / 90000), -1, pgs);
+    out.append(pgs.data(), static_cast<int>(pgs.size()));
+    sp.unit.clear();
+    sp.pts = -1;
+}
+
+// The end of the last picture of each track, held until the next (BitmapToPgs::finish)
+void ProgramStreamDemuxer::flushSubPictures(DemuxedData& demuxedData, const PIDSet& acceptedPIDs)
+{
+    if (m_subFlushed)
+        return;
+    m_subFlushed = true;
+    for (auto& [stream, sp] : m_subPictures)
+    {
+        if (!sp.decoder || acceptedPIDs.find(stream) == acceptedPIDs.end())
+            continue;
+        std::vector<uint8_t> pgs;
+        sp.decoder->finish(pgs);
+        demuxedData[stream].append(pgs.data(), static_cast<int>(pgs.size()));
+    }
 }
 
 int64_t getLastPCR(const File& file, const int bufferSize, const int64_t fileSize)

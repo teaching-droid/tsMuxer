@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <map>
+#include <mutex>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -102,7 +103,10 @@ struct Pgc
     double seconds = 0;
     std::array<int, 8> audio{};        // the stream number of each audio stream of the title set, -1 not enabled
     std::array<int, 32> subpicture{};  // the same for the sub-pictures (the 4:3 one)
-    std::vector<uint8_t> programs;     // the first cell of each program, from 1
+    // every stream number of each sub-picture stream: 4:3, wide, letterbox and pan-scan, -1 where not given
+    std::array<std::array<int, 4>, 32> subpictureStreams{};
+    std::array<uint32_t, 16> palette{};  // the 16 colours of its sub-pictures, 0x00YYCrCb
+    std::vector<uint8_t> programs;       // the first cell of each program, from 1
     std::vector<DvdCell> cells;
 };
 
@@ -120,7 +124,11 @@ Pgc readPgc(const Reader& r, const size_t at)
     {
         const uint32_t s = r.u32(at + 0x1C + i * 4);
         g.subpicture[i] = s & 0x80000000u ? static_cast<int>(s >> 24 & 0x1F) : -1;
+        for (int k = 0; k < 4; ++k)
+            g.subpictureStreams[i][static_cast<size_t>(k)] =
+                s & 0x80000000u ? static_cast<int>(s >> (24 - 8 * k) & 0x1F) : -1;
     }
+    for (size_t i = 0; i < 16; ++i) g.palette[i] = r.u32(at + 0xA4 + i * 4) & 0xFFFFFF;
     const size_t map = r.u16(at + 0xE6), play = r.u16(at + 0xE8), pos = r.u16(at + 0xEA);
     if (programs && !map)
         throw std::runtime_error(r.what + ": a program chain has programs but no program map");
@@ -168,6 +176,10 @@ double timeBefore(const Pgc& g, const size_t cell)
 struct TitleSet
 {
     std::string video;
+    int width = 720, height = 480;
+    // the forms of the picture a sub-picture stream is given for (a program chain's 4 control fields): 4:3 alone, or
+    // for 16:9 wide and, where the video attributes permit them, letterbox and pan-scan
+    std::array<bool, 4> subpictureForms{true, false, false, false};
     std::vector<DvdAudio> audio;
     std::vector<std::string> subpictures;
     std::vector<Pgc> pgcs;
@@ -202,6 +214,10 @@ TitleSet readSet(const Bytes& data, const int n)
     default:
         break;
     }
+    s.width = width;
+    s.height = height;
+    if ((v0 >> 2 & 3) == 3)
+        s.subpictureForms = {false, true, (v0 & 1) == 0, (v0 & 2) == 0};
     s.video = std::string(v0 >> 6 == 0 ? "MPEG-1 " : "MPEG-2 ") + std::to_string(width) + "x" + std::to_string(height) +
               (pal ? " 25 fps" : " 29.97 fps") + ((v0 >> 2 & 3) == 3 ? " 16:9" : " 4:3");
     const size_t audio = (std::min)(static_cast<size_t>(r.u16(0x202)), size_t{8});
@@ -437,7 +453,21 @@ DvdTitles listDvdTitles(const std::string& videoTs, const double minSeconds, con
                         }
                     for (size_t a = 0; a < s.subpictures.size(); ++a)
                         if (g.subpicture[a] >= 0)
+                        {
                             t.subpictures.push_back(s.subpictures[a]);
+                            // each sub-stream the stream is in, for the form of the picture a player shows
+                            for (size_t k = 0; k < 4; ++k)
+                            {
+                                const int n = g.subpictureStreams[a][k];
+                                if (s.subpictureForms[k] && n >= 0 &&
+                                    std::none_of(t.subpictureTracks.begin(), t.subpictureTracks.end(),
+                                                 [n](const auto& e) { return e.first == 0x20 + n; }))
+                                    t.subpictureTracks.emplace_back(0x20 + n, s.subpictures[a]);
+                            }
+                        }
+                    t.palette = g.palette;
+                    t.pictureWidth = s.width;
+                    t.pictureHeight = s.height;
                 }
             }
             t.chapters.push_back(chainStart[k] +
@@ -886,12 +916,117 @@ std::string dvdTitleSource(const std::string& videoTs, const std::string& title,
         source += (source.empty() ? "\"" : "+\"") + name + "\"";
     }
     if (languages)
+    {
         for (const auto& a : t->audio)
             if (!a.lang.empty())
                 languages->emplace_back(a.track, a.lang);
+        for (const auto& [track, lang] : t->subpictureTracks)
+            if (!lang.empty())
+                languages->emplace_back(track, lang);
+    }
     if (chapters)
         *chapters = t->chapters;
     if (discTitle)
         *discTitle = t->discTitle;
     return source;
+}
+
+namespace
+{
+// An .idx text of a picture size and 16 colours of the IFO, YCrCb turned into RGB (ITU-R BT.601, studio range)
+std::string idxText(const int width, const int height, const std::array<uint32_t, 16>& palette)
+{
+    std::ostringstream s;
+    s << "size: " << width << "x" << height << "\npalette: ";
+    for (size_t i = 0; i < 16; ++i)
+    {
+        // studio range (Y 16 to 235), the inverse of the conversion the PGS pictures are made with
+        // (TextToPGSConverter::RGBAToYUVA), so that a colour of the disc comes back as it is
+        const double y = (palette[i] >> 16 & 0xFF) - 16.0, cr = (palette[i] >> 8 & 0xFF) - 128.0,
+                     cb = (palette[i] & 0xFF) - 128.0;
+        const auto clip = [](const double v)
+        { return static_cast<int>(std::lround((std::min)(255.0, (std::max)(0.0, v)))); };
+        char rgb[8];
+        snprintf(rgb, sizeof rgb, "%02x%02x%02x", clip(1.164384 * y + 1.596027 * cr),
+                 clip(1.164384 * y - 0.391762 * cb - 0.812968 * cr), clip(1.164384 * y + 2.017232 * cb));
+        s << (i ? ", " : "") << rgb;
+    }
+    s << "\n";
+    return s.str();
+}
+}  // namespace
+
+namespace
+{
+struct SubtitleInfo
+{
+    std::string idx;
+    std::vector<std::pair<int, std::string>> tracks;
+};
+
+// The colours, picture size and sub-picture streams of the program chain that plays a VOB file (dvdSubtitleIdx)
+const SubtitleInfo& subtitleInfo(const std::string& vobPath)
+{
+    static std::mutex lock;
+    static std::map<std::string, SubtitleInfo> known;
+    {
+        const std::lock_guard<std::mutex> guard(lock);
+        if (const auto it = known.find(vobPath); it != known.end())
+            return it->second;
+    }
+    SubtitleInfo info;
+    const std::string folder = extractFilePath(vobPath);
+    const std::string name = extractFileName2(vobPath, true);
+    int discTitle = 0, part = 0, set = 0, k = 0;
+    char ext[8] = {};
+    try
+    {
+        if (sscanf(name.c_str(), "DVD title %d part %d.%3s", &discTitle, &part, ext) == 3)
+        {
+            // a title of the disc (dvdTitleSource): its own program chain
+            const DvdTitles titles = listDvdTitles(folder, 0, true);
+            for (const auto* list : {&titles.titles, &titles.leftOut})
+                for (const DvdTitle& t : *list)
+                    if (t.discTitle == discTitle && info.idx.empty())
+                    {
+                        info.idx = idxText(t.pictureWidth, t.pictureHeight, t.palette);
+                        info.tracks = t.subpictureTracks;
+                    }
+        }
+        else if (sscanf(strToUpperCase(name).c_str(), "VTS_%d_%d.%3s", &set, &k, ext) == 3 && set >= 1 && set <= 99)
+        {
+            char stem[16];
+            snprintf(stem, sizeof stem, "VTS_%02d_0", set);
+            const TitleSet s = readSet(ifo(folder, stem, "DVDVIDEO-VTS"), set);
+            for (const Pgc& g : s.pgcs)
+                if (!g.cells.empty())
+                {
+                    info.idx = idxText(s.width, s.height, g.palette);
+                    for (size_t a = 0; a < s.subpictures.size(); ++a)
+                        for (size_t f = 0; f < 4; ++f)
+                        {
+                            const int n = g.subpictureStreams[a][f];
+                            if (g.subpicture[a] >= 0 && s.subpictureForms[f] && n >= 0 &&
+                                std::none_of(info.tracks.begin(), info.tracks.end(),
+                                             [n](const auto& e) { return e.first == 0x20 + n; }))
+                                info.tracks.emplace_back(0x20 + n, s.subpictures[a]);
+                        }
+                    break;
+                }
+        }
+    }
+    catch (const std::exception&)
+    {
+        info = SubtitleInfo();  // no IFO to read: the subtitles are drawn without its colours
+    }
+    const std::lock_guard<std::mutex> guard(lock);
+    return known.emplace(vobPath, std::move(info)).first->second;
+}
+}  // namespace
+
+std::string dvdSubtitleIdx(const std::string& vobPath) { return subtitleInfo(vobPath).idx; }
+
+std::vector<std::pair<int, std::string>> dvdSubtitleTracks(const std::string& vobPath)
+{
+    return subtitleInfo(vobPath).tracks;
 }

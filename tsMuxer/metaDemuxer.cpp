@@ -1944,6 +1944,18 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         }
     }
 
+    // DVD subtitles of a VOB take their colours from the IFO file of its title set (ProgramStreamDemuxer): without
+    // one they are drawn in grey, which is said here, where such a track is muxed
+    if (codec == "S_HDMV/PGS" && pid >= 0x20 && pid <= 0x3f && !fileList.empty())
+    {
+        const std::string first = unquoteStr(trimStr(fileList[0]));
+        const std::string ext = strToUpperCase(extractFileExt(first));
+        if ((ext == "VOB" || ext == "MPG" || ext == "MPEG" || ext == "EVO") && dvdSubtitleIdx(first).empty())
+            LTRACE(LT_WARN, 2,
+                   "Warning: track " << pid << " of " << first
+                                     << " is DVD subtitles, which take their colours from the IFO file of the "
+                                        "title set. None is next to the file, so they are drawn in grey.");
+    }
     // ** A MATROSKA OUTPUT KEEPS A SUBTITLE IN THE FORM ITS MATROSKA SOURCE HAS IT. ** The listing gives ASS, SSA and
     // WebVTT as SRT and VobSub and DVB as PGS, because every other output needs them that way, and the meta line says
     // so. Into a Matroska output they used to go converted as well: ASS lost its styles, colours and positions,
@@ -4470,6 +4482,35 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             addTrack(Vstreams, trackRez);
         else
             addTrack(streams, trackRez);
+    }
+    // The subtitle streams of a DVD title whose first subtitle comes after the part read here, as a commentary's often
+    // does: the IFO file names them, and they were left out of the listing. Their languages come from it too.
+    if (containerType == AbstractStreamReader::ContainerType::ctVOB ||
+        containerType == AbstractStreamReader::ContainerType::ctEVOB)
+    {
+        bool added = false;
+        for (const auto& [track, lang] : dvdSubtitleTracks(unquoted))
+        {
+            const std::string code = iso639FromBcp47(lang);
+            // a track found in the file takes the language of the disc as well
+            const auto found = std::find_if(streams.begin(), streams.end(),
+                                            [t = track](const CheckStreamRez& r) { return r.trackID == t; });
+            if (found != streams.end())
+            {
+                if (found->lang.empty() && !code.empty())
+                    found->lang = applyLangCodeStyle(code);
+                continue;
+            }
+            CheckStreamRez trackRez = PGSStreamReader().checkStream(nullptr, 0, containerType, TRACKTYPE_PGS, track);
+            trackRez.trackID = track;
+            if (!code.empty())
+                trackRez.lang = applyLangCodeStyle(code);
+            streams.push_back(trackRez);
+            added = true;
+        }
+        if (added)
+            std::stable_sort(streams.begin(), streams.end(),
+                             [](const CheckStreamRez& a, const CheckStreamRez& b) { return a.trackID < b.trackID; });
     }
     Vstreams.insert(Vstreams.end(), streams.begin(), streams.end());
 

@@ -1061,6 +1061,15 @@ CheckStreamRez PGSStreamReader::checkStream(uint8_t* buffer, int len, ContainerT
         rez.streamDescr = "Presentation Graphic Stream";
         rez.streamDescr += std::string(" #") + int32ToStr(containerStreamIndex);
     }
+    // The sub-pictures of a VOB, drawn as PGS (ProgramStreamDemuxer::addSubPicture): told by their stream id, as their
+    // first picture can come long after the start
+    else if ((containerType == ContainerType::ctVOB || containerType == ContainerType::ctEVOB) &&
+             containerDataType == TRACKTYPE_PGS && containerStreamIndex >= 0x20 && containerStreamIndex <= 0x3f)
+    {
+        rez.codecInfo = pgsCodecInfo;
+        rez.streamDescr = "DVD subtitles (sub-picture stream " + int32ToStr(containerStreamIndex - 0x20) +
+                          "), drawn as Presentation Graphic Stream";
+    }
     else if (containerType == ContainerType::ctSUP && len > 2)
     {
         // A few bytes in front of the first "PG" marker: the file was not taken for a .sup at all, and nothing was
