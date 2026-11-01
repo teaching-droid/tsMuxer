@@ -58,6 +58,7 @@
 
 #include "checkboxedheaderview.h"
 #include "codecinfo.h"
+#include "discTitleDialog.h"
 #include "fontsettingstablemodel.h"
 #include "lang_codes.h"
 #include "muxForm.h"
@@ -185,10 +186,11 @@ QString fileDialogFilter()
     // Keep filters simple and extension-only to avoid silent failures.
     FileFilterVec filters = {
         {TsMuxerWindow::tr("All supported media files"),
-         {"ac3",  "ddp",  "ec3",  "eac3", "aac", "avc",   "mvc",   "264", "h264",   "hevc", "265", "h265", "obu", "vc1",
-          "vvc",  "266",  "h266", "ivf",  "dts", "dtshd", "dtsma", "thd", "truehd", "mpv",  "m1v", "m2v",  "mpa", "mp2",
-          "mp3",  "flac", "ts",   "m2ts", "mts", "m2t",   "ssif",  "mpg", "mpeg",   "vob",  "evo", "mkv",  "mka", "mks",
-          "mk3d", "webm", "mp4",  "m4a",  "m4v", "mov",   "mpls",  "mpl", "sup",    "srt",  "wav", "w64",  "pcm"}},
+         {"ac3",  "ddp", "ec3", "eac3", "aac",  "avc",  "mvc",  "264",   "h264",  "hevc", "265",    "h265",
+          "obu",  "vc1", "vvc", "266",  "h266", "ivf",  "dts",  "dtshd", "dtsma", "thd",  "truehd", "mpv",
+          "m1v",  "m2v", "mpa", "mp2",  "mp3",  "flac", "ts",   "m2ts",  "mts",   "m2t",  "ssif",   "mpg",
+          "mpeg", "vob", "evo", "mkv",  "mka",  "mks",  "mk3d", "webm",  "mp4",   "m4a",  "m4v",    "mov",
+          "mpls", "mpl", "iso", "sup",  "srt",  "wav",  "w64",  "pcm"}},
         {TsMuxerWindow::tr("Container files (TS, MKV, MP4, MOV, etc.)"),
          {"ts", "m2ts", "mts", "m2t", "ssif", "mpg", "mpeg", "vob", "evo", "mkv", "mka", "mks", "mk3d", "webm", "mp4",
           "m4a", "m4v", "mov"}},
@@ -199,7 +201,8 @@ QString fileDialogFilter()
          {"ac3", "ddp", "ec3", "eac3", "aac", "dts", "dtshd", "dtsma", "thd", "truehd", "mpa", "mp2", "mp3", "flac",
           "wav", "w64", "pcm"}},
         {TsMuxerWindow::tr("Subtitle files"), {"sup", "srt"}},
-        {TsMuxerWindow::tr("Blu-ray playlist"), {"mpls", "mpl"}}};
+        {TsMuxerWindow::tr("Blu-ray playlist"), {"mpls", "mpl"}},
+        {TsMuxerWindow::tr("Disc image"), {"iso"}}};
 #else
     FileFilterVec filters = {
         {TsMuxerWindow::tr("All supported media files"),
@@ -207,7 +210,7 @@ QString fileDialogFilter()
           "obu",     "vc1", "vvc",  "266",  "h266", "ivf", "dts", "dtshd", "dtsma", "thd",  "truehd", "ac3+thd",
           "thd+ac3", "mpv", "m1v",  "m2v",  "mpa",  "mp2", "mp3", "flac",  "ts",    "m2ts", "mts",    "m2t",
           "ssif",    "mpg", "mpeg", "vob",  "evo",  "mkv", "mka", "mks",   "mk3d",  "webm", "mp4",    "m4a",
-          "m4v",     "mov", "mpls", "mpl",  "sup",  "srt", "wav", "w64",   "pcm"}},
+          "m4v",     "mov", "mpls", "mpl",  "iso",  "sup", "srt", "wav",   "w64",   "pcm"}},
         {TsMuxerWindow::tr("Container files (TS, MKV, MP4, MOV, etc.)"),
          {"ts", "m2ts", "mts", "m2t", "ssif", "mpg", "mpeg", "vob", "evo", "mkv", "mka", "mks", "mk3d", "webm", "mp4",
           "m4a", "m4v", "mov"}},
@@ -218,7 +221,8 @@ QString fileDialogFilter()
          {"ac3", "ddp", "ec3", "eac3", "aac", "dts", "dtshd", "dtsma", "thd", "truehd", "ac3+thd", "thd+ac3", "mpa",
           "mp2", "mp3", "flac", "wav", "w64", "pcm"}},
         {TsMuxerWindow::tr("Subtitle files"), {"sup", "srt"}},
-        {TsMuxerWindow::tr("Blu-ray playlist"), {"mpls", "mpl"}}};
+        {TsMuxerWindow::tr("Blu-ray playlist"), {"mpls", "mpl"}},
+        {TsMuxerWindow::tr("Disc image"), {"iso"}}};
 #endif
     return makeFileFilter(filters);
 }
@@ -281,7 +285,8 @@ enum FileCustomData
     ChaptersRole,
     FileDurationRole,
     VideoStartRole,  // the listing's "Video start" and "Video end", set only when it printed them
-    VideoEndRole
+    VideoEndRole,
+    DvdTitleRole  // a DVD title: its disc number (QtvCodecInfo::dvdTitle); FileNameRole holds the disc
 };
 
 static const QString FILE_JOIN_PREFIX(" ++ ");
@@ -1127,6 +1132,37 @@ TsMuxerWindow::TsMuxerWindow()
     ui->addBtn->setToolTip(
         wrapTip(tr("Add a file as a NEW, separate input. To continue a title with its next "
                    "part instead, select that part's first file and use join.")));
+    // A disc folder or a drive cannot be chosen in the file dialog of "add", which takes files: an image (.iso) can,
+    // and any of them can be dropped on the window. This button chooses a folder or a drive; a disc then shows its
+    // titles to choose from (onDiscTitlesReceived).
+    auto* addDiscBtn = m_addDiscBtn = new QPushButton(this);
+    addDiscBtn->setObjectName(QStringLiteral("addDiscBtn"));
+    ui->verticalLayout->insertWidget(ui->verticalLayout->indexOf(ui->addBtn) + 1, addDiscBtn);
+    const auto addDiscTexts = [this, addDiscBtn]()
+    {
+        addDiscBtn->setText(tr("add disc"));
+        addDiscBtn->setToolTip(
+            wrapTip(tr("Add a title of a Blu-ray or DVD disc: choose the disc's folder, the "
+                       "folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the "
+                       "main film first, and the one chosen is added. A disc image (.iso) is "
+                       "added with \"add\", and a disc can also be dropped on the window.")));
+    };
+    addDiscTexts();
+    m_retranslateHooks.push_back(addDiscTexts);
+    connect(addDiscBtn, &QPushButton::clicked, this,
+            [this]()
+            {
+                if (m_fileDialogOpen)
+                    return;
+                const QString dir = QFileDialog::getExistingDirectory(this, tr("Choose a disc folder or drive"),
+                                                                      getExistingDialogDir(lastInputDir));
+                if (dir.isEmpty())
+                    return;
+                lastInputDir = dir;
+                writeSettings();
+                addFileList = {QUrl::fromLocalFile(QDir::toNativeSeparators(dir))};
+                addFile();
+            });
     ui->mergeAc3TrackSpinBox->setToolTip(
         wrapTip(tr("A Blu-ray carries a TrueHD track with its AC-3 core braided into the same stream, and a "
                    "Matroska file has to keep them apart. Give the ROW NUMBER of the AC-3 track in the list "
@@ -1259,6 +1295,21 @@ TsMuxerWindow::TsMuxerWindow()
         auto* folderEdit = new QLineEdit(bdmvTab);
         folderEdit->setObjectName("isoSourceFolder");  // a name for UI Automation, not remembered
         auto* folderBtn = new QPushButton(tr("Browse..."), bdmvTab);
+        // The source may also be a disc image, which tsMuxeR reads in place, without mounting it: an image had to be
+        // mounted first, which Windows 7 cannot do without extra software
+        auto* imageBtn = new QPushButton(bdmvTab);
+        imageBtn->setObjectName("isoSourceImage");
+        const auto imageBtnTexts = [this, imageBtn]()
+        {
+            imageBtn->setText(tr("Image..."));
+            imageBtn->setToolTip(
+                wrapTip(tr("Choose a Blu-ray disc image (.iso) as the source instead of a folder. "
+                           "It is read in place, without mounting it.")));
+        };
+        imageBtnTexts();
+        m_retranslateHooks.push_back(imageBtnTexts);
+        const auto isImage = [](const QString& path)
+        { return path.endsWith(QLatin1String(".iso"), Qt::CaseInsensitive) && QFileInfo(path).isFile(); };
         // Icon-only refresh: re-reads the selected folder (size, status, fit) after its contents
         // changed on disk, since re-picking the same path fires no change signal.
         auto* folderRefreshBtn = new QPushButton(bdmvTab);
@@ -1590,9 +1641,14 @@ TsMuxerWindow::TsMuxerWindow()
         // Fit calculator: cache the folder byte size (recomputed only when the folder changes) and combine it
         // with the guard band and the Free Sectors capacity into a live fits / does-not-fit estimate.
         QSharedPointer<qint64> folderBytes = QSharedPointer<qint64>::create(-1);
-        auto recomputeFolderSize = [folderEdit, folderBytes]()
+        auto recomputeFolderSize = [folderEdit, folderBytes, isImage]()
         {
             const QString folder = folderEdit->text().trimmed();
+            if (isImage(folder))  // an image: what it holds is about its own size
+            {
+                *folderBytes = QFileInfo(folder).size();
+                return;
+            }
             // Only measure a folder that actually holds a BDMV. This also prevents walking huge
             // unrelated trees (a parent folder full of movies, or a bare drive root while a path is
             // being typed), which froze the GUI and left a misleading size on screen.
@@ -1638,9 +1694,19 @@ TsMuxerWindow::TsMuxerWindow()
         // without it would give an image that plays in 2D. Taken off, the image is built as found. For any other
         // folder the box is off and greyed.
         auto lastTickedFolder = QSharedPointer<QString>::create();
-        auto updateFolderStatus = [folderEdit, folderStatusLabel, singleCopy3dCheck, lastTickedFolder]()
+        auto updateFolderStatus = [folderEdit, folderStatusLabel, singleCopy3dCheck, lastTickedFolder, isImage]()
         {
             const QString folder = folderEdit->text().trimmed();
+            // An image is not looked into here: its 3D clips are not counted, and it is never on a disc being written
+            if (isImage(folder))
+            {
+                singleCopy3dCheck->setChecked(false);
+                singleCopy3dCheck->setEnabled(false);
+                lastTickedFolder->clear();
+                folderStatusLabel->setStyleSheet(QStringLiteral("color:#2e7d32; font-weight:bold;"));
+                folderStatusLabel->setText(tr("Disc image found. It is read in place, without mounting it."));
+                return;
+            }
             const Bdmv3dScan scan =
                 !folder.isEmpty() && QFileInfo::exists(pathNoCase(folder, "BDMV")) ? scanBdmv3d(folder) : Bdmv3dScan();
             singleCopy3dCheck->setEnabled(scan.clips > 0);
@@ -1761,7 +1827,11 @@ TsMuxerWindow::TsMuxerWindow()
         g->addWidget(info, r++, 0, 1, 3);
         g->addWidget(folderLabel, r, 0);
         g->addWidget(folderEdit, r, 1);
-        g->addWidget(folderBtn, r, 2);
+        auto* folderBtns = new QHBoxLayout();
+        folderBtns->setContentsMargins(0, 0, 0, 0);
+        folderBtns->addWidget(folderBtn);
+        folderBtns->addWidget(imageBtn);
+        g->addLayout(folderBtns, r, 2);
         g->addWidget(folderRefreshBtn, r++, 3);
         g->addWidget(folderStatusLabel, r++, 0, 1, 4);
         g->addWidget(outputLabel, r, 0);
@@ -2087,6 +2157,33 @@ TsMuxerWindow::TsMuxerWindow()
                     isoEdit->setText(QDir::toNativeSeparators(QDir(outDir).filePath(name + QStringLiteral(".iso"))));
                 }
             });
+        connect(imageBtn, &QPushButton::clicked, this,
+                [this, folderEdit, isoEdit, updateFolderStatus, recomputeFolderSize, updateFit]
+                {
+                    const QString f = QFileDialog::getOpenFileName(this, tr("Select the Blu-ray disc image"),
+                                                                   lastInputDir, tr("Disk image (*.iso)"));
+                    if (f.isEmpty())
+                        return;
+                    folderEdit->setText(QDir::toNativeSeparators(f));
+                    updateFolderStatus();
+                    recomputeFolderSize();
+                    updateFit();
+                    lastInputDir = QFileInfo(f).absolutePath();
+                    writeSettings();
+                    // Beside the image, with another name: the output cannot be the image it is read from
+                    if (isoEdit->text().isEmpty())
+                    {
+                        QString outDir = QFileInfo(f).absolutePath();
+                        if (QStorageInfo(outDir).isReadOnly() || !QFileInfo(outDir).isWritable())
+                        {
+                            outDir = QStandardPaths::writableLocation(QStandardPaths::MoviesLocation);
+                            if (outDir.isEmpty())
+                                outDir = QDir::homePath();
+                        }
+                        isoEdit->setText(QDir::toNativeSeparators(
+                            QDir(outDir).filePath(QFileInfo(f).completeBaseName() + QStringLiteral("_new.iso"))));
+                    }
+                });
         connect(isoBtn, &QPushButton::clicked, this,
                 [this, isoEdit]
                 {
@@ -2110,7 +2207,7 @@ TsMuxerWindow::TsMuxerWindow()
             buildBtn, &QPushButton::clicked, this,
             [this, folderEdit, isoEdit, guardSpin, discTypeCombo, freeSectorsEdit, breaksList, buildBtn, beforeCheck,
              guardBeforeSpin, orderCheck, keepExtrasCheck, innerOnlyCheck, singleCopy3dCheck, labelEdit,
-             readFreeSectors, noGuardCheck, metaCombo, metaEdit]
+             readFreeSectors, noGuardCheck, metaCombo, metaEdit, isImage]
             {
                 const QString folder = folderEdit->text().trimmed();
                 const QString iso = isoEdit->text().trimmed();
@@ -2146,7 +2243,14 @@ TsMuxerWindow::TsMuxerWindow()
                            "Build the ISO anyway?"),
                         QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
                     return;
-                if (!QFileInfo::exists(pathNoCase(folder, "BDMV")) &&
+                if (isImage(folder) && isSameFile(iso, folder))
+                {
+                    QMessageBox::warning(this, tr("tsMuxeR"),
+                                         tr("The output ISO is the disc image it is built from. Choose another "
+                                            "name for the output."));
+                    return;
+                }
+                if (!isImage(folder) && !QFileInfo::exists(pathNoCase(folder, "BDMV")) &&
                     QMessageBox::question(this, tr("tsMuxeR"),
                                           tr("The selected folder has no BDMV subfolder. Continue anyway?")) !=
                         QMessageBox::Yes)
@@ -3109,8 +3213,12 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
             }
         }
 
+        // A DVD title listed with --show-title gives its chapters as the times of --custom-chapters, which a playlist
+        // gives as its marks: they are taken the same way
+        static const QString dvdChapters = QStringLiteral("Chapters of the title, for a disc: --custom-chapters=");
+        const bool dvdMarks = m_pendingDvdTitle && procStdOutput[i].startsWith(dvdChapters);
         p = procStdOutput[i].indexOf("Marks: ");
-        if (p == 0)
+        if (p == 0 || dvdMarks)
         {
             if (firstMark)
             {
@@ -3124,7 +3232,8 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
                 onChapterParamsChanged();
             }
             m_customChaptersUserOverride = false;
-            QStringList stringList = QtCompat::strMid(procStdOutput[i], 7).split(' ');
+            QStringList stringList = dvdMarks ? QtCompat::strMid(procStdOutput[i], dvdChapters.length()).split(';')
+                                              : QtCompat::strMid(procStdOutput[i], 7).split(' ');
             for (int k = 0; k < stringList.size(); ++k)
                 if (!stringList[k].isEmpty())
                     chapters << timeToFloat(stringList[k]);
@@ -3133,6 +3242,13 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
     if (fileDuration == 0 && !mplsFileList.isEmpty())
     {
         for (const MPLSFileInfo& mplsFile : mplsFileList) fileDuration += mplsFile.duration;
+    }
+    // The tracks of a DVD title are listed from its first part: the title's length is the one the disc listing gave,
+    // and where a join would put a file after it does not apply, a DVD title being joined to nothing
+    if (m_pendingDvdTitle)
+    {
+        fileDuration = m_pendingDvdSeconds;
+        videoStart = videoEnd = 0;
     }
 
     m_updateMeta = true;
@@ -3685,15 +3801,108 @@ void TsMuxerWindow::addFile()
     processAddFileList(&TsMuxerWindow::continueAddFile, &TsMuxerWindow::fileAdded, &TsMuxerWindow::addFile);
 }
 
-bool TsMuxerWindow::checkFileDuplicate(const QString& fileName)
+// The titles of the disc being added, as tsMuxeR lists them for the disc given alone
+void TsMuxerWindow::listDiscTitles()
+{
+    newFileName = m_discSource;  // the name a refusal shows
+    disconnect();
+    connect(this, &TsMuxerWindow::tsMuxerSuccessFinished, this, &TsMuxerWindow::onDiscTitlesReceived);
+    runInMuxMode = false;
+    m_runOutput.clear();
+    setProbeBusy(true);
+    QStringList args;
+    if (m_discOthersShown)
+        args << QStringLiteral("--all-playlists");
+    tsMuxerExecute(args << m_discSource);
+}
+
+// "Choose a title", then the title chosen is listed as a source: a Blu-ray title as its playlist, exactly as when the
+// playlist itself is added, and a DVD title through --show-title, whose tracks then name the disc and the title's disc
+// number (dvd-title=), which a saved meta file keeps whatever a later listing makes of the disc.
+void TsMuxerWindow::onDiscTitlesReceived()
+{
+    const DiscTitleList list = parseDiscTitles(procStdOutput);
+    const auto next = [this]()
+    {
+        if (!addFileList.isEmpty() && m_addNextFile)
+            (this->*m_addNextFile)();
+    };
+    if (list.titles.isEmpty())
+    {
+        QStringList lines;
+        for (const QString& line : procStdOutput)
+            if (!line.trimmed().isEmpty() && !line.startsWith(QLatin1String("tsMuxeR version")))
+                lines << line.trimmed();
+        QMessageBox msgBox(this);
+        msgBox.setWindowTitle(tr("No title"));
+        msgBox.setText(tr("The disc \"%1\" has no title to add.").arg(QDir::toNativeSeparators(m_discSource)));
+        msgBox.setInformativeText(lines.join('\n'));
+        msgBox.setIcon(QMessageBox::Warning);
+        msgBox.exec();
+        next();
+        return;
+    }
+    DiscTitleDialog dialog(m_discSource, list, m_discOthersShown, this);
+    const int result = dialog.exec();
+    if (result == DiscTitleDialog::ShowOthersChanged)
+    {
+        m_discOthersShown = !m_discOthersShown;
+        listDiscTitles();
+        return;
+    }
+    const int chosen = result == QDialog::Accepted ? dialog.chosen() : -1;
+    if (chosen < 0)
+    {
+        next();
+        return;
+    }
+    const DiscTitleRow& row = list.titles[chosen];
+    QStringList args;
+    if (list.dvd)
+    {
+        newFileName = QDir::toNativeSeparators(m_discSource);
+        if (!checkFileDuplicate(newFileName, row.discTitle))
+        {
+            next();
+            return;
+        }
+        m_pendingDvdTitle = row.discTitle;
+        m_pendingDvdSeconds = row.seconds;
+        // the number counts in the listing the title was chosen from
+        if (m_discOthersShown)
+            args << QStringLiteral("--all-playlists");
+        args << QStringLiteral("--show-title=%1").arg(row.number);
+    }
+    else
+    {
+        newFileName = discPlaylistPath(m_discSource, row.playlist);
+        if (!checkFileDuplicate(newFileName))
+        {
+            next();
+            return;
+        }
+    }
+    disconnect();
+    connect(this, &TsMuxerWindow::tsMuxerSuccessFinished, this, &TsMuxerWindow::onTsMuxerCodecInfoReceived);
+    connect(this, &TsMuxerWindow::codecListReady, this, &TsMuxerWindow::continueAddFile);
+    connect(this, &TsMuxerWindow::fileAdded, this, &TsMuxerWindow::addFile);
+    runInMuxMode = false;
+    m_runOutput.clear();
+    setProbeBusy(true);
+    tsMuxerExecute(args << newFileName);
+}
+
+bool TsMuxerWindow::checkFileDuplicate(const QString& fileName, const int dvdTitle)
 {
     QString t = myUnquoteStr(fileName).trimmed();
     for (int i = 0; i < ui->inputFilesLV->count(); ++i)
-        if (myUnquoteStr(ui->inputFilesLV->item(i)->data(FileNameRole).toString()) == t)
+        if (myUnquoteStr(ui->inputFilesLV->item(i)->data(FileNameRole).toString()) == t &&
+            ui->inputFilesLV->item(i)->data(DvdTitleRole).toInt() == dvdTitle)
         {
             QMessageBox msgBox(this);
             msgBox.setWindowTitle(tr("File already exists"));
-            msgBox.setText(tr("File \"%1\" already exists").arg(fileName));
+            msgBox.setText(dvdTitle ? tr("DVD title %1 of \"%2\" is already added").arg(dvdTitle).arg(fileName)
+                                    : tr("File \"%1\" already exists").arg(fileName));
             msgBox.setIcon(QMessageBox::Warning);
             msgBox.setStandardButtons(QMessageBox::Ok);
             msgBox.exec();
@@ -4119,14 +4328,17 @@ void TsMuxerWindow::inputFilesLVChanged()
         ui->removeFile->setEnabled(false);
         return;
     }
-    ui->btnAppend->setEnabled(itm->data(MplsItemRole).toInt() != MPLS_M2TS && proc.state() == QProcess::NotRunning);
+    // A DVD title is not joined: its meta line names the disc and the title, which a join of files cannot carry
+    ui->btnAppend->setEnabled(itm->data(MplsItemRole).toInt() != MPLS_M2TS && !itm->data(DvdTitleRole).toInt() &&
+                              proc.state() == QProcess::NotRunning);
     ui->removeFile->setEnabled(itm->data(MplsItemRole).toInt() != MPLS_M2TS);
 }
 
-void TsMuxerWindow::modifyOutFileName(const QString fileName)
+// baseName: the name of the output when the source's own does not fit, as for a DVD title
+void TsMuxerWindow::modifyOutFileName(const QString fileName, const QString& baseName)
 {
     QFileInfo fi(unquoteStr(fileName));
-    QString name = fi.completeBaseName();
+    QString name = baseName.isEmpty() ? fi.completeBaseName() : baseName;
 
     QString existingName = QDir::toNativeSeparators(ui->outFileName->text());
     QFileInfo fiDst(existingName);
@@ -4151,7 +4363,7 @@ void TsMuxerWindow::modifyOutFileName(const QString fileName)
             ui->outFileName->setText(dir + name + ".iso");
         else
             ui->outFileName->setText(dstPath);
-        if (isSameFile(ui->outFileName->text(), fileName))
+        if (baseName.isEmpty() && isSameFile(ui->outFileName->text(), fileName))
             ui->outFileName->setText(dir + name + "_new." + fi.suffix());
     }
 }
@@ -4198,6 +4410,7 @@ void TsMuxerWindow::continueAddFile()
             }
         }
         info.srcByTsMuxer = listedWritingApp.startsWith(QLatin1String("tsMuxeR"), Qt::CaseInsensitive);
+        info.dvdTitle = m_pendingDvdTitle;
         if (mplsFileList.isEmpty())
             info.fileList << newFileName;
         else
@@ -4285,6 +4498,8 @@ void TsMuxerWindow::continueAddFile()
         ui->trackLV->setCurrentCell(firstAddedIndex, 0);
     }
     QString displayName = newFileName;
+    if (m_pendingDvdTitle)
+        displayName += QStringLiteral(" - ") + tr("DVD title %1").arg(m_pendingDvdTitle);
     if (fileDuration > 0)
         displayName += QString(" (%1)").arg(floatToTime(fileDuration));
     ui->inputFilesLV->addItem(displayName);
@@ -4294,6 +4509,7 @@ void TsMuxerWindow::continueAddFile()
     if (!mplsFileList.empty())
         fileItem->setData(MplsItemRole, MPLS_PRIMARY);
     fileItem->setData(FileNameRole, newFileName);
+    fileItem->setData(DvdTitleRole, m_pendingDvdTitle);
     fileItem->setData(ChaptersRole, QVariant::fromValue(chapters));
     fileItem->setData(FileDurationRole, fileDuration);
     if (videoEnd > 0)
@@ -4321,9 +4537,14 @@ void TsMuxerWindow::continueAddFile()
     updateRemoveAllEnabled();
     if (!outFileNameModified)
     {
-        modifyOutFileName(newFileName);
+        // A DVD title is named after the disc and its number ("Brother title 5"); the disc alone has no name for
+        // a drive, and every title of it would get the same one
+        modifyOutFileName(newFileName, m_pendingDvdTitle
+                                           ? tr("%1 title %2").arg(discName(newFileName)).arg(m_pendingDvdTitle)
+                                           : QString());
         outFileNameModified = true;
     }
+    m_pendingDvdTitle = 0;
     updateMaxOffsets();
     updateCustomChapters();
     updateDvProfileVisible();
@@ -4549,6 +4770,7 @@ void TsMuxerWindow::onProcessFinished(int exitCode, QProcess::ExitStatus exitSta
     muxForm->muxFinished(processExitCode, ui->radioButtonDemux->isChecked() ? tr("Demux") : tr("Mux"));
     updateMuxButton();
     ui->addBtn->setEnabled(true);
+    m_addDiscBtn->setEnabled(true);
     inputFilesLVChanged();
     if (processExitCode == 0)
         emit tsMuxerSuccessFinished();
@@ -4605,6 +4827,7 @@ void TsMuxerWindow::onProcessError(QProcess::ProcessError error)
         msgBox.setText(tr("tsMuxeR not found!"));
         updateMuxButton();
         ui->addBtn->setEnabled(true);
+        m_addDiscBtn->setEnabled(true);
         inputFilesLVChanged();
         break;
     case QProcess::Crashed:
@@ -5113,6 +5336,9 @@ QString TsMuxerWindow::getFileList(QtvCodecInfo* codecInfo)
 {
     QString rezStr;
 
+    // A DVD title: the disc, and the title by the disc's own number
+    if (codecInfo->dvdTitle && !codecInfo->fileList.isEmpty())
+        return QString("\"") + codecInfo->fileList[0] + "\", dvd-title=" + QString::number(codecInfo->dvdTitle);
     if (codecInfo->mplsFiles.isEmpty())
     {
         for (int i = 0; i < codecInfo->fileList.size(); ++i)
@@ -5892,7 +6118,7 @@ void TsMuxerWindow::onRemoveBtnClick()
     }
 
     const QString removedFile = myUnquoteStr(ui->inputFilesLV->currentItem()->data(FileNameRole).toString());
-    delTracksByFileName(removedFile);
+    delTracksByFileName(removedFile, ui->inputFilesLV->currentItem()->data(DvdTitleRole).toInt());
     ui->inputFilesLV->takeItem(idx);
     if (idx >= ui->inputFilesLV->count())
         idx--;
@@ -5928,11 +6154,12 @@ void TsMuxerWindow::onRemoveBtnClick()
     updateCustomChapters();
 }
 
-void TsMuxerWindow::delTracksByFileName(const QString& fileName)
+void TsMuxerWindow::delTracksByFileName(const QString& fileName, const int dvdTitle)
 {
     for (int i = ui->trackLV->rowCount() - 1; i >= 0; --i)
     {
-        if (auto info = getCodecInfo(i))
+        // the tracks of one title of a DVD, not those of another title of the same disc
+        if (auto info = getCodecInfo(i); info && info->dvdTitle == dvdTitle)
         {
             for (int j = info->fileList.count() - 1; j >= 0; --j)
             {
@@ -6783,6 +7010,7 @@ void TsMuxerWindow::startMuxing()
     muxForm->prepare(!ui->radioButtonDemux->isChecked() ? tr("Muxing in progress") : tr("Demuxing in progress"));
     ui->buttonMux->setEnabled(false);
     ui->addBtn->setEnabled(false);
+    m_addDiscBtn->setEnabled(false);
     ui->btnAppend->setEnabled(false);
     muxForm->show();
     disconnect();
@@ -7596,6 +7824,26 @@ void TsMuxerWindow::processAddFileList(OnCodecListReadyFn onCodecListReady, Post
         lastSourceDir = QFileInfo(newFileName).absolutePath();
     addFileList.removeAt(0);
     m_addNextFile = postActionFn;
+    m_pendingDvdTitle = 0;
+    // A disc folder, drive or image gave "Unsupported format": its titles are listed now and one is chosen, whose
+    // playlist or DVD title is then added as any source is (onDiscTitlesReceived). A disc is added, not joined.
+    if (isDiscSource(newFileName))
+    {
+        if (postActionFn != &TsMuxerWindow::addFile)
+        {
+            QMessageBox::warning(this, tr("Join"),
+                                 tr("\"%1\" is a disc. Add it with \"add\" or \"add disc\", and choose a title; a "
+                                    "Blu-ray title can then be joined to another one.")
+                                     .arg(newFileName));
+            if (!addFileList.isEmpty())
+                (this->*postActionFn)();
+            return;
+        }
+        m_discSource = newFileName;
+        m_discOthersShown = false;
+        listDiscTitles();
+        return;
+    }
     if (!checkFileDuplicate(newFileName))
     {
         // The box has said so; the files chosen after this one are still added.

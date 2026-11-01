@@ -4512,6 +4512,122 @@ Build the ISO anyway?</source>
         <source>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL): kept as the folder has them, or taken from a folder of your own, with bdmt_eng.xml and the like and the pictures they name. Or no title and no pictures.</source>
         <translation>Название диска и изображения, которые показывает проигрыватель, например PS3 (BDMV/META/DL): сохраняются такими, как в папке, или берутся из вашей папки: bdmt_eng.xml и подобные файлы с изображениями, на которые они ссылаются. Или без названия и изображений.</translation>
     </message>
+    <message>
+        <source>Disc image</source>
+        <translation>Образ диска</translation>
+    </message>
+    <message>
+        <source>add disc</source>
+        <translation>добавить диск</translation>
+    </message>
+    <message>
+        <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
+        <translation>Добавить титул диска Blu-ray или DVD: выберите папку диска, папку с BDMV или VIDEO_TS, или привод. Его титулы будут перечислены, основной фильм первым, и выбранный будет добавлен. Образ диска (.iso) добавляется кнопкой «добавить», а диск можно также перетащить в окно.</translation>
+    </message>
+    <message>
+        <source>Choose a disc folder or drive</source>
+        <translation>Выберите папку диска или привод</translation>
+    </message>
+    <message>
+        <source>Image...</source>
+        <translation>Образ...</translation>
+    </message>
+    <message>
+        <source>Choose a Blu-ray disc image (.iso) as the source instead of a folder. It is read in place, without mounting it.</source>
+        <translation>Выбрать образ диска Blu-ray (.iso) источником вместо папки. Он читается напрямую, без подключения.</translation>
+    </message>
+    <message>
+        <source>Disc image found. It is read in place, without mounting it.</source>
+        <translation>Найден образ диска. Он читается напрямую, без подключения.</translation>
+    </message>
+    <message>
+        <source>Select the Blu-ray disc image</source>
+        <translation>Выберите образ диска Blu-ray</translation>
+    </message>
+    <message>
+        <source>The output ISO is the disc image it is built from. Choose another name for the output.</source>
+        <translation>Выходной ISO совпадает с образом диска, из которого он создаётся. Выберите другое имя для вывода.</translation>
+    </message>
+    <message>
+        <source>No title</source>
+        <translation>Нет титула</translation>
+    </message>
+    <message>
+        <source>The disc &quot;%1&quot; has no title to add.</source>
+        <translation>На диске «%1» нет титула для добавления.</translation>
+    </message>
+    <message>
+        <source>DVD title %1 of &quot;%2&quot; is already added</source>
+        <translation>Титул DVD %1 из «%2» уже добавлен</translation>
+    </message>
+    <message>
+        <source>DVD title %1</source>
+        <translation>Титул DVD %1</translation>
+    </message>
+    <message>
+        <source>%1 title %2</source>
+        <translation>%1 титул %2</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Присоединить</translation>
+    </message>
+    <message>
+        <source>&quot;%1&quot; is a disc. Add it with &quot;add&quot; or &quot;add disc&quot;, and choose a title; a Blu-ray title can then be joined to another one.</source>
+        <translation>«%1» является диском. Добавьте его кнопкой «добавить» или «добавить диск» и выберите титул; затем титул Blu-ray можно присоединить к другому.</translation>
+    </message>
+    <message>
+        <source>Choose a title</source>
+        <translation>Выберите титул</translation>
+    </message>
+    <message>
+        <source>DVD-Video, %1</source>
+        <translation>DVD-Video, %1</translation>
+    </message>
+    <message>
+        <source>This disc has %1 main titles, the episodes or films it holds. They are shown in bold.</source>
+        <translation>На этом диске %1 основных титулов: эпизоды или фильмы, которые он содержит. Они выделены жирным.</translation>
+    </message>
+    <message>
+        <source>Title</source>
+        <translation>Титул</translation>
+    </message>
+    <message>
+        <source>DVD title</source>
+        <translation>Титул DVD</translation>
+    </message>
+    <message>
+        <source>Length</source>
+        <translation>Длительность</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>Примечание</translation>
+    </message>
+    <message>
+        <source>Playlist</source>
+        <translation>Плейлист</translation>
+    </message>
+    <message>
+        <source>Clips</source>
+        <translation>Клипы</translation>
+    </message>
+    <message>
+        <source>The video of this title is still encrypted, and tsMuxeR cannot read it.</source>
+        <translation>Видео этого титула всё ещё зашифровано, и tsMuxeR не может его прочитать.</translation>
+    </message>
+    <message>
+        <source>Some playlists or titles are left out, such as copies, one clip repeated, or titles under 2 minutes. Tick the box below to list them with the reason.</source>
+        <translation>Некоторые плейлисты или титулы пропущены: копии, повтор одного клипа или титулы короче 2 минут. Отметьте флажок ниже, чтобы показать их с причиной.</translation>
+    </message>
+    <message>
+        <source>Show the left-out and short titles too</source>
+        <translation>Показать также пропущенные и короткие титулы</translation>
+    </message>
+    <message>
+        <source>Add title</source>
+        <translation>Добавить титул</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

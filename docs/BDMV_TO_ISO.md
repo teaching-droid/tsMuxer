@@ -23,6 +23,8 @@ Start tsMuxeR GUI and switch to the `BDMV folder -> ISO` tab. The text at the to
 
 Click `Browse` next to `BDMV folder` and select the folder that **contains** `BDMV` and `CERTIFICATE`, not the `BDMV` folder itself.
 
+To use a disc image (`.iso`) instead, click `Image...` beside it: the image is read in place, without mounting it.
+
 ![Step 2: selecting the folder](img/en/02_pick_folder.png)
 
 ## Step 3: check the filled-in tab

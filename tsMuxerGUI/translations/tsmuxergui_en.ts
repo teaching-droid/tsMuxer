@@ -4367,6 +4367,122 @@ Build the ISO anyway?</source>
         <source>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL): kept as the folder has them, or taken from a folder of your own, with bdmt_eng.xml and the like and the pictures they name. Or no title and no pictures.</source>
         <translation>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL): kept as the folder has them, or taken from a folder of your own, with bdmt_eng.xml and the like and the pictures they name. Or no title and no pictures.</translation>
     </message>
+    <message>
+        <source>Disc image</source>
+        <translation>Disc image</translation>
+    </message>
+    <message>
+        <source>add disc</source>
+        <translation>add disc</translation>
+    </message>
+    <message>
+        <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
+        <translation>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</translation>
+    </message>
+    <message>
+        <source>Choose a disc folder or drive</source>
+        <translation>Choose a disc folder or drive</translation>
+    </message>
+    <message>
+        <source>Image...</source>
+        <translation>Image...</translation>
+    </message>
+    <message>
+        <source>Choose a Blu-ray disc image (.iso) as the source instead of a folder. It is read in place, without mounting it.</source>
+        <translation>Choose a Blu-ray disc image (.iso) as the source instead of a folder. It is read in place, without mounting it.</translation>
+    </message>
+    <message>
+        <source>Disc image found. It is read in place, without mounting it.</source>
+        <translation>Disc image found. It is read in place, without mounting it.</translation>
+    </message>
+    <message>
+        <source>Select the Blu-ray disc image</source>
+        <translation>Select the Blu-ray disc image</translation>
+    </message>
+    <message>
+        <source>The output ISO is the disc image it is built from. Choose another name for the output.</source>
+        <translation>The output ISO is the disc image it is built from. Choose another name for the output.</translation>
+    </message>
+    <message>
+        <source>No title</source>
+        <translation>No title</translation>
+    </message>
+    <message>
+        <source>The disc &quot;%1&quot; has no title to add.</source>
+        <translation>The disc &quot;%1&quot; has no title to add.</translation>
+    </message>
+    <message>
+        <source>DVD title %1 of &quot;%2&quot; is already added</source>
+        <translation>DVD title %1 of &quot;%2&quot; is already added</translation>
+    </message>
+    <message>
+        <source>DVD title %1</source>
+        <translation>DVD title %1</translation>
+    </message>
+    <message>
+        <source>%1 title %2</source>
+        <translation>%1 title %2</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Join</translation>
+    </message>
+    <message>
+        <source>&quot;%1&quot; is a disc. Add it with &quot;add&quot; or &quot;add disc&quot;, and choose a title; a Blu-ray title can then be joined to another one.</source>
+        <translation>&quot;%1&quot; is a disc. Add it with &quot;add&quot; or &quot;add disc&quot;, and choose a title; a Blu-ray title can then be joined to another one.</translation>
+    </message>
+    <message>
+        <source>Choose a title</source>
+        <translation>Choose a title</translation>
+    </message>
+    <message>
+        <source>DVD-Video, %1</source>
+        <translation>DVD-Video, %1</translation>
+    </message>
+    <message>
+        <source>This disc has %1 main titles, the episodes or films it holds. They are shown in bold.</source>
+        <translation>This disc has %1 main titles, the episodes or films it holds. They are shown in bold.</translation>
+    </message>
+    <message>
+        <source>Title</source>
+        <translation>Title</translation>
+    </message>
+    <message>
+        <source>DVD title</source>
+        <translation>DVD title</translation>
+    </message>
+    <message>
+        <source>Length</source>
+        <translation>Length</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>Note</translation>
+    </message>
+    <message>
+        <source>Playlist</source>
+        <translation>Playlist</translation>
+    </message>
+    <message>
+        <source>Clips</source>
+        <translation>Clips</translation>
+    </message>
+    <message>
+        <source>The video of this title is still encrypted, and tsMuxeR cannot read it.</source>
+        <translation>The video of this title is still encrypted, and tsMuxeR cannot read it.</translation>
+    </message>
+    <message>
+        <source>Some playlists or titles are left out, such as copies, one clip repeated, or titles under 2 minutes. Tick the box below to list them with the reason.</source>
+        <translation>Some playlists or titles are left out, such as copies, one clip repeated, or titles under 2 minutes. Tick the box below to list them with the reason.</translation>
+    </message>
+    <message>
+        <source>Show the left-out and short titles too</source>
+        <translation>Show the left-out and short titles too</translation>
+    </message>
+    <message>
+        <source>Add title</source>
+        <translation>Add title</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

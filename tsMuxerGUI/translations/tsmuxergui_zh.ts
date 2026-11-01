@@ -4511,6 +4511,122 @@ Build the ISO anyway?</source>
         <source>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL): kept as the folder has them, or taken from a folder of your own, with bdmt_eng.xml and the like and the pictures they name. Or no title and no pictures.</source>
         <translation>光盘标题以及 PS3 等播放器显示的图片 (BDMV/META/DL)：保留文件夹中原有的，或从你自己的文件夹中获取 bdmt_eng.xml 等文件及其指定的图片。或者没有标题和图片。</translation>
     </message>
+    <message>
+        <source>Disc image</source>
+        <translation>光盘镜像</translation>
+    </message>
+    <message>
+        <source>add disc</source>
+        <translation>添加光盘</translation>
+    </message>
+    <message>
+        <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
+        <translation>添加 Blu-ray 或 DVD 光盘的一个标题：选择光盘的文件夹（包含 BDMV 或 VIDEO_TS 的文件夹）或一个驱动器。将列出它的标题，正片在最前，所选的标题会被添加。光盘镜像 (.iso) 用“添加”添加，也可以把光盘拖放到窗口上。</translation>
+    </message>
+    <message>
+        <source>Choose a disc folder or drive</source>
+        <translation>选择光盘文件夹或驱动器</translation>
+    </message>
+    <message>
+        <source>Image...</source>
+        <translation>镜像...</translation>
+    </message>
+    <message>
+        <source>Choose a Blu-ray disc image (.iso) as the source instead of a folder. It is read in place, without mounting it.</source>
+        <translation>选择 Blu-ray 光盘镜像 (.iso) 作为来源，代替文件夹。直接读取，无需挂载。</translation>
+    </message>
+    <message>
+        <source>Disc image found. It is read in place, without mounting it.</source>
+        <translation>找到光盘镜像。直接读取，无需挂载。</translation>
+    </message>
+    <message>
+        <source>Select the Blu-ray disc image</source>
+        <translation>选择 Blu-ray 光盘镜像</translation>
+    </message>
+    <message>
+        <source>The output ISO is the disc image it is built from. Choose another name for the output.</source>
+        <translation>输出 ISO 就是用来生成它的光盘镜像。请为输出另选一个名称。</translation>
+    </message>
+    <message>
+        <source>No title</source>
+        <translation>没有标题</translation>
+    </message>
+    <message>
+        <source>The disc &quot;%1&quot; has no title to add.</source>
+        <translation>光盘“%1”没有可添加的标题。</translation>
+    </message>
+    <message>
+        <source>DVD title %1 of &quot;%2&quot; is already added</source>
+        <translation>“%2”的 DVD 标题 %1 已添加</translation>
+    </message>
+    <message>
+        <source>DVD title %1</source>
+        <translation>DVD 标题 %1</translation>
+    </message>
+    <message>
+        <source>%1 title %2</source>
+        <translation>%1 标题 %2</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>加入</translation>
+    </message>
+    <message>
+        <source>&quot;%1&quot; is a disc. Add it with &quot;add&quot; or &quot;add disc&quot;, and choose a title; a Blu-ray title can then be joined to another one.</source>
+        <translation>“%1”是一张光盘。请用“添加”或“添加光盘”添加并选择一个标题；之后 Blu-ray 标题可以加入另一个标题。</translation>
+    </message>
+    <message>
+        <source>Choose a title</source>
+        <translation>选择标题</translation>
+    </message>
+    <message>
+        <source>DVD-Video, %1</source>
+        <translation>DVD-Video，%1</translation>
+    </message>
+    <message>
+        <source>This disc has %1 main titles, the episodes or films it holds. They are shown in bold.</source>
+        <translation>这张光盘有 %1 个主标题，即它包含的剧集或影片。它们以粗体显示。</translation>
+    </message>
+    <message>
+        <source>Title</source>
+        <translation>标题</translation>
+    </message>
+    <message>
+        <source>DVD title</source>
+        <translation>DVD 标题</translation>
+    </message>
+    <message>
+        <source>Length</source>
+        <translation>时长</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>说明</translation>
+    </message>
+    <message>
+        <source>Playlist</source>
+        <translation>播放列表</translation>
+    </message>
+    <message>
+        <source>Clips</source>
+        <translation>片段</translation>
+    </message>
+    <message>
+        <source>The video of this title is still encrypted, and tsMuxeR cannot read it.</source>
+        <translation>此标题的视频仍是加密的，tsMuxeR 无法读取。</translation>
+    </message>
+    <message>
+        <source>Some playlists or titles are left out, such as copies, one clip repeated, or titles under 2 minutes. Tick the box below to list them with the reason.</source>
+        <translation>有些播放列表或标题被略去，例如副本、重复同一片段或短于 2 分钟的标题。勾选下面的框可连同原因一起列出。</translation>
+    </message>
+    <message>
+        <source>Show the left-out and short titles too</source>
+        <translation>同时显示被略去的和较短的标题</translation>
+    </message>
+    <message>
+        <source>Add title</source>
+        <translation>添加标题</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

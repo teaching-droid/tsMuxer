@@ -23,6 +23,8 @@ Starten Sie die tsMuxeR GUI und wechseln Sie auf den Reiter `BDMV-Ordner -> ISO`
 
 Klicken Sie neben `BDMV-Ordner` auf `Durchsuchen` und wählen Sie den Ordner, der `BDMV` und `CERTIFICATE` **enthält**, nicht den Ordner `BDMV` selbst.
 
+Um stattdessen ein Disc-Image (`.iso`) zu verwenden, klicken Sie daneben auf `Image...`: Das Image wird direkt gelesen, ohne es einzubinden.
+
 ![Schritt 2: Ordner auswählen](img/de/02_pick_folder.png)
 
 ## Schritt 3: Den ausgefüllten Reiter prüfen

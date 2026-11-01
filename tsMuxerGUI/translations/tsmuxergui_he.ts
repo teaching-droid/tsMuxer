@@ -4511,6 +4511,122 @@ Build the ISO anyway?</source>
         <source>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL): kept as the folder has them, or taken from a folder of your own, with bdmt_eng.xml and the like and the pictures they name. Or no title and no pictures.</source>
         <translation>כותרת הדיסק והתמונות שנגן כמו PS3 מציג (BDMV/META/DL): נשמרים כפי שהם בתיקייה, או נלקחים מתיקייה משלך, עם bdmt_eng.xml וקבצים דומים והתמונות שהם מציינים. או ללא כותרת וללא תמונות.</translation>
     </message>
+    <message>
+        <source>Disc image</source>
+        <translation>דמות תקליטור</translation>
+    </message>
+    <message>
+        <source>add disc</source>
+        <translation>להוסיף דיסק</translation>
+    </message>
+    <message>
+        <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
+        <translation>הוספת כותר מדיסק Blu-ray או DVD: בחרו את תיקיית הדיסק, את התיקייה שמכילה BDMV או VIDEO_TS, או כונן. הכותרים שלו מוצגים, הסרט הראשי ראשון, והכותר שנבחר מתווסף. דמות תקליטור (.iso) מתווספת עם &quot;להוסיף&quot;, ואפשר גם לגרור דיסק אל החלון.</translation>
+    </message>
+    <message>
+        <source>Choose a disc folder or drive</source>
+        <translation>בחרו תיקיית דיסק או כונן</translation>
+    </message>
+    <message>
+        <source>Image...</source>
+        <translation>דמות...</translation>
+    </message>
+    <message>
+        <source>Choose a Blu-ray disc image (.iso) as the source instead of a folder. It is read in place, without mounting it.</source>
+        <translation>בחרו דמות תקליטור Blu-ray (.iso) כמקור במקום תיקייה. היא נקראת ישירות, בלי לעגן אותה.</translation>
+    </message>
+    <message>
+        <source>Disc image found. It is read in place, without mounting it.</source>
+        <translation>נמצאה דמות תקליטור. היא נקראת ישירות, בלי לעגן אותה.</translation>
+    </message>
+    <message>
+        <source>Select the Blu-ray disc image</source>
+        <translation>בחרו את דמות תקליטור ה-Blu-ray</translation>
+    </message>
+    <message>
+        <source>The output ISO is the disc image it is built from. Choose another name for the output.</source>
+        <translation>קובץ ה-ISO של הפלט הוא דמות התקליטור שממנה הוא נבנה. בחרו שם אחר לפלט.</translation>
+    </message>
+    <message>
+        <source>No title</source>
+        <translation>אין כותר</translation>
+    </message>
+    <message>
+        <source>The disc &quot;%1&quot; has no title to add.</source>
+        <translation>לדיסק &quot;%1&quot; אין כותר להוספה.</translation>
+    </message>
+    <message>
+        <source>DVD title %1 of &quot;%2&quot; is already added</source>
+        <translation>כותר DVD %1 של &quot;%2&quot; כבר נוסף</translation>
+    </message>
+    <message>
+        <source>DVD title %1</source>
+        <translation>כותר DVD %1</translation>
+    </message>
+    <message>
+        <source>%1 title %2</source>
+        <translation>%1 כותר %2</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>צירוף</translation>
+    </message>
+    <message>
+        <source>&quot;%1&quot; is a disc. Add it with &quot;add&quot; or &quot;add disc&quot;, and choose a title; a Blu-ray title can then be joined to another one.</source>
+        <translation>&quot;%1&quot; הוא דיסק. הוסיפו אותו עם &quot;להוסיף&quot; או &quot;להוסיף דיסק&quot; ובחרו כותר; אחר כך אפשר לצרף כותר Blu-ray לכותר אחר.</translation>
+    </message>
+    <message>
+        <source>Choose a title</source>
+        <translation>בחרו כותר</translation>
+    </message>
+    <message>
+        <source>DVD-Video, %1</source>
+        <translation>DVD-Video, %1</translation>
+    </message>
+    <message>
+        <source>This disc has %1 main titles, the episodes or films it holds. They are shown in bold.</source>
+        <translation>לדיסק הזה יש %1 כותרים ראשיים, הפרקים או הסרטים שהוא מכיל. הם מוצגים בהדגשה.</translation>
+    </message>
+    <message>
+        <source>Title</source>
+        <translation>כותר</translation>
+    </message>
+    <message>
+        <source>DVD title</source>
+        <translation>כותר DVD</translation>
+    </message>
+    <message>
+        <source>Length</source>
+        <translation>אורך</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>הערה</translation>
+    </message>
+    <message>
+        <source>Playlist</source>
+        <translation>פלייליסט</translation>
+    </message>
+    <message>
+        <source>Clips</source>
+        <translation>קליפים</translation>
+    </message>
+    <message>
+        <source>The video of this title is still encrypted, and tsMuxeR cannot read it.</source>
+        <translation>הווידאו של הכותר הזה עדיין מוצפן, ו-tsMuxeR לא יכול לקרוא אותו.</translation>
+    </message>
+    <message>
+        <source>Some playlists or titles are left out, such as copies, one clip repeated, or titles under 2 minutes. Tick the box below to list them with the reason.</source>
+        <translation>חלק מהפלייליסטים או הכותרים הושמטו, למשל עותקים, קליפ שחוזר על עצמו או כותרים קצרים מ-2 דקות. סמנו את התיבה למטה כדי להציג אותם עם הסיבה.</translation>
+    </message>
+    <message>
+        <source>Show the left-out and short titles too</source>
+        <translation>להציג גם את הכותרים שהושמטו והקצרים</translation>
+    </message>
+    <message>
+        <source>Add title</source>
+        <translation>הוספת כותר</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -25,6 +25,7 @@ class QTableWidgetItem;
 class QComboBox;
 class QLabel;
 class QCheckBox;
+class QPushButton;
 
 class MuxForm;
 namespace Ui
@@ -121,6 +122,8 @@ class TsMuxerWindow : public QWidget
     void continueAppendFile();
     void continueAddFile();
     void onTsMuxerCodecInfoReceived();
+    void listDiscTitles();
+    void onDiscTitlesReceived();
     void addFile();
     void appendFile();
     void onOpacityTimer();
@@ -163,7 +166,7 @@ class TsMuxerWindow : public QWidget
         double duration;
     };
 
-    bool checkFileDuplicate(const QString& fileName);
+    bool checkFileDuplicate(const QString& fileName, int dvdTitle = 0);
     void tsMuxerExecute(const QStringList& args);
     void addLines(const QByteArray& arr, QList<QString>& outList, bool isError);
     void flushPendingOutput();
@@ -215,10 +218,10 @@ class TsMuxerWindow : public QWidget
     // An SRT track is copied as text only into Matroska or by a demux, and only when asked for
     [[nodiscard]] bool keepTextApplies() const;
     void updateKeepTextControls();
-    void delTracksByFileName(const QString& fileName);
+    void delTracksByFileName(const QString& fileName, int dvdTitle = 0);
     void deleteTrack(int idx);
     void updateNum();
-    void modifyOutFileName(const QString fileName);
+    void modifyOutFileName(const QString fileName, const QString& baseName = QString());
     void moveRow(int index, int index2);
     bool saveMetaFile(const QString& metaName);
     void updateBtns(QWidget* w);
@@ -267,6 +270,14 @@ class TsMuxerWindow : public QWidget
     bool outFileNameDisableChange;
     MuxForm* muxForm;
     QString newFileName;
+    // A disc folder, drive or image being added: its titles are listed, the left-out ones too when m_discOthersShown,
+    // and the title chosen is added (listDiscTitles). A DVD title is added by its disc number, m_pendingDvdTitle, and
+    // its length, m_pendingDvdSeconds, while its tracks are listed; 0 for any other source.
+    QString m_discSource;
+    QPushButton* m_addDiscBtn = nullptr;  // "add disc", beside "add" and enabled with it
+    bool m_discOthersShown = false;
+    int m_pendingDvdTitle = 0;
+    double m_pendingDvdSeconds = 0.0;
     // The step that takes the next file of addFileList (addFile or appendFile), so that a file that is refused, or
     // already in the list, does not end the adding of the files chosen after it.
     void (TsMuxerWindow::*m_addNextFile)() = nullptr;

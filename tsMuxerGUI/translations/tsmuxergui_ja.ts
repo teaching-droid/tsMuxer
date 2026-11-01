@@ -4511,6 +4511,122 @@ Build the ISO anyway?</source>
         <source>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL): kept as the folder has them, or taken from a folder of your own, with bdmt_eng.xml and the like and the pictures they name. Or no title and no pictures.</source>
         <translation>PS3 などのプレーヤーが表示するディスクのタイトルと画像 (BDMV/META/DL): フォルダーにあるものをそのまま保持するか、自分のフォルダーから bdmt_eng.xml などのファイルとそれらが指す画像を取ります。またはタイトルも画像もなし。</translation>
     </message>
+    <message>
+        <source>Disc image</source>
+        <translation>ディスクイメージ</translation>
+    </message>
+    <message>
+        <source>add disc</source>
+        <translation>ディスクを追加</translation>
+    </message>
+    <message>
+        <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
+        <translation>Blu-ray または DVD ディスクのタイトルを追加します。ディスクのフォルダー (BDMV または VIDEO_TS を含むフォルダー) かドライブを選ぶと、そのタイトルが本編を先頭に一覧され、選んだタイトルが追加されます。ディスクイメージ (.iso) は「追加」で追加でき、ディスクはウィンドウにドロップすることもできます。</translation>
+    </message>
+    <message>
+        <source>Choose a disc folder or drive</source>
+        <translation>ディスクのフォルダーまたはドライブを選択</translation>
+    </message>
+    <message>
+        <source>Image...</source>
+        <translation>イメージ...</translation>
+    </message>
+    <message>
+        <source>Choose a Blu-ray disc image (.iso) as the source instead of a folder. It is read in place, without mounting it.</source>
+        <translation>フォルダーの代わりに Blu-ray ディスクイメージ (.iso) をソースとして選びます。マウントせずにそのまま読み取ります。</translation>
+    </message>
+    <message>
+        <source>Disc image found. It is read in place, without mounting it.</source>
+        <translation>ディスクイメージが見つかりました。マウントせずにそのまま読み取ります。</translation>
+    </message>
+    <message>
+        <source>Select the Blu-ray disc image</source>
+        <translation>Blu-ray ディスクイメージを選択</translation>
+    </message>
+    <message>
+        <source>The output ISO is the disc image it is built from. Choose another name for the output.</source>
+        <translation>出力 ISO が、作成元のディスクイメージと同じです。出力に別の名前を付けてください。</translation>
+    </message>
+    <message>
+        <source>No title</source>
+        <translation>タイトルなし</translation>
+    </message>
+    <message>
+        <source>The disc &quot;%1&quot; has no title to add.</source>
+        <translation>ディスク「%1」には追加できるタイトルがありません。</translation>
+    </message>
+    <message>
+        <source>DVD title %1 of &quot;%2&quot; is already added</source>
+        <translation>「%2」の DVD タイトル %1 はすでに追加されています</translation>
+    </message>
+    <message>
+        <source>DVD title %1</source>
+        <translation>DVD タイトル %1</translation>
+    </message>
+    <message>
+        <source>%1 title %2</source>
+        <translation>%1 タイトル %2</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>結合</translation>
+    </message>
+    <message>
+        <source>&quot;%1&quot; is a disc. Add it with &quot;add&quot; or &quot;add disc&quot;, and choose a title; a Blu-ray title can then be joined to another one.</source>
+        <translation>「%1」はディスクです。「追加」または「ディスクを追加」で追加し、タイトルを選んでください。その後、Blu-ray のタイトルは別のタイトルに結合できます。</translation>
+    </message>
+    <message>
+        <source>Choose a title</source>
+        <translation>タイトルを選択</translation>
+    </message>
+    <message>
+        <source>DVD-Video, %1</source>
+        <translation>DVD-Video、%1</translation>
+    </message>
+    <message>
+        <source>This disc has %1 main titles, the episodes or films it holds. They are shown in bold.</source>
+        <translation>このディスクには本編タイトルが %1 個あります (収録されたエピソードまたは映画)。太字で表示されます。</translation>
+    </message>
+    <message>
+        <source>Title</source>
+        <translation>タイトル</translation>
+    </message>
+    <message>
+        <source>DVD title</source>
+        <translation>DVD タイトル</translation>
+    </message>
+    <message>
+        <source>Length</source>
+        <translation>長さ</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>備考</translation>
+    </message>
+    <message>
+        <source>Playlist</source>
+        <translation>プレイリスト</translation>
+    </message>
+    <message>
+        <source>Clips</source>
+        <translation>クリップ</translation>
+    </message>
+    <message>
+        <source>The video of this title is still encrypted, and tsMuxeR cannot read it.</source>
+        <translation>このタイトルの映像はまだ暗号化されているため、tsMuxeR は読み取れません。</translation>
+    </message>
+    <message>
+        <source>Some playlists or titles are left out, such as copies, one clip repeated, or titles under 2 minutes. Tick the box below to list them with the reason.</source>
+        <translation>コピー、同じクリップの繰り返し、2 分未満のタイトルなど、一部のプレイリストやタイトルは除外されています。下のボックスにチェックを入れると、理由とともに一覧されます。</translation>
+    </message>
+    <message>
+        <source>Show the left-out and short titles too</source>
+        <translation>除外されたタイトルと短いタイトルも表示</translation>
+    </message>
+    <message>
+        <source>Add title</source>
+        <translation>タイトルを追加</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

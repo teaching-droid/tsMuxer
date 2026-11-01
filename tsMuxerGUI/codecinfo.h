@@ -55,6 +55,9 @@ struct QtvCodecInfo
     int offsetId = -1;
     int maxPgOffsets = 0;
     QList<QString> fileList;
+    // A title of a DVD folder, drive or image, by the disc's own number: fileList holds the disc, and the meta line
+    // names the title with dvd-title=
+    int dvdTitle = 0;
     bool checkFPS = false;
     bool checkLevel = false;
     int addSEIMethod = 1;

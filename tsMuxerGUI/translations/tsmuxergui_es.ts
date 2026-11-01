@@ -4512,6 +4512,122 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>The disc&apos;s title and the pictures a player such as the PS3 shows (BDMV/META/DL): kept as the folder has them, or taken from a folder of your own, with bdmt_eng.xml and the like and the pictures they name. Or no title and no pictures.</source>
         <translation>El título del disco y las imágenes que muestra un reproductor como la PS3 (BDMV/META/DL): se conservan tal como los tiene la carpeta, o se toman de una carpeta propia, con bdmt_eng.xml y similares y las imágenes que nombran. O sin título ni imágenes.</translation>
     </message>
+    <message>
+        <source>Disc image</source>
+        <translation>Imagen de disco</translation>
+    </message>
+    <message>
+        <source>add disc</source>
+        <translation>Añadir disco</translation>
+    </message>
+    <message>
+        <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
+        <translation>Añadir un título de un disco Blu-ray o DVD: elija la carpeta del disco, la carpeta que contiene BDMV o VIDEO_TS, o una unidad. Se muestran sus títulos, la película principal primero, y se añade el elegido. Una imagen de disco (.iso) se añade con «Añadir», y un disco también se puede soltar sobre la ventana.</translation>
+    </message>
+    <message>
+        <source>Choose a disc folder or drive</source>
+        <translation>Elija una carpeta de disco o una unidad</translation>
+    </message>
+    <message>
+        <source>Image...</source>
+        <translation>Imagen...</translation>
+    </message>
+    <message>
+        <source>Choose a Blu-ray disc image (.iso) as the source instead of a folder. It is read in place, without mounting it.</source>
+        <translation>Elija una imagen de disco Blu-ray (.iso) como origen en lugar de una carpeta. Se lee directamente, sin montarla.</translation>
+    </message>
+    <message>
+        <source>Disc image found. It is read in place, without mounting it.</source>
+        <translation>Imagen de disco encontrada. Se lee directamente, sin montarla.</translation>
+    </message>
+    <message>
+        <source>Select the Blu-ray disc image</source>
+        <translation>Seleccione la imagen del disco Blu-ray</translation>
+    </message>
+    <message>
+        <source>The output ISO is the disc image it is built from. Choose another name for the output.</source>
+        <translation>La ISO de salida es la imagen de disco a partir de la que se crea. Elija otro nombre para la salida.</translation>
+    </message>
+    <message>
+        <source>No title</source>
+        <translation>Ningún título</translation>
+    </message>
+    <message>
+        <source>The disc &quot;%1&quot; has no title to add.</source>
+        <translation>El disco «%1» no tiene ningún título que añadir.</translation>
+    </message>
+    <message>
+        <source>DVD title %1 of &quot;%2&quot; is already added</source>
+        <translation>El título de DVD %1 de «%2» ya está añadido</translation>
+    </message>
+    <message>
+        <source>DVD title %1</source>
+        <translation>Título de DVD %1</translation>
+    </message>
+    <message>
+        <source>%1 title %2</source>
+        <translation>%1 título %2</translation>
+    </message>
+    <message>
+        <source>Join</source>
+        <translation>Unir</translation>
+    </message>
+    <message>
+        <source>&quot;%1&quot; is a disc. Add it with &quot;add&quot; or &quot;add disc&quot;, and choose a title; a Blu-ray title can then be joined to another one.</source>
+        <translation>«%1» es un disco. Añádalo con «Añadir» o «Añadir disco» y elija un título; después, un título de Blu-ray se puede unir a otro.</translation>
+    </message>
+    <message>
+        <source>Choose a title</source>
+        <translation>Elija un título</translation>
+    </message>
+    <message>
+        <source>DVD-Video, %1</source>
+        <translation>DVD-Video, %1</translation>
+    </message>
+    <message>
+        <source>This disc has %1 main titles, the episodes or films it holds. They are shown in bold.</source>
+        <translation>Este disco tiene %1 títulos principales, los episodios o películas que contiene. Se muestran en negrita.</translation>
+    </message>
+    <message>
+        <source>Title</source>
+        <translation>Título</translation>
+    </message>
+    <message>
+        <source>DVD title</source>
+        <translation>Título de DVD</translation>
+    </message>
+    <message>
+        <source>Length</source>
+        <translation>Duración</translation>
+    </message>
+    <message>
+        <source>Note</source>
+        <translation>Nota</translation>
+    </message>
+    <message>
+        <source>Playlist</source>
+        <translation>Lista de reproducción</translation>
+    </message>
+    <message>
+        <source>Clips</source>
+        <translation>Clips</translation>
+    </message>
+    <message>
+        <source>The video of this title is still encrypted, and tsMuxeR cannot read it.</source>
+        <translation>El vídeo de este título sigue cifrado y tsMuxeR no puede leerlo.</translation>
+    </message>
+    <message>
+        <source>Some playlists or titles are left out, such as copies, one clip repeated, or titles under 2 minutes. Tick the box below to list them with the reason.</source>
+        <translation>Algunas listas de reproducción o títulos se omiten, como copias, un clip repetido o títulos de menos de 2 minutos. Marque la casilla de abajo para mostrarlos con el motivo.</translation>
+    </message>
+    <message>
+        <source>Show the left-out and short titles too</source>
+        <translation>Mostrar también los títulos omitidos y cortos</translation>
+    </message>
+    <message>
+        <source>Add title</source>
+        <translation>Añadir título</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

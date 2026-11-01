@@ -82,21 +82,18 @@ media.
 
 ## Working from an existing ISO
 
-tsMuxeR reads a BDMV folder, not an ISO image, and it never edits an ISO in place. You do not
-have to unpack the ISO first, though. Mount it in a virtual drive so it shows up as a drive
-letter, then point `--bdmv-to-iso` at that drive and let tsMuxeR read the disc structure
-straight from the mounted image:
-
-- Windows 8, 10 and 11: double-click the `.iso` to mount it (for example as `E:`).
-- Windows 7: install a free virtual-drive tool (WinCDEmu or Virtual CloneDrive), then mount.
+tsMuxeR never edits an ISO in place, but it reads one directly: give the image as the source of
+`--bdmv-to-iso`, and tsMuxeR reads the disc structure inside it, without mounting or unpacking
+it. This works the same on Windows 7, which cannot mount an image without extra software:
 
 ```
-tsMuxeR --bdmv-to-iso --layer-break-guard=64 --layer-break-lbn=<breaks> E:\ out.iso
+tsMuxeR --bdmv-to-iso --layer-break-guard=64 --layer-break-lbn=<breaks> film.iso out.iso
 ```
 
-tsMuxeR reads the files from the mounted drive and writes a new guarded ISO in one pass, byte
-for byte, with no re-mux. This only works with unencrypted material: a mounted image
-that still carries AACS is not readable as plain files. You only need this step when you are
+tsMuxeR writes a new guarded ISO in one pass, byte for byte, with no re-mux. The output must be
+another file than the image it is read from. An image mounted as a drive letter, or a disc
+folder, works as before. This only works with unencrypted material: an image that still
+carries AACS is not readable as plain files. You only need this step when you are
 burning to dual-layer or BD-R XL media and want the layer-break guard. A single-layer image
 that already plays can be burned directly.
 
