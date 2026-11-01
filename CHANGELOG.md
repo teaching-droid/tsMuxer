@@ -14,6 +14,8 @@
 
 * **A Matroska title longer than 1023 bytes was cut,** and so was a chapter name of more than 1024 bytes in an ordered edition or a linked file. A Matroska output got the cut text, broken inside a letter outside ASCII where the cut fell in one. Both are read whole now.
 
+* **A TrueHD track without an AC-3 core says so.** A TrueHD track of a Matroska file taken as A_AC3, to keep its core, ended with "produced no frames at all". It now stops before muxing and says that the track has no AC-3 core, which tracks of the file are AC-3, and that the TrueHD itself is muxed as A_MLP. In the window, the greyed "Keep the AC-3 core" box of such a track says why in its tooltip.
+
 ### Matroska output
 
 * **H.264 coded as fields is stored one field to a block.** The two fields of a frame went into one block. That is allowed, but where a broadcast sends a delimiter and a parameter set again between the two fields, a common decoder put a few frames together wrongly: pictures came out damaged although all their data was in the file. Each field is now a block of its own, the second one field later, each lasting a field. Video coded as frames is stored as before.

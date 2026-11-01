@@ -4627,6 +4627,10 @@ Build the ISO anyway?</source>
         <source>Add title</source>
         <translation>הוספת כותר</translation>
     </message>
+    <message>
+        <source>This TrueHD track carries no AC-3 core. If the file has an AC-3 track, take that one instead.</source>
+        <translation>רצועת TrueHD זו אינה נושאת ליבת AC-3. אם בקובץ יש רצועת AC-3, השתמשו בה במקום.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

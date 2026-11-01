@@ -4627,6 +4627,10 @@ Créer l'ISO malgré tout ?</translation>
         <source>Add title</source>
         <translation>Ajouter le titre</translation>
     </message>
+    <message>
+        <source>This TrueHD track carries no AC-3 core. If the file has an AC-3 track, take that one instead.</source>
+        <translation>Cette piste TrueHD ne contient pas de cœur AC-3. Si le fichier a une piste AC-3, prenez plutôt celle-ci.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

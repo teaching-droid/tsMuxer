@@ -4628,6 +4628,10 @@ Build the ISO anyway?</source>
         <source>Add title</source>
         <translation>Добавить титул</translation>
     </message>
+    <message>
+        <source>This TrueHD track carries no AC-3 core. If the file has an AC-3 track, take that one instead.</source>
+        <translation>Эта дорожка TrueHD не содержит ядра AC-3. Если в файле есть дорожка AC-3, возьмите её.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

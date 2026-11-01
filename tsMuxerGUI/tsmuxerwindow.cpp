@@ -4095,6 +4095,13 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
                  (codecInfo->displayName == "DTS-HD" || codecInfo->displayName == "TRUE-HD" ||
                   codecInfo->displayName == "E-AC3 (DD+)")) ||
                 (codecInfo->displayName == "DTS-HD" && codecInfo->descr.contains("High Resolution")));
+            // Greyed for a TrueHD track without a core, as from a Matroska file, it did not say why, and the AC-3 that
+            // the file usually has beside it was not pointed to
+            ui->dtsDwnConvert->setToolTip(
+                codecInfo->displayName == "TRUE-HD" && !ui->dtsDwnConvert->isEnabled()
+                    ? wrapTip(tr("This TrueHD track carries no AC-3 core. If the file has an AC-3 track, take that one "
+                                 "instead."))
+                    : QString());
             // drop-ac3-core applies to the disc form of a TrueHD track, the one that carries an
             // AC-3 core beside the lossless part. A TrueHD track with no core has nothing to drop,
             // and the same description test the box above uses says which is which.

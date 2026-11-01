@@ -4628,6 +4628,10 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <source>Add title</source>
         <translation>Añadir título</translation>
     </message>
+    <message>
+        <source>This TrueHD track carries no AC-3 core. If the file has an AC-3 track, take that one instead.</source>
+        <translation>Esta pista TrueHD no lleva núcleo AC-3. Si el archivo tiene una pista AC-3, use esa en su lugar.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

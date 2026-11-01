@@ -2530,6 +2530,33 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                         streamInfo.m_addParams["srcrighteye"] = eye->second;
             if (const auto trackIt = trackList.find(pid); trackIt != trackList.end())
             {
+                // TrueHD from a Matroska file has no AC-3 core: Matroska keeps the two apart. A line that takes it as
+                // A_AC3, to keep the core with down-to-ac3, ran through and ended with "produced no frames at all",
+                // which said only that the codec on the line was wrong. It is said what the track is, and which
+                // tracks of the file are AC-3.
+                if (const auto id = trackIt->second.m_srcParams.find("srccodecid");
+                    codecName == "A_AC3" && id != trackIt->second.m_srcParams.end() &&
+                    id->second == MATROSKA_CODEC_ID_AUDIO_TRUEHD)
+                {
+                    std::string ac3;
+                    for (const auto& [other, info] : trackList)
+                        if (const auto oid = info.m_srcParams.find("srccodecid");
+                            oid != info.m_srcParams.end() &&
+                            (oid->second == MATROSKA_CODEC_ID_AUDIO_AC3 || oid->second == MATROSKA_CODEC_ID_AUDIO_EAC3))
+                            ac3 += (ac3.empty() ? "" : ", ") + std::to_string(other);
+                    if (const auto last = ac3.rfind(", "); last != std::string::npos)
+                        ac3.replace(last, 2, " and ");
+                    THROW(ERR_COMMON, "Track " << pid << " of " << unquoteStr(fileList[0])
+                                               << " is TrueHD without an AC-3 core, so there is no AC-3 to take from "
+                                                  "it: in a Matroska file an AC-3 core is "
+                                                  "a track of its own, and tsMuxeR does not encode sound. "
+                                               << (ac3.empty() ? std::string("The file has no AC-3 track. ")
+                                                               : (ac3.find(" and ") == std::string::npos
+                                                                      ? "The AC-3 track of the file is "
+                                                                      : "The AC-3 tracks of the file are ") +
+                                                                     ac3 + ": take one of them on an A_AC3 line. ")
+                                               << "To keep the TrueHD, mux it as A_MLP. Nothing was written.")
+                }
                 // An encrypted track cannot be read without its key, which no file carries (RFC 9559, 14). Its blocks
                 // were muxed as they stand, and the output held noise in place of the track.
                 if (trackIt->second.m_srcParams.count("encrypted"))
