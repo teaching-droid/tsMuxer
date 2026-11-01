@@ -592,7 +592,9 @@ class MatroskaMuxer final : public AbstractMuxer
     void startNextPart(MkvTrackInfo& current, int64_t origin);
     // Emit one completed frame. Shared by the ordinary path and by the dual layer Dolby Vision
     // path, which writes its frames later than it finishes them.
-    void writeBlock(MkvTrackInfo& track, const uint8_t* frameData, int frameSize, int64_t pts, uint8_t pendingFlags);
+    // durationMs above 0: the block goes into a BlockGroup with that BlockDuration (a field of a field pair)
+    void writeBlock(MkvTrackInfo& track, const uint8_t* frameData, int frameSize, int64_t pts, uint8_t pendingFlags,
+                    int64_t durationMs = 0);
     bool writeAacRawBlocks(MkvTrackInfo& track, const uint8_t* frame, int frameSize, int rdb);
     // Text subtitles: one BlockGroup with its BlockDuration per subtitle, held until the other tracks
     // reach its time so that every cluster is written in time order

@@ -73,6 +73,10 @@ class H264StreamReader final : public MPEGStreamReader
         return curNalUnit ? !static_cast<SPSUnit*>(curNalUnit)->frame_mbs_only_flag : getInterlaced();
     }
     bool codesFramesOnly(void* curNalUnit) override;
+    // Of a packet that holds the two fields of a frame (a field pair goes out as one packet, see processSliceNal):
+    // where the access unit of the second field begins, the first unit after the last slice of the first field; -1 for
+    // a packet of one picture, or one whose slices cannot be read.
+    [[nodiscard]] int secondFieldStart(const uint8_t* data, int size) const;
     // For a rate of fields from a container (updateFPS): also a stream coded as frames that times its pictures in
     // fields (pic_struct_present_flag), as 3:2 pulldown does
     bool interlacedForRate(void* curNalUnit) override

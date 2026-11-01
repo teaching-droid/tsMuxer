@@ -3604,6 +3604,35 @@ void MatroskaMuxer::flushPendingFrame(MkvTrackInfo& track)
     int frameSize = static_cast<int>(track.pendingFrameData.size());
     std::vector<uint8_t> convertedData;
 
+    // ** H.264 CODED AS FIELDS: EACH FIELD A BLOCK OF ITS OWN. ** The reader hands over the two fields of a frame as
+    // one packet, which a transport stream wants, and they went into one block. The Matroska mapping allows that
+    // ("a frame, a field, or 2 fields having the same timestamp"), but a decoder that reads the block as one picture
+    // put a few frames of a broadcast together wrongly, where the stream sends a delimiter and a parameter set again
+    // between the two fields: 6 of 474 pictures came out damaged, from data that was all there. Each field is now a
+    // block, the second one field later, each lasting a field, as a field coded stream is commonly stored.
+    if (track.codecID == CODEC_V_MPEG4_H264 && track.foldElStreamIndex < 0 && !track.frameAdditions && track.fps > 0)
+        if (const auto h264 = dynamic_cast<H264StreamReader*>(track.codecReader))
+            if (const int split = h264->secondFieldStart(frameData, frameSize); split > 0)
+            {
+                std::vector<std::pair<int, int>> firstAdded, secondAdded;
+                for (const auto& [from, len] : track.pendingAdded)
+                    (from < split ? firstAdded : secondAdded).emplace_back(from < split ? from : from - split, len);
+                const std::vector<uint8_t> first = convertAnnexBToLengthPrefixed(track, frameData, split, &firstAdded);
+                const std::vector<uint8_t> second =
+                    convertAnnexBToLengthPrefixed(track, frameData + split, frameSize - split, &secondAdded);
+                const double fieldInternal = INTERNAL_PTS_FREQ / track.fps / 2.0;
+                const int64_t fieldMs = (std::max)(int64_t{1}, static_cast<int64_t>(llround(500.0 / track.fps)));
+                writeBlock(track, first.data(), static_cast<int>(first.size()), track.pendingPts, track.pendingFlags,
+                           fieldMs);
+                writeBlock(track, second.data(), static_cast<int>(second.size()),
+                           track.pendingPts + static_cast<int64_t>(llround(fieldInternal)),
+                           track.pendingFlags & ~AVPacket::IS_IFRAME, fieldMs);
+                track.pendingFrameData.clear();
+                track.pendingAdded.clear();
+                track.hasPendingFrame = false;
+                return;
+            }
+
     switch (track.codecID)
     {
     case CODEC_V_AV1:
@@ -3816,7 +3845,7 @@ bool MatroskaMuxer::writeAacRawBlocks(MkvTrackInfo& track, const uint8_t* frame,
 }
 
 void MatroskaMuxer::writeBlock(MkvTrackInfo& track, const uint8_t* frameData, int frameSize, int64_t pts,
-                               uint8_t pendingFlags)
+                               uint8_t pendingFlags, const int64_t durationMs)
 {
     if (m_partNum > 0 && m_headerWritten)
     {
@@ -3968,6 +3997,41 @@ void MatroskaMuxer::writeBlock(MkvTrackInfo& track, const uint8_t* frameData, in
             track.lastBlockRelMs = relMs;
             return;
         }
+    }
+    // A field of a field pair (flushPendingFrame) lasts a field, not the frame the DefaultDuration gives: a BlockGroup
+    // with its BlockDuration. A BlockGroup has no keyframe flag: a field that is not one says so with a ReferenceBlock,
+    // to the block before.
+    if (durationMs > 0)
+    {
+        uint8_t trackNumBuf[8];
+        const int trackNumLen = ebml_write_size(trackNumBuf, track.trackNumber);
+        const int blockPayloadSize = trackNumLen + 2 + 1 + frameSize;
+        uint8_t blockHeader[16];
+        int blockHeaderLen = ebml_write_id(blockHeader, MATROSKA_ID_BLOCK);
+        blockHeaderLen += ebml_write_size(blockHeader + blockHeaderLen, blockPayloadSize);
+        uint8_t afterBlock[32];
+        int afterLen = ebml_write_uint(afterBlock, MATROSKA_ID_BLOCKDURATION, static_cast<uint64_t>(durationMs));
+        if (!(pendingFlags & AVPacket::IS_IFRAME))
+        {
+            const int64_t ref = track.lastBlockRelMs - relMs;
+            afterLen += ebml_write_sint(afterBlock + afterLen, MATROSKA_ID_BLOCKREFERENCE, ref != 0 ? ref : -1);
+        }
+        const int groupPayloadSize = blockHeaderLen + blockPayloadSize + afterLen;
+        uint8_t groupHeader[16];
+        int groupHeaderLen = ebml_write_id(groupHeader, MATROSKA_ID_BLOCKGROUP);
+        groupHeaderLen += ebml_write_size(groupHeader + groupHeaderLen, groupPayloadSize);
+        m_clusterBuf.insert(m_clusterBuf.end(), groupHeader, groupHeader + groupHeaderLen);
+        m_clusterBuf.insert(m_clusterBuf.end(), blockHeader, blockHeader + blockHeaderLen);
+        m_clusterBuf.insert(m_clusterBuf.end(), trackNumBuf, trackNumBuf + trackNumLen);
+        m_clusterBuf.push_back(static_cast<uint8_t>((relTimeMs >> 8) & 0xFF));
+        m_clusterBuf.push_back(static_cast<uint8_t>(relTimeMs & 0xFF));
+        m_clusterBuf.push_back(0);  // Block flags: no lacing
+        m_clusterBuf.insert(m_clusterBuf.end(), frameData, frameData + frameSize);
+        m_clusterBuf.insert(m_clusterBuf.end(), afterBlock, afterBlock + afterLen);
+        m_clusterDataSize += groupHeaderLen + groupPayloadSize;
+        m_clusterBlocks++;
+        track.lastBlockRelMs = relMs;
+        return;
     }
     track.lastBlockRelMs = relMs;
 

@@ -10,6 +10,10 @@
 
 * **A Matroska title longer than 1023 bytes was cut,** and so was a chapter name of more than 1024 bytes in an ordered edition or a linked file. A Matroska output got the cut text, broken inside a letter outside ASCII where the cut fell in one. Both are read whole now.
 
+### Matroska output
+
+* **H.264 coded as fields is stored one field to a block.** The two fields of a frame went into one block. That is allowed, but where a broadcast sends a delimiter and a parameter set again between the two fields, a common decoder put a few frames together wrongly: pictures came out damaged although all their data was in the file. Each field is now a block of its own, the second one field later, each lasting a field. Video coded as frames is stored as before.
+
 ### Blu-ray and transport stream
 
 * **A playlist that plays an intro at another frame rate before the title is muxed at the title's rate.** A series disc may play a short logo or recap at 24, 25 or 29.97 fps before an episode at 23.976, and the rate of that first clip was used for the whole output: the episode played too fast and its sound fell behind, by a quarter with a 29.97 intro. A playlist is now described by the clips that make up most of it also in the picture format and frame rate of its video, and a clip whose video differs in either is left out with a warning that names both rates, as a clip with another codec already is. ([justdan96/tsMuxer#900](https://github.com/justdan96/tsMuxer/issues/900), thanks to @Nemesh64)

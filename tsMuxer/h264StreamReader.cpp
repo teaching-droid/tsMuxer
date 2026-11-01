@@ -114,6 +114,65 @@ bool H264StreamReader::codesFramesOnly(void* curNalUnit)
     return frames > 0;
 }
 
+int H264StreamReader::secondFieldStart(const uint8_t* data, const int size) const
+{
+    const auto spsOf = [this](const unsigned ppsId) -> const SPSUnit*
+    {
+        const auto pps = m_ppsMap.find(ppsId);
+        if (pps == m_ppsMap.end())
+            return nullptr;
+        const auto sps = m_spsMap.find(pps->second->seq_parameter_set_id);
+        return sps == m_spsMap.end() ? nullptr : sps->second;
+    };
+    auto* const begin = const_cast<uint8_t*>(data);
+    uint8_t* const end = begin + size;
+    bool firstSeen = false;
+    bool firstBottom = false;
+    uint8_t* afterLastSlice = nullptr;  // the start code of the first unit after the slice before, until a slice
+    bool sliceSeen = false;
+    for (uint8_t* nal = NALUnit::findNextNAL(begin, end); nal < end; nal = NALUnit::findNextNAL(nal, end))
+    {
+        uint8_t* startCode = nal - 3;
+        if (startCode > begin && startCode[-1] == 0)
+            --startCode;
+        const auto type = static_cast<NALUnit::NALType>(*nal & 0x1f);
+        const bool slice = type == NALUnit::NALType::nuSliceIDR || type == NALUnit::NALType::nuSliceNonIDR;
+        if (!slice)
+        {
+            if (sliceSeen)
+            {
+                afterLastSlice = startCode;
+                sliceSeen = false;
+            }
+            continue;
+        }
+        sliceSeen = true;
+        uint8_t* const unitsBefore = afterLastSlice;  // the units right in front of this slice, if any
+        afterLastSlice = nullptr;
+        uint8_t header[32];
+        const int len = NALUnit::decodeNAL(nal + 1, (std::min)(nal + 25, end), header, sizeof(header));
+        SliceUnit::FieldHeader head;
+        if (len <= 0 || !SliceUnit::readFieldHeader(header, header + len, spsOf, head))
+            return -1;
+        if (head.firstMb != 0)
+            continue;  // a further slice of its picture
+        if (!firstSeen)
+        {
+            if (!head.field)
+                return -1;  // a frame
+            firstSeen = true;
+            firstBottom = head.bottom;
+            continue;
+        }
+        if (!head.field || head.bottom == firstBottom)
+            return -1;
+        // The units between the last slice of the first field and this one are the second field's: its delimiter,
+        // its SEI, a parameter set sent again before it. With none, the field begins at its own start code.
+        return static_cast<int>((unitsBefore ? unitsBefore : startCode) - begin);
+    }
+    return -1;
+}
+
 static int fieldsShownOf(int picStruct);
 
 CheckStreamRez H264StreamReader::checkStream(uint8_t* buffer, int len)
@@ -2145,8 +2204,9 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
         if (!joinStart)
             m_joinPos = nullptr;
     }
-    // Frame pictures only: the two fields of a frame share one time, which a Matroska block needs, and this count
-    // placed them apart (a 1080i capture cut mid stream got its first field pair in two blocks).
+    // Frame pictures only: the two fields of a frame share one time and go out as one packet (a Matroska output
+    // writes each field as a block of its own, see secondFieldStart), and this count placed them apart (a 1080i
+    // capture cut mid stream got its first field pair in two packets).
     if ((joinStart || (m_totalFrameNum == 0 && m_idrSliceCnt == 0)) && !guessOrder && !damaged && !slice.isIDR() &&
         !slice.m_field_pic_flag && !m_fieldPicturesSeen && slice.getSPS()->pic_order_cnt_type != 2)
     {
