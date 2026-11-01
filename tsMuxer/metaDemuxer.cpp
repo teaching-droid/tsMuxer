@@ -47,6 +47,7 @@ static bool isKnownTrackParam(const std::string& name);
 #include "mpegAudioStreamReader.h"
 #include "mpegStreamReader.h"
 #include "nalUnits.h"
+#include "oggFile.h"
 #include "opusStreamReader.h"
 #include "pgsStreamReader.h"
 #include "programStreamDemuxer.h"
@@ -362,9 +363,9 @@ static NamedAs familyOfExt(const std::string& ext)
     if (ext == "mp4" || ext == "mov" || ext == "m4v" || ext == "m4a")
         return NamedAs::ctMP4;
     // WebM is Matroska with a narrower set of codecs, and .mk3d is the name used for 3D Matroska files.
-    // an ASS or SSA script is read as the Matroska file of its track (assFile.h)
+    // an ASS or SSA script and an Ogg file are read as the Matroska file of their tracks (assFile.h, oggFile.h)
     if (ext == "mkv" || ext == "mka" || ext == "mks" || ext == "mk3d" || ext == "webm" || ext == "ass" ||
-        ext == "ssa")
+        ext == "ssa" || ext == "ogg" || ext == "oga" || ext == "opus")
         return NamedAs::ctMKV;
     // The only elementary extensions the dispatch acts on. Every other unknown extension already
     // reaches the reader that works the codec out from the bytes, so naming one would gain nothing.
@@ -1265,7 +1266,7 @@ void METADemuxer::placeJoinedSubtitles()
                     part.openFile(file);
                     end = part.videoLengthNs();
                 }
-                else if (ext == "MKV" || ext == "MKS" || ext == "MK3D" || ext == "WEBM" || isAssFileExt(ext))
+                else if (ext == "MKV" || ext == "MKS" || ext == "MK3D" || ext == "WEBM" || isMemorySourceExt(ext))
                 {
                     MatroskaDemuxer part(m_readManager);
                     part.openFile(file);
@@ -1470,10 +1471,11 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     auto tmpitr = addParams.find("track");
     if (tmpitr != addParams.end())
         pid = strToInt32(tmpitr->second.c_str());
-    // An ASS or SSA script file is read as the Matroska file of its one track (assFile.h): track 1 without track=
+    // An ASS or SSA script file, or an Ogg file, is read as the Matroska file of its tracks (assFile.h, oggFile.h):
+    // track 1 without track=
     bool assFile = false;
     for (const std::string& part : splitQuotedStr(codecStreamName.c_str(), '+'))
-        assFile = prepareAssFile(unquoteStr(trimStr(part))) || assFile;
+        assFile = prepareMemorySource(unquoteStr(trimStr(part))) || assFile;
     if (assFile && pid == 0)
         pid = 1;
 
@@ -1956,7 +1958,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     {
         const std::string srcExt = strToUpperCase(extractFileExt(unquoteStr(trimStr(fileList[0]))));
         if (srcExt == "MKV" || srcExt == "MKA" || srcExt == "MKS" || srcExt == "MK3D" || srcExt == "WEBM" ||
-            isAssFileExt(srcExt))
+            isMemorySourceExt(srcExt))
         {
             MatroskaDemuxer probe(m_readManager);
             probe.openFile(fileList[0]);
@@ -1993,7 +1995,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     {
         const std::string srcExt = strToUpperCase(extractFileExt(unquoteStr(trimStr(fileList[0]))));
         // A Matroska file of any name: an ASS track in a .mka was drawn as plain text without a word
-        if (srcExt == "MKV" || srcExt == "MKA" || srcExt == "MKS" || srcExt == "MK3D" || isAssFileExt(srcExt))
+        if (srcExt == "MKV" || srcExt == "MKA" || srcExt == "MKS" || srcExt == "MK3D" || isMemorySourceExt(srcExt))
         {
             MatroskaDemuxer probe(m_readManager);
             probe.openFile(fileList[0]);
@@ -2255,7 +2257,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                 const std::string file = unquoteStr(trimStr(fileList[i]));
                 const std::string ext = strToUpperCase(extractFileExt(file));
                 if (ext != "MKV" && ext != "MKA" && ext != "MKS" && ext != "MK3D" && ext != "WEBM" &&
-                    !isAssFileExt(ext))
+                    !isMemorySourceExt(ext))
                     continue;
                 MatroskaDemuxer probe(m_readManager);
                 probe.openFile(file);
@@ -2481,7 +2483,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             const std::string first = unquoteStr(trimStr(fileList[0]));
             const std::string ext = strToUpperCase(extractFileExt(first));
             if (ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM" ||
-                isAssFileExt(ext))
+                isMemorySourceExt(ext))
             {
                 joinProbe = std::make_unique<MatroskaDemuxer>(m_readManager);
                 joinProbe->openFile(first);
@@ -2691,7 +2693,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             std::unique_ptr<AbstractDemuxer> probe;
             std::string container;
             if (ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM" ||
-                isAssFileExt(ext))
+                isMemorySourceExt(ext))
             {
                 probe = std::make_unique<MatroskaDemuxer>(m_readManager);
                 container = "MKV";
@@ -2750,7 +2752,7 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                 // join of such files got no correction, and each later file came 20 ms later
                 std::unique_ptr<AbstractDemuxer> probe;
                 if (ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM" ||
-                    isAssFileExt(ext))
+                    isMemorySourceExt(ext))
                     probe = std::make_unique<MatroskaDemuxer>(m_readManager);
                 else if (ext == "MP4" || ext == "M4A" || ext == "M4V" || ext == "MOV")
                     probe = std::make_unique<MovDemuxer>(m_readManager);
@@ -3572,7 +3574,7 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
             containerType = AbstractStreamReader::ContainerType::ctEVOB;
         }
         else if (fileExt == "mkv" || fileExt == "mka" || fileExt == "mks" || fileExt == "mk3d" || fileExt == "webm" ||
-                 isAssFileExt(strToUpperCase(fileExt)))
+                 isMemorySourceExt(strToUpperCase(fileExt)))
         {
             demuxer = std::make_unique<MatroskaDemuxer>(m_readManager);
             containerType = AbstractStreamReader::ContainerType::ctMKV;
@@ -4184,7 +4186,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
     std::unique_ptr<AbstractDemuxer> demuxer;
     auto unquoted = unquoteStr(fileName);
     string fileExt = strToLowerCase(extractFileExt(unquoted));
-    prepareAssFile(unquoted);  // listed as the Matroska file of its one track
+    prepareMemorySource(unquoted);  // listed as the Matroska file of its tracks
     checkNameMatchesContent(unquoted, fileExt);
     AbstractStreamReader::ContainerType containerType = AbstractStreamReader::ContainerType::ctNone;
     CLPIParser clpi;
@@ -4213,7 +4215,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
         containerType = AbstractStreamReader::ContainerType::ctEVOB;
     }
     else if (fileExt == "mkv" || fileExt == "mka" || fileExt == "mks" || fileExt == "mk3d" || fileExt == "webm" ||
-             isAssFileExt(strToUpperCase(fileExt)))
+             isMemorySourceExt(strToUpperCase(fileExt)))
     {
         demuxer = std::make_unique<MatroskaDemuxer>(readManager);
         containerType = AbstractStreamReader::ContainerType::ctMKV;
@@ -6200,7 +6202,7 @@ bool ContainerToReaderWrapper::openStream(int readerID, const char* streamName, 
             m_demuxers[streamName].m_streamName = streamName;
         }
         else if (ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" || ext == "WEBM" ||
-                 isAssFileExt(ext))
+                 isMemorySourceExt(ext))
         {
             demuxer = m_demuxers[streamName].m_demuxer = new MatroskaDemuxer(m_readManager);
             m_demuxers[streamName].m_streamName = streamName;

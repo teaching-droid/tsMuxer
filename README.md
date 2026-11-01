@@ -11,7 +11,7 @@ This project is for tsMuxer - a transport stream muxer for remuxing/muxing eleme
 EVO/VOB/MPG, MKV/MKA/MK3D, WebM, MP4/MOV, TS, M2TS and IVF to TS, M2TS, MKV or WebM.
 
 Supported video codecs H.264/AVC, H.265/HEVC, H.266/VVC (Alpha release), AV1, VC-1, MPEG2, and VP8 and VP9 (from MKV, WebM, MP4 or IVF; to MKV, or demuxed to IVF). MPEG-4 Part 2 (from MP4 or MOV) and ProRes (from MOV) are copied into an MKV output. 
-Supported audio codecs AAC (also in LATM, as DVB broadcasts carry it), AC3 / E-AC3(DD+), DTS/ DTS-HD, TrueHD, Opus, FLAC, LPCM, MP3, Vorbis (from MKV, WebM or MP4; to MKV, or demuxed to Ogg) and ALAC (from MKV or MP4, to MKV).
+Supported audio codecs AAC (also in LATM, as DVB broadcasts carry it), AC3 / E-AC3(DD+), DTS/ DTS-HD, TrueHD, Opus, FLAC, LPCM, MP3, Vorbis (from MKV, WebM, MP4 or Ogg; to MKV, or demuxed to Ogg) and ALAC (from MKV or MP4, to MKV).
 
 **TrueHD note (Blu-ray output):** Blu-ray players typically expect Dolby TrueHD to be muxed in a Blu-ray style
 interleaved stream with an AC-3 compatibility core. If your MKV stores TrueHD and AC-3 as separate tracks, tsMuxer

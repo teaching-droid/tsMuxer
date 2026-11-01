@@ -127,6 +127,10 @@ The output format is determined by the file extension of the output file name (e
 
 The output of the program is encoded in UTF-8, which means that non-ASCII characters will not show up properly in the Windows console by default. If you want to see the output properly, run `chcp 65001` before running tsMuxeR.
 
+### Ogg files
+
+An Ogg file (`.ogg`, `.oga`, `.opus`) of Opus or Vorbis sound is read as a source: each of its streams is a track, numbered from 1 in the order of the file, so `A_OPUS, "song.opus", track=1`; without `track=` the first one is taken. The pre-skip of Opus and the samples the last page cuts off are kept as in a Matroska file, and a LANGUAGE comment of three letters gives the track's language. Other streams in an Ogg file (Theora, FLAC, Speex) are left out with a warning, and a chained Ogg file, of several streams one after the other, is refused: split it and join the parts with `+`. Opus and Vorbis go to a Matroska output or a demux, and Opus to a TS as well; a Blu-ray disc has no form for either. A damaged page is left out with a warning; in an Opus track of one or two channels the time it held is filled with empty frames, which a decoder fills in by itself, so the sound after it stays at its time.
+
 ## Meta file format
 File MUST have the .meta extension. This file defines files you want to multiplex. The first line of a meta file contains additional parameters that apply to all tracks. In this case the first line should begin with the word MUXOPT.
 
@@ -180,8 +184,8 @@ A_DTS             | DTS/DTS-Express/DTS-HD
 A_MP3             | MPEG audio layer 1/2/3 
 A_LPCM            | raw pcm data or PCM WAV file 
 A_FLAC            | FLAC (MKV and demux output only)
-A_OPUS            | Opus (TS, MKV, and demux output only)
-A_VORBIS          | Vorbis (read from MKV, WebM and MP4; MKV output, or demuxed to an .ogg file)
+A_OPUS            | Opus (also read from an Ogg file, .opus or .ogg; TS, MKV, and demux output only)
+A_VORBIS          | Vorbis (read from MKV, WebM, MP4 and Ogg; MKV output, or demuxed to an .ogg file)
 A_ALAC            | Apple Lossless (read from MKV and MP4; MKV output only)
 S_HDMV/PGS        | Presentation graphic stream (BD subtitle format) 
 S_TEXT/UTF8       | SRT subtitle format.  Encoding MUST be  UTF-8/UTF-16/UTF-32 

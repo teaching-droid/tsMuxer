@@ -286,7 +286,7 @@ uint8_t* OpusStreamReader::findFrame(uint8_t* buff, uint8_t* end)
 // Frame decoding
 // ---------------------------------------------------------------------------
 
-int OpusStreamReader::parseFrameSamples(const uint8_t* opusData, const int size) const
+int OpusStreamReader::parseFrameSamples(const uint8_t* opusData, const int size)
 {
     if (size < 1)
         return 0;

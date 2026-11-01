@@ -19,6 +19,7 @@ add_executable (tsmuxer
   ac3Codec.cpp
   ac3StreamReader.cpp
   assFile.cpp
+  oggFile.cpp
   assRender.cpp
   avCodecs.cpp
   bitStream.cpp

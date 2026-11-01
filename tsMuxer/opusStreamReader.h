@@ -22,6 +22,9 @@ class OpusStreamReader final : public SimplePacketizerReader
     friend class MatroskaMuxer;
 
    public:
+    /// Parse the Opus TOC byte and return the number of 48 kHz PCM samples
+    /// this packet produces.  Returns 0 on failure. Also for the packets of an Ogg file (oggFile).
+    static int parseFrameSamples(const uint8_t* opusData, int size);
     OpusStreamReader();
     ~OpusStreamReader() override = default;
 
@@ -103,10 +106,6 @@ class OpusStreamReader final : public SimplePacketizerReader
 
     /// Parse the OpusHead structure.
     bool parseOpusHead(const uint8_t* data, int size);
-
-    /// Parse the Opus TOC byte and return the number of 48 kHz PCM samples
-    /// this packet produces.  Returns 0 on failure.
-    int parseFrameSamples(const uint8_t* opusData, int size) const;
 
     /// Write a complete OGG page (header + segment table + payload) into dst.
     /// Returns bytes written, or 0 if not enough space.

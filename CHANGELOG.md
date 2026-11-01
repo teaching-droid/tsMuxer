@@ -44,6 +44,8 @@
 
 ### Audio
 
+* **Ogg files of Opus or Vorbis sound are read.** A .ogg, .oga or .opus file was "Can't detect stream type": Opus and Vorbis were read from Matroska, WebM, MP4 and (Opus) transport streams only. Each stream of an Ogg file is now a track, with the pre-skip of Opus, the samples its last page cuts off and a LANGUAGE comment kept, for a Matroska output, a demux and, for Opus, a TS. A stream of another kind is left out with a warning, and a chained Ogg file is refused with the reason. A damaged page is said; in Opus of one or two channels its time is filled with empty frames, so the sound after it stays at its time. The window offers .ogg, .oga and .opus files when adding.
+
 * **DTS stored little-endian or 14 bits to a word is read, also from the WAV of a DTS music CD.** A DTS file in 16-bit little-endian words was refused, a file with 14 bits of the stream in each 16-bit word was muxed as it was, which a player cannot decode, and the WAV of a DTS music CD was listed as PCM and refused for its 44.1 kHz rate. Such a stream is now written in 16-bit big-endian words, the form a disc carries; the DTS frames themselves stay as they are, bit for bit. The listing says how the stream was stored.
 
 * **An RF64 or BW64 file, the WAV of more than 4 GB, is read.** It was refused with the advice to convert it to W64. It is read as a WAV now, the length of its audio taken from its ds64 chunk, so the chunks a BW64 file carries after its audio are not taken for sound.

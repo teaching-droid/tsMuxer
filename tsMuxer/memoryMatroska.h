@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-// The pieces of a Matroska file built in memory, for a source read as the Matroska file that holds it (assFile):
-// EBML (RFC 8794) and Matroska (RFC 9559). An element is its ID, its size as a variable length number, its
+// The pieces of a Matroska file built in memory, for a source read as the Matroska file that holds it (assFile,
+// oggFile): EBML (RFC 8794) and Matroska (RFC 9559). An element is its ID, its size as a variable length number, its
 // body.
 namespace memoryMatroska
 {
