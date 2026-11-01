@@ -304,6 +304,23 @@ void VobSubDecoder::decode(const uint8_t* spu, const int size, const int64_t pts
     int alpha[4] = {0, 15, 15, 15};
     int x1 = 0, x2 = -1, y1 = 0, y2 = -1;
     int fieldStart[2] = {0, 0};
+    // ** COLOURS CHANGED BY AREA (CHG_COLCON). ** A unit can set other colours and opacities for parts of its lines,
+    // and change them from one control sequence to the next, as a fade in and out does: its own colours are then often
+    // fully transparent, and such a picture was left out as empty without a word. It is drawn now in the colours of
+    // the change that shows it most opaque, as it looks between its fade in and its fade out; PGS cannot fade it so.
+    struct ColconPart
+    {
+        int column;  // from here to the next part, on the lines of its range
+        int colour[4];
+        int alpha[4];
+    };
+    struct ColconLines
+    {
+        int first, last;
+        std::vector<ColconPart> parts;
+    };
+    std::vector<ColconLines> colcon;
+    int colconOpacity = -1;  // of the change kept: the opacities of all its parts added up
     int pos = firstSequence;
     for (int sequences = 0; sequences < 64 && pos + 4 <= unitSize; ++sequences)
     {
@@ -367,7 +384,46 @@ void VobSubDecoder::decode(const uint8_t* spu, const int size, const int64_t pts
                     end = true;
                     break;
                 }
-                p += AV_RB16(spu + p);
+                const int stop = (std::min)(p + AV_RB16(spu + p), unitSize);
+                // line ranges of 4 bytes (first line, number of parts, last line, 12 + 4 + 12 bits after 4 zero bits),
+                // each followed by its parts of 6 bytes (column, the 4 colours, the 4 opacities); 0x0FFFFFFF ends them
+                std::vector<ColconLines> changes;
+                int q = p + 2;
+                while (q + 4 <= stop && (static_cast<uint32_t>(spu[q]) << 24 | spu[q + 1] << 16 | spu[q + 2] << 8 |
+                                         spu[q + 3]) != 0x0FFFFFFFu)
+                {
+                    ColconLines lines;
+                    lines.first = (spu[q] & 0x0F) << 8 | spu[q + 1];
+                    const int count = spu[q + 2] >> 4;
+                    lines.last = (spu[q + 2] & 0x0F) << 8 | spu[q + 3];
+                    q += 4;
+                    for (int i = 0; i < count && q + 6 <= stop; ++i, q += 6)
+                    {
+                        ColconPart part{};
+                        part.column = (spu[q] & 0x0F) << 8 | spu[q + 1];
+                        part.colour[3] = spu[q + 2] >> 4;
+                        part.colour[2] = spu[q + 2] & 0x0F;
+                        part.colour[1] = spu[q + 3] >> 4;
+                        part.colour[0] = spu[q + 3] & 0x0F;
+                        part.alpha[3] = spu[q + 4] >> 4;
+                        part.alpha[2] = spu[q + 4] & 0x0F;
+                        part.alpha[1] = spu[q + 5] >> 4;
+                        part.alpha[0] = spu[q + 5] & 0x0F;
+                        lines.parts.push_back(part);
+                    }
+                    if (!lines.parts.empty())
+                        changes.push_back(std::move(lines));
+                }
+                int opacity = 0;
+                for (const ColconLines& lines : changes)
+                    for (const ColconPart& part : lines.parts)
+                        for (const int a : part.alpha) opacity += a;
+                if (!changes.empty() && opacity > colconOpacity)
+                {
+                    colcon = std::move(changes);
+                    colconOpacity = opacity;
+                }
+                p = stop;
                 break;
             }
             default:  // 0xFF ends the sequence, and an unknown command cannot be stepped over
@@ -397,6 +453,23 @@ void VobSubDecoder::decode(const uint8_t* spu, const int size, const int64_t pts
         uint32_t argb[4];
         for (int i = 0; i < 4; ++i)
             argb[i] = alpha[i] == 0 ? 0 : static_cast<uint32_t>(alpha[i] * 17) << 24 | m_palette[colour[i]];
+        const auto toArgb = [this](const int c, const int a)
+        { return a == 0 ? 0u : static_cast<uint32_t>(a * 17) << 24 | m_palette[c & 0x0F]; };
+        // the colours of a pixel at a column of a line of the screen: those of the part of a change that covers it
+        const auto pixelAt = [&](const int value, const int canvasY, const int canvasX)
+        {
+            for (const ColconLines& lines : colcon)
+                if (canvasY >= lines.first && canvasY <= lines.last)
+                {
+                    const ColconPart* hit = nullptr;
+                    for (const ColconPart& part : lines.parts)
+                        if (part.column <= canvasX)
+                            hit = &part;
+                    if (hit)
+                        return toArgb(hit->colour[value], hit->alpha[value]);
+                }
+            return argb[value];
+        };
         // The pixel data ends where the control sequences begin.
         NibbleReader field[2] = {NibbleReader(spu, fieldStart[0], firstSequence),
                                  NibbleReader(spu, fieldStart[1], firstSequence)};
@@ -411,11 +484,19 @@ void VobSubDecoder::decode(const uint8_t* spu, const int size, const int64_t pts
                 int run = code >> 2;
                 if (run == 0 || run > w - x)
                     run = w - x;
-                const uint32_t pixel = argb[code & 3];
-                if (pixel && canvasY < m_pgs.height())
+                if (colcon.empty())
+                {
+                    const uint32_t pixel = argb[code & 3];
+                    if (pixel && canvasY < m_pgs.height())
+                        for (int i = 0; i < run; ++i)
+                            if (x1 + x + i < m_pgs.width())
+                                canvas[static_cast<size_t>(canvasY) * m_pgs.width() + x1 + x + i] = pixel;
+                }
+                else if (canvasY < m_pgs.height())
                     for (int i = 0; i < run; ++i)
                         if (x1 + x + i < m_pgs.width())
-                            canvas[static_cast<size_t>(canvasY) * m_pgs.width() + x1 + x + i] = pixel;
+                            if (const uint32_t pixel = pixelAt(code & 3, canvasY, x1 + x + i))
+                                canvas[static_cast<size_t>(canvasY) * m_pgs.width() + x1 + x + i] = pixel;
                 x += run;
             }
             reader.alignToByte();
