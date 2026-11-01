@@ -19,12 +19,14 @@ struct Extent
     uint64_t offset = 0;
     uint64_t length = 0;
     bool hole = false;
+    int file = 0;  // which of FileView::files holds it
 };
 
 // A file inside an image as File reads it: its parts in the image, or its bytes when they are kept in its entry.
 struct FileView
 {
     std::string imageFile;
+    std::vector<std::string> files;  // the files the extents are in: the image file, or those of a virtual file
     uint64_t size = 0;
     std::vector<Extent> extents;
     std::vector<uint8_t> data;
@@ -51,6 +53,17 @@ bool openFile(const std::string& path, FileView* view);
 
 // Why an image file cannot be read (not a UDF image, a kind of UDF not read); empty when it can.
 std::string unreadableReason(const std::string& imageFile);
+
+// A file made of parts of other files, as the cells of a DVD title are parts of its VOB files: reading `name` reads
+// the parts one after another. The name is taken as a path by everything that opens files, and names no file on a
+// drive. The parts may be files inside an image.
+struct Piece
+{
+    std::string file;
+    uint64_t offset = 0;
+    uint64_t length = 0;
+};
+void addVirtualFile(const std::string& name, const std::vector<Piece>& pieces);
 
 // For a path inside an image: whether it names a folder or a file there.
 bool isDir(const std::string& path);

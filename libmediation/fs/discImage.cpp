@@ -641,8 +641,34 @@ bool split(const std::string& path, std::string* imageFile, std::string* inner)
     return false;
 }
 
+std::mutex virtualLock;
+std::map<std::string, std::vector<Piece>>& virtualFiles()
+{
+    static std::map<std::string, std::vector<Piece>> files;
+    return files;
+}
+
+bool virtualFile(const std::string& name, std::vector<Piece>* pieces)
+{
+    std::lock_guard<std::mutex> guard(virtualLock);
+    const auto it = virtualFiles().find(name);
+    if (it == virtualFiles().end())
+        return false;
+    if (pieces)
+        *pieces = it->second;
+    return true;
+}
+
+void addVirtualFile(const std::string& name, const std::vector<Piece>& pieces)
+{
+    std::lock_guard<std::mutex> guard(virtualLock);
+    virtualFiles()[name] = pieces;
+}
+
 bool isInside(const std::string& path)
 {
+    if (virtualFile(path, nullptr))
+        return true;
     // Cheap first: most paths have no .iso part at all.
     if (lower(path).find(".iso") == std::string::npos)
         return false;
@@ -652,6 +678,26 @@ bool isInside(const std::string& path)
 
 bool openFile(const std::string& path, FileView* view)
 {
+    if (std::vector<Piece> pieces; virtualFile(path, &pieces))
+    {
+        view->imageFile.clear();
+        view->files.clear();
+        view->size = 0;
+        view->inEntry = false;
+        for (const Piece& p : pieces)
+        {
+            auto at = std::find(view->files.begin(), view->files.end(), p.file);
+            if (at == view->files.end())
+                at = view->files.insert(view->files.end(), p.file);
+            Extent e;
+            e.offset = p.offset;
+            e.length = p.length;
+            e.file = static_cast<int>(at - view->files.begin());
+            view->extents.push_back(e);
+            view->size += p.length;
+        }
+        return true;
+    }
     std::string imageFile, inner;
     if (!split(path, &imageFile, &inner))
         return false;
@@ -663,6 +709,7 @@ bool openFile(const std::string& path, FileView* view)
     if (!node->damaged.empty())
         throw std::runtime_error("The disc image " + imageFile + " is damaged at " + inner + ": " + node->damaged);
     view->imageFile = imageFile;
+    view->files = {imageFile};
     view->size = node->size;
     view->inEntry = node->inEntry;
     view->data = node->data;
@@ -705,6 +752,8 @@ bool isDir(const std::string& path)
 
 bool exists(const std::string& path)
 {
+    if (virtualFile(path, nullptr))
+        return true;
     std::string imageFile, inner;
     if (!split(path, &imageFile, &inner))
         return false;

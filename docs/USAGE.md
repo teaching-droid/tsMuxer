@@ -104,6 +104,13 @@ V_MPEG4/ISO/AVC, "film.iso", title=main, track=4113
 A_AC3, "film.iso", title=main, track=4352
 ```
 
+A DVD-Video folder (the folder holding VIDEO_TS, or VIDEO_TS itself) or image is listed the same way. On a meta line, `title=main` or `title=<number>` reads the title's cells in play order from its VOB files. Where the timestamps start again, the parts are joined as a "+" join is. A title with several angles is read in its first angle. Audio tracks take the disc's language unless the line gives `lang=`, and a Matroska output gets the title's chapters. A disc output takes chapters only from `--custom-chapters`: `tsMuxeR --show-title=main dvd.iso` lists the title's tracks, its audio languages and its chapters as a `--custom-chapters=` value to copy into MUXOPT. On a Blu-ray it lists the tracks of the title's playlist. Track numbers on a DVD: video 224; audio 128 and up for AC-3, 136 for DTS, 160 for LPCM and 192 for MPEG. DVD subtitles are not read. A title whose video is still encrypted is refused.
+```
+MUXOPT --vbr
+V_MPEG-2, "dvd.iso", title=main, track=224
+A_AC3, "dvd.iso", title=main, track=128
+```
+
 Supported output formats:
 * **TS** - MPEG Transport Stream
 * **M2TS** - Blu-ray MPEG-2 Transport Stream

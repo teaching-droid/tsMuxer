@@ -32,6 +32,7 @@ static bool isKnownTrackParam(const std::string& name);
 #include "discTitles.h"
 #include "dtsStreamReader.h"
 #include "dvbSubStreamReader.h"
+#include "dvdTitles.h"
 #include "flacStreamReader.h"
 #include "h264StreamReader.h"
 #include "hevcDolbyVisionFilter.h"
@@ -880,21 +881,43 @@ void METADemuxer::openFile(const string& streamName)
         }
         string codec = trimStr(params[0]);
         string codecStreamName = trimStr(params[1]);
-        // title= names a title of a Blu-ray disc folder or image (discTitles.h): the line reads that title's playlist
+        // title= names a title of a Blu-ray or DVD disc folder or image (discTitles.h, dvdTitles.h): the line reads the
+        // title's playlist, or the cells of the DVD title, whose audio takes its language from the disc
         if (const auto title = addParams.find("title"); title != addParams.end())
         {
             const string disc = unquoteStr(codecStreamName);
-            string playlist;
             try
             {
-                playlist = discTitlePlaylist(disc, title->second);
+                const string videoTs = blurayDiscRoot(disc).empty() ? dvdVideoTs(disc) : string();
+                if (!videoTs.empty())
+                {
+                    std::vector<std::pair<int, std::string>> languages;
+                    std::vector<double> chapters;
+                    codecStreamName = dvdTitleSource(videoTs, title->second, &languages, &chapters);
+                    if (m_dvdChapters.empty())
+                        for (const double start : chapters)
+                            m_dvdChapters.emplace_back(llround(start * 1e9), std::string());
+                    LTRACE(LT_INFO, 2,
+                           "title=" << title->second << " of " << disc << " is read as " << codecStreamName << ".");
+                    const auto track = addParams.find("track");
+                    if (!addParams.count("lang") && track != addParams.end())
+                        for (const auto& [id, lang] : languages)
+                            if (std::to_string(id) == track->second)
+                                if (const string code = iso639FromBcp47(lang); !code.empty())
+                                    addParams["lang"] = code;
+                }
+                else
+                {
+                    const string playlist = discTitlePlaylist(disc, title->second);
+                    LTRACE(LT_INFO, 2,
+                           "title=" << title->second << " of " << disc << " is the playlist " << playlist << ".");
+                    codecStreamName = "\"" + playlist + "\"";
+                }
             }
             catch (const std::exception& e)
             {
                 THROW(ERR_COMMON, e.what() << ".")
             }
-            LTRACE(LT_INFO, 2, "title=" << title->second << " of " << disc << " is the playlist " << playlist << ".");
-            codecStreamName = "\"" + playlist + "\"";
             addParams.erase(title);
         }
         codec = strToUpperCase(codec);
@@ -3185,6 +3208,9 @@ std::vector<AVChapter> METADemuxer::getChapters()
         if (!chapters.empty())
             return chapters;
     }
+    // A DVD title keeps its chapters in the IFO files: where each starts in the title (dvdTitles.h)
+    if (!m_dvdChapters.empty())
+        return m_dvdChapters;
 
     for (auto& [name, demuxerData] : m_containerReader.m_demuxers)
     {

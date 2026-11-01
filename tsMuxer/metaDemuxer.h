@@ -365,6 +365,7 @@ class METADemuxer final : public AbstractDemuxer
     // MPLSPlayItemsMap m_mplsPlayItemsMap;
     // MPLSPlayItemsMap m_mplsStreamMap;
     MPLSCache m_mplsStreamMap;
+    std::vector<AVChapter> m_dvdChapters;  // the chapters of the DVD title a line names with title=
     std::set<std::string> m_processedTracks;
     std::set<std::string> m_processedLines;  // the files and track of every line read, to tell a repeated line
 

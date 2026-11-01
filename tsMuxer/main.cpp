@@ -27,6 +27,7 @@
 #include "convertUTF.h"
 #include "discMeta.h"
 #include "discTitles.h"
+#include "dvdTitles.h"
 #include "h264StreamReader.h"
 #include "hevcStreamReader.h"
 #include "iso_writer.h"
@@ -1029,10 +1030,11 @@ muxing or demuxing process.
 
 A file inside a disc image is read without mounting the image: give its path
 after the image, as film.iso/BDMV/PLAYLIST/00800.mpls.
-A Blu-ray disc folder or image given alone lists its titles, the main film
+A Blu-ray or DVD disc folder or image given alone lists its titles, the main film
 first: tsMuxeR [--all-playlists] [--min-title-length=<seconds>] <disc>
+tsMuxeR --show-title=<number|main> <disc> lists the tracks of one title.
 On a meta line, title=main or title=<number> after a disc folder or image
-takes the playlist of that title.
+takes that title: the playlist of a Blu-ray, the cells of a DVD title.
 
 Meta file format:
 File MUST have the .meta extension and be encoded in UTF-8 (but see README.md).
@@ -4551,12 +4553,15 @@ int main(int argc, char** argv)
         // instead of saying what the mode expects.
         if (argc >= 2 && string(argv[1]) == "--bdmv-to-iso")
             return bdmvFolderToGuardedIso(argc, argv);
-        // A Blu-ray disc folder or image given alone lists its titles (discTitles.h); --all-playlists and
-        // --min-title-length=<seconds> may come before it.
+        // A Blu-ray or DVD disc folder or image given alone lists its titles (discTitles.h, dvdTitles.h);
+        // --all-playlists and --min-title-length=<seconds> may come before it, and --show-title=<number or main> lists
+        // the tracks of that title instead.
+        static std::string titleSource;  // argv[1] for the listing of one title, below
         {
             bool all = false;
             double minSeconds = 120;
             bool titleOptions = false;
+            std::string oneTitle;
             int a = 1;
             for (; a < argc - 1; ++a)
             {
@@ -4571,9 +4576,55 @@ int main(int argc, char** argv)
                                                     "--min-title-length=600.")
                     minSeconds = std::stod(value);
                 }
+                else if (strStartWith(option, "--show-title="))
+                    oneTitle = option.substr(13);
                 else
                     break;
                 titleOptions = true;
+            }
+            if (a == argc - 1 && !oneTitle.empty())
+            {
+                // One title: listed as its playlist, or as the first run of cells of the DVD title, as any source is.
+                // The reason a title cannot be read is said as a sentence of its own, as on a meta line.
+                try
+                {
+                    if (const string root = blurayDiscRoot(argv[a]); !root.empty())
+                        titleSource = discTitlePlaylist(argv[a], oneTitle);
+                    else if (const string videoTs = dvdVideoTs(argv[a]); !videoTs.empty())
+                    {
+                        std::vector<std::pair<int, std::string>> languages;
+                        std::vector<double> chapters;
+                        const string source = dvdTitleSource(videoTs, oneTitle, &languages, &chapters);
+                        titleSource = unquoteStr(splitQuotedStr(source.c_str(), '+')[0]);
+                        cout << "Source for a meta line: \"" << argv[a] << "\", title=" << oneTitle << " (" << source
+                             << ")" << endl;
+                        if (!languages.empty())
+                        {
+                            cout << "Languages of the disc:";
+                            for (const auto& [track, lang] : languages) cout << " track " << track << " " << lang;
+                            cout << endl;
+                        }
+                        // A Matroska output takes them from the line; a disc's marks come only from this option
+                        if (!chapters.empty())
+                        {
+                            cout << "Chapters of the title, for a disc: --custom-chapters=";
+                            for (size_t i = 0; i < chapters.size(); ++i)
+                                cout << (i ? ";" : "") << floatToTime(chapters[i]);
+                            cout << endl;
+                        }
+                    }
+                    else
+                        THROW(ERR_COMMON, argv[a]
+                                              << " is no Blu-ray or DVD disc folder or image, so --show-title names no "
+                                                 "title in it.")
+                }
+                catch (const std::runtime_error& e)
+                {
+                    THROW(ERR_COMMON, e.what() << ".")
+                }
+                argv[1] = titleSource.data();
+                argc = 2;
+                titleOptions = false;
             }
             if (a == argc - 1 && (titleOptions || argc == 2))
             {
@@ -4582,8 +4633,13 @@ int main(int argc, char** argv)
                     cout << describeDiscTitles(listDiscTitles(root, minSeconds, all));
                     return 0;
                 }
+                if (const string videoTs = dvdVideoTs(argv[a]); !videoTs.empty())
+                {
+                    cout << describeDvdTitles(listDvdTitles(videoTs, minSeconds, all));
+                    return 0;
+                }
                 if (titleOptions)
-                    THROW(ERR_COMMON, argv[a] << " is no Blu-ray disc folder or image. --all-playlists and "
+                    THROW(ERR_COMMON, argv[a] << " is no Blu-ray or DVD disc folder or image. --all-playlists and "
                                                  "--min-title-length list the titles of one.")
             }
         }

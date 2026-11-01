@@ -9,7 +9,9 @@ struct File::ImageView
 {
     discImage::FileView file;
     std::vector<uint64_t> starts;  // where each part begins in the file
-    File image;                    // the image file, opened for this file alone so that readers do not share a position
+    File image;                    // the file of the part read last, opened for this file alone so that readers do not
+                                   // share a position: the image file, or a file a virtual file is made of
+    mutable int imageIndex = -1;   // which of file.files it is
     mutable int64_t imagePos = -1;
 };
 
@@ -21,8 +23,7 @@ bool File::openInImage(const char* fName, const unsigned int oflag)
     auto* view = new ImageView;
     try
     {
-        if (!discImage::openFile(fName, &view->file) ||
-            (!view->file.inEntry && !view->image.open(view->file.imageFile.c_str(), ofRead | ofOpenExisting)))
+        if (!discImage::openFile(fName, &view->file))
         {
             delete view;
             return false;
@@ -77,6 +78,17 @@ int File::readInImage(void* buffer, const uint32_t count) const
         else
         {
             const auto at = static_cast<int64_t>(e.offset + within);
+            if (m_view->imageIndex != e.file)
+            {
+                if (m_view->image.isOpen())
+                    m_view->image.close();
+                m_view->imagePos = -1;
+                m_view->imageIndex = -1;
+                if (e.file < 0 || static_cast<size_t>(e.file) >= file.files.size() ||
+                    !m_view->image.open(file.files[static_cast<size_t>(e.file)].c_str(), ofRead | ofOpenExisting))
+                    return done ? static_cast<int>(done) : -1;
+                m_view->imageIndex = e.file;
+            }
             if (m_view->imagePos != at && m_view->image.seek(at) != at)
                 return done ? static_cast<int>(done) : -1;
             const int r = m_view->image.read(out + done, n);
