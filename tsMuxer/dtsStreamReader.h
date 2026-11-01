@@ -3,6 +3,8 @@
 #ifndef DTS_STREAM_READER_
 #define DTS_STREAM_READER_
 
+#include <vector>
+
 #include "simplePacketizerReader.h"
 
 class DTSStreamReader final : public SimplePacketizerReader
@@ -70,9 +72,29 @@ class DTSStreamReader final : public SimplePacketizerReader
     bool isSecondary() override;
     // The bit depth of the DTS-HD extension, 0 without one.
     [[nodiscard]] int getHDBitDepth() const { return hd_bitDepth; }
-    // The first DTS core frame in [buff, end) is in 16-bit little-endian byte order, which tsMuxeR does not read, and
-    // a second one follows it
-    static bool isLittleEndianCore(const uint8_t* buff, const uint8_t* end);
+    // The form a DTS stream stores its words in. A disc and a TS carry the core in 16-bit big-endian words; a stream
+    // can also be stored in 16-bit little-endian words, or with 14 bits in each 16-bit word of either order, as on a
+    // DTS music CD. The reader turns the other forms into the first one (setBuffer).
+    enum class WordForm
+    {
+        unknown,
+        be16,
+        le16,
+        be14,
+        le14
+    };
+    // The form of the first DTS core frame in [buff, end) that a second frame of the same form follows (or, after a
+    // core, a DTS-HD substream); unknown when there is none
+    static WordForm wordFormAt(const uint8_t* buff, const uint8_t* end);
+    [[nodiscard]] WordForm wordForm() const { return m_words; }
+    // The stream in [buff, end) in 16-bit big-endian words; form: its form (not unknown). in: the bytes not used yet
+    // (a frame of a 14-bit form, or a byte of a 16-bit word, that the data ends inside), kept for the next call; at the
+    // end of the stream (last) also those, as far as they go.
+    static void toBigEndian16(WordForm form, std::vector<uint8_t>& in, std::vector<uint8_t>& out, bool last);
+    void setBuffer(uint8_t* data, uint32_t dataLen, bool lastBlock = false) override;
+    // in bytes of the source, also for a stream turned into another word form: the progress and the check that the
+    // whole source was read compare it with the file size
+    int64_t getProcessedSize() override;
 
    protected:
     int getHeaderLen() override { return DTS_HEADER_SIZE; }
@@ -161,6 +183,13 @@ class DTSStreamReader final : public SimplePacketizerReader
     int decodeHdInfo(uint8_t* buff, const uint8_t* end);
     void probeDtsX(uint8_t* buff, const uint8_t* end);
     void checkIfOnlyHDDataExists(uint8_t* buff, const uint8_t* end);
+    // setBuffer: the form of the stream, the bytes not turned into 16-bit big-endian words yet, and what is handed on
+    WordForm m_words = WordForm::unknown;
+    std::vector<uint8_t> m_wordsPending;
+    std::vector<uint8_t> m_wordsOut;
+    int64_t m_wordsIn = 0;      // the bytes of the source given to setBuffer
+    int64_t m_wordsPassed = 0;  // the bytes handed on for them
+    bool m_wordsSaid = false;
 };
 
 #endif

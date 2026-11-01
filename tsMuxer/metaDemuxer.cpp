@@ -4414,11 +4414,38 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
         // A WebVTT file is read by the SRT reader (SRTStreamReader::skipNonCueLine); it was listed as "Can't detect"
         else if (fileExt == "srt" || fileExt == "vtt")
             containerType = AbstractStreamReader::ContainerType::ctSRT;
-        CheckStreamRez trackRez = detectTrackReader(tmpBuffer.get(), len, containerType, 0, 0);
-        // DTS in 16-bit little-endian byte order, which tsMuxeR does not read, was "Can't detect stream type"
-        if (trackRez.codecInfo.programName.empty() && len > 0 &&
-            DTSStreamReader::isLittleEndianCore(tmpBuffer.get(), tmpBuffer.get() + len))
-            trackRez.notSupported = "DTS in 16-bit little-endian byte order";
+        // A WAV of a DTS music CD holds DTS as 16-bit PCM at 44.1 kHz, 14 bits of the stream to a word: read as PCM, it
+        // was refused for its rate. Such a file is listed as the DTS it holds, below.
+        const DTSStreamReader::WordForm wavDts =
+            containerType == AbstractStreamReader::ContainerType::ctLPCM && len > 0
+                ? DTSStreamReader::wordFormAt(tmpBuffer.get(), tmpBuffer.get() + len)
+                : DTSStreamReader::WordForm::unknown;
+        CheckStreamRez trackRez;
+        if (wavDts == DTSStreamReader::WordForm::unknown)
+            trackRez = detectTrackReader(tmpBuffer.get(), len, containerType, 0, 0);
+        else if (wavDts == DTSStreamReader::WordForm::be16)
+            trackRez = detectTrackReader(tmpBuffer.get(), len, AbstractStreamReader::ContainerType::ctNone, 0, 0);
+        else
+            trackRez.codecInfo.codecID = CODEC_A_DTS;  // listed below from its frames
+        // DTS in 16-bit little-endian words, or 14 bits to a word, as on a DTS music CD: listed as the reader of a mux
+        // reads it, in 16-bit big-endian words. A little-endian stream was "Can't detect stream type", and a 14-bit one
+        // was listed but muxed as it was.
+        if (len > 0 && (trackRez.codecInfo.programName.empty() || trackRez.codecInfo.codecID == CODEC_A_DTS))
+            if (const auto form = DTSStreamReader::wordFormAt(tmpBuffer.get(), tmpBuffer.get() + len);
+                form != DTSStreamReader::WordForm::unknown && form != DTSStreamReader::WordForm::be16)
+            {
+                std::vector<uint8_t> in(tmpBuffer.get(), tmpBuffer.get() + len), out;
+                DTSStreamReader::toBigEndian16(form, in, out, true);
+                CheckStreamRez words = detectTrackReader(out.data(), static_cast<int>(out.size()),
+                                                         AbstractStreamReader::ContainerType::ctNone, 0, 0);
+                if (words.codecInfo.codecID == CODEC_A_DTS)
+                {
+                    words.streamDescr += form == DTSStreamReader::WordForm::le16 ? " (stored little-endian"
+                                                                                 : " (stored 14 bits to a word";
+                    words.streamDescr += wavDts != DTSStreamReader::WordForm::unknown ? ", in a WAV)" : ")";
+                    trackRez = words;
+                }
+            }
 
         if (strStartWith(trackRez.codecInfo.programName, "V_"))
             addTrack(Vstreams, trackRez);

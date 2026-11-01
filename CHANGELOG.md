@@ -42,6 +42,10 @@
 
 * **The window shows where a playlist puts each track.** Two columns of the track list, "playlist" and "clip", give a track's number among the tracks of its kind (audio, subtitles) in the playlist, which is the number a player gives it, and in its clip, by PID. They show while a playlist is in the list. The listing of a playlist gives the same in a "Stream order" line. (#52, thanks to @bulba99 for the request)
 
+### Audio
+
+* **DTS stored little-endian or 14 bits to a word is read, also from the WAV of a DTS music CD.** A DTS file in 16-bit little-endian words was refused, a file with 14 bits of the stream in each 16-bit word was muxed as it was, which a player cannot decode, and the WAV of a DTS music CD was listed as PCM and refused for its 44.1 kHz rate. Such a stream is now written in 16-bit big-endian words, the form a disc carries; the DTS frames themselves stay as they are, bit for bit. The listing says how the stream was stored.
+
 ### Video
 
 * **A raw video file that ends inside a picture says so.** A raw MPEG-2, H.264 or HEVC file (.m2v, .264, .hevc and the like) cut at a byte position ends with part of a picture, which was muxed as the last picture without a word, and a player shows it damaged or skips it. The slices of the last picture are now read to their end, and where the data stops inside the picture, a warning gives the row of macroblocks or coding tree units it stops in. A file that ends between two pictures gives none.

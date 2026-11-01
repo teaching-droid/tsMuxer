@@ -2,6 +2,8 @@
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "dtsStreamReader.h"
 
+#include <fs/systemlog.h>
+
 #include <bit>
 #include <cmath>
 #include <cstddef>
@@ -246,12 +248,6 @@ uint8_t* DTSStreamReader::findFrame(uint8_t* buff, uint8_t* end)
     if (m_firstCall)
     {
         m_firstCall = false;
-        // a mux of DTS in a form tsMuxeR does not read is refused at its first frame (isLittleEndianCore); not the
-        // probe, which goes on to the other readers
-        if (!m_testMode && isLittleEndianCore(buff, end))
-            THROW(ERR_COMMON,
-                  "DTS in 16-bit little-endian byte order is not supported. tsMuxeR reads DTS in "
-                  "big-endian byte order only, the order a Blu-ray disc and a TS carry.")
         checkIfOnlyHDDataExists(buff, end);
     }
 
@@ -1443,34 +1439,227 @@ void DTSStreamReader::BufLeToBe(uint8_t* p_out, const uint8_t* p_in, const int i
     }
 }
 
-// ** DTS IN 16-BIT LITTLE-ENDIAN BYTE ORDER. ** A DTS core can be stored in 16-bit words of the other byte order.
-// tsMuxeR reads the big-endian order only, which a disc and a TS carry, and passes the frames on as they are. A
-// little-endian file was not recognised: the listing said "Can't detect stream type", and a mux with A_DTS said that
-// the file produced no frames. (The branch of decodeFrame for such frames reads the header before its bytes are
-// swapped, so it never takes a frame.) A first frame in that order, with a second one where its length says, is named,
-// so the listing and a mux can say that it is not supported.
-bool DTSStreamReader::isLittleEndianCore(const uint8_t* buff, const uint8_t* end)
+// ** DTS IN OTHER WORD FORMS. ** A DTS stream can be stored in 16-bit words of the other byte order, or with 14 bits of
+// the stream in each 16-bit word (the two upper bits repeating the third), in either byte order, as on a DTS music CD,
+// whose WAV files carry it as 16-bit PCM. A disc and a TS carry the core in 16-bit big-endian words only. A
+// little-endian stream was refused, and a 14-bit one was passed on as it was, which a player cannot decode. Both are
+// turned into the 16-bit big-endian form now, frame by frame for the 14-bit forms (a frame of FSIZE + 1 bytes takes
+// ( FSIZE + 1 ) * 8 / 14 words there, the last one filled up).
+namespace
+{
+using WordForm = DTSStreamReader::WordForm;
+
+bool syncAt(const uint8_t* p, const WordForm form)
+{
+    switch (form)
+    {
+    case WordForm::be16:
+        return p[0] == 0x7f && p[1] == 0xfe && p[2] == 0x80 && p[3] == 0x01;
+    case WordForm::le16:
+        return p[0] == 0xfe && p[1] == 0x7f && p[2] == 0x01 && p[3] == 0x80;
+    case WordForm::be14:
+        return p[0] == 0x1f && p[1] == 0xff && p[2] == 0xe8 && p[3] == 0x00 && p[4] == 0x07 && (p[5] & 0xf0) == 0xf0;
+    case WordForm::le14:
+        return p[0] == 0xff && p[1] == 0x1f && p[2] == 0x00 && p[3] == 0xe8 && (p[4] & 0xf0) == 0xf0 && p[5] == 0x07;
+    default:
+        return false;
+    }
+}
+
+// The bits of the 14-bit words in [p, p + words * 2), 14 from each, MSB first; what fills the last byte is left out
+void repack14(const uint8_t* p, const size_t words, const bool littleEndian, std::vector<uint8_t>& out)
+{
+    uint32_t acc = 0;
+    int bits = 0;
+    for (size_t i = 0; i < words; ++i, p += 2)
+    {
+        const uint32_t word = littleEndian ? p[1] << 8 | p[0] : p[0] << 8 | p[1];
+        acc = acc << 14 | (word & 0x3fff);
+        bits += 14;
+        while (bits >= 8)
+        {
+            bits -= 8;
+            out.push_back(static_cast<uint8_t>(acc >> bits));
+        }
+        acc &= (1u << bits) - 1;
+    }
+}
+
+// The header's FSIZE + 1 of the frame at p, in the bytes of the 16-bit form; 0 when no frame of the form begins there
+// or [p, end) ends before its header does
+size_t frameSize16At(const uint8_t* p, const uint8_t* end, const WordForm form)
+{
+    if (end - p < 16 || !syncAt(p, form))
+        return 0;
+    uint8_t header[16];
+    if (form == WordForm::be16 || form == WordForm::le16)
+    {
+        for (int i = 0; i < 14; i += 2)
+        {
+            header[i] = form == WordForm::be16 ? p[i] : p[i + 1];
+            header[i + 1] = form == WordForm::be16 ? p[i + 1] : p[i];
+        }
+    }
+    else
+    {
+        std::vector<uint8_t> h;
+        repack14(p, 8, form == WordForm::le14, h);
+        std::copy(h.begin(), h.end(), header);
+    }
+    const size_t fsize = ((header[5] & 0x03) << 12 | header[6] << 4 | header[7] >> 4) + 1;
+    return fsize < 96 ? 0 : fsize;
+}
+
+// The bytes the frame at p takes in its form
+size_t frameBytesAt(const uint8_t* p, const uint8_t* end, const WordForm form)
+{
+    const size_t fsize = frameSize16At(p, end, form);
+    return form == WordForm::be16 || form == WordForm::le16 ? fsize : 2 * ((fsize * 8 + 13) / 14);
+}
+}  // namespace
+
+DTSStreamReader::WordForm DTSStreamReader::wordFormAt(const uint8_t* buff, const uint8_t* end)
 {
     if (buff == nullptr || end == nullptr)
-        return false;
-    for (const uint8_t* p = buff; end - p >= static_cast<std::ptrdiff_t>(DTS_HEADER_SIZE); ++p)
+        return WordForm::unknown;
+    static constexpr WordForm forms[] = {WordForm::be16, WordForm::le16, WordForm::be14, WordForm::le14};
+    for (const uint8_t* p = buff; end - p >= 16; ++p)
+        for (const WordForm form : forms)
+        {
+            const size_t size = frameBytesAt(p, end, form);
+            if (size == 0 || end - p < static_cast<std::ptrdiff_t>(size + 4))
+                continue;
+            const uint8_t* next = p + size;
+            // a second frame of the form, or the DTS-HD substream after the core (its sync in that byte order)
+            const bool hd =
+                (form == WordForm::be16 && next[0] == 0x64 && next[1] == 0x58 && next[2] == 0x20 && next[3] == 0x25) ||
+                (form == WordForm::le16 && next[0] == 0x58 && next[1] == 0x64 && next[2] == 0x25 && next[3] == 0x20);
+            if (hd || (end - next >= 16 && syncAt(next, form)))
+                return form;
+        }
+    return WordForm::unknown;
+}
+
+void DTSStreamReader::toBigEndian16(const WordForm form, std::vector<uint8_t>& in, std::vector<uint8_t>& out,
+                                    const bool last)
+{
+    size_t pos = 0;
+    if (form == WordForm::le16)
     {
-        if ((p[0] == 0x7f && p[1] == 0xfe && p[2] == 0x80 && p[3] == 0x01) ||
-            (p[0] == 0x1f && p[1] == 0xff && p[2] == 0xe8 && p[3] == 0x00) ||
-            (p[0] == 0xff && p[1] == 0x1f && p[2] == 0x00 && p[3] == 0xe8))
-            return false;  // a frame in a form the reader takes, 16-bit big endian or 14-bit
-        if (!(p[0] == 0xfe && p[1] == 0x7f && p[2] == 0x01 && p[3] == 0x80))
-            continue;
-        uint8_t header[DTS_HEADER_SIZE] = {};
-        BufLeToBe(header, p, DTS_HEADER_SIZE);
-        const int frameSize = ((header[5] & 0x03) << 12 | header[6] << 4 | header[7] >> 4) + 1;  // FSIZE
-        if (frameSize < 96 || end - p < frameSize + 4)
-            continue;
-        const uint8_t* next = p + frameSize;
-        if (next[0] == p[0] && next[1] == p[1] && next[2] == p[2] && next[3] == p[3])
-            return true;
+        for (; pos + 2 <= in.size(); pos += 2)
+        {
+            out.push_back(in[pos + 1]);
+            out.push_back(in[pos]);
+        }
     }
-    return false;
+    else
+    {
+        const bool le = form == WordForm::le14;
+        while (pos < in.size())
+        {
+            const uint8_t* p = in.data() + pos;
+            const uint8_t* end = in.data() + in.size();
+            const size_t fsize = frameSize16At(p, end, form);
+            if (fsize == 0)
+            {
+                if (end - p < 16 && !last)
+                    break;  // its header may be in the next block
+                // no frame here: the words up to the next frame, unpacked as they are
+                size_t skip = 2;
+                while (pos + skip + 16 <= in.size() && !syncAt(p + skip, form)) skip += 2;
+                if (pos + skip + 16 > in.size() && !last)
+                    break;
+                skip = (std::min)(skip, (in.size() - pos) / 2 * 2);
+                if (skip == 0)
+                    break;
+                repack14(p, skip / 2, le, out);
+                pos += skip;
+                continue;
+            }
+            const size_t size = 2 * ((fsize * 8 + 13) / 14);
+            if (static_cast<size_t>(end - p) < size)
+            {
+                if (!last)
+                    break;
+                repack14(p, static_cast<size_t>(end - p) / 2, le, out);  // the frame the stream ends inside
+                pos = in.size();
+                break;
+            }
+            // the frame, FSIZE + 1 bytes, without the bits that fill its last word
+            const size_t before = out.size();
+            repack14(p, size / 2, le, out);
+            out.resize(before + fsize);
+            pos += size;
+        }
+    }
+    if (last)
+        pos = in.size();
+    in.erase(in.begin(), in.begin() + static_cast<std::ptrdiff_t>(pos));
+}
+
+void DTSStreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const bool lastBlock)
+{
+    // the other forms come in a file of their own or a WAV; a container's frames, each with its own time, are passed on
+    // as they come
+    if (m_words == WordForm::unknown && m_containerType != ContainerType::ctNone &&
+        m_containerType != ContainerType::ctLPCM)
+        m_words = WordForm::be16;
+    if (m_words == WordForm::be16)
+    {
+        SimplePacketizerReader::setBuffer(data, dataLen, lastBlock);
+        return;
+    }
+    if (dataLen > 0 && data != nullptr)
+        m_wordsPending.insert(m_wordsPending.end(), data + MAX_AV_PACKET_SIZE, data + MAX_AV_PACKET_SIZE + dataLen);
+    m_wordsIn += dataLen;
+    m_wordsOut.assign(MAX_AV_PACKET_SIZE, 0);
+    if (m_words == WordForm::unknown)
+    {
+        const WordForm form = wordFormAt(m_wordsPending.data(), m_wordsPending.data() + m_wordsPending.size());
+        if (form == WordForm::unknown && !lastBlock && m_wordsPending.size() < (1u << 20))
+        {
+            SimplePacketizerReader::setBuffer(m_wordsOut.data(), 0, false);  // more of the stream first
+            return;
+        }
+        m_words = form == WordForm::unknown ? WordForm::be16 : form;
+        if (m_words == WordForm::be16)
+        {
+            m_wordsOut.insert(m_wordsOut.end(), m_wordsPending.begin(), m_wordsPending.end());
+            m_wordsPassed += static_cast<int64_t>(m_wordsPending.size());
+            m_wordsPending = std::vector<uint8_t>();
+            SimplePacketizerReader::setBuffer(m_wordsOut.data(),
+                                              static_cast<uint32_t>(m_wordsOut.size() - MAX_AV_PACKET_SIZE), lastBlock);
+            m_wordsOut = std::vector<uint8_t>();
+            return;
+        }
+        if (!m_testMode)
+            LTRACE(LT_INFO, 2,
+                   "DTS track " << m_streamIndex << " is stored "
+                                << (m_words == WordForm::le16   ? "in 16-bit little-endian words"
+                                    : m_words == WordForm::le14 ? "with 14 bits in each 16-bit little-endian word"
+                                                                : "with 14 bits in each 16-bit word")
+                                << ". It is written in 16-bit big-endian words, the form a disc carries.");
+        // the words begin where the first frame does: the bytes before it are passed on as they are
+        const uint8_t* const begin = m_wordsPending.data();
+        const uint8_t* const end = begin + m_wordsPending.size();
+        const uint8_t* first = begin;
+        while (end - first >= 16 && frameBytesAt(first, end, m_words) == 0) ++first;
+        m_wordsOut.insert(m_wordsOut.end(), begin, first);
+        m_wordsPending.erase(m_wordsPending.begin(), m_wordsPending.begin() + (first - begin));
+    }
+    toBigEndian16(m_words, m_wordsPending, m_wordsOut, lastBlock);
+    m_wordsPassed += static_cast<int64_t>(m_wordsOut.size() - MAX_AV_PACKET_SIZE);
+    SimplePacketizerReader::setBuffer(m_wordsOut.data(), static_cast<uint32_t>(m_wordsOut.size() - MAX_AV_PACKET_SIZE),
+                                      lastBlock);
+}
+
+int64_t DTSStreamReader::getProcessedSize()
+{
+    const int64_t processed = SimplePacketizerReader::getProcessedSize();
+    if (m_words == WordForm::be16 || m_words == WordForm::unknown || m_wordsPassed <= 0)
+        return processed;
+    return static_cast<int64_t>(static_cast<double>(processed) * static_cast<double>(m_wordsIn) /
+                                static_cast<double>(m_wordsPassed));
 }
 
 double DTSStreamReader::getFrameDuration()
