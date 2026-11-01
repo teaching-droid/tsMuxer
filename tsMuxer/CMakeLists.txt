@@ -56,6 +56,9 @@ add_executable (tsmuxer
   trueHDAC3MergeReader.cpp
   movDemuxer.cpp
   mp3Codec.cpp
+  h264PictureEnd.cpp
+  hevcPictureEnd.cpp
+  mpeg2PictureEnd.cpp
   mpeg2StreamReader.cpp
   mpegAudioStreamReader.cpp
   mpegStreamReader.cpp

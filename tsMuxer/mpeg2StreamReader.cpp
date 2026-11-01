@@ -8,6 +8,7 @@
 
 #include "avPacket.h"
 #include "nalUnits.h"
+#include "pictureEnd.h"
 #include "tsMuxer.h"
 #include "tsPacket.h"
 #include "vodCoreException.h"
@@ -731,4 +732,17 @@ bool MPEG2StreamReader::unusableUnit(const uint8_t* unit, const uint8_t* end, in
         break;
     }
     return false;
+}
+
+// The last picture of an MPEG-2 file: the last 8 MiB hold it, with the sequence header in force or the one read
+void MPEG2StreamReader::checkFileEnd(const std::string& fileName)
+{
+    if (!m_seqExtFound)
+        return;  // MPEG-1
+    const std::vector<uint8_t> tail = readFileTail(fileName, 8 << 20);
+    if (tail.empty())
+        return;
+    reportPictureEnd(mpeg2PictureEnd(tail.data(), tail.data() + tail.size(), m_sequence.width, m_sequence.height,
+                                     m_sequence.chroma_format, m_sequence.progressive_sequence != 0),
+                     "macroblocks");
 }

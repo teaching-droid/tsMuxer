@@ -54,6 +54,10 @@ class MPEG2StreamReader final : public MPEGStreamReader
                           PriorityDataInfo* priorityData) override;
     void onSplitEvent() override { m_firstFileFrame = true; }
 
+   public:
+    void checkFileEnd(const std::string& fileName) override;
+
+   protected:
    private:
     bool m_streamMsgPrinted;
     int m_lastRef;

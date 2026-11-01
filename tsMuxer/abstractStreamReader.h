@@ -87,6 +87,7 @@ class AbstractStreamReader : public BaseAbstractStreamReader
     unsigned m_flags;
     virtual const CodecInfo& getCodecInfo() = 0;  // get codecInfo struct. (CodecID, codec name)
     void setSrcContainerType(const ContainerType containerType) { m_containerType = containerType; }
+    [[nodiscard]] ContainerType getSrcContainerType() const { return m_containerType; }
     virtual bool beforeFileCloseEvent(File& file) { return true; }
     virtual void onSplitEvent() {}
     virtual void setDemuxMode(const bool value) { m_demuxMode = value; }

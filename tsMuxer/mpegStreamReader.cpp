@@ -3,14 +3,17 @@
 
 #include "mpegStreamReader.h"
 
+#include <fs/file.h>
 #include <fs/systemlog.h>
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <iostream>
+#include <sstream>
 
 #include "nalUnits.h"
+#include "pictureEnd.h"
 #include "vodCoreException.h"
 #include "vod_common.h"
 
@@ -678,4 +681,44 @@ void MPEGStreamReader::fillVideoDiscoveryData(StreamDiscoveryData& data)
     data.fps = m_fps;
     data.interlaced = getInterlaced();
     data.hdrType = getStreamHDR();
+}
+
+std::vector<uint8_t> MPEGStreamReader::readFileTail(const std::string& fileName, const int64_t maxBytes)
+{
+    File file;
+    if (!file.open(fileName.c_str(), File::ofRead))
+        return {};
+    const int64_t size = file.size();
+    if (size <= 0)
+        return {};
+    const int64_t n = (std::min)(size, maxBytes);
+    std::vector<uint8_t> data(static_cast<size_t>(n));
+    if (file.seek(size - n) != size - n)
+        return {};
+    for (int64_t done = 0; done < n;)
+    {
+        const int got = file.read(data.data() + done, static_cast<uint32_t>((std::min<int64_t>)(n - done, 1 << 24)));
+        if (got <= 0)
+            return {};
+        done += got;
+    }
+    return data;
+}
+
+// A raw file cut at a byte position ends inside a picture, and that part was muxed as the last picture without a word
+// (K19). Said only when the slices of the picture show it for certain (pictureEnd.h).
+void MPEGStreamReader::reportPictureEnd(const PictureEnd& end, const char* unit)
+{
+    if (end.state != PictureEnd::State::cut)
+        return;
+    std::ostringstream where;
+    if (end.row > 0)
+        where << "in row " << end.row << " of its " << end.rows << " rows of " << unit;
+    else
+        where << "before any of its picture data";
+    LTRACE(LT_WARN, 2,
+           "Warning: " << getCodecInfo().displayName << " track " << m_streamIndex
+                       << ": the file ends inside its last picture, " << where.str()
+                       << ", so it was most likely cut there. That picture is muxed as it is, and a player shows it "
+                          "damaged or skips it.");
 }

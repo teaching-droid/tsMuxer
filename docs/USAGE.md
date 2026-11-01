@@ -301,6 +301,7 @@ On Linux and Mac, a font can be named either by its family name or by the full p
 
 ASS and SSA subtitles from a Matroska file are listed as `S_TEXT/UTF8`. Whenever they are drawn into pictures, that is unless `keep-text` keeps them as text in a Matroska output or a demux, tsMuxeR draws them with [libass](https://github.com/libass/libass), as their script says: with their styles, colours, positions, rotations, fades, moves and karaoke, at the picture size given by `video-width` and `video-height`, and frame by frame at `fps` wherever the picture changes. The pictures become a PGS track, as DVD and DVB subtitles do. libass uses the fonts attached to the Matroska file, the fonts in the script's own `[Fonts]` section, the fonts in `fonts-dir`, and the fonts installed in the system. `save-srt` writes the text of every subtitle as well, without its styles.
 
+
 libass is not built into tsMuxeR. It is loaded when such a track is drawn:
 
 * Windows: the packages hold `ass-9.dll` and the libraries it needs beside `tsMuxeR.exe`. Their licenses are in `THIRD-PARTY-NOTICES.txt` and the `licenses` folder.

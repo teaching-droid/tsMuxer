@@ -11,6 +11,7 @@
 #include "bitStream.h"
 #include "hevc.h"
 #include "nalUnits.h"
+#include "pictureEnd.h"
 #include "tsMuxer.h"
 #include "tsPacket.h"
 #include "vodCoreException.h"
@@ -2034,4 +2035,18 @@ bool HEVCStreamReader::unusableUnit(const uint8_t* unit, const uint8_t* end, int
         break;
     }
     return false;
+}
+
+// The last picture of an HEVC file: the last 32 MiB hold it; the parameter sets read before stand in for those not
+// repeated there
+void HEVCStreamReader::checkFileEnd(const std::string& fileName)
+{
+    const std::vector<uint8_t> tail = readFileTail(fileName, 32 << 20);
+    if (tail.empty())
+        return;
+    std::vector<std::vector<uint8_t>> paramSets;
+    for (const MemoryBlock* blk : {&m_spsBuffer, &m_ppsBuffer})
+        if (!blk->isEmpty())
+            paramSets.emplace_back(blk->data(), blk->data() + blk->size());
+    reportPictureEnd(hevcPictureEnd(tail.data(), tail.data() + tail.size(), paramSets), "coding tree units");
 }

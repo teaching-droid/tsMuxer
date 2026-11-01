@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "avCodecs.h"
+#include "pictureEnd.h"
 #include "tsMuxer.h"
 #include "tsPacket.h"
 #include "vodCoreException.h"
@@ -2887,4 +2888,21 @@ bool H264StreamReader::unusableUnit(const uint8_t* unit, const uint8_t* end, int
     default:
         return false;
     }
+}
+
+// The last picture of an H.264 file: the last 32 MiB hold it; the parameter sets read before stand in for those not
+// repeated there
+void H264StreamReader::checkFileEnd(const std::string& fileName)
+{
+    const std::vector<uint8_t> tail = readFileTail(fileName, 32 << 20);
+    if (tail.empty())
+        return;
+    std::vector<std::vector<uint8_t>> paramSets;
+    for (const auto& [id, sps] : m_spsMap)
+        if (sps && sps->m_nalBuffer)
+            paramSets.emplace_back(sps->m_nalBuffer, sps->m_nalBuffer + sps->m_nalBufferLen);
+    for (const auto& [id, pps] : m_ppsMap)
+        if (pps && pps->m_nalBuffer)
+            paramSets.emplace_back(pps->m_nalBuffer, pps->m_nalBuffer + pps->m_nalBufferLen);
+    reportPictureEnd(h264PictureEnd(tail.data(), tail.data() + tail.size(), paramSets), "macroblocks");
 }

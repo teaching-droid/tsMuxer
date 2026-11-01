@@ -129,8 +129,15 @@ class MPEGStreamReader : public AbstractStreamReader
     virtual void onShiftBuffer(int offset);
     // The buffer was moved to a bigger one (setBuffer): every pointer kept into it moves by delta
     virtual void onMoveBuffer(std::ptrdiff_t delta) {}
+    // A raw file read to its end: a reader that can tell from the end of the file whether its last picture is whole
+    // says so when it is not (K19). Once, after the last packet of the file.
+    virtual void checkFileEnd(const std::string& fileName) {}
 
    protected:
+    // the last bytes of the file, up to maxBytes; empty when it cannot be read
+    static std::vector<uint8_t> readFileTail(const std::string& fileName, int64_t maxBytes);
+    // the warning for a last picture the end of the file cuts, in rows of the given unit
+    void reportPictureEnd(const struct PictureEnd& end, const char* unit);
     VideoAspectRatio m_ar;
     VideoAspectRatio m_streamAR;
     double m_sampleAR = 0;

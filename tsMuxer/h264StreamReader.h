@@ -58,6 +58,11 @@ class H264StreamReader final : public MPEGStreamReader
 
    protected:
     void onSplitEvent() override { m_firstFileFrame = true; }
+
+   public:
+    void checkFileEnd(const std::string& fileName) override;
+
+   protected:
     const CodecInfo& getCodecInfo() override;
     int intDecodeNAL(uint8_t* buff) override;
     bool unusableUnit(const uint8_t* unit, const uint8_t* end, int& maxLen) override;

@@ -695,6 +695,12 @@ int METADemuxer::readPacket(AVPacket& avPacket)
                 else
                 {
                     // flush single stream
+                    // a raw video file read to its end: whether its last picture is whole (K19)
+                    StreamInfo& ended = m_codecInfo[minDtsIndex];
+                    if (auto* video = dynamic_cast<MPEGStreamReader*>(ended.m_streamReader);
+                        video && !m_quiet && !ended.m_sourceFiles.empty() &&
+                        video->getSrcContainerType() == AbstractStreamReader::ContainerType::ctNone)
+                        video->checkFileEnd(ended.m_sourceFiles.back());
                     m_codecInfo[minDtsIndex].m_streamReader->flushPacket(avPacket);
                     m_codecInfo[minDtsIndex].m_flushed = true;
                 }
