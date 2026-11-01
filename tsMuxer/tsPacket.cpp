@@ -1968,7 +1968,7 @@ void MPLSParser::dropContradictingPlayItems()
     std::reverse(m_skippedClips.begin(), m_skippedClips.end());
     std::reverse(reasons.begin(), reasons.end());
 
-    for (size_t k = 0; k < m_skippedClips.size(); ++k)
+    for (size_t k = 0; k < m_skippedClips.size() && !m_quietSkips; ++k)
     {
         if (!reasons[k].empty())
             LTRACE(LT_WARN, 2,

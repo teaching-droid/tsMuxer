@@ -752,6 +752,9 @@ struct MPLSParser
     // Clips left out because their streams contradict the rest of the playlist, so a caller can
     // say which ones and why. Empty for every playlist whose clips agree, which is nearly all.
     std::vector<std::string> m_skippedClips;
+    // Leave the warnings about them out: the list of a disc's titles reads every playlist, and a warning belongs to the
+    // playlist that is listed or muxed, not to each one the list looks at
+    bool m_quietSkips = false;
 
     // The play item whose STN table describes the playlist, an index into m_playItems
     [[nodiscard]] size_t chosenStnItem() const { return m_chosenStnItem; }

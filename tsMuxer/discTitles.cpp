@@ -122,6 +122,7 @@ Playlist readPlaylist(const std::string& path, const std::string& name)
     p.title.playlist = path;
     p.title.name = name;
     MPLSParser parser;
+    parser.m_quietSkips = true;
     if (!parser.parse(path.c_str()))
     {
         p.title.note = "it cannot be read";
