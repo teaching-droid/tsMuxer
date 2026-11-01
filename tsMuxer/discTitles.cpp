@@ -12,6 +12,7 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "dvdTitles.h"
 #include "tsPacket.h"
 #include "vod_common.h"
 
@@ -208,6 +209,34 @@ std::string blurayDiscRoot(const std::string& path)
     if (isFolder(p + "/BDMV"))
         return p;
     return {};
+}
+
+std::vector<std::pair<std::string, std::string>> discsInFolder(const std::string& folder)
+{
+    std::vector<std::pair<std::string, std::string>> discs;
+    const std::string dir = withoutEndSeparators(folder);
+    if (dir.empty() || discImage::split(dir, nullptr, nullptr))
+        return discs;
+    const char sep = dir.find('\\') != std::string::npos && dir.find('/') == std::string::npos ? '\\' : '/';
+    std::error_code ec;
+    std::filesystem::directory_iterator it(std::u8string(dir.begin(), dir.end()),
+                                           std::filesystem::directory_options::skip_permission_denied, ec);
+    for (; !ec && it != std::filesystem::directory_iterator(); it.increment(ec))
+    {
+        const std::u8string u = it->path().filename().u8string();
+        const std::string path = dir + sep + std::string(u.begin(), u.end());
+        std::error_code typeEc;
+        const bool image = !it->is_directory(typeEc) && strToLowerCase(extractFileExt(path)) == "iso";
+        if (!image && !it->is_directory(typeEc))
+            continue;
+        if (!blurayDiscRoot(path).empty())
+            discs.emplace_back(path, image ? "Blu-ray image" : "Blu-ray folder");
+        else if (!dvdVideoTs(path).empty())
+            discs.emplace_back(path, image ? "DVD image" : "DVD folder");
+    }
+    std::sort(discs.begin(), discs.end(),
+              [](const auto& a, const auto& b) { return strToUpperCase(a.first) < strToUpperCase(b.first); });
+    return discs;
 }
 
 DiscTitles listDiscTitles(const std::string& root, const double minSeconds, const bool all)

@@ -3941,6 +3941,10 @@ std::string discSourceHint(const std::string& fileName)
                    "--bdmv-to-iso to write the folder into an ISO image";
         if (last == "VIDEO_TS" || folderAt("VIDEO_TS"))
             return "it is a DVD folder. Give the .vob files of the title in VIDEO_TS as the source";
+        if (const size_t discs = discsInFolder(name).size(); discs > 0)
+            return "it is a folder that holds " + std::to_string(discs) + (discs == 1 ? " disc" : " discs") +
+                   " (tsMuxeR <folder> names them). Give one of them with title=main or title=<number>, or a file, "
+                   "as the source";
         return "it is a folder. Give a file as the source";
     }
     if (!inImage && strToLowerCase(extractFileExt(name)) == "iso" &&

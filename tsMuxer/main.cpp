@@ -1062,6 +1062,7 @@ after the image, as film.iso/BDMV/PLAYLIST/00800.mpls.
 A Blu-ray or DVD disc folder or image given alone lists its titles, the main film
 first: tsMuxeR [--all-playlists] [--min-title-length=<seconds>] <disc>
 tsMuxeR --show-title=<number|main> <disc> lists the tracks of one title.
+A folder of disc folders or images given alone names the discs in it.
 On a meta line, title=main or title=<number> after a disc folder or image
 takes that title: the playlist of a Blu-ray, the cells of a DVD title.
 dvd-title=<number> names a DVD title by the disc's own number.
@@ -4881,6 +4882,15 @@ int main(int argc, char** argv)
                 // script read "no tracks". It is said why, as the mux says it, and the exit is an error.
                 File file;
                 std::error_code ec;
+                // A folder of discs, a box set copied disc by disc, said only that it is a folder: its discs are named,
+                // each to be listed on its own
+                if (const auto discs = discsInFolder(str); !discs.empty())
+                {
+                    cout << str << " holds " << discs.size() << (discs.size() == 1 ? " disc" : " discs")
+                         << ". List the titles of one with tsMuxeR <its path>:" << endl;
+                    for (const auto& [path, kind] : discs) cout << "  " << kind << ": " << path << endl;
+                    return 0;
+                }
                 if (const std::string hint = discSourceHint(str); !hint.empty())
                     THROW(ERR_FILE_NOT_FOUND, "Can't list " << str << ": " << hint << ".")
                 if (std::filesystem::is_directory(fsPath(str), ec) || !file.open(argv[1], File::ofRead))

@@ -111,6 +111,8 @@ V_MPEG-2, "dvd.iso", title=main, track=224
 A_AC3, "dvd.iso", title=main, track=128
 ```
 
+A folder that holds several disc folders or images, such as a box set copied disc by disc, given alone names them: `tsMuxeR D:/discs/box` prints each Blu-ray and DVD disc folder and image in it, to be listed with its own path.
+
 Supported output formats:
 * **TS** - MPEG Transport Stream
 * **M2TS** - Blu-ray MPEG-2 Transport Stream

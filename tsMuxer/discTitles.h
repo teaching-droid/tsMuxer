@@ -2,6 +2,7 @@
 #define DISC_TITLES_H_
 
 #include <string>
+#include <utility>
 #include <vector>
 
 // The titles of a Blu-ray disc, from its playlists alone. A disc folder or image given as a source was refused with
@@ -37,6 +38,10 @@ struct DiscTitles
 // The disc folder (the one holding BDMV, or BDMV itself) of a path, also inside a disc image; empty when the path is no
 // Blu-ray folder.
 std::string blurayDiscRoot(const std::string& path);
+
+// The Blu-ray and DVD disc folders and images one level down in `folder` (a box set copied disc by disc), each with its
+// kind ("Blu-ray folder", "DVD image" ...), by name; empty when there is none.
+std::vector<std::pair<std::string, std::string>> discsInFolder(const std::string& folder);
 
 // The titles of the disc at `root`. With `all`, the left out and the short playlists are listed as titles too, after
 // the others, with the reason in their note.
