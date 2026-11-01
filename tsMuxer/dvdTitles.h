@@ -45,12 +45,14 @@ struct DvdTitle
     std::vector<std::string> subpictures;  // their languages
     bool encrypted = false;                // its title set's video is still encrypted
     double missingShare = 0;               // the part of its cells beyond the end of the VOB files
+    bool isMain = false;                   // a main title: the film, or one of the episodes or films of the disc
     std::string note;
 };
 
 struct DvdTitles
 {
-    std::vector<DvdTitle> titles;
+    std::vector<DvdTitle> titles;   // the main titles first, in disc order
+    int mainTitles = 0;             // how many: more than one on a disc of episodes or of several films
     std::vector<DvdTitle> leftOut;  // the reason in the note
     std::vector<int> shortOnes;     // disc title numbers under the minimum length
     double minSeconds = 120;
@@ -72,9 +74,13 @@ std::string describeDvdTitles(const DvdTitles& t);
 // first angle, as parts of its VOB files under names that read them (discImage::addVirtualFile), one for each run of
 // cells whose timestamps follow on, joined as "part 1"+"part 2". Throws with the reason when there is no such title,
 // or its video is still encrypted. languages: the language of each audio track, by track number. chapters: where each
-// chapter starts, in seconds from the start of the title (the playback times of the cells before it).
+// chapter starts, in seconds from the start of the title (the playback times of the cells before it). discNumber: title
+// is the number the disc gives the title (dvd-title=), which stays the same whatever the listing makes of it, and names
+// the short and the left out titles too. minSeconds and all: the listing a number counts in, as for discTitlePlaylist.
+// discTitle: the disc's own number of the title.
 std::string dvdTitleSource(const std::string& videoTs, const std::string& title,
                            std::vector<std::pair<int, std::string>>* languages = nullptr,
-                           std::vector<double>* chapters = nullptr);
+                           std::vector<double>* chapters = nullptr, bool discNumber = false, double minSeconds = 120,
+                           bool all = false, int* discTitle = nullptr);
 
 #endif  // DVD_TITLES_H_

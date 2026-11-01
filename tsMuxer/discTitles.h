@@ -20,12 +20,14 @@ struct DiscTitle
     std::vector<std::string> audio;  // the languages of its audio, in order, each once
     bool is3d = false;
     int angles = 1;
-    std::string note;  // "main film", "version of title 1 (4 clips differ)", or why a playlist is left out
+    bool isMain = false;  // a main title: the main film, or one of the episodes or films of a disc of several
+    std::string note;     // "main film", "version of title 1 (4 clips differ)", or why a playlist is left out
 };
 
 struct DiscTitles
 {
-    std::vector<DiscTitle> titles;       // the main film first; empty when no playlist is a title
+    std::vector<DiscTitle> titles;       // the main titles first, in disc order; empty when no playlist is a title
+    int mainTitles = 0;                  // how many: more than one on a disc of episodes or of several films
     std::vector<DiscTitle> leftOut;      // with the reason in the note, by playlist name
     std::vector<std::string> shortOnes;  // the playlists under the minimum length, by name
     double minSeconds = 120;
@@ -44,6 +46,8 @@ DiscTitles listDiscTitles(const std::string& root, double minSeconds, bool all);
 std::string describeDiscTitles(const DiscTitles& t);
 
 // The playlist of title=<number> or title=main of a disc folder or image. Throws with the reason when there is none.
-std::string discTitlePlaylist(const std::string& discPath, const std::string& title);
+// minSeconds and all: the listing the number counts in (--show-title after --min-title-length or --all-playlists).
+std::string discTitlePlaylist(const std::string& discPath, const std::string& title, double minSeconds = 120,
+                              bool all = false);
 
 #endif  // DISC_TITLES_H_

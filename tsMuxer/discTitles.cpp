@@ -2,8 +2,10 @@
 
 #include <fs/directory.h>
 #include <fs/discImage.h>
+#include <fs/systemlog.h>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <map>
 #include <set>
@@ -297,44 +299,97 @@ DiscTitles listDiscTitles(const std::string& root, const double minSeconds, cons
                              return a->title.footage > b->title.footage;
                          return a->title.chapters > b->title.chapters;
                      });
+    // A disc can hold more than one main title: the episodes of a series, or several films. Another title is one too
+    // when it plays footage of its own (it is no version of a main title) for at least 75 % of the footage of the main
+    // film and at least 15 minutes. Each is listed with its versions after it. The main film comes first and title=main
+    // takes it, the other main titles follow in the order of the disc: a documentary or another cut as long as that
+    // must not take the film's place. Where the main titles are all of one length (within 3 minutes), as the episodes
+    // of a series disc, they are all in the order of the disc, and title=main takes the first: one episode was the
+    // main film for being a second longer than the others.
     if (!titles.empty())
     {
-        Playlist* main = titles.front();
-        main->title.note = "main film";
-        std::vector<Playlist*> versions, others;
+        std::vector<Playlist*> mains{titles.front()};
+        std::map<const Playlist*, std::vector<Playlist*>> versionsOf;
+        std::vector<Playlist*> others;
         for (size_t i = 1; i < titles.size(); ++i)
         {
             Playlist* p = titles[i];
-            const double shared = sharedFootage(*p, *main);
-            if (shared >= 0.5 * p->title.footage && p->title.footage >= 0.75 * main->title.footage)
+            const auto of = std::find_if(mains.begin(), mains.end(),
+                                         [p](const Playlist* m) {
+                                             return sharedFootage(*p, *m) >= 0.5 * p->title.footage &&
+                                                    p->title.footage >= 0.75 * m->title.footage;
+                                         });
+            if (of != mains.end())
+                versionsOf[*of].push_back(p);
+            else if (p->title.footage >= 0.75 * mains.front()->title.footage && p->title.footage >= 900)
+                mains.push_back(p);
+            else
+                others.push_back(p);
+        }
+        // mains is by footage, the longest first
+        const bool episodes = mains.front()->title.footage - mains.back()->title.footage <= 180;
+        std::stable_sort(mains.begin() + (episodes ? 0 : 1), mains.end(),
+                         [](const Playlist* a, const Playlist* b) { return a->title.name < b->title.name; });
+        // The others by what they play, the longest first, counted in whole seconds as listed, and those of one length
+        // in the order of the disc: the episodes of a series disc came in an order the parts of a second gave
+        std::stable_sort(others.begin(), others.end(),
+                         [](const Playlist* a, const Playlist* b)
+                         {
+                             const auto sa = llround(a->title.seconds), sb = llround(b->title.seconds);
+                             return sa != sb ? sa > sb : a->title.name < b->title.name;
+                         });
+        // Playlists of the same play items (other audio or subtitles) stay together, the one with the most chapters
+        // first: the others are then named as the same clips as it
+        {
+            std::vector<std::vector<Playlist*>> groups;
+            for (Playlist* p : others)
+            {
+                auto g = std::find_if(groups.begin(), groups.end(), [p](const std::vector<Playlist*>& group)
+                                      { return group.front()->items == p->items; });
+                if (g == groups.end())
+                    groups.push_back({p});
+                else
+                    g->push_back(p);
+            }
+            others.clear();
+            for (auto& group : groups)
+            {
+                std::stable_sort(group.begin(), group.end(), [](const Playlist* a, const Playlist* b)
+                                 { return a->title.chapters > b->title.chapters; });
+                others.insert(others.end(), group.begin(), group.end());
+            }
+        }
+        titles.clear();
+        for (Playlist* m : mains)
+        {
+            m->title.note = "main film";
+            m->title.isMain = true;
+            titles.push_back(m);
+            const std::string number = std::to_string(titles.size());
+            for (Playlist* p : versionsOf[m])
             {
                 std::set<std::string> a, b, differ;
                 for (const auto& it : p->items) a.insert(it.clip);
-                for (const auto& it : main->items) b.insert(it.clip);
+                for (const auto& it : m->items) b.insert(it.clip);
                 std::set_symmetric_difference(a.begin(), a.end(), b.begin(), b.end(),
                                               std::inserter(differ, differ.begin()));
                 // The same play items with other streams (a copy with the same streams is left out above), the same
                 // clips played in other parts, or another cut
-                if (p->items == main->items)
-                    p->title.note = "version of title 1: the same clips, other audio or subtitles";
+                if (p->items == m->items)
+                    p->title.note = "version of title " + number + ": the same clips, other audio or subtitles";
                 else if (differ.empty())
-                    p->title.note = "version of title 1: the same clips, other parts of them";
+                    p->title.note = "version of title " + number + ": the same clips, other parts of them";
                 else
-                    p->title.note = "version of title 1, " + std::to_string(differ.size()) +
+                    p->title.note = "version of title " + number + ", " + std::to_string(differ.size()) +
                                     (differ.size() == 1 ? " clip differs" : " clips differ");
-                versions.push_back(p);
+                titles.push_back(p);
             }
-            else
-                others.push_back(p);
         }
-        // The others by what they play, the longest first
-        std::stable_sort(others.begin(), others.end(),
-                         [](const Playlist* a, const Playlist* b) { return a->title.seconds > b->title.seconds; });
-        titles.assign(1, main);
-        titles.insert(titles.end(), versions.begin(), versions.end());
+        const size_t firstOther = titles.size();
         titles.insert(titles.end(), others.begin(), others.end());
+        result.mainTitles = static_cast<int>(mains.size());
         // A title with the play items of one before it differs only in its streams
-        for (size_t i = 1 + versions.size(); i < titles.size(); ++i)
+        for (size_t i = firstOther; i < titles.size(); ++i)
             for (size_t k = 0; k < i; ++k)
                 if (titles[k]->items == titles[i]->items)
                 {
@@ -384,6 +439,17 @@ DiscTitles listDiscTitles(const std::string& root, const double minSeconds, cons
     return result;
 }
 
+// "The disc has 4 main titles: 1, 2, 3, 4. title=main takes title 1."
+static std::string mainTitlesText(const DiscTitles& t)
+{
+    std::string numbers;
+    for (const auto& title : t.titles)
+        if (title.isMain)
+            numbers += (numbers.empty() ? "" : ", ") + std::to_string(title.number);
+    return "The disc has " + std::to_string(t.mainTitles) + " main titles: " + numbers + ". title=main takes title " +
+           numbers.substr(0, numbers.find(',')) + ".";
+}
+
 std::string describeDiscTitles(const DiscTitles& t)
 {
     std::ostringstream s;
@@ -415,6 +481,8 @@ std::string describeDiscTitles(const DiscTitles& t)
             s << "  (" << title.note << ")";
         s << '\n';
     }
+    if (t.mainTitles > 1)
+        s << '\n' << mainTitlesText(t) << '\n';
     if (!t.leftOut.empty() || !t.shortOnes.empty())
     {
         s << "\nLeft out:\n";
@@ -432,7 +500,8 @@ std::string describeDiscTitles(const DiscTitles& t)
     return s.str();
 }
 
-std::string discTitlePlaylist(const std::string& discPath, const std::string& title)
+std::string discTitlePlaylist(const std::string& discPath, const std::string& title, const double minSeconds,
+                              const bool all)
 {
     const std::string root = blurayDiscRoot(discPath);
     if (root.empty())
@@ -440,16 +509,21 @@ std::string discTitlePlaylist(const std::string& discPath, const std::string& ti
                                  " names nothing in it");
     // Each line of a meta file that names the disc asks again: the titles are worked out once
     static std::map<std::string, DiscTitles> known;
-    auto it = known.find(root);
+    const std::string key = root + '|' + std::to_string(minSeconds) + (all ? "|all" : "");
+    auto it = known.find(key);
     if (it == known.end())
-        it = known.emplace(root, listDiscTitles(root, 120, false)).first;
+        it = known.emplace(key, listDiscTitles(root, minSeconds, all)).first;
     const DiscTitles& t = it->second;
     if (t.titles.empty())
         throw std::runtime_error(discPath +
                                  " has no title: every playlist is left out. List the disc to see why, and "
                                  "give a playlist instead");
     if (strToLowerCase(title) == "main")
+    {
+        if (t.mainTitles > 1)
+            LTRACE(LT_INFO, 2, discPath << ": " << mainTitlesText(t));
         return t.titles.front().playlist;
+    }
     const std::string digits = title.find_first_not_of("0123456789") == std::string::npos ? title : "";
     const int n = digits.empty() || digits.size() > 4 ? 0 : std::stoi(digits);
     if (n < 1 || n > static_cast<int>(t.titles.size()))

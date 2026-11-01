@@ -882,23 +882,35 @@ void METADemuxer::openFile(const string& streamName)
         string codec = trimStr(params[0]);
         string codecStreamName = trimStr(params[1]);
         // title= names a title of a Blu-ray or DVD disc folder or image (discTitles.h, dvdTitles.h): the line reads the
-        // title's playlist, or the cells of the DVD title, whose audio takes its language from the disc
-        if (const auto title = addParams.find("title"); title != addParams.end())
+        // title's playlist, or the cells of the DVD title, whose audio takes its language from the disc. dvd-title=
+        // names a DVD title by the disc's own number, as the window writes it: that stays the same whatever the
+        // listing of titles makes of the disc.
+        auto title = addParams.find("title");
+        const bool byDiscNumber = title == addParams.end() && addParams.count("dvd-title");
+        if (byDiscNumber)
+            title = addParams.find("dvd-title");
+        else if (title != addParams.end() && addParams.count("dvd-title"))
+            THROW(ERR_COMMON, "title= and dvd-title= both name a title on one line: give one of them.")
+        if (title != addParams.end())
         {
             const string disc = unquoteStr(codecStreamName);
             try
             {
                 const string videoTs = blurayDiscRoot(disc).empty() ? dvdVideoTs(disc) : string();
+                if (byDiscNumber && videoTs.empty())
+                    throw std::runtime_error("dvd-title= names a title of a DVD, and " + disc +
+                                             " is no DVD folder or image: use title= for a Blu-ray");
                 if (!videoTs.empty())
                 {
                     std::vector<std::pair<int, std::string>> languages;
                     std::vector<double> chapters;
-                    codecStreamName = dvdTitleSource(videoTs, title->second, &languages, &chapters);
+                    codecStreamName = dvdTitleSource(videoTs, title->second, &languages, &chapters, byDiscNumber);
                     if (m_dvdChapters.empty())
                         for (const double start : chapters)
                             m_dvdChapters.emplace_back(llround(start * 1e9), std::string());
                     LTRACE(LT_INFO, 2,
-                           "title=" << title->second << " of " << disc << " is read as " << codecStreamName << ".");
+                           title->first << "=" << title->second << " of " << disc << " is read as " << codecStreamName
+                                        << ".");
                     const auto track = addParams.find("track");
                     if (!addParams.count("lang") && track != addParams.end())
                         for (const auto& [id, lang] : languages)
@@ -2963,7 +2975,7 @@ static bool isKnownTrackParam(const std::string& name)
 {
     static const std::set<std::string> known = {
         // general
-        "track", "subTrack", "lang", "timeshift", "default", "secondary", "subClip", "track-name", "title",
+        "track", "subTrack", "lang", "timeshift", "default", "secondary", "subClip", "track-name", "title", "dvd-title",
         // video
         "fps", "ar", "level", "video-width", "video-height", "insertSEI", "forceSEI", "autoSEI", "contSPS",
         "delPulldown", "stretch", "3d-plane", "hdr10-override", "save-srt",

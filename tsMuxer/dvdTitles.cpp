@@ -3,6 +3,7 @@
 #include <fs/directory.h>
 #include <fs/discImage.h>
 #include <fs/file.h>
+#include <fs/systemlog.h>
 
 #include <algorithm>
 #include <cmath>
@@ -545,36 +546,70 @@ DvdTitles listDvdTitles(const std::string& videoTs, const double minSeconds, con
                              return fa > fb;
                          return a->chapters.size() > b->chapters.size();
                      });
+    // A disc can hold more than one main title: the episodes of a series, or several films. Another title is one too
+    // when it plays cells of its own (it is no version of a main title) for at least 75 % of the footage of the main
+    // title and at least 15 minutes, as on a Blu-ray (discTitles.cpp): each with its versions after it, the longest
+    // first and the others in the order of the disc, or all in the order of the disc where they are of one length
+    // (within 3 minutes), as episodes are. title=main takes the first.
     if (!kept.empty())
     {
-        DvdTitle* main = kept.front();
-        main->note = "main title";
-        const auto mainCells = playedCells(*main);
-        const std::set<CellKey> mainSet(mainCells.begin(), mainCells.end());
-        std::vector<DvdTitle*> versions, others;
+        const auto present = [](const DvdTitle* t) { return t->footage * (1 - t->missingShare); };
+        const auto shared = [](const DvdTitle& t, const DvdTitle& m)
+        {
+            const auto mainCells = playedCells(m);
+            const std::set<CellKey> mainSet(mainCells.begin(), mainCells.end());
+            double seconds = 0;
+            std::set<CellKey> once;
+            for (const auto& c : t.cells)
+                if (firstAngle(c) && once.insert({c.firstSector, c.lastSector}).second &&
+                    mainSet.count({c.firstSector, c.lastSector}))
+                    seconds += c.seconds;
+            return seconds;
+        };
+        std::vector<DvdTitle*> mains{kept.front()}, others;
+        std::map<const DvdTitle*, std::vector<DvdTitle*>> versionsOf;
         for (size_t i = 1; i < kept.size(); ++i)
         {
             DvdTitle* t = kept[i];
-            double shared = 0;
-            std::set<CellKey> once;
-            for (const auto& c : t->cells)
-                if (firstAngle(c) && once.insert({c.firstSector, c.lastSector}).second &&
-                    mainSet.count({c.firstSector, c.lastSector}))
-                    shared += c.seconds;
-            if (t->titleSet == main->titleSet && shared >= 0.5 * t->footage && t->footage >= 0.75 * main->footage)
-            {
-                t->note = "version of title 1";
-                versions.push_back(t);
-            }
+            const auto of = std::find_if(mains.begin(), mains.end(),
+                                         [&](const DvdTitle* m) {
+                                             return t->titleSet == m->titleSet && t->footage >= 0.75 * m->footage &&
+                                                    shared(*t, *m) >= 0.5 * t->footage;
+                                         });
+            if (of != mains.end())
+                versionsOf[*of].push_back(t);
+            else if (present(t) >= 0.75 * present(mains.front()) && present(t) >= 900)
+                mains.push_back(t);
             else
                 others.push_back(t);
         }
-        std::stable_sort(others.begin(), others.end(), [](const DvdTitle* a, const DvdTitle* b)
-                         { return llround(a->seconds) > llround(b->seconds); });
-        kept.assign(1, main);
-        kept.insert(kept.end(), versions.begin(), versions.end());
+        result.video = sets[static_cast<size_t>(mains.front()->titleSet - 1)].video;
+        // mains is by footage, the longest first
+        const bool episodes = present(mains.front()) - present(mains.back()) <= 180;
+        std::stable_sort(mains.begin() + (episodes ? 0 : 1), mains.end(),
+                         [](const DvdTitle* a, const DvdTitle* b) { return a->discTitle < b->discTitle; });
+        // the others by length in whole seconds, and those of one length in the order of the disc
+        std::stable_sort(others.begin(), others.end(),
+                         [](const DvdTitle* a, const DvdTitle* b)
+                         {
+                             const auto sa = llround(a->seconds), sb = llround(b->seconds);
+                             return sa != sb ? sa > sb : a->discTitle < b->discTitle;
+                         });
+        kept.clear();
+        for (DvdTitle* m : mains)
+        {
+            m->note = "main title";
+            m->isMain = true;
+            kept.push_back(m);
+            const std::string number = std::to_string(kept.size());
+            for (DvdTitle* t : versionsOf[m])
+            {
+                t->note = "version of title " + number;
+                kept.push_back(t);
+            }
+        }
         kept.insert(kept.end(), others.begin(), others.end());
-        result.video = sets[static_cast<size_t>(main->titleSet - 1)].video;
+        result.mainTitles = static_cast<int>(mains.size());
     }
     for (DvdTitle* t : kept)
     {
@@ -604,6 +639,17 @@ DvdTitles listDvdTitles(const std::string& videoTs, const double minSeconds, con
     }
     for (size_t i = 0; i < result.titles.size(); ++i) result.titles[i].number = static_cast<int>(i + 1);
     return result;
+}
+
+// "The disc has 4 main titles: 1, 2, 3, 4. title=main takes title 1."
+static std::string mainTitlesText(const DvdTitles& t)
+{
+    std::string numbers;
+    for (const auto& title : t.titles)
+        if (title.isMain)
+            numbers += (numbers.empty() ? "" : ", ") + std::to_string(title.number);
+    return "The disc has " + std::to_string(t.mainTitles) + " main titles: " + numbers + ". title=main takes title " +
+           numbers.substr(0, numbers.find(',')) + ".";
 }
 
 std::string describeDvdTitles(const DvdTitles& t)
@@ -643,6 +689,8 @@ std::string describeDvdTitles(const DvdTitles& t)
             s << "  (" << title.note << ")";
         s << '\n';
     }
+    if (t.mainTitles > 1)
+        s << '\n' << mainTitlesText(t) << '\n';
     if (!t.leftOut.empty() || !t.shortOnes.empty())
     {
         s << "\nLeft out:\n";
@@ -763,14 +811,32 @@ bool firstAnglePieces(const std::vector<Vob>& vobs, const DvdCell& cell,
 }  // namespace
 
 std::string dvdTitleSource(const std::string& videoTs, const std::string& title,
-                           std::vector<std::pair<int, std::string>>* languages, std::vector<double>* chapters)
+                           std::vector<std::pair<int, std::string>>* languages, std::vector<double>* chapters,
+                           const bool discNumber, const double minSeconds, const bool all, int* discTitle)
 {
-    const DvdTitles list = listDvdTitles(videoTs, 120, false);
+    // By the disc's own number every title of the disc can be named, the short and the left out ones too
+    const DvdTitles list = listDvdTitles(videoTs, minSeconds, all || discNumber);
     if (list.titles.empty())
         throw std::runtime_error(videoTs + " has no title to mux: every title is left out. List the disc to see why");
     const DvdTitle* t = nullptr;
-    if (strToLowerCase(title) == "main")
+    if (discNumber)
+    {
+        const bool digits =
+            !title.empty() && title.size() <= 2 && title.find_first_not_of("0123456789") == std::string::npos;
+        const int n = digits ? std::stoi(title) : 0;
+        for (const auto& candidate : list.titles)
+            if (candidate.discTitle == n)
+                t = &candidate;
+        if (!t)
+            throw std::runtime_error("dvd-title=" + title + " is not a title of " + videoTs +
+                                     ": give the number of the DVD title as the listing shows it");
+    }
+    else if (strToLowerCase(title) == "main")
+    {
         t = &list.titles.front();
+        if (list.mainTitles > 1)
+            LTRACE(LT_INFO, 2, videoTs << ": " << mainTitlesText(list));
+    }
     else
     {
         const bool digits =
@@ -825,5 +891,7 @@ std::string dvdTitleSource(const std::string& videoTs, const std::string& title,
                 languages->emplace_back(a.track, a.lang);
     if (chapters)
         *chapters = t->chapters;
+    if (discTitle)
+        *discTitle = t->discTitle;
     return source;
 }

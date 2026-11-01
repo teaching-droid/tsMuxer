@@ -548,6 +548,9 @@ static void describeAsChosenClip(vector<CheckStreamRez>& streams, const string& 
     }
 }
 
+// The languages of a DVD title listed with --show-title, by track: the IFO files give them, and the VOB files do not
+static std::map<int, std::string> dvdTitleLanguages;
+
 void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSubMode,
                         const vector<LaterClip>* laterClips = nullptr, const string& firstClipInfo = string())
 {
@@ -634,6 +637,9 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                 }
             }
 
+            if (const auto dvd = dvdTitleLanguages.find(streams[i].trackID);
+                streams[i].lang.empty() && dvd != dvdTitleLanguages.end())
+                streams[i].lang = dvd->second;
             string postfix;
             if (isSubMode && streams[i].codecInfo.codecID == CODEC_S_PGS)
                 postfix = " (depended view)";
@@ -1035,6 +1041,7 @@ first: tsMuxeR [--all-playlists] [--min-title-length=<seconds>] <disc>
 tsMuxeR --show-title=<number|main> <disc> lists the tracks of one title.
 On a meta line, title=main or title=<number> after a disc folder or image
 takes that title: the playlist of a Blu-ray, the cells of a DVD title.
+dvd-title=<number> names a DVD title by the disc's own number.
 
 Meta file format:
 File MUST have the .meta extension and be encoded in UTF-8 (but see README.md).
@@ -4589,19 +4596,27 @@ int main(int argc, char** argv)
                 try
                 {
                     if (const string root = blurayDiscRoot(argv[a]); !root.empty())
-                        titleSource = discTitlePlaylist(argv[a], oneTitle);
+                        titleSource = discTitlePlaylist(argv[a], oneTitle, minSeconds, all);
                     else if (const string videoTs = dvdVideoTs(argv[a]); !videoTs.empty())
                     {
                         std::vector<std::pair<int, std::string>> languages;
                         std::vector<double> chapters;
-                        const string source = dvdTitleSource(videoTs, oneTitle, &languages, &chapters);
+                        int discTitle = 0;
+                        const string source = dvdTitleSource(videoTs, oneTitle, &languages, &chapters, false,
+                                                             minSeconds, all, &discTitle);
                         titleSource = unquoteStr(splitQuotedStr(source.c_str(), '+')[0]);
-                        cout << "Source for a meta line: \"" << argv[a] << "\", title=" << oneTitle << " (" << source
-                             << ")" << endl;
+                        // by the disc's own number, which a meta line reads the same whatever options listed the titles
+                        cout << "Source for a meta line: \"" << argv[a] << "\", dvd-title=" << discTitle << " ("
+                             << source << ")" << endl;
                         if (!languages.empty())
                         {
                             cout << "Languages of the disc:";
-                            for (const auto& [track, lang] : languages) cout << " track " << track << " " << lang;
+                            for (const auto& [track, lang] : languages)
+                            {
+                                cout << " track " << track << " " << lang;
+                                if (const string code = iso639FromBcp47(lang); !code.empty())
+                                    dvdTitleLanguages[track] = applyLangCodeStyle(code);
+                            }
                             cout << endl;
                         }
                         // A Matroska output takes them from the line; a disc's marks come only from this option
