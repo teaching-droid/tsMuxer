@@ -395,22 +395,38 @@ DiscTitles listDiscTitles(const std::string& root, const double minSeconds, cons
             m->title.isMain = true;
             titles.push_back(m);
             const std::string number = std::to_string(titles.size());
+            const size_t firstVersion = titles.size();
             for (Playlist* p : versionsOf[m])
             {
-                std::set<std::string> a, b, differ;
+                std::set<std::string> a, b;
                 for (const auto& it : p->items) a.insert(it.clip);
                 for (const auto& it : m->items) b.insert(it.clip);
-                std::set_symmetric_difference(a.begin(), a.end(), b.begin(), b.end(),
-                                              std::inserter(differ, differ.begin()));
+                // The clips of this title that the main film does not play, counted as the clip column counts them,
+                // by play item. Those of both sides were counted, so a title of 43 clips was said to have 46 that
+                // differ when 23 were swapped for 23 others.
+                size_t own = 0;
+                for (const auto& it : p->items)
+                    if (!b.count(it.clip))
+                        ++own;
+                // Another version with the same play items differs from it only in its streams, as the other titles
+                // below are named after one before them with the same play items
+                const auto same = std::find_if(titles.begin() + firstVersion, titles.end(),
+                                               [p](const Playlist* v) { return v->items == p->items; });
                 // The same play items with other streams (a copy with the same streams is left out above), the same
                 // clips played in other parts, or another cut
                 if (p->items == m->items)
                     p->title.note = "version of title " + number + ": the same clips, other audio or subtitles";
-                else if (differ.empty())
+                else if (same != titles.end())
+                    p->title.note = "version of title " + number + ": the same clips as title " +
+                                    std::to_string(same - titles.begin() + 1) + ", other audio or subtitles";
+                else if (a == b)
                     p->title.note = "version of title " + number + ": the same clips, other parts of them";
+                else if (own == 0)
+                    p->title.note = "version of title " + number + ": a part of its clips";
                 else
-                    p->title.note = "version of title " + number + ", " + std::to_string(differ.size()) +
-                                    (differ.size() == 1 ? " clip differs" : " clips differ");
+                    p->title.note = "version of title " + number + ", " + std::to_string(own) + " of " +
+                                    std::to_string(p->items.size()) +
+                                    (p->items.size() == 1 ? " clip" : " clips") + (own == 1 ? " differs" : " differ");
                 titles.push_back(p);
             }
         }
