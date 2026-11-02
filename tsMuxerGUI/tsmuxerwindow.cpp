@@ -268,7 +268,21 @@ bool isMatroskaOutputName(const QString& name)
 // got the question whether to overwrite it, and the muxer then refused it as a source
 bool isSameFile(const QString& a, const QString& b)
 {
-    if (QFileInfo(a) == QFileInfo(b))
+    const QFileInfo fa(a);
+    const QFileInfo fb(b);
+    // A name that is not on the disk, as a playlist inside a disc image or an output not written yet, has no canonical
+    // path, and QFileInfo took two such names for one file: a title of an image got "<playlist>_new.mpls" as its output
+    // name, and Start muxing refused every output as "one of the source files". Such names are compared as paths.
+    if (!fa.exists() || !fb.exists())
+    {
+#ifdef Q_OS_WIN
+        const Qt::CaseSensitivity cs = Qt::CaseInsensitive;
+#else
+        const Qt::CaseSensitivity cs = Qt::CaseSensitive;
+#endif
+        return QDir::cleanPath(fa.absoluteFilePath()).compare(QDir::cleanPath(fb.absoluteFilePath()), cs) == 0;
+    }
+    if (fa == fb)
         return true;
     std::error_code ec;
     const bool same = std::filesystem::equivalent(std::filesystem::path(a.toStdU16String()),
