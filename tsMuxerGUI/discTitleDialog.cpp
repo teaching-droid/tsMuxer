@@ -96,7 +96,9 @@ DiscTitleList parseDiscTitles(const QList<QString>& output)
             QString rest = d.captured(5);
             row.note = takeNote(rest);
             row.isMain = row.note.startsWith(QLatin1String("main title"));
-            // the parts are two spaces apart: "audio ...", "subtitles ...", "ENCRYPTED"
+            // the parts are two spaces apart: "2 angles", "audio ...", "subtitles ...", "ENCRYPTED". The angles go
+            // with the note, as on a Blu-ray line: a DVD title of several angles was shown without them.
+            static const QRegularExpression angles(QStringLiteral("^\\d+ angles$"));
             for (const QString& part : rest.split(QRegularExpression(QStringLiteral("\\s{2,}")), Qt::SkipEmptyParts))
             {
                 if (part.startsWith(QLatin1String("audio ")))
@@ -105,6 +107,8 @@ DiscTitleList parseDiscTitles(const QList<QString>& output)
                     row.subtitles = part.mid(10);
                 else if (part == QLatin1String("ENCRYPTED"))
                     row.encrypted = true;
+                else if (angles.match(part).hasMatch())
+                    row.note = part + (row.note.isEmpty() ? QString() : "; " + row.note);
             }
             list.titles << row;
         }
