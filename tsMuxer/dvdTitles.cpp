@@ -1,4 +1,5 @@
 #include "dvdTitles.h"
+#include "discTitles.h"
 
 #include <fs/directory.h>
 #include <fs/discImage.h>
@@ -718,6 +719,24 @@ std::string describeDvdTitles(const DvdTitles& t)
         if (!title.note.empty())
             s << "  (" << title.note << ")";
         s << '\n';
+        // where the angles differ: each angle block, at its time in the title (cellStart counts a block once)
+        std::vector<std::pair<double, double>> parts;
+        double at = 0;
+        for (const DvdCell& c : title.cells)
+        {
+            if (!firstAngle(c))
+                continue;
+            if (c.angle)
+            {
+                if (!parts.empty() && std::abs(parts.back().second - at) < 0.5)
+                    parts.back().second = at + c.seconds;  // the next block of one part of several angles
+                else
+                    parts.emplace_back(at, at + c.seconds);
+            }
+            at += c.seconds;
+        }
+        if (title.angles > 1)
+            s << anglePartsText(parts, {});
     }
     if (t.mainTitles > 1)
         s << '\n' << mainTitlesText(t) << '\n';

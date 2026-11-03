@@ -136,6 +136,18 @@ Playlist readPlaylist(const std::string& path, const std::string& name)
         const MPLSPlayItem& pi = parser.m_playItems[i];
         const uint32_t out = (std::max)(pi.IN_time, pi.OUT_time);
         p.items.push_back({strToUpperCase(pi.fileName), pi.IN_time, out});
+        // a part of several angles: where it is in the title, and the clip of each angle
+        if (pi.angles > 1)
+        {
+            const double start = p.title.seconds;
+            p.title.angleParts.emplace_back(start, start + (out - pi.IN_time) / 45000.0);
+            if (p.title.angleClips.size() < static_cast<size_t>(pi.angles))
+                p.title.angleClips.resize(static_cast<size_t>(pi.angles));
+            p.title.angleClips[0].push_back(pi.fileName + ".m2ts");
+            for (size_t a = 1; a < p.title.angleClips.size(); ++a)
+                p.title.angleClips[a].push_back(a - 1 < pi.angleFiles.size() ? pi.angleFiles[a - 1] + ".m2ts"
+                                                                            : pi.fileName + ".m2ts");
+        }
         p.title.seconds += (out - pi.IN_time) / 45000.0;
         p.title.angles = (std::max)(p.title.angles, pi.angles);
         if (i > 0 && (pi.connection_condition == 5 || pi.connection_condition == 6))
@@ -196,6 +208,25 @@ std::string namesText(const std::vector<std::string>& names)
     return out;
 }
 }  // namespace
+
+std::string anglePartsText(const std::vector<std::pair<double, double>>& parts,
+                           const std::vector<std::vector<std::string>>& clips)
+{
+    if (parts.empty())
+        return {};
+    std::ostringstream s;
+    s << "    angles differ at ";
+    for (size_t i = 0; i < parts.size(); ++i)
+        s << (i ? ", " : "") << hms(parts[i].first) << "-" << hms(parts[i].second);
+    s << '\n';
+    for (size_t a = 0; a < clips.size(); ++a)
+    {
+        s << "    angle " << a + 1 << ":";
+        for (size_t i = 0; i < clips[a].size(); ++i) s << (i ? ", " : " ") << clips[a][i];
+        s << '\n';
+    }
+    return s.str();
+}
 
 std::string blurayDiscRoot(const std::string& path)
 {
@@ -525,6 +556,7 @@ std::string describeDiscTitles(const DiscTitles& t)
         if (!title.note.empty())
             s << "  (" << title.note << ")";
         s << '\n';
+        s << anglePartsText(title.angleParts, title.angleClips);
     }
     if (t.mainTitles > 1)
         s << '\n' << mainTitlesText(t) << '\n';

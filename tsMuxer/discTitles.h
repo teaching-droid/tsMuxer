@@ -21,9 +21,18 @@ struct DiscTitle
     std::vector<std::string> audio;  // the languages of its audio, in order, each once
     bool is3d = false;
     int angles = 1;
+    // Where the angles differ: each part of several angles, its start and end in seconds of the title, and the clip
+    // of each angle there (angleClips[angle - 1]). Empty for a title of one angle.
+    std::vector<std::pair<double, double>> angleParts;
+    std::vector<std::vector<std::string>> angleClips;
     bool isMain = false;  // a main title: the main film, or one of the episodes or films of a disc of several
     std::string note;     // "main film", "version of title 1 (4 clips differ)", or why a playlist is left out
 };
+
+// The lines under a title of several angles that say where they differ: "    angles differ at 0:00:00-0:03:42", then
+// for each angle its clips there ("    angle 2: 00101.m2ts"), when clips are given. Empty when parts is empty.
+std::string anglePartsText(const std::vector<std::pair<double, double>>& parts,
+                           const std::vector<std::vector<std::string>>& clips);
 
 struct DiscTitles
 {

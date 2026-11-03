@@ -65,6 +65,11 @@ DiscTitleList parseDiscTitles(const QList<QString>& output)
             leftOut = true;
         else if (leftOut && line.startsWith(QLatin1String("  ")))
             list.leftOut << line.trimmed();
+        // under a title of several angles: where they differ, and the clips of each angle there
+        else if (!list.titles.isEmpty() && line.startsWith(QLatin1String("    angles differ at ")))
+            list.titles.last().angleParts = line.mid(21).trimmed().split(QStringLiteral(", "));
+        else if (!list.titles.isEmpty() && line.startsWith(QLatin1String("    angle ")) && line.contains(':'))
+            list.titles.last().angleClips << line.section(':', 1).trimmed().split(QStringLiteral(", "));
         else if (const QRegularExpressionMatch m = bluray.match(line); m.hasMatch())
         {
             DiscTitleRow row;
@@ -230,6 +235,41 @@ DiscTitleDialog::DiscTitleDialog(const QString& disc, const DiscTitleList& list,
         auto* item = new QTreeWidgetItem(m_tree, cells);
         item->setData(0, Qt::UserRole, i);
         item->setData(0, Qt::UserRole + 1, angle);
+        // Where this angle differs, under its row and in its tooltip: the times, and on a Blu-ray the clip it plays
+        // there, in bold where it is not the clip of the first angle. A line under a row chooses that row.
+        if (row.angles > 1 && !row.angleParts.isEmpty())
+        {
+            QStringList tip;
+            for (int k = 0; k < row.angleParts.size(); ++k)
+            {
+                const QString clip = angle - 1 < row.angleClips.size() && k < row.angleClips[angle - 1].size()
+                                         ? row.angleClips[angle - 1][k]
+                                         : QString();
+                const bool own = angle > 1 && !clip.isEmpty() && !row.angleClips.isEmpty() &&
+                                 k < row.angleClips[0].size() && row.angleClips[0][k] != clip;
+                QStringList sub;
+                for (int c = 0; c < cells.size(); ++c) sub << QString();
+                sub[list.dvd ? 2 : 1] = list.dvd ? row.angleParts[k] : clip;
+                if (!list.dvd)
+                    sub[2] = row.angleParts[k];
+                sub.last() = angle == 1 ? wtr("the first angle") : wtr("differs from angle 1");
+                auto* part = new QTreeWidgetItem(item, sub);
+                part->setData(0, Qt::UserRole, i);
+                part->setData(0, Qt::UserRole + 1, angle);
+                if (own)
+                {
+                    QFont bold = part->font(1);
+                    bold.setBold(true);
+                    for (int c = 0; c < sub.size(); ++c) part->setFont(c, bold);
+                }
+                tip << (clip.isEmpty() ? row.angleParts[k] : row.angleParts[k] + "  " + clip);
+            }
+            const QString text = wtr("Angle %1 differs from the others at:").arg(angle) + "\n" + tip.join('\n');
+            for (int c = 0; c < cells.size(); ++c) item->setToolTip(c, text);
+            // the lines are shown at once: they are what tells the angles apart
+            m_tree->setRootIsDecorated(true);
+            item->setExpanded(true);
+        }
         for (const int c : {0, 2, 3}) item->setTextAlignment(c, Qt::AlignRight | Qt::AlignVCenter);
         if (!list.dvd)
             item->setTextAlignment(4, Qt::AlignRight | Qt::AlignVCenter);

@@ -26,6 +26,8 @@ struct DiscTitleRow
     bool isMain = false;
     bool encrypted = false;
     int angles = 1;  // of a title with several angles; the dialog shows a row for each (angle=)
+    QStringList angleParts;          // where the angles differ, "0:00:00-0:03:42" (the listing's "angles differ at")
+    QList<QStringList> angleClips;   // Blu-ray: the clip of each angle there, by angle ("angle 2: 00101.m2ts, ...")
 };
 
 struct DiscTitleList
