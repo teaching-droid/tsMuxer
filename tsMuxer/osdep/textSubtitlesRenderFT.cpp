@@ -322,6 +322,11 @@ void TextSubtitlesRenderFT::setFont(const Font& font)
             if (error)
                 THROW(ERR_COMMON, "Can't load charset " << m_font.m_charset << " for font " << modFontName.c_str())
         }
+        // A track asks for few faces and sizes, but a search for the size that fits tries new ones for each
+        // subtitle: the kept measurements are let go now and then, so that they cannot grow without end.
+        if (m_glyphMetrics.size() >= 256)
+            m_glyphMetrics.clear();
+        m_curGlyphMetrics = &m_glyphMetrics[std::make_tuple(m_face, faceSize, m_emulateBold, m_emulateItalic)];
         m_loadedFont = font;
     }
 }
@@ -679,20 +684,31 @@ void TextSubtitlesRenderFT::getTextSize(const string& text, SIZE* mSize)
     convertUTF::IterateUTF8Chars(text,
                                  [&](auto c)
                                  {
-                                     const int glyph_index = FT_Get_Char_Index(m_face, c);
-                                     int error = FT_Load_Glyph(m_face, glyph_index, 0);
-                                     if (error)
-                                         THROW(ERR_COMMON, "Can't load symbol code '" << c << "' from font")
-
-                                     error = FT_Render_Glyph(m_face->glyph, FT_RENDER_MODE_NORMAL);
-                                     if (error)
-                                         THROW(ERR_COMMON, "Can't render symbol code '" << c << "' from font")
-                                     pen.x += m_face->glyph->advance.x >> 6;
+                                     const FT_UInt glyph_index = FT_Get_Char_Index(m_face, c);
+                                     const auto [kept, isNew] = m_curGlyphMetrics->try_emplace(glyph_index);
+                                     if (isNew)
+                                     {
+                                         int error = FT_Load_Glyph(m_face, glyph_index, 0);
+                                         if (error)
+                                         {
+                                             m_curGlyphMetrics->erase(kept);
+                                             THROW(ERR_COMMON, "Can't load symbol code '" << c << "' from font")
+                                         }
+                                         error = FT_Render_Glyph(m_face->glyph, FT_RENDER_MODE_NORMAL);
+                                         if (error)
+                                         {
+                                             m_curGlyphMetrics->erase(kept);
+                                             THROW(ERR_COMMON, "Can't render symbol code '" << c << "' from font")
+                                         }
+                                         kept->second =
+                                             GlyphMetrics{m_face->glyph->advance.x, m_face->glyph->bitmap_left};
+                                     }
+                                     pen.x += kept->second.advanceX >> 6;
                                      if (m_emulateBold || m_emulateItalic)
                                          pen.x += m_line_thickness - 1;
                                      pen.x += lround(m_font.m_borderWidth / 2.0F);
                                      mSize->cy = m_face->size->metrics.height >> 6;
-                                     mSize->cx = pen.x + m_face->glyph->bitmap_left;
+                                     mSize->cx = pen.x + kept->second.bitmapLeft;
                                      return true;
                                  });
 }

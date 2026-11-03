@@ -7,6 +7,8 @@
 
 #include <map>
 #include <set>
+#include <tuple>
+#include <unordered_map>
 #include <vector>
 
 #include "../textSubtitlesRender.h"
@@ -55,6 +57,21 @@ class TextSubtitlesRenderFT final : public TextSubtitlesRender
     static std::vector<std::string> fontFolders();
 
     std::map<std::string, FT_Face> m_fontMap;
+
+    // ** A GLYPH IS MEASURED ONCE AT EACH SIZE. ** getTextSize loaded and drew every glyph of the text each time it
+    // measured it, to read two numbers: the advance, and for the last glyph its left edge. A subtitle that does not
+    // fit the picture is measured at eight to ten sizes before it is drawn, so two lines of 100 letters cost some 1,800
+    // glyphs loaded and drawn, most of them the same two dozen letters again. The two numbers depend on nothing but
+    // the face, its size, the emulated bold or italic and the glyph, so they are kept for each of these and read back;
+    // a glyph not yet kept is loaded and drawn exactly as before, so a glyph that fails still fails at the same place.
+    struct GlyphMetrics
+    {
+        FT_Pos advanceX;
+        FT_Int bitmapLeft;
+    };
+    using GlyphMetricsMap = std::unordered_map<FT_UInt, GlyphMetrics>;
+    std::map<std::tuple<FT_Face, int, bool, bool>, GlyphMetricsMap> m_glyphMetrics;
+    GlyphMetricsMap* m_curGlyphMetrics = nullptr;  // those of the face and size setFont loaded last
 };
 
 }  // namespace text_subtitles
