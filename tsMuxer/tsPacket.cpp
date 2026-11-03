@@ -2086,6 +2086,19 @@ std::string MPLSParser::outOfMuxTrackKind(const MPLSStreamInfo& entry)
 // the hold of a still picture (a slideshow, held until the viewer goes on or for a set time, became a flash of single
 // pictures), and the audio and video a sub path plays from a clip of its own, as the music of a slideshow. Muxing
 // them is not built yet; until then the log says what is left out.
+void MPLSParser::selectAngle(const int angle)
+{
+    int most = 1;
+    for (const MPLSPlayItem& item : m_playItems) most = (std::max)(most, item.angles);
+    if (angle < 1 || angle > most)
+        THROW(ERR_COMMON, "angle=" << angle << " is not an angle of this playlist, which has "
+                                   << (most == 1 ? std::string("one angle") : std::to_string(most) + " angles"))
+    m_angle = angle;
+    for (MPLSPlayItem& item : m_playItems)
+        if (angle > 1 && item.angles >= angle && static_cast<size_t>(angle - 2) < item.angleFiles.size())
+            item.fileName = item.angleFiles[static_cast<size_t>(angle - 2)];
+}
+
 void MPLSParser::reportLeftOut(const std::string& playlistName, const bool listing) const
 {
     const std::string name = extractFileName2(playlistName);
@@ -2105,10 +2118,12 @@ void MPLSParser::reportLeftOut(const std::string& playlistName, const bool listi
     if (angleItems > 0)
         LTRACE(LT_WARN, 2,
                "Warning: playlist " << name << " has more than one angle in " << angleItems
-                                    << (angleItems == 1 ? " play item" : " play items") << ". Only the first angle is "
-                                    << (listing ? "listed and muxed" : "muxed") << ": " << anglesLeft
+                                    << (angleItems == 1 ? " play item" : " play items") << ". Only "
+                                    << (m_angle == 1 ? std::string("the first angle") : "angle " + std::to_string(m_angle))
+                                    << " is " << (listing ? "listed and muxed" : "muxed") << ": " << anglesLeft
                                     << (anglesLeft == 1 ? " angle is" : " angles are")
-                                    << " left out. The rest of the playlist is muxed.");
+                                    << " left out (angle= on a meta line chooses another). The rest of the playlist "
+                                       "is muxed.");
     if (stills > 0)
         LTRACE(LT_WARN, 2,
                "Warning: playlist " << name << " has " << stills << (stills == 1 ? " still picture" : " still pictures")
@@ -2697,6 +2712,7 @@ void MPLSParser::parsePlayItem(BitStreamReader& reader, const int PlayItem_id)
             CLPIStreamInfo::readString(clip_Information_file_name, reader, 5);
             CLPIStreamInfo::readString(clip_codec_identifier, reader, 4);
             ref_to_STC_id = reader.getBits<uint8_t>(8);
+            m_playItems.back().angleFiles.emplace_back(clip_Information_file_name);
         }
     }
     STN_table(reader, PlayItem_id);

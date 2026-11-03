@@ -914,7 +914,20 @@ void METADemuxer::openFile(const string& streamName)
                 {
                     std::vector<std::pair<int, std::string>> languages;
                     std::vector<double> chapters;
-                    codecStreamName = dvdTitleSource(videoTs, title->second, &languages, &chapters, byDiscNumber);
+                    // angle= of a DVD title: its cells are read in that angle, and the line is then a join of VOB
+                    // parts, which takes no angle=
+                    int angle = 1;
+                    if (const auto a = addParams.find("angle"); a != addParams.end())
+                    {
+                        const string& v = a->second;
+                        if (v.empty() || v.size() > 2 || v.find_first_not_of("0123456789") != string::npos ||
+                            std::stoi(v) < 1)
+                            throw std::runtime_error("angle=" + v + " is no angle: give its number, from 1");
+                        angle = std::stoi(v);
+                        addParams.erase(a);
+                    }
+                    codecStreamName = dvdTitleSource(videoTs, title->second, &languages, &chapters, byDiscNumber,
+                                                     120, false, nullptr, angle);
                     if (m_dvdChapters.empty())
                         for (const double start : chapters)
                             m_dvdChapters.emplace_back(llround(start * 1e9), std::string());
@@ -1518,9 +1531,22 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     ////
 
     bool isSubStream = (codec == h264DepCodecInfo.programName) || addParams.find("subClip") != addParams.end();
+    // angle= chooses the angle of a Blu-ray playlist (a DVD title takes it where title= is read)
+    int angle = 1;
+    if (const auto a = addParams.find("angle"); a != addParams.end())
+    {
+        const string& v = a->second;
+        if (fileExt != "mpls" && fileExt != "mpl")
+            THROW(ERR_COMMON, "angle= on the line of " << codecStreamName
+                                                       << " chooses the angle of a Blu-ray playlist or of a title of a "
+                                                          "disc (title=), and this is neither.")
+        if (v.empty() || v.size() > 2 || v.find_first_not_of("0123456789") != string::npos || std::stoi(v) < 1)
+            THROW(ERR_COMMON, "angle=" << v << " is no angle: give its number, from 1.")
+        angle = std::stoi(v);
+    }
     if (fileExt == "mpls" || fileExt == "mpl")
     {
-        mplsInfoList = getMplsInfo(codecStreamName);
+        mplsInfoList = getMplsInfo(codecStreamName, angle);
         vector<string> mplsNames = splitQuotedStr(codecStreamName.c_str(), '+');
         for (size_t k = 0; k < mplsInfoList.size(); ++k)
         {
@@ -3037,6 +3063,7 @@ static bool isKnownTrackParam(const std::string& name)
     static const std::set<std::string> known = {
         // general
         "track", "subTrack", "lang", "timeshift", "default", "secondary", "subClip", "track-name", "title", "dvd-title",
+        "angle",
         // video
         "fps", "ar", "level", "video-width", "video-height", "insertSEI", "forceSEI", "autoSEI", "contSPS",
         "delPulldown", "stretch", "3d-plane", "hdr10-override", "save-srt",
@@ -5434,13 +5461,19 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
     return rez;
 }
 
-std::vector<MPLSParser> METADemuxer::getMplsInfo(const string& mplsFileName)
+std::vector<MPLSParser> METADemuxer::getMplsInfo(const string& mplsFileName, const int angle)
 {
     std::vector<MPLSParser> result;
 
     std::vector<std::string> mplsFiles = splitQuotedStr(mplsFileName.c_str(), '+');
     for (auto& i : mplsFiles)
     {
+        // ** ONE ANGLE FOR A PLAYLIST. ** Its tracks come from the clips of the angle, and a track of another angle
+        // would play other pictures or sound at the same times: the lines of a playlist take one angle.
+        if (const auto chosen = m_playlistAngle.find(i); chosen != m_playlistAngle.end() && chosen->second != angle)
+            THROW(ERR_COMMON, "The lines of playlist " << unquoteStr(i) << " ask for angle " << chosen->second
+                                                       << " and angle " << angle
+                                                       << ": give every line of the playlist the same angle=.")
         auto itr = m_mplsStreamMap.find(i);
         if (itr != m_mplsStreamMap.end())
             result.push_back(itr->second);
@@ -5455,6 +5488,19 @@ std::vector<MPLSParser> METADemuxer::getMplsInfo(const string& mplsFileName)
                     THROW(ERR_FILE_NOT_FOUND, "Can't open file: " << name << openFailureReason(name))
                 THROW(ERR_COMMON, "Can't parse play list file " << i)
             }
+            try
+            {
+                parser.selectAngle(angle);
+            }
+            catch (const VodCoreException& e)
+            {
+                THROW(ERR_COMMON, e.m_errStr << ": " << unquoteStr(i) << ".")
+            }
+            if (angle > 1 && parser.isDependStreamExist)
+                THROW(ERR_COMMON, "angle=" << angle << " on the 3D playlist " << unquoteStr(i)
+                                           << ": the angles of a 3D playlist are not read; its first angle is muxed "
+                                              "without angle=.")
+            m_playlistAngle[i] = angle;
             if (!m_quiet)
                 parser.reportLeftOut(unquoteStr(i), false);
             cutPlayItems(parser, unquoteStr(i), m_playlistClipsPlayed);

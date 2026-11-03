@@ -365,6 +365,7 @@ class METADemuxer final : public AbstractDemuxer
     // MPLSPlayItemsMap m_mplsPlayItemsMap;
     // MPLSPlayItemsMap m_mplsStreamMap;
     MPLSCache m_mplsStreamMap;
+    std::map<std::string, int> m_playlistAngle;  // the angle each playlist of m_mplsStreamMap is read in
     std::vector<AVChapter> m_dvdChapters;  // the chapters of the DVD title a line names with title=
     std::set<std::string> m_processedTracks;
     std::set<std::string> m_processedLines;  // the files and track of every line read, to tell a repeated line
@@ -391,7 +392,8 @@ class METADemuxer final : public AbstractDemuxer
                                             bool wholeTrack = false);
     static std::string findBluRayFile(const std::string& streamDir, const std::string& requestDir,
                                       const std::string& requestFile);
-    std::vector<MPLSParser> getMplsInfo(const std::string& mplsFileName);
+    // angle: the angle= of the line (from 1); every line of a playlist takes it in one angle (m_playlistAngle)
+    std::vector<MPLSParser> getMplsInfo(const std::string& mplsFileName, int angle = 1);
 
    public:
     // A playlist read as a source says its 3D base view is the right eye, or a Matroska source's 3D track does

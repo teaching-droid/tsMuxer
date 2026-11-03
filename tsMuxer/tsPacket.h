@@ -650,6 +650,7 @@ struct MPLSPlayItem
     // What the play item has that a mux leaves out (MPLSParser::reportLeftOut): its number of angles (only the first
     // is muxed) and its still mode (0 none, 1 held for still_time seconds, 2 held until the viewer goes on)
     int angles = 1;
+    std::vector<std::string> angleFiles;  // the clips of the angles after the first, in their order (selectAngle)
     uint8_t still_mode = 0;
 };
 
@@ -709,6 +710,10 @@ struct MPLSParser
     // plays (the listing names those under "Not supported:"). Once for a playlist: in the listing, and where a mux
     // reads the playlist.
     void reportLeftOut(const std::string& playlistName, bool listing) const;
+    // angle= (from 1): each play item of several angles plays the clip of that angle. Refused, with the reason, where
+    // no play item has that many angles.
+    void selectAngle(int angle);
+    int m_angle = 1;  // the angle selectAngle chose
     std::vector<MPLSSubPath> m_subPaths;
     // The playlist places a picture-in-picture video itself (ExtensionData 1/1: its position, size and moves), which
     // is not read: a mux places it by the pip options.

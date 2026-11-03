@@ -805,11 +805,11 @@ Bytes readSector(const std::vector<Vob>& vobs, const uint64_t sector)
     return {};
 }
 
-// The pieces of the first angle in the first cell of an angle block. The angles are interleaved in pieces (ILVUs),
-// each beginning with a NAV pack whose DSI says where the piece ends and where the next one of the same angle begins
-// (ILVU_EA and ILVU_SA, relative to the start of the piece; 0xFFFFFFFF after the last, 0 and 0 when the cell is not
-// interleaved). False when a NAV pack cannot be read where one has to be.
-bool firstAnglePieces(const std::vector<Vob>& vobs, const DvdCell& cell,
+// The pieces of one angle in its cell of an angle block. The angles are interleaved in pieces (ILVUs), each beginning
+// with a NAV pack whose DSI says where the piece ends and where the next one of the same angle begins (ILVU_EA and
+// ILVU_SA, relative to the start of the piece; 0xFFFFFFFF after the last, 0 and 0 when the cell is not interleaved).
+// False when a NAV pack cannot be read where one has to be.
+bool anglePieces(const std::vector<Vob>& vobs, const DvdCell& cell,
                       std::vector<std::pair<uint64_t, uint64_t>>& ranges)
 {
     uint64_t sector = cell.firstSector;
@@ -842,7 +842,8 @@ bool firstAnglePieces(const std::vector<Vob>& vobs, const DvdCell& cell,
 
 std::string dvdTitleSource(const std::string& videoTs, const std::string& title,
                            std::vector<std::pair<int, std::string>>* languages, std::vector<double>* chapters,
-                           const bool discNumber, const double minSeconds, const bool all, int* discTitle)
+                           const bool discNumber, const double minSeconds, const bool all, int* discTitle,
+                           const int angle)
 {
     // By the disc's own number every title of the disc can be named, the short and the left out ones too
     const DvdTitles list = listDvdTitles(videoTs, minSeconds, all || discNumber);
@@ -882,20 +883,27 @@ std::string dvdTitleSource(const std::string& videoTs, const std::string& title,
     if (t->encrypted)
         throw std::runtime_error("DVD title " + std::to_string(t->discTitle) + " of " + videoTs +
                                  " is still encrypted, and tsMuxeR cannot read it");
+    if (angle < 1 || angle > t->angles)
+        throw std::runtime_error("angle=" + std::to_string(angle) + " is not an angle of DVD title " +
+                                 std::to_string(t->discTitle) + " of " + videoTs + ", which has " +
+                                 (t->angles == 1 ? std::string("one angle") : std::to_string(t->angles) + " angles"));
     const std::vector<Vob> vobs = titleSetVobs(videoTs, t->titleSet);
     if (vobs.empty())
         throw std::runtime_error("the video of DVD title " + std::to_string(t->discTitle) + " of " + videoTs +
                                  " (its VOB files) is not there");
-    // The cells of the first angle, in runs whose timestamps follow on: a run ends at a cell marked as a break of the
-    // timestamps (STC discontinuity) and where the sectors jump
+    // The cells of the angle, in runs whose timestamps follow on: a run ends at a cell marked as a break of the
+    // timestamps (STC discontinuity) and where the sectors jump. The cells of an angle block are its angles in order,
+    // the first marked as the block's first: the angle's own is the one at its place in the block.
     std::vector<std::vector<discImage::Piece>> runs;
     int64_t lastSector = -2;
+    int place = 0;  // of the cell in its angle block, from 1
     for (const DvdCell& c : t->cells)
     {
-        if (c.angle && c.block != 1)
-            continue;  // another angle of an angle block
+        place = !c.angle ? 0 : c.block == 1 ? 1 : place + 1;
+        if (c.angle && place != angle)
+            continue;  // another angle of the angle block
         std::vector<std::pair<uint64_t, uint64_t>> ranges;
-        if (!c.angle || !firstAnglePieces(vobs, c, ranges))
+        if (!c.angle || !anglePieces(vobs, c, ranges))
         {
             ranges.clear();
             ranges.emplace_back(c.firstSector, c.lastSector);
