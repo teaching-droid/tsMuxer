@@ -112,6 +112,8 @@ TSDemuxer::TSDemuxer(const BufferedReaderManager& readManager, const char* strea
     m_lastPTS = -1;
     m_firstVideoPTS = -1;
     m_firstSeenVideoPTS = -1;
+    m_firstVideoPtsOfProgram.clear();
+    m_firstSeenVideoPtsOfProgram.clear();
     m_lastVideoPTS = -1;
     m_lastVideoDTS = -1;
     m_videoDtsGap = -1;
@@ -366,10 +368,22 @@ TSDemuxer::LeadPes TSDemuxer::skipsLeadingPes(const int pid, const StreamType ty
     return frameStart ? LeadPes::Keep : LeadPes::GiveBack;
 }
 
+int64_t TSDemuxer::videoReference(const int32_t pid, const bool first) const
+{
+    const auto stream = m_pmt.pidList.find(pid);
+    if (stream != m_pmt.pidList.end() && stream->second.m_programNumber >= 0)
+    {
+        const auto& times = first ? m_firstSeenVideoPtsOfProgram : m_firstVideoPtsOfProgram;
+        if (const auto own = times.find(stream->second.m_programNumber); own != times.end())
+            return own->second;
+    }
+    return first ? m_firstSeenVideoPTS : m_firstVideoPTS;
+}
+
 bool TSDemuxer::getTrackStart(const int32_t pid, const bool fromFirstPes, int64_t& ticks) const
 {
     const auto first = m_firstPtsTime.find(pid);
-    const int64_t reference = fromFirstPes ? m_firstSeenVideoPTS : m_firstVideoPTS;
+    const int64_t reference = videoReference(pid, fromFirstPes);
     if (first == m_firstPtsTime.end() || reference == -1)
         return false;
     // A PTS has 33 bits and wraps after about 26.5 hours: a stream that starts just after the wrap and a video that
@@ -986,6 +1000,8 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         m_lastFullPts = -1;
         m_firstVideoPTS = -1;
         m_firstSeenVideoPTS = -1;
+        m_firstVideoPtsOfProgram.clear();
+        m_firstSeenVideoPtsOfProgram.clear();
         m_lastVideoPTS = -1;
         m_curFileNum++;
         startPart();
@@ -1179,6 +1195,13 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
             {
                 if (m_firstVideoPTS == -1 || curPts < m_firstVideoPTS)
                     m_firstVideoPTS = curPts;
+                if (const int program = streamInfo->second.m_programNumber; program >= 0)
+                {
+                    const auto [low, isNew] = m_firstVideoPtsOfProgram.try_emplace(program, curPts);
+                    if (!isNew && curPts < low->second)
+                        low->second = curPts;
+                    m_firstSeenVideoPtsOfProgram.try_emplace(program, curPts);
+                }
                 if (m_firstSeenVideoPTS == -1)
                     m_firstSeenVideoPTS = curPts;
                 if (m_firstVideoPid == -1)

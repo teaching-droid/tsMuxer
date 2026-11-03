@@ -340,6 +340,7 @@ bool TS_program_map_section::deserialize(uint8_t* buffer, const int buf_size)
                 break;
             }
             PMTStreamInfo pmtStreamInfo(stream_type, elementary_pid, nullptr, 0, nullptr, "", false);
+            pmtStreamInfo.m_programNumber = program_number;
             const int es_info_len = get16(&curPos) & 0xfff;
             if (curPos + es_info_len > crcPos)
             {

@@ -49,7 +49,8 @@ class TSDemuxer final : public AbstractDemuxer
             return llround(static_cast<double>(clockTicks) / 90.0);  // convert to ms
         if (m_firstPtsTime.find(pid) != m_firstPtsTime.end())
         {
-            clockTicks = m_firstPtsTime[pid] - (m_firstSeenVideoPTS != -1 ? m_firstSeenVideoPTS : m_firstSeenPTS);
+            const int64_t video = videoReference(pid, true);
+            clockTicks = m_firstPtsTime[pid] - (video != -1 ? video : m_firstSeenPTS);
             return llround(static_cast<double>(clockTicks) / 90.0);  // convert to ms
         }
 
@@ -271,6 +272,14 @@ class TSDemuxer final : public AbstractDemuxer
     uint32_t m_curFileNum;
     int64_t m_firstVideoPTS;
     int64_t m_firstSeenVideoPTS;  // first PTS seen on a video PID, in file order (never a minimum)
+    // ** EACH PROGRAM ITS OWN CLOCK. ** The same two times for the video of each program of the file (by program
+    // number): a stream is measured against the video of its own program (videoReference). A multiplex of several
+    // services, as an ISDB-Tb one with its 1seg service, can hold programs whose clocks are hours apart.
+    std::map<int, int64_t> m_firstVideoPtsOfProgram;
+    std::map<int, int64_t> m_firstSeenVideoPtsOfProgram;
+    // The video time a stream is measured against: that of its own program where the program has video, else that
+    // of the file (first: the first PES in file order, else the smallest PTS)
+    [[nodiscard]] int64_t videoReference(int32_t pid, bool first) const;
     int64_t m_videoPesRead = 0;   // see videoPesRead
     int m_firstVideoPid = -1;     // see firstVideoPid
     bool m_videoTimedFromFirstPes = false;

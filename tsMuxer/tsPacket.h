@@ -297,6 +297,7 @@ struct PMTStreamInfo final
     int m_pid;
     int m_esInfoLen;
     int m_pmtPID;
+    int m_programNumber = -1;  // the program whose map lists the stream, -1 when not read from a map
     uint8_t m_esInfoData[TS_ES_INFO_MAX];
     char m_lang[4];
     bool isSecondary;
