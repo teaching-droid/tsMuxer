@@ -1,5 +1,7 @@
 #include "discTitleDialog.h"
 
+#include <algorithm>
+
 #include <QCheckBox>
 #include <QCoreApplication>
 #include <QDialogButtonBox>
@@ -78,6 +80,9 @@ DiscTitleList parseDiscTitles(const QList<QString>& output)
             // 3D and the angles go with the note, so that the audio column holds the languages only
             QStringList extra;
             for (auto it = extras.globalMatch(rest); it.hasNext();) extra << it.next().captured(1);
+            for (const QString& e : extra)
+                if (e.endsWith(QLatin1String(" angles")))
+                    row.angles = e.section(' ', 0, 0).toInt();
             rest.replace(extras, QString());
             if (!extra.isEmpty())
                 row.note = extra.join(QLatin1String(", ")) + (row.note.isEmpty() ? QString() : "; " + row.note);
@@ -108,7 +113,10 @@ DiscTitleList parseDiscTitles(const QList<QString>& output)
                 else if (part == QLatin1String("ENCRYPTED"))
                     row.encrypted = true;
                 else if (angles.match(part).hasMatch())
+                {
                     row.note = part + (row.note.isEmpty() ? QString() : "; " + row.note);
+                    row.angles = part.section(' ', 0, 0).toInt();
+                }
             }
             list.titles << row;
         }
@@ -202,17 +210,26 @@ DiscTitleDialog::DiscTitleDialog(const QString& disc, const DiscTitleList& list,
             {wtr("Title"), wtr("Playlist"), wtr("Length"), wtr("Chapters"), wtr("Clips"), wtr("Audio"), wtr("Note")});
     QTreeWidgetItem* first = nullptr;
     for (int i = 0; i < list.titles.size(); ++i)
+      // a title of several angles is a row for each angle: each is muxed on its own (angle=)
+      for (int angle = 1; angle <= (std::max)(1, list.titles[i].angles); ++angle)
     {
         const DiscTitleRow& row = list.titles[i];
+        QString note = row.note;
+        if (row.angles > 1)
+        {
+            const QString main = row.note.section(QLatin1String("; "), 1);
+            note = wtr("angle %1 of %2").arg(angle).arg(row.angles) + (main.isEmpty() ? QString() : "; " + main);
+        }
         QStringList cells{QString::number(row.number)};
         if (list.dvd)
             cells << QString::number(row.discTitle) << row.length << QString::number(row.chapters) << row.audio
-                  << row.subtitles << row.note;
+                  << row.subtitles << note;
         else
             cells << row.playlist << row.length << QString::number(row.chapters) << QString::number(row.clips)
-                  << row.audio << row.note;
+                  << row.audio << note;
         auto* item = new QTreeWidgetItem(m_tree, cells);
         item->setData(0, Qt::UserRole, i);
+        item->setData(0, Qt::UserRole + 1, angle);
         for (const int c : {0, 2, 3}) item->setTextAlignment(c, Qt::AlignRight | Qt::AlignVCenter);
         if (!list.dvd)
             item->setTextAlignment(4, Qt::AlignRight | Qt::AlignVCenter);
@@ -274,4 +291,10 @@ int DiscTitleDialog::chosen() const
 {
     const QTreeWidgetItem* item = m_tree->currentItem();
     return item && (item->flags() & Qt::ItemIsEnabled) ? item->data(0, Qt::UserRole).toInt() : -1;
+}
+
+int DiscTitleDialog::chosenAngle() const
+{
+    const QTreeWidgetItem* item = m_tree->currentItem();
+    return item ? (std::max)(1, item->data(0, Qt::UserRole + 1).toInt()) : 1;
 }

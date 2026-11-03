@@ -278,6 +278,7 @@ class TsMuxerWindow : public QWidget
     QPushButton* m_addDiscBtn = nullptr;  // "add disc", beside "add" and enabled with it
     bool m_discOthersShown = false;
     int m_pendingDvdTitle = 0;
+    int m_pendingAngle = 1;  // the angle chosen with the title, while its tracks are listed
     double m_pendingDvdSeconds = 0.0;
     // The step that takes the next file of addFileList (addFile or appendFile), so that a file that is refused, or
     // already in the list, does not end the adding of the files chosen after it.

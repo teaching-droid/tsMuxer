@@ -58,6 +58,7 @@ struct QtvCodecInfo
     // A title of a DVD folder, drive or image, by the disc's own number: fileList holds the disc, and the meta line
     // names the title with dvd-title=
     int dvdTitle = 0;
+    int angle = 1;  // of a disc title or playlist of several angles (angle=)
     // A track of a playlist: its number among the tracks of its kind in the playlist (the number a player gives it)
     // and in the clip (by PID), from the listing's "Stream order" line; 0 for any other source (#52)
     int playlistPlace = 0;

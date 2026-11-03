@@ -300,7 +300,8 @@ enum FileCustomData
     FileDurationRole,
     VideoStartRole,  // the listing's "Video start" and "Video end", set only when it printed them
     VideoEndRole,
-    DvdTitleRole  // a DVD title: its disc number (QtvCodecInfo::dvdTitle); FileNameRole holds the disc
+    DvdTitleRole,  // a DVD title: its disc number (QtvCodecInfo::dvdTitle); FileNameRole holds the disc
+    AngleRole      // the angle of a disc title or playlist (QtvCodecInfo::angle), 1 for the first
 };
 
 static const QString FILE_JOIN_PREFIX(" ++ ");
@@ -3905,6 +3906,7 @@ void TsMuxerWindow::onDiscTitlesReceived()
         return;
     }
     const DiscTitleRow& row = list.titles[chosen];
+    m_pendingAngle = dialog.chosenAngle();
     QStringList args;
     if (list.dvd)
     {
@@ -4466,6 +4468,7 @@ void TsMuxerWindow::continueAddFile()
         }
         info.srcByTsMuxer = listedWritingApp.startsWith(QLatin1String("tsMuxeR"), Qt::CaseInsensitive);
         info.dvdTitle = m_pendingDvdTitle;
+        info.angle = m_pendingAngle;
         if (mplsFileList.isEmpty())
             info.fileList << newFileName;
         else
@@ -4565,6 +4568,8 @@ void TsMuxerWindow::continueAddFile()
     QString displayName = newFileName;
     if (m_pendingDvdTitle)
         displayName += QStringLiteral(" - ") + tr("DVD title %1").arg(m_pendingDvdTitle);
+    if (m_pendingAngle > 1)
+        displayName += QStringLiteral(" - ") + tr("angle %1").arg(m_pendingAngle);
     if (fileDuration > 0)
         displayName += QString(" (%1)").arg(floatToTime(fileDuration));
     ui->inputFilesLV->addItem(displayName);
@@ -4575,6 +4580,7 @@ void TsMuxerWindow::continueAddFile()
         fileItem->setData(MplsItemRole, MPLS_PRIMARY);
     fileItem->setData(FileNameRole, newFileName);
     fileItem->setData(DvdTitleRole, m_pendingDvdTitle);
+    fileItem->setData(AngleRole, m_pendingAngle);
     fileItem->setData(ChaptersRole, QVariant::fromValue(chapters));
     fileItem->setData(FileDurationRole, fileDuration);
     if (videoEnd > 0)
@@ -4604,12 +4610,18 @@ void TsMuxerWindow::continueAddFile()
     {
         // A DVD title is named after the disc and its number ("Brother title 5"); the disc alone has no name for
         // a drive, and every title of it would get the same one
-        modifyOutFileName(newFileName, m_pendingDvdTitle
-                                           ? tr("%1 title %2").arg(discName(newFileName)).arg(m_pendingDvdTitle)
-                                           : QString());
+        QString base = m_pendingDvdTitle ? tr("%1 title %2").arg(discName(newFileName)).arg(m_pendingDvdTitle)
+                                         : QString();
+        // another angle than the first is named so ("00200 angle 2"): its output is another film than the first's
+        if (m_pendingAngle > 1)
+            base = tr("%1 angle %2")
+                       .arg(base.isEmpty() ? QFileInfo(unquoteStr(newFileName)).completeBaseName() : base)
+                       .arg(m_pendingAngle);
+        modifyOutFileName(newFileName, base);
         outFileNameModified = true;
     }
     m_pendingDvdTitle = 0;
+    m_pendingAngle = 1;
     updateMaxOffsets();
     updateCustomChapters();
     updateDvProfileVisible();
@@ -5401,9 +5413,12 @@ QString TsMuxerWindow::getFileList(QtvCodecInfo* codecInfo)
 {
     QString rezStr;
 
+    // the angle of a disc title or playlist, on the line after its source (angle=)
+    const QString angle = codecInfo->angle > 1 ? QStringLiteral(", angle=%1").arg(codecInfo->angle) : QString();
     // A DVD title: the disc, and the title by the disc's own number
     if (codecInfo->dvdTitle && !codecInfo->fileList.isEmpty())
-        return QString("\"") + codecInfo->fileList[0] + "\", dvd-title=" + QString::number(codecInfo->dvdTitle);
+        return QString("\"") + codecInfo->fileList[0] + "\", dvd-title=" + QString::number(codecInfo->dvdTitle) +
+               angle;
     if (codecInfo->mplsFiles.isEmpty())
     {
         for (int i = 0; i < codecInfo->fileList.size(); ++i)
@@ -5421,6 +5436,7 @@ QString TsMuxerWindow::getFileList(QtvCodecInfo* codecInfo)
                 rezStr += '+';
             rezStr += QString("\"") + codecInfo->mplsFiles[i] + "\"";
         }
+        rezStr += angle;
     }
 
     return rezStr;

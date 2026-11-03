@@ -25,6 +25,7 @@ struct DiscTitleRow
     QString note;       // "main film", "version of title 1", why a title is left out ...
     bool isMain = false;
     bool encrypted = false;
+    int angles = 1;  // of a title with several angles; the dialog shows a row for each (angle=)
 };
 
 struct DiscTitleList
@@ -59,7 +60,8 @@ class DiscTitleDialog : public QDialog
         ShowOthersChanged = 2
     };
     DiscTitleDialog(const QString& disc, const DiscTitleList& list, bool othersShown, QWidget* parent);
-    [[nodiscard]] int chosen() const;  // an index into list.titles, -1 for none
+    [[nodiscard]] int chosen() const;       // an index into list.titles, -1 for none
+    [[nodiscard]] int chosenAngle() const;  // the angle of the row chosen, from 1
 
    private:
     QTreeWidget* m_tree = nullptr;
