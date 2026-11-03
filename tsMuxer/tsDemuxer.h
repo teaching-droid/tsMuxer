@@ -166,6 +166,7 @@ class TSDemuxer final : public AbstractDemuxer
         int64_t lastPts = -1;
         int64_t prevPts = -1;      // the PES before, for the step
         int64_t step = 0;          // the shortest time from one PES to the next: a frame, or a PES of frames
+        int64_t longestStep = 0;   // the longest, of PES that follow on (under a second): the most a PES holds
         int64_t stepBytes = 0;     // the bytes of the sound of the PES (of one time) that gave the step
         int64_t pesBytes = 0;      // the bytes of the sound of the PES (of one time) being read
         bool sizedFrames = false;  // a constant bit rate: the size of a PES tells its length

@@ -545,6 +545,13 @@ bool TSDemuxer::keepJoinSound(const int pid, const StreamType type, const int64_
                                             ? sound.step * sound.pesBytes / sound.stepBytes
                                             : sound.step;
                 sound.end = sound.lastPes + (std::min)(lastLen, sound.step);
+                // ** PES OF DIFFERENT LENGTHS. ** On one clock, where the sound of this file is due after the last PES
+                // of the file before by no more than the longest PES of the sound, that PES holds the frames up to
+                // here: the sound goes on, without a gap. The end was the last PES plus the SHORTEST step, and AAC of
+                // a broadcast recording comes in PES of 2 to 10 frames: a last PES of 9 frames left a gap of 8, and
+                // the sound of each later file of the join came 170 ms later than its picture.
+                if (m_joinOneClock && due > sound.end && due - sound.lastPes <= sound.longestStep)
+                    sound.end = due;
                 sound.pesBytes = -1;  // counted; the PES left out of this file count as nothing
             }
             // half a frame, but at least a millisecond: the end of TrueHD, whose units of under a millisecond come
@@ -624,6 +631,8 @@ bool TSDemuxer::keepJoinSound(const int pid, const StreamType type, const int64_
             sound.step = pts - sound.prevPts;
             sound.stepBytes = sound.pesBytes;
         }
+        if (sound.prevPts != -1 && pts > sound.prevPts && pts - sound.prevPts < 90000)
+            sound.longestStep = (std::max)(sound.longestStep, pts - sound.prevPts);
         sound.pesBytes = 0;
     }
     sound.prevPts = pts;
