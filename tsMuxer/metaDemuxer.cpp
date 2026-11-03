@@ -1281,7 +1281,7 @@ void METADemuxer::placeJoinedSubtitles()
                            "Subtitles joined from " << subFiles.size() << " files: reading " << file
                                                     << " for how long its video is.");
                     end = ext == "TS" || ext == "M2TS" || ext == "MTS" || ext == "M2T"
-                              ? TSDemuxer::fileVideoLengthNs(m_readManager, file)
+                              ? TSDemuxer::fileVideoLengthNs(m_readManager, file, i == 0)
                               : esVideoLengthNs(video.m_codec, video.m_addParams, file);
                 }
                 if (end <= 0)

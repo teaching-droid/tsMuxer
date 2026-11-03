@@ -315,7 +315,7 @@ TSDemuxer::LeadPes TSDemuxer::skipsLeadingPes(const int pid, const StreamType ty
     // from the first file of the source only: the next part of a split recording goes on with the parameter sets of
     // the part before, and its first pictures can be decoded. A stream whose parameter sets do not come within the
     // first LEAD_VIDEO_PES_MAX PES, or not at the start of a PES, is read whole, as before.
-    if (type == StreamType::VIDEO_H264)
+    if (type == StreamType::VIDEO_H264 && m_holdLeadVideo)
     {
         const bool parameterSets = holdsH264Sps(payload, end);
         if (!parameterSets && ++m_leadPes[pid] <= LEAD_VIDEO_PES_MAX)
@@ -390,6 +390,11 @@ int64_t TSDemuxer::fileVideoStart(const std::string& fileName, const int videoPi
 {
     static constexpr int64_t READ_LIMIT = 256LL * 1024 * 1024;
     TSDemuxer probe(m_readManager, "");
+    // ** AS THE JOIN READS IT. ** The next file of a join is read on from the file before, its first pictures too
+    // (skipsLeadingPes holds those of the first file only). The probe held them back as for a file of its own and gave
+    // the first picture with parameter sets as the start: the next file was taken for one on another clock, and its
+    // sound was placed against that later start, up to 0.8 s early at each joint of a split broadcast recording.
+    probe.m_holdLeadVideo = false;
     probe.openFile(fileName);
     std::map<int32_t, TrackInfo> tracks;
     probe.getTrackList(tracks);
@@ -411,9 +416,11 @@ int64_t TSDemuxer::fileVideoStart(const std::string& fileName, const int videoPi
 
 // How long the first video stream of a file lasts on the timeline of a join, as the join lays its files (endJoinFile):
 // from its first decoding time to its last, and one step more; in ns, -1 where it is not found. The whole file is read.
-int64_t TSDemuxer::fileVideoLengthNs(const BufferedReaderManager& readManager, const std::string& fileName)
+int64_t TSDemuxer::fileVideoLengthNs(const BufferedReaderManager& readManager, const std::string& fileName,
+                                     const bool firstFile)
 {
     TSDemuxer probe(readManager, "");
+    probe.m_holdLeadVideo = firstFile;  // as the join reads the file (fileVideoStart)
     probe.openFile(fileName);
     std::map<int32_t, TrackInfo> tracks;
     probe.getTrackList(tracks);

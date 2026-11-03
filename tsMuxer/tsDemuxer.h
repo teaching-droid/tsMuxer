@@ -93,7 +93,9 @@ class TSDemuxer final : public AbstractDemuxer
     [[nodiscard]] int64_t getFileDurationNano() const override;
     // The latest PES time read, on the PGS timeline the PES headers are rewritten to (see AbstractDemuxer)
     // How long the first video stream of a file lasts on the timeline of a join, in ns; -1 where it is not found
-    static int64_t fileVideoLengthNs(const BufferedReaderManager& readManager, const std::string& fileName);
+    // firstFile: the first file of the join, whose pictures before its first parameter sets are left out
+    static int64_t fileVideoLengthNs(const BufferedReaderManager& readManager, const std::string& fileName,
+                                     bool firstFile);
     [[nodiscard]] int64_t getDemuxedTime() const override
     {
         if (m_lastPTS == -1)
@@ -206,6 +208,8 @@ class TSDemuxer final : public AbstractDemuxer
     static constexpr uint8_t LEAD_PES_MAX = 4;
     // H.264 video held until the PES that brings its parameter sets: up to about five seconds of fields
     static constexpr uint8_t LEAD_VIDEO_PES_MAX = 250;
+    // H.264 video is held so (skipsLeadingPes); off where a probe reads a later file of a join, as the join reads it
+    bool m_holdLeadVideo = true;
     static constexpr uint8_t LEAD_PES_DONE = 0xFF;
     uint8_t m_leadPes[8192]{};   // 0: not decided; 1 to LEAD_PES_MAX: PES left out so far; LEAD_PES_DONE: decided
     uint8_t m_leadDrop[8192]{};  // the PES being read of the PID is held back, and the packets carrying its rest
