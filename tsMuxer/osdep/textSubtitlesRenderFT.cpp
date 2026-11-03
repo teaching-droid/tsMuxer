@@ -688,18 +688,26 @@ void TextSubtitlesRenderFT::getTextSize(const string& text, SIZE* mSize)
                                      const auto [kept, isNew] = m_curGlyphMetrics->try_emplace(glyph_index);
                                      if (isNew)
                                      {
+                                         // ** MEASURED WITHOUT DRAWING. ** The glyph was also drawn here, only to
+                                         // read its left edge: bold or italic text is drawn through a transform,
+                                         // and from a size of about 1800 the drawing ran out of room (raster
+                                         // overflow) and stopped the mux with "Can't render symbol code", where the
+                                         // text itself is drawn without it. Loading the glyph sets its left edge as
+                                         // drawing it would (FreeType 2.10 and later), so it is only loaded.
                                          int error = FT_Load_Glyph(m_face, glyph_index, 0);
                                          if (error)
                                          {
                                              m_curGlyphMetrics->erase(kept);
                                              THROW(ERR_COMMON, "Can't load symbol code '" << c << "' from font")
                                          }
+#if FREETYPE_MAJOR * 100 + FREETYPE_MINOR < 210  // an older FreeType sets the left edge only when it draws
                                          error = FT_Render_Glyph(m_face->glyph, FT_RENDER_MODE_NORMAL);
                                          if (error)
                                          {
                                              m_curGlyphMetrics->erase(kept);
                                              THROW(ERR_COMMON, "Can't render symbol code '" << c << "' from font")
                                          }
+#endif
                                          kept->second =
                                              GlyphMetrics{m_face->glyph->advance.x, m_face->glyph->bitmap_left};
                                      }
