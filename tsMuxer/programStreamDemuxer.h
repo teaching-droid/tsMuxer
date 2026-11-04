@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <map>
+#include <set>
 #include <memory>
 #include <vector>
 
@@ -16,6 +17,8 @@
 class ProgramStreamDemuxer final : public AbstractDemuxer
 {
    public:
+    // From now on, hand the sub-picture units of stream (0x20 to 0x3F) on as they are (m_rawSubPictures)
+    void setRawSubPictures(const int stream) { m_rawSubPictures.insert(stream); }
     static constexpr int MAX_PES_HEADER_SIZE = 1018;  // buffer for PES header and program stream map
 
     ProgramStreamDemuxer(const BufferedReaderManager& readManager);
@@ -72,6 +75,9 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
     };
     std::map<int, SubPicture> m_subPictures;
     bool m_subFlushed = false;
+    // The sub-picture streams handed on as they are, for a Matroska output (S_VOBSUB): each unit a record as a copied
+    // Matroska block is (ParsedCopyTrackData, MatroskaCopyStreamReader), not drawn as PGS
+    std::set<int> m_rawSubPictures;
     // The time line of the video the units are placed on: the joined parts of a title, or the parts of a VOB between
     // two jumps of the clock, follow on one after the other, as the video's pictures do. A part begins with the first
     // picture shown, which is not always the first one coded, and is as long as its pictures (scanVideo).

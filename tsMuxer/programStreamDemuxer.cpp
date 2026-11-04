@@ -602,6 +602,27 @@ void ProgramStreamDemuxer::addSubPicture(const int stream, const uint8_t* data, 
     // on the time line of the video: where its part begins, and the time from the first picture of the part
     const int64_t first = m_segFirst >= 0 ? m_segFirst : sp.pts;
     const int64_t at = llround(m_segBase) + (sp.pts - first);
+    if (m_rawSubPictures.count(stream))
+    {
+        // the unit as it is, framed as a copied Matroska block: "MKCP", time, duration (-1: the unit says when it
+        // ends), a key point, no BlockAdditions, its size and its bytes
+        std::vector<uint8_t> rec;
+        const auto be = [&rec](const uint64_t v, const int bytes)
+        {
+            for (int i = bytes - 1; i >= 0; --i) rec.push_back(static_cast<uint8_t>(v >> (8 * i)));
+        };
+        rec.insert(rec.end(), {'M', 'K', 'C', 'P'});
+        be(static_cast<uint64_t>(at * (INTERNAL_PTS_FREQ / 90000)), 8);
+        be(static_cast<uint64_t>(-1), 8);
+        rec.push_back(1);
+        be(0, 4);
+        be(size, 4);
+        rec.insert(rec.end(), sp.unit.begin(), sp.unit.begin() + static_cast<std::ptrdiff_t>(size));
+        out.append(rec.data(), static_cast<int>(rec.size()));
+        sp.unit.clear();
+        sp.pts = -1;
+        return;
+    }
     std::vector<uint8_t> pgs;
     if (size >= 4)
         sp.decoder->decode(sp.unit.data(), static_cast<int>(size), at * (INTERNAL_PTS_FREQ / 90000), -1, pgs);
@@ -618,7 +639,7 @@ void ProgramStreamDemuxer::flushSubPictures(DemuxedData& demuxedData, const PIDS
     m_subFlushed = true;
     for (auto& [stream, sp] : m_subPictures)
     {
-        if (!sp.decoder || acceptedPIDs.find(stream) == acceptedPIDs.end())
+        if (!sp.decoder || acceptedPIDs.find(stream) == acceptedPIDs.end() || m_rawSubPictures.count(stream))
             continue;
         std::vector<uint8_t> pgs;
         sp.decoder->finish(pgs);

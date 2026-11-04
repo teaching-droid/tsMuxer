@@ -2027,6 +2027,27 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             }
         }
     }
+    // ** DVD SUBTITLES INTO A MATROSKA OUTPUT STAY VOBSUB. ** The sub-pictures of a VOB were drawn again as PGS for every
+    // output, where a Matroska output keeps the VobSub of a Matroska source as it is. They go in as S_VOBSUB now, each
+    // unit a block, with the .idx text of the colours of the IFO file as its CodecPrivate. WebM has no VobSub.
+    if (codecReader == nullptr && m_matroskaOutput == 1 && codec == "S_HDMV/PGS" && pid >= 0x20 &&
+        pid <= 0x3f && !fileList.empty())
+    {
+        const std::string first = unquoteStr(trimStr(fileList[0]));
+        const std::string ext = strToUpperCase(extractFileExt(first));
+        if (ext == "VOB" || ext == "MPG" || ext == "MPEG" || ext == "EVO")
+        {
+            std::string idx = dvdSubtitleIdx(first);
+            if (idx.empty())
+                idx = "size: 720x480\npalette: 000000, ffffff, 808080, 404040, 000000, ffffff, 808080, 404040, "
+                      "000000, ffffff, 808080, 404040, 000000, ffffff, 808080, 404040\n";
+            LTRACE(LT_INFO, 2, "Track " << pid << " of " << first << " is DVD subtitles, and goes into the output as "
+                                                                      "they are (VobSub).");
+            auto* copyReader =
+                new MatroskaCopyStreamReader("S_VOBSUB", std::vector<uint8_t>(idx.begin(), idx.end()), {}, 0);
+            codecReader = copyReader;
+        }
+    }
     // ** ASS AND SSA ARE DRAWN WITH LIBASS. ** Drawn as SRT text, a track lost its styles, colours, positions and
     // animations, and its own fonts. libass draws it as the script says, with the fonts attached to the file, and its
     // pictures become PGS as DVD and DVB subtitles do. Without libass, or with ass-as-srt, it is drawn as before.
@@ -6351,8 +6372,12 @@ bool ContainerToReaderWrapper::openStream(int readerID, const char* streamName, 
 
     // A track copied as it is: every block of it from now on, and in every later file of a join
     if (codecInfo && codecInfo->codecID == CODEC_S_MKVCOPY)
+    {
         if (auto* mkv = dynamic_cast<MatroskaDemuxer*>(demuxer))
             mkv->setTrackCopy(pid);
+        else if (auto* ps = dynamic_cast<ProgramStreamDemuxer*>(demuxer))
+            ps->setRawSubPictures(pid);  // DVD subtitles into a Matroska output
+    }
     if (const auto ass = m_assDrawing.find({streamName, pid}); ass != m_assDrawing.end())
         if (auto* mkv = dynamic_cast<MatroskaDemuxer*>(demuxer))
             mkv->setAssDrawing(pid, ass->second);
