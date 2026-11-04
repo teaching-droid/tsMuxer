@@ -1464,9 +1464,14 @@ All parameters in this group start with two dashes:
                       and listing of each source, every message with its time,
                       the lines not shown on the screen too, what each track
                       read, used and left out, and what was written. Folders
-                      are left out of every path. A command line argument, not
-                      a MUXOPT entry.
---report-full-paths   Keep the folders in the paths of the report.
+                      are left out of every path, and the names of files,
+                      titles, track names and chapter names are replaced by
+                      placeholders such as <source1>.mkv, which keep only their
+                      length. A command line argument, not a MUXOPT entry.
+--report-keep-names   Keep the names of files, titles, track names and chapter
+                      names in the report. The folders are still left out.
+--report-full-paths   Keep the folders in the paths of the report, and the
+                      names as --report-keep-names does.
 --report-frames[=<from>-<to>] With --report: a file beside the report,
                       <file>.frames.tsv, with a line for each PES of a
                       transport stream mux (track, PTS, DTS, size, the packet
@@ -4818,14 +4823,24 @@ static int runTsMuxer(int argc, char** argv)
             }
             if (a == argc - 1 && (titleOptions || argc == 2))
             {
+                // the titles of a disc, also in the report (--report): printed here, past the lines LTRACE gives it
+                const auto listTitles = [&](const std::string& titles)
+                {
+                    cout << titles;
+                    if (diagReport::active)
+                    {
+                        diagReport::section(std::string("Titles of ") + argv[a]);
+                        diagReport::text(titles);
+                    }
+                };
                 if (const string root = blurayDiscRoot(argv[a]); !root.empty())
                 {
-                    cout << describeDiscTitles(listDiscTitles(root, minSeconds, all));
+                    listTitles(describeDiscTitles(listDiscTitles(root, minSeconds, all)));
                     return 0;
                 }
                 if (const string videoTs = dvdVideoTs(argv[a]); !videoTs.empty())
                 {
-                    cout << describeDvdTitles(listDvdTitles(videoTs, minSeconds, all));
+                    listTitles(describeDvdTitles(listDvdTitles(videoTs, minSeconds, all)));
                     return 0;
                 }
                 if (titleOptions)

@@ -19,6 +19,7 @@
 #include "av1.h"
 #include "avPacket.h"
 #include "bitStream.h"
+#include "diagnosticReport.h"
 #include "hevc.h"
 #include "matroskaParser.h"
 #include "nalUnits.h"
@@ -2671,10 +2672,14 @@ int MovDemuxer::mov_read_udta_string(MOVAtom atom)
     {
         if (num_tracks > 0 && strcmp(key, "nam") == 0 && str[0])
             if (const auto st = reinterpret_cast<MOVStreamContext*>(tracks[num_tracks - 1]); st->name.empty())
+            {
                 st->name = str.data();
+                diagReport::addName(st->name, "track name");
+            }
         return 0;
     }
     metaData[key] = str.data();
+    diagReport::addName(metaData[key], strcmp(key, "nam") == 0 ? "title" : "tag");
     return 0;
 }
 
@@ -3952,7 +3957,10 @@ int MovDemuxer::mov_read_hdlr(MOVAtom atom)
         const bool generic = name.empty() || strEndWith(name, "Handler") || strStartWith(name, "Core Media") ||
                              strStartWith(name, "ISO Media");
         if (!generic)
+        {
             reinterpret_cast<MOVStreamContext*>(tracks[num_tracks - 1])->name = name;
+            diagReport::addName(name, "track name");
+        }
         return 0;
     }
     skip_bytes(left);
@@ -4276,6 +4284,7 @@ std::vector<AVChapter> MovDemuxer::chapterTrackChapters() const
                                  cut ? wholeUtf8(reinterpret_cast<const char*>(buf + 2), static_cast<size_t>(len))
                                      : static_cast<size_t>(len));
             }
+            diagReport::addName(title, "chapter name");
             out.emplace_back(time * 1000000000LL / sc->time_scale, title);
             pos += size;
             while (sttsIndex < sc->stts_data.size() && sttsUsed >= sc->stts_data[sttsIndex].count)

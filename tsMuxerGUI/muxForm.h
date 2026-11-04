@@ -8,6 +8,10 @@
 class QProcess;
 class Ui_muxForm;
 
+// A report as it is attached to a problem report, read-only, with Copy and Close, and Save... when withSave. True when
+// Save... was chosen.
+bool showReportPreview(QWidget* parent, const QString& title, const QString& text, bool withSave);
+
 class MuxForm : public QDialog  // QWidget
 {
     Q_OBJECT

@@ -21,6 +21,7 @@
 #include "abstractDemuxer.h"
 #include "avPacket.h"
 #include "bufferedFileReader.h"
+#include "diagnosticReport.h"
 #include "metaDemuxer.h"
 #include "mpegStreamReader.h"
 #include "nalUnits.h"
@@ -2526,6 +2527,7 @@ int MatroskaDemuxer::matroska_parse_info()
             if ((res = ebml_read_utf8(&id, &text)) < 0)
                 break;
             m_title = text;
+            diagReport::addName(m_title, "title");
             delete[] text;
             break;
         }
@@ -3865,7 +3867,10 @@ void MatroskaDemuxer::loadChapters(const std::string& fileName)
                     if (!scan.readElement(did, dlen, db))
                         break;
                     if (did == MATROSKA_ID_CHAPSTRING)
+                    {
                         name.title = readString(db, dlen);
+                        diagReport::addName(name.title, "chapter name");
+                    }
                     else if (did == MATROSKA_ID_CHAPTERLANGUAGE && name.language.empty())
                         name.language = readString(db, dlen);  // the first of several: a title has one language
                     else if (did == MATROSKA_ID_CHAPLANGUAGEBCP47 && name.languageBCP47.empty())
@@ -6004,6 +6009,7 @@ int MatroskaDemuxer::matroska_add_stream()
             if ((res = ebml_read_utf8(&id, &text)) < 0)
                 break;
             track->name = text;
+            diagReport::addName(track->name, "track name");
             break;
         }
 

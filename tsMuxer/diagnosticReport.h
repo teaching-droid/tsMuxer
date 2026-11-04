@@ -9,14 +9,16 @@
 // itself, which is often too big to send or not the sender's to give. The report is a text file to attach instead: what
 // the run was given (the command line, the meta file, the size and first bytes of each source and its listing), every
 // line tsMuxeR said, the lines it keeps to itself as well, each with its time, what each track read, made and left
-// out, and what was written. Folders are left out of every path unless --report-full-paths is given, so the report
-// says nothing of the computer it came from. Without --report nothing of this runs and the output is as before.
+// out, and what was written. Folders are left out of every path unless --report-full-paths is given, and the names of
+// files, titles, track names and chapter names are replaced by placeholders unless --report-keep-names is given, so
+// the report says nothing of the computer it came from or of what is on it. Without --report nothing of this runs and
+// the output is as before.
 namespace diagReport
 {
 extern bool active;  // a report is being written: LTRACE hands every line on to it
 
-// Takes --report=<file> and --report-full-paths out of the arguments, as --lang-codes is taken out, and opens the
-// report. Returns false, the error said, when the file cannot be written.
+// Takes --report=<file>, --report-full-paths and --report-keep-names out of the arguments, as --lang-codes is taken
+// out, and opens the report. Returns false, the error said, when the file cannot be written.
 bool takeOptions(int& argc, char** argv);
 // The start of the report: version, build, system, the command line, the meta file and the sources
 void writeStart(int argc, char** argv);
@@ -33,6 +35,9 @@ void text(const std::string& line);
 void setListing(bool on);
 // A path whose folder is left out wherever it appears
 void addPath(const std::string& path);
+// A title, a track name or a chapter name a source holds, as it is read: replaced wherever it appears by a placeholder
+// that says what it is ("title", "track name", "chapter name", "disc title") and how long it is
+void addName(const std::string& text, const std::string& kind);
 // The sources the meta file names, in its order, each once
 std::vector<std::string> metaSources();
 // The run was given a meta file: a mux or a demux

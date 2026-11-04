@@ -2,14 +2,22 @@
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "muxForm.h"
 
+#include <QClipboard>
 #include <QCloseEvent>
 #include <QCoreApplication>
+#include <QDialogButtonBox>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFontDatabase>
+#include <QGuiApplication>
+#include <QLabel>
 #include <QMessageBox>
+#include <QPlainTextEdit>
 #include <QProcess>
+#include <QPushButton>
+#include <QVBoxLayout>
 
 #include "ui_muxForm.h"
 
@@ -71,15 +79,53 @@ void MuxForm::setReportFile(const QString& fileName)
     ui->reportBtn->setEnabled(false);  // until the job has ended and the report is complete
 }
 
+bool showReportPreview(QWidget* parent, const QString& title, const QString& text, const bool withSave)
+{
+    QDialog preview(parent, Qt::WindowMaximizeButtonHint | Qt::WindowCloseButtonHint);
+    preview.setWindowTitle(title);
+    auto* layout = new QVBoxLayout(&preview);
+    auto* note = new QLabel(MuxForm::tr("File names, disc titles, track names and chapter names are replaced by "
+                                        "placeholders. This is the text that is attached."),
+                            &preview);
+    note->setWordWrap(true);
+    layout->addWidget(note);
+    auto* view = new QPlainTextEdit(text, &preview);
+    view->setReadOnly(true);
+    view->setLineWrapMode(QPlainTextEdit::NoWrap);
+    view->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    layout->addWidget(view);
+    auto* buttons = new QDialogButtonBox(&preview);
+    if (withSave)
+    {
+        QPushButton* save = buttons->addButton(MuxForm::tr("Save..."), QDialogButtonBox::AcceptRole);
+        QObject::connect(save, &QPushButton::clicked, &preview, &QDialog::accept);
+    }
+    QPushButton* copy = buttons->addButton(MuxForm::tr("Copy"), QDialogButtonBox::ActionRole);
+    buttons->addButton(QDialogButtonBox::Close);
+    QObject::connect(copy, &QPushButton::clicked, &preview, [text]() { QGuiApplication::clipboard()->setText(text); });
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &preview, &QDialog::reject);
+    layout->addWidget(buttons);
+    preview.resize(900, 600);
+    return preview.exec() == QDialog::Accepted;
+}
+
+// Save report... shows the report first, as it will be attached: what it holds can be read before it leaves the
+// computer. The file is saved under a name of its own, not one built from the output's name.
 void MuxForm::onSaveReport()
 {
-    if (m_reportFile.isEmpty() || !QFile::exists(m_reportFile))
+    QFile file(m_reportFile);
+    if (m_reportFile.isEmpty() || !file.open(QIODevice::ReadOnly))
     {
         QMessageBox::warning(this, tr("Save report"), tr("tsMuxeR wrote no report for this job."));
         return;
     }
+    const QString text = QString::fromUtf8(file.readAll());
+    file.close();
+    if (!showReportPreview(this, tr("Save report"), text, true))
+        return;
+
     const QString target = QFileDialog::getSaveFileName(
-        this, tr("Save report"), QDir::home().filePath(QFileInfo(m_reportFile).fileName()), tr("Text files (*.txt)"));
+        this, tr("Save report"), QDir::home().filePath(QStringLiteral("tsMuxeR_report.txt")), tr("Text files (*.txt)"));
     if (target.isEmpty())
         return;
     if (QFile::exists(target))
@@ -90,8 +136,7 @@ void MuxForm::onSaveReport()
         return;
     }
     QMessageBox::information(this, tr("Save report"),
-                             tr("The report is saved as \"%1\". Attach this file to the problem report. It holds "
-                                "no folder names, only the names of the files.")
+                             tr("The report is saved as \"%1\". Attach this file to the problem report.")
                                  .arg(QDir::toNativeSeparators(target)));
 }
 

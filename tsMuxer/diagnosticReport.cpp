@@ -47,6 +47,7 @@ double framesTo = -1;
 int64_t firstFrameTs = INT64_MIN;
 std::recursive_mutex lock;  // lines come from the reader threads too
 bool keepPaths = false;
+bool keepNames = false;
 bool listing = false;
 // the start of a line said with LTRACE2, kept for the line that ends it, on the thread that says both
 thread_local std::string pending;
@@ -60,6 +61,23 @@ std::string metaName;
 std::string outputName;
 bool inMessages = false;   // the last section written is that of the messages
 bool hadMessages = false;  // a section of messages was written before
+
+// A file whose name is replaced by a placeholder unless --report-keep-names is given: "Der Film.mkv" is
+// "<source1>.mkv", and the name without its extension, which a demux or a split builds its names from, "<source1>"
+struct NamedFile
+{
+    std::string name;         // without its folder
+    std::string stem;         // without its extension either
+    std::string placeholder;  // for the stem: "<source1>"
+    std::string path;         // as given, for the section of the names
+    bool source = false;      // a source: the section says what tsMuxeR takes from its name
+};
+std::vector<NamedFile> namedFiles;  // longest name first
+// A title, a track name or a chapter name as a file holds it, and its placeholder; longest first
+std::vector<std::pair<std::string, std::string>> namedTexts;
+int sourceCount = 0;
+int discCount = 0;
+int otherCount = 0;
 
 #ifdef _WIN32
 constexpr char LINE_END[] = "\r\n";  // the Notepad of Windows 7 shows a file of bare line feeds as one line
@@ -114,20 +132,49 @@ bool folderAt(const std::string& line, const size_t pos, const std::string& fold
     return true;
 }
 
-// A path in a line has its folder left out: "D:/films/a.ts" is "a.ts", and the folder alone is "<folder>". A folder is
-// matched only where a path can begin, after a space, a quote or the like, so a name that merely ends like a folder
-// keeps its letters.
+// A path can begin at this place of a line: after a space, a quote or the like, so a name that merely ends like a
+// folder or a file keeps its letters
+bool pathStart(const std::string& line, const size_t i)
+{
+    const unsigned char before = i == 0 ? ' ' : static_cast<unsigned char>(line[i - 1]);
+    return !std::isalnum(before) && before != '_' && before != '-' && before != '.' && before < 0x80;
+}
+
+// A folder on a network share: \\server\share\films, or //server/share/films on Windows
+bool networkPath(const std::string& line, const size_t i)
+{
+#ifdef _WIN32
+    return i + 2 < line.size() && isSep(line[i]) && isSep(line[i + 1]) && line[i] == line[i + 1] &&
+           !isSep(line[i + 2]) && (line[i] == '\\' || i == 0 || line[i - 1] != ':');  // not the // of a web address
+#else
+    return false;
+#endif
+}
+
+// The length of a drive at the start of a path, a letter, a colon and a slash ("X:/" or "X:\"), or 0
+size_t driveAt(const std::string& line, const size_t i)
+{
+#ifdef _WIN32
+    if (i + 2 < line.size() && std::isalpha(static_cast<unsigned char>(line[i])) && line[i + 1] == ':' &&
+        isSep(line[i + 2]))
+        return 3;
+#endif
+    return 0;
+}
+
+// A path in a line has its folder left out: "D:/films/a.ts" is "a.ts", and the folder alone is "<folder>". What is left
+// still tells a local drive from a network share: "D:/a.ts" is "<drive>/a.ts", "\\server\films\a.ts" is
+// "<network share>/a.ts".
 std::string shortenPaths(const std::string& line)
 {
-    if (keepPaths || folders.empty())
+    if (keepPaths)
         return line;
     std::string r;
     r.reserve(line.size());
     for (size_t i = 0; i < line.size();)
     {
-        const unsigned char before = i == 0 ? ' ' : static_cast<unsigned char>(line[i - 1]);
         bool hit = false;
-        if (!std::isalnum(before) && before != '_' && before != '-' && before != '.' && before < 0x80)
+        if (pathStart(line, i))
             for (const std::string& f : folders)
             {
                 if (!folderAt(line, i, f))
@@ -135,6 +182,8 @@ std::string shortenPaths(const std::string& line)
                 const size_t end = i + f.size();
                 if (end < line.size() && isSep(line[end]))
                 {
+                    if (networkPath(f, 0))
+                        r += "<network share>/";
                     i = end + 1;
                     hit = true;
                     break;
@@ -150,9 +199,184 @@ std::string shortenPaths(const std::string& line)
                     break;
                 }
             }
+        if (!hit && pathStart(line, i))
+        {
+            if (const size_t drive = driveAt(line, i); drive > 0)
+            {
+                r += "<drive>/";
+                i += drive;
+                // folders of a path tsMuxeR was not given as a file, as of an option's value: "<folder>/" for them all
+                bool anyFolder = false;
+                for (size_t k = i; k < line.size();)
+                {
+                    size_t e = k;
+                    while (e < line.size() && !isSep(line[e]) && line[e] != '"' && line[e] != ',' && line[e] != ';')
+                        ++e;
+                    if (e >= line.size() || !isSep(line[e]) || e == k)
+                        break;
+                    anyFolder = true;
+                    k = e + 1;
+                    i = k;
+                }
+                if (anyFolder)
+                    r += "<folder>/";
+                hit = true;
+            }
+            else if (networkPath(line, i))
+            {
+                // a share no folder of the run is on: its server and share are left out as well
+                size_t end = i + 2;
+                for (int part = 0; part < 2 && end < line.size(); ++part)
+                {
+                    while (end < line.size() && !isSep(line[end]) && line[end] != '"' && line[end] != ' ') ++end;
+                    if (part == 0 && end < line.size() && isSep(line[end]))
+                        ++end;
+                }
+                r += "<network share>";
+                i = end;
+                hit = true;
+            }
+        }
         if (!hit)
             r += line[i++];
     }
+    return r;
+}
+
+bool nameChar(const unsigned char c) { return std::isalnum(c) || c == '_' || c == '-' || c >= 0x80; }
+
+// The names of files and the titles and names the files hold, replaced by their placeholders unless
+// --report-keep-names is given. A name is matched only as a whole: where a path or a word can begin, and up to where
+// it ends; the name of a file without its extension only before a full stop and a letter or digit, as in the names a
+// demux or a split builds from it ("<source1>.track_4113.ac3").
+std::string replaceNames(const std::string& line)
+{
+    if (keepNames || (namedFiles.empty() && namedTexts.empty()))
+        return line;
+    std::string r;
+    r.reserve(line.size());
+    for (size_t i = 0; i < line.size();)
+    {
+        bool hit = false;
+        if (pathStart(line, i))
+        {
+            for (const NamedFile& f : namedFiles)
+            {
+                if (folderAt(line, i, f.name) && (i + f.name.size() == line.size() ||
+                                                  !nameChar(static_cast<unsigned char>(line[i + f.name.size()]))))
+                {
+                    r += f.placeholder + f.name.substr(f.stem.size());
+                    i += f.name.size();
+                    hit = true;
+                    break;
+                }
+                const size_t end = i + f.stem.size();
+                if (f.stem.size() < f.name.size() && folderAt(line, i, f.stem) && end + 1 < line.size() &&
+                    line[end] == '.' && std::isalnum(static_cast<unsigned char>(line[end + 1])))
+                {
+                    r += f.placeholder;
+                    i = end;
+                    hit = true;
+                    break;
+                }
+            }
+            if (!hit)
+                for (const auto& [text, placeholder] : namedTexts)
+                {
+                    const size_t end = i + text.size();
+                    // Replaced where it is quoted, or where it cannot be a word of tsMuxeR's own: with a space or a
+                    // letter beyond ASCII, or 10 letters or more. A track named "AC3" or "English" replaced those
+                    // words in every line, "Stream type: AC3" among them; its own lines (srcname=, Stream name:)
+                    // are replaced by redactFields.
+                    const bool quoted = i > 0 && line[i - 1] == '"' && end < line.size() && line[end] == '"';
+                    const bool ownWord = text.size() < 10 && text.find(' ') == std::string::npos &&
+                                         std::all_of(text.begin(), text.end(),
+                                                     [](const char c) { return static_cast<unsigned char>(c) < 0x80; });
+                    if ((quoted || !ownWord) && line.compare(i, text.size(), text) == 0 &&
+                        (end == line.size() || !nameChar(static_cast<unsigned char>(line[end]))))
+                    {
+                        r += placeholder;
+                        i = end;
+                        hit = true;
+                        break;
+                    }
+                }
+        }
+        if (!hit)
+            r += line[i++];
+    }
+    return r;
+}
+
+// What a placeholder keeps of a name, which problems with names depend on: its length, and whether it is plain ASCII
+std::string nameInfo(const std::string& text)
+{
+    size_t chars = 0;
+    bool ascii = true;
+    for (const unsigned char c : text)
+    {
+        chars += (c & 0xC0) != 0x80 ? 1 : 0;
+        ascii = ascii && c < 0x80;
+    }
+    std::string s = std::to_string(chars) + (chars == 1 ? " character" : " characters");
+    if (!ascii)
+        s += " (" + std::to_string(text.size()) + " bytes), non-ASCII";
+    return s;
+}
+
+std::string textPlaceholder(const std::string& kind, const std::string& text)
+{
+    return "<" + kind + ", " + nameInfo(text) + ">";
+}
+
+// The values that name a track or a title wherever a line gives them, also one no file has said before: the "Stream
+// name" of a listing, srcname= and track-name= of a track, --title= of the output
+std::string redactFields(const std::string& line)
+{
+    if (keepNames)
+        return line;
+    std::string r = line;
+    static const std::string streamName = "Stream name: ";
+    if (const size_t p = r.find(streamName); p != std::string::npos && r.find_first_not_of(' ') == p)
+    {
+        const size_t v = p + streamName.size();
+        if (v < r.size() && r[v] != '<')
+            r = r.substr(0, v) + textPlaceholder("track name", r.substr(v));
+    }
+    for (const auto& [key, kind] : {std::pair<std::string, std::string>{"srcname=", "track name"},
+                                    {"track-name=", "track name"},
+                                    {"--title=", "title"}})
+        for (size_t p = r.find(key); p != std::string::npos; p = r.find(key, p + 1))
+        {
+            const char before = p == 0 ? ' ' : r[p - 1];
+            if (before != ' ' && before != ',' && before != '\t' && before != '"')
+                continue;
+            size_t v = p + key.size();
+            size_t end;
+            if (v < r.size() && r[v] == '"')
+                end = r.find('"', ++v);  // track-name="..."
+            else if (before == '"')
+                end = r.find('"', v);  // "--title=a b" as the command line quotes it
+            else if (key == "srcname=")
+            {
+                // up to the next ", key=" of the track: a name may hold a comma
+                end = std::string::npos;
+                for (size_t c = r.find(", ", v); c != std::string::npos && end == std::string::npos;
+                     c = r.find(", ", c + 1))
+                {
+                    size_t k = c + 2;
+                    while (k < r.size() && (std::islower(static_cast<unsigned char>(r[k])) || r[k] == '-')) ++k;
+                    if (k > c + 2 && k < r.size() && r[k] == '=')
+                        end = c;
+                }
+            }
+            else
+                end = r.find(key == "--title=" ? ' ' : ',', v);
+            if (end == std::string::npos)
+                end = r.size();
+            if (end > v && r[v] != '<')
+                r.replace(v, end - v, textPlaceholder(kind, r.substr(v, end - v)));
+        }
     return r;
 }
 
@@ -170,11 +394,101 @@ void addFolder(std::string f)
               [](const std::string& a, const std::string& b) { return a.size() > b.size(); });
 }
 
+std::string upper(std::string s)
+{
+    for (char& c : s) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    return s;
+}
+
+std::vector<std::string> pathParts(const std::string& path)
+{
+    std::vector<std::string> parts;
+    std::string part;
+    for (const char c : path)
+        if (isSep(c))
+        {
+            if (!part.empty())
+                parts.push_back(part);
+            part.clear();
+        }
+        else
+            part += c;
+    if (!part.empty())
+        parts.push_back(part);
+    return parts;
+}
+
+std::vector<NamedFile> filesInOrder;  // for the section of the names
+
+// A file of the run, whose name is replaced by a placeholder. A file of a disc, under its BDMV or VIDEO_TS folder,
+// keeps its name, which says nothing of anyone, and the disc's folder is named instead; so is a disc folder or image
+// given as a source.
+void addFile(const std::string& path, const std::string& kind)
+{
+    if (keepNames || path.empty())
+        return;
+    const std::vector<std::string> parts = pathParts(path);
+    std::string name;
+    bool disc = false;
+    bool discFolder = false;  // the name is that of the folder above BDMV or VIDEO_TS
+    for (size_t k = 1; k < parts.size() && !disc; ++k)
+        if (upper(parts[k]) == "BDMV" || upper(parts[k]) == "VIDEO_TS")
+        {
+            name = parts[k - 1];
+            disc = discFolder = true;
+        }
+    std::error_code ec;
+    const bool folder = std::filesystem::is_directory(fsPath(path), ec);
+    if (!disc && !parts.empty())
+    {
+        name = parts.back();
+        const std::string ext = name.size() > 4 ? upper(name.substr(name.size() - 4)) : std::string();
+        disc = kind == "source" && (folder || ext == ".ISO" || ext == ".IMG" || ext == ".UDF");
+    }
+    if (name.empty() || name == "." || name == ".." || (name.size() == 2 && name[1] == ':'))
+        return;
+    for (const NamedFile& f : namedFiles)
+        if (f.name.size() == name.size() && folderAt(f.name, 0, name))
+            return;
+    NamedFile f;
+    f.name = name;
+    f.path = path;
+    f.source = kind == "source" && !disc;
+    const size_t dot = name.rfind('.');
+    // a folder has no extension: "My.Disc.2019" is one name
+    f.stem = (folder && disc) || discFolder || dot == std::string::npos || dot == 0 ? name : name.substr(0, dot);
+    if (kind == "source")
+        f.placeholder =
+            disc ? "<disc" + std::to_string(++discCount) + ">" : "<source" + std::to_string(++sourceCount) + ">";
+    else if (kind == "file")
+        f.placeholder = "<file" + std::to_string(++otherCount) + ">";
+    else
+        f.placeholder = "<" + kind + ">";
+    filesInOrder.push_back(f);
+    namedFiles.push_back(f);
+    std::sort(namedFiles.begin(), namedFiles.end(),
+              [](const NamedFile& a, const NamedFile& b) { return a.name.size() > b.name.size(); });
+}
+
+// The values of track-name= and --title= of a line of a meta file, quoted or not
+void addMetaNames(const std::string& line)
+{
+    for (const auto& [key, kind] :
+         {std::pair<std::string, std::string>{"track-name=", "track name"}, {"--title=", "title"}})
+        for (size_t p = line.find(key); p != std::string::npos; p = line.find(key, p + 1))
+        {
+            size_t v = p + key.size();
+            const size_t end =
+                v < line.size() && line[v] == '"' ? line.find('"', ++v) : line.find(key == "--title=" ? ' ' : ',', v);
+            addName(line.substr(v, end == std::string::npos ? std::string::npos : end - v), kind);
+        }
+}
+
 void writeLine(const std::string& line)
 {
     if (out == nullptr)
         return;
-    const std::string s = shortenPaths(line);
+    const std::string s = redactFields(replaceNames(shortenPaths(line)));
     std::fwrite(s.data(), 1, s.size(), out);
     std::fputs(LINE_END, out);
     std::fflush(out);  // a run that crashes keeps every line written so far
@@ -216,7 +530,8 @@ std::string localTime()
     localtime_r(&now, &tm);
 #endif
     char buf[64];
-    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S (UTC%z)", &tm);
+    // without the offset from UTC, which would tell where in the world the report was made
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
     return buf;
 }
 
@@ -325,17 +640,38 @@ void readMeta(const std::string& text)
 {
     std::istringstream lines(text);
     std::string line;
+    std::vector<std::string> otherFiles;  // named after the sources, which are numbered first
     while (std::getline(lines, line))
     {
         if (!line.empty() && line.back() == '\r')
             line.pop_back();
+        addMetaNames(line);
+        // an unquoted value of a key that names a file or a folder: --chapters-file=, fonts-dir=, --meta-dir= ...
+        for (size_t eq = line.find('='); eq != std::string::npos; eq = line.find('=', eq + 1))
+        {
+            if (eq + 1 >= line.size() || line[eq + 1] == '"')
+                continue;
+            const size_t end = line.find_first_of(" ,", eq + 1);
+            const std::string value = line.substr(eq + 1, end == std::string::npos ? std::string::npos : end - eq - 1);
+            if (value.find_first_of("/\\") != std::string::npos)
+            {
+                addPath(value);
+                otherFiles.push_back(value);
+            }
+        }
         for (size_t q = line.find('"'); q != std::string::npos;)
         {
             const size_t e = line.find('"', q + 1);
             if (e == std::string::npos)
                 break;
-            if (const std::string s = line.substr(q + 1, e - q - 1); s.find_first_of("/\\") != std::string::npos)
+            const bool nameValue =
+                strEndWith(line.substr(0, q), "track-name=") || strEndWith(line.substr(0, q), "title=");
+            if (const std::string s = line.substr(q + 1, e - q - 1);
+                !nameValue && s.find_first_of("/\\") != std::string::npos)
+            {
                 addPath(s);
+                otherFiles.push_back(s);
+            }
             q = line.find('"', e + 1);
         }
         const std::string t = trimStr(line);
@@ -366,12 +702,14 @@ void readMeta(const std::string& text)
             {
                 sources.push_back(name);
                 addPath(name);
+                addFile(name, "source");
             }
             if (rest.empty() || rest[0] != '+')
                 break;
             rest = trimStr(rest.substr(1));
         }
     }
+    for (const std::string& f : otherFiles) addFile(f, "file");
 }
 
 std::string hexBytes(const uint8_t* data, const int n)
@@ -486,6 +824,21 @@ void addPath(const std::string& path)
     }
 }
 
+void addName(const std::string& text, const std::string& kind)
+{
+    // a name of one or two letters would be matched in too many other words; the lines that give it are covered by
+    // their own rules (redactFields)
+    if (!active || keepNames || text.size() < 3 || text[0] == '<')
+        return;
+    const std::lock_guard<std::recursive_mutex> guard(lock);
+    for (const auto& [known, placeholder] : namedTexts)
+        if (known == text)
+            return;
+    namedTexts.emplace_back(text, textPlaceholder(kind, text));
+    std::sort(namedTexts.begin(), namedTexts.end(),
+              [](const auto& a, const auto& b) { return a.first.size() > b.first.size(); });
+}
+
 bool takeOptions(int& argc, char** argv)
 {
     std::string fileName;
@@ -495,7 +848,9 @@ bool takeOptions(int& argc, char** argv)
     {
         const std::string arg = argv[i];
         if (arg == "--report-full-paths")
-            keepPaths = true;
+            keepPaths = keepNames = true;
+        else if (arg == "--report-keep-names")
+            keepNames = true;
         else if (arg == "--report-frames")
             frames = true;
         else if (arg.compare(0, 16, "--report-frames=") == 0)
@@ -515,10 +870,12 @@ bool takeOptions(int& argc, char** argv)
     }
     if (fileName.empty())
     {
-        if (keepPaths || frames)
-            std::cerr << (keepPaths ? "--report-full-paths" : "--report-frames")
+        if (keepNames || frames)
+            std::cerr << (keepPaths   ? "--report-full-paths"
+                          : keepNames ? "--report-keep-names"
+                                      : "--report-frames")
                       << " goes with --report=<file>, which is not given." << std::endl;
-        return !keepPaths && !frames;
+        return !keepNames && !frames;
     }
     if (!range.empty())
     {
@@ -574,6 +931,7 @@ bool takeOptions(int& argc, char** argv)
         framesActive = true;
     }
     addPath(fileName);
+    addFile(fileName, "report");
     started = std::chrono::steady_clock::now();
     consoleOut = std::cout.rdbuf();
     consoleErr = std::cerr.rdbuf();
@@ -604,6 +962,15 @@ void writeStart(const int argc, char** argv)
             addFolder(value);
     addPath(argv[0]);
     for (const std::string& p : positional) addPath(p);
+    // the value of an option that names a file or a folder (--meta-dir=, --custom-chapters with a file, ...)
+    for (int i = 1; i < argc; ++i)
+        if (argv[i][0] == '-')
+            if (const char* eq = std::strchr(argv[i], '='); eq && std::strpbrk(eq + 1, "/\\"))
+            {
+                const std::string value = unquoteStr(eq + 1);
+                addPath(value);
+                addFile(value, "file");
+            }
     std::string metaText;
     if (std::any_of(argv + 1, argv + argc, [](const char* a) { return std::strcmp(a, "--bdmv-to-iso") == 0; }) &&
         positional.size() == 2)
@@ -611,11 +978,15 @@ void writeStart(const int argc, char** argv)
         // a disc folder made into an image: no meta file
         sources.push_back(positional[0]);
         outputName = positional[1];
+        addFile(positional[0], "source");
+        addFile(outputName, "output");
     }
     else if (positional.size() == 2)
     {
         metaName = positional[0];
         outputName = positional[1];
+        addFile(metaName, "meta file");
+        addFile(outputName, "output");
         File file;
         if (file.open(metaName.c_str(), File::ofRead))
         {
@@ -628,7 +999,10 @@ void writeStart(const int argc, char** argv)
         readMeta(metaText);
     }
     else if (positional.size() == 1)
+    {
         sources.push_back(positional[0]);
+        addFile(positional[0], "source");
+    }
 
     writeLine("tsMuxeR diagnostic report");
     writeLine("Version: " TSMUXER_VERSION);
@@ -636,8 +1010,10 @@ void writeStart(const int argc, char** argv)
     writeLine("System: " + systemText());
     writeLine("Processors: " + std::to_string(std::thread::hardware_concurrency()) + "; memory: " + memoryText());
     writeLine("Started: " + localTime());
-    writeLine(keepPaths ? "Paths: as given (--report-full-paths)"
-                        : "Paths: folders left out, \"<folder>\" for one alone");
+    writeLine(keepPaths   ? "Paths: as given (--report-full-paths)"
+              : keepNames ? "Paths: folders left out, \"<folder>\" for one alone; names as given (--report-keep-names)"
+                          : "Paths: folders left out, \"<folder>\" for one alone; the names of files, titles, track "
+                            "names and chapter names replaced by placeholders, described under Names");
     writeLine(
         "Lines: seconds since the start, then E error, W warning, I information, D detail; a lower-case letter "
         "marks a line that was not shown on the screen");
@@ -652,6 +1028,32 @@ void writeStart(const int argc, char** argv)
                   "packet in that file, PTS/DTS/PCR in 90 kHz, early_ms = DTS minus the clock when it was written). "
                   "kind buffer: an MPEG-2 picture taken out of the decoder's buffer at its DTS (EB_bytes = the "
                   "buffer then, early_ms = how long its first byte waited, late = not whole in time).");
+    }
+
+    if (!keepNames && !filesInOrder.empty())
+    {
+        // What the placeholders keep of each name: what problems with names depend on, and what tsMuxeR takes from a
+        // name. Written through the same rules, each name here is its placeholder.
+        section("Names");
+        for (const NamedFile& f : filesInOrder)
+        {
+            std::string line = f.name + ": the name " + nameInfo(f.name);
+            if (f.name.find(' ') != std::string::npos)
+                line += ", with spaces";
+            if (const std::string lang = f.source ? langFromFileName(f.name) : std::string(); !lang.empty())
+                line += ", gives the language " + lang;
+            if (const int64_t delay = f.source ? delayFromFileName(f.name) : 0; delay != 0)
+                line += ", gives a delay of " + std::to_string(delay) + " ms";
+            std::error_code ec;
+            const std::string absolute = utf8(std::filesystem::absolute(fsPath(f.path), ec));
+            if (!ec)
+            {
+                line += "; the path " + nameInfo(absolute);
+                if (networkPath(absolute, 0))
+                    line += ", on a network share";
+            }
+            text(line);
+        }
     }
 
     section("Command line");

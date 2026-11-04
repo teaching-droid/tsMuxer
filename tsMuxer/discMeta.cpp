@@ -8,6 +8,7 @@
 #include <fs/systemlog.h>
 #include <types/types.h>
 
+#include "diagnosticReport.h"
 #include "utf8Converter.h"
 #include "vodCoreException.h"
 #include "vod_common.h"
@@ -245,6 +246,7 @@ DiscMeta readFolder(const std::string& dir, const bool given)
         std::string shown = bdmt.title;  // a title that is not UTF-8 is shown with U+FFFD in the log, not copied raw
         UtfConverter::makeValidUtf8(shown);
         meta.titles.emplace_back(lang, shown);
+        diagReport::addName(shown, "disc title");
         if (given)
         {
             if (!isPlainBdmtName(name))
