@@ -134,7 +134,7 @@ int H264StreamReader::secondFieldStart(const uint8_t* data, const int size) cons
     for (uint8_t* nal = NALUnit::findNextNAL(begin, end); nal < end; nal = NALUnit::findNextNAL(nal, end))
     {
         uint8_t* startCode = nal - 3;
-        if (startCode > begin && startCode[-1] == 0)
+        while (startCode > begin && startCode[-1] == 0)  // a slice may end in zero bytes before the start code
             --startCode;
         const auto type = static_cast<NALUnit::NALType>(*nal & 0x1f);
         const bool slice = type == NALUnit::NALType::nuSliceIDR || type == NALUnit::NALType::nuSliceNonIDR;
