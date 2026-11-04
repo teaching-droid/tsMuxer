@@ -2782,6 +2782,19 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                     streamInfo.m_addParams["srcdefault"] = trackIt->second.m_defaultFlag ? "1" : "0";
             }
         }
+        // The sub-pictures of a DVD have their language outside the stream, in the IFO file or the .idx, where the
+        // listing finds it. Asked of the stream, a line without lang= came out with no language in a Matroska file, in
+        // a transport stream and on a disc. Not written into addParams["lang"], for the reason given above.
+        if (pid >= 0x20 && pid <= 0x3f && streamInfo.m_lang.empty() && addParams.find("lang") == addParams.end() &&
+            !fileList.empty())
+        {
+            const std::string first = unquoteStr(trimStr(fileList[0]));
+            const std::string ext = strToUpperCase(extractFileExt(first));
+            if (ext == "VOB" || ext == "MPG" || ext == "MPEG" || ext == "EVO" || isVobSubPair(first))
+                for (const auto& [track, code] : dvdSubtitleTracks(first))
+                    if (track == pid)
+                        streamInfo.m_lang = iso639FromBcp47(code);
+        }
     }
     // The language the clip information file of a disc clip gives the stream, which the listing shows
     const auto takeClipInfoLang = [&](const char* why)
