@@ -5877,12 +5877,12 @@ string METADemuxer::findBluRayFile(const string& streamDir, const string& reques
     string dirName = streamDir.substr(0, streamDir.size() - 1);
     if (strEndWith(strToLowerCase(dirName), "ssif"))
     {
-        const size_t pos = dirName.find_last_of(getDirSeparator());
+        const size_t pos = dirName.find_last_of("/\\");
         if (pos > 0)
             dirName = streamDir.substr(0, pos);
     }
 
-    const size_t tmp = dirName.find_last_of(getDirSeparator());
+    const size_t tmp = dirName.find_last_of("/\\");
     if (tmp != std::string::npos)
     {
         dirName = streamDir.substr(0, tmp + 1);

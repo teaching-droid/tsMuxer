@@ -50,6 +50,8 @@
 
 * **AC-4 audio is named in a TS.** A track that the PMT declares as AC-4 was listed as "Can't detect stream type". It now says "AC-4 audio", and that tsMuxeR does not mux it. A meta line that names such a track is refused with the same reason. The other tracks of the file are not affected.
 
+* **A clip named with forward slashes on Windows lost its language.** The clip information beside it was not found, so the language of each track stayed empty.
+
 ### Audio
 
 * **WavPack is read from a Matroska file and from a .wv file.** A WavPack track (A_WAVPACK4) of a Matroska file and a .wv file were "Can't detect stream type". They are now listed with their sample rate, channels and bits per sample, copied as they are into a Matroska output and demuxed to a .wv file; a disc and a TS have no form for them. Hybrid WavPack keeps its correction part: from a Matroska file as it is, and from the .wvc file beside a .wv, so the Matroska output decodes to the lossless sound; a demux writes the lossy part, with a warning. DSD WavPack is refused with that reason.
