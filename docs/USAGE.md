@@ -111,6 +111,8 @@ V_MPEG-2, "dvd.iso", title=main, track=224
 A_AC3, "dvd.iso", title=main, track=128
 ```
 
+A demux writes DVD subtitles as `name.idx` and `name.sub`. Such a pair is read as a source when the .idx file is beside the .sub file: `S_HDMV/PGS, "name.sub", track=32`. The track number is 32 plus the `index:` of the .idx file.
+
 A folder that holds several disc folders or images, such as a box set copied disc by disc, given alone names them: `tsMuxeR D:/discs/box` prints each Blu-ray and DVD disc folder and image in it, to be listed with its own path.
 
 Supported output formats:

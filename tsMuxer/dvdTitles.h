@@ -93,6 +93,12 @@ std::string dvdTitleSource(const std::string& videoTs, const std::string& title,
 // title's own colours, for a VTS_nn_k.VOB those of the first program chain of its title set that has cells. Empty when
 // no IFO file of it can be read.
 std::string dvdSubtitleIdx(const std::string& vobPath);
+
+// An .idx/.sub pair of DVD subtitles: the name is a .sub file with its .idx file beside it
+bool isVobSubPair(const std::string& path);
+// The times of the units of a track (index: of the .idx file) of such a pair, in ms: they, not the times in the .sub
+// file, are the subtitle's times, which tools write differently
+std::vector<int64_t> vobSubTimes(const std::string& subPath, int index);
 // The sub-picture streams the same program chain enables, as track numbers (0x20 + stream) with their languages: the
 // listing gives a stream whose first subtitle comes after the part of the file it reads as well
 std::vector<std::pair<int, std::string>> dvdSubtitleTracks(const std::string& vobPath);

@@ -110,6 +110,7 @@ int64_t ProgramStreamDemuxer::getDemuxedSize() { return m_dataProcessed; }
 void ProgramStreamDemuxer::openFile(const std::string& streamName)
 {
     m_streamName = streamName;
+    m_vobSubPair = isVobSubPair(unquoteStr(streamName));
     readClose();
     // BufferedFileReader* fileReader = dynamic_cast <BufferedFileReader*> (m_bufferedReader);
     if (!m_bufferedReader->openStream(m_readerID, m_streamName.c_str()))
@@ -601,7 +602,23 @@ void ProgramStreamDemuxer::addSubPicture(const int stream, const uint8_t* data, 
         return;
     // on the time line of the video: where its part begins, and the time from the first picture of the part
     const int64_t first = m_segFirst >= 0 ? m_segFirst : sp.pts;
-    const int64_t at = llround(m_segBase) + (sp.pts - first);
+    int64_t at = llround(m_segBase) + (sp.pts - first);
+    if (m_vobSubPair)
+    {
+        if (!sp.timesRead)
+        {
+            sp.times = vobSubTimes(unquoteStr(m_streamName), stream - 0x20);
+            sp.timesRead = true;
+        }
+        if (sp.done == sp.times.size() && !sp.timesRanOut)
+        {
+            sp.timesRanOut = true;
+            LTRACE(LT_WARN, 2, "Warning: the .idx file of " << m_streamName << " has fewer times than track " << stream
+                                                            << " has subtitles. The rest take the time in the .sub file.");
+        }
+        at = sp.done < sp.times.size() ? sp.times[sp.done] * 90 : sp.pts;
+        ++sp.done;
+    }
     if (m_rawSubPictures.count(stream))
     {
         // the unit as it is, framed as a copied Matroska block: "MKCP", time, duration (-1: the unit says when it

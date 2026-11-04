@@ -41,6 +41,16 @@ class MatroskaCopyStreamReader final : public AbstractStreamReader
     // one Dialogue line or one cue for each block (textFor)
     void setTextFileOutput(const bool on) { m_textFile = on; }
 
+    // For a demux of DVD subtitles: each packet is the packs of the .sub file for one sub-picture unit, and the .idx file
+    // is gathered beside it (lang: its id: line)
+    void setVobSubFileOutput(const std::string& lang)
+    {
+        m_vobSubFile = true;
+        m_vobSubLang = lang;
+    }
+    [[nodiscard]] bool vobSubFileOutput() const { return m_vobSubFile; }
+    [[nodiscard]] std::string vobSubIndex() const;
+
    private:
     // Called S_MKVCOPY, a subtitle by the first letter as the code everywhere asks; the source's CodecID beside it
     CodecInfo m_codecInfo;
@@ -48,6 +58,11 @@ class MatroskaCopyStreamReader final : public AbstractStreamReader
     std::vector<uint8_t> m_codecPrivate;
     std::vector<std::vector<uint8_t>> m_addMappings;
     uint64_t m_maxBlockAddId;
+    bool m_vobSubFile = false;
+    std::string m_vobSubLang;
+    std::string m_vobSubTimes;  // the timestamp lines of the .idx file
+    int64_t m_vobSubPos = 0;    // where the next unit starts in the .sub file
+    void packVobSub(int64_t pts, const uint8_t* data, size_t size);
     std::vector<uint8_t> m_input;   // records not yet turned into packets
     size_t m_inputPos = 0;          // where the next record starts in m_input
     std::vector<uint8_t> m_packet;  // the data of the packet last handed out

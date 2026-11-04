@@ -528,6 +528,8 @@ static NamedAs familyOfContent(const uint8_t* buf, const int len, const char** n
 // when the file is a container. Any other content under such a name is left to the readers, as before.
 static void checkNameMatchesContent(const std::string& fileName, const std::string& ext)
 {
+    if (isVobSubPair(fileName))
+        return;  // a .sub file of DVD subtitles is a program stream by its nature
     const NamedAs named = familyOfExt(ext);
 
     File file;
@@ -2030,12 +2032,14 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     // ** DVD SUBTITLES INTO A MATROSKA OUTPUT STAY VOBSUB. ** The sub-pictures of a VOB were drawn again as PGS for every
     // output, where a Matroska output keeps the VobSub of a Matroska source as it is. They go in as S_VOBSUB now, each
     // unit a block, with the .idx text of the colours of the IFO file as its CodecPrivate. WebM has no VobSub.
-    if (codecReader == nullptr && m_matroskaOutput == 1 && codec == "S_HDMV/PGS" && pid >= 0x20 &&
+    if (codecReader == nullptr && (m_matroskaOutput == 1 || m_demuxOutput) && codec == "S_HDMV/PGS" && pid >= 0x20 &&
         pid <= 0x3f && !fileList.empty())
     {
         const std::string first = unquoteStr(trimStr(fileList[0]));
         const std::string ext = strToUpperCase(extractFileExt(first));
-        if (ext == "VOB" || ext == "MPG" || ext == "MPEG" || ext == "EVO")
+        // A demux of a VOB gives what it holds, .idx and .sub; a demux of an .idx/.sub pair gives the pictures, .sup
+        if (ext == "VOB" || ext == "MPG" || ext == "MPEG" || ext == "EVO" ||
+            (m_matroskaOutput == 1 && isVobSubPair(first)))
         {
             std::string idx = dvdSubtitleIdx(first);
             if (idx.empty())
@@ -2045,6 +2049,17 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                                                                       "they are (VobSub).");
             auto* copyReader =
                 new MatroskaCopyStreamReader("S_VOBSUB", std::vector<uint8_t>(idx.begin(), idx.end()), {}, 0);
+            if (m_demuxOutput)
+            {
+                std::string lang;
+                if (const auto given = addParams.find("lang"); given != addParams.end())
+                    lang = given->second;
+                else
+                    for (const auto& [track, code] : dvdSubtitleTracks(first))
+                        if (track == pid)
+                            lang = code;
+                copyReader->setVobSubFileOutput(lang);
+            }
             codecReader = copyReader;
         }
     }
@@ -2220,7 +2235,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         else
             codecReader->setSrcContainerType(AbstractStreamReader::ContainerType::ctM2TS);
     }
-    else if (strEndWith(tmpname, ".vob") || strEndWith(tmpname, ".evo") || strEndWith(tmpname, ".mpg") ||
+    else if (isVobSubPair(unquoteStr(trimStr(fileList[0]))) || strEndWith(tmpname, ".vob") ||
+             strEndWith(tmpname, ".evo") || strEndWith(tmpname, ".mpg") ||
              strEndWith(tmpname, ".mpeg"))
     {
         if (pid)
@@ -3379,7 +3395,7 @@ static int64_t fileDurationNano(const BufferedReaderManager& readManager, const 
     const std::string ext = strToLowerCase(extractFileExt(fileName));
     if (ext == "ts" || ext == "m2ts" || ext == "mts" || ext == "m2t" || ext == "ssif")
         return getTSDuration(fileName.c_str()) * 1000000000LL / 90000LL;
-    if (ext == "vob" || ext == "mpg" || ext == "mpeg" || ext == "evo")
+    if (ext == "vob" || ext == "mpg" || ext == "mpeg" || ext == "evo" || isVobSubPair(fileName))
         return getPSDuration(fileName.c_str()) * 1000000000LL / 90000LL;
     if (ext == "mkv" || ext == "mka" || ext == "mks" || ext == "mk3d" || ext == "webm")
     {
@@ -3625,7 +3641,7 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
             demuxer = std::make_unique<TSDemuxer>(m_readManager, "");
             containerType = AbstractStreamReader::ContainerType::ctTS;
         }
-        else if (fileExt == "vob" || fileExt == "mpg" || fileExt == "mpeg")
+        else if (fileExt == "vob" || fileExt == "mpg" || fileExt == "mpeg" || isVobSubPair(unquoted))
         {
             demuxer = std::make_unique<ProgramStreamDemuxer>(m_readManager);
             containerType = AbstractStreamReader::ContainerType::ctVOB;
@@ -4266,7 +4282,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
         demuxer = std::make_unique<TSDemuxer>(readManager, "");
         containerType = AbstractStreamReader::ContainerType::ctTS;
     }
-    else if (fileExt == "vob" || fileExt == "mpg" || fileExt == "mpeg")
+    else if (fileExt == "vob" || fileExt == "mpg" || fileExt == "mpeg" || isVobSubPair(unquoted))
     {
         demuxer = std::make_unique<ProgramStreamDemuxer>(readManager);
         containerType = AbstractStreamReader::ContainerType::ctVOB;
@@ -6312,7 +6328,7 @@ bool ContainerToReaderWrapper::openStream(int readerID, const char* streamName, 
             demuxer = m_demuxers[streamName].m_demuxer = new TSDemuxer(m_readManager, "");
             m_demuxers[streamName].m_streamName = streamName;
         }
-        else if (ext == "EVO" || ext == "VOB" || ext == "MPG" || ext == "MPEG")
+        else if (ext == "EVO" || ext == "VOB" || ext == "MPG" || ext == "MPEG" || isVobSubPair(unquoteStr(streamName)))
         {
             demuxer = m_demuxers[streamName].m_demuxer = new ProgramStreamDemuxer(m_readManager);
             m_demuxers[streamName].m_streamName = streamName;

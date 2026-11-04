@@ -140,7 +140,10 @@ void SingleFileMuxer::intAddStream(const std::string& streamName, const std::str
         if (const auto copy = dynamic_cast<MatroskaCopyStreamReader*>(codecReader))
         {
             const std::string& id = copy->sourceCodecId();
-            fileExt = id == "S_TEXT/ASS" ? ".ass" : id == "S_TEXT/SSA" ? ".ssa" : ".vtt";
+            fileExt = id == "S_VOBSUB"     ? ".sub"
+                      : id == "S_TEXT/ASS" ? ".ass"
+                      : id == "S_TEXT/SSA" ? ".ssa"
+                                           : ".vtt";
         }
         else
             fileExt = srt && srt->keepText() ? ".srt" : ".sup";
@@ -527,6 +530,22 @@ bool SingleFileMuxer::close()
             {
                 failed();
                 continue;
+            }
+            // DVD subtitles: the .idx file beside the .sub file
+            if (const auto* copy = dynamic_cast<const MatroskaCopyStreamReader*>(streamInfo->m_codecReader);
+                copy && copy->vobSubFileOutput())
+            {
+                const std::string text = copy->vobSubIndex();
+                const std::string& sub = streamInfo->m_fileName;
+                const std::string name = sub.substr(0, sub.size() - 4) + ".idx";
+                File idx;
+                if (!idx.open(name.c_str(), File::ofWrite) ||
+                    idx.write(text.data(), static_cast<uint32_t>(text.size())) != static_cast<int>(text.size()) ||
+                    !idx.close())
+                {
+                    reportUnfinished(name);
+                    allFinished = false;
+                }
             }
 
             if (streamInfo->m_part > 1)

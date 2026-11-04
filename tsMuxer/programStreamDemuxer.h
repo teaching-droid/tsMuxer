@@ -72,12 +72,17 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
         std::unique_ptr<VobSubDecoder> decoder;
         std::vector<uint8_t> unit;  // the unit being put together
         int64_t pts = -1;           // its time, 90 kHz
+        std::vector<int64_t> times;  // of an .idx file, ms
+        bool timesRead = false;
+        size_t done = 0;  // the units read
+        bool timesRanOut = false;
     };
     std::map<int, SubPicture> m_subPictures;
     bool m_subFlushed = false;
     // The sub-picture streams handed on as they are, for a Matroska output (S_VOBSUB): each unit a record as a copied
     // Matroska block is (ParsedCopyTrackData, MatroskaCopyStreamReader), not drawn as PGS
     std::set<int> m_rawSubPictures;
+    bool m_vobSubPair = false;  // an .idx/.sub pair: the times of its units are those of the .idx file
     // The time line of the video the units are placed on: the joined parts of a title, or the parts of a VOB between
     // two jumps of the clock, follow on one after the other, as the video's pictures do. A part begins with the first
     // picture shown, which is not always the first one coded, and is as long as its pictures (scanVideo).

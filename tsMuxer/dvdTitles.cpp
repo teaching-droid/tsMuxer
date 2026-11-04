@@ -1051,9 +1051,124 @@ const SubtitleInfo& subtitleInfo(const std::string& vobPath)
 }
 }  // namespace
 
-std::string dvdSubtitleIdx(const std::string& vobPath) { return subtitleInfo(vobPath).idx; }
+namespace
+{
+// Beside it, as a Linux or macOS folder may have it in capitals
+std::string idxFileOf(const std::string& subPath)
+{
+    const std::string stem = subPath.substr(0, subPath.size() - 3);
+    return fileExists(stem + "idx") || !fileExists(stem + "IDX") ? stem + "idx" : stem + "IDX";
+}
+
+std::vector<std::string> idxLines(const std::string& subPath)
+{
+    std::vector<std::string> lines;
+    File f;
+    if (!f.open(idxFileOf(subPath).c_str(), File::ofRead))
+        return lines;
+    int64_t size = 0;
+    f.size(&size);
+    if (size > 64 * 1024 * 1024)
+        LTRACE(LT_WARN, 2, "Warning: " << idxFileOf(subPath) << " is larger than 64 MB, and only its start is read.");
+    std::string text(static_cast<size_t>((std::min)(size, static_cast<int64_t>(64 * 1024 * 1024))), '\0');
+    const int got = f.read(text.data(), static_cast<uint32_t>(text.size()));
+    f.close();
+    text.resize(got > 0 ? static_cast<size_t>(got) : 0);
+    size_t pos = 0;
+    while (pos < text.size())
+    {
+        size_t end = text.find('\n', pos);
+        if (end == std::string::npos)
+            end = text.size();
+        std::string line = text.substr(pos, end - pos);
+        while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+            line.pop_back();
+        lines.push_back(line);
+        pos = end + 1;
+    }
+    return lines;
+}
+
+// HH:MM:SS:mmm
+bool idxTime(const std::string& text, int64_t& ms)
+{
+    int h = 0, m = 0, s = 0, f = 0;
+    const bool negative = !text.empty() && text[0] == '-';
+    if (sscanf(text.c_str() + (negative ? 1 : 0), "%d:%d:%d:%d", &h, &m, &s, &f) != 4)
+        return false;
+    // no film has more; a larger number is a damaged line, and would run over when it is turned into ticks
+    if (h < 0 || h > 100000 || m < 0 || m > 59 || s < 0 || s > 59 || f < 0 || f > 999)
+        return false;
+    ms = ((h * 60LL + m) * 60 + s) * 1000 + f;
+    if (negative)
+        ms = -ms;
+    return true;
+}
+}  // namespace
+
+bool isVobSubPair(const std::string& path)
+{
+    return path.size() > 4 && strToLowerCase(path.substr(path.size() - 4)) == ".sub" && fileExists(idxFileOf(path));
+}
+
+std::vector<int64_t> vobSubTimes(const std::string& subPath, const int index)
+{
+    std::vector<int64_t> times;
+    int track = -1;
+    int64_t delay = 0;
+    int unread = 0;
+    static constexpr int64_t MAX_DELAY = INT64_C(360000000000);  // 100,000 hours, in ms
+    for (const std::string& line : idxLines(subPath))
+    {
+        int number = 0;
+        if (const size_t at = line.find("index:"); line.rfind("id:", 0) == 0 && at != std::string::npos &&
+                                                   sscanf(line.c_str() + at + 6, "%d", &number) == 1)
+        {
+            track = number;
+            delay = 0;
+        }
+        else if (int64_t ms = 0; line.rfind("delay:", 0) == 0 && idxTime(trimStr(line.substr(6)), ms))
+            delay = (std::max)(-MAX_DELAY, (std::min)(MAX_DELAY, delay + ms));
+        else if (line.rfind("timestamp:", 0) == 0 && track == index)
+        {
+            if (idxTime(trimStr(line.substr(10)), ms))
+                times.push_back(ms + delay);
+            else
+                ++unread;
+        }
+    }
+    if (unread > 0)
+        LTRACE(LT_WARN, 2, "Warning: " << unread << " timestamp line(s) of track " << index << " of " << idxFileOf(subPath)
+                                       << " could not be read. The subtitles from there on may be at the wrong time.");
+    return times;
+}
+
+std::string dvdSubtitleIdx(const std::string& vobPath)
+{
+    if (isVobSubPair(vobPath))
+    {
+        std::string text;
+        for (const std::string& line : idxLines(vobPath))
+            if (line.rfind("size:", 0) == 0 || line.rfind("palette:", 0) == 0)
+                text += line + '\n';
+        return text;
+    }
+    return subtitleInfo(vobPath).idx;
+}
 
 std::vector<std::pair<int, std::string>> dvdSubtitleTracks(const std::string& vobPath)
 {
+    if (isVobSubPair(vobPath))
+    {
+        std::vector<std::pair<int, std::string>> tracks;
+        for (const std::string& line : idxLines(vobPath))
+        {
+            char lang[16] = {};
+            int number = 0;
+            if (sscanf(line.c_str(), "id: %15[^,], index: %d", lang, &number) == 2 && number >= 0 && number < 32)
+                tracks.emplace_back(0x20 + number, lang);
+        }
+        return tracks;
+    }
     return subtitleInfo(vobPath).tracks;
 }
