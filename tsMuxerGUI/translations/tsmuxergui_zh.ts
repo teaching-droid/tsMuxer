@@ -3942,6 +3942,11 @@ Build the ISO anyway?</source>
         <translation>无法检测流类型。 文件名： &quot;%1&quot;</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1082"/>
+        <source>The .idx file &quot;%1&quot; has no .sub file beside it.</source>
+        <translation>.idx 文件“%1”旁边没有 .sub 文件。</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.cpp" line="1204"/>
         <location filename="../tsmuxerwindow.cpp" line="1205"/>
         <location filename="../tsmuxerwindow.cpp" line="1233"/>

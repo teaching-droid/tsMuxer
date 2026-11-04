@@ -3834,6 +3834,11 @@ Creare comunque l&apos;ISO?</translation>
         <translation>Impossibile rilevare il tipo di flusso. Nome file: &quot;%1&quot;</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1082"/>
+        <source>The .idx file &quot;%1&quot; has no .sub file beside it.</source>
+        <translation>Il file .idx &quot;%1&quot; non ha un file .sub accanto.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.cpp" line="1204"/>
         <location filename="../tsmuxerwindow.cpp" line="1205"/>
         <location filename="../tsmuxerwindow.cpp" line="1233"/>

@@ -3942,6 +3942,11 @@ ISO trotzdem erstellen?</translation>
         <translation>Der Streamtyp kann nicht erkannt werden. Dateiname: &quot;%1&quot;</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1082"/>
+        <source>The .idx file &quot;%1&quot; has no .sub file beside it.</source>
+        <translation>Neben der .idx-Datei &quot;%1&quot; liegt keine .sub-Datei.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.cpp" line="1204"/>
         <location filename="../tsmuxerwindow.cpp" line="1205"/>
         <location filename="../tsmuxerwindow.cpp" line="1233"/>

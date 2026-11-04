@@ -3942,6 +3942,11 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <translation>No se puede detectar el formato del archivo: &quot;%1&quot;</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1082"/>
+        <source>The .idx file &quot;%1&quot; has no .sub file beside it.</source>
+        <translation>El archivo .idx &quot;%1&quot; no tiene un archivo .sub al lado.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.cpp" line="1204"/>
         <location filename="../tsmuxerwindow.cpp" line="1205"/>
         <location filename="../tsmuxerwindow.cpp" line="1233"/>

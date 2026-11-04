@@ -3942,6 +3942,11 @@ Créer l'ISO malgré tout ?</translation>
         <translation>Impossible de déterminer le type de flux pour le fichier : &quot;%1&quot;</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1082"/>
+        <source>The .idx file &quot;%1&quot; has no .sub file beside it.</source>
+        <translation>Le fichier .idx &quot;%1&quot; n&apos;a pas de fichier .sub à côté de lui.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.cpp" line="1204"/>
         <location filename="../tsmuxerwindow.cpp" line="1205"/>
         <location filename="../tsmuxerwindow.cpp" line="1233"/>

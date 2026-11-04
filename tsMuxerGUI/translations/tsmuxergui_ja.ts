@@ -3942,6 +3942,11 @@ Build the ISO anyway?</source>
         <translation>ストリームの種類を検出できません。ファイル名:「%1」</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1082"/>
+        <source>The .idx file &quot;%1&quot; has no .sub file beside it.</source>
+        <translation>.idx ファイル &quot;%1&quot; と同じ場所に .sub ファイルがありません。</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.cpp" line="1204"/>
         <location filename="../tsmuxerwindow.cpp" line="1205"/>
         <location filename="../tsmuxerwindow.cpp" line="1233"/>

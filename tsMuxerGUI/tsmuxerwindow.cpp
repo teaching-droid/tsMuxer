@@ -3372,7 +3372,11 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
         else if (unsupportedTracks.isEmpty())
         {
             msgBox.setWindowTitle(tr("Unsupported format"));
-            msgBox.setText(tr("Can't detect stream type. File name: \"%1\"").arg(newFileName));
+            // A pair is read by its .sub file, so an .idx that came this far has none beside it
+            const bool loneIdx =
+                QFileInfo(unquoteStr(newFileName)).suffix().compare(QLatin1String("idx"), Qt::CaseInsensitive) == 0;
+            msgBox.setText(loneIdx ? tr("The .idx file \"%1\" has no .sub file beside it.").arg(newFileName)
+                                   : tr("Can't detect stream type. File name: \"%1\"").arg(newFileName));
         }
         else
         {

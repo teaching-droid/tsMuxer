@@ -3834,6 +3834,11 @@ Criar o ISO mesmo assim?</translation>
         <translation>Não foi possível detectar o tipo de fluxo. Nome do arquivo: &quot;%1&quot;</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1082"/>
+        <source>The .idx file &quot;%1&quot; has no .sub file beside it.</source>
+        <translation>O arquivo .idx &quot;%1&quot; não tem um arquivo .sub ao lado.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.cpp" line="1204"/>
         <location filename="../tsmuxerwindow.cpp" line="1205"/>
         <location filename="../tsmuxerwindow.cpp" line="1233"/>

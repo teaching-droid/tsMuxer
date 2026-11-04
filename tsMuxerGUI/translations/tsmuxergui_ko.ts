@@ -3834,6 +3834,11 @@ Build the ISO anyway?</source>
         <translation>스트림 유형을 감지할 수 없습니다. 파일 이름: &quot;%1&quot;</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1082"/>
+        <source>The .idx file &quot;%1&quot; has no .sub file beside it.</source>
+        <translation>.idx 파일 &quot;%1&quot; 옆에 .sub 파일이 없습니다.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.cpp" line="1204"/>
         <location filename="../tsmuxerwindow.cpp" line="1205"/>
         <location filename="../tsmuxerwindow.cpp" line="1233"/>

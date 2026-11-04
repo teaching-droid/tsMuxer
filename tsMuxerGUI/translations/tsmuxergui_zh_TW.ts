@@ -3834,6 +3834,11 @@ Build the ISO anyway?</source>
         <translation>無法偵測串流類型。檔案名稱:「%1」</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.cpp" line="1082"/>
+        <source>The .idx file &quot;%1&quot; has no .sub file beside it.</source>
+        <translation>.idx 檔案「%1」旁邊沒有 .sub 檔案。</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.cpp" line="1204"/>
         <location filename="../tsmuxerwindow.cpp" line="1205"/>
         <location filename="../tsmuxerwindow.cpp" line="1233"/>
