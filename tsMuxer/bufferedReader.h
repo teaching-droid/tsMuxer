@@ -99,6 +99,7 @@ class BufferedReader : public AbstractReader, TerminatableThread
                 uint32_t dataReaded) override;  // reader must call notificate when part of data handled
     uint32_t getReaderCount();
     void terminate();
+    void stop();  // ends the thread; the owner calls it before it deletes the reader
     void setFileIterator(FileNameIterator* itr, int readerID);
     bool seek(int readerID, int64_t offset) override;
     bool incSeek(int readerID, int64_t offset) override;

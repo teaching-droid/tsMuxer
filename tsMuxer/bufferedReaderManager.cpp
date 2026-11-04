@@ -30,6 +30,7 @@ BufferedReaderManager::~BufferedReaderManager()
 {
     for (const auto& m_fileReader : m_fileReaders)
     {
+        m_fileReader->stop();
         delete m_fileReader;  // need to define destruction order first. This object MUST be deleted after
                               // MCVodStreamer
     }

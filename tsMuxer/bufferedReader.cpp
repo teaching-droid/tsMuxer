@@ -66,11 +66,20 @@ bool BufferedReader::incSeek(const int readerID, const int64_t offset)
     return false;
 }
 
-BufferedReader::~BufferedReader()
+// The thread ends before the destructors start: they change the table of virtual functions, which the thread reads when
+// it starts, and only the end of the thread puts that read before them.
+void BufferedReader::stop()
 {
+    if (m_terminated)
+        return;
     terminate();
     m_readQueue.push(0);
     join();
+}
+
+BufferedReader::~BufferedReader()
+{
+    stop();
     for (const auto& m_reader : m_readers)
     {
         const ReaderData* pData = m_reader.second;
