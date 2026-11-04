@@ -180,6 +180,20 @@ QString makeFileFilter(const FileFilterVec& filters)
     return rv;
 }
 
+// DVD subtitles are read by the .sub file of their pair, and tsMuxeR cannot detect the .idx. Named by itself, in any of
+// the ways a file can be added, the .idx stands for the .sub beside it, whatever the case of its name.
+QString subOfIdxPair(const QString& fileName)
+{
+    const QFileInfo info(fileName);
+    if (info.suffix().compare(QLatin1String("idx"), Qt::CaseInsensitive) != 0)
+        return fileName;
+    const QDir dir = info.dir();
+    for (const QString& entry : dir.entryList({QStringLiteral("*.sub")}, QDir::Files))
+        if (QFileInfo(entry).completeBaseName().compare(info.completeBaseName(), Qt::CaseInsensitive) == 0)
+            return QDir::toNativeSeparators(dir.filePath(entry));
+    return fileName;
+}
+
 QString fileDialogFilter()
 {
     // The elementary files the command line reads, VC-1, VVC, MP2, MP3 and FLAC among them, as the window lists them:
@@ -3121,7 +3135,14 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
             }
         }
         if (procStdOutput[i].startsWith(QLatin1String("Disc title: ")))
-            m_listedDiscTitle = QtCompat::strMid(procStdOutput[i], QString("Disc title: ").length()).trimmed();
+        {
+            // Passed over: a name that is not UTF-8, which the listing shows with replacement signs, and one no file
+            // can be called, as in a damaged file: an output, a title and a label are made from what is taken here
+            const QString title =
+                QtCompat::strMid(procStdOutput[i], QString("Disc title: ").length()).trimmed();
+            if (title.size() <= 200 && !title.contains(QChar::ReplacementCharacter))
+                m_listedDiscTitle = title;
+        }
         p = procStdOutput[i].indexOf("Stream file: ");
         if (p >= 0 && codecInfo != nullptr)
             codecInfo->ownFile = QtCompat::strMid(procStdOutput[i], QString("Stream file: ").length()).trimmed();
@@ -3336,7 +3357,19 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
     if (codecList.isEmpty())
     {
         QMessageBox msgBox(this);
-        if (unsupportedTracks.isEmpty())
+        // A folder that holds discs has no tracks of its own: tsMuxeR names the discs in it, each to be added by itself
+        QStringList discsInFolder;
+        if (QFileInfo(unquoteStr(newFileName)).isDir())
+            for (const QString& line : procStdOutput)
+                if (!line.trimmed().isEmpty() && !line.startsWith(QLatin1String("tsMuxeR version")))
+                    discsInFolder << line.trimmed();
+        if (!discsInFolder.isEmpty())
+        {
+            msgBox.setWindowTitle(tr("No title"));
+            msgBox.setText(tr("The disc \"%1\" has no title to add.").arg(newFileName));
+            msgBox.setInformativeText(discsInFolder.join('\n'));
+        }
+        else if (unsupportedTracks.isEmpty())
         {
             msgBox.setWindowTitle(tr("Unsupported format"));
             msgBox.setText(tr("Can't detect stream type. File name: \"%1\"").arg(newFileName));
@@ -5969,8 +6002,8 @@ bool TsMuxerWindow::offerAc3Cores()
             !info->mergeAc3File.isEmpty() || info->noCoreWanted || info->fileList.isEmpty())
             continue;
 
-        // The AC-3 tracks of the same file. Not one that serves another TrueHD track, and not the one the user
-        // already called a separate track.
+        // The AC-3 tracks of the same file. Not one that serves another TrueHD track, not the one the user already
+        // called a separate track, and not one the user unticked: it was left out of the job.
         const QString source = unquoteStr(info->fileList[0]);
         QStringList names;
         QList<int> rows;
@@ -5980,7 +6013,8 @@ bool TsMuxerWindow::offerAc3Cores()
             const QtvCodecInfo* ac3 = getCodecInfo(j);
             if (j == i || ac3 == nullptr || ac3->programName != "A_AC3" || ac3->displayName != "AC3" ||
                 ac3->trackID == 0 || ac3->fileList.isEmpty() || ac3->fileList[0] != info->fileList[0] ||
-                isRowMergedIntoTrueHd(j) || (nextTrackCore == j + 1 && info->coreAnswer == 2))
+                ui->trackLV->item(j, 0)->checkState() != Qt::Checked || isRowMergedIntoTrueHd(j) ||
+                (nextTrackCore == j + 1 && info->coreAnswer == 2))
                 continue;
             const int p = ac3->descr.indexOf("Channels: ");
             names << tr("Track %1: AC-3 %2, %3")
@@ -6259,8 +6293,12 @@ QString TsMuxerWindow::buildMetaText()
         }
         // A Matroska output keeps the source's language by itself, and with it a BCP 47 tag such as de-CH or pt-BR
         // that the three letter code in the box cannot carry. So lang= is written for it only when the language
-        // was changed.
-        const bool keepSourceLang = ui->radioButtonMKV->isChecked() && codecInfo->lang == codecInfo->srcLang;
+        // was changed. The language of an .idx/.sub pair and of a VOB is in the listing only (from the .idx, from the
+        // IFO file): without lang= such a track was written without a language.
+        const QString sourceKind =
+            codecInfo->fileList.isEmpty() ? QString() : QFileInfo(unquoteStr(codecInfo->fileList[0])).suffix().toLower();
+        const bool keepSourceLang = ui->radioButtonMKV->isChecked() && codecInfo->lang == codecInfo->srcLang &&
+                                    sourceKind != QLatin1String("sub") && sourceKind != QLatin1String("vob");
         if (!codecInfo->lang.isEmpty() && isLangCodeForMeta(codecInfo->lang) && !keepSourceLang)
             postfix += QString(", lang=") + codecInfo->lang;
         if (codecInfo->subTrack != 0)
@@ -8247,6 +8285,10 @@ bool TsMuxerWindow::readGeneralSettings(const QString& prefix)
                 // the language with its region first ("pt_BR", "zh_TW"), then the language alone
                 QString code = name;
                 code.replace(QLatin1Char('-'), QLatin1Char('_'));
+                // A name with its script, "zh-Hant-TW" or "zh-Hant", has no region in second place: the language alone
+                // would be Simplified Chinese
+                if (code.contains(QLatin1String("_Hant"), Qt::CaseInsensitive))
+                    code = QStringLiteral("zh_TW");
                 int found = ui->languageSelectComboBox->findData(code.section(QLatin1Char('_'), 0, 0).toLower() +
                                                                  QLatin1Char('_') +
                                                                  code.section(QLatin1Char('_'), 1, 1).toUpper());
@@ -8327,11 +8369,25 @@ void TsMuxerWindow::processAddFileList(OnCodecListReadyFn onCodecListReady, Post
 {
     if (addFileList.isEmpty())
         return;
-    newFileName = QDir::toNativeSeparators(addFileList[0].toLocalFile());
+    const QString named = QDir::toNativeSeparators(addFileList[0].toLocalFile());
+    newFileName = subOfIdxPair(named);
     if (lastSourceDir.isEmpty())
         lastSourceDir = QFileInfo(newFileName).absolutePath();
     addFileList.removeAt(0);
     m_addNextFile = postActionFn;
+    // The two files of a pair chosen together are one source: the second one says nothing
+    if (newFileName != named)
+    {
+        addFileList.removeIf([this](const QUrl& url)
+                             { return QDir::toNativeSeparators(url.toLocalFile()) == newFileName; });
+        for (int i = 0; i < ui->inputFilesLV->count(); ++i)
+            if (myUnquoteStr(ui->inputFilesLV->item(i)->data(FileNameRole).toString()) == newFileName)
+            {
+                if (!addFileList.isEmpty())
+                    (this->*postActionFn)();
+                return;
+            }
+    }
     m_pendingDvdTitle = 0;
     // A disc folder, drive or image gave "Unsupported format": its titles are listed now and one is chosen, whose
     // playlist or DVD title is then added as any source is (onDiscTitlesReceived). A disc is added, not joined.
