@@ -600,6 +600,11 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
     if (mplsParser)
         orderAsPlaylist(streams, *mplsParser);
 
+    // The film's name, as the disc gives it: the window names the output by it
+    if (!isSubMode)
+        if (const std::string title = discTitleOfSource(fileName); !title.empty())
+            LTRACE(LT_INFO, 2, "Disc title: " << title);
+
     // A 3D disc's .m2ts names ONE view, so this file may be half a picture. The disc says so
     // in its playlists; say it too, on the video line, rather than leaving someone to find out
     // when the 3D they built plays flat.

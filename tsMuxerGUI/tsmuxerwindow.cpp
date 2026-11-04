@@ -3026,6 +3026,7 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
     // showed one fewer file in its playlist list and gave no reason for it.
     QStringList skippedClips;
     codecList.clear();
+    m_listedDiscTitle.clear();
     mplsFileList.clear();
     chapters.clear();
     fileDuration = 0;
@@ -3111,6 +3112,8 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
                 codecInfo->clipPlace = m.captured(2).toInt();
             }
         }
+        if (procStdOutput[i].startsWith(QLatin1String("Disc title: ")))
+            m_listedDiscTitle = QtCompat::strMid(procStdOutput[i], QString("Disc title: ").length()).trimmed();
         p = procStdOutput[i].indexOf("Stream file: ");
         if (p >= 0 && codecInfo != nullptr)
             codecInfo->ownFile = QtCompat::strMid(procStdOutput[i], QString("Stream file: ").length()).trimmed();
@@ -4432,6 +4435,19 @@ void TsMuxerWindow::inputFilesLVChanged()
     ui->removeFile->setEnabled(itm->data(MplsItemRole).toInt() != MPLS_M2TS);
 }
 
+// A film's name as a file name: a colon, which a Windows name cannot have, becomes a dash
+static QString outputNameOfTitle(const QString& title)
+{
+    QString name = title;
+    name.replace(QStringLiteral(": "), QStringLiteral(" - "));
+    name.replace(QLatin1Char(':'), QLatin1Char('-'));
+    name.replace(QLatin1Char('/'), QLatin1Char('-'));
+    name.replace(QLatin1Char('\\'), QLatin1Char('-'));
+    for (const QChar c : QStringLiteral("*?\"<>|")) name.remove(c);
+    while (name.endsWith(QLatin1Char('.')) || name.endsWith(QLatin1Char(' '))) name.chop(1);
+    return name;
+}
+
 // baseName: the name of the output when the source's own does not fit, as for a DVD title
 void TsMuxerWindow::modifyOutFileName(const QString fileName, const QString& baseName)
 {
@@ -4657,7 +4673,17 @@ void TsMuxerWindow::continueAddFile()
         // A DVD title is named after the disc and its number ("Brother title 5"); the disc alone has no name for
         // a drive, and every title of it would get the same one
         QString base = m_pendingDvdTitle ? tr("%1 title %2").arg(discName(newFileName)).arg(m_pendingDvdTitle)
-                                         : QString();
+                                         : outputNameOfTitle(m_listedDiscTitle);
+        // The film's name of a Blu-ray: as a Matroska title and an image's label too, while those are empty
+        if (!m_listedDiscTitle.isEmpty())
+        {
+            QString title = m_listedDiscTitle;
+            title.remove(QLatin1Char('"'));
+            if (ui->mkvTitleEdit->text().isEmpty())
+                ui->mkvTitleEdit->setText(title);
+            if (ui->DiskLabelEdit->text().isEmpty())
+                ui->DiskLabelEdit->setText(title);
+        }
         // another angle than the first is named so ("00200 angle 2"): its output is another film than the first's
         if (m_pendingAngle > 1)
             base = tr("%1 angle %2")

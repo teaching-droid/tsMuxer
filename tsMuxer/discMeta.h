@@ -27,6 +27,10 @@ DiscMeta readGivenDiscMeta(const std::string& dir);
 // the file is not on a disc, or its disc has none.
 DiscMeta discMetaOfSource(const std::string& sourceFile);
 
+// The film's name for a source on a disc, empty when the disc gives none: English first, then the other languages in
+// their order; a placeholder such as "Blu-ray" is passed over, and a mark such as " - Blu-ray(TM)" and line breaks go.
+std::string discTitleOfSource(const std::string& sourceFile);
+
 // Where the files come from and the titles they give, for the log.
 std::string describeDiscMeta(const DiscMeta& meta);
 

@@ -1,9 +1,11 @@
 #include "discMeta.h"
 
 #include <algorithm>
+#include <cstring>
 #include <filesystem>
 #include <set>
 
+#include <fs/discImage.h>
 #include <fs/file.h>
 #include <fs/systemlog.h>
 #include <types/types.h>
@@ -53,6 +55,13 @@ std::string lower(std::string s)
 // as A-Z, then byte for byte, as the files of an image are ordered.
 void listFolder(const std::string& dir, std::vector<std::string>& files, std::vector<std::string>& folders)
 {
+    // A folder inside a disc image: a disc muxed from an image kept neither its title nor its pictures
+    if (discImage::isInside(dir))
+    {
+        std::vector<discImage::Entry> entries;
+        discImage::list(dir, &entries);
+        for (const auto& e : entries) (e.dir ? folders : files).push_back(e.name);
+    }
     std::error_code ec;
     for (std::filesystem::directory_iterator it(pathOf(dir), ec), end; !ec && it != end; it.increment(ec))
     {
@@ -228,7 +237,7 @@ Bdmt parseBdmt(const std::vector<uint8_t>& data)
 
 // The library in one folder. given: a folder the user named, whose faults are said; a source disc's folder is taken
 // as the disc has it, and only what is left out is said.
-DiscMeta readFolder(const std::string& dir, const bool given)
+DiscMeta readFolder(const std::string& dir, const bool given, const bool quiet = false)
 {
     DiscMeta meta;
     meta.folder = dir;
@@ -313,7 +322,7 @@ DiscMeta readFolder(const std::string& dir, const bool given)
         else
             leftOut.push_back(name);
     for (const auto& f : folders) leftOut.push_back(f + "/");
-    if (!leftOut.empty())
+    if (!leftOut.empty() && !quiet)
     {
         std::string list;
         for (const auto& name : leftOut) list += (list.empty() ? "" : ", ") + name;
@@ -345,7 +354,7 @@ DiscMeta readGivenDiscMeta(const std::string& dir)
                              "bdmt_eng.xml and the like, beside the pictures those files name.")
 }
 
-DiscMeta discMetaOfSource(const std::string& sourceFile)
+static DiscMeta metaOfSource(const std::string& sourceFile, const bool quiet)
 {
     std::filesystem::path dir = plainPath(sourceFile).parent_path();
     const auto named = [](const std::filesystem::path& p, const char* name)
@@ -358,19 +367,84 @@ DiscMeta discMetaOfSource(const std::string& sourceFile)
     std::filesystem::path dl = dir.parent_path();
     for (const char* part : {"META", "DL"})
     {
-        std::error_code ec;
-        std::filesystem::path next;
-        for (std::filesystem::directory_iterator it(pathOf(utf8Of(dl)), ec), end; !ec && it != end; it.increment(ec))
-            if (it->is_directory(ec) && strToUpperCase(utf8Of(it->path().filename())) == part)
-            {
-                next = dl / it->path().filename();
-                break;
-            }
-        if (next.empty())
+        std::vector<std::string> files, folders;
+        listFolder(utf8Of(dl), files, folders);
+        const auto found = std::find_if(folders.begin(), folders.end(),
+                                        [part](const std::string& name) { return strToUpperCase(name) == part; });
+        if (found == folders.end())
             return {};
-        dl = next;
+        dl = dl / plainPath(*found);
     }
-    return readFolder(utf8Of(dl), false);
+    return readFolder(utf8Of(dl), false, quiet);
+}
+
+DiscMeta discMetaOfSource(const std::string& sourceFile) { return metaOfSource(sourceFile, false); }
+
+namespace
+{
+// Without the trademark and registered signs, in small letters
+std::string plainMark(std::string s)
+{
+    for (const char* sign : {"\xE2\x84\xA2", "\xC2\xAE"})
+        for (size_t at; (at = s.find(sign)) != std::string::npos;) s.erase(at, strlen(sign));
+    return lower(trimStr(s));
+}
+
+bool isDiscFormatName(const std::string& text)
+{
+    const std::string s = plainMark(text);
+    for (const char* name : {"blu-ray", "bluray", "blu-ray disc", "ultra hd", "ultra hd blu-ray", "4k ultra hd"})
+        if (s == name)
+            return true;
+    return false;
+}
+
+std::string cleanTitle(const std::string& title)
+{
+    std::string text;
+    for (const char c : title)
+    {
+        const bool space = c == '\r' || c == '\n' || c == '\t' || c == ' ';
+        if (!space)
+            text += c;
+        else if (!text.empty() && text.back() != ' ')
+            text += ' ';
+    }
+    text = trimStr(text);
+    // " - Blu-ray", with a hyphen or an en or em dash
+    for (const char* mark : {" - ", " \xE2\x80\x93 ", " \xE2\x80\x94 "})
+    {
+        const size_t dash = text.rfind(mark);
+        if (dash != std::string::npos && isDiscFormatName(text.substr(dash + strlen(mark))))
+            text = trimStr(text.substr(0, dash));
+    }
+    // a trademark or registered sign at the end of the name
+    for (const char* sign : {"\xE2\x84\xA2", "\xC2\xAE"})
+        if (strEndWith(text, sign))
+            text = trimStr(text.substr(0, text.size() - strlen(sign)));
+    return isDiscFormatName(text) ? std::string() : text;
+}
+}  // namespace
+
+std::string discTitleOfSource(const std::string& sourceFile)
+{
+    DiscMeta meta;
+    try
+    {
+        meta = metaOfSource(sourceFile, true);
+    }
+    catch (const VodCoreException&)
+    {
+        return {};  // an unreadable file of the library is said where the disc is muxed
+    }
+    for (const auto& [lang, title] : meta.titles)
+        if (lang == "eng")
+            if (std::string text = cleanTitle(title); !text.empty())
+                return text;
+    for (const auto& [lang, title] : meta.titles)
+        if (std::string text = cleanTitle(title); !text.empty())
+            return text;
+    return {};
 }
 
 std::string describeDiscMeta(const DiscMeta& meta)

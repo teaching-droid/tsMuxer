@@ -12,6 +12,8 @@
 
 * **The window adds a disc by its titles.** A disc folder, a drive or a disc image, added with "add", with the new "add disc" button or dropped on the window, opens "Choose a title": the disc's titles with length, chapters, audio and subtitles, the main titles in bold, and the left-out ones with their reason on request. A Blu-ray title is added as its playlist, a DVD title by its disc number with its audio languages and chapters. Such a source gave "Unsupported format" before. The BDMV folder to ISO tab takes a disc image as its source too ("Image...").
 
+* **The window names the output after the film.** A Blu-ray that names its film gives the name of the output file, the title of a Matroska output and the label of an ISO image, as long as those are not set. English comes first. A name that says only "Blu-ray" is passed over, and a colon becomes a dash in the file name. The listing gives the name as `Disc title:`.
+
 ### Matroska input
 
 * **A Matroska title longer than 1023 bytes was cut,** and so was a chapter name of more than 1024 bytes in an ordered edition or a linked file. A Matroska output got the cut text, broken inside a letter outside ASCII where the cut fell in one. Both are read whole now.

@@ -224,6 +224,7 @@ class TsMuxerWindow : public QWidget
     void deleteTrack(int idx);
     void updateNum();
     void modifyOutFileName(const QString fileName, const QString& baseName = QString());
+    QString m_listedDiscTitle;  // the film's name the listing of the file being added gave
     void moveRow(int index, int index2);
     bool saveMetaFile(const QString& metaName);
     void updateBtns(QWidget* w);
