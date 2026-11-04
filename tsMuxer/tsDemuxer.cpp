@@ -2112,9 +2112,17 @@ int64_t getTSDuration(const char* fileName)
         // The first and last clock reference come from the SAME PID: a broadcast capture carries one
         // clock per programme, and subtracting one programme's clock from another's printed a
         // duration of minus twelve hours. And the 33 bit clock may wrap once inside a file.
+        //
+        // A clock that wraps goes from the top of its range to the bottom. One that only ends lower has jumped back, as
+        // at the end of a capture, and that gave a length of more than 26 hours, which then refused the mux as past the
+        // limit of the clock. The file then has no length to state.
         int64_t span = lastPcrVal - firstPcrVal;
         if (span < 0)
+        {
+            if (firstPcrVal < 1ll << 32 || lastPcrVal >= 1ll << 32)
+                return 0;
             span += 1ll << 33;
+        }
         return span;
     }
     catch (...)
