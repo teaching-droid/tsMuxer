@@ -8,10 +8,10 @@
 
 This project is for tsMuxer - a transport stream muxer for remuxing/muxing elementary streams. This is very useful for transcoding and this project is used in other products such as Universal Media Server.
 
-EVO/VOB/MPG, MKV/MKA/MK3D, WebM, MP4/MOV, TS, M2TS and IVF to TS, M2TS, MKV or WebM.
+EVO/VOB/MPG, MKV/MKA/MK3D, WebM, MP4/MOV, Ogg, TS, M2TS and IVF, and Blu-ray and DVD folders and disc images, to TS, M2TS, MKV or WebM.
 
 Supported video codecs H.264/AVC, H.265/HEVC, H.266/VVC (Alpha release), AV1, VC-1, MPEG2, and VP8 and VP9 (from MKV, WebM, MP4 or IVF; to MKV, or demuxed to IVF). MPEG-4 Part 2 (from MP4 or MOV) and ProRes (from MOV) are copied into an MKV output. 
-Supported audio codecs AAC (also in LATM, as DVB broadcasts carry it), AC3 / E-AC3(DD+), DTS/ DTS-HD, TrueHD, Opus, FLAC, LPCM, MP3, Vorbis (from MKV, WebM, MP4 or Ogg; to MKV, or demuxed to Ogg) and ALAC (from MKV or MP4, to MKV).
+Supported audio codecs AAC (also in LATM, as DVB broadcasts carry it), AC3 / E-AC3(DD+), DTS/ DTS-HD, TrueHD, Opus, FLAC, LPCM, MP3, Vorbis (from MKV, WebM, MP4 or Ogg; to MKV, or demuxed to Ogg), ALAC (from MKV or MP4, to MKV) and WavPack (from MKV or .wv; to MKV, or demuxed to .wv).
 
 **TrueHD note (Blu-ray output):** Blu-ray players typically expect Dolby TrueHD to be muxed in a Blu-ray style
 interleaved stream with an AC-3 compatibility core. If your MKV stores TrueHD and AC-3 as separate tracks, tsMuxer
@@ -28,10 +28,14 @@ Some of the major features include:
 * Output/Author to compliant Blu-ray Disc or AVCHD
 * Matroska (MKV/MKA) output, with track names and flags, chapters and ordered editions, attachments and tags, and splitting by size, duration or chapters
 * WebM output, for VP8, VP9 and AV1 video, Opus and Vorbis audio, and text subtitles as WebVTT
-* Subtitles from Matroska in SRT, ASS, SSA, WebVTT, DVD (VobSub) and DVB form, DVD subtitles from a DVD or its VOB files, and from MP4 as timed text or WebVTT, kept in their own form in a Matroska output, or turned into PGS for a disc. ASS and SSA are drawn with libass, with their styles, positions and animations and the fonts attached to the file (the Windows packages include libass; on Linux and Mac it is the system's). DVB subtitles from a TS recording become PGS as well
+* Subtitles from Matroska in SRT, ASS, SSA, WebVTT, DVD (VobSub) and DVB form, DVD subtitles from a DVD, its VOB files or an .idx/.sub pair, ASS and SSA from a file of their own, and from MP4 as timed text or WebVTT, kept in their own form in a Matroska output, or turned into PGS for a disc. ASS and SSA are drawn with libass, with their styles, positions and animations and the fonts attached to the file (the Windows packages include libass; on Linux and Mac it is the system's). DVB subtitles from a TS recording become PGS as well
+* Blu-ray text subtitles (TextST): as pictures on a disc or in a TS, and as SRT or as they are in a Matroska file
+* ARIB captions of ISDB recordings, carried as they are into a Matroska file
 * A remux of a Matroska file into a Matroska file keeps the tags about each track, the data stored beside each frame (BlockAdditions, such as HDR10+ metadata), and every edition and chapter of a single file that is not played as an ordered edition
 * Blu-ray 3D support
+* Disc images read without mounting them. A Blu-ray or DVD folder or image lists its titles, with the main film marked, and a title is muxed by its number, in the angle you choose
 * MP4 and MOV input with what the file says about itself: track names, the title, chapters, the cover picture and the colour and HDR data go into a Matroska output
+* A report of a run and a sample of a source, made by tsMuxeR, to attach to a problem report: see [Reporting a problem](docs/REPORTING_A_PROBLEM.md)
 * A Linux AppImage that runs on most current distributions, with what an update tool needs to fetch the next release
 
 Additions in this fork (see [DISC_AUTHORING.md](docs/DISC_AUTHORING.md) for details):
@@ -42,7 +46,7 @@ Additions in this fork (see [DISC_AUTHORING.md](docs/DISC_AUTHORING.md) for deta
 * `--disc-size` / `--allow-oversize`: abort (or warn) before muxing if the image will not fit the target disc
 * `--3d-single-copy`: store a 3D disc's video once instead of twice, the way the source disc holds it, so the image is about half the size and fits back onto the disc it came from
 * GUI: a "BDMV folder -> ISO" tab with a layer-break calculator (you copy the blank disc's "Free Sectors" value out of ImgBurn and paste it in; the break sectors are calculated for you), colour-coded guard hints, and input sanity warnings
-* GUI: fully translated interface (German, Spanish, French, Hebrew, Japanese, Russian, Chinese)
+* GUI: fully translated interface (German, Spanish, French, Hebrew, Italian, Japanese, Korean, Polish, Brazilian Portuguese, Russian, and Simplified and Traditional Chinese)
 
 Dolby Vision and Blu-ray conformance:
 
@@ -148,11 +152,9 @@ All pull requests must pass code style checks which are executed with `clang-for
 
 ## Submitting Bugs
 
-Please report problems on GitHub with the bug report form. Every report helps, and a complete one can be fixed much sooner. Please include:
+Please report problems on GitHub with the bug report form. Every report helps, and a complete one can be fixed much sooner. tsMuxeR can write a report of the run, which holds the version, the full log and the meta file, and make a sample of the source: [Reporting a problem](docs/REPORTING_A_PROBLEM.md) says how. Please include:
 
-* the version, from the first line of the log or the title bar of the window
-* the full log, especially the lines at the end of the run
-* the meta file: the text in the Meta file box of the window, or your .meta file
+* the report of the run. Without one: the version, the full log and the meta file
 * what you expected, and what happened instead
 * for a playback problem, the player or device you used
 * the source: what kind of file or disc it is, and a MediaInfo dump if you can

@@ -121,7 +121,7 @@ Title 1  00200.mpls    2:04:36   26 chapters     3 clips  eng jpn fra  2 angles 
     angle 2: 00101.m2ts, 00104.m2ts
 ```
 
-A demux writes DVD subtitles as `name.idx` and `name.sub`. Such a pair is read as a source when the .idx file is beside the .sub file: `S_HDMV/PGS, "name.sub", track=32`. The track number is 32 plus the `index:` of the .idx file.
+A demux writes DVD subtitles as `name.idx` and `name.sub`. Such a pair is read as a source when the .idx file is beside the .sub file: `S_HDMV/PGS, "name.sub", track=32`. The track number is 32 plus the `index:` of the .idx file. Such pairs are not joined: give one pair on each line.
 
 A Blu-ray plays text subtitles (TextST) from clips of their own. The listing of a playlist gives each one with `Stream file:` and `Stream delay:`. The meta line names that clip, with the delay as `timeshift=`:
 `S_TEXT/UTF8, "BDMV/STREAM/00143.m2ts", track=6144, timeshift=-11651ms, lang=fra`
@@ -159,7 +159,11 @@ It holds the tsMuxeR version, the system, the command line, the meta file, the s
 
 `--report-frames` adds a second file, `<file>.frames.tsv`, tab-separated for a spreadsheet: a line for each PES a transport stream mux writes, with its track, PTS and DTS, size, the output file and packet it begins in, the PCR there and how long before its DTS it was written; and for MPEG-2 video a line for each picture as the decoder's buffer (the T-STD of H.222.0) takes it out, with how full the buffer is and whether the picture is late. A film gives millions of lines, so a range of the output's time keeps the file small: `--report-frames=0:10:00-0:12:00` or `--report-frames=600-720`.
 
+The report cannot take the place of a file of the job: a source, the meta file, the output and the report of `--add-report` are refused as its name.
+
 In the window, "Write a report of each mux for a problem report" in the options does the same, and "Save report..." in the progress window keeps a copy when the job has ended.
+
+The steps for the window and the command line, and what to attach, are in [Reporting a problem](REPORTING_A_PROBLEM.md).
 
 ### Sample for a problem report
 
@@ -185,6 +189,8 @@ A video or sound stream on its own | a sequence header or a frame | nothing more
 `--from-start` takes the start (the default), `--from-end` the end, and `--at=<time>` the part around a time of the source, as h:mm:ss or seconds. `--at` finds the time by the clock of the source: the PCR of a transport stream, the timestamps of the clusters of a Matroska file, the SCR of a program stream, the granule positions of Ogg, the block_index of WavPack, and the rate of a WAV file or of AC-3, DTS and MPEG audio. It is refused for an MP4 file, whose index would have to be made anew, and for a video stream on its own, which holds no times. `--size=<MB>` sets the size of the sample, 1 to 24 MB, 20 when not given; the reports take their room from it so that the zip stays under 25 MB.
 
 The names are replaced as in the report: the sample is `source1.mkv` in the zip, the source `<source1>.mkv` in the report. `--report-keep-names` keeps them, and the title and names in a Matroska file too.
+
+A source that fits in the sample is taken whole, whatever part is asked for, and a time past the end takes the end. A file inside a disc image can be named as the source, as `film.iso/BDMV/STREAM/00001.m2ts`.
 
 In the window, "Make a sample..." on the Input tab makes one of the file chosen there, and the progress window offers it when a job ends with an error.
 
@@ -265,7 +271,7 @@ Additional parameters for audio tracks:
 Parameter         | Description 
 ---               | --- 
 timeshift         | Shift the track by the given time: a number followed by ns, us, ms or s, such as -120ms or 1.5s. A number alone is in milliseconds. Can be negative. Without it, the start of a track against the picture is taken from the source; a Matroska file without video has no picture to measure against, so its tracks start together unless timeshift= says otherwise. 
-angle=<n>         | The angle of a Blu-ray playlist or of a disc title (`title=`, `dvd-title=`) with several angles, from 1. Every line of one playlist takes the same angle. The listing says how many angles a title has.
+angle=<n>         | The angle of a Blu-ray playlist or of a disc title (`title=`, `dvd-title=`) with several angles, from 1. Every line of one playlist or disc title takes the same angle. The listing says how many angles a title has.
 down-to-dts       | Available only for DTS-HD tracks. Filter out HD part. 
 down-to-ac3       | For TRUE-HD and E-AC3 (DD+) tracks. Keep the AC-3 core, drop the HD part. 
 drop-ac3-core     | **Matroska output or demux, TrueHD only.** A Blu-ray TrueHD stream carries an AC-3 core beside its lossless part. Matroska writes the core as a track of its own; with drop-ac3-core it is left out and the lossless stream is kept alone. A demux then writes `.thd` instead of `.ac3+thd`. A TS or a Blu-ray keeps the core, so it is ignored there with a warning.

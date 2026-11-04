@@ -13,8 +13,8 @@ body:
     id: version
     attributes:
       label: Version
-      description: Shown in the GUI title bar and in the first line of the command line output (for example 2.11.0).
-      placeholder: "2.11.0"
+      description: Shown in the GUI title bar and in the first line of the command line output (for example 3.1.0).
+      placeholder: "3.1.0"
     validations:
       required: true
 
@@ -82,12 +82,25 @@ body:
     attributes:
       label: Program output / log
       description: >
-        Paste the text tsMuxeR printed, especially the lines at the end of the run. For a
-        BDMV-to-ISO problem, include the report and the .layerbreak.txt sidecar if you have them.
+        Paste the text tsMuxeR printed, especially the lines at the end of the run. If you attach
+        a report below, write "see report": it holds the whole log. For a BDMV-to-ISO problem,
+        include the report and the .layerbreak.txt sidecar if you have them.
         This will be shown as code, no backticks needed.
       render: shell
     validations:
       required: true
+
+  - type: textarea
+    id: report
+    attributes:
+      label: Report and sample (very helpful)
+      description: >
+        Drag the report of the run and, if you can share it, a sample of the source into this box.
+        tsMuxeR makes both, and the report replaces your file names. A sample holds a part of the
+        film itself, and an issue is public. How to make them:
+        https://github.com/teaching-droid/tsMuxer/blob/master/docs/REPORTING_A_PROBLEM.md
+    validations:
+      required: false
 
   - type: textarea
     id: meta
@@ -96,7 +109,7 @@ body:
       description: >
         In the window, copy the text from the Meta file box (Metadatei in German). On the command
         line, paste your .meta file. It holds every setting of the run, so the problem can be
-        reproduced exactly.
+        reproduced exactly. A report already holds it.
       render: shell
     validations:
       required: false

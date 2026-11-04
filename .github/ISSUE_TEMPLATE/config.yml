@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: How to report a problem
+    url: https://github.com/teaching-droid/tsMuxer/blob/master/docs/REPORTING_A_PROBLEM.md
+    about: How tsMuxeR writes a report of a run and a sample of a source to attach to a bug report.
   - name: BDMV folder to ISO guide
     url: https://github.com/teaching-droid/tsMuxer/blob/master/docs/BDMV_TO_ISO.md
     about: Step-by-step guide with screenshots. Please read it before reporting a problem with that feature.
