@@ -216,6 +216,9 @@ class TSDemuxer final : public AbstractDemuxer
     std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_joinGaps;  // by PID, see takeTimeGaps
     std::map<int, size_t> m_joinGapsTaken;                               // by track asking, see takeTimeGaps
     [[nodiscard]] bool isJoinOfFiles() const;
+    // A join reads no program table ahead, and its first block may not hold the map of every program of a file
+    void completeProgramMap();
+    bool m_programMapDone = false;
     [[nodiscard]] int64_t fileVideoStart(const std::string& fileName, int videoPid) const;
     void endJoinFile();
     bool keepJoinSound(int pid, StreamType type, int64_t pts, const uint8_t* data = nullptr,

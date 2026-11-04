@@ -145,6 +145,9 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
     bool firstPacket = true;
     int lastReadRez = 0;
     uint8_t* curPos = nullptr;
+    // For the whole scan: forgotten at each block, the map of a program that came in the block after the PAT was passed
+    // over until a PAT stood before it in one block, and a part of a recording did not list that program at all
+    TS_program_association_section pat;
     while (totalReadedBytes < DETECT_STREAM_BUFFER_SIZE && lastReadRez != BufferedReader::DATA_EOF)
     {
         lastReadRez = 0;
@@ -159,7 +162,6 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             tmpBufferLen = 0;
         }
         uint8_t* lastFrameAddr = data + readedBytes - TS_FRAME_SIZE;
-        TS_program_association_section pat;
 
         if (m_firstCall && !m_m2tsMode)
         {
@@ -414,6 +416,18 @@ bool TSDemuxer::getTrackStart(const int32_t pid, const bool fromFirstPes, int64_
     else if (ticks < -CLOCK_WRAP / 2)
         ticks += CLOCK_WRAP;
     return true;
+}
+
+void TSDemuxer::completeProgramMap()
+{
+    if (m_curFileNum >= m_joinFiles.size())
+        return;
+    TSDemuxer probe(m_readManager, "");
+    probe.m_holdLeadVideo = false;
+    probe.openFile(m_joinFiles[m_curFileNum]);
+    std::map<int32_t, TrackInfo> tracks;
+    probe.getTrackList(tracks);
+    for (const auto& [pid, info] : probe.m_pmt.pidList) m_pmt.pidList.try_emplace(pid, info);
 }
 
 bool TSDemuxer::isJoinOfFiles() const { return m_joinFiles.size() > 1 && m_mplsInfo.empty() && m_clipParts.empty(); }
@@ -1091,6 +1105,12 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         readProgramTables(data, lastFrameAddr, false, isFirstBlock);
     else if (isFirstBlock)
         readProgramTables(data, lastFrameAddr, true, true);
+    // the first file of a join starts without the mark of a next file
+    if ((isFirstBlock || !m_programMapDone) && isJoinOfFiles())
+    {
+        completeProgramMap();
+        m_programMapDone = true;
+    }
     if (isFirstBlock && m_pmtVersion != -1)
         m_pmtVersion = -2;  // each clip of a playlist has a program map of its own
 
@@ -1174,6 +1194,9 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
     const auto tsPacket = reinterpret_cast<TSPacket*>(pkt);
     uint8_t* frameData = pkt + tsPacket->getHeaderSize();
     const bool pesStartCode = frameData[0] == 0 && frameData[1] == 0 && frameData[2] == 1 && tsPacket->payloadStart;
+    // A padding PES has no header and holds nothing: its 0xFF bytes were read as the flags of a PES with both times
+    if (pesStartCode && frameData[3] == 0xBE)
+        return;
     if (isAribPid(pid))
     {
         if (!m_acceptedPidCache[pid])
@@ -1367,7 +1390,12 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
         if (streamInfo != m_pmt.pidList.end() &&
             streamInfo->second.m_streamType != StreamType::SUB_PGS)  // demux PGS with PES headers
             frameData += pesPacket->getHeaderLength();
-        else
+        // ** ONLY WHAT IS TAKEN, AND ONLY INSIDE THE PACKET. ** A PID of no known program came here as well, wanted or
+        // not. Its times were written over the bytes after them: a PES header late in a packet wrote past the end of
+        // the packet, over the sync byte of the next one, and that packet was lost, of whatever track it was.
+        else if (m_acceptedPidCache[pid] &&
+                 frameData + PESPacket::HEADER_SIZE + ((pesPacket->flagsLo & 0xc0) == 0xc0 ? 2 : 1) * PESPacket::PTS_SIZE <=
+                     pkt + TS_FRAME_SIZE)
         {
             // A part cut from a clip starts at its key picture, also for a subtitle read before that picture
             const int64_t ptsBase = part != nullptr && part->startCut ? part->firstShown()

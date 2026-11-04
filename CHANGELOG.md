@@ -48,6 +48,10 @@
 
 * **A second run into a disc folder removed the titles of the run before** (#31 K50). A run with `--mplsOffset` or `--m2tsOffset` replaced the whole BDMV folder, so a disc built one title at a time kept only its last title. With either option the new title now joins the folder. A playlist or clip number that is taken is refused, and the folder stays as it was. Without these options the folder is replaced, as before.
 
+* **A join of a recording of several programs lost packets** (#31 K51). A padding packet of a program the join had not read yet overwrote the start of the next packet, and that packet was lost, of whatever track it was. Pictures were damaged, and the sound came earlier at each frame lost. A join now reads the table of every program of each file, and such a packet changes nothing.
+
+* **A part of a recording lists all its programs.** Where the table of a program came just after the end of a block read, the program was not listed, and a join refused its tracks.
+
 * **AC-4 audio is named in a TS.** A track that the PMT declares as AC-4 was listed as "Can't detect stream type". It now says "AC-4 audio", and that tsMuxeR does not mux it. A meta line that names such a track is refused with the same reason. The other tracks of the file are not affected.
 
 * **A clip named with forward slashes on Windows lost its language.** The clip information beside it was not found, so the language of each track stayed empty.
