@@ -79,6 +79,7 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
     };
     std::map<int, SubPicture> m_subPictures;
     bool m_subFlushed = false;
+    int64_t m_subPictureSaved = 0;  // bytes of DVD subtitles read that their PGS pictures do not carry (placeSubPicture)
     // The sub-picture streams handed on as they are, for a Matroska output (S_VOBSUB): each unit a record as a copied
     // Matroska block is (ParsedCopyTrackData, MatroskaCopyStreamReader), not drawn as PGS
     std::set<int> m_rawSubPictures;
@@ -126,7 +127,7 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
     void addSubPicture(int stream, const uint8_t* data, int len, int64_t pts, StreamData& out);
     void placeSubPicture(int stream, const uint8_t* data, size_t size, int64_t at, StreamData& out);
     void releaseSubPictures(DemuxedData& demuxedData, bool end);
-    void flushSubPictures(DemuxedData& demuxedData, const PIDSet& acceptedPIDs);
+    void flushSubPictures(DemuxedData& demuxedData, const PIDSet& acceptedPIDs, int64_t& discardSize);
 
     [[nodiscard]] bool isVideoPID(uint32_t pid) const;
     int mpegps_psm_parse(const uint8_t* buff, const uint8_t* end);

@@ -271,7 +271,8 @@ bool ProgramStreamDemuxer::isVideoPID(const uint32_t pid) const
 
 int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& acceptedPIDs, int64_t& discardSize)
 {
-    discardSize = 0;
+    discardSize = m_subPictureSaved;
+    m_subPictureSaved = 0;
     uint32_t readedBytes = 0;
     int readRez = 0;
     uint8_t* data = m_bufferedReader->readBlock(m_readerID, readedBytes, readRez);  // blocked read mode
@@ -283,7 +284,7 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
     if (readedBytes + m_tmpBufferLen == 0 || (readedBytes == 0 && m_lastReadRez == BufferedReader::DATA_EOF))
     {
         m_lastReadRez = readRez;
-        flushSubPictures(demuxedData, acceptedPIDs);  // the end of the file came with no data
+        flushSubPictures(demuxedData, acceptedPIDs, discardSize);  // the end of the file came with no data
         return BufferedReader::DATA_EOF;
     }
     if (readedBytes > 0)
@@ -485,7 +486,7 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
     if (m_tmpBufferLen > 0)
         memmove(m_tmpBuffer, curBuf, end - curBuf);
     if (readRez == BufferedReader::DATA_EOF)
-        flushSubPictures(demuxedData, acceptedPIDs);
+        flushSubPictures(demuxedData, acceptedPIDs, discardSize);
     return 0;
 }
 
@@ -687,10 +688,14 @@ void ProgramStreamDemuxer::placeSubPicture(const int stream, const uint8_t* data
     if (size >= 4)
         sp.decoder->decode(data, static_cast<int>(size), at * (INTERNAL_PTS_FREQ / 90000), -1, pgs);
     out.append(pgs.data(), static_cast<int>(pgs.size()));
+    // What the picture says in fewer bytes than the unit was read all the same, though no reader counts it: an .sub with
+    // large units beside a short video ended with "The mux stopped before the source was finished" over a whole output
+    if (pgs.size() < size)
+        m_subPictureSaved += static_cast<int64_t>(size - pgs.size());
 }
 
 // The end of the last picture of each track, held until the next (BitmapToPgs::finish)
-void ProgramStreamDemuxer::flushSubPictures(DemuxedData& demuxedData, const PIDSet& acceptedPIDs)
+void ProgramStreamDemuxer::flushSubPictures(DemuxedData& demuxedData, const PIDSet& acceptedPIDs, int64_t& discardSize)
 {
     if (m_subFlushed)
         return;
@@ -704,6 +709,8 @@ void ProgramStreamDemuxer::flushSubPictures(DemuxedData& demuxedData, const PIDS
         sp.decoder->finish(pgs);
         demuxedData[stream].append(pgs.data(), static_cast<int>(pgs.size()));
     }
+    discardSize += m_subPictureSaved;
+    m_subPictureSaved = 0;
 }
 
 int64_t getLastPCR(const File& file, const int bufferSize, const int64_t fileSize)
