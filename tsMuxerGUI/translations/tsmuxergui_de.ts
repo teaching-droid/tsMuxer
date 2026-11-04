@@ -94,7 +94,7 @@
     <message>
         <location filename="../fontsettingstablemodel.cpp" line="134"/>
         <source>Size:</source>
-        <translation>Grösse:</translation>
+        <translation>Größe:</translation>
     </message>
     <message>
         <location filename="../fontsettingstablemodel.cpp" line="134"/>
@@ -3280,7 +3280,7 @@ ISO trotzdem erstellen?</translation>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1570"/>
         <source>Size</source>
-        <translation>Grösse</translation>
+        <translation>Größe</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1581"/>
@@ -3395,7 +3395,7 @@ ISO trotzdem erstellen?</translation>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1783"/>
         <source>Split by size every</source>
-        <translation>Aufteilen immer nach Grösse</translation>
+        <translation>Aufteilen immer nach Größe</translation>
     </message>
     <message>
         <location filename="../tsmuxerwindow.ui" line="1816"/>
