@@ -10,7 +10,7 @@
 // block, the size of each). So everything that reads WavPack from a Matroska file reads it: the listing, a Matroska
 // output and a join (wavpackStreamReader.h).
 //
-// The correction file (.wvc) of a hybrid file is not read: the lossy part is, with a warning. DSD is refused.
+// The correction file (.wvc) of a hybrid file is read when it is beside it. DSD is refused.
 //
 // For a file of such a name: reads it and puts the Matroska file in its place (discImage::addMemoryFile), once.
 // Throws with the reason when it holds nothing tsMuxeR can read. False for any other name.
