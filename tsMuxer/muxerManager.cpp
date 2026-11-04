@@ -409,6 +409,10 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
         m_mainMuxer->setMasterMode(m_subMuxer.get(), !mvcTrackFirst);
     }
 
+    // A codec only a Matroska file carries, refused with that reason before the muxer is given the track: the muxer of
+    // a transport stream refused it first, as "Unsupported codec A_ALAC for TS/M2TS muxing."
+    checkMatroskaOnlyCodecs(ci, m_demuxMode || !dynamic_cast<MatroskaMuxer*>(m_mainMuxer.get()));
+
     // Every stream is read before any is given to a muxer, so that the order they are given in can depend on what
     // each one is (transportStreamAddOrder).
     for (size_t i = 0; i < ci.size(); ++i)
