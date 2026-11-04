@@ -609,10 +609,20 @@ struct MPLSStreamInfo : M2TSStreamInfo
 };
 
 // A sub path of a playlist: what kind it is (SubPath_type) and the clips its sub play items play
+// A sub play item: where its clip plays against the play items of the playlist. Times at 45 kHz.
+struct MPLSSubPlayItem
+{
+    uint32_t IN_time = 0;
+    uint32_t OUT_time = 0;
+    int syncPlayItem = 0;
+    uint32_t syncStart = 0;
+};
+
 struct MPLSSubPath
 {
     int type = 0;
     std::vector<std::string> clips;
+    std::vector<MPLSSubPlayItem> items;  // one for each clip that has them whole
 };
 
 // One play item's STN table, kept per play item rather than only for the first. A playlist may
@@ -708,6 +718,9 @@ struct MPLSParser
     // The entries of the chosen STN table whose stream is not in the play item's own clip, but in a clip a sub path
     // plays (see isInMainClip)
     [[nodiscard]] std::vector<MPLSStreamInfo> getOutOfMuxStreams() const;
+    // What to add to a time of the first clip of a sub path, in ms, for its place on the playlist's timeline, the
+    // playlist's start being 0. False when the sub path does not say.
+    [[nodiscard]] bool subPathShiftMs(int subPath, int& shiftMs) const;
     [[nodiscard]] bool isInMainClip(const MPLSStreamInfo& entry) const;
     // The PG entry whose 3D table names `pid` as an eye or an aligned subtitle, with what it is named as ("left eye",
     // "right eye", "top aligned", "bottom aligned"); streamPID 0 when none does

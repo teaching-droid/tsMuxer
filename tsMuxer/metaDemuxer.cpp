@@ -2029,6 +2029,44 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             }
         }
     }
+    // ** TEXT SUBTITLES OF A BLU-RAY GO INTO A MATROSKA OUTPUT AS SRT **, which every player reads. keep-textst keeps
+    // them as they are: S_HDMV/TEXTST, its CodecPrivate the dialog style segment, a block for each subtitle.
+    if (codec == "S_TEXT/UTF8" && pid >= 0x1800 && pid <= 0x18FF && fileList.size() > 1)
+        THROW(ERR_COMMON, "Track " << pid << " of " << unquoteStr(trimStr(fileList[0]))
+                                   << " is TextST, whose clips are not joined: each has a time of its own on the "
+                                      "playlist. Give one clip on each line. Nothing was written.")
+    if (codecReader == nullptr && m_matroskaOutput == 1 && codec == "S_TEXT/UTF8" && addParams.count("keep-text") &&
+        addParams.count("keep-textst") && pid >= 0x1800 && pid <= 0x18FF && !fileList.empty())
+    {
+        const std::string first = unquoteStr(trimStr(fileList[0]));
+        const std::string ext = strToUpperCase(extractFileExt(first));
+        if (ext == "M2TS" || ext == "MTS" || ext == "TS" || ext == "M2T")
+        {
+            TSDemuxer probe(m_readManager, "");
+            probe.openFile(first);
+            std::map<int32_t, TrackInfo> tracks;
+            probe.getTrackList(tracks);
+            if (probe.isTextStPid(pid))
+            {
+                DemuxedData data;
+                int64_t discarded = 0;
+                PIDSet pids;
+                pids.insert(pid);
+                probe.simpleDemuxBlock(data, pids, discarded);
+                const std::vector<uint8_t> style = probe.textStStyle(pid);
+                if (!style.empty())
+                {
+                    LTRACE(LT_INFO, 2, "Track " << pid << " of " << first << " is TextST, and is copied into the output "
+                                                                             "as it is.");
+                    codecReader = new MatroskaCopyStreamReader("S_HDMV/TEXTST", style, {}, 0);
+                }
+                else
+                    LTRACE(LT_WARN, 2, "Warning: track " << pid << " of " << first
+                                                         << " has no dialog style at its start, which keep-textst needs. "
+                                                            "It is written as SRT.");
+            }
+        }
+    }
     // ** ISDB CAPTIONS GO INTO A MATROSKA OUTPUT AS THEY ARE. ** S_ARIBSUB: its CodecPrivate the component tag and the
     // data_component_id, a block for each PES, without a duration. No other output has a form for them.
     if (codec == aribCodecInfo.programName)
@@ -2220,6 +2258,19 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     int64_t lineShift = 0;
     if (const auto ts = addParams.find("timeshift"); ts != addParams.end())
         parseTimeToTicks(ts->second, "ms", &lineShift);
+    // The timeshift of a TextST track, which a playlist's place gives it, goes in where its times are read: a demux
+    // writes the times of the SRT text, which a shift of the packets does not reach
+    const bool textStShifted = lineShift != 0 && codec == "S_TEXT/UTF8" && pid >= 0x1800 && pid <= 0x18FF &&
+                               !fileList.empty() &&
+                               (strEndWith(tmpname, ".m2ts") || strEndWith(tmpname, ".mts") ||
+                                strEndWith(tmpname, ".ts") || strEndWith(tmpname, ".m2t"));
+    if (textStShifted)
+    {
+        const int64_t ticks = lineShift / (INTERNAL_PTS_FREQ / 90000);
+        m_containerReader.m_textStShift[{fileList[0], pid}] = ticks;
+        m_shiftedSubReader.m_textStShift[{fileList[0], pid}] = ticks;
+        lineShift = 0;
+    }
     const bool ownReader = pid > 0 && !SubTrackFilter::isSubTrack(pid) && lineShift < 0 && !codec.empty() &&
                            codec[0] == 'S' && fileList.size() == 1 && listIterator == nullptr && mplsInfoList.empty() &&
                            m_containerReader.m_demuxers.find(fileList[0]) != m_containerReader.m_demuxers.end() &&
@@ -2439,6 +2490,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             THROW(ERR_COMMON, "timeshift=" << itr->second
                                            << " is not a time. Write a number followed by ns, us, ms or s, such as "
                                               "-120ms or 1.5s; a number alone is in ms.")
+        if (textStShifted)
+            value = 0;  // in its times already
         streamInfo.m_timeShift = value;
         if (value > 0)
             streamInfo.m_lastDTS = value;
@@ -3143,7 +3196,7 @@ static bool isKnownTrackParam(const std::string& name)
         // text subtitles
         "font-name", "font-size", "font-color", "font-bold", "font-italic", "font-underline", "font-strike-out",
         "font-border", "font-charset", "line-spacing", "bottom-offset", "fadein-time", "fadeout-time", "keep-text",
-        "fonts-dir", "ass-as-srt",
+        "fonts-dir", "ass-as-srt", "keep-textst",
         // set internally, never written by a user, but accepted so a round tripped meta does
         // not warn. srcdefault is the source container's own default track flag.
         "forced", "hearing-impaired", "visual-impaired", "text-descriptions", "original", "commentary", "srclang",
@@ -4419,6 +4472,19 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             }
             if (trackRez.codecInfo.codecID == CODEC_S_SRT)
             {
+                if (const auto* ts = dynamic_cast<TSDemuxer*>(demuxer.get()); ts && ts->isTextStPid(itr.first))
+                {
+                    trackRez.streamDescr = "TextST text subtitles";
+                    trackRez.delay = textStClipShift(unquoted);
+                    // All the discs read are in UTF-8, code 1 of the clip information; another code is not converted
+                    if (clpiParsed)
+                        if (const auto info = clpi.m_streamInfo.find(itr.first);
+                            info != clpi.m_streamInfo.end() && info->second.character_code != 1)
+                            LTRACE(LT_WARN, 2,
+                                   "Warning: track " << itr.first << " of " << unquoted << " has text in character code "
+                                                     << static_cast<int>(info->second.character_code)
+                                                     << ", which is not UTF-8. Its letters may come out wrong.");
+                }
                 const std::string& id = trackRez.codecId;
                 if (id == MATROSKA_CODEC_ID_TEXT_ASS)
                     trackRez.streamDescr = "ASS text subtitles";
@@ -5872,6 +5938,34 @@ void METADemuxer::cutPlayItems(MPLSParser& mpls, const string& mplsFileName, con
                           "to the key picture at or after where it ends (--playlist-clips=played).");
 }
 
+// Where a playlist of the disc plays a TextST clip, for its Stream delay: the lowest playlist that has it
+int METADemuxer::textStClipShift(const string& clip)
+{
+    const string name = extractFileName(clip);
+    string dir = extractFileDir(clip);
+    dir = dir.substr(0, dir.size() - 1);
+    const size_t up = dir.find_last_of("/\\");
+    if (up == string::npos)
+        return 0;
+    std::vector<string> playlists;
+    findFiles(dir.substr(0, up + 1) + "PLAYLIST", "*.mpls", &playlists, true);
+    std::sort(playlists.begin(), playlists.end());
+    for (const string& file : playlists)
+    {
+        MPLSParser mpls;
+        if (!mpls.parse(file.c_str()))
+            continue;
+        for (size_t i = 0; i < mpls.m_subPaths.size(); ++i)
+        {
+            int shift = 0;
+            if (!mpls.m_subPaths[i].clips.empty() && mpls.m_subPaths[i].clips[0] == name &&
+                mpls.subPathShiftMs(static_cast<int>(i), shift))
+                return shift;
+        }
+    }
+    return 0;
+}
+
 string METADemuxer::findBluRayFile(const string& streamDir, const string& requestDir, const string& requestFile)
 {
     string dirName = streamDir.substr(0, streamDir.size() - 1);
@@ -6440,7 +6534,12 @@ bool ContainerToReaderWrapper::openStream(int readerID, const char* streamName, 
             mkv->setTrackCopy(pid);
         else if (auto* ps = dynamic_cast<ProgramStreamDemuxer*>(demuxer))
             ps->setRawSubPictures(pid);  // DVD subtitles into a Matroska output
+        else if (auto* ts = dynamic_cast<TSDemuxer*>(demuxer))
+            ts->setRawTextSt(pid);  // TextST into a Matroska output
     }
+    if (const auto shift = m_textStShift.find({streamName, pid}); shift != m_textStShift.end())
+        if (tsDemuxer)
+            tsDemuxer->setTextStShift(pid, shift->second);
     if (const auto ass = m_assDrawing.find({streamName, pid}); ass != m_assDrawing.end())
         if (auto* mkv = dynamic_cast<MatroskaDemuxer*>(demuxer))
             mkv->setAssDrawing(pid, ass->second);

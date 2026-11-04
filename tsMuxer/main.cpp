@@ -880,6 +880,35 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
             const std::string kind = MPLSParser::outOfMuxTrackKind(entry);
             if (codingType != 0x90 && codingType != 0x92 && kind.empty())
                 continue;
+            // A text subtitle of the playlist is offered from its own clip, where the playlist puts it. The meta line
+            // names the clip, and the delay places it on the timeline of the playlist.
+            if (codingType == 0x92 && entry.refSubPathId >= 0 &&
+                static_cast<size_t>(entry.refSubPathId) < mplsParser->m_subPaths.size() &&
+                !mplsParser->m_subPaths[entry.refSubPathId].clips.empty())
+            {
+                const std::string clipFile =
+                    METADemuxer::findBluRayFile(extractFileDir(fileName), "STREAM",
+                                                mplsParser->m_subPaths[entry.refSubPathId].clips[0] + ".m2ts");
+                int shift = 0;
+                if (!clipFile.empty() && mplsParser->subPathShiftMs(entry.refSubPathId, shift))
+                {
+                    if (mplsParser->m_subPaths[entry.refSubPathId].clips.size() > 1)
+                        LTRACE(LT_WARN, 2, "Warning: the text subtitles of language "
+                                               << applyLangCodeStyle(entry.language_code) << " are played from "
+                                               << mplsParser->m_subPaths[entry.refSubPathId].clips.size()
+                                               << " clips. Only the first is offered.");
+                    LTRACE(LT_INFO, 2, "");
+                    LTRACE(LT_INFO, 2, "Track ID:    " << entry.streamPID);
+                    LTRACE(LT_INFO, 2, "Stream type: SRT");
+                    LTRACE(LT_INFO, 2, "Stream ID:   S_TEXT/UTF8");
+                    LTRACE(LT_INFO, 2, "Stream info: TextST text subtitles");
+                    LTRACE(LT_INFO, 2, "Stream lang: " << applyLangCodeStyle(entry.language_code));
+                    if (shift != 0)
+                        LTRACE(LT_INFO, 2, "Stream delay: " << shift);
+                    LTRACE(LT_INFO, 2, "Stream file: " << clipFile);
+                    continue;
+                }
+            }
             std::string clip;
             if (entry.refSubPathId >= 0 && static_cast<size_t>(entry.refSubPathId) < mplsParser->m_subPaths.size() &&
                 !mplsParser->m_subPaths[entry.refSubPathId].clips.empty())
@@ -1346,6 +1375,9 @@ Additional parameters for SRT tracks:
 - fonts-dir         fonts-dir="folder": a folder of fonts that ASS and SSA
                     subtitles drawn with libass may use, besides the fonts
                     attached to the file and those installed in the system.
+- keep-textst       With keep-text into a Matroska file: keep Blu-ray text
+                    subtitles as TextST (S_HDMV/TEXTST). Without it they are
+                    written as SRT.
 - ass-as-srt        Draw ASS and SSA subtitles as plain text with the font
                     parameters above, as SRT subtitles are drawn, instead of
                     with libass. Without it, ASS and SSA subtitles drawn into

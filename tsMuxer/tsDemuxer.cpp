@@ -2,6 +2,8 @@
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "tsDemuxer.h"
 
+#include "textstParser.h"
+
 #include <fs/systemlog.h>
 
 #include <algorithm>
@@ -225,6 +227,7 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                             TrackInfo track(
                                 isDvbSubtitlePid(snd.m_pid) ? TRACKTYPE_PGS
                                 : isAribPid(snd.m_pid)                    ? TRACKTYPE_ARIB
+                                : snd.m_streamType == StreamType::SUB_TGS ? TRACKTYPE_SRT
                                                                           : static_cast<int>(snd.m_streamType),
                                 snd.m_lang, 0, snd.m_dvbDescriptor);
                             if (snd.m_streamType == StreamType::PRIVATE_DATA)
@@ -974,6 +977,31 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
                 m_lastReadRez = readRez;
                 return 0;
             }
+        if (!m_textSt.empty())
+        {
+            bool handedOn = false;
+            for (auto& [pid, sub] : m_textSt)
+            {
+                if (sub.pes.empty())
+                    continue;
+                finishTextStPes(pid, sub, demuxedData, discardSize);
+                handedOn = true;
+            }
+            if (handedOn)
+            {
+                m_lastReadRez = readRez;
+                return 0;
+            }
+            // A subtitle that cannot be read is left out, and not without a word
+            for (auto& [pid, sub] : m_textSt)
+                if (sub.unread > 0 && m_acceptedPidCache[pid])
+                {
+                    LTRACE(LT_WARN, 2,
+                           "Warning: " << sub.unread << " text subtitle(s) of track " << pid << " of " << m_streamName
+                                       << " could not be read, and are left out.");
+                    sub.unread = 0;
+                }
+        }
         if (!m_dvbSubtitles.empty() && !m_dvbSubtitlesFinished)
         {
             m_dvbSubtitlesFinished = true;
@@ -1159,6 +1187,18 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
             const bool whole = frameData + PESPacket::HEADER_SIZE + PESPacket::PTS_SIZE <= pkt + TS_FRAME_SIZE;
             sub.pts = whole && (pes->flagsLo & 0x80) == 0x80 ? fullPts(pes->getPts()) : -1;
         }
+        const int64_t payloadLen = TS_FRAME_SIZE - (frameData - pkt);
+        if (payloadLen > 0 && (pesStartCode || !sub.pes.empty()))
+            sub.pes.insert(sub.pes.end(), frameData, frameData + payloadLen);
+        return;
+    }
+    if (isTextStPid(pid))
+    {
+        if (!m_acceptedPidCache[pid])
+            return;
+        TextStPes& sub = m_textSt[pid];
+        if (pesStartCode)
+            finishTextStPes(pid, sub, demuxedData, discardSize);
         const int64_t payloadLen = TS_FRAME_SIZE - (frameData - pkt);
         if (payloadLen > 0 && (pesStartCode || !sub.pes.empty()))
             sub.pes.insert(sub.pes.end(), frameData, frameData + payloadLen);
@@ -1676,6 +1716,71 @@ void TSDemuxer::finishAribPes(const int pid, AribPes& sub, DemuxedData& demuxedD
     dst.grow(static_cast<int>(out.size()));
     memcpy(dst.data() + dst.size() - out.size(), out.data(), out.size());
     discardSize -= static_cast<int64_t>(out.size());
+}
+
+bool TSDemuxer::isTextStPid(const int pid) const
+{
+    const auto info = m_pmt.pidList.find(pid);
+    return info != m_pmt.pidList.end() && info->second.m_streamType == StreamType::SUB_TGS;
+}
+
+std::vector<uint8_t> TSDemuxer::textStStyle(const int pid) const
+{
+    const auto sub = m_textSt.find(pid);
+    return sub == m_textSt.end() ? std::vector<uint8_t>() : sub->second.style;
+}
+
+void TSDemuxer::finishTextStPes(const int pid, TextStPes& sub, DemuxedData& demuxedData, int64_t& discardSize)
+{
+    if (sub.pes.size() < 6)
+    {
+        sub.pes.clear();
+        return;
+    }
+    // The bytes of the PES count as discarded, less what is handed on: the reader counts that, and the two add up
+    discardSize += static_cast<int64_t>(sub.pes.size());
+    const size_t length = static_cast<size_t>(sub.pes[4]) << 8 | sub.pes[5];
+    const uint8_t* data = sub.pes.data() + 6;
+    const size_t size = std::min(length, sub.pes.size() - 6);
+    const uint8_t type = textst::segmentType(data, size);
+    std::vector<uint8_t> out;
+    if (type == textst::SEGMENT_STYLE)
+    {
+        if (sub.style.empty())
+            sub.topStyles = textst::topRegionStyles(data, size);
+        if (sub.style.empty())
+            sub.style.assign(data, data + 3 + (static_cast<size_t>(data[1]) << 8 | data[2]));  // not the count after it
+    }
+    else
+    {
+        textst::Subtitle subtitle;
+        const bool read = textst::parsePresentation(data, size, subtitle);
+        if (!read)
+            ++sub.unread;
+        subtitle.start += sub.shift;
+        subtitle.end += sub.shift;
+        subtitle.start = std::max<int64_t>(subtitle.start, 0);
+        // not read, or over before the output starts: nothing to hand on
+        if (read && subtitle.end > 0 && m_rawTextSt.count(pid))
+        {
+            appendCopyRecord(out, subtitle.start * (INTERNAL_PTS_FREQ / 90000),
+                             (subtitle.end - subtitle.start) * (INTERNAL_PTS_FREQ / 90000), data, size);
+            ++sub.subtitles;
+        }
+        else if (read && subtitle.end > 0 && !subtitle.text.empty())
+        {
+            const std::string record = textst::srtRecord(subtitle, ++sub.subtitles, sub.topStyles.count(subtitle.regionStyle) != 0);
+            out.assign(record.begin(), record.end());
+        }
+    }
+    if (!out.empty())
+    {
+        StreamData& dst = demuxedData[pid];
+        dst.grow(static_cast<int>(out.size()));
+        memcpy(dst.data() + dst.size() - out.size(), out.data(), out.size());
+        discardSize -= static_cast<int64_t>(out.size());
+    }
+    sub.pes.clear();
 }
 
 bool TSDemuxer::isDvbSubtitlePid(const int pid) const

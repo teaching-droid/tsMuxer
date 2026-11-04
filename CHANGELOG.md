@@ -78,6 +78,8 @@
 
 * **An ASS or SSA script is read as a file of its own.** A .ass or .ssa file was "Can't detect stream type", and only ASS and SSA from a Matroska file were read. A script file is now read as that track is: listed as track 1, drawn with libass for a disc or a TS, and kept as it is with `keep-text` in a Matroska output or a demux, its comments included. Cuts and joins work as for any subtitle track. The window offers .ass and .ssa files when adding. ([justdan96/tsMuxer#731](https://github.com/justdan96/tsMuxer/issues/731))
 
+* **Blu-ray text subtitles (TextST) can be muxed.** A disc's text subtitles were listed as "Not supported". A playlist now lists each of them with its language and its place on the timeline, and a TextST clip can be added on its own. They go to a disc or a TS as pictures, and into a Matroska file or a demux as SRT, with captions at the top of the picture kept at the top. To keep them as they are in a Matroska file, untick "Convert Blu-ray text subtitles (TextST) to SRT" in the window, or add `keep-textst` to the meta line.
+
 * **`{\an8}` in an SRT file now places a drawn subtitle at the top of the picture.** It was left out and the subtitle was drawn at the bottom.
 
 * **An .idx/.sub pair can be used as a source.** It can go onto a Blu-ray as PGS and into a Matroska file as VobSub, and a demux of it writes a .sup file. The times are read from the .idx file.

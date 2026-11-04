@@ -2263,6 +2263,19 @@
          </widget>
         </item>
         <item>
+         <widget class="QCheckBox" name="textStAsSrtCheckBox">
+          <property name="checked">
+           <bool>true</bool>
+          </property>
+          <property name="toolTip">
+           <string>Blu-ray text subtitles go into a Matroska file as SRT, which every player reads. Without this tick they stay TextST, which many players do not read.</string>
+          </property>
+          <property name="text">
+           <string>Convert Blu-ray text subtitles (TextST) to SRT</string>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QCheckBox" name="assAsSrtCheckBox">
           <property name="toolTip">
            <string>ASS and SSA subtitles from a Matroska file are drawn with libass, as their script says: with their styles, colours, positions and animations, and with the fonts attached to the file. Tick this to draw them as plain text with the font settings below instead.</string>

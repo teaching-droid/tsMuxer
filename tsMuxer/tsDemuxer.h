@@ -33,7 +33,12 @@ class TSDemuxer final : public AbstractDemuxer
     int getLastReadRez() override { return m_lastReadRez; }
     // The demuxer of a mux (not of a listing or a probe) says at the end of the file what of its tracks was damaged
     void setReportDamage() { m_reportDamage = true; }
+    [[nodiscard]] bool isTextStPid(int pid) const;
     [[nodiscard]] bool isAribPid(int pid) const;
+    void setRawTextSt(const int pid) { m_rawTextSt.insert(pid); }
+    void setTextStShift(const int pid, const int64_t ticks) { m_textSt[pid].shift = ticks; }
+    // The dialog style segment of a text subtitle track, as far as the file has been read; empty when there is none
+    [[nodiscard]] std::vector<uint8_t> textStStyle(int pid) const;
     void setFileIterator(FileNameIterator* itr) override;
     int64_t getTrackDelay(const int32_t pid) override
     {
@@ -120,6 +125,20 @@ class TSDemuxer final : public AbstractDemuxer
     std::map<int, DvbSubtitlePes> m_dvbSubtitles;
     bool m_dvbSubtitlesFinished = false;
     [[nodiscard]] bool isDvbSubtitlePid(int pid) const;
+    // A text subtitle track (textstParser.h): each PES holds one segment. They go on as SRT records for the SRT reader,
+    // or as copied blocks for a Matroska output (setRawTextSt).
+    struct TextStPes
+    {
+        std::vector<uint8_t> pes;  // the PES being gathered, its header included
+        std::vector<uint8_t> style;
+        std::set<int> topStyles;
+        int64_t shift = 0;  // 90 kHz, added to every time
+        int subtitles = 0;
+        int unread = 0;
+    };
+    std::map<int, TextStPes> m_textSt;
+    std::set<int> m_rawTextSt;
+    void finishTextStPes(int pid, TextStPes& sub, DemuxedData& demuxedData, int64_t& discardSize);
     // ISDB captions: each PES goes on as a copied block for a Matroska output (S_ARIBSUB)
     struct AribPes
     {

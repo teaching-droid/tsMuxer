@@ -1096,6 +1096,7 @@ TsMuxerWindow::TsMuxerWindow()
                 onSavedParamChanged();
             });
     connect(ui->saveSrtCheckBox, &QCheckBox::toggled, this, &TsMuxerWindow::onSavedParamChanged);
+    connect(ui->textStAsSrtCheckBox, &QCheckBox::toggled, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->assAsSrtCheckBox, &QCheckBox::toggled, this,
             [this]
             {
@@ -3110,6 +3111,9 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
                 codecInfo->clipPlace = m.captured(2).toInt();
             }
         }
+        p = procStdOutput[i].indexOf("Stream file: ");
+        if (p >= 0 && codecInfo != nullptr)
+            codecInfo->ownFile = QtCompat::strMid(procStdOutput[i], QString("Stream file: ").length()).trimmed();
         p = procStdOutput[i].indexOf("Stream delay: ");
         if (p >= 0)
         {
@@ -4506,7 +4510,12 @@ void TsMuxerWindow::continueAddFile()
         info.srcByTsMuxer = listedWritingApp.startsWith(QLatin1String("tsMuxeR"), Qt::CaseInsensitive);
         info.dvdTitle = m_pendingDvdTitle;
         info.angle = m_pendingAngle;
-        if (mplsFileList.isEmpty())
+        if (!info.ownFile.isEmpty())
+        {
+            info.fileList << QDir::fromNativeSeparators(info.ownFile);
+            info.ownerFile = newFileName;
+        }
+        else if (mplsFileList.isEmpty())
             info.fileList << newFileName;
         else
         {
@@ -6000,6 +6009,9 @@ QString TsMuxerWindow::buildMetaText()
             postfix += getSrtParams();
             if (!keepTextApplies() && ui->saveSrtCheckBox->isChecked())
                 postfix += QString(", save-srt=\"%1\"").arg(saveSrtFileName(codecInfo, i));
+            if (keepTextApplies() && ui->radioButtonMKV->isChecked() && !ui->textStAsSrtCheckBox->isChecked() &&
+                codecInfo->descr.contains(QLatin1String("TextST")))
+                postfix += ", keep-textst";
             // ASS and SSA from Matroska are drawn with libass; a track of another text format takes no notice of these
             if (!keepTextApplies() && ui->assAsSrtCheckBox->isChecked())
                 postfix += ", ass-as-srt";
@@ -6360,6 +6372,8 @@ void TsMuxerWindow::delTracksByFileName(const QString& fileName, const int dvdTi
                     break;
                 }
             }
+            if (info->ownerFile == fileName)
+                info->fileList.clear();
             if (info->fileList.count() == 0)
                 deleteTrack(i);
         }
@@ -6829,6 +6843,7 @@ void TsMuxerWindow::updateKeepTextControls()
     const bool asText = keepTextApplies();
     // save-srt is for subtitles that are drawn: kept as text, the output or the demux holds the text already
     ui->saveSrtCheckBox->setEnabled(!asText);
+    ui->textStAsSrtCheckBox->setEnabled(asText && ui->radioButtonMKV->isChecked());
     // libass draws only what is drawn, and a fonts folder is for libass alone
     ui->assAsSrtCheckBox->setEnabled(!asText);
     const bool libass = !asText && !ui->assAsSrtCheckBox->isChecked();
@@ -7828,6 +7843,7 @@ void TsMuxerWindow::writeSettings()
     settings->setValue("keepText", ui->keepTextCheckBox->isChecked());
     settings->setValue("saveSrt", ui->saveSrtCheckBox->isChecked());
     settings->setValue("assAsSrt", ui->assAsSrtCheckBox->isChecked());
+    settings->setValue("textStAsSrt", ui->textStAsSrtCheckBox->isChecked());
     settings->setValue("assFontsDir", ui->fontsDirLineEdit->text().trimmed());
     settings->endGroup();
     if (fontSettingsModel)  // writeSettings also runs before the model exists, when an empty ini is first filled
@@ -7891,6 +7907,7 @@ bool TsMuxerWindow::readSettingsBody()
     ui->keepTextCheckBox->setChecked(settings->value("keepText", true).toBool());
     ui->saveSrtCheckBox->setChecked(settings->value("saveSrt", false).toBool());
     ui->assAsSrtCheckBox->setChecked(settings->value("assAsSrt", false).toBool());
+    ui->textStAsSrtCheckBox->setChecked(settings->value("textStAsSrt", true).toBool());
     ui->fontsDirLineEdit->setText(settings->value("assFontsDir", QString()).toString());
     settings->endGroup();
 

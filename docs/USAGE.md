@@ -113,6 +113,10 @@ A_AC3, "dvd.iso", title=main, track=128
 
 A demux writes DVD subtitles as `name.idx` and `name.sub`. Such a pair is read as a source when the .idx file is beside the .sub file: `S_HDMV/PGS, "name.sub", track=32`. The track number is 32 plus the `index:` of the .idx file.
 
+A Blu-ray plays text subtitles (TextST) from clips of their own. The listing of a playlist gives each one with `Stream file:` and `Stream delay:`. The meta line names that clip, with the delay as `timeshift=`:
+`S_TEXT/UTF8, "BDMV/STREAM/00143.m2ts", track=6144, timeshift=-11651ms, lang=fra`
+The window does this by itself.
+
 A folder that holds several disc folders or images, such as a box set copied disc by disc, given alone names them: `tsMuxeR D:/discs/box` prints each Blu-ray and DVD disc folder and image in it, to be listed with its own path.
 
 Supported output formats:
@@ -343,6 +347,7 @@ keep-text         | Keep the subtitles as text instead of drawing them into pict
 save-srt          | `save-srt="name.srt"`: while the subtitles are drawn into pictures, also write them as text to that SRT file (UTF-8, numbered from 1), as a demux with `keep-text` would write them. Ignored, with a warning, on a line with `keep-text`. In the window: "Also save drawn SRT subtitles as .srt files" on the Subtitles tab.
 fonts-dir         | `fonts-dir="folder"`: a folder of fonts that ASS and SSA subtitles drawn with libass may use, besides the fonts attached to the file and the fonts installed in the system (see below). In the window: "Fonts folder for ASS and SSA subtitles" on the Subtitles tab.
 ass-as-srt        | Draw ASS and SSA subtitles as plain text with the font parameters above, as SRT subtitles are drawn, instead of with libass. In the window: "Draw ASS and SSA subtitles as plain text, without their styles" on the Subtitles tab.
+keep-textst       | **Text subtitles of a Blu-ray only.** With keep-text into a Matroska file: keep the track as TextST (S_HDMV/TEXTST). Without it the track is written as SRT.
 
 On Linux and Mac, a font can be named either by its family name or by the full path to the file. Named by family, tsMuxeR searches `/usr/share/fonts/`, `/usr/local/share/fonts/`, `~/.fonts` and `~/.local/share/fonts` on Linux, and `/Library/Fonts/` and `~/Library/Fonts` on Mac, and it accepts `.ttf`, `.otf` and `.ttc`. Note that the search is case sensitive on the extension, so a file copied from Windows as `Arial.TTF` is found only by its full path.
 

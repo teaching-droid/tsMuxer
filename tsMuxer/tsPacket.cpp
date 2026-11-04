@@ -1776,6 +1776,20 @@ void MPLSParser::parseSubPaths(const uint8_t* data, const int len, const int cou
         {
             const int itemLength = data[q] << 8 | data[q + 1];
             subPath.clips.emplace_back(reinterpret_cast<const char*>(data + q + 2), 5);
+            if (q + 30 <= end)
+            {
+                const auto be32 = [data](const int at)
+                {
+                    return static_cast<uint32_t>(data[at]) << 24 | static_cast<uint32_t>(data[at + 1]) << 16 |
+                           static_cast<uint32_t>(data[at + 2]) << 8 | data[at + 3];
+                };
+                MPLSSubPlayItem item;
+                item.IN_time = be32(q + 16);
+                item.OUT_time = be32(q + 20);
+                item.syncPlayItem = data[q + 24] << 8 | data[q + 25];
+                item.syncStart = be32(q + 26);
+                subPath.items.push_back(item);
+            }
             q += 2 + itemLength;
         }
         m_subPaths.push_back(subPath);
@@ -2051,6 +2065,23 @@ MPLSStreamInfo MPLSParser::getStreamByPID(const int pid) const
     return {};
 }
 
+bool MPLSParser::subPathShiftMs(const int subPath, int& shiftMs) const
+{
+    if (subPath < 0 || static_cast<size_t>(subPath) >= m_subPaths.size() || m_subPaths[subPath].items.empty())
+        return false;
+    const MPLSSubPlayItem& item = m_subPaths[subPath].items[0];
+    if (item.syncPlayItem < 0 || static_cast<size_t>(item.syncPlayItem) >= m_playItems.size())
+        return false;
+    // the play items before the one it is tied to, then its place in that play item, less where its own clock stood
+    int64_t at = 0;
+    for (int i = 0; i < item.syncPlayItem; ++i)
+        at += static_cast<int64_t>(m_playItems[i].OUT_time) - m_playItems[i].IN_time;
+    at += static_cast<int64_t>(item.syncStart) - m_playItems[item.syncPlayItem].IN_time;
+    at -= item.IN_time;
+    shiftMs = static_cast<int>(at >= 0 ? (at + 22) / 45 : (at - 22) / 45);
+    return true;
+}
+
 std::vector<MPLSStreamInfo> MPLSParser::getOutOfMuxStreams() const
 {
     std::vector<MPLSStreamInfo> rez;
@@ -2185,8 +2216,11 @@ void MPLSParser::reportLeftOut(const std::string& playlistName, const bool listi
                                     << (codingType == 0x92 ? "text subtitles (Text-ST)"
                                                            : "presentation graphics subtitles")
                                     << " (" << where.str()
-                                    << ") from a separate clip, which a mux of the playlist does not read, so the "
-                                       "track is left out. The rest of the playlist is muxed.");
+                                    << (codingType == 0x92
+                                            ? ") from a separate clip. They are in the output when a line of the "
+                                              "meta file names that clip, as the listing of the playlist gives it."
+                                            : ") from a separate clip, which a mux of the playlist does not read, so "
+                                              "the track is left out. The rest of the playlist is muxed."));
     }
 }
 

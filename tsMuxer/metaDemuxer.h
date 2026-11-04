@@ -159,6 +159,8 @@ class ContainerToReaderWrapper final : public AbstractReader
     std::map<std::string, DemuxerData> m_demuxers;
     // ASS and SSA tracks drawn with libass, by file and pid: handed to the Matroska reader when the track is opened
     std::map<std::pair<std::string, int>, ass_render::Drawing> m_assDrawing;
+    // The timeshift of a TextST track, in 90 kHz ticks, applied where its times are read
+    std::map<std::pair<std::string, int>, int64_t> m_textStShift;
 
     /// Retrieve the track's codec-private blob via the underlying demuxer.
     /// @param readerID  The reader ID used when the stream was registered.
@@ -390,12 +392,13 @@ class METADemuxer final : public AbstractDemuxer
                                             AbstractStreamReader::ContainerType containerType, int containerDataType,
                                             int containerStreamIndex, DeclaredKind declared = DeclaredKind::None,
                                             bool wholeTrack = false);
-    static std::string findBluRayFile(const std::string& streamDir, const std::string& requestDir,
-                                      const std::string& requestFile);
     // angle: the angle= of the line (from 1); every line of a playlist takes it in one angle (m_playlistAngle)
     std::vector<MPLSParser> getMplsInfo(const std::string& mplsFileName, int angle = 1);
 
    public:
+    static int textStClipShift(const std::string& clip);
+    static std::string findBluRayFile(const std::string& streamDir, const std::string& requestDir,
+                                      const std::string& requestFile);
     // A playlist read as a source says its 3D base view is the right eye, or a Matroska source's 3D track does
     // (StereoMode 14, srcrighteye)
     [[nodiscard]] bool mplsBaseViewRight() const

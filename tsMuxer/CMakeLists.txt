@@ -80,6 +80,7 @@ add_executable (tsmuxer
   srtStreamReader.cpp
   textSubtitles.cpp
   textSubtitlesRender.cpp
+  textstParser.cpp
   tsDemuxer.cpp
   tsMuxer.cpp
   tstdCheck.cpp

@@ -19,6 +19,10 @@ struct QtvCodecInfo
     QString descr;
     QString lang;
     int delay = 0;
+    // A track a playlist plays from a clip of its own, as text subtitles are: the clip, and the playlist the row goes
+    // with when that is removed
+    QString ownFile;
+    QString ownerFile;
     // The delay the listing gave. Where it is not 0, a delay set to 0 in the window is written as timeshift=0ms:
     // without a timeshift the track kept the start its file gives, so 0 in the window did not mean 0.
     int listedDelay = 0;

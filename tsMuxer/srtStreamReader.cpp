@@ -1634,7 +1634,9 @@ CheckStreamRez SRTStreamReader::checkStream(uint8_t* buffer, const int len, cons
                                             const int containerDataType, int containerStreamIndex)
 {
     CheckStreamRez rez;
-    if (((containerType == ContainerType::ctMKV || containerType == ContainerType::ctMOV) &&
+    // A text subtitle track of a clip reaches this reader as SRT records (TSDemuxer)
+    if (((containerType == ContainerType::ctMKV || containerType == ContainerType::ctMOV ||
+          containerType == ContainerType::ctM2TS || containerType == ContainerType::ctTS) &&
          containerDataType == TRACKTYPE_SRT) ||
         (containerType == ContainerType::ctSRT && readsLikeSrt(buffer, len)))
     {
