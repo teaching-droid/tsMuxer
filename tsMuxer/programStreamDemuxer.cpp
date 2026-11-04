@@ -320,7 +320,10 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
         else
             discardSize += copyLen;
         if (m_lastPesVideo)
+        {
             scanVideo(curBuf, copyLen);
+            releaseSubPictures(demuxedData, false);
+        }
         curBuf += copyLen;
         m_lastPesLen -= copyLen;
         if (m_lastPesLen > 0)
@@ -364,7 +367,10 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
                 const int len = pesPacket->getPacketLength() - headerLen - afterPesHeader;
                 const int have = static_cast<int>((std::min)(static_cast<int64_t>(len), static_cast<int64_t>(end - p)));
                 if (have > 0)
+                {
                     scanVideo(p, have);
+                    releaseSubPictures(demuxedData, false);
+                }
                 m_lastPesVideo = have < len;
             }
             const bool subPicture = startcode >= 0x20 && startcode <= 0x3f;
@@ -500,6 +506,7 @@ void ProgramStreamDemuxer::noteVideoTime(const int64_t pts, const int64_t dts)
         m_segBase += length;
         m_segFirst = -1;
         m_segFields = 0;
+        ++m_parts;
     }
     m_lastDts = dts;
     m_pesPts = pts;
@@ -567,6 +574,7 @@ void ProgramStreamDemuxer::videoStartCode(const uint8_t code, const uint8_t* b)
         if (m_segFirst < 0 || shown < m_segFirst)
             m_segFirst = shown;
         m_pesPts = -1;
+        ++m_pictures;
     }
 }
 
@@ -600,9 +608,6 @@ void ProgramStreamDemuxer::addSubPicture(const int stream, const uint8_t* data, 
     const size_t size = static_cast<size_t>(sp.unit[0]) << 8 | sp.unit[1];
     if (sp.unit.size() < size)
         return;
-    // on the time line of the video: where its part begins, and the time from the first picture of the part
-    const int64_t first = m_segFirst >= 0 ? m_segFirst : sp.pts;
-    int64_t at = llround(m_segBase) + (sp.pts - first);
     if (m_vobSubPair)
     {
         if (!sp.timesRead)
@@ -616,9 +621,49 @@ void ProgramStreamDemuxer::addSubPicture(const int stream, const uint8_t* data, 
             LTRACE(LT_WARN, 2, "Warning: the .idx file of " << m_streamName << " has fewer times than track " << stream
                                                             << " has subtitles. The rest take the time in the .sub file.");
         }
-        at = sp.done < sp.times.size() ? sp.times[sp.done] * 90 : sp.pts;
+        const int64_t at = sp.done < sp.times.size() ? sp.times[sp.done] * 90 : sp.pts;
         ++sp.done;
+        placeSubPicture(stream, sp.unit.data(), size, at, out);
     }
+    else
+    {
+        m_heldUnits.push_back({stream,
+                               std::vector<uint8_t>(sp.unit.begin(), sp.unit.begin() + static_cast<std::ptrdiff_t>(size)),
+                               sp.pts, m_parts, m_segBase, m_segFirst, m_lastDts});
+        m_heldAt = m_pictures;
+    }
+    sp.unit.clear();
+    sp.pts = -1;
+}
+
+// The units held (m_heldUnits) go on when a picture with a time has come after them, or at the end of the file. A unit
+// that came before the start of a part is of the part before if its time is nearer to the last picture of that part
+// than to the first of the new one: with a clock that starts again, nothing else tells the two apart.
+void ProgramStreamDemuxer::releaseSubPictures(DemuxedData& demuxedData, const bool end)
+{
+    if (m_heldUnits.empty() || (!end && m_heldAt == m_pictures))
+        return;
+    // A file without a video gives its units their distance from the first of them
+    if (m_segFirst < 0)
+        m_segFirst = m_heldUnits.front().pts;
+    for (const HeldUnit& unit : m_heldUnits)
+    {
+        const bool partBefore = unit.part != m_parts && unit.first >= 0 &&
+                                std::llabs(unit.pts - unit.lastDts) < std::llabs(unit.pts - m_segFirst);
+        // on the time line of the video: where its part begins, and the time from the first picture of the part
+        const int64_t at =
+            llround(partBefore ? unit.base : m_segBase) + unit.pts - (partBefore ? unit.first : m_segFirst);
+        placeSubPicture(unit.stream, unit.data.data(), unit.data.size(), (std::max)(int64_t{0}, at),
+                        demuxedData[unit.stream]);
+    }
+    m_heldUnits.clear();
+}
+
+// A whole unit, with its place on the time line (at, 90 kHz)
+void ProgramStreamDemuxer::placeSubPicture(const int stream, const uint8_t* data, const size_t size, const int64_t at,
+                                           StreamData& out)
+{
+    SubPicture& sp = m_subPictures[stream];
     if (m_rawSubPictures.count(stream))
     {
         // the unit as it is, framed as a copied Matroska block: "MKCP", time, duration (-1: the unit says when it
@@ -634,18 +679,14 @@ void ProgramStreamDemuxer::addSubPicture(const int stream, const uint8_t* data, 
         rec.push_back(1);
         be(0, 4);
         be(size, 4);
-        rec.insert(rec.end(), sp.unit.begin(), sp.unit.begin() + static_cast<std::ptrdiff_t>(size));
+        rec.insert(rec.end(), data, data + size);
         out.append(rec.data(), static_cast<int>(rec.size()));
-        sp.unit.clear();
-        sp.pts = -1;
         return;
     }
     std::vector<uint8_t> pgs;
     if (size >= 4)
-        sp.decoder->decode(sp.unit.data(), static_cast<int>(size), at * (INTERNAL_PTS_FREQ / 90000), -1, pgs);
+        sp.decoder->decode(data, static_cast<int>(size), at * (INTERNAL_PTS_FREQ / 90000), -1, pgs);
     out.append(pgs.data(), static_cast<int>(pgs.size()));
-    sp.unit.clear();
-    sp.pts = -1;
 }
 
 // The end of the last picture of each track, held until the next (BitmapToPgs::finish)
@@ -654,6 +695,7 @@ void ProgramStreamDemuxer::flushSubPictures(DemuxedData& demuxedData, const PIDS
     if (m_subFlushed)
         return;
     m_subFlushed = true;
+    releaseSubPictures(demuxedData, true);
     for (auto& [stream, sp] : m_subPictures)
     {
         if (!sp.decoder || acceptedPIDs.find(stream) == acceptedPIDs.end() || m_rawSubPictures.count(stream))

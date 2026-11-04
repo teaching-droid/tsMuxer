@@ -101,10 +101,31 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
     int m_scanHave = 0;
     int m_scanWant = 0;
     bool m_lastPesVideo = false;  // the PES cut by the end of a read is video
+    // ** A UNIT WAITS FOR THE NEXT PICTURE. ** The clock of a part starts again in the pack that follows the last of the
+    // part before, and a unit at the start of a part can come ahead of the first picture of its part. Placed on arrival
+    // it was counted from the first picture of the part before, and came minutes too early. A whole unit
+    // is held until the next picture with a time has shown which part it is in (releaseSubPictures).
+    struct HeldUnit
+    {
+        int stream;
+        std::vector<uint8_t> data;
+        int64_t pts;
+        // the part it came in: which one, and its place, for a unit of that part held across the start of the next
+        int64_t part;
+        double base;
+        int64_t first;
+        int64_t lastDts;
+    };
+    std::vector<HeldUnit> m_heldUnits;
+    int64_t m_parts = 0;     // the parts begun so far
+    int64_t m_pictures = 0;  // the pictures with a time so far
+    int64_t m_heldAt = 0;    // m_pictures when the units held came
     void noteVideoTime(int64_t pts, int64_t dts);
     void scanVideo(const uint8_t* data, int len);
     void videoStartCode(uint8_t code, const uint8_t* b);
     void addSubPicture(int stream, const uint8_t* data, int len, int64_t pts, StreamData& out);
+    void placeSubPicture(int stream, const uint8_t* data, size_t size, int64_t at, StreamData& out);
+    void releaseSubPictures(DemuxedData& demuxedData, bool end);
     void flushSubPictures(DemuxedData& demuxedData, const PIDSet& acceptedPIDs);
 
     [[nodiscard]] bool isVideoPID(uint32_t pid) const;
