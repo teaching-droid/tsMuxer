@@ -102,6 +102,8 @@ class LPCMStreamReader final : public SimplePacketizerReader
     bool m_lowBitsSaid = false;
     bool m_clipSaid = false;
     bool m_convertSaid = false;
+    bool m_firstConverted = false;  // the first file of the join has samples that are converted
+    uint64_t m_firstFormat = 0;     // rate, channels, sample size of the first file: the files of a join must have it
     [[nodiscard]] int sourceSampleBytes() const
     {
         return m_srcBits ? m_srcBits / 8 : (m_bitsPerSample == 20 ? 3 : m_bitsPerSample / 8);

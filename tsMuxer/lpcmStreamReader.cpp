@@ -325,6 +325,20 @@ int LPCMStreamReader::convertWavToPCM(uint8_t* start, uint8_t* end)
     int64_t cLen = end - start;
     cLen -= cLen % sourceFullSize;
     end = start + cLen;
+    // ** A BLU-RAY LPCM TRACK AT 192 KHZ HAS AT MOST 6 CHANNELS. ** Its rate is at most 27.648 Mbit/s, 6 channels of 24 bit
+    // at 192 kHz. A WAV of 7 or 8 channels at 192 kHz was written into the frame buffer of 17,284 bytes anyway, 23,040
+    // bytes for 24 bit 7.1: a crash (also in 3.0.1). It is refused, as a WAV that needs silent channels to reach such a
+    // layout already was.
+    if (bdChannels() > 6 && m_freq == 192000)
+        THROW(ERR_COMMON, "Track " << m_streamIndex << " has " << bdChannels()
+                                   << " channels at 192 kHz. A Blu-ray LPCM track (and a TS) carries at most 6 channels "
+                                      "at 192 kHz. Convert it to 96 kHz or to 6 channels, or mux it into a Matroska "
+                                      "file.")
+    {
+        const int64_t frameSamples = (end - start) / sourceFullSize;
+        if (frameSamples * ((bdChannels() + 1) & ~1) * ch1SampleSize + 4 > static_cast<int64_t>(sizeof(m_tmpFrameBuffer)))
+            THROW(ERR_COMMON, "Track " << m_streamIndex << ": a frame of LPCM is larger than a disc carries.")
+    }
     // 0. samples a disc does not take, as 16 or 24 bit ones
     if (m_srcBits)
     {
@@ -659,6 +673,27 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
             THROW(ERR_COMMON, "Bit depth " << m_bitsPerSample
                                            << " is not supported for LPCM format. Allowed values: 8, 16, 20, 24 and "
                                               "32 bit, and 32 and 64 bit floating point.")
+        }
+        // ** THE FILES OF A JOIN IN ONE FORMAT, WHERE THE OUTPUT NEEDS IT. ** A Matroska output and a demux give the
+        // format once, in the track's header: a later file of another sample size, rate or channel count was noise
+        // there (a 24 bit WAV joined with a 16 bit one lost 64,000 samples). Such a join is refused for them. A disc
+        // and a TS give the sample size in every frame, and a join of 16, 20 and 24 bit files plays there, as before;
+        // one with samples that are converted (8 bit, 32 bit, floating point) is refused for every output, as their
+        // frames are counted in the samples of the file.
+        {
+            const uint64_t format = static_cast<uint64_t>(m_freq) << 24 | static_cast<uint64_t>(m_channels) << 16 |
+                                    static_cast<uint64_t>(m_srcBits ? m_srcBits : m_bitsPerSample) << 1 |
+                                    (m_srcFloat ? 1 : 0);
+            const bool converted = m_srcBits != 0;
+            if (m_firstFormat != 0 && format != m_firstFormat && (m_demuxMode || converted || m_firstConverted))
+                THROW(ERR_COMMON, "The WAV files joined in track "
+                                      << m_streamIndex << " differ in sample rate, channels or sample size, which "
+                                      << (m_demuxMode ? "a Matroska output or a demux gives once for the whole track"
+                                                      : "a track of 8 bit, 32 bit or floating point samples cannot")
+                                      << ". Convert them to one format first.")
+            if (m_firstFormat == 0)
+                m_firstConverted = converted;
+            m_firstFormat = format;
         }
         if (static_cast<int64_t>(sourceSampleBytes()) * m_channels * m_freq / 200 > MAX_AV_PACKET_SIZE)
             THROW(ERR_COMMON, "The WAVE file has " << static_cast<int>(m_channels) << " channels of "
