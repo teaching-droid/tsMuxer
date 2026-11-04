@@ -997,7 +997,9 @@ static std::vector<uint8_t> blankPatternAt(uint8_t* pattern, const int patternSi
     return rez;
 }
 
-void muxBlankPL(const string& appDir, BlurayHelper& blurayHelper, const PIDListMap& pidList, DiskType dt, int blankNum)
+static std::string utf8Path(const std::filesystem::path& p);
+
+void muxBlankPL(BlurayHelper& blurayHelper, const PIDListMap& pidList, DiskType dt, int blankNum)
 {
     unsigned videoWidth = 1920;
     unsigned videoHeight = 1080;
@@ -1047,7 +1049,17 @@ void muxBlankPL(const string& appDir, BlurayHelper& blurayHelper, const PIDListM
     auto fname_time = std::chrono::duration_cast<std::chrono::microseconds>(
                           std::chrono::high_resolution_clock::now().time_since_epoch())
                           .count();
-    string tmpFileName = appDir + string("blank_") + std::to_string(fname_time) + string(".264");
+    // In the temp folder. It was written beside the program, which a user may not be able to write to: an installed
+    // program, an AppImage. The job then stopped here, after the whole mux, and the finished output was removed with it.
+    std::error_code tempError;
+    const string tmpFileName = utf8Path(std::filesystem::temp_directory_path(tempError) /
+                                        ("tsMuxeR_blank_" + std::to_string(fname_time) + ".264"));
+    // Gone on every way out, a mux that fails as well. Before the File, which closes first.
+    struct TemporaryFile
+    {
+        const string& name;
+        ~TemporaryFile() { deleteFile(name); }
+    } temporaryFile{tmpFileName};
     File file;
     if (!file.open(tmpFileName.c_str(), File::ofWrite))
         THROW(ERR_COMMON, "can't create file " << tmpFileName)
@@ -1057,10 +1069,7 @@ void muxBlankPL(const string& appDir, BlurayHelper& blurayHelper, const PIDListM
     for (int i = 0; i < repeats; ++i)
     {
         if (file.write(blank.data(), static_cast<uint32_t>(blank.size())) != static_cast<int>(blank.size()))
-        {
-            deleteFile(tmpFileName);
             THROW(ERR_COMMON, "can't write data to file " << tmpFileName)
-        }
     }
     file.close();
     map<string, string> videoParams;
@@ -1083,7 +1092,6 @@ void muxBlankPL(const string& appDir, BlurayHelper& blurayHelper, const PIDListM
         blurayHelper.createMPLSFile(tsMuxer, nullptr, 0, vector<double>(), dt, blankNum, false);
         blurayHelper.createCLPIFile(tsMuxer, blankNum, true);
     }
-    deleteFile(tmpFileName);
 }
 
 void doTruncatedFile(const char* fileName, const int64_t offset)
@@ -5828,7 +5836,7 @@ static int runTsMuxer(int argc, char** argv)
                 {
                     blankPlaylistClash(*mainMuxer, blankNum);
                     LTRACE(LT_INFO, 2, "Adding blank play list");
-                    muxBlankPL(extractFileDir(argv[0]), blurayHelper, mainMuxer->getPidList(), dt, blankNum);
+                    muxBlankPL(blurayHelper, mainMuxer->getPidList(), dt, blankNum);
                 }
             }
             // An image is finished here, before success is reported: finishing can still refuse, when its metadata
