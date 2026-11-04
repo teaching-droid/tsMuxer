@@ -79,6 +79,7 @@ set(tsmuxer_gui_sources
   muxForm.ui
   checkboxedheaderview.cpp
   discTitleDialog.cpp
+  sampleDialog.cpp
   images.qrc
   fontsettingstablemodel.cpp
   systemcolours.cpp

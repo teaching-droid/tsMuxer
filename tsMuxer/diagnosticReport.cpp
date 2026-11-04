@@ -981,6 +981,18 @@ void writeStart(const int argc, char** argv)
         addFile(positional[0], "source");
         addFile(outputName, "output");
     }
+    else if (std::any_of(argv + 1, argv + argc, [](const char* a) { return std::strcmp(a, "--make-sample") == 0; }) &&
+             !positional.empty())
+    {
+        // a sample of a source: no meta file
+        sources.push_back(positional[0]);
+        addFile(positional[0], "source");
+        if (positional.size() > 1)
+        {
+            outputName = positional[1];
+            addFile(outputName, "output");
+        }
+    }
     else if (positional.size() == 2)
     {
         metaName = positional[0];
@@ -1161,6 +1173,17 @@ void text(const std::string& line)
 void setListing(const bool on) { listing = on; }
 
 std::vector<std::string> metaSources() { return sources; }
+
+void addFileName(const std::string& path, const std::string& kind)
+{
+    const std::lock_guard<std::recursive_mutex> guard(lock);
+    addPath(path);
+    addFile(path, kind);
+}
+
+bool keepingNames() { return keepNames; }
+
+void setOutput(const std::string& output) { outputName = output; }
 
 bool muxRun() { return !metaName.empty(); }
 

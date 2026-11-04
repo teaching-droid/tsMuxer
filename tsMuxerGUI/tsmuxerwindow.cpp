@@ -62,6 +62,7 @@
 #include "fontsettingstablemodel.h"
 #include "lang_codes.h"
 #include "muxForm.h"
+#include "sampleDialog.h"
 
 namespace QtCompat
 {
@@ -956,6 +957,7 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->addBtn, &QPushButton::clicked, this, &TsMuxerWindow::onAddBtnClick);
     connect(ui->btnAppend, &QPushButton::clicked, this, &TsMuxerWindow::onAppendButtonClick);
     connect(ui->removeFile, &QPushButton::clicked, this, &TsMuxerWindow::onRemoveBtnClick);
+    connect(ui->sampleBtn, &QPushButton::clicked, this, &TsMuxerWindow::onMakeSample);
     connect(ui->removeTrackBtn, &QPushButton::clicked, this, &TsMuxerWindow::onRemoveTrackButtonClick);
     connect(ui->removeAllTracksBtn, &QPushButton::clicked, this, &TsMuxerWindow::onRemoveAllTracksButtonClick);
     connect(ui->moveupBtn, &QPushButton::clicked, this, &TsMuxerWindow::onMoveUpButtonCLick);
@@ -1120,6 +1122,7 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->btnBrowse, &QAbstractButton::clicked, this, &TsMuxerWindow::saveFileDialog);
     connect(ui->buttonMux, &QAbstractButton::clicked, this, &TsMuxerWindow::startMuxing);
     connect(muxForm, &MuxForm::stopped, this, &TsMuxerWindow::onMuxStopped);
+    connect(muxForm, &MuxForm::makeSampleRequested, this, &TsMuxerWindow::onMakeSample);
     connect(ui->trackLV->model(), &QAbstractItemModel::rowsInserted, this, &TsMuxerWindow::updateMuxButton);
     connect(ui->trackLV->model(), &QAbstractItemModel::rowsRemoved, this, &TsMuxerWindow::updateMuxButton);
     connect(ui->trackLV->model(), &QAbstractItemModel::modelReset, this, &TsMuxerWindow::updateMuxButton);
@@ -4390,9 +4393,24 @@ void TsMuxerWindow::onMuxStopped()
                          outputLine);
 }
 
+// The file of an item of the input list a sample can be made of (--make-sample): a file, also a clip of a playlist, and
+// not a playlist, a DVD title, a disc image or a folder, whose titles a sample does not follow yet. Empty for none.
+static QString sampleSource(const QListWidgetItem* itm)
+{
+    if (itm == nullptr || itm->data(MplsItemRole).toInt() == MPLS_PRIMARY || itm->data(DvdTitleRole).toInt() != 0)
+        return {};
+    const QString name = myUnquoteStr(itm->data(FileNameRole).toString());
+    const QFileInfo fi(name);
+    const QString ext = fi.suffix().toLower();
+    if (name.isEmpty() || !fi.isFile() || ext == "iso" || ext == "img" || ext == "udf" || ext == "mpls")
+        return {};
+    return name;
+}
+
 void TsMuxerWindow::inputFilesLVChanged()
 {
     QListWidgetItem* itm = ui->inputFilesLV->currentItem();
+    ui->sampleBtn->setEnabled(sampleSource(itm).size() > 0);
     if (!itm)
     {
         ui->btnAppend->setEnabled(false);
@@ -4994,6 +5012,18 @@ void TsMuxerWindow::tsMuxerExecute(const QStringList& args)
     m_runPid = proc.processId();
     if (muxForm->isVisible())
         muxForm->setProcess(&proc);
+}
+
+// "Make a sample...", on the Input tab and in the progress window when a job ends with an error: a part of the chosen
+// source for a problem report, with the report of the last job when there is one
+void TsMuxerWindow::onMakeSample()
+{
+    const QListWidgetItem* itm = ui->inputFilesLV->currentItem();
+    if (itm == nullptr && ui->inputFilesLV->count() > 0)
+        itm = ui->inputFilesLV->item(0);
+    SampleDialog dialog(muxForm->isVisible() ? static_cast<QWidget*>(muxForm) : this, getTsMuxerBinaryPath(),
+                        sampleSource(itm), muxForm->reportFile());
+    dialog.exec();
 }
 
 void TsMuxerWindow::doAppendInt(const QString& fileName, const QString& parentFileName, double duration,

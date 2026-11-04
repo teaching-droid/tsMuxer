@@ -101,6 +101,7 @@ class TsMuxerWindow : public QWidget
     void onFontParamsChanged();
     void onPlaylistPartsChanged();
     void onRemoveBtnClick();
+    void onMakeSample();
     void onAppendButtonClick();
     void onRemoveTrackButtonClick();
     void onRemoveAllTracksButtonClick();

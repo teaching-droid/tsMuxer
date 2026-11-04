@@ -27,10 +27,13 @@ class MuxForm : public QDialog  // QWidget
     void abort() { onAbort(); }  // as the Abort button
     // The report tsMuxeR writes for this job (--report), or none: Save report... keeps a copy when the job has ended
     void setReportFile(const QString& fileName);
+    [[nodiscard]] QString reportFile() const { return m_reportFile; }
 
    signals:
     // tsMuxeR was stopped with Abort, or with the dialog closed, and has ended
     void stopped();
+    // "Make a sample...", offered when a job ends with an error
+    void makeSampleRequested();
 
    protected:
     void closeEvent(QCloseEvent* event) override;

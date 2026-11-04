@@ -6,6 +6,7 @@
 #include <fs/textfile.h>
 
 #include <algorithm>
+#include <chrono>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -38,6 +39,7 @@
 #include "mpegStreamReader.h"
 #include "muxerManager.h"
 #include "pgsStreamReader.h"
+#include "sampleCutter.h"
 #include "simplePacketizerReader.h"
 #include "singleFileMuxer.h"
 #include "tsMuxer.h"
@@ -1480,6 +1482,25 @@ All parameters in this group start with two dashes:
                       full the buffer is, whether the picture is late). A time
                       range of the output, as h:mm:ss or seconds, keeps it
                       small: a film gives millions of lines.
+--make-sample         Separate mode: tsMuxeR --make-sample [options] <source> <out.zip>
+                      A part of a source to attach to a problem report in place
+                      of the source itself: its bytes copied as they are, from
+                      a place where a reader can begin, with the headers a
+                      reader needs. The zip holds the sample, the report of this
+                      run and, with --add-report, the report of the job that
+                      went wrong, and stays under 25 MB. The names are replaced
+                      as in every report: the sample is source1.<ext> in it.
+                      Options for this mode:
+                        --from-start     the start of the source (the default)
+                        --from-end       its end
+                        --at=<time>      around this time of the source, as
+                                         h:mm:ss or seconds. Not for an MP4
+                                         file or a video stream on its own.
+                        --size=<MB>      the size of the sample, 1 to 24 (20)
+                        --add-report=<file>  a report written with --report
+                        --report-keep-names  keep the names, also the title and
+                                         the track and chapter names of a
+                                         Matroska file, which are blanked
 --keep-editions       Matroska output only, from one Matroska file: keep its
                       chapters exactly as they are, every edition of them and
                       every link to another file, and its segment identity
@@ -4456,46 +4477,219 @@ class ReportTracks
     const MuxerManager& m_muxerManager;
 };
 
-// The listing of each source of a mux in the report, as tsMuxeR <file> gives it: the parameters of every track of it,
-// which the messages of a mux do not give
+// The listing of a source in the report, as tsMuxeR <file> gives it: the parameters of every track of it, which the
+// messages of a mux do not give
+static void writeReportListing(const std::string& source, const std::string& title)
+{
+    diagReport::section(title);
+    std::streambuf* const out = std::cout.rdbuf(nullptr);
+    std::streambuf* const err = std::cerr.rdbuf(nullptr);
+    const bool lastMsg = sLastMsg;
+    diagReport::setListing(true);
+    try
+    {
+        // a disc folder or image: its titles, as tsMuxeR <disc> lists them; the meta line names the title taken
+        if (const std::string root = blurayDiscRoot(source); !root.empty())
+            diagReport::text(describeDiscTitles(listDiscTitles(root, 120, false)));
+        else if (const std::string videoTs = dvdVideoTs(source); !videoTs.empty())
+            diagReport::text(describeDvdTitles(listDvdTitles(videoTs, 120, false)));
+        else
+            detectStreamReader(source.c_str(), nullptr, false);
+    }
+    catch (VodCoreException& e)
+    {
+        diagReport::text("Error: " + e.m_errStr);
+    }
+    catch (std::exception& e)
+    {
+        diagReport::text(std::string("Error: ") + e.what());
+    }
+    catch (...)
+    {
+        diagReport::text("Error of an unknown kind");
+    }
+    diagReport::setListing(false);
+    std::cout.rdbuf(out);
+    std::cerr.rdbuf(err);
+    sLastMsg = lastMsg;
+}
+
+// The listing of each source of a mux in the report
 static void writeReportListings()
 {
     if (!diagReport::active || !diagReport::muxRun())
         return;
-    for (const std::string& source : diagReport::metaSources())
+    for (const std::string& source : diagReport::metaSources()) writeReportListing(source, "Listing of " + source);
+}
+
+static std::string utf8Path(const std::filesystem::path& p)
+{
+    const std::u8string s = p.u8string();
+    return {s.begin(), s.end()};
+}
+
+// ** --make-sample <source> <out.zip> ** (sampleCutter.h): the sample, the report of this run and, with --add-report,
+// the report of the job that went wrong, in one zip to attach to a problem report. The report of this run lists the
+// source, says how and where the sample was cut, and lists the sample, which shows that it opens. The names are
+// replaced as in every report: the sample is "source1.mkv" in the zip, unless --report-keep-names is given.
+static int runMakeSample(int argc, char** argv, const std::string& reportFile, const bool ownReport)
+{
+    sample::Request request;
+    std::string zipName;
+    std::string addReport;
+    std::string error;
+    std::vector<std::string> positional;
+    int takes = 0;
+    for (int i = 1; i < argc && error.empty(); ++i)
     {
-        diagReport::section("Listing of " + source);
-        std::streambuf* const out = std::cout.rdbuf(nullptr);
-        std::streambuf* const err = std::cerr.rdbuf(nullptr);
-        const bool lastMsg = sLastMsg;
-        diagReport::setListing(true);
+        const std::string arg = argv[i];
+        if (arg == "--make-sample")
+            continue;
+        if (arg == "--from-start" || arg == "--from-end")
+        {
+            request.take = arg == "--from-start" ? sample::Take::Start : sample::Take::End;
+            ++takes;
+        }
+        else if (strStartWith(arg, "--at="))
+        {
+            const std::string t = arg.substr(5);
+            if (t.empty() || t.find_first_not_of("0123456789:.") != std::string::npos)
+                error = "Unknown --at value \"" + t + "\". It takes the time of the source, as h:mm:ss or seconds.";
+            request.take = sample::Take::At;
+            request.atSeconds = t.empty() ? 0 : timeToFloat(t);
+            ++takes;
+        }
+        else if (strStartWith(arg, "--size="))
+        {
+            const std::string v = arg.substr(7);
+            const int megabytes =
+                v.empty() || v.find_first_not_of("0123456789") != std::string::npos || v.size() > 3 ? 0 : std::stoi(v);
+            if (megabytes < 1 || megabytes > 24)
+                error = "Unknown --size value \"" + v + "\". It takes the size of the sample in MB, 1 to 24.";
+            request.maxBytes = static_cast<int64_t>(megabytes) * 1000000;
+        }
+        else if (strStartWith(arg, "--add-report="))
+            addReport = unquoteStr(arg.substr(13));
+        else if (arg[0] == '-')
+            error = "Unknown option " + arg + " for --make-sample.";
+        else
+            positional.push_back(unquoteStr(arg));
+    }
+    if (error.empty() && positional.size() != 2)
+        error =
+            "Usage: tsMuxeR --make-sample <source> <out.zip> [--from-start | --from-end | --at=<time>] "
+            "[--size=<MB>] [--add-report=<report file>] [--report-keep-names]";
+    else if (error.empty() && takes > 1)
+        error = "Give one of --from-start, --from-end and --at.";
+    else if (error.empty() && !strEndWith(strToLowerCase(positional[1]), ".zip"))
+        error = "The sample is written as a .zip file: name the output <name>.zip.";
+    File added;
+    int64_t addedSize = 0;
+    if (error.empty() && !addReport.empty())
+    {
+        if (!added.open(addReport.c_str(), File::ofRead))
+            error = "The report " + addReport + " for --add-report cannot be opened.";
+        else
+        {
+            addedSize = added.size();
+            added.close();
+        }
+    }
+    // the zip stays under 25 MB, GitHub's limit for a file: the reports take their room from the sample
+    constexpr int64_t ZIP_LIMIT = 25000000;
+    constexpr int64_t ROOM_FOR_REPORT = 500000;
+    if (error.empty() && request.maxBytes + addedSize + ROOM_FOR_REPORT > ZIP_LIMIT)
+        request.maxBytes = ZIP_LIMIT - addedSize - ROOM_FOR_REPORT;
+    if (error.empty() && request.maxBytes < 1000000)
+        error = "The report of --add-report is too large to leave room for a sample under 25 MB.";
+    if (!error.empty())
+    {
+        LTRACE(LT_ERROR, 2, error);
+        diagReport::close(-2);
+        if (ownReport)
+            deleteFile(reportFile);
+        return -2;
+    }
+    request.source = positional[0];
+    zipName = positional[1];
+    request.keepNames = diagReport::keepingNames();
+    diagReport::setOutput(std::string());  // the zip is written after the report is closed
+
+    std::error_code ec;
+    const std::string stamp = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    std::string sampleFile = utf8Path(std::filesystem::temp_directory_path(ec) / ("tsMuxeR_sample_" + stamp));
+    int exitCode = 0;
+    sample::Result result;
+    try
+    {
+        writeReportListing(request.source, "Listing of " + request.source);
+        const char* take = request.take == sample::Take::Start ? "its start"
+                           : request.take == sample::Take::End ? "its end"
+                                                               : "around a time";
+        LTRACE(LT_INFO, 2,
+               "Making a sample of " << request.source << ": " << take << ", at most " << request.maxBytes / 1000000
+                                     << " MB.");
+        // the extension of the source, so that the sample is read as the source is
+        const size_t dot = request.source.rfind('.');
+        const size_t slash = request.source.find_last_of("/\\");
+        const std::string ext =
+            dot != std::string::npos && (slash == std::string::npos || dot > slash) ? request.source.substr(dot) : "";
+        sampleFile += ext;
+        diagReport::addFileName(sampleFile, "sample");
+        result = sample::cut(request, sampleFile);
+        diagReport::section("Sample");
+        diagReport::text("Read as " + result.kind + ".");
+        for (const std::string& line : result.lines) diagReport::text(line);
+        writeReportListing(sampleFile, "Listing of the sample");
+    }
+    catch (std::exception& e)
+    {
+        LTRACE(LT_ERROR, 2, "No sample was made: " << e.what());
+        exitCode = -1;
+    }
+    catch (VodCoreException& e)
+    {
+        LTRACE(LT_ERROR, 2, "No sample was made: " << e.m_errStr);
+        exitCode = -1;
+    }
+    if (exitCode == 0)
+    {
+        const size_t dot = sampleFile.rfind('.');
+        const std::string ext = dot == std::string::npos ? std::string() : sampleFile.substr(dot);
+        const size_t slash = request.source.find_last_of("/\\");
+        const std::string inZip = request.keepNames
+                                      ? (slash == std::string::npos ? request.source : request.source.substr(slash + 1))
+                                      : "source1" + ext;
+        std::vector<std::pair<std::string, std::string>> entries = {{inZip, sampleFile}, {"report.txt", reportFile}};
+        if (!addReport.empty())
+            entries.emplace_back("report of the job.txt", addReport);
+        for (const std::string& extra : result.extraFiles)
+        {
+            const size_t s = extra.find_last_of("/\\");
+            entries.emplace_back(s == std::string::npos ? extra : extra.substr(s + 1), extra);
+        }
+        diagReport::section("The zip");
+        for (const auto& [name, file] : entries) diagReport::text(name);
+        LTRACE(LT_INFO, 2,
+               "The sample is written to " << zipName << ". Attach that file to the problem report: it holds " << inZip
+                                           << " and this run's report.");
+        diagReport::close(exitCode);
         try
         {
-            // a disc folder or image: its titles, as tsMuxeR <disc> lists them; the meta line names the title taken
-            if (const std::string root = blurayDiscRoot(source); !root.empty())
-                diagReport::text(describeDiscTitles(listDiscTitles(root, 120, false)));
-            else if (const std::string videoTs = dvdVideoTs(source); !videoTs.empty())
-                diagReport::text(describeDvdTitles(listDvdTitles(videoTs, 120, false)));
-            else
-                detectStreamReader(source.c_str(), nullptr, false);
-        }
-        catch (VodCoreException& e)
-        {
-            diagReport::text("Error: " + e.m_errStr);
+            sample::writeZip(zipName, entries);
         }
         catch (std::exception& e)
         {
-            diagReport::text(std::string("Error: ") + e.what());
+            LTRACE(LT_ERROR, 2, "The zip cannot be written: " << e.what());
+            exitCode = -1;
         }
-        catch (...)
-        {
-            diagReport::text("Error of an unknown kind");
-        }
-        diagReport::setListing(false);
-        std::cout.rdbuf(out);
-        std::cerr.rdbuf(err);
-        sLastMsg = lastMsg;
     }
+    else
+        diagReport::close(exitCode);
+    deleteFile(sampleFile);
+    if (ownReport)
+        deleteFile(reportFile);
+    return exitCode;
 }
 
 static void reportLostData(const MuxerManager& muxerManager)
@@ -4644,9 +4838,42 @@ int main(int argc, char** argv)
     }
     argv = argv_vec.data();
 #endif
+    // --make-sample writes a report of its own, which goes into the zip: to the temp folder, unless --report names one
+    const bool sampleRun =
+        std::any_of(argv + 1, argv + argc, [](const char* a) { return std::strcmp(a, "--make-sample") == 0; });
+    std::string sampleReport;
+    bool ownReport = false;
+    std::vector<char*> sampleArgs;
+    std::string reportArg;
+    if (sampleRun)
+    {
+        for (int i = 1; i < argc; ++i)
+            if (strStartWith(argv[i], "--report="))
+                sampleReport = unquoteStr(std::string(argv[i]).substr(9));
+        if (sampleReport.empty())
+        {
+            std::error_code ec;
+            sampleReport =
+                utf8Path(std::filesystem::temp_directory_path(ec) /
+                         ("tsMuxeR_sample_report_" +
+                          std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".txt"));
+            ownReport = true;
+            reportArg = "--report=" + sampleReport;
+            sampleArgs.assign(argv, argv + argc);
+            sampleArgs.push_back(reportArg.data());
+            sampleArgs.push_back(nullptr);
+            argv = sampleArgs.data();
+            ++argc;
+        }
+    }
     if (!diagReport::takeOptions(argc, argv))
         return -2;
     diagReport::writeStart(argc, argv);
+    if (sampleRun)
+    {
+        LTRACE(LT_INFO, 2, "tsMuxeR version " TSMUXER_VERSION << ". github.com/teaching-droid/tsMuxer");
+        return runMakeSample(argc, argv, sampleReport, ownReport);
+    }
     const int exitCode = runTsMuxer(argc, argv);
     // after the run, so that reading the sources again changes nothing the run says or writes
     writeReportListings();

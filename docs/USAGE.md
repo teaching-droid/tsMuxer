@@ -145,6 +145,32 @@ It holds the tsMuxeR version, the system, the command line, the meta file, the s
 
 In the window, "Write a report of each mux for a problem report" in the options does the same, and "Save report..." in the progress window keeps a copy when the job has ended.
 
+### Sample for a problem report
+
+When a problem needs the source itself, a part of it is enough, and an issue takes a file of 25 MB at most. `--make-sample` writes a zip with a part of the source, the report of making it and, with `--add-report`, the report of the job that went wrong:
+
+```
+tsMuxeR --make-sample --at=1:02:13 --add-report=report.txt film.mkv sample.zip
+```
+
+The part is copied byte for byte, so whatever the source does wrong the sample does too. It begins where a reader can begin and keeps what a reader needs before that:
+
+Source | Where the sample begins | What is kept
+---|---|---
+TS, M2TS | the PAT before a key picture | the PAT and PMT, which come again every few tenths of a second
+MKV, WebM | a cluster | the EBML header, Info, Tracks and Chapters; the title and the names of the tracks and chapters are blanked to "x", each as long as it was. Tags, attachments and the index are left out.
+VOB, MPG | a pack with a sequence header | the IFO file of the title set of a VOB, beside the sample
+Ogg | a page | the header pages
+WAV, RF64, BW64 | a sample of sound | the header, its sizes set to the sample
+MP4, MOV | the start only, when the index comes first | the index; the frames past the end of the sample are not there
+A video or sound stream on its own | a sequence header or a frame | nothing more is needed
+
+`--from-start` takes the start (the default), `--from-end` the end, and `--at=<time>` the part around a time of the source, as h:mm:ss or seconds. `--at` finds the time by the clock of the source: the PCR of a transport stream, the timestamps of the clusters of a Matroska file, the SCR of a program stream, the granule positions of Ogg, the block_index of WavPack, and the rate of a WAV file or of AC-3, DTS and MPEG audio. It is refused for an MP4 file, whose index would have to be made anew, and for a video stream on its own, which holds no times. `--size=<MB>` sets the size of the sample, 1 to 24 MB, 20 when not given; the reports take their room from it so that the zip stays under 25 MB.
+
+The names are replaced as in the report: the sample is `source1.mkv` in the zip, the source `<source1>.mkv` in the report. `--report-keep-names` keeps them, and the title and names in a Matroska file too.
+
+In the window, "Make a sample..." on the Input tab makes one of the file chosen there, and the progress window offers it when a job ends with an error.
+
 ## Meta file format
 File MUST have the .meta extension. This file defines files you want to multiplex. The first line of a meta file contains additional parameters that apply to all tracks. In this case the first line should begin with the word MUXOPT.
 
@@ -369,6 +395,7 @@ Parameter           | Description
 --lang-codes        | Which form a language read from a disc or a container is reported in. Twenty languages have two codes in ISO 639-2, Greek being ell or gre. Takes source (no conversion either way), terminological (ell, deu, nld, the default and what earlier versions did) or bibliographic (gre, ger, dut, what eac3to shows). Unlike the other options this is an argument rather than a MUXOPT entry, so it also applies when simply listing a file. A language typed into a file name is left exactly as typed. 
 --playlist-clips    | How the clips of a Blu-ray playlist are muxed. `played`, the default, takes from each clip only the part its play item plays: from the key picture at or before the point where a player starts to the one at or after the point where it stops. `whole` takes every clip whole, as earlier versions did. It is a MUXOPT entry and also an argument, as --lang-codes is, so that a listing of a playlist gives the lengths and marks of the same parts. 
 --report            | `--report=<file>` writes a report of the run to the file, to attach to a problem report in place of the source: see [Report for a problem report](#report-for-a-problem-report). A command line argument, not a MUXOPT entry. 
+--make-sample       | Separate mode: `tsMuxeR --make-sample [options] <source> <out.zip>`. A part of a source with the report of making it, in a zip under 25 MB for a problem report. Options: `--from-start`, `--from-end`, `--at=<time>`, `--size=<MB>`, `--add-report=<file>`, `--report-keep-names`. See "Sample for a problem report" above.
 --report-keep-names | Keeps the names of files, titles, track names and chapter names in the report, which are replaced by placeholders otherwise. 
 --report-full-paths | Keeps the folders in the paths of the report, which are left out otherwise, and the names as `--report-keep-names` does. 
 --report-frames     | With --report, a file of every PES and of the decoder's buffer for MPEG-2 video, beside the report. `--report-frames=<from>-<to>` takes only that time range of the output. 

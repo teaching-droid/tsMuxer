@@ -37,6 +37,8 @@ MuxForm::MuxForm(QWidget* parent) : QDialog(parent, Qt::WindowMaximizeButtonHint
     connect(ui->okBtn, &QPushButton::clicked, this, &MuxForm::close);
     connect(ui->reportBtn, &QPushButton::clicked, this, &MuxForm::onSaveReport);
     ui->reportBtn->setVisible(false);
+    connect(ui->sampleBtn, &QPushButton::clicked, this, &MuxForm::makeSampleRequested);
+    ui->sampleBtn->setVisible(false);
 }
 
 void MuxForm::closeEvent(QCloseEvent* event)
@@ -70,6 +72,7 @@ void MuxForm::prepare(const QString& label)
     ui->okBtn->setEnabled(false);
     ui->okBtn->setText(QCoreApplication::translate("muxForm", "OK"));
     setReportFile(QString());
+    ui->sampleBtn->setVisible(false);
 }
 
 void MuxForm::setReportFile(const QString& fileName)
@@ -205,6 +208,8 @@ void MuxForm::muxFinished(int exitCode, const QString&)
         ui->okBtn->setEnabled(true);
     }
     ui->reportBtn->setEnabled(!m_reportFile.isEmpty());
+    // a job that went wrong: a sample of its source may be what the problem report needs
+    ui->sampleBtn->setVisible(exitCode != 0);
 }
 
 void MuxForm::onAbort()

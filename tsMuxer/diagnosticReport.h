@@ -38,6 +38,12 @@ void addPath(const std::string& path);
 // A title, a track name or a chapter name a source holds, as it is read: replaced wherever it appears by a placeholder
 // that says what it is ("title", "track name", "chapter name", "disc title") and how long it is
 void addName(const std::string& text, const std::string& kind);
+// A file of the run whose name the report replaces by a placeholder: kind "sample" is "<sample>"
+void addFileName(const std::string& path, const std::string& kind);
+// --report-keep-names or --report-full-paths was given
+bool keepingNames();
+// The output the report describes at its end; empty for none (a sample, which is written after the report)
+void setOutput(const std::string& output);
 // The sources the meta file names, in its order, each once
 std::vector<std::string> metaSources();
 // The run was given a meta file: a mux or a demux

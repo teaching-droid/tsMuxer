@@ -20,6 +20,7 @@ add_executable (tsmuxer
   ac3StreamReader.cpp
   assFile.cpp
   diagnosticReport.cpp
+  sampleCutter.cpp
   oggFile.cpp
   assRender.cpp
   avCodecs.cpp
