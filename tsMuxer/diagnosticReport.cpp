@@ -41,6 +41,8 @@ namespace
 {
 std::FILE* out = nullptr;
 std::FILE* framesOut = nullptr;
+std::string reportName;
+bool framesAsked = false;
 std::string framesName;
 double framesFrom = -1;  // the range of --report-frames, in seconds of the output; -1 is open
 double framesTo = -1;
@@ -839,6 +841,82 @@ void addName(const std::string& text, const std::string& kind)
               [](const auto& a, const auto& b) { return a.first.size() > b.first.size(); });
 }
 
+namespace
+{
+// The name is the report's file, or a file inside it: a source can be named inside a disc image. Compared as the system
+// does, and by the full path for a name that is not there yet, as an output.
+bool reportHolds(const std::string& name)
+{
+    std::error_code ec;
+    if (std::filesystem::equivalent(fsPath(reportName), fsPath(name), ec) && !ec)
+        return true;
+    const std::filesystem::path report = std::filesystem::weakly_canonical(fsPath(reportName), ec);
+    if (ec)
+        return false;
+    const std::filesystem::path other = std::filesystem::weakly_canonical(fsPath(name), ec);
+    if (ec)
+        return false;
+    const auto same = [](const std::filesystem::path& a, const std::filesystem::path& b)
+    {
+#ifdef _WIN32
+        return strToLowerCase(utf8(a)) == strToLowerCase(utf8(b));
+#else
+        return a == b;
+#endif
+    };
+    return std::mismatch(report.begin(), report.end(), other.begin(), other.end(), same).first == report.end();
+}
+
+// ** A REPORT NEVER TAKES THE PLACE OF A FILE OF THE JOB. ** Opening the report empties its file. It was opened first of
+// all, so a report named as a source or a meta file took that file away before the job began, and one named as the
+// output ended up as neither. The files are opened here, with the sources known, as an output named as a source is
+// refused.
+bool openFiles(const std::vector<std::string>& names)
+{
+    for (const std::string& name : names)
+        if (reportHolds(name))
+        {
+            std::cerr << "--report names a file of the job: " << name << ". Give the report another name." << std::endl;
+            return false;
+        }
+#ifdef _WIN32
+    out = _wfopen(toWide(windowsPath(reportName)).data(), L"wb");
+#else
+    out = std::fopen(reportName.c_str(), "wb");
+#endif
+    if (out == nullptr)
+    {
+        std::cerr << "The report " << reportName << " cannot be written: " << std::strerror(errno) << std::endl;
+        return false;
+    }
+    if (framesAsked)
+    {
+        framesName = reportName + ".frames.tsv";
+#ifdef _WIN32
+        framesOut = _wfopen(toWide(windowsPath(framesName)).data(), L"wb");
+#else
+        framesOut = std::fopen(framesName.c_str(), "wb");
+#endif
+        if (framesOut == nullptr)
+        {
+            std::cerr << "The frames file " << framesName << " cannot be written: " << std::strerror(errno)
+                      << std::endl;
+            std::fclose(out);
+            out = nullptr;
+            return false;
+        }
+        std::fputs(
+            "kind	part	packet	PID	track	key	PTS	DTS	time_s	bytes	PCR	"
+            "early_ms	EB_bytes	"
+            "EB_size	late",
+            framesOut);
+        std::fputs(LINE_END, framesOut);
+        framesActive = true;
+    }
+    return true;
+}
+}  // namespace
+
 bool takeOptions(int& argc, char** argv)
 {
     std::string fileName;
@@ -883,9 +961,12 @@ bool takeOptions(int& argc, char** argv)
         const std::string from = dash == std::string::npos ? range : range.substr(0, dash);
         const std::string to = dash == std::string::npos ? std::string() : range.substr(dash + 1);
         const auto isTime = [](const std::string& t)
-        { return !t.empty() && t.find_first_not_of("0123456789:.") == std::string::npos; };
+        {
+            return !t.empty() && t.find_first_not_of("0123456789:.") == std::string::npos &&
+                   std::count(t.begin(), t.end(), ':') <= 2;
+        };
         if (dash == std::string::npos || (!from.empty() && !isTime(from)) || (!to.empty() && !isTime(to)) ||
-            (from.empty() && to.empty()))
+            (from.empty() && to.empty()) || (!from.empty() && !to.empty() && timeToFloat(from) > timeToFloat(to)))
         {
             std::cerr << "Unknown --report-frames value \"" << range
                       << "\". It takes a range of the output's time, <from>-<to>, as h:mm:ss or seconds; either end "
@@ -896,40 +977,8 @@ bool takeOptions(int& argc, char** argv)
         framesFrom = from.empty() ? -1 : timeToFloat(from);
         framesTo = to.empty() ? -1 : timeToFloat(to);
     }
-#ifdef _WIN32
-    out = _wfopen(toWide(windowsPath(fileName)).data(), L"wb");
-#else
-    out = std::fopen(fileName.c_str(), "wb");
-#endif
-    if (out == nullptr)
-    {
-        std::cerr << "The report " << fileName << " cannot be written: " << std::strerror(errno) << std::endl;
-        return false;
-    }
-    if (frames)
-    {
-        framesName = fileName + ".frames.tsv";
-#ifdef _WIN32
-        framesOut = _wfopen(toWide(windowsPath(framesName)).data(), L"wb");
-#else
-        framesOut = std::fopen(framesName.c_str(), "wb");
-#endif
-        if (framesOut == nullptr)
-        {
-            std::cerr << "The frames file " << framesName << " cannot be written: " << std::strerror(errno)
-                      << std::endl;
-            std::fclose(out);
-            out = nullptr;
-            return false;
-        }
-        std::fputs(
-            "kind	part	packet	PID	track	key	PTS	DTS	time_s	bytes	PCR	"
-            "early_ms	EB_bytes	"
-            "EB_size	late",
-            framesOut);
-        std::fputs(LINE_END, framesOut);
-        framesActive = true;
-    }
+    reportName = fileName;
+    framesAsked = frames;
     addPath(fileName);
     addFile(fileName, "report");
     started = std::chrono::steady_clock::now();
@@ -945,10 +994,10 @@ bool takeOptions(int& argc, char** argv)
     return true;
 }
 
-void writeStart(const int argc, char** argv)
+bool writeStart(const int argc, char** argv)
 {
     if (!active)
-        return;
+        return true;
     // The folders first, so every line below is written without them
     std::vector<std::string> positional;
     for (int i = 1; i < argc; ++i)
@@ -1014,6 +1063,17 @@ void writeStart(const int argc, char** argv)
     {
         sources.push_back(positional[0]);
         addFile(positional[0], "source");
+    }
+
+    std::vector<std::string> jobFiles = positional;
+    jobFiles.insert(jobFiles.end(), sources.begin(), sources.end());
+    for (int i = 1; i < argc; ++i)
+        if (strStartWith(argv[i], "--add-report="))
+            jobFiles.push_back(unquoteStr(argv[i] + 13));
+    if (!openFiles(jobFiles))
+    {
+        active = false;
+        return false;
     }
 
     writeLine("tsMuxeR diagnostic report");
@@ -1093,6 +1153,7 @@ void writeStart(const int argc, char** argv)
         section("Sources");
         for (const std::string& s : sources) describeSource(s);
     }
+    return true;
 }
 
 void trace(const unsigned level, const int errIndex, const std::string& text)

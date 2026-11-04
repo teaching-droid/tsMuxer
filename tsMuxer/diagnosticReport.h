@@ -18,10 +18,11 @@ namespace diagReport
 extern bool active;  // a report is being written: LTRACE hands every line on to it
 
 // Takes --report=<file>, --report-full-paths and --report-keep-names out of the arguments, as --lang-codes is taken
-// out, and opens the report. Returns false, the error said, when the file cannot be written.
+// out. Returns false, the error said, when they do not go together.
 bool takeOptions(int& argc, char** argv);
-// The start of the report: version, build, system, the command line, the meta file and the sources
-void writeStart(int argc, char** argv);
+// Opens the report and writes its start: version, build, system, the command line, the meta file and the sources.
+// Returns false, the error said, when the file cannot be written or is a file of the job.
+bool writeStart(int argc, char** argv);
 // A line said with LTRACE: printed as LTRACE prints it, and written to the report
 void trace(unsigned level, int errIndex, const std::string& text);
 // The start of a line said without its end (LTRACE2): printed, and kept for the line that ends it

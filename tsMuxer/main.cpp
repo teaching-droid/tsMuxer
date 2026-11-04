@@ -4693,7 +4693,8 @@ static int runMakeSample(int argc, char** argv, const std::string& reportFile, c
         else if (strStartWith(arg, "--at="))
         {
             const std::string t = arg.substr(5);
-            if (t.empty() || t.find_first_not_of("0123456789:.") != std::string::npos)
+            if (t.empty() || t.find_first_not_of("0123456789:.") != std::string::npos ||
+                std::count(t.begin(), t.end(), ':') > 2)
                 error = "Unknown --at value \"" + t + "\". It takes the time of the source, as h:mm:ss or seconds.";
             request.take = sample::Take::At;
             request.atSeconds = t.empty() ? 0 : timeToFloat(t);
@@ -4723,6 +4724,15 @@ static int runMakeSample(int argc, char** argv, const std::string& reportFile, c
         error = "Give one of --from-start, --from-end and --at.";
     else if (error.empty() && !strEndWith(strToLowerCase(positional[1]), ".zip"))
         error = "The sample is written as a .zip file: name the output <name>.zip.";
+    // The zip is written last, from a copy of the part taken: named as the source, it took the source's place without
+    // a word, as it would take the place of the report of --add-report
+    if (error.empty())
+        for (const std::string& name : {positional[0], addReport})
+            if (std::error_code ec;
+                !name.empty() && std::filesystem::equivalent(fsPath(name), fsPath(positional[1]), ec) && !ec)
+                error = "The output " + positional[1] + " is " + name +
+                        ", which goes into the sample, and writing it would destroy that file. Choose another output "
+                        "name.";
     File added;
     int64_t addedSize = 0;
     if (error.empty() && !addReport.empty())
@@ -5008,7 +5018,8 @@ int main(int argc, char** argv)
     }
     if (!diagReport::takeOptions(argc, argv))
         return -2;
-    diagReport::writeStart(argc, argv);
+    if (!diagReport::writeStart(argc, argv))
+        return -2;
     if (sampleRun)
     {
         LTRACE(LT_INFO, 2, "tsMuxeR version " TSMUXER_VERSION << ". github.com/teaching-droid/tsMuxer");
