@@ -406,7 +406,7 @@ Parameter           | Description
 --right-eye         | Use base video stream for right eye. Used for 3DBD only.
 --start-time        | Timestamp of the first video frame. May be defined as 45 kHz clock (just a number) or as time in hh:mm:ss.zzz format. If not set, muxing starts at 600 s (27000000 ticks). For every output except plain \*.ts, values below 524280 ticks (11.65 s) are raised to 524280: below that point Blu-ray players cannot navigate back to the start of the disc (their 32-bit 45 kHz registers underflow).
 --mplsOffset        | The number of the first MPLS file. Used for BD disc mode.
---m2tsOffset        | The number of the first M2TS file. Used for BD disc mode.
+--m2tsOffset        | The number of the first M2TS file. Used for BD disc mode. With this option or --mplsOffset, a job into a disc folder that exists adds its title to the folder. A number that is already there is refused.
 --insertBlankPL     | Add an additional short playlist.  Used for cropped video muxed to BD disc.
 --blankOffset       | Blank playlist number, 0 to 1999, 1900 if not set. Its clip gets the same number, so it must differ from --mplsOffset and from the main title's clips (from --m2tsOffset on, one a part when the output is split).
 --label             | Disk label when muxing to ISO.

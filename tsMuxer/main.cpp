@@ -118,7 +118,7 @@ static void refuseUnreadableMeta(const std::string& metaFileName)
 
 DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<double>& customChaptersList,
                         vector<AVChapter>& chapterInfo, int& firstMplsOffset, int& firstM2tsOffset, bool& insertBlankPL,
-                        int& blankNum, bool& stereoMode, std::string& isoDiskLabel, bool& demux)
+                        int& blankNum, bool& stereoMode, std::string& isoDiskLabel, bool& demux, bool& numbersGiven)
 {
     autoChapterLen = 0;
     demux = false;
@@ -249,6 +249,7 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                     if (paramPair.size() < 2)
                         THROW(ERR_COMMON, "Missing value for " << paramPair[0])
                     firstMplsOffset = strToInt32(paramPair[1].c_str());
+                    numbersGiven = true;
                     if (firstMplsOffset < 0 || firstMplsOffset > 1999)
                         THROW(ERR_COMMON,
                               "The playlist number of --mplsOffset must be 0 to 1999, not " << firstMplsOffset)
@@ -267,6 +268,7 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                     if (paramPair.size() < 2)
                         THROW(ERR_COMMON, "Missing value for " << paramPair[0])
                     firstM2tsOffset = strToInt32(paramPair[1].c_str());
+                    numbersGiven = true;
                     if (firstM2tsOffset < 0 || firstM2tsOffset > 99999)
                         THROW(ERR_COMMON, "The clip number of --m2tsOffset must be 0 to 99999, not " << firstM2tsOffset)
                 }
@@ -3546,6 +3548,11 @@ static bool pathIsInside(const std::filesystem::path& child, const std::filesyst
 // folder, and the folders made for them; a folder that was there before is never removed, nor anything in it the
 // job did not write. One line says so. A source that is cut off is the one exception: the job ends with an error that
 // says the output holds what the file has, and a new output is kept then (keepNewOutput), as that message says.
+// ** A JOB WITH ITS OWN NUMBERS ADDS TO A DISC FOLDER. ** --mplsOffset and --m2tsOffset are there to put a title beside
+// the others of a disc, one run for each title. Replacing the BDMV folder removed the titles of the runs before. With
+// either option the new files join the folder, and the files a run writes for every title (index.bdmv, MovieObject.bdmv)
+// replace those there, as they always did. A playlist or clip number that is taken is refused, not replaced; the blank
+// playlist is the same one for each run. The job is still written beside the folder first, so a failed one adds nothing.
 class KeepOldOutput
 {
    public:
@@ -3616,9 +3623,18 @@ class KeepOldOutput
         return pathStr(dir / u8path(m_newPrefix + ext.substr(1)));
     }
 
+    // What a job with its own numbers adds to a disc folder (see above)
+    struct DiscNumbers
+    {
+        bool given = false;
+        int firstPlaylist = 0;
+        int firstClip = 0;
+        int blank = -1;  // the number of the blank playlist and its clip, -1 for none
+    };
+
     // A Blu-ray or AVCHD folder: the disc is written into a folder beside it, and its BDMV and CERTIFICATE folders
-    // replace the old ones. Anything else in the folder is not touched.
-    std::string forDiscFolder(const std::string& dst, const int64_t estimate)
+    // replace the old ones, or add to them (DiscNumbers). Anything else in the folder is not touched.
+    std::string forDiscFolder(const std::string& dst, const int64_t estimate, const DiscNumbers& numbers)
     {
         const std::filesystem::path out = fsPath(dst);
         std::error_code ec;
@@ -3629,6 +3645,13 @@ class KeepOldOutput
             m_freshFolderExisted = std::filesystem::exists(out, ec);
             m_createdDirs = missingFolders(out);
             return dst;
+        }
+        if (numbers.given)
+        {
+            refuseTaken(out, "PLAYLIST", numbers.firstPlaylist, "playlist", "--mplsOffset", dst);
+            refuseTaken(out, "STREAM", numbers.firstClip, "clip", "--m2tsOffset", dst);
+            m_addToDisc = true;
+            m_blankNumber = numbers.blank;
         }
         std::filesystem::path base = out;
         if (!base.has_filename())
@@ -3687,6 +3710,10 @@ class KeepOldOutput
             m_committed = true;
             return;
         }
+        // Only the first numbers can be seen before the mux: a job of several clips can run into a later one. Refused
+        // before anything has moved, so the folder stays as it was.
+        if (m_folder && m_addToDisc)
+            refuseWrittenNumbers();
         m_swapBegun = true;
         std::error_code ec;
         if (m_demux)
@@ -3704,6 +3731,23 @@ class KeepOldOutput
                     throw runtime_error("The new demux is complete in " + pathStr(m_tmp) + ", but " +
                                         pathStr(p.filename()) + " could not replace " + pathStr(to) + ": " +
                                         ec.message());
+            }
+            std::filesystem::remove_all(m_tmp, ec);
+        }
+        else if (m_folder && m_addToDisc)
+        {
+            std::vector<std::filesystem::path> entries;
+            for (const auto& e : std::filesystem::recursive_directory_iterator(m_tmp, ec)) entries.push_back(e.path());
+            for (const auto& p : entries)
+            {
+                const std::filesystem::path to = m_dir / p.lexically_relative(m_tmp);
+                if (std::filesystem::is_directory(p, ec))
+                    std::filesystem::create_directories(to, ec);
+                else
+                    std::filesystem::rename(p, to, ec);
+                if (ec)
+                    throw runtime_error("The new title is complete in " + pathStr(m_tmp) + ", but " + pathStr(to) +
+                                        " could not be written: " + ec.message());
             }
             std::filesystem::remove_all(m_tmp, ec);
         }
@@ -3753,6 +3797,41 @@ class KeepOldOutput
     }
 
    private:
+    // A file of this number in BDMV/<sub>, of whatever extension: Blu-ray and AVCHD name them differently
+    static bool hasNumber(const std::filesystem::path& disc, const char* sub, const int number)
+    {
+        const std::string name = strPadLeft(int32ToStr(number), 5, '0');
+        std::error_code ec;
+        for (const auto& e : std::filesystem::directory_iterator(disc / "BDMV" / sub, ec))
+            if (pathStr(e.path().stem()) == name)
+                return true;
+        return false;
+    }
+    static void refuseTaken(const std::filesystem::path& disc, const char* sub, const int number, const char* what,
+                            const char* option, const std::string& dst)
+    {
+        if (hasNumber(disc, sub, number))
+            THROW(ERR_COMMON, "The disc folder " << dst << " has " << what << " "
+                                                 << strPadLeft(int32ToStr(number), 5, '0') << " already, and " << option
+                                                 << " adds to a folder. Give a number that is free, or another folder. "
+                                                    "Nothing was written.")
+    }
+    void refuseWrittenNumbers() const
+    {
+        std::error_code ec;
+        for (const char* sub : {"PLAYLIST", "CLIPINF", "STREAM"})
+            for (const auto& e : std::filesystem::directory_iterator(m_tmp / "BDMV" / sub, ec))
+            {
+                const std::string stem = pathStr(e.path().stem());
+                const bool isBlank = m_blankNumber >= 0 && stem == strPadLeft(int32ToStr(m_blankNumber), 5, '0');
+                if (!e.is_directory(ec) && !isBlank &&
+                    std::filesystem::exists(m_dir / "BDMV" / sub / e.path().filename(), ec))
+                    THROW(ERR_COMMON, "This job writes " << pathStr(e.path().filename()) << ", and the disc folder "
+                                                         << pathStr(m_dir) << " has that file already. Nothing was "
+                                                         << "added: give numbers that are free with --mplsOffset and "
+                                                         << "--m2tsOffset.")
+            }
+    }
     static std::filesystem::path u8path(const std::string& s) { return {std::u8string(s.begin(), s.end())}; }
     static std::string pathStr(const std::filesystem::path& p)
     {
@@ -3936,6 +4015,8 @@ class KeepOldOutput
     bool m_swapBegun = false;  // the swap has begun: what the job wrote is not removed any more
     bool m_folder = false;
     std::filesystem::path m_fresh;  // a disc folder written in place (forDiscFolder)
+    bool m_addToDisc = false;       // the job's files join the folder (DiscNumbers)
+    int m_blankNumber = -1;
     // a demux folder this job makes (forDemuxFolder)
     std::filesystem::path m_freshDemux;
     // a file this job makes (forFile): an ISO image, a transport stream or a Matroska file, and its split parts
@@ -4958,6 +5039,7 @@ static int runTsMuxer(int argc, char** argv)
         --argc;
     }
     int firstMplsOffset = 0;
+    bool discNumbersGiven = false;  // --mplsOffset or --m2tsOffset is on the MUXOPT line
     int firstM2tsOffset = 0;
     int blankNum = 1900;
     bool insertBlankPL = false;
@@ -5332,7 +5414,8 @@ static int runTsMuxer(int argc, char** argv)
         bool demuxAsked = false;
         refuseUnreadableMeta(argv[1]);
         DiskType dt = checkBluRayMux(argv[1], autoChapterLen, customChapterList, chapterInfo, firstMplsOffset,
-                                     firstM2tsOffset, insertBlankPL, blankNum, stereoMode, isoDiskLabel, demuxAsked);
+                                     firstM2tsOffset, insertBlankPL, blankNum, stereoMode, isoDiskLabel, demuxAsked,
+                                     discNumbersGiven);
         // --demux asks for a folder of tracks whatever the output is named, as --help says: the name decided, so
         // --demux with a name ending .ts, .m2ts, .mts, .m2t, .mkv or .iso wrote that file instead. A disc
         // and a demux in one job cannot both be made.
@@ -5561,7 +5644,9 @@ static int runTsMuxer(int argc, char** argv)
                 else
                     dstFile = strToUpperCase(extractFileExt(dstFile)) == "ISO"
                                   ? keepOld.forFile(dstFile, muxerManager.totalSize())
-                                  : keepOld.forDiscFolder(dstFile, muxerManager.totalSize());
+                                  : keepOld.forDiscFolder(dstFile, muxerManager.totalSize(),
+                                                          {discNumbersGiven, firstMplsOffset, firstM2tsOffset,
+                                                           insertBlankPL ? blankNum : -1});
                 // The guard of an --inner-only image is laid out in step 2, and the folder has no sectors for it.
                 // A Blu-ray image gets a guard of 288 MB after each break and 18 MB before it when none is given: a
                 // burnt dual-layer disc often reads badly at the layer change, and a player then stalls there. It
