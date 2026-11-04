@@ -151,7 +151,8 @@ bool TS_program_association_section::deserialize(uint8_t* buffer, const int buf_
         bitReader.skipBits(8);  // int section_number
         bitReader.skipBits(8);  // int last_section_number
 
-        pmtPids.clear();
+        // Taken over only when the section could be read: a damaged PAT leaves the map of the one before
+        std::map<int, int> programs;
 
         while (bitReader.getBitsCount() < crcBit)
         {
@@ -159,13 +160,14 @@ bool TS_program_association_section::deserialize(uint8_t* buffer, const int buf_
             bitReader.skipBits(3);  // reserved
             const auto program_pid = bitReader.getBits<uint16_t>(13);
             if (program_number != 0)  // not a network pid
-                pmtPids[program_pid] = program_number;
+                programs[program_pid] = program_number;
             else
                 m_nitPID = program_pid;
         }
+        pmtPids = std::move(programs);
         return bitReader.getBitsCount() == crcBit;
     }
-    catch (BitStreamReader&)
+    catch (BitStreamException&)
     {
         return false;
     }

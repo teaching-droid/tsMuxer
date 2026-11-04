@@ -139,6 +139,7 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
     uint32_t totalReadedBytes = 0;
     m_lastReadRez = 0;
     bool firstPAT = true;
+    bool unmarkedDamage = false;
     std::map<int, int> nonProcPMTPid;
 
     bool m2tsHdrDiscarded = false;
@@ -184,21 +185,20 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             auto tsPacket = reinterpret_cast<TSPacket*>(curPos);
             int pid = tsPacket->getPID();
 
-            // ** A PACKET THAT SAYS IT IS DAMAGED IS PASSED OVER. ** A receiver sets transport_error_indicator on a packet
-            // it could not correct (ISO/IEC 13818-1, 2.4.3.2), and then nothing in the packet can be trusted, the size of
-            // its adaptation field neither. One such packet stopped the listing of a whole recording with bad reception.
-            // A packet of that size that does not say so still stops it: the file is then not what it looks like.
+            // ** A DAMAGED PACKET IS PASSED OVER. ** Nothing in a packet of a recording with bad reception can be trusted,
+            // its adaptation field neither, and a receiver does not mark every such packet (transport_error_indicator,
+            // ISO/IEC 13818-1, 2.4.3.2). One of them stopped the listing of a whole recording. The file is taken for
+            // something else only if the scan finds no track at all, below.
             if (TS_FRAME_SIZE < tsPacket->getHeaderSize())
             {
-                if (tsPacket->tei)
-                    continue;
-                THROW(ERR_COMMON, "Invalid tsPacket->getHeaderSize")
-                break;
+                if (!tsPacket->tei)
+                    unmarkedDamage = true;
+                continue;
             }
             if (pid == 0)
             {  // PAT
                 pat.deserialize(curPos + tsPacket->getHeaderSize(), TS_FRAME_SIZE - tsPacket->getHeaderSize());
-                if (firstPAT)
+                if (firstPAT && !pat.pmtPids.empty())
                 {
                     firstPAT = false;
                     nonProcPMTPid = pat.pmtPids;
@@ -282,6 +282,8 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
         }
     }
 
+    if (unmarkedDamage && trackList.empty())
+        THROW(ERR_COMMON, "Invalid tsPacket->getHeaderSize")
     auto br = dynamic_cast<BufferedFileReader*>(m_bufferedReader);
     if (br)
         br->incSeek(m_readerID, -static_cast<int64_t>(totalReadedBytes));
@@ -804,6 +806,12 @@ bool TSDemuxer::checkForRealM2ts(const uint8_t* buffer, const uint8_t* end) cons
         }
         return false;
     };
+    // 188 bytes and 16 of error correction, as a recording of a modulator's output has them. No packet of it was on the
+    // grid of 188, and it was refused with "Invalid tsPacket->getHeaderSize", which said nothing of the reason.
+    if (gridFound(204) && !gridFound(188))
+        THROW(ERR_COMMON, "The file " << m_streamName
+                                      << " has packets of 204 bytes, 188 and 16 of error correction. tsMuxeR reads "
+                                         "packets of 188 and 192 bytes.")
     if (!gridFound(192) || gridFound(188))
         return false;
     LTRACE(LT_WARN, 2, "Warning! The file " << m_streamName << " has a M2TS format.");
@@ -814,8 +822,8 @@ bool TSDemuxer::checkForRealM2ts(const uint8_t* buffer, const uint8_t* end) cons
 // later clip of a join, a stream it declares is added when this demuxer delivers it to a track and does not know it
 // yet. A playlist whose first clip is a short logo without audio declares the film's audio only from the next clip
 // on, and a stream missing from the list keeps its PES headers in the data: the audio reader took each of them
-// for a broken frame. A later clip only ever adds: a PMT that does not parse adds nothing, and a packet that stops
-// the scan of the first clip ends the scan of a later one quietly, so no mux that ran before can stop here.
+// for a broken frame. A later clip only ever adds: a PMT that does not parse adds nothing, so no mux that ran before
+// can stop here.
 void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, const bool laterClip,
                                   const bool firstBlock)
 {
@@ -837,13 +845,7 @@ void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, c
         const auto tsPacket = reinterpret_cast<TSPacket*>(cur);
         const int pid = tsPacket->getPID();
         if (TS_FRAME_SIZE < tsPacket->getHeaderSize())
-        {
-            if (tsPacket->tei)
-                continue;  // damaged, and it says so (getTrackList)
-            if (laterClip)
-                break;
-            THROW(ERR_COMMON, "Invalid tsPacket->getHeaderSize")
-        }
+            continue;  // damaged (getTrackList)
         if (pid == 0)
         {  // PAT
             pat.deserialize(cur + tsPacket->getHeaderSize(), TS_FRAME_SIZE - tsPacket->getHeaderSize());
