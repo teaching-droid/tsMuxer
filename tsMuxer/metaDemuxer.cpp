@@ -930,8 +930,18 @@ void METADemuxer::openFile(const string& streamName)
                         angle = std::stoi(v);
                         addParams.erase(a);
                     }
+                    int discTitle = 0;
                     codecStreamName = dvdTitleSource(videoTs, title->second, &languages, &chapters, byDiscNumber,
-                                                     120, false, nullptr, angle);
+                                                     120, false, &discTitle, angle);
+                    // One angle for a title, as for a playlist (getMplsInfo): the video of one angle and the sound of
+                    // another were taken without a word
+                    if (const auto [chosen, isNew] =
+                            m_dvdTitleAngle.try_emplace(videoTs + "|" + std::to_string(discTitle), angle);
+                        !isNew && chosen->second != angle)
+                        throw std::runtime_error("The lines of DVD title " + std::to_string(discTitle) + " of " + disc +
+                                                 " ask for angle " + std::to_string(chosen->second) + " and angle " +
+                                                 std::to_string(angle) +
+                                                 ": give every line of the title the same angle=");
                     if (m_dvdChapters.empty())
                         for (const double start : chapters)
                             m_dvdChapters.emplace_back(llround(start * 1e9), std::string());
@@ -2035,6 +2045,13 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         THROW(ERR_COMMON, "Track " << pid << " of " << unquoteStr(trimStr(fileList[0]))
                                    << " is TextST, whose clips are not joined: each has a time of its own on the "
                                       "playlist. Give one clip on each line. Nothing was written.")
+    // The times of an .idx/.sub pair are in its own .idx file, which says nothing of where the pair before it ends: the
+    // units of the second pair came at the times of its .sub file, on top of the first, with a word on "fewer times"
+    if (fileList.size() > 1)
+        for (const std::string& name : fileList)
+            if (const std::string file = unquoteStr(trimStr(name)); isVobSubPair(file))
+                THROW(ERR_COMMON, file << " is an .idx/.sub pair, and such pairs are not joined: each has times of its "
+                                          "own. Give one pair on each line. Nothing was written.")
     if (codecReader == nullptr && m_matroskaOutput == 1 && codec == "S_TEXT/UTF8" && addParams.count("keep-text") &&
         addParams.count("keep-textst") && pid >= 0x1800 && pid <= 0x18FF && !fileList.empty())
     {
@@ -2883,6 +2900,11 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                 THROW(ERR_COMMON, file << ", a file of the join, has no track " << pid << " (its tracks are " << list
                                        << "). Nothing was written.")
             }
+            // What a file rules out (AC-4) is ruled out for the join: a line that names such a track ran through and
+            // ended with "produced no frames at all" and a word on the codec of the line
+            if (const auto why = found->second.m_srcParams.find("srcleftout"); why != found->second.m_srcParams.end())
+                THROW(ERR_COMMON, "Track " << pid << " of " << file << " cannot be read: " << why->second
+                                           << ". Nothing was written.")
             // a Matroska track is told by the kind its codec name begins with (A_, V_, S_), as its type names an audio
             // codec only when one was recognised; other containers by the type they give
             const auto codecId = found->second.m_srcParams.find("srccodecid");
