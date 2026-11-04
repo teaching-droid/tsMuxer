@@ -12,7 +12,7 @@
 
 * **The window adds a disc by its titles.** A disc folder, a drive or a disc image, added with "add", with the new "add disc" button or dropped on the window, opens "Choose a title": the disc's titles with length, chapters, audio and subtitles, the main titles in bold, and the left-out ones with their reason on request. A Blu-ray title is added as its playlist, a DVD title by its disc number with its audio languages and chapters. Such a source gave "Unsupported format" before. The BDMV folder to ISO tab takes a disc image as its source too ("Image...").
 
-* **Choose the angle of a title.** A Blu-ray playlist or a DVD title of several angles was muxed in its first angle only. `angle=<n>` on a meta line now takes angle n, for a playlist and for a disc title (`title=` or `dvd-title=`). In the window, Choose a title shows a row for each angle, and the output is named after the angle, as "00200 angle 2". All the lines of one playlist take the same angle.
+* **Choose the angle of a title.** A Blu-ray playlist or a DVD title of several angles was muxed in its first angle only. `angle=<n>` on a meta line now takes angle n, for a playlist and for a disc title (`title=` or `dvd-title=`). In the window, Choose a title shows a row for each angle, and the output is named after the angle, as "00200 angle 2". All the lines of one playlist or disc title take the same angle.
 
 * **The window names the output after the film.** A Blu-ray that names its film gives the name of the output file, the title of a Matroska output and the label of an ISO image, as long as those are not set. English comes first. A name that says only "Blu-ray" is passed over, and a colon becomes a dash in the file name. The listing gives the name as `Disc title:`.
 
@@ -28,7 +28,7 @@
 
 ### Blu-ray and transport stream
 
-* **AAC in LATM, the form DVB broadcasts carry, is read.** A recording of a channel that sends its sound as AAC in LATM (stream type 0x11) listed it as "Can't detect stream type", and the sound could not be muxed. Its frames are now read and written as ADTS AAC to TS and M2TS, and as AAC to Matroska, each frame as the recording carries it. A form DVB does not use (more than one program, layer or access unit in a frame, or another audioMuxVersion) is named in a warning. A Blu-ray disc takes no AAC.
+* **AAC in LATM, the form DVB broadcasts carry, is read.** A recording of a channel that sends its sound as AAC in LATM (stream type 0x11) listed it as "Can't detect stream type", and the sound could not be muxed. Its frames are now read and written as ADTS AAC to TS and M2TS, and as AAC to Matroska, each frame as the recording carries it. A form DVB does not use (more than one program, layer or access unit in a frame, or another audioMuxVersion) is named in a warning. On a disc it gets the warning any AAC gets.
 
 * **A playlist that plays an intro at another frame rate before the title is muxed at the title's rate.** A series disc may play a short logo or recap at 24, 25 or 29.97 fps before an episode at 23.976, and the rate of that first clip was used for the whole output: the episode played too fast and its sound fell behind, by a quarter with a 29.97 intro. A playlist is now described by the clips that make up most of it also in the picture format and frame rate of its video, and a clip whose video differs in either is left out with a warning that names both rates, as a clip with another codec already is. ([justdan96/tsMuxer#900](https://github.com/justdan96/tsMuxer/issues/900), thanks to @Nemesh64)
 
@@ -63,6 +63,12 @@
 * **AC-4 audio is named in a TS.** A track that the PMT declares as AC-4 was listed as "Can't detect stream type". It now says "AC-4 audio", and that tsMuxeR does not mux it. A meta line that names such a track is refused with the same reason. The other tracks of the file are not affected.
 
 * **A clip named with forward slashes on Windows lost its language.** The clip information beside it was not found, so the language of each track stayed empty.
+
+* **A recording with bad reception can be listed and muxed.** One damaged packet stopped the whole file with "Invalid tsPacket->getHeaderSize". A damaged packet that cannot be read is now passed over, and so is a damaged PAT, which stopped a recording with "Bitstream exception" (#31 K53, K54).
+
+* **A recording whose clock jumps back near its end is muxed.** It was listed at more than 26 hours, and that length refused the mux to a TS as past the limit of the clock. Such a file now states no length (#31 K55).
+
+* **--insertBlankPL no longer needs a program folder it can write to** (#31 K52). Its temporary file was written beside the program. Where that folder could not be written to, the job stopped after the whole mux, and the finished output was removed. It now goes to the temp folder.
 
 ### Audio
 
@@ -115,6 +121,8 @@
 * **A sample of a source for a problem report.** A problem that needs the source itself could only be sent with the whole file, too big for an issue. `--make-sample <source> <out.zip>` writes a zip under 25 MB with a part of the source, copied byte for byte from a place where a reader can begin: its start, its end, or the part around a time with `--at`. The headers a reader needs are kept; the names are replaced as in the report. The zip also holds the report of making the sample, and with `--add-report` the report of the job that went wrong. In the window, "Make a sample..." on the Input tab, also offered when a job ends with an error.
 
 * **A report of a run for a problem report.** A problem could mostly be looked into only with the source file, which is often too big to send. `--report=<file>` writes a text file of the run: the version and system, the command line, the meta file, the size, first bytes and listing of each source, every message with its time, the lines not shown on the screen as well, what each track read, used and left out, and the files written. Folders are left out of every path, and the names of files, titles, track names and chapter names are replaced by placeholders that keep only their length and kind, unless `--report-keep-names` or `--report-full-paths` is given. `--report-frames` adds a file with every PES of a transport stream mux (PTS, DTS, size, packet, PCR) and, for MPEG-2 video, the fill of the decoder's buffer at each picture, for the whole output or a time range of it. In the window, a tick in the options writes the report, and "Save report..." in the progress window keeps it. Without these options a run is as before.
+
+* **A guide to reporting a problem.** docs/REPORTING_A_PROBLEM.md says how to make a report and a sample in the window and on the command line, in English, German, Japanese, French, Italian, Spanish, Simplified Chinese and Brazilian Portuguese. More guides may follow in these languages.
 
 * **An unknown option is said to be one.** `tsMuxeR --foo=1 <source>` took the option as the name of a meta file and stopped with "Error opening file --foo=1", and errors of that kind ended without a line end, so the prompt of the shell followed the text. An argument that starts with "-" and is neither an option nor a file is now named as an unknown option, and those errors end their line.
 
