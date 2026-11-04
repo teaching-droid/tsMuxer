@@ -221,7 +221,7 @@ jobs:
           # The name on the left is Qt's, the name on the right is what the window asks for.
           # QTranslator::load SHORTENS the name it is given and never lengthens it, so a request
           # for qtbase_zh could never find qtbase_zh_CN.qm: the output name has to be ours.
-          $qtLangs = [ordered]@{ "de" = "de"; "ru" = "ru"; "fr" = "fr"; "zh_CN" = "zh"; "he" = "he"; "es" = "es"; "ja" = "ja" }
+          $qtLangs = [ordered]@{ "de" = "de"; "ru" = "ru"; "fr" = "fr"; "zh_CN" = "zh"; "he" = "he"; "es" = "es"; "ja" = "ja"; "pt_BR" = "pt_BR"; "it" = "it"; "zh_TW" = "zh_TW"; "ko" = "ko"; "pl" = "pl" }
           foreach ($pair in $qtLangs.GetEnumerator()) {
             $ts = Join-Path $TR_SRC ("qtbase_" + $pair.Key + ".ts")
             if (Test-Path $ts) {
