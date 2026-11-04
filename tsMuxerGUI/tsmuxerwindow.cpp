@@ -10,6 +10,8 @@
 
 #include "tsmuxerwindow.h"
 
+#include "ac3CoreDialog.h"
+
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QComboBox>
@@ -18,6 +20,7 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QDirIterator>
+#include <QScopeGuard>
 #include <QDropEvent>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -4905,6 +4908,9 @@ void TsMuxerWindow::onProcessFinished(int exitCode, QProcess::ExitStatus exitSta
     {
         QFile::remove(metaName);
         metaName.clear();
+        // After a failure the core stays on its track, for the next try
+        if (exitCode == 0 && exitStatus == QProcess::NormalExit)
+            removeMadeCores();
         if (ui->checkBoxSound->isChecked())
         {
             if (exitCode == 0)
@@ -5918,6 +5924,182 @@ bool TsMuxerWindow::askCoreOfTrueHd(const int thdRow, const int coreRow)
     msgBox.setEscapeButton(asTrack);
     msgBox.exec();
     return msgBox.clickedButton() == asCore;
+}
+
+void TsMuxerWindow::showMergeOfRow(const int row)
+{
+    if (row != ui->trackLV->currentRow())
+        return;
+    QtvCodecInfo* info = getCodecInfo(row);
+    const QSignalBlocker blockTrack(ui->mergeAc3TrackSpinBox);
+    const QSignalBlocker blockFile(ui->mergeAc3FileLineEdit);
+    ui->mergeAc3TrackSpinBox->setValue(info->mergeAc3Track);
+    ui->mergeAc3FileLineEdit->setText(QDir::toNativeSeparators(info->mergeAc3File));
+    updateMergeAc3Suffix();
+    updateMergeAc3Exclusion(info);
+}
+
+double TsMuxerWindow::durationOfSource(const QString& source) const
+{
+    for (int i = 0; i < ui->inputFilesLV->count(); ++i)
+    {
+        const QListWidgetItem* item = ui->inputFilesLV->item(i);
+        if (unquoteStr(item->data(FileNameRole).toString()) == source)
+            return item->data(FileDurationRole).toDouble();
+    }
+    return 0;
+}
+
+bool TsMuxerWindow::offerAc3Cores()
+{
+    bool changed = false;
+    for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+    {
+        QtvCodecInfo* info = getCodecInfo(i);
+        if (info == nullptr || info->programName != "A_MLP" || info->displayName != "TRUE-HD" ||
+            ui->trackLV->item(i, 0)->checkState() != Qt::Checked ||
+            info->descr.contains(QLatin1String("core"), Qt::CaseInsensitive) || info->mergeAc3Track > 0 ||
+            !info->mergeAc3File.isEmpty() || info->noCoreWanted || info->fileList.isEmpty())
+            continue;
+
+        // The AC-3 tracks of the same file. Not one that serves another TrueHD track, and not the one the user
+        // already called a separate track.
+        const QString source = unquoteStr(info->fileList[0]);
+        QStringList names;
+        QList<int> rows;
+        const int nextTrackCore = coreRowOfTrueHd(i);
+        for (int j = 0; j < ui->trackLV->rowCount(); ++j)
+        {
+            const QtvCodecInfo* ac3 = getCodecInfo(j);
+            if (j == i || ac3 == nullptr || ac3->programName != "A_AC3" || ac3->displayName != "AC3" ||
+                ac3->trackID == 0 || ac3->fileList.isEmpty() || ac3->fileList[0] != info->fileList[0] ||
+                isRowMergedIntoTrueHd(j) || (nextTrackCore == j + 1 && info->coreAnswer == 2))
+                continue;
+            const int p = ac3->descr.indexOf("Channels: ");
+            names << tr("Track %1: AC-3 %2, %3")
+                         .arg(ac3->trackID)
+                         .arg(p >= 0 ? QtCompat::strMid(ac3->descr, p + 10).section(' ', 0, 0) : QString(),
+                              ac3->srcLang.isEmpty() ? QStringLiteral("und") : ac3->srcLang);
+            rows << j;
+        }
+
+        const QString sourceProblem =
+            info->fileList.size() > 1 || !info->mplsFiles.isEmpty() || info->dvdTitle != 0 ||
+                    !QFileInfo(source).isFile() || QFileInfo(source).suffix().compare("iso", Qt::CaseInsensitive) == 0
+                ? tr("A core can only be created from a track of a single file.")
+                : QString();
+        const QString question =
+            info->trackID != 0
+                ? tr("The TrueHD track %1 of %2 has no AC-3 core. Some players will not play it.")
+                      .arg(info->trackID)
+                      .arg(QFileInfo(source).fileName())
+                : tr("The TrueHD file %1 has no AC-3 core. Some players will not play it.")
+                      .arg(QFileInfo(source).fileName());
+        const QString savedBefore = m_coreEncoderPath;
+        const Ac3CoreDialog::Choice choice =
+            Ac3CoreDialog::ask(this, question, names, sourceProblem, &m_coreEncoderPath);
+        if (m_coreEncoderPath != savedBefore)
+            writeSettings();
+        if (choice.what == Ac3CoreDialog::Choice::Cancel)
+        {
+            dropPendingCores();
+            return false;
+        }
+        if (choice.what == Ac3CoreDialog::Choice::NoCore)
+        {
+            info->noCoreWanted = true;
+            continue;
+        }
+        if (choice.what == Ac3CoreDialog::Choice::UseTrack)
+        {
+            info->mergeAc3Track = rows[choice.track] + 1;
+            info->mergeAc3Auto = false;
+        }
+        else
+        {
+            // Beside the output, where there is room for it, under a name of its own
+            QString folder = QFileInfo(ui->outFileName->text()).absolutePath();
+            if (!QDir(folder).exists())
+                folder = QDir::tempPath();
+            const QString base = QFileInfo(source).completeBaseName() + QStringLiteral("_core");
+            QString target = QDir(folder).filePath(base + QStringLiteral(".ac3"));
+            // Neither a file that is there, nor the name of a core still to be made for this job
+            const auto taken = [&]
+            {
+                return QFile::exists(target) ||
+                       std::any_of(m_pendingCores.cbegin(), m_pendingCores.cend(),
+                                   [&](const PendingCore& p) { return p.info->mergeAc3File == target; });
+            };
+            for (int n = 2; taken(); ++n) target = QDir(folder).filePath(base + QStringLiteral("_%1.ac3").arg(n));
+            info->mergeAc3File = target;
+            // Matroska tracks are numbered by their place in the file, a transport stream's by the PID
+            const QString map = info->trackID == 0              ? QStringLiteral("0:a:0")
+                                : isMatroskaOutputName(source) ? QStringLiteral("0:%1").arg(info->trackID - 1)
+                                                               : QStringLiteral("0:i:%1").arg(info->trackID);
+            const int p = info->descr.indexOf("Channels: ");
+            int channels = 0;
+            if (p >= 0)
+                for (const QString& part : QtCompat::strMid(info->descr, p + 10).section(' ', 0, 0).split('.'))
+                    channels += part.toInt();
+            m_pendingCores.append({info, choice.encoder, map, channels});
+        }
+        showMergeOfRow(i);
+        changed = true;
+    }
+    if (changed)
+        updateMetaLines();
+    return true;
+}
+
+bool TsMuxerWindow::makeAc3Cores()
+{
+    while (!m_pendingCores.isEmpty())
+    {
+        const PendingCore core = m_pendingCores.first();
+        Ac3CoreDialog::Job job;
+        job.encoder = core.encoder;
+        job.source = unquoteStr(core.info->fileList[0]);
+        job.map = core.map;
+        job.channels = core.channels;
+        job.seconds = durationOfSource(job.source);
+        job.target = core.info->mergeAc3File;
+        Ac3CoreDialog dialog(this, job);
+        if (dialog.exec() != QDialog::Accepted)
+            return false;  // the file is gone: dropPendingCores takes it off the track
+        m_madeCores << job.target;
+        m_pendingCores.removeFirst();
+    }
+    return true;
+}
+
+void TsMuxerWindow::dropPendingCores()
+{
+    if (m_pendingCores.isEmpty())
+        return;
+    for (const PendingCore& core : m_pendingCores) core.info->mergeAc3File.clear();
+    m_pendingCores.clear();
+    for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+        if (getCodecInfo(i) != nullptr)
+            showMergeOfRow(i);
+    updateMetaLines();
+}
+
+void TsMuxerWindow::removeMadeCores()
+{
+    if (m_madeCores.isEmpty())
+        return;
+    for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+    {
+        QtvCodecInfo* info = getCodecInfo(i);
+        if (info != nullptr && m_madeCores.contains(info->mergeAc3File))
+        {
+            info->mergeAc3File.clear();
+            showMergeOfRow(i);
+        }
+    }
+    for (const QString& file : m_madeCores) QFile::remove(file);
+    m_madeCores.clear();
+    updateMetaLines();
 }
 
 // True when this row is the one some TrueHD track is folding into itself.
@@ -7199,6 +7381,12 @@ void TsMuxerWindow::startMuxing()
             return;
     }
 
+    // A question below can still end this: a core that was to be made then leaves the track again. Before the #53
+    // question, because a changed track builds the meta file anew and the option that question adds is not in it.
+    const auto dropCores = qScopeGuard([this] { dropPendingCores(); });
+    if (isDiskOutput() && !m_metaUserOverride && !offerAc3Cores())
+        return;
+
     // More than 32 tracks of one kind on a disc (#53): tsMuxeR refuses them unless the MUXOPT line has
     // --allow-extra-tracks. Asked here, with what it means; the answer adds the option to the meta file of this job.
     if (isDiskOutput())
@@ -7281,6 +7469,9 @@ void TsMuxerWindow::startMuxing()
         if (msgBox.exec() != QMessageBox::Yes)
             return;
     }
+
+    if (!makeAc3Cores())
+        return;
 
     QFileInfo fi(ui->outFileName->text());
     metaName =
@@ -7472,6 +7663,7 @@ void TsMuxerWindow::closeEvent(QCloseEvent* event)
         QFile::remove(metaName);
         metaName.clear();
     }
+    removeMadeCores();
     muxForm->close();
     event->accept();
 }
@@ -7838,6 +8030,7 @@ void TsMuxerWindow::writeSettings()
     settings->setValue("playlistParts", ui->checkBoxPlaylistParts->isChecked());
     settings->setValue("writeReport", ui->checkBoxReport->isChecked());
     settings->setValue("askExtraTracks", ui->checkBoxAskExtraTracks->isChecked());
+    settings->setValue("coreEncoder", m_coreEncoderPath);
     settings->setValue("inputDir", lastInputDir);
     settings->setValue("outputDir", lastOutputDir);
     settings->setValue("useBlankPL", ui->checkBoxBlankPL->isChecked());
@@ -8093,6 +8286,7 @@ bool TsMuxerWindow::readGeneralSettings(const QString& prefix)
         settings->value("playlistParts", ui->checkBoxPlaylistParts->isChecked()).toBool());
     ui->checkBoxReport->setChecked(settings->value("writeReport", false).toBool());
     ui->checkBoxAskExtraTracks->setChecked(settings->value("askExtraTracks", true).toBool());
+    m_coreEncoderPath = settings->value("coreEncoder").toString();
     ui->checkBoxBlankPL->setChecked(settings->value("useBlankPL", ui->checkBoxBlankPL->isChecked()).toBool());
     // 0 is a playlist number like any other: it was skipped, and the box kept its default of 1900
     if (settings->contains("blankPLNum"))

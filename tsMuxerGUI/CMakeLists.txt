@@ -80,6 +80,7 @@ set(tsmuxer_gui_sources
   checkboxedheaderview.cpp
   discTitleDialog.cpp
   sampleDialog.cpp
+  ac3CoreDialog.cpp
   images.qrc
   fontsettingstablemodel.cpp
   systemcolours.cpp

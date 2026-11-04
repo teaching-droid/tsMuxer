@@ -56,6 +56,8 @@ struct QtvCodecInfo
     // For A_MLP (TrueHD) only: when non-empty, adds merge-ac3-file="path" to the meta line
     // to interleave an external AC-3 elementary stream with a standalone TrueHD file.
     QString mergeAc3File;
+    // The answer "Continue without a core" to the question at Start muxing: not asked again for this track
+    bool noCoreWanted = false;
     int offsetId = -1;
     int maxPgOffsets = 0;
     QList<QString> fileList;

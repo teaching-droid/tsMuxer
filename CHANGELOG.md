@@ -76,6 +76,8 @@
 
 * **A WAV file with no format chunk before its audio stopped tsMuxeR with a crash.** It now stops with a message that the format of its samples is not known.
 
+* **The window can give a TrueHD track an AC-3 core.** On Start muxing to a Blu-ray folder, a Blu-ray ISO or AVCHD, a TrueHD track without an AC-3 core brings up a question: use an AC-3 track of the same file as the core, create a core, or continue without one. A core is created with ffmpeg, which is not part of tsMuxeR: it has to be beside tsMuxeR or on the PATH, or it can be chosen in the question. The core has 640 kbit/s, 48 kHz and at most 5.1 channels, and a 7.1 track gives its own 5.1 mix. A separate window shows the progress, and Cancel stops it and removes the unfinished file. The core is removed when the mux has ended well.
+
 ### Subtitles
 
 * **A DVD subtitle picture that sets its colours by area is shown.** A DVD subtitle (VobSub) picture whose colours and opacity are set for parts of its lines, as a fade in and out sets them, was left out as empty when its own colours were transparent. It is drawn now in the colours that show it most opaque; PGS cannot fade it the same way.

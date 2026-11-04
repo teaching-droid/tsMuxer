@@ -71,6 +71,8 @@ Select the **TRUE-HD** track, then set:
 
 The GUI will emit either `merge-ac3-track=<n>` or `merge-ac3-file="path"` into the meta preview.
 
+On a disc output the window also asks about a TrueHD track that has no core when you press **Start muxing**. It offers the AC-3 tracks of the same file, a new core, or no core. A new core needs an ffmpeg of your own that reads TrueHD and writes AC-3, beside tsMuxeR, on the PATH, or chosen with **Choose ffmpeg...** in the question. tsMuxeR does not include ffmpeg. The command line is not changed: use `merge-ac3-file=` there.
+
 **If the MKV has no AC-3 track:**
 
 Create an AC-3 compatibility stream from the TrueHD audio with FFmpeg (choose the correct audio index for `0:a:N`):

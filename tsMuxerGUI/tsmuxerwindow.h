@@ -207,6 +207,16 @@ class TsMuxerWindow : public QWidget
     void updateAutoCoreMerge();
     // Asks whether the AC-3 track on coreRow (from 1) goes on the disc as the core of the TrueHD track on thdRow
     bool askCoreOfTrueHd(int thdRow, int coreRow);
+    // At Start muxing, for each ticked TrueHD track without an AC-3 core on a disc output: what to do about it. False
+    // when the user cancels. A core to make goes onto the meta line now and is made by makeAc3Cores, after the other
+    // questions of Start muxing, so that a No to one of them has not cost the time of an encode.
+    bool offerAc3Cores();
+    bool makeAc3Cores();
+    void dropPendingCores();
+    // The cores made for the job that ended well, or for a window that closes: they were only there for the mux
+    void removeMadeCores();
+    void showMergeOfRow(int row);
+    [[nodiscard]] double durationOfSource(const QString& source) const;
     // Splitting is produced by the transport stream writer, so not every output can do it.
     [[nodiscard]] bool outputCanSplit() const;
     // Grey the Blu-ray tab's controls that the chosen output does not use.
@@ -313,6 +323,16 @@ class TsMuxerWindow : public QWidget
     /// When true, meta file was edited by the user; do not auto-regenerate.
     bool m_metaUserOverride;
     bool m_buildingMuxOpts = false;  // getMuxOpts asks buildMetaText, which asks getMuxOpts: once only
+    struct PendingCore
+    {
+        QtvCodecInfo* info;
+        QString encoder;
+        QString map;
+        int channels;
+    };
+    QList<PendingCore> m_pendingCores;
+    QStringList m_madeCores;
+    QString m_coreEncoderPath;  // the program chosen by the user, kept in the settings
     QString m_lastBuiltMeta;  // the meta file last built from the settings
     QnCheckBoxedHeaderView* m_header;
     QString lastSourceDir;
