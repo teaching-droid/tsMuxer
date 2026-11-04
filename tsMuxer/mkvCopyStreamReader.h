@@ -30,6 +30,7 @@ class MatroskaCopyStreamReader final : public AbstractStreamReader
     void setBuffer(uint8_t* data, uint32_t dataLen, bool lastBlock = false) override;
     int64_t getProcessedSize() override { return m_processedSize; }
     [[nodiscard]] int64_t getDeliveredFrames() const override { return m_frames; }
+    void frameLeftOut() { --m_frames; }  // a block read that a cut leaves out
     const CodecInfo& getCodecInfo() override { return m_codecInfo; }
 
     [[nodiscard]] const std::string& sourceCodecId() const { return m_sourceCodecId; }
@@ -41,8 +42,8 @@ class MatroskaCopyStreamReader final : public AbstractStreamReader
     // one Dialogue line or one cue for each block (textFor)
     void setTextFileOutput(const bool on) { m_textFile = on; }
 
-    // For a demux of DVD subtitles: each packet is the packs of the .sub file for one sub-picture unit, and the .idx file
-    // is gathered beside it (lang: its id: line)
+    // For a demux of DVD subtitles: each packet is one sub-picture unit, which the demux writes as the packs of the .sub
+    // file (packVobSub), with the .idx file gathered beside it (lang: its id: line)
     void setVobSubFileOutput(const std::string& lang)
     {
         m_vobSubFile = true;
@@ -50,6 +51,8 @@ class MatroskaCopyStreamReader final : public AbstractStreamReader
     }
     [[nodiscard]] bool vobSubFileOutput() const { return m_vobSubFile; }
     [[nodiscard]] std::string vobSubIndex() const;
+    // A unit that goes into the .sub file: its packs in outData, their size returned, and its line of the .idx file
+    int packVobSub(int64_t packetPts, const uint8_t* data, size_t size, const uint8_t** outData);
 
    private:
     // Called S_MKVCOPY, a subtitle by the first letter as the code everywhere asks; the source's CodecID beside it
@@ -62,7 +65,7 @@ class MatroskaCopyStreamReader final : public AbstractStreamReader
     std::string m_vobSubLang;
     std::string m_vobSubTimes;  // the timestamp lines of the .idx file
     int64_t m_vobSubPos = 0;    // where the next unit starts in the .sub file
-    void packVobSub(int64_t pts, const uint8_t* data, size_t size);
+    std::vector<uint8_t> m_vobSubPacks;  // the packs of the unit last written
     std::vector<uint8_t> m_input;   // records not yet turned into packets
     size_t m_inputPos = 0;          // where the next record starts in m_input
     std::vector<uint8_t> m_packet;  // the data of the packet last handed out

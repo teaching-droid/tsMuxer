@@ -283,7 +283,7 @@ int MatroskaCopyStreamReader::readPacket(AVPacket& avPacket)
         return NEED_MORE_DATA;
 
     if (m_vobSubFile)
-        packVobSub(pts, p + HEAD + addSize + 4, dataSize);
+        m_packet.assign(p + HEAD + addSize + 4, p + HEAD + addSize + 4 + dataSize);
     else if (m_textFile)
     {
         const std::string text = textFor(pts, duration, p + HEAD, addSize, p + HEAD + addSize + 4, dataSize);
@@ -312,10 +312,15 @@ int MatroskaCopyStreamReader::readPacket(AVPacket& avPacket)
 
 // A .sub file is a program stream: packs of 2048 bytes, a unit from the start of a pack on, in private stream 1 under
 // sub-stream 0x20, the time on its first pack. What a pack has left over goes into a padding stream.
-void MatroskaCopyStreamReader::packVobSub(const int64_t pts, const uint8_t* data, const size_t size)
+// The demux packs a unit when it writes it, not when it is read: the .idx file was gathered as the units were read, and
+// after a --cut-end it held the units the cut leaves out, at places past the end of the .sub file. The time is the one
+// written, with its timeshift and its cut.
+int MatroskaCopyStreamReader::packVobSub(const int64_t packetPts, const uint8_t* data, const size_t size,
+                                         const uint8_t** outData)
 {
     constexpr size_t PACK = 2048;
     constexpr size_t PACK_HEADER = 14;
+    const int64_t pts = (std::max)(int64_t{0}, packetPts);
     const int64_t ticks = pts / (INTERNAL_PTS_FREQ / 90000);
     const int64_t ms = (pts + INTERNAL_PTS_FREQ / 2000) / (INTERNAL_PTS_FREQ / 1000);
     char line[64];
@@ -324,14 +329,14 @@ void MatroskaCopyStreamReader::packVobSub(const int64_t pts, const uint8_t* data
              static_cast<unsigned long long>(m_vobSubPos));
     m_vobSubTimes += line;
 
-    m_packet.clear();
+    m_vobSubPacks.clear();
     size_t done = 0;
     bool first = true;
     while (done < size || first)
     {
-        const size_t at = m_packet.size();
-        m_packet.resize(at + PACK, 0xFF);
-        uint8_t* p = m_packet.data() + at;
+        const size_t at = m_vobSubPacks.size();
+        m_vobSubPacks.resize(at + PACK, 0xFF);
+        uint8_t* p = m_vobSubPacks.data() + at;
         // the system clock of the pack is the time of the unit
         const auto scr = static_cast<uint64_t>(ticks);
         p[0] = 0;
@@ -396,7 +401,9 @@ void MatroskaCopyStreamReader::packVobSub(const int64_t pts, const uint8_t* data
         done += take;
         first = false;
     }
-    m_vobSubPos += static_cast<int64_t>(m_packet.size());
+    m_vobSubPos += static_cast<int64_t>(m_vobSubPacks.size());
+    *outData = m_vobSubPacks.data();
+    return static_cast<int>(m_vobSubPacks.size());
 }
 
 std::string MatroskaCopyStreamReader::vobSubIndex() const

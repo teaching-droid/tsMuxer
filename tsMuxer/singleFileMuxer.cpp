@@ -401,7 +401,11 @@ bool SingleFileMuxer::muxPacketTo(StreamInfo* streamInfo, AVPacket& avPacket)
     // exactly as it stands. The size is taken AFTER any conversion, so the buffer test below is
     // made against what is really about to be written.
     const uint8_t* outData = avPacket.data;
-    const int outSize = avPacket.codec->prepareDemuxPacket(avPacket.data, avPacket.size, &outData);
+    auto* const vobSub = dynamic_cast<MatroskaCopyStreamReader*>(streamInfo->m_codecReader);
+    const int outSize =
+        vobSub && vobSub->vobSubFileOutput()
+            ? vobSub->packVobSub(avPacket.pts, avPacket.data, static_cast<size_t>(avPacket.size), &outData)
+            : avPacket.codec->prepareDemuxPacket(avPacket.data, avPacket.size, &outData);
 
     // If the frame would overflow the output buffer, force a flush first.
     // The buffer is blockSize + MAX_AV_PACKET_SIZE + ADD_DATA_SIZE; frames

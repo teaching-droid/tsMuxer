@@ -24,6 +24,7 @@
 #include "hevcStreamReader.h"
 #include "iso_writer.h"
 #include "matroskaMuxer.h"
+#include "mkvCopyStreamReader.h"
 #include "mpegStreamReader.h"
 #include "subTrackFilter.h"
 #include "tsMuxer.h"
@@ -1093,6 +1094,9 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     {
         if (auto* video = dynamic_cast<MPEGStreamReader*>(packet.codec); video != nullptr && packet.size > 0)
             video->frameLeftOut();
+        // A copied track the cut leaves empty counted the blocks read, and had no word that it is empty (reportEmptyTracks)
+        if (auto* copied = dynamic_cast<MatroskaCopyStreamReader*>(packet.codec); copied != nullptr && packet.size > 0)
+            copied->frameLeftOut();
     };
 
     // Only this loop looks at the signal: a signal before or after it ends the program as before (main)
