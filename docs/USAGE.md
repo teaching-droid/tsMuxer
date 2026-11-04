@@ -106,11 +106,19 @@ V_MPEG4/ISO/AVC, "film.iso", title=main, track=4113
 A_AC3, "film.iso", title=main, track=4352
 ```
 
-A DVD-Video folder (the folder holding VIDEO_TS, or VIDEO_TS itself) or image is listed the same way. On a meta line, `title=main` or `title=<number>` reads the title's cells in play order from its VOB files. Where the timestamps start again, the parts are joined as a "+" join is. A title with several angles is read in its first angle. Audio tracks take the disc's language unless the line gives `lang=`, and a Matroska output gets the title's chapters. A disc output takes chapters only from `--custom-chapters`: `tsMuxeR --show-title=main dvd.iso` lists the title's tracks, its audio languages and its chapters as a `--custom-chapters=` value to copy into MUXOPT. On a Blu-ray it lists the tracks of the title's playlist. Track numbers on a DVD: video 224; audio 128 and up for AC-3, 136 for DTS, 160 for LPCM and 192 for MPEG; subtitles 32 and up. `dvd-title=<number>` names a DVD title by the disc's own number (the "DVD title" column of the listing) instead of its place in the listing: it stays the same in a saved meta file, and it also names the titles the listing leaves out. DVD subtitles are read as `S_HDMV/PGS`: their pictures are drawn as PGS with the colours of the disc's IFO file and placed on the time line of the video, also across the parts of a title; they take the disc's language as the audio does. A VOB file given on its own takes the colours from the IFO file of its title set next to it, and without one they are drawn in grey, with a warning. A title whose video is still encrypted is refused.
+A DVD-Video folder (the folder holding VIDEO_TS, or VIDEO_TS itself) or image is listed the same way. On a meta line, `title=main` or `title=<number>` reads the title's cells in play order from its VOB files. Where the timestamps start again, the parts are joined as a "+" join is. A title with several angles is read in its first angle, or in the angle `angle=<n>` gives. Audio tracks take the disc's language unless the line gives `lang=`, and a Matroska output gets the title's chapters. A disc output takes chapters only from `--custom-chapters`: `tsMuxeR --show-title=main dvd.iso` lists the title's tracks, its audio languages and its chapters as a `--custom-chapters=` value to copy into MUXOPT. On a Blu-ray it lists the tracks of the title's playlist. Track numbers on a DVD: video 224; audio 128 and up for AC-3, 136 for DTS, 160 for LPCM and 192 for MPEG; subtitles 32 and up. `dvd-title=<number>` names a DVD title by the disc's own number (the "DVD title" column of the listing) instead of its place in the listing: it stays the same in a saved meta file, and it also names the titles the listing leaves out. DVD subtitles are read as `S_HDMV/PGS`: their pictures are drawn as PGS with the colours of the disc's IFO file and placed on the time line of the video, also across the parts of a title; they take the disc's language as the audio does. A VOB file given on its own takes the colours from the IFO file of its title set next to it, and without one they are drawn in grey, with a warning. A title whose video is still encrypted is refused.
 ```
 MUXOPT --vbr
 V_MPEG-2, "dvd.iso", title=main, track=224
 A_AC3, "dvd.iso", title=main, track=128
+```
+
+A title of several angles is listed with the number of its angles and, under it, where they differ: the times, and on a Blu-ray the clip each angle plays there. Take the angle with `angle=<n>` on the meta line; the window's Choose a title shows a row for each angle, with these lines under it.
+```
+Title 1  00200.mpls    2:04:36   26 chapters     3 clips  eng jpn fra  2 angles  (main film)
+    angles differ at 0:00:00-0:03:42, 2:00:59-2:04:36
+    angle 1: 00100.m2ts, 00103.m2ts
+    angle 2: 00101.m2ts, 00104.m2ts
 ```
 
 A demux writes DVD subtitles as `name.idx` and `name.sub`. Such a pair is read as a source when the .idx file is beside the .sub file: `S_HDMV/PGS, "name.sub", track=32`. The track number is 32 plus the `index:` of the .idx file.
@@ -257,6 +265,7 @@ Additional parameters for audio tracks:
 Parameter         | Description 
 ---               | --- 
 timeshift         | Shift the track by the given time: a number followed by ns, us, ms or s, such as -120ms or 1.5s. A number alone is in milliseconds. Can be negative. Without it, the start of a track against the picture is taken from the source; a Matroska file without video has no picture to measure against, so its tracks start together unless timeshift= says otherwise. 
+angle=<n>         | The angle of a Blu-ray playlist or of a disc title (`title=`, `dvd-title=`) with several angles, from 1. Every line of one playlist takes the same angle. The listing says how many angles a title has.
 down-to-dts       | Available only for DTS-HD tracks. Filter out HD part. 
 down-to-ac3       | For TRUE-HD and E-AC3 (DD+) tracks. Keep the AC-3 core, drop the HD part. 
 drop-ac3-core     | **Matroska output or demux, TrueHD only.** A Blu-ray TrueHD stream carries an AC-3 core beside its lossless part. Matroska writes the core as a track of its own; with drop-ac3-core it is left out and the lossless stream is kept alone. A demux then writes `.thd` instead of `.ac3+thd`. A TS or a Blu-ray keeps the core, so it is ignored there with a warning.

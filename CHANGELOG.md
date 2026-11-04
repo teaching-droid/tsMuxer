@@ -12,6 +12,8 @@
 
 * **The window adds a disc by its titles.** A disc folder, a drive or a disc image, added with "add", with the new "add disc" button or dropped on the window, opens "Choose a title": the disc's titles with length, chapters, audio and subtitles, the main titles in bold, and the left-out ones with their reason on request. A Blu-ray title is added as its playlist, a DVD title by its disc number with its audio languages and chapters. Such a source gave "Unsupported format" before. The BDMV folder to ISO tab takes a disc image as its source too ("Image...").
 
+* **Choose the angle of a title.** A Blu-ray playlist or a DVD title of several angles was muxed in its first angle only. `angle=<n>` on a meta line now takes angle n, for a playlist and for a disc title (`title=` or `dvd-title=`). In the window, Choose a title shows a row for each angle, and the output is named after the angle, as "00200 angle 2". All the lines of one playlist take the same angle.
+
 * **The window names the output after the film.** A Blu-ray that names its film gives the name of the output file, the title of a Matroska output and the label of an ISO image, as long as those are not set. English comes first. A name that says only "Blu-ray" is passed over, and a colon becomes a dash in the file name. The listing gives the name as `Disc title:`.
 
 ### Matroska input
@@ -50,6 +52,10 @@
 
 * **A second run into a disc folder removed the titles of the run before** (#31 K50). A run with `--mplsOffset` or `--m2tsOffset` replaced the whole BDMV folder, so a disc built one title at a time kept only its last title. With either option the new title now joins the folder. A playlist or clip number that is taken is refused, and the folder stays as it was. Without these options the folder is replaced, as before.
 
+* **A joined TV recording drifted out of sync at every joint** (#31 K48). Where the sound of a recording comes in PES of different lengths, as the AAC of some broadcasts does (2 to 10 frames each), the sound of each later file of the join came about 170 ms later than its picture, adding up over the files. The sound now goes on at its own time. Thanks to @Nandos64
+
+* **The sound of one program of a multiplex recording was moved by hours** (#31 K49). A recording of a whole multiplex, as an ISDB-Tb one with its 1seg service beside the HD one, holds programs whose clocks can be hours apart: a track was measured against the first video of the file, of whatever program, and its sound came more than 3 hours late. Each track is now measured against the video of its own program.
+
 * **A join of a recording of several programs lost packets** (#31 K51). A padding packet of a program the join had not read yet overwrote the start of the next packet, and that packet was lost, of whatever track it was. Pictures were damaged, and the sound came earlier at each frame lost. A join now reads the table of every program of each file, and such a packet changes nothing.
 
 * **A part of a recording lists all its programs.** Where the table of a program came just after the end of a block read, the program was not listed, and a join refused its tracks.
@@ -85,6 +91,10 @@
 * **DVD subtitles are read from a DVD and its VOB files.** The subtitle tracks of a VOB were listed as "Not supported" and left out. They are now listed (`S_HDMV/PGS`, track 32 and up) and muxed: a Matroska output keeps them as they are, as DVD subtitles (VobSub) with the colours of the disc's IFO file, as it keeps the VobSub of a Matroska source; a disc and a TS get them drawn as PGS in those colours; a demux writes them as .idx and .sub files, as the disc holds them. Forced subtitles stay forced. The listing gives every subtitle track the disc names, with its language, also one whose first subtitle comes late. Each subtitle keeps its place against the picture, also where a title is read in parts because its timestamps start again, and where a title begins with pictures shown before its first key picture. A VOB file on its own takes the colours from the IFO file of its title set; without one they are drawn in grey, with a warning.
 
 * **An ASS or SSA script is read as a file of its own.** A .ass or .ssa file was "Can't detect stream type", and only ASS and SSA from a Matroska file were read. A script file is now read as that track is: listed as track 1, drawn with libass for a disc or a TS, and kept as it is with `keep-text` in a Matroska output or a demux, its comments included. Cuts and joins work as for any subtitle track. The window offers .ass and .ssa files when adding. ([justdan96/tsMuxer#731](https://github.com/justdan96/tsMuxer/issues/731))
+
+* **Subtitles that do not fit the picture are fitted faster.** Each size tried measured every letter again. A track with long lines now muxes 20 to 28 percent faster; the output is the same.
+
+* **Large bold or italic subtitles stopped the mux on Linux and macOS** with "Can't render symbol code" (#31 K47). Text subtitles in bold or italic at a font size of about 1800 or more could not be measured. They are drawn now. Windows was not affected.
 
 * **Blu-ray text subtitles (TextST) can be muxed.** A disc's text subtitles were listed as "Not supported". A playlist now lists each of them with its language and its place on the timeline, and a TextST clip can be added on its own. They go to a disc or a TS as pictures, and into a Matroska file or a demux as SRT, with captions at the top of the picture kept at the top. To keep them as they are in a Matroska file, untick "Convert Blu-ray text subtitles (TextST) to SRT" in the window, or add `keep-textst` to the meta line.
 
