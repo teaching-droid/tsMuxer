@@ -2,6 +2,89 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="en_US">
 <context>
+    <name>Ac3CoreDialog</name>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="115"/>
+        <source>%1 does not start here.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="118"/>
+        <source>%1 cannot read TrueHD.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="121"/>
+        <source>%1 cannot write AC-3.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="129"/>
+        <source>ffmpeg was not found beside tsMuxeR or on the PATH.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="137"/>
+        <source>TrueHD track without an AC-3 core</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="149"/>
+        <source>Use an AC-3 track of the file as the core:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="157"/>
+        <source>Create an AC-3 core</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="163"/>
+        <source>Choose ffmpeg...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="170"/>
+        <source>Continue without a core</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="189"/>
+        <source>640 kbit/s, 48 kHz, at most 5.1 channels. Made with %1.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="197"/>
+        <source>Choose ffmpeg</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="229"/>
+        <source>Creating the AC-3 core</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="240"/>
+        <source>Starting...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="297"/>
+        <source>%1 of %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="307"/>
+        <source>The AC-3 core could not be created.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="316"/>
+        <source>ffmpeg could not be started.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>FontSettingsTableModel</name>
     <message>
         <location filename="../fontsettingstablemodel.cpp" line="134"/>
@@ -2480,6 +2563,53 @@
     </message>
 </context>
 <context>
+    <name>MuxForm</name>
+    <message>
+        <location filename="../muxForm.cpp" line="88"/>
+        <source>File names, disc titles, track names and chapter names are replaced by placeholders. This is the text that is attached.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="101"/>
+        <source>Save...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="104"/>
+        <source>Copy</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="120"/>
+        <location filename="../muxForm.cpp" line="125"/>
+        <location filename="../muxForm.cpp" line="129"/>
+        <location filename="../muxForm.cpp" line="136"/>
+        <location filename="../muxForm.cpp" line="139"/>
+        <source>Save report</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="120"/>
+        <source>tsMuxeR wrote no report for this job.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="129"/>
+        <source>Text files (*.txt)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="136"/>
+        <source>The report could not be saved as &quot;%1&quot;.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="140"/>
+        <source>The report is saved as &quot;%1&quot;. Attach this file to the problem report.</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>QObject</name>
     <message>
         <location filename="../muxForm.cpp" line="56"/>
@@ -2518,6 +2648,145 @@
     </message>
     <message>
         <source>Close</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>SampleDialog</name>
+    <message>
+        <location filename="../sampleDialog.cpp" line="57"/>
+        <source>Make a sample for a problem report</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="59"/>
+        <source>A part of the source, copied as it is, to attach to a problem report in place of the whole file. The .zip holds the sample and a report of making it, and stays under 25 MB, the most a file on GitHub may be.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="67"/>
+        <source>Source:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="70"/>
+        <location filename="../sampleDialog.cpp" line="115"/>
+        <source>...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="76"/>
+        <source>Take:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="78"/>
+        <source>the start</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="79"/>
+        <source>the end</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="80"/>
+        <source>around this time (where the problem is):</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="93"/>
+        <source>Size:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="97"/>
+        <source> MB</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="100"/>
+        <source>(the .zip stays under 25 MB)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="104"/>
+        <source>Add the report of the last job</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="109"/>
+        <source>There is no report of a job: tick &quot;Write a report of each mux for a problem report&quot; in the options and run the job again to have one.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="113"/>
+        <source>Save as:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="127"/>
+        <source>Show report</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="129"/>
+        <source>Make sample</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="157"/>
+        <source>An MP4 or QuickTime file keeps the place of every frame in one index, so only its start can be taken. Mux it to MKV first to take another part.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="161"/>
+        <source>A video stream on its own holds no times. Take its start or its end.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="169"/>
+        <source>Source of the sample</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="177"/>
+        <source>Save the sample as</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="177"/>
+        <source>Zip files (*.zip)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="186"/>
+        <source>Report of the last job</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="206"/>
+        <source>Making the sample...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="216"/>
+        <source>No sample was made.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="229"/>
+        <source>Report of making the sample</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="234"/>
+        <source>The sample is saved as &quot;%1&quot;. Attach this .zip file to the problem report.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="234"/>
+        <source>tsMuxeR could not be started, so no sample was made.</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
@@ -4503,6 +4772,352 @@ Build the ISO anyway?</source>
         <source>The track&apos;s number among the tracks of its kind in the clip (the .m2ts file), by PID. It can differ from the playlist&apos;s.</source>
         <translation>The track&apos;s number among the tracks of its kind in the clip (the .m2ts file), by PID. It can differ from the playlist&apos;s.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="173"/>
+        <source>A part of the chosen file, to attach to a problem report in place of the whole file</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="176"/>
+        <source>Make a sample...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="830"/>
+        <source>Drop the AC-3 core, keep the lossless part</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1329"/>
+        <source>tsMuxeR writes a text file of each mux: what it was given, every message, what each track read and left out, and what it wrote. Save report... in the progress window keeps it, to attach to a problem report in place of the file itself. Folder names are left out of it, and the names of files, titles, track names and chapter names are replaced by placeholders.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1332"/>
+        <source>Write a report of each mux for a problem report</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2854"/>
+        <source>Dolby Vision:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2864"/>
+        <source>Only applies to a dual layer Dolby Vision source muxed to Matroska. Profile 7 carries the disc as it is. Profile 8.1 converts the Dolby Vision metadata so the file plays as single layer Dolby Vision on many more devices, while the disc&apos;s own metadata travels with it so the two layers can be separated again exactly. The file does not get smaller. Profile 8.1 needs the libdovi library beside tsMuxeR.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2868"/>
+        <source>Profile 7, as on the disc</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2873"/>
+        <source>Profile 8.1, plays on more devices</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="742"/>
+        <source>BD-R DL 50 GB, 2 layers (24,438,784 sectors)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="744"/>
+        <source>BD-RE DL 50 GB, 2 layers (23,652,352 sectors)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="746"/>
+        <source>BD-R XL 100 GB, 3 layers (48,878,592 sectors)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="751"/>
+        <source>BD-R XL 100 GB, first 2 layers only (32,585,728 sectors)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="753"/>
+        <source>BD-R XL 128 GB, 4 layers (62,500,864 sectors)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="775"/>
+        <source>BD 25 GB, 1 layer (12,219,392 sectors)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1150"/>
+        <source>Add a file as a NEW, separate input. To continue a title with its next part instead, select that part&apos;s first file and use join.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1184"/>
+        <source>A Blu-ray carries a TrueHD track with its AC-3 core braided into the same stream, and a Matroska file has to keep them apart. Give the ROW NUMBER of the AC-3 track in the list above and the two are put back together, which is what a disc needs. 0 leaves them separate. That row keeps its tick and is still shown, it simply travels inside the TrueHD track instead of being written on its own.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1191"/>
+        <source>Append another file to the END of the selected one, so the two are muxed as a single continuous title. This is what you want for a film split across two discs or two parts: select part 1, press join, and choose part 2. The appended file is shown indented with ++ beneath the one it continues. Every part must have the same file extension.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1196"/>
+        <source>The files this mux reads. A line indented with ++ is joined onto the file above it and continues it, rather than being a separate input.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1204"/>
+        <source>Remove the selected file, and its tracks with it. Take care with a joined title: a part joined beneath this one with ++ is NOT removed too. It loses the ++ and stays behind as a separate input in its own right, so removing part 1 leaves part 2 muxing on its own.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1209"/>
+        <source>Remove the selected track from the mux altogether. To leave a track out without losing it, untick its box in the list instead: that can be undone, this cannot, and the file has to be added again to get the track back.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1416"/>
+        <location filename="../tsmuxerwindow.cpp" line="2051"/>
+        <source>Picking a disc pre-fills the FULL Free Sectors for that size. ALWAYS check it against what ImgBurn shows for your own disc. A disc formatted with defect management reports less, and how much less depends on how it was formatted: one blank 25 GB disc offered three different spare area sizes, so no single reduced figure can be listed here. If yours differs, tick &quot;Enter Free Sectors manually&quot; and type what ImgBurn shows: the layer break is worked out from that number, so a wrong one puts the guard in the wrong place.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1462"/>
+        <location filename="../tsmuxerwindow.cpp" line="2080"/>
+        <location filename="../tsmuxerwindow.cpp" line="2422"/>
+        <location filename="../tsmuxerwindow.cpp" line="2715"/>
+        <source>Leave out the layer-break guard</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1465"/>
+        <location filename="../tsmuxerwindow.cpp" line="2082"/>
+        <source>An image whose data crosses a layer break gets the layer-break guard set above, as a burnt dual-layer disc often reads badly at the layer change and a player then stalls there. Tick this to leave it out: the image is then written without zeros at the break.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1601"/>
+        <source>At your own risk: many Blu-ray players cannot read 100/128 GB BD-R XL discs at all, and there is no guarantee yours will. Keeping the image around 66 GB (the first two layers, selectable above) and finalizing the disc improves the odds on some players, but even 66 GB is not guaranteed to play. The full 100/128 GB needs a recent player that explicitly supports high-capacity BD-R XL media. Always test on your own device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1607"/>
+        <source>At your own risk: this is still BD-R XL media, which many Blu-ray players cannot read at all. Using only the first two layers and finalizing the disc improves the odds on some players, but nothing guarantees it. Always test on your own device.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="2057"/>
+        <source>ImgBurn -&gt; Free Sectors (e.g. 48,878,592)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="2255"/>
+        <source>Many Blu-ray players cannot read 100/128 GB BD-R XL discs at all, and there is no guarantee yours will. You are proceeding at your own risk.
+
+Keeping the image around 66 GB (the first two layers, selectable as its own disc entry) improves the odds on some players, but even 66 GB is not guaranteed to play. Test on your own device.
+
+Build the ISO anyway?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="2392"/>
+        <location filename="../tsmuxerwindow.cpp" line="2713"/>
+        <source>Also fill before the break</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="2425"/>
+        <location filename="../tsmuxerwindow.cpp" line="2717"/>
+        <source>An ISO image whose data crosses a layer break gets the layer-break guard without being asked: 288 MB after the break and 18 MB before it are left empty, as a burnt dual-layer disc often reads badly there and a player then stalls. Tick this to leave it out. A guard ticked above is used instead.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="2456"/>
+        <location filename="../tsmuxerwindow.cpp" line="2742"/>
+        <source>The guard normally goes entirely after the break, where discs fail most often. Switch this on to fill before it as well, for media that are also weak just before the transition. Both zones are set independently; this one costs that much more space.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="2460"/>
+        <location filename="../tsmuxerwindow.cpp" line="2746"/>
+        <source>How much to fill BEFORE the break. Only used when the box beside it is ticked.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="2466"/>
+        <location filename="../tsmuxerwindow.cpp" line="2705"/>
+        <source>The capacity of the disc you are burning, as ImgBurn reports it under Free Sectors. The layer break is worked out from this number, so if your disc reports something else, tick the box below and enter that value.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="2519"/>
+        <source>Layer break(s) at sector: %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4916"/>
+        <source>tsMuxeR stopped without reporting a reason.
+
+If this appeared while a file was still being examined, or as the window was closing, the process was ended before it could finish. Nothing has been written.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5632"/>
+        <source> (track %1 in the file)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5768"/>
+        <source>TrueHD and its AC-3 core</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5770"/>
+        <source>Track %1 (AC-3 %2, %3) looks like the AC-3 core of the TrueHD track %4. Put it on the disc as the core of the TrueHD track, or keep it as a separate audio track?</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5776"/>
+        <source>As the core</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5777"/>
+        <source>As a separate track</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1339"/>
+        <source>A Blu-ray disc has numbers for 32 tracks of each kind (audio, subtitles, secondary audio, secondary video). More tracks can be written with --allow-extra-tracks: some players show the tracks past the 32nd, others leave them out. Ticked, Start muxing asks first; unticked, they are written without the question.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1342"/>
+        <source>Ask before writing more than 32 tracks of one kind to a disc</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7167"/>
+        <source>More tracks than a disc has numbers for</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7169"/>
+        <source>This disc gets %1. A Blu-ray disc has numbers for 32 tracks of each kind.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7170"/>
+        <source> and </source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7172"/>
+        <source>The tracks past the 32nd get numbers outside that range. Some players show them, others leave them out. Leave tracks out to keep within 32, or write the disc anyway.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7174"/>
+        <source>Write the disc anyway</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7177"/>
+        <source>Don&apos;t ask again</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7178"/>
+        <source>The question comes back with the tick on the General tab.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4604"/>
+        <source>angle %1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4649"/>
+        <source>%1 angle %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5124"/>
+        <source>%1 audio tracks</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5126"/>
+        <source>%1 secondary audio tracks</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5128"/>
+        <source>%1 subtitle tracks</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5130"/>
+        <source>%1 secondary video tracks</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>angle %1 of %2</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>the first angle</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>differs from angle 1</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>Angle %1 differs from the others at:</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5946"/>
+        <source>Track %1: AC-3 %2, %3</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5956"/>
+        <source>A core can only be created from a track of a single file.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5960"/>
+        <source>The TrueHD track %1 of %2 has no AC-3 core. Some players will not play it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5963"/>
+        <source>The TrueHD file %1 has no AC-3 core. Some players will not play it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="3182"/>
+        <source>AC-4 audio</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2270"/>
+        <source>Blu-ray text subtitles go into a Matroska file as SRT, which every player reads. Without this tick they stay TextST, which many players do not read.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2273"/>
+        <source>Convert Blu-ray text subtitles (TextST) to SRT</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
@@ -4549,6 +5164,16 @@ Build the ISO anyway?</source>
     <message>
         <location filename="../muxForm.ui" line="211"/>
         <source>Abort</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../muxForm.ui" line="211"/>
+        <source>Save report...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../muxForm.ui" line="224"/>
+        <source>Make a sample...</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

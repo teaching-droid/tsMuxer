@@ -2,6 +2,89 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="he">
 <context>
+    <name>Ac3CoreDialog</name>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="115"/>
+        <source>%1 does not start here.</source>
+        <translation>%1 לא מופעל כאן.</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="118"/>
+        <source>%1 cannot read TrueHD.</source>
+        <translation>%1 לא יכול לקרוא TrueHD.</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="121"/>
+        <source>%1 cannot write AC-3.</source>
+        <translation>%1 לא יכול לכתוב AC-3.</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="129"/>
+        <source>ffmpeg was not found beside tsMuxeR or on the PATH.</source>
+        <translation>ffmpeg לא נמצא ליד tsMuxeR או ב-PATH.</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="137"/>
+        <source>TrueHD track without an AC-3 core</source>
+        <translation>רצועת TrueHD ללא ליבת AC-3</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="149"/>
+        <source>Use an AC-3 track of the file as the core:</source>
+        <translation>להשתמש ברצועת AC-3 של הקובץ כליבה:</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="157"/>
+        <source>Create an AC-3 core</source>
+        <translation>ליצור ליבת AC-3</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="163"/>
+        <source>Choose ffmpeg...</source>
+        <translation>בחירת ffmpeg...</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="170"/>
+        <source>Continue without a core</source>
+        <translation>להמשיך ללא ליבה</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="189"/>
+        <source>640 kbit/s, 48 kHz, at most 5.1 channels. Made with %1.</source>
+        <translation>640 kbit/s, 48 kHz, לכל היותר 5.1 ערוצים. נוצר באמצעות %1.</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="197"/>
+        <source>Choose ffmpeg</source>
+        <translation>בחירת ffmpeg</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="229"/>
+        <source>Creating the AC-3 core</source>
+        <translation>יוצר את ליבת ה-AC-3</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="240"/>
+        <source>Starting...</source>
+        <translation>מתחיל...</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="297"/>
+        <source>%1 of %2</source>
+        <translation>%1 מתוך %2</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="307"/>
+        <source>The AC-3 core could not be created.</source>
+        <translation>לא ניתן היה ליצור את ליבת ה-AC-3.</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="316"/>
+        <source>ffmpeg could not be started.</source>
+        <translation>לא ניתן היה להפעיל את ffmpeg.</translation>
+    </message>
+</context>
+<context>
     <name>FontSettingsTableModel</name>
     <message>
         <location filename="../fontsettingstablemodel.cpp" line="134"/>
@@ -2480,6 +2563,53 @@
     </message>
 </context>
 <context>
+    <name>MuxForm</name>
+    <message>
+        <location filename="../muxForm.cpp" line="88"/>
+        <source>File names, disc titles, track names and chapter names are replaced by placeholders. This is the text that is attached.</source>
+        <translation>שמות קבצים, כותרי דיסקים, שמות רצועות ושמות פרקים מוחלפים בממלאי מקום. זהו הטקסט שיצורף.</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="101"/>
+        <source>Save...</source>
+        <translation>שמירה...</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="104"/>
+        <source>Copy</source>
+        <translation>העתקה</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="120"/>
+        <location filename="../muxForm.cpp" line="125"/>
+        <location filename="../muxForm.cpp" line="129"/>
+        <location filename="../muxForm.cpp" line="136"/>
+        <location filename="../muxForm.cpp" line="139"/>
+        <source>Save report</source>
+        <translation>שמירת דוח</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="120"/>
+        <source>tsMuxeR wrote no report for this job.</source>
+        <translation>tsMuxeR לא כתב דוח עבור משימה זו.</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="129"/>
+        <source>Text files (*.txt)</source>
+        <translation>קובצי טקסט (*.txt)</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="136"/>
+        <source>The report could not be saved as &quot;%1&quot;.</source>
+        <translation>לא ניתן היה לשמור את הדוח בשם &quot;%1&quot;.</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="140"/>
+        <source>The report is saved as &quot;%1&quot;. Attach this file to the problem report.</source>
+        <translation>הדוח נשמר בשם &quot;%1&quot;. צרפו קובץ זה לדיווח על הבעיה.</translation>
+    </message>
+</context>
+<context>
     <name>QObject</name>
     <message>
         <location filename="../muxForm.cpp" line="56"/>
@@ -2519,6 +2649,145 @@
     <message>
         <source>Close</source>
         <translation>סגור</translation>
+    </message>
+</context>
+<context>
+    <name>SampleDialog</name>
+    <message>
+        <location filename="../sampleDialog.cpp" line="57"/>
+        <source>Make a sample for a problem report</source>
+        <translation>יצירת דוגמה לדיווח על בעיה</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="59"/>
+        <source>A part of the source, copied as it is, to attach to a problem report in place of the whole file. The .zip holds the sample and a report of making it, and stays under 25 MB, the most a file on GitHub may be.</source>
+        <translation>חלק מהמקור, מועתק כפי שהוא, לצירוף לדיווח על בעיה במקום הקובץ כולו. קובץ ה-.zip מכיל את הדוגמה ודוח על יצירתה, ונשאר מתחת ל-25 MB, הגודל המרבי של קובץ ב-GitHub.</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="67"/>
+        <source>Source:</source>
+        <translation>מקור:</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="70"/>
+        <location filename="../sampleDialog.cpp" line="115"/>
+        <source>...</source>
+        <translation>...</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="76"/>
+        <source>Take:</source>
+        <translation>חלק:</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="78"/>
+        <source>the start</source>
+        <translation>ההתחלה</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="79"/>
+        <source>the end</source>
+        <translation>הסוף</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="80"/>
+        <source>around this time (where the problem is):</source>
+        <translation>סביב הזמן הזה (היכן שהבעיה):</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="93"/>
+        <source>Size:</source>
+        <translation>גודל:</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="97"/>
+        <source> MB</source>
+        <translation> MB</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="100"/>
+        <source>(the .zip stays under 25 MB)</source>
+        <translation>(קובץ ה-.zip נשאר מתחת ל-25 MB)</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="104"/>
+        <source>Add the report of the last job</source>
+        <translation>הוספת הדוח של המשימה האחרונה</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="109"/>
+        <source>There is no report of a job: tick &quot;Write a report of each mux for a problem report&quot; in the options and run the job again to have one.</source>
+        <translation>אין דוח של משימה: סמנו &quot;כתיבת דוח של כל מוקסינג לדיווח על בעיה&quot; באפשרויות והריצו את המשימה שוב כדי לקבל דוח.</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="113"/>
+        <source>Save as:</source>
+        <translation>שמירה בשם:</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="127"/>
+        <source>Show report</source>
+        <translation>הצגת הדוח</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="129"/>
+        <source>Make sample</source>
+        <translation>יצירת דוגמה</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="157"/>
+        <source>An MP4 or QuickTime file keeps the place of every frame in one index, so only its start can be taken. Mux it to MKV first to take another part.</source>
+        <translation>קובץ MP4 או QuickTime שומר את המיקום של כל פריים באינדקס אחד, ולכן ניתן לקחת רק את תחילתו. כדי לקחת חלק אחר, בצעו תחילה מוקסינג ל-MKV.</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="161"/>
+        <source>A video stream on its own holds no times. Take its start or its end.</source>
+        <translation>זרם וידאו בפני עצמו אינו מכיל זמנים. קחו את תחילתו או את סופו.</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="169"/>
+        <source>Source of the sample</source>
+        <translation>מקור הדוגמה</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="177"/>
+        <source>Save the sample as</source>
+        <translation>שמירת הדוגמה בשם</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="177"/>
+        <source>Zip files (*.zip)</source>
+        <translation>קובצי Zip (*.zip)</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="186"/>
+        <source>Report of the last job</source>
+        <translation>הדוח של המשימה האחרונה</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="206"/>
+        <source>Making the sample...</source>
+        <translation>הדוגמה נוצרת...</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="216"/>
+        <source>No sample was made.</source>
+        <translation>לא נוצרה דוגמה.</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="229"/>
+        <source>Report of making the sample</source>
+        <translation>דוח יצירת הדוגמה</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="234"/>
+        <source>The sample is saved as &quot;%1&quot;. Attach this .zip file to the problem report.</source>
+        <translation>הדוגמה נשמרה בשם &quot;%1&quot;. צרפו את קובץ ה-.zip הזה לדיווח על הבעיה.</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="234"/>
+        <source>tsMuxeR could not be started, so no sample was made.</source>
+        <translation>לא ניתן היה להפעיל את tsMuxeR, ולכן לא נוצרה דוגמה.</translation>
     </message>
 </context>
 <context>
@@ -4647,6 +4916,175 @@ Build the ISO anyway?</source>
         <source>The track&apos;s number among the tracks of its kind in the clip (the .m2ts file), by PID. It can differ from the playlist&apos;s.</source>
         <translation>מספר הרצועה בין הרצועות מסוגה בקליפ (קובץ ה-.m2ts), לפי PID. הוא יכול להיות שונה מזה של הפלייליסט.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="173"/>
+        <source>A part of the chosen file, to attach to a problem report in place of the whole file</source>
+        <translation>חלק מהקובץ שנבחר, לצירוף לדיווח על בעיה במקום הקובץ כולו</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="176"/>
+        <source>Make a sample...</source>
+        <translation>יצירת דוגמה...</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="830"/>
+        <source>Drop the AC-3 core, keep the lossless part</source>
+        <translation>השמטת ליבת AC-3, שמירת החלק ללא אובדן</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1329"/>
+        <source>tsMuxeR writes a text file of each mux: what it was given, every message, what each track read and left out, and what it wrote. Save report... in the progress window keeps it, to attach to a problem report in place of the file itself. Folder names are left out of it, and the names of files, titles, track names and chapter names are replaced by placeholders.</source>
+        <translation>tsMuxeR כותב קובץ טקסט על כל מוקסינג: מה שקיבל, כל הודעה, מה שכל רצועה קראה והשמיטה ומה שכתב. &quot;שמירת דוח...&quot; בחלון ההתקדמות שומר אותו, לצירוף לדיווח על בעיה במקום הקובץ עצמו. שמות תיקיות מושמטים ממנו, ושמות קבצים, כותרים, שמות רצועות ושמות פרקים מוחלפים בממלאי מקום.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1332"/>
+        <source>Write a report of each mux for a problem report</source>
+        <translation>כתיבת דוח של כל מוקסינג לדיווח על בעיה</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4916"/>
+        <source>tsMuxeR stopped without reporting a reason.
+
+If this appeared while a file was still being examined, or as the window was closing, the process was ended before it could finish. Nothing has been written.</source>
+        <translation>tsMuxeR נעצר בלי לדווח על סיבה.
+
+אם הודעה זו הופיעה בזמן שקובץ עדיין נבדק, או בעת סגירת החלון, התהליך הסתיים לפני שהספיק להשלים. דבר לא נכתב.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1184"/>
+        <source>A Blu-ray carries a TrueHD track with its AC-3 core braided into the same stream, and a Matroska file has to keep them apart. Give the ROW NUMBER of the AC-3 track in the list above and the two are put back together, which is what a disc needs. 0 leaves them separate. That row keeps its tick and is still shown, it simply travels inside the TrueHD track instead of being written on its own.</source>
+        <translation>דיסק Blu-ray נושא רצועת TrueHD שליבת ה-AC-3 שלה שזורה באותו זרם, וקובץ Matroska חייב להחזיק אותן בנפרד. ציינו את מספר השורה של רצועת ה-AC-3 ברשימה שלמעלה ושתיהן יאוחדו שוב, כפי שדיסק צריך. 0 משאיר אותן נפרדות. השורה הזו שומרת על הסימון שלה וממשיכה להופיע; היא פשוט עוברת בתוך רצועת ה-TrueHD במקום להיכתב בנפרד.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1339"/>
+        <source>A Blu-ray disc has numbers for 32 tracks of each kind (audio, subtitles, secondary audio, secondary video). More tracks can be written with --allow-extra-tracks: some players show the tracks past the 32nd, others leave them out. Ticked, Start muxing asks first; unticked, they are written without the question.</source>
+        <translation>לדיסק Blu-ray יש מספרים ל-32 רצועות מכל סוג (שמע, כתוביות, שמע משני, וידאו משני). אפשר לכתוב יותר רצועות עם --allow-extra-tracks: יש נגנים שמציגים את הרצועות שאחרי ה-32 ויש שמשמיטים אותן. כשמסומן, התחלת המוקסינג שואלת קודם; כשלא מסומן, הן נכתבות בלי שאלה.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1342"/>
+        <source>Ask before writing more than 32 tracks of one kind to a disc</source>
+        <translation>לשאול לפני כתיבת יותר מ-32 רצועות מסוג אחד לדיסק</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4604"/>
+        <source>angle %1</source>
+        <translation>זווית %1</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4649"/>
+        <source>%1 angle %2</source>
+        <translation>%1 זווית %2</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5124"/>
+        <source>%1 audio tracks</source>
+        <translation>%1 רצועות שמע</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5126"/>
+        <source>%1 secondary audio tracks</source>
+        <translation>%1 רצועות שמע משני</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5128"/>
+        <source>%1 subtitle tracks</source>
+        <translation>%1 רצועות כתוביות</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5130"/>
+        <source>%1 secondary video tracks</source>
+        <translation>%1 רצועות וידאו משני</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7167"/>
+        <source>More tracks than a disc has numbers for</source>
+        <translation>יותר רצועות ממספרים שיש לדיסק</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7169"/>
+        <source>This disc gets %1. A Blu-ray disc has numbers for 32 tracks of each kind.</source>
+        <translation>הדיסק הזה מקבל %1. לדיסק Blu-ray יש מספרים ל-32 רצועות מכל סוג.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7170"/>
+        <source> and </source>
+        <translation> ו</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7172"/>
+        <source>The tracks past the 32nd get numbers outside that range. Some players show them, others leave them out. Leave tracks out to keep within 32, or write the disc anyway.</source>
+        <translation>הרצועות שאחרי ה-32 מקבלות מספרים מחוץ לטווח הזה. יש נגנים שמציגים אותן ויש שמשמיטים אותן. השמיטו רצועות כדי להישאר ב-32, או כתבו את הדיסק בכל זאת.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7174"/>
+        <source>Write the disc anyway</source>
+        <translation>לכתוב את הדיסק בכל זאת</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7177"/>
+        <source>Don&apos;t ask again</source>
+        <translation>לא לשאול שוב</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7178"/>
+        <source>The question comes back with the tick on the General tab.</source>
+        <translation>השאלה חוזרת עם הסימון בכרטיסייה &quot;כללי&quot;.</translation>
+    </message>
+    <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>angle %1 of %2</source>
+        <translation>זווית %1 מתוך %2</translation>
+    </message>
+    <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>the first angle</source>
+        <translation>הזווית הראשונה</translation>
+    </message>
+    <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>differs from angle 1</source>
+        <translation>שונה מזווית 1</translation>
+    </message>
+    <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>Angle %1 differs from the others at:</source>
+        <translation>זווית %1 שונה מהאחרות ב:</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5946"/>
+        <source>Track %1: AC-3 %2, %3</source>
+        <translation>רצועה %1: AC-3 %2, %3</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5956"/>
+        <source>A core can only be created from a track of a single file.</source>
+        <translation>ניתן ליצור ליבה רק מרצועה של קובץ יחיד.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5960"/>
+        <source>The TrueHD track %1 of %2 has no AC-3 core. Some players will not play it.</source>
+        <translation>לרצועת ה-TrueHD %1 של %2 אין ליבת AC-3. נגנים מסוימים לא ינגנו אותה.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5963"/>
+        <source>The TrueHD file %1 has no AC-3 core. Some players will not play it.</source>
+        <translation>לקובץ ה-TrueHD %1 אין ליבת AC-3. נגנים מסוימים לא ינגנו אותו.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="3182"/>
+        <source>AC-4 audio</source>
+        <translation>שמע AC-4</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2270"/>
+        <source>Blu-ray text subtitles go into a Matroska file as SRT, which every player reads. Without this tick they stay TextST, which many players do not read.</source>
+        <translation>כתוביות טקסט של Blu-ray נכנסות לקובץ Matroska כ-SRT, שכל נגן קורא. ללא סימון זה הן נשארות TextST, שנגנים רבים לא קוראים.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2273"/>
+        <source>Convert Blu-ray text subtitles (TextST) to SRT</source>
+        <translation>להמיר כתוביות טקסט של Blu-ray (TextST) ל-SRT</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
@@ -4694,6 +5132,16 @@ Build the ISO anyway?</source>
         <location filename="../muxForm.ui" line="211"/>
         <source>Abort</source>
         <translation>לְהַפִּיל</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.ui" line="211"/>
+        <source>Save report...</source>
+        <translation>שמירת דוח...</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.ui" line="224"/>
+        <source>Make a sample...</source>
+        <translation>יצירת דוגמה...</translation>
     </message>
 </context>
 </TS>

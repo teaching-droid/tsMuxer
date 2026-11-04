@@ -2,6 +2,89 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="fr">
 <context>
+    <name>Ac3CoreDialog</name>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="115"/>
+        <source>%1 does not start here.</source>
+        <translation>%1 ne démarre pas ici.</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="118"/>
+        <source>%1 cannot read TrueHD.</source>
+        <translation>%1 ne peut pas lire le TrueHD.</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="121"/>
+        <source>%1 cannot write AC-3.</source>
+        <translation>%1 ne peut pas écrire de l&apos;AC-3.</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="129"/>
+        <source>ffmpeg was not found beside tsMuxeR or on the PATH.</source>
+        <translation>ffmpeg n&apos;a été trouvé ni à côté de tsMuxeR ni dans le PATH.</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="137"/>
+        <source>TrueHD track without an AC-3 core</source>
+        <translation>Piste TrueHD sans noyau AC-3</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="149"/>
+        <source>Use an AC-3 track of the file as the core:</source>
+        <translation>Utiliser une piste AC-3 du fichier comme noyau :</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="157"/>
+        <source>Create an AC-3 core</source>
+        <translation>Créer un noyau AC-3</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="163"/>
+        <source>Choose ffmpeg...</source>
+        <translation>Choisir ffmpeg...</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="170"/>
+        <source>Continue without a core</source>
+        <translation>Continuer sans noyau</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="189"/>
+        <source>640 kbit/s, 48 kHz, at most 5.1 channels. Made with %1.</source>
+        <translation>640 kbit/s, 48 kHz, 5.1 canaux au plus. Créé avec %1.</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="197"/>
+        <source>Choose ffmpeg</source>
+        <translation>Choisir ffmpeg</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="229"/>
+        <source>Creating the AC-3 core</source>
+        <translation>Création du noyau AC-3</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="240"/>
+        <source>Starting...</source>
+        <translation>Démarrage...</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="297"/>
+        <source>%1 of %2</source>
+        <translation>%1 sur %2</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="307"/>
+        <source>The AC-3 core could not be created.</source>
+        <translation>Le noyau AC-3 n&apos;a pas pu être créé.</translation>
+    </message>
+    <message>
+        <location filename="../ac3CoreDialog.cpp" line="316"/>
+        <source>ffmpeg could not be started.</source>
+        <translation>ffmpeg n&apos;a pas pu être lancé.</translation>
+    </message>
+</context>
+<context>
     <name>FontSettingsTableModel</name>
     <message>
         <location filename="../fontsettingstablemodel.cpp" line="134"/>
@@ -2480,6 +2563,53 @@
     </message>
 </context>
 <context>
+    <name>MuxForm</name>
+    <message>
+        <location filename="../muxForm.cpp" line="88"/>
+        <source>File names, disc titles, track names and chapter names are replaced by placeholders. This is the text that is attached.</source>
+        <translation>Les noms de fichiers, les titres de disque, les noms de pistes et les noms de chapitres sont remplacés par des marqueurs. Voici le texte qui sera joint.</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="101"/>
+        <source>Save...</source>
+        <translation>Enregistrer...</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="104"/>
+        <source>Copy</source>
+        <translation>Copier</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="120"/>
+        <location filename="../muxForm.cpp" line="125"/>
+        <location filename="../muxForm.cpp" line="129"/>
+        <location filename="../muxForm.cpp" line="136"/>
+        <location filename="../muxForm.cpp" line="139"/>
+        <source>Save report</source>
+        <translation>Enregistrer le rapport</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="120"/>
+        <source>tsMuxeR wrote no report for this job.</source>
+        <translation>tsMuxeR n&apos;a écrit aucun rapport pour cette tâche.</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="129"/>
+        <source>Text files (*.txt)</source>
+        <translation>Fichiers texte (*.txt)</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="136"/>
+        <source>The report could not be saved as &quot;%1&quot;.</source>
+        <translation>Le rapport n&apos;a pas pu être enregistré sous &quot;%1&quot;.</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.cpp" line="140"/>
+        <source>The report is saved as &quot;%1&quot;. Attach this file to the problem report.</source>
+        <translation>Le rapport est enregistré sous &quot;%1&quot;. Joignez ce fichier au signalement du problème.</translation>
+    </message>
+</context>
+<context>
     <name>QObject</name>
     <message>
         <location filename="../muxForm.cpp" line="56"/>
@@ -2519,6 +2649,145 @@
     <message>
         <source>Close</source>
         <translation>Fermer</translation>
+    </message>
+</context>
+<context>
+    <name>SampleDialog</name>
+    <message>
+        <location filename="../sampleDialog.cpp" line="57"/>
+        <source>Make a sample for a problem report</source>
+        <translation>Créer un échantillon pour un signalement de problème</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="59"/>
+        <source>A part of the source, copied as it is, to attach to a problem report in place of the whole file. The .zip holds the sample and a report of making it, and stays under 25 MB, the most a file on GitHub may be.</source>
+        <translation>Une partie de la source, copiée telle quelle, à joindre à un signalement de problème à la place du fichier entier. Le .zip contient l&apos;échantillon et un rapport de sa création, et reste sous 25 Mo, la taille maximale d&apos;un fichier sur GitHub.</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="67"/>
+        <source>Source:</source>
+        <translation>Source :</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="70"/>
+        <location filename="../sampleDialog.cpp" line="115"/>
+        <source>...</source>
+        <translation>...</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="76"/>
+        <source>Take:</source>
+        <translation>Partie :</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="78"/>
+        <source>the start</source>
+        <translation>le début</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="79"/>
+        <source>the end</source>
+        <translation>la fin</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="80"/>
+        <source>around this time (where the problem is):</source>
+        <translation>autour de ce moment (là où se trouve le problème) :</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="93"/>
+        <source>Size:</source>
+        <translation>Taille :</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="97"/>
+        <source> MB</source>
+        <translation> Mo</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="100"/>
+        <source>(the .zip stays under 25 MB)</source>
+        <translation>(le .zip reste sous 25 Mo)</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="104"/>
+        <source>Add the report of the last job</source>
+        <translation>Ajouter le rapport de la dernière tâche</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="109"/>
+        <source>There is no report of a job: tick &quot;Write a report of each mux for a problem report&quot; in the options and run the job again to have one.</source>
+        <translation>Il n&apos;y a aucun rapport de tâche : cochez &quot;Écrire un rapport de chaque multiplexage pour un signalement de problème&quot; dans les options et relancez la tâche pour en avoir un.</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="113"/>
+        <source>Save as:</source>
+        <translation>Enregistrer sous :</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="127"/>
+        <source>Show report</source>
+        <translation>Afficher le rapport</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="129"/>
+        <source>Make sample</source>
+        <translation>Créer l&apos;échantillon</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="157"/>
+        <source>An MP4 or QuickTime file keeps the place of every frame in one index, so only its start can be taken. Mux it to MKV first to take another part.</source>
+        <translation>Un fichier MP4 ou QuickTime garde l&apos;emplacement de chaque image dans un seul index ; seul son début peut donc être pris. Multiplexez-le d&apos;abord en MKV pour en prendre une autre partie.</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="161"/>
+        <source>A video stream on its own holds no times. Take its start or its end.</source>
+        <translation>Un flux vidéo seul ne contient aucun horodatage. Prenez son début ou sa fin.</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="169"/>
+        <source>Source of the sample</source>
+        <translation>Source de l&apos;échantillon</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="177"/>
+        <source>Save the sample as</source>
+        <translation>Enregistrer l&apos;échantillon sous</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="177"/>
+        <source>Zip files (*.zip)</source>
+        <translation>Fichiers zip (*.zip)</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="186"/>
+        <source>Report of the last job</source>
+        <translation>Rapport de la dernière tâche</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="206"/>
+        <source>Making the sample...</source>
+        <translation>Création de l&apos;échantillon...</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="216"/>
+        <source>No sample was made.</source>
+        <translation>Aucun échantillon n&apos;a été créé.</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="229"/>
+        <source>Report of making the sample</source>
+        <translation>Rapport de création de l&apos;échantillon</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="234"/>
+        <source>The sample is saved as &quot;%1&quot;. Attach this .zip file to the problem report.</source>
+        <translation>L&apos;échantillon est enregistré sous &quot;%1&quot;. Joignez ce fichier .zip au signalement du problème.</translation>
+    </message>
+    <message>
+        <location filename="../sampleDialog.cpp" line="234"/>
+        <source>tsMuxeR could not be started, so no sample was made.</source>
+        <translation>tsMuxeR n&apos;a pas pu être lancé, aucun échantillon n&apos;a donc été créé.</translation>
     </message>
 </context>
 <context>
@@ -4647,6 +4916,175 @@ Créer l'ISO malgré tout ?</translation>
         <source>The track&apos;s number among the tracks of its kind in the clip (the .m2ts file), by PID. It can differ from the playlist&apos;s.</source>
         <translation>Le numéro de la piste parmi les pistes de son type dans le clip (le fichier .m2ts), par PID. Il peut différer de celui de la liste de lecture.</translation>
     </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="173"/>
+        <source>A part of the chosen file, to attach to a problem report in place of the whole file</source>
+        <translation>Une partie du fichier choisi, à joindre à un signalement de problème à la place du fichier entier</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="176"/>
+        <source>Make a sample...</source>
+        <translation>Créer un échantillon...</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="830"/>
+        <source>Drop the AC-3 core, keep the lossless part</source>
+        <translation>Supprimer le noyau AC-3, garder la partie sans perte</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1329"/>
+        <source>tsMuxeR writes a text file of each mux: what it was given, every message, what each track read and left out, and what it wrote. Save report... in the progress window keeps it, to attach to a problem report in place of the file itself. Folder names are left out of it, and the names of files, titles, track names and chapter names are replaced by placeholders.</source>
+        <translation>tsMuxeR écrit un fichier texte pour chaque multiplexage : ce qu&apos;il a reçu, chaque message, ce que chaque piste a lu et laissé de côté, et ce qu&apos;il a écrit. &quot;Enregistrer le rapport...&quot; dans la fenêtre de progression le conserve, à joindre à un signalement de problème à la place du fichier lui-même. Les noms de dossiers en sont absents, et les noms de fichiers, de titres, de pistes et de chapitres sont remplacés par des marqueurs.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1332"/>
+        <source>Write a report of each mux for a problem report</source>
+        <translation>Écrire un rapport de chaque multiplexage pour un signalement de problème</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4916"/>
+        <source>tsMuxeR stopped without reporting a reason.
+
+If this appeared while a file was still being examined, or as the window was closing, the process was ended before it could finish. Nothing has been written.</source>
+        <translation>tsMuxeR s&apos;est arrêté sans indiquer de raison.
+
+Si ce message est apparu pendant l&apos;examen d&apos;un fichier, ou à la fermeture de la fenêtre, le processus a été arrêté avant de pouvoir se terminer. Rien n&apos;a été écrit.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="1184"/>
+        <source>A Blu-ray carries a TrueHD track with its AC-3 core braided into the same stream, and a Matroska file has to keep them apart. Give the ROW NUMBER of the AC-3 track in the list above and the two are put back together, which is what a disc needs. 0 leaves them separate. That row keeps its tick and is still shown, it simply travels inside the TrueHD track instead of being written on its own.</source>
+        <translation>Un Blu-ray porte une piste TrueHD dont le noyau AC-3 est entrelacé dans le même flux, et un fichier Matroska doit les garder séparés. Indiquez le NUMÉRO DE LIGNE de la piste AC-3 dans la liste ci-dessus et les deux sont réunis, ce dont un disque a besoin. 0 les laisse séparés. Cette ligne garde sa coche et reste affichée ; elle voyage simplement dans la piste TrueHD au lieu d&apos;être écrite à part.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1339"/>
+        <source>A Blu-ray disc has numbers for 32 tracks of each kind (audio, subtitles, secondary audio, secondary video). More tracks can be written with --allow-extra-tracks: some players show the tracks past the 32nd, others leave them out. Ticked, Start muxing asks first; unticked, they are written without the question.</source>
+        <translation>Un disque Blu-ray a des numéros pour 32 pistes de chaque sorte (audio, sous-titres, audio secondaire, vidéo secondaire). D&apos;autres pistes peuvent être écrites avec --allow-extra-tracks : certains lecteurs affichent les pistes au-delà de la 32e, d&apos;autres les ignorent. Coché, le démarrage du multiplexage demande d&apos;abord ; décoché, elles sont écrites sans question.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="1342"/>
+        <source>Ask before writing more than 32 tracks of one kind to a disc</source>
+        <translation>Demander avant d&apos;écrire plus de 32 pistes d&apos;une même sorte sur un disque</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4604"/>
+        <source>angle %1</source>
+        <translation>angle %1</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="4649"/>
+        <source>%1 angle %2</source>
+        <translation>%1 angle %2</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5124"/>
+        <source>%1 audio tracks</source>
+        <translation>%1 pistes audio</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5126"/>
+        <source>%1 secondary audio tracks</source>
+        <translation>%1 pistes audio secondaires</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5128"/>
+        <source>%1 subtitle tracks</source>
+        <translation>%1 pistes de sous-titres</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5130"/>
+        <source>%1 secondary video tracks</source>
+        <translation>%1 pistes vidéo secondaires</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7167"/>
+        <source>More tracks than a disc has numbers for</source>
+        <translation>Plus de pistes qu&apos;un disque n&apos;a de numéros</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7169"/>
+        <source>This disc gets %1. A Blu-ray disc has numbers for 32 tracks of each kind.</source>
+        <translation>Ce disque reçoit %1. Un disque Blu-ray a des numéros pour 32 pistes de chaque sorte.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7170"/>
+        <source> and </source>
+        <translation> et </translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7172"/>
+        <source>The tracks past the 32nd get numbers outside that range. Some players show them, others leave them out. Leave tracks out to keep within 32, or write the disc anyway.</source>
+        <translation>Les pistes au-delà de la 32e reçoivent des numéros hors de cette plage. Certains lecteurs les affichent, d&apos;autres les ignorent. Retirez des pistes pour rester à 32, ou écrivez le disque quand même.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7174"/>
+        <source>Write the disc anyway</source>
+        <translation>Écrire le disque quand même</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7177"/>
+        <source>Don&apos;t ask again</source>
+        <translation>Ne plus demander</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="7178"/>
+        <source>The question comes back with the tick on the General tab.</source>
+        <translation>La question revient avec la case à cocher de l&apos;onglet Général.</translation>
+    </message>
+    <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>angle %1 of %2</source>
+        <translation>angle %1 sur %2</translation>
+    </message>
+    <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>the first angle</source>
+        <translation>le premier angle</translation>
+    </message>
+    <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>differs from angle 1</source>
+        <translation>diffère de l&apos;angle 1</translation>
+    </message>
+    <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>Angle %1 differs from the others at:</source>
+        <translation>L&apos;angle %1 diffère des autres à :</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5946"/>
+        <source>Track %1: AC-3 %2, %3</source>
+        <translation>Piste %1 : AC-3 %2, %3</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5956"/>
+        <source>A core can only be created from a track of a single file.</source>
+        <translation>Un noyau ne peut être créé qu&apos;à partir d&apos;une piste d&apos;un seul fichier.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5960"/>
+        <source>The TrueHD track %1 of %2 has no AC-3 core. Some players will not play it.</source>
+        <translation>La piste TrueHD %1 de %2 n&apos;a pas de noyau AC-3. Certains lecteurs ne la liront pas.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="5963"/>
+        <source>The TrueHD file %1 has no AC-3 core. Some players will not play it.</source>
+        <translation>Le fichier TrueHD %1 n&apos;a pas de noyau AC-3. Certains lecteurs ne le liront pas.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.cpp" line="3182"/>
+        <source>AC-4 audio</source>
+        <translation>Audio AC-4</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2270"/>
+        <source>Blu-ray text subtitles go into a Matroska file as SRT, which every player reads. Without this tick they stay TextST, which many players do not read.</source>
+        <translation>Les sous-titres texte Blu-ray vont dans un fichier Matroska en SRT, que tous les lecteurs lisent. Sans cette case, ils restent en TextST, que beaucoup de lecteurs ne lisent pas.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="2273"/>
+        <source>Convert Blu-ray text subtitles (TextST) to SRT</source>
+        <translation>Convertir les sous-titres texte Blu-ray (TextST) en SRT</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
@@ -4694,6 +5132,16 @@ Créer l'ISO malgré tout ?</translation>
         <location filename="../muxForm.ui" line="211"/>
         <source>Abort</source>
         <translation>Annuler</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.ui" line="211"/>
+        <source>Save report...</source>
+        <translation>Enregistrer le rapport...</translation>
+    </message>
+    <message>
+        <location filename="../muxForm.ui" line="224"/>
+        <source>Make a sample...</source>
+        <translation>Créer un échantillon...</translation>
     </message>
 </context>
 </TS>

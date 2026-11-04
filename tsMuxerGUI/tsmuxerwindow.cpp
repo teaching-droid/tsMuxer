@@ -540,6 +540,11 @@ void initLanguageComboBox(QComboBox* comboBox)
     comboBox->addItem(QString::fromUtf8("עִברִית"), "he");
     comboBox->addItem(QString::fromUtf8("Español"), "es");
     comboBox->addItem(QString::fromUtf8("日本語"), "ja");
+    comboBox->addItem(QString::fromUtf8("Português (Brasil)"), "pt_BR");
+    comboBox->addItem(QString::fromUtf8("Italiano"), "it");
+    comboBox->addItem(QString::fromUtf8("繁體中文"), "zh_TW");
+    comboBox->addItem(QString::fromUtf8("한국어"), "ko");
+    comboBox->addItem(QString::fromUtf8("Polski"), "pl");
     comboBox->setCurrentIndex(-1);  // makes sure currentIndexChanged() is emitted when reading settings.
 }
 
@@ -5730,6 +5735,8 @@ void TsMuxerWindow::onLanguageComboBoxIndexChanged(int idx)
         (void)qtCoreTranslator.load(QString("qtbase_%1").arg(lang), QLibraryInfo::path(QLibraryInfo::TranslationsPath));
     (void)tsMuxerTranslator.load(QString("tsmuxergui_%1").arg(lang), ":/i18n");
     QFile aboutContent(QString(":/about_%1.html").arg(lang));
+    if (!aboutContent.exists())
+        aboutContent.setFileName(QStringLiteral(":/about_en.html"));  // a language without its own About page
     if (aboutContent.open(QIODevice::ReadOnly))
     {
         ui->textEdit->setHtml(QString::fromUtf8(aboutContent.readAll()));
@@ -8237,8 +8244,15 @@ bool TsMuxerWindow::readGeneralSettings(const QString& prefix)
             idx = 0;
             for (const QString& name : QLocale::system().uiLanguages())
             {
-                const int found = ui->languageSelectComboBox->findData(
-                    name.section(QLatin1Char('-'), 0, 0).section(QLatin1Char('_'), 0, 0).toLower());
+                // the language with its region first ("pt_BR", "zh_TW"), then the language alone
+                QString code = name;
+                code.replace(QLatin1Char('-'), QLatin1Char('_'));
+                int found = ui->languageSelectComboBox->findData(code.section(QLatin1Char('_'), 0, 0).toLower() +
+                                                                 QLatin1Char('_') +
+                                                                 code.section(QLatin1Char('_'), 1, 1).toUpper());
+                if (found < 0)
+                    found = ui->languageSelectComboBox->findData(
+                        name.section(QLatin1Char('-'), 0, 0).section(QLatin1Char('_'), 0, 0).toLower());
                 if (found >= 0)
                 {
                     idx = found;
