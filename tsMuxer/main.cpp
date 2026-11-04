@@ -1129,7 +1129,8 @@ Names of codecs in the meta file:
 - A_OPUS            Opus, also from an Ogg file, to TS or MKV output or demuxed only
 - A_VORBIS          Vorbis, from MKV/WebM/MP4 or an Ogg file, to MKV output or demuxed to .ogg
 - A_ALAC            Apple Lossless, from MKV, to MKV output only
-- A_LPCM            raw pcm data or PCM WAV file
+- A_LPCM            raw pcm data or PCM WAV file: 8 to 32 bit, or 32 or 64 bit
+                    float; a disc and a TS get 16 or 24 bit
 - S_HDMV/PGS        Presentation graphic stream (BD subtitle format)
 - S_TEXT/UTF8        SRT subtitle format. Encoding MUST be UTF-8/UTF-16/UTF-32
 

@@ -1019,7 +1019,7 @@ class MovParsedPCMTrackData final : public ParsedTrackPrivData
     void setPrivData(uint8_t* buff, const int size) override
     {
         // pcmC (ISO/IEC 23003-5, 5.2): version and flags, format_flags (bit 0: little endian), PCM_sample_size
-        if (m_format == MKTAG('i', 'p', 'c', 'm') && buff && size >= 6)
+        if ((m_format == MKTAG('i', 'p', 'c', 'm') || m_format == MKTAG('f', 'p', 'c', 'm')) && buff && size >= 6)
         {
             m_sc->pcmBigEndian = (buff[4] & 1) == 0;
             m_sc->bits_per_coded_sample = buff[5];
@@ -1038,8 +1038,10 @@ class MovParsedPCMTrackData final : public ParsedTrackPrivData
         unsigned bits = m_sc->bits_per_coded_sample;
         if (m_format == MKTAG('i', 'n', '2', '4'))
             bits = 24;
-        else if (m_format == MKTAG('i', 'n', '3', '2'))
+        else if (m_format == MKTAG('i', 'n', '3', '2') || m_format == MKTAG('f', 'l', '3', '2'))
             bits = 32;
+        else if (m_format == MKTAG('f', 'l', '6', '4'))
+            bits = 64;
         return m_sc->channels * (bits / 8);
     }
 
@@ -1058,6 +1060,10 @@ class MovParsedPCMTrackData final : public ParsedTrackPrivData
             wave_format::toLittleEndian(dst, buff, size, m_bits);
         else
             memcpy(dst, buff, size);
+        // 8 bit samples are signed in sowt, twos and ipcm, and in lpcm where its flags say so
+        // (kAudioFormatFlagIsSigned- Integer, 4), and unsigned in a WAV, the form they are handed on in
+        if (m_bits == 8 && !m_sc->pcmFloat && (m_format != MKTAG('l', 'p', 'c', 'm') || (m_sc->lpcmFlags & 4)))
+            for (int i = 0; i < size; ++i) dst[i] ^= 0x80;
         pkt->size = static_cast<int>(dst - pkt->data) + size;
     }
 
@@ -1069,17 +1075,19 @@ class MovParsedPCMTrackData final : public ParsedTrackPrivData
         m_bits = static_cast<uint16_t>(m_sc->bits_per_coded_sample);
         if (m_format == MKTAG('i', 'n', '2', '4'))
             m_bits = 24;
-        else if (m_format == MKTAG('i', 'n', '3', '2'))
+        else if (m_format == MKTAG('i', 'n', '3', '2') || m_format == MKTAG('f', 'l', '3', '2'))
             m_bits = 32;
+        else if (m_format == MKTAG('f', 'l', '6', '4'))
+            m_bits = 64;
         if (m_format == MKTAG('l', 'p', 'c', 'm'))
         {
             m_sc->pcmFloat = m_sc->lpcmFlags & 1;
             m_sc->pcmBigEndian = (m_sc->lpcmFlags & 2) != 0;
         }
-        if (m_sc->pcmFloat)
-            THROW(ERR_MOV_PARSE, "MP4/MOV: floating point PCM is not supported")
+        if (m_sc->pcmFloat && m_bits != 32 && m_bits != 64)
+            THROW(ERR_MOV_PARSE, "MP4/MOV: floating point PCM of " << m_bits << " bits; only 32 and 64 bit is read")
         const auto channels = static_cast<uint16_t>(m_sc->channels);
-        wave_format::buildWaveHeader(m_wave, m_sc->sample_rate, channels, channels >= 6, m_bits);
+        wave_format::buildWaveHeader(m_wave, m_sc->sample_rate, channels, channels >= 6, m_bits, m_sc->pcmFloat);
     }
     MOVStreamContext* m_sc;
     uint32_t m_format;
@@ -3668,17 +3676,16 @@ int MovDemuxer::mov_read_stsd(MOVAtom atom)
             st->pcmBigEndian = format != MKTAG('s', 'o', 'w', 't');
             st->parsed_priv_data = new MovParsedPCMTrackData(st, format);
             break;
-        // Floating point PCM, which no output takes: QuickTime's fl32 and fl64 and ISO/IEC 23003-5's fpcm. They were
-        // listed as "Can't detect stream type" and left out without a word; the listing now names them, and a meta
-        // line that names one is refused with what it holds (a float lpcm entry: see the end of the entry).
+        // Floating point PCM: QuickTime's fl32 and fl64 (big endian unless an enda box says otherwise) and ISO/IEC
+        // 23003-5's fpcm (its pcmC box says). They were left out; a Matroska output and a demux now keep them, and a
+        // disc or a TS gets them as 24 bit LPCM (LPCMStreamReader::convertSamples).
         case MKTAG('f', 'l', '3', '2'):
-            st->notMuxed = "floating point PCM, 32 bit (fl32)";
-            break;
         case MKTAG('f', 'l', '6', '4'):
-            st->notMuxed = "floating point PCM, 64 bit (fl64)";
-            break;
         case MKTAG('f', 'p', 'c', 'm'):
-            st->notMuxed = "floating point PCM (fpcm)";
+            st->type = IOContextTrackType::AUDIO;
+            st->pcmBigEndian = true;
+            st->pcmFloat = true;
+            st->parsed_priv_data = new MovParsedPCMTrackData(st, format);
             break;
         case MKTAG('t', 'x', '3', 'g'):
             st->type = IOContextTrackType::SUBTITLE;
@@ -3839,16 +3846,10 @@ if (bits_per_sample) {
             skip_bytes(size - (m_processedBytes - start_pos));
         }
 
-        // A QuickTime lpcm entry says in its flags (version 2) whether its samples are floating point. Such a track
-        // stopped the listing of the whole file, and a mux at its first packet, with "floating point PCM is not
-        // supported". It is left out as fl32 and fl64 are.
+        // A QuickTime lpcm entry says in its flags (version 2) whether its samples are floating point; they are read
+        // as fl32 and fl64 are (MovParsedPCMTrackData::prepare)
         if (format == MKTAG('l', 'p', 'c', 'm') && st->type == IOContextTrackType::AUDIO && (st->lpcmFlags & 1))
-        {
-            st->notMuxed = "floating point PCM, " + std::to_string(st->bits_per_coded_sample) + " bit (lpcm)";
-            delete st->parsed_priv_data;
-            st->parsed_priv_data = nullptr;
-            st->type = IOContextTrackType::DATA;
-        }
+            st->pcmFloat = true;
 
         // For mp4a tracks, seed AAC codec defaults from stsd fields so that
         // a usable ADTS header can be built even if no ESDS atom is found.

@@ -71,6 +71,12 @@ class LPCMStreamReader final : public SimplePacketizerReader
     int flushPacket(AVPacket& avPacket) override;
     void onSplitEvent() override { m_firstFrame = true; }
     void setBuffer(uint8_t* data, uint32_t dataLen, bool lastBlock = false) override;
+    // The samples as a demux and a Matroska output keep them: their size in bits, and whether they are floating point
+    [[nodiscard]] int keptBits() const
+    {
+        return m_srcBits ? m_srcBits : (m_bitsPerSample == 20 ? 24 : m_bitsPerSample);
+    }
+    [[nodiscard]] bool keptFloat() const { return m_srcFloat; }
 
    private:
     LPCMHeaderType m_headerType;
@@ -84,6 +90,23 @@ class LPCMStreamReader final : public SimplePacketizerReader
     bool m_needPCMHdr;
 
     uint16_t m_bitsPerSample;
+    // ** SAMPLES A DISC DOES NOT TAKE. ** A WAV of 8 bit, 32 bit or floating point samples: m_srcBits is their size (8,
+    // 32, 64) and m_srcFloat says they are floating point, m_bitsPerSample then the size a disc gets (16 or 24). 0: the
+    // samples are taken as they are. A demux and a Matroska output keep them; the disc and TS path converts them
+    // (convertSamples).
+    uint16_t m_srcBits = 0;
+    bool m_srcFloat = false;
+    std::vector<uint8_t> m_convBuffer;
+    int64_t m_convSamples = 0;  // samples of one channel converted so far: the time of a warning
+    int64_t m_clipped = 0;      // floating point samples above full scale, clipped
+    bool m_lowBitsSaid = false;
+    bool m_clipSaid = false;
+    bool m_convertSaid = false;
+    [[nodiscard]] int sourceSampleBytes() const
+    {
+        return m_srcBits ? m_srcBits / 8 : (m_bitsPerSample == 20 ? 3 : m_bitsPerSample / 8);
+    }
+    void convertSamples(const uint8_t* start, const uint8_t* end);
     int32_t m_freq;
     uint8_t m_channels;
     bool m_lfeExists;

@@ -525,7 +525,11 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
         {
             // 20 bit samples are carried in 3 bytes each, and A_PCM/INT/LIT has no other field to give the size of a
             // sample: BitDepth 20 over 3 byte samples was read as 20 bit samples, noise at 1.5 times the length.
-            track.bitDepth = lpcmReader->m_bitsPerSample == 20 ? 24 : lpcmReader->m_bitsPerSample;
+            // 8 bit, 32 bit and floating point samples are kept as they are: keptBits is their size, and floating
+            // point has a codec ID of its own
+            track.bitDepth = lpcmReader->keptBits();
+            if (lpcmReader->keptFloat())
+                track.matroskaCodecID = MATROSKA_CODEC_ID_AUDIO_PCM_FLOAT;
             // A_PCM/INT/LIT is plain little endian PCM in WAV channel order. Left to itself the
             // reader produces Blu-ray LPCM: a 4 byte header on every 5 ms frame, big endian samples,
             // Blu-ray channel order and a silent extra channel when the count is odd. Every other
@@ -2133,7 +2137,11 @@ void MatroskaMuxer::refreshTrackFromReader(MkvTrackInfo& track)
             track.channels = ac3->getChannels() + 2;
         const auto lpcmReader = dynamic_cast<LPCMStreamReader*>(track.codecReader);
         if (lpcmReader)
-            track.bitDepth = lpcmReader->m_bitsPerSample == 20 ? 24 : lpcmReader->m_bitsPerSample;
+        {
+            track.bitDepth = lpcmReader->keptBits();
+            if (lpcmReader->keptFloat())
+                track.matroskaCodecID = MATROSKA_CODEC_ID_AUDIO_PCM_FLOAT;
+        }
         // BitDepth for the lossless codecs whose readers know it: FLAC from its STREAMINFO, DTS-HD from its
         // extension. It was written for LPCM alone.
         // An MP3's LAME delay and padding (muxPacket), in samples, with the 529 samples an MP3 decoder itself puts
@@ -4529,7 +4537,8 @@ bool MatroskaMuxer::muxPacketInternal(AVPacket& avPacket)
     // The LPCM reader marks no frame at all, so an LPCM block had no keyframe flag, a file of LPCM alone had no Cues
     // and could not be split. Every PCM frame decodes on its own.
     if (track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_DTS_EXPRESS ||
-        track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_PCM_LIT)
+        track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_PCM_LIT ||
+        track.matroskaCodecID == MATROSKA_CODEC_ID_AUDIO_PCM_FLOAT)
         track.pendingFlags |= AVPacket::IS_IFRAME;
     if (avPacket.addedBytes > 0 && track.codecID == CODEC_V_MPEG4_H264)
         track.pendingAdded.emplace_back(static_cast<int>(track.pendingFrameData.size()), avPacket.addedBytes);

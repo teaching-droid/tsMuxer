@@ -487,7 +487,8 @@ ParsedLPCMTrackData::ParsedLPCMTrackData(MatroskaTrack* track)
     m_channels = audiotrack->channels;
     m_bitdepth = audiotrack->bitdepth;
 
-    buildWaveHeader(m_waveBuffer, audiotrack->samplerate, m_channels, m_channels >= 6, m_bitdepth);
+    buildWaveHeader(m_waveBuffer, audiotrack->samplerate, m_channels, m_channels >= 6, m_bitdepth,
+                    !strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_PCM_FLOAT));
 
     if (track->codec_priv_size == sizeof(WAVEFORMATPCMEX))
         memcpy(m_waveBuffer.data() + 20, track->codec_priv, track->codec_priv_size);

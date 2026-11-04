@@ -2264,6 +2264,7 @@ int MatroskaDemuxer::matroska_read_header()
             }
             else if (!strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_PCM_BIG) ||
                      !strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_PCM_LIT) ||
+                     !strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_PCM_FLOAT) ||
                      !strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_ACM))
             {
                 track->parsed_priv_data = new ParsedLPCMTrackData(track);
@@ -6472,7 +6473,8 @@ int MatroskaDemuxer::getTrackType(const MatroskaTrack* track)
         return TRACKTYPE_SRT;
     if (!strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_PCM_BIG))
         return TRACKTYPE_WAV;
-    if (!strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_PCM_LIT))
+    if (!strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_PCM_LIT) ||
+        !strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_PCM_FLOAT))
         return TRACKTYPE_WAV;
     if (!strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_ACM))
         return TRACKTYPE_WAV;

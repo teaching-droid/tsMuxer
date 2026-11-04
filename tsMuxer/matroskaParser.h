@@ -297,6 +297,7 @@ inline bool isWebmVttText(const std::string& codecId)
 constexpr auto MATROSKA_CODEC_ID_AUDIO_AAC = "A_AAC";
 constexpr auto MATROSKA_CODEC_ID_AUDIO_PCM_BIG = "A_PCM/INT/BIG";
 constexpr auto MATROSKA_CODEC_ID_AUDIO_PCM_LIT = "A_PCM/INT/LIT";
+constexpr auto MATROSKA_CODEC_ID_AUDIO_PCM_FLOAT = "A_PCM/FLOAT/IEEE";
 constexpr auto MATROSKA_CODEC_ID_SUBTITLE_PGS = "S_HDMV/PGS";
 constexpr auto MATROSKA_CODEC_ID_SUBTITLE_VOBSUB = "S_VOBSUB";
 constexpr auto MATROSKA_CODEC_ID_SUBTITLE_DVB = "S_DVBSUB";

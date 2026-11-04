@@ -319,11 +319,19 @@ int LPCMStreamReader::convertWavToPCM(uint8_t* start, uint8_t* end)
     // int mch = m_channels; // + (m_channels%2==1 ? 1 : 0);
     const int ch1SampleSize = (m_bitsPerSample == 20 ? 3 : m_bitsPerSample / 8);
     const int fullSampleSize = m_channels * ch1SampleSize;
-    if (end - start < fullSampleSize)
+    const int sourceFullSize = m_channels * sourceSampleBytes();
+    if (end - start < sourceFullSize)
         return 0;
     int64_t cLen = end - start;
-    cLen -= cLen % fullSampleSize;
+    cLen -= cLen % sourceFullSize;
     end = start + cLen;
+    // 0. samples a disc does not take, as 16 or 24 bit ones
+    if (m_srcBits)
+    {
+        convertSamples(start, end);
+        start = m_convBuffer.data();
+        end = start + m_convBuffer.size();
+    }
 
     // 1. convert byte order to little endian
     if (m_bitsPerSample == 16)
@@ -625,19 +633,38 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
                                      "Blu-ray disc, for every output, Matroska and a demux included. Convert the "
                                      "audio to 48000 Hz first.")
         m_bitsPerSample = waveFormatPCMEx->wBitsPerSample;
-        // A WAV of floating point samples was refused as "Bit depth 32 is not supported for LPCM format", for a
-        // Matroska output as well, which said neither what the file holds nor that no output takes it.
-        if (waveFormatPCMEx->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||
-            (waveFormatPCMEx->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
-             waveFormatPCMEx->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT))
-            THROW(ERR_COMMON, "The WAVE file holds floating point samples ("
-                                  << m_bitsPerSample
-                                  << " bit float), which no output takes: a disc, a TS and the Matroska output carry "
-                                     "integer PCM, and so does the file a demux writes. Convert it to 16 or 24 bit "
-                                     "integer PCM.")
-        if (m_bitsPerSample != 16 && m_bitsPerSample != 20 && m_bitsPerSample != 24)
+        // 8 bit, 32 bit and floating point samples were refused ("Bit depth 32 is not supported for LPCM format"). A
+        // demux and a Matroska output now keep them as they are, and a disc or a TS, whose LPCM is 16, 20 or 24 bit,
+        // gets them converted (convertSamples): 8 bit to 16, 32 bit and floating point to 24.
+        m_srcFloat = waveFormatPCMEx->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||
+                     (waveFormatPCMEx->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
+                      waveFormatPCMEx->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT);
+        m_srcBits = 0;
+        if (m_srcFloat)
+        {
+            if (m_bitsPerSample != 32 && m_bitsPerSample != 64)
+                THROW(ERR_COMMON, "The WAVE file holds floating point samples of " << m_bitsPerSample
+                                                                                   << " bits; only 32 and 64 bit "
+                                                                                      "floating point is read.")
+            m_srcBits = m_bitsPerSample;
+            m_bitsPerSample = 24;
+        }
+        else if (m_bitsPerSample == 8 || m_bitsPerSample == 32)
+        {
+            m_srcBits = m_bitsPerSample;
+            m_bitsPerSample = m_srcBits == 8 ? 16 : 24;
+        }
+        else if (m_bitsPerSample != 16 && m_bitsPerSample != 20 && m_bitsPerSample != 24)
+        {
             THROW(ERR_COMMON, "Bit depth " << m_bitsPerSample
-                                           << " is not supported for LPCM format. Allowed values: 16bit, 20bit, 24bit")
+                                           << " is not supported for LPCM format. Allowed values: 8, 16, 20, 24 and "
+                                              "32 bit, and 32 and 64 bit floating point.")
+        }
+        if (static_cast<int64_t>(sourceSampleBytes()) * m_channels * m_freq / 200 > MAX_AV_PACKET_SIZE)
+            THROW(ERR_COMMON, "The WAVE file has " << static_cast<int>(m_channels) << " channels of "
+                                                   << (m_srcBits ? m_srcBits : m_bitsPerSample) << " bit at " << m_freq
+                                                   << " Hz, more than tsMuxeR reads in one frame. Convert it to 32 bit "
+                                                      "floating point or to 24 bit first.")
         m_lfeExists = false;
         if (waveFormatPCMEx->wFormatTag == WAVE_FORMAT_EXTENSIBLE)
         {
@@ -645,14 +672,14 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
             // knows 20 bit samples in a 24 bit container, so a valid size of up to 20 bits in 24 is written as 20
             // bit; any other valid size keeps the container size, which also sets the sample stride.
             const uint16_t validBits = waveFormatPCMEx->Samples.wValidBitsPerSample;
-            if (m_bitsPerSample == 24 && validBits && validBits <= 20)
+            if (m_bitsPerSample == 24 && !m_srcBits && validBits && validBits <= 20)
                 m_bitsPerSample = 20;
             m_lfeExists = waveFormatPCMEx->dwChannelMask & SPEAKER_LOW_FREQUENCY;
             planBdLayout(waveFormatPCMEx->dwChannelMask);
-            if (!(waveFormatPCMEx->SubFormat == KSDATAFORMAT_SUBTYPE_PCM))
+            if (!(waveFormatPCMEx->SubFormat == KSDATAFORMAT_SUBTYPE_PCM) && !m_srcFloat)
                 THROW(ERR_COMMON, "Unsupported WAVE format. Only PCM audio is supported.")
         }
-        else if (waveFormatPCMEx->wFormatTag == 0x01)
+        else if (waveFormatPCMEx->wFormatTag == 0x01 || waveFormatPCMEx->wFormatTag == WAVE_FORMAT_IEEE_FLOAT)
         {  // standard format
             // ** SAID ONCE. ** The header is read again after the first read (m_needSync) and for the stream's
             // descriptor, and each read printed this warning again; so did the reader that only looks at the file to
@@ -673,7 +700,8 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
         }
         else
             THROW(ERR_COMMON, "Unsupported WAVE format. wFormatTag: " << waveFormatPCMEx->wFormatTag)
-        if (waveFormatPCMEx->wFormatTag == 0x01 && m_channels > 2)
+        if ((waveFormatPCMEx->wFormatTag == 0x01 || waveFormatPCMEx->wFormatTag == WAVE_FORMAT_IEEE_FLOAT) &&
+            m_channels > 2)
             planBdLayout(getWaveChannelMask(m_channels, m_lfeExists));
         // A Wave64 chunk is padded to 8 bytes: an 18 byte format (42 with its header) has 6 pad bytes,
         // and the chunks after it were looked for from inside them.
@@ -777,7 +805,8 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
     // WAV can hold such a capture. It was muxed as 2.0 LPCM without a word, which a player plays as noise. A burst
     // begins with the preamble words Pa 0xF872 and Pb 0x4E1F (IEC 61937-1), stored little-endian in a WAV.
     // Said by the reader of the track only (its number is 1 or more), not again by the one that probes the file first.
-    if (!m_burstsSaid && m_streamIndex > 0 && m_bitsPerSample == 16 && m_channels == 2 && end - curPos >= 4)
+    if (!m_burstsSaid && m_streamIndex > 0 && m_bitsPerSample == 16 && !m_srcBits && m_channels == 2 &&
+        end - curPos >= 4)
     {
         static constexpr uint8_t PREAMBLE[] = {0x72, 0xF8, 0x1F, 0x4E};
         const uint8_t* scanEnd = curPos + (std::min)(static_cast<ptrdiff_t>(65536), end - curPos) - 4;
@@ -923,14 +952,14 @@ int LPCMStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, i
                 return 0;  // can't decode frame
 
             // Assume 5ms frames = 1s / 200
-            const int reqFrameLen = (m_bitsPerSample == 20 ? 3 : m_bitsPerSample / 8) * m_channels * m_freq / 200;
+            const int reqFrameLen = sourceSampleBytes() * m_channels * m_freq / 200;
             int frameLen = reqFrameLen;
             // a chunk can contain several frames, but a frame canot be bigger than a chunck
             if (m_curChunkLen)
                 frameLen = static_cast<int>(FFMIN(reqFrameLen, m_curChunkLen));
             if (end - buff < frameLen + hdrSize)
                 return NOT_ENOUGH_BUFFER;
-            const int sampleSize = (m_bitsPerSample == 20 ? 3 : m_bitsPerSample / 8) * m_channels;
+            const int sampleSize = sourceSampleBytes() * m_channels;
             m_frameRest = reqFrameLen - (frameLen / sampleSize * sampleSize);
             if (m_frameRest == reqFrameLen)
                 m_frameRest = 0;
@@ -991,8 +1020,106 @@ const std::string LPCMStreamReader::getStreamInfo()
         str << static_cast<int>(m_channels) - 1 << ".1";
     else
         str << static_cast<int>(m_channels);
-    str << "  Bits per sample: " << m_bitsPerSample << "bit";
+    if (m_srcBits)
+        str << "  Bits per sample: " << m_srcBits << "bit" << (m_srcFloat ? " float" : "") << ", " << m_bitsPerSample
+            << " bit on a disc or a TS";
+    else
+        str << "  Bits per sample: " << m_bitsPerSample << "bit";
     return str.str();
+}
+
+// 8 bit samples, unsigned in a WAV, become 16 bit exactly. 32 bit integers become 24 bit, exactly where their lowest
+// byte is 0 (24 bit sound in a 32 bit container), else rounded to the nearest. Floating point samples become 24 bit
+// rounded to the nearest, those above full scale (beyond -1.0 to 1.0) clipped. Each loss is said once, with its time.
+void LPCMStreamReader::convertSamples(const uint8_t* start, const uint8_t* end)
+{
+    const int inBytes = m_srcBits / 8;
+    const int outBytes = m_bitsPerSample / 8;
+    const auto count = static_cast<size_t>((end - start) / inBytes);
+    m_convBuffer.resize(count * static_cast<size_t>(outBytes));
+    uint8_t* out = m_convBuffer.data();
+    bool lowBits = false;
+    int64_t clipped = 0;
+    constexpr int32_t MAX24 = 8388607;
+    constexpr int32_t MIN24 = -8388608;
+    for (const uint8_t* in = start; in + inBytes <= end; in += inBytes)
+    {
+        int32_t v;
+        if (m_srcFloat)
+        {
+            double f;
+            if (inBytes == 4)
+            {
+                const uint32_t bits = in[0] | in[1] << 8 | in[2] << 16 | static_cast<uint32_t>(in[3]) << 24;
+                float x;
+                memcpy(&x, &bits, 4);
+                f = x;
+            }
+            else
+            {
+                uint64_t bits = 0;
+                for (int i = 7; i >= 0; --i) bits = bits << 8 | in[i];
+                memcpy(&f, &bits, 8);
+            }
+            double s = f * 8388608.0;
+            if (s != s)  // not a number
+                s = 0;
+            if (f > 1.0 || f < -1.0)  // above full scale; 1.0 itself is full scale, one step above the largest 24 bit
+                ++clipped;
+            if (s > MAX24 || s < MIN24)
+                s = s > 0 ? MAX24 : MIN24;
+            v = static_cast<int32_t>(std::lrint(s));
+        }
+        else if (inBytes == 1)
+            v = (in[0] - 128) * 256;
+        else
+        {
+            const auto s = static_cast<int32_t>(in[0] | in[1] << 8 | in[2] << 16 | static_cast<uint32_t>(in[3]) << 24);
+            if (in[0] == 0)
+                v = s >> 8;
+            else
+            {
+                lowBits = true;
+                v = static_cast<int32_t>((static_cast<int64_t>(s) + 128) >> 8);
+                if (v > MAX24)
+                    v = MAX24;
+            }
+        }
+        out[0] = static_cast<uint8_t>(v);
+        out[1] = static_cast<uint8_t>(v >> 8);
+        if (outBytes == 3)
+            out[2] = static_cast<uint8_t>(v >> 16);
+        out += outBytes;
+    }
+    const double at = m_freq ? static_cast<double>(m_convSamples) / m_freq : 0;
+    m_convSamples += static_cast<int64_t>(count) / (m_channels ? m_channels : 1);
+    if (!m_convertSaid)
+    {
+        m_convertSaid = true;
+        LTRACE(LT_INFO, 2,
+               "Track " << m_streamIndex << ": its " << m_srcBits << " bit" << (m_srcFloat ? " floating point" : "")
+                        << " samples are written as " << m_bitsPerSample << " bit LPCM, the sizes a disc and a TS carry"
+                        << (m_srcBits == 8 ? ", exactly." : "."));
+    }
+    if (lowBits && !m_lowBitsSaid)
+    {
+        m_lowBitsSaid = true;
+        LTRACE(LT_WARN, 2,
+               "Warning: track " << m_streamIndex << " holds 32 bit samples whose lowest 8 bits are not 0, from "
+                                 << doubleToStr(at, 3)
+                                 << " s on. They are rounded to the 24 bits a disc and a TS carry, which loses those "
+                                    "bits. A Matroska output keeps all 32.");
+    }
+    m_clipped += clipped;
+    if (clipped && !m_clipSaid)
+    {
+        m_clipSaid = true;
+        LTRACE(LT_WARN, 2,
+               "Warning: track " << m_streamIndex << " holds floating point samples above full scale, from "
+                                 << doubleToStr(at, 3)
+                                 << " s on. A disc and a TS carry integer samples, so they are clipped to full scale "
+                                    "there. A Matroska output keeps them as they are.");
+    }
 }
 
 void LPCMStreamReader::writePESExtension(PESPacket* pesPacket, const AVPacket& avPacket) {}
@@ -1029,17 +1156,19 @@ int LPCMStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
                 curPos += 4;
             }
             const auto waveFormatPCMEx = reinterpret_cast<WAVEFORMATPCMEX*>(curPos);
+            // A demux keeps 8 bit, 32 bit and floating point samples as they are, and says so
+            const auto bitsPerSample = static_cast<uint16_t>(keptBits());
             waveFormatPCMEx->wFormatTag = WAVE_FORMAT_EXTENSIBLE;
             waveFormatPCMEx->nChannels = m_channels;
             waveFormatPCMEx->nSamplesPerSec = m_freq;
-            waveFormatPCMEx->nAvgBytesPerSec = m_channels * m_freq * ((m_bitsPerSample + 4) >> 3);
-            const uint16_t bitsPerSample = m_bitsPerSample == 20 ? 24 : m_bitsPerSample;
+            waveFormatPCMEx->nAvgBytesPerSec =
+                m_channels * m_freq * (m_srcBits ? m_srcBits / 8 : (m_bitsPerSample + 4) >> 3);
             waveFormatPCMEx->nBlockAlign = m_channels * bitsPerSample / 8;
             waveFormatPCMEx->wBitsPerSample = bitsPerSample;
             waveFormatPCMEx->cbSize = 22;  // After this to GUID
-            waveFormatPCMEx->Samples.wValidBitsPerSample = m_bitsPerSample;
+            waveFormatPCMEx->Samples.wValidBitsPerSample = m_srcBits ? m_srcBits : m_bitsPerSample;
             waveFormatPCMEx->dwChannelMask = getWaveChannelMask(m_channels, m_lfeExists, m_backCentre);  // Specify PCM
-            waveFormatPCMEx->SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
+            waveFormatPCMEx->SubFormat = m_srcFloat ? KSDATAFORMAT_SUBTYPE_IEEE_FLOAT : KSDATAFORMAT_SUBTYPE_PCM;
             curPos += sizeof(WAVEFORMATPCMEX);
             if (m_demuxToW64)
             {
@@ -1366,10 +1495,10 @@ void LPCMStreamReader::findJoinedFileHeader()
     if ((m_headerType != LPCMHeaderType::htWAVE && m_headerType != LPCMHeaderType::htWAVE64) || !m_chunkSizeKnown ||
         m_curChunkLen <= 0 || m_afterData || m_skipRest > 0 || m_joinPartial > 0 || m_curPos == nullptr)
         return;
-    const int sampleSize = (m_bitsPerSample == 20 ? 3 : m_bitsPerSample / 8) * m_channels;
+    const int sampleSize = sourceSampleBytes() * m_channels;
     if (sampleSize <= 0)
         return;
-    const int64_t frameLen = (m_bitsPerSample == 20 ? 3 : m_bitsPerSample / 8) * m_channels * m_freq / 200;
+    const int64_t frameLen = static_cast<int64_t>(sampleSize) * m_freq / 200;
     const int64_t span = FFMIN(FFMIN(frameLen, m_curChunkLen), m_bufEnd - m_curPos);
     for (int64_t k = 0; k < span; ++k)
     {
@@ -1424,12 +1553,21 @@ int LPCMStreamReader::flushPacket(AVPacket& avPacket)
     //
     // A WAV whose data chunk gives more audio than the file holds, a recording that stopped before its header was
     // written again, is said too: what the file holds is muxed, and the header's length cannot be.
-    const int sampleSize = (m_bitsPerSample == 20 ? 3 : m_bitsPerSample / 8) * m_channels;
+    // a sample of the file, 8, 32 bit and floating point ones as they are in it
+    const int sampleSize = sourceSampleBytes() * m_channels;
     if ((m_headerType == LPCMHeaderType::htWAVE || m_headerType == LPCMHeaderType::htWAVE64) && m_tmpBufferLen > 0 &&
         sampleSize > 0)
     {
         const auto first = UnalignedPtr<uint32_t>(m_tmpBuffer.data());
         const bool header = m_tmpBufferLen >= 4 && riffId(*first);
+        // ** WHAT FOLLOWS THE AUDIO AT THE END OF THE FILE IS NOT AUDIO. ** The data chunk of 8 bit samples can be of
+        // an odd size, and then a pad byte follows it: the last block of an 8 bit WAV of 48,001 samples ended with that
+        // byte, a 49th sample at -32,768, a click. Of a data chunk whose size is given, no more than it holds is taken.
+        if (!header && m_chunkSizeKnown && m_curChunkLen >= 0 && m_tmpBufferLen > m_curChunkLen)
+        {
+            m_processedBytes += m_tmpBufferLen - m_curChunkLen;
+            m_tmpBufferLen = static_cast<int>(m_curChunkLen);
+        }
         const int partial = header ? 0 : static_cast<int>(m_tmpBufferLen % sampleSize);
         const int64_t notThere = m_chunkSizeKnown && !header ? m_curChunkLen - m_tmpBufferLen : 0;
         if (notThere > 0)
@@ -1479,7 +1617,9 @@ int LPCMStreamReader::flushPacket(AVPacket& avPacket)
 
     if (m_frameRest > 0 && !m_demuxMode)
     {
-        const int32_t samplesRest = m_frameRest / m_channels;
+        int32_t samplesRest = m_frameRest / m_channels;
+        if (m_srcBits)  // counted in the samples of the file, written in those of the disc
+            samplesRest = samplesRest / sourceSampleBytes() * (m_bitsPerSample / 8);
         m_frameRest = samplesRest * ((bdChannels() + 1) & 0xfe);
         m_frameRest -= avPacket.size - (m_needPCMHdr ? 4 : 0);
         if (avPacket.data != nullptr && m_frameRest > 0)

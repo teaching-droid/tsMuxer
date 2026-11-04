@@ -222,7 +222,7 @@ A_AC3             | AC3/AC3+/TRUE-HD
 A_AAC             | AAC. AAC in LATM from a transport stream is read and written as ADTS.
 A_DTS             | DTS/DTS-Express/DTS-HD 
 A_MP3             | MPEG audio layer 1/2/3 
-A_LPCM            | raw pcm data or PCM WAV file 
+A_LPCM            | raw pcm data or PCM WAV file: 8, 16, 20, 24 or 32 bit integers, or 32 or 64 bit floating point. A disc and a TS carry 16, 20 or 24 bit, so 8 bit samples become 16 bit and 32 bit and floating point ones 24 bit there; a Matroska output and a demux keep the samples as they are. 
 A_FLAC            | FLAC (MKV and demux output only)
 A_OPUS            | Opus (also read from an Ogg file, .opus or .ogg; TS, MKV, and demux output only)
 A_VORBIS          | Vorbis (read from MKV, WebM, MP4 and Ogg; MKV output, or demuxed to an .ogg file)

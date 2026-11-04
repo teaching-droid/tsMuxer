@@ -49,7 +49,7 @@ uint32_t getWaveChannelMask(const int channels, const bool lfeExists, const bool
 }
 
 void buildWaveHeader(MemoryBlock& waveBuffer, const int samplerate, const uint16_t channels, const bool lfeExist,
-                     const uint16_t bitdepth)
+                     const uint16_t bitdepth, const bool isFloat)
 {
     waveBuffer.clear();
     waveBuffer.grow(40 + 28);
@@ -70,7 +70,7 @@ void buildWaveHeader(MemoryBlock& waveBuffer, const int samplerate, const uint16
     waveFormatPCMEx->cbSize = 22;  // After this to GUID
     waveFormatPCMEx->Samples.wValidBitsPerSample = bitdepth;
     waveFormatPCMEx->dwChannelMask = getWaveChannelMask(channels, lfeExist);  // Specify PCM
-    waveFormatPCMEx->SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
+    waveFormatPCMEx->SubFormat = isFloat ? KSDATAFORMAT_SUBTYPE_IEEE_FLOAT : KSDATAFORMAT_SUBTYPE_PCM;
 
     curPos += sizeof(WAVEFORMATPCMEX);
     for (const char c : "data\x00\x00\x00\x00") *curPos++ = c;
@@ -95,14 +95,20 @@ void toLittleEndian(uint8_t* dstData, uint8_t* srcData, const int size, const in
     }
     else if (bitdepth > 16)
     {
-        const int width = bitdepth == 32 ? 4 : 3;
+        const int width = bitdepth == 64 ? 8 : bitdepth == 32 ? 4 : 3;
         const int whole = size / width * width;
         uint8_t* dst = dstData;
         const uint8_t* src = srcData;
         const uint8_t* srcEnd = srcData + whole;
         while (src < srcEnd)
         {
-            if (width == 4)
+            if (width == 8)
+            {
+                uint8_t b[8];
+                memcpy(b, src, 8);
+                for (int i = 0; i < 8; ++i) dst[i] = b[7 - i];
+            }
+            else if (width == 4)
             {
                 const uint8_t b0 = src[0], b1 = src[1];
                 dst[0] = src[3];
