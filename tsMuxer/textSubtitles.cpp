@@ -557,8 +557,10 @@ uint8_t* TextToPGSConverter::doConvert(const std::string& text, const TextAnimat
     // put them partly below it. An object of fewer than 8 lines, the least PGS allows, gets transparent lines above
     // them, or below them at the top of the picture. The columns are those packDrawnBox kept.
     const int drawnHeight = renderedHeight();
-    const int drawnTop =
-        FFMAX(0, FFMIN(m_textRender->m_height - drawnHeight - m_bottomOffset, m_textRender->m_height - drawnHeight));
+    // {\an8} asks for the top of the picture, as bottom-offset lines below it
+    const int lowest = m_textRender->m_height - drawnHeight;
+    const int drawnTop = text.find("{\\an8}") != std::string::npos ? FFMAX(0, FFMIN(m_bottomOffset, lowest))
+                                                                  : FFMAX(0, FFMIN(lowest - m_bottomOffset, lowest));
     const uint16_t objectWindowTop = padToLeastHeight(drawnTop);
     const auto objectWindowHeight = static_cast<uint16_t>(FFMAX(8, drawnHeight));
     const uint16_t objectWindowLeft = m_objectLeft;

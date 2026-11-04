@@ -216,8 +216,8 @@ size_t findUnquotedStr(const string& str, const string& substr)
 }
 
 // An SRT file made from an ASS script can keep its override blocks, such as {\an8} for a subtitle at the top. They
-// were drawn as text. tsMuxeR places every subtitle at the bottom, so a block is left out of the picture; the text
-// kept in a Matroska output or a demux still has it, for a player that reads it.
+// were drawn as text. A block is left out of the picture ({\an8} is honoured where the picture is placed, doConvert);
+// the text kept in a Matroska output or a demux still has it, for a player that reads it.
 string withoutOverrideBlocks(const string& line)
 {
     string out;
