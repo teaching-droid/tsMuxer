@@ -1,5 +1,7 @@
 #include "sampleCutter.h"
 
+#include <fs/discImage.h>
+#include <fs/file.h>
 #include <types/types.h>
 
 #include <algorithm>
@@ -51,7 +53,8 @@ std::string clock(const double seconds)
 }
 
 // A file on the drive, opened by the system: not through File, which reads a source tsMuxeR has turned into a Matroska
-// file in memory (an Ogg file, a subtitle script) as that Matroska file once the source has been listed
+// file in memory (an Ogg file, a subtitle script) as that Matroska file once the source has been listed. Only a file
+// inside a disc image, which the system cannot open, is read through File (class Source).
 std::FILE* openFile(const std::string& name, const bool write)
 {
 #ifdef _WIN32
@@ -74,8 +77,15 @@ bool seekFile(std::FILE* f, const int64_t pos, const int whence)
 class Source
 {
    public:
-    explicit Source(const std::string& name) : m_file(openFile(name, false))
+    explicit Source(const std::string& name) : m_file(discImage::isInside(name) ? nullptr : openFile(name, false))
     {
+        if (discImage::isInside(name))
+        {
+            if (!m_image.open(name.c_str(), File::ofRead))
+                throw std::runtime_error("The file " + name + " cannot be opened.");
+            m_size = m_image.size();
+            return;
+        }
         if (m_file == nullptr || !seekFile(m_file, 0, SEEK_END))
             throw std::runtime_error("The file " + name + " cannot be opened.");
 #ifdef _WIN32
@@ -96,7 +106,17 @@ class Source
     Bytes read(const int64_t pos, const int64_t n) const
     {
         Bytes b;
-        if (pos < 0 || pos >= m_size || n <= 0 || !seekFile(m_file, pos, SEEK_SET))
+        if (pos < 0 || pos >= m_size || n <= 0)
+            return b;
+        if (m_image.isOpen())
+        {
+            if (m_image.seek(pos) != pos)
+                return b;
+            b.resize(static_cast<size_t>(std::min(n, m_size - pos)));
+            b.resize(static_cast<size_t>(std::max(m_image.read(b.data(), static_cast<uint32_t>(b.size())), 0)));
+            return b;
+        }
+        if (!seekFile(m_file, pos, SEEK_SET))
             return b;
         b.resize(static_cast<size_t>(std::min(n, m_size - pos)));
         b.resize(std::fread(b.data(), 1, b.size(), m_file));
@@ -144,6 +164,7 @@ class Source
 
    private:
     std::FILE* m_file;
+    File m_image;
     int64_t m_size = 0;
 };
 
@@ -859,9 +880,11 @@ void cutProgramStream(const Request& r, const Source& src, Target& out, Result& 
         ifo = "VIDEO_TS.IFO";
     if (!ifo.empty())
     {
-        if (std::FILE* f = openFile(folder + ifo, false))
-        {
+        std::FILE* const f = discImage::isInside(name) ? nullptr : openFile(folder + ifo, false);
+        if (f)
             std::fclose(f);
+        if (File inImage; f || (discImage::isInside(name) && inImage.open((folder + ifo).c_str(), File::ofRead)))
+        {
             res.extraFiles.push_back(folder + ifo);
             res.lines.push_back(ifo + " of the title set is added: the colours of the subtitles and the languages.");
         }
