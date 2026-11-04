@@ -2287,6 +2287,20 @@ int MatroskaDemuxer::matroska_read_header()
                 track->parsed_priv_data =
                     new ParsedMarkedTrackData("ALACCPRV", track->codec_priv, track->codec_priv_size);
             }
+            else if (!strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_WAVPACK) &&
+                     track->type == IOContextTrackType::AUDIO)
+            {
+                // the 2 byte version, then what the frames do not all say: sample rate, channels, bits per sample
+                const auto* audio = static_cast<const MatroskaAudioTrack*>(track);
+                uint8_t priv[8] = {};
+                if (track->codec_priv && track->codec_priv_size >= 2)
+                    memcpy(priv, track->codec_priv, 2);
+                const auto rate = static_cast<uint32_t>(audio->samplerate);
+                for (int b = 0; b < 4; ++b) priv[2 + b] = static_cast<uint8_t>(rate >> (8 * b));
+                priv[6] = static_cast<uint8_t>(audio->channels);
+                priv[7] = static_cast<uint8_t>(audio->bitdepth);
+                track->parsed_priv_data = new ParsedMarkedTrackData("WVPKCPRV", priv, sizeof(priv));
+            }
             else if (!strcmp(track->codec_id, MATROSKA_CODEC_ID_VP8) || !strcmp(track->codec_id, MATROSKA_CODEC_ID_VP9))
             {
                 track->parsed_priv_data = new ParsedVpxTrackData();
@@ -6501,6 +6515,8 @@ int MatroskaDemuxer::getTrackType(const MatroskaTrack* track)
         return TRACKTYPE_VORBIS;
     if (!strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_ALAC))
         return TRACKTYPE_ALAC;
+    if (!strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_WAVPACK))
+        return TRACKTYPE_WAVPACK;
 
     return 0;
 }

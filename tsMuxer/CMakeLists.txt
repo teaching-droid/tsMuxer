@@ -11,6 +11,8 @@ add_executable (tsmuxer
   vpxStreamReader.cpp
   vorbisStreamReader.cpp
   alacStreamReader.cpp
+  wavpackStreamReader.cpp
+  wavpackFile.cpp
   mkvCopyStreamReader.cpp
   videoCopyStreamReader.cpp
   bdSsifImport.cpp

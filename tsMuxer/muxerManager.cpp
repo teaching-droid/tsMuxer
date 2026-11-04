@@ -686,7 +686,7 @@ void MuxerManager::checkMatroskaOnlyCodecs(const vector<StreamInfo>& ci, const b
     if (notMatroska)
         for (const StreamInfo& si : ci)
             for (const CodecInfo* only : {&vp8CodecInfo, &vp9CodecInfo, &vorbisCodecInfo, &flacCodecInfo,
-                                          &alacCodecInfo, &mpeg4AspCodecInfo, &proresCodecInfo})
+                                          &alacCodecInfo, &mpeg4AspCodecInfo, &proresCodecInfo, &wavpackCodecInfo})
             {
                 const bool demuxWrites =
                     only != &alacCodecInfo && only != &mpeg4AspCodecInfo && only != &proresCodecInfo;

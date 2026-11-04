@@ -161,6 +161,7 @@ TS, M2TS | the PAT before a key picture | the PAT and PMT, which come again ever
 MKV, WebM | a cluster | the EBML header, Info, Tracks and Chapters; the title and the names of the tracks and chapters are blanked to "x", each as long as it was. Tags, attachments and the index are left out.
 VOB, MPG | a pack with a sequence header | the IFO file of the title set of a VOB, beside the sample
 Ogg | a page | the header pages
+WavPack (.wv) | the initial block of a frame | nothing more is needed; whole frames are taken
 WAV, RF64, BW64 | a sample of sound | the header, its sizes set to the sample
 MP4, MOV | the start only, when the index comes first | the index; the frames past the end of the sample are not there
 A video or sound stream on its own | a sequence header or a frame | nothing more is needed
@@ -227,6 +228,7 @@ A_FLAC            | FLAC (MKV and demux output only)
 A_OPUS            | Opus (also read from an Ogg file, .opus or .ogg; TS, MKV, and demux output only)
 A_VORBIS          | Vorbis (read from MKV, WebM, MP4 and Ogg; MKV output, or demuxed to an .ogg file)
 A_ALAC            | Apple Lossless (read from MKV and MP4; MKV output only)
+A_WAVPACK4        | WavPack (read from MKV and from .wv files; MKV output, or demuxed to .wv). Hybrid WavPack: the correction part (from the MKV, or the .wvc file beside the .wv) is kept in a Matroska output; a demux writes the lossy part only.
 S_HDMV/PGS        | Presentation graphic stream (BD subtitle format) 
 S_TEXT/UTF8       | SRT subtitle format.  Encoding MUST be  UTF-8/UTF-16/UTF-32 
 

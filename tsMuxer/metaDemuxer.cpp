@@ -64,6 +64,7 @@ static bool isKnownTrackParam(const std::string& name);
 #include "vorbisStreamReader.h"
 #include "vpxStreamReader.h"
 #include "vvcStreamReader.h"
+#include "wavpackStreamReader.h"
 
 extern "C"
 {
@@ -363,9 +364,10 @@ static NamedAs familyOfExt(const std::string& ext)
     if (ext == "mp4" || ext == "mov" || ext == "m4v" || ext == "m4a")
         return NamedAs::ctMP4;
     // WebM is Matroska with a narrower set of codecs, and .mk3d is the name used for 3D Matroska files.
-    // an ASS or SSA script and an Ogg file are read as the Matroska file of their tracks (assFile.h, oggFile.h)
+    // an ASS or SSA script, an Ogg file and a WavPack file are read as the Matroska file of their tracks (assFile.h,
+    // oggFile.h, wavpackFile.h)
     if (ext == "mkv" || ext == "mka" || ext == "mks" || ext == "mk3d" || ext == "webm" || ext == "ass" ||
-        ext == "ssa" || ext == "ogg" || ext == "oga" || ext == "opus")
+        ext == "ssa" || ext == "ogg" || ext == "oga" || ext == "opus" || ext == "wv")
         return NamedAs::ctMKV;
     // The only elementary extensions the dispatch acts on. Every other unknown extension already
     // reaches the reader that works the codec out from the bytes, so naming one would gain nothing.
@@ -2242,8 +2244,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
         // Opus, Vorbis, ALAC, MPEG-4 Part 2 and ProRes are read from a container only: their readers take the packets
         // a container gives them. A file of its own, as an Ogg Opus file, was read all the same: any four bytes were
         // taken for the length of a packet, and the mux of the noise that made was said to be successful.
-        if (codec == "A_OPUS" || codec == "A_VORBIS" || codec == "A_ALAC" || codec == "V_MPEG4/ISO/ASP" ||
-            codec == "V_PRORES")
+        if (codec == "A_OPUS" || codec == "A_VORBIS" || codec == "A_ALAC" || codec == "A_WAVPACK4" ||
+            codec == "V_MPEG4/ISO/ASP" || codec == "V_PRORES")
         {
             THROW(ERR_INVALID_CODEC_FORMAT, codec << " is read from a Matroska, WebM, MP4 or MOV file or a transport "
                                                      "stream only, and "
@@ -4839,6 +4841,9 @@ CheckStreamRez METADemuxer::detectTrackReader(uint8_t* tmpBuffer, int len,
         return VorbisStreamReader().checkStream(tmpBuffer, len, containerType, containerDataType, containerStreamIndex);
     if (containerDataType == TRACKTYPE_ALAC)
         return AlacStreamReader().checkStream(tmpBuffer, len, containerType, containerDataType, containerStreamIndex);
+    if (containerDataType == TRACKTYPE_WAVPACK)
+        return WavpackStreamReader().checkStream(tmpBuffer, len, containerType, containerDataType,
+                                                 containerStreamIndex);
     // MPEG-4 Part 2 and ProRes from an MP4 file: the MP4 reader says what they are, and their data has no mark of
     // its own another probe could take for something else
     if (containerDataType == TRACKTYPE_MP4V || containerDataType == TRACKTYPE_PRORES)
@@ -5270,6 +5275,8 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
         rez = new VorbisStreamReader();
     else if (codecName == "A_ALAC")
         rez = new AlacStreamReader();
+    else if (codecName == "A_WAVPACK4")
+        rez = new WavpackStreamReader();
     else if (codecName == "V_MPEG4/ISO/ASP" || codecName == "V_PRORES")
         rez = new VideoCopyStreamReader(codecName == "V_PRORES");
     else if (codecName == "A_DTS")

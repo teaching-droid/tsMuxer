@@ -21,6 +21,7 @@
 #include "vodCoreException.h"
 #include "vod_common.h"
 #include "vorbisStreamReader.h"
+#include "wavpackFile.h"
 
 namespace
 {
@@ -348,12 +349,16 @@ std::set<std::string>& prepared()
 
 bool isOggFileExt(const std::string& upperExt) { return upperExt == "OGG" || upperExt == "OGA" || upperExt == "OPUS"; }
 
-bool isMemorySourceExt(const std::string& upperExt) { return isAssFileExt(upperExt) || isOggFileExt(upperExt); }
+bool isMemorySourceExt(const std::string& upperExt)
+{
+    return isAssFileExt(upperExt) || isOggFileExt(upperExt) || isWavpackFileExt(upperExt);
+}
 
 bool prepareMemorySource(const std::string& fileName)
 {
     const bool ass = prepareAssFile(fileName);
-    return prepareOggFile(fileName) || ass;
+    const bool wavpack = prepareWavpackFile(fileName);
+    return prepareOggFile(fileName) || ass || wavpack;
 }
 
 bool prepareOggFile(const std::string& fileName)

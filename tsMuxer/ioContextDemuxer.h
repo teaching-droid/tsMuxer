@@ -23,6 +23,7 @@ static constexpr int TRACKTYPE_ALAC = 0x1AB;
 // MPEG-4 Part 2 and ProRes from an MP4 file, copied into a Matroska output only (VideoCopyStreamReader)
 static constexpr int TRACKTYPE_MP4V = 0x1AC;
 static constexpr int TRACKTYPE_PRORES = 0x1AD;
+static constexpr int TRACKTYPE_WAVPACK = 0x1AE;
 
 class ParsedTrackPrivData
 {

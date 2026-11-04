@@ -17,7 +17,8 @@ bool prepareOggFile(const std::string& fileName);
 // The extension is that of an Ogg file (in capitals)
 bool isOggFileExt(const std::string& upperExt);
 
-// A source read as a Matroska file built in memory: an ASS or SSA script (assFile.h) or an Ogg file
+// A source read as a Matroska file built in memory: an ASS or SSA script (assFile.h), an Ogg file or a WavPack file
+// (wavpackFile.h)
 bool isMemorySourceExt(const std::string& upperExt);
 bool prepareMemorySource(const std::string& fileName);
 

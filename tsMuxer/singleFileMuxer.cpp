@@ -97,6 +97,10 @@ void SingleFileMuxer::intAddStream(const std::string& streamName, const std::str
     {
         fileExt = ".flac";
     }
+    else if (codecName == "A_WAVPACK4")
+    {
+        fileExt = ".wv";
+    }
     else if (codecName == "A_OPUS")
     {
         fileExt = ".opus";

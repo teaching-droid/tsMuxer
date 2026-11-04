@@ -46,6 +46,8 @@
 
 ### Audio
 
+* **WavPack is read from a Matroska file and from a .wv file.** A WavPack track (A_WAVPACK4) of a Matroska file and a .wv file were "Can't detect stream type". They are now listed with their sample rate, channels and bits per sample, copied as they are into a Matroska output and demuxed to a .wv file; a disc and a TS have no form for them. Hybrid WavPack keeps its correction part: from a Matroska file as it is, and from the .wvc file beside a .wv, so the Matroska output decodes to the lossless sound; a demux writes the lossy part, with a warning. DSD WavPack is refused with that reason.
+
 * **PCM of 8 or 32 bits and floating point PCM are read.** A WAV, Matroska or MP4 track of 8 bit, 32 bit or floating point (32 or 64 bit) samples was refused ("Bit depth 32 is not supported for LPCM format") or left out. A Matroska output and a demux now keep the samples as they are. A disc and a TS, whose LPCM is 16, 20 or 24 bit, get them converted: 8 bit samples to 16 bit and 32 bit ones to 24 bit, exactly while their lowest 8 bits are 0 and else rounded, with a warning; floating point samples to 24 bit, those above full scale clipped, with a warning.
 
 * **A WAV of 7 or 8 channels at 192 kHz stopped tsMuxeR with a crash** when it was muxed to a disc or a TS. A Blu-ray LPCM track carries at most 6 channels at 192 kHz; such a WAV is now refused for a disc and a TS with that reason, and a Matroska output and a demux take it as before.

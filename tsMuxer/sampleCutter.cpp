@@ -1040,6 +1040,90 @@ void cutWav(const Request& r, const Source& src, Target& out, Result& res)
                         ", from " + clock(static_cast<double>(from) / byteRate) + ").");
 }
 
+// ---- WavPack (.wv): the block format of WavPack 4 and 5 ----
+
+bool isWvBlock(const uint8_t* p) { return p[0] == 'w' && p[1] == 'v' && p[2] == 'p' && p[3] == 'k'; }
+
+// The place of the first block at or after pos that begins a frame (its initial block), or -1
+int64_t wvFrameAt(const Source& src, const int64_t pos)
+{
+    return src.find(pos, 16 << 20, 32,
+                    [](const uint8_t* p, size_t)
+                    {
+                        const uint32_t size = le32(p + 4);
+                        return isWvBlock(p) && size >= 24 && size < (1u << 24) && (le32(p + 24) & 0x800) != 0 &&
+                               le32(p + 20) != 0;  // initial block of a frame with samples
+                    });
+}
+
+void cutWavpack(const Request& r, const Source& src, Target& out, Result& res)
+{
+    res.kind = "WavPack";
+    static const int RATES[] = {6000,  8000,  9600,  11025, 12000, 16000, 22050, 24000,
+                                32000, 44100, 48000, 64000, 88200, 96000, 192000};
+    int64_t atByte = 0;
+    if (r.take == Take::At)
+    {
+        const int64_t first = wvFrameAt(src, 0);
+        const Bytes h = first < 0 ? Bytes() : src.read(first, 32);
+        const unsigned code = h.size() == 32 ? le32(h.data() + 24) >> 23 & 0xF : 15;
+        if (code >= 15)
+            throw std::runtime_error(
+                "This WavPack file gives its sample rate only in its metadata, so a time cannot "
+                "be found in it. Take its start or its end.");
+        const int rate = RATES[code];
+        const auto clockAt = [&](const int64_t pos) -> int64_t
+        {
+            const int64_t p = wvFrameAt(src, pos);
+            if (p < 0)
+                return NO_TIME;
+            const Bytes b = src.read(p, 32);
+            return static_cast<int64_t>(b[10]) << 32 | le32(b.data() + 16);
+        };
+        atByte = bisect(src.size(), static_cast<int64_t>(r.atSeconds * rate), 64 << 10, clockAt);
+        res.lines.push_back("The time was found by the block_index of the frames: " + clock(r.atSeconds) +
+                            " is near byte " + std::to_string(atByte) + ".");
+    }
+    int64_t start = roughStart(r, src.size(), atByte);
+    if (start > 0)
+    {
+        start = wvFrameAt(src, start);
+        if (start < 0)
+            throw std::runtime_error("No WavPack frame was found after the place.");
+    }
+    // whole frames: blocks are taken while they fit, and the sample ends before a frame's initial block
+    int64_t end = start;
+    int64_t frameStart = start;
+    for (int64_t pos = start; pos + 32 <= src.size();)
+    {
+        const Bytes h = src.read(pos, 32);
+        if (!isWvBlock(h.data()))
+            break;
+        const int64_t size = static_cast<int64_t>(le32(h.data() + 4)) + 8;
+        if (le32(h.data() + 24) & 0x800)
+            frameStart = pos;
+        if (pos + size - start > r.maxBytes)
+        {
+            end = frameStart;
+            break;
+        }
+        pos += size;
+        end = pos;
+    }
+    if (end <= start)
+        throw std::runtime_error("The first WavPack frame after the place is larger than the sample may be.");
+    out.copy(src, start, end);
+    res.lines.push_back("Bytes " + std::to_string(start) + " to " + std::to_string(end - 1) + " of the source (" +
+                        mb(end - start) + "), whole frames from an initial block on.");
+    if (std::FILE* f = openFile(r.source + "c", false))  // the correction file of a hybrid file beside it
+    {
+        std::fclose(f);
+        res.lines.push_back(
+            "The correction file (.wvc) beside the source is not in the sample: the sample holds the "
+            "lossy part of the hybrid file.");
+    }
+}
+
 // ---- A stream on its own: video or sound without a container ----
 
 enum class EsKind
@@ -1314,6 +1398,8 @@ Result cut(const Request& r, const std::string& target)
         cutProgramStream(r, src, out, res, r.source);
     else if (isPage(head.data()))
         cutOgg(r, src, out, res);
+    else if (isWvBlock(head.data()))
+        cutWavpack(r, src, out, res);
     else if ((std::memcmp(head.data(), "RIFF", 4) == 0 || std::memcmp(head.data(), "RF64", 4) == 0 ||
               std::memcmp(head.data(), "BW64", 4) == 0) &&
              std::memcmp(head.data() + 8, "WAVE", 4) == 0)

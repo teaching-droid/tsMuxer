@@ -50,6 +50,7 @@ extern "C"
 #include "vpxStreamReader.h"
 #include "vvc.h"
 #include "vvcStreamReader.h"
+#include "wavpackStreamReader.h"
 
 // The Matroska TrackType values this muxer writes, those that are asked about away from where the tracks are built.
 static constexpr uint8_t MKV_TRACK_TYPE_VIDEO = 1;
@@ -989,6 +990,14 @@ void MatroskaMuxer::buildCodecPrivate(MkvTrackInfo& track)
         const auto opus = dynamic_cast<OpusStreamReader*>(track.codecReader);
         if (opus && !opus->getCodecPrivate().empty())
             track.codecPrivate = opus->getCodecPrivate();
+        break;
+    }
+    case CODEC_A_WAVPACK:
+    {
+        // The 2 byte version of its block headers, as the source had it.
+        const auto wavpack = dynamic_cast<WavpackStreamReader*>(track.codecReader);
+        if (wavpack)
+            track.codecPrivate = wavpack->getCodecPrivate();
         break;
     }
     case CODEC_A_ALAC:
@@ -2165,13 +2174,16 @@ void MatroskaMuxer::refreshTrackFromReader(MkvTrackInfo& track)
             track.bitDepth = dts->getHDBitDepth();
         if (const auto alac = dynamic_cast<AlacStreamReader*>(track.codecReader); alac && alac->getBitDepth() > 0)
             track.bitDepth = alac->getBitDepth();
+        if (const auto wv = dynamic_cast<WavpackStreamReader*>(track.codecReader); wv && wv->getBitDepth() > 0)
+            track.bitDepth = wv->getBitDepth();
         // DefaultDuration for audio whose frames are all of one length: the step the reader moves each frame's
         // time by, so it is the spacing of the blocks written. Not for E-AC-3, DTS-HD, TrueHD, FLAC, Opus, Vorbis
         // or LPCM, whose frames may differ in length. ALAC's do only in the last, which says so (writeBlock).
         const std::string kind = track.codecReader->getCodecInfo().displayName;
         if (simpleReader &&
             (track.codecID == CODEC_A_AAC || track.codecID == CODEC_A_MPEG_AUDIO || track.codecID == CODEC_A_ALAC ||
-             (track.codecID == CODEC_A_AC3 && kind == "AC3") || (track.codecID == CODEC_A_DTS && kind == "DTS")))
+             track.codecID == CODEC_A_WAVPACK || (track.codecID == CODEC_A_AC3 && kind == "AC3") ||
+             (track.codecID == CODEC_A_DTS && kind == "DTS")))
         {
             double frame = simpleReader->frameDurationInternal();
             // AAC whose ADTS frames carry more than one raw block, each 1024 samples: a Matroska block holds one
@@ -3922,7 +3934,8 @@ void MatroskaMuxer::writeBlock(MkvTrackInfo& track, const uint8_t* frameData, in
     // An ALAC track's last frame is a partial one, as a rule, shorter than the DefaultDuration says: it gets its
     // own BlockDuration, so that a player does not take it for a whole frame.
     int64_t lastFrameMs = 0;
-    if (track.finalFlush && track.codecID == CODEC_A_ALAC && track.audioFrameNs > 0)
+    if (track.finalFlush && (track.codecID == CODEC_A_ALAC || track.codecID == CODEC_A_WAVPACK) &&
+        track.audioFrameNs > 0)
         if (const auto simple = dynamic_cast<SimplePacketizerReader*>(track.codecReader))
         {
             const double lastNs = simple->frameDurationInternal() * 1e9 / INTERNAL_PTS_FREQ;
@@ -3945,7 +3958,17 @@ void MatroskaMuxer::writeBlock(MkvTrackInfo& track, const uint8_t* frameData, in
                 ebml_write_uint(paddingElement, MATROSKA_ID_BLOCKDURATION, static_cast<uint64_t>(lastFrameMs));
         if (track.endPaddingNs > 0)
             paddingLen += ebml_write_sint(paddingElement + paddingLen, MATROSKA_ID_DISCARDPADDING, track.endPaddingNs);
-        const int groupPayloadSize = blockHeaderLen + blockPayloadSize + paddingLen;
+        // the frame's BlockAdditions as well: the correction part of the last frame of a hybrid WavPack track was lost
+        std::vector<uint8_t> additions;
+        uint8_t additionsHeader[16];
+        int additionsHeaderLen = 0;
+        if (track.frameAdditions && m_owner && m_owner->takeBlockAdditions(track.streamIndex, pts, additions) &&
+            !additions.empty())
+            additionsHeaderLen = ebml_write_master_open(additionsHeader, MATROSKA_ID_BLOCKADDITIONS, additions.size());
+        else
+            additions.clear();
+        const int groupPayloadSize =
+            blockHeaderLen + blockPayloadSize + paddingLen + additionsHeaderLen + static_cast<int>(additions.size());
         uint8_t groupHeader[16];
         int groupHeaderLen = ebml_write_id(groupHeader, MATROSKA_ID_BLOCKGROUP);
         groupHeaderLen += ebml_write_size(groupHeader + groupHeaderLen, groupPayloadSize);
@@ -3957,6 +3980,8 @@ void MatroskaMuxer::writeBlock(MkvTrackInfo& track, const uint8_t* frameData, in
         m_clusterBuf.push_back(0);  // Block flags: no lacing
         m_clusterBuf.insert(m_clusterBuf.end(), frameData, frameData + frameSize);
         m_clusterBuf.insert(m_clusterBuf.end(), paddingElement, paddingElement + paddingLen);
+        m_clusterBuf.insert(m_clusterBuf.end(), additionsHeader, additionsHeader + additionsHeaderLen);
+        m_clusterBuf.insert(m_clusterBuf.end(), additions.begin(), additions.end());
         m_clusterDataSize += groupHeaderLen + groupPayloadSize;
         m_clusterBlocks++;
         return;
@@ -5296,7 +5321,8 @@ void MatroskaMuxer::finishPart(const int64_t partEndPts)
         // Opus, Vorbis and ALAC: the length of the last frame itself, which their readers know and which may be
         // shorter than the one before it (a partial ALAC frame, a shorter Opus packet).
         else if (simple &&
-                 (track.codecID == CODEC_A_OPUS || track.codecID == CODEC_A_VORBIS || track.codecID == CODEC_A_ALAC) &&
+                 (track.codecID == CODEC_A_OPUS || track.codecID == CODEC_A_VORBIS || track.codecID == CODEC_A_ALAC ||
+                  track.codecID == CODEC_A_WAVPACK) &&
                  simple->frameDurationInternal() > 0)
             endMs += simple->frameDurationInternal() / INTERNAL_PTS_PER_MS;
         else if (track.trackType != MKV_TRACK_TYPE_SUBTITLE && track.hasNextMaxBlockPts)
