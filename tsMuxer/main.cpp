@@ -1584,6 +1584,9 @@ All parameters in this group start with two dashes:
                       keywords bd25/bd50/bd100/bd128, or a byte count with an optional
                       k/m/g (decimal) or ki/mi/gi (binary) suffix (e.g. 25000000000,
                       24g, 23gib).
+--allow-extra-tracks  Write more than 32 tracks of one kind to a Blu-ray disc,
+                      with a warning. Some players show the tracks past the
+                      32nd, others leave them out.
 --allow-oversize      With --disc-size, downgrade an over-capacity overrun from a
                       hard error to a warning and build the (oversized) image anyway.
 --layer-break-guard   Dual-layer safety padding for ISO output: place <n> megabytes

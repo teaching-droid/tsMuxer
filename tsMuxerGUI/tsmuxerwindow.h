@@ -311,6 +311,7 @@ class TsMuxerWindow : public QWidget
     bool m_customChaptersUserOverride;
     /// When true, meta file was edited by the user; do not auto-regenerate.
     bool m_metaUserOverride;
+    bool m_buildingMuxOpts = false;  // getMuxOpts asks buildMetaText, which asks getMuxOpts: once only
     QString m_lastBuiltMeta;  // the meta file last built from the settings
     QnCheckBoxedHeaderView* m_header;
     QString lastSourceDir;

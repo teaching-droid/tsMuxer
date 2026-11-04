@@ -619,14 +619,29 @@ void MuxerManager::checkTracksBeforeOutput()
             else if (si.m_codec[0] == 'V' && secondary)
                 ++secondaryVideo;
         }
+        // --allow-extra-tracks writes them anyway, as before 3.0.0, with a warning: some players show the tracks
+        // past the 32nd, others leave them out. A playlist counts each kind in one byte, so 255 stays the limit.
         for (const auto& [count, kind] : {std::pair<int, const char*>{audio, "audio"},
                                           {secondaryAudio, "secondary audio"},
                                           {subtitles, "subtitle"},
                                           {secondaryVideo, "secondary video"}})
-            if (count > 32)
-                THROW(ERR_COMMON, "A Blu-ray disc holds at most 32 " << kind << " tracks, and " << count
-                                                                     << " were given. Leave out " << count - 32
-                                                                     << " of them.")
+        {
+            if (count <= 32)
+                continue;
+            if (count > 255)
+                THROW(ERR_COMMON, "A Blu-ray playlist holds at most 255 " << kind << " tracks, and " << count
+                                                                          << " were given. Leave out " << count - 255
+                                                                          << " of them.")
+            if (!m_allowExtraTracks)
+                THROW(ERR_COMMON, "A Blu-ray disc holds at most 32 "
+                                      << kind << " tracks, and " << count << " were given. Leave out " << count - 32
+                                      << " of them, or add --allow-extra-tracks to the MUXOPT line to write them "
+                                         "anyway: some players show the tracks past the 32nd, others leave them out.")
+            LTRACE(LT_WARN, 2,
+                   "Warning: " << count << " " << kind << " tracks are more than the 32 a Blu-ray disc has numbers for "
+                               << "(--allow-extra-tracks): the last " << count - 32
+                               << " get numbers outside that range. Some players show them, others leave them out.");
+        }
     }
     checkTimeshiftFitsClock();
 
@@ -1507,7 +1522,8 @@ string MuxerManager::muxOptLine(const string& line)
 
 void MuxerManager::warnUnknownMuxOpts(const string& opts)
 {
-    static const std::set<std::string> metaOptions = {"--allow-oversize",
+    static const std::set<std::string> metaOptions = {"--allow-extra-tracks",
+                                                      "--allow-oversize",
                                                       "--auto-chapters",
                                                       "--avchd",
                                                       "--bitrate",
@@ -1666,6 +1682,8 @@ void MuxerManager::parseMuxOpt(const string& opts)
         {
             m_demuxMode = true;
         }
+        else if (paramPair[0] == "--allow-extra-tracks")
+            m_allowExtraTracks = true;
         // It was looked for in the text of the line, so a label or a title holding "right-eye" made the right eye
         // the base view of a 3D disc.
         else if (paramPair[0] == "--right-eye")

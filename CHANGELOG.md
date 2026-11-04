@@ -44,6 +44,8 @@
 
 * **The window shows where a playlist puts each track.** Two columns of the track list, "playlist" and "clip", give a track's number among the tracks of its kind (audio, subtitles) in the playlist, which is the number a player gives it, and in its clip, by PID. They show while a playlist is in the list. The listing of a playlist gives the same in a "Stream order" line. (#52, thanks to @bulba99 for the request)
 
+* **More than 32 tracks of one kind on a disc, when asked for** (#53). A Blu-ray disc has numbers for 32 tracks of each kind: audio, subtitles, secondary audio and secondary video. 3.0.0 refused a 33rd. `--allow-extra-tracks` on the MUXOPT line now writes them anyway, with a warning: some players show the tracks past the 32nd, others leave them out. The window asks first, with a "Don't ask again" tick; the question comes back with the tick "Ask before writing more than 32 tracks of one kind to a disc" on the General tab. Thanks to @DreckSoft
+
 ### Audio
 
 * **WavPack is read from a Matroska file and from a .wv file.** A WavPack track (A_WAVPACK4) of a Matroska file and a .wv file were "Can't detect stream type". They are now listed with their sample rate, channels and bits per sample, copied as they are into a Matroska output and demuxed to a .wv file; a disc and a TS have no form for them. Hybrid WavPack keeps its correction part: from a Matroska file as it is, and from the .wvc file beside a .wv, so the Matroska output decodes to the lossless sound; a demux writes the lossy part, with a warning. DSD WavPack is refused with that reason.

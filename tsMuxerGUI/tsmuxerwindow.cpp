@@ -986,6 +986,8 @@ TsMuxerWindow::TsMuxerWindow()
             &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->w64CheckBox, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->secondaryCheckBox, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
+    // the option on the MUXOPT line follows the question being on or off (getMuxOpts)
+    connect(ui->checkBoxAskExtraTracks, &QCheckBox::checkStateChanged, this, [this] { updateMetaLines(); });
     connect(ui->mergeAc3TrackSpinBox, spinBoxValueChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->mergeAc3FileLineEdit, &QLineEdit::textChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->mergeAc3FileBrowseButton, &QPushButton::clicked, this, &TsMuxerWindow::onMergeAc3FileBrowseClicked);
@@ -5098,6 +5100,48 @@ bool TsMuxerWindow::isVideoCropped()
     return false;
 }
 
+// The kinds of track a meta text has more than 32 of, as tsMuxeR counts them for a disc (MuxerManager::
+// checkTracksBeforeOutput): audio, secondary audio, subtitles and secondary video, by the codec of each track line
+// and its "secondary" parameter. Each kind as "47 subtitle tracks".
+static QStringList kindsOverDiscLimit(const QString& meta)
+{
+    int audio = 0, secondaryAudio = 0, subtitles = 0, secondaryVideo = 0;
+    static const QRegularExpression secondaryParam(QStringLiteral(",\\s*secondary\\s*(,|$)"));
+    for (const QString& rawLine : meta.split('\n'))
+    {
+        const QString line = rawLine.trimmed();
+        if (line.isEmpty() || line.startsWith('#') || line.startsWith(QLatin1String("MUXOPT")))
+            continue;
+        const QString codec = line.section(',', 0, 0).trimmed();
+        const bool secondary = line.contains(secondaryParam);
+        if (codec.startsWith('A'))
+            ++(secondary ? secondaryAudio : audio);
+        else if (codec.startsWith('S'))
+            ++subtitles;
+        else if (codec.startsWith('V') && secondary)
+            ++secondaryVideo;
+    }
+    QStringList over;
+    if (audio > 32)
+        over << TsMuxerWindow::tr("%1 audio tracks").arg(audio);
+    if (secondaryAudio > 32)
+        over << TsMuxerWindow::tr("%1 secondary audio tracks").arg(secondaryAudio);
+    if (subtitles > 32)
+        over << TsMuxerWindow::tr("%1 subtitle tracks").arg(subtitles);
+    if (secondaryVideo > 32)
+        over << TsMuxerWindow::tr("%1 secondary video tracks").arg(secondaryVideo);
+    return over;
+}
+
+// Whether the MUXOPT line of a meta text has an option, as a word of its own
+static bool muxOptHas(const QString& meta, const QString& option)
+{
+    for (const QString& line : meta.split('\n'))
+        if (line.trimmed().startsWith(QLatin1String("MUXOPT")))
+            return line.contains(QRegularExpression("(^|\\s)" + QRegularExpression::escape(option) + "(\\s|$)"));
+    return false;
+}
+
 bool TsMuxerWindow::isDiskOutput() const
 {
     return ui->radioButtonAVCHD->isChecked() || ui->radioButtonBluRay->isChecked() ||
@@ -5118,6 +5162,16 @@ QString TsMuxerWindow::getMuxOpts()
         rez += (ui->checkBoxV3->isChecked() ? " --blu-ray-v3" : " --blu-ray");
         if (!ui->DiskLabelEdit->text().isEmpty())
             rez += QString(" --label=\"%1\" ").arg(ui->DiskLabelEdit->text());
+    }
+    // More than 32 tracks of one kind on a disc (#53): with the question turned off, the option goes on the line itself,
+    // so that a saved meta file writes the disc as the window does
+    if (isDiskOutput() && !ui->checkBoxAskExtraTracks->isChecked() && !m_buildingMuxOpts)
+    {
+        m_buildingMuxOpts = true;
+        const bool over = !kindsOverDiscLimit(buildMetaText()).isEmpty();
+        m_buildingMuxOpts = false;
+        if (over)
+            rez += " --allow-extra-tracks";
     }
     // The disc's title and pictures (#30): kept from the source disc unless a folder or none is chosen
     if (ui->radioButtonBluRay->isChecked() || ui->radioButtonBluRayISO->isChecked())
@@ -7101,6 +7155,53 @@ void TsMuxerWindow::startMuxing()
             return;
     }
 
+    // More than 32 tracks of one kind on a disc (#53): tsMuxeR refuses them unless the MUXOPT line has
+    // --allow-extra-tracks. Asked here, with what it means; the answer adds the option to the meta file of this job.
+    if (isDiskOutput())
+    {
+        const QString meta = ui->memoMeta->toPlainText();
+        const QStringList over = kindsOverDiscLimit(meta);
+        if (!over.isEmpty() && !muxOptHas(meta, QStringLiteral("--allow-extra-tracks")))
+        {
+            if (ui->checkBoxAskExtraTracks->isChecked())
+            {
+                QMessageBox box(this);
+                box.setWindowTitle(tr("More tracks than a disc has numbers for"));
+                box.setIcon(QMessageBox::Question);
+                box.setText(tr("This disc gets %1. A Blu-ray disc has numbers for 32 tracks of each kind.")
+                                .arg(over.join(tr(" and "))));
+                box.setInformativeText(
+                    tr("The tracks past the 32nd get numbers outside that range. Some players show them, others leave "
+                       "them out. Leave tracks out to keep within 32, or write the disc anyway."));
+                QPushButton* write = box.addButton(tr("Write the disc anyway"), QMessageBox::AcceptRole);
+                box.addButton(QMessageBox::Cancel);
+                box.setDefaultButton(QMessageBox::Cancel);
+                auto* dontAsk = new QCheckBox(tr("Don't ask again"), &box);
+                dontAsk->setToolTip(tr("The question comes back with the tick on the General tab."));
+                box.setCheckBox(dontAsk);
+                box.exec();
+                if (box.clickedButton() != write)
+                    return;
+                if (dontAsk->isChecked())
+                {
+                    ui->checkBoxAskExtraTracks->setChecked(false);
+                    writeSettings();
+                }
+            }
+            // the option on the MUXOPT line of this job's meta file, the hand-edited one too
+            QStringList lines = meta.split('\n');
+            for (QString& line : lines)
+                if (line.trimmed().startsWith(QLatin1String("MUXOPT")))
+                {
+                    line = line.trimmed() + " --allow-extra-tracks";
+                    break;
+                }
+            const bool wasBlocked = ui->memoMeta->blockSignals(true);
+            ui->memoMeta->setPlainText(lines.join('\n'));
+            ui->memoMeta->blockSignals(wasBlocked);
+        }
+    }
+
     // A Matroska or WebM output is a file too, and an existing one was replaced without the question the others ask.
     bool isFile = ui->radioButtonM2TS->isChecked() || ui->radioButtonTS->isChecked() ||
                   ui->radioButtonBluRayISO->isChecked() || ui->radioButtonMKV->isChecked();
@@ -7692,6 +7793,7 @@ void TsMuxerWindow::writeSettings()
         settings->setValue("restoreCropEnabled", ui->checkBoxCrop->isChecked());
     settings->setValue("playlistParts", ui->checkBoxPlaylistParts->isChecked());
     settings->setValue("writeReport", ui->checkBoxReport->isChecked());
+    settings->setValue("askExtraTracks", ui->checkBoxAskExtraTracks->isChecked());
     settings->setValue("inputDir", lastInputDir);
     settings->setValue("outputDir", lastOutputDir);
     settings->setValue("useBlankPL", ui->checkBoxBlankPL->isChecked());
@@ -7944,6 +8046,7 @@ bool TsMuxerWindow::readGeneralSettings(const QString& prefix)
     ui->checkBoxPlaylistParts->setChecked(
         settings->value("playlistParts", ui->checkBoxPlaylistParts->isChecked()).toBool());
     ui->checkBoxReport->setChecked(settings->value("writeReport", false).toBool());
+    ui->checkBoxAskExtraTracks->setChecked(settings->value("askExtraTracks", true).toBool());
     ui->checkBoxBlankPL->setChecked(settings->value("useBlankPL", ui->checkBoxBlankPL->isChecked()).toBool());
     // 0 is a playlist number like any other: it was skipped, and the box kept its default of 1900
     if (settings->contains("blankPLNum"))
