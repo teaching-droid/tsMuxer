@@ -184,8 +184,14 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             auto tsPacket = reinterpret_cast<TSPacket*>(curPos);
             int pid = tsPacket->getPID();
 
+            // ** A PACKET THAT SAYS IT IS DAMAGED IS PASSED OVER. ** A receiver sets transport_error_indicator on a packet
+            // it could not correct (ISO/IEC 13818-1, 2.4.3.2), and then nothing in the packet can be trusted, the size of
+            // its adaptation field neither. One such packet stopped the listing of a whole recording with bad reception.
+            // A packet of that size that does not say so still stops it: the file is then not what it looks like.
             if (TS_FRAME_SIZE < tsPacket->getHeaderSize())
             {
+                if (tsPacket->tei)
+                    continue;
                 THROW(ERR_COMMON, "Invalid tsPacket->getHeaderSize")
                 break;
             }
@@ -832,6 +838,8 @@ void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, c
         const int pid = tsPacket->getPID();
         if (TS_FRAME_SIZE < tsPacket->getHeaderSize())
         {
+            if (tsPacket->tei)
+                continue;  // damaged, and it says so (getTrackList)
             if (laterClip)
                 break;
             THROW(ERR_COMMON, "Invalid tsPacket->getHeaderSize")
@@ -1157,6 +1165,10 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
             }
         }
 
+        // The size of its adaptation field puts the payload past the end of the packet: a damaged packet (getTrackList)
+        // has nothing to read
+        if (TS_FRAME_SIZE < tsPacket->getHeaderSize())
+            continue;
         uint8_t* frameData = m_curPos + tsPacket->getHeaderSize();
         // ** A PACKET SENT TWICE IS READ ONCE. ** A stream may send a packet again right after it, with the same
         // continuity counter and the same payload (ISO/IEC 13818-1, 2.4.3.3), which a decoder discards. Both were read:
