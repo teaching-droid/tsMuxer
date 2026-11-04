@@ -81,6 +81,8 @@ struct CheckStreamRez
     int containerStreamType;
     // 0x59 DVB bitmap subtitles, 0x56 EBU teletext, 0 when the container named neither
     int containerDvbDescriptor;
+    int containerComponentTag = -1;     // ISDB: stream_identifier component tag (PMTStreamInfo::m_componentTag)
+    int containerDataComponentId = -1;  // ISDB: data_component_id (PMTStreamInfo::m_dataComponentId)
     // An interlaced H.264 stream whose pictures read are all coded frames (MBAFF), no fields: the time a container
     // gives each picture is that of a frame, as for a progressive stream
     bool framesOnly = false;
@@ -132,6 +134,7 @@ const static CodecInfo mpegAudioCodecInfo(CODEC_A_MPEG_AUDIO, "MPEG-Audio", "A_M
 const static CodecInfo dvbSubCodecInfo(CODEC_S_SUP, "SUP", "S_SUP");
 const static CodecInfo pgsCodecInfo(CODEC_S_PGS, "PGS", "S_HDMV/PGS");
 const static CodecInfo srtCodecInfo(CODEC_S_SRT, "SRT", "S_TEXT/UTF8");
+const static CodecInfo aribCodecInfo(CODEC_S_MKVCOPY, "ARIB", "S_ARIBSUB");
 const static CodecInfo av1CodecInfo(CODEC_V_AV1, "AV1", "V_AV1");
 const static CodecInfo flacCodecInfo(CODEC_A_FLAC, "FLAC", "A_FLAC");
 const static CodecInfo opusCodecInfo(CODEC_A_OPUS, "Opus", "A_OPUS");

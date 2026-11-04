@@ -78,6 +78,8 @@
 
 * **An .idx/.sub pair can be used as a source.** It can go onto a Blu-ray as PGS and into a Matroska file as VobSub, and a demux of it writes a .sup file. The times are read from the .idx file.
 
+* **ARIB captions of ISDB recordings can go into a Matroska file.** They are carried as they are (S_ARIBSUB). A disc, a TS, a WebM file and a demux have no form for them, and refuse them with the reason. Superimposed text has no time, and is listed but not muxed.
+
 ### Video
 
 * **A raw video file that ends inside a picture says so.** A raw MPEG-2, H.264 or HEVC file (.m2v, .264, .hevc and the like) cut at a byte position ends with part of a picture, which was muxed as the last picture without a word, and a player shows it damaged or skips it. The slices of the last picture are now read to their end, and where the data stops inside the picture, a warning gives the row of macroblocks or coding tree units it stops in. A file that ends between two pictures gives none.

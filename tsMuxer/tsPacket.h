@@ -306,6 +306,12 @@ struct PMTStreamInfo final
     // named by a descriptor: 0x59 is DVB bitmap subtitles, 0x56 is EBU teletext. Kept so a track
     // no reader accepts can still be named instead of reported as an unknown number.
     int m_dvbDescriptor;
+    // ISDB (ARIB STD-B10, ABNT NBR 15603): the component tag of the stream_identifier_descriptor (0x52) and the
+    // data_component_id of the data_component_descriptor (0xFD), -1 when absent. Captions are 0x0008, the captions of
+    // the 1seg service 0x0012; the tag tells the service (0x30 to 0x37 captions, 0x38 to 0x3F superimposed text, 0x87
+    // the 1seg service).
+    int m_componentTag = -1;
+    int m_dataComponentId = -1;
     // The descriptor that says the track is AC-4 audio, 0 when none does: the DVB AC-4_descriptor (extension 0x15 of
     // 0x7F, EN 300 468) or a registration descriptor "AC-4" (0x05). tsMuxeR does not mux AC-4, and only names it.
     int m_ac4Descriptor = 0;

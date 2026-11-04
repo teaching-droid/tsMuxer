@@ -33,6 +33,7 @@ class TSDemuxer final : public AbstractDemuxer
     int getLastReadRez() override { return m_lastReadRez; }
     // The demuxer of a mux (not of a listing or a probe) says at the end of the file what of its tracks was damaged
     void setReportDamage() { m_reportDamage = true; }
+    [[nodiscard]] bool isAribPid(int pid) const;
     void setFileIterator(FileNameIterator* itr) override;
     int64_t getTrackDelay(const int32_t pid) override
     {
@@ -119,6 +120,14 @@ class TSDemuxer final : public AbstractDemuxer
     std::map<int, DvbSubtitlePes> m_dvbSubtitles;
     bool m_dvbSubtitlesFinished = false;
     [[nodiscard]] bool isDvbSubtitlePid(int pid) const;
+    // ISDB captions: each PES goes on as a copied block for a Matroska output (S_ARIBSUB)
+    struct AribPes
+    {
+        std::vector<uint8_t> pes;  // the PES being gathered, its header included
+        int64_t pts = -1;          // its time, 90 kHz, unwrapped
+    };
+    std::map<int, AribPes> m_arib;
+    void finishAribPes(int pid, AribPes& sub, DemuxedData& demuxedData, int64_t& discardSize);
     // The PGS handed on is read by the PGS reader and counted as read there; the DVB bytes it came from count as
     // discarded, less what was handed on, so that the two add up to the file.
     void convertDvbSubtitlePes(int pid, DvbSubtitlePes& sub, DemuxedData& demuxedData, bool last, int64_t& discardSize);

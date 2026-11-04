@@ -796,6 +796,7 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
             // lines deliberately avoid the "Stream type: "/"Stream ID:   " prefixes the GUI
             // parses, so an unmuxable track is reported without being offered as selectable.
             const char* known = nullptr;
+            std::string aribKnown;  // ISDB captions, named with their service
             switch (static_cast<StreamType>(streams[i].containerStreamType))
             {
             case StreamType::SUB_IGS:
@@ -812,6 +813,17 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                     known = "DVB bitmap subtitles (EN 300 743)";
                 else if (streams[i].containerDvbDescriptor == static_cast<int>(TSDescriptorTag::DVB_TELETEXT))
                     known = "EBU teletext (EN 300 468)";
+                // ISDB-T and ISDB-Tb captions (ARIB STD-B24, ABNT NBR 15606): named by the data_component_id, the
+                // service by the component tag. They were "Can't detect stream type".
+                else if (streams[i].containerDataComponentId == 0x0008 || streams[i].containerDataComponentId == 0x0012)
+                {
+                    const int tag = streams[i].containerComponentTag;
+                    aribKnown = std::string("ARIB captions") +
+                                (streams[i].containerDataComponentId == 0x0012 || tag == 0x87 ? " of the 1seg service"
+                                 : tag >= 0x38 && tag <= 0x3F                                 ? ", superimposed text"
+                                                                                              : "");
+                    known = aribKnown.c_str();
+                }
                 break;
             default:
                 break;
@@ -833,6 +845,9 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                 codes << "stream type 0x" << std::hex << streams[i].containerStreamType << std::dec;
                 if (streams[i].containerDvbDescriptor)
                     codes << ", descriptor 0x" << std::hex << streams[i].containerDvbDescriptor << std::dec;
+                else if (!aribKnown.empty())
+                    codes << ", data component 0x" << std::hex << std::setw(4) << std::setfill('0')
+                          << streams[i].containerDataComponentId << std::dec << std::setfill(' ');
                 LTRACE(LT_INFO, 2,
                        "Not supported: " << known << " (" << codes.str()
                                          << "). Muxing this stream type is not implemented, "
@@ -1137,6 +1152,7 @@ Names of codecs in the meta file:
                     float; a disc and a TS get 16 or 24 bit
 - S_HDMV/PGS        Presentation graphic stream (BD subtitle format)
 - S_TEXT/UTF8        SRT subtitle format. Encoding MUST be UTF-8/UTF-16/UTF-32
+- S_ARIBSUB          ARIB captions of an ISDB recording. Matroska output only.
 
 Each track may have additional parameters. Track parameters do not have dashes.
 If a parameter's value consists of several words, it must be enclosed in quotes.

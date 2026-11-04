@@ -223,11 +223,15 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                         for (const auto& [fst, snd] : m_pmt.pidList)
                         {
                             TrackInfo track(
-                                isDvbSubtitlePid(snd.m_pid) ? TRACKTYPE_PGS : static_cast<int>(snd.m_streamType),
+                                isDvbSubtitlePid(snd.m_pid) ? TRACKTYPE_PGS
+                                : isAribPid(snd.m_pid)                    ? TRACKTYPE_ARIB
+                                                                          : static_cast<int>(snd.m_streamType),
                                 snd.m_lang, 0, snd.m_dvbDescriptor);
                             if (snd.m_streamType == StreamType::PRIVATE_DATA)
                             {
                                 track.m_soundDescriptor = snd.m_soundDescriptor;
+                                track.m_componentTag = snd.m_componentTag;
+                                track.m_dataComponentId = snd.m_dataComponentId;
                                 // What the PMT says is AC-4 is named by it, and left out: it is not guessed from
                                 // its bytes, where a chance match could list it as another codec
                                 if (snd.m_ac4Descriptor != 0 && snd.m_soundDescriptor == 0 && snd.m_dvbDescriptor == 0)
@@ -963,6 +967,13 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
             m_lastReadRez = readRez;
             return 0;
         }
+        for (auto& [pid, sub] : m_arib)
+            if (!sub.pes.empty())
+            {
+                finishAribPes(pid, sub, demuxedData, discardSize);
+                m_lastReadRez = readRez;
+                return 0;
+            }
         if (!m_dvbSubtitles.empty() && !m_dvbSubtitlesFinished)
         {
             m_dvbSubtitlesFinished = true;
@@ -1135,6 +1146,24 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
     const auto tsPacket = reinterpret_cast<TSPacket*>(pkt);
     uint8_t* frameData = pkt + tsPacket->getHeaderSize();
     const bool pesStartCode = frameData[0] == 0 && frameData[1] == 0 && frameData[2] == 1 && tsPacket->payloadStart;
+    if (isAribPid(pid))
+    {
+        if (!m_acceptedPidCache[pid])
+            return;
+        demuxedData[pid];  // a track without a caption so far is a track all the same
+        AribPes& sub = m_arib[pid];
+        if (pesStartCode)
+        {
+            finishAribPes(pid, sub, demuxedData, discardSize);
+            auto* pes = reinterpret_cast<PESPacket*>(frameData);
+            const bool whole = frameData + PESPacket::HEADER_SIZE + PESPacket::PTS_SIZE <= pkt + TS_FRAME_SIZE;
+            sub.pts = whole && (pes->flagsLo & 0x80) == 0x80 ? fullPts(pes->getPts()) : -1;
+        }
+        const int64_t payloadLen = TS_FRAME_SIZE - (frameData - pkt);
+        if (payloadLen > 0 && (pesStartCode || !sub.pes.empty()))
+            sub.pes.insert(sub.pes.end(), frameData, frameData + payloadLen);
+        return;
+    }
     if (part != nullptr && !pesStartCode && !m_partKeep[pid])
         return;
     if (!pesStartCode && m_leadDrop[pid])
@@ -1589,6 +1618,64 @@ int64_t TSDemuxer::clearSubtitlesAtPartEnd(DemuxedData& demuxedData)
         cut.pgsCleared = true;
     }
     return written;
+}
+
+// A copied Matroska block: "MKCP", time, duration (-1: none), a key point, no BlockAdditions, its size and its bytes
+static void appendCopyRecord(std::vector<uint8_t>& out, const int64_t pts, const int64_t duration, const uint8_t* data,
+                             const size_t size)
+{
+    const auto be = [&out](const uint64_t v, const int bytes)
+    {
+        for (int i = bytes - 1; i >= 0; --i) out.push_back(static_cast<uint8_t>(v >> (8 * i)));
+    };
+    out.insert(out.end(), {'M', 'K', 'C', 'P'});
+    be(static_cast<uint64_t>(pts), 8);
+    be(static_cast<uint64_t>(duration), 8);
+    out.push_back(1);
+    be(0, 4);
+    be(size, 4);
+    out.insert(out.end(), data, data + size);
+}
+
+// Captions of ISDB (ARIB STD-B10, ABNT NBR 15603): the data_component_id says so. The superimposed text of tags 0x38 to
+// 0x3F is sent without a time, and has nothing to be placed by.
+bool TSDemuxer::isAribPid(const int pid) const
+{
+    const auto info = m_pmt.pidList.find(pid);
+    if (info == m_pmt.pidList.end() || info->second.m_streamType != StreamType::PRIVATE_DATA)
+        return false;
+    const int id = info->second.m_dataComponentId;
+    const int tag = info->second.m_componentTag;
+    return (id == 0x0008 || id == 0x0012) && !(tag >= 0x38 && tag <= 0x3F);
+}
+
+void TSDemuxer::finishAribPes(const int pid, AribPes& sub, DemuxedData& demuxedData, int64_t& discardSize)
+{
+    const std::vector<uint8_t> pes = std::move(sub.pes);
+    sub.pes.clear();
+    if (pes.empty())
+        return;
+    discardSize += static_cast<int64_t>(pes.size());
+    // start code and stream id, length, flags and the length of the header: private stream 1, with its time
+    if (pes.size() < 9 || pes[3] != PES_PRIVATE_DATA1 || sub.pts < 0)
+        return;
+    const size_t start = 9 + static_cast<size_t>(pes[8]);
+    const size_t end = (std::min)(6 + (static_cast<size_t>(pes[4]) << 8 | pes[5]), pes.size());
+    // data_identifier 0x80 opens a caption
+    if (start >= end || pes[start] != 0x80)
+        return;
+    int64_t reference = videoReference(pid, false);
+    if (reference == -1)
+        reference = m_firstPTS;
+    const int64_t at = sub.pts - reference + m_prevFileLen;
+    if (at < 0)
+        return;  // before the first picture of its program
+    std::vector<uint8_t> out;
+    appendCopyRecord(out, at * (INTERNAL_PTS_FREQ / 90000), -1, pes.data() + start, end - start);
+    StreamData& dst = demuxedData[pid];
+    dst.grow(static_cast<int>(out.size()));
+    memcpy(dst.data() + dst.size() - out.size(), out.data(), out.size());
+    discardSize -= static_cast<int64_t>(out.size());
 }
 
 bool TSDemuxer::isDvbSubtitlePid(const int pid) const

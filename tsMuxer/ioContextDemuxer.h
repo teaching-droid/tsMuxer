@@ -13,6 +13,7 @@
 static constexpr int TRACKTYPE_PCM = 0x080;
 static constexpr int TRACKTYPE_PGS = 0x090;
 static constexpr int TRACKTYPE_SRT = 0x190;
+static constexpr int TRACKTYPE_ARIB = 0x191;  // ISDB captions of a transport stream
 static constexpr int TRACKTYPE_WAV = 0x180;
 // VP8 and VP9, which only a Matroska source names: their data has nothing another probe could recognise them by.
 static constexpr int TRACKTYPE_VP8 = 0x1A8;

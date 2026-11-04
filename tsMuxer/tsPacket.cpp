@@ -408,6 +408,10 @@ uint32_t TS_program_map_section::extractDescriptors(uint8_t* curPos, const int e
         }
         else if (tag == TSDescriptorTag::DVB_EXTENSION && len >= 1 && descrBuf[0] == 0x15)  // AC-4_descriptor
             pmtInfo.m_ac4Descriptor = 0x7F;
+        else if (static_cast<uint8_t>(tag) == 0x52 && len >= 1)  // stream_identifier_descriptor
+            pmtInfo.m_componentTag = descrBuf[0];
+        else if (static_cast<uint8_t>(tag) == 0xFD && len >= 2)  // data_component_descriptor (ISDB)
+            pmtInfo.m_dataComponentId = descrBuf[0] << 8 | descrBuf[1];
         else if (tag == TSDescriptorTag::DVB_AC3)
             pmtInfo.m_soundDescriptor = static_cast<int>(StreamType::AUDIO_AC3);
         else if (tag == TSDescriptorTag::DVB_EAC3)

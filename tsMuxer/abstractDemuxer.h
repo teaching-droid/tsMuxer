@@ -103,6 +103,9 @@ struct TrackInfo
     // A transport stream track of stream type 0x06 whose descriptor names its sound: the stream type that names the
     // same codec, zero for none (PMTStreamInfo::m_soundDescriptor).
     int m_soundDescriptor = 0;
+    // ISDB: the component tag and data_component_id of a stream type 0x06 track (PMTStreamInfo), -1 when absent
+    int m_componentTag = -1;
+    int m_dataComponentId = -1;
     TrackInfo() : m_trackType(0), m_delay(0), m_dvbDescriptor(0), m_defaultFlag(-1) {}
     TrackInfo(const int trackType, const char* lang, const int64_t delay, const int dvbDescriptor = 0,
               const int defaultFlag = -1)

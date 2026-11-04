@@ -2029,6 +2029,29 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
             }
         }
     }
+    // ** ISDB CAPTIONS GO INTO A MATROSKA OUTPUT AS THEY ARE. ** S_ARIBSUB: its CodecPrivate the component tag and the
+    // data_component_id, a block for each PES, without a duration. No other output has a form for them.
+    if (codec == aribCodecInfo.programName)
+    {
+        if (m_matroskaOutput != 1)
+            THROW(ERR_COMMON, "ARIB captions can only go into a Matroska file: a disc, a TS, a WebM file and a demux "
+                              "have no form for them. Leave track "
+                                  << pid << " out, or mux to .mkv. Nothing was written.")
+        const std::string first = unquoteStr(trimStr(fileList[0]));
+        TSDemuxer probe(m_readManager, "");
+        probe.openFile(first);
+        std::map<int32_t, TrackInfo> tracks;
+        probe.getTrackList(tracks);
+        const auto track = tracks.find(pid);
+        if (track == tracks.end() || !probe.isAribPid(pid))
+            THROW(ERR_COMMON, "Track " << pid << " of " << first << " holds no ARIB captions. Nothing was written.")
+        const int id = track->second.m_dataComponentId;
+        codecReader = new MatroskaCopyStreamReader(
+            aribCodecInfo.programName,
+            {static_cast<uint8_t>(track->second.m_componentTag), static_cast<uint8_t>(id >> 8),
+             static_cast<uint8_t>(id)},
+            {}, 0);
+    }
     // ** DVD SUBTITLES INTO A MATROSKA OUTPUT STAY VOBSUB. ** The sub-pictures of a VOB were drawn again as PGS for every
     // output, where a Matroska output keeps the VobSub of a Matroska source as it is. They go in as S_VOBSUB now, each
     // unit a block, with the .idx text of the colours of the IFO file as its CodecPrivate. WebM has no VobSub.
@@ -4386,6 +4409,14 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             // ASS, SSA and WebVTT from a Matroska file go through the SRT reader, which called every one of them
             // "SRT text subtitles". The listing names what the file holds. Stream type and Stream ID stay SRT and
             // S_TEXT/UTF8: the window and the meta file take the track by those.
+            if (trackRez.codecInfo.programName == aribCodecInfo.programName)
+            {
+                const TrackInfo& arib = acceptedPidMap[itr.first];
+                std::ostringstream descr;
+                descr << "ARIB captions" << (arib.m_dataComponentId == 0x0012 ? " of the 1seg service" : "")
+                      << ", component tag 0x" << std::hex << arib.m_componentTag;
+                trackRez.streamDescr = descr.str();
+            }
             if (trackRez.codecInfo.codecID == CODEC_S_SRT)
             {
                 const std::string& id = trackRez.codecId;
@@ -4407,6 +4438,8 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             if (dynamic_cast<TSDemuxer*>(demuxer.get()))
                 trackRez.containerStreamType = acceptedPidMap[itr.first].m_trackType;
             trackRez.containerDvbDescriptor = acceptedPidMap[itr.first].m_dvbDescriptor;
+            trackRez.containerComponentTag = acceptedPidMap[itr.first].m_componentTag;
+            trackRez.containerDataComponentId = acceptedPidMap[itr.first].m_dataComponentId;
 
             if (strStartWith(trackRez.codecInfo.programName, "A_") && dynamic_cast<TSDemuxer*>(demuxer.get()))
             {
@@ -4852,6 +4885,13 @@ CheckStreamRez METADemuxer::detectTrackReader(uint8_t* tmpBuffer, int len,
                                               const bool wholeTrack)
 {
     CheckStreamRez rez;
+
+    if (containerDataType == TRACKTYPE_ARIB)
+    {
+        rez.codecInfo = aribCodecInfo;
+        rez.streamDescr = "ARIB captions";
+        return rez;
+    }
 
     auto pgsReader = std::make_unique<PGSStreamReader>();
     rez = pgsReader->checkStream(tmpBuffer, len, containerType, containerDataType, containerStreamIndex);

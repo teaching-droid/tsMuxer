@@ -233,6 +233,7 @@ A_ALAC            | Apple Lossless (read from MKV and MP4; MKV output only)
 A_WAVPACK4        | WavPack (read from MKV and from .wv files; MKV output, or demuxed to .wv). Hybrid WavPack: the correction part (from the MKV, or the .wvc file beside the .wv) is kept in a Matroska output; a demux writes the lossy part only.
 S_HDMV/PGS        | Presentation graphic stream (BD subtitle format) 
 S_TEXT/UTF8       | SRT subtitle format.  Encoding MUST be  UTF-8/UTF-16/UTF-32 
+S_ARIBSUB         | ARIB captions of an ISDB recording. Matroska output only.
 
 Each track may have additional parameters. Track parameters do not have dashes. If a parameter's value consists of several words, it must be enclosed in quotes.
 
