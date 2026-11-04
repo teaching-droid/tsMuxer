@@ -2618,6 +2618,13 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                     THROW(ERR_COMMON, "Track " << pid << " of " << unquoteStr(fileList[0])
                                                << " cannot be read: " << why->second << ". Nothing was written.")
             }
+            // A transport stream lists from its first part, but what its PMT rules out is ruled out for every part
+            if (pid > 0 && !SubTrackFilter::isSubTrack(pid) && dynamic_cast<TSDemuxer*>(fileDemuxer))
+                if (const auto named = trackList.find(pid); named != trackList.end())
+                    if (const auto why = named->second.m_srcParams.find("srcleftout");
+                        why != named->second.m_srcParams.end())
+                        THROW(ERR_COMMON, "Track " << pid << " of " << unquoteStr(fileList[0])
+                                                   << " cannot be read: " << why->second << ". Nothing was written.")
             // A 3D track is taken by its views (subTrack=), under a number of its own: of its source track only the
             // base view's eye is carried over, for the disc's playlist and a Matroska output's StereoMode
             if (SubTrackFilter::isSubTrack(pid))

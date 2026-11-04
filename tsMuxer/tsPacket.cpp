@@ -403,7 +403,11 @@ uint32_t TS_program_map_section::extractDescriptors(uint8_t* curPos, const int e
                 pmtInfo.m_soundDescriptor = static_cast<int>(StreamType::AUDIO_AC3);
             else if (registrationId == 0x45414333 /* 'EAC3' */)
                 pmtInfo.m_soundDescriptor = static_cast<int>(StreamType::AUDIO_EAC3_ATSC);
+            else if (registrationId == 0x41432D34 /* 'AC-4' */ && pmtInfo.m_ac4Descriptor == 0)
+                pmtInfo.m_ac4Descriptor = 0x05;
         }
+        else if (tag == TSDescriptorTag::DVB_EXTENSION && len >= 1 && descrBuf[0] == 0x15)  // AC-4_descriptor
+            pmtInfo.m_ac4Descriptor = 0x7F;
         else if (tag == TSDescriptorTag::DVB_AC3)
             pmtInfo.m_soundDescriptor = static_cast<int>(StreamType::AUDIO_AC3);
         else if (tag == TSDescriptorTag::DVB_EAC3)

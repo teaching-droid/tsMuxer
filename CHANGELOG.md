@@ -48,6 +48,8 @@
 
 * **A second run into a disc folder removed the titles of the run before** (#31 K50). A run with `--mplsOffset` or `--m2tsOffset` replaced the whole BDMV folder, so a disc built one title at a time kept only its last title. With either option the new title now joins the folder. A playlist or clip number that is taken is refused, and the folder stays as it was. Without these options the folder is replaced, as before.
 
+* **AC-4 audio is named in a TS.** A track that the PMT declares as AC-4 was listed as "Can't detect stream type". It now says "AC-4 audio", and that tsMuxeR does not mux it. A meta line that names such a track is refused with the same reason. The other tracks of the file are not affected.
+
 ### Audio
 
 * **WavPack is read from a Matroska file and from a .wv file.** A WavPack track (A_WAVPACK4) of a Matroska file and a .wv file were "Can't detect stream type". They are now listed with their sample rate, channels and bits per sample, copied as they are into a Matroska output and demuxed to a .wv file; a disc and a TS have no form for them. Hybrid WavPack keeps its correction part: from a Matroska file as it is, and from the .wvc file beside a .wv, so the Matroska output decodes to the lossless sound; a demux writes the lossy part, with a warning. DSD WavPack is refused with that reason.

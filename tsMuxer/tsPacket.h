@@ -306,6 +306,9 @@ struct PMTStreamInfo final
     // named by a descriptor: 0x59 is DVB bitmap subtitles, 0x56 is EBU teletext. Kept so a track
     // no reader accepts can still be named instead of reported as an unknown number.
     int m_dvbDescriptor;
+    // The descriptor that says the track is AC-4 audio, 0 when none does: the DVB AC-4_descriptor (extension 0x15 of
+    // 0x7F, EN 300 468) or a registration descriptor "AC-4" (0x05). tsMuxeR does not mux AC-4, and only names it.
+    int m_ac4Descriptor = 0;
     // The sound a descriptor names, as the stream type that names the same codec (0x81 AC-3, 0x87 E-AC-3, 0x82 DTS,
     // 0x0F AAC), zero for none: the AC-3, enhanced AC-3, DTS or AAC descriptor of EN 300 468, which is how a DVB stream
     // declares these (TS 101 154: AC-3, E-AC-3 and DTS are carried as stream type 0x06 with the descriptor), or the

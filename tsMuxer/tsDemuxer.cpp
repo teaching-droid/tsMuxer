@@ -226,7 +226,19 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                                 isDvbSubtitlePid(snd.m_pid) ? TRACKTYPE_PGS : static_cast<int>(snd.m_streamType),
                                 snd.m_lang, 0, snd.m_dvbDescriptor);
                             if (snd.m_streamType == StreamType::PRIVATE_DATA)
+                            {
                                 track.m_soundDescriptor = snd.m_soundDescriptor;
+                                // What the PMT says is AC-4 is named by it, and left out: it is not guessed from
+                                // its bytes, where a chance match could list it as another codec
+                                if (snd.m_ac4Descriptor != 0 && snd.m_soundDescriptor == 0 && snd.m_dvbDescriptor == 0)
+                                {
+                                    std::ostringstream what;
+                                    what << "AC-4 audio (stream type 0x6, descriptor 0x" << std::hex
+                                         << snd.m_ac4Descriptor << ")";
+                                    track.m_srcParams["srcnotsupported"] = what.str();
+                                    track.m_srcParams["srcleftout"] = "it holds AC-4 audio, which tsMuxeR does not mux";
+                                }
+                            }
                             trackList.insert(std::make_pair(snd.m_pid, track));
                         }
                         nonProcPMTPid.erase(pid);

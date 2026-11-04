@@ -3172,6 +3172,8 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
                     description = tr("DVB bitmap subtitles (EN 300 743)");
                 else if (dvbDescriptor == 0x56)
                     description = tr("EBU teletext (EN 300 468)");
+                else if (dvbDescriptor == 0x7F || dvbDescriptor == 0x05)
+                    description = tr("AC-4 audio");
                 break;
             default:
                 break;
