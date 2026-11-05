@@ -510,6 +510,7 @@ void ProgramStreamDemuxer::noteVideoTime(const int64_t pts, const int64_t dts)
         ++m_parts;
     }
     m_lastDts = dts;
+    m_lastPts = pts;
     m_pesPts = pts;
 }
 
@@ -630,7 +631,7 @@ void ProgramStreamDemuxer::addSubPicture(const int stream, const uint8_t* data, 
     {
         m_heldUnits.push_back({stream,
                                std::vector<uint8_t>(sp.unit.begin(), sp.unit.begin() + static_cast<std::ptrdiff_t>(size)),
-                               sp.pts, m_parts, m_segBase, m_segFirst, m_lastDts});
+                               sp.pts, m_parts, m_segBase, m_segFirst, m_lastDts, m_lastPts});
         m_heldAt = m_pictures;
     }
     sp.unit.clear();
@@ -649,8 +650,12 @@ void ProgramStreamDemuxer::releaseSubPictures(DemuxedData& demuxedData, const bo
         m_segFirst = m_heldUnits.front().pts;
     for (const HeldUnit& unit : m_heldUnits)
     {
-        const bool partBefore = unit.part != m_parts && unit.first >= 0 &&
-                                std::llabs(unit.pts - unit.lastDts) < std::llabs(unit.pts - m_segFirst);
+        // A still menu starts its clock again at every picture, at the same value: the unit is as near to the part it
+        // came in as to the next one, and it belongs to the one it came in, shown with that picture
+        const int64_t toPartBefore =
+            (std::min)(std::llabs(unit.pts - unit.lastDts), std::llabs(unit.pts - unit.lastPts));
+        const bool partBefore =
+            unit.part != m_parts && unit.first >= 0 && toPartBefore <= std::llabs(unit.pts - m_segFirst);
         // on the time line of the video: where its part begins, and the time from the first picture of the part
         const int64_t at =
             llround(partBefore ? unit.base : m_segBase) + unit.pts - (partBefore ? unit.first : m_segFirst);

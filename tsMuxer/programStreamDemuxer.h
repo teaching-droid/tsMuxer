@@ -116,8 +116,10 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
         double base;
         int64_t first;
         int64_t lastDts;
+        int64_t lastPts;
     };
     std::vector<HeldUnit> m_heldUnits;
+    int64_t m_lastPts = -1;  // the presentation time of the last picture with a time
     int64_t m_parts = 0;     // the parts begun so far
     int64_t m_pictures = 0;  // the pictures with a time so far
     int64_t m_heldAt = 0;    // m_pictures when the units held came
