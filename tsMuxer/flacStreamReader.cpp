@@ -282,8 +282,8 @@ uint8_t* FLACStreamReader::findFrame(uint8_t* buff, uint8_t* end)
                 if (p + STREAMINFO_SIZE <= end)
                     parseStreamInfo(p, static_cast<int>(end - p));
 
-                // Build CodecPrivate if we don't have one yet
-                if (m_codecPrivate.empty())
+                // Build CodecPrivate if we don't have one yet, from a block that is all there
+                if (m_codecPrivate.empty() && p + blockLen <= end)
                 {
                     // Store fLaC + this STREAMINFO block
                     const int privSize = 4 + 4 + blockLen;

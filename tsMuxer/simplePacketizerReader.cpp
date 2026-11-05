@@ -1102,12 +1102,20 @@ int SimplePacketizerReader::flushPacket(AVPacket& avPacket)
             return 0;
         }
     }
+    // What a reader skips at the start of the last frame, as the header of a WAV file, is not part of it. The frame was
+    // sent at its whole length from behind that header, and the read ran past the end of the buffer by as much.
+    if (skipBeforeBytes > 0 && m_tmpBufferLen > 0 && m_tmpBufferLen <= static_cast<uint32_t>(skipBeforeBytes))
+    {
+        m_processedBytes += m_tmpBufferLen;
+        m_tmpBufferLen = 0;
+        return 0;
+    }
     avPacket.dts = avPacket.pts = static_cast<int64_t>(m_curPts * m_stretch) + m_timeOffset;
     if (m_tmpBufferLen > 0)
     {
         avPacket.data = m_tmpBuffer.data();
         avPacket.data += skipBeforeBytes;
-        avPacket.size = static_cast<int>(m_tmpBufferLen);
+        avPacket.size = static_cast<int>(m_tmpBufferLen) - skipBeforeBytes;
         if (isPriorityData(&avPacket))
             avPacket.flags |= AVPacket::PRIORITY_DATA;
         if (isIFrame(&avPacket))

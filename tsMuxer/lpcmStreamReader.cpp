@@ -1241,6 +1241,10 @@ bool LPCMStreamReader::detectLPCMType(uint8_t* buffer, const int64_t len)
         return true;
     }
 
+    // The tests below read up to the 16 bytes of a Wave64 identifier: of a shorter file they read past its end
+    if (len < 16)
+        return false;
+
     const uint8_t* end = buffer + len;
     // An RF64 or BW64 file (EBU Tech 3306, ITU-R BS.2088), the WAV of more than 4 GB, begins "RF64" or "BW64" in place
     // of "RIFF" and gives its sizes in a ds64 chunk. It was refused; it is read as a WAV now, the size of its audio
@@ -1637,9 +1641,11 @@ int LPCMStreamReader::flushPacket(AVPacket& avPacket)
     else
         avPacket.data = nullptr;
     avPacket.data += skipBeforeBytes;
+    // What decodeFrame skipped, as a WAV header in a tail that begins with one, is not sound: the block was sent at the
+    // whole length from behind it, and the read ran past the end of the buffer by as much
     if (m_tmpBufferLen > 0)
     {
-        avPacket.size = static_cast<int>(m_tmpBufferLen);
+        avPacket.size = (std::max)(0, static_cast<int>(m_tmpBufferLen) - skipBeforeBytes);
     }
     if ((m_headerType == LPCMHeaderType::htWAVE || m_headerType == LPCMHeaderType::htWAVE64) && !m_demuxMode)
     {
