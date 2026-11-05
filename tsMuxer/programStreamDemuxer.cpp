@@ -341,6 +341,7 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
 
     while (curBuf <= end - 9)
     {
+        const uint8_t* const packetStart = curBuf;
         const auto pesPacket = reinterpret_cast<PESPacket*>(curBuf);
         int startcode = curBuf[3];
         if ((startcode >= 0xc0 && startcode <= 0xef) || (startcode == PES_PRIVATE_DATA1) || (startcode == PES_VC1_ID) ||
@@ -471,6 +472,12 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
             const int64_t rest = FFMIN(end - curBuf, 4);
             curBuf += rest;
             discardSize += rest;
+        }
+        // A packet of length 0, as in a damaged file, moved nothing on: the next marker was this one, for ever
+        if (curBuf == packetStart)
+        {
+            curBuf += 4;
+            discardSize += 4;
         }
         prevBuf = curBuf;
         curBuf = MPEGHeader::findNextMarker(curBuf, end);
