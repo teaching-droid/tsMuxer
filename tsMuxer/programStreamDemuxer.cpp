@@ -158,6 +158,35 @@ int ProgramStreamDemuxer::mpegps_psm_parse(const uint8_t* buff, const uint8_t* e
     return 6 + psm_length;
 }
 
+int ProgramStreamDemuxer::appendLpcm(const int idx, StreamData& out, const uint8_t* data, int len)
+{
+    LpcmSubStream& s = m_lpcm[idx];
+    const int unit = s.bits == 16 ? 2 : 3;
+    m_lpcmOut.resize(static_cast<size_t>(s.partLen + len) / unit * unit + unit);
+    uint8_t* dst = m_lpcmOut.data();
+    if (s.partLen > 0)
+    {
+        const int take = (std::min)(unit - s.partLen, len);
+        memcpy(s.part + s.partLen, data, take);
+        s.partLen += take;
+        data += take;
+        len -= take;
+        if (s.partLen < unit)
+            return 0;
+        wave_format::toLittleEndian(dst, s.part, unit, s.bits);
+        dst += unit;
+        s.partLen = 0;
+    }
+    const int whole = len / unit * unit;
+    wave_format::toLittleEndian(dst, const_cast<uint8_t*>(data), whole, s.bits);
+    dst += whole;
+    s.partLen = len - whole;
+    memcpy(s.part, data + whole, s.partLen);
+    const int appended = static_cast<int>(dst - m_lpcmOut.data());
+    out.append(m_lpcmOut.data(), appended);
+    return appended;
+}
+
 int ProgramStreamDemuxer::processPES(uint8_t* buff, uint8_t* end, const int headerLen, const bool mpeg1,
                                      int& afterPesHeader)
 {
@@ -220,20 +249,16 @@ int ProgramStreamDemuxer::processPES(uint8_t* buff, uint8_t* end, const int head
 
             MemoryBlock& waveHeader = m_lpcmWaveHeader[startcode - 0xa0];
 
-            const uint16_t bitdepth = 16 + (curBuf[4] >> 6 & 3) * 4;
-
             if (waveHeader.isEmpty())
             {
+                const uint16_t bitdepth = 16 + (curBuf[4] >> 6 & 3) * 4;
                 const int samplerate = LPCM_FREQS[curBuf[4] >> 4 & 3];
                 const uint16_t channels = 1 + (curBuf[4] & 7);
                 wave_format::buildWaveHeader(waveHeader, samplerate, channels, channels >= 6, bitdepth);
+                m_lpcm[startcode - 0xa0].bits = bitdepth;
             }
 
             afterPesHeader += 6;
-
-            uint8_t* payloadData = curBuf + afterPesHeader - 1;
-            const int pesPayloadLen = pesPacket->getPacketLength() - headerLen - afterPesHeader;
-            wave_format::toLittleEndian(payloadData, payloadData, pesPayloadLen, bitdepth);
         }
         else if (startcode >= 0x80 && startcode <= 0xcf)
         {
@@ -310,6 +335,11 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
         if (m_lastPID >= 0x20 && m_lastPID <= 0x3f)
         {
             addSubPicture(m_lastPID, curBuf, copyLen, -1, demuxedData[m_lastPID]);
+            m_dataProcessed += copyLen;
+        }
+        else if (m_lastPID >= 0xa0 && m_lastPID <= 0xaf)
+        {
+            discardSize += copyLen - appendLpcm(m_lastPID - 0xa0, demuxedData[m_lastPID], curBuf, copyLen);
             m_dataProcessed += copyLen;
         }
         else if (m_lastPID > 0)
@@ -427,7 +457,10 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
                 {
                     THROW(ERR_COMMON, "Invalid copyLen")
                 }
-                vect.append(payloadData, copyLen);
+                if (idx >= 0 && idx <= 15)
+                    discardSize += copyLen - appendLpcm(idx, vect, payloadData, copyLen);
+                else
+                    vect.append(payloadData, copyLen);
                 m_dataProcessed += copyLen;
                 discardSize += payloadData - curBuf;
                 if (copyLen < pesPayloadLen)

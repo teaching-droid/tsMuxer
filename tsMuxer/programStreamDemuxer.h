@@ -62,6 +62,21 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
     int64_t m_firstPTS;
     MemoryBlock m_lpcmWaveHeader[16];
     bool m_lpcpHeaderAdded[16];
+    // ** DVD LPCM IS TURNED ROUND AS IT IS HANDED ON. ** The big endian samples of sub-streams 0xA0 to 0xAF go on as a
+    // WAV, little endian. They were turned round in the read buffer, a whole PES at a time, also the part of a PES past
+    // the end of the read; the next read brought that part in again as it was, and it stayed big endian. They are now
+    // turned round as they are handed on (appendLpcm), and a sample cut by the end of a PES or of a read waits there
+    // for the rest of its bytes.
+    struct LpcmSubStream
+    {
+        int bits = 0;        // 16, 20 or 24, from the first header of the sub-stream, as its WAV header says
+        uint8_t part[16]{};  // the bytes of a sample cut by the end of a PES or a read
+        int partLen = 0;
+    };
+    LpcmSubStream m_lpcm[16];
+    std::vector<uint8_t> m_lpcmOut;
+    // Hands on len bytes of the samples of sub-stream 0xA0 + idx; returns the bytes appended to out
+    int appendLpcm(int idx, StreamData& out, const uint8_t* data, int len);
 
     // ** DVD SUBTITLES. ** The sub-pictures of private stream 1, sub-streams 0x20 to 0x3F, were not read. Each
     // sub-picture unit is put together from its PES packets (its first two bytes give its size), drawn with the
