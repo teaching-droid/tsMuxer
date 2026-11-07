@@ -242,6 +242,8 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
     {
         if (!isAAC || m_hasConfig)
             return true;
+        // the rate of the sample entry as it is now: a srat box after it can give one above 65535 Hz
+        m_aacRaw.m_sample_rate = m_sc->sample_rate;
         if (samples == 2048 && m_aacRaw.m_profile == 1 && m_sc->sample_rate % 2 == 0)
             m_aacRaw.m_sample_rate = m_sc->sample_rate / 2;
         return samples == 1024 || samples == 2048;
@@ -2481,6 +2483,20 @@ int MovDemuxer::ParseTableEntry(MOVAtom atom)
     case MKTAG('d', 'O', 'p', 's'):  // OpusSpecificBox
     case MKTAG('p', 'c', 'm', 'C'):  // PCMConfigurationBox, ISO/IEC 23003-5
         return mov_read_glbl(atom);
+    // srat (ISO/IEC 14496-12, 12.2.3): the sample rate of an audio sample entry of version 1, whose 16.16 field
+    // cannot hold a rate above 65535 Hz. It was not read, and PCM of 96 kHz in an MP4 was read as 48 kHz: the sound
+    // of every output played at half speed.
+    case MKTAG('s', 'r', 'a', 't'):
+    {
+        if (num_tracks < 1 || atom.size < 8)
+            return 0;
+        const auto st = reinterpret_cast<MOVStreamContext*>(tracks[num_tracks - 1]);
+        get_be32();  // version and flags
+        const uint32_t rate = get_be32();
+        if (st->type == IOContextTrackType::AUDIO && rate > 0 && rate <= INT_MAX)
+            st->sample_rate = static_cast<int>(rate);
+        return 0;
+    }
     case MKTAG('e', 'n', 'd', 'a'):  // QuickTime: the byte order of in24 and in32
     {
         if (num_tracks < 1 || atom.size < 2)
