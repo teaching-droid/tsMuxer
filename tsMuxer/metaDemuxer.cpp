@@ -4457,6 +4457,25 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
         DemuxedData demuxedData;
         map<int32_t, TrackInfo> acceptedPidMap;
         demuxer->getTrackList(acceptedPidMap);
+        // ** A TS WITHOUT THE TABLES THAT NAME ITS TRACKS IS SAID SO. ** A recording cut out of a stream, or one that
+        // kept only some of its PIDs, can have no PAT, or no PMT: its tracks are found by them, so the listing showed
+        // only a duration, with no track and no word why.
+        if (const auto* ts = dynamic_cast<TSDemuxer*>(demuxer.get()); ts && acceptedPidMap.empty())
+        {
+            const std::string missing = ts->missingProgramTable() ? ts->missingProgramTable() : "";
+            const std::string scope = ts->tableScanWholeFile() ? "" : " in its first 64 MB";
+            if (missing == "PAT")
+                THROW(ERR_COMMON, "The file " << unquoted << " is a transport stream without a PAT (program association "
+                                              "table)" << scope
+                                              << ". The tracks of a TS are found by its PAT and the PMT it names, so "
+                                                 "no track of this file can be read. A recording cut out of a stream, "
+                                                 "or one that kept only some of its PIDs, can lack them.")
+            if (missing == "PMT")
+                THROW(ERR_COMMON, "The file " << unquoted << " names its programs in a PAT, but has no PMT (program "
+                                              "map table) of them" << scope
+                                              << ". The tracks of a TS are found by its PMT, so no track of this file "
+                                                 "can be read. A recording that kept only some of its PIDs can lack it.")
+        }
         PIDSet acceptedPidSet;
         for (const auto& itr : acceptedPidMap) acceptedPidSet.insert(itr.first);
         for (auto& itr : demuxedData)
@@ -4519,6 +4538,32 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
                         throw;
                     trackRez = CheckStreamRez();
                     trackRez.notSupported = e.m_errStr;
+                }
+            }
+            // A TS track no reader found: whether that is because its every packet is scrambled, or because the file
+            // carries none of it (see TSDemuxer::packetsRead). It was "Can't detect stream type", which read as if
+            // the codec the program map declares, MPEG-2 or AAC, could not be read.
+            if (const auto* ts = dynamic_cast<TSDemuxer*>(demuxer.get());
+                ts && !trackRez.codecInfo.codecID && trackRez.notSupported.empty())
+            {
+                int64_t packets = 0, scrambled = 0;
+                if (!ts->packetsRead(itr.first, packets, scrambled))
+                    trackRez.notSupported =
+                        wholeTracks ? "no data. The program map names this track, but the file has no packet of it."
+                                    : "no data. The program map names this track, but the part of the file read "
+                                      "has no packet of it.";
+                // Most packets, not all: a recording of an encrypted channel can carry a few packets in the clear (41 of
+                // 49,707 of a real HD recording), and its track is still unreadable
+                else if (scrambled * 2 > packets)
+                {
+                    std::ostringstream what;
+                    what << "encrypted, ";
+                    if (scrambled == packets)
+                        what << "all " << packets;
+                    else
+                        what << scrambled << " of " << packets;
+                    what << " packets read are marked scrambled (transport_scrambling_control)";
+                    trackRez.notSupported = what.str();
                 }
             }
             warnKindMismatch(unquoted, itr.first, acceptedPidMap[itr.first], declared, trackRez);

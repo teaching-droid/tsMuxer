@@ -74,6 +74,17 @@ class TSDemuxer final : public AbstractDemuxer
     // The video PES read, of all video streams and files, and the stream of the first one (-1: none yet)
     [[nodiscard]] int64_t videoPesRead() const { return m_videoPesRead; }
     [[nodiscard]] int firstVideoPid() const { return m_firstVideoPid; }
+    // ** WHY A TRACK OR A FILE GIVES NOTHING TO READ. ** A listing said "Can't detect stream type" for a track whose
+    // every packet is scrambled (the recording of an encrypted channel) and for a track the program map names but the
+    // file does not carry, and said nothing at all for a TS without a PAT: the reader did not count what it saw.
+    // The packets with payload of a track in the listing's read, and how many of them are marked scrambled; false where
+    // no packet of the track was read
+    [[nodiscard]] bool packetsRead(int pid, int64_t& packets, int64_t& scrambled) const;
+    // After getTrackList: the program table the scan found none of ("PAT", or "PMT" where a PAT names maps that never
+    // came), or nullptr where the maps were found or the file held no TS packet at all; and whether the scan read the
+    // whole file
+    [[nodiscard]] const char* missingProgramTable() const { return m_missingTable; }
+    [[nodiscard]] bool tableScanWholeFile() const { return m_tableScanWhole; }
     // Where a stream starts on the timeline of a join, in 90 kHz: the start of the clip in which its first PES was
     // seen, so 0 for every stream of the first clip. An audio or video reader counts its own time from its first
     // frame and needs this added; PGS times already carry it in their PES headers.
@@ -314,6 +325,11 @@ class TSDemuxer final : public AbstractDemuxer
     [[nodiscard]] int64_t videoReference(int32_t pid, bool first) const;
     int64_t m_videoPesRead = 0;   // see videoPesRead
     int m_firstVideoPid = -1;     // see firstVideoPid
+    // see packetsRead and missingProgramTable: packets with payload and those marked scrambled, of each track read
+    // while no mux reports damage (a listing)
+    std::map<int, std::pair<int64_t, int64_t>> m_listedPackets;
+    const char* m_missingTable = nullptr;
+    bool m_tableScanWhole = false;
     bool m_videoTimedFromFirstPes = false;
     int64_t m_lastVideoPTS;
     int64_t m_lastVideoDTS;

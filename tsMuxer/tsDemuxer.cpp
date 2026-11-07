@@ -238,6 +238,9 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
     m_lastReadRez = 0;
     bool firstPAT = true;
     bool unmarkedDamage = false;
+    bool patSeen = false;    // a packet of PID 0 came (see missingProgramTable)
+    bool anyPacket = false;  // a TS packet that can be read came
+    m_missingTable = nullptr;
     std::map<int, int> nonProcPMTPid;
 
     bool m2tsHdrDiscarded = false;
@@ -347,8 +350,10 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                     unmarkedDamage = true;
                 continue;
             }
+            anyPacket = true;
             if (pid == 0)
             {  // PAT
+                patSeen = true;
                 readPat(pat, curPos + tsPacket->getHeaderSize(), TS_FRAME_SIZE - tsPacket->getHeaderSize());
                 if (firstPAT && !pat.pmtPids.empty())
                 {
@@ -474,6 +479,11 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             takeMap(shared.firstOther.data(), static_cast<int>(shared.firstOther.size()), pid);
     }
 
+    // No track because the tables that name the tracks are not there: no PAT, or a PAT whose maps never came. A map
+    // that came and names no stream is no missing table.
+    m_tableScanWhole = lastReadRez == BufferedReader::DATA_EOF;
+    if (trackList.empty() && anyPacket)
+        m_missingTable = !patSeen ? "PAT" : mapTaken.empty() && damagedMaps.empty() && sharedPids.empty() ? "PMT" : nullptr;
     if (unmarkedDamage && trackList.empty())
         THROW(ERR_COMMON, "Invalid tsPacket->getHeaderSize")
     auto br = dynamic_cast<BufferedFileReader*>(m_bufferedReader);
@@ -1476,6 +1486,13 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
             checkPmtVersion(frameData, m_curPos + TS_FRAME_SIZE);
         if (m_reportDamage && m_acceptedPidCache[pid])
             noteDamage(tsPacket, pid);
+        else if (m_acceptedPidCache[pid] && tsPacket->dataExists)
+        {
+            auto& [packets, scrambled] = m_listedPackets[pid];  // see packetsRead
+            ++packets;
+            if (tsPacket->sc != 0)
+                ++scrambled;
+        }
         demuxPacket(m_curPos, pid, demuxedData, discardSize, part, vect, lastPid);
     }
     if (m_curPos < data + readedBytes)
@@ -2044,6 +2061,14 @@ void TSDemuxer::finishAribPes(const int pid, AribPes& sub, DemuxedData& demuxedD
     dst.grow(static_cast<int>(out.size()));
     memcpy(dst.data() + dst.size() - out.size(), out.data(), out.size());
     discardSize -= static_cast<int64_t>(out.size());
+}
+
+bool TSDemuxer::packetsRead(const int pid, int64_t& packets, int64_t& scrambled) const
+{
+    const auto it = m_listedPackets.find(pid);
+    packets = it == m_listedPackets.end() ? 0 : it->second.first;
+    scrambled = it == m_listedPackets.end() ? 0 : it->second.second;
+    return packets > 0;
 }
 
 bool TSDemuxer::isTextStPid(const int pid) const
