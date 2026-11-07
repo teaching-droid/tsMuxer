@@ -213,8 +213,10 @@ bool TSDemuxer::mvcContinueExpected() const { return !m_nonMVCVideoFound && strE
 
 void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
 {
-    uint8_t pmtBuffer[4096]{0};
-    int pmtBufferLen = 0;
+    // A program map section that spans packets is put together for each PMT PID on its own. One buffer served every
+    // PID, so where the maps of two PIDs each span packets and come interleaved, the packet of the other PID was glued
+    // into the section: the map was lost, or read with streams that are not in it.
+    std::map<int, std::vector<uint8_t>> pmtBuffers;
     uint32_t tmpBufferLen = 0;
     uint32_t readedBytes;
     uint32_t totalReadedBytes = 0;
@@ -372,34 +374,34 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                     }
                     continue;
                 }
-                if (tsPacket->payloadStart || pmtBufferLen > 0)
+                std::vector<uint8_t>& pmtBuffer = pmtBuffers[pid];
+                if (tsPacket->payloadStart || !pmtBuffer.empty())
                 {
                     // A section that would outgrow the buffer is damaged, as on a broken off-air recording.
                     // Leaving the packet loop here used to strand the rest of the 2 MiB block, which the
                     // carry-over below then copied into a buffer of one packet. Drop the section and collect
                     // again from the next one that starts.
-                    if (pmtBufferLen + TS_FRAME_SIZE - tsPacket->getHeaderSize() > static_cast<int>(sizeof(pmtBuffer)))
+                    if (pmtBuffer.size() + TS_FRAME_SIZE - tsPacket->getHeaderSize() > 4096)
                     {
-                        pmtBufferLen = 0;
+                        pmtBuffer.clear();
                         if (!tsPacket->payloadStart)
                             continue;
                     }
-                    memcpy(pmtBuffer + pmtBufferLen, curPos + tsPacket->getHeaderSize(),
-                           TS_FRAME_SIZE - tsPacket->getHeaderSize());
-                    pmtBufferLen += TS_FRAME_SIZE - tsPacket->getHeaderSize();
-                    if (TS_program_map_section::isFullBuff(pmtBuffer, pmtBufferLen))
+                    pmtBuffer.insert(pmtBuffer.end(), curPos + tsPacket->getHeaderSize(), curPos + TS_FRAME_SIZE);
+                    const int pmtBufferLen = static_cast<int>(pmtBuffer.size());
+                    if (TS_program_map_section::isFullBuff(pmtBuffer.data(), pmtBufferLen))
                     {
                         // The map of a program the PAT does not name on this PID: the PID is read as a shared one
                         // from here on, and this map is taken only if none of the program the PAT names comes
-                        if (!named.empty() && !named.count(programOfMap(pmtBuffer)))
+                        if (!named.empty() && !named.count(programOfMap(pmtBuffer.data())))
                         {
                             m_sharedPmtPids.insert(pid);
-                            sharedPids[pid].firstOther.assign(pmtBuffer, pmtBuffer + pmtBufferLen);
-                            pmtBufferLen = 0;
+                            sharedPids[pid].firstOther = pmtBuffer;
+                            pmtBuffer.clear();
                             continue;
                         }
-                        takeMap(pmtBuffer, pmtBufferLen, pid);
-                        pmtBufferLen = 0;
+                        takeMap(pmtBuffer.data(), pmtBufferLen, pid);
+                        pmtBuffer.clear();
                         if (allTaken(pid))
                             return;
                     }
@@ -989,8 +991,7 @@ bool TSDemuxer::checkForRealM2ts(const uint8_t* buffer, const uint8_t* end) cons
 void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, const bool laterClip,
                                   const bool firstBlock)
 {
-    uint8_t pmtBuffer[4096]{0};
-    int pmtBufferLen = 0;
+    std::map<int, std::vector<uint8_t>> pmtBuffers;  // one for each PMT PID, as in getTrackList
     bool hdrDiscarded = m_m2tsHdrDiscarded;
     bool firstPacket = firstBlock;
     TS_program_association_section pat;
@@ -1029,33 +1030,33 @@ void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, c
                         sharedMaps.emplace_back(pid, std::move(section));
                 continue;
             }
-            if (tsPacket->payloadStart || pmtBufferLen > 0)
+            std::vector<uint8_t>& pmtBuffer = pmtBuffers[pid];
+            if (tsPacket->payloadStart || !pmtBuffer.empty())
             {
-                if (pmtBufferLen + TS_FRAME_SIZE - tsPacket->getHeaderSize() > 4096)
+                if (pmtBuffer.size() + TS_FRAME_SIZE - tsPacket->getHeaderSize() > 4096)
                     break;
-                memcpy(pmtBuffer + pmtBufferLen, cur + tsPacket->getHeaderSize(),
-                       TS_FRAME_SIZE - tsPacket->getHeaderSize());
-                pmtBufferLen += TS_FRAME_SIZE - tsPacket->getHeaderSize();
-                if (TS_program_map_section::isFullBuff(pmtBuffer, pmtBufferLen))
+                pmtBuffer.insert(pmtBuffer.end(), cur + tsPacket->getHeaderSize(), cur + TS_FRAME_SIZE);
+                const int pmtBufferLen = static_cast<int>(pmtBuffer.size());
+                if (TS_program_map_section::isFullBuff(pmtBuffer.data(), pmtBufferLen))
                 {
-                    const bool namedProgram = named.empty() || named.count(programOfMap(pmtBuffer));
+                    const bool namedProgram = named.empty() || named.count(programOfMap(pmtBuffer.data()));
                     if (!laterClip && !namedProgram)
                     {
                         // a map of a program the PAT does not name on this PID: read as a shared PID from here on
                         m_sharedPmtPids.insert(pid);
-                        sharedMaps.emplace_back(pid, std::vector<uint8_t>(pmtBuffer, pmtBuffer + pmtBufferLen));
+                        sharedMaps.emplace_back(pid, pmtBuffer);
                     }
                     else if (!laterClip)
-                        takeProgramMap(pmtBuffer, pmtBufferLen, pid);
+                        takeProgramMap(pmtBuffer.data(), pmtBufferLen, pid);
                     else if (namedProgram || !m_sharedPmtPids.count(pid))
                     {
                         TS_program_map_section clipPmt;
-                        if (clipPmt.deserialize(pmtBuffer, pmtBufferLen))
+                        if (clipPmt.deserialize(pmtBuffer.data(), pmtBufferLen))
                             for (const auto& [streamPid, info] : clipPmt.pidList)
                                 if (streamPid >= 0 && streamPid < 8192 && m_acceptedPidCache[streamPid])
                                     m_pmt.pidList.emplace(streamPid, info);  // a known stream stays as it is
                     }
-                    pmtBufferLen = 0;
+                    pmtBuffer.clear();
                 }
             }
         }
