@@ -1138,6 +1138,7 @@ A folder of disc folders or images given alone names the discs in it.
 On a meta line, title=main or title=<number> after a disc folder or image
 takes that title: the playlist of a Blu-ray, the cells of a DVD title.
 dvd-title=<number> names a DVD title by the disc's own number.
+angle=<n> on such a line, or on the line of a playlist, takes that angle.
 
 Meta file format:
 File MUST have the .meta extension and be encoded in UTF-8 (but see README.md).
@@ -1210,7 +1211,7 @@ Additional parameters for audio tracks:
                     Can be negative.
 - down-to-dts       Available only for DTS-HD tracks. Filter out HD part.
 - down-to-ac3       For TRUE-HD and E-AC3 (DD+) tracks. Keep the AC-3 core, drop the HD part.
-- drop-ac3-core     A Blu-ray TrueHD stream carries a 448 kbps AC-3 core beside its
+- drop-ac3-core     A Blu-ray TrueHD stream carries an AC-3 core beside its
                     lossless part; Matroska cannot hold the two in one track, so the core is written
                     as a track of its own and merge-ac3-track= puts them back together when the file
                     is muxed to a disc again. Add this to leave the core out and keep the lossless
@@ -1425,19 +1426,25 @@ All parameters in this group start with two dashes:
                       or --maxbitrate is given as well.
 --maxbitrate          Set a ceiling on the muxing rate, in kbps. The stream is
                       paced so it never asks to be read faster than that. The
-                      rate counts what is written. For a fixed rate use
-                      --bitrate instead. A --bitrate or --minbitrate above it
-                      is lowered to it, with a warning. Must be above 90.
+                      rate counts the transport stream. In an .m2ts file and on
+                      a disc the 4-byte timestamp of each packet is not counted,
+                      as in the Blu-ray read rate, so the same number allows
+                      about 2 percent more there than with --bitrate. For a
+                      fixed rate use --bitrate instead. A --bitrate or
+                      --minbitrate above it is lowered to it, with a warning.
+                      Must be above 90.
 --cbr                 Ask for a fixed bitrate. The rate comes from --bitrate, so
                       --cbr on its own does nothing. --vbr and --cbr ask for
                       opposite things: given both, a warning says so, and
                       --bitrate decides as always.
 --bitrate             Set a fixed bitrate in kbps, so --bitrate=35000 means
                       35 Mbps. This sets both the minimum and the maximum to
-                      that value. Where the streams need less, null packets pad
-                      the difference; where they need more they are still
-                      written in full, so the output can come out above the
-                      figure asked for. Must be above 90.
+                      that value. Where the streams need less, NULL packets pad
+                      the difference; where they need more, the data waits for
+                      the rate, and a warning counts the pictures that arrive
+                      after they are due. The rate counts everything written,
+                      in an .m2ts file and on a disc the timestamp of each
+                      packet too. Must be above 90.
 --vbv-len             The  length  of the  virtual  buffer  in milliseconds.  The
                       default value  is 500.  Typically, this  option  is used
                       together with --cbr. The parameter is similar to  the value
