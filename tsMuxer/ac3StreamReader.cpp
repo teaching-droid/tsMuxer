@@ -179,7 +179,13 @@ int AC3StreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdm
     }
     BitStreamWriter bitWriter{};
 
-    if (isAC3())
+    // ** E-AC-3 WITH AN AC-3 CORE UNDER STREAM TYPE 0x87 IS DESCRIBED AS E-AC-3. ** Dolby Digital Plus as a disc
+    // carries it, an AC-3 frame with the E-AC-3 part beside it, gets stream type 0x87 in a TS that is neither a disc
+    // nor M2TS (TSMuxer::intAddStream), and ATSC A/52 Annex G 3.5 asks for the E-AC-3 audio descriptor with that stream
+    // type. It was given the AC-3 descriptor of its core. Its independent substream 0 is the core, whose bsid the
+    // descriptor carries. A disc and an M2TS, where the stream type is 0x84, keep the AC-3 descriptor.
+    const bool eac3Type = m_atscEac3Type && isEAC3() && !isTrueHD() && !m_downconvertToAC3;
+    if (isAC3() && !eac3Type)
     {
         // ATSC A/52 Annex A Table A3.1 AC-3 Registration Descriptor
         *dstBuff++ = static_cast<uint8_t>(TSDescriptorTag::REGISTRATION);  // descriptor tag
@@ -237,7 +243,7 @@ int AC3StreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdm
     bitWriter.putBits(3, number_of_channels);
 
     bitWriter.putBits(3, 1);  // language_flag = 0, language_flag2 = 0, reserved = 1
-    bitWriter.putBits(5, m_bsid);
+    bitWriter.putBits(5, isAC3() ? m_bsidBase : m_bsid);
 
     bitWriter.putBits(8, 0x80);  // additional_info_byte
     bitWriter.flushBits();

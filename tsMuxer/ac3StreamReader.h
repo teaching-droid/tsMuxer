@@ -23,6 +23,8 @@ class AC3StreamReader final : public SimplePacketizerReader, public AC3Codec
     }
     int getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdmvDescriptors) override;
     void setNewStyleAudioPES(const bool value) { m_useNewStyleAudioPES = value; }
+    // The track goes to a transport stream that is neither a disc nor M2TS, where E-AC-3 has the ATSC stream type 0x87
+    void setAtscEac3Type(const bool value) { m_atscEac3Type = value; }
     void setTestMode(const bool value) override { AC3Codec::setTestMode(value); }
     int getFreq() override { return m_sample_rate; }
     int getAltFreq() override
@@ -48,6 +50,7 @@ class AC3StreamReader final : public SimplePacketizerReader, public AC3Codec
     void findTrueHDMajorSync();
     bool m_needTrueHDProbe;
     bool m_eac3NoCoreReported = false;
+    bool m_atscEac3Type = false;  // see setAtscEac3Type
     // E-AC-3 without an AC-3 core: the timestamp of the last independent frame, which the
     // dependent frames after it belong to
     void stampDependentFrame(AVPacket& avPacket);

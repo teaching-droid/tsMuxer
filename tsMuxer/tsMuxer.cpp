@@ -270,6 +270,9 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
 {
     int descriptorLen = 0;
     uint8_t descrBuffer[1024];
+    // E-AC-3 gets stream type 0x87 here (below), and its descriptor follows the stream type
+    if (auto* ac3 = dynamic_cast<AC3StreamReader*>(codecReader))
+        ac3->setAtscEac3Type(!m_bluRayMode && !m_m2tsMode);
     if (codecReader != nullptr)
         descriptorLen = codecReader->getTSDescriptor(descrBuffer, m_bluRayMode, m_hdmvDescriptors);
 
