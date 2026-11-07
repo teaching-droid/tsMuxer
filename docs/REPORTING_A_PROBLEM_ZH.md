@@ -9,7 +9,7 @@ muxing 出错时，tsMuxeR 生成的两个文件有助于查找故障，无需�
 | **报告** | 一个记录本次运行的文本文件：tsMuxeR 收到了什么、每条消息、每条轨道读取和舍弃了什么，以及写入了什么 | 很小 | 任何问题都发送 |
 | **样本** | 一个 .zip 文件，内含逐字节复制的一部分源文件 | 最大 25 MB | 报告不够用时，或被要求提供时 |
 
-两者都可以在窗口或命令行中生成。请使用 [“Bug report” 表单](https://github.com/teaching-droid/tsMuxer/issues/new/choose)新建 issue 并附上它们。文件可以直接拖入表单。
+两者都可以在窗口或命令行中生成。请使用 ["Bug report" 表单](https://github.com/teaching-droid/tsMuxer/issues/new/choose)新建 issue 并附上它们。文件可以直接拖入表单。
 
 **issue 是公开的。** 报告不包含任何画面或声音，并会替换您的文件名。样本包含影片本身的一部分，因此只有在您可以分享时才附上。
 
@@ -84,7 +84,7 @@ tsMuxeR --make-sample --at=1:02:13 --add-report=report.txt film.mkv sample.zip
 | 单独的视频流 | 不含时间信息，请截取开头或结尾。 |
 | 光盘映像内的文件 | 在映像后写出路径，例如 `film.iso/BDMV/STREAM/00001.m2ts`。 |
 
-各类源文件的详细说明，请参阅 [USAGE](USAGE.md) 中的 “Sample for a problem report”（英文）。
+各类源文件的详细说明，请参阅 [USAGE](USAGE.md) 中的 "Sample for a problem report"（英文）。
 
 ## 其他有帮助的信息
 
