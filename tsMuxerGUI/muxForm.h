@@ -28,6 +28,8 @@ class MuxForm : public QDialog  // QWidget
     // The report tsMuxeR writes for this job (--report), or none: Save report... keeps a copy when the job has ended
     void setReportFile(const QString& fileName);
     [[nodiscard]] QString reportFile() const { return m_reportFile; }
+    // "Make a sample..." offered when the job ends with an error; not for a job whose source is no file to sample
+    void setSampleOffered(const bool offered) { m_sampleOffered = offered; }
 
    signals:
     // tsMuxeR was stopped with Abort, or with the dialog closed, and has ended
@@ -50,6 +52,7 @@ class MuxForm : public QDialog  // QWidget
     Ui_muxForm* ui;
     QProcess* muxProcess;
     QString m_reportFile;
+    bool m_sampleOffered = true;
 };
 
 #endif

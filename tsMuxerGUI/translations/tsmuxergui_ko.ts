@@ -5141,6 +5141,86 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>the same clip as angle 1</source>
         <translation>앵글 1과 같은 클립</translation>
     </message>
+    <message>
+        <source>Player for previews</source>
+        <translation>미리보기용 플레이어</translation>
+    </message>
+    <message>
+        <source>Player:</source>
+        <translation>플레이어:</translation>
+    </message>
+    <message>
+        <source>the system's default player</source>
+        <translation>시스템 기본 플레이어</translation>
+    </message>
+    <message>
+        <source>Arguments:</source>
+        <translation>인수:</translation>
+    </message>
+    <message>
+        <source>{file} stands for what is played; without it, it comes last</source>
+        <translation>{file}은 재생할 대상을 나타냅니다. 없으면 맨 뒤에 붙습니다</translation>
+    </message>
+    <message>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>&quot;타이틀 선택&quot;의 &quot;미리보기&quot;와 입력 목록의 &quot;재생&quot;은 타이틀이나 파일을 이 플레이어로 엽니다. 타이틀의 경우 tsMuxeR가 먼저 30초 미리보기를 임시 폴더에 만들며, 이 폴더는 창을 닫을 때 삭제됩니다.</translation>
+    </message>
+    <message>
+        <source>Programs (*.exe)</source>
+        <translation>프로그램 (*.exe)</translation>
+    </message>
+    <message>
+        <source>Choose the player</source>
+        <translation>플레이어 선택</translation>
+    </message>
+    <message>
+        <source>Play</source>
+        <translation>재생</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>미리보기</translation>
+    </message>
+    <message>
+        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, it starts there.</source>
+        <translation>선택한 타이틀을 해당 앵글로 미리보기용 플레이어(일반 탭)에서 재생합니다. 타이틀의 앵글이 달라지는 부분이 있으면 그곳에서 시작합니다.</translation>
+    </message>
+    <message>
+        <source>The file &quot;%1&quot; could not be opened in the system's default player.</source>
+        <translation>파일 &quot;%1&quot;을(를) 시스템 기본 플레이어로 열 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>The player &quot;%1&quot; could not be started.</source>
+        <translation>플레이어 &quot;%1&quot;을(를) 시작할 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>Making a preview</source>
+        <translation>미리보기 만드는 중</translation>
+    </message>
+    <message>
+        <source>Reading the tracks of the title...</source>
+        <translation>타이틀의 트랙을 읽는 중...</translation>
+    </message>
+    <message>
+        <source>tsMuxeR found no video in this title, so no preview can be made.</source>
+        <translation>tsMuxeR가 이 타이틀에서 비디오를 찾지 못해 미리보기를 만들 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>The temporary folder &quot;%1&quot; could not be made.</source>
+        <translation>임시 폴더 &quot;%1&quot;을(를) 만들 수 없습니다.</translation>
+    </message>
+    <message>
+        <source>The preview was stopped.</source>
+        <translation>미리보기가 중지되었습니다.</translation>
+    </message>
+    <message>
+        <source>No preview was made.</source>
+        <translation>미리보기가 만들어지지 않았습니다.</translation>
+    </message>
+    <message>
+        <source>Click to play this clip in the player for previews.</source>
+        <translation>클릭하면 이 클립을 미리보기용 플레이어에서 재생합니다.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -5131,6 +5131,86 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>the same clip as angle 1</source>
         <translation>the same clip as angle 1</translation>
     </message>
+    <message>
+        <source>Player for previews</source>
+        <translation>Player for previews</translation>
+    </message>
+    <message>
+        <source>Player:</source>
+        <translation>Player:</translation>
+    </message>
+    <message>
+        <source>the system's default player</source>
+        <translation>the system's default player</translation>
+    </message>
+    <message>
+        <source>Arguments:</source>
+        <translation>Arguments:</translation>
+    </message>
+    <message>
+        <source>{file} stands for what is played; without it, it comes last</source>
+        <translation>{file} stands for what is played; without it, it comes last</translation>
+    </message>
+    <message>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</translation>
+    </message>
+    <message>
+        <source>Programs (*.exe)</source>
+        <translation>Programs (*.exe)</translation>
+    </message>
+    <message>
+        <source>Choose the player</source>
+        <translation>Choose the player</translation>
+    </message>
+    <message>
+        <source>Play</source>
+        <translation>Play</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Preview</translation>
+    </message>
+    <message>
+        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, it starts there.</source>
+        <translation>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, it starts there.</translation>
+    </message>
+    <message>
+        <source>The file &quot;%1&quot; could not be opened in the system's default player.</source>
+        <translation>The file &quot;%1&quot; could not be opened in the system's default player.</translation>
+    </message>
+    <message>
+        <source>The player &quot;%1&quot; could not be started.</source>
+        <translation>The player &quot;%1&quot; could not be started.</translation>
+    </message>
+    <message>
+        <source>Making a preview</source>
+        <translation>Making a preview</translation>
+    </message>
+    <message>
+        <source>Reading the tracks of the title...</source>
+        <translation>Reading the tracks of the title...</translation>
+    </message>
+    <message>
+        <source>tsMuxeR found no video in this title, so no preview can be made.</source>
+        <translation>tsMuxeR found no video in this title, so no preview can be made.</translation>
+    </message>
+    <message>
+        <source>The temporary folder &quot;%1&quot; could not be made.</source>
+        <translation>The temporary folder &quot;%1&quot; could not be made.</translation>
+    </message>
+    <message>
+        <source>The preview was stopped.</source>
+        <translation>The preview was stopped.</translation>
+    </message>
+    <message>
+        <source>No preview was made.</source>
+        <translation>No preview was made.</translation>
+    </message>
+    <message>
+        <source>Click to play this clip in the player for previews.</source>
+        <translation>Click to play this clip in the player for previews.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

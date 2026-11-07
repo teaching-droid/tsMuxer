@@ -6,8 +6,10 @@
 #include <QString>
 #include <QStringList>
 
+class PlayerLauncher;
 class QCheckBox;
 class QTreeWidget;
+class QTreeWidgetItem;
 
 // The titles of a Blu-ray or DVD disc folder, drive or image, read from the listing tsMuxeR prints for it
 // (tsMuxeR <disc>, see discTitles.h and dvdTitles.h of the command line).
@@ -54,7 +56,9 @@ QString discName(const QString& disc);
 QString discPlaylistPath(const QString& disc, const QString& playlist);
 
 // "Choose a title": the titles of the disc, the main titles bold, the first of them chosen. The tick shows the left-out
-// and short titles too, for which the disc is listed again: exec() then ends with ShowOthersChanged.
+// and short titles too, for which the disc is listed again: exec() then ends with ShowOthersChanged. With a player,
+// Preview plays the row chosen in its angle, from where the angles differ (or from the part of a line under an angle),
+// and the dialog stays open to try another.
 class DiscTitleDialog : public QDialog
 {
    public:
@@ -62,13 +66,20 @@ class DiscTitleDialog : public QDialog
     {
         ShowOthersChanged = 2
     };
-    DiscTitleDialog(const QString& disc, const DiscTitleList& list, bool othersShown, QWidget* parent);
+    DiscTitleDialog(const QString& disc, const DiscTitleList& list, bool othersShown, QWidget* parent,
+                    PlayerLauncher* player = nullptr);
     [[nodiscard]] int chosen() const;       // an index into list.titles, -1 for none
     [[nodiscard]] int chosenAngle() const;  // the angle of the row chosen, from 1
 
    private:
+    void preview(const QTreeWidgetItem* item);
+
     QTreeWidget* m_tree = nullptr;
     QCheckBox* m_showOthers = nullptr;
+    QString m_disc;
+    DiscTitleList m_list;
+    bool m_othersShown = false;
+    PlayerLauncher* m_player = nullptr;
 };
 
 #endif  // DISC_TITLE_DIALOG_H_

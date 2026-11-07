@@ -1403,6 +1403,66 @@
             </layout>
            </widget>
           </item>
+          <item row="2" column="0" colspan="2">
+           <widget class="QGroupBox" name="previewPlayerGroup">
+            <property name="title">
+             <string>Player for previews</string>
+            </property>
+            <layout class="QGridLayout" name="previewPlayerLayout">
+             <item row="0" column="0">
+              <widget class="QLabel" name="previewPlayerPathLabel">
+               <property name="text">
+                <string>Player:</string>
+               </property>
+               <property name="buddy">
+                <cstring>previewPlayerPath</cstring>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QLineEdit" name="previewPlayerPath">
+               <property name="placeholderText">
+                <string>the system's default player</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="2">
+              <widget class="QPushButton" name="previewPlayerBrowse">
+               <property name="text">
+                <string>Browse...</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="previewPlayerArgsLabel">
+               <property name="text">
+                <string>Arguments:</string>
+               </property>
+               <property name="buddy">
+                <cstring>previewPlayerArgs</cstring>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1" colspan="2">
+              <widget class="QLineEdit" name="previewPlayerArgs">
+               <property name="placeholderText">
+                <string>{file} stands for what is played; without it, it comes last</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0" colspan="3">
+              <widget class="QLabel" name="previewPlayerNote">
+               <property name="text">
+                <string>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</string>
+               </property>
+               <property name="wordWrap">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
          </layout>
         </item>
        </layout>

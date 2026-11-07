@@ -5141,6 +5141,86 @@ Jeśli pojawiło się to podczas sprawdzania pliku lub zamykania okna, proces zo
         <source>the same clip as angle 1</source>
         <translation>ten sam klip co kąt 1</translation>
     </message>
+    <message>
+        <source>Player for previews</source>
+        <translation>Odtwarzacz do podglądów</translation>
+    </message>
+    <message>
+        <source>Player:</source>
+        <translation>Odtwarzacz:</translation>
+    </message>
+    <message>
+        <source>the system's default player</source>
+        <translation>domyślny odtwarzacz systemu</translation>
+    </message>
+    <message>
+        <source>Arguments:</source>
+        <translation>Argumenty:</translation>
+    </message>
+    <message>
+        <source>{file} stands for what is played; without it, it comes last</source>
+        <translation>{file} oznacza to, co jest odtwarzane; bez niego trafia na koniec</translation>
+    </message>
+    <message>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>„Podgląd” w „Wybierz tytuł” i „Odtwórz” na liście wejściowej otwierają tytuł lub plik w tym odtwarzaczu. Dla tytułu tsMuxeR najpierw tworzy 30-sekundowy podgląd w folderze tymczasowym, który jest usuwany po zamknięciu okna.</translation>
+    </message>
+    <message>
+        <source>Programs (*.exe)</source>
+        <translation>Programy (*.exe)</translation>
+    </message>
+    <message>
+        <source>Choose the player</source>
+        <translation>Wybierz odtwarzacz</translation>
+    </message>
+    <message>
+        <source>Play</source>
+        <translation>Odtwórz</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Podgląd</translation>
+    </message>
+    <message>
+        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, it starts there.</source>
+        <translation>Odtwarza wybrany tytuł, w jego kącie, w odtwarzaczu do podglądów (karta Ogólne). Tam, gdzie kąty tytułu się różnią, zaczyna od tego miejsca.</translation>
+    </message>
+    <message>
+        <source>The file &quot;%1&quot; could not be opened in the system's default player.</source>
+        <translation>Nie można otworzyć pliku „%1” w domyślnym odtwarzaczu systemu.</translation>
+    </message>
+    <message>
+        <source>The player &quot;%1&quot; could not be started.</source>
+        <translation>Nie można uruchomić odtwarzacza „%1”.</translation>
+    </message>
+    <message>
+        <source>Making a preview</source>
+        <translation>Tworzenie podglądu</translation>
+    </message>
+    <message>
+        <source>Reading the tracks of the title...</source>
+        <translation>Odczytywanie ścieżek tytułu...</translation>
+    </message>
+    <message>
+        <source>tsMuxeR found no video in this title, so no preview can be made.</source>
+        <translation>tsMuxeR nie znalazł wideo w tym tytule, więc nie można utworzyć podglądu.</translation>
+    </message>
+    <message>
+        <source>The temporary folder &quot;%1&quot; could not be made.</source>
+        <translation>Nie można utworzyć folderu tymczasowego „%1”.</translation>
+    </message>
+    <message>
+        <source>The preview was stopped.</source>
+        <translation>Podgląd został zatrzymany.</translation>
+    </message>
+    <message>
+        <source>No preview was made.</source>
+        <translation>Nie utworzono podglądu.</translation>
+    </message>
+    <message>
+        <source>Click to play this clip in the player for previews.</source>
+        <translation>Kliknij, aby odtworzyć ten klip w odtwarzaczu do podglądów.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -15,6 +15,8 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
+#include "playerLauncher.h"
+
 // The texts are the window's, so that they are translated with the others (tsmuxergui_*.ts, context TsMuxerWindow)
 static QString wtr(const char* text) { return QCoreApplication::translate("TsMuxerWindow", text); }
 
@@ -199,8 +201,8 @@ QString discPlaylistPath(const QString& disc, const QString& playlist)
 }
 
 DiscTitleDialog::DiscTitleDialog(const QString& disc, const DiscTitleList& list, const bool othersShown,
-                                 QWidget* parent)
-    : QDialog(parent)
+                                 QWidget* parent, PlayerLauncher* player)
+    : QDialog(parent), m_disc(disc), m_list(list), m_othersShown(othersShown), m_player(player)
 {
     setWindowTitle(wtr("Choose a title"));
     auto* layout = new QVBoxLayout(this);
@@ -274,11 +276,22 @@ DiscTitleDialog::DiscTitleDialog(const QString& disc, const DiscTitleList& list,
                 auto* part = new QTreeWidgetItem(item, sub);
                 part->setData(0, Qt::UserRole, i);
                 part->setData(0, Qt::UserRole + 1, angle);
+                part->setData(0, Qt::UserRole + 2, k + 1);  // the part, from 1: a preview starts there
                 if (own)
                 {
                     QFont bold = part->font(1);
                     bold.setBold(true);
                     for (int c = 0; c < sub.size(); ++c) part->setFont(c, bold);
+                }
+                // A Blu-ray angle's clip there is a link: a click plays that clip as it is (in an image, a short
+                // preview of it)
+                if (m_player && !list.dvd && !clip.isEmpty())
+                {
+                    QFont link = part->font(1);
+                    link.setUnderline(true);
+                    part->setFont(1, link);
+                    part->setForeground(1, palette().brush(QPalette::Link));
+                    part->setToolTip(1, wtr("Click to play this clip in the player for previews."));
                 }
                 tip << (clip.isEmpty() ? row.angleParts[k] : row.angleParts[k] + "  " + clip);
             }
@@ -326,6 +339,23 @@ DiscTitleDialog::DiscTitleDialog(const QString& disc, const DiscTitleList& list,
 
     auto* buttons = new QDialogButtonBox(this);
     QPushButton* add = buttons->addButton(wtr("Add title"), QDialogButtonBox::AcceptRole);
+    QPushButton* previewButton = nullptr;
+    if (m_player)
+    {
+        previewButton = buttons->addButton(wtr("Preview"), QDialogButtonBox::ActionRole);
+        previewButton->setToolTip(
+            wtr("Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a "
+                "title differ, it starts there."));
+        previewButton->setEnabled(first != nullptr);
+        connect(previewButton, &QPushButton::clicked, this, [this]() { preview(m_tree->currentItem()); });
+        connect(m_tree, &QTreeWidget::itemClicked, this,
+                [this](QTreeWidgetItem* item, const int column)
+                {
+                    if (!m_list.dvd && column == 1 && item && item->data(0, Qt::UserRole + 2).toInt() > 0 &&
+                        !item->text(1).isEmpty() && (item->flags() & Qt::ItemIsEnabled))
+                        preview(item);
+                });
+    }
     buttons->addButton(QDialogButtonBox::Cancel);
     add->setEnabled(first != nullptr);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
@@ -337,12 +367,70 @@ DiscTitleDialog::DiscTitleDialog(const QString& disc, const DiscTitleList& list,
                     accept();
             });
     connect(m_tree, &QTreeWidget::currentItemChanged, this,
-            [add](QTreeWidgetItem* item) { add->setEnabled(item && (item->flags() & Qt::ItemIsEnabled)); });
+            [add, previewButton](QTreeWidgetItem* item)
+            {
+                add->setEnabled(item && (item->flags() & Qt::ItemIsEnabled));
+                if (previewButton)
+                    previewButton->setEnabled(add->isEnabled());
+            });
     layout->addWidget(buttons);
 
     int width = 60;
     for (int c = 0; c < m_tree->columnCount(); ++c) width += m_tree->columnWidth(c);
     resize(qBound(640, width, 1200), qBound(320, 200 + 22 * static_cast<int>(list.titles.size()), 720));
+}
+
+// The row chosen in the player: the title in its angle, from the start of the part of the line chosen under an angle,
+// or from where the angles differ first, or a part of the way into a title of one angle
+void DiscTitleDialog::preview(const QTreeWidgetItem* item)
+{
+    const int index = item && (item->flags() & Qt::ItemIsEnabled) ? item->data(0, Qt::UserRole).toInt() : -1;
+    if (!m_player || index < 0 || index >= m_list.titles.size())
+        return;
+    const DiscTitleRow& row = m_list.titles[index];
+    PreviewSource source;
+    source.angle = (std::max)(1, item->data(0, Qt::UserRole + 1).toInt());
+    if (m_list.dvd)
+    {
+        source.disc = m_disc;
+        source.dvdTitle = row.discTitle;
+        // the number counts in the listing the title was chosen from
+        if (m_othersShown)
+            source.listArguments << QStringLiteral("--all-playlists");
+        source.listArguments << QStringLiteral("--show-title=%1").arg(row.number) << m_disc;
+    }
+    else
+    {
+        source.playlist = discPlaylistPath(m_disc, row.playlist);
+        source.listArguments << source.playlist;
+    }
+    // the part of several angles: the one of the line chosen, or the first
+    const int chosenPart = item->data(0, Qt::UserRole + 2).toInt();
+    const int part = chosenPart > 0 ? chosenPart - 1 : row.angles > 1 && !row.angleParts.isEmpty() ? 0 : -1;
+    if (part >= 0 && part < row.angleParts.size())
+    {
+        source.start = hmsSeconds(row.angleParts[part].section(QLatin1Char('-'), 0, 0));
+        // On a Blu-ray the angle plays a clip of its own there, which begins where the part begins: that clip is
+        // opened as it is (or its preview made from its start, in an image), which a cut of the playlist at the part
+        // would first read the title up to
+        const int angle = source.angle;
+        if (!m_list.dvd && angle - 1 < row.angleClips.size() && part < row.angleClips[angle - 1].size())
+        {
+            const QString playlistDir = QFileInfo(source.playlist).absolutePath();
+            const QString streamDir = QFileInfo(playlistDir).absolutePath() + QStringLiteral("/STREAM");
+            const QFileInfo info(m_disc);
+            const QString stream =
+                info.isFile() ? streamDir : childNoCase(QFileInfo(playlistDir).absolutePath(), QStringLiteral("STREAM"));
+            QString clip = info.isFile() ? QString() : childNoCase(stream, row.angleClips[angle - 1][part]);
+            if (clip.isEmpty())
+                clip = (stream.isEmpty() ? streamDir : stream) + QLatin1Char('/') + row.angleClips[angle - 1][part];
+            source.file = QDir::toNativeSeparators(clip);
+            source.listArguments = QStringList{source.file};
+        }
+    }
+    else
+        source.start = PlayerLauncher::defaultStart(row.seconds);
+    m_player->preview(source, this);
 }
 
 int DiscTitleDialog::chosen() const

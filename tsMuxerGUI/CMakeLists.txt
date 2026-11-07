@@ -76,6 +76,7 @@ set(tsmuxer_gui_sources
   checkboxedheaderview.cpp
   discTitleDialog.cpp
   sampleDialog.cpp
+  playerLauncher.cpp
   ac3CoreDialog.cpp
   images.qrc
   fontsettingstablemodel.cpp

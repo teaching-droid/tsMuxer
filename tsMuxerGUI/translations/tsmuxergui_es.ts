@@ -5099,6 +5099,86 @@ Si esto apareció mientras se examinaba un archivo, o al cerrar la ventana, el p
         <source>the same clip as angle 1</source>
         <translation>el mismo clip que el ángulo 1</translation>
     </message>
+    <message>
+        <source>Player for previews</source>
+        <translation>Reproductor para vistas previas</translation>
+    </message>
+    <message>
+        <source>Player:</source>
+        <translation>Reproductor:</translation>
+    </message>
+    <message>
+        <source>the system's default player</source>
+        <translation>el reproductor predeterminado del sistema</translation>
+    </message>
+    <message>
+        <source>Arguments:</source>
+        <translation>Argumentos:</translation>
+    </message>
+    <message>
+        <source>{file} stands for what is played; without it, it comes last</source>
+        <translation>{file} representa lo que se reproduce; sin él, va al final</translation>
+    </message>
+    <message>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>&quot;Vista previa&quot; en &quot;Elija un título&quot; y &quot;Reproducir&quot; en la lista de entrada abren un título o un archivo en este reproductor. Para un título, tsMuxeR primero crea una vista previa de 30 segundos en una carpeta temporal, que se elimina al cerrar la ventana.</translation>
+    </message>
+    <message>
+        <source>Programs (*.exe)</source>
+        <translation>Programas (*.exe)</translation>
+    </message>
+    <message>
+        <source>Choose the player</source>
+        <translation>Elegir el reproductor</translation>
+    </message>
+    <message>
+        <source>Play</source>
+        <translation>Reproducir</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Vista previa</translation>
+    </message>
+    <message>
+        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, it starts there.</source>
+        <translation>Reproduce el título elegido, en su ángulo, en el reproductor para vistas previas (pestaña General). Donde los ángulos de un título difieren, empieza allí.</translation>
+    </message>
+    <message>
+        <source>The file &quot;%1&quot; could not be opened in the system's default player.</source>
+        <translation>El archivo &quot;%1&quot; no se pudo abrir en el reproductor predeterminado del sistema.</translation>
+    </message>
+    <message>
+        <source>The player &quot;%1&quot; could not be started.</source>
+        <translation>No se pudo iniciar el reproductor &quot;%1&quot;.</translation>
+    </message>
+    <message>
+        <source>Making a preview</source>
+        <translation>Creando una vista previa</translation>
+    </message>
+    <message>
+        <source>Reading the tracks of the title...</source>
+        <translation>Leyendo las pistas del título...</translation>
+    </message>
+    <message>
+        <source>tsMuxeR found no video in this title, so no preview can be made.</source>
+        <translation>tsMuxeR no encontró vídeo en este título, así que no se puede crear una vista previa.</translation>
+    </message>
+    <message>
+        <source>The temporary folder &quot;%1&quot; could not be made.</source>
+        <translation>No se pudo crear la carpeta temporal &quot;%1&quot;.</translation>
+    </message>
+    <message>
+        <source>The preview was stopped.</source>
+        <translation>La vista previa se detuvo.</translation>
+    </message>
+    <message>
+        <source>No preview was made.</source>
+        <translation>No se creó ninguna vista previa.</translation>
+    </message>
+    <message>
+        <source>Click to play this clip in the player for previews.</source>
+        <translation>Haga clic para reproducir este clip en el reproductor para vistas previas.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

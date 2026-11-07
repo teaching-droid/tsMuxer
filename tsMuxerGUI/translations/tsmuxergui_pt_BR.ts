@@ -5141,6 +5141,86 @@ Se isto apareceu enquanto um arquivo ainda estava sendo examinado, ou quando a j
         <source>the same clip as angle 1</source>
         <translation>o mesmo clipe do ângulo 1</translation>
     </message>
+    <message>
+        <source>Player for previews</source>
+        <translation>Player para pré-visualizações</translation>
+    </message>
+    <message>
+        <source>Player:</source>
+        <translation>Player:</translation>
+    </message>
+    <message>
+        <source>the system's default player</source>
+        <translation>o player padrão do sistema</translation>
+    </message>
+    <message>
+        <source>Arguments:</source>
+        <translation>Argumentos:</translation>
+    </message>
+    <message>
+        <source>{file} stands for what is played; without it, it comes last</source>
+        <translation>{file} representa o que é reproduzido; sem ele, vai por último</translation>
+    </message>
+    <message>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>&quot;Pré-visualizar&quot; em &quot;Escolha um título&quot; e &quot;Reproduzir&quot; na lista de entrada abrem um título ou arquivo neste player. Para um título, o tsMuxeR primeiro cria uma pré-visualização de 30 segundos em uma pasta temporária, que é removida quando a janela é fechada.</translation>
+    </message>
+    <message>
+        <source>Programs (*.exe)</source>
+        <translation>Programas (*.exe)</translation>
+    </message>
+    <message>
+        <source>Choose the player</source>
+        <translation>Escolher o player</translation>
+    </message>
+    <message>
+        <source>Play</source>
+        <translation>Reproduzir</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Pré-visualizar</translation>
+    </message>
+    <message>
+        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, it starts there.</source>
+        <translation>Reproduz o título escolhido, em seu ângulo, no player para pré-visualizações (aba Geral). Onde os ângulos de um título diferem, começa ali.</translation>
+    </message>
+    <message>
+        <source>The file &quot;%1&quot; could not be opened in the system's default player.</source>
+        <translation>Não foi possível abrir o arquivo &quot;%1&quot; no player padrão do sistema.</translation>
+    </message>
+    <message>
+        <source>The player &quot;%1&quot; could not be started.</source>
+        <translation>Não foi possível iniciar o player &quot;%1&quot;.</translation>
+    </message>
+    <message>
+        <source>Making a preview</source>
+        <translation>Criando uma pré-visualização</translation>
+    </message>
+    <message>
+        <source>Reading the tracks of the title...</source>
+        <translation>Lendo as faixas do título...</translation>
+    </message>
+    <message>
+        <source>tsMuxeR found no video in this title, so no preview can be made.</source>
+        <translation>O tsMuxeR não encontrou vídeo neste título, então não é possível criar uma pré-visualização.</translation>
+    </message>
+    <message>
+        <source>The temporary folder &quot;%1&quot; could not be made.</source>
+        <translation>Não foi possível criar a pasta temporária &quot;%1&quot;.</translation>
+    </message>
+    <message>
+        <source>The preview was stopped.</source>
+        <translation>A pré-visualização foi interrompida.</translation>
+    </message>
+    <message>
+        <source>No preview was made.</source>
+        <translation>Nenhuma pré-visualização foi criada.</translation>
+    </message>
+    <message>
+        <source>Click to play this clip in the player for previews.</source>
+        <translation>Clique para reproduzir este clipe no player para pré-visualizações.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

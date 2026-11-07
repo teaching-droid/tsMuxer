@@ -5098,6 +5098,86 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>the same clip as angle 1</source>
         <translation>אותו קליפ כמו בזווית 1</translation>
     </message>
+    <message>
+        <source>Player for previews</source>
+        <translation>נגן לתצוגות מקדימות</translation>
+    </message>
+    <message>
+        <source>Player:</source>
+        <translation>נגן:</translation>
+    </message>
+    <message>
+        <source>the system's default player</source>
+        <translation>נגן ברירת המחדל של המערכת</translation>
+    </message>
+    <message>
+        <source>Arguments:</source>
+        <translation>ארגומנטים:</translation>
+    </message>
+    <message>
+        <source>{file} stands for what is played; without it, it comes last</source>
+        <translation>{file} מייצג את מה שמנוגן; בלעדיו, הוא מתווסף בסוף</translation>
+    </message>
+    <message>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>&quot;תצוגה מקדימה&quot; ב&quot;בחרו כותר&quot; ו&quot;נגנו&quot; ברשימת הקלט פותחים כותר או קובץ בנגן זה. עבור כותר, tsMuxeR יוצר תחילה תצוגה מקדימה של 30 שניות בתיקייה זמנית, שנמחקת כשהחלון נסגר.</translation>
+    </message>
+    <message>
+        <source>Programs (*.exe)</source>
+        <translation>תוכניות (*.exe)</translation>
+    </message>
+    <message>
+        <source>Choose the player</source>
+        <translation>בחרו את הנגן</translation>
+    </message>
+    <message>
+        <source>Play</source>
+        <translation>נגנו</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>תצוגה מקדימה</translation>
+    </message>
+    <message>
+        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, it starts there.</source>
+        <translation>מנגן את הכותר שנבחר, בזווית שלו, בנגן לתצוגות מקדימות (לשונית כללי). היכן שהזוויות של הכותר שונות, ההפעלה מתחילה שם.</translation>
+    </message>
+    <message>
+        <source>The file &quot;%1&quot; could not be opened in the system's default player.</source>
+        <translation>לא ניתן היה לפתוח את הקובץ &quot;%1&quot; בנגן ברירת המחדל של המערכת.</translation>
+    </message>
+    <message>
+        <source>The player &quot;%1&quot; could not be started.</source>
+        <translation>לא ניתן היה להפעיל את הנגן &quot;%1&quot;.</translation>
+    </message>
+    <message>
+        <source>Making a preview</source>
+        <translation>יוצר תצוגה מקדימה</translation>
+    </message>
+    <message>
+        <source>Reading the tracks of the title...</source>
+        <translation>קורא את הרצועות של הכותר...</translation>
+    </message>
+    <message>
+        <source>tsMuxeR found no video in this title, so no preview can be made.</source>
+        <translation>tsMuxeR לא מצא וידאו בכותר זה, ולכן לא ניתן ליצור תצוגה מקדימה.</translation>
+    </message>
+    <message>
+        <source>The temporary folder &quot;%1&quot; could not be made.</source>
+        <translation>לא ניתן היה ליצור את התיקייה הזמנית &quot;%1&quot;.</translation>
+    </message>
+    <message>
+        <source>The preview was stopped.</source>
+        <translation>התצוגה המקדימה הופסקה.</translation>
+    </message>
+    <message>
+        <source>No preview was made.</source>
+        <translation>לא נוצרה תצוגה מקדימה.</translation>
+    </message>
+    <message>
+        <source>Click to play this clip in the player for previews.</source>
+        <translation>לחצו כדי לנגן קליפ זה בנגן לתצוגות מקדימות.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

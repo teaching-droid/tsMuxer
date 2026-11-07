@@ -65,6 +65,7 @@
 #include "fontsettingstablemodel.h"
 #include "lang_codes.h"
 #include "muxForm.h"
+#include "playerLauncher.h"
 #include "sampleDialog.h"
 
 namespace QtCompat
@@ -976,6 +977,26 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->trackLV, &QTableWidget::itemSelectionChanged, this, &TsMuxerWindow::trackLVItemSelectionChanged);
     connect(ui->trackLV, &QTableWidget::itemChanged, this, &TsMuxerWindow::trackLVItemChanged);
     connect(ui->inputFilesLV, &QListWidget::currentRowChanged, this, &TsMuxerWindow::inputFilesLVChanged);
+    ui->inputFilesLV->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->inputFilesLV, &QWidget::customContextMenuRequested, this, &TsMuxerWindow::onInputContextMenu);
+    // The player for previews (General tab): a program, or the system's default player when none is given. The
+    // previews that earlier windows left in the temporary folder are removed.
+    PlayerLauncher::removeOldFolders();
+    connect(ui->previewPlayerBrowse, &QPushButton::clicked, this,
+            [this]()
+            {
+                const QString current = ui->previewPlayerPath->text().trimmed();
+#ifdef Q_OS_WIN
+                const QString filter = tr("Programs (*.exe)");
+#else
+                const QString filter;
+#endif
+                const QString program = QFileDialog::getOpenFileName(
+                    this, tr("Choose the player"), current.isEmpty() ? QString() : QFileInfo(current).absolutePath(),
+                    filter);
+                if (!program.isEmpty())
+                    ui->previewPlayerPath->setText(QDir::toNativeSeparators(program));
+            });
     connect(ui->addBtn, &QPushButton::clicked, this, &TsMuxerWindow::onAddBtnClick);
     connect(ui->btnAppend, &QPushButton::clicked, this, &TsMuxerWindow::onAppendButtonClick);
     connect(ui->removeFile, &QPushButton::clicked, this, &TsMuxerWindow::onRemoveBtnClick);
@@ -2886,6 +2907,8 @@ static const char* const CHOICE_WIDGETS[] = {
     "comboBoxMeasure",
     // Output
     "comboBoxDvProfile",
+    // the player for previews (General tab)
+    "previewPlayerPath", "previewPlayerArgs",
     // the dual-layer group beside the Meta file box
     "dlDiscSize", "dlGuardCheck", "dlGuardSpin", "dlGuardBeforeCheck", "dlGuardBeforeSpin", "dlFreeSectorsManual",
     "dlFreeSectors", "dlAllowOversize", "dlInnerOnly", "dlNoGuard",
@@ -3979,7 +4002,7 @@ void TsMuxerWindow::onDiscTitlesReceived()
         next();
         return;
     }
-    DiscTitleDialog dialog(m_discSource, list, m_discOthersShown, this);
+    DiscTitleDialog dialog(m_discSource, list, m_discOthersShown, this, previewPlayer());
     const int result = dialog.exec();
     if (result == DiscTitleDialog::ShowOthersChanged)
     {
@@ -5129,6 +5152,14 @@ static QString getTsMuxerBinaryPath()
         }
     }
     return QString();
+}
+
+PlayerLauncher* TsMuxerWindow::previewPlayer()
+{
+    if (!m_player)
+        m_player = new PlayerLauncher(getTsMuxerBinaryPath(), this);
+    m_player->setPlayer(ui->previewPlayerPath->text(), ui->previewPlayerArgs->text());
+    return m_player;
 }
 
 void TsMuxerWindow::tsMuxerExecute(const QStringList& args)
@@ -6873,16 +6904,9 @@ void TsMuxerWindow::setChecksMatching(const int refRow, const bool byLanguage, c
 // whatever was clicked rather than offering a list of every type and every language, which keeps
 // it to four entries and needs no submenu: right click an English audio track and every English
 // track, or every audio track, follows it.
-void TsMuxerWindow::onTrackContextMenu(const QPoint& pos)
+// The colours of a context menu of the window (the track list's, the input list's)
+static void setMenuColours(QMenu& menu)
 {
-    const int row = ui->trackLV->rowAt(pos.y());
-    if (row < 0 || row >= ui->trackLV->rowCount())
-        return;
-    const QtvCodecInfo* info = getCodecInfo(row);
-    if (!info)
-        return;
-
-    QMenu menu(this);
 #ifdef Q_OS_WIN
     // The Windows styles paint a menu's ground from the visual theme but its text in the colour scheme's menu text
     // colour. With a colour scheme the user chose, which Windows 7 still offers, that can be white text on the
@@ -6907,7 +6931,22 @@ void TsMuxerWindow::onTrackContextMenu(const QPoint& pos)
             "QMenu::item:disabled { color: %1; }"
             "QMenu::separator { height: 1px; background: palette(mid); margin: 3px 6px; }")
             .arg(disabledInk.name()));
+#else
+    Q_UNUSED(menu);
 #endif
+}
+
+void TsMuxerWindow::onTrackContextMenu(const QPoint& pos)
+{
+    const int row = ui->trackLV->rowAt(pos.y());
+    if (row < 0 || row >= ui->trackLV->rowCount())
+        return;
+    const QtvCodecInfo* info = getCodecInfo(row);
+    if (!info)
+        return;
+
+    QMenu menu(this);
+    setMenuColours(menu);
     QAction* checkType = menu.addAction(tr("Check all tracks of this type"));
     QAction* uncheckType = menu.addAction(tr("Uncheck all tracks of this type"));
     menu.addSeparator();
@@ -6928,6 +6967,59 @@ void TsMuxerWindow::onTrackContextMenu(const QPoint& pos)
         setChecksMatching(row, true, true);
     else if (chosen == uncheckLang)
         setChecksMatching(row, true, false);
+}
+
+void TsMuxerWindow::onInputContextMenu(const QPoint& pos)
+{
+    QListWidgetItem* itm = ui->inputFilesLV->itemAt(pos);
+    if (!itm)
+        return;
+    QMenu menu(this);
+    setMenuColours(menu);
+    QAction* play = menu.addAction(tr("Play"));
+    play->setEnabled(!previewPlayer()->busy());
+    if (menu.exec(ui->inputFilesLV->viewport()->mapToGlobal(pos)) == play)
+        playInputItem(itm);
+}
+
+// An item of the input list in the player for previews: a file as it is, a playlist or a DVD title in its angle, which
+// mpv or VLC open directly where they can, and any other player as a short preview tsMuxeR makes of it
+void TsMuxerWindow::playInputItem(const QListWidgetItem* itm)
+{
+    const QString name = myUnquoteStr(itm->data(FileNameRole).toString());
+    PreviewSource source;
+    source.angle = (std::max)(1, itm->data(AngleRole).toInt());
+    source.start = PlayerLauncher::defaultStart(itm->data(FileDurationRole).toDouble());
+    source.fileStart = source.start;
+    if (const int dvdTitle = itm->data(DvdTitleRole).toInt())
+    {
+        source.disc = name;
+        source.dvdTitle = dvdTitle;
+        // its video and first audio, as listed when it was added
+        QPair<QString, int> video, audio;
+        for (int row = 0; row < ui->trackLV->rowCount(); ++row)
+        {
+            const QtvCodecInfo* info = getCodecInfo(row);
+            if (!info || info->dvdTitle != dvdTitle || info->fileList.isEmpty() ||
+                QDir::fromNativeSeparators(info->fileList[0]).compare(QDir::fromNativeSeparators(name),
+                                                                      Qt::CaseInsensitive) != 0)
+                continue;
+            if (info->programName.startsWith(QLatin1String("V_")) && video.first.isEmpty())
+                video = {info->programName, info->trackID};
+            else if (info->programName.startsWith(QLatin1String("A_")) && audio.first.isEmpty())
+                audio = {info->programName, info->trackID};
+        }
+        if (!video.first.isEmpty())
+            source.tracks << video;
+        if (!audio.first.isEmpty())
+            source.tracks << audio;
+    }
+    else if (itm->data(MplsItemRole).toInt() == MPLS_PRIMARY)
+        source.playlist = name;
+    else
+        source.file = name;
+    source.listArguments << name;
+    previewPlayer()->preview(source, this);
 }
 
 // "remove all" is offered whenever there is anything to remove. That is NOT the same condition as
@@ -7772,6 +7864,8 @@ void TsMuxerWindow::closeEvent(QCloseEvent* event)
     }
     removeMadeCores();
     muxForm->close();
+    if (m_player)
+        m_player->removeFolder();
     event->accept();
 }
 

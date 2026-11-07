@@ -5098,6 +5098,86 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>the same clip as angle 1</source>
         <translation>アングル 1 と同じクリップ</translation>
     </message>
+    <message>
+        <source>Player for previews</source>
+        <translation>プレビュー用プレーヤー</translation>
+    </message>
+    <message>
+        <source>Player:</source>
+        <translation>プレーヤー:</translation>
+    </message>
+    <message>
+        <source>the system's default player</source>
+        <translation>システムの既定のプレーヤー</translation>
+    </message>
+    <message>
+        <source>Arguments:</source>
+        <translation>引数:</translation>
+    </message>
+    <message>
+        <source>{file} stands for what is played; without it, it comes last</source>
+        <translation>{file} は再生する対象を表します。ない場合は最後に付けます</translation>
+    </message>
+    <message>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>「タイトルを選択」の「プレビュー」と入力リストの「再生」は、タイトルまたはファイルをこのプレーヤーで開きます。タイトルの場合、tsMuxeR はまず 30 秒のプレビューを一時フォルダーに作成します。このフォルダーはウィンドウを閉じると削除されます。</translation>
+    </message>
+    <message>
+        <source>Programs (*.exe)</source>
+        <translation>プログラム (*.exe)</translation>
+    </message>
+    <message>
+        <source>Choose the player</source>
+        <translation>プレーヤーを選択</translation>
+    </message>
+    <message>
+        <source>Play</source>
+        <translation>再生</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>プレビュー</translation>
+    </message>
+    <message>
+        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, it starts there.</source>
+        <translation>選択したタイトルを、そのアングルで、プレビュー用プレーヤー（「全般」タブ）で再生します。タイトルのアングルが異なる箇所がある場合は、そこから再生します。</translation>
+    </message>
+    <message>
+        <source>The file &quot;%1&quot; could not be opened in the system's default player.</source>
+        <translation>ファイル「%1」をシステムの既定のプレーヤーで開けませんでした。</translation>
+    </message>
+    <message>
+        <source>The player &quot;%1&quot; could not be started.</source>
+        <translation>プレーヤー「%1」を起動できませんでした。</translation>
+    </message>
+    <message>
+        <source>Making a preview</source>
+        <translation>プレビューを作成中</translation>
+    </message>
+    <message>
+        <source>Reading the tracks of the title...</source>
+        <translation>タイトルのトラックを読み込んでいます...</translation>
+    </message>
+    <message>
+        <source>tsMuxeR found no video in this title, so no preview can be made.</source>
+        <translation>tsMuxeR はこのタイトルに映像を見つけられなかったため、プレビューを作成できません。</translation>
+    </message>
+    <message>
+        <source>The temporary folder &quot;%1&quot; could not be made.</source>
+        <translation>一時フォルダー「%1」を作成できませんでした。</translation>
+    </message>
+    <message>
+        <source>The preview was stopped.</source>
+        <translation>プレビューを中止しました。</translation>
+    </message>
+    <message>
+        <source>No preview was made.</source>
+        <translation>プレビューは作成されませんでした。</translation>
+    </message>
+    <message>
+        <source>Click to play this clip in the player for previews.</source>
+        <translation>クリックすると、このクリップをプレビュー用プレーヤーで再生します。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

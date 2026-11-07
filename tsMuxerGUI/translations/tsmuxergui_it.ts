@@ -5141,6 +5141,86 @@ Se questo è apparso mentre un file era ancora in esame, o mentre la finestra si
         <source>the same clip as angle 1</source>
         <translation>la stessa clip dell'angolazione 1</translation>
     </message>
+    <message>
+        <source>Player for previews</source>
+        <translation>Lettore per le anteprime</translation>
+    </message>
+    <message>
+        <source>Player:</source>
+        <translation>Lettore:</translation>
+    </message>
+    <message>
+        <source>the system's default player</source>
+        <translation>il lettore predefinito del sistema</translation>
+    </message>
+    <message>
+        <source>Arguments:</source>
+        <translation>Argomenti:</translation>
+    </message>
+    <message>
+        <source>{file} stands for what is played; without it, it comes last</source>
+        <translation>{file} indica ciò che viene riprodotto; senza, viene messo in fondo</translation>
+    </message>
+    <message>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>&quot;Anteprima&quot; in &quot;Scegli un titolo&quot; e &quot;Riproduci&quot; nell'elenco degli ingressi aprono un titolo o un file in questo lettore. Per un titolo, tsMuxeR crea prima un'anteprima di 30 secondi in una cartella temporanea, che viene rimossa alla chiusura della finestra.</translation>
+    </message>
+    <message>
+        <source>Programs (*.exe)</source>
+        <translation>Programmi (*.exe)</translation>
+    </message>
+    <message>
+        <source>Choose the player</source>
+        <translation>Scegli il lettore</translation>
+    </message>
+    <message>
+        <source>Play</source>
+        <translation>Riproduci</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Anteprima</translation>
+    </message>
+    <message>
+        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, it starts there.</source>
+        <translation>Riproduce il titolo scelto, nella sua angolazione, nel lettore per le anteprime (scheda Generale). Dove le angolazioni di un titolo differiscono, inizia da lì.</translation>
+    </message>
+    <message>
+        <source>The file &quot;%1&quot; could not be opened in the system's default player.</source>
+        <translation>Non è stato possibile aprire il file &quot;%1&quot; nel lettore predefinito del sistema.</translation>
+    </message>
+    <message>
+        <source>The player &quot;%1&quot; could not be started.</source>
+        <translation>Non è stato possibile avviare il lettore &quot;%1&quot;.</translation>
+    </message>
+    <message>
+        <source>Making a preview</source>
+        <translation>Creazione di un'anteprima</translation>
+    </message>
+    <message>
+        <source>Reading the tracks of the title...</source>
+        <translation>Lettura delle tracce del titolo...</translation>
+    </message>
+    <message>
+        <source>tsMuxeR found no video in this title, so no preview can be made.</source>
+        <translation>tsMuxeR non ha trovato alcun video in questo titolo, quindi non è possibile creare un'anteprima.</translation>
+    </message>
+    <message>
+        <source>The temporary folder &quot;%1&quot; could not be made.</source>
+        <translation>Non è stato possibile creare la cartella temporanea &quot;%1&quot;.</translation>
+    </message>
+    <message>
+        <source>The preview was stopped.</source>
+        <translation>L'anteprima è stata interrotta.</translation>
+    </message>
+    <message>
+        <source>No preview was made.</source>
+        <translation>Nessuna anteprima è stata creata.</translation>
+    </message>
+    <message>
+        <source>Click to play this clip in the player for previews.</source>
+        <translation>Fare clic per riprodurre questa clip nel lettore per le anteprime.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -5098,6 +5098,86 @@ Wenn dies erschien, während eine Datei noch untersucht wurde, oder beim Schlie�
         <source>the same clip as angle 1</source>
         <translation>derselbe Clip wie Blickwinkel 1</translation>
     </message>
+    <message>
+        <source>Player for previews</source>
+        <translation>Player für Vorschauen</translation>
+    </message>
+    <message>
+        <source>Player:</source>
+        <translation>Player:</translation>
+    </message>
+    <message>
+        <source>the system's default player</source>
+        <translation>der Standard-Player des Systems</translation>
+    </message>
+    <message>
+        <source>Arguments:</source>
+        <translation>Argumente:</translation>
+    </message>
+    <message>
+        <source>{file} stands for what is played; without it, it comes last</source>
+        <translation>{file} steht für das, was abgespielt wird; ohne es kommt es ans Ende</translation>
+    </message>
+    <message>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>&quot;Vorschau&quot; unter &quot;Titel wählen&quot; und &quot;Abspielen&quot; in der Liste der Eingabedateien öffnen einen Titel oder eine Datei in diesem Player. Für einen Titel erstellt tsMuxeR zuerst eine Vorschau von 30 Sekunden in einem temporären Ordner, der beim Schließen des Fensters entfernt wird.</translation>
+    </message>
+    <message>
+        <source>Programs (*.exe)</source>
+        <translation>Programme (*.exe)</translation>
+    </message>
+    <message>
+        <source>Choose the player</source>
+        <translation>Player wählen</translation>
+    </message>
+    <message>
+        <source>Play</source>
+        <translation>Abspielen</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Vorschau</translation>
+    </message>
+    <message>
+        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, it starts there.</source>
+        <translation>Spielt den gewählten Titel in seinem Blickwinkel im Player für Vorschauen ab (Registerkarte Allgemein). Wo sich die Blickwinkel eines Titels unterscheiden, beginnt er dort.</translation>
+    </message>
+    <message>
+        <source>The file &quot;%1&quot; could not be opened in the system's default player.</source>
+        <translation>Die Datei &quot;%1&quot; konnte nicht im Standard-Player des Systems geöffnet werden.</translation>
+    </message>
+    <message>
+        <source>The player &quot;%1&quot; could not be started.</source>
+        <translation>Der Player &quot;%1&quot; konnte nicht gestartet werden.</translation>
+    </message>
+    <message>
+        <source>Making a preview</source>
+        <translation>Vorschau wird erstellt</translation>
+    </message>
+    <message>
+        <source>Reading the tracks of the title...</source>
+        <translation>Die Spuren des Titels werden gelesen...</translation>
+    </message>
+    <message>
+        <source>tsMuxeR found no video in this title, so no preview can be made.</source>
+        <translation>tsMuxeR hat in diesem Titel kein Video gefunden, daher kann keine Vorschau erstellt werden.</translation>
+    </message>
+    <message>
+        <source>The temporary folder &quot;%1&quot; could not be made.</source>
+        <translation>Der temporäre Ordner &quot;%1&quot; konnte nicht angelegt werden.</translation>
+    </message>
+    <message>
+        <source>The preview was stopped.</source>
+        <translation>Die Vorschau wurde abgebrochen.</translation>
+    </message>
+    <message>
+        <source>No preview was made.</source>
+        <translation>Es wurde keine Vorschau erstellt.</translation>
+    </message>
+    <message>
+        <source>Click to play this clip in the player for previews.</source>
+        <translation>Klicken, um diesen Clip im Player für Vorschauen abzuspielen.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

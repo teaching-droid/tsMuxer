@@ -5098,6 +5098,86 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>the same clip as angle 1</source>
         <translation>与视角 1 相同的片段</translation>
     </message>
+    <message>
+        <source>Player for previews</source>
+        <translation>预览播放器</translation>
+    </message>
+    <message>
+        <source>Player:</source>
+        <translation>播放器：</translation>
+    </message>
+    <message>
+        <source>the system's default player</source>
+        <translation>系统默认播放器</translation>
+    </message>
+    <message>
+        <source>Arguments:</source>
+        <translation>参数：</translation>
+    </message>
+    <message>
+        <source>{file} stands for what is played; without it, it comes last</source>
+        <translation>{file} 表示要播放的内容；若没有，则放在最后</translation>
+    </message>
+    <message>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>“选择标题”中的“预览”和输入列表中的“播放”会在此播放器中打开标题或文件。对于标题，tsMuxeR 会先在临时文件夹中生成 30 秒的预览，关闭窗口时该文件夹会被删除。</translation>
+    </message>
+    <message>
+        <source>Programs (*.exe)</source>
+        <translation>程序 (*.exe)</translation>
+    </message>
+    <message>
+        <source>Choose the player</source>
+        <translation>选择播放器</translation>
+    </message>
+    <message>
+        <source>Play</source>
+        <translation>播放</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>预览</translation>
+    </message>
+    <message>
+        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, it starts there.</source>
+        <translation>在预览播放器（“常规”选项卡）中以其视角播放所选标题。标题的各视角不同之处，从该处开始播放。</translation>
+    </message>
+    <message>
+        <source>The file &quot;%1&quot; could not be opened in the system's default player.</source>
+        <translation>无法在系统默认播放器中打开文件“%1”。</translation>
+    </message>
+    <message>
+        <source>The player &quot;%1&quot; could not be started.</source>
+        <translation>无法启动播放器“%1”。</translation>
+    </message>
+    <message>
+        <source>Making a preview</source>
+        <translation>正在生成预览</translation>
+    </message>
+    <message>
+        <source>Reading the tracks of the title...</source>
+        <translation>正在读取标题的轨道...</translation>
+    </message>
+    <message>
+        <source>tsMuxeR found no video in this title, so no preview can be made.</source>
+        <translation>tsMuxeR 在此标题中未找到视频，因此无法生成预览。</translation>
+    </message>
+    <message>
+        <source>The temporary folder &quot;%1&quot; could not be made.</source>
+        <translation>无法创建临时文件夹“%1”。</translation>
+    </message>
+    <message>
+        <source>The preview was stopped.</source>
+        <translation>预览已停止。</translation>
+    </message>
+    <message>
+        <source>No preview was made.</source>
+        <translation>未生成预览。</translation>
+    </message>
+    <message>
+        <source>Click to play this clip in the player for previews.</source>
+        <translation>单击以在预览播放器中播放此片段。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -24,12 +24,14 @@
 #include "codecinfo.h"
 
 class QTableWidgetItem;
+class QListWidgetItem;
 class QComboBox;
 class QLabel;
 class QCheckBox;
 class QPushButton;
 
 class MuxForm;
+class PlayerLauncher;
 namespace Ui
 {
 class TsMuxerWindow;
@@ -109,6 +111,11 @@ class TsMuxerWindow : public QWidget
     void onRemoveAllTracksButtonClick();
     void updateRemoveAllEnabled();
     void onTrackContextMenu(const QPoint& pos);
+    // "Play" on the input list: the item in the player for previews (playerLauncher.h)
+    void onInputContextMenu(const QPoint& pos);
+    void playInputItem(const QListWidgetItem* itm);
+    // The launcher with the player of the General tab as it is set now
+    PlayerLauncher* previewPlayer();
     void setChecksMatching(int refRow, bool byLanguage, bool checked);
     void onMoveUpButtonCLick();
     void onMoveDownButtonCLick();
@@ -345,6 +352,7 @@ class TsMuxerWindow : public QWidget
     QString m_coreEncoderPath;  // the program chosen by the user, kept in the settings
     QString m_lastBuiltMeta;  // the meta file last built from the settings
     QnCheckBoxedHeaderView* m_header;
+    PlayerLauncher* m_player = nullptr;  // made at the first preview (previewPlayer)
     QString lastSourceDir;
 
     QTranslator qtCoreTranslator;

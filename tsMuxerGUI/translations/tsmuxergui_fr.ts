@@ -5098,6 +5098,86 @@ Si ce message est apparu pendant l&apos;examen d&apos;un fichier, ou à la ferme
         <source>the same clip as angle 1</source>
         <translation>le même clip que l'angle 1</translation>
     </message>
+    <message>
+        <source>Player for previews</source>
+        <translation>Lecteur pour les aperçus</translation>
+    </message>
+    <message>
+        <source>Player:</source>
+        <translation>Lecteur :</translation>
+    </message>
+    <message>
+        <source>the system's default player</source>
+        <translation>le lecteur par défaut du système</translation>
+    </message>
+    <message>
+        <source>Arguments:</source>
+        <translation>Arguments :</translation>
+    </message>
+    <message>
+        <source>{file} stands for what is played; without it, it comes last</source>
+        <translation>{file} désigne ce qui est lu ; sans lui, il est placé en dernier</translation>
+    </message>
+    <message>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>« Aperçu » dans « Choisir un titre » et « Lire » dans la liste des entrées ouvrent un titre ou un fichier dans ce lecteur. Pour un titre, tsMuxeR crée d'abord un aperçu de 30 secondes dans un dossier temporaire, supprimé à la fermeture de la fenêtre.</translation>
+    </message>
+    <message>
+        <source>Programs (*.exe)</source>
+        <translation>Programmes (*.exe)</translation>
+    </message>
+    <message>
+        <source>Choose the player</source>
+        <translation>Choisir le lecteur</translation>
+    </message>
+    <message>
+        <source>Play</source>
+        <translation>Lire</translation>
+    </message>
+    <message>
+        <source>Preview</source>
+        <translation>Aperçu</translation>
+    </message>
+    <message>
+        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, it starts there.</source>
+        <translation>Lit le titre choisi, dans son angle, dans le lecteur pour les aperçus (onglet Général). Là où les angles d'un titre diffèrent, la lecture commence à cet endroit.</translation>
+    </message>
+    <message>
+        <source>The file &quot;%1&quot; could not be opened in the system's default player.</source>
+        <translation>Le fichier « %1 » n'a pas pu être ouvert dans le lecteur par défaut du système.</translation>
+    </message>
+    <message>
+        <source>The player &quot;%1&quot; could not be started.</source>
+        <translation>Le lecteur « %1 » n'a pas pu être démarré.</translation>
+    </message>
+    <message>
+        <source>Making a preview</source>
+        <translation>Création d'un aperçu</translation>
+    </message>
+    <message>
+        <source>Reading the tracks of the title...</source>
+        <translation>Lecture des pistes du titre...</translation>
+    </message>
+    <message>
+        <source>tsMuxeR found no video in this title, so no preview can be made.</source>
+        <translation>tsMuxeR n'a trouvé aucune vidéo dans ce titre ; aucun aperçu ne peut donc être créé.</translation>
+    </message>
+    <message>
+        <source>The temporary folder &quot;%1&quot; could not be made.</source>
+        <translation>Le dossier temporaire « %1 » n'a pas pu être créé.</translation>
+    </message>
+    <message>
+        <source>The preview was stopped.</source>
+        <translation>L'aperçu a été arrêté.</translation>
+    </message>
+    <message>
+        <source>No preview was made.</source>
+        <translation>Aucun aperçu n'a été créé.</translation>
+    </message>
+    <message>
+        <source>Click to play this clip in the player for previews.</source>
+        <translation>Cliquez pour lire ce clip dans le lecteur pour les aperçus.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -209,7 +209,7 @@ void MuxForm::muxFinished(int exitCode, const QString&)
     }
     ui->reportBtn->setEnabled(!m_reportFile.isEmpty());
     // a job that went wrong: a sample of its source may be what the problem report needs
-    ui->sampleBtn->setVisible(exitCode != 0);
+    ui->sampleBtn->setVisible(exitCode != 0 && m_sampleOffered);
 }
 
 void MuxForm::onAbort()
