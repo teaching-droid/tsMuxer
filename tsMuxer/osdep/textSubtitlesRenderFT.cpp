@@ -328,7 +328,10 @@ void TextSubtitlesRenderFT::setFont(const Font& font)
                                           << ", and no sans serif font that could take its place is installed. Give "
                                              "the track font-name= with a font installed here, or the path of a "
                                              ".ttf, .otf or .ttc file.")
-                if (m_missingFonts.insert(fontLower).second)
+                // Once per font in a job: the track is drawn by a renderer of its own when it is checked before the
+                // mux and again in the mux, and each said it
+                static std::set<std::string> replacedFonts;
+                if (replacedFonts.insert(fontLower).second)
                     LTRACE(LT_WARN, 2,
                            "Warning: the font \"" << font.m_name
                                                   << "\" is not installed, so the subtitles are drawn with " << family
