@@ -257,7 +257,7 @@ void LPCMStreamReader::planBdLayout(const uint32_t mask)
     {
         std::ostringstream text;
         text << "The WAV of track " << m_streamIndex << " has the speaker layout 0x" << std::hex << mask << std::dec
-             << ", and " << why << " Convert it to stereo, 5.1 or 7.1 before muxing it to a disc.";
+             << ", and " << why;
         m_bdRefusal = text.str();
         m_bdMap.clear();
         m_backCentre = false;
@@ -336,7 +336,7 @@ void LPCMStreamReader::planBdLayout(const uint32_t mask)
 int LPCMStreamReader::convertWavToPCM(uint8_t* start, uint8_t* end)
 {
     if (!m_bdRefusal.empty())
-        THROW(ERR_COMMON, m_bdRefusal)
+        THROW(ERR_COMMON, m_bdRefusal << " Convert it to stereo, 5.1 or 7.1 before muxing it to " << m_bdOutput << ".")
     // int mch = m_channels; // + (m_channels%2==1 ? 1 : 0);
     const int ch1SampleSize = (m_bitsPerSample == 20 ? 3 : m_bitsPerSample / 8);
     const int fullSampleSize = m_channels * ch1SampleSize;

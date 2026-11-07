@@ -417,6 +417,8 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
 
     // Every stream is read before any is given to a muxer, so that the order they are given in can depend on what
     // each one is (transportStreamAddOrder).
+    if (dynamic_cast<TSMuxer*>(m_mainMuxer.get()) != nullptr)
+        nameLpcmOutput(ci);
     for (size_t i = 0; i < ci.size(); ++i)
     {
         StreamInfo& si = ci[i];
@@ -663,6 +665,7 @@ void MuxerManager::checkTracksBeforeOutput()
     // Matroska output. Its header is read with its first block, before the folders of a disc are made.
     const bool lpcm = !m_demuxMode && std::any_of(ci.begin(), ci.end(), [](const StreamInfo& si)
                                                   { return si.m_codec == lpcmCodecInfo.programName; });
+    nameLpcmOutput(ci);
     if ((hevcSplit || movPcm || lpcm) && !m_firstBlocksRead)
     {
         // The probe refuses a split of a track that holds no enhancement layer, by what the track holds; the first
@@ -679,7 +682,20 @@ void MuxerManager::checkTracksBeforeOutput()
         for (const StreamInfo& si : ci)
             if (const auto* reader = dynamic_cast<const LPCMStreamReader*>(si.m_streamReader);
                 reader && !reader->discLayoutRefusal().empty())
-                THROW(ERR_COMMON, reader->discLayoutRefusal())
+                THROW(ERR_COMMON, reader->discLayoutRefusal()
+                                      << " Convert it to stereo, 5.1 or 7.1 before muxing it to "
+                                      << (m_bluRayMode ? (m_avchdMode ? "an AVCHD disc." : "a Blu-ray disc.")
+                                                       : "a transport stream."))
+}
+
+void MuxerManager::nameLpcmOutput(const std::vector<StreamInfo>& ci) const
+{
+    if (m_demuxMode)
+        return;
+    for (const StreamInfo& si : ci)
+        if (auto* reader = dynamic_cast<LPCMStreamReader*>(si.m_streamReader))
+            reader->setDiscOutputName(m_bluRayMode ? (m_avchdMode ? "an AVCHD disc" : "a Blu-ray disc")
+                                                   : "a transport stream");
 }
 
 void MuxerManager::checkTrackList(const vector<StreamInfo>& ci) const

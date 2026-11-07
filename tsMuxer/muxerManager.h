@@ -180,6 +180,8 @@ class MuxerManager final
     [[nodiscard]] bool keepEditions() const { return m_keepEditions; }
     // Also a subTrack= split of an HEVC track that has no enhancement layer to split off.
     void checkTracksBeforeOutput();
+    // Gives the LPCM readers the name of the output a disc or TS mux writes, for the refusal of a speaker layout
+    void nameLpcmOutput(const std::vector<StreamInfo>& ci) const;
     void checkTimeshiftFitsClock();
 
    private:
