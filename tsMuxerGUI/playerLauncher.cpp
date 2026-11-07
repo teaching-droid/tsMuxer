@@ -145,7 +145,7 @@ bool PlayerLauncher::launchDirect(const PreviewSource& source, QWidget* parent)
     const QString start = QString::number(source.start, 'f', 3);
     if (player() == Player::Mpv && !source.playlist.isEmpty())
     {
-        // the disc of BDMV/PLAYLIST/00200.mpls, a folder or an image, and the playlist by its number
+        // the disc of BDMV/PLAYLIST/<number>.mpls, a folder or an image, and the playlist by its number
         QString root = QDir::fromNativeSeparators(source.playlist);
         for (int up = 0; up < 3 && root.lastIndexOf('/') > 0; ++up) root.truncate(root.lastIndexOf('/'));
         bool ok = false;
