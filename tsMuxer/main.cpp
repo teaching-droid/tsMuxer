@@ -3401,13 +3401,18 @@ static void reportSingleLayerDvOnDisc(const MuxerManager& muxerManager)
         if (hevc->holdsDvEnhancementLayer())
         {
             hevc->doViProfileAndCompatibility(true, profile, compatibility);
+            // subTrack= takes the layers apart in a container only: on a stream file of its own it is refused (#58)
+            const bool streamFile = si.m_pid == 0;
             LTRACE(LT_WARN, 2,
                    "Warning: the video track holds both layers of a dual layer Dolby Vision stream (profile "
                        << profile
                        << "), and on one meta line it goes to the disc as one stream. A UHD Blu-ray player takes the "
                           "enhancement layer from a stream of its own only, so this disc plays as HDR10. For a dual "
                           "layer disc give the track on two lines, one with subTrack=1 (the base layer) and one with "
-                          "subTrack=2 (the enhancement layer).");
+                          "subTrack=2 (the enhancement layer)"
+                       << (streamFile ? ", which needs the track of a container: mux the stream file to an MKV file "
+                                        "first, and give that file's track with track=1 on both lines."
+                                      : "."));
             return;
         }
         hevc->doViProfileAndCompatibility(false, profile, compatibility);

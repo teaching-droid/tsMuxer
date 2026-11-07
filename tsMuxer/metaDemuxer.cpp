@@ -4799,7 +4799,10 @@ void METADemuxer::addTrack(vector<CheckStreamRez>& rez, CheckStreamRez trackRez)
 
         rez.push_back(trackRez);
     }
-    else if (trackRez.codecInfo.codecID == hevcCodecInfo.codecID && trackRez.multiSubStream)
+    // A stream file of its own (no track number) is not split: nothing can take its layers apart on a meta line, as
+    // SubTrackFilter needs the demuxer of a container, and the two rows were refused, each of them, for subTrack=
+    // without track= (#58). It is listed as one track, and the mux says how to make the layers two tracks.
+    else if (trackRez.codecInfo.codecID == hevcCodecInfo.codecID && trackRez.multiSubStream && trackRez.trackID != 0)
     {
         // A dual layer Dolby Vision disc stored as ONE Matroska track: the base layer, the
         // enhancement layer wrapped in unspecified NALs, and one RPU per picture. Listing it as
@@ -4830,7 +4833,11 @@ void METADemuxer::addTrack(vector<CheckStreamRez>& rez, CheckStreamRez trackRez)
         rez.push_back(trackRez);
     }
     else
+    {
+        if (trackRez.codecInfo.codecID == hevcCodecInfo.codecID && trackRez.trackID == 0)
+            trackRez.multiSubStream = false;  // a stream file of its own, listed as one track (above)
         rez.push_back(trackRez);
+    }
 }
 
 // A frame rate in a meta file may be written either way round: 23.976 or 24000/1001. Only the
