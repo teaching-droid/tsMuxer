@@ -838,6 +838,9 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                        "Not supported: " << streams[i].notSupported
                                          << (streams[i].notSupported.find("encrypted") != std::string::npos
                                                  ? ". tsMuxeR cannot read an encrypted track, so the track is skipped."
+                                             // a reason of its own, as the reader's refusal of a PCM track
+                                             : streams[i].notSupported.back() == '.'
+                                                 ? " The track is skipped."
                                                  : ". Muxing this kind of track is not implemented, so the track is "
                                                    "skipped."));
             else if (known)

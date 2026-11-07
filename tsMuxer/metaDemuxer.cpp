@@ -4465,10 +4465,27 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             // a damaged AC-3, E-AC-3 or DTS track of a DVB stream is then found as it is under 0x81, 0x87 or 0x82
             // (the readers' declaredByContainer)
             const int soundDescriptor = soundDescriptorOf(acceptedPidMap[itr.first]);
-            CheckStreamRez trackRez =
-                detectTrackReader(vect.data(), static_cast<int>(vect.size()), containerType,
-                                  soundDescriptor ? soundDescriptor : acceptedPidMap[itr.first].m_trackType, itr.first,
-                                  declared, wholeTracks);
+            CheckStreamRez trackRez;
+            // ** ONE PCM TRACK THAT CANNOT BE READ DOES NOT END THE LISTING. ** An LPCM track the reader refuses, as
+            // one of a DVD at 44.1 or 32 kHz, ended the listing of the whole file with the reader's message, and no
+            // track of it was shown. Such a track is now listed as not supported, with the reason, and the others as
+            // they are.
+            try
+            {
+                trackRez = detectTrackReader(vect.data(), static_cast<int>(vect.size()), containerType,
+                                             soundDescriptor ? soundDescriptor : acceptedPidMap[itr.first].m_trackType,
+                                             itr.first, declared, wholeTracks);
+            }
+            catch (const VodCoreException& e)
+            {
+                // PCM a container hands on as a WAV (DVD LPCM, Matroska A_PCM, the PCM of an MP4 or MOV file)
+                const int type = acceptedPidMap[itr.first].m_trackType;
+                if (type != static_cast<int>(StreamType::AUDIO_LPCM) && type != TRACKTYPE_WAV &&
+                    (vect.size() < 4 || memcmp(vect.data(), "RIFF", 4) != 0))
+                    throw;
+                trackRez = CheckStreamRez();
+                trackRez.notSupported = e.m_errStr;
+            }
             warnKindMismatch(unquoted, itr.first, acceptedPidMap[itr.first], declared, trackRez);
             if (!trackRez.codecInfo.programName.empty())
             {

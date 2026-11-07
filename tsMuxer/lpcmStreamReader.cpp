@@ -661,8 +661,11 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
         // The reader cuts the audio into the frames of a disc's LPCM, which other rates do not fill evenly, so this
         // holds for every output. The message gave the list without saying so, and a Matroska output looked
         // refused by a disc rule.
+        // A track of a VOB, a Matroska or an MP4 file was called a WAVE file as well.
         if (m_freq != 48000 && m_freq != 96000 && m_freq != 192000)
-            THROW(ERR_COMMON, "The WAVE file has a sample rate of "
+            THROW(ERR_COMMON, (m_containerType == ContainerType::ctNone || m_containerType == ContainerType::ctLPCM
+                                   ? "The WAVE file has a sample rate of "
+                                   : "The PCM track has a sample rate of ")
                                   << m_freq
                                   << " Hz. tsMuxeR reads PCM audio at 48000, 96000 or 192000 Hz only, the rates of a "
                                      "Blu-ray disc, for every output, Matroska and a demux included. Convert the "
