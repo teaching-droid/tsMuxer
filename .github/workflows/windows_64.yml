@@ -297,6 +297,12 @@ jobs:
           7z a -y "$asset" tsMuxeR.exe *.dll LICENSE NOTICE THIRD-PARTY-NOTICES.txt licenses
         }
 
+    - name: Check that no FFmpeg is bundled
+      run: |
+        # tsMuxeR ships no FFmpeg, nor GStreamer or Qt Multimedia, which brought both into other packages once.
+        python scripts/check_package.py "bin/$env:ASSET"
+        if ($LASTEXITCODE -ne 0) { throw "The package holds FFmpeg, GStreamer or Qt Multimedia." }
+
     - name: Checksum the package
       run: |
         $ErrorActionPreference = "Stop"

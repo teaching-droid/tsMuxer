@@ -82,7 +82,8 @@ jobs:
       uses: jurplel/install-qt-action@v4
       with:
         version: '6.7.*'
-        modules: 'qtmultimedia'
+        # No qtmultimedia: its deployment put Qt's FFmpeg plug-in and the FFmpeg libraries into the package, and
+        # tsMuxeR ships no FFmpeg. The window plays its end-of-mux sound through the system.
       
     - run: ./scripts/rebuild_linux_with_gui.sh
       name: build-for-linux
@@ -242,7 +243,8 @@ jobs:
       uses: jurplel/install-qt-action@v4
       with:
         version: '6.7.*'
-        modules: 'qtmultimedia'
+        # No qtmultimedia: its deployment put Qt's FFmpeg plug-in and the FFmpeg libraries into the package, and
+        # tsMuxeR ships no FFmpeg. The window plays its end-of-mux sound through the system.
       
     - run: ./scripts/build_macos_native.sh
       name: build-for-mac

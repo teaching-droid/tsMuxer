@@ -4925,10 +4925,41 @@ void TsMuxerWindow::myPlaySound(const QString& fileName)
             return;
     }
     QApplication::beep();
-#elif QT_MULTIMEDIA_LIB
-    sound.setSource(QUrl(QString("qrc%1").arg(fileName)));
-    sound.play();
 #else
+    // macOS and Linux played it with QSoundEffect from Qt Multimedia, and deploying that module put Qt's FFmpeg
+    // plug-in and the FFmpeg libraries into both packages, for this one sound. The system plays it instead, with the
+    // player it has for its own sounds: afplay on macOS, and on Linux the player of PulseAudio or PipeWire, or that of
+    // ALSA. Each reads a file, so the wav is written out once and kept until the window closes. A system with none of
+    // them gets the beep, as a build without Qt Multimedia always did.
+    QString wav;
+    std::unique_ptr<QTemporaryFile>& kept = m_soundFiles[fileName];
+    if (!kept)
+    {
+        QFile resource(fileName);
+        auto out = std::make_unique<QTemporaryFile>(QDir::tempPath() + "/tsMuxerGUI-XXXXXX.wav");
+        if (resource.open(QIODevice::ReadOnly) && out->open())
+        {
+            const QByteArray data = resource.readAll();
+            if (!data.isEmpty() && out->write(data) == data.size() && out->flush())
+                kept = std::move(out);
+        }
+    }
+    if (kept)
+        wav = kept->fileName();
+    if (!wav.isEmpty())
+    {
+#ifdef Q_OS_MACOS
+        const std::vector<QStringList> players{{"/usr/bin/afplay"}};
+#else
+        const std::vector<QStringList> players{{"paplay"}, {"pw-play"}, {"aplay", "-q"}};
+#endif
+        for (const QStringList& player : players)
+        {
+            const QString program = QStandardPaths::findExecutable(player.first());
+            if (!program.isEmpty() && QProcess::startDetached(program, player.mid(1) << wav))
+                return;
+        }
+    }
     QApplication::beep();
 #endif
 }

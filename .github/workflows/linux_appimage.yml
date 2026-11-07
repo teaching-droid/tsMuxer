@@ -81,7 +81,8 @@ jobs:
       uses: jurplel/install-qt-action@v4
       with:
         version: '6.7.*'
-        modules: 'qtmultimedia'
+        # No qtmultimedia: its deployment put Qt's FFmpeg plug-in and the FFmpeg libraries into the package, and
+        # tsMuxeR ships no FFmpeg. The window plays its end-of-mux sound through the system.
 
     - name: build-for-linux
       run: ./scripts/rebuild_linux_with_gui.sh
@@ -179,6 +180,12 @@ jobs:
           --icon-file tsmuxergui.png \
           --custom-apprun AppRun \
           --plugin qt
+
+    - name: Check that no FFmpeg is bundled
+      run: |
+        # tsMuxeR ships no FFmpeg. Qt Multimedia brought Qt's FFmpeg plug-in, the GStreamer one and their libraries
+        # into the AppImage once without anything noticing; every file linuxdeploy put in is checked by name.
+        python3 scripts/check_package.py AppDir
 
     - name: Add the licence notices
       run: |

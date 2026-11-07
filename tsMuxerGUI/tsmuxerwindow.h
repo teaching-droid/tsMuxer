@@ -12,11 +12,13 @@
 #include <functional>
 #include <vector>
 
-#if QT_MULTIMEDIA_LIB
-#include <QSoundEffect>
-#endif
 #ifdef Q_OS_WIN
 #include <QByteArray>
+#else
+#include <QTemporaryFile>
+
+#include <map>
+#include <memory>
 #endif
 
 #include "codecinfo.h"
@@ -348,14 +350,15 @@ class TsMuxerWindow : public QWidget
     void dragMoveEvent(QDragMoveEvent* event) override;
     void dragLeaveEvent(QDragLeaveEvent* event) override;
 
-#if QT_MULTIMEDIA_LIB
-    QSoundEffect sound;
-#endif
     void myPlaySound(const QString& fileName);
 #ifdef Q_OS_WIN
     // PlaySound reads the wav straight out of this while it plays, and it plays
     // asynchronously, so the bytes have to outlive the call.
     QByteArray m_soundData;
+#else
+    // The wav of each sound, written out once for the system's player, which reads a file and
+    // plays on after the call. Removed when the window closes.
+    std::map<QString, std::unique_ptr<QTemporaryFile>> m_soundFiles;
 #endif
     bool isVideoCropped();
 

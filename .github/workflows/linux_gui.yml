@@ -38,7 +38,8 @@ jobs:
       uses: jurplel/install-qt-action@v4
       with:
         version: '6.7.*'
-        modules: 'qtmultimedia'
+        # No qtmultimedia: its deployment put Qt's FFmpeg plug-in and the FFmpeg libraries into the package, and
+        # tsMuxeR ships no FFmpeg. The window plays its end-of-mux sound through the system.
       
     - run: ./.github/workflows/linux_gui.sh
       name: build-linux-gui

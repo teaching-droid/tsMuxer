@@ -33,7 +33,8 @@ jobs:
       uses: jurplel/install-qt-action@v4
       with:
         version: '6.7.*'
-        modules: 'qtmultimedia'
+        # No qtmultimedia: its deployment put Qt's FFmpeg plug-in and the FFmpeg libraries into the package, and
+        # tsMuxeR ships no FFmpeg. The window plays its end-of-mux sound through the system.
       
     - name: build-for-linux
       run: ./scripts/rebuild_linux_with_gui.sh
@@ -65,11 +66,18 @@ jobs:
           echo "::error::tsMuxerGUI needs libOpenGL.so.0, which many systems do not have."
           exit 1
         fi
+        # Qt Multimedia, which the window linked once for its end-of-mux sound, is not used: on a system without it
+        # the window would not start, and its deployment brought FFmpeg into the other packages.
+        if readelf -d tsMuxerGUI | grep -qi 'Multimedia'; then
+          echo "::error::tsMuxerGUI needs Qt Multimedia, which the window does not use."
+          exit 1
+        fi
         # tsMuxeR's own license: the Apache License asks for a copy of it with every copy of the program. The two
         # programs use the libraries of the system, so the package holds no other software.
         cp ../LICENSE LICENSE
         cp ../NOTICE NOTICE
         zip -9 "$asset" tsMuxeR tsMuxerGUI LICENSE NOTICE
+        python3 ../scripts/check_package.py "$asset"
         ls -la
 
     - name: Checksum the package

@@ -7,9 +7,12 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
+# No Qt Multimedia, on any platform. It was linked for the sound at the end of a mux only, and its
+# deployment put Qt's FFmpeg plug-in and the FFmpeg libraries into the macOS and Linux packages,
+# where tsMuxeR ships no FFmpeg. The sound is played by the system instead (myPlaySound in
+# tsmuxerwindow.cpp), as it always was on Windows, where Qt is built from qtbase alone.
 find_package(Qt6
-  REQUIRED COMPONENTS Widgets LinguistTools
-  OPTIONAL_COMPONENTS Multimedia)
+  REQUIRED COMPONENTS Widgets LinguistTools)
 
 # When cross-compiling for macOS, the pre-built Qt cmake config may reference
 # the deprecated AGL framework which is absent from modern/osxcross SDKs.
@@ -35,18 +38,6 @@ if(APPLE AND CMAKE_CROSSCOMPILING)
 endif()
 
 set(tsmuxer_gui_libs Qt6::Widgets)
-
-# Linux static builds in our Docker environment can have Qt6Multimedia
-# available without its runtime backend deps (e.g. PulseAudio), which causes
-# link failures. Keep multimedia optional and skip it for that build flavor.
-if(Qt6Multimedia_FOUND)
-  if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND TSMUXER_STATIC_BUILD)
-    message(STATUS "Qt6Multimedia found but disabled for static Linux build")
-  else()
-    list(APPEND tsmuxer_gui_libs Qt6::Multimedia)
-    set(TSMUXER_HAVE_MULTIMEDIA TRUE)
-  endif()
-endif()
 
 set(tsmuxer_ts_files
   translations/tsmuxergui_en.ts
@@ -133,20 +124,9 @@ endif()
 
 target_link_libraries(tsMuxerGUI ${tsmuxer_gui_libs})
 
-# PlaySound, used for the end-of-mux sound on Windows where Qt Multimedia is not built.
-# See myPlaySound in tsmuxerwindow.cpp.
+# PlaySound, used for the end-of-mux sound on Windows. See myPlaySound in tsmuxerwindow.cpp.
 if(WIN32)
   target_link_libraries(tsMuxerGUI winmm)
-endif()
-
-# "Play sound at end" is guarded by QT_MULTIMEDIA_LIB in the source. qmake defined that
-# macro by itself for QT += multimedia; CMake does not, and linking Qt6::Multimedia sets
-# nothing. So the test was silently false in every CMake build and the feature has always
-# fallen through to QApplication::beep(), which on Windows is usually inaudible. It last
-# worked in a qmake build. Defined here in step with the linking above, so the static Linux
-# build that deliberately leaves Multimedia out still takes the beep path.
-if(TSMUXER_HAVE_MULTIMEDIA)
-  target_compile_definitions(tsMuxerGUI PRIVATE QT_MULTIMEDIA_LIB=1)
 endif()
 
 # On macOS, ensure tsMuxeR CLI is built before the GUI (for the copy step)

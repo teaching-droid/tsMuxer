@@ -166,5 +166,8 @@ if ! unzip -l mac.zip | grep -q '_CodeSignature/CodeResources'; then
   echo "ERROR: the .app is not signed, which reads as damaged on Apple Silicon" >&2
   exit 1
 fi
+# tsMuxeR ships no FFmpeg. macdeployqt put Qt's FFmpeg plug-in and the FFmpeg libraries into the bundle while the
+# window linked Qt Multimedia, and nothing noticed; every file of the package is checked by name.
+python3 ../../scripts/check_package.py mac.zip
 popd
 popd
