@@ -5090,6 +5090,10 @@ Si ce message est apparu pendant l&apos;examen d&apos;un fichier, ou à la ferme
         <source>Convert Blu-ray text subtitles (TextST) to SRT</source>
         <translation>Convertir les sous-titres texte Blu-ray (TextST) en SRT</translation>
     </message>
+    <message>
+        <source>Picture</source>
+        <translation>Image</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

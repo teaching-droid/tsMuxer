@@ -5123,6 +5123,10 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>Convert Blu-ray text subtitles (TextST) to SRT</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>Picture</source>
+        <translation>Picture</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

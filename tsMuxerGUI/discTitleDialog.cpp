@@ -50,6 +50,10 @@ DiscTitleList parseDiscTitles(const QList<QString>& output)
     static const QRegularExpression dvd(
         QStringLiteral("^Title\\s+(\\d+)\\s+DVD title\\s+(\\d+)\\s+(\\d+:\\d\\d:\\d\\d)\\s+(\\d+)\\s+chapters?(.*)$"));
     static const QRegularExpression extras(QStringLiteral("(?:^|\\s)(3D|\\d+ angles)(?=\\s|$)"));
+    // the picture, the last part before the note: "SDR", "HDR10", "HDR10+", "Dolby Vision profile 7", or the first
+    // three with a Dolby Vision after ", "
+    static const QRegularExpression picture(QStringLiteral(
+        "^(?:SDR|HDR10\\+?|Dolby Vision(?: profile [0-9.]+)?)(?:, Dolby Vision(?: profile [0-9.]+)?)?$"));
     DiscTitleList list;
     bool leftOut = false;
     for (const QString& line : output)
@@ -82,6 +86,14 @@ DiscTitleList parseDiscTitles(const QList<QString>& output)
             QString rest = m.captured(6);
             row.note = takeNote(rest);
             row.isMain = row.note.startsWith(QLatin1String("main film"));
+            // the picture is the last part, two spaces after the one before it (the rest is trimmed: on a title without
+            // languages, 3D or angles it is all of it)
+            const int at = rest.lastIndexOf(QLatin1String("  "));
+            if (picture.match(rest.mid(at < 0 ? 0 : at + 2).trimmed()).hasMatch())
+            {
+                row.picture = rest.mid(at < 0 ? 0 : at + 2).trimmed();
+                rest.truncate(at < 0 ? 0 : at);
+            }
             // 3D and the angles go with the note, so that the audio column holds the languages only
             QStringList extra;
             for (auto it = extras.globalMatch(rest); it.hasNext();) extra << it.next().captured(1);
@@ -117,6 +129,8 @@ DiscTitleList parseDiscTitles(const QList<QString>& output)
                     row.subtitles = part.mid(10);
                 else if (part == QLatin1String("ENCRYPTED"))
                     row.encrypted = true;
+                else if (picture.match(part).hasMatch())
+                    row.picture = part;
                 else if (angles.match(part).hasMatch())
                 {
                     row.note = part + (row.note.isEmpty() ? QString() : "; " + row.note);
@@ -209,10 +223,10 @@ DiscTitleDialog::DiscTitleDialog(const QString& disc, const DiscTitleList& list,
     m_tree->setUniformRowHeights(true);
     if (list.dvd)
         m_tree->setHeaderLabels({wtr("Title"), wtr("DVD title"), wtr("Length"), wtr("Chapters"), wtr("Audio"),
-                                 wtr("Subtitles"), wtr("Note")});
+                                 wtr("Subtitles"), wtr("Picture"), wtr("Note")});
     else
-        m_tree->setHeaderLabels(
-            {wtr("Title"), wtr("Playlist"), wtr("Length"), wtr("Chapters"), wtr("Clips"), wtr("Audio"), wtr("Note")});
+        m_tree->setHeaderLabels({wtr("Title"), wtr("Playlist"), wtr("Length"), wtr("Chapters"), wtr("Clips"),
+                                 wtr("Audio"), wtr("Picture"), wtr("Note")});
     QTreeWidgetItem* first = nullptr;
     for (int i = 0; i < list.titles.size(); ++i)
       // a title of several angles is a row for each angle: each is muxed on its own (angle=)
@@ -228,10 +242,10 @@ DiscTitleDialog::DiscTitleDialog(const QString& disc, const DiscTitleList& list,
         QStringList cells{QString::number(row.number)};
         if (list.dvd)
             cells << QString::number(row.discTitle) << row.length << QString::number(row.chapters) << row.audio
-                  << row.subtitles << note;
+                  << row.subtitles << row.picture << note;
         else
             cells << row.playlist << row.length << QString::number(row.chapters) << QString::number(row.clips)
-                  << row.audio << note;
+                  << row.audio << row.picture << note;
         auto* item = new QTreeWidgetItem(m_tree, cells);
         item->setData(0, Qt::UserRole, i);
         item->setData(0, Qt::UserRole + 1, angle);

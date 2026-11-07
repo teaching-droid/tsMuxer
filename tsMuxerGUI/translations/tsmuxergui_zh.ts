@@ -5090,6 +5090,10 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>Convert Blu-ray text subtitles (TextST) to SRT</source>
         <translation>将蓝光文本字幕 (TextST) 转换为 SRT</translation>
     </message>
+    <message>
+        <source>Picture</source>
+        <translation>画面</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

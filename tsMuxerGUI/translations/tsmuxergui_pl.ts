@@ -5133,6 +5133,10 @@ Jeśli pojawiło się to podczas sprawdzania pliku lub zamykania okna, proces zo
         <source>Convert Blu-ray text subtitles (TextST) to SRT</source>
         <translation>Konwertuj napisy tekstowe Blu-ray (TextST) na SRT</translation>
     </message>
+    <message>
+        <source>Picture</source>
+        <translation>Obraz</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

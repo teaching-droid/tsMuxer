@@ -5133,6 +5133,10 @@ Se isto apareceu enquanto um arquivo ainda estava sendo examinado, ou quando a j
         <source>Convert Blu-ray text subtitles (TextST) to SRT</source>
         <translation>Converter as legendas de texto Blu-ray (TextST) para SRT</translation>
     </message>
+    <message>
+        <source>Picture</source>
+        <translation>Imagem</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

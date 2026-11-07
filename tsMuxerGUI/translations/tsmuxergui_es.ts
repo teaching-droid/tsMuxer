@@ -5091,6 +5091,10 @@ Si esto apareció mientras se examinaba un archivo, o al cerrar la ventana, el p
         <source>Convert Blu-ray text subtitles (TextST) to SRT</source>
         <translation>Convertir los subtítulos de texto Blu-ray (TextST) a SRT</translation>
     </message>
+    <message>
+        <source>Picture</source>
+        <translation>Imagen</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -22,6 +22,7 @@ struct DiscTitleRow
     int clips = 0;      // Blu-ray only
     QString audio;      // the languages, as listed
     QString subtitles;  // DVD only
+    QString picture;    // "SDR", "HDR10", "HDR10+, Dolby Vision profile 7" ...; empty from a listing without it
     QString note;       // "main film", "version of title 1", why a title is left out ...
     bool isMain = false;
     bool encrypted = false;
