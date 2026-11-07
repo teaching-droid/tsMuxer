@@ -599,6 +599,11 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
     }
     if (mplsParser)
         orderAsPlaylist(streams, *mplsParser);
+    // A TS without a PAT, or without the PMT its PAT names, lists no track: the listing says why (the reason comes
+    // from DetectStreamReader, which a mux calls as well and where it is no error). The dependent view of a 3D
+    // playlist (isSubMode) only adds to the listing of its playlist, and is left out.
+    if (streams.empty() && !isSubMode && !streamInfo.noTracksReason.empty())
+        THROW(ERR_COMMON, streamInfo.noTracksReason)
 
     // The film's name, as the disc gives it: the window names the output by it
     if (!isSubMode)

@@ -4402,6 +4402,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
     int64_t fileDuration = 0;
     int64_t videoStart = 0, videoEnd = 0;
     std::string writingApp;
+    std::string noTracksReason;
     vector<CheckStreamRez> streams, Vstreams;
     std::unique_ptr<AbstractDemuxer> demuxer;
     auto unquoted = unquoteStr(fileName);
@@ -4458,23 +4459,29 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
         map<int32_t, TrackInfo> acceptedPidMap;
         demuxer->getTrackList(acceptedPidMap);
         // ** A TS WITHOUT THE TABLES THAT NAME ITS TRACKS IS SAID SO. ** A recording cut out of a stream, or one that
-        // kept only some of its PIDs, can have no PAT, or no PMT: its tracks are found by them, so the listing showed
-        // only a duration, with no track and no word why.
+        // kept only some of its PIDs, can have no PAT, or no PMT: the listing finds its tracks by them, so it showed
+        // only a duration, with no track and no word why. The reason is kept for the listing alone, which raises it:
+        // a meta line that names the codec and the PID muxes such a track all the same (track=), and the probes of
+        // that mux (delPulldown, the 3D planes) go on as before when this file lists nothing.
         if (const auto* ts = dynamic_cast<TSDemuxer*>(demuxer.get()); ts && acceptedPidMap.empty())
         {
             const std::string missing = ts->missingProgramTable() ? ts->missingProgramTable() : "";
             const std::string scope = ts->tableScanWholeFile() ? "" : " in its first 64 MB";
+            std::ostringstream why;
             if (missing == "PAT")
-                THROW(ERR_COMMON, "The file " << unquoted << " is a transport stream without a PAT (program association "
-                                              "table)" << scope
-                                              << ". The tracks of a TS are found by its PAT and the PMT it names, so "
-                                                 "no track of this file can be read. A recording cut out of a stream, "
-                                                 "or one that kept only some of its PIDs, can lack them.")
-            if (missing == "PMT")
-                THROW(ERR_COMMON, "The file " << unquoted << " names its programs in a PAT, but has no PMT (program "
-                                              "map table) of them" << scope
-                                              << ". The tracks of a TS are found by its PMT, so no track of this file "
-                                                 "can be read. A recording that kept only some of its PIDs can lack it.")
+                why << "The file " << unquoted << " is a transport stream without a PAT (program association table)"
+                    << scope
+                    << ". tsMuxeR lists the tracks of a TS from its PAT and the PMT it names, so it can list no track "
+                       "of this file. A track can still be muxed when a meta file line names its codec and its PID, "
+                       "for example: V_MPEG-2, \"<file>\", track=<PID>. A recording cut out of a stream, or one that "
+                       "kept only some of its PIDs, can lack the PAT.";
+            else if (missing == "PMT")
+                why << "The file " << unquoted << " names its programs in a PAT, but has no PMT (program map table) of "
+                    << "them" << scope
+                    << ". tsMuxeR lists the tracks of a TS from its PMT, so it can list no track of this file. A track "
+                       "can still be muxed when a meta file line names its codec and its PID, for example: V_MPEG-2, "
+                       "\"<file>\", track=<PID>. A recording that kept only some of its PIDs can lack the PMT.";
+            noTracksReason = why.str();
         }
         PIDSet acceptedPidSet;
         for (const auto& itr : acceptedPidMap) acceptedPidSet.insert(itr.first);
@@ -4824,6 +4831,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
     rez.videoStartNano = videoStart;
     rez.videoEndNano = videoEnd;
     rez.writingApp = writingApp;
+    rez.noTracksReason = noTracksReason;
     rez.streams = Vstreams;
     return rez;
 }

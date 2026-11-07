@@ -206,6 +206,10 @@ struct DetectStreamRez
     int64_t videoEndNano = 0;
     // A Matroska file's WritingApp, empty for other files. The window takes it to tell a file tsMuxeR wrote.
     std::string writingApp;
+    // Why a TS gave no track at all: it has no PAT, or no PMT of the programs its PAT names. Empty otherwise. Only the
+    // listing says it (main.cpp): a mux whose meta line names the codec and the PID reads such a track without them,
+    // and the probes of a mux take this result as well.
+    std::string noTracksReason;
 };
 
 // ISO 639-2 gives twenty languages two codes, a bibliographic one and a terminological one,
