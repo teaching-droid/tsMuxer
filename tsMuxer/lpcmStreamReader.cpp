@@ -1657,12 +1657,20 @@ int LPCMStreamReader::flushPacket(AVPacket& avPacket)
         }
         m_tmpBufferLen -= partial;
     }
+    // ** THE LAST 5 MS FRAME OF A DISC OR A TS IS FILLED UP. ** A WAV file gives the length of its audio, and its last
+    // part of a frame was sent as a frame of its own and filled up with silence (m_frameRest). PCM of a VOB, a Matroska
+    // or an MP4 file comes as a WAV of no stated length: its last part of a frame was written as it was, shorter than
+    // its header said, and a reader of the disc or TS took it for damage: the demux gave its 4 header bytes as sound,
+    // and its samples the wrong way round. It is filled up now as well.
+    bool lastPart = false;
     if (m_tmpBufferLen >= getHeaderLen())
     {
         const int size =
             decodeFrame(m_tmpBuffer.data(), m_tmpBuffer.data() + m_tmpBufferLen, skipBytes, skipBeforeBytes);
         if (size + skipBytes + skipBeforeBytes <= 0 && size != NOT_ENOUGH_BUFFER)
             return 0;
+        lastPart = size == NOT_ENOUGH_BUFFER && m_frameRest == 0 && !m_demuxMode &&
+                   (m_headerType == LPCMHeaderType::htWAVE || m_headerType == LPCMHeaderType::htWAVE64);
     }
     avPacket.dts = avPacket.pts = static_cast<int64_t>(m_curPts * m_stretch) + m_timeOffset;
     if (!m_tmpBuffer.empty())
@@ -1680,9 +1688,13 @@ int LPCMStreamReader::flushPacket(AVPacket& avPacket)
     {
         if (m_frameRest > 0)
             m_needPCMHdr = false;
+        if (lastPart)
+            m_needPCMHdr = true;  // a frame of its own, with its header
         if (avPacket.size > 0)
             avPacket.size = convertWavToPCM(avPacket.data, avPacket.data + avPacket.size);
         avPacket.data = m_tmpFrameBuffer;
+        if (lastPart && avPacket.size > 4)
+            m_frameRest = sourceSampleBytes() * m_channels * m_freq / 200;  // the whole frame; filled up below
     }
 
     if (m_frameRest > 0 && !m_demuxMode)
