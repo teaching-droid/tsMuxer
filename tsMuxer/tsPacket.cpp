@@ -3419,6 +3419,7 @@ MPLSStreamInfo::MPLSStreamInfo(const MPLSStreamInfo& other) : M2TSStreamInfo(oth
     refSubPathId = other.refSubPathId;
     isPiP = other.isPiP;
     hangsOffEntry = other.hangsOffEntry;
+    dynamicRange = other.dynamicRange;
     topAS = other.topAS;
     bottomAS = other.bottomAS;
     leftEye = nullptr;
@@ -3554,7 +3555,8 @@ void MPLSStreamInfo::parseStreamAttributes(BitStreamReader& reader)
     {
         video_format = reader.getBits<uint8_t>(4);
         frame_rate_index = reader.getBits<uint8_t>(4);
-        reader.skipBits(24);  // reserved_for_future_use
+        dynamicRange = reader.getBits<uint8_t>(4);  // dynamic_range_type (UHD), 0 on other discs
+        reader.skipBits(20);                        // the colour space and the rest, not read
     }
     else if (isAudioStreamType(stream_coding_type))
     {

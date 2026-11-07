@@ -27,6 +27,16 @@ struct DiscTitle
     std::vector<std::vector<std::string>> angleClips;
     bool isMain = false;  // a main title: the main film, or one of the episodes or films of a disc of several
     std::string note;     // "main film", "version of title 1 (4 clips differ)", or why a playlist is left out
+    // What the playlist says of its picture: the dynamic range of its video (the first video entry of its stream
+    // table: 0 SDR, 1 HDR10, 2 Dolby Vision; -1 for a playlist without video), and a sub path of type 10, which plays
+    // the enhancement layer of a dual layer Dolby Vision picture. With the PID of that video, whether it is HEVC, and
+    // the clip the title plays the most footage of, for a look at the start of its video (addPictureLabels).
+    int dynamicRange = -1;
+    bool dolbyVisionLayer = false;
+    bool hevc = false;
+    int videoPid = 0;
+    std::string mainClip;
+    std::string picture;  // the label of the listing: "SDR", "HDR10", "HDR10+, Dolby Vision profile 7" ...
 };
 
 // The lines under a title of several angles that say where they differ: "    angles differ at 0:00:00-0:03:42", then
@@ -55,6 +65,12 @@ std::vector<std::pair<std::string, std::string>> discsInFolder(const std::string
 // The titles of the disc at `root`. With `all`, the left out and the short playlists are listed as titles too, after
 // the others, with the reason in their note.
 DiscTitles listDiscTitles(const std::string& root, double minSeconds, bool all);
+
+// The picture of each title, for the listing: SDR, HDR10, HDR10+, Dolby Vision (with its profile where known) or a
+// combination, in DiscTitle::picture. What the playlist says is always known, also from the control files of a disc
+// alone. HDR10+ and a single layer Dolby Vision are in the video stream only: the start of the main clip of each main
+// title is read for them (not of every title, which would take long on a disc of hundreds), when the clip is there.
+void addPictureLabels(DiscTitles& t, const std::string& root);
 
 // The listing printed for a disc folder or image given alone on the command line.
 std::string describeDiscTitles(const DiscTitles& t);

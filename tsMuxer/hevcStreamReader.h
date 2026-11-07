@@ -51,6 +51,13 @@ class HEVCStreamReader final : public MPEGStreamReader
     // What the stream's first readable RPU says of the layers: 1 the picture is built with an enhancement layer (the
     // RPU of a profile 7 disc's enhancement layer), 0 a single layer (profile 5 or 8), -1 no RPU read (HevcDvRpuUnit).
     [[nodiscard]] int dvRpuElPresent() const { return m_dvRpuElPresent; }
+    // What the stream read so far says of its picture, for the picture label of a disc title (discTitles.cpp): HDR10 (a
+    // PQ transfer, or a mastering display SEI), HDR10+ (its dynamic metadata SEI), a Dolby Vision RPU, and whether an
+    // SPS was read (doViProfileAndCompatibility needs one)
+    [[nodiscard]] bool hasHdr10() const { return m_hdr && m_hdr->isHDR10; }
+    [[nodiscard]] bool hasHdr10plus() const { return m_hdr && m_hdr->isHDR10plus; }
+    [[nodiscard]] bool hasDvRpu() const { return m_hdr && m_hdr->isDVRPU; }
+    [[nodiscard]] bool hasSps() const { return m_sps != nullptr; }
     // Both layers of a dual layer Dolby Vision stream in this one stream (a merged track), as setDoViDescriptor
     // counts them: an RPU made single layer (--dv-profile=8.1) leaves the enhancement layer out of what plays
     [[nodiscard]] bool holdsDvEnhancementLayer() const { return m_hdr && m_hdr->isDVEL && m_dvRpuElPresent != 0; }

@@ -52,6 +52,7 @@ struct DvdTitle
     double missingShare = 0;  // the part of its cells beyond the end of the VOB files
     bool isMain = false;      // a main title: the film, or one of the episodes or films of the disc
     std::string note;
+    std::string picture;  // the label of the listing (addPictureLabels): "SDR"
 };
 
 struct DvdTitles
@@ -72,6 +73,9 @@ std::string dvdVideoTs(const std::string& path);
 // The titles of the DVD whose VIDEO_TS folder is given. Throws with the reason when its IFO files and their copies
 // cannot be read.
 DvdTitles listDvdTitles(const std::string& videoTs, double minSeconds, bool all);
+
+// The picture of each title, for the listing, as discTitles.h gives it for a Blu-ray: a DVD is SDR
+void addPictureLabels(DvdTitles& t);
 
 std::string describeDvdTitles(const DvdTitles& t);
 

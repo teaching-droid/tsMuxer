@@ -683,6 +683,11 @@ static std::string mainTitlesText(const DvdTitles& t)
            numbers.substr(0, numbers.find(',')) + ".";
 }
 
+void addPictureLabels(DvdTitles& t)
+{
+    for (auto& title : t.titles) title.picture = "SDR";
+}
+
 std::string describeDvdTitles(const DvdTitles& t)
 {
     std::ostringstream s;
@@ -716,6 +721,8 @@ std::string describeDvdTitles(const DvdTitles& t)
             s << "  subtitles " << subs;
         if (title.encrypted)
             s << "  ENCRYPTED";
+        if (!title.picture.empty())
+            s << "  " << title.picture;
         if (!title.note.empty())
             s << "  (" << title.note << ")";
         s << '\n';

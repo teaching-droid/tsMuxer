@@ -118,6 +118,7 @@ enum class StreamType
 };
 
 bool isAudioStreamType(StreamType stream_coding_type);
+bool isVideoStreamType(StreamType stream_coding_type);
 
 // A transport stream packet header and its adaptation field, laid over the bytes of a packet. A packet is found at any
 // byte offset when a stream has lost its sync, so the two are packed: read at any address, with the same bit layout.
@@ -600,6 +601,9 @@ struct MPLSStreamInfo : M2TSStreamInfo
     PIPParams pipParams;
     // The sub path a stream entry of type 2, 3 or 4 names (ref_to_SubPath_id), -1 for an entry of type 1
     int refSubPathId = -1;
+    // The dynamic_range_type of a video entry (UHD playlists): 0 SDR, 1 HDR10, 2 Dolby Vision. Read for the title
+    // listing only (discTitles.cpp); a playlist that is written takes its value from the stream, never from this.
+    uint8_t dynamicRange = 0;
     // A PG or text subtitle entry of the picture-in-picture list of the STN table (the entries counted by
     // number_of_PiP_PG_textST_stream_entries_plus, after the ordinary ones): the subtitles of the secondary video
     bool isPiP = false;

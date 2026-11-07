@@ -2,17 +2,20 @@
 
 #include <fs/directory.h>
 #include <fs/discImage.h>
+#include <fs/file.h>
 #include <fs/systemlog.h>
 
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <iostream>
 #include <map>
 #include <set>
 #include <sstream>
 #include <stdexcept>
 
 #include "dvdTitles.h"
+#include "hevcStreamReader.h"
 #include "tsPacket.h"
 #include "vod_common.h"
 
@@ -167,6 +170,18 @@ Playlist readPlaylist(const std::string& path, const std::string& name)
         parts = merged;
         for (const auto& [in, out] : parts) p.title.footage += (out - in) / 45000.0;
     }
+    // The clip it plays the most footage of
+    double most = -1;
+    for (const auto& [clip, parts] : p.parts)
+    {
+        double footage = 0;
+        for (const auto& [in, out] : parts) footage += out - in;
+        if (footage > most)
+        {
+            most = footage;
+            p.title.mainClip = clip;
+        }
+    }
     p.title.clips = p.items.size();
     p.title.chapters = parser.m_marks.size();
     for (const auto& m : parser.m_marks)
@@ -175,6 +190,18 @@ Playlist readPlaylist(const std::string& path, const std::string& name)
         p.streams += std::to_string(static_cast<int>(s.stream_coding_type)) + ':' + std::to_string(s.streamPID) + ':' +
                      std::string(s.language_code, strnlen(s.language_code, 3)) + ' ';
     p.title.is3d = parser.isDependStreamExist;
+    // its picture, as the playlist gives it: the first video entry is the primary video
+    for (const auto& s : parser.m_streamInfo)
+        if (isVideoStreamType(s.stream_coding_type) && !s.isSecondary)
+        {
+            p.title.dynamicRange = s.dynamicRange;
+            p.title.hevc = s.stream_coding_type == StreamType::VIDEO_H265;
+            p.title.videoPid = s.streamPID;
+            break;
+        }
+    for (const auto& subPath : parser.m_subPaths)
+        if (subPath.type == 10)
+            p.title.dolbyVisionLayer = true;
     for (const auto& s : parser.m_streamInfo)
     {
         const std::string lang(s.language_code, strnlen(s.language_code, 3));
@@ -206,6 +233,111 @@ std::string namesText(const std::vector<std::string>& names)
         i = j + 1;
     }
     return out;
+}
+
+// The file of a clip in STREAM, in the case the disc writes its name; empty when it is not there
+std::string clipFile(const std::string& streamDir, const std::string& clip)
+{
+    for (const std::string& name : {clip + ".m2ts", strToLowerCase(clip) + ".m2ts", clip + ".M2TS"})
+        if (fileExists(streamDir + name))
+            return streamDir + name;
+    return {};
+}
+
+// What the start of a clip's video says of its picture
+struct ClipPicture
+{
+    bool hdr10 = false;
+    bool hdr10plus = false;
+    bool dolbyVision = false;
+    std::string profile;  // of a Dolby Vision RPU: "7", "8.1", "5"; empty when not known
+};
+
+// Reads the HEVC video of PID pid in the first 4 MiB of a clip (192 byte packets), also inside a disc image. Whatever
+// the reader would print is not shown: the listing stays as it is, and a damaged clip only gives no label.
+ClipPicture readClipPicture(const std::string& fileName, const int pid)
+{
+    ClipPicture picture;
+    File file;
+    if (fileName.empty() || !file.open(fileName.c_str(), File::ofRead))
+        return picture;
+    constexpr uint32_t readSize = 4 * 1024 * 1024;
+    std::vector<uint8_t> data(readSize);
+    const int got = file.read(data.data(), readSize);
+    file.close();
+    if (got <= 0)
+        return picture;
+    // the payload of the video's packets, without the PES headers
+    std::vector<uint8_t> video;
+    for (size_t pos = 0; pos + 192 <= static_cast<size_t>(got); pos += 192)
+    {
+        const uint8_t* ts = data.data() + pos + 4;
+        if (ts[0] != 0x47 || ((ts[1] & 0x1f) << 8 | ts[2]) != pid || !(ts[3] & 0x10))
+            continue;
+        size_t at = 4;
+        if (ts[3] & 0x20)
+            at += 1 + ts[4];
+        if ((ts[1] & 0x40) && at + 9 <= 188 && ts[at] == 0 && ts[at + 1] == 0 && ts[at + 2] == 1)
+            at += 9 + ts[at + 8];
+        if (at < 188)
+            video.insert(video.end(), ts + at, ts + 188);
+    }
+    if (video.size() < 1024)
+        return picture;
+    std::streambuf* const out = std::cout.rdbuf(nullptr);
+    std::streambuf* const err = std::cerr.rdbuf(nullptr);
+    const bool lastMsg = sLastMsg;
+    const bool report = diagReport::active;
+    diagReport::active = false;
+    try
+    {
+        HEVCStreamReader reader;
+        reader.checkStream(video.data(), static_cast<int>(video.size()));
+        picture.hdr10 = reader.hasHdr10();
+        picture.hdr10plus = reader.hasHdr10plus();
+        picture.dolbyVision = reader.hasDvRpu();
+        if (picture.dolbyVision && reader.dvRpuElPresent() == 1)
+            picture.profile = "7";  // the RPU of a dual layer picture: on a disc, profile 7
+        else if (picture.dolbyVision && reader.dvRpuElPresent() == 0 && reader.hasSps())
+        {
+            int profile = 0, compatibility = 0;
+            reader.doViProfileAndCompatibility(false, profile, compatibility);
+            picture.profile = std::to_string(profile);
+            if (profile == 8)
+                picture.profile += "." + std::to_string(compatibility);
+        }
+    }
+    catch (...)
+    {
+        picture = ClipPicture();
+    }
+    diagReport::active = report;
+    sLastMsg = lastMsg;
+    std::cout.rdbuf(out);
+    std::cerr.rdbuf(err);
+    std::cout.clear();
+    std::cerr.clear();
+    return picture;
+}
+
+// "SDR", "HDR10", "HDR10+", "Dolby Vision profile 7", or a combination: "HDR10+, Dolby Vision profile 7"
+std::string pictureLabel(const DiscTitle& title, const ClipPicture& clip)
+{
+    std::string base;
+    if (title.dynamicRange == 0)
+        base = "SDR";
+    else if (title.dynamicRange == 1 || (title.dynamicRange == 2 && clip.hdr10))
+        base = "HDR10";
+    if (clip.hdr10plus)
+        base = "HDR10+";  // HDR10 with dynamic metadata
+    std::string dolbyVision;
+    if (title.dolbyVisionLayer)
+        dolbyVision = "Dolby Vision profile 7";  // the enhancement layer in a clip of its own: dual layer, profile 7
+    else if (clip.dolbyVision)
+        dolbyVision = clip.profile.empty() ? "Dolby Vision" : "Dolby Vision profile " + clip.profile;
+    else if (title.dynamicRange == 2)
+        dolbyVision = "Dolby Vision";
+    return base.empty() ? dolbyVision : dolbyVision.empty() ? base : base + ", " + dolbyVision;
 }
 }  // namespace
 
@@ -553,6 +685,8 @@ std::string describeDiscTitles(const DiscTitles& t)
             s << "  3D";
         if (title.angles > 1)
             s << "  " << title.angles << " angles";
+        if (!title.picture.empty())
+            s << "  " << title.picture;
         if (!title.note.empty())
             s << "  (" << title.note << ")";
         s << '\n';
@@ -575,6 +709,27 @@ std::string describeDiscTitles(const DiscTitles& t)
         s << "\nGive the playlist of a title as the source to list its tracks, or name the disc with title=<number> "
              "or title=main in a meta file.\n";
     return s.str();
+}
+
+void addPictureLabels(DiscTitles& t, const std::string& root)
+{
+    const std::string streamDir = root + getDirSeparator() + "BDMV" + getDirSeparator() + "STREAM" + getDirSeparator();
+    std::map<std::string, ClipPicture> read;  // the main titles of a disc can share their main clip
+    for (auto& title : t.titles)
+    {
+        if (title.dynamicRange < 0)
+            continue;  // no video
+        ClipPicture clip;
+        if (title.isMain && title.hevc && !title.mainClip.empty())
+        {
+            auto it = read.find(title.mainClip);
+            if (it == read.end())
+                it = read.emplace(title.mainClip, readClipPicture(clipFile(streamDir, title.mainClip), title.videoPid))
+                         .first;
+            clip = it->second;
+        }
+        title.picture = pictureLabel(title, clip);
+    }
 }
 
 std::string discTitlePlaylist(const std::string& discPath, const std::string& title, const double minSeconds,

@@ -5235,14 +5235,19 @@ static int runTsMuxer(int argc, char** argv)
                         diagReport::text(titles);
                     }
                 };
+                // the picture of each title only here, in the listing: a mux and its report read no more than before
                 if (const string root = blurayDiscRoot(argv[a]); !root.empty())
                 {
-                    listTitles(describeDiscTitles(listDiscTitles(root, minSeconds, all)));
+                    DiscTitles titles = listDiscTitles(root, minSeconds, all);
+                    addPictureLabels(titles, root);
+                    listTitles(describeDiscTitles(titles));
                     return 0;
                 }
                 if (const string videoTs = dvdVideoTs(argv[a]); !videoTs.empty())
                 {
-                    listTitles(describeDvdTitles(listDvdTitles(videoTs, minSeconds, all)));
+                    DvdTitles titles = listDvdTitles(videoTs, minSeconds, all);
+                    addPictureLabels(titles);
+                    listTitles(describeDvdTitles(titles));
                     return 0;
                 }
                 if (titleOptions)
