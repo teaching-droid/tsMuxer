@@ -63,7 +63,7 @@ Il report non può avere il nome di un file del lavoro: una sorgente, il file me
 * che cosa ogni traccia ha letto, usato e tralasciato
 * i file scritti, con la loro dimensione
 
-**I vostri nomi restano privati.** Le cartelle vengono tolte da ogni percorso. I nomi di file, titoli, tracce e capitoli vengono sostituiti da segnaposto, come `<source1>.mkv`. Una sezione chiamata Names riporta solo ciò che serve per trovare un difetto legato a un nome, come la lunghezza e se contiene spazi. I nomi dei file di un disco, come `00800.mpls`, vengono mantenuti.
+**I vostri nomi restano privati.** Le cartelle vengono tolte da ogni percorso. I nomi di file, titoli, tracce e capitoli vengono sostituiti da segnaposto, come `<source1>.mkv`. Una sezione chiamata Names riporta solo ciò che serve per trovare un difetto legato a un nome, come la lunghezza e se contiene spazi. I nomi dei file di un disco, come `00011.mpls`, vengono mantenuti.
 
 Solo se vi viene chiesto: `--report-keep-names` mantiene i nomi e `--report-full-paths` mantiene anche le cartelle. `--report-frames` aggiunge un secondo file, molto più grande, con una riga per ogni parte del flusso scritta. Indicate un intervallo di tempo, come `--report-frames=0:10:00-0:12:00`.
 

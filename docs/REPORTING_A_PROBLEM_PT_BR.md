@@ -63,7 +63,7 @@ O relatório não pode ter o nome de um arquivo da tarefa: uma fonte, o arquivo 
 * o que cada faixa leu, usou e deixou de fora
 * os arquivos gravados, com seus tamanhos
 
-**Seus nomes continuam privados.** As pastas são retiradas de cada caminho. Os nomes de arquivos, títulos, faixas e capítulos são substituídos por marcadores, como `<source1>.mkv`. Uma seção chamada Names traz só o necessário para achar uma falha ligada a um nome, como o comprimento dele e se tem espaços. Os nomes dos arquivos de um disco, como `00800.mpls`, são mantidos.
+**Seus nomes continuam privados.** As pastas são retiradas de cada caminho. Os nomes de arquivos, títulos, faixas e capítulos são substituídos por marcadores, como `<source1>.mkv`. Uma seção chamada Names traz só o necessário para achar uma falha ligada a um nome, como o comprimento dele e se tem espaços. Os nomes dos arquivos de um disco, como `00011.mpls`, são mantidos.
 
 Só se pedirem: `--report-keep-names` mantém os nomes e `--report-full-paths` mantém também as pastas. `--report-frames` adiciona um segundo arquivo, bem maior, com uma linha para cada parte do fluxo gravada. Informe um intervalo de tempo, como `--report-frames=0:10:00-0:12:00`.
 

@@ -63,7 +63,7 @@ Le rapport ne peut pas porter le nom d'un fichier de la tâche : une source, le 
 * ce que chaque piste a lu, utilisé et laissé de côté
 * les fichiers écrits, avec leur taille
 
-**Vos noms restent privés.** Les dossiers sont retirés de chaque chemin. Les noms des fichiers, titres, pistes et chapitres sont remplacés par des marques, comme `<source1>.mkv`. Une section appelée Names ne donne que ce qui sert à trouver un défaut lié à un nom, comme sa longueur et s'il contient des espaces. Les noms des fichiers d'un disque, comme `00800.mpls`, sont conservés.
+**Vos noms restent privés.** Les dossiers sont retirés de chaque chemin. Les noms des fichiers, titres, pistes et chapitres sont remplacés par des marques, comme `<source1>.mkv`. Une section appelée Names ne donne que ce qui sert à trouver un défaut lié à un nom, comme sa longueur et s'il contient des espaces. Les noms des fichiers d'un disque, comme `00011.mpls`, sont conservés.
 
 Seulement si on vous le demande : `--report-keep-names` conserve les noms et `--report-full-paths` conserve aussi les dossiers. `--report-frames` ajoute un second fichier, bien plus gros, avec une ligne pour chaque partie du flux écrite. Donnez-lui une plage de temps, comme `--report-frames=0:10:00-0:12:00`.
 

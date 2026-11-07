@@ -63,7 +63,7 @@ Der Bericht darf nicht wie eine Datei des Auftrags heißen: eine Quelle, die Met
 * was jede Spur gelesen, verwendet und ausgelassen hat
 * die geschriebenen Dateien mit ihrer Größe
 
-**Ihre Namen bleiben privat.** Ordner werden aus jedem Pfad entfernt. Die Namen von Dateien, Titeln, Spuren und Kapiteln werden durch Platzhalter ersetzt, zum Beispiel `<source1>.mkv`. Ein Abschnitt namens Names enthält nur, was nötig ist, um einen Fehler mit einem Namen zu finden, etwa seine Länge und ob er Leerzeichen enthält. Die Namen der Dateien einer Disc, zum Beispiel `00800.mpls`, bleiben erhalten.
+**Ihre Namen bleiben privat.** Ordner werden aus jedem Pfad entfernt. Die Namen von Dateien, Titeln, Spuren und Kapiteln werden durch Platzhalter ersetzt, zum Beispiel `<source1>.mkv`. Ein Abschnitt namens Names enthält nur, was nötig ist, um einen Fehler mit einem Namen zu finden, etwa seine Länge und ob er Leerzeichen enthält. Die Namen der Dateien einer Disc, zum Beispiel `00011.mpls`, bleiben erhalten.
 
 Nur wenn Sie darum gebeten werden: `--report-keep-names` behält die Namen und `--report-full-paths` zusätzlich die Ordner. `--report-frames` fügt eine zweite, viel größere Datei hinzu, mit einer Zeile für jeden geschriebenen Teil des Streams. Geben Sie dazu einen Zeitbereich an, zum Beispiel `--report-frames=0:10:00-0:12:00`.
 

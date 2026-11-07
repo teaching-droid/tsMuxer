@@ -1130,7 +1130,7 @@ construct a meta file. When running with two arguments, tsMuxeR starts the
 muxing or demuxing process.
 
 A file inside a disc image is read without mounting the image: give its path
-after the image, as film.iso/BDMV/PLAYLIST/00800.mpls.
+after the image, as film.iso/BDMV/PLAYLIST/00011.mpls.
 A Blu-ray or DVD disc folder or image given alone lists its titles, the main film
 first: tsMuxeR [--all-playlists] [--min-title-length=<seconds>] <disc>
 tsMuxeR --show-title=<number|main> <disc> lists the tracks of one title.

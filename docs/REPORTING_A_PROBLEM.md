@@ -63,7 +63,7 @@ The name of the report cannot be a file of the job: a source, the meta file or t
 * what each track read, used and left out
 * the files written, with their sizes
 
-**Your names stay private.** Folders are left out of every path. The names of files, titles, tracks and chapters are replaced by placeholders, such as `<source1>.mkv`. A section called Names gives only what is needed to find a fault with a name, such as its length and whether it has spaces. The names of the files of a disc, such as `00800.mpls`, are kept.
+**Your names stay private.** Folders are left out of every path. The names of files, titles, tracks and chapters are replaced by placeholders, such as `<source1>.mkv`. A section called Names gives only what is needed to find a fault with a name, such as its length and whether it has spaces. The names of the files of a disc, such as `00011.mpls`, are kept.
 
 Only if you are asked to, `--report-keep-names` keeps the names and `--report-full-paths` keeps the folders too. `--report-frames` adds a second, much larger file with a line for each part of the stream that is written. Give it a time range, such as `--report-frames=0:10:00-0:12:00`.
 

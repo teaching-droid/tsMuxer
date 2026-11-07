@@ -63,7 +63,7 @@ El informe no puede llamarse como un archivo de la tarea: una fuente, el archivo
 * lo que cada pista leyó, usó y dejó fuera
 * los archivos escritos, con su tamaño
 
-**Sus nombres siguen siendo privados.** Las carpetas se quitan de cada ruta. Los nombres de archivos, títulos, pistas y capítulos se sustituyen por marcadores, como `<source1>.mkv`. Una sección llamada Names da solo lo necesario para encontrar un fallo con un nombre, como su longitud y si tiene espacios. Los nombres de los archivos de un disco, como `00800.mpls`, se conservan.
+**Sus nombres siguen siendo privados.** Las carpetas se quitan de cada ruta. Los nombres de archivos, títulos, pistas y capítulos se sustituyen por marcadores, como `<source1>.mkv`. Una sección llamada Names da solo lo necesario para encontrar un fallo con un nombre, como su longitud y si tiene espacios. Los nombres de los archivos de un disco, como `00011.mpls`, se conservan.
 
 Solo si se le pide: `--report-keep-names` conserva los nombres y `--report-full-paths` conserva también las carpetas. `--report-frames` añade un segundo archivo, mucho mayor, con una línea por cada parte del flujo que se escribe. Indíquele un intervalo de tiempo, como `--report-frames=0:10:00-0:12:00`.
 
