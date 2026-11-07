@@ -913,7 +913,9 @@ void TSMuxer::reportReadRate() const
     LTRACE(LT_WARN, 2, msg.str());
 }
 
-static bool isVideoStreamType(const StreamType streamType)
+// Every video type a muxed stream can have, MPEG-1 and MPEG-4 Part 2 included: the isVideoStreamType of tsPacket.cpp
+// (the Blu-ray video types) leaves those two out.
+static bool isAnyVideoStreamType(const StreamType streamType)
 {
     switch (streamType)
     {
@@ -946,7 +948,7 @@ void TSMuxer::noteLateArrival()
     if (ceiling == -1 || m_lastPCR == -1 || m_lastPESDTS == -1)
         return;
     const auto it = m_pmt.pidList.find(m_pesPID);
-    if (it == m_pmt.pidList.end() || !isVideoStreamType(it->second.m_streamType))
+    if (it == m_pmt.pidList.end() || !isAnyVideoStreamType(it->second.m_streamType))
         return;
     m_cappedPictures++;
     const int64_t arrival =
@@ -1178,7 +1180,7 @@ void TSMuxer::sendAheadNotePes()
     if (m_lastPESDTS == -1)
         return;
     const auto it = m_pmt.pidList.find(m_pesPID);
-    const bool video = it != m_pmt.pidList.end() && isVideoStreamType(it->second.m_streamType);
+    const bool video = it != m_pmt.pidList.end() && isAnyVideoStreamType(it->second.m_streamType);
     m_saPes.push_back({m_outBufPos + m_outBufLen, m_lastPESDTS, video});
 }
 
