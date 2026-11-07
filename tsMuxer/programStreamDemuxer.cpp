@@ -440,7 +440,14 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
             int64_t mpeg1Pts;
             const int mpeg1HeaderLen = mpeg1PacketHeader(curBuf, end, mpeg1Pts);
             const int headerLen = mpeg1HeaderLen > 0 ? mpeg1HeaderLen : pesPacket->getHeaderLength();
-            if (mpeg1HeaderLen < 0 || curBuf + headerLen + 4 > end)
+            // The header of a sub-stream of private stream 1 is read with the PES header: 4 bytes of it at most, but 7
+            // for LPCM. An LPCM header cut by the end of a read, in packs not of 2048 bytes, ended the job with
+            // "Invalid copyLen". It waits for the rest, as a cut PES header does.
+            const int subHeader = startcode == PES_PRIVATE_DATA1 && curBuf + headerLen < end &&
+                                          curBuf[headerLen] >= 0xa0 && curBuf[headerLen] <= 0xaf
+                                      ? 7
+                                      : 4;
+            if (mpeg1HeaderLen < 0 || curBuf + headerLen + subHeader > end)
                 break;
             int afterPesHeader = 0;
             startcode = processPES(curBuf, end, headerLen, mpeg1HeaderLen > 0, afterPesHeader);
