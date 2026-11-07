@@ -5119,8 +5119,8 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>{file} מייצג את מה שמנוגן; בלעדיו, הוא מתווסף בסוף</translation>
     </message>
     <message>
-        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
-        <translation>&quot;תצוגה מקדימה&quot; ב&quot;בחרו כותר&quot; ו&quot;נגנו&quot; ברשימת הקלט פותחים כותר או קובץ בנגן זה. עבור כותר, tsMuxeR יוצר תחילה תצוגה מקדימה של 30 שניות בתיקייה זמנית, שנמחקת כשהחלון נסגר.</translation>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. mpv opens a Blu-ray title directly in its angle, VLC the first angle of a DVD title. For any other player and title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>&quot;תצוגה מקדימה&quot; ב&quot;בחרו כותר&quot; ו&quot;נגנו&quot; ברשימת הקלט פותחים כותר או קובץ בנגן זה. mpv פותח כותר Blu-ray ישירות בזווית שלו, ו-VLC את הזווית הראשונה של כותר DVD. עבור כל נגן וכותר אחרים, tsMuxeR יוצר תחילה תצוגה מקדימה של 30 שניות בתיקייה זמנית, שנמחקת כשהחלון נסגר.</translation>
     </message>
     <message>
         <source>Programs (*.exe)</source>

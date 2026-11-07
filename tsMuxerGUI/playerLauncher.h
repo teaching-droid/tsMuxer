@@ -29,9 +29,11 @@ struct PreviewSource
 };
 
 // A preview of a title or file in a player outside the window: the one set on the General tab (a program and its
-// arguments), or the system's default player. A file is opened as it is. For a title of a disc, tsMuxeR first makes a
-// short .ts of the title in its angle (angle= with --cut-start and --cut-end), which every player can open, Windows 7
-// included, also from a disc image. It runs with the progress window of a mux and can be stopped there. The previews go into a folder of this
+// arguments), or the system's default player. A file is opened as it is. A disc title is opened by the player directly
+// where the player can show its angle: mpv a Blu-ray playlist (bd://mpls/<number> with --bluray-angle, which mpv 0.41
+// and later know), VLC a DVD title in its first angle (dvd://; VLC has no Blu-ray angle switch, and its DVD angle
+// switch did not work, see launchDirect). For any other player and title, tsMuxeR first makes a short .ts of the title in its angle (angle= with --cut-start and --cut-end), which
+// every player can open, Windows 7 included, also from a disc image. It runs with the progress window of a mux and can be stopped there. The previews go into a folder of this
 // session in the system's temporary folder, removed when the window closes, or at the next start when it could not be
 // removed then (a player may still have a file open).
 class PlayerLauncher : public QObject
@@ -56,8 +58,18 @@ class PlayerLauncher : public QObject
     static double defaultStart(double seconds);
 
    private:
+    enum class Player
+    {
+        Other,
+        Mpv,
+        Vlc
+    };
+    // The kind of player, by the name of its program
+    [[nodiscard]] Player player() const;
     // The player with what to play in place of {file} (or last), and the arguments of a preset after the user's own
     bool launch(const QString& what, const QStringList& presetArguments, QWidget* parent);
+    // mpv or VLC opens the title itself, in its angle and from its start: false for any other player or source
+    bool launchDirect(const PreviewSource& source, QWidget* parent);
     void startList();
     void startMux();
     void onListFinished(int exitCode, QProcess::ExitStatus status);

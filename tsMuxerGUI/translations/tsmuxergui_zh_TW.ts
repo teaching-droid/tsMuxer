@@ -5162,8 +5162,8 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>{file} 表示要播放的內容；若沒有，則放在最後</translation>
     </message>
     <message>
-        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
-        <translation>「選擇標題」中的「預覽」和輸入清單中的「播放」會在此播放器中開啟標題或檔案。對於標題，tsMuxeR 會先在暫存資料夾中產生 30 秒的預覽，關閉視窗時該資料夾會被刪除。</translation>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. mpv opens a Blu-ray title directly in its angle, VLC the first angle of a DVD title. For any other player and title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>「選擇標題」中的「預覽」和輸入清單中的「播放」會在此播放器中開啟標題或檔案。mpv 會直接以其角度開啟 Blu-ray 標題，VLC 則以第一個角度開啟 DVD 標題。對於其他播放器和標題，tsMuxeR 會先在暫存資料夾中產生 30 秒的預覽，關閉視窗時該資料夾會被刪除。</translation>
     </message>
     <message>
         <source>Programs (*.exe)</source>

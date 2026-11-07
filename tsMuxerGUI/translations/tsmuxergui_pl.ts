@@ -5162,8 +5162,8 @@ Jeśli pojawiło się to podczas sprawdzania pliku lub zamykania okna, proces zo
         <translation>{file} oznacza to, co jest odtwarzane; bez niego trafia na koniec</translation>
     </message>
     <message>
-        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
-        <translation>„Podgląd” w „Wybierz tytuł” i „Odtwórz” na liście wejściowej otwierają tytuł lub plik w tym odtwarzaczu. Dla tytułu tsMuxeR najpierw tworzy 30-sekundowy podgląd w folderze tymczasowym, który jest usuwany po zamknięciu okna.</translation>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. mpv opens a Blu-ray title directly in its angle, VLC the first angle of a DVD title. For any other player and title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>„Podgląd” w „Wybierz tytuł” i „Odtwórz” na liście wejściowej otwierają tytuł lub plik w tym odtwarzaczu. mpv otwiera tytuł Blu-ray bezpośrednio w jego kącie, VLC pierwszy kąt tytułu DVD. Dla każdego innego odtwarzacza i tytułu tsMuxeR najpierw tworzy 30-sekundowy podgląd w folderze tymczasowym, który jest usuwany po zamknięciu okna.</translation>
     </message>
     <message>
         <source>Programs (*.exe)</source>

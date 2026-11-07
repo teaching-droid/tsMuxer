@@ -5162,8 +5162,8 @@ Se isto apareceu enquanto um arquivo ainda estava sendo examinado, ou quando a j
         <translation>{file} representa o que é reproduzido; sem ele, vai por último</translation>
     </message>
     <message>
-        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
-        <translation>&quot;Pré-visualizar&quot; em &quot;Escolha um título&quot; e &quot;Reproduzir&quot; na lista de entrada abrem um título ou arquivo neste player. Para um título, o tsMuxeR primeiro cria uma pré-visualização de 30 segundos em uma pasta temporária, que é removida quando a janela é fechada.</translation>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. mpv opens a Blu-ray title directly in its angle, VLC the first angle of a DVD title. For any other player and title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>&quot;Pré-visualizar&quot; em &quot;Escolha um título&quot; e &quot;Reproduzir&quot; na lista de entrada abrem um título ou arquivo neste player. O mpv abre um título Blu-ray diretamente em seu ângulo, e o VLC, o primeiro ângulo de um título de DVD. Para qualquer outro player e título, o tsMuxeR primeiro cria uma pré-visualização de 30 segundos em uma pasta temporária, que é removida quando a janela é fechada.</translation>
     </message>
     <message>
         <source>Programs (*.exe)</source>

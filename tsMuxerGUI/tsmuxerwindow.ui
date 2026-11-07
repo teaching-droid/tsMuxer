@@ -1453,7 +1453,7 @@
              <item row="2" column="0" colspan="3">
               <widget class="QLabel" name="previewPlayerNote">
                <property name="text">
-                <string>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. For a title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</string>
+                <string>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. mpv opens a Blu-ray title directly in its angle, VLC the first angle of a DVD title. For any other player and title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</string>
                </property>
                <property name="wordWrap">
                 <bool>true</bool>

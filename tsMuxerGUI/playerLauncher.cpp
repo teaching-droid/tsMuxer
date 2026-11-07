@@ -99,6 +99,18 @@ double PlayerLauncher::defaultStart(const double seconds)
     return std::floor((std::min)(seconds / 10, 120.0));
 }
 
+PlayerLauncher::Player PlayerLauncher::player() const
+{
+    if (m_program.isEmpty())
+        return Player::Other;
+    const QString name = QFileInfo(m_program).completeBaseName().toLower();
+    if (name == QLatin1String("mpv"))
+        return Player::Mpv;
+    if (name == QLatin1String("vlc"))
+        return Player::Vlc;
+    return Player::Other;
+}
+
 bool PlayerLauncher::launch(const QString& what, const QStringList& presetArguments, QWidget* parent)
 {
     if (m_program.isEmpty())
@@ -128,6 +140,38 @@ bool PlayerLauncher::launch(const QString& what, const QStringList& presetArgume
     return false;
 }
 
+bool PlayerLauncher::launchDirect(const PreviewSource& source, QWidget* parent)
+{
+    const QString start = QString::number(source.start, 'f', 3);
+    if (player() == Player::Mpv && !source.playlist.isEmpty())
+    {
+        // the disc of BDMV/PLAYLIST/00200.mpls, a folder or an image, and the playlist by its number
+        QString root = QDir::fromNativeSeparators(source.playlist);
+        for (int up = 0; up < 3 && root.lastIndexOf('/') > 0; ++up) root.truncate(root.lastIndexOf('/'));
+        bool ok = false;
+        const int number = QFileInfo(source.playlist).completeBaseName().toInt(&ok);
+        if (!ok)
+            return false;
+        QStringList preset{QStringLiteral("--bluray-device=") + QDir::toNativeSeparators(root)};
+        if (source.angle > 1)
+            preset << QStringLiteral("--bluray-angle=%1").arg(source.angle);
+        if (source.start > 0)
+            preset << QStringLiteral("--start=") + start;
+        launch(QStringLiteral("bd://mpls/%1").arg(number), preset, parent);
+        return true;
+    }
+    // VLC 3.0 opens a DVD title, from its start: tried with VLC 3.0.24, a title opened with --dvdnav-angle (or with
+    // dvdsimple:// and --dvdread-angle) still played the first angle, and --start-time on a dvd:// address ended VLC
+    // with a crash. Another angle is previewed by tsMuxeR.
+    if (player() == Player::Vlc && source.dvdTitle > 0 && source.angle == 1)
+    {
+        launch(QStringLiteral("dvd:///%1#%2").arg(QDir::fromNativeSeparators(source.disc)).arg(source.dvdTitle), {},
+               parent);
+        return true;
+    }
+    return false;
+}
+
 void PlayerLauncher::preview(const PreviewSource& source, QWidget* parent)
 {
     if (busy())
@@ -138,6 +182,8 @@ void PlayerLauncher::preview(const PreviewSource& source, QWidget* parent)
         launch(QDir::toNativeSeparators(source.file), {}, parent);
         return;
     }
+    if (launchDirect(source, parent))
+        return;
     m_source = source;
     m_parent = parent;
     m_stopped = false;
