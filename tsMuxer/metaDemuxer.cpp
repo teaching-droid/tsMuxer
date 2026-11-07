@@ -1163,6 +1163,11 @@ void METADemuxer::checkSubtitlePlanes() const
         if (it == si.m_addParams.end())
             continue;
         const uint8_t plane = parse3dPlane(it->second);
+        // A video without planes was said to have "0 planes, 0 to -1" (#58)
+        if (plane != 0xff && plane >= planes && planes == 0)
+            THROW(ERR_COMMON, "3d-plane=" << it->second << " on the line of " << unquoteStr(si.m_streamName)
+                                          << " is not a plane of the MVC video, which has no planes. Give "
+                                             "3d-plane=255 for none.")
         if (plane != 0xff && plane >= planes)
             THROW(ERR_COMMON, "3d-plane=" << it->second << " on the line of " << unquoteStr(si.m_streamName)
                                           << " is not a plane of the MVC video, which has " << planes

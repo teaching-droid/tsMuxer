@@ -316,6 +316,7 @@ class TsMuxerWindow : public QWidget
     QTimer opacityTimer;
     bool m_updateMeta;
     bool m_3dMode;
+    int m_maxPgOffsets = 0;          // the most planes (3d-pg-planes) an MVC track of the list has
     QLabel* m_mux3dLabel = nullptr;  // says that a 3D (MVC) track gives the disc its .ssif files
     bool m_fileDialogOpen;
     /// When true, custom chapter text was edited by the user; do not overwrite from input file marks.

@@ -4615,7 +4615,10 @@ void TsMuxerWindow::continueAddFile()
 
         info.maxPgOffsets = extractFloatFromDescr(info.descr, "3d-pg-planes: ");
         if (info.maxPgOffsets > 0)
+        {
             m_3dMode = true;
+            m_maxPgOffsets = qMax(m_maxPgOffsets, info.maxPgOffsets);
+        }
 
         // The listing says "undefined" for a subtitle without an offset. The window looked for "zero", which the
         // listing never prints, and read the word as plane #0, so such a subtitle was muxed with 3d-plane=0.
@@ -4623,7 +4626,10 @@ void TsMuxerWindow::continueAddFile()
             info.offsetId = -1;
         else if (info.descr.contains("3d-plane: "))
             info.offsetId = extractFloatFromDescr(info.descr, "3d-plane: ");
-        else if (m_3dMode)
+        // Plane #0 only where an MVC track has planes. A 3D video without any (its listing says "3d-pg-planes: 0")
+        // gave a subtitle added after it plane #0 all the same, which the mux refuses as a plane the video does not
+        // have (#58): such a subtitle stays without a plane (3d-plane=255).
+        else if (m_3dMode && m_maxPgOffsets > 0)
             info.offsetId = 0;
 
         auto newTrackRowIdx = ui->trackLV->rowCount();
@@ -8008,6 +8014,7 @@ void TsMuxerWindow::updateMaxOffsets()
             maxPGOffsets = qMax(maxPGOffsets, codecInfo->maxPgOffsets);
         }
     }
+    m_maxPgOffsets = maxPGOffsets;
 
     disableUpdatesCnt++;
 
