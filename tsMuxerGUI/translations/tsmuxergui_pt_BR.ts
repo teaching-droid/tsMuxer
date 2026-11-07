@@ -5137,6 +5137,10 @@ Se isto apareceu enquanto um arquivo ainda estava sendo examinado, ou quando a j
         <source>Picture</source>
         <translation>Imagem</translation>
     </message>
+    <message>
+        <source>the same clip as angle 1</source>
+        <translation>o mesmo clipe do ângulo 1</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

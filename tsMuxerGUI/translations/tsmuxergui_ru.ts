@@ -5095,6 +5095,10 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>Picture</source>
         <translation>Изображение</translation>
     </message>
+    <message>
+        <source>the same clip as angle 1</source>
+        <translation>тот же клип, что у ракурса 1</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

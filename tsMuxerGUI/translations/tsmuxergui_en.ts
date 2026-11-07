@@ -5127,6 +5127,10 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>Picture</source>
         <translation>Picture</translation>
     </message>
+    <message>
+        <source>the same clip as angle 1</source>
+        <translation>the same clip as angle 1</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

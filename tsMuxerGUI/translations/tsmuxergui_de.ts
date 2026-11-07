@@ -5094,6 +5094,10 @@ Wenn dies erschien, w√§hrend eine Datei noch untersucht wurde, oder beim Schlie√
         <source>Picture</source>
         <translation>Bild</translation>
     </message>
+    <message>
+        <source>the same clip as angle 1</source>
+        <translation>derselbe Clip wie Blickwinkel 1</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

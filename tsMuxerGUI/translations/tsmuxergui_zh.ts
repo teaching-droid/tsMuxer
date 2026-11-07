@@ -5094,6 +5094,10 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>Picture</source>
         <translation>画面</translation>
     </message>
+    <message>
+        <source>the same clip as angle 1</source>
+        <translation>与视角 1 相同的片段</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

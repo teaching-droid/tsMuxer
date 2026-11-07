@@ -5137,6 +5137,10 @@ Jeśli pojawiło się to podczas sprawdzania pliku lub zamykania okna, proces zo
         <source>Picture</source>
         <translation>Obraz</translation>
     </message>
+    <message>
+        <source>the same clip as angle 1</source>
+        <translation>ten sam klip co kąt 1</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

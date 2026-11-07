@@ -5094,6 +5094,10 @@ Si ce message est apparu pendant l&apos;examen d&apos;un fichier, ou à la ferme
         <source>Picture</source>
         <translation>Image</translation>
     </message>
+    <message>
+        <source>the same clip as angle 1</source>
+        <translation>le même clip que l'angle 1</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

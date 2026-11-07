@@ -5095,6 +5095,10 @@ Si esto apareció mientras se examinaba un archivo, o al cerrar la ventana, el p
         <source>Picture</source>
         <translation>Imagen</translation>
     </message>
+    <message>
+        <source>the same clip as angle 1</source>
+        <translation>el mismo clip que el ángulo 1</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

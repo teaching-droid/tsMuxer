@@ -266,7 +266,11 @@ DiscTitleDialog::DiscTitleDialog(const QString& disc, const DiscTitleList& list,
                 sub[list.dvd ? 2 : 1] = list.dvd ? row.angleParts[k] : clip;
                 if (!list.dvd)
                     sub[2] = row.angleParts[k];
-                sub.last() = angle == 1 ? wtr("the first angle") : wtr("differs from angle 1");
+                // A play item can name fewer clips than it has angles: the listing gives the first angle's clip for
+                // the others, and the line then says so rather than that the angle differs there
+                sub.last() = angle == 1                            ? wtr("the first angle")
+                             : !list.dvd && !clip.isEmpty() && !own ? wtr("the same clip as angle 1")
+                                                                    : wtr("differs from angle 1");
                 auto* part = new QTreeWidgetItem(item, sub);
                 part->setData(0, Qt::UserRole, i);
                 part->setData(0, Qt::UserRole + 1, angle);
