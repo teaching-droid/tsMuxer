@@ -2975,6 +2975,13 @@ int MovDemuxer::mov_read_tfdt(MOVAtom atom)
 // list (an audio edit list start is the priming, which is taken off on its own).
 void MovDemuxer::fragmentStartDelays()
 {
+    // That start already takes the whole video edit list start off a video track whose samples begin in fragments,
+    // so the pre-roll of a cut file is counted there. The lead of mov_read_moov counted it again: its moov holds no
+    // samples, so the first composition offset was taken as 0 and the whole edit list start became the lead. The
+    // sound of such a file (an MP4 written with an empty moov after its first fragment) came late by that much, 83 ms
+    // for two B pictures, and a cut one by the pre-roll on top. Such a track has no lead.
+    if (m_videoLeadTrack > 0 && m_firstTfdt.find(m_videoLeadTrack) != m_firstTfdt.end())
+        m_videoLeadNs = 0;
     for (const auto& [track, tfdt] : m_firstTfdt)
     {
         if (track <= 0 || track > num_tracks)
@@ -3443,12 +3450,16 @@ int MovDemuxer::mov_read_moov(MOVAtom atom)
     // start put it that far early against them (500 ms for a cut 0.5 s after a key frame). What the video's edit list
     // skips beyond its own first composition offset (which the video reader's timing already accounts for) is that
     // pre-roll: the sound is moved back by its edit list start less the pre-roll.
+    // A video track whose samples begin only in fragments has no composition offsets yet; fragmentStartDelays sets
+    // the lead to 0 for it.
     m_videoLeadNs = 0;
+    m_videoLeadTrack = 0;
     for (int i = 0; i < num_tracks; ++i)
     {
         const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
         if (st->type != IOContextTrackType::VIDEO || st->editMediaTime <= 0 || st->time_scale <= 0)
             continue;
+        m_videoLeadTrack = i + 1;
         // signed, as below: read unsigned, a first offset of -1024 (a cut file written with negative composition
         // offsets) left no pre-roll, and the sound came 500 ms early
         const int64_t firstOffset =
