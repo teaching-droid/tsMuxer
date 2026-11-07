@@ -597,8 +597,10 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
     {
         StreamType stream_type = StreamType::VIDEO_H265;
         m_sitHevc = true;
-        // For non-bluray, second Dolby Vision track must be stream_type 06 = private data
-        if (!m_bluRayMode && tsStreamIndex == 0x1015 && (V3_flags & BL_TRACK))
+        // For non-bluray, second Dolby Vision track must be stream_type 06 = private data. Every enhancement layer:
+        // the test was of the PID of the first one, 0x1015, so a second layer (0x1016) kept 0x24, and a fifth video
+        // that is no layer at all, which lands on 0x1015 too, got 0x06.
+        if (!m_bluRayMode && isDvEnhancement)
             stream_type = StreamType::PRIVATE_DATA;
         // Dolby Vision profile 5 is not compatible with SDR or HDR and must be stream_type 06 = private data
         // else if (V3_flags & BL_NOTCOMPAT)
