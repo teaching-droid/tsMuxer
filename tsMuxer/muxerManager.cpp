@@ -2079,8 +2079,10 @@ std::unique_ptr<AbstractMuxer> MuxerManager::createMuxer() { return m_factory.ne
 // --bitrate it pads every second up to the rate, and the output is the rate times the length, whatever the sources
 // hold: an image of 449 MB was estimated at 208 MB and passed for a disc of 300 MB. The rate padded to is the one
 // TSMuxer::parseMuxOpt settles on: --bitrate, held to --maxbitrate when that is lower; without --bitrate, --minbitrate
-// under a --maxbitrate (alone it pads nothing). The length is what the sources state, less a cut. Each 188 byte
-// packet the rate counts is 192 bytes in a disc's clip.
+// under a --maxbitrate (alone it pads nothing). The length is what the sources state, less a cut. The rate counts the
+// 192 bytes of each packet of a disc's clip, its four byte arrival time included, so the clip is the rate times the
+// length: the estimate took each packet as 188 bytes of the rate and 192 in the clip, and came out 2.1 percent high,
+// so that a constant bitrate disc which fits by less than that was refused, or lost its layer break guard.
 static int64_t padRateOf(const int64_t given, const int64_t maxRate, const int64_t minRate)
 {
     if (given > 0)
@@ -2116,7 +2118,7 @@ int64_t MuxerManager::paddedOutputSize()
             if (si.m_isSubStream)
                 views = 2;
     const double bytes = static_cast<double>(rate) / 8.0 * static_cast<double>(toEndNano - fromNano) / 1e9 * views;
-    return static_cast<int64_t>(bytes / 188.0 * 192.0);
+    return static_cast<int64_t>(bytes);
 }
 
 // ** THE FIT-TO-DISC ESTIMATE COUNTED THE WHOLE SOURCE FILES. **
