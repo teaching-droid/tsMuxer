@@ -13,7 +13,7 @@ struct DiscTitle
 {
     int number = 0;        // the title's place in the listing, the main film first
     std::string playlist;  // the playlist file, the full path
-    std::string name;      // its name, 00800.mpls
+    std::string name;      // its name, 00011.mpls
     double seconds = 0;    // what it plays, every play item counted
     double footage = 0;    // the footage it plays, each part of a clip counted once
     size_t chapters = 0;

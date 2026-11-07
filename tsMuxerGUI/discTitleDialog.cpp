@@ -41,7 +41,7 @@ static QString takeNote(QString& rest)
 
 DiscTitleList parseDiscTitles(const QList<QString>& output)
 {
-    // "Title  1  00800.mpls    1:39:36   17 chapters     1 clip   deu eng  3D  5 angles  (main film)"
+    // "Title  1  00011.mpls    1:52:14   24 chapters     1 clip   deu eng  3D  2 angles  (main film)"
     static const QRegularExpression bluray(
         QStringLiteral("^Title\\s+(\\d+)\\s+(\\S+\\.mpls)\\s+(\\d+:\\d\\d:\\d\\d)\\s+(\\d+)\\s+chapters?\\s+(\\d+)\\s+"
                        "clips?(.*)$"),

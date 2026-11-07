@@ -14,7 +14,7 @@ class QTreeWidget;
 struct DiscTitleRow
 {
     int number = 0;     // its place in the listing (title=<number>, --show-title=<number>)
-    QString playlist;   // Blu-ray: the playlist, 00800.mpls
+    QString playlist;   // Blu-ray: the playlist, 00011.mpls
     int discTitle = 0;  // DVD: the disc's own number of the title (dvd-title=)
     double seconds = 0;
     QString length;  // as listed, 1:39:36

@@ -4729,7 +4729,7 @@ void TsMuxerWindow::continueAddFile()
             if (ui->DiskLabelEdit->text().isEmpty())
                 ui->DiskLabelEdit->setText(title);
         }
-        // another angle than the first is named so ("00200 angle 2"): its output is another film than the first's
+        // another angle than the first is named so ("00011 angle 2"): its output is another film than the first's
         if (m_pendingAngle > 1)
             base = tr("%1 angle %2")
                        .arg(base.isEmpty() ? QFileInfo(unquoteStr(newFileName)).completeBaseName() : base)
