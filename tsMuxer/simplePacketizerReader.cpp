@@ -1394,7 +1394,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
             m_pendingPad = 0;
             LTRACE(LT_INFO, 2,
                    "Decoding " << getCodecInfo().displayName << " stream (track " << m_streamIndex
-                               << "): " << getStreamInfo());
+                               << "): " << getStreamInfoAt(frame, m_bufEnd));
             if (m_syncFreq != 0 && (getFreq() != m_syncFreq || getChannels() != m_syncChannels))
                 m_syncChanges++;
             m_syncFreq = getFreq();

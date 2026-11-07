@@ -100,6 +100,9 @@ class SimplePacketizerReader : public AbstractStreamReader
     virtual int wholeFrameSizeAt(const uint8_t* p, const uint8_t* end) { return 0; }
     virtual double getFrameDuration() = 0;  // frame duration at nano seconds
     virtual const std::string getStreamInfo() = 0;
+    // The description at the first frame of a mux, which is at frame with the read data behind it up to end. A reader
+    // whose description needs more than that frame reads ahead in it; the others give getStreamInfo().
+    virtual std::string getStreamInfoAt(const uint8_t* frame, const uint8_t* end) { return getStreamInfo(); }
     virtual void setTestMode(bool value) {}
     [[nodiscard]] virtual bool needMPLSCorrection() const { return true; }
 

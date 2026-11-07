@@ -745,6 +745,49 @@ uint64_t AC3Codec::getFrameDuration() const
     return m_frameDuration;
 }
 
+// A mux describes the stream at its first frame, when the codec has read that frame alone. For E-AC-3 7.1 without an
+// AC-3 core, an independent frame and a dependent one in each period, the "Decoding" line gave the rate of the first,
+// 640 kbps for a stream of 1664, where the listing gives the whole. The frames of the first period are in the data read
+// already: their rates are read from their headers here, without the codec's state, and the line gives the same rate
+// as the listing. Data that ends before the period does gives what it holds. A stream that begins with an AC-3 frame
+// is described as before: 0 is returned for it.
+uint32_t AC3Codec::periodRateAhead(const uint8_t* frame, const uint8_t* end)
+{
+    uint32_t sum = 0;
+    for (const uint8_t* p = frame; end - p >= 6 && p[0] == 0x0B && p[1] == 0x77;)
+    {
+        const int bsid = p[5] >> 3;
+        int size;
+        if (bsid > 10 && bsid <= 16)
+        {
+            const int strmtyp = p[2] >> 6;
+            const int substreamid = p[2] >> 3 & 7;
+            if (p != frame && strmtyp != 1 && substreamid == 0)
+                break;  // the next period
+            size = (((p[2] & 0x07) << 8 | p[3]) + 1) << 1;
+            const int fscod = p[4] >> 6;
+            const int code2 = p[4] >> 4 & 3;
+            if (fscod == 3 && code2 == 3)
+                break;
+            const int rate = fscod == 3 ? ff_ac3_freqs[code2] / 2 : ff_ac3_freqs[fscod];
+            const int samples = eac3_blocks[fscod == 3 ? 3 : code2] << 8;
+            sum += static_cast<uint32_t>(static_cast<int64_t>(size) * rate * 8 / samples);
+        }
+        else
+            break;
+        p += size;
+    }
+    return sum;
+}
+
+const std::string AC3Codec::describeAt(const uint8_t* frame, const uint8_t* end)
+{
+    m_periodRateGiven = periodRateAhead(frame, end);
+    std::string info = getStreamInfo();
+    m_periodRateGiven = 0;
+    return info;
+}
+
 const std::string AC3Codec::getStreamInfo()
 {
     std::ostringstream str;
@@ -784,7 +827,8 @@ const std::string AC3Codec::getStreamInfo()
             str << "), ";
         }
 
-        str << "Bitrate: " << (m_bit_rate + (m_periodRate ? m_periodRate : m_periodRateSum)) / 1000 << "Kbps ";
+        const uint32_t eac3Rate = m_periodRateGiven ? m_periodRateGiven : m_periodRate ? m_periodRate : m_periodRateSum;
+        str << "Bitrate: " << (m_bit_rate + eac3Rate) / 1000 << "Kbps ";
         if (m_bit_rateExt)
             str << "(core " << m_bit_rate / 1000 << "Kbps) ";
         str << "Sample Rate: " << m_sample_rate / 1000 << "KHz ";

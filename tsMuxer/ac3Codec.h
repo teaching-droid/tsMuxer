@@ -96,6 +96,10 @@ class AC3Codec
     [[nodiscard]] uint64_t getFrameDuration() const;
     virtual const CodecInfo& getCodecInfo();
     virtual const std::string getStreamInfo();
+    // The description at the first frame of a mux, at frame, with the rest of the read data behind it to end
+    const std::string describeAt(const uint8_t* frame, const uint8_t* end);
+    // The E-AC-3 rate of the period that begins at frame, from the headers of its frames in [frame, end)
+    static uint32_t periodRateAhead(const uint8_t* frame, const uint8_t* end);
 
     AC3State m_state;
     // Set by decodeFrame for the frame it has just sized: true when that frame is an AC-3
@@ -155,6 +159,7 @@ class AC3Codec
     // m_periodRate is the last whole period, m_periodRateSum the one being read.
     uint32_t m_periodRateSum;
     uint32_t m_periodRate;
+    uint32_t m_periodRateGiven = 0;  // getStreamInfoAt: the rate of the period read ahead, for the description
     void startRatePeriod()
     {
         if (m_periodRateSum)
