@@ -240,6 +240,7 @@ void LPCMStreamReader::planBdLayout(const uint32_t mask)
 {
     m_bdMap.clear();
     m_backCentre = false;
+    m_bdRefusal.clear();
     std::vector<uint32_t> order;  // the speaker of each channel, in the order of the WAV
     for (uint32_t bit = 1; bit != 0; bit <<= 1)
         if (mask & bit)
@@ -249,26 +250,41 @@ void LPCMStreamReader::planBdLayout(const uint32_t mask)
     const uint32_t known = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT | SPEAKER_FRONT_CENTER | SPEAKER_LOW_FREQUENCY |
                            SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT | SPEAKER_BACK_CENTER | SPEAKER_SIDE_LEFT |
                            SPEAKER_SIDE_RIGHT;
+    // ** REFUSED FOR A DISC AND A TS ONLY. ** A layout a Blu-ray does not have was refused here, for every output and
+    // for the listing, although a demux and a Matroska output keep the WAV's own channels. The reason is kept, and a
+    // disc or a TS refuses the track with it (discLayoutRefusal).
     const auto refuse = [&](const char* why)
     {
-        THROW(ERR_COMMON, "The WAV of track " << m_streamIndex << " has the speaker layout 0x" << std::hex << mask
-                                              << std::dec << ", and " << why
-                                              << " Convert it to stereo, 5.1 or 7.1 before muxing it to a disc.")
+        std::ostringstream text;
+        text << "The WAV of track " << m_streamIndex << " has the speaker layout 0x" << std::hex << mask << std::dec
+             << ", and " << why << " Convert it to stereo, 5.1 or 7.1 before muxing it to a disc.";
+        m_bdRefusal = text.str();
+        m_bdMap.clear();
+        m_backCentre = false;
     };
     if (mask & ~known)
+    {
         refuse("a Blu-ray LPCM track has no place for some of its speakers (such as top or front centre-side ones).");
+        return;
+    }
     const bool backPair = (mask & (SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT)) == (SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT);
     const bool sidePair = (mask & (SPEAKER_SIDE_LEFT | SPEAKER_SIDE_RIGHT)) == (SPEAKER_SIDE_LEFT | SPEAKER_SIDE_RIGHT);
     if (((mask & (SPEAKER_BACK_LEFT | SPEAKER_BACK_RIGHT)) && !backPair) ||
         ((mask & (SPEAKER_SIDE_LEFT | SPEAKER_SIDE_RIGHT)) && !sidePair) ||
         (mask & (SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT)) != (SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT))
+    {
         refuse("one speaker of a left and right pair is missing, which no Blu-ray LPCM layout has.");
+        return;
+    }
     const bool lfe = mask & SPEAKER_LOW_FREQUENCY;
     const bool centre = mask & SPEAKER_FRONT_CENTER;
     if (mask & SPEAKER_BACK_CENTER)
     {
         if (backPair || sidePair || lfe)
+        {
             refuse("its back centre comes with other surround speakers or an LFE, which no Blu-ray LPCM layout has.");
+            return;
+        }
         m_backCentre = true;  // 2/1 or 3/1, in the order of the WAV
         return;
     }
@@ -305,9 +321,12 @@ void LPCMStreamReader::planBdLayout(const uint32_t mask)
         m_bdMap.push_back(at == order.end() ? -1 : static_cast<int>(at - order.begin()));
     }
     if (bdChannels() > 6 && m_freq == 192000)
+    {
         refuse(
             "with silent channels added for a disc layout it would have more than the 6 channels a disc carries at "
             "192 kHz.");
+        return;
+    }
     LTRACE(LT_INFO, 2,
            "The WAV of track " << m_streamIndex << " has " << static_cast<int>(m_channels)
                                << " channels in a layout a Blu-ray does not have; it is written with " << bdChannels()
@@ -316,6 +335,8 @@ void LPCMStreamReader::planBdLayout(const uint32_t mask)
 
 int LPCMStreamReader::convertWavToPCM(uint8_t* start, uint8_t* end)
 {
+    if (!m_bdRefusal.empty())
+        THROW(ERR_COMMON, m_bdRefusal)
     // int mch = m_channels; // + (m_channels%2==1 ? 1 : 0);
     const int ch1SampleSize = (m_bitsPerSample == 20 ? 3 : m_bitsPerSample / 8);
     const int fullSampleSize = m_channels * ch1SampleSize;

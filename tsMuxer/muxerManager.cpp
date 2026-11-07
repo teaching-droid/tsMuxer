@@ -23,6 +23,7 @@
 #include "h264StreamReader.h"
 #include "hevcStreamReader.h"
 #include "iso_writer.h"
+#include "lpcmStreamReader.h"
 #include "matroskaMuxer.h"
 #include "mkvCopyStreamReader.h"
 #include "mpegStreamReader.h"
@@ -658,17 +659,27 @@ void MuxerManager::checkTracksBeforeOutput()
                         const std::string ext = strToLowerCase(extractFileExt(si.m_streamName));
                         return si.m_codec == "A_LPCM" && (ext == "mp4" || ext == "mov" || ext == "m4a" || ext == "m4v");
                     });
-    if ((!hevcSplit && !movPcm) || m_firstBlocksRead)
-        return;
-    // The probe refuses a split of a track that holds no enhancement layer, by what the track holds; the first
-    // blocks below are refused by the subTrack filter only after 32 pictures without one.
-    if (!m_discovered)
+    // A WAV whose speakers no Blu-ray LPCM layout has is refused for a disc and a TS, and taken by a demux and a
+    // Matroska output. Its header is read with its first block, before the folders of a disc are made.
+    const bool lpcm = !m_demuxMode && std::any_of(ci.begin(), ci.end(), [](const StreamInfo& si)
+                                                  { return si.m_codec == lpcmCodecInfo.programName; });
+    if ((hevcSplit || movPcm || lpcm) && !m_firstBlocksRead)
     {
-        m_discoveryData = m_metaDemuxer.discoverStreams();
-        m_discovered = true;
+        // The probe refuses a split of a track that holds no enhancement layer, by what the track holds; the first
+        // blocks below are refused by the subTrack filter only after 32 pictures without one.
+        if (!m_discovered)
+        {
+            m_discoveryData = m_metaDemuxer.discoverStreams();
+            m_discovered = true;
+        }
+        for (StreamInfo& si : ci) si.read();
+        m_firstBlocksRead = true;
     }
-    for (StreamInfo& si : ci) si.read();
-    m_firstBlocksRead = true;
+    if (!m_demuxMode)
+        for (const StreamInfo& si : ci)
+            if (const auto* reader = dynamic_cast<const LPCMStreamReader*>(si.m_streamReader);
+                reader && !reader->discLayoutRefusal().empty())
+                THROW(ERR_COMMON, reader->discLayoutRefusal())
 }
 
 void MuxerManager::checkTrackList(const vector<StreamInfo>& ci) const

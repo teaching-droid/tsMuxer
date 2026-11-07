@@ -3,6 +3,7 @@
 #ifndef LPCM_STREAM_READER_H_
 #define LPCM_STREAM_READER_H_
 
+#include <string>
 #include <vector>
 
 #include "avPacket.h"
@@ -55,6 +56,9 @@ class LPCMStreamReader final : public SimplePacketizerReader
     void setFirstFrame(const bool value) { m_firstFrame = value; }
     bool beforeFileCloseEvent(File& file) override;
     void setHeadersType(LPCMHeaderType value);
+    // Why a disc or a TS cannot take the speaker layout of the WAV (planBdLayout); empty when it can. A demux and a
+    // Matroska output keep the WAV's own channels and take it.
+    [[nodiscard]] const std::string& discLayoutRefusal() const { return m_bdRefusal; }
 
    protected:
     int getHeaderLen() override { return 4; }
@@ -119,6 +123,7 @@ class LPCMStreamReader final : public SimplePacketizerReader
     std::vector<int> m_bdMap;
     std::vector<uint8_t> m_bdBuffer;
     bool m_backCentre = false;
+    std::string m_bdRefusal;    // discLayoutRefusal
     bool m_noMaskSaid = false;  // the warning for a WAV of more than 2 channels without a channel mask was given
     // ** A DEMUX KEEPS THE SPEAKERS OF THE WAV. ** The channel mask of a WAV whose header names one speaker for each
     // channel, 0 for any other. A demux wrote a mask made from the number of channels, and 5.1 with back surrounds came
