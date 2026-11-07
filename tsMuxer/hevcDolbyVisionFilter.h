@@ -70,9 +70,9 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
    private:
     void fillPids(const PIDSet& acceptedPIDs, int pid);
     // nalType decides the start code length when the source's framing was recorded; pass -1 to
-    // keep the four byte default.
-    void emit(int streamIndex, const uint8_t* data, const uint8_t* dataEnd, DemuxedData& demuxedData,
-              int64_t& discardSize, int nalType) const;
+    // keep the four byte default. The bytes handed on to the track, start code included.
+    int64_t emit(int streamIndex, const uint8_t* data, const uint8_t* dataEnd, DemuxedData& demuxedData,
+                 int64_t& discardSize, int nalType) const;
     // Which preserved original belongs to the picture at this timestamp, or -1 if none does.
     [[nodiscard]] int64_t entryForPts(int64_t pts) const;
 

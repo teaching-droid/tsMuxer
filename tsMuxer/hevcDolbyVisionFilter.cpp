@@ -79,8 +79,8 @@ void HevcDolbyVisionFilter::fillPids(const PIDSet& acceptedPIDs, const int pid)
 // "4:35,32,33,34 3:1,39", parsed by parseStartCodeRule so there is one definition of the format.
 void HevcDolbyVisionFilter::setStartCodeRule(const std::string& rule) { parseStartCodeRule(rule, m_startCodeByType); }
 
-void HevcDolbyVisionFilter::emit(const int streamIndex, const uint8_t* data, const uint8_t* dataEnd,
-                                 DemuxedData& demuxedData, int64_t& discardSize, const int nalType) const
+int64_t HevcDolbyVisionFilter::emit(const int streamIndex, const uint8_t* data, const uint8_t* dataEnd,
+                                    DemuxedData& demuxedData, int64_t& discardSize, const int nalType) const
 {
     if (streamIndex >= 0)
     {
@@ -96,13 +96,12 @@ void HevcDolbyVisionFilter::emit(const int streamIndex, const uint8_t* data, con
         }
         demuxedData[streamIndex].append(START_CODE + (sizeof(START_CODE) - len), len);
         demuxedData[streamIndex].append(data, dataEnd - data);
+        return len + (dataEnd - data);
     }
-    else
-    {
-        // Only one of the two layers was asked for. The other one is not an error, it is simply
-        // not wanted, so its bytes are discarded rather than buffered forever.
-        discardSize += dataEnd - data;
-    }
+    // Only one of the two layers was asked for. The other one is not an error, it is simply
+    // not wanted, so its bytes are discarded rather than buffered forever.
+    discardSize += dataEnd - data;
+    return 0;
 }
 
 int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& acceptedPIDs, AVPacket& avPacket)
@@ -116,6 +115,7 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
     uint8_t* dataEnd = avPacket.data + avPacket.size;
     uint8_t* curNal = NALUnit::findNextNAL(avPacket.data, dataEnd);
     int64_t discardSize = 0;
+    int64_t handedOn = 0;
 
     while (curNal < dataEnd)
     {
@@ -135,7 +135,8 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
                 // An enhancement layer NAL inside its wrapper. Drop the two wrapper bytes and what
                 // is left IS the NAL as the disc carried it, header included. Nothing is unescaped:
                 // the NAL was emulation prevented before it was ever wrapped.
-                emit(m_elStreamIndex, curNal + 2, nalEnd, demuxedData, discardSize, (curNal[2] >> 1) & 0x3F);
+                handedOn +=
+                    emit(m_elStreamIndex, curNal + 2, nalEnd, demuxedData, discardSize, (curNal[2] >> 1) & 0x3F);
                 m_unwrapped++;
             }
             else if (nalType == static_cast<int>(HevcUnit::NalType::DVRPU))
@@ -164,18 +165,19 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
                     nal.push_back(curNal[0]);
                     nal.push_back(curNal[1]);
                     nal.insert(nal.end(), payload, payload + len);
-                    emit(m_elStreamIndex, nal.data(), nal.data() + nal.size(), demuxedData, discardSize, nalType);
+                    handedOn +=
+                        emit(m_elStreamIndex, nal.data(), nal.data() + nal.size(), demuxedData, discardSize, nalType);
                     m_restored++;
                 }
                 else
                 {
-                    emit(m_elStreamIndex, curNal, nalEnd, demuxedData, discardSize, nalType);
+                    handedOn += emit(m_elStreamIndex, curNal, nalEnd, demuxedData, discardSize, nalType);
                 }
                 m_rpu++;
             }
             else
             {
-                emit(m_blStreamIndex, curNal, nalEnd, demuxedData, discardSize, nalType);
+                handedOn += emit(m_blStreamIndex, curNal, nalEnd, demuxedData, discardSize, nalType);
             }
         }
 
@@ -198,5 +200,13 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
                                          "split into two.")
                               << " Mux it as ONE track, without subTrack=.")
 
-    return avPacket.size - static_cast<int>(discardSize);
+    // ** THE COUNT OF WHAT WAS READ STAYS WHOLE. ** Each NAL goes on with a start code of its own kind, and an
+    // enhancement layer NAL without its two byte wrapper and the start code of the wrapper. What a split hands on is
+    // therefore not what it took in, and neither the difference nor the start codes of a layer left out were counted
+    // anywhere: a small file split into its two layers stopped with "the mux stopped before the source was finished"
+    // at 97.8 percent, and with one layer at 95 percent, though every picture was muxed. The difference is handed to
+    // the container to count as discarded. What is returned stays as it was, as the container reads by it.
+    const int counted = avPacket.size - static_cast<int>(discardSize);
+    m_reframed += counted - handedOn;
+    return counted;
 }

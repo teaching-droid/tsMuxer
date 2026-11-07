@@ -6211,6 +6211,7 @@ int MatroskaDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& ac
 
     AVPacket packet;
     uint32_t demuxedSize = 0;
+    int64_t reframed = 0;  // see SubTrackFilter::takeReframedBytes
     discardSize = 0;
     while (demuxedSize < m_fileBlockSize)
     {
@@ -6218,7 +6219,7 @@ int MatroskaDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& ac
         if (readRez == BufferedReader::DATA_EOF)
         {
             m_demuxEnded = true;
-            discardSize = m_processedBytes - m_lastProcessedBytes - demuxedSize;
+            discardSize = m_processedBytes - m_lastProcessedBytes - demuxedSize + reframed;
             m_lastProcessedBytes = m_processedBytes;
             return readRez;
         }
@@ -6227,6 +6228,7 @@ int MatroskaDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& ac
         if (itr != m_pidFilters.end())
         {
             demuxedSize += itr->second->demuxPacket(demuxedData, acceptedPIDs, packet);
+            reframed += itr->second->takeReframedBytes();
         }
         else
         {
@@ -6239,7 +6241,7 @@ int MatroskaDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& ac
             }
         }
     }
-    discardSize = m_processedBytes - m_lastProcessedBytes - demuxedSize;
+    discardSize = m_processedBytes - m_lastProcessedBytes - demuxedSize + reframed;
     m_lastProcessedBytes = m_processedBytes;
     return 0;
 }

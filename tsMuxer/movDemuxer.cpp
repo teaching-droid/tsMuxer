@@ -1968,7 +1968,8 @@ int MovDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepte
                         st->parsed_priv_data->extractData(&m_deliveredPacket, m_tmpChunkBuffer.data(), usable);
                         const int demuxed =
                             filterItr->second->demuxPacket(demuxedData, acceptedPIDs, m_deliveredPacket);
-                        discardSize += static_cast<int64_t>(chunkSize) - demuxed;
+                        discardSize +=
+                            static_cast<int64_t>(chunkSize) - demuxed + filterItr->second->takeReframedBytes();
                     }
                     else
                     {
@@ -1996,7 +1997,7 @@ int MovDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepte
                     m_deliveredPacket.data = m_filterBuffer.data();
                     m_deliveredPacket.size = static_cast<int>(m_filterBuffer.size());
                     const int demuxed = filterItr->second->demuxPacket(demuxedData, acceptedPIDs, m_deliveredPacket);
-                    discardSize += static_cast<int64_t>(chunkSize) - demuxed;
+                    discardSize += static_cast<int64_t>(chunkSize) - demuxed + filterItr->second->takeReframedBytes();
                 }
                 else
                 {
