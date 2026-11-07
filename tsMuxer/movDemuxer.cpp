@@ -3032,7 +3032,10 @@ static int64_t usualDuration(const MOVStreamContext* st)
 // first sample of 27840 at 48000 instead of 1024. The readers time a track by its usual sample length, so the start
 // was lost: the sound came 500 ms early, the picture 520 ms early, and the priming of AAC that
 // such a file writes the same way played in front of the picture (+21.4 ms). What the first sample lasts
-// beyond the usual length is where the rest of the track starts, and so where the track starts.
+// beyond the length of the second is where the rest of the track starts, and so where the track starts.
+// The second sample, not the usual length: a track that starts at another rate (a video of 6 pictures a second for
+// its first two seconds, then 24) has a first sample as long as the ones after it, and the usual length made that
+// a start offset: the picture came 125 ms late against the sound. A writer lengthens only the first sample.
 void MovDemuxer::longFirstSamples()
 {
     for (int i = 0; i < num_tracks; ++i)
@@ -3041,8 +3044,8 @@ void MovDemuxer::longFirstSamples()
         if (st->hasEditList || st->time_scale == 0 ||
             (st->type != IOContextTrackType::AUDIO && st->type != IOContextTrackType::VIDEO))
             continue;
-        const std::vector<int64_t> d = firstDurations(st, 1);
-        const int64_t usual = usualDuration(st);
+        const std::vector<int64_t> d = firstDurations(st, 2);
+        const int64_t usual = d.size() > 1 && d[1] > 0 ? d[1] : usualDuration(st);
         if (d.empty() || usual <= 0 || d[0] <= usual)
             continue;
         m_trackStartNs[i + 1] += ticksToNs(d[0] - usual, st->time_scale);
