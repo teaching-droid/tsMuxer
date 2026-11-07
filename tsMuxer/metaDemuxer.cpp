@@ -1509,6 +1509,19 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     // A track has two parts, 1 and 2. subTrack=0 or 3 was taken as asked, the track then gave nothing, and the job was
     // refused as if the codec on the line were wrong. Without track= the line names an elementary stream, which is
     // read whole: subTrack= on it was dropped without a word, where the same stream in an MP4 file is refused.
+    //
+    // ** EXCEPT A RAW H.264 MVC STREAM (#58). ** A .264, .h264 or .mvc file is read by the combined AVC/MVC demuxer
+    // when its line names a part (ContainerToReaderWrapper::openStream): subTrack=1 is its MVC view and subTrack=2 its
+    // AVC view, as the listing gives them, and it is how the window and 2.20.0 split such a file. The check above
+    // refused it, and a 3D stream could no longer be muxed from a meta the window wrote. It is taken again, for a
+    // line whose every file is such a stream.
+    const auto rawMvcFile = [](const std::string& name)
+    {
+        const std::string ext = strToLowerCase(extractFileExt(unquoteStr(trimStr(name))));
+        return ext == "264" || ext == "h264" || ext == "mvc";
+    };
+    const std::vector<std::string> lineFiles = splitQuotedStr(codecStreamName.c_str(), '+');
+    const bool rawMvcLine = !lineFiles.empty() && std::all_of(lineFiles.begin(), lineFiles.end(), rawMvcFile);
     tmpitr = addParams.find("subTrack");
     if (tmpitr != addParams.end())
     {
@@ -1519,13 +1532,17 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
                                           << " is not a part of a track: subTrack is 1 or 2. For a dual layer Dolby "
                                              "Vision track 1 is the base layer and 2 the enhancement layer; for a "
                                              "combined AVC/MVC track 1 is the MVC part and 2 the AVC part.")
-        if (pid == 0)
+        if (pid == 0 && rawMvcLine)
+            pid = strToInt32(part);  // the track of the combined demuxer: 1 the MVC view, 2 the AVC view
+        else if (pid == 0)
             THROW(ERR_COMMON, "subTrack= on the " << codec << " line of " << unquoteStr(codecStreamName)
                                                   << " picks a part of the track that track= names in a container "
-                                                     "file (MKV, MP4, TS), and this line names no track. A stream "
-                                                     "file of its own is read whole: leave subTrack= out, or add "
-                                                     "track= for a container.")
-        pid = SubTrackFilter::pidToSubPid(pid, strToInt32(part));
+                                                     "file (MKV, MP4, TS). Without track=, subTrack= splits only a "
+                                                     "raw H.264 MVC stream (.264, .h264, .mvc); this file is read "
+                                                     "whole. Leave subTrack= out, or name the track of a container "
+                                                     "with track=.")
+        else
+            pid = SubTrackFilter::pidToSubPid(pid, strToInt32(part));
     }
 
     vector<string> fileList;
