@@ -172,6 +172,11 @@ AC3Codec::AC3ParseError AC3Codec::parseHeader(uint8_t* buf, const uint8_t* end)
 
         m_samples = eac3_blocks[numblkscod] << 8;
         m_bit_rateExt = m_frame_size * m_sample_rate * 8 / m_samples;
+        // A 7.1 stream is an independent frame of 5.1 and a dependent one of two channels in each period, and the
+        // listing gave the rate of the one read last alone: 640 kbps for a stream of 1664
+        if (m_strmtyp != 1 && m_substreamid == 0)
+            startRatePeriod();
+        m_periodRateSum += m_bit_rateExt;
 
         gbc.skipBits(5);  // skip bsid, already got it
         for (int i = 0; i < (acmod ? 1 : 2); i++)
@@ -386,6 +391,7 @@ AC3Codec::AC3ParseError AC3Codec::parseHeader(uint8_t* buf, const uint8_t* end)
 
         m_bsidBase = m_bsid;  // id except AC3+ frames
         m_strmtyp = 2;
+        startRatePeriod();  // the E-AC-3 frames behind this core frame make up the rest of its period
         m_samples = AC3_FRAME_SIZE;
 
         gbc.skipBits(5);  // skip bsid, already got it
@@ -778,7 +784,7 @@ const std::string AC3Codec::getStreamInfo()
             str << "), ";
         }
 
-        str << "Bitrate: " << (m_bit_rate + m_bit_rateExt) / 1000 << "Kbps ";
+        str << "Bitrate: " << (m_bit_rate + (m_periodRate ? m_periodRate : m_periodRateSum)) / 1000 << "Kbps ";
         if (m_bit_rateExt)
             str << "(core " << m_bit_rate / 1000 << "Kbps) ";
         str << "Sample Rate: " << m_sample_rate / 1000 << "KHz ";

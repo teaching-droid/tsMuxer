@@ -52,6 +52,8 @@ class AC3Codec
         AC3Codec::setTestMode(false);
         m_frameDuration = 0;
         m_bit_rateExt = 0;
+        m_periodRateSum = 0;
+        m_periodRate = 0;
         m_nextFrameIsExt = false;
         m_bit_rate = 0;
         m_channels = 0;
@@ -146,7 +148,19 @@ class AC3Codec
 
     int m_samples;
 
+    // The rate of the E-AC-3 frame read last. Besides the listing it says that an AC-3 stream has an E-AC-3 part.
     uint32_t m_bit_rateExt;
+    // The E-AC-3 rate of a whole period, for the listing: the frames from one AC-3 frame or independent frame of the
+    // first program to the next, so the dependent substream of a 7.1 stream and further programs count as well.
+    // m_periodRate is the last whole period, m_periodRateSum the one being read.
+    uint32_t m_periodRateSum;
+    uint32_t m_periodRate;
+    void startRatePeriod()
+    {
+        if (m_periodRateSum)
+            m_periodRate = m_periodRateSum;
+        m_periodRateSum = 0;
+    }
     bool m_nextFrameIsExt;  // the frame after this AC-3 one is E-AC-3, so this one adds no time
     bool m_extChannelsExists;
     bool m_timecodeBlockSaid = false;
