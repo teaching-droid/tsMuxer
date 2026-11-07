@@ -389,6 +389,8 @@ class METADemuxer final : public AbstractDemuxer
     inline void updateReport(bool checkTime);
     void lineBack();
     // wholeTrack: the data is all the track holds (the probe read the file to its end)
+    // Whether the container file declares its track pid as AV1 (TrackInfo::m_av1Declared)
+    [[nodiscard]] bool containerDeclaresAv1(const std::string& fileName, int pid) const;
     static CheckStreamRez detectTrackReader(uint8_t* tmpBuffer, int len,
                                             AbstractStreamReader::ContainerType containerType, int containerDataType,
                                             int containerStreamIndex, DeclaredKind declared = DeclaredKind::None,

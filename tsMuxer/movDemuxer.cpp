@@ -2269,6 +2269,8 @@ void MovDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                                                 tracks[i]->language, 0)));
             if (const auto delay = m_codecDelayNs.find(i + 1); delay != m_codecDelayNs.end() && delay->second > 0)
                 trackList[i + 1].m_srcParams["srccodecdelay"] = std::to_string(delay->second);
+            if (dynamic_cast<MovParsedAV1TrackData*>(mst->parsed_priv_data))
+                trackList[i + 1].m_av1Declared = true;
             if (tracks[i]->type == IOContextTrackType::AUDIO && m_videoLeadNs > 0)
                 trackList[i + 1].m_srcParams["srcvideolead"] = std::to_string(m_videoLeadNs);
             // Where the track starts against the first video track (the listing's Stream delay), for the mux

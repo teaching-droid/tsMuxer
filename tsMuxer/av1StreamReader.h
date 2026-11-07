@@ -18,6 +18,8 @@ class AV1StreamReader final : public MPEGStreamReader
     ~AV1StreamReader() override = default;
     int getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdmvDescriptors) override;
     CheckStreamRez checkStream(uint8_t* buffer, int len);
+    // The container declares the track AV1 (TrackInfo::m_av1Declared): its data may begin inside an OBU
+    void setDeclaredAv1(const bool declared) { m_declaredAv1 = declared; }
     void applyDiscoveryData(const StreamDiscoveryData& data) override;
     [[nodiscard]] bool needSPSForSplit() const override { return false; }
     void setBuffer(uint8_t* data, uint32_t dataLen, bool lastBlock = false) override;
@@ -93,7 +95,8 @@ class AV1StreamReader final : public MPEGStreamReader
     bool m_firstFrame;
     bool m_lastIFrame;
     bool m_firstFileFrame;
-    bool m_notAv1 = false;  // checkStream saw data that does not begin as AV1
+    bool m_notAv1 = false;       // checkStream saw data that does not begin as AV1
+    bool m_declaredAv1 = false;  // see setDeclaredAv1
     // A stream without temporal delimiters, which a temporal unit must begin with: -1 until its first frame is read,
     // then 1 when no delimiter came before it. Its temporal units are then found by their frames (intDecodeNAL), and
     // each gets a delimiter on output (writeAdditionData, prepareDemuxPacket).

@@ -106,6 +106,9 @@ struct TrackInfo
     // ISDB: the component tag and data_component_id of a stream type 0x06 track (PMTStreamInfo), -1 when absent
     int m_componentTag = -1;
     int m_dataComponentId = -1;
+    // The container declares the track AV1: a transport stream by the registration descriptor "AV01", Matroska by
+    // V_AV1, MP4 by an av01 sample entry. Its data may then begin inside an OBU (AV1StreamReader::setDeclaredAv1).
+    bool m_av1Declared = false;
     TrackInfo() : m_trackType(0), m_delay(0), m_dvbDescriptor(0), m_defaultFlag(-1) {}
     TrackInfo(const int trackType, const char* lang, const int64_t delay, const int dvbDescriptor = 0,
               const int defaultFlag = -1)

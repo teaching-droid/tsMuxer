@@ -511,7 +511,22 @@ CheckStreamRez AV1StreamReader::checkStream(uint8_t* buffer, const int len)
     int leadingZeros = 0;
     while (leadingZeros < scanLen && leadingZeros <= 16 && buffer[leadingZeros] == 0) leadingZeros++;
     if (leadingZeros < 2 || leadingZeros > 16 || leadingZeros >= scanLen || buffer[leadingZeros] != 1)
-        return rez;
+    {
+        // ** A TRACK THE CONTAINER DECLARES AS AV1 MAY BEGIN INSIDE AN OBU (#57). ** A transport stream cut at any
+        // packet hands over its AV1 from the first packet of the cut, in the middle of a PES and of an OBU, and the
+        // track was refused as "not AV1". Where the container says the track is AV1, the probe begins at the first
+        // start code, within the first MAX_DECLARED_LEAD bytes, and every rule above holds from there. A file without
+        // a container, and a track the container does not declare as AV1, still has to begin with a start code.
+        static constexpr int MAX_DECLARED_LEAD = 4 * 1024 * 1024;
+        if (!m_declaredAv1)
+            return rez;
+        const uint8_t* leadEnd = buffer + (std::min)(scanLen, MAX_DECLARED_LEAD);
+        uint8_t* first = buffer;
+        while (first + 3 <= leadEnd && !(first[0] == 0 && first[1] == 0 && first[2] == 1)) ++first;
+        if (first + 3 > leadEnd)
+            return rez;
+        buffer = first;
+    }
 
     for (uint8_t* nal = NALUnit::findNextNAL(buffer, end); nal < end - 2; nal = NALUnit::findNextNAL(nal, end))
     {

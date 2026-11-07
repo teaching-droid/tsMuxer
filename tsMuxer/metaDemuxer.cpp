@@ -2384,6 +2384,8 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     }
     if (dataReader == nullptr)
         THROW(ERR_INVALID_CODEC_FORMAT, "This version do not support multicast or other network steams for muxing")
+    if (auto* av1 = dynamic_cast<AV1StreamReader*>(codecReader); av1 && pid > 0 && !SubTrackFilter::isSubTrack(pid))
+        av1->setDeclaredAv1(containerDeclaresAv1(unquoteStr(trimStr(fileList[0])), pid));
 
     m_codecInfo.emplace_back(dataReader, codecReader, fileList[0], codecStreamName, pid, isSubStream);
     readerGuard.release();
@@ -4465,26 +4467,37 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             // a damaged AC-3, E-AC-3 or DTS track of a DVB stream is then found as it is under 0x81, 0x87 or 0x82
             // (the readers' declaredByContainer)
             const int soundDescriptor = soundDescriptorOf(acceptedPidMap[itr.first]);
+            // A track the container declares as AV1 may begin inside an OBU (#57): the AV1 reader is asked first, and
+            // told so. Where it finds no AV1, every probe is asked as for any track.
             CheckStreamRez trackRez;
+            if (acceptedPidMap[itr.first].m_av1Declared)
+            {
+                AV1StreamReader av1;
+                av1.setDeclaredAv1(true);
+                trackRez = av1.checkStream(vect.data(), static_cast<int>(vect.size()));
+            }
             // ** ONE PCM TRACK THAT CANNOT BE READ DOES NOT END THE LISTING. ** An LPCM track the reader refuses, as
             // one of a DVD at 44.1 or 32 kHz, ended the listing of the whole file with the reader's message, and no
             // track of it was shown. Such a track is now listed as not supported, with the reason, and the others as
             // they are.
-            try
+            if (!trackRez.codecInfo.codecID)
             {
-                trackRez = detectTrackReader(vect.data(), static_cast<int>(vect.size()), containerType,
-                                             soundDescriptor ? soundDescriptor : acceptedPidMap[itr.first].m_trackType,
-                                             itr.first, declared, wholeTracks);
-            }
-            catch (const VodCoreException& e)
-            {
-                // PCM a container hands on as a WAV (DVD LPCM, Matroska A_PCM, the PCM of an MP4 or MOV file)
-                const int type = acceptedPidMap[itr.first].m_trackType;
-                if (type != static_cast<int>(StreamType::AUDIO_LPCM) && type != TRACKTYPE_WAV &&
-                    (vect.size() < 4 || memcmp(vect.data(), "RIFF", 4) != 0))
-                    throw;
-                trackRez = CheckStreamRez();
-                trackRez.notSupported = e.m_errStr;
+                try
+                {
+                    trackRez = detectTrackReader(vect.data(), static_cast<int>(vect.size()), containerType,
+                                                 soundDescriptor ? soundDescriptor : acceptedPidMap[itr.first].m_trackType,
+                                                 itr.first, declared, wholeTracks);
+                }
+                catch (const VodCoreException& e)
+                {
+                    // PCM a container hands on as a WAV (DVD LPCM, Matroska A_PCM, the PCM of an MP4 or MOV file)
+                    const int type = acceptedPidMap[itr.first].m_trackType;
+                    if (type != static_cast<int>(StreamType::AUDIO_LPCM) && type != TRACKTYPE_WAV &&
+                        (vect.size() < 4 || memcmp(vect.data(), "RIFF", 4) != 0))
+                        throw;
+                    trackRez = CheckStreamRez();
+                    trackRez.notSupported = e.m_errStr;
+                }
             }
             warnKindMismatch(unquoted, itr.first, acceptedPidMap[itr.first], declared, trackRez);
             if (!trackRez.codecInfo.programName.empty())
@@ -4995,6 +5008,34 @@ static uint32_t parseFontColor(const std::string& text)
                                            "as 0xFF0000 for red, with the alpha in front as 0xAARRGGBB, or as a "
                                            "decimal number.")
     return static_cast<uint32_t>(value);
+}
+
+// Whether the container file declares its track pid as AV1 (TrackInfo::m_av1Declared): a transport stream, Matroska or
+// MP4 file. Its track list is read by a demuxer of its own, as the mux has not begun.
+bool METADemuxer::containerDeclaresAv1(const std::string& fileName, const int pid) const
+{
+    const std::string ext = strToUpperCase(extractFileExt(fileName));
+    std::unique_ptr<AbstractDemuxer> demuxer;
+    if (ext == "TS" || ext == "M2TS" || ext == "MTS" || ext == "M2T")
+        demuxer = std::make_unique<TSDemuxer>(m_readManager, "");
+    else if (ext == "MKV" || ext == "MK3D" || ext == "WEBM")
+        demuxer = std::make_unique<MatroskaDemuxer>(m_readManager);
+    else if (ext == "MP4" || ext == "MOV" || ext == "M4V")
+        demuxer = std::make_unique<MovDemuxer>(m_readManager);
+    else
+        return false;
+    std::map<int32_t, TrackInfo> tracks;
+    try
+    {
+        demuxer->openFile(fileName);
+        demuxer->getTrackList(tracks);
+    }
+    catch (const VodCoreException&)
+    {
+        return false;  // the mux itself says what is wrong with the file
+    }
+    const auto track = tracks.find(pid);
+    return track != tracks.end() && track->second.m_av1Declared;
 }
 
 CheckStreamRez METADemuxer::detectTrackReader(uint8_t* tmpBuffer, int len,

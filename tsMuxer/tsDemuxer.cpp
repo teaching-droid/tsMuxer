@@ -256,6 +256,7 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                 track.m_soundDescriptor = snd.m_soundDescriptor;
                 track.m_componentTag = snd.m_componentTag;
                 track.m_dataComponentId = snd.m_dataComponentId;
+                track.m_av1Declared = snd.m_av1Registration;
                 // What the PMT says is AC-4 is named by it, and left out: it is not guessed from
                 // its bytes, where a chance match could list it as another codec
                 if (snd.m_ac4Descriptor != 0 && snd.m_soundDescriptor == 0 && snd.m_dvbDescriptor == 0)

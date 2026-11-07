@@ -363,6 +363,8 @@ bool TS_program_map_section::deserialize(uint8_t* buffer, const int buf_size)
                 audio_pid = elementary_pid;
                 audio_type = static_cast<int>(stream_type);
             }
+            if (stream_type == StreamType::PRIVATE_DATA && regId == 0x41563031 /* 'AV01' */)
+                pmtStreamInfo.m_av1Registration = true;
 
             pidList[elementary_pid] = pmtStreamInfo;
             curPos += es_info_len;
