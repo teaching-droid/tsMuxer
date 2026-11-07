@@ -15,6 +15,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <cstdio>
 #include <map>
 
 #if defined(_WIN32)
@@ -141,6 +142,50 @@ void TextSubtitlesRenderFT::loadFontMap()
         }
         // LTRACE(LT_INFO, 2, "after loading font " << fileList[i].c_str());
     }
+}
+
+// ** A FONT THAT IS NOT INSTALLED IS REPLACED, AS ON WINDOWS. ** The window writes font-name="Arial" unless another
+// font is chosen, and Linux has no Arial: such a meta, and any meta written on Windows, ended with "Can't find a font
+// file for Arial" there, while Windows draws a font it lacks with a sans serif font of its own and says so. The
+// subtitles are drawn with a sans serif font that is installed: one made to Arial's measures first, then those most
+// systems have, then the one fontconfig gives for sans-serif. Only when none is there does the job end.
+std::string TextSubtitlesRenderFT::fallbackFontFile(std::string& family)
+{
+#if defined(__APPLE__) && defined(__MACH__)
+    static const char* const candidates[] = {"Helvetica", "Helvetica Neue", "Arial", "Geneva"};
+#else
+    static const char* const candidates[] = {"Liberation Sans", "Arimo",  "DejaVu Sans", "Noto Sans", "FreeSans",
+                                             "Nimbus Sans",     "Ubuntu", "Cantarell",   "Arial"};
+#endif
+    for (const char* name : candidates)
+        if (const auto itr = m_fontNameToFile.find(strToLowerCase(name)); itr != m_fontNameToFile.end())
+        {
+            family = name;
+            return itr->second;
+        }
+#if !defined(_WIN32)
+    // The font fontconfig takes for sans-serif, where its program is installed; a file FreeType opens as a whole font
+    if (FILE* pipe = popen("fc-match -f '%{family[0]}|%{file}' sans-serif 2>/dev/null", "r"))
+    {
+        std::string answer;
+        char buf[512];
+        while (fgets(buf, sizeof(buf), pipe)) answer += buf;
+        pclose(pipe);
+        const size_t bar = answer.find('|');
+        if (bar != std::string::npos)
+        {
+            const std::string file = trimStr(answer.substr(bar + 1));
+            const std::string lower = strToLowerCase(file);
+            if ((strEndWith(lower, ".ttf") || strEndWith(lower, ".otf") || strEndWith(lower, ".ttc")) &&
+                fileExists(file))
+            {
+                family = answer.substr(0, bar);
+                return file;
+            }
+        }
+    }
+#endif
+    return std::string();
 }
 
 // delete[], because the buffer below is new[]. Both sites had plain delete, which is the same
@@ -274,7 +319,22 @@ void TextSubtitlesRenderFT::setFont(const Font& font)
                 fontName = m_fallbackFontFile;
             }
             else
-                THROW(ERR_COMMON, "Can't find a font file for " << fontName)
+            {
+                std::string family;
+                const std::string file = fallbackFontFile(family);
+                if (file.empty())
+                    THROW(ERR_COMMON, "Can't find a font file for "
+                                          << fontName
+                                          << ", and no sans serif font that could take its place is installed. Give "
+                                             "the track font-name= with a font installed here, or the path of a "
+                                             ".ttf, .otf or .ttc file.")
+                if (m_missingFonts.insert(fontLower).second)
+                    LTRACE(LT_WARN, 2,
+                           "Warning: the font \"" << font.m_name
+                                                  << "\" is not installed, so the subtitles are drawn with " << family
+                                                  << " (" << file << ").");
+                fontName = file;
+            }
         }
         if (m_fallbackFontFile.empty())
             m_fallbackFontFile = fontName;

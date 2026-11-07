@@ -4,6 +4,8 @@
 
 #include <QBrush>
 #include <QColor>
+#include <QFontDatabase>
+#include <QFontInfo>
 #include <QSettings>
 #include <array>
 #include <functional>
@@ -50,7 +52,27 @@ void stringToFontOptions(const QString& serialized, QFont& font)
 int colorLight(QColor color) { return (0.257 * color.red()) + (0.504 * color.green()) + (0.098 * color.blue()) + 16; }
 }  // namespace
 
-FontSettingsTableModel::FontSettingsTableModel(QObject* parent) : QAbstractTableModel(parent) {}
+// The subtitle font is Arial unless another is chosen, and a Linux system has no Arial: the meta asked for a font the
+// muxer could not find there. Where the family is not installed, the font the system draws in its place is named
+// instead, which is one the muxer finds. Windows has Arial, and draws a font it lacks with one of its own.
+static void useInstalledFamily(QFont& font)
+{
+#ifndef Q_OS_WIN
+    if (!QFontDatabase::hasFamily(font.family()))
+    {
+        const QString drawnWith = QFontInfo(font).family();
+        if (!drawnWith.isEmpty())
+            font.setFamily(drawnWith);
+    }
+#else
+    Q_UNUSED(font);
+#endif
+}
+
+FontSettingsTableModel::FontSettingsTableModel(QObject* parent) : QAbstractTableModel(parent)
+{
+    useInstalledFamily(m_font);
+}
 
 // The font, its size, colour and style are read and written through the window's own settings object. This model used
 // a QSettings of its own, which is always the registry on Windows, so with a tsMuxerGUI.ini beside the program every
@@ -79,6 +101,7 @@ void FontSettingsTableModel::load(QSettings& settings)
 
     if (settings.contains("options"))
         stringToFontOptions(settings.value("options").toString(), m_font);
+    useInstalledFamily(m_font);  // a family saved by an earlier version, Arial, that is not installed
     settings.endGroup();
     endResetModel();
 }

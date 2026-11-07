@@ -54,6 +54,8 @@ class TextSubtitlesRenderFT final : public TextSubtitlesRender
                                      bool isItalic);
     int loadFont(const std::string& fontName, FT_Face& face);
     static void loadFontMap();
+    // A font installed here for subtitles whose named font is not: its file, and its family in family
+    static std::string fallbackFontFile(std::string& family);
     static std::vector<std::string> fontFolders();
 
     std::map<std::string, FT_Face> m_fontMap;
