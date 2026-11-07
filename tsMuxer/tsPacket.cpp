@@ -122,8 +122,13 @@ TS_program_association_section::TS_program_association_section() : transport_str
     // av_crc_init(tmpAvCrc, 0, 32, 0x04c11db7, sizeof(AVCRC)*257);
 }
 
-bool TS_program_association_section::deserialize(uint8_t* buffer, const int buf_size)
+bool TS_program_association_section::deserialize(uint8_t* buffer, const int buf_size, const bool checkCrc)
 {
+    // The section is read from behind the pointer field, as below
+    const int sectionLength = buf_size >= 4 ? (buffer[2] & 0x0f) << 8 | buffer[3] : 0;
+    crcGood = buf_size >= 4 && 3 + sectionLength <= buf_size - 1 && calculateCRC32(buffer + 1, 3 + sectionLength) == 0;
+    if (checkCrc && !crcGood)
+        return false;
     m_nitPID = -1;
     buffer++;
     BitStreamReader bitReader{};

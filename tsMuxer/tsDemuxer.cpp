@@ -153,6 +153,17 @@ bool isProgramMap(const std::vector<uint8_t>& s)
            calculateCRC32(s.data() + 1, s.size() - 1) == 0;
 }
 
+// Whether the program map section of a buffer that begins with its pointer field (isFullBuff is true) has a right CRC
+bool mapCrcGood(const uint8_t* buffer, const int len)
+{
+    const uint8_t* section = buffer + 1 + buffer[0];
+    const uint8_t* end = buffer + len;
+    if (end - section < 3)
+        return false;
+    const int sectionLength = (section[1] & 0x0f) << 8 | section[2];
+    return end - section >= 3 + sectionLength && calculateCRC32(section, 3 + sectionLength) == 0;
+}
+
 // The program number of the program map section of a buffer that begins with its pointer field (isFullBuff is true)
 int programOfMap(const uint8_t* buffer)
 {
@@ -217,6 +228,10 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
     // PID, so where the maps of two PIDs each span packets and come interleaved, the packet of the other PID was glued
     // into the section: the map was lost, or read with streams that are not in it.
     std::map<int, std::vector<uint8_t>> pmtBuffers;
+    // The first map with a wrong CRC of each PMT PID, taken only where no right one comes (see readPat), and the PMT
+    // PIDs whose map was taken
+    std::map<int, std::vector<uint8_t>> damagedMaps;
+    std::set<int> mapTaken;
     uint32_t tmpBufferLen = 0;
     uint32_t readedBytes;
     uint32_t totalReadedBytes = 0;
@@ -334,7 +349,7 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             }
             if (pid == 0)
             {  // PAT
-                pat.deserialize(curPos + tsPacket->getHeaderSize(), TS_FRAME_SIZE - tsPacket->getHeaderSize());
+                readPat(pat, curPos + tsPacket->getHeaderSize(), TS_FRAME_SIZE - tsPacket->getHeaderSize());
                 if (firstPAT && !pat.pmtPids.empty())
                 {
                     firstPAT = false;
@@ -391,6 +406,13 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                     const int pmtBufferLen = static_cast<int>(pmtBuffer.size());
                     if (TS_program_map_section::isFullBuff(pmtBuffer.data(), pmtBufferLen))
                     {
+                        if (!mapCrcGood(pmtBuffer.data(), pmtBufferLen))
+                        {
+                            damagedMaps.try_emplace(pid, pmtBuffer);
+                            pmtBuffer.clear();
+                            continue;
+                        }
+                        m_goodPmtSeen = true;
                         // The map of a program the PAT does not name on this PID: the PID is read as a shared one
                         // from here on, and this map is taken only if none of the program the PAT names comes
                         if (!named.empty() && !named.count(programOfMap(pmtBuffer.data())))
@@ -401,6 +423,7 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                             continue;
                         }
                         takeMap(pmtBuffer.data(), pmtBufferLen, pid);
+                        mapTaken.insert(pid);
                         pmtBuffer.clear();
                         if (allTaken(pid))
                             return;
@@ -421,6 +444,11 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             memmove(m_tmpBuffer, curPos, tmpBufferLen);
         }
     }
+
+    // A PMT PID that gave maps with a wrong CRC only: the first of them, as it was taken before
+    for (auto& [pid, section] : damagedMaps)
+        if (!mapTaken.count(pid) && !m_sharedPmtPids.count(pid))
+            takeMap(section.data(), static_cast<int>(section.size()), pid);
 
     // The shared PMT PIDs whose map is not taken yet: of the programs the PAT names, those whose streams carry data,
     // or all of them where none does; where the PAT names none of the maps, the first map, as before
@@ -1014,7 +1042,7 @@ void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, c
             continue;  // damaged (getTrackList)
         if (pid == 0)
         {  // PAT
-            pat.deserialize(cur + tsPacket->getHeaderSize(), TS_FRAME_SIZE - tsPacket->getHeaderSize());
+            readPat(pat, cur + tsPacket->getHeaderSize(), TS_FRAME_SIZE - tsPacket->getHeaderSize());
         }
         else if (pat.pmtPids.find(pid) != pat.pmtPids.end())
         {  // PMT
@@ -1039,6 +1067,14 @@ void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, c
                 const int pmtBufferLen = static_cast<int>(pmtBuffer.size());
                 if (TS_program_map_section::isFullBuff(pmtBuffer.data(), pmtBufferLen))
                 {
+                    // a map with a wrong CRC once a right one was read: left out, as in getTrackList
+                    const bool crcGood = mapCrcGood(pmtBuffer.data(), pmtBufferLen);
+                    if (!crcGood && m_goodPmtSeen)
+                    {
+                        pmtBuffer.clear();
+                        continue;
+                    }
+                    m_goodPmtSeen = m_goodPmtSeen || crcGood;
                     const bool namedProgram = named.empty() || named.count(programOfMap(pmtBuffer.data()));
                     if (!laterClip && !namedProgram)
                     {
@@ -1063,6 +1099,21 @@ void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, c
     }
     if (!sharedMaps.empty())
         takeSharedMaps(sharedMaps, pat);
+}
+
+// ** A DAMAGED PAT OR PROGRAM MAP IS LEFT OUT. ** A recording with bad reception has PATs that are damaged, and each
+// one replaced the programs and their PMT PIDs until the next good one came: the program map then came on a PID that
+// was not looked at, the packets of a stream were taken for a map, or a program the PAT now named differently made its
+// PMT PID one that programs share, which is read with the CRC checked. Once a PAT with a right CRC has been read, one
+// whose CRC is wrong is left out and the map stays as it was. A damaged program map gave tracks that are not in the
+// file, with languages of random letters: the listing waits for a map with a right CRC and takes a damaged one only
+// where no right one comes, and a mux leaves out a damaged map once it has read a right one. A file whose PATs or maps
+// all have a wrong CRC, as from a muxer that does not write it, is read as before.
+void TSDemuxer::readPat(TS_program_association_section& pat, uint8_t* payload, const int len)
+{
+    pat.deserialize(payload, len, m_goodPatSeen);
+    if (pat.crcGood)
+        m_goodPatSeen = true;
 }
 
 void TSDemuxer::takeProgramMap(uint8_t* section, const int len, const int pid)

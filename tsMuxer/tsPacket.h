@@ -380,8 +380,12 @@ struct TS_program_association_section
     // their program number, and pmtPids keeps only the last of them.
     std::map<int, std::set<int>> programsOfPid;
 
+    // Whether the CRC of the last section given to deserialize was right
+    bool crcGood = false;
+
     TS_program_association_section();
-    bool deserialize(uint8_t* buffer, int buf_size);
+    // With checkCrc, a section whose CRC is wrong is left out, and the map stays as it was
+    bool deserialize(uint8_t* buffer, int buf_size, bool checkCrc = false);
     uint32_t serialize(uint8_t* buffer, int buf_size);
 };
 

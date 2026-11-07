@@ -348,6 +348,10 @@ class TSDemuxer final : public AbstractDemuxer
     // PAT does not name on them, and the program whose map is followed for a change of version on m_pmtVersionPid
     // (-1: any section of the PID, as on a PID of one program). See getTrackList.
     std::set<int> m_sharedPmtPids;
+    // A PAT, a program map with a right CRC was read: from then on one whose CRC is wrong is left out (readPat)
+    bool m_goodPatSeen = false;
+    bool m_goodPmtSeen = false;
+    void readPat(TS_program_association_section& pat, uint8_t* payload, int len);
     int m_pmtVersionProgram = -1;
     // The program map a stream list is made from: m_pmt takes it in, and the version of it is followed from here on
     void takeProgramMap(uint8_t* section, int len, int pid);
