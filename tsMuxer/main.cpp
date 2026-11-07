@@ -5510,6 +5510,19 @@ static int runTsMuxer(int argc, char** argv)
             THROW(ERR_COMMON, "The MUXOPT lines ask for both a demux and a disc. Give one of --demux and "
                                   << (dt == DiskType::AVCHD ? "--avchd" : "--blu-ray") << ".")
         std::string fileExt2 = unquoteStr(fileExt);
+        // ** AN .iso OUTPUT IS A BLU-RAY IMAGE. ** The name of the output decides what is written, and an .iso is a
+        // Blu-ray disc image, as the documentation lists it. Without --blu-ray or --avchd on the MUXOPT lines it was
+        // written as a plain transport stream of 188 byte packets under the name of an image, which no player or
+        // burning program reads, and nothing said so. It is muxed as --blu-ray asks, first on the first MUXOPT line,
+        // and that is said. A UHD source still makes a UHD disc, as with --blu-ray.
+        const bool isoAsBluRay = !demuxAsked && dt == DiskType::NONE && fileExt2 == "ISO";
+        if (isoAsBluRay)
+        {
+            dt = DiskType::BLURAY;
+            LTRACE(LT_INFO, 2,
+                   "The output is an .iso, a Blu-ray disc image, and the MUXOPT lines name no disc: it is muxed as "
+                   "with --blu-ray.");
+        }
         // .mks (subtitles only) and .mk3d (stereoscopic) are Matroska files too: they went to a demux folder
         bool mkvMode = !demuxAsked && (fileExt2 == "MKV" || fileExt2 == "MKA" || fileExt2 == "MKS" ||
                                        fileExt2 == "MK3D" || fileExt2 == "WEBM");
@@ -5588,6 +5601,8 @@ static int runTsMuxer(int argc, char** argv)
             MuxerManager muxerManager(readManager, tsMuxerFactory);
             const ReportTracks reportTracks(muxerManager);
             muxerManager.setAllowStereoMux(fileExt2 == "SSIF" || dt != DiskType::NONE);
+            if (isoAsBluRay)
+                muxerManager.setImpliedMuxOpt("--blu-ray");
             muxerManager.openMetaFile(argv[1]);
             DiscMeta discMeta;
             if (dt == DiskType::BLURAY)

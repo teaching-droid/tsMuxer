@@ -94,6 +94,8 @@ class MuxerManager final
     [[nodiscard]] bool isStereoMode() const;
 
     void setAllowStereoMux(bool value);
+    // Before openMetaFile: an option the output name asks for, read as if it began the first MUXOPT line
+    void setImpliedMuxOpt(const std::string& opt) { m_impliedMuxOpt = opt; }
     // Before openMetaFile: the output is Matroska (1) or WebM (2), so subtitles of a Matroska source keep their form
     void setMatroskaOutput(const int kind) { m_metaDemuxer.setMatroskaOutput(kind); }
     // The BlockAdditions the source stored beside a frame of a stream, for a Matroska output (see METADemuxer)
@@ -221,6 +223,7 @@ class MuxerManager final
     bool m_allowStereoMux;
     std::set<int> m_subStreamIndex;
     std::string m_muxOpts;
+    std::string m_impliedMuxOpt;
     bool m_interleave;
 
     std::vector<WriterData> m_delayedData;  // ssif interlieave

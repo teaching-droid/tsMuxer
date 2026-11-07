@@ -1374,7 +1374,13 @@ bool MuxerManager::openMetaFile(const string& fileName)
         const size_t start = str.find_first_not_of(" 	");
         if (start != string::npos && strStartWith(str.substr(start), "MUXOPT"))
         {
-            const string line = muxOptLine(str);
+            string line = muxOptLine(str);
+            // First on the first line, as a meta file written for that output has it
+            if (!m_impliedMuxOpt.empty())
+            {
+                line = "MUXOPT " + m_impliedMuxOpt + line.substr(6);
+                m_impliedMuxOpt.clear();
+            }
             // Every MUXOPT line counts. The muxers were given the last one only, so the options of an earlier line
             // (--no-pcr-on-video-pid, --vbr, --vbv-len...) were lost without a word, while the rest of the program
             // read them all.
@@ -1402,6 +1408,12 @@ bool MuxerManager::openMetaFile(const string& fileName)
         file.readLine(str);
     }
     file.close();
+    if (!m_impliedMuxOpt.empty())  // a meta file without a MUXOPT line
+    {
+        const string line = "MUXOPT " + m_impliedMuxOpt;
+        m_impliedMuxOpt.clear();
+        parseMuxOpt(line);
+    }
 
     m_metaDemuxer.setDemuxOutput(m_demuxMode);
     m_metaDemuxer.openFile(fileName);
