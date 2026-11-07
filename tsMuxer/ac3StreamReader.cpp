@@ -146,8 +146,14 @@ int AC3StreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdm
 {
     AC3Codec::setTestMode(true);
     uint8_t* frame = findFrame(m_buffer, m_bufEnd);
+    // Test mode is left by decodeLeadingFrames only. Where the first data read holds no frame, as after a long run of
+    // other bytes at the start of a file, it stayed on for the whole mux, and with it the probe's ways: the warning
+    // that the layout or rate of the stream changes was not given, nor the others test mode keeps quiet.
     if (frame == nullptr)
+    {
+        AC3Codec::setTestMode(false);
         return 0;
+    }
     decodeLeadingFrames(frame);
     // The stream type is chosen from isTrueHD() as soon as this returns, and the payload path finds TrueHD only later.
     // A TrueHD track that starts inside its stream need not have a major sync where the decoding above looks for one,
