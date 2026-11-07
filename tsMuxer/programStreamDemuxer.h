@@ -67,16 +67,31 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
     // the end of the read; the next read brought that part in again as it was, and it stayed big endian. They are now
     // turned round as they are handed on (appendLpcm), and a sample cut by the end of a PES or of a read waits there
     // for the rest of its bytes.
+    // ** THE SAMPLE GROUPS OF 20 AND 24 BIT. ** 20 and 24 bit samples were turned round as 3 byte big endian samples,
+    // which a DVD does not store: it stores groups of samples (dvdLpcmGroup), and the sound was noise, at 20 bit also a
+    // fifth too short. A group is turned into 24 bit samples, 20 bit ones as the top 20 bits of 24, as the WAV header
+    // says.
     struct LpcmSubStream
     {
-        int bits = 0;        // 16, 20 or 24, from the first header of the sub-stream, as its WAV header says
-        uint8_t part[16]{};  // the bytes of a sample cut by the end of a PES or a read
+        int bits = 0;  // 16, 20 or 24, from the first header of the sub-stream, as its WAV header says
+        int channels = 0;
+        int samples = 1;  // the samples of a group: 1 at 16 bit, 4 at 20 and 24 bit (2 for mono)
+        int in = 2;       // the bytes of a group in the stream
+        int out = 2;      // and as handed on
+        // the bytes of the groups that begin and end on a sample frame, and the bytes taken so far, counted modulo
+        // that: 0 for 16 bit, whose samples are not looked at for a frame
+        int sync = 0;
+        int taken = 0;
+        bool started = false;  // a frame has been looked for at the start of the stream
+        uint8_t part[16]{};    // the bytes of a group cut by the end of a PES or a read
         int partLen = 0;
     };
     LpcmSubStream m_lpcm[16];
     std::vector<uint8_t> m_lpcmOut;
-    // Hands on len bytes of the samples of sub-stream 0xA0 + idx; returns the bytes appended to out
-    int appendLpcm(int idx, StreamData& out, const uint8_t* data, int len);
+    int m_lpcmFrameAt = -1;  // where the first frame of the LPCM PES at hand starts in its samples; -1: none does
+    // Hands on len bytes of the samples of sub-stream 0xA0 + idx, from the start of a PES when frameAt is not -1;
+    // returns the bytes appended to out
+    int appendLpcm(int idx, StreamData& out, const uint8_t* data, int len, int frameAt);
 
     // ** DVD SUBTITLES. ** The sub-pictures of private stream 1, sub-streams 0x20 to 0x3F, were not read. Each
     // sub-picture unit is put together from its PES packets (its first two bytes give its size), drawn with the

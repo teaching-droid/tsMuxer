@@ -4,6 +4,8 @@
 
 #include <fs/systemlog.h>
 
+#include <numeric>
+
 #include "dvdTitles.h"
 #include "encryptedInput.h"
 #include "mpegVideo.h"
@@ -158,30 +160,67 @@ int ProgramStreamDemuxer::mpegps_psm_parse(const uint8_t* buff, const uint8_t* e
     return 6 + psm_length;
 }
 
-int ProgramStreamDemuxer::appendLpcm(const int idx, StreamData& out, const uint8_t* data, int len)
+// The samples of one group of DVD LPCM as a WAV holds them, little endian (s.out bytes from s.in). 16 bit: one sample,
+// big endian. 20 and 24 bit: the samples of the group follow the channels across the sample frames; first the upper 16
+// bits of each, big endian, then the rest of each, at 24 bit a byte, at 20 bit a nibble, the first of two in the high
+// one. A group has 4 samples, a mono one 2: how a disc of 20 or 24 bit mono stores them is not known for certain.
+static void dvdLpcmGroup(const int bits, const int samples, const uint8_t* in, uint8_t* out)
+{
+    if (bits != 20 && bits != 24)
+    {
+        out[0] = in[1];
+        out[1] = in[0];
+        return;
+    }
+    const uint8_t* low = in + 2 * samples;
+    for (int i = 0; i < samples; ++i)
+    {
+        out[3 * i] = bits == 24 ? low[i] : static_cast<uint8_t>((i % 2 == 0 ? low[i / 2] >> 4 : low[i / 2]) << 4);
+        out[3 * i + 1] = in[2 * i + 1];
+        out[3 * i + 2] = in[2 * i];
+    }
+}
+
+int ProgramStreamDemuxer::appendLpcm(const int idx, StreamData& out, const uint8_t* data, int len, const int frameAt)
 {
     LpcmSubStream& s = m_lpcm[idx];
-    const int unit = s.bits == 16 ? 2 : 3;
-    m_lpcmOut.resize(static_cast<size_t>(s.partLen + len) / unit * unit + unit);
+    // A frame begins with a group that begins a sample frame. A stream that does not begin so, as a part of a VOB cut
+    // inside a frame, is taken from its first frame on: from inside a group every sample came out wrong.
+    if (s.sync > 0 && !s.started && frameAt >= 0 && frameAt < len)
+    {
+        s.started = true;
+        if ((s.taken + frameAt) % s.sync != 0)
+        {
+            LTRACE(LT_INFO, 2,
+                   "The LPCM track 0x" << std::hex << 0xa0 + idx << std::dec << " of " << m_streamName
+                                       << " does not begin with a whole frame; its first " << s.partLen + frameAt
+                                       << " bytes are left out.");
+            s.partLen = 0;
+            s.taken = 0;
+            data += frameAt;
+            len -= frameAt;
+        }
+    }
+    if (s.sync > 0)
+        s.taken = (s.taken + len) % s.sync;
+    m_lpcmOut.resize(static_cast<size_t>(s.partLen + len) / s.in * s.out + s.out);
     uint8_t* dst = m_lpcmOut.data();
     if (s.partLen > 0)
     {
-        const int take = (std::min)(unit - s.partLen, len);
+        const int take = (std::min)(s.in - s.partLen, len);
         memcpy(s.part + s.partLen, data, take);
         s.partLen += take;
         data += take;
         len -= take;
-        if (s.partLen < unit)
+        if (s.partLen < s.in)
             return 0;
-        wave_format::toLittleEndian(dst, s.part, unit, s.bits);
-        dst += unit;
+        dvdLpcmGroup(s.bits, s.samples, s.part, dst);
+        dst += s.out;
         s.partLen = 0;
     }
-    const int whole = len / unit * unit;
-    wave_format::toLittleEndian(dst, const_cast<uint8_t*>(data), whole, s.bits);
-    dst += whole;
-    s.partLen = len - whole;
-    memcpy(s.part, data + whole, s.partLen);
+    for (; len >= s.in; data += s.in, len -= s.in, dst += s.out) dvdLpcmGroup(s.bits, s.samples, data, dst);
+    s.partLen = len;
+    memcpy(s.part, data, len);
     const int appended = static_cast<int>(dst - m_lpcmOut.data());
     out.append(m_lpcmOut.data(), appended);
     return appended;
@@ -255,8 +294,29 @@ int ProgramStreamDemuxer::processPES(uint8_t* buff, uint8_t* end, const int head
                 const int samplerate = LPCM_FREQS[curBuf[4] >> 4 & 3];
                 const uint16_t channels = 1 + (curBuf[4] & 7);
                 wave_format::buildWaveHeader(waveHeader, samplerate, channels, channels >= 6, bitdepth);
-                m_lpcm[startcode - 0xa0].bits = bitdepth;
+                LpcmSubStream& s = m_lpcm[startcode - 0xa0];
+                s.bits = bitdepth;
+                s.channels = channels;
+                if (bitdepth == 20 || bitdepth == 24)
+                {
+                    s.samples = channels == 1 ? 2 : 4;
+                    s.in = s.samples * bitdepth / 8;
+                    s.out = s.samples * 3;
+                    s.sync = std::lcm(s.samples, static_cast<int>(channels)) / s.samples * s.in;
+                    static bool monoSaid = false;
+                    if (channels == 1 && !monoSaid)
+                        LTRACE(LT_WARN, 2,
+                               "Warning: the LPCM track 0x"
+                                   << std::hex << startcode << std::dec << " of " << m_streamName << " is mono at "
+                                   << bitdepth
+                                   << " bit. How a DVD stores such samples is not certain: listen to the result.");
+                    monoSaid = channels == 1 || monoSaid;
+                }
             }
+            if (curBuf[0] > 0 && (curBuf[1] << 8 | curBuf[2]) >= 4)
+                m_lpcmFrameAt = (curBuf[1] << 8 | curBuf[2]) - 4;
+            else
+                m_lpcmFrameAt = -1;
 
             afterPesHeader += 6;
         }
@@ -339,7 +399,7 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
         }
         else if (m_lastPID >= 0xa0 && m_lastPID <= 0xaf)
         {
-            discardSize += copyLen - appendLpcm(m_lastPID - 0xa0, demuxedData[m_lastPID], curBuf, copyLen);
+            discardSize += copyLen - appendLpcm(m_lastPID - 0xa0, demuxedData[m_lastPID], curBuf, copyLen, -1);
             m_dataProcessed += copyLen;
         }
         else if (m_lastPID > 0)
@@ -458,7 +518,7 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
                     THROW(ERR_COMMON, "Invalid copyLen")
                 }
                 if (idx >= 0 && idx <= 15)
-                    discardSize += copyLen - appendLpcm(idx, vect, payloadData, copyLen);
+                    discardSize += copyLen - appendLpcm(idx, vect, payloadData, copyLen, m_lpcmFrameAt);
                 else
                     vect.append(payloadData, copyLen);
                 m_dataProcessed += copyLen;
