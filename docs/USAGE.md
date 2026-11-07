@@ -124,7 +124,7 @@ Title 1  00011.mpls    1:52:14   24 chapters     3 clips  eng deu spa  2 angles 
 A demux writes DVD subtitles as `name.idx` and `name.sub`. Such a pair is read as a source when the .idx file is beside the .sub file: `S_HDMV/PGS, "name.sub", track=32`. The track number is 32 plus the `index:` of the .idx file. Such pairs are not joined: give one pair on each line.
 
 A Blu-ray plays text subtitles (TextST) from clips of their own. The listing of a playlist gives each one with `Stream file:` and `Stream delay:`. The meta line names that clip, with the delay as `timeshift=`:
-`S_TEXT/UTF8, "BDMV/STREAM/00143.m2ts", track=6144, timeshift=-11651ms, lang=fra`
+`S_TEXT/UTF8, "BDMV/STREAM/00013.m2ts", track=6144, timeshift=-10000ms, lang=fra`
 The window does this by itself.
 
 A folder that holds several disc folders or images, such as a box set copied disc by disc, given alone names them: `tsMuxeR D:/discs/box` prints each Blu-ray and DVD disc folder and image in it, to be listed with its own path.
