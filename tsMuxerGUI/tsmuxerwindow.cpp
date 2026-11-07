@@ -3260,16 +3260,6 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
         {
             // Format: "File #XXXXX name=<filename>", offset 17 = len("File #") + 5 + len(" name=")
             tmpStr = QtCompat::strMid(procStdOutput[i], 17);
-            // the listing reads a playlist in its first angle: another angle's clip is named in its place, the
-            // parts of several angles in their order
-            for (int k = 0; k < m_pendingAngleClips.size(); ++k)
-                if (QFileInfo(tmpStr).fileName().compare(m_pendingAngleClips[k].first, Qt::CaseInsensitive) == 0)
-                {
-                    tmpStr = QFileInfo(tmpStr).dir().filePath(m_pendingAngleClips[k].second);
-                    tmpStr = QDir::toNativeSeparators(tmpStr);
-                    m_pendingAngleClips.removeAt(k);
-                    break;
-                }
             mplsFileList << MPLSFileInfo(tmpStr, 0.0);
         }
         else if (procStdOutput[i].startsWith("Duration:"))
@@ -3340,6 +3330,34 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
                 if (!stringList[k].isEmpty())
                     chapters << timeToFloat(stringList[k]);
         }
+    }
+    // The listing reads a playlist in its first angle: at each part of several angles, the clip of the angle chosen
+    // is named in place of the first angle's. A part is found by where it is in the title (the lengths of the play
+    // items before it added up, as the disc listing adds them) and by its first angle's clip there. It was found by
+    // the clip's name alone, so a clip played once on its own and later again as the first angle of a part was
+    // swapped at its first place, and the part itself kept the first angle's clip.
+    if (!m_pendingAngleClips.isEmpty())
+    {
+        QList<double> starts;
+        double at = 0;
+        for (const MPLSFileInfo& mplsFile : mplsFileList)
+        {
+            starts << at;
+            at += mplsFile.duration;
+        }
+        for (const PendingAngleClip& part : m_pendingAngleClips)
+        {
+            int best = -1;
+            for (int k = 0; k < mplsFileList.size(); ++k)
+                if (QFileInfo(mplsFileList[k].name).fileName().compare(part.first, Qt::CaseInsensitive) == 0 &&
+                    qAbs(starts[k] - part.start) < 1.0 &&
+                    (best < 0 || qAbs(starts[k] - part.start) < qAbs(starts[best] - part.start)))
+                    best = k;
+            if (best >= 0)
+                mplsFileList[best].name =
+                    QDir::toNativeSeparators(QFileInfo(mplsFileList[best].name).dir().filePath(part.clip));
+        }
+        m_pendingAngleClips.clear();
     }
     if (fileDuration == 0 && !mplsFileList.isEmpty())
     {
@@ -3979,8 +3997,11 @@ void TsMuxerWindow::onDiscTitlesReceived()
     m_pendingAngle = dialog.chosenAngle();
     m_pendingAngleClips.clear();
     if (m_pendingAngle > 1 && m_pendingAngle - 1 < row.angleClips.size() && !row.angleClips.isEmpty())
-        for (int k = 0; k < row.angleClips[0].size() && k < row.angleClips[m_pendingAngle - 1].size(); ++k)
-            m_pendingAngleClips << qMakePair(row.angleClips[0][k], row.angleClips[m_pendingAngle - 1][k]);
+        for (int k = 0; k < row.angleClips[0].size() && k < row.angleClips[m_pendingAngle - 1].size() &&
+                        k < row.angleParts.size();
+             ++k)
+            m_pendingAngleClips << PendingAngleClip{timeToFloat(row.angleParts[k].section(QLatin1Char('-'), 0, 0)),
+                                                    row.angleClips[0][k], row.angleClips[m_pendingAngle - 1][k]};
     QStringList args;
     if (list.dvd)
     {

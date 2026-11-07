@@ -293,8 +293,15 @@ class TsMuxerWindow : public QWidget
     bool m_discOthersShown = false;
     int m_pendingDvdTitle = 0;
     int m_pendingAngle = 1;  // the angle chosen with the title, while its tracks are listed
-    // Blu-ray, another angle than the first: its clips in place of the first angle's, in the order of the parts
-    QList<QPair<QString, QString>> m_pendingAngleClips;
+    // Blu-ray, another angle than the first: for each part of several angles, where it starts in the title (in
+    // seconds, as the disc listing gives it), the first angle's clip there and this angle's, which takes its place
+    struct PendingAngleClip
+    {
+        double start = 0;
+        QString first;
+        QString clip;
+    };
+    QList<PendingAngleClip> m_pendingAngleClips;
     double m_pendingDvdSeconds = 0.0;
     // The step that takes the next file of addFileList (addFile or appendFile), so that a file that is refused, or
     // already in the list, does not end the adding of the files chosen after it.
