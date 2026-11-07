@@ -7,7 +7,8 @@ before it is published.
 
     python3 scripts/check_package.py <folder | .zip | .AppImage | .7z> [...]
 
-A folder and a .zip are read here; anything else is listed with 7z, which reads an AppImage as well. The exit code is
+A folder and a .zip are read here; anything else is listed with 7z, which reads an AppImage as well (without
+7z, an AppImage is listed with unsquashfs). The exit code is
 0 when nothing was found, 1 when something was, and 2 when a package could not be read.
 """
 
@@ -44,10 +45,35 @@ def list_zip(path):
             yield name.rstrip("/")
 
 
+def list_appimage(path):
+    # An AppImage is a small program with a SquashFS image appended. Without 7z, unsquashfs lists the image from the
+    # offset where the program ends.
+    unsq = shutil.which("unsquashfs")
+    if not unsq:
+        return None
+    with open(path, "rb") as fh:
+        head = fh.read(64)
+    if head[:4] != b"\x7fELF" or head[4] != 2:
+        return None
+    # the image starts where the 64-bit ELF ends: after its section header table (e_shoff + e_shentsize * e_shnum)
+    order = "little" if head[5] == 1 else "big"
+    offset = int.from_bytes(head[0x28:0x30], order) + int.from_bytes(head[0x3A:0x3C], order) * int.from_bytes(
+        head[0x3C:0x3E], order)
+    out = subprocess.run([unsq, "-o", str(offset), "-l", "-d", "x", path], capture_output=True, text=True,
+                         errors="replace")
+    if out.returncode != 0:
+        raise RuntimeError("unsquashfs could not list " + path + ": " + out.stderr.strip())
+    return [line[2:] for line in out.stdout.splitlines() if line.startswith("x/")]
+
+
 def list_7z(path):
     seven = shutil.which("7z") or shutil.which("7za") or shutil.which("7zz")
     if not seven:
-        raise RuntimeError("7z is needed to list " + path)
+        names = list_appimage(path)
+        if names is not None:
+            yield from names
+            return
+        raise RuntimeError("7z (or, for an AppImage, unsquashfs) is needed to list " + path)
     out = subprocess.run([seven, "l", "-ba", "-slt", path], capture_output=True, text=True, errors="replace")
     if out.returncode != 0:
         raise RuntimeError("7z could not list " + path + ": " + out.stderr.strip())
