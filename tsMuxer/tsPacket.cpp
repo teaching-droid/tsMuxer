@@ -548,6 +548,25 @@ uint32_t TS_program_map_section::serialize(uint8_t* buffer, const int max_buf_si
             }
         }
         for (int j = 0; j < curEsInfoLen; j++) bitWriter.putBits(8, curEsInfoData[j]);
+        // ** A STREAM TYPE OF BLU-RAY NEEDS A NAME WITHOUT THE HDMV DESCRIPTORS. ** Stream types from 0x80 up are user
+        // private (H.222.0 Table 2-34): what they mean is said by a registration descriptor, the program's "HDMV" or
+        // the stream's own ("AC-3", "DTS1", "mlpa", ...). With --no-hdmv-descriptors the program's is left out, and a
+        // stream without one of its own is named by nothing. That was said for PGS only (above); DTS Express, which has
+        // no DTS core and so gets no DTS descriptor, went out as stream type 0x85 or 0xA2 without a word.
+        if (!hdmvDescriptors && si.m_streamType != StreamType::SUB_PGS && static_cast<int>(si.m_streamType) >= 0x80)
+        {
+            bool named = false;
+            for (int j = 0; j + 1 < curEsInfoLen; j += 2 + curEsInfoData[j + 1])
+                named = named || curEsInfoData[j] == static_cast<uint8_t>(TSDescriptorTag::REGISTRATION);
+            static std::set<int> said;  // once for each track: the PMT is written again and again
+            if (!named && said.insert(si.m_pid).second)
+                LTRACE(LT_WARN, 2,
+                       "Warning: the track on PID " << si.m_pid << " (stream type 0x" << std::hex
+                                                    << static_cast<int>(si.m_streamType) << std::dec
+                                                    << ") might not work without HDMV descriptors: its stream type "
+                                                       "is one only Blu-ray defines, and no descriptor names its "
+                                                       "codec.");
+        }
 
         if (*si.m_lang && !blurayMode)
         {
