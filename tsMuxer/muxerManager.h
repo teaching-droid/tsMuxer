@@ -38,8 +38,8 @@ class MuxerManager final
 
     // Stored, not forwarded here: the output muxer does not exist yet when main() calls this,
     // it is created inside doMux(). Forwarding immediately silently did nothing.
-    // Matroska writes these as a Chapters master; every other muxer ignores them, because the
-    // Blu-ray path takes the same list a different way.
+    // Matroska writes these as a Chapters master, and the transport stream muxer splits its output
+    // at them for --split-chapters. The Blu-ray playlist takes the same list a different way.
     void setChapters(const std::vector<double>& chapters) { m_chapters = chapters; }
     void moveChaptersByCut(std::vector<double>& times, std::vector<AVChapter>& info) const;
     void setChapterInfo(const std::vector<AVChapter>& info) { m_chapterInfo = info; }

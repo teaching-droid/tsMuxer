@@ -32,8 +32,9 @@ class AbstractMuxer
     virtual void setFileName(const std::string& fileName, FileFactory* fileFactory);
 
     /*
-     * Chapter start times in seconds. Only Matroska output uses them; the Blu-ray path takes the
-     * same list through BlurayHelper::createMPLSFile instead, and every other muxer ignores them.
+     * Chapter start times in seconds. Matroska output writes them, and the transport stream muxer
+     * splits its output at them for --split-chapters; the Blu-ray playlist takes the same list
+     * through BlurayHelper::createMPLSFile instead. Every other muxer ignores them.
      */
     virtual void setChapters(const std::vector<double>& chapters) {}
     // The chapters themselves, in the same order as setChapters, carrying whatever name and
