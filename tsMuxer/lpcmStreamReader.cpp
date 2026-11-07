@@ -710,12 +710,16 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
             if (m_bitsPerSample == 24 && !m_srcBits && validBits && validBits <= 20)
                 m_bitsPerSample = 20;
             m_lfeExists = waveFormatPCMEx->dwChannelMask & SPEAKER_LOW_FREQUENCY;
+            int speakers = 0;
+            for (uint32_t m = waveFormatPCMEx->dwChannelMask; m; m &= m - 1) ++speakers;
+            m_srcMask = speakers == m_channels ? static_cast<uint32_t>(waveFormatPCMEx->dwChannelMask) : 0;
             planBdLayout(waveFormatPCMEx->dwChannelMask);
             if (!(waveFormatPCMEx->SubFormat == KSDATAFORMAT_SUBTYPE_PCM) && !m_srcFloat)
                 THROW(ERR_COMMON, "Unsupported WAVE format. Only PCM audio is supported.")
         }
         else if (waveFormatPCMEx->wFormatTag == 0x01 || waveFormatPCMEx->wFormatTag == WAVE_FORMAT_IEEE_FLOAT)
         {  // standard format
+            m_srcMask = 0;
             // ** SAID ONCE. ** The header is read again after the first read (m_needSync) and for the stream's
             // descriptor, and each read printed this warning again; so did the reader that only looks at the file to
             // tell what it holds (stream 0), before the track's own.
@@ -1202,7 +1206,8 @@ int LPCMStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
             waveFormatPCMEx->wBitsPerSample = bitsPerSample;
             waveFormatPCMEx->cbSize = 22;  // After this to GUID
             waveFormatPCMEx->Samples.wValidBitsPerSample = m_srcBits ? m_srcBits : m_bitsPerSample;
-            waveFormatPCMEx->dwChannelMask = getWaveChannelMask(m_channels, m_lfeExists, m_backCentre);  // Specify PCM
+            waveFormatPCMEx->dwChannelMask =
+                m_srcMask ? m_srcMask : getWaveChannelMask(m_channels, m_lfeExists, m_backCentre);
             waveFormatPCMEx->SubFormat = m_srcFloat ? KSDATAFORMAT_SUBTYPE_IEEE_FLOAT : KSDATAFORMAT_SUBTYPE_PCM;
             curPos += sizeof(WAVEFORMATPCMEX);
             if (m_demuxToW64)

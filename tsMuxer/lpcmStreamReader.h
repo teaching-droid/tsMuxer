@@ -120,6 +120,10 @@ class LPCMStreamReader final : public SimplePacketizerReader
     std::vector<uint8_t> m_bdBuffer;
     bool m_backCentre = false;
     bool m_noMaskSaid = false;  // the warning for a WAV of more than 2 channels without a channel mask was given
+    // ** A DEMUX KEEPS THE SPEAKERS OF THE WAV. ** The channel mask of a WAV whose header names one speaker for each
+    // channel, 0 for any other. A demux wrote a mask made from the number of channels, and 5.1 with back surrounds came
+    // out as 5.1 with side ones.
+    uint32_t m_srcMask = 0;
     [[nodiscard]] int bdChannels() const { return m_bdMap.empty() ? m_channels : static_cast<int>(m_bdMap.size()); }
     void planBdLayout(uint32_t mask);
     int64_t m_curChunkLen;
