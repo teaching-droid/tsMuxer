@@ -7,6 +7,7 @@
 #include <types/types.h>
 
 #include <map>
+#include <set>
 
 #include "avPacket.h"
 #include "bitStream.h"
@@ -373,6 +374,9 @@ struct TS_program_association_section
     uint16_t transport_stream_id;
     int m_nitPID;
     std::map<int, int> pmtPids;  // program pid, program number
+    // The program numbers the PAT gives to each PMT PID. A PID can carry the maps of several programs, told apart by
+    // their program number, and pmtPids keeps only the last of them.
+    std::map<int, std::set<int>> programsOfPid;
 
     TS_program_association_section();
     bool deserialize(uint8_t* buffer, int buf_size);

@@ -19,6 +19,7 @@
 #include "ac3Codec.h"
 #include "bitmapSubtitles.h"
 #include "bufferedFileReader.h"
+#include "crc32.h"
 #include "encryptedInput.h"
 #include "matroskaParser.h"
 #include "nalUnits.h"
@@ -77,6 +78,86 @@ std::string pmtText(const TS_program_map_section& pmt, const int pmtPid)
             s << " secondary";
     }
     return s.str();
+}
+
+// ** PROGRAMS THAT SHARE ONE PMT PID (#31 K56). ** A PAT may give the program maps of several programs one PID, told
+// apart by their program number (ISO/IEC 13818-1, 2.4.4.8), and a capture of one program from a satellite or cable
+// multiplex can keep the maps of all the others on it, or of programs its PAT no longer names at all. The first map
+// that came on the PID was taken for the file: a program with no data in the file, or one the PAT does not name, and
+// the video and sound of the recording could not be used, or the second program of the file was left out. On such a
+// PID every map is read, a map counts only when the PAT names its program, and of several named programs those whose
+// streams carry data in the file are kept. Where no map of the PID matches the PAT, the first map is taken, as before.
+// A PID of one program whose maps match the PAT is read as it always was.
+
+// The program map sections a packet of a shared PMT PID completes. A packet can end one section and begin several
+// more (the pointer field says where the first new one begins), so each is cut out by its length. Each comes back
+// behind a pointer field of 0, as the first section of a packet, which is how TS_program_map_section reads it.
+struct SectionReader
+{
+    std::vector<uint8_t> pending;
+
+    void add(const uint8_t* payload, const uint8_t* end, const bool unitStart,
+             std::vector<std::vector<uint8_t>>& sections)
+    {
+        if (payload >= end)
+            return;
+        if (unitStart)
+        {
+            const int pointer = *payload++;
+            if (pointer > end - payload)
+            {
+                pending.clear();
+                return;
+            }
+            if (!pending.empty())
+            {
+                pending.insert(pending.end(), payload, payload + pointer);
+                cut(sections);
+            }
+            pending.assign(payload + pointer, end);
+        }
+        else if (!pending.empty())
+            pending.insert(pending.end(), payload, end);
+        cut(sections);
+        // a section is at most 1024 bytes: anything longer is damage
+        if (pending.size() > 4096)
+            pending.clear();
+    }
+
+   private:
+    void cut(std::vector<std::vector<uint8_t>>& sections)
+    {
+        size_t pos = 0;
+        while (pending.size() - pos >= 3 && pending[pos] != 0xFF)
+        {
+            const size_t len = 3 + ((pending[pos + 1] & 0x0F) << 8 | pending[pos + 2]);
+            if (pending.size() - pos < len)
+                break;
+            std::vector<uint8_t> section(1, 0);
+            section.insert(section.end(), pending.begin() + static_cast<std::ptrdiff_t>(pos),
+                           pending.begin() + static_cast<std::ptrdiff_t>(pos + len));
+            sections.push_back(std::move(section));
+            pos += len;
+        }
+        if (pos < pending.size() && pending[pos] == 0xFF)
+            pending.clear();  // stuffing to the end of the packet
+        else
+            pending.erase(pending.begin(), pending.begin() + static_cast<std::ptrdiff_t>(pos));
+    }
+};
+
+// A whole program map section behind its pointer field, whose CRC is right
+bool isProgramMap(const std::vector<uint8_t>& s)
+{
+    return s.size() >= 17 && s[0] == 0 && s[1] == 2 && (s[2] & 0x80) != 0 &&
+           calculateCRC32(s.data() + 1, s.size() - 1) == 0;
+}
+
+// The program number of the program map section of a buffer that begins with its pointer field (isFullBuff is true)
+int programOfMap(const uint8_t* buffer)
+{
+    const uint8_t* section = buffer + 1 + buffer[0];
+    return section[3] << 8 | section[4];
 }
 }  // namespace
 
@@ -149,6 +230,59 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
     // For the whole scan: forgotten at each block, the map of a program that came in the block after the PAT was passed
     // over until a PAT stood before it in one block, and a part of a recording did not list that program at all
     TS_program_association_section pat;
+    // The shared PMT PIDs (#31 K56): the first map of each program the PAT names, the first map of another program,
+    // and the packets of each PID, to tell the programs that have data in the file
+    struct SharedPid
+    {
+        std::map<int, std::vector<uint8_t>> ofProgram;
+        std::vector<uint8_t> firstOther;
+        bool taken = false;
+    };
+    std::map<int, SharedPid> sharedPids;
+    std::map<int, SectionReader> readers;
+    std::vector<int64_t> packetsOfPid(8192);
+    const auto takeMap = [&](uint8_t* buffer, const int len, const int pid)
+    {
+        takeProgramMap(buffer, len, pid);
+        for (const auto& [fst, snd] : m_pmt.pidList)
+        {
+            TrackInfo track(isDvbSubtitlePid(snd.m_pid)               ? TRACKTYPE_PGS
+                            : isAribPid(snd.m_pid)                    ? TRACKTYPE_ARIB
+                            : snd.m_streamType == StreamType::SUB_TGS ? TRACKTYPE_SRT
+                                                                      : static_cast<int>(snd.m_streamType),
+                            snd.m_lang, 0, snd.m_dvbDescriptor);
+            if (snd.m_streamType == StreamType::PRIVATE_DATA)
+            {
+                track.m_soundDescriptor = snd.m_soundDescriptor;
+                track.m_componentTag = snd.m_componentTag;
+                track.m_dataComponentId = snd.m_dataComponentId;
+                // What the PMT says is AC-4 is named by it, and left out: it is not guessed from
+                // its bytes, where a chance match could list it as another codec
+                if (snd.m_ac4Descriptor != 0 && snd.m_soundDescriptor == 0 && snd.m_dvbDescriptor == 0)
+                {
+                    std::ostringstream what;
+                    what << "AC-4 audio (stream type 0x6, descriptor 0x" << std::hex << snd.m_ac4Descriptor << ")";
+                    track.m_srcParams["srcnotsupported"] = what.str();
+                    track.m_srcParams["srcleftout"] = "it holds AC-4 audio, which tsMuxeR does not mux";
+                }
+            }
+            trackList.insert(std::make_pair(snd.m_pid, track));
+        }
+    };
+    // Whether every PMT PID has given its map, now that pid has: the scan then ends, and the reader goes back to the
+    // start of the file
+    const auto allTaken = [&](const int pid)
+    {
+        nonProcPMTPid.erase(pid);
+        if (!nonProcPMTPid.empty() || mvcContinueExpected())
+            return false;
+        auto br = dynamic_cast<BufferedFileReader*>(m_bufferedReader);
+        if (br)
+            br->incSeek(m_readerID, -static_cast<int64_t>(totalReadedBytes));
+        else
+            THROW(ERR_COMMON, "Function TSDemuxer::getTrackList required bufferedReader!")
+        return true;
+    };
     while (totalReadedBytes < DETECT_STREAM_BUFFER_SIZE && lastReadRez != BufferedReader::DATA_EOF)
     {
         lastReadRez = 0;
@@ -206,6 +340,37 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             }
             else if (pat.pmtPids.find(pid) != pat.pmtPids.end())
             {  // PMT
+                const std::set<int>& named = pat.programsOfPid[pid];
+                if (m_sharedPmtPids.count(pid) || named.size() > 1)
+                {
+                    m_sharedPmtPids.insert(pid);
+                    std::vector<std::vector<uint8_t>> sections;
+                    readers[pid].add(curPos + tsPacket->getHeaderSize(), curPos + TS_FRAME_SIZE, tsPacket->payloadStart,
+                                     sections);
+                    SharedPid& shared = sharedPids[pid];
+                    for (std::vector<uint8_t>& section : sections)
+                    {
+                        if (shared.taken || !isProgramMap(section))
+                            continue;
+                        const int program = programOfMap(section.data());
+                        if (!named.count(program))
+                        {
+                            if (shared.firstOther.empty())
+                                shared.firstOther = std::move(section);
+                        }
+                        else if (named.size() == 1)
+                        {
+                            // the one program the PAT names on the PID: its map is the one, as soon as it comes
+                            shared.taken = true;
+                            takeMap(section.data(), static_cast<int>(section.size()), pid);
+                            if (allTaken(pid))
+                                return;
+                        }
+                        else
+                            shared.ofProgram.try_emplace(program, std::move(section));
+                    }
+                    continue;
+                }
                 if (tsPacket->payloadStart || pmtBufferLen > 0)
                 {
                     // A section that would outgrow the buffer is damaged, as on a broken off-air recording.
@@ -223,52 +388,24 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                     pmtBufferLen += TS_FRAME_SIZE - tsPacket->getHeaderSize();
                     if (TS_program_map_section::isFullBuff(pmtBuffer, pmtBufferLen))
                     {
-                        m_pmt.deserialize(pmtBuffer, pmtBufferLen);
-                        if (m_pmt.video_type != static_cast<int>(StreamType::VIDEO_MVC))
-                            m_nonMVCVideoFound = true;
-                        m_pmtVersionPid = pid;
-                        m_pmtVersion = -2;
-                        pmtBufferLen = 0;
-                        tracePmt(m_streamName, m_pmt, pid);
-                        for (const auto& [fst, snd] : m_pmt.pidList)
+                        // The map of a program the PAT does not name on this PID: the PID is read as a shared one
+                        // from here on, and this map is taken only if none of the program the PAT names comes
+                        if (!named.empty() && !named.count(programOfMap(pmtBuffer)))
                         {
-                            TrackInfo track(
-                                isDvbSubtitlePid(snd.m_pid) ? TRACKTYPE_PGS
-                                : isAribPid(snd.m_pid)                    ? TRACKTYPE_ARIB
-                                : snd.m_streamType == StreamType::SUB_TGS ? TRACKTYPE_SRT
-                                                                          : static_cast<int>(snd.m_streamType),
-                                snd.m_lang, 0, snd.m_dvbDescriptor);
-                            if (snd.m_streamType == StreamType::PRIVATE_DATA)
-                            {
-                                track.m_soundDescriptor = snd.m_soundDescriptor;
-                                track.m_componentTag = snd.m_componentTag;
-                                track.m_dataComponentId = snd.m_dataComponentId;
-                                // What the PMT says is AC-4 is named by it, and left out: it is not guessed from
-                                // its bytes, where a chance match could list it as another codec
-                                if (snd.m_ac4Descriptor != 0 && snd.m_soundDescriptor == 0 && snd.m_dvbDescriptor == 0)
-                                {
-                                    std::ostringstream what;
-                                    what << "AC-4 audio (stream type 0x6, descriptor 0x" << std::hex
-                                         << snd.m_ac4Descriptor << ")";
-                                    track.m_srcParams["srcnotsupported"] = what.str();
-                                    track.m_srcParams["srcleftout"] = "it holds AC-4 audio, which tsMuxeR does not mux";
-                                }
-                            }
-                            trackList.insert(std::make_pair(snd.m_pid, track));
+                            m_sharedPmtPids.insert(pid);
+                            sharedPids[pid].firstOther.assign(pmtBuffer, pmtBuffer + pmtBufferLen);
+                            pmtBufferLen = 0;
+                            continue;
                         }
-                        nonProcPMTPid.erase(pid);
-                        if (nonProcPMTPid.empty() && !mvcContinueExpected())
-                        {  // all pmt pids processed
-                            auto br = dynamic_cast<BufferedFileReader*>(m_bufferedReader);
-                            if (br)
-                                br->incSeek(m_readerID, -static_cast<int64_t>(totalReadedBytes));
-                            else
-                                THROW(ERR_COMMON, "Function TSDemuxer::getTrackList required bufferedReader!")
+                        takeMap(pmtBuffer, pmtBufferLen, pid);
+                        pmtBufferLen = 0;
+                        if (allTaken(pid))
                             return;
-                        }
                     }
                 }
             }
+            else if (tsPacket->dataExists)
+                ++packetsOfPid[pid];
         }
         if (curPos < data + readedBytes)
         {
@@ -280,6 +417,30 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                 THROW(ERR_COMMON, "TS track scan: " << tmpBufferLen << " bytes left over at the end of a block")
             memmove(m_tmpBuffer, curPos, tmpBufferLen);
         }
+    }
+
+    // The shared PMT PIDs whose map is not taken yet: of the programs the PAT names, those whose streams carry data,
+    // or all of them where none does; where the PAT names none of the maps, the first map, as before
+    for (auto& [pid, shared] : sharedPids)
+    {
+        if (shared.taken)
+            continue;
+        std::vector<std::vector<uint8_t>*> withData;
+        for (auto& [program, section] : shared.ofProgram)
+        {
+            TS_program_map_section map;
+            std::vector<uint8_t> copy = section;
+            if (!map.deserialize(copy.data(), static_cast<int>(copy.size())))
+                continue;
+            if (std::any_of(map.pidList.begin(), map.pidList.end(), [&](const auto& stream)
+                            { return stream.first >= 0 && stream.first < 8192 && packetsOfPid[stream.first] > 0; }))
+                withData.push_back(&section);
+        }
+        if (withData.empty())
+            for (auto& [program, section] : shared.ofProgram) withData.push_back(&section);
+        for (std::vector<uint8_t>* section : withData) takeMap(section->data(), static_cast<int>(section->size()), pid);
+        if (withData.empty() && !shared.firstOther.empty())
+            takeMap(shared.firstOther.data(), static_cast<int>(shared.firstOther.size()), pid);
     }
 
     if (unmarkedDamage && trackList.empty())
@@ -832,6 +993,9 @@ void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, c
     bool hdrDiscarded = m_m2tsHdrDiscarded;
     bool firstPacket = firstBlock;
     TS_program_association_section pat;
+    // The maps of the shared PMT PIDs of the block (#31 K56), in the order they come: taken after the block is read
+    std::vector<std::pair<int, std::vector<uint8_t>>> sharedMaps;
+    std::map<int, SectionReader> readers;
     for (uint8_t* cur = data; cur <= lastFrameAddr; cur += TS_FRAME_SIZE)
     {
         if (!hdrDiscarded && m_m2tsMode)
@@ -852,6 +1016,18 @@ void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, c
         }
         else if (pat.pmtPids.find(pid) != pat.pmtPids.end())
         {  // PMT
+            const std::set<int>& named = pat.programsOfPid[pid];
+            if (!laterClip && (m_sharedPmtPids.count(pid) || named.size() > 1))
+            {
+                m_sharedPmtPids.insert(pid);
+                std::vector<std::vector<uint8_t>> sections;
+                readers[pid].add(cur + tsPacket->getHeaderSize(), cur + TS_FRAME_SIZE, tsPacket->payloadStart,
+                                 sections);
+                for (std::vector<uint8_t>& section : sections)
+                    if (isProgramMap(section))
+                        sharedMaps.emplace_back(pid, std::move(section));
+                continue;
+            }
             if (tsPacket->payloadStart || pmtBufferLen > 0)
             {
                 if (pmtBufferLen + TS_FRAME_SIZE - tsPacket->getHeaderSize() > 4096)
@@ -861,16 +1037,16 @@ void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, c
                 pmtBufferLen += TS_FRAME_SIZE - tsPacket->getHeaderSize();
                 if (TS_program_map_section::isFullBuff(pmtBuffer, pmtBufferLen))
                 {
-                    if (!laterClip)
+                    const bool namedProgram = named.empty() || named.count(programOfMap(pmtBuffer));
+                    if (!laterClip && !namedProgram)
                     {
-                        m_pmt.deserialize(pmtBuffer, pmtBufferLen);
-                        if (m_pmt.video_type != static_cast<int>(StreamType::VIDEO_MVC))
-                            m_nonMVCVideoFound = true;
-                        m_pmtVersionPid = pid;
-                        m_pmtVersion = -2;
-                        tracePmt(m_streamName, m_pmt, pid);
+                        // a map of a program the PAT does not name on this PID: read as a shared PID from here on
+                        m_sharedPmtPids.insert(pid);
+                        sharedMaps.emplace_back(pid, std::vector<uint8_t>(pmtBuffer, pmtBuffer + pmtBufferLen));
                     }
-                    else
+                    else if (!laterClip)
+                        takeProgramMap(pmtBuffer, pmtBufferLen, pid);
+                    else if (namedProgram || !m_sharedPmtPids.count(pid))
                     {
                         TS_program_map_section clipPmt;
                         if (clipPmt.deserialize(pmtBuffer, pmtBufferLen))
@@ -882,6 +1058,60 @@ void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, c
                 }
             }
         }
+    }
+    if (!sharedMaps.empty())
+        takeSharedMaps(sharedMaps, pat);
+}
+
+void TSDemuxer::takeProgramMap(uint8_t* section, const int len, const int pid)
+{
+    m_pmt.deserialize(section, len);
+    if (m_pmt.video_type != static_cast<int>(StreamType::VIDEO_MVC))
+        m_nonMVCVideoFound = true;
+    m_pmtVersionPid = pid;
+    m_pmtVersion = -2;
+    m_pmtVersionProgram = m_sharedPmtPids.count(pid) ? programOfMap(section) : -1;
+    tracePmt(m_streamName, m_pmt, pid);
+}
+
+// The maps of each shared PMT PID of the block, as getTrackList chooses them, with the tracks of the mux in place of
+// the data of the file: of the programs the PAT names, those that hold a track of the mux, or all of them where none
+// does; where the PAT names none of the maps, every map, as the block was read before
+void TSDemuxer::takeSharedMaps(std::vector<std::pair<int, std::vector<uint8_t>>>& sections,
+                               const TS_program_association_section& pat)
+{
+    std::map<int, std::set<int>> taken;  // PMT PID: the programs whose maps are taken
+    for (const auto& [pid, section] : sections)
+    {
+        if (taken.count(pid))
+            continue;
+        std::set<int> named;
+        if (const auto it = pat.programsOfPid.find(pid); it != pat.programsOfPid.end())
+            named = it->second;
+        std::set<int> found;
+        std::set<int> withTrack;
+        for (const auto& [otherPid, other] : sections)
+        {
+            if (otherPid != pid)
+                continue;
+            const int program = programOfMap(other.data());
+            if (!named.count(program))
+                continue;
+            found.insert(program);
+            TS_program_map_section map;
+            std::vector<uint8_t> copy = other;
+            if (map.deserialize(copy.data(), static_cast<int>(copy.size())) &&
+                std::any_of(map.pidList.begin(), map.pidList.end(), [&](const auto& stream)
+                            { return stream.first >= 0 && stream.first < 8192 && m_acceptedPidCache[stream.first]; }))
+                withTrack.insert(program);
+        }
+        taken[pid] = withTrack.empty() || found.size() == 1 ? found : withTrack;
+    }
+    for (auto& [pid, section] : sections)
+    {
+        const std::set<int>& programs = taken[pid];
+        if (programs.empty() || programs.count(programOfMap(section.data())))
+            takeProgramMap(section.data(), static_cast<int>(section.size()), pid);
     }
 }
 
@@ -912,6 +1142,9 @@ void TSDemuxer::checkPmtVersion(uint8_t* payload, const uint8_t* end)
 {
     const uint8_t* section = payload + 1 + payload[0];
     if (section + 8 > end || section[0] != 2)
+        return;
+    // the map of another program on a PMT PID that several share (#31 K56) is not a change of this one
+    if (m_pmtVersionProgram >= 0 && (section[3] << 8 | section[4]) != m_pmtVersionProgram)
         return;
     const int version = section[5] >> 1 & 0x1f;
     if (m_pmtVersion == -2)

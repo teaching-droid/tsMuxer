@@ -344,6 +344,17 @@ class TSDemuxer final : public AbstractDemuxer
     bool m_pmtChangeReported = false;
     void checkPmtVersion(uint8_t* payload, const uint8_t* end);
 
+    // ** PROGRAMS THAT SHARE ONE PMT PID. ** The PMT PIDs that carry the maps of several programs, or of a program the
+    // PAT does not name on them, and the program whose map is followed for a change of version on m_pmtVersionPid
+    // (-1: any section of the PID, as on a PID of one program). See getTrackList.
+    std::set<int> m_sharedPmtPids;
+    int m_pmtVersionProgram = -1;
+    // The program map a stream list is made from: m_pmt takes it in, and the version of it is followed from here on
+    void takeProgramMap(uint8_t* section, int len, int pid);
+    // The maps of the shared PMT PIDs in the first block of a mux, chosen as the listing chooses them (pid, section)
+    void takeSharedMaps(std::vector<std::pair<int, std::vector<uint8_t>>>& sections,
+                        const TS_program_association_section& pat);
+
     // ** DAMAGE A DECODER SEES AND THE MUX DID NOT. ** Packets marked scrambled (transport_scrambling_control, the
     // recording of an encrypted channel without its key) and packets lost (the continuity counter skips) went into the
     // tracks without a word: the pictures were damaged at exit 0. Counted for each track muxed, and said once at the
