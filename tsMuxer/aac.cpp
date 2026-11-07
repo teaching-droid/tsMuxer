@@ -378,7 +378,9 @@ void AACCodec::readConfig(uint8_t* buff, const int size)
     auto object_type = reader.getBits<uint8_t>(5);
     if (object_type == 31)
         object_type = 32 + reader.getBits<uint8_t>(6);
-    m_profile = (object_type & 0x3) - 1;
+    // The profile of an ADTS header is the object type less 1, for types 1 to 4 (Main, LC, SSR, LTP). "& 3" gave LTP
+    // (4) the profile 255.
+    m_profile = object_type >= 1 && object_type <= 4 ? object_type - 1 : (object_type & 0x3) - 1;
     m_sample_rates_index = reader.getBits<uint8_t>(4);
     m_sample_rate = m_sample_rates_index == 0x0f ? reader.getBits<int>(24) : aac_sample_rates[m_sample_rates_index];
     m_channels_index = reader.getBits<uint8_t>(4);

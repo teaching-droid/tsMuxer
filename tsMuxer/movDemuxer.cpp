@@ -218,10 +218,37 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
         m_aacRaw.m_id = 1;  // MPEG-2
         m_aacRaw.m_layer = 0;
         m_aacRaw.m_rdb = 0;
-        m_aacRaw.m_profile = 0;  // AAC-LC default (will be refined by readConfig)
+        // The profile of an ADTS header is the object type less 1. It was 0, AAC Main, so the AAC LC of an MP4 whose
+        // esds has no AudioSpecificConfig was written as AAC Main in every output.
+        m_aacRaw.m_profile = m_profileWithoutConfig;
         m_aacRaw.m_channels = static_cast<uint8_t>(m_sc->channels);
         m_aacRaw.m_sample_rate = m_sc->sample_rate;
     }
+
+    // The object type of the esds when there is no AudioSpecificConfig to say more: MPEG-2 AAC names its profile
+    // there (0x66 Main, 0x67 LC, 0x68 SSR); MPEG-4 audio (0x40) is taken as AAC LC.
+    void setObjectTypeIndication(const uint8_t objectType)
+    {
+        m_profileWithoutConfig = objectType >= 0x66 && objectType <= 0x68 ? static_cast<uint8_t>(objectType - 0x66) : 1;
+        if (!m_hasConfig)
+            m_aacRaw.m_profile = m_profileWithoutConfig;
+    }
+
+    // Without an AudioSpecificConfig the sample entry gives the rate the sound plays at. Frames of 2048 samples at
+    // that rate are HE-AAC: an AAC LC core at half the rate with SBR, which an ADTS header describes by the core, as
+    // the AudioSpecificConfig of such a file does. The header said the full rate, and a decoder failed on every frame.
+    // False when the frames are neither 1024 nor 2048 samples long and the header may be wrong.
+    bool setFrameSamplesWithoutConfig(const int64_t samples)
+    {
+        if (!isAAC || m_hasConfig)
+            return true;
+        if (samples == 2048 && m_aacRaw.m_profile == 1 && m_sc->sample_rate % 2 == 0)
+            m_aacRaw.m_sample_rate = m_sc->sample_rate / 2;
+        return samples == 1024 || samples == 2048;
+    }
+
+    [[nodiscard]] bool hasConfig() const { return m_hasConfig; }
+    [[nodiscard]] int sampleRate() const { return m_aacRaw.m_sample_rate; }
 
     void setPrivData(uint8_t* buff, const int size) override
     {
@@ -236,6 +263,7 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
             m_aacRaw.m_layer = 0;
             m_aacRaw.m_rdb = 0;
             m_aacRaw.readConfig(buff, size);
+            m_hasConfig = true;
         }
         else
         {
@@ -376,6 +404,8 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
    private:
     int m_dropLeft = 0;
     bool m_tailWarned = false;
+    bool m_hasConfig = false;            // the esds gave an AudioSpecificConfig
+    uint8_t m_profileWithoutConfig = 1;  // AAC LC
     uint8_t* m_buff;
     int m_size;
     MovDemuxer* m_demuxer;
@@ -1563,6 +1593,7 @@ void MovDemuxer::openFile(const std::string& streamName)
         fragmentStartDelays();
     longFirstSamples();
     pictureLengths();
+    aacWithoutConfig();
     if (m_mdat_pos && m_processedBytes != m_mdat_pos)
     {
         // Reading the header walked to the end of the file, because a moov atom usually sits
@@ -3052,6 +3083,35 @@ void MovDemuxer::longFirstSamples()
     }
 }
 
+// AAC whose esds has no AudioSpecificConfig: the length of its frames, which its sample times give, says whether it is
+// AAC LC (1024 samples) or HE-AAC (2048) at the rate of its sample entry (MovParsedAudioTrackData).
+void MovDemuxer::aacWithoutConfig()
+{
+    for (int i = 0; i < num_tracks; ++i)
+    {
+        const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
+        auto* audio = dynamic_cast<MovParsedAudioTrackData*>(st->parsed_priv_data);
+        if (!audio || !audio->isAAC || audio->hasConfig() || st->time_scale == 0 || st->sample_rate <= 0)
+            continue;
+        const int64_t usual = usualDuration(st);
+        if (usual <= 0)
+            continue;
+        const int64_t samples = usual * st->sample_rate / st->time_scale;
+        if (audio->setFrameSamplesWithoutConfig(samples))
+            continue;
+        static std::mutex warnMtx;
+        static std::set<std::string> warned;  // a job opens a file more than once
+        const std::lock_guard<std::mutex> lock(warnMtx);
+        if (warned.insert(m_fileName + "|" + std::to_string(i + 1)).second)
+            LTRACE(LT_WARN, 2,
+                   "Warning: the AAC of track " << i + 1 << " of " << m_fileName
+                                                << " has no AudioSpecificConfig, and its frames last " << samples
+                                                << " samples, not 1024 (AAC LC) or 2048 (HE-AAC). It is muxed as AAC "
+                                                   "LC of "
+                                                << audio->sampleRate() << " Hz, which may be wrong.");
+    }
+}
+
 // A track's start against the first video track's (itself when there is none), in ns
 int64_t MovDemuxer::trackStartFromVideoNs(const int32_t pid) const
 {
@@ -4402,8 +4462,12 @@ int MovDemuxer::mov_read_esds(MOVAtom atom)
         // were listed as AAC and muxed to nothing. Anything that is not AAC goes on as it is stored, framed by its own
         // headers, and the codec readers find it by those.
         if (auto* audioData = dynamic_cast<MovParsedAudioTrackData*>(st->parsed_priv_data))
+        {
             audioData->isAAC =
                 object_type_id == 0x40 || object_type_id == 0x66 || object_type_id == 0x67 || object_type_id == 0x68;
+            if (audioData->isAAC)
+                audioData->setObjectTypeIndication(object_type_id);
+        }
         get_byte();  // stream type
         get_be24();  // buffer size db
         get_be32();  // max bitrate

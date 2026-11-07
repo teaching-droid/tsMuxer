@@ -454,7 +454,8 @@ void ParsedVC1TrackData::extractData(AVPacket* pkt, uint8_t* buff, const int siz
 
 // ------------ AAC --------------
 
-ParsedAACTrackData::ParsedAACTrackData(uint8_t* buff, const int size) : ParsedTrackPrivData(buff, size)
+ParsedAACTrackData::ParsedAACTrackData(uint8_t* buff, const int size, const int sampleRate, const int channels)
+    : ParsedTrackPrivData(buff, size)
 {
     // ID 0, MPEG-4: an A_AAC track is described by an AudioSpecificConfig, which is MPEG-4 audio. The ADTS headers
     // were written with ID 1 (MPEG-2), so AAC that came in as MPEG-4 ADTS changed its headers on a way through
@@ -462,6 +463,16 @@ ParsedAACTrackData::ParsedAACTrackData(uint8_t* buff, const int size) : ParsedTr
     m_aacRaw.m_id = 0;
     m_aacRaw.m_layer = 0;
     m_aacRaw.m_rdb = 0;
+    // A track without its CodecPrivate is described by its own fields: AAC LC at its SamplingFrequency, which for
+    // HE-AAC is the rate of the core. Reading the missing config stopped the listing and the mux with "Unknown
+    // exception".
+    if (size < 2)
+    {
+        m_aacRaw.m_profile = 1;
+        m_aacRaw.m_sample_rate = sampleRate;
+        m_aacRaw.m_channels = static_cast<uint8_t>(channels);
+        return;
+    }
     m_aacRaw.readConfig(buff, size);
 }
 

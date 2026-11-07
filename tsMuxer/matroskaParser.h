@@ -399,7 +399,8 @@ class ParsedAC3TrackData final : public ParsedTrackPrivData
 class ParsedAACTrackData final : public ParsedTrackPrivData
 {
    public:
-    ParsedAACTrackData(uint8_t* buff, int size);
+    // sampleRate and channels: the track's own, for a track without CodecPrivate
+    ParsedAACTrackData(uint8_t* buff, int size, int sampleRate, int channels);
     void extractData(AVPacket* pkt, uint8_t* buff, int size) override;
     ~ParsedAACTrackData() override = default;
 

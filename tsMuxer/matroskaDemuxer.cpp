@@ -2260,7 +2260,14 @@ int MatroskaDemuxer::matroska_read_header()
             }
             else if (!strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_AAC))
             {
-                track->parsed_priv_data = new ParsedAACTrackData(track->codec_priv, track->codec_priv_size);
+                // the track's own fields, for a track without CodecPrivate; SamplingFrequency is the rate of the core
+                const auto* audio = static_cast<const MatroskaAudioTrack*>(track);
+                const bool isAudio = track->type == IOContextTrackType::AUDIO;
+                const int rate = !isAudio                         ? 48000
+                                 : audio->internal_samplerate > 0 ? audio->internal_samplerate
+                                                                  : audio->samplerate;
+                track->parsed_priv_data = new ParsedAACTrackData(track->codec_priv, track->codec_priv_size, rate,
+                                                                 isAudio ? audio->channels : 2);
             }
             else if (!strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_PCM_BIG) ||
                      !strcmp(track->codec_id, MATROSKA_CODEC_ID_AUDIO_PCM_LIT) ||
