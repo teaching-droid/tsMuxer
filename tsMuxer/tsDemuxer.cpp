@@ -2063,6 +2063,9 @@ void TSDemuxer::finishAribPes(const int pid, AribPes& sub, DemuxedData& demuxedD
     discardSize -= static_cast<int64_t>(out.size());
 }
 
+static_assert(TS_FRAME_SIZE == 188,
+              "a TS packet is 188 bytes; an M2TS packet carries its 4 byte arrival stamp before them");
+
 bool TSDemuxer::packetsRead(const int pid, int64_t& packets, int64_t& scrambled) const
 {
     const auto it = m_listedPackets.find(pid);

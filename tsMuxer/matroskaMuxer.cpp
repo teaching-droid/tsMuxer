@@ -1211,7 +1211,7 @@ void MatroskaMuxer::writeVoid(const int totalBytes)
     int len = ebml_write_id(buf, EBML_ID_VOID);
     len += ebml_write_size_fixed(buf + len, static_cast<uint64_t>(totalBytes) - VOID_MIN_BYTES, 2);
     writeToFile(buf, len);
-    const std::vector<uint8_t> filler(static_cast<size_t>(totalBytes) - VOID_MIN_BYTES, 0);
+    const std::vector<uint8_t> filler(static_cast<size_t>(totalBytes) - VOID_MIN_BYTES, VOID_FILLER_BYTE);
     writeToFile(filler);
 }
 
@@ -1776,7 +1776,7 @@ void MatroskaMuxer::writeVoidExact(const int64_t totalBytes)
     int len = ebml_write_id(buf, EBML_ID_VOID);
     len += ebml_write_size_fixed(buf + len, static_cast<uint64_t>(totalBytes - 1 - sizeBytes), sizeBytes);
     writeToFile(buf, len);
-    const std::vector<uint8_t> filler(static_cast<size_t>(totalBytes - len), 0);
+    const std::vector<uint8_t> filler(static_cast<size_t>(totalBytes - len), VOID_FILLER_BYTE);
     writeToFile(filler);
 }
 

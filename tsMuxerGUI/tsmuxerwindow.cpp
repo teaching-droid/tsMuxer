@@ -5163,7 +5163,10 @@ static QString getTsMuxerBinaryPath()
 PlayerLauncher* TsMuxerWindow::previewPlayer()
 {
     if (!m_player)
+    {
         m_player = new PlayerLauncher(getTsMuxerBinaryPath(), this);
+        m_player->setObjectName(QStringLiteral("previewHarbour"));
+    }
     m_player->setPlayer(ui->previewPlayerPath->text(), ui->previewPlayerArgs->text());
     m_player->setTitlePlayers(ui->previewPlayerBdPath->text(), ui->previewPlayerBdArgs->text(),
                               ui->previewPlayerDvdPath->text(), ui->previewPlayerDvdArgs->text());

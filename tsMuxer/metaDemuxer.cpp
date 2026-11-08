@@ -4404,6 +4404,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
     std::string writingApp;
     std::string noTracksReason;
     vector<CheckStreamRez> streams, Vstreams;
+    Vstreams.reserve(23);
     std::unique_ptr<AbstractDemuxer> demuxer;
     auto unquoted = unquoteStr(fileName);
     string fileExt = strToLowerCase(extractFileExt(unquoted));

@@ -515,8 +515,9 @@ class MatroskaMuxer final : public AbstractMuxer
     // attachments are written after the clusters because they are not known until then, and
     // without an index at the front other software does not find them.
     int64_t m_seekHeadReservePos = 0;
-    static constexpr int SEEKHEAD_RESERVE = 256;  // five entries need about 120
-    static constexpr int VOID_MIN_BYTES = 3;      // one byte of ID plus a two byte size
+    static constexpr int SEEKHEAD_RESERVE = 256;       // five entries need about 120
+    static constexpr int VOID_MIN_BYTES = 3;           // one byte of ID plus a two byte size
+    static constexpr uint8_t VOID_FILLER_BYTE = 0x00;  // what the body of a Void holds
 
     // Timecode tracking
     int64_t m_firstTimecode;  // the timeline's origin in INTERNAL_PTS_FREQ units (see replayBufferedPackets)

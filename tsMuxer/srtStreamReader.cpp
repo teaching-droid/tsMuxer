@@ -19,6 +19,8 @@
 #include "vodCoreException.h"
 #include "vod_common.h"
 
+static_assert(sizeof(char16_t) == 2, "a UTF-16 subtitle code unit is two bytes on every system tsMuxeR is built for");
+
 using namespace std;
 
 using namespace text_subtitles;
