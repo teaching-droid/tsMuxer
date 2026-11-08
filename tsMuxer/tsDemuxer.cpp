@@ -224,10 +224,9 @@ bool TSDemuxer::mvcContinueExpected() const { return !m_nonMVCVideoFound && strE
 
 void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
 {
-    // A program map section that spans packets is put together for each PMT PID on its own. One buffer served every
-    // PID, so where the maps of two PIDs each span packets and come interleaved, the packet of the other PID was glued
-    // into the section: the map was lost, or read with streams that are not in it.
-    std::map<int, std::vector<uint8_t>> pmtBuffers;
+    // A program map section that spans packets is put together for each PMT PID on its own (readers, below). One buffer
+    // served every PID, so where the maps of two PIDs each span packets and come interleaved, the packet of the other
+    // PID was glued into the section: the map was lost, or read with streams that are not in it.
     // The first map with a wrong CRC of each PMT PID, taken only where no right one comes (see readPat), and the PMT
     // PIDs whose map was taken
     std::map<int, std::vector<uint8_t>> damagedMaps;
@@ -394,22 +393,20 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                     }
                     continue;
                 }
-                std::vector<uint8_t>& pmtBuffer = pmtBuffers[pid];
-                if (tsPacket->payloadStart || !pmtBuffer.empty())
+                // ** THE SECTIONS OF A PMT PID ARE CUT WHERE THEY START. ** A cable recording sends another table on
+                // the PMT PID beside the map (table 0xC0 of ATSC A/65 and SCTE, every few packets): the packets were
+                // added to one buffer, which held the other table first and never became a map, so the map that came
+                // after it was not read and the listing named no track. Each section now starts where the pointer
+                // field of a packet says, and only a program map (table 0x02) is read; a section that would outgrow
+                // 4096 bytes is damage and dropped (SectionReader).
+                std::vector<std::vector<uint8_t>> sections;
+                readers[pid].add(curPos + tsPacket->getHeaderSize(), curPos + TS_FRAME_SIZE, tsPacket->payloadStart,
+                                 sections);
+                for (std::vector<uint8_t>& pmtBuffer : sections)
                 {
-                    // A section that would outgrow the buffer is damaged, as on a broken off-air recording.
-                    // Leaving the packet loop here used to strand the rest of the 2 MiB block, which the
-                    // carry-over below then copied into a buffer of one packet. Drop the section and collect
-                    // again from the next one that starts.
-                    if (pmtBuffer.size() + TS_FRAME_SIZE - tsPacket->getHeaderSize() > 4096)
-                    {
-                        pmtBuffer.clear();
-                        if (!tsPacket->payloadStart)
-                            continue;
-                    }
-                    pmtBuffer.insert(pmtBuffer.end(), curPos + tsPacket->getHeaderSize(), curPos + TS_FRAME_SIZE);
                     const int pmtBufferLen = static_cast<int>(pmtBuffer.size());
-                    if (TS_program_map_section::isFullBuff(pmtBuffer.data(), pmtBufferLen))
+                    if (pmtBufferLen >= 2 && pmtBuffer[1] == 0x02 &&
+                        TS_program_map_section::isFullBuff(pmtBuffer.data(), pmtBufferLen))
                     {
                         if (!mapCrcGood(pmtBuffer.data(), pmtBufferLen))
                         {
@@ -1029,7 +1026,6 @@ bool TSDemuxer::checkForRealM2ts(const uint8_t* buffer, const uint8_t* end) cons
 void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, const bool laterClip,
                                   const bool firstBlock)
 {
-    std::map<int, std::vector<uint8_t>> pmtBuffers;  // one for each PMT PID, as in getTrackList
     bool hdrDiscarded = m_m2tsHdrDiscarded;
     bool firstPacket = firstBlock;
     TS_program_association_section pat;
@@ -1068,14 +1064,15 @@ void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, c
                         sharedMaps.emplace_back(pid, std::move(section));
                 continue;
             }
-            std::vector<uint8_t>& pmtBuffer = pmtBuffers[pid];
-            if (tsPacket->payloadStart || !pmtBuffer.empty())
+            // Each section starts where the pointer field says, and only a program map is read, as in getTrackList: a
+            // cable recording sends another table on the PMT PID, which held the buffer and kept the map out
+            std::vector<std::vector<uint8_t>> sections;
+            readers[pid].add(cur + tsPacket->getHeaderSize(), cur + TS_FRAME_SIZE, tsPacket->payloadStart, sections);
+            for (std::vector<uint8_t>& pmtBuffer : sections)
             {
-                if (pmtBuffer.size() + TS_FRAME_SIZE - tsPacket->getHeaderSize() > 4096)
-                    break;
-                pmtBuffer.insert(pmtBuffer.end(), cur + tsPacket->getHeaderSize(), cur + TS_FRAME_SIZE);
                 const int pmtBufferLen = static_cast<int>(pmtBuffer.size());
-                if (TS_program_map_section::isFullBuff(pmtBuffer.data(), pmtBufferLen))
+                if (pmtBufferLen >= 2 && pmtBuffer[1] == 0x02 &&
+                    TS_program_map_section::isFullBuff(pmtBuffer.data(), pmtBufferLen))
                 {
                     // a map with a wrong CRC once a right one was read: left out, as in getTrackList
                     const bool crcGood = mapCrcGood(pmtBuffer.data(), pmtBufferLen);
