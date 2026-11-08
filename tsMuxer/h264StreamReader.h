@@ -57,7 +57,11 @@ class H264StreamReader final : public MPEGStreamReader
     void setAddDataInPackets(const bool value) { m_addDataInPackets = value; }
 
    protected:
-    void onSplitEvent() override { m_firstFileFrame = true; }
+    void onSplitEvent() override
+    {
+        m_firstFileFrame = true;
+        m_newFileLead = true;
+    }
 
    public:
     void checkFileEnd(const std::string& fileName) override;
@@ -235,6 +239,11 @@ class H264StreamReader final : public MPEGStreamReader
     int m_removalDelay;
     bool m_ppsSinceAU = false;   // a PPS was read since the last access unit was written (writeAdditionData)
     bool m_secondField = false;  // the picture read last is the second field of a frame
+    // A new file (a split part or a cut) whose first picture has an SPS or PPS before its delimiter: those units are
+    // left out (skipNal, writeAdditionData)
+    bool m_newFileLead = false;         // no unit of the first picture of a new file has been handed over yet
+    bool m_leadingSetsLeftOut = false;  // the units before the first picture's delimiter were left out
+    bool m_skipSourceAud = false;       // its delimiter was written ahead (writeAdditionData), not the stream's own
 
     // The coded picture buffer of H.264 Annex C, as the HRD of the SPS written describes it, for the initial delays of
     // the buffering period SEI written with insertSEI and forceSEI. One schedule per CPB of the NAL HRD (every byte of

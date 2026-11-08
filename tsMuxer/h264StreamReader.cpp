@@ -753,12 +753,41 @@ static bool holdsSpsAndPps(uint8_t* auStart, uint8_t* end)
     return sps && pps;
 }
 
+// ** A NEW FILE BEGINS WITH THE DELIMITER OF ITS FIRST PICTURE. ** A stream may send an SPS or a PPS after the last
+// slice of a picture and before the delimiter of the next (a broadcast recording: slice, PPS, delimiter, SPS, PPS,
+// IDR). The reader takes such a unit into the next picture, and in the middle of a stream it does no harm. A split part
+// or a cut that began at that picture began with the PPS, before the delimiter and before any SPS: no decoder read the
+// file (sps_id out of range, no size). Those units are left out at the start of a new file; the picture's own SPS and
+// PPS come after its delimiter, or the reader writes them (newFileNeedsSpsPps). Returns the delimiter that follows the
+// parameter set at nal with nothing but parameter sets between, or null.
+static uint8_t* delimiterAfterSets(uint8_t* nal, uint8_t* end)
+{
+    const auto isSet = [](const uint8_t* unit)
+    {
+        const auto type = static_cast<NALUnit::NALType>(*unit & 0x1f);
+        return type == NALUnit::NALType::nuSPS || type == NALUnit::NALType::nuPPS;
+    };
+    if (nal >= end || !isSet(nal))
+        return nullptr;
+    for (uint8_t* unit = NALUnit::findNextNAL(nal, end); unit < end; unit = NALUnit::findNextNAL(unit, end))
+    {
+        if (static_cast<NALUnit::NALType>(*unit & 0x1f) == NALUnit::NALType::nuDelimiter)
+            return unit;
+        if (!isSet(unit))
+            return nullptr;
+    }
+    return nullptr;
+}
+
 int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPacket& avPacket,
                                         PriorityDataInfo* priorityData)
 {
     uint8_t* curPos = dstBuffer;
     int movedBytes = 0;  // a packet moved to the front, counted already when the reader handed it over
     uint8_t* const auStart = avPacket.data;  // in the reader's buffer (holdsSpsAndPps)
+    const bool inBuffer = auStart != nullptr && auStart >= m_buffer && auStart < m_bufEnd;
+    // where the access unit begins: past the parameter sets left out before the delimiter of a new file's first picture
+    uint8_t* auFrom = auStart;
     if (avPacket.size > 4 && avPacket.size < dstEnd - dstBuffer)
     {
         // A start code is three bytes or four, and both are legal, so where the NAL header sits has
@@ -777,6 +806,29 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
             curPos += avPacket.size;
             avPacket.size = 0;
             avPacket.data = nullptr;
+        }
+        else if (m_firstFileFrame && m_newFileLead && inBuffer && !replaceToOwnSPS() && !m_mvcSubStream)
+        {
+            // The first picture of a split part: the part was begun at this unit, a parameter set before the
+            // picture's delimiter (delimiterAfterSets). It is left out and the delimiter is written here; the stream's
+            // own delimiter and any further parameter set before it are left out as they are read (skipNal).
+            uint8_t* aud = delimiterAfterSets(avPacket.data + offset, m_bufEnd);
+            uint8_t* audStart = aud != nullptr ? aud - 3 : nullptr;
+            if (audStart != nullptr && m_longCodesAllowed && audStart - 1 >= m_buffer && audStart[-1] == 0)
+                audStart--;
+            uint8_t* audEnd =
+                aud != nullptr ? NALUnit::findNALWithStartCode(aud, m_bufEnd, m_longCodesAllowed) : nullptr;
+            if (audEnd != nullptr && audEnd < m_bufEnd && audEnd - audStart <= dstEnd - curPos)
+            {
+                memcpy(curPos, audStart, audEnd - audStart);
+                curPos += audEnd - audStart;
+                m_delimiterFound = true;
+                m_skipSourceAud = true;
+                m_leadingSetsLeftOut = true;
+                auFrom = audStart;
+                avPacket.size = 0;
+                avPacket.data = nullptr;
+            }
         }
     }
 
@@ -803,6 +855,10 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
 
     bool needInsTimingSEI = m_needSeiCorrection && m_lastSliceSPS != UINT_MAX;
     bool srcSpsPpsFound = avPacket.flags & AVPacket::IS_SPS_PPS_IN_GOP;
+    // The parameter sets left out before the delimiter of a new file's first picture do not count: only its own after
+    // the delimiter do, and without them the reader writes them
+    if (m_firstFileFrame && m_leadingSetsLeftOut && inBuffer)
+        srcSpsPpsFound = holdsSpsAndPps(auFrom, m_bufEnd);
     // The first picture of a new file, the next part of a split or the first picture of a cut, carries the parameter
     // sets when its group has none, as HEVC already does. A stream from MP4 or Matroska holds them once, ahead of its
     // first picture, so without them nothing in that file decoded: this used to be done only with contSPS. The
@@ -817,8 +873,7 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
     // the middle of a group (a cut of a disc clip) came after other pictures and got the copy ahead of its own: SPS
     // and PPS twice in one access unit. Where the stream's own are replaced (replaceToOwnSPS), they are left out and
     // the copy stays.
-    if (spsDiscontinue && !replaceToOwnSPS() && auStart != nullptr && auStart >= m_buffer && auStart < m_bufEnd &&
-        holdsSpsAndPps(auStart, m_bufEnd))
+    if (spsDiscontinue && !replaceToOwnSPS() && inBuffer && holdsSpsAndPps(auFrom, m_bufEnd))
         spsDiscontinue = false;
     bool needInsSpsPps = false;
     if (isIFrame() && m_lastSliceSPS != UINT_MAX && m_lastSlicePPS != UINT_MAX)
@@ -934,6 +989,7 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
     if (m_hrdPending)
         m_hrdAuAdded = static_cast<int>(curPos - dstBuffer) - movedBytes;
     m_firstFileFrame = false;
+    m_leadingSetsLeftOut = false;
     return static_cast<int>(curPos - dstBuffer);
 }
 
@@ -1783,6 +1839,26 @@ void H264StreamReader::countSps(const uint8_t* nal)
 bool H264StreamReader::skipNal(uint8_t* nal)
 {
     const auto nalType = static_cast<NALUnit::NALType>(*nal & 0x1f);
+
+    // The first unit of a new file's first picture (a cut, which is begun before the unit is read, or the units after
+    // the first of a split part): a parameter set before the picture's delimiter is left out (delimiterAfterSets), and
+    // the delimiter too where writeAdditionData has written it already.
+    if (m_newFileLead)
+    {
+        if ((m_firstFileFrame || m_skipSourceAud) && !replaceToOwnSPS() && !m_mvcSubStream &&
+            delimiterAfterSets(nal, m_bufEnd) != nullptr)
+        {
+            m_leadingSetsLeftOut = m_firstFileFrame;
+            return true;
+        }
+        m_newFileLead = false;
+        if (m_skipSourceAud)
+        {
+            m_skipSourceAud = false;
+            if (nalType == NALUnit::NALType::nuDelimiter)
+                return true;
+        }
+    }
 
     if (nalType == NALUnit::NALType::nuFillerData)
         return true;
