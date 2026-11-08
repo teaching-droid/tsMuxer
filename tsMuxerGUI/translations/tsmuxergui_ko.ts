@@ -5162,8 +5162,20 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>{file}은 재생할 대상을 나타냅니다. 없으면 맨 뒤에 붙습니다</translation>
     </message>
     <message>
-        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. mpv opens a Blu-ray title directly in its angle, VLC the first angle of a DVD title. For any other player and title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
-        <translation>&quot;타이틀 선택&quot;의 &quot;미리보기&quot;와 입력 목록의 &quot;재생&quot;은 타이틀이나 파일을 이 플레이어로 엽니다. mpv는 Blu-ray 타이틀을 해당 앵글로, VLC는 DVD 타이틀을 첫 번째 앵글로 바로 엽니다. 그 밖의 플레이어와 타이틀의 경우 tsMuxeR가 먼저 30초 미리보기를 임시 폴더에 만들며, 이 폴더는 창을 닫을 때 삭제됩니다.</translation>
+        <source>Blu-ray titles:</source>
+        <translation>Blu-ray 타이틀:</translation>
+    </message>
+    <message>
+        <source>DVD titles:</source>
+        <translation>DVD 타이틀:</translation>
+    </message>
+    <message>
+        <source>the player above</source>
+        <translation>위의 플레이어</translation>
+    </message>
+    <message>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in the player above. A Blu-ray title or a DVD title opens in the player given for it, where one is given. mpv opens a Blu-ray title directly in its angle, VLC the first angle of a DVD title. For any other player and title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>&quot;타이틀 선택&quot;의 &quot;미리보기&quot;와 입력 목록의 &quot;재생&quot;은 타이틀이나 파일을 위의 플레이어로 엽니다. Blu-ray 또는 DVD 타이틀은 해당 플레이어가 지정되어 있으면 그 플레이어로 열립니다. mpv는 Blu-ray 타이틀을 해당 앵글로, VLC는 DVD 타이틀을 첫 번째 앵글로 바로 엽니다. 그 밖의 플레이어와 타이틀의 경우 tsMuxeR가 먼저 30초 미리보기를 임시 폴더에 만들며, 이 폴더는 창을 닫을 때 삭제됩니다.</translation>
     </message>
     <message>
         <source>Programs (*.exe)</source>

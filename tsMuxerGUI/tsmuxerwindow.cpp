@@ -982,21 +982,26 @@ TsMuxerWindow::TsMuxerWindow()
     // The player for previews (General tab): a program, or the system's default player when none is given. The
     // previews that earlier windows left in the temporary folder are removed.
     PlayerLauncher::removeOldFolders();
-    connect(ui->previewPlayerBrowse, &QPushButton::clicked, this,
-            [this]()
-            {
-                const QString current = ui->previewPlayerPath->text().trimmed();
+    // The same Browse for the player of every preview and those of Blu-ray and DVD titles
+    const auto browsePlayer = [this](QLineEdit* path)
+    {
+        const QString current = path->text().trimmed();
 #ifdef Q_OS_WIN
-                const QString filter = tr("Programs (*.exe)");
+        const QString filter = tr("Programs (*.exe)");
 #else
-                const QString filter;
+        const QString filter;
 #endif
-                const QString program = QFileDialog::getOpenFileName(
-                    this, tr("Choose the player"), current.isEmpty() ? QString() : QFileInfo(current).absolutePath(),
-                    filter);
-                if (!program.isEmpty())
-                    ui->previewPlayerPath->setText(QDir::toNativeSeparators(program));
-            });
+        const QString program = QFileDialog::getOpenFileName(
+            this, tr("Choose the player"), current.isEmpty() ? QString() : QFileInfo(current).absolutePath(), filter);
+        if (!program.isEmpty())
+            path->setText(QDir::toNativeSeparators(program));
+    };
+    connect(ui->previewPlayerBrowse, &QPushButton::clicked, this,
+            [browsePlayer, this]() { browsePlayer(ui->previewPlayerPath); });
+    connect(ui->previewPlayerBdBrowse, &QPushButton::clicked, this,
+            [browsePlayer, this]() { browsePlayer(ui->previewPlayerBdPath); });
+    connect(ui->previewPlayerDvdBrowse, &QPushButton::clicked, this,
+            [browsePlayer, this]() { browsePlayer(ui->previewPlayerDvdPath); });
     connect(ui->addBtn, &QPushButton::clicked, this, &TsMuxerWindow::onAddBtnClick);
     connect(ui->btnAppend, &QPushButton::clicked, this, &TsMuxerWindow::onAppendButtonClick);
     connect(ui->removeFile, &QPushButton::clicked, this, &TsMuxerWindow::onRemoveBtnClick);
@@ -2908,7 +2913,8 @@ static const char* const CHOICE_WIDGETS[] = {
     // Output
     "comboBoxDvProfile",
     // the player for previews (General tab)
-    "previewPlayerPath", "previewPlayerArgs",
+    "previewPlayerPath", "previewPlayerArgs", "previewPlayerBdPath", "previewPlayerBdArgs", "previewPlayerDvdPath",
+    "previewPlayerDvdArgs",
     // the dual-layer group beside the Meta file box
     "dlDiscSize", "dlGuardCheck", "dlGuardSpin", "dlGuardBeforeCheck", "dlGuardBeforeSpin", "dlFreeSectorsManual",
     "dlFreeSectors", "dlAllowOversize", "dlInnerOnly", "dlNoGuard",
@@ -5159,6 +5165,8 @@ PlayerLauncher* TsMuxerWindow::previewPlayer()
     if (!m_player)
         m_player = new PlayerLauncher(getTsMuxerBinaryPath(), this);
     m_player->setPlayer(ui->previewPlayerPath->text(), ui->previewPlayerArgs->text());
+    m_player->setTitlePlayers(ui->previewPlayerBdPath->text(), ui->previewPlayerBdArgs->text(),
+                              ui->previewPlayerDvdPath->text(), ui->previewPlayerDvdArgs->text());
     return m_player;
 }
 

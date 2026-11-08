@@ -5162,8 +5162,20 @@ Se isto apareceu enquanto um arquivo ainda estava sendo examinado, ou quando a j
         <translation>{file} representa o que é reproduzido; sem ele, vai por último</translation>
     </message>
     <message>
-        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. mpv opens a Blu-ray title directly in its angle, VLC the first angle of a DVD title. For any other player and title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
-        <translation>&quot;Pré-visualizar&quot; em &quot;Escolha um título&quot; e &quot;Reproduzir&quot; na lista de entrada abrem um título ou arquivo neste player. O mpv abre um título Blu-ray diretamente em seu ângulo, e o VLC, o primeiro ângulo de um título de DVD. Para qualquer outro player e título, o tsMuxeR primeiro cria uma pré-visualização de 30 segundos em uma pasta temporária, que é removida quando a janela é fechada.</translation>
+        <source>Blu-ray titles:</source>
+        <translation>Títulos Blu-ray:</translation>
+    </message>
+    <message>
+        <source>DVD titles:</source>
+        <translation>Títulos de DVD:</translation>
+    </message>
+    <message>
+        <source>the player above</source>
+        <translation>o player acima</translation>
+    </message>
+    <message>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in the player above. A Blu-ray title or a DVD title opens in the player given for it, where one is given. mpv opens a Blu-ray title directly in its angle, VLC the first angle of a DVD title. For any other player and title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>&quot;Pré-visualizar&quot; em &quot;Escolha um título&quot; e &quot;Reproduzir&quot; na lista de entrada abrem um título ou arquivo no player acima. Um título Blu-ray ou de DVD abre no player indicado para ele, quando houver um. O mpv abre um título Blu-ray diretamente em seu ângulo, e o VLC, o primeiro ângulo de um título de DVD. Para qualquer outro player e título, o tsMuxeR primeiro cria uma pré-visualização de 30 segundos em uma pasta temporária, que é removida quando a janela é fechada.</translation>
     </message>
     <message>
         <source>Programs (*.exe)</source>

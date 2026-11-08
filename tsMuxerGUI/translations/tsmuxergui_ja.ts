@@ -5119,8 +5119,20 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>{file} は再生する対象を表します。ない場合は最後に付けます</translation>
     </message>
     <message>
-        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. mpv opens a Blu-ray title directly in its angle, VLC the first angle of a DVD title. For any other player and title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
-        <translation>「タイトルを選択」の「プレビュー」と入力リストの「再生」は、タイトルまたはファイルをこのプレーヤーで開きます。mpv は Blu-ray のタイトルをそのアングルで、VLC は DVD のタイトルを最初のアングルで直接開きます。その他のプレーヤーとタイトルでは、tsMuxeR はまず 30 秒のプレビューを一時フォルダーに作成します。このフォルダーはウィンドウを閉じると削除されます。</translation>
+        <source>Blu-ray titles:</source>
+        <translation>Blu-ray のタイトル:</translation>
+    </message>
+    <message>
+        <source>DVD titles:</source>
+        <translation>DVD のタイトル:</translation>
+    </message>
+    <message>
+        <source>the player above</source>
+        <translation>上のプレーヤー</translation>
+    </message>
+    <message>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in the player above. A Blu-ray title or a DVD title opens in the player given for it, where one is given. mpv opens a Blu-ray title directly in its angle, VLC the first angle of a DVD title. For any other player and title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>「タイトルを選択」の「プレビュー」と入力リストの「再生」は、タイトルまたはファイルを上のプレーヤーで開きます。Blu-ray または DVD のタイトルは、そのためのプレーヤーが指定されていれば、そのプレーヤーで開きます。mpv は Blu-ray のタイトルをそのアングルで、VLC は DVD のタイトルを最初のアングルで直接開きます。その他のプレーヤーとタイトルでは、tsMuxeR はまず 30 秒のプレビューを一時フォルダーに作成します。このフォルダーはウィンドウを閉じると削除されます。</translation>
     </message>
     <message>
         <source>Programs (*.exe)</source>

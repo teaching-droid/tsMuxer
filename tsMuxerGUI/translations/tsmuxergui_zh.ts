@@ -5119,8 +5119,20 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>{file} 表示要播放的内容；若没有，则放在最后</translation>
     </message>
     <message>
-        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. mpv opens a Blu-ray title directly in its angle, VLC the first angle of a DVD title. For any other player and title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
-        <translation>“选择标题”中的“预览”和输入列表中的“播放”会在此播放器中打开标题或文件。mpv 会直接以其视角打开 Blu-ray 标题，VLC 则以第一个视角打开 DVD 标题。对于其他播放器和标题，tsMuxeR 会先在临时文件夹中生成 30 秒的预览，关闭窗口时该文件夹会被删除。</translation>
+        <source>Blu-ray titles:</source>
+        <translation>Blu-ray 标题：</translation>
+    </message>
+    <message>
+        <source>DVD titles:</source>
+        <translation>DVD 标题：</translation>
+    </message>
+    <message>
+        <source>the player above</source>
+        <translation>上面的播放器</translation>
+    </message>
+    <message>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in the player above. A Blu-ray title or a DVD title opens in the player given for it, where one is given. mpv opens a Blu-ray title directly in its angle, VLC the first angle of a DVD title. For any other player and title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>“选择标题”中的“预览”和输入列表中的“播放”会在上面的播放器中打开标题或文件。如果为 Blu-ray 或 DVD 标题指定了播放器，则在该播放器中打开。mpv 会直接以其视角打开 Blu-ray 标题，VLC 则以第一个视角打开 DVD 标题。对于其他播放器和标题，tsMuxeR 会先在临时文件夹中生成 30 秒的预览，关闭窗口时该文件夹会被删除。</translation>
     </message>
     <message>
         <source>Programs (*.exe)</source>

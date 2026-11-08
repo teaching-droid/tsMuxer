@@ -5162,8 +5162,20 @@ Jeśli pojawiło się to podczas sprawdzania pliku lub zamykania okna, proces zo
         <translation>{file} oznacza to, co jest odtwarzane; bez niego trafia na koniec</translation>
     </message>
     <message>
-        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. mpv opens a Blu-ray title directly in its angle, VLC the first angle of a DVD title. For any other player and title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
-        <translation>„Podgląd” w „Wybierz tytuł” i „Odtwórz” na liście wejściowej otwierają tytuł lub plik w tym odtwarzaczu. mpv otwiera tytuł Blu-ray bezpośrednio w jego kącie, VLC pierwszy kąt tytułu DVD. Dla każdego innego odtwarzacza i tytułu tsMuxeR najpierw tworzy 30-sekundowy podgląd w folderze tymczasowym, który jest usuwany po zamknięciu okna.</translation>
+        <source>Blu-ray titles:</source>
+        <translation>Tytuły Blu-ray:</translation>
+    </message>
+    <message>
+        <source>DVD titles:</source>
+        <translation>Tytuły DVD:</translation>
+    </message>
+    <message>
+        <source>the player above</source>
+        <translation>odtwarzacz powyżej</translation>
+    </message>
+    <message>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in the player above. A Blu-ray title or a DVD title opens in the player given for it, where one is given. mpv opens a Blu-ray title directly in its angle, VLC the first angle of a DVD title. For any other player and title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>„Podgląd” w „Wybierz tytuł” i „Odtwórz” na liście wejściowej otwierają tytuł lub plik w odtwarzaczu powyżej. Tytuł Blu-ray lub DVD otwiera się w odtwarzaczu podanym dla niego, jeśli taki podano. mpv otwiera tytuł Blu-ray bezpośrednio w jego kącie, VLC pierwszy kąt tytułu DVD. Dla każdego innego odtwarzacza i tytułu tsMuxeR najpierw tworzy 30-sekundowy podgląd w folderze tymczasowym, który jest usuwany po zamknięciu okna.</translation>
     </message>
     <message>
         <source>Programs (*.exe)</source>

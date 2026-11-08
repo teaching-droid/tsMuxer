@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <tuple>
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -60,8 +61,30 @@ PlayerLauncher::~PlayerLauncher()
 
 void PlayerLauncher::setPlayer(const QString& program, const QString& arguments)
 {
-    m_program = program.trimmed();
-    m_arguments = arguments.trimmed();
+    m_defaultProgram = program.trimmed();
+    m_defaultArguments = arguments.trimmed();
+}
+
+void PlayerLauncher::setTitlePlayers(const QString& bluRayProgram, const QString& bluRayArguments,
+                                     const QString& dvdProgram, const QString& dvdArguments)
+{
+    m_bluRayProgram = bluRayProgram.trimmed();
+    m_bluRayArguments = bluRayArguments.trimmed();
+    m_dvdProgram = dvdProgram.trimmed();
+    m_dvdArguments = dvdArguments.trimmed();
+}
+
+QPair<QString, QString> PlayerLauncher::playerOf(const PreviewSource& source) const
+{
+    // a clip or any other file is a file: the player of every preview
+    if (source.file.isEmpty() || !QFileInfo(source.file).isFile())
+    {
+        if (!source.playlist.isEmpty() && !m_bluRayProgram.isEmpty())
+            return {m_bluRayProgram, m_bluRayArguments};
+        if (source.dvdTitle > 0 && !m_dvdProgram.isEmpty())
+            return {m_dvdProgram, m_dvdArguments};
+    }
+    return {m_defaultProgram, m_defaultArguments};
 }
 
 QString PlayerLauncher::folder() const
@@ -176,6 +199,9 @@ void PlayerLauncher::preview(const PreviewSource& source, QWidget* parent)
 {
     if (busy())
         return;
+    // The player is fixed here, for the whole of this preview: a setting changed while tsMuxeR makes it does not move
+    // the preview to another player
+    std::tie(m_program, m_arguments) = playerOf(source);
     // a file is opened as it is: any player plays a whole clip or file, and can go anywhere in it
     if (!source.file.isEmpty() && QFileInfo(source.file).isFile())
     {

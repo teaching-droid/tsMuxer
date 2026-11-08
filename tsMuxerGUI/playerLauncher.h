@@ -45,6 +45,12 @@ class PlayerLauncher : public QObject
     ~PlayerLauncher() override;
     // program empty: the system's default player
     void setPlayer(const QString& program, const QString& arguments);
+    // ** ONE PLAYER DID NOT FIT EVERY SOURCE. ** mpv opens a Blu-ray title itself and VLC a DVD title, and a player
+    // such as PowerDVD may be the one wanted for files: the General tab gives a player for Blu-ray titles and one for
+    // DVD titles beside the player of every preview. An empty program there is the player of every preview, with its
+    // arguments. A title's preview that tsMuxeR makes first is played in the player of the title.
+    void setTitlePlayers(const QString& bluRayProgram, const QString& bluRayArguments, const QString& dvdProgram,
+                         const QString& dvdArguments);
     // Plays the source, or makes its preview and plays that. parent: the window the progress and the messages show over.
     void preview(const PreviewSource& source, QWidget* parent);
     // A preview is being made
@@ -78,9 +84,18 @@ class PlayerLauncher : public QObject
     void finish();
     [[nodiscard]] QString folder() const;
 
+    // The player of the source of the preview being made or played, chosen when it starts (preview)
+    [[nodiscard]] QPair<QString, QString> playerOf(const PreviewSource& source) const;
+
     QString m_tsMuxer;
-    QString m_program;
+    QString m_program;    // the player of this preview: program and arguments
     QString m_arguments;
+    QString m_defaultProgram;  // as set on the General tab
+    QString m_defaultArguments;
+    QString m_bluRayProgram;
+    QString m_bluRayArguments;
+    QString m_dvdProgram;
+    QString m_dvdArguments;
     PreviewSource m_source;
     QPointer<QWidget> m_parent;
     QProcess* m_proc = nullptr;

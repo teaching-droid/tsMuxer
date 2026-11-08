@@ -5119,8 +5119,20 @@ Wenn dies erschien, während eine Datei noch untersucht wurde, oder beim Schlie�
         <translation>{file} steht für das, was abgespielt wird; ohne es kommt es ans Ende</translation>
     </message>
     <message>
-        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in this player. mpv opens a Blu-ray title directly in its angle, VLC the first angle of a DVD title. For any other player and title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
-        <translation>&quot;Vorschau&quot; unter &quot;Titel wählen&quot; und &quot;Abspielen&quot; in der Liste der Eingabedateien öffnen einen Titel oder eine Datei in diesem Player. mpv öffnet einen Blu-ray-Titel direkt in seinem Blickwinkel, VLC den ersten Blickwinkel eines DVD-Titels. Für jeden anderen Player und Titel erstellt tsMuxeR zuerst eine Vorschau von 30 Sekunden in einem temporären Ordner, der beim Schließen des Fensters entfernt wird.</translation>
+        <source>Blu-ray titles:</source>
+        <translation>Blu-ray-Titel:</translation>
+    </message>
+    <message>
+        <source>DVD titles:</source>
+        <translation>DVD-Titel:</translation>
+    </message>
+    <message>
+        <source>the player above</source>
+        <translation>der Player oben</translation>
+    </message>
+    <message>
+        <source>&quot;Preview&quot; in &quot;Choose a title&quot; and &quot;Play&quot; on the input list open a title or file in the player above. A Blu-ray title or a DVD title opens in the player given for it, where one is given. mpv opens a Blu-ray title directly in its angle, VLC the first angle of a DVD title. For any other player and title, tsMuxeR first makes a 30 second preview of it into a temporary folder, which is removed when the window closes.</source>
+        <translation>&quot;Vorschau&quot; unter &quot;Titel wählen&quot; und &quot;Abspielen&quot; in der Liste der Eingabedateien öffnen einen Titel oder eine Datei im Player oben. Ein Blu-ray- oder DVD-Titel öffnet sich in dem Player, der dafür angegeben ist, falls einer angegeben ist. mpv öffnet einen Blu-ray-Titel direkt in seinem Blickwinkel, VLC den ersten Blickwinkel eines DVD-Titels. Für jeden anderen Player und Titel erstellt tsMuxeR zuerst eine Vorschau von 30 Sekunden in einem temporären Ordner, der beim Schließen des Fensters entfernt wird.</translation>
     </message>
     <message>
         <source>Programs (*.exe)</source>
