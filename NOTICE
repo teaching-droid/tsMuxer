@@ -1,0 +1,11 @@
+tsMuxeR
+Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer)
+
+This product includes software from the tsMuxeR project:
+  tsMuxeR was created by Roman Vasilenko and open sourced on 23 July 2019.
+  justdan96/tsMuxer (https://github.com/justdan96/tsMuxer), Daniel Bryant and contributors.
+  jaminmc/tsMuxer (https://github.com/jaminmc/tsMuxer), the C++20 and Qt 6 modernisation.
+The contributors are listed in README.md.
+
+Files changed in this repository carry a line saying so. Third-party components and their licences are listed in
+THIRD-PARTY-NOTICES.txt and the licenses folder.

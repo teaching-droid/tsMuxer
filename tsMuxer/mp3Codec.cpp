@@ -1,3 +1,5 @@
+// Changed by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 #include "mp3Codec.h"
 
 static constexpr uint16_t ff_mpa_bitrate_tab[2][3][15] = {

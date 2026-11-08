@@ -1,3 +1,5 @@
+# Largely rewritten by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer).
+# Apache License 2.0, see LICENSE and NOTICE.
 name: Build for Linux
 
 on:
@@ -66,7 +68,8 @@ jobs:
         # tsMuxeR's own license: the Apache License asks for a copy of it with every copy of the program. The two
         # programs use the libraries of the system, so the package holds no other software.
         cp ../LICENSE LICENSE
-        zip -9 "$asset" tsMuxeR tsMuxerGUI LICENSE
+        cp ../NOTICE NOTICE
+        zip -9 "$asset" tsMuxeR tsMuxerGUI LICENSE NOTICE
         ls -la
 
     - name: Checksum the package

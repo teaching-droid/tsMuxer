@@ -1,3 +1,5 @@
+# Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
+# Apache License 2.0, see LICENSE and NOTICE.
 name: Build AppImage for Linux
 
 # One file that runs on most current Linux distributions (glibc 2.35 or newer), with the window and the command line
@@ -186,6 +188,7 @@ jobs:
         doc=AppDir/usr/share/doc/tsMuxeR
         mkdir -p "$doc/licenses"
         cp LICENSE "$doc/LICENSE"
+        cp NOTICE "$doc/NOTICE"
         cp packaging/notices/AppImage.txt "$doc/THIRD-PARTY-NOTICES.txt"
         cp licenses/LGPL-3.0.txt licenses/GPL-3.0.txt licenses/LGPL-2.1.txt "$doc/licenses/"
         : > packages.txt

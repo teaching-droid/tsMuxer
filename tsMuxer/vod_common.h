@@ -1,3 +1,5 @@
+// Changed by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 #ifndef VOD_COMMON_H_
 #define VOD_COMMON_H_
 

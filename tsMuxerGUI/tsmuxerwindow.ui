@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Changed by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer). Apache License 2.0, see LICENSE and NOTICE. -->
 <ui version="4.0">
  <class>TsMuxerWindow</class>
  <widget class="QWidget" name="TsMuxerWindow">

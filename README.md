@@ -108,6 +108,8 @@ versions additionally appear on the Releases page.
 
 This project was created by Roman Vasilenko, with the last public release 20th January 2014. It was open sourced on 23rd July 2019, to aid the future development.
 
+The copyright and licence notices are in [NOTICE](NOTICE), [LICENSE](LICENSE) and [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt). Every source file changed in this fork says so in its first lines.
+
 ## Installation
 
 Please see [INSTALLATION.md](docs/INSTALLATION.md) for installation instructions.

@@ -1,3 +1,5 @@
+// Changed by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 #include "lang_codes.h"
 
 QVariant LangCodesModel::QtvLangCode::toVariant(int role, const std::function<QString(const QString&)>& shownCode) const

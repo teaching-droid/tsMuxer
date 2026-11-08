@@ -1,3 +1,5 @@
+# Largely rewritten by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer).
+# Apache License 2.0, see LICENSE and NOTICE.
 name: Build for Windows 32-bit
 
 on:
@@ -198,6 +200,7 @@ jobs:
         Copy-Item "$env:GITHUB_WORKSPACE\THIRD-PARTY-NOTICES.txt" "../bin/" -Force
         # tsMuxeR's own license: the Apache License asks for a copy of it with every copy of the program.
         Copy-Item "$env:GITHUB_WORKSPACE\LICENSE" "../bin/LICENSE" -Force
+        Copy-Item "$env:GITHUB_WORKSPACE\NOTICE" "../bin/NOTICE" -Force
         Copy-Item "$env:GITHUB_WORKSPACE\licenses" "../bin/licenses" -Recurse -Force
         if (Test-Path "tsMuxerGUI/tsmuxergui.exe") {
           Copy-Item -Path "tsMuxerGUI/tsmuxergui.exe" -Destination "../bin/tsMuxerGUI.exe" -Force
@@ -291,7 +294,7 @@ jobs:
           7z a -y "..\$asset" *
           Move-Item "..\$asset" ".\$asset" -Force
         } else {
-          7z a -y "$asset" tsMuxeR.exe *.dll LICENSE THIRD-PARTY-NOTICES.txt licenses
+          7z a -y "$asset" tsMuxeR.exe *.dll LICENSE NOTICE THIRD-PARTY-NOTICES.txt licenses
         }
 
     - name: Checksum the package

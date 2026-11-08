@@ -1,3 +1,5 @@
+// Largely rewritten by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 #include "tsDemuxer.h"
 
 #include <fs/systemlog.h>

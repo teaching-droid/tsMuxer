@@ -1,3 +1,5 @@
+// Changed by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 #if !defined(_WIN32) || defined(WIN32_DEBUG_FREETYPE)
 #ifdef _WIN32
 #pragma comment(lib, "../../freetype/lib/freetype.lib")

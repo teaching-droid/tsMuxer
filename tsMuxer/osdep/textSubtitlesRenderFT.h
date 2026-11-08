@@ -1,3 +1,5 @@
+// Changed by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 #ifndef TEXT_SUBTITLES_RENDER_FT_H_
 #define TEXT_SUBTITLES_RENDER_FT_H_
 

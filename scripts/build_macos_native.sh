@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Largely rewritten by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer).
+# Apache License 2.0, see LICENSE and NOTICE.
 
 set -ex
 
@@ -145,10 +147,11 @@ codesign --verify --deep --strict tsMuxerGUI.app
 # tsMuxeR's own license, and the notices and license texts of what the package holds: the Qt frameworks in the
 # app (LGPLv3) and the FreeType linked into tsMuxeR.
 cp ../../LICENSE LICENSE
+cp ../../NOTICE NOTICE
 cp ../../packaging/notices/macOS.txt THIRD-PARTY-NOTICES.txt
 mkdir -p licenses
 cp ../../licenses/LGPL-3.0.txt ../../licenses/GPL-3.0.txt ../../licenses/LGPL-2.1.txt ../../licenses/FreeType-FTL.txt licenses/
-zip -9 -r -y mac.zip tsMuxeR tsMuxerGUI.app LICENSE THIRD-PARTY-NOTICES.txt licenses
+zip -9 -r -y mac.zip tsMuxeR tsMuxerGUI.app LICENSE NOTICE THIRD-PARTY-NOTICES.txt licenses
 
 # Check the package rather than trusting the flags, because both faults this replaces were
 # silent: the build succeeded, the zip uploaded, and the app would not open. zipinfo marks a

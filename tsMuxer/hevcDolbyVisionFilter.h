@@ -1,3 +1,5 @@
+// Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 #ifndef HEVC_DOLBY_VISION_FILTER_H_
 #define HEVC_DOLBY_VISION_FILTER_H_
 

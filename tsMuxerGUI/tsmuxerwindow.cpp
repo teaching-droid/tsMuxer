@@ -1,3 +1,5 @@
+// Largely rewritten by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 // _WIN32 and not Q_OS_WIN: the Qt macro comes from a Qt header, and none has been included yet
 // at this point in the file.
 #ifdef _WIN32

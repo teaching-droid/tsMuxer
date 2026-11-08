@@ -1,3 +1,5 @@
+// Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 #ifndef BITMAP_SUBTITLES_H_
 #define BITMAP_SUBTITLES_H_
 
