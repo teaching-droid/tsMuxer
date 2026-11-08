@@ -2,6 +2,8 @@
 
 > **Note:** This is a fork of [jaminmc/tsMuxer](https://github.com/jaminmc/tsMuxer) (itself a modernized C++20/Qt6 fork of [justdan96/tsMuxer](https://github.com/justdan96/tsMuxer)). It adds multi-layer disc authoring: a menu-preserving BDMV to ISO mode, a layer-break guard band for BD-R/RE DL and BD-R XL media, a fit-to-disc capacity guard, and a layer-break calculator in the GUI. See [DISC_AUTHORING.md](docs/DISC_AUTHORING.md) (also available [auf Deutsch](docs/DISC_AUTHORING_DE.md) and [日本語で](docs/DISC_AUTHORING_JA.md)).
 
+> **This repository is the only home of this tsMuxeR.** The source, the issues and the release packages are here, on GitHub, and nowhere else. No website is run by or for this project. `tsmuxer.net`, and any other site that offers tsMuxeR downloads, checksums or guides, is not connected to this repository or its author. What such a site offers may be out of date, and the files it links to can be changed at any time. Download tsMuxeR only from the [Releases page](https://github.com/teaching-droid/tsMuxer/releases) of this repository, and compare each package with the `.sha256` file published beside it.
+
 ## Vision
 
 This project is for tsMuxer - a transport stream muxer for remuxing/muxing elementary streams. This is very useful for transcoding and this project is used in other products such as Universal Media Server.
