@@ -1,3 +1,5 @@
+// Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 #ifndef DIAGNOSTIC_REPORT_H_
 #define DIAGNOSTIC_REPORT_H_
 

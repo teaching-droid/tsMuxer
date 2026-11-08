@@ -1,3 +1,5 @@
+// Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 #include "dvdTitles.h"
 #include "discTitles.h"
 

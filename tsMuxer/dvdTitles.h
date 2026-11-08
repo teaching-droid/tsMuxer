@@ -1,3 +1,5 @@
+// Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 #ifndef DVD_TITLES_H_
 #define DVD_TITLES_H_
 

@@ -1,3 +1,5 @@
+// Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 #ifndef TSTD_CHECK_H_
 #define TSTD_CHECK_H_
 

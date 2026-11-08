@@ -181,12 +181,6 @@ jobs:
           --custom-apprun AppRun \
           --plugin qt
 
-    - name: Check that no FFmpeg is bundled
-      run: |
-        # tsMuxeR ships no FFmpeg. Qt Multimedia brought Qt's FFmpeg plug-in, the GStreamer one and their libraries
-        # into the AppImage once without anything noticing; every file linuxdeploy put in is checked by name.
-        python3 scripts/check_package.py AppDir
-
     - name: Add the licence notices
       run: |
         # tsMuxeR's license, the notices of Qt, and for every other library linuxdeploy put in the AppImage the
@@ -218,6 +212,13 @@ jobs:
         rm -f packages.txt
         [ "$missing" = 0 ] || exit 1
         echo "$(wc -l < "$doc/PACKAGES.txt") packages, each with its copyright file"
+
+    - name: Check that no FFmpeg is bundled and the notices are there
+      run: |
+        # tsMuxeR ships no FFmpeg. Qt Multimedia brought Qt's FFmpeg plug-in, the GStreamer one and their libraries
+        # into the AppImage once without anything noticing; every file linuxdeploy put in is checked by name. It runs
+        # after the notices are added, as LICENSE and NOTICE are looked for too.
+        python3 scripts/check_package.py AppDir
 
     - name: Make the AppImage
       env:

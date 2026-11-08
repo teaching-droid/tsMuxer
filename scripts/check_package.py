@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Lists every file of a built package and fails if any of it is FFmpeg, GStreamer or Qt Multimedia.
+# Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
+# Apache License 2.0, see LICENSE and NOTICE.
+"""Lists every file of a built package and fails if any of it is FFmpeg, GStreamer or Qt Multimedia, or if the
+package lacks LICENSE or NOTICE.
 
 tsMuxeR ships no FFmpeg. Qt Multimedia, linked once for the sound at the end of a mux, brought Qt's FFmpeg plug-in
 and the FFmpeg libraries into the macOS and Linux packages without anything noticing, so every package is checked
-before it is published.
+before it is published. The Apache License asks for its text and the NOTICE file with every copy of the program, so
+both are looked for too, anywhere in the package (the AppImage keeps them in usr/share/doc/tsMuxeR).
 
     python3 scripts/check_package.py <folder | .zip | .AppImage | .7z> [...]
 
@@ -31,6 +35,9 @@ FORBIDDEN = [
     re.compile(r"(^|/)(lib)?Qt6?Multimedia", re.I),
     re.compile(r"(^|/)(plugins|PlugIns)/multimedia(/|$)", re.I),
 ]
+
+# Files every package must hold, by name, in any folder
+REQUIRED = ["LICENSE", "NOTICE"]
 
 
 def list_folder(path):
@@ -92,10 +99,14 @@ def check(path):
     if not names:
         raise RuntimeError(path + " holds no files")
     hits = [n for n in names if any(p.search(n) for p in FORBIDDEN)]
+    present = {n.rsplit("/", 1)[-1] for n in names}
+    missing = [r for r in REQUIRED if r not in present]
     print(f"{path}: {len(names)} entries")
     for n in sorted(hits):
         print(f"  NOT ALLOWED: {n}")
-    return hits
+    for r in missing:
+        print(f"  MISSING: {r}")
+    return hits + ["missing " + r for r in missing]
 
 
 def main(argv):
@@ -110,9 +121,10 @@ def main(argv):
             print(f"{path}: cannot be read: {e}")
             return 2
     if found:
-        print("FAIL: the package holds FFmpeg, GStreamer or Qt Multimedia, and tsMuxeR ships none of them.")
+        print("FAIL: the package holds FFmpeg, GStreamer or Qt Multimedia, which tsMuxeR ships none of, or lacks LICENSE"
+              " or NOTICE.")
         return 1
-    print("OK: no FFmpeg, GStreamer or Qt Multimedia in the package.")
+    print("OK: no FFmpeg, GStreamer or Qt Multimedia in the package, and LICENSE and NOTICE are there.")
     return 0
 
 

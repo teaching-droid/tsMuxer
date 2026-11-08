@@ -1,3 +1,5 @@
+// Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 // H.262 Annex B, Tables B.14 and B.15: the codes of the DCT coefficients, taken from the text of the Recommendation
 // by a script that also checks each table is prefix free (Kraft sum: B.14 4095/4096, the 12 zero bits a start code
 // begins with left out; B.15 4087/4096, the long codes Table one has no use for left out as well).

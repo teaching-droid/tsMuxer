@@ -1,3 +1,5 @@
+// Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 #ifndef DISC_TITLE_DIALOG_H_
 #define DISC_TITLE_DIALOG_H_
 

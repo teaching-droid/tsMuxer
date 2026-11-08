@@ -1,3 +1,4 @@
+<!-- Changed by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer). Apache License 2.0, see LICENSE and NOTICE. -->
 <ui version="4.0" >
  <class>muxForm</class>
  <widget class="QDialog" name="muxForm" >

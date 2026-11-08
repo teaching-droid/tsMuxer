@@ -1,3 +1,5 @@
+// Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 // Taken from the text and the word positions of Rec. ITU-T H.264 (08/2021), Tables 9-12 to 9-33, by a script that checks
 // every ctxIdx 0..1023 but 276 is there for each cabac_init_idc; the
 // Recommendation prints ctxIdx 541 of Table 9-26 as 641, taken from its place between 540 and 542.

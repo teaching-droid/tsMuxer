@@ -1,3 +1,5 @@
+// Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 // H.264 tables of clause 9 (9-4, 9-5, 9-7 to 9-10, 9-43 to 9-45) taken from Rec. ITU-T H.264 (08/2021) by
 // word position, each code column checked to be prefix free and to hold every value it must, by a script.
 // Vlc4: {code, length in bits, value, value}: coeff_token {TotalCoeff, TrailingOnes}; total_zeros and run_before {value}.

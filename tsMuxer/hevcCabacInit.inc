@@ -1,3 +1,5 @@
+// Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
+// Apache License 2.0, see LICENSE and NOTICE.
 // HEVC Tables 9-5 to 9-31 and 9-34 to 9-37: the initValue of each ctxIdx, taken from Rec. ITU-T H.265 (09/2023)
 // by a script that checks the number of contexts of each table.
 const uint8_t init9_5[3] = {153, 153, 153};
