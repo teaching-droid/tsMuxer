@@ -10,6 +10,7 @@
 #include "../directory.h"
 #include "../discImage.h"
 #include "../file.h"
+#include "../nameAlias.h"
 
 // FormatMessage is FormatMessageW in this build, so the text came back in UTF-16 and was read as 8-bit
 // characters: every message stopped after its first letter, and a write Windows refused said only "T"
@@ -73,6 +74,9 @@ File::File(const char* fName, const unsigned int oflag,
            unsigned int systemDependentFlags) /* throw ( std::runtime_error ) */
     : AbstractOutputStream(), m_impl(INVALID_HANDLE_VALUE), m_name(fName), m_pos(0)
 {
+    // a second name of a source opens the file itself (nameAlias.h)
+    const std::string realName = nameAlias::resolve(fName);
+    fName = realName.c_str();
     if (discImage::isInside(fName))
     {
         if (!openInImage(fName, oflag))
@@ -122,6 +126,9 @@ bool File::open(const char* fName, const unsigned int oflag, unsigned int system
     m_pos = 0;
     if (m_view)
         closeInImage();
+    // a second name of a source opens the file itself (nameAlias.h)
+    const std::string realName = nameAlias::resolve(fName);
+    fName = realName.c_str();
     if (discImage::isInside(fName))
         return openInImage(fName, oflag);
 

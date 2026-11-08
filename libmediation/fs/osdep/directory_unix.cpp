@@ -6,6 +6,7 @@
 #include "../directory_priv.h"
 #include "../discImage.h"
 #include "../file.h"
+#include "../nameAlias.h"
 
 #include <dirent.h>
 #include <fnmatch.h>
@@ -29,16 +30,18 @@ string extractFileDir(const string& fileName)
 }
 
 // A path inside a disc image is asked of the image (discImage.h); stat knows only the image file.
-bool fileExists(const string& fileName)
+bool fileExists(const string& name)
 {
+    const std::string fileName = nameAlias::resolve(name);  // a second name of a file (nameAlias.h)
     if (discImage::isInside(fileName))
         return discImage::exists(fileName);
     struct stat buf;
     return stat(fileName.c_str(), &buf) == 0;
 }
 
-uint64_t getFileSize(const std::string& fileName)
+uint64_t getFileSize(const std::string& name)
 {
+    const std::string fileName = nameAlias::resolve(name);  // a second name of a file (nameAlias.h)
     if (discImage::isInside(fileName))
     {
         File f;

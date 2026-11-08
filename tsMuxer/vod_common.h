@@ -3,6 +3,7 @@
 #ifndef VOD_COMMON_H_
 #define VOD_COMMON_H_
 
+#include <fs/nameAlias.h>
 #include <types/types.h>
 
 #include <chrono>
@@ -16,25 +17,24 @@
 
 #if 1
 extern bool sLastMsg;
-// With --report every line goes to the report as well, the ones not shown included (diagnosticReport.h)
-#define LTRACE(level, errIndex, msg)                               \
-    do                                                             \
-    {                                                              \
-        if (diagReport::active)                                    \
-        {                                                          \
-            std::ostringstream ltrace_;                            \
-            ltrace_ << msg;                                        \
-            diagReport::trace((level), (errIndex), ltrace_.str()); \
-        }                                                          \
-        else if (((errIndex) & 2) != 0)                            \
-        {                                                          \
-            if ((level) <= LT_WARN)                                \
-                std::cerr << msg << std::endl;                     \
-            else if ((level) == LT_INFO)                           \
-                std::cout << msg << std::endl;                     \
-            if ((level) <= LT_INFO)                                \
-                sLastMsg = true;                                   \
-        }                                                          \
+// With --report every line goes to the report as well, the ones not shown included (diagnosticReport.h). A file read
+// under a second name is named by its own name (nameAlias.h, nameAlias::shown).
+#define LTRACE(level, errIndex, msg)                                                                      \
+    do                                                                                                    \
+    {                                                                                                     \
+        if (diagReport::active)                                                                           \
+        {                                                                                                 \
+            std::ostringstream ltrace_;                                                                   \
+            ltrace_ << msg;                                                                               \
+            diagReport::trace((level), (errIndex), nameAlias::shown(ltrace_.str()));                      \
+        }                                                                                                 \
+        else if (((errIndex) & 2) != 0 && (level) <= LT_INFO)                                             \
+        {                                                                                                 \
+            std::ostringstream ltrace_;                                                                   \
+            ltrace_ << msg;                                                                               \
+            ((level) <= LT_WARN ? std::cerr : std::cout) << nameAlias::shown(ltrace_.str()) << std::endl; \
+            sLastMsg = true;                                                                              \
+        }                                                                                                 \
     } while (false)
 
 class Process

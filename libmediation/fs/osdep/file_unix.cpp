@@ -20,6 +20,7 @@
 #include "../directory.h"
 #include "../discImage.h"
 #include "../file.h"
+#include "../nameAlias.h"
 
 namespace
 {
@@ -68,6 +69,9 @@ File::File() : m_impl(from_fd(-1)), m_pos(0) {}
 File::File(const char* fName, unsigned int oflag, unsigned int systemDependentFlags)
     : m_impl(from_fd(-1)), m_name(fName), m_pos(0)
 {
+    // a second name of a source opens the file itself (nameAlias.h)
+    const std::string realName = nameAlias::resolve(fName);
+    fName = realName.c_str();
     if (discImage::isInside(fName))
     {
         if (!openInImage(fName, oflag))
@@ -104,6 +108,9 @@ bool File::open(const char* fName, unsigned int oflag, unsigned int systemDepend
 
     if (isOpen())
         close();
+    // a second name of a source opens the file itself (nameAlias.h)
+    const std::string realName = nameAlias::resolve(fName);
+    fName = realName.c_str();
     if (discImage::isInside(fName))
         return openInImage(fName, oflag);
 

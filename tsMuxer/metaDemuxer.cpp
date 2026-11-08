@@ -4,6 +4,7 @@
 
 #include <fs/directory.h>
 #include <fs/discImage.h>
+#include <fs/nameAlias.h>
 #include <fs/systemlog.h>
 
 #include <fs/textfile.h>
@@ -526,46 +527,74 @@ static NamedAs familyOfContent(const uint8_t* buf, const int len, const char** n
 // A name without an extension, or with one tsMuxeR does not know, sends the file to the raw stream readers. A transport
 // stream or a Matroska file named so was "Can't detect stream type", or read as junk frames: such a name is now told
 // when the file is a container. Any other content under such a name is left to the readers, as before.
-static void checkNameMatchesContent(const std::string& fileName, const std::string& ext)
+//
+// ** A CONTAINER UNDER ANOTHER NAME IS READ AS WHAT IT IS. ** The name decides which reader opens a file, in many
+// places, and a file whose content is another container was refused with the advice to rename it (0894e7ee). Many
+// recorders save a transport stream as .mpg, or plain 188 byte packets as .mts or .m2ts, so a recording could not be
+// read as it came. Such a file is now given a second name with the extension of what it is (nameAlias.h), which every
+// reader then sees, and a note says so. Only a container the content names for certain is read this way (the four
+// signatures of familyOfContent); a raw stream under the name of a container is refused as before, as its codec is not
+// known from its first bytes. A file that already has the second name is not hidden: the refusal stands then.
+// Returns the name to read the file by: its own, or the second one.
+static std::string readAsName(const std::string& fileName, const std::string& ext)
 {
     if (isVobSubPair(fileName))
-        return;  // a .sub file of DVD subtitles is a program stream by its nature
+        return fileName;  // a .sub file of DVD subtitles is a program stream by its nature
     const NamedAs named = familyOfExt(ext);
 
     File file;
     if (!file.open(fileName.c_str(), File::ofRead))
-        return;  // let whatever opens it next report that properly
+        return fileName;  // let whatever opens it next report that properly
     uint8_t buf[192 * 20];
     const int len = file.read(buf, sizeof(buf));
     file.close();
     if (len <= 0)
-        return;
+        return fileName;
 
     const char* what = nullptr;
     bool contentIsM2ts = false;
     const NamedAs found = familyOfContent(buf, len, &what, &contentIsM2ts);
     if (found == NamedAs::ctUnknown)
-        return;
-    if (named == NamedAs::ctUnknown)
-    {
-        if (found == NamedAs::ctElementary)
-            return;
-        if (ext.empty())
-            THROW(ERR_COMMON, "The file " << fileName
-                                          << " has no extension, and the name is what decides how it is read, but it "
-                                             "is "
-                                          << what << " and try again.")
-    }
-
+        return fileName;
+    if (named == NamedAs::ctUnknown && found == NamedAs::ctElementary)
+        return fileName;
     if (found == named)
     {
         // Same family. Only the one direction the reader cannot sort out is worth naming: plain
         // packets under a name that promises timestamps. The reverse is detected further down and
         // already works, so it is left alone.
         if (found != NamedAs::ctTS || contentIsM2ts || !namedAsM2ts(ext))
-            return;
+            return fileName;
     }
 
+    const char* asExt = found == NamedAs::ctTS    ? (contentIsM2ts ? "m2ts" : "ts")
+                        : found == NamedAs::ctPS  ? "mpg"
+                        : found == NamedAs::ctMP4 ? "mp4"
+                        : found == NamedAs::ctMKV ? "mkv"
+                                                  : nullptr;
+    if (asExt)
+    {
+        const std::string alias = fileName + "." + asExt;
+        if (nameAlias::resolve(alias) == fileName)
+            return alias;  // named so before
+        if (!fileExists(alias))
+        {
+            nameAlias::add(alias, fileName);
+            const char* kind = found == NamedAs::ctTS    ? (contentIsM2ts ? "a transport stream with arrival timestamps"
+                                                                          : "a transport stream of plain 188 byte packets")
+                               : found == NamedAs::ctPS  ? "an MPEG program stream"
+                               : found == NamedAs::ctMP4 ? "an mp4 or QuickTime file"
+                                                         : "a Matroska file";
+            LTRACE(LT_INFO, 2,
+                   "The file " << fileName << (ext.empty() ? std::string(" has no extension") : " is named ." + ext)
+                               << ", but it is " << kind << ", so it is read as one.");
+            return alias;
+        }
+    }
+    if (named == NamedAs::ctUnknown && ext.empty())
+        THROW(ERR_COMMON, "The file " << fileName
+                                      << " has no extension, and the name is what decides how it is read, but it is "
+                                      << what << " and try again.")
     THROW(ERR_COMMON, "The file " << fileName << " is named ." << ext
                                   << ", and the name is what decides how it is read, but it is " << what
                                   << " and try again.")
@@ -1495,8 +1524,25 @@ static int checkedLevel(const std::string& text, const char* codec, const int sc
 
 VideoAspectRatio arNameToCode(const string& arName);  // below, with createCodec
 
-int METADemuxer::addStream(const string& codecName, const string& codecStreamName, const map<string, string>& addParams)
+int METADemuxer::addStream(const string& codecName, const string& lineStreamName, const map<string, string>& addParams)
 {
+    // Each file of the line, a join included, by the name it is read as: a container under another name gets the
+    // second name of what it is (readAsName), which every test of the extension below then sees
+    string codecStreamName;
+    {
+        const std::vector<std::string> files = extractFileList(lineStreamName);
+        bool renamed = false;
+        std::vector<std::string> named;
+        for (const std::string& f : files)
+        {
+            named.push_back(readAsName(f, strToLowerCase(extractFileExt(f))));
+            renamed = renamed || named.back() != f;
+        }
+        if (!renamed)
+            codecStreamName = lineStreamName;
+        else
+            for (size_t i = 0; i < named.size(); ++i) codecStreamName += (i ? "+" : "") + quoteStr(named[i]);
+    }
     // the reader's codec: the one asked for, or PGS for an ASS or SSA track drawn with libass
     string codec = codecName;
     int32_t pid = 0;
@@ -2286,7 +2332,6 @@ int METADemuxer::addStream(const string& codecName, const string& codecStreamNam
     string tmpname = strToLowerCase(fileList[0]);
     tmpname = unquoteStr(trimStr(tmpname));
 
-    checkNameMatchesContent(unquoteStr(trimStr(fileList[0])), strToLowerCase(extractFileExt(tmpname)));
 
     // ** A SUBTITLE TRACK WITH A NEGATIVE TIMESHIFT IS READ BY A DEMUXER OF ITS OWN. ** Its packets are due that much
     // before their place in the file, so the file was read ahead for them, holding the video and the sound read on the
@@ -4395,9 +4440,16 @@ static void warnKindMismatch(const std::string& fileName, const int trackId, con
                              << holds << ".");
 }
 
-DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& readManager, const string& fileName,
+DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& readManager, const string& sourceName,
                                                 bool calcDuration, const std::vector<std::string>& laterFiles)
 {
+    // the file by the name it is read as: a container under another name by the name of what it is (readAsName)
+    const string fileName = [&]
+    {
+        const string plain = unquoteStr(sourceName);
+        const string as = readAsName(plain, strToLowerCase(extractFileExt(plain)));
+        return as == plain ? sourceName : as;
+    }();
     AVChapters chapters;
     int64_t fileDuration = 0;
     int64_t videoStart = 0, videoEnd = 0;
@@ -4409,7 +4461,6 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
     auto unquoted = unquoteStr(fileName);
     string fileExt = strToLowerCase(extractFileExt(unquoted));
     prepareMemorySource(unquoted);  // listed as the Matroska file of its tracks
-    checkNameMatchesContent(unquoted, fileExt);
     AbstractStreamReader::ContainerType containerType = AbstractStreamReader::ContainerType::ctNone;
     CLPIParser clpi;
     bool clpiParsed = false;
