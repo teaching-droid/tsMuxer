@@ -173,6 +173,8 @@ class TSMuxer final : public AbstractMuxer
     void reportKeyPictureGaps();
     [[nodiscard]] int64_t cbrClock() const;
     [[nodiscard]] int ceilingRate() const;
+    // The read rate a disc is checked against (bit/s), and whether it is the one given by --maxbitrate or --bitrate
+    [[nodiscard]] double readRateLimit(bool* fromCeiling = nullptr) const;
     [[nodiscard]] int64_t pcrForMaxRate(int64_t newPCR, int64_t extraFrames, int64_t pcrGAP) const;
     [[nodiscard]] bool nextPCRChanceTooLate(int tsIndex, int64_t dts) const;
     void noteAtsPass(int frames, double gap);

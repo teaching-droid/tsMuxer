@@ -85,6 +85,9 @@ static constexpr int DEGENERATE_MUX_RATE = PCR_FREQUENCY;
 static constexpr double TS_PACKET_BITS = 188.0 * 8.0;
 static constexpr double BD_READ_RATE_HD = 48.0e6;
 static constexpr double BD_READ_RATE_UHD = 109.0e6;
+// The highest figure of BD-ROM Version 3, the high transfer rate zone of a 66 or 100 GB disc (see above). UHD discs of
+// the 100 GB kind are mastered at it: their packets come 318 ticks apart, 127.7 Mbit/s, and never closer.
+static constexpr double BD_READ_RATE_UHD_HIGH = 127.9e6;
 
 static double atsGapFloor(const double bitsPerSecond) { return TS_PACKET_BITS * 27000000.0 / bitsPerSecond; }
 
@@ -893,7 +896,8 @@ void TSMuxer::reportReadRate() const
     if (!m_bluRayMode || m_atsPackets == 0 || m_minAtsGap <= 0 || m_atsOverLimit == 0)
         return;
 
-    const double limit = isV3() ? BD_READ_RATE_UHD : BD_READ_RATE_HD;
+    bool fromCeiling = false;
+    const double limit = readRateLimit(&fromCeiling);
     const double fastest = atsGapToRate(m_minAtsGap) / 1e6;
     const double share = 100.0 * static_cast<double>(m_atsOverLimit) / static_cast<double>(m_atsPackets);
 
@@ -901,6 +905,17 @@ void TSMuxer::reportReadRate() const
     const std::string shareText = share < 0.05 ? std::string("less than 0.1") : doubleToStr(share, 1);
 
     std::ostringstream msg;
+    // The rate was asked for: "add --maxbitrate" would name what is already there
+    if (fromCeiling)
+    {
+        msg << "Warning: this disc asks to be read at " << doubleToStr(fastest, 1) << " Mbit/s at its fastest, and "
+            << shareText << " per cent of its packets are above the read rate given with "
+            << (m_ceilingFromBitrate ? "--bitrate" : "--maxbitrate") << ", " << doubleToStr(limit / 1e6, 1)
+            << " Mbit/s. It will play from a hard disk, where the rate does not matter, and may stutter or refuse to "
+               "start on a standalone player.";
+        LTRACE(LT_WARN, 2, msg.str());
+        return;
+    }
     msg << "Warning: this disc asks to be read at " << doubleToStr(fastest, 1) << " Mbit/s at its fastest, and "
         << shareText << " per cent of its packets are above the limit. A " << (isV3() ? "UHD" : "Blu-ray")
         << " drive only has to supply " << doubleToStr(limit / 1e6, 0)
@@ -1473,6 +1488,22 @@ int64_t TSMuxer::cbrClock() const
 // --maxbitrate, else none
 int TSMuxer::ceilingRate() const { return m_ceilingFromBitrate ? m_cbrBitrate : m_maxBitrate; }
 
+// ** THE READ RATE ASKED FOR IS THE ONE CHECKED. ** The warning held every UHD disc to 109 Mbit/s. The window offers
+// 127.9 for the high transfer rate zone, which writes --maxbitrate=127900; the muxer then paced the disc to 127.9 as
+// asked and still warned that its packets were above the limit, advising --maxbitrate=109000. A ceiling given with
+// --maxbitrate, or with --bitrate where it holds the clock, is now the limit, as long as the format allows it (127.9
+// for UHD, 48 for HD). Above that, or with none given, the figure a disc is mastered to applies as before.
+double TSMuxer::readRateLimit(bool* fromCeiling) const
+{
+    const double mastered = isV3() ? BD_READ_RATE_UHD : BD_READ_RATE_HD;
+    const double highest = isV3() ? BD_READ_RATE_UHD_HIGH : BD_READ_RATE_HD;
+    const int ceiling = ceilingRate();
+    const bool given = ceiling > 0 && ceiling <= highest;
+    if (fromCeiling)
+        *fromCeiling = given;
+    return given ? static_cast<double>(ceiling) : mastered;
+}
+
 int64_t TSMuxer::pcrForMaxRate(const int64_t newPCR, const int64_t extraFrames, const int64_t pcrGAP) const
 {
     if (m_lastPCR == -1)
@@ -1579,7 +1610,7 @@ void TSMuxer::noteAtsPass(const int frames, const double gap)
     if (m_minAtsGap == 0 || gap < m_minAtsGap)
         m_minAtsGap = gap;
     m_atsPackets += frames;
-    if (gap < atsGapFloor(isV3() ? BD_READ_RATE_UHD : BD_READ_RATE_HD))
+    if (gap < atsGapFloor(readRateLimit()))
         m_atsOverLimit += frames;
 }
 
