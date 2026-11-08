@@ -299,6 +299,33 @@ not a defect. Because the guard is sized in tens to hundreds of MB to cover the 
 region at the layer transition, a sub-MB alignment difference has no effect on playback. So if you
 read a finished disc and the zero band is not exactly the value you entered, that is expected.
 
+## Read rate
+
+A player reads a disc at a rate that has an upper limit, and a disc must never ask for more. Each packet of a
+Blu-ray disc carries the time it is due, so the rate a disc asks for can be measured packet by packet. The limits
+of the format are, for the transport stream without the 4 byte timestamp of each packet:
+
+| Disc | Read rate | `--maxbitrate=` |
+|---|---|---|
+| Blu-ray (HD) | 48 Mbit/s | `48000` |
+| UHD, 66 or 100 GB | 109 Mbit/s | `109000` |
+| UHD, high transfer rate zone of a 66 or 100 GB disc | 127.9 Mbit/s | `127900` |
+| UHD, 50 GB, or the inner zone of a 66 or 100 GB disc | 81.7 Mbit/s | `81700` |
+| UHD, inner zone of a 50 GB disc | 64 Mbit/s | `64000` |
+
+UHD titles are mastered at 109 Mbit/s, and some 100 GB titles at 127.9. tsMuxeR works out the time of each packet
+itself and does not keep the pace of the source, so a remux can ask for more than its source did, in short bursts,
+even when the source kept to its limit. tsMuxeR says so after the mux, with the fastest rate and the share of
+packets above the limit.
+
+`--maxbitrate` holds a disc to a rate: no second then asks for more. The Blu-ray tab of the window does this by
+default, with 109 Mbit/s for UHD. A disc is checked against the rate given with `--maxbitrate`, or against the
+figure of its kind when none is given. If the video's own peaks are above the rate, its pictures reach the player
+late, and tsMuxeR says so: only a re-encode with a capped peak bitrate helps then.
+
+For a disc to be burned, 109 Mbit/s (UHD) and 48 Mbit/s (HD) are the safe choice. Many players cannot read a BD-R
+XL disc at all (see below).
+
 ## BD-R XL (100 / 128 GB) player compatibility
 
 Many Blu-ray players cannot read 100 or 128 GB BD-R XL discs at all, and there is no

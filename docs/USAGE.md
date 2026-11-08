@@ -85,6 +85,10 @@ Then either:
 - use **Merge AC-3 file** / `merge-ac3-file="compat.ac3"` directly, or
 - **remux** `compat.ac3` back into the MKV as a separate audio track (e.g. with `mkvmerge`) and use **Merge AC-3 track** / `merge-ac3-track` with the new AC-3 track number.
 
+### Preview in the GUI
+
+Set a player for previews on the General tab, or leave it empty for the system's default player. `{file}` in its arguments stands for what is played; without it, it comes last. A player can also be given for Blu-ray titles and one for DVD titles; left empty, they use the player above. Preview in Choose a title plays the title chosen, in its angle; a click on the clip of an angle under it plays that clip; Play in the context menu of the input list plays an item. A clip of a disc folder, or a file, is opened as it is. For a title, or a clip inside an image, tsMuxeR first makes a 30 second preview (from where the angles differ, or a tenth of the way in, at most 2 minutes) into a temporary folder, which is removed when the window closes. mpv opens a Blu-ray title directly in its angle (mpv 0.41 or later), VLC a DVD title in its first angle. A 3D title has no angle choice; its clip played directly shows the 2D base view.
+
 ## Command Line
 
 Alternatively you can use tsMuxer via the command-line. 
@@ -99,7 +103,7 @@ tsMuxeR can be run in track detection mode or muxing mode. If tsMuxeR is run wit
 
 A file inside a disc image (.iso) is read without mounting the image: give the path of the file after the name of the image, for example `tsMuxeR film.iso/BDMV/PLAYLIST/00011.mpls`, and the same in a meta file. Blu-ray, UHD Blu-ray and DVD images are read, and the stream files are read in place, without a copy. The names inside an image are found without regard to case.
 
-A Blu-ray disc folder or image given alone lists its titles instead of tracks: `tsMuxeR film.iso` or `tsMuxeR D:/discs/film`. Each title is shown with its playlist, length, chapters, clips and audio languages, the main film first. A disc of episodes or of several films has more than one main title: a title that plays footage of its own for at least 75 % of the main film's footage and at least 15 minutes is one too. The main film comes first and the other main titles follow in the order of the disc, each with its versions after it; where they are all of one length (within 3 minutes), as episodes are, they are all in the order of the disc. `title=main` takes title 1 and says how many main titles the disc has. The main film is a best guess: the title that plays the most footage. A disc with several main titles says so, and `title=main` takes the first. It can miss on some discs, as with an HDR and an SDR version of one length, so check the list before a long mux. Any title can be chosen by its number. Playlists that are no title are listed under "Left out" with the reason (one clip repeated, many short pieces, a copy of another playlist, the same clips in another order, shorter than 2 minutes). Options before the name: `--all-playlists` lists every playlist as a title, `--min-title-length=<seconds>` sets the length a title needs (120 by default). Give the playlist of a title as the source to list its tracks, or name the disc on a meta line with `title=main` or `title=<number>`:
+A Blu-ray disc folder or image given alone lists its titles instead of tracks: `tsMuxeR film.iso` or `tsMuxeR D:/discs/film`. Each title is shown with its playlist, length, chapters, clips and audio languages, the main film first. Each title also says what its picture is: SDR, HDR10, HDR10+, Dolby Vision with its profile where it is known, or a combination such as "HDR10, Dolby Vision profile 7". The playlist gives SDR, HDR10 and the Dolby Vision enhancement layer of a disc (profile 7). HDR10+ and single layer Dolby Vision are read from the start of the main clip of each main title, when it is there; a disc of control files alone does not show them. A DVD title is SDR. A disc of episodes or of several films has more than one main title: a title that plays footage of its own for at least 75 % of the main film's footage and at least 15 minutes is one too. The main film comes first and the other main titles follow in the order of the disc, each with its versions after it; where they are all of one length (within 3 minutes), as episodes are, they are all in the order of the disc. `title=main` takes title 1 and says how many main titles the disc has. The main film is a best guess: the title that plays the most footage. A disc with several main titles says so, and `title=main` takes the first. It can miss on some discs, as with an HDR and an SDR version of one length, so check the list before a long mux. Any title can be chosen by its number. Playlists that are no title are listed under "Left out" with the reason (one clip repeated, many short pieces, a copy of another playlist, the same clips in another order, shorter than 2 minutes). Options before the name: `--all-playlists` lists every playlist as a title, `--min-title-length=<seconds>` sets the length a title needs (120 by default). Give the playlist of a title as the source to list its tracks, or name the disc on a meta line with `title=main` or `title=<number>`:
 ```
 MUXOPT --blu-ray
 V_MPEG4/ISO/AVC, "film.iso", title=main, track=4113
@@ -115,11 +119,13 @@ A_AC3, "dvd.iso", title=main, track=128
 
 A title of several angles is listed with the number of its angles and, under it, where they differ: the times, and on a Blu-ray the clip each angle plays there. Take the angle with `angle=<n>` on the meta line; the window's Choose a title shows a row for each angle, with these lines under it.
 ```
-Title 1  00011.mpls    1:52:14   24 chapters     3 clips  eng deu spa  2 angles  (main film)
+Title 1  00011.mpls    1:52:14   24 chapters     3 clips  eng deu spa  2 angles  SDR  (main film)
     angles differ at 0:00:00-0:02:10, 1:49:30-1:52:14
     angle 1: 00021.m2ts, 00023.m2ts
     angle 2: 00022.m2ts, 00024.m2ts
 ```
+
+In the window, a click on such a clip plays it in the player for previews (General tab).
 
 A demux writes DVD subtitles as `name.idx` and `name.sub`. Such a pair is read as a source when the .idx file is beside the .sub file: `S_HDMV/PGS, "name.sub", track=32`. The track number is 32 plus the `index:` of the .idx file. Such pairs are not joined: give one pair on each line.
 
