@@ -20,6 +20,20 @@
 
 * **The window names the output after the film.** A Blu-ray that names its film gives the name of the output file, the title of a Matroska output and the label of an ISO image, as long as those are not set. English comes first. A name that says only "Blu-ray" is passed over, and a colon becomes a dash in the file name. The listing gives the name as `Disc title:`.
 
+* **The title listing shows the picture of each title.** Each title of a disc now says whether its picture is SDR, HDR10, HDR10+ or Dolby Vision, with the Dolby Vision profile where it is known, or a combination such as "HDR10, Dolby Vision profile 7". So a UHD disc with an SDR and an HDR version of one film, or a disc where only one title carries Dolby Vision, can be told apart in the listing. What the playlist says is read always, also when only the control files of a disc are there. HDR10+ and single layer Dolby Vision are in the video only: tsMuxeR reads the start of the main clip of each main title for them, when the clip is there. A DVD title is SDR. Choose a title shows this in a column of its own, Picture.
+
+* **Preview a title, an angle or a clip in a player.** The General tab has a player for previews: a program with its arguments, or none for the system's default player. Choose a title has a Preview button beside Add title, and the dialog stays open to try another title or angle. Under a title of several angles, the clip each angle plays at a part is a link: a click plays that clip as it is, with no conversion. The input list has Play in its context menu. A clip of a disc folder, or any file, is opened as it is. For a title, or a clip inside a disc image, tsMuxeR first makes a 30 second preview of it in its angle, with the progress window of a mux, where Abort stops it; this works with every player, also on Windows 7. mpv opens a Blu-ray title directly in its angle (mpv 0.41 or later), and VLC a DVD title in its first angle. A player can also be given for Blu-ray titles and one for DVD titles, for example mpv and VLC. The previews go into a temporary folder that is removed when the window closes.
+
+### MP4 and MOV input
+
+* **The sound of a fragmented MP4 came late when its moov follows the first fragment.** A file written with an empty moov after its first fragment (ffmpeg's delay_moov) counted the start of its video edit list twice: the sound came 83 ms late with two B pictures, in the listing and in every output, and a cut file of this kind by its pre-roll more (500 ms for a cut 0.5 s after a key picture). Such a file now gives the same times as the same streams in an ordinary MP4, also in joins and with timeshift. (#54) Thanks to @Moonghost-coder.
+
+* **A video that starts at another frame rate no longer moves the sound.** In a fragmented MP4, or one without edit lists, a video that starts at 6 pictures a second and goes on at 24 had its first picture taken as a later start, and the sound came 125 ms early. A later start is now measured against the second sample, which is how such a file writes it. (#55) Thanks to @Moonghost-coder.
+
+* **AAC LC without its decoder configuration is no longer written as AAC Main.** When the esds of an MP4 has no AudioSpecificConfig, the TS, the Matroska output and a demux all said AAC Main. Such a track is now AAC LC, or the profile that an MPEG-2 AAC esds names. HE-AAC of this kind also got the full sample rate in its header, and decoders failed on every frame: frames of 2048 samples are now written as HE-AAC is, with the core at half the rate. A Matroska A_AAC track without CodecPrivate stopped with "Unknown exception"; it is now read as AAC LC with the sample rate and channels of the track. (#56) Thanks to @Moonghost-coder.
+
+* **PCM above 65535 Hz in an MP4 is read at its own rate.** ipcm and fpcm of 96 or 192 kHz were read as 48 kHz, so the sound of every output played at half or a quarter of its speed. The rate an MP4 gives in its srat box is read now. A MOV was not affected.
+
 ### Matroska input
 
 * **A Matroska title longer than 1023 bytes was cut** (#31 K20), and so was a chapter name of more than 1024 bytes in an ordered edition or a linked file. A Matroska output got the cut text, broken inside a letter outside ASCII where the cut fell in one. Both are read whole now.
@@ -40,7 +54,7 @@
 
 * **A Blu-ray disc muxed from a Blu-ray disc keeps that disc's title and pictures** (BDMV/META/DL), which a player such as the PS3 shows. They were left behind, and the new disc showed as a blank one named BDMV. `--meta-dir=<folder>` gives the disc a title and pictures of one's own: bdmt_eng.xml and the like, with the pictures they name, as a disc keeps them. `--meta-dir=none` writes none. It works with `--bdmv-to-iso` too, in place of the folder's own. Only the bdmt files and the pictures they name are copied. In the window it is the "Disc title and pictures" choice in the Output area, for a Blu-ray folder or image, and on the BDMV folder to ISO tab. (#30, thanks to @NTMPowers for the request)
 
-* **A recording of H.264 that begins before its first parameter sets is in sync** (#31 K39). A broadcast recording that started some pictures before its first key picture and parameter sets kept those pictures, which no player can show, and on a recording coded partly as fields the sound came up to 80 ms late against the picture. The pictures before the first parameter sets are now left out, and the pictures shown before the first key picture keep their times, also when fields follow later.
+* **A recording of H.264 that begins before its first parameter sets is in sync** (#31 K39). A broadcast recording that started some pictures before its first key picture and parameter sets kept those pictures, which no player can show, and on a recording coded partly as fields the picture was timed apart from the sound. The pictures before the first parameter sets are now left out, and the pictures shown before the first key picture keep their times, also when fields follow later.
 
 * **A playlist that is not there is said to be missing** (#31 K40). `tsMuxeR <disc>/BDMV/PLAYLIST/99999.mpls` printed only the version line and ended without an error, and a meta line that named it said "Can't parse play list file". Both now say that the file does not exist, or that the disc image has no such file, and end with an error.
 
@@ -52,13 +66,13 @@
 
 * **The window shows where a playlist puts each track.** Two columns of the track list, "playlist" and "clip", give a track's number among the tracks of its kind (audio, subtitles) in the playlist, which is the number a player gives it, and in its clip, by PID. They show while a playlist is in the list. The listing of a playlist gives the same in a "Stream order" line. (#52, thanks to @bulba99 for the request)
 
-* **More than 32 tracks of one kind on a disc, when asked for** (#53). A Blu-ray disc has numbers for 32 tracks of each kind: audio, subtitles, secondary audio and secondary video. 3.0.0 refused a 33rd. `--allow-extra-tracks` on the MUXOPT line now writes them anyway, with a warning: some players show the tracks past the 32nd, others leave them out. The window asks first, with a "Don't ask again" tick; the question comes back with the tick "Ask before writing more than 32 tracks of one kind to a disc" on the General tab. Thanks to @DreckSoft
+* **More than 32 tracks of one kind on a disc, when asked for** (#53). A Blu-ray disc has numbers for 32 tracks of each kind: audio, subtitles, secondary audio and secondary video. 3.0.1 and earlier refused a 33rd. `--allow-extra-tracks` on the MUXOPT line now writes them anyway, with a warning: some players show the tracks past the 32nd, others leave them out. The window asks first, with a "Don't ask again" tick; the question comes back with the tick "Ask before writing more than 32 tracks of one kind to a disc" on the General tab. Thanks to @DreckSoft
 
 * **A second run into a disc folder removed the titles of the run before** (#31 K50). A run with `--mplsOffset` or `--m2tsOffset` replaced the whole BDMV folder, so a disc built one title at a time kept only its last title. With either option the new title now joins the folder. A playlist or clip number that is taken is refused, and the folder stays as it was. Without these options the folder is replaced, as before.
 
 * **A joined TV recording drifted out of sync at every joint** (#31 K48, #49). Where the sound of a recording comes in PES of different lengths, as the AAC of some broadcasts does (2 to 10 frames each), the sound of each later file of the join came about 170 ms later than its picture, adding up over the files. The sound now goes on at its own time. Thanks to @Nandos64
 
-* **The sound of one program of a multiplex recording was moved by hours** (#31 K49). A recording of a whole multiplex, as an ISDB-Tb one with its 1seg service beside the HD one, holds programs whose clocks can be hours apart: a track was measured against the first video of the file, of whatever program, and its sound came more than 3 hours late. Each track is now measured against the video of its own program.
+* **A track of one program of a multiplex recording was moved by hours** (#31 K49). A recording of a whole multiplex, as an ISDB-Tb one with its 1seg service beside the HD one, holds programs whose clocks can be hours apart: a track was measured against the first video of the file, of whatever program, and could be moved by more than 3 hours. Each track is now measured against the video of its own program.
 
 * **A join of a recording of several programs lost packets** (#31 K51). A padding packet of a program the join had not read yet overwrote the start of the next packet, and that packet was lost, of whatever track it was. Pictures were damaged, and the sound came earlier at each frame lost. A join now reads the table of every program of each file, and such a packet changes nothing.
 
@@ -77,6 +91,42 @@
 * **A cut that leaves nothing is said.** Subtitles alone with nothing before --cut-end gave a transport stream of 0 bytes without a word. A warning now says that the output holds no media. A copied track that a cut leaves empty also gets the warning of an empty track.
 
 * **--insertBlankPL no longer needs a program folder it can write to** (#31 K52). Its temporary file was written beside the program. Where that folder could not be written to, the job stopped after the whole mux, and the finished output was removed. It now goes to the temp folder.
+
+* **A recording whose programs share one PMT PID is read** (#31 K56). A transport stream may give the program maps of several programs one PID, told apart by the program number. tsMuxeR took the first map on that PID for the whole file: in a capture of one program from a satellite or cable multiplex this map often belongs to another program, so the listing said "Can't detect stream type" and the video and sound could not be used, and of two programs on one PID the second was left out. Every map on such a PID is now read; a map counts only when the PAT names its program, and of several such programs those with data in the file are listed. The maps of the other programs no longer bring the warning that the program map changes inside the file. A file whose maps do not match its PAT at all is read as before.
+
+* **AV1 from a transport stream cut at any point is muxed again** (#57). A TS or M2TS with AV1, cut at a packet that is not the start of a picture, was listed as "Can't detect stream type", and a mux of its AV1 track to TS or M2TS stopped with "not AV1". 2.20.0 muxed it. A track the file declares as AV1 may now begin in the middle of its data; a raw file and a track that is not declared as AV1 must still begin as AV1, so raw AC-3 and DTS files are still not taken for AV1. Thanks to @Moonghost-coder.
+
+* **With --no-hdmv-descriptors, a track whose kind only Blu-ray defines is named in a warning.** Without the HDMV descriptors nothing in the file says what such a track holds. This was said for PGS only; DTS Express, which has no DTS core and so gets no DTS descriptor, now gets the same warning.
+
+* **A second Dolby Vision enhancement layer in a TS had the stream type of a picture of its own.** In a TS that is not for a disc, the first enhancement layer gets stream type 0x06, as the Dolby Vision carriage rules ask; the second one got 0x24 (HEVC). It now gets 0x06 too. A disc is not changed.
+
+* **Dolby Digital Plus with an AC-3 core is described as E-AC-3 in a TS.** A TS that is not for a disc gives such a stream the E-AC-3 stream type 0x87, but described it with the AC-3 descriptor. ATSC A/52 asks for the E-AC-3 descriptor with this stream type, which it now gets. A disc and an M2TS are not changed.
+
+* **A warning about AC-3 could go missing.** Where no AC-3 frame was found in the first part of the stream that was read, as after a long run of other data at the start of a file, the reader stayed in the mode it uses to probe a stream: the warning that the channel layout or sample rate changes was not given, nor some others. It now leaves that mode in this case too.
+
+* **A TS that gives nothing to read now says why.** A TS without a PAT or PMT listed only its length; its listing now names the missing table and says how a track can still be muxed by its PID. A track of an encrypted recording, and a track the PMT names but the file does not carry, said "Can't detect stream type"; they now say "encrypted" or "no data".
+
+* **An .iso output name without --blu-ray wrote a file that was no working disc image.** It now makes a Blu-ray image, with a message.
+
+* **The fit-to-disc estimate of a constant bitrate disc was 2.1 percent too high.** With --bitrate (or --minbitrate under --maxbitrate) and --disc-size, a disc that fits by less than that was refused before the mux, and an image could lose its layer break guard. The estimate now matches the written size.
+
+* **The listing gave the wrong bitrate for E-AC-3 7.1.** For an E-AC-3 stream with a dependent substream, as 7.1 sound without an AC-3 core is, the listing gave the rate of one part only, for example 640 kbps for a stream of 1664 kbps, both in the listing and in the line that starts a mux. It now gives the rate of the whole stream. The mux is not changed.
+
+* **A transport stream with two program maps that span packets is read.** Where the maps of two programs each take more than one packet and their packets come in turn, the parts of the two maps were joined into one: neither program was listed. Each map is now put together on its own.
+
+* **Damaged program tables in a recording are passed over.** A PAT or a program map with a wrong check sum, as in a recording with bad reception, was read as if it were right: tracks that are not in the file were listed, and a subtitle track was listed as "Can't detect stream type" where its good maps name it. Once a good PAT has been read, a damaged one is left out, and a damaged program map is used only where no good one comes. A file whose tables all have a wrong check sum is read as before.
+
+* **A small Dolby Vision file split into its two layers no longer stops before the end** with "The mux stopped before the source was finished" (97.8 percent read, every picture muxed). The bytes the split changes were not counted as read. Only short files were affected.
+
+* **Choosing the 127.9 Mbit/s read rate still warned against 109.** The window's 127.9 Mbit/s choice for a UHD disc (--maxbitrate=127900) paced the disc as asked, and the muxer then warned that its packets were above the limit and advised --maxbitrate=109000. A read rate given with --maxbitrate, or with --bitrate where it holds the clock, is now the one the disc is checked against, up to 127.9 Mbit/s for UHD and 48 for HD. The output does not change.
+
+### Meta file and window
+
+* **A raw 3D H.264 stream is split by subTrack= again** (#58). A .264, .h264 or .mvc file with an MVC view, given on two lines with subTrack=1 (the MVC view) and subTrack=2 (the AVC view) and no track=, as the window writes them and 2.20.0 muxed them, was refused since 3.0.0 with "names no track". It is muxed again, to a disc, to TS and to MKV, and so is a join of such files. subTrack= without track= on any other file is still refused, with a message that no longer gives advice that fails. Thanks to @Moonghost-coder.
+
+* **The window gave a subtitle plane 0 of a 3D video that has no planes.** A subtitle added after a 3D video whose listing says "3d-pg-planes: 0" got plane #0, and the mux refused the meta, saying the video has "0 planes, 0 to -1". The window now gives such a subtitle no plane (3d-plane=255), and the message says that the video has no planes. (#58) Thanks to @Moonghost-coder.
+
+* **A raw dual layer Dolby Vision HEVC file is listed as one track.** A .hevc file that holds both layers of a dual layer Dolby Vision stream was listed as two tracks, base layer and enhancement layer, and the window wrote them as two lines with subTrack=, which a stream file cannot be split by: both lines were refused. It is now listed as one track. Muxed on one line to a disc, the warning that the disc plays as HDR10 now says how to get both layers on the disc: mux the file to MKV first and give that track on two lines. (#58) Thanks to @Moonghost-coder.
 
 ### Audio
 
@@ -98,15 +148,27 @@
 
 * **The window can give a TrueHD track an AC-3 core.** On Start muxing to a Blu-ray folder, a Blu-ray ISO or AVCHD, a TrueHD track without an AC-3 core brings up a question: use an AC-3 track of the same file as the core, create a core, or continue without one. A core is created with ffmpeg, which is not part of tsMuxeR: it has to be beside tsMuxeR or on the PATH, or it can be chosen in the question. The core has 640 kbit/s, 48 kHz and at most 5.1 channels, and a 7.1 track gives its own 5.1 mix. A separate window shows the progress, and Cancel stops it and removes the unfinished file. The core is removed when the mux has ended well.
 
+* **DVD LPCM of 20 and 24 bits is read in the order a DVD stores it.** A DVD stores such samples in groups: the upper 16 bits of four samples first, then the low bits of the four. tsMuxeR read them as plain 3 byte samples, so every output of such a track was noise, and 20 bit sound was also a fifth too short. Each sample is now the one the disc holds, for every output. Mono at 20 or 24 bits is read in pairs of samples, with a warning, as no disc of that kind was at hand to confirm its order. A stream that begins inside a frame, as a VOB cut in the middle, is read from its first whole frame.
+
+* **DVD LPCM no longer clicks every 2 MiB in a program stream whose packs are not 2048 bytes long.** Where a packet of the sound went on past the end of a 2 MiB read, the samples after that point were written with their bytes the wrong way round. 16 bit sound whose packets hold an odd number of bytes was out of step the same way after the first such packet. A DVD VOB, in 2048 byte packs with even packets, was not affected. Such a file also stopped with "Invalid copyLen" when the end of a read fell inside the 7 bytes that start an LPCM packet.
+
+* **One PCM track tsMuxeR cannot read no longer hides the other tracks of the file.** A VOB with an LPCM track at 44.1 or 32 kHz, or a Matroska or MP4 file with PCM at 44.1 kHz, listed no track at all, only the message that the rate is not read, and it called the track a WAVE file. The listing now shows the other tracks as usual and names that track as not supported, with the reason. Such a track is still refused when it is muxed.
+
+* **A demux keeps the speakers of a WAV.** The demuxed WAV got a channel mask made from the number of channels, so 5.1 with back surrounds came out as 5.1 with side surrounds. The source's own mask is kept now, when it names one speaker for each channel. The samples were always right.
+
+* **A WAV whose speakers a Blu-ray has no layout for is muxed to Matroska and demuxed again.** A WAV such as 6.0 hexagonal, or one with top speakers, was refused for every output since 3.0.0, and its listing failed, although a Matroska output and a demux keep the WAV's own channels. Now only a disc and a TS refuse it, before any file is made, and the listing shows it. 2.20.0 took such a WAV for every output.
+
+* **The last part of a 5 ms frame of PCM from a VOB, a Matroska or an MP4 file is filled up on a disc and in a TS.** Where such sound did not end on a whole 5 ms frame, its last frame was written shorter than its header said. A player could take it for damage, and a demux of the disc or TS gave 4 bytes of the header as sound and the last samples the wrong way round, a click at the very end. The frame is now filled up with silence, as it always was for a WAV file.
+
 ### Subtitles
 
-* **A DVD subtitle picture that sets its colours by area is shown.** A DVD subtitle (VobSub) picture whose colours and opacity are set for parts of its lines, as a fade in and out sets them, was left out as empty when its own colours were transparent. It is drawn now in the colours that show it most opaque; PGS cannot fade it the same way.
+* **A DVD subtitle picture that sets its colours by area is shown.** A DVD subtitle (VobSub) picture whose colours and opacity are set for parts of its lines, as a fade in and out sets them, was left out as empty when its own colours were transparent, as in a Matroska file. It is drawn now in the colours that show it most opaque; PGS cannot fade it the same way.
 
 * **DVD subtitles are read from a DVD and its VOB files.** The subtitle tracks of a VOB were listed as "Not supported" and left out. They are now listed (`S_HDMV/PGS`, track 32 and up) and muxed: a Matroska output keeps them as they are, as DVD subtitles (VobSub) with the colours of the disc's IFO file, as it keeps the VobSub of a Matroska source; a disc and a TS get them drawn as PGS in those colours; a demux writes them as .idx and .sub files, as the disc holds them. Forced subtitles stay forced. The listing gives every subtitle track the disc names, with its language, also one whose first subtitle comes late. Each subtitle keeps its place against the picture, also where a title is read in parts because its timestamps start again, and where a title begins with pictures shown before its first key picture. A VOB file on its own takes the colours from the IFO file of its title set; without one they are drawn in grey, with a warning.
 
 * **An ASS or SSA script is read as a file of its own.** A .ass or .ssa file was "Can't detect stream type", and only ASS and SSA from a Matroska file were read. A script file is now read as that track is: listed as track 1, drawn with libass for a disc or a TS, and kept with `keep-text` in a Matroska output or a demux, its Dialogue lines in the order of their start times and its comments in its header. Cuts and joins work as for any subtitle track. The window offers .ass and .ssa files when adding. ([justdan96/tsMuxer#731](https://github.com/justdan96/tsMuxer/issues/731))
 
-* **Subtitles that do not fit the picture are fitted faster.** Each size tried measured every letter again. A track with long lines now muxes 20 to 28 percent faster; the output is the same.
+* **Subtitles that do not fit the picture are fitted faster on Linux and macOS.** Each size tried measured every letter again. A track with long lines now muxes 20 to 28 percent faster there; the output is the same.
 
 * **Large bold or italic subtitles stopped the mux on Linux and macOS** with "Can't render symbol code" (#31 K47). Text subtitles in bold or italic at a font size of about 1800 or more could not be measured. They are drawn now. Windows was not affected.
 
@@ -118,9 +180,17 @@
 
 * **ARIB captions of ISDB recordings can go into a Matroska file.** They are carried as they are (S_ARIBSUB). A disc, a TS, a WebM file and a demux have no form for them, and refuse them with the reason. Superimposed text has no time, and is listed but not muxed.
 
+* **On Linux and macOS, a subtitle font that is not installed is replaced instead of stopping the job.** The window writes font-name="Arial" unless another font is chosen, and Linux has no Arial, so the job ended with "Can't find a font file for Arial". The subtitles are now drawn with an installed sans serif font (Liberation Sans, DejaVu Sans, Noto Sans and others, or the one fontconfig gives; Helvetica on macOS), with a warning that names it, as Windows does. On Linux the window now offers the system's sans serif font where Arial is not installed. A font that is installed is drawn as before.
+
 ### Video
 
 * **A raw video file that ends inside a picture says so** (#31 K19). A raw MPEG-2, H.264 or HEVC file (.m2v, .264, .hevc and the like) cut at a byte position ends with part of a picture, which was muxed as the last picture without a word, and a player shows it damaged or skips it. The slices of the last picture are now read to their end, and where the data stops inside the picture, a warning gives the row of macroblocks or coding tree units it stops in. A file that ends between two pictures gives none.
+
+* **A cut or a split part of some H.264 recordings could not be played.** Where a stream sends a picture parameter set after the last slice of a picture and before the delimiter of the next one, a cut with --cut-pictures=inside, or a split part, that began at that picture began with that parameter set, ahead of the delimiter and of any sequence parameter set, and decoders could not start. Such a cut or part now begins with the delimiter; the picture's own parameter sets follow it, or are written there.
+
+### Packages
+
+* **The macOS and Linux AppImage packages no longer include FFmpeg.** The window linked Qt Multimedia only to play the sound at the end of a mux, and with it Qt's FFmpeg and GStreamer plug-ins and the FFmpeg libraries went into these packages (about 38 MB on macOS, 44 MB in the AppImage). Qt Multimedia is no longer used: the sound is played by the system, with afplay on macOS and with paplay, pw-play or aplay on Linux (a beep where none of them is installed). Every package is now checked before it is published. The Windows package never included them, and its sound is played as before.
 
 ### Other
 
