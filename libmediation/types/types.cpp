@@ -334,7 +334,9 @@ string extractFileExt(const string& src)
     if (src.empty())
         return "";
 
-    for (size_t i = src.size() - 1; i > 0; i--)
+    // The extension is in the name of the file only: a file without one, in a folder with a dot in its name
+    // ("tests 3.1/rec"), was given the rest of the path as its extension (".1/rec")
+    for (size_t i = src.size() - 1; i > 0 && src[i] != '/' && src[i] != '\\'; i--)
         if (src[i] == '.')
         {
             string rez = src.substr(i + 1);
