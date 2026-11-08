@@ -21,6 +21,7 @@ struct DiscTitle
     size_t chapters = 0;
     size_t clips = 0;                // the play items
     std::vector<std::string> audio;  // the languages of its audio, in order, each once
+    bool hasAudio = false;           // it has an audio track, with a language or without
     bool is3d = false;
     int angles = 1;
     // Where the angles differ: each part of several angles, its start and end in seconds of the title, and the clip

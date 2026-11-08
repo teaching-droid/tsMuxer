@@ -207,6 +207,7 @@ Playlist readPlaylist(const std::string& path, const std::string& name)
     for (const auto& s : parser.m_streamInfo)
     {
         const std::string lang(s.language_code, strnlen(s.language_code, 3));
+        p.title.hasAudio = p.title.hasAudio || isAudioStreamType(s.stream_coding_type);
         if (isAudioStreamType(s.stream_coding_type) && !lang.empty() &&
             std::find(p.title.audio.begin(), p.title.audio.end(), lang) == p.title.audio.end())
             p.title.audio.push_back(lang);
@@ -486,9 +487,16 @@ DiscTitles listDiscTitles(const std::string& root, const double minSeconds, cons
     // 4. The main film plays the most footage, then has the most chapters, then the lowest number. A title that shares
     // most of its footage with the main film and is about as long is a version of it (seamless branching: another
     // cut, or the film with other title cards).
+    //
+    // ** A TITLE WITHOUT SOUND IS NO MAIN TITLE. ** A disc can hold a long playlist of one clip of video alone, such as
+    // a plain picture shown behind the extras: it plays footage of its own as long as the film, and was listed as a
+    // second main film. A film has sound, so a title with no audio track comes after those that have
+    // one, and is listed as a title, not as a main one, where any title has sound.
     std::stable_sort(titles.begin(), titles.end(),
                      [](const Playlist* a, const Playlist* b)
                      {
+                         if (a->title.hasAudio != b->title.hasAudio)
+                             return a->title.hasAudio;
                          if (a->title.footage != b->title.footage)
                              return a->title.footage > b->title.footage;
                          return a->title.chapters > b->title.chapters;
@@ -515,7 +523,8 @@ DiscTitles listDiscTitles(const std::string& root, const double minSeconds, cons
                                          });
             if (of != mains.end())
                 versionsOf[*of].push_back(p);
-            else if (p->title.footage >= 0.75 * mains.front()->title.footage && p->title.footage >= 900)
+            else if (p->title.footage >= 0.75 * mains.front()->title.footage && p->title.footage >= 900 &&
+                     (p->title.hasAudio || !mains.front()->title.hasAudio))
                 mains.push_back(p);
             else
                 others.push_back(p);
