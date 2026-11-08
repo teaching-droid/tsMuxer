@@ -1,3 +1,6 @@
+# Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
+# Apache License 2.0, see LICENSE and NOTICE.
+#
 # Builds libass and the libraries it needs with vcpkg, at the vcpkg commit that vcpkg.json beside this script names as
 # its builtin-baseline, and copies the DLLs a Windows package ships beside tsMuxeR.exe into -Out. tsMuxeR is not linked
 # against them: it loads ass-9.dll when an ASS or SSA track is drawn (tsMuxer/assRender.cpp).
