@@ -331,6 +331,37 @@ hunderten MB liegt und den etwa 35 MB großen Defektbereich am Layer-Übergang a
 eine Abweichung von unter 1 MB keinen Einfluss auf die Wiedergabe. Wenn die Nullzone auf
 einer fertigen Disc also nicht exakt dem eingegebenen Wert entspricht, ist das zu erwarten.
 
+## Leserate
+
+Ein Player liest eine Disc mit einer Rate, die eine Obergrenze hat, und eine Disc darf nie mehr
+verlangen. Jedes Paket einer Blu-ray-Disc trägt die Zeit, zu der es fällig ist, so lässt sich
+die Rate, die eine Disc verlangt, Paket für Paket messen. Die Grenzen des Formats gelten für
+den Transport Stream ohne den 4-Byte-Zeitstempel jedes Pakets:
+
+| Disc | Leserate | `--maxbitrate=` |
+|---|---|---|
+| Blu-ray (HD) | 48 Mbit/s | `48000` |
+| UHD, 66 oder 100 GB | 109 Mbit/s | `109000` |
+| UHD, Zone mit hoher Übertragungsrate einer 66- oder 100-GB-Disc | 127,9 Mbit/s | `127900` |
+| UHD, 50 GB, oder die innere Zone einer 66- oder 100-GB-Disc | 81,7 Mbit/s | `81700` |
+| UHD, innere Zone einer 50-GB-Disc | 64 Mbit/s | `64000` |
+
+UHD-Titel werden mit 109 Mbit/s gemastert, manche 100-GB-Titel mit 127,9. tsMuxeR berechnet die
+Zeit jedes Pakets selbst und übernimmt nicht das Tempo der Quelle, deshalb kann ein Remux in
+kurzen Spitzen mehr verlangen als seine Quelle, auch wenn die Quelle ihre Grenze eingehalten
+hat. tsMuxeR sagt das nach dem Mux, mit der schnellsten Rate und dem Anteil der Pakete über der
+Grenze.
+
+`--maxbitrate` hält eine Disc auf einer Rate: Keine Sekunde verlangt dann mehr. Der
+Blu-ray-Reiter der Oberfläche tut das standardmäßig, mit 109 Mbit/s für UHD. Eine Disc wird
+gegen die mit `--maxbitrate` angegebene Rate geprüft, oder gegen den Wert ihrer Art, wenn keine
+angegeben ist. Liegen die eigenen Spitzen des Videos über der Rate, kommen seine Bilder zu spät
+beim Player an, und tsMuxeR sagt das: Dann hilft nur eine Neukodierung mit begrenzter
+Spitzenbitrate.
+
+Für eine Disc zum Brennen sind 109 Mbit/s (UHD) und 48 Mbit/s (HD) die sichere Wahl. Viele
+Player können eine BD-R-XL-Disc gar nicht lesen (siehe unten).
+
 ## BD-R XL (100 / 128 GB): Player-Kompatibilität
 
 Viele Blu-ray-Player können 100- oder 128-GB-BD-R-XL-Discs gar nicht lesen, und es gibt
