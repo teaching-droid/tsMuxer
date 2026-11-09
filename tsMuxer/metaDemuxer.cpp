@@ -344,6 +344,41 @@ static bool syncsAt(const uint8_t* buf, const int len, const int stride, const i
     return false;
 }
 
+// Whether a run of 16 transport stream packets of 188, 192 or 204 bytes begins anywhere in the first `limit` bytes of
+// a file: a stream that begins after some rubbish has one, a file encrypted as a whole has none
+static bool packetRunWithin(const std::string& fileName, const int64_t limit)
+{
+    File file;
+    if (!file.open(fileName.c_str(), File::ofRead))
+        return true;  // whatever opens it next reports that
+    constexpr int chunk = 1 << 20;
+    constexpr int tail = 204 * 16;  // a run that starts near the end of a chunk is checked in the next one
+    std::vector<uint8_t> buf(chunk + tail);
+    int have = 0;
+    for (int64_t read = 0; read < limit;)
+    {
+        const int got = file.read(buf.data() + have, chunk);
+        if (got <= 0)
+            break;
+        read += got;
+        have += got;
+        const int last = have < tail ? 0 : have - tail;
+        for (int i = 0; i < (got < chunk ? have : last); ++i)
+            if (buf[i] == 0x47)
+                for (const int stride : {188, 192, 204})
+                {
+                    int n = 0;
+                    while (n < 16 && i + n * stride < have && buf[i + n * stride] == 0x47) ++n;
+                    if (n == 16)
+                        return true;
+                }
+        // keep the tail, where a run can begin that the next chunk completes
+        std::memmove(buf.data(), buf.data() + last, static_cast<size_t>(have - last));
+        have -= last;
+    }
+    return false;
+}
+
 // The families the name can put a file into. ctUnknown means the name says nothing useful, which
 // includes every elementary stream.
 enum class NamedAs
@@ -554,6 +589,15 @@ static std::string readAsName(const std::string& fileName, const std::string& ex
     const char* what = nullptr;
     bool contentIsM2ts = false;
     const NamedAs found = familyOfContent(buf, len, &what, &contentIsM2ts);
+    // ** A FILE NAMED AS A TRANSPORT STREAM THAT HOLDS NONE SAYS SO. ** Some TVs and receivers encrypt a recording as a
+    // whole before they store it: not one packet is left in it, and the reader stopped with "Invalid
+    // tsPacket->getHeaderSize", which says nothing a user can act on. Where no run of packets of 188, 192 or 204 bytes
+    // is in the first 32 MB (a recording can begin with some MB of rubbish before its packets), that is said instead.
+    if (found == NamedAs::ctUnknown && named == NamedAs::ctTS && !packetRunWithin(fileName, 32 << 20))
+        THROW(ERR_COMMON, "The file " << fileName << " is named ." << ext
+                                      << ", but no run of transport stream packets is in its first 32 MB, so it holds "
+                                         "no stream tsMuxeR can read. A recording that a TV or a receiver encrypted as "
+                                         "a whole looks like this, and only the device that made it can play it.")
     if (found == NamedAs::ctUnknown)
         return fileName;
     if (named == NamedAs::ctUnknown && found == NamedAs::ctElementary)

@@ -1005,12 +1005,14 @@ bool TSDemuxer::checkForRealM2ts(const uint8_t* buffer, const uint8_t* end) cons
         }
         return false;
     };
-    // 188 bytes and 16 of error correction, as a recording of a modulator's output has them. No packet of it was on the
-    // grid of 188, and it was refused with "Invalid tsPacket->getHeaderSize", which said nothing of the reason.
+    // 188 bytes and 16 more: error correction, as a recording of a modulator's output has them, or the data of the
+    // layers of an ISDB-T broadcast (a BTS recording). No packet of it was on the grid of 188, and it was refused with
+    // "Invalid tsPacket->getHeaderSize", which said nothing of the reason.
     if (gridFound(204) && !gridFound(188))
         THROW(ERR_COMMON, "The file " << m_streamName
-                                      << " has packets of 204 bytes, 188 and 16 of error correction. tsMuxeR reads "
-                                         "packets of 188 and 192 bytes.")
+                                      << " has packets of 204 bytes: a packet of 188 bytes with 16 more after it, of "
+                                         "error correction or of the data of an ISDB recording. tsMuxeR reads packets "
+                                         "of 188 and 192 bytes.")
     if (!gridFound(192) || gridFound(188))
         return false;
     LTRACE(LT_WARN, 2, "Warning! The file " << m_streamName << " has a M2TS format.");
