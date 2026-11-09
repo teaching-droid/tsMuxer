@@ -127,6 +127,16 @@ Title 1  00011.mpls    1:52:14   24 chapters     3 clips  eng deu spa  2 angles 
 
 In the window, a click on such a clip plays it in the player for previews (General tab).
 
+A version of a main title that plays clips of its own, another cut, gets two lines under it: where in its own time it differs, and the clips it plays there (several in a row joined with +). A version with the same clips and other audio or subtitles gets none.
+
+```
+Title 2  00012.mpls    2:21:47   64 chapters    31 clips  eng deu fra  SDR  (version of title 1, 2 of 31 clips differ)
+    differs from title 1 at 0:31:12-0:31:58, 1:47:40-1:48:20
+    its own clips: 00031.m2ts, 00035.m2ts
+```
+
+In the window, such a version has an arrow: it opens a row for each place, and a click on the clip plays it in the player for previews.
+
 A demux writes DVD subtitles as `name.idx` and `name.sub`. Such a pair is read as a source when the .idx file is beside the .sub file: `S_HDMV/PGS, "name.sub", track=32`. The track number is 32 plus the `index:` of the .idx file. Such pairs are not joined: give one pair on each line.
 
 A Blu-ray plays text subtitles (TextST) from clips of their own. The listing of a playlist gives each one with `Stream file:` and `Stream delay:`. The meta line names that clip, with the delay as `timeshift=`:
