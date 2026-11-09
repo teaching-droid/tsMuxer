@@ -1391,6 +1391,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         m_firstVideoPtsOfProgram.clear();
         m_firstSeenVideoPtsOfProgram.clear();
         m_videoFirstPtsOfPid.clear();
+        m_videoPesOfPid.clear();
         m_lastVideoPTS = -1;
         m_curFileNum++;
         startPart();
@@ -1635,16 +1636,21 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
                 // ** A DAMAGED TIME IS NOT THE START. ** The video starts at its lowest PTS, as its pictures come in
                 // decoding order, a fraction of a second apart. A PES header damaged by bad reception can carry any
                 // time: one two hours below the rest made that the start, and the sound of the recording was placed
-                // two hours after its picture, in the listing and in the mux (2.20.0 was not affected). A PTS more
-                // than 10 seconds below the first of its track is no start now.
+                // two hours after its picture, in the listing and in the mux (2.20.0 was not affected). A picture
+                // shown before the first PES of its track comes a few frames before it and among its first PES: a
+                // PTS more than 2 seconds below the first of its track, or after its first 32 PES, is no start now.
+                // That holds for a stream whose times jump back as well, as a test stream played in a loop: its lowest
+                // time, 11 seconds below the first and minutes into the file, was its start.
                 static constexpr int64_t CLOCK_WRAP = 1LL << 33;
+                static constexpr int START_PICTURES = 32;  // PES of a video track that may hold its lowest time
                 const auto [anchor, firstOfPid] = m_videoFirstPtsOfPid.try_emplace(pid, curPts);
+                const int pesOfPid = ++m_videoPesOfPid[pid];
                 int64_t below = (anchor->second - curPts) % CLOCK_WRAP;
                 if (below >= CLOCK_WRAP / 2)
                     below -= CLOCK_WRAP;
                 else if (below < -CLOCK_WRAP / 2)
                     below += CLOCK_WRAP;
-                const bool canStart = firstOfPid || below <= 10 * 90000;
+                const bool canStart = firstOfPid || (pesOfPid <= START_PICTURES && below <= 2 * 90000);
                 if (m_firstVideoPTS == -1 || (canStart && curPts < m_firstVideoPTS))
                     m_firstVideoPTS = curPts;
                 if (const int program = streamInfo->second.m_programNumber; program >= 0)
@@ -1694,30 +1700,31 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
 
             if (m_firstPtsTime.find(pid) == m_firstPtsTime.end())
                 m_firstPtsTime[pid] = curPts;
-            // ** A FIRST PES ON ANOTHER CLOCK IS NOT THE START. ** A recording can begin with a PES or two left in the
+            // ** A FIRST PES ON ANOTHER CLOCK IS NOT THE START. ** A recording can begin with a few PES left in the
             // receiver from before, on a time base hours away from the rest: the sound of such a recording was placed
             // 9.7 hours after its video, where the video reader had left its own leftover picture out, and a cut had
-            // no sound. Where the second PES of a sound or video track is more than 10 seconds from the first (on a
-            // 33 bit clock), the first was such a leftover, and the track starts at the second. PES of sound and
-            // picture come a fraction of a second apart; subtitles can be minutes apart and are left as they are.
+            // no sound. The leftover can be one PES of picture and three of sound.
+            //
+            // ** NOR IS A DAMAGED ONE. ** Bad reception can damage the time of any of the first PES, and the track
+            // then started at a damaged time, hours from its picture.
+            //
+            // The first PES of a sound or video track are taken in runs: PES within 10 seconds of each other (on a 33
+            // bit clock), as PES of sound and picture come a fraction of a second apart. A PES that comes back near an
+            // earlier run belongs to it. The track starts at the first PES of the latest run of two or more: after a
+            // leftover, at the run that follows it; a damaged PES is a run of one and is passed over. Where no run of
+            // two is found, as a still picture can be sent more than 10 seconds apart, the track keeps its first time.
+            // The runs are taken over the first 16 PES. Subtitles can be minutes apart and are left as they are.
             // Sound includes a track of stream type 0x06 whose descriptor names its codec, as the AC-3 and E-AC-3 of
             // a DVB broadcast are carried.
-            //
-            // ** A DAMAGED TIME IS NO LEFTOVER. ** Bad reception can damage the time of any of the first PES, and the
-            // track then started at a damaged time, hours from its picture. The start is now the first time that the
-            // next PES confirms, within 10 seconds: a leftover is passed over at the second PES as before, a damaged
-            // second PES is passed over when the third is near the first again, and a run of damaged ones when two
-            // after them agree. A track whose first PES are all more than 10 seconds apart, as a still picture can
-            // be sent, is no such case: where no time is confirmed by the fifth PES, the track keeps its first.
             else if (streamInfo != m_pmt.pidList.end() &&
                      (isAudioStreamType(streamInfo->second.m_streamType) || streamInfo->second.m_soundDescriptor != 0 ||
                       isVideoPID(streamInfo->second.m_streamType)) &&
                      m_ptsPesSeen[pid] >= 0)
             {
-                static constexpr int START_PES_MAX = 4;  // PES after the first that may confirm a start
+                static constexpr int START_PES_MAX = 15;  // PES after the first that are taken in runs
                 const int seen = ++m_ptsPesSeen[pid];
                 static constexpr int64_t CLOCK_WRAP = 1LL << 33;
-                auto far = [](const int64_t a, const int64_t b)
+                auto farApart = [](const int64_t a, const int64_t b)
                 {
                     int64_t step = (a - b) % CLOCK_WRAP;
                     if (step >= CLOCK_WRAP / 2)
@@ -1748,39 +1755,40 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
                             first->second = to;
                     }
                 };
-                std::vector<int64_t>& passed = m_passedStarts[pid];  // the times taken for a start and passed over
-                const int64_t start = m_firstPtsTime[pid];
-                const auto earlier =
-                    std::find_if(passed.begin(), passed.end(), [&](const int64_t t) { return !far(curPts, t); });
-                if (!far(curPts, start))
-                    m_ptsPesSeen[pid] = -1;  // confirmed
-                else if (earlier != passed.end())
+                std::vector<StartRun>& runs = m_startRuns[pid];
+                if (runs.empty())
+                    runs.push_back({m_firstPtsTime[pid], m_firstPtsTime[pid], m_firstPtsTime[pid], 1});
+                const auto joined = std::find_if(runs.rbegin(), runs.rend(),
+                                                 [&](const StartRun& run) { return !farApart(curPts, run.last); });
+                if (joined != runs.rend())
                 {
-                    // a time passed over before is confirmed by this PES: the PES between were the damaged ones
-                    moveStart(start, *earlier);
-                    m_ptsPesSeen[pid] = -1;
-                    // this PES is near that start, so it can be the lowest picture time as any other
-                    if (isVideoPID(streamInfo->second.m_streamType))
-                    {
-                        if (curPts < m_firstVideoPTS)
-                            m_firstVideoPTS = curPts;
-                        if (const int program = streamInfo->second.m_programNumber; program >= 0)
-                            if (auto low = m_firstVideoPtsOfProgram.find(program);
-                                low != m_firstVideoPtsOfProgram.end() && curPts < low->second)
-                                low->second = curPts;
-                    }
-                }
-                else if (seen < START_PES_MAX)
-                {
-                    passed.push_back(start);
-                    moveStart(start, curPts);
+                    joined->last = curPts;
+                    joined->low = (std::min)(joined->low, curPts);
+                    ++joined->count;
                 }
                 else
+                    runs.push_back({curPts, curPts, curPts, 1});
+                const auto chosen =
+                    std::find_if(runs.rbegin(), runs.rend(), [](const StartRun& run) { return run.count >= 2; });
+                const StartRun& run = chosen != runs.rend() ? *chosen : runs.front();
+                if (run.first != m_firstPtsTime[pid])
                 {
-                    // no two of the first PES agree: the track keeps its first time
-                    if (!passed.empty())
-                        moveStart(start, passed.front());
+                    moveStart(m_firstPtsTime[pid], run.first);
+                    // a picture of the run shown before its first PES (decoding order) is its lowest time
+                    if (isVideoPID(streamInfo->second.m_streamType))
+                    {
+                        if (run.low < m_firstVideoPTS)
+                            m_firstVideoPTS = run.low;
+                        if (const int program = streamInfo->second.m_programNumber; program >= 0)
+                            if (auto low = m_firstVideoPtsOfProgram.find(program);
+                                low != m_firstVideoPtsOfProgram.end() && run.low < low->second)
+                                low->second = run.low;
+                    }
+                }
+                if (seen >= START_PES_MAX)
+                {
                     m_ptsPesSeen[pid] = -1;
+                    runs.clear();
                 }
             }
             if (m_reportDamage && m_acceptedPidCache[pid])
@@ -2328,8 +2336,9 @@ void TSDemuxer::openFile(const std::string& streamName)
     m_fullDtsTime.clear();
     m_firstPtsTime.clear();
     m_ptsPesSeen.clear();
-    m_passedStarts.clear();
+    m_startRuns.clear();
     m_videoFirstPtsOfPid.clear();
+    m_videoPesOfPid.clear();
     memset(m_leadPes, 0, sizeof(m_leadPes));
     memset(m_leadDrop, 0, sizeof(m_leadDrop));
     memset(m_leadFirstSeen, 0, sizeof(m_leadFirstSeen));

@@ -288,9 +288,17 @@ class TSDemuxer final : public AbstractDemuxer
     std::map<int, int64_t> m_lastPesPts;
     std::map<int, int64_t> m_lastPesDts;
     std::map<int, int64_t> m_firstPtsTime;  // first PTS per PID, in file order (never a minimum)
-    std::map<int, int> m_ptsPesSeen;  // PES with a PTS after the first, per PID, until the start is confirmed (-1)
-                                      // (a first PES on another clock or damaged, see processTsPacket)
-    std::map<int, std::vector<int64_t>> m_passedStarts;  // the times taken for its start and passed over, per PID
+    std::map<int, int> m_ptsPesSeen;        // PES with a PTS after the first, per PID, until the start is settled (-1)
+                                            // (a first PES on another clock or damaged, see processTsPacket)
+    // A run of the first PES of a track, within 10 seconds of each other: the first, the last and the lowest time
+    struct StartRun
+    {
+        int64_t first;
+        int64_t last;
+        int64_t low;
+        int count;
+    };
+    std::map<int, std::vector<StartRun>> m_startRuns;  // per PID, until the start is settled
     std::map<int, int64_t> m_firstDtsTime;
     std::map<int, int64_t> m_clipStartOfPid;  // see getTrackClipStart
     std::map<int, int64_t> m_fullPtsTime;
@@ -326,6 +334,7 @@ class TSDemuxer final : public AbstractDemuxer
     // The first PTS of each video track of the file, by PID: a PTS far below it is damaged and is no start (see
     // processTsPacket)
     std::map<int, int64_t> m_videoFirstPtsOfPid;
+    std::map<int, int> m_videoPesOfPid;  // PES with a PTS of each video track of the file, counted
     // The video time a stream is measured against: that of its own program where the program has video, else that
     // of the file (first: the first PES in file order, else the smallest PTS)
     [[nodiscard]] int64_t videoReference(int32_t pid, bool first) const;
