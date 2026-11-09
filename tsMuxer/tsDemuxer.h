@@ -288,8 +288,9 @@ class TSDemuxer final : public AbstractDemuxer
     std::map<int, int64_t> m_lastPesPts;
     std::map<int, int64_t> m_lastPesDts;
     std::map<int, int64_t> m_firstPtsTime;  // first PTS per PID, in file order (never a minimum)
-    std::map<int, int> m_ptsPesSeen;        // PES with a PTS after the first, per PID, counted up to the second
-                                            // (a first PES on another clock, see processTsPacket)
+    std::map<int, int> m_ptsPesSeen;  // PES with a PTS after the first, per PID, until the start is confirmed (-1)
+                                      // (a first PES on another clock or damaged, see processTsPacket)
+    std::map<int, std::vector<int64_t>> m_passedStarts;  // the times taken for its start and passed over, per PID
     std::map<int, int64_t> m_firstDtsTime;
     std::map<int, int64_t> m_clipStartOfPid;  // see getTrackClipStart
     std::map<int, int64_t> m_fullPtsTime;
@@ -322,6 +323,9 @@ class TSDemuxer final : public AbstractDemuxer
     // services, as an ISDB-Tb one with its 1seg service, can hold programs whose clocks are hours apart.
     std::map<int, int64_t> m_firstVideoPtsOfProgram;
     std::map<int, int64_t> m_firstSeenVideoPtsOfProgram;
+    // The first PTS of each video track of the file, by PID: a PTS far below it is damaged and is no start (see
+    // processTsPacket)
+    std::map<int, int64_t> m_videoFirstPtsOfPid;
     // The video time a stream is measured against: that of its own program where the program has video, else that
     // of the file (first: the first PES in file order, else the smallest PTS)
     [[nodiscard]] int64_t videoReference(int32_t pid, bool first) const;
