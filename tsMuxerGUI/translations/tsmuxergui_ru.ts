@@ -5057,6 +5057,16 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>Ракурс %1 отличается от других в:</translation>
     </message>
     <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>differs from title %1</source>
+        <translation>отличается от титула %1</translation>
+    </message>
+    <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>Title %1 differs from title %2 at:</source>
+        <translation>Титул %1 отличается от титула %2 в:</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.cpp" line="5946"/>
         <source>Track %1: AC-3 %2, %3</source>
         <translation>Дорожка %1: AC-3 %2, %3</translation>
@@ -5152,8 +5162,8 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>Предпросмотр</translation>
     </message>
     <message>
-        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, it starts there.</source>
-        <translation>Воспроизводит выбранный титул в его ракурсе в проигрывателе для предпросмотра (вкладка «Общие»). Там, где ракурсы титула различаются, воспроизведение начинается с этого места.</translation>
+        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, or a version differs from its main title, it starts there.</source>
+        <translation>Воспроизводит выбранный титул в его ракурсе в проигрывателе для предпросмотра (вкладка «Общие»). Там, где ракурсы титула различаются или версия отличается от своего основного титула, воспроизведение начинается с этого места.</translation>
     </message>
     <message>
         <source>The file &quot;%1&quot; could not be opened in the system's default player.</source>

@@ -28,6 +28,11 @@ struct DiscTitle
     // of each angle there (angleClips[angle - 1]). Empty for a title of one angle.
     std::vector<std::pair<double, double>> angleParts;
     std::vector<std::vector<std::string>> angleClips;
+    // A version of a main title (another cut): where in its own time it plays clips the main title does not play, and
+    // those clips there ("00123.m2ts", several of one stretch joined by "+"); empty for any other title
+    int versionOf = 0;  // the number of that main title in the listing
+    std::vector<std::pair<double, double>> versionParts;
+    std::vector<std::string> versionClips;
     bool isMain = false;  // a main title: the main film, or one of the episodes or films of a disc of several
     std::string note;     // "main film", "version of title 1 (4 clips differ)", or why a playlist is left out
     // What the playlist says of its picture: the dynamic range of its video (the first video entry of its stream
@@ -46,6 +51,9 @@ struct DiscTitle
 // for each angle its clips there ("    angle 2: 00101.m2ts"), when clips are given. Empty when parts is empty.
 std::string anglePartsText(const std::vector<std::pair<double, double>>& parts,
                            const std::vector<std::vector<std::string>>& clips);
+// The lines under a version of a main title that say where it differs: "    differs from title 1 at 0:12:34-0:13:10",
+// then "    its own clips: 00123.m2ts"; empty for a title that is no such version
+std::string versionPartsText(const DiscTitle& title);
 
 struct DiscTitles
 {

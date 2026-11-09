@@ -5056,6 +5056,16 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>视角 %1 与其他视角不同的位置：</translation>
     </message>
     <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>differs from title %1</source>
+        <translation>与标题 %1 不同</translation>
+    </message>
+    <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>Title %1 differs from title %2 at:</source>
+        <translation>标题 %1 与标题 %2 不同的位置：</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.cpp" line="5946"/>
         <source>Track %1: AC-3 %2, %3</source>
         <translation>音轨 %1：AC-3 %2，%3</translation>
@@ -5151,8 +5161,8 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>预览</translation>
     </message>
     <message>
-        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, it starts there.</source>
-        <translation>在预览播放器（“常规”选项卡）中以其视角播放所选标题。标题的各视角不同之处，从该处开始播放。</translation>
+        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, or a version differs from its main title, it starts there.</source>
+        <translation>在预览播放器（“常规”选项卡）中以其视角播放所选标题。标题的各视角不同之处，或版本与其主标题不同之处，从该处开始播放。</translation>
     </message>
     <message>
         <source>The file &quot;%1&quot; could not be opened in the system's default player.</source>

@@ -33,6 +33,9 @@ struct DiscTitleRow
     int angles = 1;  // of a title with several angles; the dialog shows a row for each (angle=)
     QStringList angleParts;          // where the angles differ, "0:00:00-0:03:42" (the listing's "angles differ at")
     QList<QStringList> angleClips;   // Blu-ray: the clip of each angle there, by angle ("angle 2: 00101.m2ts, ...")
+    int versionOf = 0;               // a version of a main title (another cut): the number of that title
+    QStringList versionParts;        // where it plays its own clips ("differs from title 1 at 0:44:05-0:44:53, ...")
+    QStringList versionClips;        // those clips there ("its own clips: 00007.m2ts, ..."), several joined by "+"
 };
 
 struct DiscTitleList

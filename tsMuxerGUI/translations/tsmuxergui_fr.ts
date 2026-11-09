@@ -5056,6 +5056,16 @@ Si ce message est apparu pendant l&apos;examen d&apos;un fichier, ou à la ferme
         <translation>L&apos;angle %1 diffère des autres à :</translation>
     </message>
     <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>differs from title %1</source>
+        <translation>diffère du titre %1</translation>
+    </message>
+    <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>Title %1 differs from title %2 at:</source>
+        <translation>Le titre %1 diffère du titre %2 à :</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.cpp" line="5946"/>
         <source>Track %1: AC-3 %2, %3</source>
         <translation>Piste %1 : AC-3 %2, %3</translation>
@@ -5151,8 +5161,8 @@ Si ce message est apparu pendant l&apos;examen d&apos;un fichier, ou à la ferme
         <translation>Aperçu</translation>
     </message>
     <message>
-        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, it starts there.</source>
-        <translation>Lit le titre choisi, dans son angle, dans le lecteur pour les aperçus (onglet Général). Là où les angles d'un titre diffèrent, la lecture commence à cet endroit.</translation>
+        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, or a version differs from its main title, it starts there.</source>
+        <translation>Lit le titre choisi, dans son angle, dans le lecteur pour les aperçus (onglet Général). Là où les angles d'un titre diffèrent, ou une version diffère de son titre principal, la lecture commence à cet endroit.</translation>
     </message>
     <message>
         <source>The file &quot;%1&quot; could not be opened in the system's default player.</source>

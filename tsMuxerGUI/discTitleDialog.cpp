@@ -78,6 +78,16 @@ DiscTitleList parseDiscTitles(const QList<QString>& output)
             list.titles.last().angleParts = line.mid(21).trimmed().split(QStringLiteral(", "));
         else if (!list.titles.isEmpty() && line.startsWith(QLatin1String("    angle ")) && line.contains(':'))
             list.titles.last().angleClips << line.section(':', 1).trimmed().split(QStringLiteral(", "));
+        // under a version of a main title: where it plays its own clips, and those clips
+        else if (!list.titles.isEmpty() && line.startsWith(QLatin1String("    differs from title ")))
+        {
+            const QString rest = line.mid(23);
+            list.titles.last().versionOf = rest.section(' ', 0, 0).toInt();
+            list.titles.last().versionParts =
+                rest.section(QLatin1String(" at "), 1).trimmed().split(QStringLiteral(", "));
+        }
+        else if (!list.titles.isEmpty() && line.startsWith(QLatin1String("    its own clips:")))
+            list.titles.last().versionClips = line.section(':', 1).trimmed().split(QStringLiteral(", "));
         else if (const QRegularExpressionMatch m = bluray.match(line); m.hasMatch())
         {
             DiscTitleRow row;
@@ -303,6 +313,39 @@ DiscTitleDialog::DiscTitleDialog(const QString& disc, const DiscTitleList& list,
             m_tree->setRootIsDecorated(true);
             item->setExpanded(true);
         }
+        // ** WHERE A VERSION DIFFERS, UNDER ITS ROW. ** The stretches in which a version of a main title (another cut)
+        // plays clips of its own, each with its time and the clip, which is a link that plays it, as under the angles
+        // of a title. The rows are folded: a cut can differ in thirty places, and the arrow opens them.
+        if (!list.dvd && row.angles <= 1 && !row.versionParts.isEmpty())
+        {
+            QStringList tip;
+            for (int k = 0; k < row.versionParts.size(); ++k)
+            {
+                const QString clip = k < row.versionClips.size() ? row.versionClips[k] : QString();
+                QStringList sub;
+                for (int c = 0; c < cells.size(); ++c) sub << QString();
+                sub[1] = clip;
+                sub[2] = row.versionParts[k];
+                sub.last() = wtr("differs from title %1").arg(row.versionOf);
+                auto* part = new QTreeWidgetItem(item, sub);
+                part->setData(0, Qt::UserRole, i);
+                part->setData(0, Qt::UserRole + 1, 1);
+                part->setData(0, Qt::UserRole + 2, k + 1);  // the part, from 1: a preview starts there
+                if (m_player && !clip.isEmpty())
+                {
+                    QFont link = part->font(1);
+                    link.setUnderline(true);
+                    part->setFont(1, link);
+                    part->setForeground(1, palette().brush(QPalette::Link));
+                    part->setToolTip(1, wtr("Click to play this clip in the player for previews."));
+                }
+                tip << (clip.isEmpty() ? row.versionParts[k] : row.versionParts[k] + "  " + clip);
+            }
+            const QString text =
+                wtr("Title %1 differs from title %2 at:").arg(row.number).arg(row.versionOf) + "\n" + tip.join('\n');
+            for (int c = 0; c < cells.size(); ++c) item->setToolTip(c, text);
+            m_tree->setRootIsDecorated(true);
+        }
         for (const int c : {0, 2, 3}) item->setTextAlignment(c, Qt::AlignRight | Qt::AlignVCenter);
         if (!list.dvd)
             item->setTextAlignment(4, Qt::AlignRight | Qt::AlignVCenter);
@@ -322,6 +365,13 @@ DiscTitleDialog::DiscTitleDialog(const QString& disc, const DiscTitleList& list,
             first = item;
     }
     for (int c = 0; c < m_tree->columnCount(); ++c) m_tree->resizeColumnToContents(c);
+    // The rows under a version are folded when the columns are fitted, so a column fits its rows again when one opens:
+    // the times of a version's places were cut off
+    connect(m_tree, &QTreeWidget::itemExpanded, this,
+            [this]()
+            {
+                for (int c = 0; c < m_tree->columnCount(); ++c) m_tree->resizeColumnToContents(c);
+            });
     if (first)
         m_tree->setCurrentItem(first);
     layout->addWidget(m_tree);
@@ -347,7 +397,7 @@ DiscTitleDialog::DiscTitleDialog(const QString& disc, const DiscTitleList& list,
         previewButton = buttons->addButton(wtr("Preview"), QDialogButtonBox::ActionRole);
         previewButton->setToolTip(
             wtr("Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a "
-                "title differ, it starts there."));
+                "title differ, or a version differs from its main title, it starts there."));
         previewButton->setEnabled(first != nullptr);
         connect(previewButton, &QPushButton::clicked, this, [this]() { preview(m_tree->currentItem()); });
         connect(m_tree, &QTreeWidget::itemClicked, this,
@@ -406,26 +456,34 @@ void DiscTitleDialog::preview(const QTreeWidgetItem* item)
         source.playlist = discPlaylistPath(m_disc, row.playlist);
         source.listArguments << source.playlist;
     }
-    // the part of several angles: the one of the line chosen, or the first
+    // the part of several angles, or of a version where it plays its own clips: the one of the line chosen, or the
+    // first. A version's part is played as its own clip, as an angle's is: the first of a stretch of several.
+    const bool version = !m_list.dvd && row.angles <= 1 && !row.versionParts.isEmpty();
+    const QStringList& parts = version ? row.versionParts : row.angleParts;
     const int chosenPart = item->data(0, Qt::UserRole + 2).toInt();
-    const int part = chosenPart > 0 ? chosenPart - 1 : row.angles > 1 && !row.angleParts.isEmpty() ? 0 : -1;
-    if (part >= 0 && part < row.angleParts.size())
+    const int part = chosenPart > 0 ? chosenPart - 1 : (row.angles > 1 || version) && !parts.isEmpty() ? 0 : -1;
+    if (part >= 0 && part < parts.size())
     {
-        source.start = hmsSeconds(row.angleParts[part].section(QLatin1Char('-'), 0, 0));
+        source.start = hmsSeconds(parts[part].section(QLatin1Char('-'), 0, 0));
         // On a Blu-ray the angle plays a clip of its own there, which begins where the part begins: that clip is
         // opened as it is (or its preview made from its start, in an image), which a cut of the playlist at the part
         // would first read the title up to
         const int angle = source.angle;
-        if (!m_list.dvd && angle - 1 < row.angleClips.size() && part < row.angleClips[angle - 1].size())
+        const QString partClip =
+            version ? (part < row.versionClips.size() ? row.versionClips[part].section('+', 0, 0) : QString())
+            : !m_list.dvd && angle - 1 < row.angleClips.size() && part < row.angleClips[angle - 1].size()
+                ? row.angleClips[angle - 1][part]
+                : QString();
+        if (!partClip.isEmpty())
         {
             const QString playlistDir = QFileInfo(source.playlist).absolutePath();
             const QString streamDir = QFileInfo(playlistDir).absolutePath() + QStringLiteral("/STREAM");
             const QFileInfo info(m_disc);
             const QString stream =
                 info.isFile() ? streamDir : childNoCase(QFileInfo(playlistDir).absolutePath(), QStringLiteral("STREAM"));
-            QString clip = info.isFile() ? QString() : childNoCase(stream, row.angleClips[angle - 1][part]);
+            QString clip = info.isFile() ? QString() : childNoCase(stream, partClip);
             if (clip.isEmpty())
-                clip = (stream.isEmpty() ? streamDir : stream) + QLatin1Char('/') + row.angleClips[angle - 1][part];
+                clip = (stream.isEmpty() ? streamDir : stream) + QLatin1Char('/') + partClip;
             source.file = QDir::toNativeSeparators(clip);
             source.listArguments = QStringList{source.file};
         }

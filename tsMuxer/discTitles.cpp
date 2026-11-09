@@ -363,6 +363,20 @@ std::string anglePartsText(const std::vector<std::pair<double, double>>& parts,
     return s.str();
 }
 
+std::string versionPartsText(const DiscTitle& title)
+{
+    if (title.versionParts.empty())
+        return {};
+    std::ostringstream s;
+    s << "    differs from title " << title.versionOf << " at ";
+    for (size_t i = 0; i < title.versionParts.size(); ++i)
+        s << (i ? ", " : "") << hms(title.versionParts[i].first) << "-" << hms(title.versionParts[i].second);
+    s << '\n' << "    its own clips:";
+    for (size_t i = 0; i < title.versionClips.size(); ++i) s << (i ? ", " : " ") << title.versionClips[i];
+    s << '\n';
+    return s.str();
+}
+
 std::string blurayDiscRoot(const std::string& path)
 {
     const std::string p = withoutEndSeparators(path);
@@ -598,9 +612,35 @@ DiscTitles listDiscTitles(const std::string& root, const double minSeconds, cons
                 else if (own == 0)
                     p->title.note = "version of title " + number + ": a part of its clips";
                 else
+                {
+                    // ** WHERE A VERSION DIFFERS. ** The stretches of its own time in which it plays clips the main
+                    // title does not play, and those clips, as the angles of a title are shown: the listing said only
+                    // how many clips differ, not where, so another cut could not be found in it or played there.
+                    double at = 0;
+                    for (size_t k = 0; k < p->items.size(); ++k)
+                    {
+                        const Item& it = p->items[k];
+                        const double length = (it.out - it.in) / 45000.0;
+                        if (!b.count(it.clip))
+                        {
+                            if (k > 0 && !b.count(p->items[k - 1].clip) && !p->title.versionParts.empty())
+                            {
+                                p->title.versionParts.back().second = at + length;
+                                p->title.versionClips.back() += "+" + it.clip + ".m2ts";
+                            }
+                            else
+                            {
+                                p->title.versionParts.emplace_back(at, at + length);
+                                p->title.versionClips.push_back(it.clip + ".m2ts");
+                            }
+                        }
+                        at += length;
+                    }
+                    p->title.versionOf = static_cast<int>(std::stoi(number));
                     p->title.note = "version of title " + number + ", " + std::to_string(own) + " of " +
                                     std::to_string(p->items.size()) +
                                     (p->items.size() == 1 ? " clip" : " clips") + (own == 1 ? " differs" : " differ");
+                }
                 titles.push_back(p);
             }
         }
@@ -702,6 +742,7 @@ std::string describeDiscTitles(const DiscTitles& t)
             s << "  (" << title.note << ")";
         s << '\n';
         s << anglePartsText(title.angleParts, title.angleClips);
+        s << versionPartsText(title);
     }
     if (t.mainTitles > 1)
         s << '\n' << mainTitlesText(t) << '\n';

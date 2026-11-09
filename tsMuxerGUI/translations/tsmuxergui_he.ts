@@ -5056,6 +5056,16 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>זווית %1 שונה מהאחרות ב:</translation>
     </message>
     <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>differs from title %1</source>
+        <translation>שונה מכותר %1</translation>
+    </message>
+    <message>
+        <location filename="../discTitleDialog.cpp"/>
+        <source>Title %1 differs from title %2 at:</source>
+        <translation>כותר %1 שונה מכותר %2 ב:</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.cpp" line="5946"/>
         <source>Track %1: AC-3 %2, %3</source>
         <translation>רצועה %1: AC-3 %2, %3</translation>
@@ -5151,8 +5161,8 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>תצוגה מקדימה</translation>
     </message>
     <message>
-        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, it starts there.</source>
-        <translation>מנגן את הכותר שנבחר, בזווית שלו, בנגן לתצוגות מקדימות (לשונית כללי). היכן שהזוויות של הכותר שונות, ההפעלה מתחילה שם.</translation>
+        <source>Play the title chosen, in its angle, in the player for previews (General tab). Where the angles of a title differ, or a version differs from its main title, it starts there.</source>
+        <translation>מנגן את הכותר שנבחר, בזווית שלו, בנגן לתצוגות מקדימות (לשונית כללי). היכן שהזוויות של הכותר שונות, או שגרסה שונה מהכותר הראשי שלה, ההפעלה מתחילה שם.</translation>
     </message>
     <message>
         <source>The file &quot;%1&quot; could not be opened in the system's default player.</source>
