@@ -372,6 +372,17 @@ static bool packetRunWithin(const std::string& fileName, const int64_t limit)
                     if (n == 16)
                         return true;
                 }
+        // A whole file of fewer than 16 packets has no run of 16: it is one where each of its packets begins with the
+        // sync byte (a test pattern of one to three packets was said to hold no transport stream, as if encrypted)
+        if (got < chunk && read == have)
+            for (const int stride : {188, 192, 204})
+            {
+                const int sync = stride == 192 ? 4 : 0;  // a 192 byte packet begins with 4 bytes of time
+                bool all = have > 0 && have < 16 * stride && have % stride == 0;
+                for (int i = sync; all && i < have; i += stride) all = buf[i] == 0x47;
+                if (all)
+                    return true;
+            }
         // keep the tail, where a run can begin that the next chunk completes
         std::memmove(buf.data(), buf.data() + last, static_cast<size_t>(have - last));
         have -= last;
