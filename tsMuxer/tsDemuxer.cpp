@@ -1671,6 +1671,46 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
 
             if (m_firstPtsTime.find(pid) == m_firstPtsTime.end())
                 m_firstPtsTime[pid] = curPts;
+            // ** A FIRST PES ON ANOTHER CLOCK IS NOT THE START. ** A recording can begin with a PES or two left in the
+            // receiver from before, on a time base hours away from the rest: the sound of such a recording was placed
+            // 9.7 hours after its video, where the video reader had left its own leftover picture out, and a cut had
+            // no sound. Where the second PES of a sound or video track is more than 10 seconds from the first (on a
+            // 33 bit clock), the first was such a leftover, and the track starts at the second. PES of sound and
+            // picture come a fraction of a second apart; subtitles can be minutes apart and are left as they are.
+            else if (streamInfo != m_pmt.pidList.end() &&
+                     (isAudioStreamType(streamInfo->second.m_streamType) ||
+                      isVideoPID(streamInfo->second.m_streamType)) &&
+                     ++m_ptsPesSeen[pid] == 1)
+            {
+                static constexpr int64_t CLOCK_WRAP = 1LL << 33;
+                int64_t step = (curPts - m_firstPtsTime[pid]) % CLOCK_WRAP;
+                if (step >= CLOCK_WRAP / 2)
+                    step -= CLOCK_WRAP;
+                else if (step < -CLOCK_WRAP / 2)
+                    step += CLOCK_WRAP;
+                if (step > 10 * 90000 || step < -10 * 90000)
+                {
+                    const int64_t stale = m_firstPtsTime[pid];
+                    m_firstPtsTime[pid] = curPts;
+                    if (isVideoPID(streamInfo->second.m_streamType))
+                    {
+                        // the video's own references as well, where the leftover was the lowest or the first seen
+                        if (m_firstVideoPTS == stale)
+                            m_firstVideoPTS = curPts;
+                        if (m_firstSeenVideoPTS == stale)
+                            m_firstSeenVideoPTS = curPts;
+                        if (const int program = streamInfo->second.m_programNumber; program >= 0)
+                        {
+                            if (auto low = m_firstVideoPtsOfProgram.find(program);
+                                low != m_firstVideoPtsOfProgram.end() && low->second == stale)
+                                low->second = curPts;
+                            if (auto seen = m_firstSeenVideoPtsOfProgram.find(program);
+                                seen != m_firstSeenVideoPtsOfProgram.end() && seen->second == stale)
+                                seen->second = curPts;
+                        }
+                    }
+                }
+            }
             if (m_reportDamage && m_acceptedPidCache[pid])
                 m_damagePts[pid] = curPts;
 
@@ -2215,6 +2255,7 @@ void TSDemuxer::openFile(const std::string& streamName)
     m_fullPtsTime.clear();
     m_fullDtsTime.clear();
     m_firstPtsTime.clear();
+    m_ptsPesSeen.clear();
     memset(m_leadPes, 0, sizeof(m_leadPes));
     memset(m_leadDrop, 0, sizeof(m_leadDrop));
     memset(m_leadFirstSeen, 0, sizeof(m_leadFirstSeen));

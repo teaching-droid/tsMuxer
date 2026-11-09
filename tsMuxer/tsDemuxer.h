@@ -288,6 +288,8 @@ class TSDemuxer final : public AbstractDemuxer
     std::map<int, int64_t> m_lastPesPts;
     std::map<int, int64_t> m_lastPesDts;
     std::map<int, int64_t> m_firstPtsTime;  // first PTS per PID, in file order (never a minimum)
+    std::map<int, int> m_ptsPesSeen;        // PES with a PTS after the first, per PID, counted up to the second
+                                            // (a first PES on another clock, see processTsPacket)
     std::map<int, int64_t> m_firstDtsTime;
     std::map<int, int64_t> m_clipStartOfPid;  // see getTrackClipStart
     std::map<int, int64_t> m_fullPtsTime;
