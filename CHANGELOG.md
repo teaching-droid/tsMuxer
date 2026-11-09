@@ -104,7 +104,7 @@
 
 * **A warning about AC-3 could go missing.** Where no AC-3 frame was found in the first part of the stream that was read, as after a long run of other data at the start of a file, the reader stayed in the mode it uses to probe a stream: the warning that the channel layout or sample rate changes was not given, nor some others. It now leaves that mode in this case too.
 
-* **A TS that gives nothing to read now says why.** A TS without a PAT or PMT listed only its length; its listing now names the missing table and says how a track can still be muxed by its PID. A track of an encrypted recording, and a track the PMT names but the file does not carry, said "Can't detect stream type"; they now say "encrypted" or "no data".
+* **A TS that gives nothing to read now says why.** A TS without a PAT or PMT listed only its length; its listing now names the missing table. A track of an encrypted recording, and a track the PMT names but the file does not carry, said "Can't detect stream type"; they now say "encrypted" or "no data".
 
 * **An .iso output name without --blu-ray wrote a file that was no working disc image.** It now makes a Blu-ray image, with a message.
 

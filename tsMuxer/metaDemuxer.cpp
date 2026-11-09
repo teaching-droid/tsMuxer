@@ -4579,15 +4579,13 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
                 why << "The file " << unquoted << " is a transport stream without a PAT (program association table)"
                     << scope
                     << ". tsMuxeR lists the tracks of a TS from its PAT and the PMT it names, so it can list no track "
-                       "of this file. A track can still be muxed when a meta file line names its codec and its PID, "
-                       "for example: V_MPEG-2, \"<file>\", track=<PID>. A recording cut out of a stream, or one that "
-                       "kept only some of its PIDs, can lack the PAT.";
+                       "of this file. A recording cut out of a stream, or one that kept only some of its PIDs, can "
+                       "lack the PAT.";
             else if (missing == "PMT")
                 why << "The file " << unquoted << " names its programs in a PAT, but has no PMT (program map table) of "
                     << "them" << scope
-                    << ". tsMuxeR lists the tracks of a TS from its PMT, so it can list no track of this file. A track "
-                       "can still be muxed when a meta file line names its codec and its PID, for example: V_MPEG-2, "
-                       "\"<file>\", track=<PID>. A recording that kept only some of its PIDs can lack the PMT.";
+                    << ". tsMuxeR lists the tracks of a TS from its PMT, so it can list no track of this file. A "
+                       "recording that kept only some of its PIDs can lack the PMT.";
             noTracksReason = why.str();
         }
         PIDSet acceptedPidSet;
