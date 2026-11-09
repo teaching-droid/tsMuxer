@@ -43,8 +43,9 @@ const std::string AACStreamReader::getStreamInfo()
 // data: an A_AAC track that held H.264 was listed as AAC. The first syntax element of the raw_data_block behind each
 // header is read instead, which every AAC frame has: for channel configurations 1 to 7 it is the first channel element
 // of the configuration (ISO/IEC 14496-3 Table 1.19: a single channel element for 1 and 3 to 7, a channel pair element
-// for 2), element_instance_tag 0, or a data stream or fill element, which an encoder may put before it. Data that is
-// not AAC meets that in about half of its blocks at most, and AAC in all of them; three in four is asked. Configuration
+// for 2, or a single one for the parametric stereo of HE-AAC v2), whatever its element_instance_tag, or a data stream
+// or fill element, which an encoder may put before it. Data that is not AAC meets that in about half of its blocks at
+// most, and AAC in all of them; three in four is asked. Configuration
 // 0 begins with the program config element the demuxer copies into each frame and is not checked. Too few frames for a
 // share are not checked either, so a short track is listed as before.
 static bool matroskaBlocksLookLikeAac(uint8_t* buffer, uint8_t* end)
@@ -69,10 +70,14 @@ static bool matroskaBlocksLookLikeAac(uint8_t* buffer, uint8_t* end)
             break;
         if (const int channelConfig = ((frame[2] & 0x01) << 2) | (frame[3] >> 6); channelConfig != 0)
         {
+            // ** ANY ELEMENT TAG, AND A MONO CORE OF A STEREO TRACK. ** element_instance_tag is the encoder's own
+            // number for the element (0 to 15): a Brazilian broadcast numbers its channel pair 2, so its HE-AAC, read
+            // from a Matroska file, was listed as "Can't detect stream type". HE-AAC v2 codes the two channels of a
+            // stereo track as one with parametric stereo, a single channel element. Data that is not AAC still meets
+            // these four elements in about half of its blocks, under the three in four asked.
             const int element = frame[headerLen] >> 5;
-            const int tag = (frame[headerLen] >> 1) & 0x0f;
             const int first = channelConfig == 2 ? ID_CPE : ID_SCE;
-            if ((element == first && tag == 0) || element == ID_DSE || element == ID_FIL)
+            if (element == first || (channelConfig == 2 && element == ID_SCE) || element == ID_DSE || element == ID_FIL)
                 ++fitting;
             ++checked;
         }
