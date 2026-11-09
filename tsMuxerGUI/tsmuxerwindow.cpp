@@ -556,6 +556,7 @@ void initLanguageComboBox(QComboBox* comboBox)
     comboBox->addItem(QString::fromUtf8("Español"), "es");
     comboBox->addItem(QString::fromUtf8("日本語"), "ja");
     comboBox->addItem(QString::fromUtf8("Português (Brasil)"), "pt_BR");
+    comboBox->addItem(QString::fromUtf8("Português (Portugal)"), "pt_PT");
     comboBox->addItem(QString::fromUtf8("Italiano"), "it");
     comboBox->addItem(QString::fromUtf8("繁體中文"), "zh_TW");
     comboBox->addItem(QString::fromUtf8("한국어"), "ko");

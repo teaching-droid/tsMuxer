@@ -49,6 +49,7 @@ set(tsmuxer_ts_files
   translations/tsmuxergui_es.ts
   translations/tsmuxergui_ja.ts
   translations/tsmuxergui_pt_BR.ts
+  translations/tsmuxergui_pt_PT.ts
   translations/tsmuxergui_it.ts
   translations/tsmuxergui_zh_TW.ts
   translations/tsmuxergui_ko.ts
