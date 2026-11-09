@@ -222,6 +222,25 @@ TSDemuxer::TSDemuxer(const BufferedReaderManager& readManager, const char* strea
 
 bool TSDemuxer::mvcContinueExpected() const { return !m_nonMVCVideoFound && strEndWith(m_streamNameLow, "ssif"); }
 
+// The codec of a video PES of a file without a PAT, from the first start code of its data (getTrackList): what a
+// broadcast PES begins with, an access unit delimiter, a parameter set or SEI of H.264 or HEVC, or the sequence,
+// GOP or picture header of MPEG-2. Anything else is taken as MPEG-2 video, of which no reading of the demux depends
+// on the codec; the codec the listing shows is found by the readers all the same.
+static StreamType pesVideoType(const std::vector<uint8_t>& data)
+{
+    size_t at = 0;
+    if (data.size() >= 4 && data[0] == 0 && data[1] == 0 && data[2] == 0 && data[3] == 1)
+        at = 1;
+    if (data.size() < at + 5 || data[at] != 0 || data[at + 1] != 0 || data[at + 2] != 1)
+        return StreamType::VIDEO_MPEG2;
+    const uint8_t c = data[at + 3];
+    if (c == 0x09 || c == 0x06 || c == 0x27 || c == 0x47 || c == 0x67)
+        return StreamType::VIDEO_H264;  // access unit delimiter, SEI, sequence parameter set
+    if ((c == 0x46 || c == 0x40 || c == 0x42 || c == 0x4E) && data[at + 4] == 0x01)
+        return StreamType::VIDEO_H265;  // access unit delimiter, VPS, SPS, prefix SEI, of layer 0 and temporal ID 0
+    return StreamType::VIDEO_MPEG2;
+}
+
 void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
 {
     // A program map section that spans packets is put together for each PMT PID on its own (readers, below). One buffer
@@ -260,6 +279,8 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
     std::map<int, SharedPid> sharedPids;
     std::map<int, SectionReader> readers;
     std::vector<int64_t> packetsOfPid(8192);
+    std::map<int, int> pesStreamIds;                    // the stream ID of the first PES of each PID
+    std::map<int, std::vector<uint8_t>> pesFirstBytes;  // the first bytes of the data of that PES
     const auto takeMap = [&](uint8_t* buffer, const int len, const int pid)
     {
         takeProgramMap(buffer, len, pid);
@@ -433,7 +454,21 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                 }
             }
             else if (tsPacket->dataExists)
+            {
                 ++packetsOfPid[pid];
+                // the stream ID of the first PES of each PID: where the file has no PAT, it says the tracks (below)
+                const uint8_t* payload = curPos + tsPacket->getHeaderSize();
+                if (tsPacket->payloadStart && pid != 0x1FFF && payload + 9 <= curPos + TS_FRAME_SIZE &&
+                    payload[0] == 0 && payload[1] == 0 && payload[2] == 1 && pesStreamIds.count(pid) == 0)
+                {
+                    pesStreamIds.emplace(pid, payload[3]);
+                    // and the first bytes of its data, past the PES header, which tell LATM and ARIB captions
+                    const uint8_t* esData = payload + 9 + payload[8];
+                    const uint8_t* packetEnd = curPos + TS_FRAME_SIZE;
+                    if (esData < packetEnd)
+                        pesFirstBytes[pid].assign(esData, (std::min)(esData + 8, packetEnd));
+                }
+            }
         }
         if (curPos < data + readedBytes)
         {
@@ -475,6 +510,73 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
         if (withData.empty() && !shared.firstOther.empty())
             takeMap(shared.firstOther.data(), static_cast<int>(shared.firstOther.size()), pid);
     }
+
+    // ** A TS WITHOUT A PAT IS LISTED BY ITS PES HEADERS. ** A recording cut out of a stream, or one that kept only
+    // some of its PIDs, can have no PAT: the tracks are named by it and its PMT, so such a file listed none, and a
+    // track could be muxed only by naming its codec and its PID. Each PID whose packets begin PES is now a track, of
+    // the kind its stream ID says (video, MPEG audio, private data), and the readers find its codec from its data, as
+    // they do for a stream type a PMT leaves open. A PID of PSI sections or of PES that are no audio or video (padding,
+    // private stream 2, ECM and EMM, DSM-CC) is left out.
+    //
+    // ** AND ITS PES ARE READ AS THOSE OF A MAPPED STREAM. ** The demux takes the PES header off the data only for a
+    // stream the program map names (demuxPacket); of any other PID the readers were given the PES with its headers,
+    // and found no codec in them, nor could a mux that named codec and PID read them: an AC-3 track came out with a
+    // bad frame at each PES. Each such PID is entered in the program map of this demuxer, as a stream of its kind, so
+    // its headers are taken off and its times read as those of any stream. A video PID is entered as the codec its
+    // first PES begins with (pesVideoType), which makes it the video the other tracks are timed against, and reads it
+    // as a PMT of that codec has it read (an H.264 recording up to its first parameter sets, skipsLeadingPes). A file
+    // with a PAT never comes here.
+    //
+    // Two kinds are told by the first bytes of their data, as the demux must know them before any reader sees it: AAC
+    // in LATM, which a DVB-T2 or ISDB-Tb channel sends under an MPEG audio stream ID, and which the demux turns into
+    // ADTS for the AAC reader only where the stream is declared so (LatmToAdts); and the captions of ISDB, a PES of
+    // private stream 1 whose data identifier 0x80 says synchronised PES (ARIB STD-B24, volume 3), which the demux
+    // gathers by caption only where the stream is declared so (isAribPid). Superimposed text, sent as asynchronous PES
+    // (0x81) without a time, is left to the readers, as it is with a PMT.
+    if (trackList.empty() && !patSeen && anyPacket)
+        for (const auto& [pid, id] : pesStreamIds)
+        {
+            const auto bytes = pesFirstBytes.find(pid);
+            const auto startsWith = [&](const uint8_t b0, const uint8_t mask1, const uint8_t b1)
+            {
+                return bytes != pesFirstBytes.end() && bytes->second.size() >= 2 && bytes->second[0] == b0 &&
+                       (bytes->second[1] & mask1) == b1;
+            };
+            int type = 0;  // left to the readers
+            StreamType mapped = StreamType::PRIVATE_DATA;
+            bool aribCaptions = false;
+            if (id >= 0xC0 && id <= 0xDF && startsWith(0x56, 0xE0, 0xE0))
+            {
+                type = static_cast<int>(StreamType::AUDIO_AAC_RAW);  // the LATM sync word, 0x2B7 in 11 bits
+                mapped = StreamType::AUDIO_AAC_RAW;
+            }
+            else if (id >= 0xC0 && id <= 0xDF)
+            {
+                type = static_cast<int>(StreamType::AUDIO_MPEG1);  // MPEG audio, or AAC, which that reader passes on
+                mapped = StreamType::AUDIO_MPEG1;
+            }
+            else if (id == 0xBD && startsWith(0x80, 0xFF, 0xFF))
+            {
+                type = TRACKTYPE_ARIB;  // data identifier 0x80, private stream ID 0xFF
+                aribCaptions = true;
+            }
+            else if (id == 0xBD)
+                type = static_cast<int>(StreamType::PRIVATE_DATA);  // AC-3, DTS, subtitles
+            else if (id >= 0xE0 && id <= 0xEF)
+                mapped = pesVideoType(bytes != pesFirstBytes.end() ? bytes->second : std::vector<uint8_t>());
+            else if (id != 0xFD)
+                continue;
+            TrackInfo track(type, "", 0);
+            PMTStreamInfo stream(mapped, pid, nullptr, 0, nullptr, "", false);
+            if (aribCaptions)
+            {
+                // the data component of captions; the component tag that would tell the service is in the PMT only
+                track.m_dataComponentId = stream.m_dataComponentId = 0x0008;
+            }
+            trackList.insert(std::make_pair(pid, track));
+            m_pmt.pidList.try_emplace(pid, stream);
+            m_tracksFromPes = true;
+        }
 
     // No track because the tables that name the tracks are not there: no PAT, or a PAT whose maps never came. A map
     // that came and names no stream is no missing table.
@@ -637,6 +739,18 @@ void TSDemuxer::completeProgramMap()
     std::map<int32_t, TrackInfo> tracks;
     probe.getTrackList(tracks);
     for (const auto& [pid, info] : probe.m_pmt.pidList) m_pmt.pidList.try_emplace(pid, info);
+}
+
+void TSDemuxer::adoptPesTracks()
+{
+    TSDemuxer probe(m_readManager, "");
+    probe.openFile(m_streamName);
+    std::map<int32_t, TrackInfo> tracks;
+    probe.getTrackList(tracks);
+    if (!probe.m_tracksFromPes)
+        return;
+    for (const auto& [pid, info] : probe.m_pmt.pidList) m_pmt.pidList.try_emplace(pid, info);
+    m_tracksFromPes = true;
 }
 
 bool TSDemuxer::isJoinOfFiles() const { return m_joinFiles.size() > 1 && m_mplsInfo.empty() && m_clipParts.empty(); }
@@ -1262,6 +1376,13 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
             if (acceptedPID >= 0 && acceptedPID < 8192)
                 m_acceptedPidCache[acceptedPID] = 1;
         m_firstDemuxCall = false;
+        // The mux reads a file without listing it first: the tracks of a file without a PAT are found here as the
+        // listing finds them (getTrackList), so a meta line that names one is read as the listing read it. Only where
+        // tracks are taken and nothing has filled the map yet, and for a single file: a join or a playlist reads its
+        // maps from each clip. A file with a PAT is read on as before.
+        if (!acceptedPIDs.empty() && m_pmt.pidList.empty() && !m_tracksFromPes && m_joinFiles.size() <= 1 &&
+            m_mplsInfo.empty() && m_clipParts.empty() && !m_streamName.empty())
+            adoptPesTracks();
     }
 
     MemoryBlock* vect = nullptr;

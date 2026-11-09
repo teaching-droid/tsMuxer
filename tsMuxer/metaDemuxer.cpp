@@ -2228,10 +2228,12 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         if (track == tracks.end() || !probe.isAribPid(pid))
             THROW(ERR_COMMON, "Track " << pid << " of " << first << " holds no ARIB captions. Nothing was written.")
         const int id = track->second.m_dataComponentId;
-        codecReader = new MatroskaCopyStreamReader(aribCodecInfo.programName,
-                                                   {static_cast<uint8_t>(track->second.m_componentTag),
-                                                    static_cast<uint8_t>(id >> 8), static_cast<uint8_t>(id)},
-                                                   {}, 0);
+        // A file without a PAT has no PMT to give the component tag of its captions: they get 0x30, the tag of the
+        // first caption stream of a service (ARIB TR-B14), which is what such a track nearly always is
+        const int tag = probe.tracksFromPesHeaders() ? 0x30 : track->second.m_componentTag;
+        codecReader = new MatroskaCopyStreamReader(
+            aribCodecInfo.programName,
+            {static_cast<uint8_t>(tag), static_cast<uint8_t>(id >> 8), static_cast<uint8_t>(id)}, {}, 0);
     }
     // ** DVD SUBTITLES INTO A MATROSKA OUTPUT STAY VOBSUB. ** The sub-pictures of a VOB were drawn again as PGS for
     // every output, where a Matroska output keeps the VobSub of a Matroska source as it is. They go in as S_VOBSUB now,
@@ -4592,6 +4594,12 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
                        "recording that kept only some of its PIDs can lack the PMT.";
             noTracksReason = why.str();
         }
+        if (const auto* ts = dynamic_cast<TSDemuxer*>(demuxer.get()); ts && ts->tracksFromPesHeaders())
+            LTRACE(LT_INFO, 2,
+                   "The file " << unquoted
+                               << " is a transport stream without a PAT (program association table): its tracks are "
+                                  "found by the PES headers of their packets, and their codecs from their data, so "
+                                  "there are no languages.");
         PIDSet acceptedPidSet;
         for (const auto& itr : acceptedPidMap) acceptedPidSet.insert(itr.first);
         for (auto& itr : demuxedData)
@@ -4715,8 +4723,10 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             {
                 const TrackInfo& arib = acceptedPidMap[itr.first];
                 std::ostringstream descr;
-                descr << "ARIB captions" << (arib.m_dataComponentId == 0x0012 ? " of the 1seg service" : "")
-                      << ", component tag 0x" << std::hex << arib.m_componentTag;
+                descr << "ARIB captions" << (arib.m_dataComponentId == 0x0012 ? " of the 1seg service" : "");
+                // a file without a PAT has no PMT to give the tag (TSDemuxer::getTrackList)
+                if (const auto* ts = dynamic_cast<TSDemuxer*>(demuxer.get()); !ts || !ts->tracksFromPesHeaders())
+                    descr << ", component tag 0x" << std::hex << arib.m_componentTag;
                 trackRez.streamDescr = descr.str();
             }
             if (trackRez.codecInfo.codecID == CODEC_S_SRT)

@@ -85,6 +85,8 @@ class TSDemuxer final : public AbstractDemuxer
     // whole file
     [[nodiscard]] const char* missingProgramTable() const { return m_missingTable; }
     [[nodiscard]] bool tableScanWholeFile() const { return m_tableScanWhole; }
+    // Whether the file has no PAT and its tracks were found by the PES headers of their packets (getTrackList)
+    [[nodiscard]] bool tracksFromPesHeaders() const { return m_tracksFromPes; }
     // Where a stream starts on the timeline of a join, in 90 kHz: the start of the clip in which its first PES was
     // seen, so 0 for every stream of the first clip. An audio or video reader counts its own time from its first
     // frame and needs this added; PGS times already carry it in their PES headers.
@@ -230,6 +232,9 @@ class TSDemuxer final : public AbstractDemuxer
     // A join reads no program table ahead, and its first block may not hold the map of every program of a file
     void completeProgramMap();
     bool m_programMapDone = false;
+    // A file read without its listing: the tracks found by their PES headers where it has no PAT, entered in the map
+    // as getTrackList enters them
+    void adoptPesTracks();
     [[nodiscard]] int64_t fileVideoStart(const std::string& fileName, int videoPid) const;
     void endJoinFile();
     bool keepJoinSound(int pid, StreamType type, int64_t pts, const uint8_t* data = nullptr,
@@ -345,6 +350,7 @@ class TSDemuxer final : public AbstractDemuxer
     std::map<int, std::pair<int64_t, int64_t>> m_listedPackets;
     const char* m_missingTable = nullptr;
     bool m_tableScanWhole = false;
+    bool m_tracksFromPes = false;
     bool m_videoTimedFromFirstPes = false;
     int64_t m_lastVideoPTS;
     int64_t m_lastVideoDTS;
