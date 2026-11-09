@@ -1015,6 +1015,15 @@ bool TSDemuxer::checkForRealM2ts(const uint8_t* buffer, const uint8_t* end) cons
                                          "of 188 and 192 bytes.")
     if (!gridFound(192) || gridFound(188))
         return false;
+    // A job opens a file more than once (the listing, each track, the mux), and the warning came each time: four times
+    // for a mux of one video and one audio track. It is given once for each file.
+    static std::mutex lock;
+    static std::set<std::string> warned;
+    {
+        const std::lock_guard<std::mutex> guard(lock);
+        if (!warned.insert(m_streamName).second)
+            return true;
+    }
     LTRACE(LT_WARN, 2, "Warning! The file " << m_streamName << " has a M2TS format.");
     return true;
 }
