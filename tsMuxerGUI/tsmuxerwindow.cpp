@@ -5867,8 +5867,17 @@ void TsMuxerWindow::onLanguageComboBoxIndexChanged(int idx)
     // nothing to point at. The result is a dialog whose title and text are translated and whose
     // buttons are not. Look beside the executable first, which is where a package can put them,
     // and keep the old path for a build against a full system Qt.
-    if (!qtCoreTranslator.load(QString("qtbase_%1").arg(lang), QCoreApplication::applicationDirPath()))
-        (void)qtCoreTranslator.load(QString("qtbase_%1").arg(lang), QLibraryInfo::path(QLibraryInfo::TranslationsPath));
+    // European Portuguese has no qtbase catalogue in Qt 6.8, only an old qt_pt_PT without the standard buttons, so its
+    // dialogs showed English buttons. The buttons this window uses (Yes, No, OK, Cancel, Close) have the same words in
+    // both forms of Portuguese: the Brazilian catalogue is taken where there is no European one.
+    auto loadQtCatalogue = [this](const QString& code)
+    {
+        return qtCoreTranslator.load(QString("qtbase_%1").arg(code), QCoreApplication::applicationDirPath()) ||
+               qtCoreTranslator.load(QString("qtbase_%1").arg(code),
+                                     QLibraryInfo::path(QLibraryInfo::TranslationsPath));
+    };
+    if (!loadQtCatalogue(lang) && lang == QLatin1String("pt_PT"))
+        (void)loadQtCatalogue(QStringLiteral("pt_BR"));
     (void)tsMuxerTranslator.load(QString("tsmuxergui_%1").arg(lang), ":/i18n");
     QFile aboutContent(QString(":/about_%1.html").arg(lang));
     if (!aboutContent.exists())
