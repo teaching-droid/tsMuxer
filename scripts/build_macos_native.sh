@@ -150,7 +150,7 @@ cp ../../LICENSE LICENSE
 cp ../../NOTICE NOTICE
 cp ../../packaging/notices/macOS.txt THIRD-PARTY-NOTICES.txt
 mkdir -p licenses
-cp ../../licenses/LGPL-3.0.txt ../../licenses/GPL-3.0.txt ../../licenses/LGPL-2.1.txt ../../licenses/FreeType-FTL.txt licenses/
+cp ../../licenses/LGPL-3.0.txt ../../licenses/GPL-3.0.txt ../../licenses/FreeType-FTL.txt licenses/
 zip -9 -r -y mac.zip tsMuxeR tsMuxerGUI.app LICENSE NOTICE THIRD-PARTY-NOTICES.txt licenses
 
 # Check the package rather than trusting the flags, because both faults this replaces were

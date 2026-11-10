@@ -31,9 +31,8 @@ Corresponding source:
         https://code.qt.io/
 
 Qt's own bundled third-party components:
-    Qt itself includes further third-party software, among them FFmpeg in its
-    multimedia plugin (LGPL 2.1 or later, licenses/LGPL-2.1.txt). Their
-    licenses are listed at:
+    Qt itself includes further third-party software. Their licenses are listed
+    at:
         https://doc.qt.io/qt-6/licenses-used-in-qt.html
 
 ================================================================================
