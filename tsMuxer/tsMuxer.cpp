@@ -511,6 +511,31 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
     }
     m_extIndexToTSIndex[streamIndex] = tsStreamIndex;
 
+    // ** EACH TRACK OF THE OUTPUT IS NAMED WITH ITS PID. ** A transport stream or a disc gives each track a PID of its
+    // own, and the log said only which track was decoded, so a script or a player setting could not be matched to the
+    // output without a second tool. One line now gives the PID, the kind, the language and, for HEVC, the HDR kind.
+    if (codecReader != nullptr)
+    {
+        char pid[8];
+        snprintf(pid, sizeof(pid), "0x%04X", tsStreamIndex);
+        std::string line = std::string("Output track ") + std::to_string(streamIndex) + ": PID " + pid + ", " +
+                           codecReader->getCodecInfo().displayName;
+        if (const auto lang = params.find("lang"); lang != params.end() && !lang->second.empty())
+            line += ", language " + lang->second;
+        if (const auto* hevc = dynamic_cast<HEVCStreamReader*>(codecReader))
+        {
+            std::string hdr;
+            if (hevc->hasDvRpu())
+                hdr = "Dolby Vision";
+            if (hevc->hasHdr10plus())
+                hdr += std::string(hdr.empty() ? "" : ", ") + "HDR10+";
+            else if (hevc->hasHdr10())
+                hdr += std::string(hdr.empty() ? "" : ", ") + "HDR10";
+            line += ", " + (hdr.empty() ? std::string("SDR") : hdr);
+        }
+        LTRACE(LT_INFO, 2, line);
+    }
+
     m_pmt.program_number = 1;
     // The PCR goes on the video PID. A mux without video put it on PID 0, the PID of the program association table,
     // which the PCR_PID of the program map then named: it goes on a PID of its own, as with --no-pcr-on-video-pid,
