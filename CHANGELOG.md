@@ -1,5 +1,9 @@
 ## tsMuxeR 3.1.0
 
+**3.1.0 fixes 66 faults of earlier versions and brings 30 new features and improvements**, each listed below. Every fault that the final tests turned up was fixed before this release. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+
+**The title list of a disc is new:** if it names a title, a version or an angle wrongly, the title list from `tsMuxeR --report=report.txt <disc>` and the small files of the disc (for a Blu-ray the PLAYLIST and CLIPINF folders with index.bdmv and MovieObject.bdmv, for a DVD the .IFO files) are enough to look into it.
+
 **The Intel macOS build has been back since 2.19.0, and Mac users are still asked to test.** It has been built and checked, but it has not been run on an Intel Mac, because no Mac is available here. If you have an Intel Mac, please try it and report whether it works. On any Mac, please also report whether ASS subtitles are drawn with libass after `brew install libass`, and what happens when you change the subtitle font and colour in the window.
 
 ### Disc images
