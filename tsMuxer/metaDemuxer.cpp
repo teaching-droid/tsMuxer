@@ -4699,6 +4699,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             }
             trackRez.trackID = itr.first;
             trackRez.lang = acceptedPidMap[trackRez.trackID].m_lang;
+            trackRez.langTag = acceptedPidMap[trackRez.trackID].m_langBCP47;
             {
                 const auto& srcParams = acceptedPidMap[trackRez.trackID].m_srcParams;
                 if (const auto name = srcParams.find("srcname"); name != srcParams.end())

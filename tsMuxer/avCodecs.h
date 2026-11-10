@@ -74,6 +74,9 @@ struct CheckStreamRez
     // layer's own parameter sets could not be read, which leaves the old behaviour in place.
     std::string elStreamDescr;
     std::string lang;
+    // The full language tag the container gives (BCP 47, such as fr-CA or zh-Hant), where it gives one: lang holds
+    // only the three letters an output takes
+    std::string langTag;
     int32_t trackID;
     int64_t delay;  // auto delay for audio
     // stream_coding_type as declared by a TS/M2TS PMT, 0 for other containers. Kept so that a
