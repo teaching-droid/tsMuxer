@@ -10,7 +10,8 @@ The release binaries are made by the workflows under `.github/workflows/`. The s
   - Clang 11 or later
   - MSVC 2019 or later (the Windows release builds use Visual Studio 2022)
 - **FreeType** and **zlib** for the command line program
-- **Qt**: Qt 6.7 or later for the window, with Qt Multimedia for the sound at the end of a mux (optional). The
+- **Qt**: Qt 6.7 or later for the window, Qt Widgets only. The sound at the end of a mux is played by the system's
+  own player, so no Qt Multimedia is needed. The
   Windows release builds use Qt 6.8.3 with the [qt6windows7](https://github.com/crystalidea/qt6windows7) patches,
   built from source with **Ninja** (the Visual Studio generator cannot build Qt, because Qt uses per-configuration
   `EXCLUDE_FROM_ALL` targets that multi-config generators reject) and shipped as DLLs beside the window.
@@ -43,12 +44,12 @@ sudo apt-get update
 sudo apt-get install build-essential cmake ninja-build libfreetype-dev zlib1g-dev
 ```
 
-The window needs Qt 6.7 or later with Qt Multimedia. Take it from the distribution where it has one that new, or
+The window needs Qt 6.7 or later (Qt Widgets). Take it from the distribution where it has one that new, or
 install it with [aqtinstall](https://github.com/miurahr/aqtinstall), as the release builds do:
 
 ```
 pip install aqtinstall
-aqt install-qt linux desktop 6.7.3 linux_gcc_64 -m qtmultimedia -O ~/Qt
+aqt install-qt linux desktop 6.7.3 linux_gcc_64 -O ~/Qt
 export CMAKE_PREFIX_PATH=~/Qt/6.7.3/gcc_64
 ```
 
@@ -288,13 +289,13 @@ Or run the following to build the GUI as well:
 
 ## MacOS (Native)
 
-You need the Xcode command line tools, CMake, and Qt 6.7 or later with Qt Multimedia. Qt from Homebrew has issues
+You need the Xcode command line tools, CMake, and Qt 6.7 or later (Qt Widgets). Qt from Homebrew has issues
 with `macdeployqt` and is *not* supported; install the official Qt package with
 [aqtinstall](https://github.com/miurahr/aqtinstall), as the release builds do:
 
 ```
 pip3 install aqtinstall
-aqt install-qt mac desktop 6.7.3 clang_64 -m qtmultimedia -O ~/Qt
+aqt install-qt mac desktop 6.7.3 clang_64 -O ~/Qt
 export PATH=~/Qt/6.7.3/macos/bin:$PATH
 ```
 

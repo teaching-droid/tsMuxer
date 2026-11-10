@@ -69,8 +69,9 @@ parts.
 
 The ZIP file holds the two programs on their own (glibc 2.34 or newer):
 - `tsMuxeR`, the command line program, needs FreeType and zlib, which every desktop has.
-- `tsMuxerGUI`, the window, needs the Qt 6.7 or newer libraries of the system (Qt Widgets and
-  Qt Multimedia). Many distributions have an older Qt, such as Ubuntu 24.04 and Debian 12 (Qt 6.4),
+- `tsMuxerGUI`, the window, needs the Qt 6.7 or newer libraries of the system (Qt Widgets). It
+  plays the sound at the end of a mux with paplay, pw-play or aplay, whichever the system has. Many distributions
+  have an older Qt, such as Ubuntu 24.04 and Debian 12 (Qt 6.4),
   and there the window does not start (`version 'Qt_6.7' not found`): take the AppImage instead.
 
 ### Drawing ASS and SSA subtitles
