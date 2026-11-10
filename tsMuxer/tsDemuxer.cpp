@@ -639,6 +639,15 @@ static bool holdsH264Sps(const uint8_t* p, const uint8_t* end)
     return false;
 }
 
+// Whether the start of a PES of MPEG-2 or MPEG-1 video holds a sequence header (start code 0xB3)
+static bool holdsMpeg2SequenceHeader(const uint8_t* p, const uint8_t* end)
+{
+    for (; end - p >= 4; ++p)
+        if (p[0] == 0 && p[1] == 0 && p[2] == 1 && p[3] == 0xB3)
+            return true;
+    return false;
+}
+
 TSDemuxer::LeadPes TSDemuxer::skipsLeadingPes(const int pid, const StreamType type, const uint8_t* payload,
                                               const uint8_t* end)
 {
@@ -656,6 +665,21 @@ TSDemuxer::LeadPes TSDemuxer::skipsLeadingPes(const int pid, const StreamType ty
             return LeadPes::Hold;
         m_leadPes[pid] = LEAD_PES_DONE;
         return parameterSets ? LeadPes::Keep : LeadPes::GiveBack;
+    }
+    // ** AND SO DOES ONE OF MPEG-2 THAT BEGINS INSIDE A GROUP OF PICTURES. ** A cut recording begins with the pictures
+    // left of a group, which cannot be decoded without the sequence header and I picture before them. The reader leaves
+    // out what comes before the first sequence header (MPEG2StreamReader::skipNal), but the video still started at the
+    // time of the first PES, one of those left out: the first I picture was shown that much early, and the sound was
+    // late by as much (0.36 s on a DVB recording that began 0.44 s before its first sequence header, in every output).
+    // The PES before the first one with a sequence header are left out here as well, so the video starts with the
+    // pictures the reader keeps; from the first file only, as for H.264.
+    if ((type == StreamType::VIDEO_MPEG2 || type == StreamType::VIDEO_MPEG1) && m_holdLeadVideo)
+    {
+        const bool sequenceHeader = holdsMpeg2SequenceHeader(payload, end);
+        if (!sequenceHeader && ++m_leadPes[pid] <= LEAD_VIDEO_PES_MAX)
+            return LeadPes::Hold;
+        m_leadPes[pid] = LEAD_PES_DONE;
+        return sequenceHeader ? LeadPes::Keep : LeadPes::GiveBack;
     }
     const auto at = [&](const std::initializer_list<uint8_t> bytes)
     {
