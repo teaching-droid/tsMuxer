@@ -1488,6 +1488,16 @@ All parameters in this group start with two dashes:
                       - Subtitles in a Presentation Graphic Stream are converted
                         into sup format.
                       - PCM audio is saved as WAV files.
+                      Each file is named after its source and track, then DELAY
+                      <n>ms where the track starts away from the video, then an
+                      extension for its kind: .264 H.264, .mvc MVC, .hevc HEVC,
+                      .vvc VVC, .vc1 VC-1, .mpv MPEG-2, .obu AV1, .ivf VP8 and
+                      VP9; .ac3 AC-3, .ec3 E-AC-3, .ac3+ec3 E-AC-3 with an AC-3
+                      core, .thd TrueHD, .ac3+thd TrueHD with its AC-3 core, .dts
+                      DTS and DTS-HD, .aac AAC, .mp3 or .mpa MPEG audio, .wav PCM
+                      (.w64 with w64), .flac FLAC, .opus Opus, .ogg Vorbis, .wv
+                      WavPack; .sup PGS, .srt SRT kept as text, .ass, .ssa and
+                      .vtt, and .idx with .sub for DVD subtitles.
 --blu-ray             Mux as a BD disc. If the output file name is a folder, a
                       Blu-Ray folder structure is created inside that folder.
                       SSIF files for BD3D discs are not created in this case. If
