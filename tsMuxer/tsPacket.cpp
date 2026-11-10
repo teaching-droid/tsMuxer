@@ -2189,14 +2189,15 @@ void MPLSParser::reportLeftOut(const std::string& playlistName, const bool listi
             ++stills;
     }
     if (angleItems > 0)
-        LTRACE(LT_WARN, 2,
-               "Warning: playlist " << name << " has more than one angle in " << angleItems
-                                    << (angleItems == 1 ? " play item" : " play items") << ". Only "
-                                    << (m_angle == 1 ? std::string("the first angle") : "angle " + std::to_string(m_angle))
-                                    << " is " << (listing ? "listed and muxed" : "muxed") << ": " << anglesLeft
-                                    << (anglesLeft == 1 ? " angle is" : " angles are")
-                                    << " left out (angle= on a meta line chooses another). The rest of the playlist "
-                                       "is muxed.");
+        LTRACE(
+            LT_WARN, 2,
+            "Warning: playlist " << name << " has more than one angle in " << angleItems
+                                 << (angleItems == 1 ? " play item" : " play items") << ". Only "
+                                 << (m_angle == 1 ? std::string("the first angle") : "angle " + std::to_string(m_angle))
+                                 << " is " << (listing ? "listed and muxed" : "muxed") << ": " << anglesLeft
+                                 << (anglesLeft == 1 ? " angle is" : " angles are")
+                                 << " left out (angle= on a meta line chooses another). The rest of the playlist "
+                                    "is muxed.");
     if (stills > 0)
         LTRACE(LT_WARN, 2,
                "Warning: playlist " << name << " has " << stills << (stills == 1 ? " still picture" : " still pictures")

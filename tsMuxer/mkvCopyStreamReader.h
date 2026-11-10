@@ -42,8 +42,8 @@ class MatroskaCopyStreamReader final : public AbstractStreamReader
     // one Dialogue line or one cue for each block (textFor)
     void setTextFileOutput(const bool on) { m_textFile = on; }
 
-    // For a demux of DVD subtitles: each packet is one sub-picture unit, which the demux writes as the packs of the .sub
-    // file (packVobSub), with the .idx file gathered beside it (lang: its id: line)
+    // For a demux of DVD subtitles: each packet is one sub-picture unit, which the demux writes as the packs of the
+    // .sub file (packVobSub), with the .idx file gathered beside it (lang: its id: line)
     void setVobSubFileOutput(const std::string& lang)
     {
         m_vobSubFile = true;
@@ -63,12 +63,12 @@ class MatroskaCopyStreamReader final : public AbstractStreamReader
     uint64_t m_maxBlockAddId;
     bool m_vobSubFile = false;
     std::string m_vobSubLang;
-    std::string m_vobSubTimes;  // the timestamp lines of the .idx file
-    int64_t m_vobSubPos = 0;    // where the next unit starts in the .sub file
+    std::string m_vobSubTimes;           // the timestamp lines of the .idx file
+    int64_t m_vobSubPos = 0;             // where the next unit starts in the .sub file
     std::vector<uint8_t> m_vobSubPacks;  // the packs of the unit last written
-    std::vector<uint8_t> m_input;   // records not yet turned into packets
-    size_t m_inputPos = 0;          // where the next record starts in m_input
-    std::vector<uint8_t> m_packet;  // the data of the packet last handed out
+    std::vector<uint8_t> m_input;        // records not yet turned into packets
+    size_t m_inputPos = 0;               // where the next record starts in m_input
+    std::vector<uint8_t> m_packet;       // the data of the packet last handed out
     bool m_textFile = false;
     bool m_headerWritten = false;
     std::string textFor(int64_t pts, int64_t duration, const uint8_t* add, size_t addSize, const uint8_t* data,

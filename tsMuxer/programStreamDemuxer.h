@@ -5,8 +5,8 @@
 
 #include <cmath>
 #include <map>
-#include <set>
 #include <memory>
+#include <set>
 #include <vector>
 
 #include "abstractDemuxer.h"
@@ -100,8 +100,8 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
     struct SubPicture
     {
         std::unique_ptr<VobSubDecoder> decoder;
-        std::vector<uint8_t> unit;  // the unit being put together
-        int64_t pts = -1;           // its time, 90 kHz
+        std::vector<uint8_t> unit;   // the unit being put together
+        int64_t pts = -1;            // its time, 90 kHz
         std::vector<int64_t> times;  // of an .idx file, ms
         bool timesRead = false;
         size_t done = 0;  // the units read
@@ -109,7 +109,8 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
     };
     std::map<int, SubPicture> m_subPictures;
     bool m_subFlushed = false;
-    int64_t m_subPictureSaved = 0;  // bytes of DVD subtitles read that their PGS pictures do not carry (placeSubPicture)
+    int64_t m_subPictureSaved =
+        0;  // bytes of DVD subtitles read that their PGS pictures do not carry (placeSubPicture)
     // The sub-picture streams handed on as they are, for a Matroska output (S_VOBSUB): each unit a record as a copied
     // Matroska block is (ParsedCopyTrackData, MatroskaCopyStreamReader), not drawn as PGS
     std::set<int> m_rawSubPictures;
@@ -132,10 +133,10 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
     int m_scanHave = 0;
     int m_scanWant = 0;
     bool m_lastPesVideo = false;  // the PES cut by the end of a read is video
-    // ** A UNIT WAITS FOR THE NEXT PICTURE. ** The clock of a part starts again in the pack that follows the last of the
-    // part before, and a unit at the start of a part can come ahead of the first picture of its part. Placed on arrival
-    // it was counted from the first picture of the part before, and came minutes too early. A whole unit
-    // is held until the next picture with a time has shown which part it is in (releaseSubPictures).
+    // ** A UNIT WAITS FOR THE NEXT PICTURE. ** The clock of a part starts again in the pack that follows the last of
+    // the part before, and a unit at the start of a part can come ahead of the first picture of its part. Placed on
+    // arrival it was counted from the first picture of the part before, and came minutes too early. A whole unit is
+    // held until the next picture with a time has shown which part it is in (releaseSubPictures).
     struct HeldUnit
     {
         int stream;

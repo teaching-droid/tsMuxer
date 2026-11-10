@@ -899,17 +899,17 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                 static_cast<size_t>(entry.refSubPathId) < mplsParser->m_subPaths.size() &&
                 !mplsParser->m_subPaths[entry.refSubPathId].clips.empty())
             {
-                const std::string clipFile =
-                    METADemuxer::findBluRayFile(extractFileDir(fileName), "STREAM",
-                                                mplsParser->m_subPaths[entry.refSubPathId].clips[0] + ".m2ts");
+                const std::string clipFile = METADemuxer::findBluRayFile(
+                    extractFileDir(fileName), "STREAM", mplsParser->m_subPaths[entry.refSubPathId].clips[0] + ".m2ts");
                 int shift = 0;
                 if (!clipFile.empty() && mplsParser->subPathShiftMs(entry.refSubPathId, shift))
                 {
                     if (mplsParser->m_subPaths[entry.refSubPathId].clips.size() > 1)
-                        LTRACE(LT_WARN, 2, "Warning: the text subtitles of language "
-                                               << applyLangCodeStyle(entry.language_code) << " are played from "
-                                               << mplsParser->m_subPaths[entry.refSubPathId].clips.size()
-                                               << " clips. Only the first is offered.");
+                        LTRACE(LT_WARN, 2,
+                               "Warning: the text subtitles of language "
+                                   << applyLangCodeStyle(entry.language_code) << " are played from "
+                                   << mplsParser->m_subPaths[entry.refSubPathId].clips.size()
+                                   << " clips. Only the first is offered.");
                     LTRACE(LT_INFO, 2, "");
                     LTRACE(LT_INFO, 2, "Track ID:    " << entry.streamPID);
                     LTRACE(LT_INFO, 2, "Stream type: SRT");
@@ -1058,7 +1058,8 @@ void muxBlankPL(BlurayHelper& blurayHelper, const PIDListMap& pidList, DiskType 
                           std::chrono::high_resolution_clock::now().time_since_epoch())
                           .count();
     // In the temp folder. It was written beside the program, which a user may not be able to write to: an installed
-    // program, an AppImage. The job then stopped here, after the whole mux, and the finished output was removed with it.
+    // program, an AppImage. The job then stopped here, after the whole mux, and the finished output was removed with
+    // it.
     std::error_code tempError;
     const string tmpFileName = utf8Path(std::filesystem::temp_directory_path(tempError) /
                                         ("tsMuxeR_blank_" + std::to_string(fname_time) + ".264"));
@@ -3631,9 +3632,10 @@ static bool pathIsInside(const std::filesystem::path& child, const std::filesyst
 // says the output holds what the file has, and a new output is kept then (keepNewOutput), as that message says.
 // ** A JOB WITH ITS OWN NUMBERS ADDS TO A DISC FOLDER. ** --mplsOffset and --m2tsOffset are there to put a title beside
 // the others of a disc, one run for each title. Replacing the BDMV folder removed the titles of the runs before. With
-// either option the new files join the folder, and the files a run writes for every title (index.bdmv, MovieObject.bdmv)
-// replace those there, as they always did. A playlist or clip number that is taken is refused, not replaced; the blank
-// playlist is the same one for each run. The job is still written beside the folder first, so a failed one adds nothing.
+// either option the new files join the folder, and the files a run writes for every title (index.bdmv,
+// MovieObject.bdmv) replace those there, as they always did. A playlist or clip number that is taken is refused, not
+// replaced; the blank playlist is the same one for each run. The job is still written beside the folder first, so a
+// failed one adds nothing.
 class KeepOldOutput
 {
    public:
@@ -5510,9 +5512,9 @@ static int runTsMuxer(int argc, char** argv)
         string isoDiskLabel;
         bool demuxAsked = false;
         refuseUnreadableMeta(argv[1]);
-        DiskType dt = checkBluRayMux(argv[1], autoChapterLen, customChapterList, chapterInfo, firstMplsOffset,
-                                     firstM2tsOffset, insertBlankPL, blankNum, stereoMode, isoDiskLabel, demuxAsked,
-                                     discNumbersGiven);
+        DiskType dt =
+            checkBluRayMux(argv[1], autoChapterLen, customChapterList, chapterInfo, firstMplsOffset, firstM2tsOffset,
+                           insertBlankPL, blankNum, stereoMode, isoDiskLabel, demuxAsked, discNumbersGiven);
         // --demux asks for a folder of tracks whatever the output is named, as --help says: the name decided, so
         // --demux with a name ending .ts, .m2ts, .mts, .m2t, .mkv or .iso wrote that file instead. A disc
         // and a demux in one job cannot both be made.

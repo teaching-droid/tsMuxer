@@ -66,8 +66,7 @@ QString askProgram(const QString& path, const QStringList& args)
 // A line of -decoders or -encoders: flags, the name, the description. The flags of an audio codec start with A.
 bool listsAudioCodec(const QString& list, const QString& name)
 {
-    const QRegularExpression line(QStringLiteral("^\\s*A\\S*\\s+%1\\s").arg(name),
-                                  QRegularExpression::MultilineOption);
+    const QRegularExpression line(QStringLiteral("^\\s*A\\S*\\s+%1\\s").arg(name), QRegularExpression::MultilineOption);
     return line.match(list).hasMatch();
 }
 
@@ -87,8 +86,7 @@ double progressSeconds(const QByteArray& value)
     if (parts.size() != 3)
         return -1;
     bool ok[3];
-    const double seconds =
-        parts[0].toInt(&ok[0]) * 3600.0 + parts[1].toInt(&ok[1]) * 60.0 + parts[2].toDouble(&ok[2]);
+    const double seconds = parts[0].toInt(&ok[0]) * 3600.0 + parts[1].toInt(&ok[1]) * 60.0 + parts[2].toDouble(&ok[2]);
     return ok[0] && ok[1] && ok[2] ? seconds : -1;
 }
 }  // namespace
@@ -188,9 +186,10 @@ Ac3CoreDialog::Choice Ac3CoreDialog::ask(QWidget* parent, const QString& questio
             (use != nullptr ? use : without)->setChecked(true);
         choose->setVisible(!usable && sourceProblem.isEmpty());
         createInfo->setEnabled(usable);
-        createInfo->setText(usable ? tr("640 kbit/s, 48 kHz, at most 5.1 channels. Made with %1.")
-                                         .arg(QDir::toNativeSeparators(encoder))
-                                   : (sourceProblem.isEmpty() ? problem : sourceProblem));
+        createInfo->setText(
+            usable
+                ? tr("640 kbit/s, 48 kHz, at most 5.1 channels. Made with %1.").arg(QDir::toNativeSeparators(encoder))
+                : (sourceProblem.isEmpty() ? problem : sourceProblem));
     };
     showEncoder();
     connect(choose, &QPushButton::clicked, &box,
@@ -269,7 +268,8 @@ void Ac3CoreDialog::startEncoder()
     if (m_job.channels > 6)
         args << QStringLiteral("-downmix") << QStringLiteral("5.1(side)");
     args << QStringLiteral("-i") << QDir::toNativeSeparators(m_job.source) << QStringLiteral("-map") << m_job.map
-         << QStringLiteral("-c:a") << QStringLiteral("ac3") << QStringLiteral("-b:a") << QStringLiteral("640k")
+         << QStringLiteral("-c:a") << QStringLiteral("ac3") << QStringLiteral("-b:a")
+         << QStringLiteral("640k")
          // An AC-3 encoder runs 256 samples late: they are taken from the start, so the core sits exactly on the
          // TrueHD, and added at the end, so that it keeps the length. At 48 kHz, as the rate an AC-3 core must have:
          // the encoder would leave a 44.1 kHz source at 44.1 kHz.
@@ -306,8 +306,9 @@ void Ac3CoreDialog::onOutput()
 void Ac3CoreDialog::fail(const QString& details)
 {
     QFile::remove(m_job.target);
-    QMessageBox::warning(this, windowTitle(), tr("The AC-3 core could not be created.") +
-                                                  (details.isEmpty() ? QString() : QStringLiteral("\n\n") + details));
+    QMessageBox::warning(
+        this, windowTitle(),
+        tr("The AC-3 core could not be created.") + (details.isEmpty() ? QString() : QStringLiteral("\n\n") + details));
     QDialog::reject();
 }
 

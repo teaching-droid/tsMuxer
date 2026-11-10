@@ -338,8 +338,8 @@ class TSDemuxer final : public AbstractDemuxer
     // The video time a stream is measured against: that of its own program where the program has video, else that
     // of the file (first: the first PES in file order, else the smallest PTS)
     [[nodiscard]] int64_t videoReference(int32_t pid, bool first) const;
-    int64_t m_videoPesRead = 0;   // see videoPesRead
-    int m_firstVideoPid = -1;     // see firstVideoPid
+    int64_t m_videoPesRead = 0;  // see videoPesRead
+    int m_firstVideoPid = -1;    // see firstVideoPid
     // see packetsRead and missingProgramTable: packets with payload and those marked scrambled, of each track read
     // while no mux reports damage (a listing)
     std::map<int, std::pair<int64_t, int64_t>> m_listedPackets;

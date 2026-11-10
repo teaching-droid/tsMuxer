@@ -243,127 +243,127 @@ DiscTitleDialog::DiscTitleDialog(const QString& disc, const DiscTitleList& list,
                                  wtr("Audio"), wtr("Picture"), wtr("Note")});
     QTreeWidgetItem* first = nullptr;
     for (int i = 0; i < list.titles.size(); ++i)
-      // a title of several angles is a row for each angle: each is muxed on its own (angle=)
-      for (int angle = 1; angle <= (std::max)(1, list.titles[i].angles); ++angle)
-    {
-        const DiscTitleRow& row = list.titles[i];
-        QString note = row.note;
-        if (row.angles > 1)
+        // a title of several angles is a row for each angle: each is muxed on its own (angle=)
+        for (int angle = 1; angle <= (std::max)(1, list.titles[i].angles); ++angle)
         {
-            const QString main = row.note.section(QLatin1String("; "), 1);
-            note = wtr("angle %1 of %2").arg(angle).arg(row.angles) + (main.isEmpty() ? QString() : "; " + main);
-        }
-        QStringList cells{QString::number(row.number)};
-        if (list.dvd)
-            cells << QString::number(row.discTitle) << row.length << QString::number(row.chapters) << row.audio
-                  << row.subtitles << row.picture << note;
-        else
-            cells << row.playlist << row.length << QString::number(row.chapters) << QString::number(row.clips)
-                  << row.audio << row.picture << note;
-        auto* item = new QTreeWidgetItem(m_tree, cells);
-        item->setData(0, Qt::UserRole, i);
-        item->setData(0, Qt::UserRole + 1, angle);
-        // Where this angle differs, under its row and in its tooltip: the times, and on a Blu-ray the clip it plays
-        // there, in bold where it is not the clip of the first angle. A line under a row chooses that row.
-        if (row.angles > 1 && !row.angleParts.isEmpty())
-        {
-            QStringList tip;
-            for (int k = 0; k < row.angleParts.size(); ++k)
+            const DiscTitleRow& row = list.titles[i];
+            QString note = row.note;
+            if (row.angles > 1)
             {
-                const QString clip = angle - 1 < row.angleClips.size() && k < row.angleClips[angle - 1].size()
-                                         ? row.angleClips[angle - 1][k]
-                                         : QString();
-                const bool own = angle > 1 && !clip.isEmpty() && !row.angleClips.isEmpty() &&
-                                 k < row.angleClips[0].size() && row.angleClips[0][k] != clip;
-                QStringList sub;
-                for (int c = 0; c < cells.size(); ++c) sub << QString();
-                sub[list.dvd ? 2 : 1] = list.dvd ? row.angleParts[k] : clip;
-                if (!list.dvd)
-                    sub[2] = row.angleParts[k];
-                // A play item can name fewer clips than it has angles: the listing gives the first angle's clip for
-                // the others, and the line then says so rather than that the angle differs there
-                sub.last() = angle == 1                            ? wtr("the first angle")
-                             : !list.dvd && !clip.isEmpty() && !own ? wtr("the same clip as angle 1")
-                                                                    : wtr("differs from angle 1");
-                auto* part = new QTreeWidgetItem(item, sub);
-                part->setData(0, Qt::UserRole, i);
-                part->setData(0, Qt::UserRole + 1, angle);
-                part->setData(0, Qt::UserRole + 2, k + 1);  // the part, from 1: a preview starts there
-                if (own)
-                {
-                    QFont bold = part->font(1);
-                    bold.setBold(true);
-                    for (int c = 0; c < sub.size(); ++c) part->setFont(c, bold);
-                }
-                // A Blu-ray angle's clip there is a link: a click plays that clip as it is (in an image, a short
-                // preview of it)
-                if (m_player && !list.dvd && !clip.isEmpty())
-                {
-                    QFont link = part->font(1);
-                    link.setUnderline(true);
-                    part->setFont(1, link);
-                    part->setForeground(1, palette().brush(QPalette::Link));
-                    part->setToolTip(1, wtr("Click to play this clip in the player for previews."));
-                }
-                tip << (clip.isEmpty() ? row.angleParts[k] : row.angleParts[k] + "  " + clip);
+                const QString main = row.note.section(QLatin1String("; "), 1);
+                note = wtr("angle %1 of %2").arg(angle).arg(row.angles) + (main.isEmpty() ? QString() : "; " + main);
             }
-            const QString text = wtr("Angle %1 differs from the others at:").arg(angle) + "\n" + tip.join('\n');
-            for (int c = 0; c < cells.size(); ++c) item->setToolTip(c, text);
-            // the lines are shown at once: they are what tells the angles apart
-            m_tree->setRootIsDecorated(true);
-            item->setExpanded(true);
-        }
-        // ** WHERE A VERSION DIFFERS, UNDER ITS ROW. ** The stretches in which a version of a main title (another cut)
-        // plays clips of its own, each with its time and the clip, which is a link that plays it, as under the angles
-        // of a title. The rows are folded: a cut can differ in thirty places, and the arrow opens them.
-        if (!list.dvd && row.angles <= 1 && !row.versionParts.isEmpty())
-        {
-            QStringList tip;
-            for (int k = 0; k < row.versionParts.size(); ++k)
+            QStringList cells{QString::number(row.number)};
+            if (list.dvd)
+                cells << QString::number(row.discTitle) << row.length << QString::number(row.chapters) << row.audio
+                      << row.subtitles << row.picture << note;
+            else
+                cells << row.playlist << row.length << QString::number(row.chapters) << QString::number(row.clips)
+                      << row.audio << row.picture << note;
+            auto* item = new QTreeWidgetItem(m_tree, cells);
+            item->setData(0, Qt::UserRole, i);
+            item->setData(0, Qt::UserRole + 1, angle);
+            // Where this angle differs, under its row and in its tooltip: the times, and on a Blu-ray the clip it plays
+            // there, in bold where it is not the clip of the first angle. A line under a row chooses that row.
+            if (row.angles > 1 && !row.angleParts.isEmpty())
             {
-                const QString clip = k < row.versionClips.size() ? row.versionClips[k] : QString();
-                QStringList sub;
-                for (int c = 0; c < cells.size(); ++c) sub << QString();
-                sub[1] = clip;
-                sub[2] = row.versionParts[k];
-                sub.last() = wtr("differs from title %1").arg(row.versionOf);
-                auto* part = new QTreeWidgetItem(item, sub);
-                part->setData(0, Qt::UserRole, i);
-                part->setData(0, Qt::UserRole + 1, 1);
-                part->setData(0, Qt::UserRole + 2, k + 1);  // the part, from 1: a preview starts there
-                if (m_player && !clip.isEmpty())
+                QStringList tip;
+                for (int k = 0; k < row.angleParts.size(); ++k)
                 {
-                    QFont link = part->font(1);
-                    link.setUnderline(true);
-                    part->setFont(1, link);
-                    part->setForeground(1, palette().brush(QPalette::Link));
-                    part->setToolTip(1, wtr("Click to play this clip in the player for previews."));
+                    const QString clip = angle - 1 < row.angleClips.size() && k < row.angleClips[angle - 1].size()
+                                             ? row.angleClips[angle - 1][k]
+                                             : QString();
+                    const bool own = angle > 1 && !clip.isEmpty() && !row.angleClips.isEmpty() &&
+                                     k < row.angleClips[0].size() && row.angleClips[0][k] != clip;
+                    QStringList sub;
+                    for (int c = 0; c < cells.size(); ++c) sub << QString();
+                    sub[list.dvd ? 2 : 1] = list.dvd ? row.angleParts[k] : clip;
+                    if (!list.dvd)
+                        sub[2] = row.angleParts[k];
+                    // A play item can name fewer clips than it has angles: the listing gives the first angle's clip for
+                    // the others, and the line then says so rather than that the angle differs there
+                    sub.last() = angle == 1                             ? wtr("the first angle")
+                                 : !list.dvd && !clip.isEmpty() && !own ? wtr("the same clip as angle 1")
+                                                                        : wtr("differs from angle 1");
+                    auto* part = new QTreeWidgetItem(item, sub);
+                    part->setData(0, Qt::UserRole, i);
+                    part->setData(0, Qt::UserRole + 1, angle);
+                    part->setData(0, Qt::UserRole + 2, k + 1);  // the part, from 1: a preview starts there
+                    if (own)
+                    {
+                        QFont bold = part->font(1);
+                        bold.setBold(true);
+                        for (int c = 0; c < sub.size(); ++c) part->setFont(c, bold);
+                    }
+                    // A Blu-ray angle's clip there is a link: a click plays that clip as it is (in an image, a short
+                    // preview of it)
+                    if (m_player && !list.dvd && !clip.isEmpty())
+                    {
+                        QFont link = part->font(1);
+                        link.setUnderline(true);
+                        part->setFont(1, link);
+                        part->setForeground(1, palette().brush(QPalette::Link));
+                        part->setToolTip(1, wtr("Click to play this clip in the player for previews."));
+                    }
+                    tip << (clip.isEmpty() ? row.angleParts[k] : row.angleParts[k] + "  " + clip);
                 }
-                tip << (clip.isEmpty() ? row.versionParts[k] : row.versionParts[k] + "  " + clip);
+                const QString text = wtr("Angle %1 differs from the others at:").arg(angle) + "\n" + tip.join('\n');
+                for (int c = 0; c < cells.size(); ++c) item->setToolTip(c, text);
+                // the lines are shown at once: they are what tells the angles apart
+                m_tree->setRootIsDecorated(true);
+                item->setExpanded(true);
             }
-            const QString text =
-                wtr("Title %1 differs from title %2 at:").arg(row.number).arg(row.versionOf) + "\n" + tip.join('\n');
-            for (int c = 0; c < cells.size(); ++c) item->setToolTip(c, text);
-            m_tree->setRootIsDecorated(true);
+            // ** WHERE A VERSION DIFFERS, UNDER ITS ROW. ** The stretches in which a version of a main title (another
+            // cut) plays clips of its own, each with its time and the clip, which is a link that plays it, as under the
+            // angles of a title. The rows are folded: a cut can differ in thirty places, and the arrow opens them.
+            if (!list.dvd && row.angles <= 1 && !row.versionParts.isEmpty())
+            {
+                QStringList tip;
+                for (int k = 0; k < row.versionParts.size(); ++k)
+                {
+                    const QString clip = k < row.versionClips.size() ? row.versionClips[k] : QString();
+                    QStringList sub;
+                    for (int c = 0; c < cells.size(); ++c) sub << QString();
+                    sub[1] = clip;
+                    sub[2] = row.versionParts[k];
+                    sub.last() = wtr("differs from title %1").arg(row.versionOf);
+                    auto* part = new QTreeWidgetItem(item, sub);
+                    part->setData(0, Qt::UserRole, i);
+                    part->setData(0, Qt::UserRole + 1, 1);
+                    part->setData(0, Qt::UserRole + 2, k + 1);  // the part, from 1: a preview starts there
+                    if (m_player && !clip.isEmpty())
+                    {
+                        QFont link = part->font(1);
+                        link.setUnderline(true);
+                        part->setFont(1, link);
+                        part->setForeground(1, palette().brush(QPalette::Link));
+                        part->setToolTip(1, wtr("Click to play this clip in the player for previews."));
+                    }
+                    tip << (clip.isEmpty() ? row.versionParts[k] : row.versionParts[k] + "  " + clip);
+                }
+                const QString text = wtr("Title %1 differs from title %2 at:").arg(row.number).arg(row.versionOf) +
+                                     "\n" + tip.join('\n');
+                for (int c = 0; c < cells.size(); ++c) item->setToolTip(c, text);
+                m_tree->setRootIsDecorated(true);
+            }
+            for (const int c : {0, 2, 3}) item->setTextAlignment(c, Qt::AlignRight | Qt::AlignVCenter);
+            if (!list.dvd)
+                item->setTextAlignment(4, Qt::AlignRight | Qt::AlignVCenter);
+            if (row.isMain)
+            {
+                QFont bold = item->font(0);
+                bold.setBold(true);
+                for (int c = 0; c < cells.size(); ++c) item->setFont(c, bold);
+            }
+            if (row.encrypted)
+            {
+                item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
+                for (int c = 0; c < cells.size(); ++c)
+                    item->setToolTip(c, wtr("The video of this title is still encrypted, and tsMuxeR cannot read it."));
+            }
+            else if (!first || (row.isMain && !list.titles[first->data(0, Qt::UserRole).toInt()].isMain))
+                first = item;
         }
-        for (const int c : {0, 2, 3}) item->setTextAlignment(c, Qt::AlignRight | Qt::AlignVCenter);
-        if (!list.dvd)
-            item->setTextAlignment(4, Qt::AlignRight | Qt::AlignVCenter);
-        if (row.isMain)
-        {
-            QFont bold = item->font(0);
-            bold.setBold(true);
-            for (int c = 0; c < cells.size(); ++c) item->setFont(c, bold);
-        }
-        if (row.encrypted)
-        {
-            item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
-            for (int c = 0; c < cells.size(); ++c)
-                item->setToolTip(c, wtr("The video of this title is still encrypted, and tsMuxeR cannot read it."));
-        }
-        else if (!first || (row.isMain && !list.titles[first->data(0, Qt::UserRole).toInt()].isMain))
-            first = item;
-    }
     for (int c = 0; c < m_tree->columnCount(); ++c) m_tree->resizeColumnToContents(c);
     // The rows under a version are folded when the columns are fitted, so a column fits its rows again when one opens:
     // the times of a version's places were cut off
@@ -479,8 +479,9 @@ void DiscTitleDialog::preview(const QTreeWidgetItem* item)
             const QString playlistDir = QFileInfo(source.playlist).absolutePath();
             const QString streamDir = QFileInfo(playlistDir).absolutePath() + QStringLiteral("/STREAM");
             const QFileInfo info(m_disc);
-            const QString stream =
-                info.isFile() ? streamDir : childNoCase(QFileInfo(playlistDir).absolutePath(), QStringLiteral("STREAM"));
+            const QString stream = info.isFile()
+                                       ? streamDir
+                                       : childNoCase(QFileInfo(playlistDir).absolutePath(), QStringLiteral("STREAM"));
             QString clip = info.isFile() ? QString() : childNoCase(stream, partClip);
             if (clip.isEmpty())
                 clip = (stream.isEmpty() ? streamDir : stream) + QLatin1Char('/') + partClip;

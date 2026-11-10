@@ -346,20 +346,22 @@ int LPCMStreamReader::convertWavToPCM(uint8_t* start, uint8_t* end)
     int64_t cLen = end - start;
     cLen -= cLen % sourceFullSize;
     end = start + cLen;
-    // ** A BLU-RAY LPCM TRACK AT 192 KHZ HAS AT MOST 6 CHANNELS. ** Its rate is at most 27.648 Mbit/s, 6 channels of 24 bit
-    // at 192 kHz. A WAV of 7 or 8 channels at 192 kHz was written into the frame buffer of 17,284 bytes anyway, 23,040
-    // bytes for 24 bit 7.1: a crash (also in 3.0.1). It is refused, as a WAV that needs silent channels to reach such a
-    // layout already was.
+    // ** A BLU-RAY LPCM TRACK AT 192 KHZ HAS AT MOST 6 CHANNELS. ** Its rate is at most 27.648 Mbit/s, 6 channels of 24
+    // bit at 192 kHz. A WAV of 7 or 8 channels at 192 kHz was written into the frame buffer of 17,284 bytes anyway,
+    // 23,040 bytes for 24 bit 7.1: a crash (also in 3.0.1). It is refused, as a WAV that needs silent channels to reach
+    // such a layout already was.
     if (bdChannels() > 6 && m_freq == 192000)
-        THROW(ERR_COMMON, "Track " << m_streamIndex << " has " << bdChannels()
-                                   << " channels at 192 kHz. A Blu-ray LPCM track (and a TS) carries at most 6 channels "
-                                      "at 192 kHz. Convert it to 96 kHz or to 6 channels, or mux it into a Matroska "
-                                      "file.")
-    {
-        const int64_t frameSamples = (end - start) / sourceFullSize;
-        if (frameSamples * ((bdChannels() + 1) & ~1) * ch1SampleSize + 4 > static_cast<int64_t>(sizeof(m_tmpFrameBuffer)))
-            THROW(ERR_COMMON, "Track " << m_streamIndex << ": a frame of LPCM is larger than a disc carries.")
-    }
+        THROW(ERR_COMMON,
+              "Track " << m_streamIndex << " has " << bdChannels()
+                       << " channels at 192 kHz. A Blu-ray LPCM track (and a TS) carries at most 6 channels "
+                          "at 192 kHz. Convert it to 96 kHz or to 6 channels, or mux it into a Matroska "
+                          "file.")
+        {
+            const int64_t frameSamples = (end - start) / sourceFullSize;
+            if (frameSamples * ((bdChannels() + 1) & ~1) * ch1SampleSize + 4 >
+                static_cast<int64_t>(sizeof(m_tmpFrameBuffer)))
+                THROW(ERR_COMMON, "Track " << m_streamIndex << ": a frame of LPCM is larger than a disc carries.")
+        }
     // 0. samples a disc does not take, as 16 or 24 bit ones
     if (m_srcBits)
     {

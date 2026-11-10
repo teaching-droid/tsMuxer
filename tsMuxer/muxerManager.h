@@ -239,7 +239,7 @@ class MuxerManager final
     bool m_isoSplitChapters = false;     // --split-chapters
     std::optional<std::vector<AVChapter>> m_sourceChapters;
     bool m_bluRayMode;
-    bool m_avchdMode = false;  // --avchd: m_bluRayMode is set too
+    bool m_avchdMode = false;         // --avchd: m_bluRayMode is set too
     bool m_allowExtraTracks = false;  // --allow-extra-tracks: more than 32 tracks of one kind on a disc, with a warning
     bool m_demuxMode;
     std::string m_demuxFolder;

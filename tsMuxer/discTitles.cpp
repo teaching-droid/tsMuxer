@@ -151,7 +151,7 @@ Playlist readPlaylist(const std::string& path, const std::string& name)
             p.title.angleClips[0].push_back(pi.fileName + ".m2ts");
             for (size_t a = 1; a < p.title.angleClips.size(); ++a)
                 p.title.angleClips[a].push_back(a - 1 < pi.angleFiles.size() ? pi.angleFiles[a - 1] + ".m2ts"
-                                                                            : pi.fileName + ".m2ts");
+                                                                             : pi.fileName + ".m2ts");
         }
         p.title.seconds += (out - pi.IN_time) / 45000.0;
         p.title.angles = (std::max)(p.title.angles, pi.angles);
@@ -638,8 +638,8 @@ DiscTitles listDiscTitles(const std::string& root, const double minSeconds, cons
                     }
                     p->title.versionOf = static_cast<int>(std::stoi(number));
                     p->title.note = "version of title " + number + ", " + std::to_string(own) + " of " +
-                                    std::to_string(p->items.size()) +
-                                    (p->items.size() == 1 ? " clip" : " clips") + (own == 1 ? " differs" : " differ");
+                                    std::to_string(p->items.size()) + (p->items.size() == 1 ? " clip" : " clips") +
+                                    (own == 1 ? " differs" : " differ");
                 }
                 titles.push_back(p);
             }

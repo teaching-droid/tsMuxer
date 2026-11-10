@@ -20,14 +20,15 @@ struct Subtitle
 {
     int64_t start = 0;  // 90 kHz, on the clock of the clip
     int64_t end = 0;
-    std::string text;  // UTF-8, its lines parted by \n
+    std::string text;     // UTF-8, its lines parted by \n
     int regionStyle = 0;  // of its first region
 };
 
 // The payload of a PES, if it holds a whole segment: its type, 0 otherwise
 uint8_t segmentType(const uint8_t* data, size_t size);
 
-// One presentation segment, its 3 byte header included. False for one that is cut off or that this reader cannot follow.
+// One presentation segment, its 3 byte header included. False for one that is cut off or that this reader cannot
+// follow.
 bool parsePresentation(const uint8_t* data, size_t size, Subtitle& subtitle);
 
 // The region styles of a dialog style segment that sit at the top of the picture

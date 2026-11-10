@@ -34,8 +34,9 @@ struct PreviewSource
 // arguments), or the system's default player. A file is opened as it is. A disc title is opened by the player directly
 // where the player can show its angle: mpv a Blu-ray playlist (bd://mpls/<number> with --bluray-angle, which mpv 0.41
 // and later know), VLC a DVD title in its first angle (dvd://; VLC has no Blu-ray angle switch, and its DVD angle
-// switch did not work, see launchDirect). For any other player and title, tsMuxeR first makes a short .ts of the title in its angle (angle= with --cut-start and --cut-end), which
-// every player can open, Windows 7 included, also from a disc image. It runs with the progress window of a mux and can be stopped there. The previews go into a folder of this
+// switch did not work, see launchDirect). For any other player and title, tsMuxeR first makes a short .ts of the title
+// in its angle (angle= with --cut-start and --cut-end), which every player can open, Windows 7 included, also from a
+// disc image. It runs with the progress window of a mux and can be stopped there. The previews go into a folder of this
 // session in the system's temporary folder, removed when the window closes, or at the next start when it could not be
 // removed then (a player may still have a file open).
 class PlayerLauncher : public QObject
@@ -53,7 +54,8 @@ class PlayerLauncher : public QObject
     // arguments. A title's preview that tsMuxeR makes first is played in the player of the title.
     void setTitlePlayers(const QString& bluRayProgram, const QString& bluRayArguments, const QString& dvdProgram,
                          const QString& dvdArguments);
-    // Plays the source, or makes its preview and plays that. parent: the window the progress and the messages show over.
+    // Plays the source, or makes its preview and plays that. parent: the window the progress and the messages show
+    // over.
     void preview(const PreviewSource& source, QWidget* parent);
     // A preview is being made
     [[nodiscard]] bool busy() const { return m_proc != nullptr; }
@@ -90,7 +92,7 @@ class PlayerLauncher : public QObject
     [[nodiscard]] QPair<QString, QString> playerOf(const PreviewSource& source) const;
 
     QString m_tsMuxer;
-    QString m_program;    // the player of this preview: program and arguments
+    QString m_program;  // the player of this preview: program and arguments
     QString m_arguments;
     QString m_defaultProgram;  // as set on the General tab
     QString m_defaultArguments;

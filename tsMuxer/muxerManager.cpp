@@ -1121,7 +1121,8 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     {
         if (auto* video = dynamic_cast<MPEGStreamReader*>(packet.codec); video != nullptr && packet.size > 0)
             video->frameLeftOut();
-        // A copied track the cut leaves empty counted the blocks read, and had no word that it is empty (reportEmptyTracks)
+        // A copied track the cut leaves empty counted the blocks read, and had no word that it is empty
+        // (reportEmptyTracks)
         if (auto* copied = dynamic_cast<MatroskaCopyStreamReader*>(packet.codec); copied != nullptr && packet.size > 0)
             copied->frameLeftOut();
     };
@@ -1323,8 +1324,9 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     // track is then what was asked for. But a transport stream of 0 bytes came without a word: a reader that draws its
     // pictures counts them as read before the cut drops them, so the check of the empty tracks saw nothing.
     if (m_cutEnd > 0 && !anyMuxed)
-        LTRACE(LT_WARN, 2, "Warning: no track has anything before --cut-end ("
-                               << static_cast<double>(m_cutEnd) / INTERNAL_PTS_FREQ << "s). The output holds no media.");
+        LTRACE(LT_WARN, 2,
+               "Warning: no track has anything before --cut-end (" << static_cast<double>(m_cutEnd) / INTERNAL_PTS_FREQ
+                                                                   << "s). The output holds no media.");
     // ** A CUT THAT LEAVES THE MAIN VIDEO OUT IS NOT A SUCCESS EITHER. ** A cut inside the last picture of a film, or
     // with --cut-pictures=inside after its last key picture, kept no picture but the sound that runs a frame or two
     // past it, and the output was reported as a finished mux: a TS with one AC-3 frame and no video, a disc playlist

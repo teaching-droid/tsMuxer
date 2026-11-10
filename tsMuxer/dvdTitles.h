@@ -82,13 +82,13 @@ void addPictureLabels(DvdTitles& t);
 std::string describeDvdTitles(const DvdTitles& t);
 
 // The source of title=<number> or title=main of a DVD folder or image, for a meta line: the cells of the title, in
-// the angle given (from 1; angle=), as parts of its VOB files under names that read them (discImage::addVirtualFile), one for each run of
-// cells whose timestamps follow on, joined as "part 1"+"part 2". Throws with the reason when there is no such title,
-// or its video is still encrypted. languages: the language of each audio track, by track number. chapters: where each
-// chapter starts, in seconds from the start of the title (the playback times of the cells before it). discNumber: title
-// is the number the disc gives the title (dvd-title=), which stays the same whatever the listing makes of it, and names
-// the short and the left out titles too. minSeconds and all: the listing a number counts in, as for discTitlePlaylist.
-// discTitle: the disc's own number of the title. An angle the title does not have is refused.
+// the angle given (from 1; angle=), as parts of its VOB files under names that read them (discImage::addVirtualFile),
+// one for each run of cells whose timestamps follow on, joined as "part 1"+"part 2". Throws with the reason when there
+// is no such title, or its video is still encrypted. languages: the language of each audio track, by track number.
+// chapters: where each chapter starts, in seconds from the start of the title (the playback times of the cells before
+// it). discNumber: title is the number the disc gives the title (dvd-title=), which stays the same whatever the listing
+// makes of it, and names the short and the left out titles too. minSeconds and all: the listing a number counts in, as
+// for discTitlePlaylist. discTitle: the disc's own number of the title. An angle the title does not have is refused.
 std::string dvdTitleSource(const std::string& videoTs, const std::string& title,
                            std::vector<std::pair<int, std::string>>* languages = nullptr,
                            std::vector<double>* chapters = nullptr, bool discNumber = false, double minSeconds = 120,

@@ -837,8 +837,7 @@ Bytes readSector(const std::vector<Vob>& vobs, const uint64_t sector)
 // with a NAV pack whose DSI says where the piece ends and where the next one of the same angle begins (ILVU_EA and
 // ILVU_SA, relative to the start of the piece; 0xFFFFFFFF after the last, 0 and 0 when the cell is not interleaved).
 // False when a NAV pack cannot be read where one has to be.
-bool anglePieces(const std::vector<Vob>& vobs, const DvdCell& cell,
-                      std::vector<std::pair<uint64_t, uint64_t>>& ranges)
+bool anglePieces(const std::vector<Vob>& vobs, const DvdCell& cell, std::vector<std::pair<uint64_t, uint64_t>>& ranges)
 {
     uint64_t sector = cell.firstSector;
     for (int guard = 0; sector <= cell.lastSector && guard < 1000000; ++guard)
@@ -1090,8 +1089,7 @@ std::vector<std::string> idxLines(const std::string& subPath)
         if (end == std::string::npos)
             end = text.size();
         std::string line = text.substr(pos, end - pos);
-        while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
-            line.pop_back();
+        while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
         lines.push_back(line);
         pos = end + 1;
     }
@@ -1130,8 +1128,8 @@ std::vector<int64_t> vobSubTimes(const std::string& subPath, const int index)
     for (const std::string& line : idxLines(subPath))
     {
         int number = 0;
-        if (const size_t at = line.find("index:"); line.rfind("id:", 0) == 0 && at != std::string::npos &&
-                                                   sscanf(line.c_str() + at + 6, "%d", &number) == 1)
+        if (const size_t at = line.find("index:");
+            line.rfind("id:", 0) == 0 && at != std::string::npos && sscanf(line.c_str() + at + 6, "%d", &number) == 1)
         {
             track = number;
             delay = 0;
@@ -1147,8 +1145,9 @@ std::vector<int64_t> vobSubTimes(const std::string& subPath, const int index)
         }
     }
     if (unread > 0)
-        LTRACE(LT_WARN, 2, "Warning: " << unread << " timestamp line(s) of track " << index << " of " << idxFileOf(subPath)
-                                       << " could not be read. The subtitles from there on may be at the wrong time.");
+        LTRACE(LT_WARN, 2,
+               "Warning: " << unread << " timestamp line(s) of track " << index << " of " << idxFileOf(subPath)
+                           << " could not be read. The subtitles from there on may be at the wrong time.");
     return times;
 }
 

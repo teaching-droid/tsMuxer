@@ -350,7 +350,7 @@ class TsMuxerWindow : public QWidget
     QList<PendingCore> m_pendingCores;
     QStringList m_madeCores;
     QString m_coreEncoderPath;  // the program chosen by the user, kept in the settings
-    QString m_lastBuiltMeta;  // the meta file last built from the settings
+    QString m_lastBuiltMeta;    // the meta file last built from the settings
     QnCheckBoxedHeaderView* m_header;
     PlayerLauncher* m_player = nullptr;  // made at the first preview (previewPlayer)
     QString lastSourceDir;

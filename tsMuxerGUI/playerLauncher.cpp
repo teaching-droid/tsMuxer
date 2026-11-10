@@ -46,9 +46,7 @@ static bool processRuns(const qint64 pid)
 #endif
 }
 
-PlayerLauncher::PlayerLauncher(const QString& tsMuxerPath, QWidget* parent) : QObject(parent), m_tsMuxer(tsMuxerPath)
-{
-}
+PlayerLauncher::PlayerLauncher(const QString& tsMuxerPath, QWidget* parent) : QObject(parent), m_tsMuxer(tsMuxerPath) {}
 
 PlayerLauncher::~PlayerLauncher()
 {
@@ -119,10 +117,7 @@ void PlayerLauncher::removeOldFolders()
     }
 }
 
-double PlayerLauncher::defaultStart(const double seconds)
-{
-    return std::floor((std::min)(seconds / 10, 120.0));
-}
+double PlayerLauncher::defaultStart(const double seconds) { return std::floor((std::min)(seconds / 10, 120.0)); }
 
 PlayerLauncher::Player PlayerLauncher::player() const
 {
@@ -285,7 +280,8 @@ void PlayerLauncher::startMux()
     QDir dir(folder());
     if (!dir.exists() && !QDir().mkpath(dir.path()))
     {
-        m_form->addStdErrLine(wtr("The temporary folder \"%1\" could not be made.").arg(QDir::toNativeSeparators(dir.path())));
+        m_form->addStdErrLine(
+            wtr("The temporary folder \"%1\" could not be made.").arg(QDir::toNativeSeparators(dir.path())));
         finish();
         return;
     }
@@ -306,8 +302,8 @@ void PlayerLauncher::startMux()
         source = QStringLiteral("\"%1\"").arg(m_source.playlist);
     else
         source = QStringLiteral("\"%1\", dvd-title=%2").arg(m_source.disc).arg(m_source.dvdTitle);
-    const QString angle = m_source.angle > 1 && m_source.file.isEmpty() ? QStringLiteral(", angle=%1").arg(m_source.angle)
-                                                                         : QString();
+    const QString angle =
+        m_source.angle > 1 && m_source.file.isEmpty() ? QStringLiteral(", angle=%1").arg(m_source.angle) : QString();
     // A cut reads the title from its start up to the cut. Only the pictures inside it are kept, which spares the
     // second reading that keeping the pictures before it takes (--cut-pictures).
     const qint64 from = qRound64(start * 1000);
@@ -320,7 +316,8 @@ void PlayerLauncher::startMux()
     QFile file(m_meta);
     if (!file.open(QIODevice::WriteOnly) || file.write(meta.toUtf8()) < 0)
     {
-        m_form->addStdErrLine(wtr("The temporary folder \"%1\" could not be made.").arg(QDir::toNativeSeparators(dir.path())));
+        m_form->addStdErrLine(
+            wtr("The temporary folder \"%1\" could not be made.").arg(QDir::toNativeSeparators(dir.path())));
         finish();
         return;
     }

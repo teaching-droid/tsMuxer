@@ -1015,8 +1015,8 @@ void METADemuxer::openFile(const string& streamName)
                         addParams.erase(a);
                     }
                     int discTitle = 0;
-                    codecStreamName = dvdTitleSource(videoTs, title->second, &languages, &chapters, byDiscNumber,
-                                                     120, false, &discTitle, angle);
+                    codecStreamName = dvdTitleSource(videoTs, title->second, &languages, &chapters, byDiscNumber, 120,
+                                                     false, &discTitle, angle);
                     // One angle for a title, as for a playlist (getMplsInfo): the video of one angle and the sound of
                     // another were taken without a word
                     if (const auto [chosen, isNew] =
@@ -2196,14 +2196,17 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
                 const std::vector<uint8_t> style = probe.textStStyle(pid);
                 if (!style.empty())
                 {
-                    LTRACE(LT_INFO, 2, "Track " << pid << " of " << first << " is TextST, and is copied into the output "
-                                                                             "as it is.");
+                    LTRACE(LT_INFO, 2,
+                           "Track " << pid << " of " << first
+                                    << " is TextST, and is copied into the output "
+                                       "as it is.");
                     codecReader = new MatroskaCopyStreamReader("S_HDMV/TEXTST", style, {}, 0);
                 }
                 else
-                    LTRACE(LT_WARN, 2, "Warning: track " << pid << " of " << first
-                                                         << " has no dialog style at its start, which keep-textst needs. "
-                                                            "It is written as SRT.");
+                    LTRACE(LT_WARN, 2,
+                           "Warning: track " << pid << " of " << first
+                                             << " has no dialog style at its start, which keep-textst needs. "
+                                                "It is written as SRT.");
             }
         }
     }
@@ -2212,9 +2215,10 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
     if (codec == aribCodecInfo.programName)
     {
         if (m_matroskaOutput != 1)
-            THROW(ERR_COMMON, "ARIB captions can only go into a Matroska file: a disc, a TS, a WebM file and a demux "
-                              "have no form for them. Leave track "
-                                  << pid << " out, or mux to .mkv. Nothing was written.")
+            THROW(ERR_COMMON,
+                  "ARIB captions can only go into a Matroska file: a disc, a TS, a WebM file and a demux "
+                  "have no form for them. Leave track "
+                      << pid << " out, or mux to .mkv. Nothing was written.")
         const std::string first = unquoteStr(trimStr(fileList[0]));
         TSDemuxer probe(m_readManager, "");
         probe.openFile(first);
@@ -2224,15 +2228,14 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         if (track == tracks.end() || !probe.isAribPid(pid))
             THROW(ERR_COMMON, "Track " << pid << " of " << first << " holds no ARIB captions. Nothing was written.")
         const int id = track->second.m_dataComponentId;
-        codecReader = new MatroskaCopyStreamReader(
-            aribCodecInfo.programName,
-            {static_cast<uint8_t>(track->second.m_componentTag), static_cast<uint8_t>(id >> 8),
-             static_cast<uint8_t>(id)},
-            {}, 0);
+        codecReader = new MatroskaCopyStreamReader(aribCodecInfo.programName,
+                                                   {static_cast<uint8_t>(track->second.m_componentTag),
+                                                    static_cast<uint8_t>(id >> 8), static_cast<uint8_t>(id)},
+                                                   {}, 0);
     }
-    // ** DVD SUBTITLES INTO A MATROSKA OUTPUT STAY VOBSUB. ** The sub-pictures of a VOB were drawn again as PGS for every
-    // output, where a Matroska output keeps the VobSub of a Matroska source as it is. They go in as S_VOBSUB now, each
-    // unit a block, with the .idx text of the colours of the IFO file as its CodecPrivate. WebM has no VobSub.
+    // ** DVD SUBTITLES INTO A MATROSKA OUTPUT STAY VOBSUB. ** The sub-pictures of a VOB were drawn again as PGS for
+    // every output, where a Matroska output keeps the VobSub of a Matroska source as it is. They go in as S_VOBSUB now,
+    // each unit a block, with the .idx text of the colours of the IFO file as its CodecPrivate. WebM has no VobSub.
     if (codecReader == nullptr && (m_matroskaOutput == 1 || m_demuxOutput) && codec == "S_HDMV/PGS" && pid >= 0x20 &&
         pid <= 0x3f && !fileList.empty())
     {
@@ -2244,10 +2247,13 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         {
             std::string idx = dvdSubtitleIdx(first);
             if (idx.empty())
-                idx = "size: 720x480\npalette: 000000, ffffff, 808080, 404040, 000000, ffffff, 808080, 404040, "
-                      "000000, ffffff, 808080, 404040, 000000, ffffff, 808080, 404040\n";
-            LTRACE(LT_INFO, 2, "Track " << pid << " of " << first << " is DVD subtitles, and goes into the output as "
-                                                                      "they are (VobSub).");
+                idx =
+                    "size: 720x480\npalette: 000000, ffffff, 808080, 404040, 000000, ffffff, 808080, 404040, "
+                    "000000, ffffff, 808080, 404040, 000000, ffffff, 808080, 404040\n";
+            LTRACE(LT_INFO, 2,
+                   "Track " << pid << " of " << first
+                            << " is DVD subtitles, and goes into the output as "
+                               "they are (VobSub).");
             auto* copyReader =
                 new MatroskaCopyStreamReader("S_VOBSUB", std::vector<uint8_t>(idx.begin(), idx.end()), {}, 0);
             if (m_demuxOutput)
@@ -2387,7 +2393,6 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
     string tmpname = strToLowerCase(fileList[0]);
     tmpname = unquoteStr(trimStr(tmpname));
 
-
     // ** A SUBTITLE TRACK WITH A NEGATIVE TIMESHIFT IS READ BY A DEMUXER OF ITS OWN. ** Its packets are due that much
     // before their place in the file, so the file was read ahead for them, holding the video and the sound read on the
     // way in memory, which stops at a quarter of the buffer limit: at 135 Mbit/s that is about 4 s, and with
@@ -2449,8 +2454,7 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
             codecReader->setSrcContainerType(AbstractStreamReader::ContainerType::ctM2TS);
     }
     else if (isVobSubPair(unquoteStr(trimStr(fileList[0]))) || strEndWith(tmpname, ".vob") ||
-             strEndWith(tmpname, ".evo") || strEndWith(tmpname, ".mpg") ||
-             strEndWith(tmpname, ".mpeg"))
+             strEndWith(tmpname, ".evo") || strEndWith(tmpname, ".mpg") || strEndWith(tmpname, ".mpeg"))
     {
         if (pid)
             dataReader = &m_containerReader;
@@ -4637,9 +4641,10 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             {
                 try
                 {
-                    trackRez = detectTrackReader(vect.data(), static_cast<int>(vect.size()), containerType,
-                                                 soundDescriptor ? soundDescriptor : acceptedPidMap[itr.first].m_trackType,
-                                                 itr.first, declared, wholeTracks);
+                    trackRez =
+                        detectTrackReader(vect.data(), static_cast<int>(vect.size()), containerType,
+                                          soundDescriptor ? soundDescriptor : acceptedPidMap[itr.first].m_trackType,
+                                          itr.first, declared, wholeTracks);
                 }
                 catch (const VodCoreException& e)
                 {
@@ -4664,8 +4669,8 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
                         wholeTracks ? "no data. The program map names this track, but the file has no packet of it."
                                     : "no data. The program map names this track, but the part of the file read "
                                       "has no packet of it.";
-                // Most packets, not all: a recording of an encrypted channel can carry a few packets in the clear (41 of
-                // 49,707 of a real HD recording), and its track is still unreadable
+                // Most packets, not all: a recording of an encrypted channel can carry a few packets in the clear (41
+                // of 49,707 of a real HD recording), and its track is still unreadable
                 else if (scrambled * 2 > packets)
                 {
                     std::ostringstream what;
@@ -4725,7 +4730,8 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
                         if (const auto info = clpi.m_streamInfo.find(itr.first);
                             info != clpi.m_streamInfo.end() && info->second.character_code != 1)
                             LTRACE(LT_WARN, 2,
-                                   "Warning: track " << itr.first << " of " << unquoted << " has text in character code "
+                                   "Warning: track " << itr.first << " of " << unquoted
+                                                     << " has text in character code "
                                                      << static_cast<int>(info->second.character_code)
                                                      << ", which is not UTF-8. Its letters may come out wrong.");
                 }

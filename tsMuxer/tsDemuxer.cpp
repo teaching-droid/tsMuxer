@@ -339,10 +339,10 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             auto tsPacket = reinterpret_cast<TSPacket*>(curPos);
             int pid = tsPacket->getPID();
 
-            // ** A DAMAGED PACKET IS PASSED OVER. ** Nothing in a packet of a recording with bad reception can be trusted,
-            // its adaptation field neither, and a receiver does not mark every such packet (transport_error_indicator,
-            // ISO/IEC 13818-1, 2.4.3.2). One of them stopped the listing of a whole recording. The file is taken for
-            // something else only if the scan finds no track at all, below.
+            // ** A DAMAGED PACKET IS PASSED OVER. ** Nothing in a packet of a recording with bad reception can be
+            // trusted, its adaptation field neither, and a receiver does not mark every such packet
+            // (transport_error_indicator, ISO/IEC 13818-1, 2.4.3.2). One of them stopped the listing of a whole
+            // recording. The file is taken for something else only if the scan finds no track at all, below.
             if (TS_FRAME_SIZE < tsPacket->getHeaderSize())
             {
                 if (!tsPacket->tei)
@@ -480,7 +480,9 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
     // that came and names no stream is no missing table.
     m_tableScanWhole = lastReadRez == BufferedReader::DATA_EOF;
     if (trackList.empty() && anyPacket)
-        m_missingTable = !patSeen ? "PAT" : mapTaken.empty() && damagedMaps.empty() && sharedPids.empty() ? "PMT" : nullptr;
+        m_missingTable = !patSeen                                                        ? "PAT"
+                         : mapTaken.empty() && damagedMaps.empty() && sharedPids.empty() ? "PMT"
+                                                                                         : nullptr;
     if (unmarkedDamage && trackList.empty())
         THROW(ERR_COMMON, "Invalid tsPacket->getHeaderSize")
     auto br = dynamic_cast<BufferedFileReader*>(m_bufferedReader);
@@ -1830,7 +1832,8 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
         // not. Its times were written over the bytes after them: a PES header late in a packet wrote past the end of
         // the packet, over the sync byte of the next one, and that packet was lost, of whatever track it was.
         else if (m_acceptedPidCache[pid] &&
-                 frameData + PESPacket::HEADER_SIZE + ((pesPacket->flagsLo & 0xc0) == 0xc0 ? 2 : 1) * PESPacket::PTS_SIZE <=
+                 frameData + PESPacket::HEADER_SIZE +
+                         ((pesPacket->flagsLo & 0xc0) == 0xc0 ? 2 : 1) * PESPacket::PTS_SIZE <=
                      pkt + TS_FRAME_SIZE)
         {
             // A part cut from a clip starts at its key picture, also for a subtitle read before that picture
@@ -2244,7 +2247,8 @@ void TSDemuxer::finishTextStPes(const int pid, TextStPes& sub, DemuxedData& demu
         }
         else if (read && subtitle.end > 0 && !subtitle.text.empty())
         {
-            const std::string record = textst::srtRecord(subtitle, ++sub.subtitles, sub.topStyles.count(subtitle.regionStyle) != 0);
+            const std::string record =
+                textst::srtRecord(subtitle, ++sub.subtitles, sub.topStyles.count(subtitle.regionStyle) != 0);
             out.assign(record.begin(), record.end());
         }
     }

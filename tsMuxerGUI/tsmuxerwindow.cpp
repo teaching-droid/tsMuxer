@@ -20,7 +20,6 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QDirIterator>
-#include <QScopeGuard>
 #include <QDropEvent>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -41,6 +40,7 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QRegularExpressionValidator>
+#include <QScopeGuard>
 #include <QScreen>
 #include <QScrollArea>
 #include <QSettings>
@@ -209,7 +209,7 @@ QString fileDialogFilter()
           "vc1", "vvc", "266", "h266", "ivf",  "dts",  "dtshd", "dtsma", "thd",  "truehd", "mpv",  "m1v",  "m2v",
           "mpa", "mp2", "mp3", "flac", "ts",   "m2ts", "mts",   "m2t",   "ssif", "mpg",    "mpeg", "vob",  "evo",
           "mkv", "mka", "mks", "mk3d", "webm", "mp4",  "m4a",   "m4v",   "mov",  "mpls",   "mpl",  "iso",  "sup",
-          "srt", "sub", "ass", "ssa", "wav",  "w64",  "pcm",  "ogg",   "oga",   "opus", "wv"}},
+          "srt", "sub", "ass", "ssa",  "wav",  "w64",  "pcm",   "ogg",   "oga",  "opus",   "wv"}},
         {TsMuxerWindow::tr("Container files (TS, MKV, MP4, MOV, etc.)"),
          {"ts", "m2ts", "mts", "m2t", "ssif", "mpg", "mpeg", "vob", "evo", "mkv", "mka", "mks", "mk3d", "webm", "mp4",
           "m4a", "m4v", "mov"}},
@@ -229,7 +229,7 @@ QString fileDialogFilter()
           "vc1", "vvc", "266", "h266", "ivf", "dts",  "dtshd", "dtsma", "thd",  "truehd", "ac3+thd", "thd+ac3", "mpv",
           "m1v", "m2v", "mpa", "mp2",  "mp3", "flac", "ts",    "m2ts",  "mts",  "m2t",    "ssif",    "mpg",     "mpeg",
           "vob", "evo", "mkv", "mka",  "mks", "mk3d", "webm",  "mp4",   "m4a",  "m4v",    "mov",     "mpls",    "mpl",
-          "iso", "sup", "srt", "sub", "ass",  "ssa", "wav",  "w64",   "pcm",   "ogg",  "oga",    "opus",    "wv"}},
+          "iso", "sup", "srt", "sub",  "ass", "ssa",  "wav",   "w64",   "pcm",  "ogg",    "oga",     "opus",    "wv"}},
         {TsMuxerWindow::tr("Container files (TS, MKV, MP4, MOV, etc.)"),
          {"ts", "m2ts", "mts", "m2t", "ssif", "mpg", "mpeg", "vob", "evo", "mkv", "mka", "mks", "mk3d", "webm", "mp4",
           "m4a", "m4v", "mov"}},
@@ -3168,8 +3168,7 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
         {
             // Passed over: a name that is not UTF-8, which the listing shows with replacement signs, and one no file
             // can be called, as in a damaged file: an output, a title and a label are made from what is taken here
-            const QString title =
-                QtCompat::strMid(procStdOutput[i], QString("Disc title: ").length()).trimmed();
+            const QString title = QtCompat::strMid(procStdOutput[i], QString("Disc title: ").length()).trimmed();
             if (title.size() <= 200 && !title.contains(QChar::ReplacementCharacter))
                 m_listedDiscTitle = title;
         }
@@ -4027,8 +4026,8 @@ void TsMuxerWindow::onDiscTitlesReceived()
     m_pendingAngle = dialog.chosenAngle();
     m_pendingAngleClips.clear();
     if (m_pendingAngle > 1 && m_pendingAngle - 1 < row.angleClips.size() && !row.angleClips.isEmpty())
-        for (int k = 0; k < row.angleClips[0].size() && k < row.angleClips[m_pendingAngle - 1].size() &&
-                        k < row.angleParts.size();
+        for (int k = 0;
+             k < row.angleClips[0].size() && k < row.angleClips[m_pendingAngle - 1].size() && k < row.angleParts.size();
              ++k)
             m_pendingAngleClips << PendingAngleClip{timeToFloat(row.angleParts[k].section(QLatin1Char('-'), 0, 0)),
                                                     row.angleClips[0][k], row.angleClips[m_pendingAngle - 1][k]};
@@ -5350,8 +5349,8 @@ QString TsMuxerWindow::getMuxOpts()
         if (!ui->DiskLabelEdit->text().isEmpty())
             rez += QString(" --label=\"%1\" ").arg(ui->DiskLabelEdit->text());
     }
-    // More than 32 tracks of one kind on a disc (#53): with the question turned off, the option goes on the line itself,
-    // so that a saved meta file writes the disc as the window does
+    // More than 32 tracks of one kind on a disc (#53): with the question turned off, the option goes on the line
+    // itself, so that a saved meta file writes the disc as the window does
     if (isDiskOutput() && !ui->checkBoxAskExtraTracks->isChecked() && !m_buildingMuxOpts)
     {
         m_buildingMuxOpts = true;
@@ -5703,8 +5702,7 @@ QString TsMuxerWindow::getFileList(QtvCodecInfo* codecInfo)
     const QString angle = codecInfo->angle > 1 ? QStringLiteral(", angle=%1").arg(codecInfo->angle) : QString();
     // A DVD title: the disc, and the title by the disc's own number
     if (codecInfo->dvdTitle && !codecInfo->fileList.isEmpty())
-        return QString("\"") + codecInfo->fileList[0] + "\", dvd-title=" + QString::number(codecInfo->dvdTitle) +
-               angle;
+        return QString("\"") + codecInfo->fileList[0] + "\", dvd-title=" + QString::number(codecInfo->dvdTitle) + angle;
     if (codecInfo->mplsFiles.isEmpty())
     {
         for (int i = 0; i < codecInfo->fileList.size(); ++i)
@@ -6129,18 +6127,17 @@ bool TsMuxerWindow::offerAc3Cores()
             rows << j;
         }
 
-        const QString sourceProblem =
-            info->fileList.size() > 1 || !info->mplsFiles.isEmpty() || info->dvdTitle != 0 ||
-                    !QFileInfo(source).isFile() || QFileInfo(source).suffix().compare("iso", Qt::CaseInsensitive) == 0
-                ? tr("A core can only be created from a track of a single file.")
-                : QString();
-        const QString question =
-            info->trackID != 0
-                ? tr("The TrueHD track %1 of %2 has no AC-3 core. Some players will not play it.")
-                      .arg(info->trackID)
-                      .arg(QFileInfo(source).fileName())
-                : tr("The TrueHD file %1 has no AC-3 core. Some players will not play it.")
-                      .arg(QFileInfo(source).fileName());
+        const QString sourceProblem = info->fileList.size() > 1 || !info->mplsFiles.isEmpty() || info->dvdTitle != 0 ||
+                                              !QFileInfo(source).isFile() ||
+                                              QFileInfo(source).suffix().compare("iso", Qt::CaseInsensitive) == 0
+                                          ? tr("A core can only be created from a track of a single file.")
+                                          : QString();
+        const QString question = info->trackID != 0
+                                     ? tr("The TrueHD track %1 of %2 has no AC-3 core. Some players will not play it.")
+                                           .arg(info->trackID)
+                                           .arg(QFileInfo(source).fileName())
+                                     : tr("The TrueHD file %1 has no AC-3 core. Some players will not play it.")
+                                           .arg(QFileInfo(source).fileName());
         const QString savedBefore = m_coreEncoderPath;
         const Ac3CoreDialog::Choice choice =
             Ac3CoreDialog::ask(this, question, names, sourceProblem, &m_coreEncoderPath);
@@ -6179,7 +6176,7 @@ bool TsMuxerWindow::offerAc3Cores()
             for (int n = 2; taken(); ++n) target = QDir(folder).filePath(base + QStringLiteral("_%1.ac3").arg(n));
             info->mergeAc3File = target;
             // Matroska tracks are numbered by their place in the file, a transport stream's by the PID
-            const QString map = info->trackID == 0              ? QStringLiteral("0:a:0")
+            const QString map = info->trackID == 0             ? QStringLiteral("0:a:0")
                                 : isMatroskaOutputName(source) ? QStringLiteral("0:%1").arg(info->trackID - 1)
                                                                : QStringLiteral("0:i:%1").arg(info->trackID);
             const int p = info->descr.indexOf("Channels: ");
@@ -6400,8 +6397,9 @@ QString TsMuxerWindow::buildMetaText()
         // that the three letter code in the box cannot carry. So lang= is written for it only when the language
         // was changed. The language of an .idx/.sub pair and of a VOB is in the listing only (from the .idx, from the
         // IFO file): without lang= such a track was written without a language.
-        const QString sourceKind =
-            codecInfo->fileList.isEmpty() ? QString() : QFileInfo(unquoteStr(codecInfo->fileList[0])).suffix().toLower();
+        const QString sourceKind = codecInfo->fileList.isEmpty()
+                                       ? QString()
+                                       : QFileInfo(unquoteStr(codecInfo->fileList[0])).suffix().toLower();
         const bool keepSourceLang = ui->radioButtonMKV->isChecked() && codecInfo->lang == codecInfo->srcLang &&
                                     sourceKind != QLatin1String("sub") && sourceKind != QLatin1String("vob");
         if (!codecInfo->lang.isEmpty() && isLangCodeForMeta(codecInfo->lang) && !keepSourceLang)
@@ -7013,8 +7011,8 @@ void TsMuxerWindow::playInputItem(const QListWidgetItem* itm)
         {
             const QtvCodecInfo* info = getCodecInfo(row);
             if (!info || info->dvdTitle != dvdTitle || info->fileList.isEmpty() ||
-                QDir::fromNativeSeparators(info->fileList[0]).compare(QDir::fromNativeSeparators(name),
-                                                                      Qt::CaseInsensitive) != 0)
+                QDir::fromNativeSeparators(info->fileList[0])
+                        .compare(QDir::fromNativeSeparators(name), Qt::CaseInsensitive) != 0)
                 continue;
             if (info->programName.startsWith(QLatin1String("V_")) && video.first.isEmpty())
                 video = {info->programName, info->trackID};

@@ -140,10 +140,7 @@ void SingleFileMuxer::intAddStream(const std::string& streamName, const std::str
         if (const auto copy = dynamic_cast<MatroskaCopyStreamReader*>(codecReader))
         {
             const std::string& id = copy->sourceCodecId();
-            fileExt = id == "S_VOBSUB"     ? ".sub"
-                      : id == "S_TEXT/ASS" ? ".ass"
-                      : id == "S_TEXT/SSA" ? ".ssa"
-                                           : ".vtt";
+            fileExt = id == "S_VOBSUB" ? ".sub" : id == "S_TEXT/ASS" ? ".ass" : id == "S_TEXT/SSA" ? ".ssa" : ".vtt";
         }
         else
             fileExt = srt && srt->keepText() ? ".srt" : ".sup";

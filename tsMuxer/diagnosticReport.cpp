@@ -869,8 +869,8 @@ bool reportHolds(const std::string& name)
     return std::mismatch(report.begin(), report.end(), other.begin(), other.end(), same).first == report.end();
 }
 
-// ** A REPORT NEVER TAKES THE PLACE OF A FILE OF THE JOB. ** Opening the report empties its file. It was opened first of
-// all, so a report named as a source or a meta file took that file away before the job began, and one named as the
+// ** A REPORT NEVER TAKES THE PLACE OF A FILE OF THE JOB. ** Opening the report empties its file. It was opened first
+// of all, so a report named as a source or a meta file took that file away before the job began, and one named as the
 // output ended up as neither. The files are opened here, with the sources known, as an output named as a source is
 // refused.
 bool openFiles(const std::vector<std::string>& names)

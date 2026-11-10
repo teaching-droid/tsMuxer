@@ -727,8 +727,9 @@ void ProgramStreamDemuxer::addSubPicture(const int stream, const uint8_t* data, 
         if (sp.done == sp.times.size() && !sp.timesRanOut)
         {
             sp.timesRanOut = true;
-            LTRACE(LT_WARN, 2, "Warning: the .idx file of " << m_streamName << " has fewer times than track " << stream
-                                                            << " has subtitles. The rest take the time in the .sub file.");
+            LTRACE(LT_WARN, 2,
+                   "Warning: the .idx file of " << m_streamName << " has fewer times than track " << stream
+                                                << " has subtitles. The rest take the time in the .sub file.");
         }
         const int64_t at = sp.done < sp.times.size() ? sp.times[sp.done] * 90 : sp.pts;
         ++sp.done;
@@ -736,9 +737,9 @@ void ProgramStreamDemuxer::addSubPicture(const int stream, const uint8_t* data, 
     }
     else
     {
-        m_heldUnits.push_back({stream,
-                               std::vector<uint8_t>(sp.unit.begin(), sp.unit.begin() + static_cast<std::ptrdiff_t>(size)),
-                               sp.pts, m_parts, m_segBase, m_segFirst, m_lastDts, m_lastPts});
+        m_heldUnits.push_back(
+            {stream, std::vector<uint8_t>(sp.unit.begin(), sp.unit.begin() + static_cast<std::ptrdiff_t>(size)), sp.pts,
+             m_parts, m_segBase, m_segFirst, m_lastDts, m_lastPts});
         m_heldAt = m_pictures;
     }
     sp.unit.clear();
@@ -800,8 +801,9 @@ void ProgramStreamDemuxer::placeSubPicture(const int stream, const uint8_t* data
     if (size >= 4)
         sp.decoder->decode(data, static_cast<int>(size), at * (INTERNAL_PTS_FREQ / 90000), -1, pgs);
     out.append(pgs.data(), static_cast<int>(pgs.size()));
-    // What the picture says in fewer bytes than the unit was read all the same, though no reader counts it: an .sub with
-    // large units beside a short video ended with "The mux stopped before the source was finished" over a whole output
+    // What the picture says in fewer bytes than the unit was read all the same, though no reader counts it: an .sub
+    // with large units beside a short video ended with "The mux stopped before the source was finished" over a whole
+    // output
     if (pgs.size() < size)
         m_subPictureSaved += static_cast<int64_t>(size - pgs.size());
 }
