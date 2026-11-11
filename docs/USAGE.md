@@ -229,6 +229,12 @@ A source that fits in the sample is taken whole, whatever part is asked for, and
 
 In the window, "Make a sample..." on the Input tab makes one of the file chosen there, and the progress window offers it when a job ends with an error.
 
+A title of a Blu-ray disc can be the source as well: a playlist, or the disc folder or image with `--title=<number>` or `--title=main`, the number as in the listing of the disc. The sample is then of the clip the title plays first, last with `--from-end`, or at the time of `--at`, which counts in the title; the report says which clip that is. The playlist and the information file of that clip, a few kilobytes without picture or sound, go into the zip beside the sample:
+
+```
+tsMuxeR --make-sample film.iso sample.zip --title=main --at=0:45:00
+```
+
 ## Meta file format
 File MUST have the .meta extension. This file defines files you want to multiplex. The first line of a meta file contains additional parameters that apply to all tracks. In this case the first line should begin with the word MUXOPT.
 

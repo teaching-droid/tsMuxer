@@ -1609,6 +1609,14 @@ All parameters in this group start with two dashes:
                         --at=<time>      around this time of the source, as
                                          h:mm:ss or seconds. Not for an MP4
                                          file or a video stream on its own.
+                        --title=<n>      with a Blu-ray disc folder or image as
+                                         the source: the title of that number
+                                         in its listing, or main. A playlist
+                                         may be the source as well. The sample
+                                         is of the clip the title plays first,
+                                         last, or at the time of --at, and the
+                                         playlist and that clip's information
+                                         file go into the zip with it.
                         --size=<MB>      the size of the sample, 1 to 24 (20)
                         --add-report=<file>  a report written with --report
                         --report-keep-names  keep the names, also the title and
@@ -4738,6 +4746,7 @@ static int runMakeSample(int argc, char** argv, const std::string& reportFile, c
     sample::Request request;
     std::string zipName;
     std::string addReport;
+    std::string sampleTitle;  // --title=<number> or main: the title of a disc the sample is taken of
     std::string error;
     std::vector<std::string> positional;
     int takes = 0;
@@ -4772,6 +4781,8 @@ static int runMakeSample(int argc, char** argv, const std::string& reportFile, c
         }
         else if (strStartWith(arg, "--add-report="))
             addReport = unquoteStr(arg.substr(13));
+        else if (strStartWith(arg, "--title="))
+            sampleTitle = arg.substr(8);
         else if (arg[0] == '-')
             error = "Unknown option " + arg + " for --make-sample.";
         else
@@ -4780,7 +4791,7 @@ static int runMakeSample(int argc, char** argv, const std::string& reportFile, c
     if (error.empty() && positional.size() != 2)
         error =
             "Usage: tsMuxeR --make-sample <source> <out.zip> [--from-start | --from-end | --at=<time>] "
-            "[--size=<MB>] [--add-report=<report file>] [--report-keep-names]";
+            "[--title=<number or main>] [--size=<MB>] [--add-report=<report file>] [--report-keep-names]";
     else if (error.empty() && takes > 1)
         error = "Give one of --from-start, --from-end and --at.";
     else if (error.empty() && !strEndWith(strToLowerCase(positional[1]), ".zip"))
@@ -4831,27 +4842,73 @@ static int runMakeSample(int argc, char** argv, const std::string& reportFile, c
     std::string sampleFile = utf8Path(std::filesystem::temp_directory_path(ec) / ("tsMuxeR_sample_" + stamp));
     int exitCode = 0;
     sample::Result result;
+    // ** A SAMPLE OF A DISC TITLE. ** A sample was taken of a file only, and the fault of a disc title is in one of
+    // its clips: the user had to find which clip the title plays at that time. A playlist as the source, or a disc
+    // folder or image with --title=<number> or main, now gives the sample of the clip the title plays there: its first
+    // clip, its last, or the one at the time of --at, which then counts in the title. The playlist and the clip
+    // information file of that clip, a few kilobytes without picture or sound, go into the zip beside the sample.
+    std::vector<std::string> titleLines;
+    std::vector<std::string> titleFiles;
     try
     {
-        writeReportListing(request.source, "Listing of " + request.source);
-        const char* take = request.take == sample::Take::Start ? "its start"
-                           : request.take == sample::Take::End ? "its end"
-                                                               : "around a time";
-        LTRACE(LT_INFO, 2,
-               "Making a sample of " << request.source << ": " << take << ", at most " << request.maxBytes / 1000000
-                                     << " MB.");
-        // the extension of the source, so that the sample is read as the source is
-        const size_t dot = request.source.rfind('.');
-        const size_t slash = request.source.find_last_of("/\\");
-        const std::string ext =
-            dot != std::string::npos && (slash == std::string::npos || dot > slash) ? request.source.substr(dot) : "";
-        sampleFile += ext;
-        diagReport::addFileName(sampleFile, "sample");
-        result = sample::cut(request, sampleFile);
-        diagReport::section("Sample");
-        diagReport::text("Read as " + result.kind + ".");
-        for (const std::string& line : result.lines) diagReport::text(line);
-        writeReportListing(sampleFile, "Listing of the sample");
+        std::string playlist;
+        if (!sampleTitle.empty())
+            playlist = discTitlePlaylist(request.source, sampleTitle);
+        else if (const std::string lower = strToLowerCase(request.source);
+                 strEndWith(lower, ".mpls") || strEndWith(lower, ".mpl"))
+            playlist = request.source;
+        if (!playlist.empty())
+        {
+            MPLSParser mpls;
+            // the name of a file of the disc without its folders, whichever separator the path has
+            const auto nameOnly = [](const std::string& path)
+            {
+                const size_t slash = path.find_last_of("/\\");
+                return slash == std::string::npos ? path : path.substr(slash + 1);
+            };
+            if (!mpls.parse(playlist.c_str()) || mpls.m_playItems.empty())
+                throw std::runtime_error("the playlist " + playlist + " cannot be read or plays no clip");
+            const bool avchd = strEndWith(strToLowerCase(playlist), ".mpl");
+            const std::string bdmv = extractFilePath(extractFilePath(playlist)) + getDirSeparator();  // .../BDMV/
+            size_t item = request.take == sample::Take::End ? mpls.m_playItems.size() - 1 : 0;
+            double before = 0;  // what the title plays before that clip, in seconds
+            const auto length = [&](const size_t i)
+            { return (mpls.m_playItems[i].OUT_time - mpls.m_playItems[i].IN_time) / 45000.0; };
+            if (request.take == sample::Take::At)
+            {
+                while (item + 1 < mpls.m_playItems.size() && request.atSeconds >= before + length(item))
+                    before += length(item++);
+                if (request.atSeconds > before + length(item))
+                    throw std::runtime_error("the title is " + floatToTime(before + length(item)) +
+                                             " long, and --at is after its end");
+                request.atSeconds -= before;
+            }
+            else
+                for (size_t i = 0; i < item; ++i) before += length(i);
+            const std::string clip = mpls.m_playItems[item].fileName;
+            const std::string clipFile =
+                METADemuxer::clipNameAsOnDisc(bdmv + "STREAM" + getDirSeparator() + clip + ".", avchd ? "mts" : "m2ts");
+            if (!fileExists(clipFile))
+                throw std::runtime_error("the clip " + clip + " of the playlist is not there (" + clipFile + ")");
+            titleLines.push_back(
+                "Source: " +
+                std::string(sampleTitle.empty() ? "the playlist " : "title " + sampleTitle + ", playlist ") +
+                nameOnly(playlist) + ", " + std::to_string(mpls.m_playItems.size()) +
+                (mpls.m_playItems.size() == 1 ? " clip." : " clips."));
+            titleLines.push_back("Sample of clip " + std::to_string(item + 1) + " of them, " + nameOnly(clipFile) +
+                                 ", which the title plays from " + floatToTime(before) + " to " +
+                                 floatToTime(before + length(item)) + "." +
+                                 (request.take == sample::Take::At ? " --at counts from the start of that clip: " +
+                                                                         floatToTime(request.atSeconds) + "."
+                                                                   : ""));
+            titleFiles.push_back(playlist);
+            const std::string clpi = METADemuxer::clipNameAsOnDisc(bdmv + "CLIPINF" + getDirSeparator() + clip + ".",
+                                                                   avchd ? "cpi" : "clpi");
+            if (fileExists(clpi))
+                titleFiles.push_back(clpi);
+            for (const std::string& line : titleLines) LTRACE(LT_INFO, 2, line);
+            request.source = clipFile;
+        }
     }
     catch (std::exception& e)
     {
@@ -4863,6 +4920,42 @@ static int runMakeSample(int argc, char** argv, const std::string& reportFile, c
         LTRACE(LT_ERROR, 2, "No sample was made: " << e.m_errStr);
         exitCode = -1;
     }
+    if (exitCode == 0)
+        try
+        {
+            writeReportListing(request.source, "Listing of " + request.source);
+            const char* take = request.take == sample::Take::Start ? "its start"
+                               : request.take == sample::Take::End ? "its end"
+                                                                   : "around a time";
+            LTRACE(LT_INFO, 2,
+                   "Making a sample of " << request.source << ": " << take << ", at most " << request.maxBytes / 1000000
+                                         << " MB.");
+            // the extension of the source, so that the sample is read as the source is
+            const size_t dot = request.source.rfind('.');
+            const size_t slash = request.source.find_last_of("/\\");
+            const std::string ext = dot != std::string::npos && (slash == std::string::npos || dot > slash)
+                                        ? request.source.substr(dot)
+                                        : "";
+            sampleFile += ext;
+            diagReport::addFileName(sampleFile, "sample");
+            result = sample::cut(request, sampleFile);
+            diagReport::section("Sample");
+            diagReport::text("Read as " + result.kind + ".");
+            for (const std::string& line : result.lines) diagReport::text(line);
+            for (const std::string& line : titleLines) diagReport::text(line);
+            result.extraFiles.insert(result.extraFiles.end(), titleFiles.begin(), titleFiles.end());
+            writeReportListing(sampleFile, "Listing of the sample");
+        }
+        catch (std::exception& e)
+        {
+            LTRACE(LT_ERROR, 2, "No sample was made: " << e.what());
+            exitCode = -1;
+        }
+        catch (VodCoreException& e)
+        {
+            LTRACE(LT_ERROR, 2, "No sample was made: " << e.m_errStr);
+            exitCode = -1;
+        }
     if (exitCode == 0)
     {
         const size_t dot = sampleFile.rfind('.');
