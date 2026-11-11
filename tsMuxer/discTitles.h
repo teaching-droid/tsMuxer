@@ -40,6 +40,8 @@ struct DiscTitle
     // the enhancement layer of a dual layer Dolby Vision picture. With the PID of that video, whether it is HEVC, and
     // the clip the title plays the most footage of, for a look at the start of its video (addPictureLabels).
     int dynamicRange = -1;
+    // The lines of its picture, from the video format of that entry: 480, 576, 720, 1080 or 2160; 0 when not known
+    int pictureLines = 0;
     bool dolbyVisionLayer = false;
     bool hevc = false;
     int videoPid = 0;

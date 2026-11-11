@@ -197,6 +197,10 @@ Playlist readPlaylist(const std::string& path, const std::string& name)
         if (isVideoStreamType(s.stream_coding_type) && !s.isSecondary)
         {
             p.title.dynamicRange = s.dynamicRange;
+            {
+                static const int lines[] = {0, 480, 576, 480, 1080, 720, 1080, 576, 2160};
+                p.title.pictureLines = s.video_format < 9 ? lines[s.video_format] : 0;
+            }
             p.title.hevc = s.stream_coding_type == StreamType::VIDEO_H265;
             p.title.videoPid = s.streamPID;
             break;
@@ -547,6 +551,18 @@ DiscTitles listDiscTitles(const std::string& root, const double minSeconds, cons
         const bool episodes = mains.front()->title.footage - mains.back()->title.footage <= 180;
         std::stable_sort(mains.begin() + (episodes ? 0 : 1), mains.end(),
                          [](const Playlist* a, const Playlist* b) { return a->title.name < b->title.name; });
+        // ** OF SEVERAL MAIN TITLES, THE ONE WITH THE BEST PICTURE COMES FIRST. ** The main film was the title that
+        // plays the most footage, whatever its picture: on a concert disc title=main took the documentary in standard
+        // definition, 12 minutes longer than the concert in high definition, and on a disc that holds its film in SDR
+        // and in HDR it took the SDR one, the first of two of one length. A main title with more lines, or with HDR
+        // where the lines are the same, now comes before the others, which keep their order among themselves; main
+        // titles of one picture, as the episodes of a series, stay as they were.
+        {
+            const auto picture = [](const Playlist* p)
+            { return p->title.pictureLines * 4 + (p->title.dynamicRange > 0 ? p->title.dynamicRange : 0); };
+            std::stable_sort(mains.begin(), mains.end(),
+                             [&](const Playlist* a, const Playlist* b) { return picture(a) > picture(b); });
+        }
         // The others by what they play, the longest first, counted in whole seconds as listed, and those of one length
         // in the order of the disc: the episodes of a series disc came in an order the parts of a second gave
         std::stable_sort(others.begin(), others.end(),
