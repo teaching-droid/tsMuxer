@@ -4730,6 +4730,18 @@ Build the ISO anyway?</source>
         <translation>估計大小：約 %1</translation>
     </message>
     <message>
+        <source>Scan</source>
+        <translation>掃描</translation>
+    </message>
+    <message>
+        <source>Run the job without writing anything. The progress window shows what the mux would warn of, and at the end the size of the output and, for a disc image, the disc it fits. A scan takes as long as reading the sources takes.</source>
+        <translation>執行工作但不寫入任何內容。進度視窗會顯示混流時會給出的警告，最後顯示輸出的大小，若為光碟映像檔還會顯示能容納它的光碟。掃描所需時間與讀取來源的時間相同。</translation>
+    </message>
+    <message>
+        <source>Scan in progress</source>
+        <translation>正在掃描</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>已勾選軌道的總和，加上輸出格式在其外圍增加的部分。「最多」：未勾選的軌道大小不明，無法扣除。在剪切、分割、固定混流位元率或以光碟為來源時不提供估計值。</translation>
     </message>

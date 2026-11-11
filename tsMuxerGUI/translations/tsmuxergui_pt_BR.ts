@@ -4730,6 +4730,18 @@ Criar o ISO mesmo assim?</translation>
         <translation>Tamanho estimado: cerca de %1</translation>
     </message>
     <message>
+        <source>Scan</source>
+        <translation>Analisar</translation>
+    </message>
+    <message>
+        <source>Run the job without writing anything. The progress window shows what the mux would warn of, and at the end the size of the output and, for a disc image, the disc it fits. A scan takes as long as reading the sources takes.</source>
+        <translation>Executa o trabalho sem gravar nada. A janela de progresso mostra os avisos que a multiplexação daria e, no fim, o tamanho da saída e, para uma imagem de disco, o disco em que ela cabe. Uma análise leva o tempo de leitura das origens.</translation>
+    </message>
+    <message>
+        <source>Scan in progress</source>
+        <translation>Análise em andamento</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>A soma das faixas marcadas, com o que a saída acrescenta em volta delas. &quot;No máximo&quot;: uma faixa deixada de fora não pôde ser descontada, pois nada indica o seu tamanho. Nenhuma estimativa é dada com um corte, uma divisão, uma taxa de multiplexação fixa ou um disco como origem.</translation>
     </message>

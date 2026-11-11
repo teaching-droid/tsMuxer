@@ -4870,6 +4870,18 @@ Build the ISO anyway?</source>
         <translation>预计大小：约 %1</translation>
     </message>
     <message>
+        <source>Scan</source>
+        <translation>扫描</translation>
+    </message>
+    <message>
+        <source>Run the job without writing anything. The progress window shows what the mux would warn of, and at the end the size of the output and, for a disc image, the disc it fits. A scan takes as long as reading the sources takes.</source>
+        <translation>运行任务但不写入任何内容。进度窗口显示混流时会给出的警告，最后显示输出的大小，对于光盘镜像还会显示能容纳它的光盘。扫描所需时间与读取来源的时间相同。</translation>
+    </message>
+    <message>
+        <source>Scan in progress</source>
+        <translation>正在扫描</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>已勾选轨道的总和，加上输出格式在其外围增加的部分。“最多”：未勾选的轨道大小未知，无法扣除。在剪切、分割、固定混流码率或以光盘为来源时不给出预计值。</translation>
     </message>

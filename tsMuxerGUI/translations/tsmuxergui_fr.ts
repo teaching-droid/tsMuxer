@@ -4870,6 +4870,18 @@ Créer l'ISO malgré tout ?</translation>
         <translation>Taille estimée : environ %1</translation>
     </message>
     <message>
+        <source>Scan</source>
+        <translation>Analyser</translation>
+    </message>
+    <message>
+        <source>Run the job without writing anything. The progress window shows what the mux would warn of, and at the end the size of the output and, for a disc image, the disc it fits. A scan takes as long as reading the sources takes.</source>
+        <translation>Exécute la tâche sans rien écrire. La fenêtre de progression montre ce dont le multiplexage avertirait et, à la fin, la taille de la sortie et, pour une image disque, le disque sur lequel elle tient. Une analyse dure le temps de la lecture des sources.</translation>
+    </message>
+    <message>
+        <source>Scan in progress</source>
+        <translation>Analyse en cours</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>La somme des pistes cochées, avec ce que la sortie ajoute autour d&apos;elles. « Au plus » : une piste écartée n&apos;a pas pu être déduite, car rien n&apos;indique sa taille. Aucune estimation n&apos;est donnée avec une coupe, un découpage, un débit de multiplexage fixe ou un disque comme source.</translation>
     </message>

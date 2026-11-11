@@ -5498,28 +5498,6 @@ static int runTsMuxer(int argc, char** argv)
         for (int k = i; k + 1 < argc; ++k) argv[k] = argv[k + 1];
         --argc;
     }
-    if (g_scan)
-    {
-        if (argc != 3 || (argv[1][0] == '-' && argv[1][1] == '-'))
-        {
-            LTRACE(LT_ERROR, 2,
-                   "--scan goes with a mux: tsMuxeR --scan <meta file or source> <output>. The output is named as for "
-                   "the mux, and is not written.");
-            return ExitCode::Usage;
-        }
-        g_scanOutput = argv[2];
-        std::error_code ec;
-        std::filesystem::path temp = std::filesystem::temp_directory_path(ec);
-        if (ec)
-            temp = ".";
-        const std::filesystem::path given = fsPath(unquoteStr(g_scanOutput));
-        const std::u8string scratch = (temp / ("tsMuxeR_scan_" + std::to_string(currentProcessId())) /
-                                       (given.has_filename() ? given.filename() : given.parent_path().filename()))
-                                          .u8string();
-        g_scanScratch.assign(scratch.begin(), scratch.end());
-        dryRun::enable();
-        argv[2] = g_scanScratch.data();
-    }
     std::string langCodesGiven;  // the value of an earlier --lang-codes: given twice, the last won without a word
     for (int i = 1; i < argc;)
     {
@@ -5575,6 +5553,29 @@ static int runTsMuxer(int argc, char** argv)
         listPlaylistPlayed = value == "played";
         for (int j = i; j + 1 < argc; ++j) argv[j] = argv[j + 1];
         --argc;
+    }
+    // after every option above is taken out of the list: a meta file or a source, and the output, are left
+    if (g_scan)
+    {
+        if (argc != 3 || (argv[1][0] == '-' && argv[1][1] == '-'))
+        {
+            LTRACE(LT_ERROR, 2,
+                   "--scan goes with a mux: tsMuxeR --scan <meta file or source> <output>. The output is named as for "
+                   "the mux, and is not written.");
+            return ExitCode::Usage;
+        }
+        g_scanOutput = unquoteStr(argv[2]);
+        std::error_code ec;
+        std::filesystem::path temp = std::filesystem::temp_directory_path(ec);
+        if (ec)
+            temp = ".";
+        const std::filesystem::path given = fsPath(g_scanOutput);
+        const std::u8string scratch = (temp / ("tsMuxeR_scan_" + std::to_string(currentProcessId())) /
+                                       (given.has_filename() ? given.filename() : given.parent_path().filename()))
+                                          .u8string();
+        g_scanScratch.assign(scratch.begin(), scratch.end());
+        dryRun::enable();
+        argv[2] = g_scanScratch.data();
     }
     int firstMplsOffset = 0;
     bool discNumbersGiven = false;  // --mplsOffset or --m2tsOffset is on the MUXOPT line

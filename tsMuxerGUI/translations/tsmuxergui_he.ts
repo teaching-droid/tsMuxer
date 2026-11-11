@@ -4870,6 +4870,18 @@ Build the ISO anyway?</source>
         <translation>גודל משוער: כ-%1</translation>
     </message>
     <message>
+        <source>Scan</source>
+        <translation>סריקה</translation>
+    </message>
+    <message>
+        <source>Run the job without writing anything. The progress window shows what the mux would warn of, and at the end the size of the output and, for a disc image, the disc it fits. A scan takes as long as reading the sources takes.</source>
+        <translation>מריץ את העבודה בלי לכתוב דבר. חלון ההתקדמות מציג את האזהרות שהריבוב היה נותן, ובסוף את גודל הפלט, ולדמות תקליטור גם את התקליטור שהיא נכנסת בו. סריקה נמשכת כזמן קריאת המקורות.</translation>
+    </message>
+    <message>
+        <source>Scan in progress</source>
+        <translation>סריקה מתבצעת</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>סכום הרצועות המסומנות, בתוספת מה שהפלט מוסיף סביבן. &quot;לכל היותר&quot;: רצועה שהושמטה לא הופחתה, כי גודלה אינו ידוע. לא ניתנת הערכה כשיש חיתוך, פיצול, קצב ריבוב קבוע או כשהמקור הוא תקליטור.</translation>
     </message>

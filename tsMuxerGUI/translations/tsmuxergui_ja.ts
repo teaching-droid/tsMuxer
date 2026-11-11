@@ -4870,6 +4870,18 @@ Build the ISO anyway?</source>
         <translation>推定サイズ: 約 %1</translation>
     </message>
     <message>
+        <source>Scan</source>
+        <translation>スキャン</translation>
+    </message>
+    <message>
+        <source>Run the job without writing anything. The progress window shows what the mux would warn of, and at the end the size of the output and, for a disc image, the disc it fits. A scan takes as long as reading the sources takes.</source>
+        <translation>何も書き込まずにジョブを実行します。進行状況ウィンドウには多重化で出る警告が表示され、最後に出力のサイズと、ディスクイメージの場合は収まるディスクが表示されます。スキャンにはソースの読み取りと同じだけ時間がかかります。</translation>
+    </message>
+    <message>
+        <source>Scan in progress</source>
+        <translation>スキャン中</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>チェックの入ったトラックの合計に、出力形式が付け加える分を足した値です。「最大」: 外したトラックのサイズが分からないため、差し引けませんでした。カット、分割、固定の多重化レート、またはディスクが入力の場合、推定値は表示されません。</translation>
     </message>

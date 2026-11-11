@@ -4871,6 +4871,18 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <translation>Tamaño estimado: unos %1</translation>
     </message>
     <message>
+        <source>Scan</source>
+        <translation>Analizar</translation>
+    </message>
+    <message>
+        <source>Run the job without writing anything. The progress window shows what the mux would warn of, and at the end the size of the output and, for a disc image, the disc it fits. A scan takes as long as reading the sources takes.</source>
+        <translation>Ejecuta el trabajo sin escribir nada. La ventana de progreso muestra de qué avisaría el multiplexado y, al final, el tamaño de la salida y, para una imagen de disco, el disco en el que cabe. Un análisis dura lo que se tarda en leer los orígenes.</translation>
+    </message>
+    <message>
+        <source>Scan in progress</source>
+        <translation>Análisis en curso</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>La suma de las pistas marcadas, con lo que la salida añade a su alrededor. «Como máximo»: no se pudo restar una pista excluida porque nada indica su tamaño. No se da una estimación con un corte, una división, una tasa de multiplexado fija o un disco como origen.</translation>
     </message>

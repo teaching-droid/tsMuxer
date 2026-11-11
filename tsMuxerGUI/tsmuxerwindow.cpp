@@ -1250,6 +1250,30 @@ TsMuxerWindow::TsMuxerWindow()
                 m_addToQueue = false;
             });
     connect(m_queueBtn, &QPushButton::clicked, this, &TsMuxerWindow::showQueue);
+    // ** SCAN: THE SIZE OF THE OUTPUT, BEFORE IT IS WRITTEN. ** Whether a disc image fits its disc showed when the mux
+    // was done. "Scan" runs the job with --scan in the progress window: nothing is written, every warning of the mux
+    // is shown, and the last lines give the size of each file of the output and, for an image, the disc it fits. An
+    // output that is there already is not asked about, as it is not touched.
+    m_scanBtn = new QPushButton(this);
+    m_scanBtn->setObjectName(QStringLiteral("scanBtn"));
+    ui->horizontalLayout_4->insertWidget(ui->horizontalLayout_4->indexOf(m_queueBtn) + 1, m_scanBtn);
+    const auto scanTexts = [this]()
+    {
+        m_scanBtn->setText(tr("Scan"));
+        m_scanBtn->setToolTip(
+            wrapTip(tr("Run the job without writing anything. The progress window shows what the mux would warn "
+                       "of, and at the end the size of the output and, for a disc image, the disc it fits. A scan "
+                       "takes as long as reading the sources takes.")));
+    };
+    scanTexts();
+    m_retranslateHooks.push_back(scanTexts);
+    connect(m_scanBtn, &QPushButton::clicked, this,
+            [this]()
+            {
+                m_scanRun = true;
+                startMuxing();
+                m_scanRun = false;
+            });
     connect(muxForm, &MuxForm::stopped, this, &TsMuxerWindow::onMuxStopped);
     connect(muxForm, &MuxForm::makeSampleRequested, this, &TsMuxerWindow::onMakeSample);
     connect(ui->trackLV->model(), &QAbstractItemModel::rowsInserted, this, &TsMuxerWindow::updateMuxButton);
@@ -2480,9 +2504,11 @@ TsMuxerWindow::TsMuxerWindow()
         auto updateBottomForTab = [this, bdmvTab]()
         {
             const bool onBdmv = ui->tabWidget->currentWidget() == bdmvTab;
-            ui->groupBox_4->setVisible(!onBdmv);      // Output (type radios + File name)
-            ui->groupBox_2->setVisible(!onBdmv);      // Meta file
-            ui->buttonMux->setVisible(!onBdmv);       // Start muxing
+            ui->groupBox_4->setVisible(!onBdmv);  // Output (type radios + File name)
+            ui->groupBox_2->setVisible(!onBdmv);  // Meta file
+            ui->buttonMux->setVisible(!onBdmv);   // Start muxing
+            if (m_scanBtn)
+                m_scanBtn->setVisible(!onBdmv);
             ui->buttonSaveMeta->setVisible(!onBdmv);  // Save meta file
             ui->buttonOpenMeta->setVisible(!onBdmv);  // Open meta file
         };
@@ -4506,6 +4532,8 @@ void TsMuxerWindow::updateMuxButton()
         }
     }
     ui->buttonMux->setEnabled(hasTrack && proc.state() == QProcess::NotRunning);
+    if (m_scanBtn)
+        m_scanBtn->setEnabled(ui->buttonMux->isEnabled());
 }
 
 static const QDir::Filters ALL_ENTRIES = QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System;
@@ -5180,9 +5208,10 @@ void TsMuxerWindow::onProcessFinished(int exitCode, QProcess::ExitStatus exitSta
     {
         QFile::remove(metaName);
         metaName.clear();
-        // After a failure the core stays on its track, for the next try
-        if (exitCode == 0 && exitStatus == QProcess::NormalExit)
+        // After a failure the core stays on its track, for the next try, and after a scan for the mux
+        if (exitCode == 0 && exitStatus == QProcess::NormalExit && !m_scanRunning)
             removeMadeCores();
+        m_scanRunning = false;
         if (ui->checkBoxSound->isChecked())
         {
             if (exitCode == 0)
@@ -8031,7 +8060,7 @@ void TsMuxerWindow::startMuxing()
                 break;
             }
     }
-    if (isFile && !existingOutput.isEmpty() && QFile::exists(existingOutput))
+    if (isFile && !m_scanRun && !existingOutput.isEmpty() && QFile::exists(existingOutput))
     {
         //: Used in expressions "Overwrite existing %1" and "The output %1 already exists".
         auto fileOrDir = isFile ? tr("file") : tr("directory");
@@ -8079,8 +8108,12 @@ void TsMuxerWindow::startMuxing()
         metaName.clear();
         return;
     }
-    muxForm->prepare(!ui->radioButtonDemux->isChecked() ? tr("Muxing in progress") : tr("Demuxing in progress"));
+    m_scanRunning = m_scanRun;
+    muxForm->prepare(m_scanRun                            ? tr("Scan in progress")
+                     : !ui->radioButtonDemux->isChecked() ? tr("Muxing in progress")
+                                                          : tr("Demuxing in progress"));
     ui->buttonMux->setEnabled(false);
+    m_scanBtn->setEnabled(false);
     ui->addBtn->setEnabled(false);
     m_addDiscBtn->setEnabled(false);
     ui->btnAppend->setEnabled(false);
@@ -8088,9 +8121,16 @@ void TsMuxerWindow::startMuxing()
     disconnect();
     // QCoreApplication::dir
     runInMuxMode = true;
-    noteRunOutput(ui->outFileName->text(), ui->radioButtonBluRay->isChecked() || ui->radioButtonAVCHD->isChecked() ||
-                                               ui->radioButtonDemux->isChecked());
+    // a scan writes no output: nothing of that name is the window's to remove when the run is stopped
+    if (!m_scanRun)
+        noteRunOutput(ui->outFileName->text(), ui->radioButtonBluRay->isChecked() ||
+                                                   ui->radioButtonAVCHD->isChecked() ||
+                                                   ui->radioButtonDemux->isChecked());
+    else
+        m_runOutput.clear();
     QStringList args;
+    if (m_scanRun)
+        args << QStringLiteral("--scan");
     // A report of the job for a problem report (--report): in the temp folder, Save report... in the progress window
     // keeps a copy
     if (ui->checkBoxReport->isChecked())

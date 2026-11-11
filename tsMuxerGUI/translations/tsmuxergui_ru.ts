@@ -4871,6 +4871,18 @@ Build the ISO anyway?</source>
         <translation>Расчётный размер: около %1</translation>
     </message>
     <message>
+        <source>Scan</source>
+        <translation>Сканировать</translation>
+    </message>
+    <message>
+        <source>Run the job without writing anything. The progress window shows what the mux would warn of, and at the end the size of the output and, for a disc image, the disc it fits. A scan takes as long as reading the sources takes.</source>
+        <translation>Выполняет задание, ничего не записывая. Окно хода работы показывает предупреждения, которые выдал бы мультиплексор, а в конце размер результата и, для образа диска, диск, на который он помещается. Сканирование занимает столько же времени, сколько чтение источников.</translation>
+    </message>
+    <message>
+        <source>Scan in progress</source>
+        <translation>Идёт сканирование</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>Сумма отмеченных дорожек вместе с тем, что добавляет к ним выходной формат. «Не более»: исключённую дорожку не удалось вычесть, так как её размер неизвестен. Оценка не показывается при обрезке, разделении, постоянной скорости мультиплексирования или если источником служит диск.</translation>
     </message>

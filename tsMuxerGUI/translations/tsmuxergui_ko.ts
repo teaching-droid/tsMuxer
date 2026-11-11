@@ -4730,6 +4730,18 @@ Build the ISO anyway?</source>
         <translation>예상 크기: 약 %1</translation>
     </message>
     <message>
+        <source>Scan</source>
+        <translation>스캔</translation>
+    </message>
+    <message>
+        <source>Run the job without writing anything. The progress window shows what the mux would warn of, and at the end the size of the output and, for a disc image, the disc it fits. A scan takes as long as reading the sources takes.</source>
+        <translation>아무것도 쓰지 않고 작업을 실행합니다. 진행 창에 먹싱에서 나올 경고가 표시되고, 끝에는 출력 크기와 디스크 이미지의 경우 들어가는 디스크가 표시됩니다. 스캔에는 소스를 읽는 만큼의 시간이 걸립니다.</translation>
+    </message>
+    <message>
+        <source>Scan in progress</source>
+        <translation>스캔 진행 중</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>선택된 트랙을 합한 값에 출력 형식이 덧붙이는 양을 더한 값입니다. &quot;최대&quot;: 제외한 트랙의 크기를 알 수 없어 빼지 못했습니다. 자르기, 분할, 고정 먹싱 비트레이트를 쓰거나 디스크가 소스인 경우에는 예상 크기가 표시되지 않습니다.</translation>
     </message>
