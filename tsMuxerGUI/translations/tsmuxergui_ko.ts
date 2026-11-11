@@ -4694,6 +4694,26 @@ Build the ISO anyway?</source>
         <translation>대기열 실행 중</translation>
     </message>
     <message>
+        <source>Add a folder...</source>
+        <translation>폴더 추가...</translation>
+    </message>
+    <message>
+        <source>The folder of the sources</source>
+        <translation>소스 폴더</translation>
+    </message>
+    <message>
+        <source>The folder for the outputs</source>
+        <translation>출력 폴더</translation>
+    </message>
+    <message>
+        <source>Mux each file to:</source>
+        <translation>각 파일을 먹싱할 형식:</translation>
+    </message>
+    <message>
+        <source>No file that tsMuxeR can add was found in %1.</source>
+        <translation>%1에서 tsMuxeR가 추가할 수 있는 파일을 찾지 못했습니다.</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>Blu-ray 또는 DVD 디스크의 타이틀을 추가합니다: 디스크 폴더, BDMV 또는 VIDEO_TS가 들어 있는 폴더, 또는 드라이브를 선택하십시오. 타이틀이 본편 영화부터 나열되며, 선택한 타이틀이 추가됩니다. 디스크 이미지(.iso)는 &quot;추가&quot;로 추가하며, 디스크를 창에 끌어다 놓을 수도 있습니다.</translation>
     </message>

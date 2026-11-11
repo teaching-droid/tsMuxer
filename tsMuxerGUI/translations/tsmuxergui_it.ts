@@ -4694,6 +4694,26 @@ Creare comunque l&apos;ISO?</translation>
         <translation>Esecuzione della coda</translation>
     </message>
     <message>
+        <source>Add a folder...</source>
+        <translation>Aggiungi una cartella...</translation>
+    </message>
+    <message>
+        <source>The folder of the sources</source>
+        <translation>La cartella delle sorgenti</translation>
+    </message>
+    <message>
+        <source>The folder for the outputs</source>
+        <translation>La cartella per le uscite</translation>
+    </message>
+    <message>
+        <source>Mux each file to:</source>
+        <translation>Mux di ogni file in:</translation>
+    </message>
+    <message>
+        <source>No file that tsMuxeR can add was found in %1.</source>
+        <translation>In %1 non è stato trovato nessun file che tsMuxeR possa aggiungere.</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>Aggiunge un titolo di un disco Blu-ray o DVD: scegli la cartella del disco, la cartella che contiene BDMV o VIDEO_TS, o un&apos;unità. I suoi titoli vengono elencati, il film principale per primo, e viene aggiunto quello scelto. Un&apos;immagine disco (.iso) si aggiunge con &quot;aggiungi&quot;, e un disco può anche essere trascinato sulla finestra.</translation>
     </message>

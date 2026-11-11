@@ -4690,6 +4690,26 @@ Build the ISO anyway?</source>
         <translation>Running the queue</translation>
     </message>
     <message>
+        <source>Add a folder...</source>
+        <translation>Add a folder...</translation>
+    </message>
+    <message>
+        <source>The folder of the sources</source>
+        <translation>The folder of the sources</translation>
+    </message>
+    <message>
+        <source>The folder for the outputs</source>
+        <translation>The folder for the outputs</translation>
+    </message>
+    <message>
+        <source>Mux each file to:</source>
+        <translation>Mux each file to:</translation>
+    </message>
+    <message>
+        <source>No file that tsMuxeR can add was found in %1.</source>
+        <translation>No file that tsMuxeR can add was found in %1.</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</translation>
     </message>

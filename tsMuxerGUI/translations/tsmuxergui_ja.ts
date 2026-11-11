@@ -4834,6 +4834,26 @@ Build the ISO anyway?</source>
         <translation>キューを実行中</translation>
     </message>
     <message>
+        <source>Add a folder...</source>
+        <translation>フォルダーを追加...</translation>
+    </message>
+    <message>
+        <source>The folder of the sources</source>
+        <translation>ソースのフォルダー</translation>
+    </message>
+    <message>
+        <source>The folder for the outputs</source>
+        <translation>出力先のフォルダー</translation>
+    </message>
+    <message>
+        <source>Mux each file to:</source>
+        <translation>各ファイルの多重化先の形式:</translation>
+    </message>
+    <message>
+        <source>No file that tsMuxeR can add was found in %1.</source>
+        <translation>%1 には tsMuxeR が追加できるファイルが見つかりませんでした。</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>Blu-ray または DVD ディスクのタイトルを追加します。ディスクのフォルダー (BDMV または VIDEO_TS を含むフォルダー) かドライブを選ぶと、そのタイトルが本編を先頭に一覧され、選んだタイトルが追加されます。ディスクイメージ (.iso) は「追加」で追加でき、ディスクはウィンドウにドロップすることもできます。</translation>
     </message>

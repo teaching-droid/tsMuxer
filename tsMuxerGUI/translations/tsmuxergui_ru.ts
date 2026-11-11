@@ -4835,6 +4835,26 @@ Build the ISO anyway?</source>
         <translation>Очередь выполняется</translation>
     </message>
     <message>
+        <source>Add a folder...</source>
+        <translation>Добавить папку...</translation>
+    </message>
+    <message>
+        <source>The folder of the sources</source>
+        <translation>Папка с источниками</translation>
+    </message>
+    <message>
+        <source>The folder for the outputs</source>
+        <translation>Папка для выходных файлов</translation>
+    </message>
+    <message>
+        <source>Mux each file to:</source>
+        <translation>Муксировать каждый файл в:</translation>
+    </message>
+    <message>
+        <source>No file that tsMuxeR can add was found in %1.</source>
+        <translation>В %1 не найдено файлов, которые tsMuxeR может добавить.</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>Добавить титул диска Blu-ray или DVD: выберите папку диска, папку с BDMV или VIDEO_TS, или привод. Его титулы будут перечислены, основной фильм первым, и выбранный будет добавлен. Образ диска (.iso) добавляется кнопкой «добавить», а диск можно также перетащить в окно.</translation>
     </message>

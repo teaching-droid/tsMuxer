@@ -4834,6 +4834,26 @@ Build the ISO anyway?</source>
         <translation>התור רץ</translation>
     </message>
     <message>
+        <source>Add a folder...</source>
+        <translation>להוסיף תיקייה...</translation>
+    </message>
+    <message>
+        <source>The folder of the sources</source>
+        <translation>תיקיית המקורות</translation>
+    </message>
+    <message>
+        <source>The folder for the outputs</source>
+        <translation>התיקייה לקובצי הפלט</translation>
+    </message>
+    <message>
+        <source>Mux each file to:</source>
+        <translation>לבצע mux לכל קובץ אל:</translation>
+    </message>
+    <message>
+        <source>No file that tsMuxeR can add was found in %1.</source>
+        <translation>לא נמצא ב-%1 קובץ ש-tsMuxeR יכול להוסיף.</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>הוספת כותר מדיסק Blu-ray או DVD: בחרו את תיקיית הדיסק, את התיקייה שמכילה BDMV או VIDEO_TS, או כונן. הכותרים שלו מוצגים, הסרט הראשי ראשון, והכותר שנבחר מתווסף. דמות תקליטור (.iso) מתווספת עם &quot;להוסיף&quot;, ואפשר גם לגרור דיסק אל החלון.</translation>
     </message>

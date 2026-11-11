@@ -4835,6 +4835,26 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <translation>Ejecutando la cola</translation>
     </message>
     <message>
+        <source>Add a folder...</source>
+        <translation>Añadir una carpeta...</translation>
+    </message>
+    <message>
+        <source>The folder of the sources</source>
+        <translation>La carpeta de las fuentes</translation>
+    </message>
+    <message>
+        <source>The folder for the outputs</source>
+        <translation>La carpeta para las salidas</translation>
+    </message>
+    <message>
+        <source>Mux each file to:</source>
+        <translation>Multiplexar cada archivo a:</translation>
+    </message>
+    <message>
+        <source>No file that tsMuxeR can add was found in %1.</source>
+        <translation>No se encontró en %1 ningún archivo que tsMuxeR pueda añadir.</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>Añadir un título de un disco Blu-ray o DVD: elija la carpeta del disco, la carpeta que contiene BDMV o VIDEO_TS, o una unidad. Se muestran sus títulos, la película principal primero, y se añade el elegido. Una imagen de disco (.iso) se añade con «Añadir», y un disco también se puede soltar sobre la ventana.</translation>
     </message>

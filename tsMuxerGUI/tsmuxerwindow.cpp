@@ -32,6 +32,7 @@
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QInputDialog>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLibraryInfo>
@@ -5099,7 +5100,7 @@ void TsMuxerWindow::onProcessFinished(int exitCode, QProcess::ExitStatus exitSta
             if (!m_queueDone.contains(i + 1))
                 left << lines[i];
             else
-                QFile::remove(lines[i].section('"', 1, 1));
+                removeQueueMeta(lines[i]);
         }
         writeQueueLines(left);
         updateQueueButton();
@@ -7812,6 +7813,16 @@ QString TsMuxerWindow::queueDir() const
     return QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/queue";
 }
 
+// Removes the meta file of a job that leaves the queue. Only a meta file the window wrote into the queue folder: the
+// first name of a job added from a folder is its SOURCE, which stays where it is.
+void TsMuxerWindow::removeQueueMeta(const QString& line) const
+{
+    const QFileInfo first(line.section('"', 1, 1));
+    if (first.suffix().compare(QLatin1String("meta"), Qt::CaseInsensitive) == 0 &&
+        first.absoluteDir() == QDir(queueDir()))
+        QFile::remove(first.absoluteFilePath());
+}
+
 // The job list as tsMuxeR --batch reads it: on each line the meta file and the output in quotes, then the options
 QStringList TsMuxerWindow::queueLines() const
 {
@@ -7854,6 +7865,7 @@ void TsMuxerWindow::showQueue()
     QPushButton* start = buttons->addButton(tr("Start the queue"), QDialogButtonBox::AcceptRole);
     QPushButton* remove = buttons->addButton(tr("Take out"), QDialogButtonBox::ActionRole);
     QPushButton* clear = buttons->addButton(tr("Empty the queue"), QDialogButtonBox::ActionRole);
+    QPushButton* folder = buttons->addButton(tr("Add a folder..."), QDialogButtonBox::ActionRole);
     buttons->addButton(QDialogButtonBox::Close);
     layout->addWidget(buttons);
     const auto enable = [=, this]()
@@ -7871,7 +7883,7 @@ void TsMuxerWindow::showQueue()
             if (!all && !(i < list->count() && list->item(i)->isSelected()))
                 left << lines[i];
             else
-                QFile::remove(lines[i].section('"', 1, 1));
+                removeQueueMeta(lines[i]);
         }
         writeQueueLines(left);
         list->clear();
@@ -7879,6 +7891,51 @@ void TsMuxerWindow::showQueue()
         updateQueueButton();
         enable();
     };
+    // ** A FOLDER OF SOURCES. ** A job for each file of a folder that tsMuxeR reads as a container, each muxed with
+    // all its tracks to a file of the same name in another folder (tsMuxeR <source> <output>): a season of recordings
+    // goes into the queue in one step, where each file had to be added, set up and queued by hand.
+    connect(folder, &QPushButton::clicked, &dialog,
+            [=, this, &dialog]()
+            {
+                const QString from = QFileDialog::getExistingDirectory(&dialog, tr("The folder of the sources"),
+                                                                       getExistingDialogDir(lastInputDir));
+                if (from.isEmpty())
+                    return;
+                const QString to = QFileDialog::getExistingDirectory(&dialog, tr("The folder for the outputs"), from);
+                if (to.isEmpty())
+                    return;
+                bool chosen = false;
+                const QString kind = QInputDialog::getItem(&dialog, tr("Add a folder..."), tr("Mux each file to:"),
+                                                           {"MKV", "M2TS", "TS"}, 0, false, &chosen);
+                if (!chosen)
+                    return;
+                static const QStringList sources = {"*.ts",  "*.m2ts", "*.mts", "*.m2t", "*.mkv", "*.mka", "*.webm",
+                                                    "*.mp4", "*.m4v",  "*.mov", "*.mpg", "*.vob", "*.evo"};
+                QStringList lines = queueLines();
+                int added = 0;
+                for (const QFileInfo& file : QDir(from).entryInfoList(sources, QDir::Files, QDir::Name))
+                {
+                    QString output = to + "/" + file.completeBaseName() + "." + kind.toLower();
+                    // never onto the source itself: the same folder and the same kind
+                    if (QFileInfo(output) == file)
+                        output = to + "/" + file.completeBaseName() + ".new." + kind.toLower();
+                    lines << quoteStr(QDir::toNativeSeparators(file.absoluteFilePath())) + " " +
+                                 quoteStr(QDir::toNativeSeparators(output));
+                    ++added;
+                }
+                if (added == 0)
+                {
+                    QMessageBox::information(
+                        &dialog, tr("Add a folder..."),
+                        tr("No file that tsMuxeR can add was found in %1.").arg(QDir::toNativeSeparators(from)));
+                    return;
+                }
+                writeQueueLines(lines);
+                list->clear();
+                for (const QString& line : lines) list->addItem(line.section('"', 3, 3));
+                updateQueueButton();
+                enable();
+            });
     connect(list, &QListWidget::itemSelectionChanged, &dialog, enable);
     connect(remove, &QPushButton::clicked, &dialog, [=]() { takeOut(false); });
     connect(clear, &QPushButton::clicked, &dialog, [=]() { takeOut(true); });

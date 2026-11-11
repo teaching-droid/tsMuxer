@@ -4694,6 +4694,26 @@ Build the ISO anyway?</source>
         <translation>正在執行佇列</translation>
     </message>
     <message>
+        <source>Add a folder...</source>
+        <translation>加入資料夾...</translation>
+    </message>
+    <message>
+        <source>The folder of the sources</source>
+        <translation>來源檔案所在的資料夾</translation>
+    </message>
+    <message>
+        <source>The folder for the outputs</source>
+        <translation>輸出資料夾</translation>
+    </message>
+    <message>
+        <source>Mux each file to:</source>
+        <translation>將每個檔案封裝為：</translation>
+    </message>
+    <message>
+        <source>No file that tsMuxeR can add was found in %1.</source>
+        <translation>在 %1 中找不到 tsMuxeR 可以加入的檔案。</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>加入 Blu-ray 或 DVD 光碟的標題: 選擇光碟的資料夾、包含 BDMV 或 VIDEO_TS 的資料夾，或磁碟機。其標題會列出，主影片排在最前面，並加入所選的標題。光碟映像檔 (.iso) 請以「加入」加入，也可以將光碟拖放到視窗上。</translation>
     </message>

@@ -309,6 +309,7 @@ class TsMuxerWindow : public QWidget
     [[nodiscard]] QString queueDir() const;
     [[nodiscard]] QStringList queueLines() const;
     void writeQueueLines(const QStringList& lines);
+    void removeQueueMeta(const QString& line) const;
     void updateQueueButton();
     void showQueue();
     void startQueue();
