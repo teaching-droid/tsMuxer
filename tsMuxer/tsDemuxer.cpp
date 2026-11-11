@@ -2132,10 +2132,16 @@ void TSDemuxer::opusFromTs(const int pid, const int channelConfig, const uint8_t
         const bool startTrimFlag = p[at + 1] & 0x10, endTrimFlag = p[at + 1] & 0x08, extension = p[at + 1] & 0x04;
         size_t i = at + 2;
         size_t packet = 0;
-        while (i < p.size() && p[i] == 0xFF)
+        // bounded while it is read: a run of FF bytes without end kept every byte of the track waiting for its last
+        while (i < p.size() && p[i] == 0xFF && packet <= 61440)
         {
             packet += 255;
             ++i;
+        }
+        if (packet > 61440)
+        {
+            ++at;  // no access unit: an Opus packet has 61440 bytes at most
+            continue;
         }
         if (i >= p.size())
             break;

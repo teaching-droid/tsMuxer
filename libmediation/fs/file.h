@@ -16,6 +16,8 @@ bool enabled();
 // the files "written", by name, each with its size
 std::vector<std::pair<std::string, int64_t>> files();
 bool has(const std::string& name);
+// the size of a file "written", -1 for a name that was not
+int64_t sizeOf(const std::string& name);
 void forget(const std::string& name);
 bool rename(const std::string& from, const std::string& to);
 }  // namespace dryRun
@@ -35,6 +37,9 @@ class AbstractStream
     static constexpr unsigned int ofSequential = 64;   // hint: sequential access (win32: FILE_FLAG_SEQUENTIAL_SCAN)
     // written also in a run that writes nothing (dryRun): a temporary file the run reads again
     static constexpr unsigned int ofForReal = 128;
+    // with ofRead, in a dry run: a file the run "wrote" is opened with its size, and reads as zeros. For a writer
+    // that reads its own output back to move it, where the size after the move is what is asked.
+    static constexpr unsigned int ofDryRead = 256;
 
     virtual bool open(const char* fName, unsigned int oflag, unsigned int systemDependentFlags = 0) = 0;
     virtual bool close() = 0;

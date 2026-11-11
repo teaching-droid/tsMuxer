@@ -36,6 +36,9 @@ bool fileExists(const string& fileName)
 
 uint64_t getFileSize(const std::string& fileName)
 {
+    if (dryRun::enabled())
+        if (const int64_t counted = dryRun::sizeOf(fileName); counted >= 0)
+            return static_cast<uint64_t>(counted);  // a file of a run that writes nothing
     File f;
     if (f.open(fileName.c_str(), File::ofRead | File::ofOpenExisting))
     {

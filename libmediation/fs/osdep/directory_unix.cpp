@@ -43,6 +43,9 @@ bool fileExists(const string& name)
 
 uint64_t getFileSize(const std::string& name)
 {
+    if (dryRun::enabled())
+        if (const int64_t counted = dryRun::sizeOf(name); counted >= 0)
+            return static_cast<uint64_t>(counted);          // a file of a run that writes nothing
     const std::string fileName = nameAlias::resolve(name);  // a second name of a file (nameAlias.h)
     if (discImage::isInside(fileName))
     {

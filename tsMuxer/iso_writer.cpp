@@ -2273,7 +2273,7 @@ void IsoWriter::moveBackLookAhead()
         return;
 
     File reader;
-    if (!reader.open(m_file.getName().c_str(), File::ofRead | File::ofOpenExisting))
+    if (!reader.open(m_file.getName().c_str(), File::ofRead | File::ofOpenExisting | File::ofDryRead))
         return;
     std::vector<uint8_t> buffer(4 * 1024 * 1024);
     int64_t dataEnd = end;

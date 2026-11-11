@@ -6582,7 +6582,8 @@ void TsMuxerWindow::updateSizeEstimate()
                 return hide();
             fileBytes += file.size();
         }
-        bool counted = true;  // the listing gave the bytes of every track
+        // the listing gave the bytes of every track; of the first file only where files are joined, so not then
+        bool counted = files.size() == 1;
         for (const QtvCodecInfo* track : source.tracks) counted &= track->sizeBytes >= 0;
         if (counted)
         {

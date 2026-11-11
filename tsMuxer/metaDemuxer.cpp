@@ -1121,7 +1121,7 @@ void METADemuxer::openFile(const string& streamName)
             }
             catch (const std::exception& e)
             {
-                THROW(ERR_SOURCE, e.what() << ".")
+                THROW(dynamic_cast<const UsageError*>(&e) ? ERR_USAGE : ERR_SOURCE, e.what() << ".")
             }
             addParams.erase(title);
         }

@@ -50,6 +50,13 @@ bool has(const std::string& name)
     return g_sizes.find(keyOf(name.c_str())) != g_sizes.end();
 }
 
+int64_t sizeOf(const std::string& name)
+{
+    const std::lock_guard<std::mutex> lock(g_lock);
+    const auto found = g_sizes.find(keyOf(name.c_str()));
+    return found == g_sizes.end() ? -1 : found->second;
+}
+
 void forget(const std::string& name)
 {
     const std::lock_guard<std::mutex> lock(g_lock);
@@ -73,13 +80,29 @@ struct File::DryView
 {
     std::string key;
     int64_t size = 0;
+    bool readOnly = false;  // opened to read: its size is not written back
 };
 
 // True when the file is one of a dry run: opened for writing while the dry run is on
 bool File::openDry(const char* fName, const unsigned int oflag)
 {
-    if (!g_enabled || !(oflag & ofWrite) || (oflag & ofForReal))
+    if (!g_enabled || (oflag & ofForReal))
         return false;
+    if (!(oflag & ofWrite))
+    {
+        // read back: only where the caller asks for it, and only a file the run "wrote"
+        const int64_t size = (oflag & ofDryRead) ? dryRun::sizeOf(fName) : -1;
+        if (size < 0)
+            return false;
+        closeDry();
+        auto* view = new DryView;
+        view->key = keyOf(fName);
+        view->size = size;
+        view->readOnly = true;
+        m_dry = view;
+        m_pos = 0;
+        return true;
+    }
     closeDry();
     auto* view = new DryView;
     view->key = keyOf(fName);
@@ -100,6 +123,7 @@ void File::closeDry()
 {
     if (!m_dry)
         return;
+    if (!m_dry->readOnly)
     {
         const std::lock_guard<std::mutex> lock(g_lock);
         g_sizes[m_dry->key] = m_dry->size;
@@ -110,6 +134,8 @@ void File::closeDry()
 
 int File::writeDry(const uint32_t count)
 {
+    if (m_dry->readOnly)
+        return -1;
     m_pos += count;
     m_dry->size = (std::max)(m_dry->size, m_pos);
     return static_cast<int>(count);

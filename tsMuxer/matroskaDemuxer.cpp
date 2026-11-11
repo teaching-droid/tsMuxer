@@ -4930,7 +4930,8 @@ std::map<uint64_t, int64_t> MatroskaDemuxer::getTrackBytes()
     for (int i = 0; i < num_tracks; i++)
     {
         const auto found = tracks[i] ? bytes.find(tracks[i]->uid) : bytes.end();
-        if (found == bytes.end() || found->second < 0)
+        // a count above 2^50 is no count of a file, and many of them would overflow the sum
+        if (found == bytes.end() || found->second < 0 || found->second > (1LL << 50))
             return {};
         sum += found->second;
         if (tracks[i]->encodingAlgo < 0)

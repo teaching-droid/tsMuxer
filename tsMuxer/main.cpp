@@ -3683,6 +3683,15 @@ static void reportFinishedDiscSize(const std::string& outputRoot, const int64_t 
         {
             std::vector<std::string> files;
             findFilesRecursive(outputRoot + getDirSeparator() + sub + getDirSeparator(), "*", &files);
+            // in a run that writes nothing (--scan) the files are the ones that were only counted
+            if (dryRun::enabled())
+            {
+                std::string prefix = outputRoot + "/" + sub + "/";
+                std::replace(prefix.begin(), prefix.end(), '\\', '/');
+                for (const auto& [name, counted] : dryRun::files())
+                    if (name.compare(0, prefix.size(), prefix) == 0)
+                        files.push_back(name);
+            }
             for (const std::string& f : files)
             {
                 const auto bytes = static_cast<int64_t>(getFileSize(f));
@@ -5067,7 +5076,9 @@ static int runMakeSample(int argc, char** argv, const std::string& reportFile, c
     catch (std::exception& e)
     {
         LTRACE(LT_ERROR, 2, "No sample was made: " << e.what());
-        exitCode = dynamic_cast<OutputError*>(&e) ? ExitCode::Output : ExitCode::Source;
+        exitCode = dynamic_cast<OutputError*>(&e)  ? ExitCode::Output
+                   : dynamic_cast<UsageError*>(&e) ? ExitCode::Usage
+                                                   : ExitCode::Source;
     }
     catch (VodCoreException& e)
     {
@@ -5103,7 +5114,9 @@ static int runMakeSample(int argc, char** argv, const std::string& reportFile, c
         catch (std::exception& e)
         {
             LTRACE(LT_ERROR, 2, "No sample was made: " << e.what());
-            exitCode = dynamic_cast<OutputError*>(&e) ? ExitCode::Output : ExitCode::Source;
+            exitCode = dynamic_cast<OutputError*>(&e)  ? ExitCode::Output
+                       : dynamic_cast<UsageError*>(&e) ? ExitCode::Usage
+                                                       : ExitCode::Source;
         }
         catch (VodCoreException& e)
         {
@@ -5301,9 +5314,17 @@ static void printScanSummary()
     {
         if (size <= 0)
             continue;
-        // shown under the name of the output as it was given
-        if (name.compare(0, scratch.size(), scratch) == 0)
+        // shown under the name of the output as it was given; the parts of a split stand beside it
+        const size_t folder = scratch.find_last_of('/');
+        if (name.compare(0, scratch.size(), scratch) == 0 &&
+            (name.size() == scratch.size() || name[scratch.size()] == '/'))
             name = g_scanOutput + name.substr(scratch.size());
+        else if (folder != std::string::npos && name.compare(0, folder + 1, scratch, 0, folder + 1) == 0)
+        {
+            const size_t given = g_scanOutput.find_last_of("/\\");
+            name = (given == std::string::npos ? std::string() : g_scanOutput.substr(0, given + 1)) +
+                   name.substr(folder + 1);
+        }
         disc |= name.find("/BDMV/") != std::string::npos || name.find("\\BDMV\\") != std::string::npos;
         total += size;
         files.emplace_back(name, size);
@@ -5669,7 +5690,7 @@ static int runTsMuxer(int argc, char** argv)
                 }
                 catch (const std::runtime_error& e)
                 {
-                    THROW(ERR_SOURCE, e.what() << ".")
+                    THROW(dynamic_cast<const UsageError*>(&e) ? ERR_USAGE : ERR_SOURCE, e.what() << ".")
                 }
                 argv[1] = titleSource.data();
                 argc = 2;
@@ -6159,6 +6180,12 @@ static int runTsMuxer(int argc, char** argv)
             if (muxerManager.keepEditions())
                 THROW(ERR_USAGE, "--keep-editions applies to a Matroska output (.mkv) only.")
             const bool innerIso = innerOnlyIsoAsked(muxerManager, dt, dstFile);
+            // --inner-only makes the image in two steps, the second from the files the first wrote: a run that writes
+            // nothing has none to lay out
+            if (innerIso && g_scan)
+                THROW(ERR_USAGE,
+                      "--scan does not lay out an image of --inner-only, which is made from a disc folder "
+                      "written first. Scan the job without --inner-only for the size of the disc.")
 
             if (dt != DiskType::NONE)
             {

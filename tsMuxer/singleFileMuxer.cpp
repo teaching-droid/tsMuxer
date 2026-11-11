@@ -362,7 +362,9 @@ void SingleFileMuxer::writeOutBuffer(StreamInfo* streamInfo)
         streamInfo->m_file.close();
         const std::string newName = getNewName(streamInfo->m_fileName, streamInfo->m_part);
         deleteFile(newName);
-        if (rename(streamInfo->m_fileName.c_str(), newName.c_str()) != 0)
+        // in a run that writes nothing the part is a file that was only counted, and takes its name there
+        if (!(dryRun::enabled() && dryRun::rename(streamInfo->m_fileName, newName)) &&
+            rename(streamInfo->m_fileName.c_str(), newName.c_str()) != 0)
             THROW(ERR_OUTPUT, "Can't rename file " << streamInfo->m_fileName << " to " << newName)
         streamInfo->m_part++;
         int systemFlags = 0;
@@ -642,7 +644,8 @@ bool SingleFileMuxer::close()
             {
                 std::string newName = getNewName(streamInfo->m_fileName, streamInfo->m_part);
                 deleteFile(newName);
-                if (rename(streamInfo->m_fileName.c_str(), newName.c_str()) != 0)
+                if (!(dryRun::enabled() && dryRun::rename(streamInfo->m_fileName, newName)) &&
+                    rename(streamInfo->m_fileName.c_str(), newName.c_str()) != 0)
                     THROW(ERR_OUTPUT, "Can't rename file " << streamInfo->m_fileName << " to " << newName)
             }
         }
