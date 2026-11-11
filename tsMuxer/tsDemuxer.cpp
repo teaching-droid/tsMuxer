@@ -1822,8 +1822,19 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
                     m_firstVideoPTS = curPts;
                 if (const int program = streamInfo->second.m_programNumber; program >= 0)
                 {
+                    // ** EARLIER, ACROSS A WRAP OF THE CLOCK. ** The programs of a multiplex each have a clock of their
+                    // own, and the PES of the others between two of this one can make the count of wraps differ from
+                    // one PES of a track to the next: a B picture shown before the first I picture then looked a day
+                    // later, the start stayed at the I picture, and the sound of such a program came early by the
+                    // pictures between (83 ms in a feed of 8 programs). The start of a track is among its first PES
+                    // (canStart), so the two times are compared as the clock counts them, across a wrap.
                     const auto [low, isNew] = m_firstVideoPtsOfProgram.try_emplace(program, curPts);
-                    if (!isNew && canStart && curPts < low->second)
+                    int64_t ahead = (low->second - curPts) % CLOCK_WRAP;
+                    if (ahead >= CLOCK_WRAP / 2)
+                        ahead -= CLOCK_WRAP;
+                    else if (ahead < -CLOCK_WRAP / 2)
+                        ahead += CLOCK_WRAP;
+                    if (!isNew && canStart && ahead > 0)
                         low->second = curPts;
                     m_firstSeenVideoPtsOfProgram.try_emplace(program, curPts);
                 }
