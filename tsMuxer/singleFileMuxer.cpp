@@ -241,6 +241,21 @@ void SingleFileMuxer::intAddStream(const std::string& streamName, const std::str
         }
     }
 
+    // a PGS track: its forced pictures also go to a file of their own, unless the line says no-forced-track, gives
+    // the forced pictures alone (forced-pictures), or is itself the forced track of its language
+    if (const auto* pgs = dynamic_cast<PGSStreamReader*>(codecReader); pgs && fileExt == ".sup")
+    {
+        const auto lang = params.find("lang");
+        m_pgsLanguage[streamIndex] = lang != params.end() ? lang->second : std::string();
+        const auto flags = params.find("srcflags");
+        const bool markedForced = params.count("forced") > 0 ||
+                                  (flags != params.end() && flags->second.find("forced=1") != std::string::npos);
+        if (markedForced)
+            m_forcedPgsLanguages.insert(m_pgsLanguage[streamIndex]);
+        else if (!pgs->forcedOnly() && params.count("no-forced-track") == 0)
+            m_forcedPgs[streamIndex].fileName = fileName + ".forced" + fileExt;
+    }
+
     auto streamInfo = new StreamInfo(static_cast<unsigned>(DEFAULT_FILE_BLOCK_SIZE));
     streamInfo->m_fileName = fileName + fileExt;
     if (streamInfo->m_fileName.size() > 254)
@@ -363,10 +378,71 @@ void SingleFileMuxer::writeOutBuffer(StreamInfo* streamInfo)
     }
 }
 
+// The forced pictures of a PGS track, to their file: each segment with the header a .sup file gives it, "PG", its
+// presentation time and its decoding time
+void SingleFileMuxer::writeForcedPgs(const int streamIndex, std::deque<PgsForcedFilter::Segment>& segments)
+{
+    ForcedPgs& forced = m_forcedPgs[streamIndex];
+    if (!forced.open && !forced.failed)
+    {
+        // a track of the same language that is marked forced is that file already
+        if (m_forcedPgsLanguages.count(m_pgsLanguage[streamIndex]) > 0)
+            forced.failed = true;
+        else
+        {
+            const std::string dir = closeDirPath(toNativeSeparators(m_origFileName));
+            forced.fileName = dir + forced.fileName;
+            if (forced.file.open(forced.fileName.c_str(), File::ofWrite))
+            {
+                forced.open = true;
+                LTRACE(LT_INFO, 2,
+                       "Track " << streamIndex + 1 << " has forced pictures beside its others. They are also written "
+                                << "to " << extractFileName2(forced.fileName)
+                                << "; the whole track stays as it is. no-forced-track on the meta line leaves that "
+                                   "file out.");
+            }
+            else
+            {
+                forced.failed = true;
+                LTRACE(LT_WARN, 2,
+                       "Warning: the file " << forced.fileName << " of the forced pictures cannot be "
+                                            << "made, so they are written with the whole track only.");
+            }
+        }
+    }
+    if (forced.open)
+        for (const PgsForcedFilter::Segment& seg : segments)
+        {
+            const auto pts = static_cast<uint32_t>((std::max)(int64_t{0}, seg.pts));
+            const auto dts = static_cast<uint32_t>((std::max)(int64_t{0}, seg.dts));
+            const uint8_t header[10] = {'P',
+                                        'G',
+                                        static_cast<uint8_t>(pts >> 24),
+                                        static_cast<uint8_t>(pts >> 16),
+                                        static_cast<uint8_t>(pts >> 8),
+                                        static_cast<uint8_t>(pts),
+                                        static_cast<uint8_t>(dts >> 24),
+                                        static_cast<uint8_t>(dts >> 16),
+                                        static_cast<uint8_t>(dts >> 8),
+                                        static_cast<uint8_t>(dts)};
+            forced.file.write(header, sizeof(header));
+            forced.file.write(seg.data.data(), static_cast<uint32_t>(seg.data.size()));
+        }
+    segments.clear();
+}
+
 bool SingleFileMuxer::muxPacket(AVPacket& avPacket)
 {
     if (avPacket.data == nullptr || avPacket.size == 0)
         return true;
+    if (const auto forced = m_forcedPgs.find(avPacket.stream_index); forced != m_forcedPgs.end())
+    {
+        std::deque<PgsForcedFilter::Segment> segments;
+        forced->second.track.push(avPacket.data, static_cast<size_t>(avPacket.size), internalClockToPts(avPacket.pts),
+                                  internalClockToPts(avPacket.dts), segments);
+        if (!segments.empty())
+            writeForcedPgs(avPacket.stream_index, segments);
+    }
     // The disc form of a TrueHD track interleaves an AC-3 core with the lossless frames, and a
     // decoder handed the pair reports inconsistent timestamps or refuses the file outright. Each
     // output of this track says which of the two it wants, so the same packet can go to the file
@@ -501,6 +577,19 @@ static void reportUnfinished(const std::string& fileName)
 bool SingleFileMuxer::close()
 {
     bool allFinished = true;
+    for (auto& [streamIndex, forced] : m_forcedPgs)
+    {
+        std::deque<PgsForcedFilter::Segment> segments;
+        forced.track.finish(segments);
+        if (!segments.empty())
+            writeForcedPgs(streamIndex, segments);
+        if (forced.open && !forced.file.close())
+        {
+            LTRACE(LT_ERROR, 2, "Error: the end of " << forced.fileName << " could not be written.");
+            allFinished = false;
+        }
+        forced.open = false;
+    }
     for (const auto& [fst, outputs] : m_streamInfo)
         for (StreamInfo* streamInfo : outputs)
         {

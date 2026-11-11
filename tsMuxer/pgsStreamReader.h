@@ -3,7 +3,9 @@
 #ifndef PGS_STREAM_READER_H_
 #define PGS_STREAM_READER_H_
 
+#include <deque>
 #include <vector>
+#include "pgsForcedFilter.h"
 
 #include "abstractStreamReader.h"
 #include "avCodecs.h"
@@ -62,6 +64,10 @@ class PGSStreamReader final : public AbstractStreamReader
     // void setFPS(double value);
     void setVideoInfo(uint16_t width, uint16_t height, double fps);
     void setFontBorder(const int value) { m_fontBorder = value; }
+    // forced-pictures on the meta line: the track gives only its forced pictures
+    void setForcedOnly(const bool on) { m_forcedOnly = on; }
+    [[nodiscard]] bool forcedOnly() const { return m_forcedOnly; }
+    [[nodiscard]] int64_t forcedPicturesWritten() const { return m_forcedFilter.forcedPictures(); }
     void setBottomOffset(const int value) const { m_render->setBottomOffset(value); }
     void setOffsetId(const uint8_t value) { m_offsetId = value; }
     [[nodiscard]] uint8_t getOffsetId() const { return m_offsetId; }
@@ -222,6 +228,18 @@ class PGSStreamReader final : public AbstractStreamReader
     uint16_t m_objectWindowWidth = 0;
     uint8_t m_offsetId;
     bool m_forced_on_flag;
+
+    // forced-pictures: only the forced pictures of the track are handed on (pgsForcedFilter.h). The segments of the
+    // source are gathered whole, given to the filter, and what it writes is handed out in packets.
+    bool m_forcedOnly = false;
+    PgsForcedFilter m_forcedFilter;
+    std::vector<uint8_t> m_forcedIn;  // the segment of the source being gathered
+    int64_t m_forcedInPts = 0;
+    int64_t m_forcedInDts = 0;
+    std::deque<PgsForcedFilter::Segment> m_forcedOut;  // the segments to hand out
+    size_t m_forcedOutPos = 0;                         // how much of the first of them is handed out
+    bool m_forcedPacket = false;                       // the packet handed out last is one of them
+    int readSourcePacket(AVPacket& avPacket);
 
     CompositionState composition_state;
 

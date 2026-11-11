@@ -3361,7 +3361,7 @@ static bool isKnownTrackParam(const std::string& name)
         // text subtitles
         "font-name", "font-size", "font-color", "font-bold", "font-italic", "font-underline", "font-strike-out",
         "font-border", "font-charset", "line-spacing", "bottom-offset", "fadein-time", "fadeout-time", "keep-text",
-        "fonts-dir", "ass-as-srt", "keep-textst",
+        "fonts-dir", "ass-as-srt", "keep-textst", "forced-pictures", "no-forced-track",
         // set internally, never written by a user, but accepted so a round tripped meta does
         // not warn. srcdefault is the source container's own default track flag.
         "forced", "hearing-impaired", "visual-impaired", "text-descriptions", "original", "commentary", "srclang",
@@ -5743,6 +5743,9 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
     else if (codecName == "S_HDMV/PGS")
     {
         rez = new PGSStreamReader();
+        // forced-pictures: the forced pictures of the track alone, as a track of its own (pgsForcedFilter.h)
+        if (addParams.find("forced-pictures") != addParams.end())
+            dynamic_cast<PGSStreamReader*>(rez)->setForcedOnly(true);
         auto itr = addParams.find("bottom-offset");
         if (itr != addParams.end())
             dynamic_cast<PGSStreamReader*>(rez)->setBottomOffset(strToInt32(itr->second.c_str()));

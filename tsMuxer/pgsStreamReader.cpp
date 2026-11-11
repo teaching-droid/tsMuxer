@@ -586,7 +586,67 @@ void PGSStreamReader::warnSupDamage()
                                                 "at the next segment.");
 }
 
+// ** forced-pictures: THE FORCED PICTURES ALONE. ** The packets of the source carry its segments, one to a packet, a
+// long one in pieces. Each segment is gathered whole and given to the filter with its times, and the segments the
+// filter writes are handed out in their place, each as a packet (in pieces where it is long), with the times the
+// filter gave them. A stream drawn at another size is not filtered: its packets are the drawn ones.
 int PGSStreamReader::readPacket(AVPacket& avPacket)
+{
+    if (!m_forcedOnly || m_needRescale)
+    {
+        m_forcedPacket = false;
+        return readSourcePacket(avPacket);
+    }
+    for (;;)
+    {
+        if (!m_forcedOut.empty())
+        {
+            PgsForcedFilter::Segment& seg = m_forcedOut.front();
+            if (m_forcedOutPos >= seg.data.size())
+            {
+                m_forcedOut.pop_front();
+                m_forcedOutPos = 0;
+                continue;
+            }
+            avPacket.codec = this;
+            avPacket.codecID = CODEC_S_PGS;
+            avPacket.stream_index = m_streamIndex;
+            avPacket.duration = 0;
+            avPacket.flags = 0;
+            // each segment of a demux begins with its own header; in a mux the composition opens the display set
+            if (m_forcedOutPos == 0 && (m_demuxMode || seg.startsSet))
+                avPacket.flags += AVPacket::FORCE_NEW_FRAME;
+            const size_t left = seg.data.size() - m_forcedOutPos;
+            avPacket.data = seg.data.data() + m_forcedOutPos;
+            avPacket.size = static_cast<int>((std::min)(left, static_cast<size_t>(MAX_AV_PACKET_SIZE)));
+            avPacket.pts = ptsToInternalClock((std::max)(int64_t{0}, seg.pts));
+            avPacket.dts = ptsToInternalClock((std::max)(int64_t{0}, seg.dts));
+            m_forcedOutPos += static_cast<size_t>(avPacket.size);
+            m_forcedPacket = true;
+            return 0;
+        }
+        AVPacket in;
+        const int rez = readSourcePacket(in);
+        if (rez != 0)
+            return rez;
+        if (in.size <= 0 || in.data == nullptr)
+            continue;
+        if (m_forcedIn.empty())
+        {
+            m_forcedInPts = internalClockToPts(in.pts);
+            m_forcedInDts = internalClockToPts(in.dts);
+        }
+        m_forcedIn.insert(m_forcedIn.end(), in.data, in.data + in.size);
+        if (m_forcedIn.size() >= 3 && m_forcedIn.size() >= 3u + AV_RB16(m_forcedIn.data() + 1))
+        {
+            m_forcedFilter.push(m_forcedIn.data(), 3u + AV_RB16(m_forcedIn.data() + 1), m_forcedInPts, m_forcedInDts,
+                                m_forcedOut);
+            m_forcedIn.clear();
+        }
+    }
+}
+
+int PGSStreamReader::readSourcePacket(AVPacket& avPacket)
 {
     avPacket.size = 0;
     avPacket.codec = this;
@@ -1144,8 +1204,11 @@ int PGSStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPa
         // as a time near 13 hours 15 minutes. The set is written that much later, so that it is decoded from the first
         // tick (a decoding time of 0 stands for the presentation time) and shown as soon as it can be decoded; every
         // later set keeps its time.
-        *data++ = my_htonl(static_cast<uint32_t>(internalClockToPts(m_lastPTS + m_demuxDtsShift)));
-        *data = my_htonl(static_cast<uint32_t>(internalClockToPts(m_lastDTS + m_demuxDtsShift)));
+        // a packet of the forced pictures alone has the times the filter gave it, not those of the segment read last
+        const int64_t pts = m_forcedPacket ? avPacket.pts : m_lastPTS + m_demuxDtsShift;
+        const int64_t dts = m_forcedPacket ? avPacket.dts : m_lastDTS + m_demuxDtsShift;
+        *data++ = my_htonl(static_cast<uint32_t>(internalClockToPts(pts)));
+        *data = my_htonl(static_cast<uint32_t>(internalClockToPts(dts)));
         return 10;
     }
     return 0;

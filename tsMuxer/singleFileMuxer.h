@@ -4,6 +4,9 @@
 #define SINGLE_FILE_MUXER_H_
 
 #include <types/types.h>
+#include <deque>
+#include <set>
+#include "pgsForcedFilter.h"
 
 #include <map>
 #include <string>
@@ -68,6 +71,21 @@ class SingleFileMuxer final : public AbstractMuxer
         ~StreamInfo() { delete[] m_buffer; }
     };
     int m_lastIndex;
+    // ** THE FORCED PICTURES OF A PGS TRACK AS A FILE OF THEIR OWN ** (pgsForcedFilter.h): <name>.forced.sup beside
+    // <name>.sup, for a track that has forced pictures and others. The file is made when its first picture is
+    // written, so a track without forced pictures, or of forced pictures alone, leaves none.
+    struct ForcedPgs
+    {
+        PgsForcedTrack track;
+        File file;
+        std::string fileName;
+        bool open = false;
+        bool failed = false;
+    };
+    std::map<int, ForcedPgs> m_forcedPgs;        // by stream index
+    std::map<int, std::string> m_pgsLanguage;    // the language of each PGS track of the demux
+    std::set<std::string> m_forcedPgsLanguages;  // the languages that have a track marked forced already
+    void writeForcedPgs(int streamIndex, std::deque<PgsForcedFilter::Segment>& segments);
     std::map<std::string, int> m_trackNameTmp;
     // std::map<int, std::string> m_fileNames;
     // std::map<int, File> m_file;

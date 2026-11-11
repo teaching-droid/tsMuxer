@@ -62,6 +62,8 @@ static constexpr uint8_t PGS_SEGMENT_END = 0x80;  // closes it
 // Key for the AC-3 core companion of a TrueHD track (see refreshTrackProperties). Packets are
 // routed by real stream index, so the companion is keyed clear of every real one.
 static constexpr int AC3_CORE_STREAM_BASE = 0x40000000;
+// the track of the forced pictures of a PGS track is keyed the same way, above every real stream and below the cores
+static constexpr int FORCED_PGS_STREAM_BASE = 0x20000000;
 
 // Said in two places, so it lives in one: openDstFile refuses before the destination is touched,
 // and refreshTrackProperties keeps the same refusal as a backstop for a pair that looked foldable
@@ -316,6 +318,7 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
     track.streamIndex = streamIndex;
     track.trackNumber = m_nextTrackNumber++;
     track.codecReader = codecReader;
+    track.noForcedTrack = params.count("no-forced-track") > 0 || params.count("forced-pictures") > 0;
     track.codecID = codecReader->getCodecInfo().codecID;
     // With insertSEI or forceSEI the SPS in CodecPrivate has the HRD tsMuxeR writes: the SEI units that go with it,
     // which a transport stream gets from writeAdditionData, come in the packets
@@ -1792,11 +1795,101 @@ void MatroskaMuxer::writeTracks()
 
     // A track that has not delivered its first packet yet (muxPacket) has an entry made of what its reader knows so
     // far. Room is kept after the element, so that the entry can be completed in place when the packet comes.
+    // Room as well for the track of the forced pictures a PGS track may turn out to have (forcedPgsTrack)
+    int64_t forcedRoom = 0;
+    for (const auto& [index, track] : m_tracks)
+        if (track.codecID == CODEC_S_PGS && !track.forcedDerived && !track.noForcedTrack &&
+            m_tracks.count(FORCED_PGS_STREAM_BASE + index) == 0)
+            forcedRoom += FORCED_TRACK_RESERVE;
     m_tracksReservedEnd = 0;
-    if (!m_lateStreams.empty())
+    if (!m_lateStreams.empty() || forcedRoom > 0)
     {
-        writeVoidExact(LATE_TRACK_RESERVE * static_cast<int64_t>(m_lateStreams.size()));
+        writeVoidExact(LATE_TRACK_RESERVE * static_cast<int64_t>(m_lateStreams.size()) + forcedRoom);
         m_tracksReservedEnd = m_file.pos();
+    }
+}
+
+// A packet of a PGS track: its forced pictures, if the track has both kinds, go to a track of their own
+void MatroskaMuxer::feedForcedPgs(MkvTrackInfo& track, const AVPacket& avPacket)
+{
+    if (track.forcedDerived || track.noForcedTrack || m_webm)
+        return;
+    std::deque<PgsForcedFilter::Segment> segments;
+    m_forcedPgs[track.streamIndex].push(avPacket.data, static_cast<size_t>(avPacket.size),
+                                        internalClockToPts(avPacket.pts), internalClockToPts(avPacket.dts), segments);
+    if (!segments.empty())
+        writeForcedPgs(track.streamIndex, segments);
+}
+
+void MatroskaMuxer::writeForcedPgs(const int sourceStream, std::deque<PgsForcedFilter::Segment>& segments)
+{
+    const int forcedStream = FORCED_PGS_STREAM_BASE + sourceStream;
+    if (m_tracks.count(forcedStream) == 0)
+    {
+        MkvTrackInfo& source = m_tracks[sourceStream];
+        // A track of the same language that is marked forced is that track already: a file muxed once more must not
+        // get it a second time
+        for (const auto& [index, t] : m_tracks)
+            if (index != sourceStream && t.codecID == CODEC_S_PGS && t.language == source.language)
+                if (const auto flag = t.flags.find(MATROSKA_ID_TRACKFLAGFORCED); flag != t.flags.end() && flag->second)
+                {
+                    source.noForcedTrack = true;
+                    segments.clear();
+                    return;
+                }
+        MkvTrackInfo forced;
+        forced.streamIndex = forcedStream;
+        forced.codecReader = source.codecReader;
+        forced.codecID = CODEC_S_PGS;
+        forced.matroskaCodecID = source.matroskaCodecID;
+        forced.trackType = source.trackType;
+        forced.language = source.language;
+        forced.languageBCP47 = source.languageBCP47;
+        forced.name = source.name.empty() ? std::string("Forced") : source.name + " (forced)";
+        forced.flags[MATROSKA_ID_TRACKFLAGFORCED] = 1;
+        forced.markedDefault = false;
+        forced.forcedDerived = true;
+        forced.noForcedTrack = true;
+        static std::mt19937_64 rng(std::random_device{}());
+        forced.trackUID = rng() | 1ull << 63;  // 8 bytes always, as for every track
+        int last = 0;
+        for (const auto& [index, t] : m_tracks) last = (std::max)(last, t.trackNumber);
+        forced.trackNumber = last + 1;
+        LTRACE(LT_INFO, 2,
+               "Matroska: track " << source.trackNumber << " has forced pictures beside its others. They are also "
+                                  << "written as track " << forced.trackNumber
+                                  << ", with the forced flag, so that a player can show them alone; the whole track "
+                                     "stays as it is. no-forced-track on the meta line leaves that track out.");
+        m_tracks[forcedStream] = forced;
+        if (m_headerWritten)
+            rewriteTracks();
+    }
+    for (PgsForcedFilter::Segment& seg : segments)
+    {
+        AVPacket packet;
+        packet.stream_index = forcedStream;
+        packet.codec = m_tracks[forcedStream].codecReader;
+        packet.codecID = CODEC_S_PGS;
+        packet.data = seg.data.data();
+        packet.size = static_cast<int>(seg.data.size());
+        packet.pts = ptsToInternalClock(seg.pts);
+        packet.dts = ptsToInternalClock(seg.dts);
+        packet.flags = seg.startsSet ? AVPacket::FORCE_NEW_FRAME : 0;
+        packet.duration = 0;
+        muxPacketInternal(packet);
+    }
+    segments.clear();
+}
+
+// The end of the mux: what the filters still hold
+void MatroskaMuxer::finishForcedPgs()
+{
+    for (auto& [sourceStream, forced] : m_forcedPgs)
+    {
+        std::deque<PgsForcedFilter::Segment> segments;
+        forced.finish(segments);
+        if (!segments.empty())
+            writeForcedPgs(sourceStream, segments);
     }
 }
 
@@ -4535,6 +4628,9 @@ bool MatroskaMuxer::muxPacketInternal(AVPacket& avPacket)
             track.pendingFlags |= AVPacket::IS_IFRAME;
         if (pgsDisplaySetComplete(track.pendingFrameData))
             flushPendingFrame(track);
+        // its forced pictures, to a track of their own (after its own set: the map may grow, `track` is not used on)
+        if (!track.forcedDerived && !track.noForcedTrack)
+            feedForcedPgs(track, avPacket);
         return true;
     }
 
@@ -4576,6 +4672,7 @@ bool MatroskaMuxer::muxPacketInternal(AVPacket& avPacket)
 
 bool MatroskaMuxer::doFlush()
 {
+    finishForcedPgs();
     // Flush all pending accumulated frames: the end of the stream, so each one is its track's last
     for (auto& [streamIdx, track] : m_tracks)
     {

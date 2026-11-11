@@ -24,6 +24,7 @@ add_executable (tsmuxer
   diagnosticReport.cpp
   sampleCutter.cpp
   batchRunner.cpp
+  pgsForcedFilter.cpp
   oggFile.cpp
   assRender.cpp
   avCodecs.cpp

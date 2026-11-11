@@ -9,6 +9,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include "pgsForcedFilter.h"
 
 #include "abstractMuxer.h"
 #include "avPacket.h"
@@ -90,6 +91,8 @@ class MatroskaMuxer final : public AbstractMuxer
         std::string language;         // ISO 639-2 code, empty means write "und"
         std::string languageBCP47;    // the source's BCP 47 tag, written as LanguageBCP47 when there is one
         std::string name;             // track-name=, optional
+        bool forcedDerived = false;   // the track of the forced pictures of another PGS track
+        bool noForcedTrack = false;   // no-forced-track or forced-pictures on its meta line
         bool defaultExplicit;         // the meta carried "default" on this track at all
         bool markedDefault;           // and it did not say none, no, 0, false or off
         bool isDefault;               // resolved: exactly one per track type
@@ -421,6 +424,15 @@ class MatroskaMuxer final : public AbstractMuxer
     std::string m_fileName;
 
     std::map<int, MkvTrackInfo> m_tracks;  // keyed by streamIndex
+    // ** THE FORCED PICTURES OF A PGS TRACK AS A TRACK OF THEIR OWN ** (pgsForcedFilter.h), beside the whole track and
+    // with FlagForced, so that a player shows them with subtitles off as a disc player does. The track is made when
+    // its first picture is written (forcedPgsTrack), in room kept after the Tracks element, as for a track that
+    // starts late; a PGS track without forced pictures, or of forced pictures alone, gets none.
+    std::map<int, PgsForcedTrack> m_forcedPgs;  // by the stream index of the whole track
+    static constexpr int64_t FORCED_TRACK_RESERVE = 1024;
+    void feedForcedPgs(MkvTrackInfo& track, const AVPacket& avPacket);
+    void writeForcedPgs(int sourceStream, std::deque<PgsForcedFilter::Segment>& segments);
+    void finishForcedPgs();
     int m_nextTrackNumber;
 
     // --dv-profile=8.1. A dual layer profile 7 disc is understood by few devices, while profile 8.1
