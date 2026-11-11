@@ -4742,6 +4742,50 @@ Build the ISO anyway?</source>
         <translation>스캔 진행 중</translation>
     </message>
     <message>
+        <source>Load...</source>
+        <translation>불러오기...</translation>
+    </message>
+    <message>
+        <source>Fill the chapter list from a chapter file: a simple text file (CHAPTER01=00:00:00.000) or Matroska XML. A file dropped on the list does the same.</source>
+        <translation>챕터 파일에서 챕터 목록을 채웁니다. 단순 텍스트 파일(CHAPTER01=00:00:00.000) 또는 Matroska XML을 읽을 수 있습니다. 목록에 파일을 끌어다 놓아도 같습니다.</translation>
+    </message>
+    <message>
+        <source>Save...</source>
+        <translation>저장...</translation>
+    </message>
+    <message>
+        <source>Write the chapter list as a simple text chapter file.</source>
+        <translation>챕터 목록을 단순 텍스트 챕터 파일로 씁니다.</translation>
+    </message>
+    <message>
+        <source>Load a chapter file</source>
+        <translation>챕터 파일 불러오기</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt *.xml);;All files (*)</source>
+        <translation>챕터 파일 (*.txt *.xml);;모든 파일 (*)</translation>
+    </message>
+    <message>
+        <source>No chapter time was found in %1.</source>
+        <translation>%1에서 챕터 시간을 찾지 못했습니다.</translation>
+    </message>
+    <message>
+        <source>The chapter list holds no time to save.</source>
+        <translation>챕터 목록에 저장할 시간이 없습니다.</translation>
+    </message>
+    <message>
+        <source>Save the chapter list</source>
+        <translation>챕터 목록 저장</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt);;All files (*)</source>
+        <translation>챕터 파일 (*.txt);;모든 파일 (*)</translation>
+    </message>
+    <message>
+        <source>The file %1 could not be written.</source>
+        <translation>%1 파일을 쓸 수 없습니다.</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>선택된 트랙을 합한 값에 출력 형식이 덧붙이는 양을 더한 값입니다. &quot;최대&quot;: 제외한 트랙의 크기를 알 수 없어 빼지 못했습니다. 자르기, 분할, 고정 먹싱 비트레이트를 쓰거나 디스크가 소스인 경우에는 예상 크기가 표시되지 않습니다.</translation>
     </message>

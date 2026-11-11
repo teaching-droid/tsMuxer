@@ -389,6 +389,9 @@ class TsMuxerWindow : public QWidget
 
     // A chapter file dropped on the chapter list is loaded into it rather than added as a track.
     bool loadChapterFileIntoBox(const QString& fileName);
+    // "Load..." and "Save..." under the chapter list
+    void loadChapterFileByDialog();
+    void saveChapterFileByDialog();
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dropEvent(QDropEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;

@@ -4883,6 +4883,50 @@ Build the ISO anyway?</source>
         <translation>Идёт сканирование</translation>
     </message>
     <message>
+        <source>Load...</source>
+        <translation>Загрузить...</translation>
+    </message>
+    <message>
+        <source>Fill the chapter list from a chapter file: a simple text file (CHAPTER01=00:00:00.000) or Matroska XML. A file dropped on the list does the same.</source>
+        <translation>Заполняет список глав из файла глав: простого текстового файла (CHAPTER01=00:00:00.000) или Matroska XML. Файл, перетащенный на список, делает то же самое.</translation>
+    </message>
+    <message>
+        <source>Save...</source>
+        <translation>Сохранить...</translation>
+    </message>
+    <message>
+        <source>Write the chapter list as a simple text chapter file.</source>
+        <translation>Записывает список глав в простой текстовый файл глав.</translation>
+    </message>
+    <message>
+        <source>Load a chapter file</source>
+        <translation>Загрузить файл глав</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt *.xml);;All files (*)</source>
+        <translation>Файлы глав (*.txt *.xml);;Все файлы (*)</translation>
+    </message>
+    <message>
+        <source>No chapter time was found in %1.</source>
+        <translation>В %1 не найдено ни одного времени главы.</translation>
+    </message>
+    <message>
+        <source>The chapter list holds no time to save.</source>
+        <translation>В списке глав нет времени для сохранения.</translation>
+    </message>
+    <message>
+        <source>Save the chapter list</source>
+        <translation>Сохранить список глав</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt);;All files (*)</source>
+        <translation>Файлы глав (*.txt);;Все файлы (*)</translation>
+    </message>
+    <message>
+        <source>The file %1 could not be written.</source>
+        <translation>Не удалось записать файл %1.</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>Сумма отмеченных дорожек вместе с тем, что добавляет к ним выходной формат. «Не более»: исключённую дорожку не удалось вычесть, так как её размер неизвестен. Оценка не показывается при обрезке, разделении, постоянной скорости мультиплексирования или если источником служит диск.</translation>
     </message>

@@ -4742,6 +4742,50 @@ Criar o ISO mesmo assim?</translation>
         <translation>Análise em curso</translation>
     </message>
     <message>
+        <source>Load...</source>
+        <translation>Carregar...</translation>
+    </message>
+    <message>
+        <source>Fill the chapter list from a chapter file: a simple text file (CHAPTER01=00:00:00.000) or Matroska XML. A file dropped on the list does the same.</source>
+        <translation>Preenche a lista de capítulos a partir de um ficheiro de capítulos: um ficheiro de texto simples (CHAPTER01=00:00:00.000) ou XML Matroska. Um ficheiro largado sobre a lista faz o mesmo.</translation>
+    </message>
+    <message>
+        <source>Save...</source>
+        <translation>Guardar...</translation>
+    </message>
+    <message>
+        <source>Write the chapter list as a simple text chapter file.</source>
+        <translation>Escreve a lista de capítulos como um ficheiro de capítulos de texto simples.</translation>
+    </message>
+    <message>
+        <source>Load a chapter file</source>
+        <translation>Carregar um ficheiro de capítulos</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt *.xml);;All files (*)</source>
+        <translation>Ficheiros de capítulos (*.txt *.xml);;Todos os ficheiros (*)</translation>
+    </message>
+    <message>
+        <source>No chapter time was found in %1.</source>
+        <translation>Não foi encontrado nenhum tempo de capítulo em %1.</translation>
+    </message>
+    <message>
+        <source>The chapter list holds no time to save.</source>
+        <translation>A lista de capítulos não contém nenhum tempo para guardar.</translation>
+    </message>
+    <message>
+        <source>Save the chapter list</source>
+        <translation>Guardar a lista de capítulos</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt);;All files (*)</source>
+        <translation>Ficheiros de capítulos (*.txt);;Todos os ficheiros (*)</translation>
+    </message>
+    <message>
+        <source>The file %1 could not be written.</source>
+        <translation>Não foi possível escrever o ficheiro %1.</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>A soma das faixas marcadas, com o que a saída acrescenta à sua volta. «No máximo»: uma faixa excluída não pôde ser descontada, pois nada indica o seu tamanho. Não é dada qualquer estimativa com um corte, uma divisão, uma taxa de multiplexagem fixa ou um disco como origem.</translation>
     </message>

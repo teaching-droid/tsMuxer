@@ -4882,6 +4882,50 @@ Build the ISO anyway?</source>
         <translation>סריקה מתבצעת</translation>
     </message>
     <message>
+        <source>Load...</source>
+        <translation>טעינה...</translation>
+    </message>
+    <message>
+        <source>Fill the chapter list from a chapter file: a simple text file (CHAPTER01=00:00:00.000) or Matroska XML. A file dropped on the list does the same.</source>
+        <translation>ממלא את רשימת הפרקים מקובץ פרקים: קובץ טקסט פשוט (CHAPTER01=00:00:00.000) או Matroska XML. קובץ שנגרר אל הרשימה עושה אותו דבר.</translation>
+    </message>
+    <message>
+        <source>Save...</source>
+        <translation>שמירה...</translation>
+    </message>
+    <message>
+        <source>Write the chapter list as a simple text chapter file.</source>
+        <translation>כותב את רשימת הפרקים כקובץ פרקים בטקסט פשוט.</translation>
+    </message>
+    <message>
+        <source>Load a chapter file</source>
+        <translation>טעינת קובץ פרקים</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt *.xml);;All files (*)</source>
+        <translation>קובצי פרקים (*.txt *.xml);;כל הקבצים (*)</translation>
+    </message>
+    <message>
+        <source>No chapter time was found in %1.</source>
+        <translation>לא נמצא זמן פרק ב-%1.</translation>
+    </message>
+    <message>
+        <source>The chapter list holds no time to save.</source>
+        <translation>רשימת הפרקים אינה מכילה זמן לשמירה.</translation>
+    </message>
+    <message>
+        <source>Save the chapter list</source>
+        <translation>שמירת רשימת הפרקים</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt);;All files (*)</source>
+        <translation>קובצי פרקים (*.txt);;כל הקבצים (*)</translation>
+    </message>
+    <message>
+        <source>The file %1 could not be written.</source>
+        <translation>לא ניתן היה לכתוב את הקובץ %1.</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>סכום הרצועות המסומנות, בתוספת מה שהפלט מוסיף סביבן. &quot;לכל היותר&quot;: רצועה שהושמטה לא הופחתה, כי גודלה אינו ידוע. לא ניתנת הערכה כשיש חיתוך, פיצול, קצב ריבוב קבוע או כשהמקור הוא תקליטור.</translation>
     </message>

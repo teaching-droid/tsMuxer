@@ -4882,6 +4882,50 @@ ISO trotzdem erstellen?</translation>
         <translation>Scan läuft</translation>
     </message>
     <message>
+        <source>Load...</source>
+        <translation>Laden...</translation>
+    </message>
+    <message>
+        <source>Fill the chapter list from a chapter file: a simple text file (CHAPTER01=00:00:00.000) or Matroska XML. A file dropped on the list does the same.</source>
+        <translation>Die Kapitelliste aus einer Kapiteldatei füllen: einer einfachen Textdatei (CHAPTER01=00:00:00.000) oder Matroska-XML. Eine auf die Liste gezogene Datei bewirkt dasselbe.</translation>
+    </message>
+    <message>
+        <source>Save...</source>
+        <translation>Speichern...</translation>
+    </message>
+    <message>
+        <source>Write the chapter list as a simple text chapter file.</source>
+        <translation>Die Kapitelliste als einfache Text-Kapiteldatei schreiben.</translation>
+    </message>
+    <message>
+        <source>Load a chapter file</source>
+        <translation>Kapiteldatei laden</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt *.xml);;All files (*)</source>
+        <translation>Kapiteldateien (*.txt *.xml);;Alle Dateien (*)</translation>
+    </message>
+    <message>
+        <source>No chapter time was found in %1.</source>
+        <translation>In %1 wurde keine Kapitelzeit gefunden.</translation>
+    </message>
+    <message>
+        <source>The chapter list holds no time to save.</source>
+        <translation>Die Kapitelliste enthält keine Zeit zum Speichern.</translation>
+    </message>
+    <message>
+        <source>Save the chapter list</source>
+        <translation>Kapitelliste speichern</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt);;All files (*)</source>
+        <translation>Kapiteldateien (*.txt);;Alle Dateien (*)</translation>
+    </message>
+    <message>
+        <source>The file %1 could not be written.</source>
+        <translation>Die Datei %1 konnte nicht geschrieben werden.</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>Die Spuren mit Häkchen zusammengezählt, mit dem, was die Ausgabe um sie herum hinzufügt. „Höchstens“: Eine weggelassene Spur konnte nicht abgezogen werden, weil ihre Größe nicht bekannt ist. Bei einem Schnitt, einer Teilung, einer festen Mux-Rate oder einer Disc als Quelle wird keine Schätzung angezeigt.</translation>
     </message>

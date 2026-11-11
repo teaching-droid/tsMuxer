@@ -4882,6 +4882,50 @@ Build the ISO anyway?</source>
         <translation>スキャン中</translation>
     </message>
     <message>
+        <source>Load...</source>
+        <translation>読み込み...</translation>
+    </message>
+    <message>
+        <source>Fill the chapter list from a chapter file: a simple text file (CHAPTER01=00:00:00.000) or Matroska XML. A file dropped on the list does the same.</source>
+        <translation>チャプターファイルからチャプター一覧を埋めます。単純なテキストファイル (CHAPTER01=00:00:00.000) または Matroska XML を読み込めます。一覧にファイルをドロップしても同じです。</translation>
+    </message>
+    <message>
+        <source>Save...</source>
+        <translation>保存...</translation>
+    </message>
+    <message>
+        <source>Write the chapter list as a simple text chapter file.</source>
+        <translation>チャプター一覧を単純なテキスト形式のチャプターファイルとして書き出します。</translation>
+    </message>
+    <message>
+        <source>Load a chapter file</source>
+        <translation>チャプターファイルを読み込む</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt *.xml);;All files (*)</source>
+        <translation>チャプターファイル (*.txt *.xml);;すべてのファイル (*)</translation>
+    </message>
+    <message>
+        <source>No chapter time was found in %1.</source>
+        <translation>%1 にチャプターの時刻が見つかりませんでした。</translation>
+    </message>
+    <message>
+        <source>The chapter list holds no time to save.</source>
+        <translation>チャプター一覧に保存できる時刻がありません。</translation>
+    </message>
+    <message>
+        <source>Save the chapter list</source>
+        <translation>チャプター一覧を保存</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt);;All files (*)</source>
+        <translation>チャプターファイル (*.txt);;すべてのファイル (*)</translation>
+    </message>
+    <message>
+        <source>The file %1 could not be written.</source>
+        <translation>ファイル %1 を書き込めませんでした。</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>チェックの入ったトラックの合計に、出力形式が付け加える分を足した値です。「最大」: 外したトラックのサイズが分からないため、差し引けませんでした。カット、分割、固定の多重化レート、またはディスクが入力の場合、推定値は表示されません。</translation>
     </message>

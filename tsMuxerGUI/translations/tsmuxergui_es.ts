@@ -4883,6 +4883,50 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <translation>Análisis en curso</translation>
     </message>
     <message>
+        <source>Load...</source>
+        <translation>Cargar...</translation>
+    </message>
+    <message>
+        <source>Fill the chapter list from a chapter file: a simple text file (CHAPTER01=00:00:00.000) or Matroska XML. A file dropped on the list does the same.</source>
+        <translation>Rellena la lista de capítulos a partir de un archivo de capítulos: un archivo de texto simple (CHAPTER01=00:00:00.000) o XML de Matroska. Un archivo soltado sobre la lista hace lo mismo.</translation>
+    </message>
+    <message>
+        <source>Save...</source>
+        <translation>Guardar...</translation>
+    </message>
+    <message>
+        <source>Write the chapter list as a simple text chapter file.</source>
+        <translation>Escribe la lista de capítulos como un archivo de capítulos de texto simple.</translation>
+    </message>
+    <message>
+        <source>Load a chapter file</source>
+        <translation>Cargar un archivo de capítulos</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt *.xml);;All files (*)</source>
+        <translation>Archivos de capítulos (*.txt *.xml);;Todos los archivos (*)</translation>
+    </message>
+    <message>
+        <source>No chapter time was found in %1.</source>
+        <translation>No se encontró ningún tiempo de capítulo en %1.</translation>
+    </message>
+    <message>
+        <source>The chapter list holds no time to save.</source>
+        <translation>La lista de capítulos no contiene ningún tiempo que guardar.</translation>
+    </message>
+    <message>
+        <source>Save the chapter list</source>
+        <translation>Guardar la lista de capítulos</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt);;All files (*)</source>
+        <translation>Archivos de capítulos (*.txt);;Todos los archivos (*)</translation>
+    </message>
+    <message>
+        <source>The file %1 could not be written.</source>
+        <translation>No se pudo escribir el archivo %1.</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>La suma de las pistas marcadas, con lo que la salida añade a su alrededor. «Como máximo»: no se pudo restar una pista excluida porque nada indica su tamaño. No se da una estimación con un corte, una división, una tasa de multiplexado fija o un disco como origen.</translation>
     </message>

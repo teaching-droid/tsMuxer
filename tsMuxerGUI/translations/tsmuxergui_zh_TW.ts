@@ -4742,6 +4742,50 @@ Build the ISO anyway?</source>
         <translation>正在掃描</translation>
     </message>
     <message>
+        <source>Load...</source>
+        <translation>載入...</translation>
+    </message>
+    <message>
+        <source>Fill the chapter list from a chapter file: a simple text file (CHAPTER01=00:00:00.000) or Matroska XML. A file dropped on the list does the same.</source>
+        <translation>從章節檔填入章節清單：簡單文字檔（CHAPTER01=00:00:00.000）或 Matroska XML。把檔案拖放到清單上效果相同。</translation>
+    </message>
+    <message>
+        <source>Save...</source>
+        <translation>儲存...</translation>
+    </message>
+    <message>
+        <source>Write the chapter list as a simple text chapter file.</source>
+        <translation>把章節清單寫成簡單文字章節檔。</translation>
+    </message>
+    <message>
+        <source>Load a chapter file</source>
+        <translation>載入章節檔</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt *.xml);;All files (*)</source>
+        <translation>章節檔 (*.txt *.xml);;所有檔案 (*)</translation>
+    </message>
+    <message>
+        <source>No chapter time was found in %1.</source>
+        <translation>在 %1 中找不到章節時間。</translation>
+    </message>
+    <message>
+        <source>The chapter list holds no time to save.</source>
+        <translation>章節清單中沒有可儲存的時間。</translation>
+    </message>
+    <message>
+        <source>Save the chapter list</source>
+        <translation>儲存章節清單</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt);;All files (*)</source>
+        <translation>章節檔 (*.txt);;所有檔案 (*)</translation>
+    </message>
+    <message>
+        <source>The file %1 could not be written.</source>
+        <translation>無法寫入檔案 %1。</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>已勾選軌道的總和，加上輸出格式在其外圍增加的部分。「最多」：未勾選的軌道大小不明，無法扣除。在剪切、分割、固定混流位元率或以光碟為來源時不提供估計值。</translation>
     </message>

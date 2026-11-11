@@ -4882,6 +4882,50 @@ Build the ISO anyway?</source>
         <translation>正在扫描</translation>
     </message>
     <message>
+        <source>Load...</source>
+        <translation>载入...</translation>
+    </message>
+    <message>
+        <source>Fill the chapter list from a chapter file: a simple text file (CHAPTER01=00:00:00.000) or Matroska XML. A file dropped on the list does the same.</source>
+        <translation>从章节文件填充章节列表：简单文本文件（CHAPTER01=00:00:00.000）或 Matroska XML。把文件拖放到列表上效果相同。</translation>
+    </message>
+    <message>
+        <source>Save...</source>
+        <translation>保存...</translation>
+    </message>
+    <message>
+        <source>Write the chapter list as a simple text chapter file.</source>
+        <translation>把章节列表写成简单文本章节文件。</translation>
+    </message>
+    <message>
+        <source>Load a chapter file</source>
+        <translation>载入章节文件</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt *.xml);;All files (*)</source>
+        <translation>章节文件 (*.txt *.xml);;所有文件 (*)</translation>
+    </message>
+    <message>
+        <source>No chapter time was found in %1.</source>
+        <translation>在 %1 中未找到章节时间。</translation>
+    </message>
+    <message>
+        <source>The chapter list holds no time to save.</source>
+        <translation>章节列表中没有可保存的时间。</translation>
+    </message>
+    <message>
+        <source>Save the chapter list</source>
+        <translation>保存章节列表</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt);;All files (*)</source>
+        <translation>章节文件 (*.txt);;所有文件 (*)</translation>
+    </message>
+    <message>
+        <source>The file %1 could not be written.</source>
+        <translation>无法写入文件 %1。</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>已勾选轨道的总和，加上输出格式在其外围增加的部分。“最多”：未勾选的轨道大小未知，无法扣除。在剪切、分割、固定混流码率或以光盘为来源时不给出预计值。</translation>
     </message>

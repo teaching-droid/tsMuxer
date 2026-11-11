@@ -1215,6 +1215,35 @@ TsMuxerWindow::TsMuxerWindow()
         settings->endGroup();
         connect(m_languagesEdit, &QLineEdit::editingFinished, this, [this]() { writeSettings(); });
     }
+    // ** A CHAPTER FILE BY BUTTON. ** A chapter file could be dropped on the chapter list, which nothing in the window
+    // said, and the list could not be saved at all. "Load..." asks for the file and fills the list as a drop does;
+    // "Save..." writes the list as a simple text chapter file (CHAPTER01=, CHAPTER01NAME=), which this window, the
+    // command line (--chapters-file) and other tools read.
+    {
+        auto* row = new QHBoxLayout;
+        auto* loadBtn = new QPushButton(this);
+        loadBtn->setObjectName(QStringLiteral("chaptersLoadBtn"));
+        auto* saveBtn = new QPushButton(this);
+        saveBtn->setObjectName(QStringLiteral("chaptersSaveBtn"));
+        row->addWidget(loadBtn);
+        row->addWidget(saveBtn);
+        row->addStretch(1);
+        ui->verticalLayout_11->addLayout(row);
+        const auto texts = [loadBtn, saveBtn]()
+        {
+            loadBtn->setText(tr("Load..."));
+            loadBtn->setToolTip(
+                wrapTip(tr("Fill the chapter list from a chapter file: a simple text file "
+                           "(CHAPTER01=00:00:00.000) or Matroska XML. A file dropped on the list "
+                           "does the same.")));
+            saveBtn->setText(tr("Save..."));
+            saveBtn->setToolTip(wrapTip(tr("Write the chapter list as a simple text chapter file.")));
+        };
+        texts();
+        m_retranslateHooks.push_back(texts);
+        connect(loadBtn, &QPushButton::clicked, this, &TsMuxerWindow::loadChapterFileByDialog);
+        connect(saveBtn, &QPushButton::clicked, this, &TsMuxerWindow::saveChapterFileByDialog);
+    }
     // the size estimate, at the right end of the row of output kinds (updateSizeEstimate)
     m_sizeLabel = new QLabel(this);
     m_sizeLabel->setObjectName(QStringLiteral("sizeEstimateLabel"));
@@ -8484,6 +8513,60 @@ void TsMuxerWindow::changeEvent(QEvent* event)
             hook();  // re-translate the hand-built BDMV->ISO tab and dual-layer groupbox
     }
     QWidget::changeEvent(event);
+}
+
+void TsMuxerWindow::loadChapterFileByDialog()
+{
+    const QString name =
+        QFileDialog::getOpenFileName(this, tr("Load a chapter file"), getExistingDialogDir(lastInputDir),
+                                     tr("Chapter files (*.txt *.xml);;All files (*)"));
+    if (name.isEmpty())
+        return;
+    if (!loadChapterFileIntoBox(name))
+        QMessageBox::warning(this, tr("tsMuxeR"),
+                             tr("No chapter time was found in %1.").arg(QDir::toNativeSeparators(name)));
+}
+
+// The list as a simple text chapter file: each time as HH:MM:SS.mmm with its number, and an empty name, as the list
+// holds none. The lines that are no time are left out, as the meta file leaves them out.
+void TsMuxerWindow::saveChapterFileByDialog()
+{
+    QStringList lines;
+    int number = 0;
+    for (const QString& line : ui->memoChapters->toPlainText().split('\n'))
+    {
+        const QString t = chapterLineTime(line);
+        if (t.isEmpty() || !isChapterTime(t))
+            continue;
+        double seconds = 0;
+        for (const QString& part : t.split(QLatin1Char(':'))) seconds = seconds * 60 + part.toDouble();
+        const qint64 ms = qRound64(seconds * 1000);
+        const QString key = QStringLiteral("CHAPTER%1").arg(++number, 2, 10, QLatin1Char('0'));
+        lines << QStringLiteral("%1=%2:%3:%4.%5")
+                     .arg(key)
+                     .arg(ms / 3600000, 2, 10, QLatin1Char('0'))
+                     .arg(ms / 60000 % 60, 2, 10, QLatin1Char('0'))
+                     .arg(ms / 1000 % 60, 2, 10, QLatin1Char('0'))
+                     .arg(ms % 1000, 3, 10, QLatin1Char('0'));
+        lines << key + QStringLiteral("NAME=");
+    }
+    if (lines.isEmpty())
+    {
+        QMessageBox::information(this, tr("tsMuxeR"), tr("The chapter list holds no time to save."));
+        return;
+    }
+    const QFileInfo out(unquoteStr(ui->outFileName->text().trimmed()));
+    const QString name =
+        QFileDialog::getSaveFileName(this, tr("Save the chapter list"),
+                                     QDir(getExistingDialogDir(out.absolutePath()))
+                                         .filePath(out.completeBaseName() + QStringLiteral(".chapters.txt")),
+                                     tr("Chapter files (*.txt);;All files (*)"));
+    if (name.isEmpty())
+        return;
+    QFile file(name);
+    if (!file.open(QIODevice::WriteOnly) || file.write((lines.join('\n') + '\n').toUtf8()) < 0)
+        QMessageBox::warning(this, tr("tsMuxeR"),
+                             tr("The file %1 could not be written.").arg(QDir::toNativeSeparators(name)));
 }
 
 // A chapter file dropped on the chapter list fills the list instead of being added as a track.

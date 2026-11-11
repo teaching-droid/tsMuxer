@@ -4742,6 +4742,50 @@ Utworzyć mimo to ISO?</translation>
         <translation>Skanowanie w toku</translation>
     </message>
     <message>
+        <source>Load...</source>
+        <translation>Wczytaj...</translation>
+    </message>
+    <message>
+        <source>Fill the chapter list from a chapter file: a simple text file (CHAPTER01=00:00:00.000) or Matroska XML. A file dropped on the list does the same.</source>
+        <translation>Wypełnia listę rozdziałów z pliku rozdziałów: prostego pliku tekstowego (CHAPTER01=00:00:00.000) lub XML Matroska. Plik upuszczony na listę działa tak samo.</translation>
+    </message>
+    <message>
+        <source>Save...</source>
+        <translation>Zapisz...</translation>
+    </message>
+    <message>
+        <source>Write the chapter list as a simple text chapter file.</source>
+        <translation>Zapisuje listę rozdziałów jako prosty tekstowy plik rozdziałów.</translation>
+    </message>
+    <message>
+        <source>Load a chapter file</source>
+        <translation>Wczytaj plik rozdziałów</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt *.xml);;All files (*)</source>
+        <translation>Pliki rozdziałów (*.txt *.xml);;Wszystkie pliki (*)</translation>
+    </message>
+    <message>
+        <source>No chapter time was found in %1.</source>
+        <translation>W pliku %1 nie znaleziono żadnego czasu rozdziału.</translation>
+    </message>
+    <message>
+        <source>The chapter list holds no time to save.</source>
+        <translation>Lista rozdziałów nie zawiera żadnego czasu do zapisania.</translation>
+    </message>
+    <message>
+        <source>Save the chapter list</source>
+        <translation>Zapisz listę rozdziałów</translation>
+    </message>
+    <message>
+        <source>Chapter files (*.txt);;All files (*)</source>
+        <translation>Pliki rozdziałów (*.txt);;Wszystkie pliki (*)</translation>
+    </message>
+    <message>
+        <source>The file %1 could not be written.</source>
+        <translation>Nie można zapisać pliku %1.</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>Suma zaznaczonych ścieżek wraz z tym, co dodaje wokół nich format wyjściowy. „Najwyżej”: pominiętej ścieżki nie można było odjąć, ponieważ jej rozmiar nie jest znany. Szacunek nie jest podawany przy cięciu, dzieleniu, stałej przepływności multipleksu ani wtedy, gdy źródłem jest płyta.</translation>
     </message>
