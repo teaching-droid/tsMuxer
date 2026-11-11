@@ -825,8 +825,9 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
             // ** THE FULL LANGUAGE TAG OF A TRACK IS LISTED. ** A Matroska track can name its language in BCP 47, such
             // as fr-CA beside fr-FR, or zh-Hant, and the listing gave only the three letters every output takes, so two
             // dubs of one language could not be told apart. The tag the file gives is listed on a line of its own,
-            // which the window and scripts that read "Stream lang: " pass over; a meta line takes it with lang=.
-            if (!streams[i].langTag.empty())
+            // which the window and scripts that read "Stream lang: " pass over; a meta line takes it with lang=. A tag
+            // of "und" (undetermined) says nothing and is not listed.
+            if (!streams[i].langTag.empty() && streams[i].langTag != "und")
                 LTRACE(LT_INFO, 2, "Stream language tag: " << streams[i].langTag);
             // Where a playlist puts the track among its kind, against where its clip has it (#52): a player numbers the
             // tracks in the playlist's order, which may differ from the clip's
