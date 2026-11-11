@@ -117,6 +117,71 @@ static void refuseUnreadableMeta(const std::string& metaFileName)
                                               "UTF-8.")
 }
 
+// ** A SOURCE IN PLACE OF A META FILE. ** A mux takes a meta file and an output, and a script that had only a source
+// had to write the meta file itself; only the window turned a listing into one. Given a source as the first argument,
+// tsMuxeR 3.1.0 read its bytes as the lines of a meta file and did not come back (a transport stream of 36 MB ran for
+// minutes without a word). A file that is no text is now taken as the source: its tracks are listed, and a meta file
+// of every track tsMuxeR reads is made for the run, as the window writes it, and shown.
+//
+// Whether the first argument is such a source: a file with a zero byte in its first 4 KB, which no meta file has.
+static bool isSourceNotMeta(const std::string& name)
+{
+    std::error_code ec;
+    if (std::filesystem::is_directory(fsPath(name), ec))
+        return false;
+    File file;
+    uint8_t head[4096];
+    if (!file.open(name.c_str(), File::ofRead))
+        return false;
+    const int got = file.read(head, sizeof(head));
+    return got > 0 && std::find(head, head + got, 0) != head + got;
+}
+
+// The meta file for a mux of every track of `source` that tsMuxeR reads, to an output of the kind its name says
+static std::string metaFromSource(const std::string& source, const std::string& output)
+{
+    const std::string ext = strToUpperCase(extractFileExt(output));
+    static const char* const kinds[] = {"TS", "M2TS", "MTS", "M2T", "MKV", "MKA", "MKS", "WEBM"};
+    if (std::find(std::begin(kinds), std::end(kinds), ext) == std::end(kinds))
+        THROW(ERR_COMMON, source << " is a source, not a meta file. A source in its place is muxed with all its "
+                                 << "tracks to an output named .ts, .m2ts or .mkv; for a disc, a demux or a choice of "
+                                 << "tracks write a meta file. tsMuxeR " << source << " lists the tracks.")
+    if (strEndWith(strToLowerCase(source), ".iso"))
+        THROW(ERR_COMMON, source << " is a disc image. Name its title in a meta file, for example: V_MPEG4/ISO/AVC, \""
+                                 << source << "\", title=main. tsMuxeR " << source << " lists the titles.")
+    DetectStreamRez listing = METADemuxer::DetectStreamReader(readManager, source, true);
+    if (listing.streams.empty() && !listing.noTracksReason.empty())
+        THROW(ERR_COMMON, listing.noTracksReason)
+    std::string meta = "MUXOPT --no-pcr-on-video-pid --new-audio-pes --vbr --vbv-len=500\n";
+    int tracks = 0;
+    for (const CheckStreamRez& stream : listing.streams)
+    {
+        if (stream.codecInfo.programName.empty() || stream.unused)
+        {
+            LTRACE(LT_INFO, 2, "Track " << stream.trackID << " of the source is left out: tsMuxeR does not read it.");
+            continue;
+        }
+        std::string line = stream.codecInfo.programName + ", \"" + source + "\"";
+        if (stream.trackID != 0)
+            line += ", track=" + std::to_string(stream.trackID);
+        if (stream.multiSubStream)
+            line += ", subTrack=" + std::to_string(stream.subTrack != 0 ? stream.subTrack
+                                                   : stream.codecInfo.codecID == CODEC_V_MPEG4_H264_DEP ? 1
+                                                                                                        : 2);
+        if (!stream.lang.empty() && stream.lang != "und")
+            line += ", lang=" + stream.lang;
+        if (stream.codecInfo.programName[0] == 'A' && stream.delay != 0)
+            line += ", timeshift=" + std::to_string(stream.delay) + "ms";
+        if (stream.isSecondary)
+            line += ", secondary";
+        meta += line + "\n";
+        ++tracks;
+    }
+    if (tracks == 0)
+        THROW(ERR_COMMON, "tsMuxeR reads no track of " << source << ", so there is nothing to mux.")
+    return meta;
+}
+
 DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<double>& customChaptersList,
                         vector<AVChapter>& chapterInfo, int& firstMplsOffset, int& firstM2tsOffset, bool& insertBlankPL,
                         int& blankNum, bool& stereoMode, std::string& isoDiskLabel, bool& demux, bool& numbersGiven)
@@ -5673,6 +5738,36 @@ static int runTsMuxer(int argc, char** argv)
         bool stereoMode = false;
         string isoDiskLabel;
         bool demuxAsked = false;
+        // a source in place of the meta file: the meta file is made for this run, in the temp folder
+        struct MadeMeta
+        {
+            std::string name;
+            ~MadeMeta()
+            {
+                if (!name.empty())
+                    deleteFile(name);
+            }
+        };
+        static MadeMeta madeMeta;
+        if (isSourceNotMeta(argv[1]))
+        {
+            const std::string text = metaFromSource(argv[1], unquoteStr(argv[2]));
+            std::error_code tempError;
+            madeMeta.name =
+                utf8Path(std::filesystem::temp_directory_path(tempError) /
+                         ("tsMuxeR_meta_" +
+                          std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".meta"));
+            File out;
+            if (!out.open(madeMeta.name.c_str(), File::ofWrite) ||
+                out.write(text.data(), static_cast<uint32_t>(text.size())) != static_cast<int>(text.size()))
+                THROW(ERR_COMMON, "The meta file for " << argv[1] << " cannot be written to the temp folder.")
+            out.close();
+            LTRACE(LT_INFO, 2, argv[1] << " is a source, not a meta file: it is muxed with this meta file.");
+            for (const std::string& line : splitStr(text.c_str(), '\n'))
+                if (!line.empty())
+                    LTRACE(LT_INFO, 2, "  " << line);
+            argv[1] = madeMeta.name.data();
+        }
         refuseUnreadableMeta(argv[1]);
         DiskType dt =
             checkBluRayMux(argv[1], autoChapterLen, customChapterList, chapterInfo, firstMplsOffset, firstM2tsOffset,
