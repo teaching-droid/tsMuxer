@@ -137,6 +137,45 @@ static bool isSourceNotMeta(const std::string& name)
     return got > 0 && std::find(head, head + got, 0) != head + got;
 }
 
+// ** --languages=<list>: THE TRACKS OF THE LANGUAGES WANTED. ** A source given in place of the meta file was muxed with
+// every track, so a film with twelve dubs and thirty subtitle tracks came out with all of them, and a batch of such
+// files could only be thinned out by a meta file for each. With --languages=deu,eng only the sound and subtitle
+// tracks of those languages are taken. An entry is a language as tsMuxeR lists it (deu), a language tag as the file
+// gives it (fr-CA, or fr for every French track), or a word of the track's name (VFQ), so the dubs of one language
+// can be told apart. The video is always taken, and so is a track that names no language: it cannot be judged.
+static std::vector<std::string> g_takeLanguages;
+
+static bool languageWanted(const CheckStreamRez& stream)
+{
+    if (g_takeLanguages.empty() || stream.codecInfo.programName.empty() || stream.codecInfo.programName[0] == 'V')
+        return true;
+    const std::string lang = strToLowerCase(stream.lang);
+    const std::string tag = strToLowerCase(stream.langTag);
+    if ((lang.empty() || lang == "und") && (tag.empty() || tag == "und"))
+        return true;
+    const std::string name = " " + strToLowerCase(stream.name) + " ";
+    for (const std::string& entry : g_takeLanguages)
+    {
+        if (entry == lang || entry == tag)
+            return true;
+        // fr takes fr-CA and fr-FR; the code of the language a tag stands for is taken as well (fr for fra)
+        if (!tag.empty() && tag.size() > entry.size() && tag.compare(0, entry.size(), entry) == 0 &&
+            tag[entry.size()] == '-')
+            return true;
+        // a tag with a region (fr-CA) takes only that tag where the track has one: the other French track is fr-FR
+        if ((entry.find('-') == std::string::npos || tag.empty()) && !lang.empty() && iso639FromBcp47(entry) == lang)
+            return true;
+        // a word of the name: VFQ in "Français VFQ 5.1"
+        std::string spaced = name;
+        for (char& c : spaced)
+            if (!isalnum(static_cast<unsigned char>(c)) && static_cast<unsigned char>(c) < 0x80)
+                c = ' ';
+        if (entry.size() >= 2 && spaced.find(" " + entry + " ") != std::string::npos)
+            return true;
+    }
+    return false;
+}
+
 // The meta file for a mux of every track of `source` that tsMuxeR reads, to an output of the kind its name says
 static std::string metaFromSource(const std::string& source, const std::string& output)
 {
@@ -154,11 +193,28 @@ static std::string metaFromSource(const std::string& source, const std::string& 
         THROW(ERR_COMMON, listing.noTracksReason)
     std::string meta = "MUXOPT --no-pcr-on-video-pid --new-audio-pes --vbr --vbv-len=500\n";
     int tracks = 0;
+    // --languages: when no sound track is of a language wanted, the sound is all taken, as a film without sound is
+    // not what was asked for
+    bool soundWanted = false;
+    for (const CheckStreamRez& stream : listing.streams)
+        soundWanted |= !stream.codecInfo.programName.empty() && stream.codecInfo.programName[0] == 'A' &&
+                       !stream.unused && languageWanted(stream);
+    if (!g_takeLanguages.empty() && !soundWanted)
+        LTRACE(LT_WARN, 2,
+               "Warning: no sound track of " << source << " is of a language of --languages, so every "
+                                             << "sound track is taken.");
     for (const CheckStreamRez& stream : listing.streams)
     {
         if (stream.codecInfo.programName.empty() || stream.unused)
         {
             LTRACE(LT_INFO, 2, "Track " << stream.trackID << " of the source is left out: tsMuxeR does not read it.");
+            continue;
+        }
+        if (!languageWanted(stream) && (soundWanted || stream.codecInfo.programName[0] != 'A'))
+        {
+            LTRACE(LT_INFO, 2,
+                   "Track " << stream.trackID << " (" << (stream.lang.empty() ? "und" : stream.lang)
+                            << ") is left out: its language is not in --languages.");
             continue;
         }
         std::string line = stream.codecInfo.programName + ", \"" + source + "\"";
@@ -1657,7 +1713,15 @@ All parameters in this group start with two dashes:
                       range of the output, as h:mm:ss or seconds, keeps it
                       small: a film gives millions of lines.
 )help"
-        R"help(--batch               Separate mode: tsMuxeR --batch <job list> [--batch-stop-on-error]
+        R"help(--languages=<list>    With a source in place of the meta file (tsMuxeR film.mkv
+                      out.mkv): take only the sound and subtitle tracks of
+                      these languages, for example --languages=deu,eng. An
+                      entry is a language as the listing gives it (deu), a
+                      language tag of the file (fr-CA, or fr for every French
+                      track), or a word of the track's name (VFQ). The video is
+                      always taken, and so is a track without a language. On a
+                      line of a --batch job list as well.
+--batch               Separate mode: tsMuxeR --batch <job list> [--batch-stop-on-error]
                       Runs a list of jobs one after the other. The job list is
                       a text file in UTF-8 with one job on each line, written
                       as the arguments of a run of its own, for example:
@@ -5312,6 +5376,22 @@ static int runTsMuxer(int argc, char** argv)
     //
     // It is taken OUT of the list before anything below counts the arguments, because the modes
     // are chosen by how many there are: two means list, three means mux.
+    // --languages=<list> (languageWanted): for a source in place of the meta file. Taken out of the list as well.
+    for (int i = 1; i < argc;)
+    {
+        const std::string arg = argv[i];
+        if (arg.compare(0, 12, "--languages=") != 0)
+        {
+            ++i;
+            continue;
+        }
+        g_takeLanguages.clear();
+        for (const std::string& entry : splitStr(unquoteStr(arg.substr(12)).c_str(), ','))
+            if (const std::string e = strToLowerCase(trimStr(entry)); !e.empty())
+                g_takeLanguages.push_back(e);
+        for (int k = i; k + 1 < argc; ++k) argv[k] = argv[k + 1];
+        --argc;
+    }
     std::string langCodesGiven;  // the value of an earlier --lang-codes: given twice, the last won without a word
     for (int i = 1; i < argc;)
     {

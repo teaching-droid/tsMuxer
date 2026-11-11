@@ -4714,6 +4714,14 @@ Utworzyć mimo to ISO?</translation>
         <translation>W %1 nie znaleziono pliku, który tsMuxeR może dodać.</translation>
     </message>
     <message>
+        <source>Languages to take:</source>
+        <translation>Języki do pobrania:</translation>
+    </message>
+    <message>
+        <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
+        <translation>Ścieżki dźwiękowe i napisy w innych językach są dodawane jako niezaznaczone. Podaj języki tak, jak pokazuje je lista ścieżek, oddzielone przecinkami: deu, eng. Znacznik języka (fr-CA) lub słowo z nazwy ścieżki (VFQ) pozwala odróżnić dubbingi jednego języka. Puste: wszystkie ścieżki są zaznaczone.</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>Dodaj tytuł z płyty Blu-ray lub DVD: wybierz folder płyty, folder zawierający BDMV lub VIDEO_TS albo napęd. Jej tytuły zostaną wyświetlone, najpierw główny film, a wybrany zostanie dodany. Obraz płyty (.iso) dodaje się przyciskiem &quot;dodaj&quot;, a płytę można też upuścić na okno.</translation>
     </message>

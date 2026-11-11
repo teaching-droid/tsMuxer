@@ -4714,6 +4714,14 @@ Criar o ISO mesmo assim?</translation>
         <translation>Nenhum arquivo que o tsMuxeR possa adicionar foi encontrado em %1.</translation>
     </message>
     <message>
+        <source>Languages to take:</source>
+        <translation>Idiomas a incluir:</translation>
+    </message>
+    <message>
+        <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
+        <translation>As faixas de som e de legendas de outros idiomas são adicionadas desmarcadas. Informe os idiomas como a lista de faixas os mostra, com vírgulas: deu, eng. Uma etiqueta de idioma (fr-CA) ou uma palavra do nome de uma faixa (VFQ) distingue as dublagens de um mesmo idioma. Vazio: todas as faixas ficam marcadas.</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>Adiciona um título de um disco Blu-ray ou DVD: escolha a pasta do disco, a pasta que contém BDMV ou VIDEO_TS, ou uma unidade. Os seus títulos são listados, o filme principal primeiro, e o escolhido é adicionado. Uma imagem de disco (.iso) é adicionada com &quot;adicionar&quot;, e um disco também pode ser arrastado para a janela.</translation>
     </message>

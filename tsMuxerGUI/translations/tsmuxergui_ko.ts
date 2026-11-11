@@ -4714,6 +4714,14 @@ Build the ISO anyway?</source>
         <translation>%1에서 tsMuxeR가 추가할 수 있는 파일을 찾지 못했습니다.</translation>
     </message>
     <message>
+        <source>Languages to take:</source>
+        <translation>가져올 언어:</translation>
+    </message>
+    <message>
+        <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
+        <translation>다른 언어의 오디오 및 자막 트랙은 선택 해제된 상태로 추가됩니다. 언어는 트랙 목록에 표시된 대로 쉼표로 구분해 입력합니다: deu, eng. 언어 태그(fr-CA)나 트랙 이름의 단어(VFQ)로 같은 언어의 더빙을 구분할 수 있습니다. 비워 두면 모든 트랙이 선택됩니다.</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>Blu-ray 또는 DVD 디스크의 타이틀을 추가합니다: 디스크 폴더, BDMV 또는 VIDEO_TS가 들어 있는 폴더, 또는 드라이브를 선택하십시오. 타이틀이 본편 영화부터 나열되며, 선택한 타이틀이 추가됩니다. 디스크 이미지(.iso)는 &quot;추가&quot;로 추가하며, 디스크를 창에 끌어다 놓을 수도 있습니다.</translation>
     </message>

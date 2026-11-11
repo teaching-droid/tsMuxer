@@ -4854,6 +4854,14 @@ Build the ISO anyway?</source>
         <translation>在 %1 中未找到 tsMuxeR 可以添加的文件。</translation>
     </message>
     <message>
+        <source>Languages to take:</source>
+        <translation>要保留的语言：</translation>
+    </message>
+    <message>
+        <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
+        <translation>其他语言的音轨和字幕轨添加时不勾选。按轨道列表显示的写法填写语言，用逗号分隔：deu, eng。语言标签（fr-CA）或轨道名称中的一个词（VFQ）可以区分同一语言的不同配音。留空：所有轨道都勾选。</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>添加 Blu-ray 或 DVD 光盘的一个标题：选择光盘的文件夹（包含 BDMV 或 VIDEO_TS 的文件夹）或一个驱动器。将列出它的标题，正片在最前，所选的标题会被添加。光盘镜像 (.iso) 用“添加”添加，也可以把光盘拖放到窗口上。</translation>
     </message>

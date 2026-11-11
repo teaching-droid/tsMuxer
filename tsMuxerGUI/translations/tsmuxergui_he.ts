@@ -4854,6 +4854,14 @@ Build the ISO anyway?</source>
         <translation>לא נמצא ב-%1 קובץ ש-tsMuxeR יכול להוסיף.</translation>
     </message>
     <message>
+        <source>Languages to take:</source>
+        <translation>השפות לקחת:</translation>
+    </message>
+    <message>
+        <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
+        <translation>רצועות קול וכתוביות בשפות אחרות מתווספות ללא סימון. יש לציין את השפות כפי שרשימת הרצועות מציגה אותן, עם פסיקים: deu, eng. תג שפה (fr-CA) או מילה משם הרצועה (VFQ) מבדילים בין דיבובים של אותה שפה. ריק: כל הרצועות מסומנות.</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>הוספת כותר מדיסק Blu-ray או DVD: בחרו את תיקיית הדיסק, את התיקייה שמכילה BDMV או VIDEO_TS, או כונן. הכותרים שלו מוצגים, הסרט הראשי ראשון, והכותר שנבחר מתווסף. דמות תקליטור (.iso) מתווספת עם &quot;להוסיף&quot;, ואפשר גם לגרור דיסק אל החלון.</translation>
     </message>

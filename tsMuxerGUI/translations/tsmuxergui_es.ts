@@ -4855,6 +4855,14 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <translation>No se encontró en %1 ningún archivo que tsMuxeR pueda añadir.</translation>
     </message>
     <message>
+        <source>Languages to take:</source>
+        <translation>Idiomas que tomar:</translation>
+    </message>
+    <message>
+        <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
+        <translation>Las pistas de sonido y de subtítulos de otros idiomas se añaden sin marcar. Indique los idiomas como los muestra la lista de pistas, con comas: deu, eng. Una etiqueta de idioma (fr-CA) o una palabra del nombre de una pista (VFQ) distingue los doblajes de un mismo idioma. Vacío: se marcan todas las pistas.</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>Añadir un título de un disco Blu-ray o DVD: elija la carpeta del disco, la carpeta que contiene BDMV o VIDEO_TS, o una unidad. Se muestran sus títulos, la película principal primero, y se añade el elegido. Una imagen de disco (.iso) se añade con «Añadir», y un disco también se puede soltar sobre la ventana.</translation>
     </message>

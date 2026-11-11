@@ -1178,6 +1178,43 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->DiskLabelEdit, &QLineEdit::textChanged, this, &TsMuxerWindow::onGeneralCheckboxClicked);
     connect(ui->btnBrowse, &QAbstractButton::clicked, this, &TsMuxerWindow::saveFileDialog);
     connect(ui->buttonMux, &QAbstractButton::clicked, this, &TsMuxerWindow::startMuxing);
+    // ** THE LANGUAGES TO TAKE. ** A film with a dozen dubs and thirty subtitle tracks was added with every track
+    // ticked, and each one not wanted had to be unticked by hand, for every file. With languages given here, the sound
+    // and subtitle tracks of other languages are added unticked; the video and tracks without a language stay ticked,
+    // and so does the sound when no sound track is of a language given. The folder of the queue uses the same list.
+    {
+        auto* row = new QWidget(this);
+        auto* rowLayout = new QHBoxLayout(row);
+        rowLayout->setContentsMargins(0, 0, 0, 0);
+        auto* label = new QLabel(row);
+        m_languagesEdit = new QLineEdit(row);
+        m_languagesEdit->setObjectName(QStringLiteral("languagesEdit"));
+        m_languagesEdit->setMaximumWidth(260);
+        rowLayout->addWidget(label);
+        rowLayout->addWidget(m_languagesEdit);
+        rowLayout->addStretch(1);
+        ui->verticalLayout_18->insertWidget(ui->verticalLayout_18->indexOf(ui->checkBoxPlaylistParts) + 1, row);
+        const auto texts = [this, label]()
+        {
+            label->setText(tr("Languages to take:"));
+            const QString tip =
+                wrapTip(tr("The sound and subtitle tracks of other languages are added unticked. Give the languages "
+                           "as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word "
+                           "of a track's name (VFQ) tells the dubs of one language apart. Empty: every track is "
+                           "ticked."));
+            label->setToolTip(tip);
+            m_languagesEdit->setToolTip(tip);
+            m_languagesEdit->setPlaceholderText(QStringLiteral("deu, eng"));
+        };
+        texts();
+        m_retranslateHooks.push_back(texts);
+        // the settings were read before this box was made
+        settings->beginGroup("main");
+        // a value with commas may come back as a list
+        m_languagesEdit->setText(settings->value("takeLanguages").toStringList().join(", "));
+        settings->endGroup();
+        connect(m_languagesEdit, &QLineEdit::editingFinished, this, [this]() { writeSettings(); });
+    }
     // ** A QUEUE OF JOBS. ** A series of recordings or discs had to be muxed one by one, each started when the one
     // before was done. "Add to queue" keeps the job as it stands, after the same checks as a start, and "Queue" lists
     // the jobs kept and runs them one after the other (tsMuxeR --batch), also after the window was closed in between.
@@ -3122,6 +3159,9 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
     {
         // A Matroska track's name is the file's own text, so it can hold any of the prefixes looked for below. Its
         // line is read first, and nothing else is looked for in it.
+        if (procStdOutput[i].startsWith("Stream language tag: "))
+            codecInfo->langTag =
+                QtCompat::strMid(procStdOutput[i], QString("Stream language tag: ").length()).trimmed();
         if (procStdOutput[i].startsWith("Stream name: "))
         {
             if (codecInfo)
@@ -4611,8 +4651,44 @@ void TsMuxerWindow::modifyOutFileName(const QString fileName, const QString& bas
     }
 }
 
+// The languages of "Languages to take", in lower case
+QStringList TsMuxerWindow::takeLanguages() const
+{
+    QStringList list;
+    if (m_languagesEdit)
+        for (const QString& entry : m_languagesEdit->text().split(',', Qt::SkipEmptyParts))
+            if (!entry.trimmed().isEmpty())
+                list << entry.trimmed().toLower();
+    return list;
+}
+
+// Whether a track is of a language wanted: the video always, and a track without a language, which cannot be judged.
+// An entry is the language as the track list shows it, the language tag of the file or its first part (fr for fr-CA),
+// or a word of the track's name.
+bool TsMuxerWindow::languageWanted(const QtvCodecInfo& info, const QStringList& wanted) const
+{
+    if (wanted.isEmpty() || info.programName.startsWith('V'))
+        return true;
+    const QString lang = info.lang.trimmed().toLower();
+    const QString tag = info.langTag.toLower();
+    if ((lang.isEmpty() || lang == QLatin1String("und")) && tag.isEmpty())
+        return true;
+    QString name = ' ' + info.trackName.toLower() + ' ';
+    for (QChar& c : name)
+        if (!c.isLetterOrNumber())
+            c = ' ';
+    for (const QString& entry : wanted)
+        if (entry == lang || entry == tag || tag.startsWith(entry + '-') ||
+            (entry.size() >= 2 && name.contains(' ' + entry + ' ')))
+            return true;
+    return false;
+}
+
 void TsMuxerWindow::continueAddFile()
 {
+    const QStringList wantedLanguages = takeLanguages();
+    QList<int> soundRows;          // the sound tracks this file adds
+    bool soundOfLanguage = false;  // one of them is of a language wanted
     double fps;
     double level;
     disableUpdatesCnt++;
@@ -4720,7 +4796,13 @@ void TsMuxerWindow::continueAddFile()
         ui->trackLV->setRowCount(newTrackRowIdx + 1);
         ui->trackLV->setRowHeight(newTrackRowIdx, 18);
         QTableWidgetItem* item = new QTableWidgetItem("");
-        item->setCheckState(info.enabledByDefault ? Qt::Checked : Qt::Unchecked);
+        const bool wanted = languageWanted(info, wantedLanguages);
+        item->setCheckState(info.enabledByDefault && wanted ? Qt::Checked : Qt::Unchecked);
+        if (info.programName.startsWith('A'))
+        {
+            soundRows.push_back(newTrackRowIdx);
+            soundOfLanguage |= wanted;
+        }
         // A new track takes the SEI and SPS choice the window shows, which is the saved one. Every track started with
         // insertSEI and contSPS switched on instead, and kept them unless it was clicked, so a file added with those
         // turned off still muxed with them on (#666).
@@ -4754,6 +4836,13 @@ void TsMuxerWindow::continueAddFile()
         colorizeCurrentRow(&info, newTrackRowIdx);
         addTrackToDefaultComboBox(newTrackRowIdx);
     }
+    // no sound track of a language wanted: the sound stays ticked, as a film without sound is not what was asked for
+    if (!soundOfLanguage)
+        for (const int row : soundRows)
+            if (auto* info =
+                    reinterpret_cast<QtvCodecInfo*>(ui->trackLV->item(row, 0)->data(Qt::UserRole).toLongLong());
+                info && info->enabledByDefault)
+                ui->trackLV->item(row, 0)->setCheckState(Qt::Checked);
     updateOrderColumns();
     if (firstAddedIndex >= 0)
     {
@@ -7919,8 +8008,11 @@ void TsMuxerWindow::showQueue()
                     // never onto the source itself: the same folder and the same kind
                     if (QFileInfo(output) == file)
                         output = to + "/" + file.completeBaseName() + ".new." + kind.toLower();
-                    lines << quoteStr(QDir::toNativeSeparators(file.absoluteFilePath())) + " " +
-                                 quoteStr(QDir::toNativeSeparators(output));
+                    QString line = quoteStr(QDir::toNativeSeparators(file.absoluteFilePath())) + " " +
+                                   quoteStr(QDir::toNativeSeparators(output));
+                    if (const QStringList languages = takeLanguages(); !languages.isEmpty())
+                        line += " --languages=" + languages.join(',');
+                    lines << line;
                     ++added;
                 }
                 if (added == 0)
@@ -8491,6 +8583,8 @@ void TsMuxerWindow::writeSettings()
     if (ui->checkBoxCrop->isEnabled())
         settings->setValue("restoreCropEnabled", ui->checkBoxCrop->isChecked());
     settings->setValue("playlistParts", ui->checkBoxPlaylistParts->isChecked());
+    if (m_languagesEdit)
+        settings->setValue("takeLanguages", m_languagesEdit->text());
     settings->setValue("writeReport", ui->checkBoxReport->isChecked());
     settings->setValue("askExtraTracks", ui->checkBoxAskExtraTracks->isChecked());
     settings->setValue("coreEncoder", m_coreEncoderPath);

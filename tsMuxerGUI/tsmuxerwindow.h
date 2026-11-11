@@ -4,6 +4,7 @@
 #define TSMUXER_H_
 
 #include <QHeaderView>
+#include <QLineEdit>
 #include <QProcess>
 #include <QSet>
 #include <QTimer>
@@ -301,6 +302,10 @@ class TsMuxerWindow : public QWidget
     // The queue of jobs (tsMuxeR --batch): "Add to queue" keeps the job the window shows, as its meta file and a line
     // of the job list in the queue folder, and "Queue" shows the list and runs it. The folder is on disk, so the queue
     // is still there after the window was closed.
+    // "Languages to take" on the General tab: the sound and subtitle tracks of other languages are added unticked
+    QLineEdit* m_languagesEdit = nullptr;
+    [[nodiscard]] QStringList takeLanguages() const;
+    [[nodiscard]] bool languageWanted(const QtvCodecInfo& info, const QStringList& wanted) const;
     QPushButton* m_queueAddBtn = nullptr;
     QPushButton* m_queueBtn = nullptr;
     bool m_addToQueue = false;  // startMuxing was asked for the queue: it stops after the checks and the meta file
