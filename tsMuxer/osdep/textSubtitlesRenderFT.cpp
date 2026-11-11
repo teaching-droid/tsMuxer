@@ -111,14 +111,20 @@ void TextSubtitlesRenderFT::loadFontMap()
     vector<string> fileList;
     // A .ttc holds several faces and only the first is taken, which is what happens for a .ttf
     // with more than one face too. Better than the file being invisible.
-    static const char* masks[] = {"*.ttf", "*.otf", "*.ttc"};
+    // ** A FONT FILE NAMED IN CAPITALS IS FOUND. ** The folders were searched for *.ttf, *.otf and *.ttc, and on Linux
+    // such a pattern matches small letters only: a font copied from Windows as ARIAL.TTF was found by its full path
+    // alone, never by its name (#606). Every file is looked at, and its ending is compared without regard to case.
     for (const auto& folder : fontFolders())
-        for (const char* mask : masks)
+    {
+        vector<string> found;
+        findFilesRecursive(folder.c_str(), "*", &found);
+        for (const string& file : found)
         {
-            vector<string> found;
-            findFilesRecursive(folder.c_str(), mask, &found);
-            fileList.insert(fileList.end(), found.begin(), found.end());
+            const string lower = strToLowerCase(file);
+            if (strEndWith(lower, ".ttf") || strEndWith(lower, ".otf") || strEndWith(lower, ".ttc"))
+                fileList.push_back(file);
         }
+    }
 
     for (auto& fontFile : fileList)
     {
