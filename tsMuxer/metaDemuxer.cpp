@@ -586,6 +586,26 @@ static std::string readAsName(const std::string& fileName, const std::string& ex
 {
     if (isVobSubPair(fileName))
         return fileName;  // a .sub file of DVD subtitles is a program stream by its nature
+    // ** THE INDEX OF DVD SUBTITLES IS NOT THE SUBTITLES. ** DVD subtitles outside a disc are a pair of files: the
+    // pictures in a .sub file, and their times and colours in an .idx file beside it. The .sub file is the one to give;
+    // given the .idx file, the answer was "Can't detect stream type", which told nothing (#31 K59). It now says what
+    // the file is, and which file to give, or that this one is missing.
+    if (strToLowerCase(ext) == "idx")
+    {
+        File index;
+        char start[32] = {};
+        if (index.open(fileName.c_str(), File::ofRead) && index.read(start, 19) == 19 &&
+            !memcmp(start, "# VobSub index file", 19))
+        {
+            const std::string stem = fileName.substr(0, fileName.size() - 3);
+            const std::string sub = fileExists(stem + "sub") || !fileExists(stem + "SUB") ? stem + "sub" : stem + "SUB";
+            if (fileExists(sub))
+                THROW(ERR_USAGE, fileName << " is the index of DVD subtitles (VobSub). The subtitles are in the file "
+                                          << "beside it: give " << sub << ", and the index is read with it.")
+            THROW(ERR_SOURCE, fileName << " is the index of DVD subtitles (VobSub), and the file with the subtitles, "
+                                       << sub << ", is not beside it. Nothing can be read from the index alone.")
+        }
+    }
     const NamedAs named = familyOfExt(ext);
 
     File file;
