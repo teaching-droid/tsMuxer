@@ -319,6 +319,10 @@ struct PMTStreamInfo final
     int m_ac4Descriptor = 0;
     // A stream type 0x06 stream with the registration descriptor "AV01" (AOM, carriage of AV1 in MPEG-2 TS): AV1 video
     bool m_av1Registration = false;
+    // A stream type 0x06 stream with the registration descriptor "Opus", and the channel_config_code of its
+    // Opus audio descriptor (extension descriptor 0x80, TS 101 154), -1 without one
+    bool m_opusRegistration = false;
+    int m_opusChannelConfig = -1;
     // The sound a descriptor names, as the stream type that names the same codec (0x81 AC-3, 0x87 E-AC-3, 0x82 DTS,
     // 0x0F AAC), zero for none: the AC-3, enhanced AC-3, DTS or AAC descriptor of EN 300 468, which is how a DVB stream
     // declares these (TS 101 154: AC-3, E-AC-3 and DTS are carried as stream type 0x06 with the descriptor), or the

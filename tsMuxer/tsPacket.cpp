@@ -370,6 +370,8 @@ bool TS_program_map_section::deserialize(uint8_t* buffer, const int buf_size)
             }
             if (stream_type == StreamType::PRIVATE_DATA && regId == 0x41563031 /* 'AV01' */)
                 pmtStreamInfo.m_av1Registration = true;
+            if (stream_type == StreamType::PRIVATE_DATA && regId == 0x4F707573 /* 'Opus' */)
+                pmtStreamInfo.m_opusRegistration = true;
 
             pidList[elementary_pid] = pmtStreamInfo;
             curPos += es_info_len;
@@ -422,6 +424,8 @@ uint32_t TS_program_map_section::extractDescriptors(uint8_t* curPos, const int e
         }
         else if (tag == TSDescriptorTag::DVB_EXTENSION && len >= 1 && descrBuf[0] == 0x15)  // AC-4_descriptor
             pmtInfo.m_ac4Descriptor = 0x7F;
+        else if (tag == TSDescriptorTag::DVB_EXTENSION && len >= 2 && descrBuf[0] == 0x80)  // Opus audio descriptor
+            pmtInfo.m_opusChannelConfig = descrBuf[1];
         else if (static_cast<uint8_t>(tag) == 0x52 && len >= 1)  // stream_identifier_descriptor
             pmtInfo.m_componentTag = descrBuf[0];
         else if (static_cast<uint8_t>(tag) == 0xFD && len >= 2)  // data_component_descriptor (ISDB)

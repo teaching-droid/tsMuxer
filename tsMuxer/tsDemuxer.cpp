@@ -2064,8 +2064,24 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
             const auto info = m_pmt.pidList.find(pid);
             m_latmPid[pid] =
                 info != m_pmt.pidList.end() && info->second.m_streamType == StreamType::AUDIO_AAC_RAW ? 2 : 1;
+            // 3: Opus, which is unpacked as well (opusFromTs)
+            if (info != m_pmt.pidList.end() && info->second.m_streamType == StreamType::PRIVATE_DATA &&
+                info->second.m_opusRegistration)
+                m_latmPid[pid] = 3;
         }
-        if (vect != nullptr && payloadLen > skip && m_latmPid[pid] == 2)
+        if (vect != nullptr && payloadLen > skip && m_latmPid[pid] == 3)
+        {
+            // Opus: the Opus reader is given a head and packets behind their lengths (opusFromTs)
+            std::vector<uint8_t> packets;
+            opusFromTs(pid, m_pmt.pidList[pid].m_opusChannelConfig, frameData + skip,
+                       static_cast<size_t>(payloadLen - skip), packets);
+            if (!packets.empty())
+            {
+                vect->grow(packets.size());
+                memcpy(vect->data() + vect->size() - packets.size(), packets.data(), packets.size());
+            }
+        }
+        else if (vect != nullptr && payloadLen > skip && m_latmPid[pid] == 2)
         {
             // AAC in LATM: the AAC reader is given ADTS frames (latm.h)
             LatmToAdts& latm = m_latm[pid];
@@ -2093,6 +2109,117 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
         return;
     }
     discardSize -= payloadLen;
+}
+
+// The Opus access units of a PES payload, as an OpusHead (once) and each packet behind its length of 4 bytes, the form
+// OpusStreamReader takes. An access unit: 11 bits 0x3FF, start_trim_flag, end_trim_flag, control_extension_flag, 2
+// reserved bits; the size, as bytes of 255 and a last one below it; with the flags, 16 bits for each trim (13 of them
+// the samples) and an extension of a length byte and its bytes; then the packet.
+void TSDemuxer::opusFromTs(const int pid, const int channelConfig, const uint8_t* data, const size_t size,
+                           std::vector<uint8_t>& out)
+{
+    OpusFromTs& opus = m_opusFromTs[pid];
+    opus.pending.insert(opus.pending.end(), data, data + size);
+    const std::vector<uint8_t>& p = opus.pending;
+    size_t at = 0;
+    while (at + 3 <= p.size())
+    {
+        if (p[at] != 0x7F || (p[at + 1] & 0xE0) != 0xE0)
+        {
+            ++at;  // not the start of an access unit: looked for further on
+            continue;
+        }
+        const bool startTrimFlag = p[at + 1] & 0x10, endTrimFlag = p[at + 1] & 0x08, extension = p[at + 1] & 0x04;
+        size_t i = at + 2;
+        size_t packet = 0;
+        while (i < p.size() && p[i] == 0xFF)
+        {
+            packet += 255;
+            ++i;
+        }
+        if (i >= p.size())
+            break;
+        packet += p[i++];
+        int startTrim = 0;
+        if (startTrimFlag)
+        {
+            if (i + 2 > p.size())
+                break;
+            startTrim = (p[i] & 0x1F) << 8 | p[i + 1];
+            i += 2;
+        }
+        if (endTrimFlag)
+        {
+            if (i + 2 > p.size())
+                break;
+            i += 2;
+        }
+        if (extension)
+        {
+            if (i + 1 > p.size() || i + 1 + p[i] > p.size())
+                break;
+            i += 1 + p[i];
+        }
+        if (packet == 0 || packet > 61440)
+        {
+            ++at;  // no access unit after all
+            continue;
+        }
+        if (i + packet > p.size())
+            break;  // the rest of the packet comes with the next PES
+        if (!opus.headWritten)
+        {
+            // The channels: 1 to 8 as the program map says them (above 2 in the order and the streams of the Vorbis
+            // mapping, RFC 7845 5.1.1.2); without that, one or two by the first packet (the stereo bit of its TOC).
+            static const uint8_t STREAMS[9] = {0, 1, 1, 2, 2, 3, 4, 4, 5};
+            static const uint8_t COUPLED[9] = {0, 0, 1, 1, 2, 2, 2, 3, 3};
+            static const uint8_t MAPPING[9][8] = {{0},
+                                                  {0},
+                                                  {0, 1},
+                                                  {0, 2, 1},
+                                                  {0, 1, 2, 3},
+                                                  {0, 4, 1, 2, 3},
+                                                  {0, 4, 1, 2, 3, 5},
+                                                  {0, 4, 1, 2, 3, 5, 6},
+                                                  {0, 6, 1, 2, 3, 4, 5, 7}};
+            const int channels = channelConfig >= 1 && channelConfig <= 8 ? channelConfig : (p[i] & 0x04) ? 2 : 1;
+            const uint8_t head[19] = {'O',
+                                      'p',
+                                      'u',
+                                      's',
+                                      'H',
+                                      'e',
+                                      'a',
+                                      'd',
+                                      1,
+                                      static_cast<uint8_t>(channels),
+                                      static_cast<uint8_t>(startTrim & 0xFF),
+                                      static_cast<uint8_t>(startTrim >> 8),
+                                      0x80,
+                                      0xBB,
+                                      0,
+                                      0,  // 48000 Hz
+                                      0,
+                                      0,  // no gain
+                                      static_cast<uint8_t>(channels > 2 ? 1 : 0)};
+            out.insert(out.end(), head, head + 19);
+            if (channels > 2)
+            {
+                out.push_back(STREAMS[channels]);
+                out.push_back(COUPLED[channels]);
+                out.insert(out.end(), MAPPING[channels], MAPPING[channels] + channels);
+            }
+            opus.headWritten = true;
+        }
+        out.push_back(static_cast<uint8_t>(packet >> 24));
+        out.push_back(static_cast<uint8_t>(packet >> 16));
+        out.push_back(static_cast<uint8_t>(packet >> 8));
+        out.push_back(static_cast<uint8_t>(packet));
+        out.insert(out.end(), p.begin() + static_cast<std::ptrdiff_t>(i),
+                   p.begin() + static_cast<std::ptrdiff_t>(i + packet));
+        at = i + packet;
+    }
+    opus.pending.erase(opus.pending.begin(), opus.pending.begin() + static_cast<std::ptrdiff_t>(at));
 }
 
 // ** THE PES LEFT OUT AT THE START ARE GIVEN BACK WHERE NO FRAME FOLLOWS. ** skipsLeadingPes leaves out the first PES

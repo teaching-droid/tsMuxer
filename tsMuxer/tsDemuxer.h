@@ -368,6 +368,18 @@ class TSDemuxer final : public AbstractDemuxer
     // AAC in LATM (stream type 0x11), turned into ADTS for the AAC reader (latm.h): 0 not looked at yet, 1 not LATM,
     // 2 LATM; the converter of each such PID, and whether its problem has been said
     uint8_t m_latmPid[8192]{};
+    // ** OPUS IN A TRANSPORT STREAM IS READ. ** tsMuxeR writes Opus into a transport stream (TS 101 154: stream type
+    // 0x06 with the registration "Opus", each packet behind a control header that gives its length and what to trim),
+    // and could not read it back: the track was "Can't detect stream type". The access units are unpacked here into
+    // the form the Opus reader takes from any container: an OpusHead, made from the channels the program map gives
+    // and the trim at the start of the first access unit (its pre-skip), then each packet behind its length.
+    struct OpusFromTs
+    {
+        std::vector<uint8_t> pending;  // the bytes of an access unit that is not complete yet
+        bool headWritten = false;
+    };
+    std::map<int, OpusFromTs> m_opusFromTs;
+    void opusFromTs(int pid, int channelConfig, const uint8_t* data, size_t size, std::vector<uint8_t>& out);
     std::map<int, LatmToAdts> m_latm;
     std::set<int> m_latmProblemSaid;
     bool m_firstDemuxCall;
