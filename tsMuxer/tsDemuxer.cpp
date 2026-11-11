@@ -251,6 +251,7 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
     std::map<int, std::vector<uint8_t>> damagedMaps;
     std::set<int> mapTaken;
     uint32_t tmpBufferLen = 0;
+    int64_t tailLeft = 0;  // bytes after the last packet of a block of 204-byte packets that lie in the next block
     uint32_t readedBytes;
     uint32_t totalReadedBytes = 0;
     m_lastReadRez = 0;
@@ -330,6 +331,7 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
         uint8_t* data = m_bufferedReader->readBlock(m_readerID, readedBytes, lastReadRez);
         totalReadedBytes += readedBytes;
         data += TS_FRAME_SIZE;
+        const uint32_t tmpBufferLenBefore = tmpBufferLen;
         if (tmpBufferLen > 0)
         {
             memcpy(data - tmpBufferLen, m_tmpBuffer, tmpBufferLen);
@@ -345,11 +347,14 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             m_firstCall = false;
         }
 
-        for (curPos = data; curPos <= lastFrameAddr; curPos += TS_FRAME_SIZE)
+        // of a file of 204-byte packets: the bytes after the last packet of the block before that lie in this one
+        curPos = data + (tmpBufferLenBefore == 0 ? tailLeft : 0);
+        tailLeft = 0;
+        for (; curPos <= lastFrameAddr; curPos += TS_FRAME_SIZE + m_tail)
         {
             if (!m2tsHdrDiscarded && m_m2tsMode)
                 curPos += 4;
-            curPos = findPacket(curPos, lastFrameAddr, m_m2tsMode ? 192 : TS_FRAME_SIZE, firstPacket);
+            curPos = findPacket(curPos, lastFrameAddr, m_m2tsMode ? 192 : TS_FRAME_SIZE + m_tail, firstPacket);
             if (curPos > lastFrameAddr)
             {
                 m2tsHdrDiscarded = true;
@@ -480,6 +485,8 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                 THROW(ERR_COMMON, "TS track scan: " << tmpBufferLen << " bytes left over at the end of a block")
             memmove(m_tmpBuffer, curPos, tmpBufferLen);
         }
+        else if (m_tail)
+            tailLeft = curPos - (data + readedBytes);
     }
 
     // A PMT PID that gave maps with a wrong CRC only: the first of them, as it was taken before
@@ -1148,11 +1155,13 @@ bool TSDemuxer::checkForRealM2ts(const uint8_t* buffer, const uint8_t* end) cons
     // 188 bytes and 16 more: error correction, as a recording of a modulator's output has them, or the data of the
     // layers of an ISDB-T broadcast (a BTS recording). No packet of it was on the grid of 188, and it was refused with
     // "Invalid tsPacket->getHeaderSize", which said nothing of the reason.
+    // ** PACKETS OF 204 BYTES ARE READ. ** Such a file was refused with the reason. The 16 bytes after each packet are
+    // passed over (m_tail), as the 4 bytes before each packet of an M2TS file are, and the packets are read as any.
     if (gridFound(204) && !gridFound(188))
-        THROW(ERR_COMMON, "The file " << m_streamName
-                                      << " has packets of 204 bytes: a packet of 188 bytes with 16 more after it, of "
-                                         "error correction or of the data of an ISDB recording. tsMuxeR reads packets "
-                                         "of 188 and 192 bytes.")
+    {
+        m_tail = 16;
+        return false;
+    }
     if (!gridFound(192) || gridFound(188))
         return false;
     // A job opens a file more than once (the listing, each track, the mux), and the warning came each time: four times
@@ -1183,11 +1192,11 @@ void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, c
     // The maps of the shared PMT PIDs of the block (#31 K56), in the order they come: taken after the block is read
     std::vector<std::pair<int, std::vector<uint8_t>>> sharedMaps;
     std::map<int, SectionReader> readers;
-    for (uint8_t* cur = data; cur <= lastFrameAddr; cur += TS_FRAME_SIZE)
+    for (uint8_t* cur = data + m_tailLeft; cur <= lastFrameAddr; cur += TS_FRAME_SIZE + m_tail)
     {
         if (!hdrDiscarded && m_m2tsMode)
             cur += 4;
-        cur = findPacket(cur, lastFrameAddr, m_m2tsMode ? 192 : TS_FRAME_SIZE, firstPacket);
+        cur = findPacket(cur, lastFrameAddr, m_m2tsMode ? 192 : TS_FRAME_SIZE + m_tail, firstPacket);
         if (cur > lastFrameAddr)
             break;
         hdrDiscarded = false;
@@ -1582,14 +1591,19 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         m_curFileNum < m_clipParts.size() && m_clipParts[m_curFileNum].isCut() ? &m_clipParts[m_curFileNum] : nullptr;
 
     bool firstPacket = isFirstBlock;
-    for (m_curPos = data; m_curPos <= lastFrameAddr; m_curPos += TS_FRAME_SIZE)
+    // of a file of 204-byte packets: the bytes after the last packet of the block before, which lie in this one
+    discardSize += m_tailLeft;
+    m_curPos = data + m_tailLeft;
+    m_tailLeft = 0;
+    for (; m_curPos <= lastFrameAddr; m_curPos += TS_FRAME_SIZE + m_tail)
     {
         if (!m_m2tsHdrDiscarded && m_m2tsMode)
         {
             discardSize += 4;
             m_curPos += 4;
         }
-        uint8_t* const found = findPacket(m_curPos, lastFrameAddr, m_m2tsMode ? 192 : TS_FRAME_SIZE, firstPacket);
+        uint8_t* const found =
+            findPacket(m_curPos, lastFrameAddr, m_m2tsMode ? 192 : TS_FRAME_SIZE + m_tail, firstPacket);
         discardSize += found - m_curPos;
         m_noPacketBytes += found - m_curPos;
         m_curPos = found;
@@ -1603,7 +1617,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
 
         const auto tsPacket = reinterpret_cast<TSPacket*>(m_curPos);
         int pid = tsPacket->getPID();
-        discardSize += TS_FRAME_SIZE;
+        discardSize += TS_FRAME_SIZE + m_tail;
 
         // pcrFrames++;
 
@@ -1656,6 +1670,12 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     {
         m_tmpBufferLen = data + readedBytes - m_curPos;
         memmove(m_tmpBuffer, m_curPos, static_cast<size_t>(m_tmpBufferLen));
+    }
+    else if (m_tail)
+    {
+        // the last packet ended the block, and some of the bytes after it come with the next one
+        m_tailLeft = m_curPos - (data + readedBytes);
+        discardSize -= m_tailLeft;
     }
 
     return 0;

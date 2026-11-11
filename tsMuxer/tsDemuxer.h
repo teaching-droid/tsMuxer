@@ -285,6 +285,10 @@ class TSDemuxer final : public AbstractDemuxer
     bool m_m2tsHdrDiscarded;
     int m_lastReadRez;
     bool m_m2tsMode;
+    // A file of 204-byte packets: the 16 bytes after each packet of 188, which are passed over, and how many of
+    // those after the last packet of a block lie at the start of the next one
+    mutable int m_tail = 0;
+    int64_t m_tailLeft = 0;
     int m_scale;
     int m_nptPos;
     const BufferedReaderManager& m_readManager;
