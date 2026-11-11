@@ -4722,6 +4722,18 @@ Build the ISO anyway?</source>
         <translation>지연을 적용해 미리 보기</translation>
     </message>
     <message>
+        <source>Estimated size: at most %1</source>
+        <translation>예상 크기: 최대 %1</translation>
+    </message>
+    <message>
+        <source>Estimated size: about %1</source>
+        <translation>예상 크기: 약 %1</translation>
+    </message>
+    <message>
+        <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
+        <translation>선택된 트랙을 합한 값에 출력 형식이 덧붙이는 양을 더한 값입니다. &quot;최대&quot;: 제외한 트랙의 크기를 알 수 없어 빼지 못했습니다. 자르기, 분할, 고정 먹싱 비트레이트를 쓰거나 디스크가 소스인 경우에는 예상 크기가 표시되지 않습니다.</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>다른 언어의 오디오 및 자막 트랙은 선택 해제된 상태로 추가됩니다. 언어는 트랙 목록에 표시된 대로 쉼표로 구분해 입력합니다: deu, eng. 언어 태그(fr-CA)나 트랙 이름의 단어(VFQ)로 같은 언어의 더빙을 구분할 수 있습니다. 비워 두면 모든 트랙이 선택됩니다.</translation>
     </message>

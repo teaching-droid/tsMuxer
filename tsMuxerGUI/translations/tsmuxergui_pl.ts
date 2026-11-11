@@ -4722,6 +4722,18 @@ Utworzyć mimo to ISO?</translation>
         <translation>Podgląd z opóźnieniem</translation>
     </message>
     <message>
+        <source>Estimated size: at most %1</source>
+        <translation>Szacowany rozmiar: najwyżej %1</translation>
+    </message>
+    <message>
+        <source>Estimated size: about %1</source>
+        <translation>Szacowany rozmiar: około %1</translation>
+    </message>
+    <message>
+        <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
+        <translation>Suma zaznaczonych ścieżek wraz z tym, co dodaje wokół nich format wyjściowy. „Najwyżej”: pominiętej ścieżki nie można było odjąć, ponieważ jej rozmiar nie jest znany. Szacunek nie jest podawany przy cięciu, dzieleniu, stałej przepływności multipleksu ani wtedy, gdy źródłem jest płyta.</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>Ścieżki dźwiękowe i napisy w innych językach są dodawane jako niezaznaczone. Podaj języki tak, jak pokazuje je lista ścieżek, oddzielone przecinkami: deu, eng. Znacznik języka (fr-CA) lub słowo z nazwy ścieżki (VFQ) pozwala odróżnić dubbingi jednego języka. Puste: wszystkie ścieżki są zaznaczone.</translation>
     </message>

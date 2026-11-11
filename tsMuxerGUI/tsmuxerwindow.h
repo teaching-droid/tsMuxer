@@ -143,6 +143,7 @@ class TsMuxerWindow : public QWidget
     void appendFile();
     void onOpacityTimer();
     void updateMetaLines();
+    void updateSizeEstimate();
     void at_sectionCheckstateChanged(Qt::CheckState state);
     void updateMuxTime1();
     void updateMuxTime2();
@@ -306,6 +307,7 @@ class TsMuxerWindow : public QWidget
     // is still there after the window was closed.
     // "Languages to take" on the General tab: the sound and subtitle tracks of other languages are added unticked
     QLineEdit* m_languagesEdit = nullptr;
+    QLabel* m_sizeLabel = nullptr;  // "Estimated size: about 23.4 GB", in the Output box
     [[nodiscard]] QStringList takeLanguages() const;
     [[nodiscard]] bool languageWanted(const QtvCodecInfo& info, const QStringList& wanted) const;
     QPushButton* m_queueAddBtn = nullptr;

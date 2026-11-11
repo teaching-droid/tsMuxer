@@ -4863,6 +4863,18 @@ Build the ISO anyway?</source>
         <translation>Предпросмотр с задержкой</translation>
     </message>
     <message>
+        <source>Estimated size: at most %1</source>
+        <translation>Расчётный размер: не более %1</translation>
+    </message>
+    <message>
+        <source>Estimated size: about %1</source>
+        <translation>Расчётный размер: около %1</translation>
+    </message>
+    <message>
+        <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
+        <translation>Сумма отмеченных дорожек вместе с тем, что добавляет к ним выходной формат. «Не более»: исключённую дорожку не удалось вычесть, так как её размер неизвестен. Оценка не показывается при обрезке, разделении, постоянной скорости мультиплексирования или если источником служит диск.</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>Звуковые дорожки и субтитры на других языках добавляются без отметки. Укажите языки так, как их показывает список дорожек, через запятую: deu, eng. Языковой тег (fr-CA) или слово из названия дорожки (VFQ) позволяет различать дубляжи одного языка. Пусто: отмечаются все дорожки.</translation>
     </message>

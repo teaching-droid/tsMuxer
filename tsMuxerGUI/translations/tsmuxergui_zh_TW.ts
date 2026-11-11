@@ -4722,6 +4722,18 @@ Build the ISO anyway?</source>
         <translation>套用延遲預覽</translation>
     </message>
     <message>
+        <source>Estimated size: at most %1</source>
+        <translation>估計大小：最多 %1</translation>
+    </message>
+    <message>
+        <source>Estimated size: about %1</source>
+        <translation>估計大小：約 %1</translation>
+    </message>
+    <message>
+        <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
+        <translation>已勾選軌道的總和，加上輸出格式在其外圍增加的部分。「最多」：未勾選的軌道大小不明，無法扣除。在剪切、分割、固定混流位元率或以光碟為來源時不提供估計值。</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>其他語言的音軌和字幕軌加入時不勾選。依軌道清單顯示的寫法填寫語言，以逗號分隔：deu, eng。語言標籤（fr-CA）或軌道名稱中的一個詞（VFQ）可以區分同一語言的不同配音。留空：所有軌道都勾選。</translation>
     </message>

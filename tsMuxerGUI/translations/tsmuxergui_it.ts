@@ -4722,6 +4722,18 @@ Creare comunque l&apos;ISO?</translation>
         <translation>Anteprima con il suo ritardo</translation>
     </message>
     <message>
+        <source>Estimated size: at most %1</source>
+        <translation>Dimensione stimata: al massimo %1</translation>
+    </message>
+    <message>
+        <source>Estimated size: about %1</source>
+        <translation>Dimensione stimata: circa %1</translation>
+    </message>
+    <message>
+        <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
+        <translation>La somma delle tracce spuntate, con ciò che l&apos;uscita aggiunge attorno ad esse. «Al massimo»: non è stato possibile sottrarre una traccia esclusa, perché nulla ne indica la dimensione. Non viene data alcuna stima con un taglio, una divisione, una velocità di multiplazione fissa o un disco come sorgente.</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>Le tracce audio e sottotitoli delle altre lingue vengono aggiunte senza spunta. Indicare le lingue come le mostra l&apos;elenco delle tracce, con virgole: deu, eng. Un tag di lingua (fr-CA) o una parola del nome di una traccia (VFQ) distingue i doppiaggi di una stessa lingua. Vuoto: tutte le tracce sono spuntate.</translation>
     </message>

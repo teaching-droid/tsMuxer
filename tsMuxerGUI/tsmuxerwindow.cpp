@@ -1215,6 +1215,12 @@ TsMuxerWindow::TsMuxerWindow()
         settings->endGroup();
         connect(m_languagesEdit, &QLineEdit::editingFinished, this, [this]() { writeSettings(); });
     }
+    // the size estimate, at the right end of the row of output kinds (updateSizeEstimate)
+    m_sizeLabel = new QLabel(this);
+    m_sizeLabel->setObjectName(QStringLiteral("sizeEstimateLabel"));
+    m_sizeLabel->hide();
+    ui->horizontalLayout_7->addWidget(m_sizeLabel);
+    m_retranslateHooks.push_back([this]() { updateSizeEstimate(); });
     // ** A QUEUE OF JOBS. ** A series of recordings or discs had to be muxed one by one, each started when the one
     // before was done. "Add to queue" keeps the job as it stands, after the same checks as a start, and "Queue" lists
     // the jobs kept and runs them one after the other (tsMuxeR --batch), also after the window was closed in between.
@@ -3159,6 +3165,15 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
     {
         // A Matroska track's name is the file's own text, so it can hold any of the prefixes looked for below. Its
         // line is read first, and nothing else is looked for in it.
+        if (codecInfo && procStdOutput[i].startsWith("Stream size: "))
+        {
+            bool ok = false;
+            const qint64 bytes = QtCompat::strMid(procStdOutput[i], QString("Stream size: ").length())
+                                     .section(' ', 0, 0)
+                                     .toLongLong(&ok);
+            codecInfo->sizeBytes = ok ? bytes : -1;
+            continue;
+        }
         if (procStdOutput[i].startsWith("Stream language tag: "))
             codecInfo->langTag =
                 QtCompat::strMid(procStdOutput[i], QString("Stream language tag: ").length()).trimmed();
@@ -4687,6 +4702,7 @@ bool TsMuxerWindow::languageWanted(const QtvCodecInfo& info, const QStringList& 
 void TsMuxerWindow::continueAddFile()
 {
     const QStringList wantedLanguages = takeLanguages();
+    for (QtvCodecInfo& listed : codecList) listed.fileTracks = static_cast<int>(codecList.size());
     QList<int> soundRows;          // the sound tracks this file adds
     bool soundOfLanguage = false;  // one of them is of a language wanted
     double fps;
@@ -6420,6 +6436,7 @@ void TsMuxerWindow::updateMetaLines()
     ui->defaultSubTrackForcedOnlyCheckBox->setEnabled(isDiskOutput() && ui->defaultSubTrackCheckBox->isChecked());
     if (!m_updateMeta || disableUpdatesCnt > 0)
         return;
+    updateSizeEstimate();
 
     if (m_metaUserOverride)
     {
@@ -6435,6 +6452,139 @@ void TsMuxerWindow::updateMetaLines()
     bool wasBlocked = ui->memoMeta->blockSignals(true);
     ui->memoMeta->setPlainText(metaContent);
     ui->memoMeta->blockSignals(wasBlocked);
+}
+
+// ** THE SIZE OF THE MUX, BEFORE IT IS MADE. ** How large the output will be showed only when it was written: whether
+// a film still fits on a disc or a stick after two of its sound tracks are left out had to be tried. The Output box
+// now says it: the tracks that are ticked, added up, with what the output adds around them.
+//  - A Matroska file whose writer counted the bytes of each track gives them in the listing ("Stream size: ").
+//  - Of any other file the size as a whole is known: with all its tracks ticked that is the estimate, and a sound
+//    track left out is taken off by its bitrate and the length of the file, where the listing gives a fixed bitrate.
+//  - A track left out whose size nothing tells (sound of a varying bitrate, subtitles) is not taken off, and the
+//    line says "at most". With a video track left out, a cut, a split, a fixed mux rate, a disc as the source or a
+//    meta file edited by hand, nothing is said.
+// What the output adds: 4 of 188 bytes for a transport stream and the headers of its packets (3 per cent in all,
+// measured on films), 4 more of 192 for an M2TS or a disc, next to nothing for Matroska.
+void TsMuxerWindow::updateSizeEstimate()
+{
+    if (!m_sizeLabel)
+        return;
+    const auto hide = [this]()
+    {
+        m_sizeLabel->hide();
+        m_sizeLabel->clear();
+    };
+    if (m_metaUserOverride || ui->checkBoxCut->isChecked() || !ui->noSplit->isChecked() ||
+        (ui->checkBoxCBR->isChecked() && !ui->radioButtonMKV->isChecked() && !ui->radioButtonDemux->isChecked()))
+        return hide();
+    // how much larger than its tracks a file of a kind is
+    const auto growth = [](const QString& suffix, bool& known)
+    {
+        known = true;
+        if (suffix == "m2ts" || suffix == "mts" || suffix == "ssif")
+            return 1.03 * 192 / 188;
+        if (suffix == "ts" || suffix == "m2t" || suffix == "trp")
+            return 1.03;
+        if (suffix == "mkv" || suffix == "mka" || suffix == "mks" || suffix == "webm")
+            return 1.001;
+        if (suffix == "mp4" || suffix == "m4v" || suffix == "m4a" || suffix == "mov")
+            return 1.003;
+        known = false;
+        return 1.0;
+    };
+    struct Source
+    {
+        QList<const QtvCodecInfo*> tracks;
+        QList<bool> ticked;
+    };
+    QMap<QString, Source> sources;
+    for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+    {
+        const QtvCodecInfo* info = getCodecInfo(i);
+        if (!info || info->fileList.isEmpty() || info->dvdTitle > 0 || !info->ownFile.isEmpty())
+            return hide();
+        Source& source = sources[info->fileList.join('|')];
+        source.tracks << info;
+        source.ticked << (ui->trackLV->item(i, 0)->checkState() == Qt::Checked);
+    }
+    if (sources.isEmpty())
+        return hide();
+    double payload = 0;
+    bool atMost = false;
+    for (auto it = sources.constBegin(); it != sources.constEnd(); ++it)
+    {
+        const Source& source = it.value();
+        const QStringList& files = source.tracks[0]->fileList;
+        qint64 fileBytes = 0;
+        for (const QString& name : files)
+        {
+            const QFileInfo file(name);
+            const QString suffix = file.suffix().toLower();
+            if (!file.isFile() || suffix == "mpls" || suffix == "mpl" || suffix == "ifo" || suffix == "iso")
+                return hide();
+            fileBytes += file.size();
+        }
+        bool counted = true;  // the listing gave the bytes of every track
+        for (const QtvCodecInfo* track : source.tracks) counted &= track->sizeBytes >= 0;
+        if (counted)
+        {
+            for (int i = 0; i < source.tracks.size(); ++i)
+                if (source.ticked[i])
+                    payload += static_cast<double>(source.tracks[i]->sizeBytes);
+            continue;
+        }
+        bool known = false;
+        const double sourceGrowth = growth(QFileInfo(files[0]).suffix().toLower(), known);
+        // a file of one track is that track; of another kind of file nothing is known but its size
+        if (!known && source.tracks[0]->fileTracks != 1)
+            atMost = true;
+        double left = static_cast<double>(fileBytes) / sourceGrowth;
+        if (source.tracks.size() < source.tracks[0]->fileTracks)
+            atMost = true;  // a track of the file was removed from the list: its size is not known
+        for (int i = 0; i < source.tracks.size(); ++i)
+        {
+            if (source.ticked[i])
+                continue;
+            const QtvCodecInfo* track = source.tracks[i];
+            if (track->programName.startsWith('V'))
+                return hide();
+            // "Bitrate: 640Kbps", not "Peak bitrate:" nor an average or a nominal one
+            static const QRegularExpression fixedRate(
+                QStringLiteral("(?<!Peak b)(?:^|\\s)Bitrate: (\\d+)Kbps(?! \\()"));
+            const QRegularExpressionMatch rate = fixedRate.match(track->descr);
+            const double seconds = files.size() == 1 ? durationOfSource(files[0]) : 0;
+            if (track->programName.startsWith('A') && rate.hasMatch() && seconds > 0 &&
+                !track->descr.contains(QLatin1String("core")))
+                left -= rate.captured(1).toDouble() * 125.0 * seconds;
+            else
+                atMost = true;
+        }
+        if (left <= 0)
+            return hide();
+        bool ticked = false;
+        for (const bool t : source.ticked) ticked |= t;
+        if (ticked)
+            payload += left;
+    }
+    if (payload <= 0)
+        return hide();
+    double outGrowth = 1.03 * 192 / 188;  // an M2TS or a disc
+    if (ui->radioButtonTS->isChecked())
+        outGrowth = 1.03;
+    else if (ui->radioButtonMKV->isChecked())
+        outGrowth = 1.001;
+    else if (ui->radioButtonDemux->isChecked())
+        outGrowth = 1.0;
+    const double bytes = payload * outGrowth;
+    const QString size = bytes >= 1e9 ? QStringLiteral("%1 GB").arg(bytes / 1e9, 0, 'f', bytes >= 1e10 ? 1 : 2)
+                                      : QStringLiteral("%1 MB").arg(bytes / 1e6, 0, 'f', bytes >= 1e7 ? 0 : 1);
+    m_sizeLabel->setText(atMost ? tr("Estimated size: at most %1").arg(size)
+                                : tr("Estimated size: about %1").arg(size));
+    m_sizeLabel->setToolTip(wrapTip(
+        tr("The ticked tracks added up, with what the output adds around them. \"At most\": a track that is left "
+           "out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a "
+           "fixed mux rate or a disc as the source.")));
+    m_sizeLabel->show();
 }
 
 // The meta file the settings of the tabs give

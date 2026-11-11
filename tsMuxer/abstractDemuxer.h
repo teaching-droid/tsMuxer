@@ -201,6 +201,9 @@ class AbstractDemuxer
         std::vector<uint8_t> simpleTags;
     };
     [[nodiscard]] virtual std::map<uint64_t, std::vector<SourceTrackTag>> getTrackTags() { return {}; }
+    // The bytes of each track as the container counts them, by TrackUID: empty where it does not, or where its
+    // numbers do not agree with the file
+    [[nodiscard]] virtual std::map<uint64_t, int64_t> getTrackBytes() { return {}; }
     // The TrackUID of a track, 0 when the container has none
     [[nodiscard]] virtual uint64_t getTrackUid(int pid) const { return 0; }
     // Data a container stores beside the frames of a track (Matroska BlockAdditions, such as HDR10+ metadata): the

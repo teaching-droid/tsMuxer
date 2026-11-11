@@ -4862,6 +4862,18 @@ ISO trotzdem erstellen?</translation>
         <translation>Vorschau mit Verzögerung</translation>
     </message>
     <message>
+        <source>Estimated size: at most %1</source>
+        <translation>Geschätzte Größe: höchstens %1</translation>
+    </message>
+    <message>
+        <source>Estimated size: about %1</source>
+        <translation>Geschätzte Größe: etwa %1</translation>
+    </message>
+    <message>
+        <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
+        <translation>Die Spuren mit Häkchen zusammengezählt, mit dem, was die Ausgabe um sie herum hinzufügt. „Höchstens“: Eine weggelassene Spur konnte nicht abgezogen werden, weil ihre Größe nicht bekannt ist. Bei einem Schnitt, einer Teilung, einer festen Mux-Rate oder einer Disc als Quelle wird keine Schätzung angezeigt.</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>Ton- und Untertitelspuren anderer Sprachen werden ohne Häkchen hinzugefügt. Die Sprachen so angeben, wie die Spurliste sie zeigt, mit Kommas: deu, eng. Ein Sprach-Tag (fr-CA) oder ein Wort aus dem Namen einer Spur (VFQ) unterscheidet die Synchronfassungen einer Sprache. Leer: jede Spur bekommt ein Häkchen.</translation>
     </message>

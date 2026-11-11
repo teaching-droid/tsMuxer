@@ -885,6 +885,11 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
             // of "und" (undetermined) says nothing and is not listed.
             if (!streams[i].langTag.empty() && streams[i].langTag != "und")
                 LTRACE(LT_INFO, 2, "Stream language tag: " << streams[i].langTag);
+            // ** THE SIZE OF A TRACK IS LISTED WHERE THE FILE COUNTS IT. ** How large a mux will be could not be told
+            // before it was made. A Matroska file whose writer counted the bytes of each track gives them here (see
+            // MatroskaDemuxer::getTrackBytes), and the window adds up the tracks that are ticked.
+            if (streams[i].sizeBytes >= 0)
+                LTRACE(LT_INFO, 2, "Stream size: " << streams[i].sizeBytes << " bytes");
             // Where a playlist puts the track among its kind, against where its clip has it (#52): a player numbers the
             // tracks in the playlist's order, which may differ from the clip's
             if (streams[i].playlistPlace > 0)

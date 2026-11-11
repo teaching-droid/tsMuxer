@@ -4862,6 +4862,18 @@ Créer l'ISO malgré tout ?</translation>
         <translation>Aperçu avec son décalage</translation>
     </message>
     <message>
+        <source>Estimated size: at most %1</source>
+        <translation>Taille estimée : au plus %1</translation>
+    </message>
+    <message>
+        <source>Estimated size: about %1</source>
+        <translation>Taille estimée : environ %1</translation>
+    </message>
+    <message>
+        <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
+        <translation>La somme des pistes cochées, avec ce que la sortie ajoute autour d&apos;elles. « Au plus » : une piste écartée n&apos;a pas pu être déduite, car rien n&apos;indique sa taille. Aucune estimation n&apos;est donnée avec une coupe, un découpage, un débit de multiplexage fixe ou un disque comme source.</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>Les pistes son et sous-titres des autres langues sont ajoutées non cochées. Indiquez les langues comme la liste des pistes les affiche, avec des virgules : deu, eng. Une étiquette de langue (fr-CA) ou un mot du nom d&apos;une piste (VFQ) distingue les doublages d&apos;une même langue. Vide : toutes les pistes sont cochées.</translation>
     </message>

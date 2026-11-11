@@ -4862,6 +4862,18 @@ Build the ISO anyway?</source>
         <translation>תצוגה מקדימה עם ההשהיה</translation>
     </message>
     <message>
+        <source>Estimated size: at most %1</source>
+        <translation>גודל משוער: לכל היותר %1</translation>
+    </message>
+    <message>
+        <source>Estimated size: about %1</source>
+        <translation>גודל משוער: כ-%1</translation>
+    </message>
+    <message>
+        <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
+        <translation>סכום הרצועות המסומנות, בתוספת מה שהפלט מוסיף סביבן. &quot;לכל היותר&quot;: רצועה שהושמטה לא הופחתה, כי גודלה אינו ידוע. לא ניתנת הערכה כשיש חיתוך, פיצול, קצב ריבוב קבוע או כשהמקור הוא תקליטור.</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>רצועות קול וכתוביות בשפות אחרות מתווספות ללא סימון. יש לציין את השפות כפי שרשימת הרצועות מציגה אותן, עם פסיקים: deu, eng. תג שפה (fr-CA) או מילה משם הרצועה (VFQ) מבדילים בין דיבובים של אותה שפה. ריק: כל הרצועות מסומנות.</translation>
     </message>

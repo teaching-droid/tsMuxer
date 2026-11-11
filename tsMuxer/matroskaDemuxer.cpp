@@ -4879,6 +4879,42 @@ std::vector<std::vector<uint8_t>> MatroskaDemuxer::getGlobalTags()
 // its tracks new UIDs: the muxer writes each of these again with the UID of the track it now belongs to.
 std::map<uint64_t, std::vector<AbstractDemuxer::SourceTrackTag>> MatroskaDemuxer::getTrackTags()
 {
+    return readTrackTags(nullptr);
+}
+
+// ** THE SIZE OF EACH TRACK, FROM THE STATISTICS TAGS. ** A writer may count the bytes of each track in a tag
+// (NUMBER_OF_BYTES). With them the size of a mux is known before it is made, whatever tracks are left out. The tags
+// are not kept up by every program that changes a file: one that cuts it or drops a track copies them as they were.
+// So they are used only where every track has one and together they are between 80 and 100 per cent of the file,
+// which a file whose tags are those of another file does not meet. A track stored compressed is counted by the bytes
+// it unpacks to, which are those a mux carries: it may exceed what the file holds, so only the tracks stored as they
+// are have to fit in the file.
+std::map<uint64_t, int64_t> MatroskaDemuxer::getTrackBytes()
+{
+    std::map<uint64_t, int64_t> bytes;
+    readTrackTags(&bytes);
+    File f;
+    int64_t fileSize = 0;
+    if (bytes.empty() || !f.open(m_sourceName.c_str(), File::ofRead) || (fileSize = f.size()) <= 0)
+        return {};
+    int64_t sum = 0, stored = 0;
+    for (int i = 0; i < num_tracks; i++)
+    {
+        const auto found = tracks[i] ? bytes.find(tracks[i]->uid) : bytes.end();
+        if (found == bytes.end() || found->second < 0)
+            return {};
+        sum += found->second;
+        if (tracks[i]->encodingAlgo < 0)
+            stored += found->second;
+    }
+    if (stored > fileSize || sum < fileSize / 5 * 4)
+        return {};
+    return bytes;
+}
+
+std::map<uint64_t, std::vector<AbstractDemuxer::SourceTrackTag>> MatroskaDemuxer::readTrackTags(
+    std::map<uint64_t, int64_t>* bytes)
+{
     std::map<uint64_t, std::vector<SourceTrackTag>> out;
     if (m_sourceName.empty())
         return out;
@@ -4963,6 +4999,7 @@ std::map<uint64_t, std::vector<AbstractDemuxer::SourceTrackTag>> MatroskaDemuxer
             SourceTrackTag tag;
             std::vector<std::pair<std::string, std::vector<uint8_t>>> simple;  // name, the whole element
             std::string statistics;
+            int64_t numberOfBytes = -1;
             size_t j = b;
             uint32_t cid = 0;
             size_t cb = 0, ce = 0;
@@ -5008,10 +5045,15 @@ std::map<uint64_t, std::vector<AbstractDemuxer::SourceTrackTag>> MatroskaDemuxer
                                          d.begin() + static_cast<std::ptrdiff_t>(se));
                     if (name == "_STATISTICS_TAGS")
                         statistics = " " + value + " ";
+                    else if (name == "NUMBER_OF_BYTES" && !value.empty() && value.size() < 19 &&
+                             value.find_first_not_of("0123456789") == std::string::npos)
+                        numberOfBytes = strToInt64(value.c_str());
                 }
             }
             if (trackUids.empty() || aboutOther)
                 continue;
+            if (bytes && numberOfBytes >= 0)
+                for (const uint64_t uid : trackUids) (*bytes)[uid] = numberOfBytes;
             // The SimpleTags again, now that the list of statistics tags is known, each as it stands
             j = b;
             size_t start = j;

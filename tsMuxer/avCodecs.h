@@ -77,6 +77,9 @@ struct CheckStreamRez
     // The full language tag the container gives (BCP 47, such as fr-CA or zh-Hant), where it gives one: lang holds
     // only the three letters an output takes
     std::string langTag;
+    // The bytes of the track in its file, where the container counts them (the statistics tags of a Matroska file);
+    // -1 where it does not
+    int64_t sizeBytes = -1;
     int32_t trackID;
     int64_t delay;  // auto delay for audio
     // stream_coding_type as declared by a TS/M2TS PMT, 0 for other containers. Kept so that a

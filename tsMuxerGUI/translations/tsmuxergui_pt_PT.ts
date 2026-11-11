@@ -4722,6 +4722,18 @@ Criar o ISO mesmo assim?</translation>
         <translation>Pré-visualizar com o atraso</translation>
     </message>
     <message>
+        <source>Estimated size: at most %1</source>
+        <translation>Tamanho estimado: no máximo %1</translation>
+    </message>
+    <message>
+        <source>Estimated size: about %1</source>
+        <translation>Tamanho estimado: cerca de %1</translation>
+    </message>
+    <message>
+        <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
+        <translation>A soma das faixas marcadas, com o que a saída acrescenta à sua volta. «No máximo»: uma faixa excluída não pôde ser descontada, pois nada indica o seu tamanho. Não é dada qualquer estimativa com um corte, uma divisão, uma taxa de multiplexagem fixa ou um disco como origem.</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>As faixas de som e de legendas de outros idiomas são adicionadas sem marca. Indique os idiomas como a lista de faixas os mostra, com vírgulas: deu, eng. Uma etiqueta de idioma (fr-CA) ou uma palavra do nome de uma faixa (VFQ) distingue as dobragens de um mesmo idioma. Vazio: todas as faixas ficam marcadas.</translation>
     </message>

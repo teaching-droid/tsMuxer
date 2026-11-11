@@ -108,6 +108,13 @@ class MatroskaDemuxer final : public IOContextDemuxer
     std::vector<std::vector<uint8_t>> getPassThroughAttachments() override;
     std::vector<std::vector<uint8_t>> getGlobalTags() override;
     std::map<uint64_t, std::vector<SourceTrackTag>> getTrackTags() override;
+    std::map<uint64_t, int64_t> getTrackBytes() override;
+
+   private:
+    // the tags about each track; with `bytes`, the NUMBER_OF_BYTES statistics tag of each track as well
+    std::map<uint64_t, std::vector<SourceTrackTag>> readTrackTags(std::map<uint64_t, int64_t>* bytes);
+
+   public:
     [[nodiscard]] uint64_t getTrackUid(int pid) const override
     {
         return pid >= 1 && pid <= num_tracks && tracks[pid - 1] ? tracks[pid - 1]->uid : 0;

@@ -4863,6 +4863,18 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <translation>Vista previa con su retardo</translation>
     </message>
     <message>
+        <source>Estimated size: at most %1</source>
+        <translation>Tamaño estimado: como máximo %1</translation>
+    </message>
+    <message>
+        <source>Estimated size: about %1</source>
+        <translation>Tamaño estimado: unos %1</translation>
+    </message>
+    <message>
+        <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
+        <translation>La suma de las pistas marcadas, con lo que la salida añade a su alrededor. «Como máximo»: no se pudo restar una pista excluida porque nada indica su tamaño. No se da una estimación con un corte, una división, una tasa de multiplexado fija o un disco como origen.</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>Las pistas de sonido y de subtítulos de otros idiomas se añaden sin marcar. Indique los idiomas como los muestra la lista de pistas, con comas: deu, eng. Una etiqueta de idioma (fr-CA) o una palabra del nombre de una pista (VFQ) distingue los doblajes de un mismo idioma. Vacío: se marcan todas las pistas.</translation>
     </message>

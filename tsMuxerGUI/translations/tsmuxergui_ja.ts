@@ -4862,6 +4862,18 @@ Build the ISO anyway?</source>
         <translation>遅延を適用してプレビュー</translation>
     </message>
     <message>
+        <source>Estimated size: at most %1</source>
+        <translation>推定サイズ: 最大 %1</translation>
+    </message>
+    <message>
+        <source>Estimated size: about %1</source>
+        <translation>推定サイズ: 約 %1</translation>
+    </message>
+    <message>
+        <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
+        <translation>チェックの入ったトラックの合計に、出力形式が付け加える分を足した値です。「最大」: 外したトラックのサイズが分からないため、差し引けませんでした。カット、分割、固定の多重化レート、またはディスクが入力の場合、推定値は表示されません。</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>他の言語の音声トラックと字幕トラックは、チェックを外した状態で追加されます。言語はトラック一覧の表示どおりにカンマで区切って指定します: deu, eng。言語タグ (fr-CA) やトラック名の単語 (VFQ) で、同じ言語の吹き替えを区別できます。空の場合はすべてのトラックにチェックが入ります。</translation>
     </message>

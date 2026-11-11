@@ -4609,6 +4609,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
         }
 
         bool wholeTracks = false;  // the file was read to its end: the data of each track is all of it
+        const std::map<uint64_t, int64_t> trackBytes = demuxer->getTrackBytes();
         for (unsigned i = 0; i < DETECT_STREAM_BUFFER_SIZE / fileBlockSize; i++)
             if (demuxer->simpleDemuxBlock(demuxedData, acceptedPidSet, discardedSize) == BufferedReader::DATA_EOF)
                 wholeTracks = true;
@@ -4700,6 +4701,9 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             trackRez.trackID = itr.first;
             trackRez.lang = acceptedPidMap[trackRez.trackID].m_lang;
             trackRez.langTag = acceptedPidMap[trackRez.trackID].m_langBCP47;
+            if (const auto counted = trackBytes.find(demuxer->getTrackUid(itr.first));
+                counted != trackBytes.end() && demuxer->getTrackUid(itr.first) != 0)
+                trackRez.sizeBytes = counted->second;
             {
                 const auto& srcParams = acceptedPidMap[trackRez.trackID].m_srcParams;
                 if (const auto name = srcParams.find("srcname"); name != srcParams.end())
