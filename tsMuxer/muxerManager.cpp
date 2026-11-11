@@ -681,7 +681,9 @@ void MuxerManager::checkTracksBeforeOutput()
     if (!m_demuxMode)
         for (const StreamInfo& si : ci)
             if (const auto* reader = dynamic_cast<const LPCMStreamReader*>(si.m_streamReader);
-                reader && !reader->discLayoutRefusal().empty())
+                reader && !reader->discRateRefusal().empty())
+                THROW(ERR_USAGE, reader->discRateRefusal())
+            else if (reader && !reader->discLayoutRefusal().empty())
                 THROW(ERR_USAGE, reader->discLayoutRefusal()
                                      << " Convert it to stereo, 5.1 or 7.1 before muxing it to "
                                      << (m_bluRayMode ? (m_avchdMode ? "an AVCHD disc." : "a Blu-ray disc.")

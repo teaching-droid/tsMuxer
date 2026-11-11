@@ -60,6 +60,8 @@ class LPCMStreamReader final : public SimplePacketizerReader
     // follows it, which names the output; empty when it can. A demux and a Matroska output keep the WAV's own channels
     // and take it.
     [[nodiscard]] const std::string& discLayoutRefusal() const { return m_bdRefusal; }
+    // Why a disc or a TS cannot carry this track at its sample rate, empty where they can (48, 96 and 192 kHz)
+    [[nodiscard]] const std::string& discRateRefusal() const { return m_rateRefusal; }
     // The output a disc or TS mux writes, as the refusal names it: "a Blu-ray disc", "an AVCHD disc", "a transport
     // stream"
     void setDiscOutputName(const std::string& name) { m_bdOutput = name; }
@@ -127,7 +129,20 @@ class LPCMStreamReader final : public SimplePacketizerReader
     std::vector<int> m_bdMap;
     std::vector<uint8_t> m_bdBuffer;
     bool m_backCentre = false;
-    std::string m_bdRefusal;  // discLayoutRefusal
+    std::string m_bdRefusal;    // discLayoutRefusal
+    std::string m_rateRefusal;  // discRateRefusal
+    // ** PCM AT ANY SAMPLE RATE, FOR MATROSKA AND A DEMUX. ** The sound is read in pieces of 5 ms, the frame of a
+    // disc's LPCM, which 44100 Hz does not fill with whole samples (220.5). So every rate but those of a disc was
+    // refused, for every output: a WAV ripped from a CD could not go into a Matroska file. A piece is now the shortest
+    // of 5, 10, 20 ms and so on that holds whole samples (10 ms at 44100 Hz), and such a track is taken by a Matroska
+    // output and a demux; a disc or a TS, whose LPCM has three rates, refuses it with the reason.
+    [[nodiscard]] int piecesPerSecond() const
+    {
+        for (const int pieces : {200, 100, 50, 40, 25, 20, 10, 8, 5, 4, 2})
+            if (m_freq % pieces == 0)
+                return pieces;
+        return 1;
+    }
     std::string m_bdOutput = "a disc or a TS";
     bool m_noMaskSaid = false;  // the warning for a WAV of more than 2 channels without a channel mask was given
     // ** A DEMUX KEEPS THE SPEAKERS OF THE WAV. ** The channel mask of a WAV whose header names one speaker for each

@@ -335,6 +335,8 @@ void LPCMStreamReader::planBdLayout(const uint32_t mask)
 
 int LPCMStreamReader::convertWavToPCM(uint8_t* start, uint8_t* end)
 {
+    if (!m_rateRefusal.empty())
+        THROW(ERR_USAGE, m_rateRefusal)
     if (!m_bdRefusal.empty())
         THROW(ERR_USAGE, m_bdRefusal << " Convert it to stereo, 5.1 or 7.1 before muxing it to " << m_bdOutput << ".")
     // int mch = m_channels; // + (m_channels%2==1 ? 1 : 0);
@@ -659,18 +661,23 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
         if (m_channels == 0)
             THROW(ERR_SOURCE, "Invalid channels count: 0. WAVE header is invalid.")
         m_freq = waveFormatPCMEx->nSamplesPerSec;
-        // The reader cuts the audio into the frames of a disc's LPCM, which other rates do not fill evenly, so this
-        // holds for every output. The message gave the list without saying so, and a Matroska output looked
-        // refused by a disc rule.
-        // A track of a VOB, a Matroska or an MP4 file was called a WAVE file as well.
-        if (m_freq != 48000 && m_freq != 96000 && m_freq != 192000)
+        // A rate a disc does not have is kept for a Matroska output and a demux (piecesPerSecond); a disc and a TS
+        // refuse it (discRateRefusal).
+        if (m_freq < 1000 || m_freq > 768000)
             THROW(ERR_SOURCE, (m_containerType == ContainerType::ctNone || m_containerType == ContainerType::ctLPCM
                                    ? "The WAVE file has a sample rate of "
                                    : "The PCM track has a sample rate of ")
-                                  << m_freq
-                                  << " Hz. tsMuxeR reads PCM audio at 48000, 96000 or 192000 Hz only, the rates of a "
-                                     "Blu-ray disc, for every output, Matroska and a demux included. Convert the "
-                                     "audio to 48000 Hz first.")
+                                  << m_freq << " Hz, which is no rate of sound tsMuxeR reads (1000 to 768000 Hz).")
+        m_rateRefusal.clear();
+        if (m_freq != 48000 && m_freq != 96000 && m_freq != 192000)
+        {
+            std::ostringstream text;
+            text << "Track " << m_streamIndex << " is PCM at " << m_freq
+                 << " Hz, and the LPCM of a Blu-ray disc and of a transport stream has the rates 48000, 96000 and "
+                    "192000 Hz only. Convert the audio to 48000 Hz first, or mux it into a Matroska file, which keeps "
+                    "its rate.";
+            m_rateRefusal = text.str();
+        }
         m_bitsPerSample = waveFormatPCMEx->wBitsPerSample;
         // 8 bit, 32 bit and floating point samples were refused ("Bit depth 32 is not supported for LPCM format"). A
         // demux and a Matroska output now keep them as they are, and a disc or a TS, whose LPCM is 16, 20 or 24 bit,
@@ -720,7 +727,7 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
                 m_firstConverted = converted;
             m_firstFormat = format;
         }
-        if (static_cast<int64_t>(sourceSampleBytes()) * m_channels * m_freq / 200 > MAX_AV_PACKET_SIZE)
+        if (static_cast<int64_t>(sourceSampleBytes()) * m_channels * m_freq / piecesPerSecond() > MAX_AV_PACKET_SIZE)
             THROW(ERR_SOURCE, "The WAVE file has " << static_cast<int>(m_channels) << " channels of "
                                                    << (m_srcBits ? m_srcBits : m_bitsPerSample) << " bit at " << m_freq
                                                    << " Hz, more than tsMuxeR reads in one frame. Convert it to 32 bit "
@@ -1015,8 +1022,8 @@ int LPCMStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, i
             if (m_bitsPerSample == 0)
                 return 0;  // can't decode frame
 
-            // Assume 5ms frames = 1s / 200
-            const int reqFrameLen = sourceSampleBytes() * m_channels * m_freq / 200;
+            // 5 ms frames = 1 s / 200, at the rates of a disc (piecesPerSecond)
+            const int reqFrameLen = sourceSampleBytes() * m_channels * (m_freq / piecesPerSecond());
             int frameLen = reqFrameLen;
             // a chunk can contain several frames, but a frame canot be bigger than a chunck
             if (m_curChunkLen)
@@ -1052,7 +1059,7 @@ uint8_t* LPCMStreamReader::findFrame(uint8_t* buff, uint8_t* end)
 double LPCMStreamReader::getFrameDuration()
 {
     if (m_frameRest == 0)
-        return 5 * INTERNAL_PTS_FREQ / 1000.0;  // 5 ms frames
+        return static_cast<double>(INTERNAL_PTS_FREQ) / piecesPerSecond();  // 5 ms frames at the rates of a disc
     return 0;
 }
 
@@ -1078,7 +1085,15 @@ const std::string LPCMStreamReader::getStreamInfo()
     const int mch = m_channels + (m_channels % 2 == 1 ? 1 : 0);
     const uint32_t bitrate = (m_bitsPerSample == 20 ? 24 : m_bitsPerSample) * m_freq * mch;
     str << "Bitrate: " << bitrate / 1000 << "Kbps  ";
-    str << "Sample Rate: " << m_freq / 1000 << "KHz  ";
+    // 44.1KHz and 22.05KHz, not 44KHz and 22KHz
+    str << "Sample Rate: " << m_freq / 1000;
+    if (int rest = m_freq % 1000; rest > 0)
+    {
+        std::string digits = std::to_string(1000 + rest).substr(1);
+        while (digits.back() == '0') digits.pop_back();
+        str << "." << digits;
+    }
+    str << "KHz  ";
     str << "Channels: ";
     if (m_lfeExists)
         str << static_cast<int>(m_channels) - 1 << ".1";
@@ -1567,7 +1582,7 @@ void LPCMStreamReader::findJoinedFileHeader()
     const int sampleSize = sourceSampleBytes() * m_channels;
     if (sampleSize <= 0)
         return;
-    const int64_t frameLen = static_cast<int64_t>(sampleSize) * m_freq / 200;
+    const int64_t frameLen = static_cast<int64_t>(sampleSize) * (m_freq / piecesPerSecond());
     const int64_t span = FFMIN(FFMIN(frameLen, m_curChunkLen), m_bufEnd - m_curPos);
     for (int64_t k = 0; k < span; ++k)
     {
@@ -1695,7 +1710,8 @@ int LPCMStreamReader::flushPacket(AVPacket& avPacket)
             avPacket.size = convertWavToPCM(avPacket.data, avPacket.data + avPacket.size);
         avPacket.data = m_tmpFrameBuffer;
         if (lastPart && avPacket.size > 4)
-            m_frameRest = sourceSampleBytes() * m_channels * m_freq / 200;  // the whole frame; filled up below
+            m_frameRest =
+                sourceSampleBytes() * m_channels * (m_freq / piecesPerSecond());  // the whole frame; filled up below
     }
 
     if (m_frameRest > 0 && !m_demuxMode)
