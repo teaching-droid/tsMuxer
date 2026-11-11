@@ -16,8 +16,11 @@
 #include <QColorDialog>
 #include <QComboBox>
 #include <QCursor>
+#include <QDateTime>
 #include <QDebug>
 #include <QDesktopServices>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDir>
 #include <QDirIterator>
 #include <QDropEvent>
@@ -33,6 +36,7 @@
 #include <QLabel>
 #include <QLibraryInfo>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QLocale>
 #include <QMenu>
 #include <QMessageBox>
@@ -1173,6 +1177,35 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->DiskLabelEdit, &QLineEdit::textChanged, this, &TsMuxerWindow::onGeneralCheckboxClicked);
     connect(ui->btnBrowse, &QAbstractButton::clicked, this, &TsMuxerWindow::saveFileDialog);
     connect(ui->buttonMux, &QAbstractButton::clicked, this, &TsMuxerWindow::startMuxing);
+    // ** A QUEUE OF JOBS. ** A series of recordings or discs had to be muxed one by one, each started when the one
+    // before was done. "Add to queue" keeps the job as it stands, after the same checks as a start, and "Queue" lists
+    // the jobs kept and runs them one after the other (tsMuxeR --batch), also after the window was closed in between.
+    m_queueAddBtn = new QPushButton(this);
+    m_queueAddBtn->setObjectName(QStringLiteral("queueAddBtn"));
+    m_queueBtn = new QPushButton(this);
+    m_queueBtn->setObjectName(QStringLiteral("queueBtn"));
+    ui->horizontalLayout_4->insertWidget(ui->horizontalLayout_4->indexOf(ui->buttonMux) + 1, m_queueAddBtn);
+    ui->horizontalLayout_4->insertWidget(ui->horizontalLayout_4->indexOf(m_queueAddBtn) + 1, m_queueBtn);
+    const auto queueTexts = [this]()
+    {
+        m_queueAddBtn->setText(tr("Add to queue"));
+        m_queueAddBtn->setToolTip(
+            wrapTip(tr("Keep this job for later: it is checked as for a start and added to the "
+                       "queue. The queue runs its jobs one after the other.")));
+        m_queueBtn->setToolTip(
+            wrapTip(tr("Show the jobs in the queue, take jobs out of it, or run them one after the other.")));
+        updateQueueButton();
+    };
+    queueTexts();
+    m_retranslateHooks.push_back(queueTexts);
+    connect(m_queueAddBtn, &QPushButton::clicked, this,
+            [this]()
+            {
+                m_addToQueue = true;
+                startMuxing();
+                m_addToQueue = false;
+            });
+    connect(m_queueBtn, &QPushButton::clicked, this, &TsMuxerWindow::showQueue);
     connect(muxForm, &MuxForm::stopped, this, &TsMuxerWindow::onMuxStopped);
     connect(muxForm, &MuxForm::makeSampleRequested, this, &TsMuxerWindow::onMakeSample);
     connect(ui->trackLV->model(), &QAbstractItemModel::rowsInserted, this, &TsMuxerWindow::updateMuxButton);
@@ -4879,6 +4912,10 @@ void TsMuxerWindow::addLines(const QByteArray& arr, QList<QString>& outList, boo
     {
         if (strList[i].trimmed().isEmpty())
             continue;
+        // a job of the queue that ended well: "=== Job 2 of 5 done (0:01:23)"
+        if (m_queueRun && strList[i].startsWith(QLatin1String("=== Job ")) &&
+            strList[i].contains(QLatin1String(" done (")))
+            m_queueDone.insert(strList[i].mid(8).section(' ', 0, 0).toInt());
         int p = strList[i].indexOf("% complete");
         if (p >= 0)
         {
@@ -5052,7 +5089,24 @@ void TsMuxerWindow::onProcessFinished(int exitCode, QProcess::ExitStatus exitSta
     processExitStatus = exitStatus;
     if (exitStatus == QProcess::NormalExit)
         m_runOutput.clear();  // ended by itself: tsMuxeR has dealt with its output
-    muxForm->muxFinished(processExitCode, ui->radioButtonDemux->isChecked() ? tr("Demux") : tr("Mux"));
+    // the queue: the jobs that ended well leave it with their meta files; a failed or stopped one stays for another run
+    if (m_queueRun)
+    {
+        QStringList left;
+        const QStringList lines = queueLines();
+        for (int i = 0; i < lines.size(); ++i)
+        {
+            if (!m_queueDone.contains(i + 1))
+                left << lines[i];
+            else
+                QFile::remove(lines[i].section('"', 1, 1));
+        }
+        writeQueueLines(left);
+        updateQueueButton();
+    }
+    const QString finishedWhat = m_queueRun ? tr("Queue") : ui->radioButtonDemux->isChecked() ? tr("Demux") : tr("Mux");
+    muxForm->muxFinished(processExitCode, finishedWhat);
+    m_queueRun = false;
     updateMuxButton();
     ui->addBtn->setEnabled(true);
     m_addDiscBtn->setEnabled(true);
@@ -5182,11 +5236,13 @@ void TsMuxerWindow::tsMuxerExecute(const QStringList& args)
     // the command line and the behaviour exactly as they were.
     QStringList allArgs;
     const QString langStyle = ui->langCodesComboBox->currentData().toString();
-    if (!langStyle.isEmpty() && langStyle != QLatin1String("terminological"))
+    // not for the queue: nothing stands beside --batch, and each job has these on its own line
+    const bool batchRun = !args.isEmpty() && args.first() == QLatin1String("--batch");
+    if (!batchRun && !langStyle.isEmpty() && langStyle != QLatin1String("terminological"))
         allArgs << (QLatin1String("--lang-codes=") + langStyle);
     // The listing of a playlist gives the lengths and chapters of the parts it muxes, so it is asked the same way as
     // the mux: the window takes the chapters from it. Left off at the default.
-    if (!ui->checkBoxPlaylistParts->isChecked())
+    if (!batchRun && !ui->checkBoxPlaylistParts->isChecked())
         allArgs << QLatin1String("--playlist-clips=whole");
     allArgs << args;
     ui->buttonMux->setEnabled(false);
@@ -7691,6 +7747,29 @@ void TsMuxerWindow::startMuxing()
     if (!makeAc3Cores())
         return;
 
+    // for the queue: the meta file goes into the queue folder with a line of the job list, and nothing is started
+    if (m_addToQueue)
+    {
+        const QString dir = queueDir();
+        QDir().mkpath(dir);
+        const QString jobMeta = QDir::toNativeSeparators(
+            dir + "/job_" + QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss_zzz")) + ".meta");
+        if (!saveMetaFile(jobMeta))
+            return;
+        // what a start gives tsMuxeR beside the meta file (tsMuxerExecute) goes on the line of the job
+        QString line = quoteStr(jobMeta) + " " + quoteStr(ui->outFileName->text());
+        const QString langStyle = ui->langCodesComboBox->currentData().toString();
+        if (!langStyle.isEmpty() && langStyle != QLatin1String("terminological"))
+            line += QLatin1String(" --lang-codes=") + langStyle;
+        if (!ui->checkBoxPlaylistParts->isChecked())
+            line += QLatin1String(" --playlist-clips=whole");
+        QStringList lines = queueLines();
+        lines << line;
+        writeQueueLines(lines);
+        updateQueueButton();
+        return;
+    }
+
     QFileInfo fi(ui->outFileName->text());
     metaName =
         QDir::toNativeSeparators(QDir::tempPath()) + QDir::separator() + "tsMuxeR_" + fi.completeBaseName() + ".meta";
@@ -7722,6 +7801,112 @@ void TsMuxerWindow::startMuxing()
         muxForm->setReportFile(report);
     }
     tsMuxerExecute(args << metaName << quoteStr(ui->outFileName->text()));
+}
+
+// The folder of the queue: beside tsMuxerGUI.ini where the window keeps its settings there, so that a copy carried on
+// a stick keeps its queue with it, and in the user's application data otherwise.
+QString TsMuxerWindow::queueDir() const
+{
+    if (QFile::exists(tsMuxerGuiIniName()))
+        return QFileInfo(tsMuxerGuiIniName()).absolutePath() + "/tsMuxerGUI_queue";
+    return QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/queue";
+}
+
+// The job list as tsMuxeR --batch reads it: on each line the meta file and the output in quotes, then the options
+QStringList TsMuxerWindow::queueLines() const
+{
+    QStringList lines;
+    QFile file(queueDir() + "/jobs.txt");
+    if (file.open(QIODevice::ReadOnly))
+        for (const QString& line : QString::fromUtf8(file.readAll()).split(QChar(10)))
+            if (!line.trimmed().isEmpty())
+                lines << line.trimmed();
+    return lines;
+}
+
+void TsMuxerWindow::writeQueueLines(const QStringList& lines)
+{
+    QDir().mkpath(queueDir());
+    QFile file(queueDir() + "/jobs.txt");
+    if (file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        for (const QString& line : lines) file.write((line + QChar(10)).toUtf8());
+}
+
+void TsMuxerWindow::updateQueueButton()
+{
+    const int jobs = static_cast<int>(queueLines().size());
+    m_queueBtn->setText(tr("Queue (%1)...").arg(jobs));
+}
+
+void TsMuxerWindow::showQueue()
+{
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Queue"));
+    auto* layout = new QVBoxLayout(&dialog);
+    auto* label = new QLabel(tr("The jobs of the queue, in the order they run. Each is shown by its output."), &dialog);
+    label->setWordWrap(true);
+    layout->addWidget(label);
+    auto* list = new QListWidget(&dialog);
+    list->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    for (const QString& line : queueLines()) list->addItem(line.section('"', 3, 3));
+    layout->addWidget(list);
+    auto* buttons = new QDialogButtonBox(&dialog);
+    QPushButton* start = buttons->addButton(tr("Start the queue"), QDialogButtonBox::AcceptRole);
+    QPushButton* remove = buttons->addButton(tr("Take out"), QDialogButtonBox::ActionRole);
+    QPushButton* clear = buttons->addButton(tr("Empty the queue"), QDialogButtonBox::ActionRole);
+    buttons->addButton(QDialogButtonBox::Close);
+    layout->addWidget(buttons);
+    const auto enable = [=, this]()
+    {
+        start->setEnabled(list->count() > 0 && proc.state() == QProcess::NotRunning);
+        remove->setEnabled(!list->selectedItems().isEmpty());
+        clear->setEnabled(list->count() > 0);
+    };
+    const auto takeOut = [=, this](const bool all)
+    {
+        QStringList left;
+        const QStringList lines = queueLines();
+        for (int i = 0; i < lines.size(); ++i)
+        {
+            if (!all && !(i < list->count() && list->item(i)->isSelected()))
+                left << lines[i];
+            else
+                QFile::remove(lines[i].section('"', 1, 1));
+        }
+        writeQueueLines(left);
+        list->clear();
+        for (const QString& line : left) list->addItem(line.section('"', 3, 3));
+        updateQueueButton();
+        enable();
+    };
+    connect(list, &QListWidget::itemSelectionChanged, &dialog, enable);
+    connect(remove, &QPushButton::clicked, &dialog, [=]() { takeOut(false); });
+    connect(clear, &QPushButton::clicked, &dialog, [=]() { takeOut(true); });
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    enable();
+    dialog.resize(640, 360);
+    if (dialog.exec() == QDialog::Accepted)
+        startQueue();
+}
+
+// Runs the queue in the progress window, as one run of tsMuxeR --batch: each job is a process of its own there, so a
+// job that fails leaves the next ones as they are, and Abort stops the job that runs and the queue with it.
+void TsMuxerWindow::startQueue()
+{
+    if (queueLines().isEmpty() || proc.state() != QProcess::NotRunning)
+        return;
+    muxForm->prepare(tr("Running the queue"));
+    ui->buttonMux->setEnabled(false);
+    ui->addBtn->setEnabled(false);
+    m_addDiscBtn->setEnabled(false);
+    ui->btnAppend->setEnabled(false);
+    muxForm->show();
+    disconnect();
+    runInMuxMode = true;
+    m_queueRun = true;
+    m_queueDone.clear();
+    tsMuxerExecute(QStringList() << QStringLiteral("--batch") << QDir::toNativeSeparators(queueDir() + "/jobs.txt"));
 }
 
 // A meta file could only ever be handed to the command line version, and that is what blocks the

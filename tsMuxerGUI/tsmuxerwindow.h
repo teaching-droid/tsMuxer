@@ -5,6 +5,7 @@
 
 #include <QHeaderView>
 #include <QProcess>
+#include <QSet>
 #include <QTimer>
 #include <QTranslator>
 #include <QWidget>
@@ -297,6 +298,20 @@ class TsMuxerWindow : public QWidget
     // its length, m_pendingDvdSeconds, while its tracks are listed; 0 for any other source.
     QString m_discSource;
     QPushButton* m_addDiscBtn = nullptr;  // "add disc", beside "add" and enabled with it
+    // The queue of jobs (tsMuxeR --batch): "Add to queue" keeps the job the window shows, as its meta file and a line
+    // of the job list in the queue folder, and "Queue" shows the list and runs it. The folder is on disk, so the queue
+    // is still there after the window was closed.
+    QPushButton* m_queueAddBtn = nullptr;
+    QPushButton* m_queueBtn = nullptr;
+    bool m_addToQueue = false;  // startMuxing was asked for the queue: it stops after the checks and the meta file
+    bool m_queueRun = false;    // the run in the progress window is the queue
+    QSet<int> m_queueDone;      // the jobs of that run that ended well, counted from 1
+    [[nodiscard]] QString queueDir() const;
+    [[nodiscard]] QStringList queueLines() const;
+    void writeQueueLines(const QStringList& lines);
+    void updateQueueButton();
+    void showQueue();
+    void startQueue();
     bool m_discOthersShown = false;
     int m_pendingDvdTitle = 0;
     int m_pendingAngle = 1;  // the angle chosen with the title, while its tracks are listed
