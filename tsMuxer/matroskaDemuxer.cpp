@@ -4226,7 +4226,7 @@ static bool mpegVideo(const MatroskaTrack* t)
 // the first block without fromHeader, the group is looked for in up to GROUP_BLOCKS blocks. Gives false where the walk
 // finds no block of the track.
 static bool mpegFirstShown(EbmlScan& scan, const int64_t firstCluster, const int64_t segmentEnd, const int maxClusters,
-                           const int64_t track, const bool fromHeader, int64_t& earliest)
+                           const int64_t track, const bool fromHeader, int64_t& earliest, bool* startsWithKey = nullptr)
 {
     static constexpr size_t GROUP_BLOCKS = 64;
     static constexpr size_t HEADER_BLOCKS = 1024;
@@ -4260,6 +4260,8 @@ static bool mpegFirstShown(EbmlScan& scan, const int64_t firstCluster, const int
         });
     if (walked.empty())
         return false;
+    if (startsWithKey)
+        *startsWithKey = firstKey == 0;
     // where the pictures the reader shows begin, and the keyframe whose group they end with
     size_t from = 0, group = firstKey >= 0 ? static_cast<size_t>(firstKey) : 0;
     if (fromHeader)
@@ -4662,8 +4664,8 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
     // their first block. A group that is not closed stores its I picture before the B pictures shown ahead of it, the
     // reader of both shows those first, and measured from the I picture the sound of such a file came early by those
     // pictures: 33 ms in a 29.97 film with soft pulldown (#47). Every such video track is measured so, the first as
-    // the reference and any other against it. Only these two: an HEVC stream that begins with a random access picture
-    // is timed from that picture (the TS rule), and H.264 was not measured.
+    // the reference and any other against it. Not HEVC: a stream that begins with a random access picture is timed
+    // from that picture (the TS rule). H.264 has its own measure below.
     // The first group is the one the reader starts at: that of the first block whose frame holds a sequence header,
     // as the reader decodes nothing before one. The walk began at the first block, and a file cut inside a group
     // begins with the rest of that group, which the reader does not decode: its B pictures were the earliest of the
@@ -4689,8 +4691,33 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
             m_shownAfterFirstBlock[t->num] = earliest - first;
         return earliest;
     };
+    // ** H.264 THAT BEGINS WITH A GROUP THAT IS NOT CLOSED. ** Such a stream stores its first I picture before the B
+    // pictures shown ahead of it, as a recording cut from a broadcast does. Its reader shows those pictures first
+    // (H264StreamReader::leadingPicturesOfFirst), as a transport stream's does, where the sound is measured from the
+    // first of them. Here it was measured from the I picture, so the sound of such a Matroska file came early by
+    // those pictures in every output: 80 ms for a 25 fps recording with two of them. Measured as for MPEG-2, from
+    // the earliest picture of the first group, where the track begins with a keyframe; a track that begins inside a
+    // group is left as it was.
+    const auto h264FirstShown = [&](const MatroskaTrack* t, const int64_t first)
+    {
+        int64_t earliest = first;
+        bool startsWithKey = false;
+        if (mpegFirstShown(scan, facts.firstCluster, facts.segmentEnd, START_CLUSTERS, t->num, false, earliest,
+                           &startsWithKey) &&
+            startsWithKey && earliest < first)
+        {
+            m_shownAfterFirstBlock[t->num] = earliest - first;
+            return earliest;
+        }
+        return first;
+    };
+    const auto h264Video = [](const MatroskaTrack* t) {
+        return t->type == MatroskaTrackType::VIDEO && t->codec_id && !strcmp(t->codec_id, MATROSKA_CODEC_ID_AVC_FOURCC);
+    };
     if (mpegVideo(video))
         videoTime = firstShown(video, videoTime);
+    else if (h264Video(video))
+        videoTime = h264FirstShown(video, videoTime);
     for (int i = 0; i < num_tracks; i++)
     {
         int64_t time = 0;
@@ -4700,6 +4727,8 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
             continue;
         if (mpegVideo(tracks[i]))
             time = firstShown(tracks[i], time);
+        else if (h264Video(tracks[i]))
+            time = h264FirstShown(tracks[i], time);
         if (time != videoTime)
             m_trackExtras[tracks[i]->num]["srcstartdelay"] =
                 std::to_string((time - videoTime) * static_cast<int64_t>(facts.timestampScale));
