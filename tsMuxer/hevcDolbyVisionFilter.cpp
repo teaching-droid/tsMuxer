@@ -29,7 +29,7 @@ void HevcDolbyVisionFilter::setOriginalRpus(DvOriginalRpus&& rpus)
 {
     m_originals = std::move(rpus);
     if (m_originals.offsets.size() != m_originals.pts.size())
-        THROW(ERR_COMMON, "Dolby Vision: this file preserves "
+        THROW(ERR_SOURCE, "Dolby Vision: this file preserves "
                               << m_originals.offsets.size() << " original RPUs but timestamps for "
                               << m_originals.pts.size()
                               << ". They cannot be matched to pictures, so the disc is not rebuilt from it.")
@@ -39,7 +39,7 @@ void HevcDolbyVisionFilter::setOriginalRpus(DvOriginalRpus&& rpus)
     for (size_t i = 1; i < m_originals.pts.size(); ++i)
     {
         if (m_originals.pts[i] <= m_originals.pts[i - 1])
-            THROW(ERR_COMMON,
+            THROW(ERR_SOURCE,
                   "Dolby Vision: the preserved original RPUs are not in presentation order, so this file has been "
                   "altered since it was written and the disc is not rebuilt from it.")
     }
@@ -149,7 +149,7 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
                         avPacket.pts == AV_NOPTS_VALUE_INTERNAL ? -1 : avPacket.pts / INTERNAL_PTS_PER_MS;
                     const int64_t entry = ms < 0 ? -1 : entryForPts(ms);
                     if (entry < 0)
-                        THROW(ERR_COMMON,
+                        THROW(ERR_SOURCE,
                               "Dolby Vision: a picture at "
                                   << ms
                                   << " ms has no preserved original RPU, so this file no longer lines up with the "
@@ -194,7 +194,7 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
     const bool singleLayer = m_rpu > 0 && m_unwrapped == 0;
     const bool noDolbyVision = m_packets > 32 && m_rpu == 0 && m_unwrapped == 0;
     if (singleLayer || noDolbyVision)
-        THROW(ERR_COMMON, (singleLayer ? "Dolby Vision: this track carries an RPU but no enhancement layer, so it is "
+        THROW(ERR_SOURCE, (singleLayer ? "Dolby Vision: this track carries an RPU but no enhancement layer, so it is "
                                          "single layer and cannot be split into two."
                                        : "This HEVC track carries no Dolby Vision enhancement layer, so it cannot be "
                                          "split into two.")

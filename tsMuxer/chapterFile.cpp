@@ -194,7 +194,7 @@ std::string readWholeFile(const std::string& fileName)
 {
     TextFile file;
     if (!file.open(fileName.c_str(), File::ofRead))
-        THROW(ERR_COMMON, "Can't open the chapter file " << fileName)
+        THROW(ERR_SOURCE, "Can't open the chapter file " << fileName)
     std::string raw;
     char buf[16384];
     int got;
@@ -261,14 +261,14 @@ std::vector<AVChapter> parseOgm(const std::string& text, const std::string& file
         size_t first = 7;
         while (first < i && key[first] == '0') ++first;
         if (i - first > 9)
-            THROW(ERR_COMMON, fileName << ", line " << lineNo << ": the chapter number " << key.substr(7, i - 7)
+            THROW(ERR_SOURCE, fileName << ", line " << lineNo << ": the chapter number " << key.substr(7, i - 7)
                                        << " is too large (at most 9 digits)")
         const auto number = first < i ? static_cast<uint32_t>(std::stoul(key.substr(first, i - first))) : 0u;
 
         std::map<uint32_t, std::string>& into = isName ? names : times;
         std::map<uint32_t, int>& lines = isName ? nameLine : timeLine;
         if (!into.emplace(number, value).second)
-            THROW(ERR_COMMON, fileName << ": the " << (isName ? "name" : "time") << " of chapter " << number
+            THROW(ERR_SOURCE, fileName << ": the " << (isName ? "name" : "time") << " of chapter " << number
                                        << " is given twice, on lines " << lines[number] << " and " << lineNo)
         lines[number] = lineNo;
     }
@@ -284,7 +284,7 @@ std::vector<AVChapter> parseOgm(const std::string& text, const std::string& file
         chapters.emplace_back(start, name != names.end() ? name->second : std::string(), std::string());
     }
     if (chapters.empty())
-        THROW(ERR_COMMON, "No chapters found in " << fileName << ". A simple text chapter file has "
+        THROW(ERR_SOURCE, "No chapters found in " << fileName << ". A simple text chapter file has "
                                                   << "lines like CHAPTER01=00:00:00.000")
     return chapters;
 }
@@ -359,11 +359,11 @@ std::vector<AVChapter> parseXml(const std::string& text, const std::string& file
         chapters.emplace_back(start, name, language);
     }
     if (chapters.empty() && hiddenLeftOut > 0)
-        THROW(ERR_COMMON, "Every chapter of the edition used in "
+        THROW(ERR_SOURCE, "Every chapter of the edition used in "
                               << fileName << " is hidden (ChapterFlagHidden) or disabled (ChapterFlagEnabled 0), so "
                               << "there is no chapter to show.")
     if (chapters.empty())
-        THROW(ERR_COMMON, "No chapters found in " << fileName << ". A Matroska XML chapter file has a "
+        THROW(ERR_SOURCE, "No chapters found in " << fileName << ". A Matroska XML chapter file has a "
                                                   << "ChapterAtom with a ChapterTimeStart in it")
     return chapters;
 }
@@ -404,7 +404,7 @@ double chapterTimeToSeconds(const std::string& text, const std::string& where)
     }
     const double seconds = ok ? timeToFloat(t) : 0.0;
     if (!ok || !std::isfinite(seconds) || seconds < 0.0 || seconds > 100000.0 * 3600.0)
-        THROW(ERR_COMMON, where << ": \"" << t << "\" is not a time from 0 to 100000 hours, written as HH:MM:SS.mmm")
+        THROW(ERR_SOURCE, where << ": \"" << t << "\" is not a time from 0 to 100000 hours, written as HH:MM:SS.mmm")
     return seconds;
 }
 
@@ -424,7 +424,7 @@ std::vector<AVChapter> readChapterFile(const std::string& fileName)
     if (text.size() >= 2 &&
         ((static_cast<unsigned char>(text[0]) == 0xFF && static_cast<unsigned char>(text[1]) == 0xFE) ||
          (static_cast<unsigned char>(text[0]) == 0xFE && static_cast<unsigned char>(text[1]) == 0xFF)))
-        THROW(ERR_COMMON, "The chapter file " << fileName << " is UTF-16. Save it as UTF-8 or plain text.")
+        THROW(ERR_SOURCE, "The chapter file " << fileName << " is UTF-16. Save it as UTF-8 or plain text.")
 
     const std::string head = trimmed(text);
     const bool looksLikeXml = !head.empty() && head[0] == '<';

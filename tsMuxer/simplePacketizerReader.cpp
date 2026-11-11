@@ -1272,7 +1272,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
             if (decodeRez == NOT_ENOUGH_BUFFER)
             {
                 if (m_bufEnd - frame > DEFAULT_FILE_BLOCK_SIZE)
-                    THROW(ERR_COMMON,
+                    THROW(ERR_SOURCE,
                           getCodecInfo().displayName << " stream (track " << m_streamIndex << "): invalid stream.")
                 memmove(m_tmpBuffer.data(), m_curPos, m_bufEnd - m_curPos);
                 m_tmpBufferLen = m_bufEnd - m_curPos;
@@ -1416,7 +1416,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
         if (frameLen == NOT_ENOUGH_BUFFER)
         {
             if (m_bufEnd - m_curPos > DEFAULT_FILE_BLOCK_SIZE)
-                THROW(ERR_COMMON,
+                THROW(ERR_SOURCE,
                       getCodecInfo().displayName << " stream (track " << m_streamIndex << "): invalid stream.")
             memmove(m_tmpBuffer.data(), m_curPos, m_bufEnd - m_curPos);
             m_tmpBufferLen = m_bufEnd - m_curPos;

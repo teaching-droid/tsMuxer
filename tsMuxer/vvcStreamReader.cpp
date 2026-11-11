@@ -306,13 +306,13 @@ void VVCStreamReader::updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* nex
     auto tmpBuffer = std::make_unique<uint8_t[]>(unit->nalBufferLen() + 16);
     const long newSpsLen = unit->serializeBuffer(tmpBuffer.get(), tmpBuffer.get() + unit->nalBufferLen() + 16);
     if (newSpsLen == -1)
-        THROW(ERR_COMMON, "Not enough buffer")
+        THROW(ERR_SOURCE, "Not enough buffer")
 
     if (m_bufEnd && newSpsLen != oldNalSize)
     {
         m_vpsSizeDiff = newSpsLen - oldNalSize;
         if (m_bufEnd + m_vpsSizeDiff > m_tmpBuffer + m_tmpBufferSize)
-            THROW(ERR_COMMON, "Not enough buffer")
+            THROW(ERR_SOURCE, "Not enough buffer")
         memmove(nextNal + m_vpsSizeDiff, nextNal, m_bufEnd - nextNal);
         m_bufEnd += m_vpsSizeDiff;
     }

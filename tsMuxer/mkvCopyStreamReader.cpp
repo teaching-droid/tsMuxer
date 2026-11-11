@@ -269,7 +269,7 @@ int MatroskaCopyStreamReader::readPacket(AVPacket& avPacket)
         return NEED_MORE_DATA;
     const uint8_t* p = m_input.data() + m_inputPos;
     if (memcmp(p, "MKCP", 4) != 0)
-        THROW(ERR_COMMON,
+        THROW(ERR_SOURCE,
               "A Matroska track copied as it is lost its framing at byte " << m_processedSize << " of its data.")
     const auto pts = static_cast<int64_t>(readBe(p + 4, 8));
     const auto duration = static_cast<int64_t>(readBe(p + 12, 8));

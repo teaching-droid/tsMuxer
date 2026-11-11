@@ -346,7 +346,7 @@ bool BlurayHelper::open(const string& dst, const DiskType dt, const int64_t disk
             if (defaultGuard && !error.empty())
                 breaks.clear();
             else if (!error.empty())
-                THROW(ERR_COMMON, error)
+                THROW(ERR_USAGE, error)
             if (!warning.empty() && !defaultGuard)
                 LTRACE(LT_WARN, 2, warning);
             std::string list;
@@ -698,8 +698,8 @@ bool BlurayHelper::createMPLSFile(TSMuxer* mainMuxer, TSMuxer* subMuxer, int aut
     if (mplsParser.m_marks.size() > 999)
     {
         delete[] mplsBuffer;
-        THROW(ERR_COMMON, "A Blu-ray playlist holds at most 999 chapter marks, and the chapters within the title are "
-                              << mplsParser.m_marks.size() << ". Give fewer chapters.")
+        THROW(ERR_USAGE, "A Blu-ray playlist holds at most 999 chapter marks, and the chapters within the title are "
+                             << mplsParser.m_marks.size() << ". Give fewer chapters.")
     }
     mplsParser.PlayItem_random_access_flag = false;
     PIDListMap pidList = mainMuxer->getPidList();

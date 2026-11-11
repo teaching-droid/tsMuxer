@@ -818,7 +818,7 @@ int AV1StreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, const bo
         // A line that names V_AV1 for data that is not AV1 was muxed all the same: start codes found by chance in audio
         // became "pictures", and the job said "Mux successful complete" over a stream nothing can play
         if (m_notAv1)
-            THROW(ERR_COMMON,
+            THROW(ERR_SOURCE,
                   "Track " << m_streamIndex
                            << " is not AV1: its data does not begin with an AV1 OBU, as an AV1 stream does. "
                               "The usual reason is that the codec on the meta line is not the codec the "

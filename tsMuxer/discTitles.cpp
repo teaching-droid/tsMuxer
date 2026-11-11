@@ -1,6 +1,7 @@
 // Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "discTitles.h"
+#include "vodCoreException.h"
 
 #include <fs/directory.h>
 #include <fs/discImage.h>
@@ -827,8 +828,8 @@ std::string discTitlePlaylist(const std::string& discPath, const std::string& ti
     const std::string digits = title.find_first_not_of("0123456789") == std::string::npos ? title : "";
     const int n = digits.empty() || digits.size() > 4 ? 0 : std::stoi(digits);
     if (n < 1 || n > static_cast<int>(t.titles.size()))
-        throw std::runtime_error("title=" + title + " is not a title of " + discPath + ", which has " +
-                                 std::to_string(t.titles.size()) + (t.titles.size() == 1 ? " title" : " titles") +
-                                 ": give a number from 1 to " + std::to_string(t.titles.size()) + ", or main");
+        throw UsageError("title=" + title + " is not a title of " + discPath + ", which has " +
+                         std::to_string(t.titles.size()) + (t.titles.size() == 1 ? " title" : " titles") +
+                         ": give a number from 1 to " + std::to_string(t.titles.size()) + ", or main");
     return t.titles[n - 1].playlist;
 }

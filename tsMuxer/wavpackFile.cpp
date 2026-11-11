@@ -183,7 +183,7 @@ bool prepareWavpackFile(const std::string& fileName)
     if (ec || !file)
         return false;  // said by whatever opens it, as for any file that cannot be opened
     if (fileSize > MAX_WAVPACK_BYTES)
-        THROW(ERR_COMMON, "The WavPack file " << name << " is " << fileSize / (1024 * 1024)
+        THROW(ERR_SOURCE, "The WavPack file " << name << " is " << fileSize / (1024 * 1024)
                                               << " MiB. tsMuxeR reads a WavPack file into memory, up to "
                                               << MAX_WAVPACK_BYTES / (1024 * 1024) << " MiB.")
     std::vector<uint8_t> data(static_cast<size_t>(fileSize));
@@ -212,7 +212,7 @@ bool prepareWavpackFile(const std::string& fileName)
             if (data.size() - at == 128 && std::memcmp(data.data() + at, "TAG", 3) == 0)
                 break;
             if (frames.empty() && !inFrame && at == 0)
-                THROW(ERR_COMMON, "The file " << name << " is no WavPack file: it does not begin with a block.")
+                THROW(ERR_SOURCE, "The file " << name << " is no WavPack file: it does not begin with a block.")
             ++strayBytes;
             ++at;
             continue;
@@ -237,7 +237,7 @@ bool prepareWavpackFile(const std::string& fileName)
         const size_t bodySize = (flags & HAS_CHECKSUM) ? bodyKept.size() : blockSize - HEADER;
         at += blockSize;
         if (flags & DSD_FLAG)
-            THROW(ERR_COMMON, "The WavPack file " << name << " holds DSD audio, which tsMuxeR does not read.")
+            THROW(ERR_SOURCE, "The WavPack file " << name << " holds DSD audio, which tsMuxeR does not read.")
         if (samples == 0)
             continue;  // a block of metadata only, as the RIFF trailer of a file packed from a WAV
         if (flags & INITIAL_BLOCK)
@@ -279,7 +279,7 @@ bool prepareWavpackFile(const std::string& fileName)
         }
     }
     if (frames.empty() || rate <= 0)
-        THROW(ERR_COMMON, "The WavPack file " << name << " holds no audio that tsMuxeR can read.")
+        THROW(ERR_SOURCE, "The WavPack file " << name << " holds no audio that tsMuxeR can read.")
     if (strayBytes > 0 || lostFrames > 0)
         LTRACE(LT_WARN, 2,
                "Warning: the WavPack file " << name << " is damaged: " << strayBytes

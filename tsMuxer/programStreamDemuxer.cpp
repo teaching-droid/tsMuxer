@@ -100,7 +100,7 @@ void ProgramStreamDemuxer::setFileIterator(FileNameIterator* itr)
     if (br)
         br->setFileIterator(itr, m_readerID);
     else if (itr != nullptr)
-        THROW(ERR_COMMON, "Can not set file iterator. Reader does not support bufferedReader interface.")
+        THROW(ERR_SOURCE, "Can not set file iterator. Reader does not support bufferedReader interface.")
 }
 
 ProgramStreamDemuxer::~ProgramStreamDemuxer() { m_bufferedReader->deleteReader(m_readerID); }
@@ -133,7 +133,7 @@ int ProgramStreamDemuxer::mpegps_psm_parse(const uint8_t* buff, const uint8_t* e
     // map at the limit was then up to 6 bytes longer than the room.
     if (psm_length > MAX_PES_HEADER_SIZE - 6)
     {
-        THROW(ERR_COMMON, "Can't parse Program Stream Map. Too large size " << psm_length << ". Max allowed size "
+        THROW(ERR_SOURCE, "Can't parse Program Stream Map. Too large size " << psm_length << ". Max allowed size "
                                                                             << MAX_PES_HEADER_SIZE - 6 << " bytes.")
     }
     if (end - buff < psm_length + 7)
@@ -479,7 +479,7 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
                 const int pesPayloadLen = pesPacket->getPacketLength() - headerLen - afterPesHeader;
                 const int copyLen = FFMIN(pesPayloadLen, (int)(end - payloadData));
                 if (copyLen < 0)
-                    THROW(ERR_COMMON, "Invalid copyLen")
+                    THROW(ERR_SOURCE, "Invalid copyLen")
                 addSubPicture(startcode, payloadData, copyLen,
                               !hasPts              ? -1
                               : mpeg1HeaderLen > 0 ? mpeg1Pts
@@ -522,7 +522,7 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
                 const int copyLen = FFMIN(pesPayloadLen, (int)(end - payloadData));
                 if (copyLen < 0)
                 {
-                    THROW(ERR_COMMON, "Invalid copyLen")
+                    THROW(ERR_SOURCE, "Invalid copyLen")
                 }
                 if (idx >= 0 && idx <= 15)
                     discardSize += copyLen - appendLpcm(idx, vect, payloadData, copyLen, m_lpcmFrameAt);
@@ -586,7 +586,7 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
     // What is left is a header cut by the end of the read; it is kept until the rest arrives. Nothing longer than the
     // room for it can be kept, and nothing that fits a program stream is.
     if (end - curBuf > MAX_PES_HEADER_SIZE)
-        THROW(ERR_COMMON, "Can't parse the program stream: a header cut by the end of a read is "
+        THROW(ERR_SOURCE, "Can't parse the program stream: a header cut by the end of a read is "
                               << end - curBuf << " bytes long, more than the " << MAX_PES_HEADER_SIZE
                               << " bytes kept for one.")
     m_tmpBufferLen = static_cast<uint32_t>(end - curBuf);

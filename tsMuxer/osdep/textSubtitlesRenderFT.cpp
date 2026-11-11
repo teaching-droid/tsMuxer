@@ -57,7 +57,7 @@ TextSubtitlesRenderFT::TextSubtitlesRenderFT() : TextSubtitlesRender()
     {
         int error = FT_Init_FreeType(&library);
         if (error)
-            THROW(ERR_COMMON, "Can't initialize freeType font library");
+            THROW(ERR_SOURCE, "Can't initialize freeType font library");
         loadFontMap();
         initialized = true;
     }
@@ -292,7 +292,7 @@ void TextSubtitlesRenderFT::setFont(const Font& font)
     {
         // Windows draws with a font of its own choosing when none is named; here there is none to fall back on
         if (font.m_name.empty())
-            THROW(ERR_COMMON,
+            THROW(ERR_USAGE,
                   "No font is named for the subtitles. Give the track font-name=, the name of a font "
                   "installed here or the path of a .ttf, .otf or .ttc file.")
         string fontName = font.m_name;
@@ -323,7 +323,7 @@ void TextSubtitlesRenderFT::setFont(const Font& font)
                 std::string family;
                 const std::string file = fallbackFontFile(family);
                 if (file.empty())
-                    THROW(ERR_COMMON, "Can't find a font file for "
+                    THROW(ERR_SOURCE, "Can't find a font file for "
                                           << fontName
                                           << ", and no sans serif font that could take its place is installed. Give "
                                              "the track font-name= with a font installed here, or the path of a "
@@ -351,11 +351,11 @@ void TextSubtitlesRenderFT::setFont(const Font& font)
         int error = loadFont(modFontName, m_face);
         if (error == FT_Err_Unknown_File_Format)
         {
-            THROW(ERR_COMMON, "Unknown font format for file " << modFontName.c_str())
+            THROW(ERR_SOURCE, "Unknown font format for file " << modFontName.c_str())
         }
         else if (error)
         {
-            THROW(ERR_COMMON, "Can't load font file " << modFontName.c_str())
+            THROW(ERR_SOURCE, "Can't load font file " << modFontName.c_str())
         }
 
         // No piece of a subtitle is measured or drawn above 65,535 (browserSizeToRealSize holds every size to it, and
@@ -370,7 +370,7 @@ void TextSubtitlesRenderFT::setFont(const Font& font)
                                  64,            /* horizontal device resolution */
                                  64);           /* vertical device resolution */
         if (error)
-            THROW(ERR_COMMON, "Invalid font size " << font.m_size)
+            THROW(ERR_USAGE, "Invalid font size " << font.m_size)
 
         m_line_thickness = FT_MulFix(m_face->underline_thickness, m_face->size->metrics.y_scale) >> 6;
         if (m_line_thickness < 1)
@@ -383,7 +383,7 @@ void TextSubtitlesRenderFT::setFont(const Font& font)
             auto encoding = reinterpret_cast<FT_Encoding*>(&m_font.m_charset);
             error = FT_Select_Charmap(m_face, *encoding);
             if (error)
-                THROW(ERR_COMMON, "Can't load charset " << m_font.m_charset << " for font " << modFontName.c_str())
+                THROW(ERR_SOURCE, "Can't load charset " << m_font.m_charset << " for font " << modFontName.c_str())
         }
         // A track asks for few faces and sizes, but a search for the size that fits tries new ones for each
         // subtitle: the kept measurements are let go now and then, so that they cannot grow without end.
@@ -761,14 +761,14 @@ void TextSubtitlesRenderFT::getTextSize(const string& text, SIZE* mSize)
                                          if (error)
                                          {
                                              m_curGlyphMetrics->erase(kept);
-                                             THROW(ERR_COMMON, "Can't load symbol code '" << c << "' from font")
+                                             THROW(ERR_SOURCE, "Can't load symbol code '" << c << "' from font")
                                          }
 #if FREETYPE_MAJOR * 100 + FREETYPE_MINOR < 210  // an older FreeType sets the left edge only when it draws
                                          error = FT_Render_Glyph(m_face->glyph, FT_RENDER_MODE_NORMAL);
                                          if (error)
                                          {
                                              m_curGlyphMetrics->erase(kept);
-                                             THROW(ERR_COMMON, "Can't render symbol code '" << c << "' from font")
+                                             THROW(ERR_SOURCE, "Can't render symbol code '" << c << "' from font")
                                          }
 #endif
                                          kept->second =

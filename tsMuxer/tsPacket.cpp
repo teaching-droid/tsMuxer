@@ -827,9 +827,9 @@ void CLPIParser::composeClipInfo(BitStreamWriter& writer) const
     for (int i = 0; i < 32; i++) writer.putBits(32, 0);  // reserved
     composeTS_type_info_block(writer);
     if (is_ATC_delta)
-        THROW(ERR_COMMON, "CLPI is_ATC_delta is not implemented yet.")
+        THROW(ERR_SOURCE, "CLPI is_ATC_delta is not implemented yet.")
     if (application_type == 6)
-        THROW(ERR_COMMON, "CLPI application_type==6 is not implemented yet.")
+        THROW(ERR_SOURCE, "CLPI application_type==6 is not implemented yet.")
     *lengthPos = my_htonl(writer.getBitsCount() / 8 - beforeCount);
 }
 
@@ -1018,7 +1018,7 @@ void CLPIParser::composeEP_map(BitStreamWriter& writer, const bool isSSExt)
             }
         }
     if (processStream.empty())
-        THROW(ERR_COMMON, "Can't create EP map. One audio or video stream is needed.")
+        THROW(ERR_USAGE, "Can't create EP map. One audio or video stream is needed.")
     // ------------------
     writer.putBits(8, 0);                                       // reserved_for_word_align
     writer.putBits(8, static_cast<int>(processStream.size()));  // number_of_stream_PID_entries
@@ -1369,7 +1369,7 @@ void CLPIParser::parse(uint8_t* buffer, const int64_t len)
     }
     catch (BitStreamException&)
     {
-        THROW(ERR_COMMON, "Can't parse clip info file: unexpected end of data")
+        THROW(ERR_SOURCE, "Can't parse clip info file: unexpected end of data")
     }
 }
 
@@ -1514,7 +1514,7 @@ void MPLSParser::parse(uint8_t* buffer, const int len)
     }
     catch (BitStreamException&)
     {
-        THROW(ERR_COMMON, "Can't parse media playlist file: unexpected end of data")
+        THROW(ERR_SOURCE, "Can't parse media playlist file: unexpected end of data")
     }
 }
 
@@ -2051,7 +2051,7 @@ MPLSStreamInfo& MPLSParser::getMainStream()
         if (isAudioStreamType(coding_type))
             return i;
     }
-    THROW(ERR_COMMON, "Can't find stream index. One audio or video stream is needed.")
+    THROW(ERR_USAGE, "Can't find stream index. One audio or video stream is needed.")
 }
 
 // The place in m_streamInfo of entry `value` of the PG and text subtitle list: STN_table() stores the primary video
@@ -2164,8 +2164,8 @@ void MPLSParser::selectAngle(const int angle)
     int most = 1;
     for (const MPLSPlayItem& item : m_playItems) most = (std::max)(most, item.angles);
     if (angle < 1 || angle > most)
-        THROW(ERR_COMMON, "angle=" << angle << " is not an angle of this playlist, which has "
-                                   << (most == 1 ? std::string("one angle") : std::to_string(most) + " angles"))
+        THROW(ERR_USAGE, "angle=" << angle << " is not an angle of this playlist, which has "
+                                  << (most == 1 ? std::string("one angle") : std::to_string(most) + " angles"))
     m_angle = angle;
     for (MPLSPlayItem& item : m_playItems)
         if (angle > 1 && item.angles >= angle && static_cast<size_t>(angle - 2) < item.angleFiles.size())
@@ -2278,7 +2278,7 @@ MPLSStreamInfo& MPLSParser::getMVCDependStream()
         if (coding_type == StreamType::VIDEO_MVC)
             return i;
     }
-    THROW(ERR_COMMON, "Can't find stream index. One audio or video stream is needed.")
+    THROW(ERR_USAGE, "Can't find stream index. One audio or video stream is needed.")
 }
 
 void MPLSParser::composePlayList(BitStreamWriter& writer)
@@ -3544,7 +3544,7 @@ void MPLSStreamInfo::composeStreamEntry(BitStreamWriter& writer, size_t entryNum
         writer.putBits(8, 0);
     }
     else
-        THROW(ERR_COMMON, "Unsupported media type for AVCHD/Blu-ray muxing")
+        THROW(ERR_USAGE, "Unsupported media type for AVCHD/Blu-ray muxing")
     *lengthPos = static_cast<uint8_t>(writer.getBitsCount() / 8 - initPos);
 }
 
@@ -3614,6 +3614,6 @@ void MPLSStreamInfo::composeStreamAttributes(BitStreamWriter& writer)
         writer.putBits(8, 0);  // reserved_for_future_use
     }
     else
-        THROW(ERR_COMMON, "Unsupported media type for AVCHD/Blu-ray muxing")
+        THROW(ERR_USAGE, "Unsupported media type for AVCHD/Blu-ray muxing")
     *lengthPos = static_cast<uint8_t>(writer.getBitsCount() / 8 - initPos);
 }

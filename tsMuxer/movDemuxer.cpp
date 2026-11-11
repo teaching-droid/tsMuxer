@@ -2964,7 +2964,7 @@ int MovDemuxer::mov_read_trak(MOVAtom atom)
     // Check before allocating. The other order leaked the context every time the limit was hit,
     // and said less than the Matroska path does about what went wrong.
     if (num_tracks >= MAX_STREAMS)
-        THROW(ERR_COMMON, "Too many tracks. Max supported tracks count: " << MAX_STREAMS)
+        THROW(ERR_SOURCE, "Too many tracks. Max supported tracks count: " << MAX_STREAMS)
     const auto sc = new MOVStreamContext();
     Track* st = tracks[num_tracks] = sc;
     num_tracks++;
@@ -3174,7 +3174,7 @@ int MovDemuxer::mov_read_tfhd(MOVAtom atom)
             break;
         }
     if (!trex)
-        THROW(ERR_COMMON, "could not find corresponding trex")
+        THROW(ERR_SOURCE, "could not find corresponding trex")
 
     // Where this track fragment's data offsets count from: the offset the header gives, else the start of the moof
     // when the header says so (default-base-is-moof, which CMAF and DASH fragments use), else the end of the data of

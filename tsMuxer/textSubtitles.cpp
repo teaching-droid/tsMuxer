@@ -178,7 +178,7 @@ uint8_t TextToPGSConverter::color32To8(const uint32_t* buff, const uint32_t colo
         }
         // find nearest color
         // if (m_paletteYUV.size() >= 256)
-        THROW(ERR_COMMON, "Can't transform image to YUV: too many colors are used.")
+        THROW(ERR_SOURCE, "Can't transform image to YUV: too many colors are used.")
         // return m_paletteYUV[yuv];
     }
     return itr->second;
@@ -381,7 +381,7 @@ void TextToPGSConverter::packDrawnBox(const uint32_t* picture, const uint32_t co
         {
             // a run takes at most 4 bytes, and the end of the line 2 more
             if (bufEnd - curPtr < 6)
-                THROW(ERR_COMMON, "Not enough RLE buffer for encoding picture")
+                THROW(ERR_SOURCE, "Not enough RLE buffer for encoding picture")
             const int repCnt = getRepeatCnt(src, lineEnd, colorMask);
             curPtr = packRun(curPtr, src, repCnt, colorMask);
             src += repCnt;

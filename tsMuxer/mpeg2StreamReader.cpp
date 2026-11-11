@@ -467,7 +467,7 @@ int MPEG2StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AV
     }
     const auto len = static_cast<int64_t>(m_seqHeaderCopy.size());
     if (dstEnd - dstBuffer < len)
-        THROW(ERR_COMMON, "MPEG-2 stream error: not enough buffer to repeat the sequence header")
+        THROW(ERR_SOURCE, "MPEG-2 stream error: not enough buffer to repeat the sequence header")
     if (!m_seqRepeatSaid)
     {
         m_seqRepeatSaid = true;

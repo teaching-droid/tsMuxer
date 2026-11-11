@@ -956,13 +956,13 @@ void HEVCStreamReader::updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* ne
     auto tmpBuffer = std::make_unique<uint8_t[]>(unit->nalBufferLen() + 16);
     const int newSpsLen = unit->serializeBuffer(tmpBuffer.get(), tmpBuffer.get() + unit->nalBufferLen() + 16);
     if (newSpsLen == -1)
-        THROW(ERR_COMMON, "Not enough buffer")
+        THROW(ERR_SOURCE, "Not enough buffer")
 
     if (m_bufEnd && newSpsLen != oldNalSize)
     {
         m_vpsSizeDiff = newSpsLen - oldNalSize;
         if (m_bufEnd + m_vpsSizeDiff > m_tmpBuffer + m_tmpBufferSize)
-            THROW(ERR_COMMON, "Not enough buffer")
+            THROW(ERR_SOURCE, "Not enough buffer")
         memmove(nextNal + m_vpsSizeDiff, nextNal, m_bufEnd - nextNal);
         m_bufEnd += m_vpsSizeDiff;
     }
@@ -1065,12 +1065,12 @@ void HEVCStreamReader::markHdr10ByMasteringSei()
 void HEVCStreamReader::refuseMultiLayer() const
 {
     if (!m_sps)
-        THROW(ERR_COMMON, "Track " << m_streamIndex
+        THROW(ERR_SOURCE, "Track " << m_streamIndex
                                    << " is not HEVC: no sequence parameter set came before its first picture, as "
                                       "one does in an HEVC stream. The usual reason is that the codec on the meta "
                                       "line is not the codec the file holds. List the file on its own to see what "
                                       "tsMuxeR makes of it.")
-    THROW(ERR_COMMON, "Track " << m_streamIndex
+    THROW(ERR_SOURCE, "Track " << m_streamIndex
                                << ": the HEVC stream has more than one layer (multi-layer HEVC, MV-HEVC, as Dolby "
                                   "Vision profile 20 and 3D HEVC are coded). tsMuxeR can mux single layer HEVC only, "
                                   "so it is not muxed.")
@@ -1957,7 +1957,7 @@ int HEVCStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
     if (!audFound)
     {
         if (dstEnd - curPos < 7)
-            THROW(ERR_COMMON, "HEVC stream error: not enough buffer to write an access unit delimiter")
+            THROW(ERR_SOURCE, "HEVC stream error: not enough buffer to write an access unit delimiter")
         if (!m_audInsertReported)
         {
             m_audInsertReported = true;

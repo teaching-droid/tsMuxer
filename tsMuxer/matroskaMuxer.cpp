@@ -1054,7 +1054,7 @@ void MatroskaMuxer::parseMuxOpt(const std::string& opts)
         const std::string key = token.substr(0, eq);
         const std::string value = eq == std::string::npos ? std::string() : token.substr(eq + 1);
         if ((key == "--split-size" || key == "--split-duration") && value.empty())
-            THROW(ERR_COMMON, "Missing value for " << key)
+            THROW(ERR_USAGE, "Missing value for " << key)
         if (key == "--split-size")
             m_splitSize = checkedSplitSize(value);
         else if (key == "--split-duration")
@@ -1112,28 +1112,28 @@ void MatroskaMuxer::parseMuxOpt(const std::string& opts)
         // they need. Unless it is not the library at all (wrongLibrary): then the right one is fetched.
         if (!DoviLib::instance().available() && DoviLib::instance().fileFound() && !DoviLib::instance().wrongLibrary())
         {
-            THROW(ERR_COMMON, "--dv-profile=8.1 needs "
-                                  << DoviLib::libraryName() << ", which converts the Dolby Vision metadata, and "
-                                  << DoviLib::instance().loadError() << ". Or leave --dv-profile at 7.")
+            THROW(ERR_USAGE, "--dv-profile=8.1 needs "
+                                 << DoviLib::libraryName() << ", which converts the Dolby Vision metadata, and "
+                                 << DoviLib::instance().loadError() << ". Or leave --dv-profile at 7.")
         }
         if (!DoviLib::instance().available())
         {
-            THROW(ERR_COMMON, "--dv-profile=8.1 needs "
-                                  << DoviLib::libraryName() << ", which converts the Dolby Vision metadata, and "
-                                  << DoviLib::instance().loadError()
-                                  << (DoviLib::instance().wrongLibrary() ? ". Put the library itself there instead"
-                                                                         : ". Put it beside tsMuxeR")
-                                  << ". On 64 bit Windows take "
-                                     "libdovi-<version>-x86_64-pc-windows-msvc.zip from the dovi_tool releases page "
-                                     "and use the dovi.dll inside it. Do NOT take dovi_tool-<version>.zip from the "
-                                     "same page: that is the command line tool and this cannot use it. Other "
-                                     "platforms build the library from source. Or leave --dv-profile at 7.")
+            THROW(ERR_USAGE, "--dv-profile=8.1 needs "
+                                 << DoviLib::libraryName() << ", which converts the Dolby Vision metadata, and "
+                                 << DoviLib::instance().loadError()
+                                 << (DoviLib::instance().wrongLibrary() ? ". Put the library itself there instead"
+                                                                        : ". Put it beside tsMuxeR")
+                                 << ". On 64 bit Windows take "
+                                    "libdovi-<version>-x86_64-pc-windows-msvc.zip from the dovi_tool releases page "
+                                    "and use the dovi.dll inside it. Do NOT take dovi_tool-<version>.zip from the "
+                                    "same page: that is the command line tool and this cannot use it. Other "
+                                    "platforms build the library from source. Or leave --dv-profile at 7.")
         }
         m_dvWriteProfile81 = true;
     }
     else
     {
-        THROW(ERR_COMMON, "Invalid --dv-profile value '" << value << "'. Expected 7 or 8.1.")
+        THROW(ERR_USAGE, "Invalid --dv-profile value '" << value << "'. Expected 7 or 8.1.")
     }
 }
 
@@ -2043,20 +2043,20 @@ void MatroskaMuxer::openDstFile()
     // 96,002 byte file. The muxer knows its tracks by now, since they are added before this is
     // called, so nothing is lost by asking here.
     if (m_dvWriteProfile81 && !couldFoldDualLayer())
-        THROW(ERR_COMMON, DV_PROFILE81_NEEDS_DUAL_LAYER)
+        THROW(ERR_SOURCE, DV_PROFILE81_NEEDS_DUAL_LAYER)
 
     // A .webm output is WebM, the subset of Matroska a web browser plays: VP8, VP9 and AV1 video, Opus and Vorbis
     // audio, and of the elements only those the WebM container guidelines list.
     m_webm = strToLowerCase(extractFileExt(m_origFileName)) == "webm";
     if (m_keepEditions && (m_webm || isSplitting()))
-        THROW(ERR_COMMON, "--keep-editions keeps one Matroska file as it is stored: it cannot be used with "
-                              << (m_webm ? "a WebM output, which has no editions or segment links." : "a split."))
+        THROW(ERR_USAGE, "--keep-editions keeps one Matroska file as it is stored: it cannot be used with "
+                             << (m_webm ? "a WebM output, which has no editions or segment links." : "a split."))
     if (m_webm)
         for (const auto& [index, track] : m_tracks)
             if (track.codecID != CODEC_V_VP8 && track.codecID != CODEC_V_VP9 && track.codecID != CODEC_V_AV1 &&
                 track.codecID != CODEC_A_OPUS && track.codecID != CODEC_A_VORBIS && track.codecID != CODEC_S_SRT &&
                 !(track.codecID == CODEC_S_MKVCOPY && isWebmVttText(track.matroskaCodecID)))
-                THROW(ERR_COMMON,
+                THROW(ERR_USAGE,
                       (track.codecReader ? track.codecReader->getCodecInfo().displayName : std::string("A track"))
                           << " cannot go into a WebM file, which holds VP8, VP9 and AV1 video, Opus and "
                              "Vorbis audio and text subtitles only. Give the output an .mkv name for it, or "
@@ -2581,12 +2581,12 @@ void MatroskaMuxer::refreshTrackProperties()
         if (!folded)
         {
             if (reversedDualLayer)
-                THROW(ERR_COMMON,
+                THROW(ERR_USAGE,
                       "--dv-profile=8.1 needs the two layers in the order a disc has them, and this mux lists "
                       "the ENHANCEMENT LAYER FIRST. The base layer is the larger picture and belongs on the "
                       "first video line; the enhancement layer, the smaller one carrying the Dolby Vision RPU, "
                       "belongs on the second. Swap the two video lines and the pair is folded and converted.")
-            THROW(ERR_COMMON, DV_PROFILE81_NEEDS_DUAL_LAYER)
+            THROW(ERR_SOURCE, DV_PROFILE81_NEEDS_DUAL_LAYER)
         }
     }
 
@@ -2649,7 +2649,7 @@ void MatroskaMuxer::writeDeferredHeader()
         for (const auto& [index, track] : m_tracks)
             if (track.trackType == MKV_TRACK_TYPE_SUBTITLE && track.matroskaCodecID != MATROSKA_CODEC_ID_SRT &&
                 !isWebmVttText(track.matroskaCodecID))
-                THROW(ERR_COMMON,
+                THROW(ERR_USAGE,
                       "A WebM file holds subtitles as text only, and this one is drawn into pictures. "
                       "Keep the subtitles as text, give the output an .mkv name, or leave the track out.")
 
@@ -2668,7 +2668,7 @@ void MatroskaMuxer::writeDeferredHeader()
     if (isSplitting())
         for (const auto& [streamIdx, track] : m_tracks)
             if (track.foldElStreamIndex >= 0)
-                THROW(ERR_COMMON,
+                THROW(ERR_USAGE,
                       "Splitting a Matroska output is not supported with a merged dual layer Dolby Vision "
                       "or 3D track. Make one file, or mux the layers to a transport stream.")
 
@@ -3612,7 +3612,7 @@ std::vector<uint8_t> MatroskaMuxer::convertDvElToLengthPrefixed(MkvTrackInfo& tr
                     // Refusing beats finishing. A file whose RPUs are part converted and part not
                     // would look complete and play wrong, which is the failure this whole design is
                     // built to avoid.
-                    THROW(ERR_COMMON, "Dolby Vision: converting an RPU to profile 8.1 failed after "
+                    THROW(ERR_SOURCE, "Dolby Vision: converting an RPU to profile 8.1 failed after "
                                           << m_dvRpusConverted << " frames: " << err)
                 }
                 // Keep the original. The payload only, WITHOUT its two byte NAL header, which is
@@ -5059,7 +5059,7 @@ void MatroskaMuxer::writeAttachments()
     for (size_t i = 1; i < ordered.size(); ++i)
     {
         if (ordered[i]->pts == ordered[i - 1]->pts)
-            THROW(ERR_COMMON,
+            THROW(ERR_SOURCE,
                   "Dolby Vision: one picture carries "
                       << "more than one RPU, so the originals cannot be matched to pictures one for one and "
                          "the profile 8.1 file would not be reversible. This is what a source that ends part "
@@ -5084,7 +5084,7 @@ void MatroskaMuxer::writeAttachments()
     {
         const int64_t ms = internalToRoundedMs(entry->pts - m_firstTimecode);  // as the block's time
         if (ms == previousMs)
-            THROW(ERR_COMMON,
+            THROW(ERR_SOURCE,
                   "Dolby Vision: two pictures land on the same millisecond, so the original RPUs "
                   "cannot be indexed by timestamp and the profile 8.1 file would not be reversible.")
         previousMs = ms;

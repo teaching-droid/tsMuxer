@@ -496,10 +496,10 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
         if (const auto srt = dynamic_cast<SRTStreamReader*>(codecReader); srt && srt->keepText())
         {
             if (!srt->hasVideoInfo())
-                THROW(ERR_COMMON, "Track "
-                                      << streamIndex
-                                      << ": keep-text applies to Matroska output and to a demux. This output draws the "
-                                         "subtitles into pictures, which needs video-width, video-height and fps.")
+                THROW(ERR_USAGE, "Track "
+                                     << streamIndex
+                                     << ": keep-text applies to Matroska output and to a demux. This output draws the "
+                                        "subtitles into pictures, which needs video-width, video-height and fps.")
             LTRACE(LT_WARN, 2,
                    "Warning: a transport stream has no common way to carry text subtitles, so track "
                        << streamIndex
@@ -1182,7 +1182,7 @@ void TSMuxer::sendAheadPatch(int64_t pos, const uint8_t* src, int len)
         if (!dst)
         {
             if (pos < m_outBufPos || pos >= m_outBufPos + m_outBufLen)
-                THROW(ERR_COMMON, "Internal error: output at " << pos << " to be retimed is no longer held")
+                THROW(ERR_INTERNAL_ERROR, "Internal error: output at " << pos << " to be retimed is no longer held")
             dst = m_outBuf + (pos - m_outBufPos);
             room = m_outBufPos + m_outBufLen - pos;
         }
@@ -1737,7 +1737,7 @@ void TSMuxer::buildPesHeader(const uint8_t pesStreamID, AVPacket& avPacket, int 
         // subtitle segment of nearly 64 KB is the one way to get here.
         const int pesLength = avPacket.size + pesPacket->getHeaderLength() - 6;
         if (pesLength > 0xFFFF)
-            THROW(ERR_COMMON, "A packet of " << avPacket.size << " bytes on track " << avPacket.stream_index
+            THROW(ERR_SOURCE, "A packet of " << avPacket.size << " bytes on track " << avPacket.stream_index
                                              << " does not fit in one PES packet of a transport stream (at most "
                                              << 0xFFFF - (pesPacket->getHeaderLength() - 6)
                                              << " bytes), so this track cannot be muxed to a transport stream or a "
@@ -1795,7 +1795,7 @@ void TSMuxer::refuseLongNonVideoPes() const
     if (it == m_pmt.pidList.end() || !isAudioOrSubtitleStreamType(it->second.m_streamType))
         return;
     const int64_t pesLength = static_cast<int64_t>(m_pesData.size()) - 6;
-    THROW(ERR_COMMON, "A packet of " << pesLength << " bytes on the stream with PID " << m_pesPID
+    THROW(ERR_SOURCE, "A packet of " << pesLength << " bytes on the stream with PID " << m_pesPID
                                      << " does not fit in one PES packet of a transport stream (at most 65535 bytes), "
                                         "so this track cannot be muxed to a transport stream or a disc. It can be "
                                         "muxed to Matroska.")
@@ -1820,7 +1820,7 @@ void TSMuxer::addData(const uint8_t pesStreamID, const int pid, AVPacket& avPack
     const int oldLen = static_cast<int>(m_pesData.size());
     const int pesHeaderLen = oldLen - beforePesLen;
     if (oldLen > 100000000)
-        THROW(ERR_COMMON, "Pes packet len too large ( >100Mb). Bad stream or invalid codec speciffed.")
+        THROW(ERR_SOURCE, "Pes packet len too large ( >100Mb). Bad stream or invalid codec speciffed.")
     m_pesData.grow(avPacket.size /*+ additionDataSize*/);
     uint8_t* dst = m_pesData.data() + oldLen;
     // memcpy(dst, tmpBuffer, additionDataSize);
@@ -1938,9 +1938,9 @@ std::string TSMuxer::getNextName(const std::string curName)
         // A clip name has five digits, and a playlist names a clip by them. A split that went past 99999 wrote a part
         // named 100000.m2ts, and the playlist pointed at clip 10000, which does not exist.
         if (origNum > 99999)
-            THROW(ERR_COMMON, "The split needs clip number " << origNum
-                                                             << ", and a disc clip has five digits at most. Give a "
-                                                                "lower --m2tsOffset or larger parts.")
+            THROW(ERR_USAGE, "The split needs clip number " << origNum
+                                                            << ", and a disc clip has five digits at most. Give a "
+                                                               "lower --m2tsOffset or larger parts.")
         result = closeDirPath(filePath) + strPadLeft(int32ToStr(origNum), 5, '0') + "." + fileExt;
     }
     else if (isSplitting())
@@ -1994,7 +1994,7 @@ void TSMuxer::gotoNextFile(const int64_t newPts)
     // Each part of a disc is a play item of the one playlist, and a playlist holds at most 999 play items. A split into
     // more parts wrote a playlist of 1000 or more, which no player reads, at exit 0.
     if (m_bluRayMode && m_fileNames.size() >= 999)
-        THROW(ERR_COMMON,
+        THROW(ERR_USAGE,
               "The split needs more than 999 parts, and a disc playlist holds at most 999 play items. Give "
               "a larger --split-duration or --split-size.")
     m_outFileName = getNextName(m_outFileName);
@@ -2036,7 +2036,7 @@ void TSMuxer::ensureOutBufSpace(const int needed)
     const int64_t want = static_cast<int64_t>(m_outBufLen) + needed;
     while (newCap < want) newCap *= 2;
     if (newCap > INT32_MAX - 1024)
-        THROW(ERR_COMMON, "Pes packet len too large (>2Gb) . Bad stream or invalid codec speciffed")
+        THROW(ERR_SOURCE, "Pes packet len too large (>2Gb) . Bad stream or invalid codec speciffed")
     const auto newBuf = new uint8_t[static_cast<size_t>(newCap)];
     memcpy(newBuf, m_outBuf, m_outBufLen);
     delete[] m_outBuf;
@@ -2052,7 +2052,7 @@ void TSMuxer::emitInplacePacket(const uint8_t* payload, const int payloadLen, co
     // apply the same limit here or a broken stream grows m_outBuf without bound instead of
     // getting the diagnosis the check exists to give.
     if (m_outBufLen - m_pendingStartOffset > 100 * 1024 * 1024)
-        THROW(ERR_COMMON, "Pes packet len too large ( >100Mb). Bad stream or invalid codec speciffed.")
+        THROW(ERR_SOURCE, "Pes packet len too large ( >100Mb). Bad stream or invalid codec speciffed.")
     insertHeldPCRIfDue();
     ensureOutBufSpace(m_frameSize);
     if (m_m2tsMode)
@@ -3015,10 +3015,9 @@ void TSMuxer::buildPMT()
     // The table is checked as it grows, so the count is of the tracks added so far, not of all of them: "With 59
     // tracks" was said of 65.
     if (sectionLength > 1021)
-        THROW(ERR_COMMON, "The tracks do not fit into one transport stream: with "
-                              << m_pmt.pidList.size() << " of them the program map table already needs "
-                              << sectionLength
-                              << " bytes, and a transport stream holds at most 1021 in one. Leave some out.")
+        THROW(ERR_USAGE, "The tracks do not fit into one transport stream: with "
+                             << m_pmt.pidList.size() << " of them the program map table already needs " << sectionLength
+                             << " bytes, and a transport stream holds at most 1021 in one. Leave some out.")
     uint8_t* pmtEnd = m_pmtBuffer + TSPacket::TS_HEADER_SIZE + size;
     uint8_t* curPos = m_pmtBuffer + TS_FRAME_SIZE;
     for (; curPos < pmtEnd; curPos += TS_FRAME_SIZE)
@@ -3273,19 +3272,18 @@ int64_t checkedSplitSize(const std::string& value)
         coeff = 1024.0 * 1024 * 1024 * 1024;
     if (coeff == 0 || number.find_first_of("0123456789") == string::npos ||
         std::count(number.begin(), number.end(), '.') > 1)
-        THROW(ERR_COMMON, "Invalid --split-size value \""
-                              << value
-                              << "\": write a number and a unit, such as 4GB, 4G, 700MiB or "
-                                 "500MB (KB, MB, GB, TB, and KiB, MiB, GiB, TiB).")
+        THROW(ERR_USAGE, "Invalid --split-size value \"" << value
+                                                         << "\": write a number and a unit, such as 4GB, 4G, 700MiB or "
+                                                            "500MB (KB, MB, GB, TB, and KiB, MiB, GiB, TiB).")
     // Above what 64 bits hold the conversion wrapped, and 99999999999999G was refused as not above zero
     const double bytes = strToDouble(number.c_str()) * coeff;
     if (!(bytes < 9.2e18))
-        THROW(ERR_COMMON, "Invalid --split-size value \"" << value
-                                                          << "\": it is larger than any output can be. Leave the "
-                                                             "split out, or give a size such as 4GB.")
+        THROW(ERR_USAGE, "Invalid --split-size value \"" << value
+                                                         << "\": it is larger than any output can be. Leave the "
+                                                            "split out, or give a size such as 4GB.")
     const auto splitBytes = static_cast<int64_t>(bytes);
     if (splitBytes <= 0)
-        THROW(ERR_COMMON, "Invalid --split-size value \"" << value << "\": it must be above zero.")
+        THROW(ERR_USAGE, "Invalid --split-size value \"" << value << "\": it must be above zero.")
     return splitBytes;
 }
 
@@ -3296,9 +3294,9 @@ int64_t checkedSplitDuration(const std::string& value)
 {
     int64_t ticks = 0;
     if (!parseTimeToTicks(value, "s", &ticks) || ticks <= 0)
-        THROW(ERR_COMMON, "Invalid --split-duration value \"" << value
-                                                              << "\": write a length above zero, in seconds such as "
-                                                                 "600, or with a unit such as 10min or 1h.")
+        THROW(ERR_USAGE, "Invalid --split-duration value \"" << value
+                                                             << "\": write a length above zero, in seconds such as "
+                                                                "600, or with a unit such as 10min or 1h.")
     return ticks;
 }
 
@@ -3342,10 +3340,10 @@ int checkedMuxRate(const std::string& option, const std::string& value)
 {
     const auto rate = static_cast<int>(strToDouble(value.c_str()) * 1000.0);
     if (rate <= DEGENERATE_MUX_RATE)
-        THROW(ERR_COMMON, "Invalid " << option << " value \"" << value << "\": the rate is in kbps and must be above "
-                                     << DEGENERATE_MUX_RATE / 1000
-                                     << ". At or below that the muxing clock overtakes the media and the output "
-                                        "grows without bound.")
+        THROW(ERR_USAGE, "Invalid " << option << " value \"" << value << "\": the rate is in kbps and must be above "
+                                    << DEGENERATE_MUX_RATE / 1000
+                                    << ". At or below that the muxing clock overtakes the media and the output "
+                                       "grows without bound.")
     return rate;
 }
 
@@ -3398,14 +3396,14 @@ void TSMuxer::parseMuxOpt(const std::string& opts)
         else if (paramPair[0] == "--split-duration")
         {
             if (paramPair.size() < 2)
-                THROW(ERR_COMMON, "Missing value for " << paramPair[0])
+                THROW(ERR_USAGE, "Missing value for " << paramPair[0])
             setSplitDuration(checkedSplitDuration(paramPair[1]));
             m_computeMuxStats = true;
         }
         else if (paramPair[0] == "--split-size")
         {
             if (paramPair.size() < 2)
-                THROW(ERR_COMMON, "Missing value for " << paramPair[0])
+                THROW(ERR_USAGE, "Missing value for " << paramPair[0])
             setSplitSize(checkedSplitSize(paramPair[1]));
             m_computeMuxStats = true;
         }

@@ -44,6 +44,7 @@
 #include "simplePacketizerReader.h"
 #include "singleFileMuxer.h"
 #include "tsMuxer.h"
+#include "vodCoreException.h"
 
 using namespace std;
 
@@ -94,9 +95,9 @@ static void refuseUnknownOption(const std::string& arg)
     std::error_code ec;
     if (arg.size() < 2 || arg[0] != '-' || std::filesystem::exists(fsPath(arg), ec))
         return;
-    THROW(ERR_COMMON, "Unknown option " << arg
-                                        << ". tsMuxeR --help lists the options of the command line; the options of a "
-                                           "mux go on the MUXOPT line of the meta file.")
+    THROW(ERR_USAGE, "Unknown option " << arg
+                                       << ". tsMuxeR --help lists the options of the command line; the options of a "
+                                          "mux go on the MUXOPT line of the meta file.")
 }
 
 // A meta file saved in UTF-16, as some editors save text, was refused as "Invalid codec format" with the raw bytes of
@@ -106,15 +107,15 @@ static void refuseUnreadableMeta(const std::string& metaFileName)
 {
     std::error_code ec;
     if (std::filesystem::is_directory(fsPath(metaFileName), ec))
-        THROW(ERR_COMMON, metaFileName << " is a folder, not a meta file.")
+        THROW(ERR_USAGE, metaFileName << " is a folder, not a meta file.")
     File file;
     uint8_t bom[2] = {};
     if (!file.open(metaFileName.c_str(), File::ofRead) || file.read(bom, 2) != 2)
         return;  // said as before by the reader of the meta file
     if ((bom[0] == 0xFF && bom[1] == 0xFE) || (bom[0] == 0xFE && bom[1] == 0xFF))
-        THROW(ERR_COMMON, "The meta file " << metaFileName
-                                           << " is saved in UTF-16. tsMuxeR reads meta files in UTF-8: save it as "
-                                              "UTF-8.")
+        THROW(ERR_USAGE, "The meta file " << metaFileName
+                                          << " is saved in UTF-16. tsMuxeR reads meta files in UTF-8: save it as "
+                                             "UTF-8.")
 }
 
 // ** A SOURCE IN PLACE OF A META FILE. ** A mux takes a meta file and an output, and a script that had only a source
@@ -182,15 +183,15 @@ static std::string metaFromSource(const std::string& source, const std::string& 
     const std::string ext = strToUpperCase(extractFileExt(output));
     static const char* const kinds[] = {"TS", "M2TS", "MTS", "M2T", "MKV", "MKA", "MKS", "WEBM"};
     if (std::find(std::begin(kinds), std::end(kinds), ext) == std::end(kinds))
-        THROW(ERR_COMMON, source << " is a source, not a meta file. A source in its place is muxed with all its "
-                                 << "tracks to an output named .ts, .m2ts or .mkv; for a disc, a demux or a choice of "
-                                 << "tracks write a meta file. tsMuxeR " << source << " lists the tracks.")
+        THROW(ERR_USAGE, source << " is a source, not a meta file. A source in its place is muxed with all its "
+                                << "tracks to an output named .ts, .m2ts or .mkv; for a disc, a demux or a choice of "
+                                << "tracks write a meta file. tsMuxeR " << source << " lists the tracks.")
     if (strEndWith(strToLowerCase(source), ".iso"))
-        THROW(ERR_COMMON, source << " is a disc image. Name its title in a meta file, for example: V_MPEG4/ISO/AVC, \""
-                                 << source << "\", title=main. tsMuxeR " << source << " lists the titles.")
+        THROW(ERR_USAGE, source << " is a disc image. Name its title in a meta file, for example: V_MPEG4/ISO/AVC, \""
+                                << source << "\", title=main. tsMuxeR " << source << " lists the titles.")
     DetectStreamRez listing = METADemuxer::DetectStreamReader(readManager, source, true);
     if (listing.streams.empty() && !listing.noTracksReason.empty())
-        THROW(ERR_COMMON, listing.noTracksReason)
+        THROW(ERR_SOURCE, listing.noTracksReason)
     std::string meta = "MUXOPT --no-pcr-on-video-pid --new-audio-pes --vbr --vbv-len=500\n";
     int tracks = 0;
     // --languages: when no sound track is of a language wanted, the sound is all taken, as a film without sound is
@@ -234,7 +235,7 @@ static std::string metaFromSource(const std::string& source, const std::string& 
         ++tracks;
     }
     if (tracks == 0)
-        THROW(ERR_COMMON, "tsMuxeR reads no track of " << source << ", so there is nothing to mux.")
+        THROW(ERR_SOURCE, "tsMuxeR reads no track of " << source << ", so there is nothing to mux.")
     return meta;
 }
 
@@ -268,18 +269,18 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                 // with a warning (LBN spaces)
                 if (!previous.empty() && paramPair.size() == 1 &&
                     paramPair[0].find_first_not_of("0123456789") == std::string::npos)
-                    THROW(ERR_COMMON, previous << " is followed by " << paramPair[0]
-                                               << " on the MUXOPT line: a value is written without spaces, such as "
-                                                  "--layer-break-lbn=12219392.")
+                    THROW(ERR_USAGE, previous << " is followed by " << paramPair[0]
+                                              << " on the MUXOPT line: a value is written without spaces, such as "
+                                                 "--layer-break-lbn=12219392.")
                 // A time after --custom-chapters is the rest of its list, written with a space after a semicolon:
                 // --custom-chapters=00:00:01.000; 00:00:03.000 lost the second chapter, with a warning about an
                 // unknown option only
                 if (strStartWith(previous, "--custom-chapters") && paramPair.size() == 1 &&
                     paramPair[0].find_first_not_of("0123456789:.;") == std::string::npos)
-                    THROW(ERR_COMMON, previous << " is followed by " << paramPair[0]
-                                               << " on the MUXOPT line: write the chapter times without spaces, such "
-                                                  "as --custom-chapters=00:00:01.000;00:00:03.000, or put the list "
-                                                  "in quotes.")
+                    THROW(ERR_USAGE, previous << " is followed by " << paramPair[0]
+                                              << " on the MUXOPT line: write the chapter times without spaces, such "
+                                                 "as --custom-chapters=00:00:01.000;00:00:03.000, or put the list "
+                                                 "in quotes.")
                 previous = paramPair.size() > 1 ? trimStr(param) : std::string();
                 // ** A NUMBER IS READ WHOLE OR REFUSED. ** These were read up to their first other character, so
                 // --start-time=10s was 10 ticks of 45 kHz, --vbv-len=0.5s was 0, --extra-iso-space=64K was 64 and -50
@@ -290,38 +291,38 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                     const std::string v = trimStr(paramPair[1]);
                     const bool digits = !v.empty() && v.find_first_not_of("0123456789") == std::string::npos;
                     if (paramPair[0] == "--start-time" && v.find(':') == std::string::npos && !digits)
-                        THROW(ERR_COMMON, "--start-time=" << v
-                                                          << " is neither a number of 45 kHz ticks nor a time written "
-                                                             "hh:mm:ss.zzz, such as --start-time=00:10:00.")
+                        THROW(ERR_USAGE, "--start-time=" << v
+                                                         << " is neither a number of 45 kHz ticks nor a time written "
+                                                            "hh:mm:ss.zzz, such as --start-time=00:10:00.")
                     // A clock time is read as a chapter time is, minutes and seconds below 60: 99:99:99 was taken as
                     // 100:40:39 and 00:00:10s as 10 s. Ticks beyond 15 digits did not fit when doubled to 90 kHz.
                     if (paramPair[0] == "--start-time" && v.find(':') != std::string::npos)
                         chapterTimeToSeconds(v, "--start-time");
                     if (paramPair[0] == "--start-time" && digits && v.size() > 15)
-                        THROW(ERR_COMMON, "--start-time=" << v << " is past the clock's limit of about 26.5 hours.")
+                        THROW(ERR_USAGE, "--start-time=" << v << " is past the clock's limit of about 26.5 hours.")
                     // The numbers of a disc's files as well: --mplsOffset=5abc was read as 5, --m2tsOffset=1e3 as 1
                     // and 0x10 as 0, without a word
                     if ((paramPair[0] == "--vbv-len" || paramPair[0] == "--extra-iso-space" ||
                          paramPair[0] == "--auto-chapters" || paramPair[0] == "--mplsOffset" ||
                          paramPair[0] == "--m2tsOffset" || paramPair[0] == "--blankOffset") &&
                         !digits)
-                        THROW(ERR_COMMON, paramPair[0]
-                                              << "=" << v
-                                              << " is not a whole number of 0 or more. Write digits alone, such as "
-                                              << (paramPair[0] == "--vbv-len"           ? "--vbv-len=500 (ms)"
-                                                  : paramPair[0] == "--extra-iso-space" ? "--extra-iso-space=64"
-                                                  : paramPair[0] == "--auto-chapters"   ? "--auto-chapters=5"
-                                                  : paramPair[0] == "--m2tsOffset"      ? "--m2tsOffset=100"
-                                                                                        : paramPair[0] + "=5")
-                                              << ".")
+                        THROW(ERR_USAGE, paramPair[0]
+                                             << "=" << v
+                                             << " is not a whole number of 0 or more. Write digits alone, such as "
+                                             << (paramPair[0] == "--vbv-len"           ? "--vbv-len=500 (ms)"
+                                                 : paramPair[0] == "--extra-iso-space" ? "--extra-iso-space=64"
+                                                 : paramPair[0] == "--auto-chapters"   ? "--auto-chapters=5"
+                                                 : paramPair[0] == "--m2tsOffset"      ? "--m2tsOffset=100"
+                                                                                       : paramPair[0] + "=5")
+                                             << ".")
                     // strtol held a larger --vbv-len at 2147483647 ms without a word
                     if (paramPair[0] == "--vbv-len" && (v.size() > 10 || strtoll(v.c_str(), nullptr, 10) > INT_MAX))
-                        THROW(ERR_COMMON, "--vbv-len=" << v << " is too large: the most is 2147483647 (ms).")
+                        THROW(ERR_USAGE, "--vbv-len=" << v << " is too large: the most is 2147483647 (ms).")
                     if (paramPair[0] == "--extra-iso-space")
                         if (const std::string why = IsoWriter::tooManyExtraBlocks(
                                 v.size() > 18 ? INT64_MAX : strtoll(v.c_str(), nullptr, 10));
                             !why.empty())
-                            THROW(ERR_COMMON, why)
+                            THROW(ERR_USAGE, why)
                 }
                 // ** AN OPTION WRITTEN WITH A SPACE INSTEAD OF AN EQUALS SIGN READ PAST THE END OF THE
                 // VECTOR. ** splitStr on "--auto-chapters" alone yields one element, and every branch
@@ -332,7 +333,7 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                 if (paramPair[0] == "--auto-chapters")
                 {
                     if (paramPair.size() < 2)
-                        THROW(ERR_COMMON, "Missing value for " << paramPair[0])
+                        THROW(ERR_USAGE, "Missing value for " << paramPair[0])
                     // Minutes between chapters. A negative value put chapters before the start of the
                     // film, and from about 35.8 million minutes on the seconds no longer fitted. Every
                     // value longer than a playlist can last (its times are 32-bit counts of 1/45,000 s,
@@ -340,7 +341,7 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                     // the most the seconds can take.
                     const int64_t minutes = strToInt64(paramPair[1].c_str());
                     if (minutes < 0)
-                        THROW(ERR_COMMON,
+                        THROW(ERR_USAGE,
                               "The value of --auto-chapters is a number of minutes, 0 or more, not " << paramPair[1])
                     autoChapterLen = static_cast<int>(std::min<int64_t>(minutes, INT_MAX / 60) * 60);
                 }
@@ -357,49 +358,49 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                 else if (paramPair[0] == "--chapters-file")
                 {
                     if (paramPair.size() < 2)
-                        THROW(ERR_COMMON, "Missing value for " << paramPair[0])
+                        THROW(ERR_USAGE, "Missing value for " << paramPair[0])
                     // A list in a meta line is times only. A file carries the names as well, so the
                     // chapters are kept whole here and the times are taken from them, rather than
                     // the other way round. A second file replaced the first without a word: one is taken.
                     if (fromChapterFile)
-                        THROW(ERR_COMMON, "--chapters-file is given more than once. Give one chapter file.")
+                        THROW(ERR_USAGE, "--chapters-file is given more than once. Give one chapter file.")
                     chapterInfo = readChapterFile(unquoteStr(paramPair[1]));
                     fromChapterFile = true;
                 }
                 else if (paramPair[0] == "--mplsOffset")
                 {
                     if (paramPair.size() < 2)
-                        THROW(ERR_COMMON, "Missing value for " << paramPair[0])
+                        THROW(ERR_USAGE, "Missing value for " << paramPair[0])
                     firstMplsOffset = strToInt32(paramPair[1].c_str());
                     numbersGiven = true;
                     if (firstMplsOffset < 0 || firstMplsOffset > 1999)
-                        THROW(ERR_COMMON,
+                        THROW(ERR_USAGE,
                               "The playlist number of --mplsOffset must be 0 to 1999, not " << firstMplsOffset)
                 }
                 else if (paramPair[0] == "--blankOffset")
                 {
                     if (paramPair.size() < 2)
-                        THROW(ERR_COMMON, "Missing value for " << paramPair[0])
+                        THROW(ERR_USAGE, "Missing value for " << paramPair[0])
                     blankNum = strToInt32(paramPair[1].c_str());
                     if (blankNum < 0 || blankNum > 1999)
-                        THROW(ERR_COMMON,
+                        THROW(ERR_USAGE,
                               "The blank playlist number of --blankOffset must be 0 to 1999, not " << blankNum)
                 }
                 else if (paramPair[0] == "--m2tsOffset")
                 {
                     if (paramPair.size() < 2)
-                        THROW(ERR_COMMON, "Missing value for " << paramPair[0])
+                        THROW(ERR_USAGE, "Missing value for " << paramPair[0])
                     firstM2tsOffset = strToInt32(paramPair[1].c_str());
                     numbersGiven = true;
                     if (firstM2tsOffset < 0 || firstM2tsOffset > 99999)
-                        THROW(ERR_COMMON, "The clip number of --m2tsOffset must be 0 to 99999, not " << firstM2tsOffset)
+                        THROW(ERR_USAGE, "The clip number of --m2tsOffset must be 0 to 99999, not " << firstM2tsOffset)
                 }
                 else if (paramPair[0] == "--insertBlankPL")
                     insertBlankPL = true;
                 else if (paramPair[0] == "--label")
                 {
                     if (paramPair.size() < 2)
-                        THROW(ERR_COMMON, "Missing value for " << paramPair[0])
+                        THROW(ERR_USAGE, "Missing value for " << paramPair[0])
                     // The whole text after the first '=': a label with '=' in it ("Rock=Roll") was cut to "Rock".
                     const std::string whole = trimStr(param);
                     isoDiskLabel = whole.substr(whole.find('=') + 1);
@@ -422,7 +423,7 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
                 if (optionType != DiskType::NONE)
                 {
                     if (result != DiskType::NONE && result != optionType)
-                        THROW(ERR_COMMON,
+                        THROW(ERR_USAGE,
                               "The MUXOPT lines ask for both a Blu-ray disc and an AVCHD disc. Give one "
                               "of --blu-ray and --avchd.")
                     result = optionType;
@@ -464,12 +465,12 @@ DiskType checkBluRayMux(const char* metaFileName, int& autoChapterLen, vector<do
     if (result != DiskType::NONE && insertBlankPL && !stereoMode)
     {
         if (blankNum == firstMplsOffset)
-            THROW(ERR_COMMON,
+            THROW(ERR_USAGE,
                   "The blank playlist (--blankOffset) and the main playlist (--mplsOffset) both have the number "
                       << strPadLeft(int32ToStr(blankNum), 5, '0')
                       << ", and the blank one would replace the main one. Give --blankOffset another number.")
         if (blankNum == firstM2tsOffset)
-            THROW(ERR_COMMON,
+            THROW(ERR_USAGE,
                   "The blank playlist's clip (--blankOffset) and the first clip of the main title "
                   "(--m2tsOffset) both have the number "
                       << strPadLeft(int32ToStr(blankNum), 5, '0')
@@ -501,18 +502,18 @@ static void refuseTooManyMarks(MuxerManager& muxerManager, const vector<double>&
         const auto inside = static_cast<size_t>(
             std::count_if(chapters.begin(), chapters.end(), [&](const double t) { return t <= end - start; }));
         if (inside + startMark > MAX_MARKS)
-            THROW(ERR_COMMON,
+            THROW(ERR_USAGE,
                   "A Blu-ray playlist holds at most 999 chapter marks, and the chapters given within the "
                   "title are "
                       << inside + startMark << (startMark ? ", with the mark at its start" : "")
                       << ". Give fewer chapters.")
         return;
     }
-    THROW(ERR_COMMON, "A Blu-ray playlist holds at most 999 chapter marks, and the chapters given are "
-                          << chapters.size() + startMark
-                          << (startMark ? ", with the mark at the start of the title" : "")
-                          << ". The length of the title is not known before the mux, as its sources do not state it, "
-                             "so chapters past its end count too. Give fewer chapters.")
+    THROW(ERR_USAGE, "A Blu-ray playlist holds at most 999 chapter marks, and the chapters given are "
+                         << chapters.size() + startMark
+                         << (startMark ? ", with the mark at the start of the title" : "")
+                         << ". The length of the title is not known before the mux, as its sources do not state it, "
+                            "so chapters past its end count too. Give fewer chapters.")
 }
 
 // The blank playlist's clip takes the number of --blankOffset. A split gives the main title one clip a part, numbered
@@ -523,12 +524,12 @@ static void blankPlaylistClash(const TSMuxer& mainMuxer, const int blankNum)
     const int first = mainMuxer.getFirstFileNum();
     const int last = first + static_cast<int>(mainMuxer.splitFileCnt()) - 1;
     if (blankNum >= first && blankNum <= last)
-        THROW(ERR_COMMON, "The blank playlist was not written: its clip number "
-                              << strPadLeft(int32ToStr(blankNum), 5, '0')
-                              << " (--blankOffset) is one of the main title's clips, "
-                              << strPadLeft(int32ToStr(first), 5, '0') << " to " << strPadLeft(int32ToStr(last), 5, '0')
-                              << ", and would have replaced it. The rest of the disc is complete. Give --blankOffset a "
-                                 "number outside that range.")
+        THROW(ERR_USAGE, "The blank playlist was not written: its clip number "
+                             << strPadLeft(int32ToStr(blankNum), 5, '0')
+                             << " (--blankOffset) is one of the main title's clips, "
+                             << strPadLeft(int32ToStr(first), 5, '0') << " to " << strPadLeft(int32ToStr(last), 5, '0')
+                             << ", and would have replaced it. The rest of the disc is complete. Give --blankOffset a "
+                                "number outside that range.")
 }
 
 // A clip of a playlist after the first: the media file to probe and its clip info.
@@ -725,7 +726,7 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
     // from DetectStreamReader, which a mux calls as well and where it is no error). The dependent view of a 3D
     // playlist (isSubMode) only adds to the listing of its playlist, and is left out.
     if (streams.empty() && !isSubMode && !streamInfo.noTracksReason.empty())
-        THROW(ERR_COMMON, streamInfo.noTracksReason)
+        THROW(ERR_SOURCE, streamInfo.noTracksReason)
 
     // The film's name, as the disc gives it: the window names the output by it
     if (!isSubMode)
@@ -1205,14 +1206,14 @@ void muxBlankPL(BlurayHelper& blurayHelper, const PIDListMap& pidList, DiskType 
     } temporaryFile{tmpFileName};
     File file;
     if (!file.open(tmpFileName.c_str(), File::ofWrite))
-        THROW(ERR_COMMON, "can't create file " << tmpFileName)
+        THROW(ERR_OUTPUT, "can't create file " << tmpFileName)
     // About half a second, as three patterns of four pictures are at 23.976: more of them at a higher rate
     const std::vector<uint8_t> blank = blankPatternAt(pattern, patternSize, fps);
     const int repeats = (std::max)(3, static_cast<int>(lround(fps / 8.0)));
     for (int i = 0; i < repeats; ++i)
     {
         if (file.write(blank.data(), static_cast<uint32_t>(blank.size())) != static_cast<int>(blank.size()))
-            THROW(ERR_COMMON, "can't write data to file " << tmpFileName)
+            THROW(ERR_OUTPUT, "can't write data to file " << tmpFileName)
     }
     file.close();
     map<string, string> videoParams;
@@ -1736,8 +1737,9 @@ All parameters in this group start with two dashes:
                       Each job runs as a process of its own, so a job that
                       fails leaves the next ones as they are; a summary at the
                       end says how each job ended. The exit code is 0 when
-                      every job is done. --batch-stop-on-error ends the batch
-                      at the first job that fails.
+                      every job is done, and 6 when one failed or was not run.
+                      --batch-stop-on-error ends the batch at the first job
+                      that fails.
 --make-sample         Separate mode: tsMuxeR --make-sample [options] <source> <out.zip>
                       A part of a source to attach to a problem report in place
                       of the source itself: its bytes copied as they are, from
@@ -1956,6 +1958,10 @@ All parameters in this group start with two dashes:
                               place of the folder's own BDMV/META/DL; none leaves them out.
                         --extra-iso-space=<64K blocks>  More room for the file system, on
                               top of what is counted from the folder's files and names.
+
+Exit codes: 0 done; 1 the command line or the meta file is wrong; 2 a source
+cannot be read or is not supported; 3 the output cannot be written; 5 an error
+inside the program; 6 --batch: a job failed or was not run.
 )help";
     LTRACE(LT_INFO, 2, help);
 }
@@ -2220,7 +2226,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                 if (const std::string err = parseGuardMB(a.substr(0, eq), a.substr(eq + 1), mb); !err.empty())
                 {
                     LTRACE(LT_ERROR, 2, err);
-                    return -1;
+                    return ExitCode::Usage;
                 }
             }
             else if (a.rfind("--layer-break-lbn=", 0) == 0)
@@ -2229,7 +2235,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                 if (const std::string err = parseLayerBreakList(a.substr(18), layerBreakLbns, warnings); !err.empty())
                 {
                     LTRACE(LT_ERROR, 2, "--layer-break-lbn: " << err);
-                    return -1;
+                    return ExitCode::Usage;
                 }
                 for (const auto& warning : warnings) LTRACE(LT_WARN, 2, "Warning: " << warning);
             }
@@ -2245,7 +2251,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                            "--disc-capacity=" << value
                                               << " is not a number of sectors. Write it in digits only, such as "
                                                  "24438784 for a 50 GB disc.");
-                    return -1;
+                    return ExitCode::Usage;
                 }
                 discCapacitySectors = std::stoll(value);
             }
@@ -2278,14 +2284,14 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                 if (v.empty() || v.find_first_not_of("0123456789") != string::npos)
                 {
                     LTRACE(LT_ERROR, 2, "Invalid value in " << a << ": a number of 64K blocks.");
-                    return -1;
+                    return ExitCode::Usage;
                 }
                 if (const std::string why =
                         IsoWriter::tooManyExtraBlocks(v.size() > 18 ? INT64_MAX : strtoll(v.c_str(), nullptr, 10));
                     !why.empty())
                 {
                     LTRACE(LT_ERROR, 2, why);
-                    return -1;
+                    return ExitCode::Usage;
                 }
                 extraIsoSpace = static_cast<int>(strToInt32(v.c_str()));
             }
@@ -2295,7 +2301,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
         catch (...)
         {
             LTRACE(LT_ERROR, 2, "Invalid value in " << a);
-            return -1;
+            return ExitCode::Usage;
         }
     }
     if (positional.size() != 2)
@@ -2306,7 +2312,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                "[--keep-extra-files] [--3d-single-copy] [--inner-only] [--allow-oversize] [--label=<string>] "
                "[--extra-iso-space=<64K blocks>] [--constant-iso-hdr] [--meta-dir=<folder>|none] "
                "<BDMV_folder> <out.iso>");
-        return -1;
+        return ExitCode::Usage;
     }
     GuardedIsoOptions opt;
     opt.srcRoot = positional[0];
@@ -2401,7 +2407,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
             LTRACE(LT_ERROR, 2,
                    "The output " << outIso << " is the disc image the folder is read from, and writing it would "
                                  << "destroy that source. Choose another output name.");
-            return -1;
+            return ExitCode::Usage;
         }
     }
 
@@ -2430,7 +2436,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
     if (!findFilesRecursive(srcRoot + getDirSeparator(), "*", &files) || files.empty())
     {
         LTRACE(LT_ERROR, 2, "No files found under " << srcRoot);
-        return -1;
+        return ExitCode::Source;
     }
     // --meta-dir: the disc's title and pictures from a folder of one's own, in place of the folder's BDMV/META/DL
     if (!opt.metaDir.empty())
@@ -2569,7 +2575,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
                 const string part = item.rel.substr(from, slash == string::npos ? string::npos : slash - from);
                 const auto [it, isNew] = seen.emplace(std::make_pair(parent, textOf(udfFileIdentifier(part))), part);
                 if (!isNew && it->second != part)
-                    THROW(ERR_COMMON, "bdmv-to-iso: the names \""
+                    THROW(ERR_SOURCE, "bdmv-to-iso: the names \""
                                           << it->second << "\" and \"" << part << "\" in "
                                           << (parent.empty() ? string("the disc folder") : parent)
                                           << " are the same as far as a UDF file identifier holds a name. "
@@ -2671,7 +2677,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
     if (items.empty())
     {
         LTRACE(LT_ERROR, 2, "No BDMV content found under " << srcRoot);
-        return -1;
+        return ExitCode::Source;
     }
 
     // Match tsMuxeR's own BD authoring: give the ISO the full standard folder structure by default so
@@ -2768,7 +2774,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         if (!error.empty())
         {
             LTRACE(LT_ERROR, 2, error);
-            return -1;
+            return ExitCode::Usage;
         }
         if (!warning.empty())
             LTRACE(LT_WARN, 2, warning);
@@ -2790,7 +2796,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         if (discCapacitySectors <= 0)
         {
             LTRACE(LT_ERROR, 2, "--inner-only needs the disc capacity; add --disc-capacity=<sectors>");
-            return -1;
+            return ExitCode::Usage;
         }
         // A disc of one layer has no layer change and no outer edge before one: its data starts at the centre and
         // ends where it ends. A break was made up at half the disc and padded, which put the second half of the data
@@ -3129,7 +3135,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
                        "  capacity: " << why.str() << ". " << (guardZoneSectors > 0 ? "Shrink the guard, use" : "Use")
                                       << " a larger disc, drop files, or pass --allow-oversize to build it anyway. "
                                          "Nothing has been written");
-                return -1;
+                return ExitCode::Output;
             }
         }
         else if (leastSectors + guardOverrunSectors + alignSectors + UDF_MARGIN_SECTORS > discCapacitySectors)
@@ -3188,7 +3194,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
                      defaultGuard))
     {
         LTRACE(LT_ERROR, 2, "Can't create output ISO " << outIso);
-        return -1;
+        return ExitCode::Output;
     }
     IsoWriter* iso = helper.isoWriter();
     if (!innerBefore.empty())
@@ -3241,7 +3247,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
             int64_t dataStartLbn = startLbn;
             if (!writeSsifGroup(iso, srcRoot, ssifGroups[item.ssifGroup], buf, written, total, lastTenths,
                                 dataStartLbn))
-                return -1;
+                return ExitCode::Source;
             ranges.push_back({dataStartLbn, iso->currentImageLBA(), dataStartLbn});
             continue;
         }
@@ -3249,7 +3255,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         if (!in.open(item.full.c_str(), File::ofRead))
         {
             LTRACE(LT_ERROR, 2, "Can't read " << item.full);
-            return -1;
+            return ExitCode::Source;
         }
         ISOFile* out = iso->createFile();
         out->open(item.rel.c_str(), File::ofWrite);
@@ -3261,7 +3267,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
             if (out->write(buf.data(), static_cast<uint32_t>(n)) < 0)
             {
                 LTRACE(LT_ERROR, 2, "Write error on " << item.rel);
-                return -1;
+                return ExitCode::Source;
             }
             copied += n;
             written += n;
@@ -3289,7 +3295,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
             LTRACE(LT_ERROR, 2,
                    "Error: " << item.full << " could not be read in full (" << copied << " of " << item.size
                              << " bytes), so the image is not finished and cannot be used.");
-            return -1;
+            return ExitCode::Source;
         }
         ranges.push_back({startLbn, iso->currentImageLBA(), dataLbn});
     }
@@ -3412,7 +3418,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
                     unfinished.quiet = true;  // the mux's error says the image is not kept
                     if (sizeRefused)
                         *sizeRefused = true;
-                    return -1;
+                    return ExitCode::Output;
                 }
             }
             else
@@ -3986,16 +3992,16 @@ class KeepOldOutput
             std::vector<std::filesystem::path> files;
             for (const auto& e : std::filesystem::directory_iterator(m_tmp, ec)) files.push_back(e.path());
             if (ec)
-                throw runtime_error("The new demux is complete in " + pathStr(m_tmp) +
-                                    ", but its files could not be moved into " + pathStr(m_dir) + ": " + ec.message());
+                throw OutputError("The new demux is complete in " + pathStr(m_tmp) +
+                                  ", but its files could not be moved into " + pathStr(m_dir) + ": " + ec.message());
             for (const auto& p : files)
             {
                 const std::filesystem::path to = m_dir / p.filename();
                 std::filesystem::rename(p, to, ec);
                 if (ec)
-                    throw runtime_error("The new demux is complete in " + pathStr(m_tmp) + ", but " +
-                                        pathStr(p.filename()) + " could not replace " + pathStr(to) + ": " +
-                                        ec.message());
+                    throw OutputError("The new demux is complete in " + pathStr(m_tmp) + ", but " +
+                                      pathStr(p.filename()) + " could not replace " + pathStr(to) + ": " +
+                                      ec.message());
             }
             std::filesystem::remove_all(m_tmp, ec);
         }
@@ -4011,8 +4017,8 @@ class KeepOldOutput
                 else
                     std::filesystem::rename(p, to, ec);
                 if (ec)
-                    throw runtime_error("The new title is complete in " + pathStr(m_tmp) + ", but " + pathStr(to) +
-                                        " could not be written: " + ec.message());
+                    throw OutputError("The new title is complete in " + pathStr(m_tmp) + ", but " + pathStr(to) +
+                                      " could not be written: " + ec.message());
             }
             std::filesystem::remove_all(m_tmp, ec);
         }
@@ -4025,8 +4031,8 @@ class KeepOldOutput
                 {
                     std::filesystem::rename(m_tmp / sub, m_dir / sub, ec);
                     if (ec)
-                        throw runtime_error("The new disc is complete in " + pathStr(m_tmp) + ", but its " + sub +
-                                            " folder could not be moved into " + pathStr(m_dir) + ": " + ec.message());
+                        throw OutputError("The new disc is complete in " + pathStr(m_tmp) + ", but its " + sub +
+                                          " folder could not be moved into " + pathStr(m_dir) + ": " + ec.message());
                 }
             }
             std::filesystem::remove_all(m_tmp, ec);
@@ -4047,8 +4053,8 @@ class KeepOldOutput
                 const std::filesystem::path to = m_dir / u8path(written.back());
                 std::filesystem::rename(p, to, ec);
                 if (ec)
-                    throw runtime_error("The new output is complete as " + pathStr(p) + ", but it could not replace " +
-                                        pathStr(to) + ": " + ec.message());
+                    throw OutputError("The new output is complete as " + pathStr(p) + ", but it could not replace " +
+                                      pathStr(to) + ": " + ec.message());
             }
             if (!m_imageSideFile.empty() && !newSideFile)
                 std::filesystem::remove(m_dir / u8path(m_oldPrefix + m_imageSideFile), ec);
@@ -4076,7 +4082,7 @@ class KeepOldOutput
                             const char* option, const std::string& dst)
     {
         if (hasNumber(disc, sub, number))
-            THROW(ERR_COMMON, "The disc folder " << dst << " has " << what << " "
+            THROW(ERR_OUTPUT, "The disc folder " << dst << " has " << what << " "
                                                  << strPadLeft(int32ToStr(number), 5, '0') << " already, and " << option
                                                  << " adds to a folder. Give a number that is free, or another folder. "
                                                     "Nothing was written.")
@@ -4091,7 +4097,7 @@ class KeepOldOutput
                 const bool isBlank = m_blankNumber >= 0 && stem == strPadLeft(int32ToStr(m_blankNumber), 5, '0');
                 if (!e.is_directory(ec) && !isBlank &&
                     std::filesystem::exists(m_dir / "BDMV" / sub / e.path().filename(), ec))
-                    THROW(ERR_COMMON, "This job writes " << pathStr(e.path().filename()) << ", and the disc folder "
+                    THROW(ERR_OUTPUT, "This job writes " << pathStr(e.path().filename()) << ", and the disc folder "
                                                          << pathStr(m_dir) << " has that file already. Nothing was "
                                                          << "added: give numbers that are free with --mplsOffset and "
                                                          << "--m2tsOffset.")
@@ -4345,7 +4351,7 @@ static bool innerOnlyIsoAsked(const MuxerManager& muxerManager, const DiskType d
     if (!muxerManager.getInnerOnly())
         return false;
     if (dt == DiskType::AVCHD)
-        THROW(ERR_COMMON, "--inner-only lays out a Blu-ray disc image, and this is an AVCHD disc. Leave it out.")
+        THROW(ERR_USAGE, "--inner-only lays out a Blu-ray disc image, and this is an AVCHD disc. Leave it out.")
     if (dt != DiskType::BLURAY)
     {
         LTRACE(LT_WARN, 2,
@@ -4363,7 +4369,7 @@ static bool innerOnlyIsoAsked(const MuxerManager& muxerManager, const DiskType d
     }
     const int64_t discBytes = muxerManager.getDiscSizeLimit();
     if (discBytes <= 0)
-        THROW(ERR_COMMON,
+        THROW(ERR_USAGE,
               "--inner-only needs the disc it is for, to know where its layers end: add --disc-size, such as "
               "--disc-size=bd50, or the Free Sectors of your disc times 2048. Nothing has been written.")
     std::vector<int> breaks = muxerManager.getLayerBreakLbns();
@@ -4372,7 +4378,7 @@ static bool innerOnlyIsoAsked(const MuxerManager& muxerManager, const DiskType d
         std::string warning, error;
         breaks = defaultLayerBreaks(discBytes, warning, error);
         if (!error.empty())
-            THROW(ERR_COMMON, error << " Nothing has been written.")
+            THROW(ERR_USAGE, error << " Nothing has been written.")
     }
     if (breaks.empty())
     {
@@ -4409,10 +4415,9 @@ static void refuseSourceAsOutput(const MuxerManager& muxerManager, const std::st
                 if (strStartWith(strToLowerCase(std::string(fn.begin(), fn.end())), prefix) &&
                     strToLowerCase(std::string(se.begin(), se.end())) == ext &&
                     std::filesystem::equivalent(srcDir, outDir, ec) && !ec)
-                    throw runtime_error("The source " + name + " has the name of a part of the split output " +
-                                        dstFile +
-                                        ", and writing that part would destroy it. Choose another output "
-                                        "name.");
+                    throw UsageError("The source " + name + " has the name of a part of the split output " + dstFile +
+                                     ", and writing that part would destroy it. Choose another output "
+                                     "name.");
             }
     }
     if (!std::filesystem::exists(out, ec))
@@ -4428,21 +4433,21 @@ static void refuseSourceAsOutput(const MuxerManager& muxerManager, const std::st
         {
             const std::filesystem::path src(std::u8string(name.begin(), name.end()));
             if (std::filesystem::equivalent(src, out, ec) && !ec)
-                throw runtime_error("The output " + dstFile + " is one of the source files (" + name +
-                                    "), and writing it would destroy that source. Choose another output name.");
+                throw UsageError("The output " + dstFile + " is one of the source files (" + name +
+                                 "), and writing it would destroy that source. Choose another output name.");
             if (std::string image; discImage::split(name, &image, nullptr) &&
                                    std::filesystem::equivalent(std::u8string(image.begin(), image.end()), out, ec) &&
                                    !ec)
-                throw runtime_error("The output " + dstFile + " is the disc image the source " + name +
-                                    " is read from, and writing it would destroy that source. Choose another output "
-                                    "name.");
+                throw UsageError("The output " + dstFile + " is the disc image the source " + name +
+                                 " is read from, and writing it would destroy that source. Choose another output "
+                                 "name.");
             if (outIsFolder)
                 for (const char* sub : {"BDMV", "CERTIFICATE"})
                     if (pathIsInside(src, out / sub))
-                        throw runtime_error("The output folder " + dstFile + " holds the source " + name + " in its " +
-                                            sub +
-                                            " folder, and writing the disc there would destroy that source. Choose "
-                                            "another output folder.");
+                        throw UsageError("The output folder " + dstFile + " holds the source " + name + " in its " +
+                                         sub +
+                                         " folder, and writing the disc there would destroy that source. Choose "
+                                         "another output folder.");
         }
     }
 }
@@ -4477,12 +4482,12 @@ static void refuseSaveSrtClash(const MuxerManager& muxerManager, const std::stri
             continue;
         for (const std::string& other : saved)
             if (sameName(name, other))
-                THROW(ERR_COMMON, "Two tracks write their subtitles with save-srt to the same file "
-                                      << name << ". Give each track a file of its own.")
+                THROW(ERR_USAGE, "Two tracks write their subtitles with save-srt to the same file "
+                                     << name << ". Give each track a file of its own.")
         if (sameName(name, dstFile))
-            THROW(ERR_COMMON, "save-srt names the output "
-                                  << dstFile
-                                  << ", and the subtitles would be written over it. Give the .srt another name.")
+            THROW(ERR_USAGE, "save-srt names the output "
+                                 << dstFile
+                                 << ", and the subtitles would be written over it. Give the .srt another name.")
         for (const auto& src : muxerManager.getStreamInfo())
         {
             std::vector<std::string> names;
@@ -4491,9 +4496,9 @@ static void refuseSaveSrtClash(const MuxerManager& muxerManager, const std::stri
             names.insert(names.end(), src.m_sourceFiles.begin(), src.m_sourceFiles.end());
             for (const std::string& srcName : names)
                 if (sameName(name, srcName))
-                    THROW(ERR_COMMON,
-                          "save-srt names the source "
-                              << srcName << ", and writing the subtitles would destroy it. Give the .srt another name.")
+                    THROW(ERR_USAGE, "save-srt names the source "
+                                         << srcName
+                                         << ", and writing the subtitles would destroy it. Give the .srt another name.")
         }
         saved.push_back(name);
     }
@@ -4551,9 +4556,9 @@ static void checkSourceConsumed(MuxerManager& muxerManager)
     // Nothing of the sources at all, as from a .sup of one END segment: "0.0 percent read" said that the job had
     // stopped early, where the sources hold nothing to mux.
     if (done == 0)
-        THROW(ERR_COMMON, "No track of the meta file gave anything to mux: its sources hold "
+        THROW(ERR_SOURCE, "No track of the meta file gave anything to mux: its sources hold "
                               << total << " bytes, and none of them is data of its track. Nothing was written.")
-    THROW(ERR_COMMON, "The mux stopped before the source was finished: "
+    THROW(ERR_SOURCE, "The mux stopped before the source was finished: "
                           << doubleToStr(pct, 1) << " percent read, " << done << " bytes of " << total
                           << ". The output is incomplete. This is not a warning: the job did not do "
                              "what it was asked to do.")
@@ -4568,7 +4573,7 @@ static void checkSourcesCutOff(const MuxerManager& muxerManager)
     {
         if (muxerManager.getCutEnd() > 0 && static_cast<double>(muxerManager.getCutEnd()) / INTERNAL_PTS_FREQ <= from)
             return;
-        THROW(ERR_COMMON, "The source " << file << " is cut off: " << what << ", in track " << track << " from "
+        THROW(ERR_SOURCE, "The source " << file << " is cut off: " << what << ", in track " << track << " from "
                                         << doubleToStr(from, 3)
                                         << " s on. The output holds what the file has and is incomplete.")
     };
@@ -4642,7 +4647,7 @@ static void checkEmptyTracks(const MuxerManager& muxerManager)
         if (cut)
             break;
         if (isAudioOrVideoLine(si) && isEmptyTrack(si))
-            THROW(ERR_COMMON, "The " << emptyTrackText(si) << " The output is incomplete.")
+            THROW(ERR_SOURCE, "The " << emptyTrackText(si) << " The output is incomplete.")
         // The same for audio of which a few frames were found by chance and the rest dropped: AC-3 named A_AAC gave
         // a third of its bytes as "AAC" and a warning. More than half of the data that could not be used is not a
         // damaged track but another codec.
@@ -4658,7 +4663,7 @@ static void checkEmptyTracks(const MuxerManager& muxerManager)
         const int64_t lost = audio->getLostSize() - lostPad;
         const int64_t notTags = total - tags - lostPad;
         if (notTags > 0 && lost > notTags / 2)
-            THROW(ERR_COMMON, trackSourceName(si) << ": " << lost << " bytes of the " << notTags
+            THROW(ERR_SOURCE, trackSourceName(si) << ": " << lost << " bytes of the " << notTags
                                                   << " read for this track as " << si.m_codec
                                                   << (tags > 0 && lostPad > 0 ? ", its tags and padding left aside,"
                                                       : tags > 0              ? ", its tags left aside,"
@@ -4677,7 +4682,7 @@ static void checkEmptyTracks(const MuxerManager& muxerManager)
                                   : pad > 0           ? ", its padding left aside,"
                                                       : "";
         if (si.m_codec != "A_LPCM" && besideTags > 0 && audio->getFrameBytes() < besideTags / 2)
-            THROW(ERR_COMMON, trackSourceName(si)
+            THROW(ERR_SOURCE, trackSourceName(si)
                                   << ": only " << audio->getFrameBytes() << " of the " << besideTags
                                   << " bytes read for this track as " << si.m_codec << aside
                                   << " are frames of that codec, less than half of it. " << lossHint(*audio))
@@ -4686,7 +4691,7 @@ static void checkEmptyTracks(const MuxerManager& muxerManager)
         // another sample rate or channel count nearly every time. A real stream found again after damage keeps them.
         const int64_t frames = audio->getDeliveredFrames();
         if (frames >= 20 && audio->getSyncChanges() * 10 > frames)
-            THROW(ERR_COMMON, trackSourceName(si)
+            THROW(ERR_SOURCE, trackSourceName(si)
                                   << ": the sample rate or the channels changed at " << audio->getSyncChanges()
                                   << " of the " << frames << " frames read as " << si.m_codec
                                   << "; a real stream keeps them. " << WRONG_CODEC_HINT)
@@ -4705,7 +4710,7 @@ static void checkEmptyTracks(const MuxerManager& muxerManager)
             continue;
         const int64_t unusable = video->getUnusableBytes();
         if (si.m_readCnt > 0 && unusable > si.m_readCnt / 2)
-            THROW(ERR_COMMON, trackSourceName(si)
+            THROW(ERR_SOURCE, trackSourceName(si)
                                   << ": " << unusable << " bytes of the " << si.m_readCnt << " read for this track as "
                                   << si.m_codec << " are in units that "
                                   << (dynamic_cast<H264StreamReader*>(video) ? std::string("H.264")
@@ -4719,7 +4724,7 @@ static void checkEmptyTracks(const MuxerManager& muxerManager)
     bool anyData = false;
     for (const StreamInfo& si : muxerManager.getStreamInfo()) anyData = anyData || si.m_readCnt > 0;
     if (!muxerManager.getStreamInfo().empty() && !anyData)
-        THROW(ERR_COMMON, "No track of the meta file read any data from its source. Nothing was written.")
+        THROW(ERR_SOURCE, "No track of the meta file read any data from its source. Nothing was written.")
 }
 
 static void reportEmptyTracks(const MuxerManager& muxerManager)
@@ -4970,10 +4975,10 @@ static int runMakeSample(int argc, char** argv, const std::string& reportFile, c
     if (!error.empty())
     {
         LTRACE(LT_ERROR, 2, error);
-        diagReport::close(-2);
+        diagReport::close(ExitCode::Source);
         if (ownReport)
             deleteFile(reportFile);
-        return -2;
+        return ExitCode::Source;
     }
     request.source = positional[0];
     zipName = positional[1];
@@ -5056,12 +5061,12 @@ static int runMakeSample(int argc, char** argv, const std::string& reportFile, c
     catch (std::exception& e)
     {
         LTRACE(LT_ERROR, 2, "No sample was made: " << e.what());
-        exitCode = -1;
+        exitCode = dynamic_cast<OutputError*>(&e) ? ExitCode::Output : ExitCode::Source;
     }
     catch (VodCoreException& e)
     {
         LTRACE(LT_ERROR, 2, "No sample was made: " << e.m_errStr);
-        exitCode = -1;
+        exitCode = ExitCode::of(e.m_errCode);
     }
     if (exitCode == 0)
         try
@@ -5092,12 +5097,12 @@ static int runMakeSample(int argc, char** argv, const std::string& reportFile, c
         catch (std::exception& e)
         {
             LTRACE(LT_ERROR, 2, "No sample was made: " << e.what());
-            exitCode = -1;
+            exitCode = dynamic_cast<OutputError*>(&e) ? ExitCode::Output : ExitCode::Source;
         }
         catch (VodCoreException& e)
         {
             LTRACE(LT_ERROR, 2, "No sample was made: " << e.m_errStr);
-            exitCode = -1;
+            exitCode = ExitCode::of(e.m_errCode);
         }
     if (exitCode == 0)
     {
@@ -5128,7 +5133,7 @@ static int runMakeSample(int argc, char** argv, const std::string& reportFile, c
         catch (std::exception& e)
         {
             LTRACE(LT_ERROR, 2, "The zip cannot be written: " << e.what());
-            exitCode = -1;
+            exitCode = ExitCode::Output;
         }
     }
     else
@@ -5319,7 +5324,7 @@ int main(int argc, char** argv)
             LTRACE(LT_ERROR, 2,
                    "Usage: tsMuxeR --batch <job list> [--batch-stop-on-error]. The job list is a text file with the "
                    "arguments of one run on each line, for example: \"film.meta\" \"film.m2ts\"");
-            return -2;
+            return ExitCode::Usage;
         }
         return batch::run(listFile, stopOnError, argv[0]);
     }
@@ -5352,9 +5357,9 @@ int main(int argc, char** argv)
         }
     }
     if (!diagReport::takeOptions(argc, argv))
-        return -2;
+        return ExitCode::Usage;
     if (!diagReport::writeStart(argc, argv))
-        return -2;
+        return ExitCode::Output;
     if (sampleRun)
     {
         LTRACE(LT_INFO, 2, "tsMuxeR version " TSMUXER_VERSION << ". github.com/teaching-droid/tsMuxer");
@@ -5426,7 +5431,7 @@ static int runTsMuxer(int argc, char** argv)
             // here instead, the same way the handler at the end of main would have.
             LTRACE(LT_ERROR, 2,
                    "Unknown --lang-codes value \"" << value << "\". It takes source, terminological or bibliographic.");
-            return -2;
+            return ExitCode::Usage;
         }
         for (int j = i; j + 1 < argc; ++j) argv[j] = argv[j + 1];
         --argc;
@@ -5447,7 +5452,7 @@ static int runTsMuxer(int argc, char** argv)
         if (value != "played" && value != "whole")
         {
             LTRACE(LT_ERROR, 2, "Unknown --playlist-clips value \"" << value << "\". It takes played or whole.");
-            return -2;
+            return ExitCode::Usage;
         }
         listPlaylistPlayed = value == "played";
         for (int j = i; j + 1 < argc; ++j) argv[j] = argv[j + 1];
@@ -5487,8 +5492,8 @@ static int runTsMuxer(int argc, char** argv)
                 {
                     const string value = option.substr(19);
                     if (value.empty() || value.size() > 5 || value.find_first_not_of("0123456789") != string::npos)
-                        THROW(ERR_COMMON, option << ": give the length in whole seconds, such as "
-                                                    "--min-title-length=600.")
+                        THROW(ERR_USAGE, option << ": give the length in whole seconds, such as "
+                                                   "--min-title-length=600.")
                     minSeconds = std::stod(value);
                 }
                 else if (strStartWith(option, "--show-title="))
@@ -5539,13 +5544,13 @@ static int runTsMuxer(int argc, char** argv)
                         }
                     }
                     else
-                        THROW(ERR_COMMON, argv[a]
+                        THROW(ERR_SOURCE, argv[a]
                                               << " is no Blu-ray or DVD disc folder or image, so --show-title names no "
                                                  "title in it.")
                 }
                 catch (const std::runtime_error& e)
                 {
-                    THROW(ERR_COMMON, e.what() << ".")
+                    THROW(ERR_SOURCE, e.what() << ".")
                 }
                 argv[1] = titleSource.data();
                 argc = 2;
@@ -5579,7 +5584,7 @@ static int runTsMuxer(int argc, char** argv)
                     return 0;
                 }
                 if (titleOptions)
-                    THROW(ERR_COMMON, argv[a] << " is no Blu-ray or DVD disc folder or image. --all-playlists and "
+                    THROW(ERR_SOURCE, argv[a] << " is no Blu-ray or DVD disc folder or image. --all-playlists and "
                                                  "--min-title-length list the titles of one.")
             }
         }
@@ -5598,7 +5603,7 @@ static int runTsMuxer(int argc, char** argv)
             if (trimStr(str).empty())
             {
                 showHelp();
-                return -1;
+                return ExitCode::Usage;
             }
             refuseUnknownOption(str);
             string fileExt = extractFileExt(str);
@@ -5613,7 +5618,7 @@ static int runTsMuxer(int argc, char** argv)
                 {
                     if (File file; !file.open(argv[1], File::ofRead))
                         THROW(ERR_FILE_NOT_FOUND, "Can't open file: " << str << openFailureReason(str))
-                    THROW(ERR_COMMON, "Can't parse play list file " << str
+                    THROW(ERR_SOURCE, "Can't parse play list file " << str
                                                                     << ": it is no Blu-ray playlist (MPLS), or "
                                                                        "it is damaged.")
                 }
@@ -5813,14 +5818,14 @@ static int runTsMuxer(int argc, char** argv)
                         cout << endl;
             */
             showHelp();
-            return -1;
+            return ExitCode::Usage;
         }
         // Check the destination before anything reads it. It used to be checked further down,
         // after several things had already taken it apart.
         if (trimStr(unquoteStr(argv[2])).empty())
         {
             LTRACE(LT_ERROR, 2, "No output file or folder was given. It is the second argument.");
-            return -1;
+            return ExitCode::Usage;
         }
         string fileExt = extractFileExt(argv[2]);
         fileExt = strToUpperCase(fileExt);
@@ -5854,7 +5859,7 @@ static int runTsMuxer(int argc, char** argv)
             File out;
             if (!out.open(madeMeta.name.c_str(), File::ofWrite) ||
                 out.write(text.data(), static_cast<uint32_t>(text.size())) != static_cast<int>(text.size()))
-                THROW(ERR_COMMON, "The meta file for " << argv[1] << " cannot be written to the temp folder.")
+                THROW(ERR_OUTPUT, "The meta file for " << argv[1] << " cannot be written to the temp folder.")
             out.close();
             LTRACE(LT_INFO, 2, argv[1] << " is a source, not a meta file: it is muxed with this meta file.");
             for (const std::string& line : splitStr(text.c_str(), '\n'))
@@ -5870,8 +5875,8 @@ static int runTsMuxer(int argc, char** argv)
         // --demux with a name ending .ts, .m2ts, .mts, .m2t, .mkv or .iso wrote that file instead. A disc
         // and a demux in one job cannot both be made.
         if (demuxAsked && dt != DiskType::NONE)
-            THROW(ERR_COMMON, "The MUXOPT lines ask for both a demux and a disc. Give one of --demux and "
-                                  << (dt == DiskType::AVCHD ? "--avchd" : "--blu-ray") << ".")
+            THROW(ERR_USAGE, "The MUXOPT lines ask for both a demux and a disc. Give one of --demux and "
+                                 << (dt == DiskType::AVCHD ? "--avchd" : "--blu-ray") << ".")
         std::string fileExt2 = unquoteStr(fileExt);
         // ** AN .iso OUTPUT IS A BLU-RAY IMAGE. ** The name of the output decides what is written, and an .iso is a
         // Blu-ray disc image, as the documentation lists it. Without --blu-ray or --avchd on the MUXOPT lines it was
@@ -5900,10 +5905,10 @@ static int runTsMuxer(int argc, char** argv)
             for (const char* kind :
                  {"MP4", "MOV", "M4V", "M4A", "MPG", "MPEG", "VOB", "AVI", "FLV", "OGG", "OGM", "WMV"})
                 if (fileExt2 == kind)
-                    THROW(ERR_COMMON, "tsMuxeR does not write ." << strToLowerCase(fileExt2)
-                                                                 << " files. Name the output .ts, .m2ts, .mkv or .iso, "
-                                                                    "or add --demux to the MUXOPT line for a folder of "
-                                                                    "tracks.")
+                    THROW(ERR_USAGE, "tsMuxeR does not write ." << strToLowerCase(fileExt2)
+                                                                << " files. Name the output .ts, .m2ts, .mkv or .iso, "
+                                                                   "or add --demux to the MUXOPT line for a folder of "
+                                                                   "tracks.")
 
         if (mkvMode)
         {
@@ -5916,14 +5921,14 @@ static int runTsMuxer(int argc, char** argv)
 
             string dstFile = unquoteStr(argv[2]);
             if (!isValidFileName(dstFile))
-                throw runtime_error(string("The output file name is empty or contains characters that "
-                                           "cannot be used: \"") +
-                                    dstFile + "\"");
+                throw UsageError(string("The output file name is empty or contains characters that "
+                                        "cannot be used: \"") +
+                                 dstFile + "\"");
             refuseSourceAsOutput(muxerManager, dstFile);
             refuseSaveSrtClash(muxerManager, dstFile);
 
             if (muxerManager.getTrackCnt() == 0)
-                THROW(ERR_COMMON, "No tracks selected")
+                THROW(ERR_USAGE, "No tracks selected")
             reportOptionsIgnored(muxerManager, autoChapterLen, false, false, false, fileExt2);
             // Same list the Blu-ray path hands to createMPLSFile. checkBluRayMux() has already
             // parsed --custom-chapters out of the meta above, whatever the output format is.
@@ -6018,9 +6023,9 @@ static int runTsMuxer(int argc, char** argv)
             string dstFile = unquoteStr(argv[2]);
 
             if (!isValidFileName(dstFile))
-                throw runtime_error(string("The output file name is empty or contains characters that "
-                                           "cannot be used: \"") +
-                                    dstFile + "\"");
+                throw UsageError(string("The output file name is empty or contains characters that "
+                                        "cannot be used: \"") +
+                                 dstFile + "\"");
 
             refuseSourceAsOutput(muxerManager, dstFile);
             refuseSaveSrtClash(muxerManager, dstFile);
@@ -6030,10 +6035,10 @@ static int runTsMuxer(int argc, char** argv)
             // creates the output image, so a meta that selects no tracks replaced an existing .iso
             // with a stub and then refused. The capacity guard just below already had this right.
             if (muxerManager.getTrackCnt() == 0)
-                THROW(ERR_COMMON, "No tracks selected")
+                THROW(ERR_USAGE, "No tracks selected")
             // Refused when the muxer was set up, which an ISO image of the same name did not survive
             if (muxerManager.keepEditions())
-                THROW(ERR_COMMON, "--keep-editions applies to a Matroska output (.mkv) only.")
+                THROW(ERR_USAGE, "--keep-editions applies to a Matroska output (.mkv) only.")
             const bool innerIso = innerOnlyIsoAsked(muxerManager, dt, dstFile);
 
             if (dt != DiskType::NONE)
@@ -6068,7 +6073,7 @@ static int runTsMuxer(int argc, char** argv)
                                        << " GB target disc; continuing due to --allow-oversize (it will NOT fit "
                                           "that disc).");
                         else
-                            THROW(ERR_COMMON,
+                            THROW(ERR_OUTPUT,
                                   "Capacity guard: estimated image ~"
                                       << estGb << " GB exceeds the " << capGb
                                       << " GB target disc. Lower the bitrate/duration, choose a larger --disc-size, "
@@ -6275,7 +6280,7 @@ static int runTsMuxer(int argc, char** argv)
                     if (sizeRefused)
                     {
                         innerFolder.keep = true;
-                        THROW(ERR_COMMON,
+                        THROW(ERR_OUTPUT,
                               "The image is not kept, as it does not fit the disc. The disc it was made from "
                               "is kept as an ordinary Blu-ray folder in "
                                   << innerFolder.str()
@@ -6283,7 +6288,7 @@ static int runTsMuxer(int argc, char** argv)
                                      "(--bdmv-to-iso), for a larger disc say, without muxing again.")
                     }
                     // the folder goes with the job, so it is not named
-                    THROW(ERR_COMMON, "The image could not be laid out from the muxed disc; the reason is above.")
+                    THROW(ERR_OUTPUT, "The image could not be laid out from the muxed disc; the reason is above.")
                 }
             }
             keepOld.commit();
@@ -6314,7 +6319,7 @@ static int runTsMuxer(int argc, char** argv)
             reportOptionsIgnored(sMuxer, autoChapterLen, false, true,
                                  !customChapterList.empty() || !chapterInfo.empty(), std::string());
             if (sMuxer.getTrackCnt() == 0)
-                THROW(ERR_COMMON, "No tracks selected")
+                THROW(ERR_USAGE, "No tracks selected")
 
             // output path - is checked for invalid characters on our platform
             string dstFile = unquoteStr(argv[2]);
@@ -6328,7 +6333,7 @@ static int runTsMuxer(int argc, char** argv)
             refuseSaveSrtClash(sMuxer, dstFile);
             // Refused when the muxer was set up, after the demux folder had been made, which was left empty
             if (sMuxer.keepEditions())
-                THROW(ERR_COMMON, "--keep-editions applies to a Matroska output (.mkv) only.")
+                THROW(ERR_USAGE, "--keep-editions applies to a Matroska output (.mkv) only.")
             sMuxer.setDemuxFolder(dstFile);
             const std::string demuxDir = keepOld.forDemuxFolder(dstFile, sMuxer.totalSize());
             createDir(demuxDir, true);
@@ -6368,7 +6373,9 @@ static int runTsMuxer(int argc, char** argv)
         // on a line of its own, as the other errors are: the shell prompt followed the text
         LTRACE(LT_ERROR, 2, e.what());
         printRemovedOutputNotes();
-        return -1;
+        if (dynamic_cast<OutputError*>(&e))
+            return ExitCode::Output;
+        return dynamic_cast<UsageError*>(&e) ? ExitCode::Usage : ExitCode::Source;
     }
     catch (VodCoreException& e)
     {
@@ -6377,7 +6384,7 @@ static int runTsMuxer(int argc, char** argv)
         LTRACE(LT_ERROR, 2, e.m_errStr.c_str());
         printRemovedOutputNotes();
         endBySignal();
-        return -2;
+        return ExitCode::of(e.m_errCode);
     }
     catch (BitStreamException& e)
     {
@@ -6385,7 +6392,7 @@ static int runTsMuxer(int argc, char** argv)
             LTRACE2(LT_ERROR, "Error: ")
         LTRACE(LT_ERROR, 2, "Bitstream exception " << e.what() << EXCEPTION_ERR_MSG);
         printRemovedOutputNotes();
-        return -3;
+        return ExitCode::Internal;
     }
     catch (...)
     {
@@ -6393,6 +6400,6 @@ static int runTsMuxer(int argc, char** argv)
             LTRACE2(LT_ERROR, "Error: ")
         LTRACE(LT_ERROR, 2, "Unknown exception" << EXCEPTION_ERR_MSG);
         printRemovedOutputNotes();
-        return -4;
+        return ExitCode::Internal;
     }
 }

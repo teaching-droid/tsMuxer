@@ -2,6 +2,7 @@
 #define VOD_CORE_EXCEPTION_H_
 
 #include <sstream>
+#include <stdexcept>
 #include <string>
 
 class VodCoreException
@@ -26,6 +27,11 @@ static constexpr int ERR_INVALID_HANDLE = 1;
 static constexpr int ERR_CANT_EXEC_PROCESS = 2;
 
 static constexpr int ERR_COMMON = 3;
+
+// What a general error is about, for the exit code (ExitCode::of)
+static constexpr int ERR_USAGE = 10;   // the command line or the meta file
+static constexpr int ERR_SOURCE = 11;  // a source that cannot be read or is not supported
+static constexpr int ERR_OUTPUT = 12;  // the output cannot be written
 
 static constexpr int ERR_FILE_NOT_FOUND = 100;
 static constexpr int ERR_FILE_SEEK = 101;
@@ -79,5 +85,56 @@ static constexpr char ERR_INTERNAL_ERROR_STR[] = "Internal error";
 static constexpr int MSG_ENDOFFILE = 2000;
 
 static constexpr int ERR_FEC_UNSUPPORTED_FEATURE = 3000;
+
+// ** EXIT CODES WITH A MEANING. ** The program ended with -1, -2, -3 or -4 by the kind of exception that ended it,
+// which said nothing about what was wrong: a script could tell success from failure and no more. The code now names the
+// reason, so that a script can stop on a wrong command line and go on after a source it cannot read.
+// A stop by Ctrl+C or SIGTERM is not among them: the program then ends as the system ends one that is stopped, so a
+// script that runs it in a loop stops too (endBySignal in main.cpp). 4 is kept free for it.
+namespace ExitCode
+{
+constexpr int Done = 0;
+constexpr int Usage = 1;     // the command line or the meta file is wrong
+constexpr int Source = 2;    // a source cannot be read or is not supported
+constexpr int Output = 3;    // the output cannot be written
+constexpr int Stopped = 4;   // kept free, see above
+constexpr int Internal = 5;  // an error inside the program
+constexpr int Batch = 6;     // --batch: a job failed or was not run
+
+inline int of(const int errCode)
+{
+    switch (errCode)
+    {
+    case ERR_USAGE:
+    case 500:  // ERR_INVALID_CODEC_INFO_FORMAT
+    case 501:  // ERR_UNKNOWN_CODEC
+    case 502:  // ERR_INVALID_CODEC_FORMAT
+    case 504:  // ERR_INVALID_STREAMS_SELECTED
+        return Usage;
+    case ERR_OUTPUT:
+    case 103:  // ERR_CANT_CREATE_FILE
+    case 104:  // ERR_FILE_EXISTS
+    case 105:  // ERR_FILE_COMMON
+        return Output;
+    case 1:     // ERR_INVALID_HANDLE
+    case 600:   // ERR_COMMON_SMALL_BUFFER
+    case 602:   // ERR_COMMON_MEMORY
+    case 1000:  // ERR_INTERNAL_ERROR
+        return Internal;
+    default:
+        return Source;
+    }
+}
+}  // namespace ExitCode
+
+// An error that is not a VodCoreException, by what it is about: any other std::runtime_error is about a source
+struct OutputError : std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
+struct UsageError : std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
 
 #endif

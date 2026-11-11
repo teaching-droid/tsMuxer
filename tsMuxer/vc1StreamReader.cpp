@@ -39,7 +39,7 @@ int VC1StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPa
         if (!m_seqBuffer.empty())
         {
             if (static_cast<size_t>(dstEnd - curPtr) < m_seqBuffer.size())
-                THROW(ERR_COMMON,
+                THROW(ERR_SOURCE,
                       "Track "
                           << m_streamIndex << ": its VC-1 sequence header of " << m_seqBuffer.size()
                           << " bytes does not fit the room kept for it in front of a picture, "
@@ -52,7 +52,7 @@ int VC1StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPa
         if (!m_entryPointBuffer.empty())
         {
             if (static_cast<size_t>(dstEnd - curPtr) < m_entryPointBuffer.size())
-                THROW(ERR_COMMON,
+                THROW(ERR_SOURCE,
                       "Track "
                           << m_streamIndex << ": its VC-1 entry point header of " << m_entryPointBuffer.size()
                           << " bytes does not fit the room kept for it in front of a picture, "

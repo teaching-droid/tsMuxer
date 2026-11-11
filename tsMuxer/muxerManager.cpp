@@ -267,18 +267,18 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
                 {
                     auto* const mkv = dynamic_cast<MatroskaMuxer*>(m_mainMuxer.get());
                     if (!mkv)
-                        THROW(ERR_COMMON, "--keep-editions applies to a Matroska output (.mkv) only.")
+                        THROW(ERR_USAGE, "--keep-editions applies to a Matroska output (.mkv) only.")
                     if (m_cutStart > 0 || m_cutEnd > 0)
-                        THROW(ERR_COMMON,
+                        THROW(ERR_USAGE,
                               "--keep-editions keeps the source's chapter times, which a cut would move. "
                               "Leave out --cut-start and --cut-end, or --keep-editions.")
                     if (!m_chapters.empty())
-                        THROW(ERR_COMMON,
+                        THROW(ERR_USAGE,
                               "--keep-editions keeps the source's own chapters, and cannot be used with "
                               "--custom-chapters or --chapters-file.")
                     // --no-chapters was ignored without a word, and the chapters kept
                     if (m_noChaptersTyped)
-                        THROW(ERR_COMMON,
+                        THROW(ERR_USAGE,
                               "--keep-editions keeps the source's own chapters, and --no-chapters leaves them out: "
                               "use one of the two.")
                     // An MP4 source was taken: the option kept nothing, and its chapters were left out as well.
@@ -291,7 +291,7 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
                                        ext == "WEBM";
                     }
                     if (!fromMatroska)
-                        THROW(ERR_COMMON,
+                        THROW(ERR_USAGE,
                               "--keep-editions keeps the editions of a Matroska source, and no track "
                               "here comes from a Matroska file. Leave it out.")
                     // A Matroska source without editions has nothing to keep, and nothing said so
@@ -377,7 +377,7 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
     // first view. With only such tracks there was no muxer for the first view, and the mux crashed after the whole
     // source had been read.
     if (m_subMuxer && !m_mainMuxer)
-        THROW(ERR_COMMON,
+        THROW(ERR_USAGE,
               "Every track of the meta file is the second view of 3D video (subClip= or an MVC dependent view), so "
               "there is nothing for the first view. Add the track of the first view, or leave subClip= out.")
 
@@ -538,7 +538,7 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
     // before anything is written. A Blu-ray folder or an ISO image keeps the views in clips of their own and splits.
     const auto* const mainTs = dynamic_cast<const TSMuxer*>(m_mainMuxer.get());
     if (m_subMuxer && m_interleave && !(fileFactory && fileFactory->isVirtualFS()) && mainTs && mainTs->isSplitting())
-        THROW(ERR_COMMON,
+        THROW(ERR_USAGE,
               "A .ssif output cannot be split. Leave out the split options, or write a Blu-ray folder or "
               "an ISO image (--blu-ray), whose clips are split instead.")
 
@@ -577,10 +577,10 @@ void MuxerManager::checkTimeshiftFitsClock()
         // may not pass half the clock, which leaves more than 13 hours for the mux itself.
         const int64_t length = m_metaDemuxer.statedDurationNano() / 1000000 * 90;  // ns to ms to 90 kHz ticks
         if (std::max(needed, m_ptsOffset) + (length > 0 ? length : CLOCK_WRAP / 2) >= CLOCK_WRAP)
-            THROW(ERR_COMMON, "A timeshift of " << (-mostNegativeShift * 1000 / INTERNAL_PTS_FREQ)
-                                                << " ms needs the start of the mux raised so far that the times would "
-                                                   "pass the clock's limit of about 26.5 hours and wrap round. Use a "
-                                                   "smaller timeshift.")
+            THROW(ERR_USAGE, "A timeshift of " << (-mostNegativeShift * 1000 / INTERNAL_PTS_FREQ)
+                                               << " ms needs the start of the mux raised so far that the times would "
+                                                  "pass the clock's limit of about 26.5 hours and wrap round. Use a "
+                                                  "smaller timeshift.")
     }
     // --start-time and a positive timeshift move the times up as well, and had no bound at all: --start-time=26:30:40
     // and a timeshift of 95440 s wrapped round within the first seconds. The same rule as
@@ -593,10 +593,10 @@ void MuxerManager::checkTimeshiftFitsClock()
         const int64_t length = m_metaDemuxer.statedDurationNano() / 1000000 * 90;  // ns to ms to 90 kHz ticks
         if (m_ptsOffset >= CLOCK_WRAP || shift >= CLOCK_WRAP ||
             m_ptsOffset + shift + (length > 0 ? length : CLOCK_WRAP / 2) >= CLOCK_WRAP)
-            THROW(ERR_COMMON, "--start-time (" << m_ptsOffset / 90000 << " s) and a timeshift of "
-                                               << mostPositiveShift * 1000 / INTERNAL_PTS_FREQ
-                                               << " ms put the times of the mux past the clock's limit of about 26.5 "
-                                                  "hours, where they wrap round. Use a smaller start or timeshift.")
+            THROW(ERR_USAGE, "--start-time (" << m_ptsOffset / 90000 << " s) and a timeshift of "
+                                              << mostPositiveShift * 1000 / INTERNAL_PTS_FREQ
+                                              << " ms put the times of the mux past the clock's limit of about 26.5 "
+                                                 "hours, where they wrap round. Use a smaller start or timeshift.")
     }
 }
 
@@ -633,14 +633,14 @@ void MuxerManager::checkTracksBeforeOutput()
             if (count <= 32)
                 continue;
             if (count > 255)
-                THROW(ERR_COMMON, "A Blu-ray playlist holds at most 255 " << kind << " tracks, and " << count
-                                                                          << " were given. Leave out " << count - 255
-                                                                          << " of them.")
+                THROW(ERR_USAGE, "A Blu-ray playlist holds at most 255 " << kind << " tracks, and " << count
+                                                                         << " were given. Leave out " << count - 255
+                                                                         << " of them.")
             if (!m_allowExtraTracks)
-                THROW(ERR_COMMON, "A Blu-ray disc holds at most 32 "
-                                      << kind << " tracks, and " << count << " were given. Leave out " << count - 32
-                                      << " of them, or add --allow-extra-tracks to the MUXOPT line to write them "
-                                         "anyway: some players show the tracks past the 32nd, others leave them out.")
+                THROW(ERR_USAGE, "A Blu-ray disc holds at most 32 "
+                                     << kind << " tracks, and " << count << " were given. Leave out " << count - 32
+                                     << " of them, or add --allow-extra-tracks to the MUXOPT line to write them "
+                                        "anyway: some players show the tracks past the 32nd, others leave them out.")
             LTRACE(LT_WARN, 2,
                    "Warning: " << count << " " << kind << " tracks are more than the 32 a Blu-ray disc has numbers for "
                                << "(--allow-extra-tracks): the last " << count - 32
@@ -682,10 +682,10 @@ void MuxerManager::checkTracksBeforeOutput()
         for (const StreamInfo& si : ci)
             if (const auto* reader = dynamic_cast<const LPCMStreamReader*>(si.m_streamReader);
                 reader && !reader->discLayoutRefusal().empty())
-                THROW(ERR_COMMON, reader->discLayoutRefusal()
-                                      << " Convert it to stereo, 5.1 or 7.1 before muxing it to "
-                                      << (m_bluRayMode ? (m_avchdMode ? "an AVCHD disc." : "a Blu-ray disc.")
-                                                       : "a transport stream."))
+                THROW(ERR_USAGE, reader->discLayoutRefusal()
+                                     << " Convert it to stereo, 5.1 or 7.1 before muxing it to "
+                                     << (m_bluRayMode ? (m_avchdMode ? "an AVCHD disc." : "a Blu-ray disc.")
+                                                      : "a transport stream."))
 }
 
 void MuxerManager::nameLpcmOutput(const std::vector<StreamInfo>& ci) const
@@ -736,13 +736,13 @@ void MuxerManager::checkMatroskaOnlyCodecs(const vector<StreamInfo>& ci, const b
                 if (si.m_codec != only->programName || (m_demuxMode && demuxWrites))
                     continue;
                 if (m_demuxMode)
-                    THROW(ERR_COMMON, only->displayName
-                                          << " can only be muxed into a Matroska file (.mkv): a demux has no file "
-                                             "of its own to write it to. Choose MKV output, or leave the track out.")
-                THROW(ERR_COMMON, only->displayName
-                                      << " can only be muxed into a Matroska file (.mkv). It has no form in a "
-                                         "transport stream or on a Blu-ray disc. Choose MKV output"
-                                      << (demuxWrites ? ", a demux (--demux)" : "") << ", or leave the track out.")
+                    THROW(ERR_USAGE, only->displayName
+                                         << " can only be muxed into a Matroska file (.mkv): a demux has no file "
+                                            "of its own to write it to. Choose MKV output, or leave the track out.")
+                THROW(ERR_USAGE, only->displayName
+                                     << " can only be muxed into a Matroska file (.mkv). It has no form in a "
+                                        "transport stream or on a Blu-ray disc. Choose MKV output"
+                                     << (demuxWrites ? ", a demux (--demux)" : "") << ", or leave the track out.")
             }
 }
 
@@ -769,7 +769,7 @@ void MuxerManager::checkOtherTracks(const vector<StreamInfo>& ci) const
         // there was written without one, and a disc of Opus alone was refused for want of "one audio or video stream"
         // to index, though there was one. It is refused as what it is, as the usage says: TS, MKV and demux only.
         else if (si.m_codec == opusCodecInfo.programName && m_bluRayMode)
-            THROW(ERR_COMMON,
+            THROW(ERR_USAGE,
                   "Opus has no form on a Blu-ray or AVCHD disc: the clip information of a disc has no "
                   "stream coding type for it. Choose TS or MKV output, or leave the track out.")
         else if (si.m_codec == vvcCodecInfo.programName)
@@ -779,7 +779,7 @@ void MuxerManager::checkOtherTracks(const vector<StreamInfo>& ci) const
         // track ended "Mux successful" with a playlist that has no video entry, a clip information entry of length 0
         // and a line about menus and DVB subtitles. It is refused as what it is.
         else if (si.m_codec == av1CodecInfo.programName && m_bluRayMode)
-            THROW(ERR_COMMON,
+            THROW(ERR_USAGE,
                   "AV1 has no form on a Blu-ray or AVCHD disc: the clip information of a disc has no stream coding "
                   "type for it, so a disc could not index or list the video. Choose TS or MKV output, or leave the "
                   "track out.")
@@ -1299,12 +1299,12 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     {
         const std::string err = m_fileWriter->getLastError();
         m_fileWriter.reset();
-        throw std::runtime_error("Failed to write output (disk full or I/O error): " + err);
+        throw OutputError("Failed to write output (disk full or I/O error): " + err);
     }
 
     m_fileWriter.reset();
     if (!closed)
-        throw std::runtime_error("Failed to write the end of the output (disk full or I/O error)");
+        throw OutputError("Failed to write the end of the output (disk full or I/O error)");
     // A start past the end of the sources dropped every packet, and the empty output was reported as a finished mux.
     // The sources can go on past the start and still give nothing: a video track starts at a key picture, and an
     // 8 s stream with one every 8 s cut at 7.5 s has none after the cut. That was reported as a start at or past
@@ -1318,7 +1318,7 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
                    "there is none after the cut. The output holds no media. Choose an earlier start.";
         else
             msg << "is at or past the end of the sources: the output holds no media.";
-        throw std::runtime_error(msg.str());
+        throw UsageError(msg.str());
     }
     // The same at the other end is no fault of the job: subtitles alone may have nothing before --cut-end, and an empty
     // track is then what was asked for. But a transport stream of 0 bytes came without a word: a reader that draws its
@@ -1354,7 +1354,7 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
         if (cover && key != lastKey.end())
             msg << ", where the picture begins at the key picture at " << at(key->second);
         msg << (cover ? "." : ", or --cut-pictures=cover.");
-        throw std::runtime_error(msg.str());
+        throw UsageError(msg.str());
     }
 }
 
@@ -1401,11 +1401,11 @@ bool MuxerManager::openMetaFile(const string& fileName)
             // refused here, before an output exists: refused when muxing began, an existing ISO image of
             // the same name had already been emptied.
             if (m_cutEnd > 0 && m_cutEnd <= m_cutStart)
-                THROW(ERR_COMMON, "Nothing to mux: --cut-end ("
-                                      << m_cutEnd / INTERNAL_PTS_FREQ << "s) is not after --cut-start ("
-                                      << m_cutStart / INTERNAL_PTS_FREQ
-                                      << "s). Both are positions from the start of the source, so the end "
-                                         "must be the later of the two.")
+                THROW(ERR_USAGE, "Nothing to mux: --cut-end ("
+                                     << m_cutEnd / INTERNAL_PTS_FREQ << "s) is not after --cut-start ("
+                                     << m_cutStart / INTERNAL_PTS_FREQ
+                                     << "s). Both are positions from the start of the source, so the end "
+                                        "must be the later of the two.")
         }
         file.readLine(str);
     }
@@ -1566,7 +1566,7 @@ string MuxerManager::muxOptLine(const string& line)
     // A quote that is not closed took the rest of the line into one value: --label="Disc --cut-end=5s made a label
     // of all of it, and the cut was not made, without a word
     if (quoted)
-        THROW(ERR_COMMON, "A quote on the MUXOPT line is not closed: " << trimStr(line))
+        THROW(ERR_USAGE, "A quote on the MUXOPT line is not closed: " << trimStr(line))
     const size_t start = out.find_first_not_of(' ');
     return start == string::npos ? string() : out.substr(start);
 }
@@ -1668,29 +1668,29 @@ void MuxerManager::parseMuxOpt(const string& opts)
         {
             const string how = paramPair.size() > 1 ? strToLowerCase(paramPair[1]) : string();
             if (how != "played" && how != "whole")
-                THROW(ERR_COMMON, "--playlist-clips takes played or whole, not \""
-                                      << (paramPair.size() > 1 ? paramPair[1] : "") << "\".")
+                THROW(ERR_USAGE, "--playlist-clips takes played or whole, not \""
+                                     << (paramPair.size() > 1 ? paramPair[1] : "") << "\".")
             m_metaDemuxer.setPlaylistClipsPlayed(how == "played");
         }
         else if (paramPair[0] == "--cut-pictures")
         {
             const string how = paramPair.size() > 1 ? strToLowerCase(paramPair[1]) : string();
             if (how != "cover" && how != "inside")
-                THROW(ERR_COMMON, "--cut-pictures takes cover or inside, not \""
-                                      << (paramPair.size() > 1 ? paramPair[1] : "") << "\".")
+                THROW(ERR_USAGE, "--cut-pictures takes cover or inside, not \""
+                                     << (paramPair.size() > 1 ? paramPair[1] : "") << "\".")
             m_cutCover = how == "cover";
         }
         else if (paramPair[0] == "--cut-start" || paramPair[0] == "--cut-end")
         {
             if (paramPair.size() < 2)
-                THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
+                THROW(ERR_USAGE, "Missing value for " << paramPair[0]);
             // A value without a unit was taken in the internal clock's ticks, 5,292,000,000 a second, and a clock
             // time such as 00:01:30 as 0, which switched the cut off; both in silence.
             int64_t cut = 0;
             if (!parseTimeToTicks(paramPair[1], nullptr, &cut) || cut < 0)
-                THROW(ERR_COMMON, paramPair[0] << "=" << paramPair[1]
-                                               << " is not a time. Write a number followed by ms, s or min, such as "
-                                                  "90s or 1.5min, or a clock time such as 00:01:30.")
+                THROW(ERR_USAGE, paramPair[0] << "=" << paramPair[1]
+                                              << " is not a time. Write a number followed by ms, s or min, such as "
+                                                 "90s or 1.5min, or a clock time such as 00:01:30.")
             if (paramPair[0] == "--cut-start")
                 setCutStart(cut);
             else
@@ -1719,7 +1719,7 @@ void MuxerManager::parseMuxOpt(const string& opts)
         else if (paramPair[0] == "--extra-iso-space")
         {
             if (paramPair.size() < 2)
-                THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
+                THROW(ERR_USAGE, "Missing value for " << paramPair[0]);
             m_extraIsoSpace = strToInt32(paramPair[1]);
             m_extraIsoBlocksGiven = true;
         }
@@ -1746,13 +1746,13 @@ void MuxerManager::parseMuxOpt(const string& opts)
         else if (paramPair[0] == "--disc-size")
         {
             if (paramPair.size() < 2)
-                THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
+                THROW(ERR_USAGE, "Missing value for " << paramPair[0]);
             m_discSizeLimit = parseDiscSizeValue(paramPair[1]);
             if (m_discSizeLimit <= 0)
-                THROW(ERR_COMMON, "Invalid --disc-size value '"
-                                      << paramPair[1]
-                                      << "'. Use bd25/bd50/bd100/bd128, or a byte count with an optional "
-                                         "k/m/g/gib suffix (e.g. 25000000000, 24g, 23gib).");
+                THROW(ERR_USAGE, "Invalid --disc-size value '"
+                                     << paramPair[1]
+                                     << "'. Use bd25/bd50/bd100/bd128, or a byte count with an optional "
+                                        "k/m/g/gib suffix (e.g. 25000000000, 24g, 23gib).");
         }
         else if (paramPair[0] == "--allow-oversize")
         {
@@ -1777,7 +1777,7 @@ void MuxerManager::parseMuxOpt(const string& opts)
         else if (paramPair[0] == "--meta-dir")
         {
             if (paramPair.size() < 2)
-                THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
+                THROW(ERR_USAGE, "Missing value for " << paramPair[0]);
             m_metaDir = unquoteStr(trimStr(paramPair[1]));
             UtfConverter::metaTextToUtf8(m_metaDir);
         }
@@ -1786,17 +1786,17 @@ void MuxerManager::parseMuxOpt(const string& opts)
         else if (paramPair[0] == "--layer-break-guard")
         {
             if (paramPair.size() < 2)
-                THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
+                THROW(ERR_USAGE, "Missing value for " << paramPair[0]);
             if (const std::string err = parseGuardMB(paramPair[0], paramPair[1], m_layerBreakGuardMB); !err.empty())
-                THROW(ERR_COMMON, err);
+                THROW(ERR_USAGE, err);
         }
         else if (paramPair[0] == "--layer-break-guard-before")
         {
             if (paramPair.size() < 2)
-                THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
+                THROW(ERR_USAGE, "Missing value for " << paramPair[0]);
             if (const std::string err = parseGuardMB(paramPair[0], paramPair[1], m_layerBreakGuardBeforeMB);
                 !err.empty())
-                THROW(ERR_COMMON, err);
+                THROW(ERR_USAGE, err);
         }
         else if (paramPair[0] == "--no-chapters")
             m_noChapters = m_noChaptersTyped = true;
@@ -1808,13 +1808,13 @@ void MuxerManager::parseMuxOpt(const string& opts)
         else if (paramPair[0] == "--layer-break-lbn")
         {
             if (paramPair.size() < 2)
-                THROW(ERR_COMMON, "Missing value for " << paramPair[0]);
+                THROW(ERR_USAGE, "Missing value for " << paramPair[0]);
             // One sector for BD-R/RE DL, or a comma-separated list for BDXL (100 GB = 2 breaks,
             // 128 GB = 3): e.g. --layer-break-lbn=15768576,31537152
             // one reading, shared with the --bdmv-to-iso path
             std::vector<std::string> warnings;
             if (const std::string err = parseLayerBreakList(paramPair[1], m_layerBreakLbns, warnings); !err.empty())
-                THROW(ERR_COMMON, "Invalid --layer-break-lbn value '" << paramPair[1] << "': " << err);
+                THROW(ERR_USAGE, "Invalid --layer-break-lbn value '" << paramPair[1] << "': " << err);
             for (const auto& warning : warnings) LTRACE(LT_WARN, 2, "Warning: " << warning);
         }
     }
@@ -1830,10 +1830,10 @@ void MuxerManager::parseMuxOpt(const string& opts)
                                     ? "--layer-break-guard and --layer-break-guard-before"
                                 : m_layerBreakGuardMB >= 0 ? "--layer-break-guard"
                                                            : "--layer-break-guard-before";
-        THROW(ERR_COMMON, "--inner-only and " << guardName
-                                              << " cannot be used together. --inner-only works out its own padding at "
-                                                 "the layer break from the size of the disc. Remove one of the two. "
-                                                 "Nothing has been written.")
+        THROW(ERR_USAGE, "--inner-only and " << guardName
+                                             << " cannot be used together. --inner-only works out its own padding at "
+                                                "the layer break from the size of the disc. Remove one of the two. "
+                                                "Nothing has been written.")
     }
     // Decided 27 Oct: a guard given by size is written, and the line says the other option is not used.
     if (m_noLayerBreakGuard && (m_layerBreakGuardMB >= 0 || m_layerBreakGuardBeforeMB >= 0))

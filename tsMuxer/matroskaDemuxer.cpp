@@ -726,7 +726,7 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
                 if (const int64_t pause = soundPause(track + 1, blockNs); pause > 0 && joinSound)
                     m_joinSound[track + 1].pause = true;
                 else if (pause > 0)
-                    THROW(ERR_COMMON,
+                    THROW(ERR_SOURCE,
                           "Track " << track + 1 << " in file " << m_joinPart + 1 << " of the join has no data for "
                                    << (pause + 500000) / 1000000
                                    << " ms while the picture goes on, and where its sound after that comes cannot be "
@@ -818,7 +818,7 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
                 else if (n == 0 && laceNs != AV_NOPTS_VALUE && tracks[track]->type == IOContextTrackType::AUDIO &&
                          isJoinTimedCodec(tracks[track]))
                     if (const int64_t pause = soundPause(track + 1, laceNs); pause > 0)
-                        THROW(ERR_COMMON,
+                        THROW(ERR_SOURCE,
                               "Track " << track + 1 << " has no data for " << (pause + 500000) / 1000000
                                        << " ms while the picture goes on, in a file read as its ordered edition, and "
                                           "where its sound after that comes cannot be told there: tsMuxeR puts such "
@@ -5710,7 +5710,7 @@ int MatroskaDemuxer::matroska_add_stream()
     uint32_t id;
 
     if (num_tracks >= MAX_STREAMS)
-        THROW(ERR_COMMON, "Too many tracks. Max supported tracks count: " << MAX_STREAMS)
+        THROW(ERR_SOURCE, "Too many tracks. Max supported tracks count: " << MAX_STREAMS)
 
     /* Allocate a generic track. As soon as we know its type we'll realloc. */
     auto* track = reinterpret_cast<MatroskaTrack*>(new char[MAX_TRACK_SIZE]{});

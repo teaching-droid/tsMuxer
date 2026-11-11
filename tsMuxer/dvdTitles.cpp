@@ -2,6 +2,7 @@
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "dvdTitles.h"
 #include "discTitles.h"
+#include "vodCoreException.h"
 
 #include <fs/directory.h>
 #include <fs/discImage.h>
@@ -886,8 +887,8 @@ std::string dvdTitleSource(const std::string& videoTs, const std::string& title,
             if (candidate.discTitle == n)
                 t = &candidate;
         if (!t)
-            throw std::runtime_error("dvd-title=" + title + " is not a title of " + videoTs +
-                                     ": give the number of the DVD title as the listing shows it");
+            throw UsageError("dvd-title=" + title + " is not a title of " + videoTs +
+                             ": give the number of the DVD title as the listing shows it");
     }
     else if (strToLowerCase(title) == "main")
     {
@@ -901,19 +902,18 @@ std::string dvdTitleSource(const std::string& videoTs, const std::string& title,
             !title.empty() && title.size() <= 4 && title.find_first_not_of("0123456789") == std::string::npos;
         const int n = digits ? std::stoi(title) : 0;
         if (n < 1 || n > static_cast<int>(list.titles.size()))
-            throw std::runtime_error("title=" + title + " is not a title of " + videoTs + ", which has " +
-                                     std::to_string(list.titles.size()) +
-                                     (list.titles.size() == 1 ? " title" : " titles") + ": give a number from 1 to " +
-                                     std::to_string(list.titles.size()) + ", or main");
+            throw UsageError("title=" + title + " is not a title of " + videoTs + ", which has " +
+                             std::to_string(list.titles.size()) + (list.titles.size() == 1 ? " title" : " titles") +
+                             ": give a number from 1 to " + std::to_string(list.titles.size()) + ", or main");
         t = &list.titles[static_cast<size_t>(n - 1)];
     }
     if (t->encrypted)
         throw std::runtime_error("DVD title " + std::to_string(t->discTitle) + " of " + videoTs +
                                  " is still encrypted, and tsMuxeR cannot read it");
     if (angle < 1 || angle > t->angles)
-        throw std::runtime_error("angle=" + std::to_string(angle) + " is not an angle of DVD title " +
-                                 std::to_string(t->discTitle) + " of " + videoTs + ", which has " +
-                                 (t->angles == 1 ? std::string("one angle") : std::to_string(t->angles) + " angles"));
+        throw UsageError("angle=" + std::to_string(angle) + " is not an angle of DVD title " +
+                         std::to_string(t->discTitle) + " of " + videoTs + ", which has " +
+                         (t->angles == 1 ? std::string("one angle") : std::to_string(t->angles) + " angles"));
     const std::vector<Vob> vobs = titleSetVobs(videoTs, t->titleSet);
     if (vobs.empty())
         throw std::runtime_error("the video of DVD title " + std::to_string(t->discTitle) + " of " + videoTs +

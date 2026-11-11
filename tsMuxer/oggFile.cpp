@@ -380,7 +380,7 @@ bool prepareOggFile(const std::string& fileName)
     if (ec || !file)
         return false;  // said by whatever opens it, as for any file that cannot be opened
     if (fileSize > MAX_OGG_BYTES)
-        THROW(ERR_COMMON, "The Ogg file " << name << " is " << fileSize / (1024 * 1024)
+        THROW(ERR_SOURCE, "The Ogg file " << name << " is " << fileSize / (1024 * 1024)
                                           << " MiB. tsMuxeR reads an Ogg file into memory, up to "
                                           << MAX_OGG_BYTES / (1024 * 1024) << " MiB.")
 
@@ -401,7 +401,7 @@ bool prepareOggFile(const std::string& fileName)
         if (std::memcmp(in.at(), "OggS", 4) != 0 || in.at()[4] != 0)
         {
             if (in.offset() == 0)
-                THROW(ERR_COMMON, "The file " << name << " is no Ogg file: it does not begin with an Ogg page.")
+                THROW(ERR_SOURCE, "The file " << name << " is no Ogg file: it does not begin with an Ogg page.")
             in.skip(1);
             if (!afterDamage)
                 ++strayBytes;
@@ -463,7 +463,7 @@ bool prepareOggFile(const std::string& fileName)
                 continue;
             }
             if (audioBegun && std::any_of(streams.begin(), streams.end(), [](const Stream& x) { return x.ended; }))
-                THROW(ERR_COMMON, "The Ogg file "
+                THROW(ERR_SOURCE, "The Ogg file "
                                       << name
                                       << " holds several streams one after the other (a chained Ogg file), which "
                                          "tsMuxeR does not read. Split it into a file for each stream; the files can "
@@ -588,7 +588,7 @@ bool prepareOggFile(const std::string& fileName)
                                         << " ends inside a page: it was cut off there, and the sound of that page is "
                                            "lost.");
     if (track == 0)
-        THROW(ERR_COMMON, "The Ogg file " << name << " holds no Opus or Vorbis sound that tsMuxeR can read.")
+        THROW(ERR_SOURCE, "The Ogg file " << name << " holds no Opus or Vorbis sound that tsMuxeR can read.")
 
     // the Matroska file: the size of its segment is written when it is known
     std::vector<uint8_t> mkv;

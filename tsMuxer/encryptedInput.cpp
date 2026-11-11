@@ -116,7 +116,7 @@ void checkEncryptedInput(const std::string& fileName, const bool m2ts)
         return;
     const std::string what = m2ts ? " units of 6144 bytes tested" : " sectors tested";
     if (s.encrypted * 2 >= s.tested)
-        THROW(ERR_COMMON, "\"" << name << "\" is still encrypted: " << s.encrypted << " of the " << s.tested << what
+        THROW(ERR_SOURCE, "\"" << name << "\" is still encrypted: " << s.encrypted << " of the " << s.tested << what
                                << (m2ts ? " cannot be read past their first 16 bytes"
                                         : (s.encrypted == 1 ? " is marked scrambled" : " are marked scrambled"))
                                << ". tsMuxeR cannot read an encrypted file; it needs to be decrypted before muxing.")

@@ -114,7 +114,7 @@ int PGSStreamReader::calcFpsIndex(const double fps)
     for (int i = 0; i < 16; i++)
         if (fabs(pgs_frame_rates[i] - fps) < 1e-4)
             return i;
-    THROW(ERR_COMMON, "Non standard fps value are not supported for PGS streams")
+    THROW(ERR_SOURCE, "Non standard fps value are not supported for PGS streams")
 }
 
 void PGSStreamReader::readPalette(const uint8_t* pos, const uint8_t* end)
@@ -695,7 +695,7 @@ int PGSStreamReader::readSourcePacket(AVPacket& avPacket)
         // Random bytes on an S_HDMV/PGS line hold a "PG" and a segment code 0x16 by chance, and their "size" of
         // 15162:26915 at frame rate 0 was scaled to 1920:1080 and muxed as subtitles, at exit 0
         if (m_badDescriptor)
-            THROW(ERR_COMMON, "Track " << m_streamIndex << " is not PGS: its first composition gives a picture of "
+            THROW(ERR_SOURCE, "Track " << m_streamIndex << " is not PGS: its first composition gives a picture of "
                                        << m_video_width << ':' << m_video_height << " at frame rate " << m_frame_rate
                                        << ", which no PGS stream has. The usual reason is that the codec on the meta "
                                           "line is not the codec the file holds. List the file on its own to see what "
@@ -1194,7 +1194,7 @@ int PGSStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVPa
     if (!m_demuxMode)
         return 0;
     if (dstEnd - dstBuffer < 10)
-        THROW(ERR_COMMON, "PGS stream error: Not enough buffer for write headers")
+        THROW(ERR_INTERNAL_ERROR, "PGS stream error: Not enough buffer for write headers")
     if (!m_needRescale)
     {
         *dstBuffer++ = 'P';

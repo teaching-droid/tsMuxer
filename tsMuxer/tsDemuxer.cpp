@@ -193,7 +193,7 @@ TSDemuxer::TSDemuxer(const BufferedReaderManager& readManager, const char* strea
     m_bufferedReader = m_readManager.getReader(streamName);
     m_readerID = m_bufferedReader->createReader(TS_FRAME_SIZE);
     if (m_bufferedReader == nullptr)
-        THROW(ERR_COMMON,
+        THROW(ERR_SOURCE,
               "TS demuxer can't accept reader because this reader does not support BufferedReader interface")
     m_scale = 1;
     m_nptPos = 0;
@@ -322,7 +322,7 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
         if (br)
             br->incSeek(m_readerID, -static_cast<int64_t>(totalReadedBytes));
         else
-            THROW(ERR_COMMON, "Function TSDemuxer::getTrackList required bufferedReader!")
+            THROW(ERR_SOURCE, "Function TSDemuxer::getTrackList required bufferedReader!")
         return true;
     };
     while (totalReadedBytes < DETECT_STREAM_BUFFER_SIZE && lastReadRez != BufferedReader::DATA_EOF)
@@ -482,7 +482,7 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             // the next block.
             tmpBufferLen = static_cast<uint32_t>(data + readedBytes - curPos);
             if (tmpBufferLen > TS_FRAME_SIZE)
-                THROW(ERR_COMMON, "TS track scan: " << tmpBufferLen << " bytes left over at the end of a block")
+                THROW(ERR_SOURCE, "TS track scan: " << tmpBufferLen << " bytes left over at the end of a block")
             memmove(m_tmpBuffer, curPos, tmpBufferLen);
         }
         else if (m_tail)
@@ -593,12 +593,12 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                          : mapTaken.empty() && damagedMaps.empty() && sharedPids.empty() ? "PMT"
                                                                                          : nullptr;
     if (unmarkedDamage && trackList.empty())
-        THROW(ERR_COMMON, "Invalid tsPacket->getHeaderSize")
+        THROW(ERR_SOURCE, "Invalid tsPacket->getHeaderSize")
     auto br = dynamic_cast<BufferedFileReader*>(m_bufferedReader);
     if (br)
         br->incSeek(m_readerID, -static_cast<int64_t>(totalReadedBytes));
     else
-        THROW(ERR_COMMON, "Function TSDemuxer::getTrackList required bufferedReader!")
+        THROW(ERR_SOURCE, "Function TSDemuxer::getTrackList required bufferedReader!")
 }
 
 // The sound of a file cut at any byte, or written by a muxer that does not start each PES with a frame, can begin
@@ -998,7 +998,7 @@ bool TSDemuxer::keepJoinSound(const int pid, const StreamType type, const int64_
     if (const int64_t pause = soundPause(pid, pts, end); pause > 0)
     {
         if (sound.origin != -1 && sound.onTimeline == INT64_MIN)
-            THROW(ERR_COMMON, "Track " << pid << " in file " << m_curFileNum + 1 << " of the join has no data for "
+            THROW(ERR_SOURCE, "Track " << pid << " in file " << m_curFileNum + 1 << " of the join has no data for "
                                        << (pause + 45) / 90
                                        << " ms while the picture goes on, and where its sound after that comes "
                                           "cannot be told: a file of the join before it has no picture to put its "
@@ -1048,7 +1048,7 @@ void TSDemuxer::noteSoundGap(const int pid, const int64_t pts, const bool cutPar
         // clip a playlist cuts, is not put against its picture: it follows on from the sound handed on before it, so
         // where the sound after the pause comes is not known. It came straight after the sound before the pause.
         if (m_curFileNum > 0 || cutPart)
-            THROW(ERR_COMMON, "Track " << pid << " has no data for " << (pause + 45) / 90 << " ms in clip "
+            THROW(ERR_SOURCE, "Track " << pid << " has no data for " << (pause + 45) / 90 << " ms in clip "
                                        << m_curFileNum + 1
                                        << " of the playlist while the picture goes on, and where its sound after "
                                           "that comes cannot be told in a playlist that plays a part of a clip: "
@@ -2614,7 +2614,7 @@ void TSDemuxer::reportDamage()
                        << " missing by the continuity counter" << where(damage.lostAt) << ", " << damage.scrambled
                        << " marked scrambled");
         if (damage.packets > 0 && damage.scrambled == damage.packets)
-            THROW(ERR_COMMON, "Track " << pid << " of \"" << m_streamName << "\" is scrambled: all " << damage.packets
+            THROW(ERR_SOURCE, "Track " << pid << " of \"" << m_streamName << "\" is scrambled: all " << damage.packets
                                        << " of its packets are marked so (transport_scrambling_control), and what "
                                           "they hold cannot be read. A recording of an encrypted channel needs to be "
                                           "decrypted before muxing; or leave the track out.")
@@ -2647,7 +2647,7 @@ void TSDemuxer::setFileIterator(FileNameIterator* itr)
     if (br)
         br->setFileIterator(itr, m_readerID);
     else if (itr != nullptr)
-        THROW(ERR_COMMON, "Can not set file iterator. Reader does not support bufferedReader interface.")
+        THROW(ERR_SOURCE, "Can not set file iterator. Reader does not support bufferedReader interface.")
 }
 
 int64_t getLastPCR(const File& file, const int bufferSize, const int frameSize, const int64_t fileSize,

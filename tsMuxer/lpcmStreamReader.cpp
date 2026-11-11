@@ -336,7 +336,7 @@ void LPCMStreamReader::planBdLayout(const uint32_t mask)
 int LPCMStreamReader::convertWavToPCM(uint8_t* start, uint8_t* end)
 {
     if (!m_bdRefusal.empty())
-        THROW(ERR_COMMON, m_bdRefusal << " Convert it to stereo, 5.1 or 7.1 before muxing it to " << m_bdOutput << ".")
+        THROW(ERR_USAGE, m_bdRefusal << " Convert it to stereo, 5.1 or 7.1 before muxing it to " << m_bdOutput << ".")
     // int mch = m_channels; // + (m_channels%2==1 ? 1 : 0);
     const int ch1SampleSize = (m_bitsPerSample == 20 ? 3 : m_bitsPerSample / 8);
     const int fullSampleSize = m_channels * ch1SampleSize;
@@ -351,16 +351,15 @@ int LPCMStreamReader::convertWavToPCM(uint8_t* start, uint8_t* end)
     // 23,040 bytes for 24 bit 7.1: a crash (also in 3.0.1). It is refused, as a WAV that needs silent channels to reach
     // such a layout already was.
     if (bdChannels() > 6 && m_freq == 192000)
-        THROW(ERR_COMMON,
-              "Track " << m_streamIndex << " has " << bdChannels()
-                       << " channels at 192 kHz. A Blu-ray LPCM track (and a TS) carries at most 6 channels "
-                          "at 192 kHz. Convert it to 96 kHz or to 6 channels, or mux it into a Matroska "
-                          "file.")
+        THROW(ERR_USAGE, "Track " << m_streamIndex << " has " << bdChannels()
+                                  << " channels at 192 kHz. A Blu-ray LPCM track (and a TS) carries at most 6 channels "
+                                     "at 192 kHz. Convert it to 96 kHz or to 6 channels, or mux it into a Matroska "
+                                     "file.")
         {
             const int64_t frameSamples = (end - start) / sourceFullSize;
             if (frameSamples * ((bdChannels() + 1) & ~1) * ch1SampleSize + 4 >
                 static_cast<int64_t>(sizeof(m_tmpFrameBuffer)))
-                THROW(ERR_COMMON, "Track " << m_streamIndex << ": a frame of LPCM is larger than a disc carries.")
+                THROW(ERR_USAGE, "Track " << m_streamIndex << ": a frame of LPCM is larger than a disc carries.")
         }
     // 0. samples a disc does not take, as 16 or 24 bit ones
     if (m_srcBits)
@@ -621,7 +620,7 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
                 if (memcmp(c, "fmt ", 4) == 0)
                     break;
                 if (memcmp(c, "data", 4) == 0)
-                    THROW(ERR_COMMON,
+                    THROW(ERR_SOURCE,
                           "The WAVE file has no format chunk before its audio, so the format of its "
                           "samples is not known. The file is damaged or is no WAV file.")
                 const uint32_t size = loadUnaligned<uint32_t>(c + 4);
@@ -655,17 +654,17 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
 
         m_channels = static_cast<uint8_t>(waveFormatPCMEx->nChannels);
         if (m_channels > 8)
-            THROW(ERR_COMMON,
+            THROW(ERR_SOURCE,
                   "Too many channels: " << static_cast<int>(m_channels) << ". Maximum supported value is 8(7.1)")
         if (m_channels == 0)
-            THROW(ERR_COMMON, "Invalid channels count: 0. WAVE header is invalid.")
+            THROW(ERR_SOURCE, "Invalid channels count: 0. WAVE header is invalid.")
         m_freq = waveFormatPCMEx->nSamplesPerSec;
         // The reader cuts the audio into the frames of a disc's LPCM, which other rates do not fill evenly, so this
         // holds for every output. The message gave the list without saying so, and a Matroska output looked
         // refused by a disc rule.
         // A track of a VOB, a Matroska or an MP4 file was called a WAVE file as well.
         if (m_freq != 48000 && m_freq != 96000 && m_freq != 192000)
-            THROW(ERR_COMMON, (m_containerType == ContainerType::ctNone || m_containerType == ContainerType::ctLPCM
+            THROW(ERR_SOURCE, (m_containerType == ContainerType::ctNone || m_containerType == ContainerType::ctLPCM
                                    ? "The WAVE file has a sample rate of "
                                    : "The PCM track has a sample rate of ")
                                   << m_freq
@@ -683,7 +682,7 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
         if (m_srcFloat)
         {
             if (m_bitsPerSample != 32 && m_bitsPerSample != 64)
-                THROW(ERR_COMMON, "The WAVE file holds floating point samples of " << m_bitsPerSample
+                THROW(ERR_SOURCE, "The WAVE file holds floating point samples of " << m_bitsPerSample
                                                                                    << " bits; only 32 and 64 bit "
                                                                                       "floating point is read.")
             m_srcBits = m_bitsPerSample;
@@ -696,7 +695,7 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
         }
         else if (m_bitsPerSample != 16 && m_bitsPerSample != 20 && m_bitsPerSample != 24)
         {
-            THROW(ERR_COMMON, "Bit depth " << m_bitsPerSample
+            THROW(ERR_SOURCE, "Bit depth " << m_bitsPerSample
                                            << " is not supported for LPCM format. Allowed values: 8, 16, 20, 24 and "
                                               "32 bit, and 32 and 64 bit floating point.")
         }
@@ -712,7 +711,7 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
                                     (m_srcFloat ? 1 : 0);
             const bool converted = m_srcBits != 0;
             if (m_firstFormat != 0 && format != m_firstFormat && (m_demuxMode || converted || m_firstConverted))
-                THROW(ERR_COMMON, "The WAV files joined in track "
+                THROW(ERR_SOURCE, "The WAV files joined in track "
                                       << m_streamIndex << " differ in sample rate, channels or sample size, which "
                                       << (m_demuxMode ? "a Matroska output or a demux gives once for the whole track"
                                                       : "a track of 8 bit, 32 bit or floating point samples cannot")
@@ -722,7 +721,7 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
             m_firstFormat = format;
         }
         if (static_cast<int64_t>(sourceSampleBytes()) * m_channels * m_freq / 200 > MAX_AV_PACKET_SIZE)
-            THROW(ERR_COMMON, "The WAVE file has " << static_cast<int>(m_channels) << " channels of "
+            THROW(ERR_SOURCE, "The WAVE file has " << static_cast<int>(m_channels) << " channels of "
                                                    << (m_srcBits ? m_srcBits : m_bitsPerSample) << " bit at " << m_freq
                                                    << " Hz, more than tsMuxeR reads in one frame. Convert it to 32 bit "
                                                       "floating point or to 24 bit first.")
@@ -741,7 +740,7 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
             m_srcMask = speakers == m_channels ? static_cast<uint32_t>(waveFormatPCMEx->dwChannelMask) : 0;
             planBdLayout(waveFormatPCMEx->dwChannelMask);
             if (!(waveFormatPCMEx->SubFormat == KSDATAFORMAT_SUBTYPE_PCM) && !m_srcFloat)
-                THROW(ERR_COMMON, "Unsupported WAVE format. Only PCM audio is supported.")
+                THROW(ERR_SOURCE, "Unsupported WAVE format. Only PCM audio is supported.")
         }
         else if (waveFormatPCMEx->wFormatTag == 0x01 || waveFormatPCMEx->wFormatTag == WAVE_FORMAT_IEEE_FLOAT)
         {  // standard format
@@ -764,7 +763,7 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
             }
         }
         else
-            THROW(ERR_COMMON, "Unsupported WAVE format. wFormatTag: " << waveFormatPCMEx->wFormatTag)
+            THROW(ERR_SOURCE, "Unsupported WAVE format. wFormatTag: " << waveFormatPCMEx->wFormatTag)
         if ((waveFormatPCMEx->wFormatTag == 0x01 || waveFormatPCMEx->wFormatTag == WAVE_FORMAT_IEEE_FLOAT) &&
             m_channels > 2)
             planBdLayout(getWaveChannelMask(m_channels, m_lfeExists));
@@ -815,7 +814,7 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
                 --chunkSize;
         }
         if (chunkSize > static_cast<uint64_t>(DEFAULT_FILE_BLOCK_SIZE))
-            THROW(ERR_COMMON, "WAVE header: the chunk '" << std::string(reinterpret_cast<char*>(curPos), 4)
+            THROW(ERR_SOURCE, "WAVE header: the chunk '" << std::string(reinterpret_cast<char*>(curPos), 4)
                                                          << "' before the audio is " << chunkSize
                                                          << " bytes. A chunk of more than " << DEFAULT_FILE_BLOCK_SIZE
                                                          << " bytes before the audio is not supported.")
@@ -1202,7 +1201,7 @@ int LPCMStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
             // not hold what was about to be written into it.
             const int64_t headerSize = m_demuxToW64 ? W64_HEADER_SIZE : 68;
             if (dstEnd - dstBuffer < headerSize)
-                THROW(ERR_COMMON, "LPCM stream error: Not enough buffer for writing headers")
+                THROW(ERR_INTERNAL_ERROR, "LPCM stream error: Not enough buffer for writing headers")
             if (m_demuxToW64)
             {
                 curPos = writeW64Guid(curPos, "riff");

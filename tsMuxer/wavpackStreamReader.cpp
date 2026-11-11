@@ -106,7 +106,7 @@ int WavpackStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes
     const uint8_t* f = buff + FRAME_PREFIX_LEN;
     const uint32_t flags = le32(f + 4);
     if (flags & DSD_FLAG)
-        THROW(ERR_COMMON, "The WavPack track holds DSD audio, which tsMuxeR does not read.")
+        THROW(ERR_SOURCE, "The WavPack track holds DSD audio, which tsMuxeR does not read.")
     if (!m_haveFlags)
     {
         m_flags = flags;

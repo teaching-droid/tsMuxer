@@ -101,14 +101,14 @@ std::vector<uint8_t> readWhole(const std::string& path)
     File file;
     int64_t size = 0;
     if (!file.open(path.c_str(), File::ofRead) || !file.size(&size) || size < 0 || size > 64 * 1024 * 1024)
-        THROW(ERR_COMMON, "Can't read " << path << " of the disc's title and pictures (BDMV/META/DL).")
+        THROW(ERR_SOURCE, "Can't read " << path << " of the disc's title and pictures (BDMV/META/DL).")
     std::vector<uint8_t> data(static_cast<size_t>(size));
     size_t done = 0;
     while (done < data.size())
     {
         const int n = file.read(data.data() + done, static_cast<uint32_t>(data.size() - done));
         if (n <= 0)
-            THROW(ERR_COMMON, "Can't read " << path << " of the disc's title and pictures (BDMV/META/DL).")
+            THROW(ERR_SOURCE, "Can't read " << path << " of the disc's title and pictures (BDMV/META/DL).")
         done += static_cast<size_t>(n);
     }
     return data;
@@ -339,7 +339,7 @@ DiscMeta readGivenDiscMeta(const std::string& dir)
 {
     std::error_code ec;
     if (!std::filesystem::is_directory(pathOf(dir), ec))
-        THROW(ERR_COMMON, "--meta-dir: the folder " << dir << " is not there.")
+        THROW(ERR_USAGE, "--meta-dir: the folder " << dir << " is not there.")
     for (const char* sub : {"", "DL", "META/DL", "BDMV/META/DL"})
     {
         const std::filesystem::path p = *sub ? plainPath(dir) / std::filesystem::path(sub) : plainPath(dir);
@@ -350,10 +350,10 @@ DiscMeta readGivenDiscMeta(const std::string& dir)
         if (std::any_of(names.begin(), names.end(), isBdmtName))
             return readFolder(utf8Of(p), true);
     }
-    THROW(ERR_COMMON, "--meta-dir: there is no bdmt_<lang>.xml file in "
-                          << dir
-                          << ", nor in a DL or META/DL folder in it. A disc keeps its title in BDMV/META/DL, in "
-                             "bdmt_eng.xml and the like, beside the pictures those files name.")
+    THROW(ERR_USAGE, "--meta-dir: there is no bdmt_<lang>.xml file in "
+                         << dir
+                         << ", nor in a DL or META/DL folder in it. A disc keeps its title in BDMV/META/DL, in "
+                            "bdmt_eng.xml and the like, beside the pictures those files name.")
 }
 
 static DiscMeta metaOfSource(const std::string& sourceFile, const bool quiet)

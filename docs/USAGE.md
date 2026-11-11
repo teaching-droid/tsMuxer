@@ -184,7 +184,22 @@ The job list is a text file in UTF-8 with one job on each line, written as the a
 "disc.meta" "D:\out\disc" --report="disc report.txt"
 ```
 
-Each job runs as a process of its own, so a job that fails leaves the next ones as they are. What a job prints stands between a line that names the job and a line that gives its result, and a summary at the end says how each job ended. The exit code is 0 when every job is done. `--batch-stop-on-error` ends the batch at the first job that fails; the jobs after it are listed as not run. Nothing else is given beside `--batch`: the options of a job go on its line.
+Each job runs as a process of its own, so a job that fails leaves the next ones as they are. What a job prints stands between a line that names the job and a line that gives its result, and a summary at the end says how each job ended. The exit code is 0 when every job was done, and 6 when one failed or was not run. `--batch-stop-on-error` ends the batch at the first job that fails; the jobs after it are listed as not run. Nothing else is given beside `--batch`: the options of a job go on its line.
+
+### Exit codes
+
+The exit code says how a run ended, for a script that starts tsMuxeR:
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Done. |
+| 1 | The command line or the meta file is wrong. |
+| 2 | A source cannot be read or is not supported. |
+| 3 | The output cannot be written. |
+| 5 | An error inside the program. |
+| 6 | `--batch`: a job failed or was not run. |
+
+A run stopped by Ctrl+C ends as the system ends a stopped program, so a script that runs it in a loop stops as well. 4 is not used.
 
 ### Report for a problem report
 

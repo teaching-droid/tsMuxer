@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 
+#include "vodCoreException.h"
 #include "vod_common.h"
 
 constexpr unsigned WRITE_QUEUE_MAX_SIZE = 400 * 1024 * 1024 / DEFAULT_FILE_BLOCK_SIZE;  // 400 Mb max queue size
@@ -51,7 +52,7 @@ class BufferedFileWriter final : public TerminatableThread
         {
             return m_writeQueue.push(data);
         }
-        throw std::runtime_error(getLastError());
+        throw OutputError(getLastError());
     }
     bool isQueueEmpty() const { return m_writeQueue.empty(); }
 

@@ -237,14 +237,14 @@ static void loadDvOriginalRpus(AbstractDemuxer* demuxer, HevcDolbyVisionFilter* 
 
     const std::string order = manifestValue(manifest, "rpu-order");
     if (order != "display")
-        THROW(ERR_COMMON, "Dolby Vision: this file states that its preserved original RPUs are in '"
+        THROW(ERR_SOURCE, "Dolby Vision: this file states that its preserved original RPUs are in '"
                               << order << "' order, which this version does not know how to put back.")
 
     std::vector<uint8_t> rpuBytes;
     std::vector<uint8_t> ptsBytes;
     if (!demuxer->getAttachment(DV_RPU_ATTACHMENT, rpuBytes) ||
         !demuxer->getAttachment(DV_RPU_PTS_ATTACHMENT, ptsBytes))
-        THROW(ERR_COMMON,
+        THROW(ERR_SOURCE,
               "Dolby Vision: this file says it preserves the original RPUs so the disc can be rebuilt, but the "
               "attachments holding them are missing. They are dropped by some tools when a file is copied.")
 
@@ -255,12 +255,12 @@ static void loadDvOriginalRpus(AbstractDemuxer* demuxer, HevcDolbyVisionFilter* 
     char buf[16];
     snprintf(buf, sizeof(buf), "%08x", rpuCrc);
     if (manifestValue(manifest, "rpu-crc32") != buf)
-        THROW(ERR_COMMON,
+        THROW(ERR_SOURCE,
               "Dolby Vision: the preserved original RPUs do not match the checksum this file records for them, so "
               "they have been altered and the disc is not rebuilt from them.")
     snprintf(buf, sizeof(buf), "%08x", ptsCrc);
     if (manifestValue(manifest, "pts-crc32") != buf)
-        THROW(ERR_COMMON,
+        THROW(ERR_SOURCE,
               "Dolby Vision: the timestamps of the preserved original RPUs do not match the checksum this file "
               "records for them, so they have been altered and the disc is not rebuilt from them.")
 
@@ -280,12 +280,12 @@ static void loadDvOriginalRpus(AbstractDemuxer* demuxer, HevcDolbyVisionFilter* 
 
     const size_t declared = static_cast<size_t>(strtoull(manifestValue(manifest, "rpu-count").c_str(), nullptr, 10));
     if (originals.offsets.size() != declared)
-        THROW(ERR_COMMON, "Dolby Vision: this file records " << declared << " preserved original RPUs but holds "
+        THROW(ERR_SOURCE, "Dolby Vision: this file records " << declared << " preserved original RPUs but holds "
                                                              << originals.offsets.size()
                                                              << ", so the disc is not rebuilt from it.")
 
     if (ptsBytes.size() != originals.offsets.size() * 8)
-        THROW(ERR_COMMON,
+        THROW(ERR_SOURCE,
               "Dolby Vision: this file preserves "
                   << originals.offsets.size() << " original RPUs but " << ptsBytes.size() / 8
                   << " timestamps for them, so they cannot be matched to pictures and the disc is not rebuilt.")
@@ -605,7 +605,7 @@ static std::string readAsName(const std::string& fileName, const std::string& ex
     // tsPacket->getHeaderSize", which says nothing a user can act on. Where no run of packets of 188, 192 or 204 bytes
     // is in the first 32 MB (a recording can begin with some MB of rubbish before its packets), that is said instead.
     if (found == NamedAs::ctUnknown && named == NamedAs::ctTS && !packetRunWithin(fileName, 32 << 20))
-        THROW(ERR_COMMON, "The file " << fileName << " is named ." << ext
+        THROW(ERR_SOURCE, "The file " << fileName << " is named ." << ext
                                       << ", but no run of transport stream packets is in its first 32 MB, so it holds "
                                          "no stream tsMuxeR can read. A recording that a TV or a receiver encrypted as "
                                          "a whole looks like this, and only the device that made it can play it.")
@@ -647,10 +647,10 @@ static std::string readAsName(const std::string& fileName, const std::string& ex
         }
     }
     if (named == NamedAs::ctUnknown && ext.empty())
-        THROW(ERR_COMMON, "The file " << fileName
+        THROW(ERR_SOURCE, "The file " << fileName
                                       << " has no extension, and the name is what decides how it is read, but it is "
                                       << what << " and try again.")
-    THROW(ERR_COMMON, "The file " << fileName << " is named ." << ext
+    THROW(ERR_SOURCE, "The file " << fileName << " is named ." << ext
                                   << ", and the name is what decides how it is read, but it is " << what
                                   << " and try again.")
 }
@@ -907,10 +907,10 @@ void METADemuxer::openFile(const string& streamName)
         // A quote that is not closed, such as one inside a track-name, cut the line there: the rest was read as
         // parameters no track has, with a warning for each, and the name was lost
         if (std::count(str.begin(), str.end(), '"') % 2 != 0)
-            THROW(ERR_COMMON, "A quote on this meta line is not closed, so it cannot be read: "
-                                  << trimStr(str)
-                                  << ". A file name or a value with a comma in it goes in quotes; a value cannot hold "
-                                     "a quote itself.")
+            THROW(ERR_USAGE, "A quote on this meta line is not closed, so it cannot be read: "
+                                 << trimStr(str)
+                                 << ". A file name or a value with a comma in it goes in quotes; a value cannot hold "
+                                    "a quote itself.")
         vector<string> params = splitQuotedStr(str.c_str(), ',');
         if (params.size() < 2)
             THROW(ERR_INVALID_CODEC_FORMAT, "Invalid codec format: " << str)
@@ -940,18 +940,18 @@ void METADemuxer::openFile(const string& streamName)
             if (eq == string::npos && i > 0 && !paramName.empty() && digitsEnd != 0 &&
                 (digitsEnd == string::npos || unit == "ns" || unit == "us" || unit == "ms" || unit == "s" ||
                  unit == "min" || unit == "h"))
-                THROW(ERR_COMMON, "\"" << trimStr(params[i - 1]) << "," << paramName
-                                       << "\" on a track line: a decimal comma parts the value in two, as the "
-                                          "parameters are parted at commas. Write it with a point: "
-                                       << trimStr(params[i - 1]) << "." << paramName << ".")
+                THROW(ERR_USAGE, "\"" << trimStr(params[i - 1]) << "," << paramName
+                                      << "\" on a track line: a decimal comma parts the value in two, as the "
+                                         "parameters are parted at commas. Write it with a point: "
+                                      << trimStr(params[i - 1]) << "." << paramName << ".")
             // A track number is digits alone: track=1.5 was read as track 1, and track=-1 as no track, which skipped
             // the check that the track is in the file and made an empty output that said it was successful
             if (paramName == "track" &&
                 (addParams[paramName].empty() || addParams[paramName].find_first_not_of("0123456789") != string::npos ||
                  addParams[paramName].size() > 9))
-                THROW(ERR_COMMON, "track=" << addParams[paramName]
-                                           << " is not a track number. Write the number the listing gives, digits "
-                                              "alone, such as track=1 or track=4113.")
+                THROW(ERR_USAGE, "track=" << addParams[paramName]
+                                          << " is not a track number. Write the number the listing gives, digits "
+                                             "alone, such as track=1 or track=4113.")
             // The Matroska flags took any value that is not a "no" word as a yes: forced=2 and original=bogus set them
             if (paramName == "forced" || paramName == "hearing-impaired" || paramName == "visual-impaired" ||
                 paramName == "text-descriptions" || paramName == "original" || paramName == "commentary")
@@ -959,15 +959,14 @@ void METADemuxer::openFile(const string& streamName)
                 const string lower = strToLowerCase(addParams[paramName]);
                 if (!lower.empty() && !defaultParamMeansNo(lower) && lower != "1" && lower != "yes" &&
                     lower != "true" && lower != "on")
-                    THROW(ERR_COMMON, paramName << "=" << addParams[paramName] << " is not a value of " << paramName
-                                                << ". Write " << paramName
-                                                << " alone (or =1, =yes) to set the flag, or " << paramName
-                                                << "=0 (or =no) to clear it.")
+                    THROW(ERR_USAGE, paramName << "=" << addParams[paramName] << " is not a value of " << paramName
+                                               << ". Write " << paramName << " alone (or =1, =yes) to set the flag, or "
+                                               << paramName << "=0 (or =no) to clear it.")
             }
             if (paramName == "default" && defaultParamKind(addParams[paramName]) < 0)
-                THROW(ERR_COMMON, "default=" << addParams[paramName]
-                                             << " is not a value of default. Write all (or yes) for the default track, "
-                                                "forced for the forced subtitles only, or none (or no).")
+                THROW(ERR_USAGE, "default=" << addParams[paramName]
+                                            << " is not a value of default. Write all (or yes) for the default track, "
+                                               "forced for the forced subtitles only, or none (or no).")
             if (!isKnownTrackParam(paramName))
             {
                 // A misspelled parameter used to be accepted in silence and simply do nothing,
@@ -988,7 +987,7 @@ void METADemuxer::openFile(const string& streamName)
         if (byDiscNumber)
             title = addParams.find("dvd-title");
         else if (title != addParams.end() && addParams.count("dvd-title"))
-            THROW(ERR_COMMON, "title= and dvd-title= both name a title on one line: give one of them.")
+            THROW(ERR_USAGE, "title= and dvd-title= both name a title on one line: give one of them.")
         if (title != addParams.end())
         {
             const string disc = unquoteStr(codecStreamName);
@@ -996,8 +995,8 @@ void METADemuxer::openFile(const string& streamName)
             {
                 const string videoTs = blurayDiscRoot(disc).empty() ? dvdVideoTs(disc) : string();
                 if (byDiscNumber && videoTs.empty())
-                    throw std::runtime_error("dvd-title= names a title of a DVD, and " + disc +
-                                             " is no DVD folder or image: use title= for a Blu-ray");
+                    throw UsageError("dvd-title= names a title of a DVD, and " + disc +
+                                     " is no DVD folder or image: use title= for a Blu-ray");
                 if (!videoTs.empty())
                 {
                     std::vector<std::pair<int, std::string>> languages;
@@ -1010,7 +1009,7 @@ void METADemuxer::openFile(const string& streamName)
                         const string& v = a->second;
                         if (v.empty() || v.size() > 2 || v.find_first_not_of("0123456789") != string::npos ||
                             std::stoi(v) < 1)
-                            throw std::runtime_error("angle=" + v + " is no angle: give its number, from 1");
+                            throw UsageError("angle=" + v + " is no angle: give its number, from 1");
                         angle = std::stoi(v);
                         addParams.erase(a);
                     }
@@ -1022,10 +1021,9 @@ void METADemuxer::openFile(const string& streamName)
                     if (const auto [chosen, isNew] =
                             m_dvdTitleAngle.try_emplace(videoTs + "|" + std::to_string(discTitle), angle);
                         !isNew && chosen->second != angle)
-                        throw std::runtime_error("The lines of DVD title " + std::to_string(discTitle) + " of " + disc +
-                                                 " ask for angle " + std::to_string(chosen->second) + " and angle " +
-                                                 std::to_string(angle) +
-                                                 ": give every line of the title the same angle=");
+                        throw UsageError("The lines of DVD title " + std::to_string(discTitle) + " of " + disc +
+                                         " ask for angle " + std::to_string(chosen->second) + " and angle " +
+                                         std::to_string(angle) + ": give every line of the title the same angle=");
                     if (m_dvdChapters.empty())
                         for (const double start : chapters)
                             m_dvdChapters.emplace_back(llround(start * 1e9), std::string());
@@ -1049,7 +1047,7 @@ void METADemuxer::openFile(const string& streamName)
             }
             catch (const std::exception& e)
             {
-                THROW(ERR_COMMON, e.what() << ".")
+                THROW(ERR_SOURCE, e.what() << ".")
             }
             addParams.erase(title);
         }
@@ -1249,14 +1247,14 @@ void METADemuxer::checkSubtitlePlanes() const
         const uint8_t plane = parse3dPlane(it->second);
         // A video without planes was said to have "0 planes, 0 to -1" (#58)
         if (plane != 0xff && plane >= planes && planes == 0)
-            THROW(ERR_COMMON, "3d-plane=" << it->second << " on the line of " << unquoteStr(si.m_streamName)
-                                          << " is not a plane of the MVC video, which has no planes. Give "
-                                             "3d-plane=255 for none.")
+            THROW(ERR_USAGE, "3d-plane=" << it->second << " on the line of " << unquoteStr(si.m_streamName)
+                                         << " is not a plane of the MVC video, which has no planes. Give "
+                                            "3d-plane=255 for none.")
         if (plane != 0xff && plane >= planes)
-            THROW(ERR_COMMON, "3d-plane=" << it->second << " on the line of " << unquoteStr(si.m_streamName)
-                                          << " is not a plane of the MVC video, which has " << planes
-                                          << (planes == 1 ? " plane, 0" : " planes, 0 to " + int32ToStr(planes - 1))
-                                          << ". Give one of them, or 3d-plane=255 for none.")
+            THROW(ERR_USAGE, "3d-plane=" << it->second << " on the line of " << unquoteStr(si.m_streamName)
+                                         << " is not a plane of the MVC video, which has " << planes
+                                         << (planes == 1 ? " plane, 0" : " planes, 0 to " + int32ToStr(planes - 1))
+                                         << ". Give one of them, or 3d-plane=255 for none.")
     }
 }
 
@@ -1572,7 +1570,7 @@ static int checkedLevel(const std::string& text, const char* codec, const int sc
         for (const int l : levels)
             list += (list.empty() ? "" : ", ") +
                     (l % scale ? doubleToStr(static_cast<double>(l) / scale, 1) : std::to_string(l / scale));
-        THROW(ERR_COMMON, "level=" << text << " is not a " << codec << " level. The levels are " << list << ".")
+        THROW(ERR_USAGE, "level=" << text << " is not a " << codec << " level. The levels are " << list << ".")
     }
     return static_cast<int>(idc);
 }
@@ -1633,20 +1631,20 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
     {
         const std::string part = trimStr(tmpitr->second);
         if (part != "1" && part != "2")
-            THROW(ERR_COMMON, "subTrack=" << tmpitr->second << " on the " << codec << " line of "
-                                          << unquoteStr(codecStreamName)
-                                          << " is not a part of a track: subTrack is 1 or 2. For a dual layer Dolby "
-                                             "Vision track 1 is the base layer and 2 the enhancement layer; for a "
-                                             "combined AVC/MVC track 1 is the MVC part and 2 the AVC part.")
+            THROW(ERR_USAGE, "subTrack=" << tmpitr->second << " on the " << codec << " line of "
+                                         << unquoteStr(codecStreamName)
+                                         << " is not a part of a track: subTrack is 1 or 2. For a dual layer Dolby "
+                                            "Vision track 1 is the base layer and 2 the enhancement layer; for a "
+                                            "combined AVC/MVC track 1 is the MVC part and 2 the AVC part.")
         if (pid == 0 && rawMvcLine)
             pid = strToInt32(part);  // the track of the combined demuxer: 1 the MVC view, 2 the AVC view
         else if (pid == 0)
-            THROW(ERR_COMMON, "subTrack= on the " << codec << " line of " << unquoteStr(codecStreamName)
-                                                  << " picks a part of the track that track= names in a container "
-                                                     "file (MKV, MP4, TS). Without track=, subTrack= splits only a "
-                                                     "raw H.264 MVC stream (.264, .h264, .mvc); this file is read "
-                                                     "whole. Leave subTrack= out, or name the track of a container "
-                                                     "with track=.")
+            THROW(ERR_USAGE, "subTrack= on the " << codec << " line of " << unquoteStr(codecStreamName)
+                                                 << " picks a part of the track that track= names in a container "
+                                                    "file (MKV, MP4, TS). Without track=, subTrack= splits only a "
+                                                    "raw H.264 MVC stream (.264, .h264, .mvc); this file is read "
+                                                    "whole. Leave subTrack= out, or name the track of a container "
+                                                    "with track=.")
         else
             pid = SubTrackFilter::pidToSubPid(pid, strToInt32(part));
     }
@@ -1674,11 +1672,11 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
     {
         const string& v = a->second;
         if (fileExt != "mpls" && fileExt != "mpl")
-            THROW(ERR_COMMON, "angle= on the line of " << codecStreamName
-                                                       << " chooses the angle of a Blu-ray playlist or of a title of a "
-                                                          "disc (title=), and this is neither.")
+            THROW(ERR_USAGE, "angle= on the line of " << codecStreamName
+                                                      << " chooses the angle of a Blu-ray playlist or of a title of a "
+                                                         "disc (title=), and this is neither.")
         if (v.empty() || v.size() > 2 || v.find_first_not_of("0123456789") != string::npos || std::stoi(v) < 1)
-            THROW(ERR_COMMON, "angle=" << v << " is no angle: give its number, from 1.")
+            THROW(ERR_USAGE, "angle=" << v << " is no angle: give its number, from 1.")
         angle = std::stoi(v);
     }
     if (fileExt == "mpls" || fileExt == "mpl")
@@ -1765,7 +1763,7 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
     }
 
     if (m_keepEditions && fileList.size() > 1)
-        THROW(ERR_COMMON, "--keep-editions keeps one Matroska file as it is stored, and cannot be used with a join.")
+        THROW(ERR_USAGE, "--keep-editions keeps one Matroska file as it is stored, and cannot be used with a join.")
 
     // A Matroska file is played as a player plays it: by its ordered edition, or with the files linked after it.
     // Not with --keep-editions, which keeps the file as it is stored, editions and all.
@@ -1831,7 +1829,7 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         which << codec << " from " << unquotedStreamName;
         if (pid)
             which << ", track " << pid;
-        THROW(ERR_COMMON,
+        THROW(ERR_USAGE,
               which.str() << " is muxed by an earlier line of the meta file "
                           << (addParams.find("subClip") == addParams.end() ? "as the second view of 3D video (subClip=)"
                                                                            : "without subClip=")
@@ -1862,9 +1860,9 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         which << codec << " from " << unquotedStreamName;
         if (pid)
             which << ", track " << pid;
-        THROW(ERR_COMMON, which.str() << " uses " << taken.front() << (taken.size() > 1 ? " and other files" : "")
-                                      << " for a track an earlier line of the meta file already muxes, and the same "
-                                         "track of a file can be muxed only once. Give each file to one line only.")
+        THROW(ERR_USAGE, which.str() << " uses " << taken.front() << (taken.size() > 1 ? " and other files" : "")
+                                     << " for a track an earlier line of the meta file already muxes, and the same "
+                                        "track of a file can be muxed only once. Give each file to one line only.")
     }
     // A track of a file is read once, so a line that names some of the files of an earlier line for the same track
     // cannot have them. They were left out without a word, and the track started where the first remaining file does:
@@ -1875,10 +1873,10 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         which << codec << " from " << unquotedStreamName;
         if (pid)
             which << ", track " << pid;
-        THROW(ERR_COMMON, which.str() << " uses " << taken.front() << (taken.size() > 1 ? " and other files" : "")
-                                      << " for a track an earlier line of the meta file already muxes, and the same "
-                                         "track of a file can be muxed only once. The line would lose that part. "
-                                         "Give each file to one line only.")
+        THROW(ERR_USAGE, which.str() << " uses " << taken.front() << (taken.size() > 1 ? " and other files" : "")
+                                     << " for a track an earlier line of the meta file already muxes, and the same "
+                                        "track of a file can be muxed only once. The line would lose that part. "
+                                        "Give each file to one line only.")
     }
     if (fileList.empty())
     {
@@ -1920,9 +1918,9 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         {
             const string& fileName = fileList[i];
             if (const std::string hint = discSourceHint(fileName); !hint.empty())
-                THROW(ERR_INVALID_CODEC_FORMAT, "Can't use " << fileName << " as a source: " << hint << ".")
+                THROW(ERR_SOURCE, "Can't use " << fileName << " as a source: " << hint << ".")
             if (!tmpFile.open(fileName.c_str(), File::ofRead))
-                THROW(ERR_INVALID_CODEC_FORMAT, "Can't open file: " << fileName << openFailureReason(fileName))
+                THROW(ERR_SOURCE, "Can't open file: " << fileName << openFailureReason(fileName))
             int64_t tmpSize = 0;
             tmpFile.size(&tmpSize);
             // of a clip cut to a part, the bytes that are read
@@ -2003,9 +2001,9 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
                 const int found =
                     s.codecInfo.codecID == CODEC_V_MPEG4_H264_DEP ? CODEC_V_MPEG4_H264 : s.codecInfo.codecID;
                 if (found != named && isVideoCodecId(found))
-                    THROW(ERR_COMMON, "Track " << pid << " of " << unquoteStr(fileList[0]) << " is "
-                                               << s.codecInfo.programName << ", but the line names " << codec
-                                               << ". Name the track as the listing gives it. Nothing was written.")
+                    THROW(ERR_USAGE, "Track " << pid << " of " << unquoteStr(fileList[0]) << " is "
+                                              << s.codecInfo.programName << ", but the line names " << codec
+                                              << ". Name the track as the listing gives it. Nothing was written.")
                 break;
             }
         }
@@ -2056,9 +2054,9 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
             const CodecInfo& found = probe.streams[0].codecInfo;
             const int foundId = found.codecID == CODEC_V_MPEG4_H264_DEP ? CODEC_V_MPEG4_H264 : found.codecID;
             if (foundId != named && isVideoCodecId(foundId))
-                THROW(ERR_COMMON, "File " << i + 1 << " of the join on the " << codec << " line, " << file << ", is "
-                                          << found.displayName << ", not the codec of the line. Every file of a "
-                                          << "join has to hold the codec of its line. Nothing was written.")
+                THROW(ERR_USAGE, "File " << i + 1 << " of the join on the " << codec << " line, " << file << ", is "
+                                         << found.displayName << ", not the codec of the line. Every file of a "
+                                         << "join has to hold the codec of its line. Nothing was written.")
         }
 
     map<string, string> readerParams = addParams;
@@ -2165,16 +2163,16 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
     // ** TEXT SUBTITLES OF A BLU-RAY GO INTO A MATROSKA OUTPUT AS SRT **, which every player reads. keep-textst keeps
     // them as they are: S_HDMV/TEXTST, its CodecPrivate the dialog style segment, a block for each subtitle.
     if (codec == "S_TEXT/UTF8" && pid >= 0x1800 && pid <= 0x18FF && fileList.size() > 1)
-        THROW(ERR_COMMON, "Track " << pid << " of " << unquoteStr(trimStr(fileList[0]))
-                                   << " is TextST, whose clips are not joined: each has a time of its own on the "
-                                      "playlist. Give one clip on each line. Nothing was written.")
+        THROW(ERR_USAGE, "Track " << pid << " of " << unquoteStr(trimStr(fileList[0]))
+                                  << " is TextST, whose clips are not joined: each has a time of its own on the "
+                                     "playlist. Give one clip on each line. Nothing was written.")
     // The times of an .idx/.sub pair are in its own .idx file, which says nothing of where the pair before it ends: the
     // units of the second pair came at the times of its .sub file, on top of the first, with a word on "fewer times"
     if (fileList.size() > 1)
         for (const std::string& name : fileList)
             if (const std::string file = unquoteStr(trimStr(name)); isVobSubPair(file))
-                THROW(ERR_COMMON, file << " is an .idx/.sub pair, and such pairs are not joined: each has times of its "
-                                          "own. Give one pair on each line. Nothing was written.")
+                THROW(ERR_USAGE, file << " is an .idx/.sub pair, and such pairs are not joined: each has times of its "
+                                         "own. Give one pair on each line. Nothing was written.")
     if (codecReader == nullptr && m_matroskaOutput == 1 && codec == "S_TEXT/UTF8" && addParams.count("keep-text") &&
         addParams.count("keep-textst") && pid >= 0x1800 && pid <= 0x18FF && !fileList.empty())
     {
@@ -2215,7 +2213,7 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
     if (codec == aribCodecInfo.programName)
     {
         if (m_matroskaOutput != 1)
-            THROW(ERR_COMMON,
+            THROW(ERR_USAGE,
                   "ARIB captions can only go into a Matroska file: a disc, a TS, a WebM file and a demux "
                   "have no form for them. Leave track "
                       << pid << " out, or mux to .mkv. Nothing was written.")
@@ -2226,7 +2224,7 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         probe.getTrackList(tracks);
         const auto track = tracks.find(pid);
         if (track == tracks.end() || !probe.isAribPid(pid))
-            THROW(ERR_COMMON, "Track " << pid << " of " << first << " holds no ARIB captions. Nothing was written.")
+            THROW(ERR_SOURCE, "Track " << pid << " of " << first << " holds no ARIB captions. Nothing was written.")
         const int id = track->second.m_dataComponentId;
         // A file without a PAT has no PMT to give the component tag of its captions: they get 0x30, the tag of the
         // first caption stream of a service (ARIB TR-B14), which is what such a track nearly always is
@@ -2323,7 +2321,7 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
                     {
                         drawing.saveSrt = unquoteStr(it->second);
                         if (drawing.saveSrt.empty())
-                            THROW(ERR_COMMON,
+                            THROW(ERR_USAGE,
                                   "save-srt needs the name of the SRT file to write, as save-srt=\"name.srt\"")
                         drawing.srtFile = std::make_shared<ass_render::SaveSrtFile>(drawing.saveSrt);
                     }
@@ -2634,9 +2632,9 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         // over 1742.9 s ran over 64 bits.
         int64_t value = 0;
         if (!parseTimeToTicks(itr->second, "ms", &value))
-            THROW(ERR_COMMON, "timeshift=" << itr->second
-                                           << " is not a time. Write a number followed by ns, us, ms or s, such as "
-                                              "-120ms or 1.5s; a number alone is in ms.")
+            THROW(ERR_USAGE, "timeshift=" << itr->second
+                                          << " is not a time. Write a number followed by ns, us, ms or s, such as "
+                                             "-120ms or 1.5s; a number alone is in ms.")
         if (textStShifted)
             value = 0;  // in its times already
         streamInfo.m_timeShift = value;
@@ -2714,11 +2712,11 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
                 const std::string shown =
                     value.size() <= 40 ? value
                                        : value.substr(0, 40) + "... (" + std::to_string(value.size()) + " characters)";
-                THROW(ERR_COMMON, "lang=" << shown << " on the line of " << codec
-                                          << " is not a language code. lang= takes three letters, an ISO 639-2 code "
-                                             "such as eng, ger or deu, or a BCP 47 tag such as en, de-CH or pt-BR; "
-                                             "lang=und marks an undetermined language, and lang= with nothing after "
-                                             "it leaves the track without one.")
+                THROW(ERR_USAGE, "lang=" << shown << " on the line of " << codec
+                                         << " is not a language code. lang= takes three letters, an ISO 639-2 code "
+                                            "such as eng, ger or deu, or a BCP 47 tag such as en, de-CH or pt-BR; "
+                                            "lang=und marks an undetermined language, and lang= with nothing after "
+                                            "it leaves the track without one.")
             }
             streamInfo.m_lang = applyLangCodeStyle(code);
             streamInfo.m_langBCP47 = value;
@@ -2833,12 +2831,12 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
                     std::string tracks;
                     for (const auto& [id, info] : trackList)
                         tracks += (tracks.empty() ? "" : ", ") + std::to_string(id);
-                    THROW(ERR_COMMON, unquoteStr(fileList[0]) << " has no track " << pid << " (its tracks are "
-                                                              << tracks << "). Nothing was written.")
+                    THROW(ERR_USAGE, unquoteStr(fileList[0]) << " has no track " << pid << " (its tracks are " << tracks
+                                                             << "). Nothing was written.")
                 }
                 if (const auto why = named->second.m_srcParams.find("srcleftout");
                     why != named->second.m_srcParams.end())
-                    THROW(ERR_COMMON, "Track " << pid << " of " << unquoteStr(fileList[0])
+                    THROW(ERR_SOURCE, "Track " << pid << " of " << unquoteStr(fileList[0])
                                                << " cannot be read: " << why->second << ". Nothing was written.")
             }
             // A transport stream lists from its first part, but what its PMT rules out is ruled out for every part
@@ -2846,7 +2844,7 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
                 if (const auto named = trackList.find(pid); named != trackList.end())
                     if (const auto why = named->second.m_srcParams.find("srcleftout");
                         why != named->second.m_srcParams.end())
-                        THROW(ERR_COMMON, "Track " << pid << " of " << unquoteStr(fileList[0])
+                        THROW(ERR_SOURCE, "Track " << pid << " of " << unquoteStr(fileList[0])
                                                    << " cannot be read: " << why->second << ". Nothing was written.")
             // A 3D track is taken by its views (subTrack=), under a number of its own: of its source track only the
             // base view's eye is carried over, for the disc's playlist and a Matroska output's StereoMode
@@ -2873,7 +2871,7 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
                             ac3 += (ac3.empty() ? "" : ", ") + std::to_string(other);
                     if (const auto last = ac3.rfind(", "); last != std::string::npos)
                         ac3.replace(last, 2, " and ");
-                    THROW(ERR_COMMON, "Track " << pid << " of " << unquoteStr(fileList[0])
+                    THROW(ERR_SOURCE, "Track " << pid << " of " << unquoteStr(fileList[0])
                                                << " is TrueHD without an AC-3 core, so there is no AC-3 to take from "
                                                   "it: in a Matroska file an AC-3 core is "
                                                   "a track of its own, and tsMuxeR does not encode sound. "
@@ -2887,7 +2885,7 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
                 // An encrypted track cannot be read without its key, which no file carries (RFC 9559, 14). Its blocks
                 // were muxed as they stand, and the output held noise in place of the track.
                 if (trackIt->second.m_srcParams.count("encrypted"))
-                    THROW(ERR_COMMON, "Track " << pid << " of " << unquoteStr(fileList[0])
+                    THROW(ERR_SOURCE, "Track " << pid << " of " << unquoteStr(fileList[0])
                                                << " is encrypted (Matroska ContentEncryption). tsMuxeR cannot "
                                                   "decrypt it; leave the track out of the meta file.")
                 if (addParams.find("lang") == addParams.end())
@@ -3040,13 +3038,13 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
             {
                 std::string list;
                 for (const auto& [id, info] : tracks) list += (list.empty() ? "" : ", ") + std::to_string(id);
-                THROW(ERR_COMMON, file << ", a file of the join, has no track " << pid << " (its tracks are " << list
-                                       << "). Nothing was written.")
+                THROW(ERR_USAGE, file << ", a file of the join, has no track " << pid << " (its tracks are " << list
+                                      << "). Nothing was written.")
             }
             // What a file rules out (AC-4) is ruled out for the join: a line that names such a track ran through and
             // ended with "produced no frames at all" and a word on the codec of the line
             if (const auto why = found->second.m_srcParams.find("srcleftout"); why != found->second.m_srcParams.end())
-                THROW(ERR_COMMON, "Track " << pid << " of " << file << " cannot be read: " << why->second
+                THROW(ERR_SOURCE, "Track " << pid << " of " << file << " cannot be read: " << why->second
                                            << ". Nothing was written.")
             // a Matroska track is told by the kind its codec name begins with (A_, V_, S_), as its type names an audio
             // codec only when one was recognised; other containers by the type they give
@@ -3056,8 +3054,8 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
                                       : found->second.m_trackType;
             const auto [kind, isFirst] = firstKind.try_emplace(container, trackKind);
             if (!isFirst && kind->second != 0 && trackKind != 0 && trackKind != kind->second)
-                THROW(ERR_COMMON, file << ", a file of the join, has a track " << pid
-                                       << " of another kind than the first file of the join has. Nothing was written.")
+                THROW(ERR_USAGE, file << ", a file of the join, has a track " << pid
+                                      << " of another kind than the first file of the join has. Nothing was written.")
         }
     }
     // A join of Matroska files with Opus sound: each file is asked for the padding at its end (the DiscardPadding of
@@ -3327,7 +3325,7 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
             const std::string ac3File = unquoteStr(trimStr(itFile->second));
             AbstractReader* ac3Reader = m_readManager.getReader(ac3File.c_str());
             if (ac3Reader == nullptr)
-                THROW(ERR_INVALID_CODEC_FORMAT, "merge-ac3-file: can't open reader for " << ac3File)
+                THROW(ERR_SOURCE, "merge-ac3-file: can't open reader for " << ac3File)
             const int r2 = ac3Reader->createReader(mergeReader->getTmpBufferSize());
             if (!ac3Reader->openStream(r2, ac3File.c_str(), 0, &ac3CodecInfo))
                 THROW(ERR_CANT_OPEN_STREAM, "Can't open merge-ac3-file stream: " << ac3File)
@@ -3832,7 +3830,7 @@ static void probeSubTrack(uint8_t* data, const size_t size, const int subTrackNo
         nal = NALUnit::findNextNAL(next, end);
     }
     if (wrapped == 0)
-        THROW(ERR_COMMON, (rpu > 0 ? "Dolby Vision: this track carries an RPU but no enhancement layer, so it is "
+        THROW(ERR_SOURCE, (rpu > 0 ? "Dolby Vision: this track carries an RPU but no enhancement layer, so it is "
                                      "single layer and cannot be split into two."
                                    : "This HEVC track carries no Dolby Vision enhancement layer, so it cannot be "
                                      "split into two.")
@@ -5055,9 +5053,9 @@ static double parseFpsValue(const std::string& text)
     // At least one picture a second: fps=0.001 was taken, and a picture every 1000 s passes the 26.5 hour clock of a
     // transport stream after 96 pictures, where the times wrap round
     if (!ok || !(fps >= 1) || fps > 1000)
-        THROW(ERR_COMMON, "fps=" << text
-                                 << " is not a frame rate. Write it as a number such as 25 or 23.976, or as a fraction "
-                                    "such as 24000/1001, from 1 up to 1000.")
+        THROW(ERR_USAGE, "fps=" << text
+                                << " is not a frame rate. Write it as a number such as 25 or 23.976, or as a fraction "
+                                   "such as 24000/1001, from 1 up to 1000.")
     return fps;
 }
 
@@ -5086,14 +5084,14 @@ static double parseStretchValue(const std::string& text)
         double num = 0, den = 0;
         ok = number(t.substr(0, bar), num) && number(t.substr(bar + 1), den);
         if (ok && den == 0.0)
-            THROW(ERR_COMMON, "Second argument at stretch parameter can not be 0")
+            THROW(ERR_USAGE, "Second argument at stretch parameter can not be 0")
         if (ok)
             stretch = num / den;
     }
     if (!ok || !(stretch >= 0.5) || stretch > 2.0)
-        THROW(ERR_COMMON, "stretch=" << text
-                                     << " is not a factor tsMuxeR can stretch the sound by. Write it as a number such "
-                                        "as 1.04 or as a fraction such as 25/24, from 0.5 up to 2.")
+        THROW(ERR_USAGE, "stretch=" << text
+                                    << " is not a factor tsMuxeR can stretch the sound by. Write it as a number such "
+                                       "as 1.04 or as a fraction such as 25/24, from 0.5 up to 2.")
     return stretch;
 }
 
@@ -5106,9 +5104,9 @@ static uint16_t parsePictureSize(const char* name, const std::string& text)
     const bool digits = !t.empty() && t.size() <= 5 && t.find_first_not_of("0123456789") == std::string::npos;
     const long value = digits ? strtol(t.c_str(), nullptr, 10) : 0;
     if (value < 1 || value > 65535)
-        THROW(ERR_COMMON, name << "=" << text
-                               << " is not a picture size. Write the size of the video in pixels, a whole number "
-                                  "from 1 up to 65535, such as 1920.")
+        THROW(ERR_USAGE, name << "=" << text
+                              << " is not a picture size. Write the size of the video in pixels, a whole number "
+                                 "from 1 up to 65535, such as 1920.")
     return static_cast<uint16_t>(value);
 }
 
@@ -5138,7 +5136,7 @@ static float parseFadeTime(const char* name, const std::string& text)
                         std::count(t.begin(), t.end(), '.') <= 1 && t.find_first_of("0123456789") != std::string::npos;
     const double value = number ? strToDouble(t.c_str()) : -1.0;
     if (!(value >= 0.0) || value > 86400.0)
-        THROW(ERR_COMMON,
+        THROW(ERR_USAGE,
               name << "=" << text << " is not a fade time. Write it in seconds, from 0 up to 86400, such as 0.25.")
     return static_cast<float>(value);
 }
@@ -5157,11 +5155,11 @@ static double parseFontNumber(const char* name, const std::string& text, const b
     if (!(value >= (size ? 1.0 : 0.0)))
     {
         if (size)
-            THROW(ERR_COMMON, name << "=" << text
-                                   << " is not a font size. Write the size in pixels, a whole number from 1, such as "
-                                      "48.")
-        THROW(ERR_COMMON, name << "=" << text << " is not a number of 0 or more, such as "
-                               << (std::string(name) == "line-spacing" ? "1.2." : "2."))
+            THROW(ERR_USAGE, name << "=" << text
+                                  << " is not a font size. Write the size in pixels, a whole number from 1, such as "
+                                     "48.")
+        THROW(ERR_USAGE, name << "=" << text << " is not a number of 0 or more, such as "
+                              << (std::string(name) == "line-spacing" ? "1.2." : "2."))
     }
     return value;
 }
@@ -5175,10 +5173,10 @@ uint8_t METADemuxer::parse3dPlane(const std::string& text)
     const bool digits = !t.empty() && t.size() <= 3 && t.find_first_not_of("0123456789") == std::string::npos;
     const long value = digits ? strtol(t.c_str(), nullptr, 10) : -1;
     if (value < 0 || value > 255)
-        THROW(ERR_COMMON, "3d-plane=" << text
-                                      << " is not a 3D plane. Write the number of a plane of the MVC video, a whole "
-                                         "number from 0 (its listing gives how many it has as 3d-pg-planes), or 255 "
-                                         "for none.")
+        THROW(ERR_USAGE, "3d-plane=" << text
+                                     << " is not a 3D plane. Write the number of a plane of the MVC video, a whole "
+                                        "number from 0 (its listing gives how many it has as 3d-pg-planes), or 255 "
+                                        "for none.")
     return static_cast<uint8_t>(value);
 }
 
@@ -5211,10 +5209,10 @@ static uint32_t parseFontColor(const std::string& text)
         ok = ok && value <= 0xFFFFFFFFu;
     }
     if (!ok)
-        THROW(ERR_COMMON, "font-color=" << text
-                                        << " is not a colour. Write it in hexadecimal as 0xRRGGBB or #RRGGBB, such "
-                                           "as 0xFF0000 for red, with the alpha in front as 0xAARRGGBB, or as a "
-                                           "decimal number.")
+        THROW(ERR_USAGE, "font-color=" << text
+                                       << " is not a colour. Write it in hexadecimal as 0xRRGGBB or #RRGGBB, such "
+                                          "as 0xFF0000 for red, with the alpha in front as 0xAARRGGBB, or as a "
+                                          "decimal number.")
     return static_cast<uint32_t>(value);
 }
 
@@ -5458,9 +5456,9 @@ VideoAspectRatio arNameToCode(const string& arName)
         return VideoAspectRatio::AR_221_100;
     // Any other value kept the stream's own shape without a word: ar=2.35:1 on a 16:9 stream gave 16:9, as did
     // ar=bogus and ar=0:0. These four are the shapes an MPEG-2 sequence header and a disc can give.
-    THROW(ERR_COMMON, "ar=" << arName
-                            << " is not an aspect ratio tsMuxeR can give the video. The values are 1:1, 4:3, 16:9 "
-                               "and 2.21:1, also written with x, such as 16x9.")
+    THROW(ERR_USAGE, "ar=" << arName
+                           << " is not an aspect ratio tsMuxeR can give the video. The values are 1:1, 4:3, 16:9 "
+                              "and 2.21:1, also written with x, such as 16x9.")
 }
 
 // A value the help does not list (pipCorner=Middle, pipScale=2/3) was taken as BottomLeft or as no scale, without a
@@ -5476,9 +5474,9 @@ PIPParams::PipCorner pipCornerFromStr(const std::string& value)
         return PIPParams::PipCorner::BottomRight;
     if (v == "bottomleft")
         return PIPParams::PipCorner::BottomLeft;
-    THROW(ERR_COMMON, "pipCorner=" << value
-                                   << " is not a corner. The corners are TopLeft, TopRight, BottomRight and "
-                                      "BottomLeft.")
+    THROW(ERR_USAGE, "pipCorner=" << value
+                                  << " is not a corner. The corners are TopLeft, TopRight, BottomRight and "
+                                     "BottomLeft.")
 }
 
 int pipScaleFromStr(const std::string& value)
@@ -5495,7 +5493,7 @@ int pipScaleFromStr(const std::string& value)
         return 4;
     if (v == "fullscreen")
         return 5;
-    THROW(ERR_COMMON,
+    THROW(ERR_USAGE,
           "pipScale=" << value << " is not a scale a disc has. The scales are 1, 1/2, 1/4, 1.5 and fullScreen.")
 }
 
@@ -5506,7 +5504,7 @@ static int pipNumber(const std::string& name, const std::string& value, const in
     const std::string v = trimStr(value);
     if (v.empty() || v.find_first_not_of("0123456789") != std::string::npos || v.size() > 5 ||
         strToInt32(v.c_str()) > most)
-        THROW(ERR_COMMON,
+        THROW(ERR_USAGE,
               name << "=" << value << " is not " << meaning << ": write a whole number from 0 to " << most << ".")
     return strToInt32(v.c_str());
 }
@@ -5839,11 +5837,11 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
             if (srtReader->keepText())
                 LTRACE(LT_WARN, 2, "Warning: save-srt is ignored on a line with keep-text: the subtitles stay text.");
             else if (unquoteStr(saveSrt->second).empty())
-                THROW(ERR_COMMON, "save-srt needs the name of the SRT file to write, as save-srt=\"name.srt\"")
+                THROW(ERR_USAGE, "save-srt needs the name of the SRT file to write, as save-srt=\"name.srt\"")
             // The file is opened for writing here, before the source is read: naming the source emptied it.
             else if (sameExistingFile(unquoteStr(saveSrt->second), codecStreamName))
-                THROW(ERR_COMMON, "save-srt names the subtitle file the track is read from: "
-                                      << unquoteStr(saveSrt->second) << ". Give it another name.")
+                THROW(ERR_USAGE, "save-srt names the subtitle file the track is read from: "
+                                     << unquoteStr(saveSrt->second) << ". Give it another name.")
             else
                 srtReader->setSaveSrt(unquoteStr(saveSrt->second));
         }
@@ -5864,7 +5862,7 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
             for (size_t i = 1; i < missing.size(); ++i)
                 list += (i + 1 == missing.size() ? " and " : ", ") + std::string(missing[i]);
             const auto track = addParams.find("track");
-            THROW(ERR_COMMON, "The text subtitles of "
+            THROW(ERR_SOURCE, "The text subtitles of "
                                   << (track != addParams.end() ? "track " + track->second + " of " : std::string())
                                   << unquoteStr(codecStreamName)
                                   << " are drawn as pictures, which needs the size and frame rate of the video: "
@@ -5932,9 +5930,9 @@ std::vector<MPLSParser> METADemuxer::getMplsInfo(const string& mplsFileName, con
         // ** ONE ANGLE FOR A PLAYLIST. ** Its tracks come from the clips of the angle, and a track of another angle
         // would play other pictures or sound at the same times: the lines of a playlist take one angle.
         if (const auto chosen = m_playlistAngle.find(i); chosen != m_playlistAngle.end() && chosen->second != angle)
-            THROW(ERR_COMMON, "The lines of playlist " << unquoteStr(i) << " ask for angle " << chosen->second
-                                                       << " and angle " << angle
-                                                       << ": give every line of the playlist the same angle=.")
+            THROW(ERR_USAGE, "The lines of playlist " << unquoteStr(i) << " ask for angle " << chosen->second
+                                                      << " and angle " << angle
+                                                      << ": give every line of the playlist the same angle=.")
         auto itr = m_mplsStreamMap.find(i);
         if (itr != m_mplsStreamMap.end())
             result.push_back(itr->second);
@@ -5947,7 +5945,7 @@ std::vector<MPLSParser> METADemuxer::getMplsInfo(const string& mplsFileName, con
                 const std::string name = unquoteStr(i);
                 if (File file; !file.open(name.c_str(), File::ofRead))
                     THROW(ERR_FILE_NOT_FOUND, "Can't open file: " << name << openFailureReason(name))
-                THROW(ERR_COMMON, "Can't parse play list file " << i)
+                THROW(ERR_SOURCE, "Can't parse play list file " << i)
             }
             try
             {
@@ -5955,12 +5953,12 @@ std::vector<MPLSParser> METADemuxer::getMplsInfo(const string& mplsFileName, con
             }
             catch (const VodCoreException& e)
             {
-                THROW(ERR_COMMON, e.m_errStr << ": " << unquoteStr(i) << ".")
+                THROW(ERR_SOURCE, e.m_errStr << ": " << unquoteStr(i) << ".")
             }
             if (angle > 1 && parser.isDependStreamExist)
-                THROW(ERR_COMMON, "angle=" << angle << " on the 3D playlist " << unquoteStr(i)
-                                           << ": the angles of a 3D playlist are not read; its first angle is muxed "
-                                              "without angle=.")
+                THROW(ERR_USAGE, "angle=" << angle << " on the 3D playlist " << unquoteStr(i)
+                                          << ": the angles of a 3D playlist are not read; its first angle is muxed "
+                                             "without angle=.")
             m_playlistAngle[i] = angle;
             if (!m_quiet)
                 parser.reportLeftOut(unquoteStr(i), false);

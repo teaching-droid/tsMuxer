@@ -1,6 +1,7 @@
 // Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "sampleCutter.h"
+#include "vodCoreException.h"
 
 #include <fs/discImage.h>
 #include <fs/file.h>
@@ -176,7 +177,7 @@ class Target
     explicit Target(const std::string& name) : m_file(openFile(name, true))
     {
         if (m_file == nullptr)
-            throw std::runtime_error("The file " + name + " cannot be written.");
+            throw OutputError("The file " + name + " cannot be written.");
     }
     ~Target()
     {
@@ -188,7 +189,7 @@ class Target
     void write(const uint8_t* data, const size_t n)
     {
         if (n > 0 && std::fwrite(data, 1, n, m_file) != n)
-            throw std::runtime_error("The sample cannot be written: the disc may be full.");
+            throw OutputError("The sample cannot be written: the disc may be full.");
         m_written += static_cast<int64_t>(n);
     }
     void write(const Bytes& b) { write(b.data(), b.size()); }
@@ -209,7 +210,7 @@ class Target
         std::FILE* const f = m_file;
         m_file = nullptr;
         if (f && std::fclose(f) != 0)
-            throw std::runtime_error("The sample cannot be written: the disc may be full.");
+            throw OutputError("The sample cannot be written: the disc may be full.");
     }
 
    private:

@@ -277,7 +277,7 @@ struct PMTStreamInfo final
         m_streamType = streamType;
         m_pid = pid;
         if (esInfoLen > TS_ES_INFO_MAX)
-            THROW(ERR_COMMON, "The descriptors of the track on PID " << pid << " take " << esInfoLen
+            THROW(ERR_SOURCE, "The descriptors of the track on PID " << pid << " take " << esInfoLen
                                                                      << " bytes, more than the " << TS_ES_INFO_MAX
                                                                      << " kept for them.")
         if (esInfoLen > 0)  // the callers pass no data at all when there is none

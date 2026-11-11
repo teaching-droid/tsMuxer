@@ -1,6 +1,7 @@
 // Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "batchRunner.h"
+#include "vodCoreException.h"
 
 #include <fs/file.h>
 #include <fs/systemlog.h>
@@ -177,20 +178,20 @@ int run(const string& listFile, const bool stopOnError, const string& argv0)
     if (!file.open(listFile.c_str(), File::ofRead))
     {
         LTRACE(LT_ERROR, 2, "Error: the job list " << listFile << " cannot be opened.");
-        return -2;
+        return ExitCode::Source;
     }
     int64_t size = 0;
     file.size(&size);
     if (size > 16 * 1024 * 1024)
     {
         LTRACE(LT_ERROR, 2, "Error: the job list " << listFile << " is larger than 16 MB. It is a text file of lines.");
-        return -2;
+        return ExitCode::Source;
     }
     string text(static_cast<size_t>(size), '\0');
     if (size > 0 && file.read(text.data(), static_cast<uint32_t>(size)) != size)
     {
         LTRACE(LT_ERROR, 2, "Error: the job list " << listFile << " cannot be read.");
-        return -2;
+        return ExitCode::Source;
     }
     file.close();
     if (text.size() >= 3 && text.compare(0, 3, "\xEF\xBB\xBF") == 0)
@@ -220,7 +221,7 @@ int run(const string& listFile, const bool stopOnError, const string& argv0)
                 LTRACE(LT_ERROR, 2,
                        "Error: line " << lineNumber << " of the job list " << listFile
                                       << " has --batch. A job is one run: a meta file and an output.");
-                return -2;
+                return ExitCode::Usage;
             }
         if (!args.empty())
             jobs.push_back({lineNumber, std::move(args)});
@@ -231,7 +232,7 @@ int run(const string& listFile, const bool stopOnError, const string& argv0)
         LTRACE(LT_ERROR, 2,
                "Error: the job list " << listFile << " holds no job. Each line is the arguments of one run, for "
                                       << "example: \"film.meta\" \"film.m2ts\"");
-        return -2;
+        return ExitCode::Usage;
     }
 
     const string program = ownProgram(argv0);
@@ -280,6 +281,6 @@ int run(const string& listFile, const bool stopOnError, const string& argv0)
            "=== Batch summary: " << total - failed << " of " << total << " jobs done, " << failed
                                  << " failed or not run (" << timeText(all) << ")");
     for (size_t i = 0; i < results.size(); ++i) LTRACE(LT_INFO, 2, "  " << i + 1 << ". " << results[i]);
-    return failed == 0 ? 0 : -1;
+    return failed == 0 ? ExitCode::Done : ExitCode::Batch;
 }
 }  // namespace batch

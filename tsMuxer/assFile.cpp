@@ -94,7 +94,7 @@ bool prepareAssFile(const std::string& fileName)
     std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     if (text.size() >= 2 && ((static_cast<uint8_t>(text[0]) == 0xFF && static_cast<uint8_t>(text[1]) == 0xFE) ||
                              (static_cast<uint8_t>(text[0]) == 0xFE && static_cast<uint8_t>(text[1]) == 0xFF)))
-        THROW(ERR_COMMON, "The subtitle script " << name
+        THROW(ERR_SOURCE, "The subtitle script " << name
                                                  << " is saved in UTF-16. tsMuxeR reads it in UTF-8: save it as "
                                                     "UTF-8.")
     if (text.size() >= 3 && text.compare(0, 3, "\xEF\xBB\xBF") == 0)
@@ -155,7 +155,7 @@ bool prepareAssFile(const std::string& fileName)
             continue;
         }
         if (format.empty() || format.back() != "text")
-            THROW(ERR_COMMON, "The subtitle script " << name
+            THROW(ERR_SOURCE, "The subtitle script " << name
                                                      << " has a Dialogue line before a Format line that ends with "
                                                         "Text, so its fields cannot be read.")
         // the fields of the Format line, the last one, Text, with every comma it holds
@@ -181,7 +181,7 @@ bool prepareAssFile(const std::string& fileName)
         e.startMs = parseTime(value["start"]);
         e.endMs = parseTime(value["end"]);
         if (e.startMs < 0 || e.endMs < 0)
-            THROW(ERR_COMMON, "The subtitle script " << name << " has a Dialogue line with a time that is no time: \""
+            THROW(ERR_SOURCE, "The subtitle script " << name << " has a Dialogue line with a time that is no time: \""
                                                      << line << "\"")
         if (e.endMs <= e.startMs)
             continue;  // shown for no time
@@ -199,11 +199,11 @@ bool prepareAssFile(const std::string& fileName)
         events.push_back(std::move(e));
     }
     if (!scriptInfo || format.empty())
-        THROW(ERR_COMMON, "The file " << name
+        THROW(ERR_SOURCE, "The file " << name
                                       << " is no ASS or SSA subtitle script: it has no [Script Info] section or no "
                                          "[Events] section with a Format line.")
     if (events.empty())
-        THROW(ERR_COMMON, "The subtitle script " << name << " has no Dialogue line to show.")
+        THROW(ERR_SOURCE, "The subtitle script " << name << " has no Dialogue line to show.")
     std::stable_sort(events.begin(), events.end(),
                      [](const Event& a, const Event& b) { return a.startMs < b.startMs; });
 

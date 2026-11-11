@@ -204,7 +204,7 @@ void SaveSrtFile::write(const std::string& text, int64_t inMs, int64_t outMs)
         if (!m_file->open(saveSrtTempName(m_name).c_str(), File::ofWrite))
         {
             m_file.reset();
-            THROW(ERR_COMMON, "save-srt: the file " << m_name << " cannot be written.")
+            THROW(ERR_OUTPUT, "save-srt: the file " << m_name << " cannot be written.")
         }
     }
     const auto clock = [](const int64_t ms)
@@ -322,7 +322,7 @@ AssDecoder::AssDecoder(const uint8_t* header, const int headerSize, const ass_re
     if (!l.ok)
     {
         delete m;
-        THROW(ERR_COMMON, "libass cannot be used: " << l.why)
+        THROW(ERR_SOURCE, "libass cannot be used: " << l.why)
     }
     m->srt = drawing.srtFile;
     setUp(drawing.width, drawing.height, drawing.fps, drawing.fps);

@@ -108,7 +108,7 @@ void SRTStreamReader::saveSrtWrite(const std::string& text, int64_t inMs, int64_
         if (!m_saveSrt->open(saveSrtTempName(m_saveSrtName).c_str(), File::ofWrite))
         {
             m_saveSrt.reset();
-            THROW(ERR_COMMON, "save-srt: the file " << m_saveSrtName << " cannot be written.")
+            THROW(ERR_OUTPUT, "save-srt: the file " << m_saveSrtName << " cannot be written.")
         }
     }
     m_saveSrt->write(rec.data(), static_cast<uint32_t>(rec.size()));
@@ -178,7 +178,7 @@ void SRTStreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const boo
     const int parsedLen = parseText(dataBegin, dataLen + m_tmpBuffer.size());
     const size_t rest = dataLen + m_tmpBuffer.size() - parsedLen;
     if (rest > MAX_AV_PACKET_SIZE)
-        THROW(ERR_COMMON, "Invalid SRT file or too large text message (>" << MAX_AV_PACKET_SIZE << " bytes)")
+        THROW(ERR_SOURCE, "Invalid SRT file or too large text message (>" << MAX_AV_PACKET_SIZE << " bytes)")
     // The unfinished line starts where parsing stopped. Its position used to be worked out AFTER the
     // buffer had been resized to the new length, which pointed at the end of the data instead, so
     // the bytes kept were whatever followed the data: a line crossing the end of a read block was
@@ -257,7 +257,7 @@ bool SRTStreamReader::detectSrcFormat(const uint8_t* dataStart, const size_t len
                                                                     : "UTF-16 big endian")
                  << " without a byte order mark, which is not read. Save the file as UTF-8, or with a byte order "
                     "mark.";
-            THROW(ERR_COMMON, what.str())
+            THROW(ERR_SOURCE, what.str())
         }
     }
     if (hasUtf8Bom || convertUTF::isLegalUTF8String(dataStart, checkLen))
@@ -771,7 +771,7 @@ void SRTStreamReader::reportSkippedLines()
         what << ". The first line that is not part of a subtitle is line " << m_firstSkippedLine << ", \""
              << UtfConverter::quotedForMessage(m_firstSkippedText)
              << "\". A subtitle starts with a timing line like 00:00:20,000 --> 00:00:24,400";
-        THROW(ERR_COMMON, what.str())
+        THROW(ERR_SOURCE, what.str())
     }
     if (m_skippedLines > 5 && !m_webVtt)
         LTRACE(LT_WARN, 2,

@@ -106,7 +106,7 @@ int VideoCopyStreamReader::readPacket(AVPacket& avPacket)
         }
         static constexpr size_t HEAD = 4 + 8 + 8 + 8 + 1 + 4;
         if (memcmp(p, "VCPY", 4) != 0)
-            THROW(ERR_COMMON, "A copied video track lost its framing at byte " << m_processedSize << " of its data.")
+            THROW(ERR_SOURCE, "A copied video track lost its framing at byte " << m_processedSize << " of its data.")
         if (left < HEAD)
             return NEED_MORE_DATA;
         const auto dataSize = static_cast<size_t>(readBe(p + 29, 4));

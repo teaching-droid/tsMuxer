@@ -672,7 +672,7 @@ int H264StreamReader::writeSEIMessage(uint8_t* dstBuffer, const uint8_t* dstEnd,
     uint8_t* curPos = dstBuffer;
 
     if (dstEnd - curPos < 4)
-        THROW(ERR_COMMON, "H264 stream error: Not enough buffer for write headers")
+        THROW(ERR_SOURCE, "H264 stream error: Not enough buffer for write headers")
 
     uint8_t tmpBuffer[256];
     BitStreamWriter writer{};
@@ -728,7 +728,7 @@ int H264StreamReader::writeSEIMessage(uint8_t* dstBuffer, const uint8_t* dstEnd,
 
         const int sRez = SEIUnit::encodeNAL(tmpBuffer, tmpBuffer + writer.getBitsCount() / 8, curPos, dstEnd - curPos);
         if (sRez == -1)
-            THROW(ERR_COMMON, "H264 stream error: Not enough buffer for write headers")
+            THROW(ERR_SOURCE, "H264 stream error: Not enough buffer for write headers")
         curPos += sRez;
     }
 
@@ -840,7 +840,7 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
             LTRACE(LT_INFO, 2, "H264 bitstream changed: insert nal unit delimiters");
         }
         if (dstEnd - curPos < 6)
-            THROW(ERR_COMMON, "H264 stream error: Not enough buffer for write headers")
+            THROW(ERR_SOURCE, "H264 stream error: Not enough buffer for write headers")
         curPos = writeNalPrefix(curPos);
         if (m_mvcSubStream && m_blurayMode)
         {
@@ -908,11 +908,11 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
             avPacket.flags |= AVPacket::IS_SPS_PPS_IN_GOP;
             SPSUnit* sps = m_spsMap.find(m_lastSliceSPS)->second;
             if (dstEnd - curPos < 4)
-                THROW(ERR_COMMON, "H264 stream error: Not enough buffer for write headers")
+                THROW(ERR_SOURCE, "H264 stream error: Not enough buffer for write headers")
             curPos = writeNalPrefix(curPos);
             sRez = sps->serializeBuffer(curPos, dstEnd, false);
             if (sRez == -1)
-                THROW(ERR_COMMON, "H264 stream error: Not enough buffer for write headers")
+                THROW(ERR_SOURCE, "H264 stream error: Not enough buffer for write headers")
             curPos += sRez;
         }
 
@@ -922,11 +922,11 @@ int H264StreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
         for (auto [index, pps] : m_ppsMap)
         {
             if (dstEnd - curPos < 4)
-                THROW(ERR_COMMON, "H264 stream error: Not enough buffer for write headers")
+                THROW(ERR_SOURCE, "H264 stream error: Not enough buffer for write headers")
             curPos = writeNalPrefix(curPos);
             sRez = pps->serializeBuffer(curPos, dstEnd, false);
             if (sRez == -1)
-                THROW(ERR_COMMON, "H264 stream error: Not enough buffer for write headers")
+                THROW(ERR_SOURCE, "H264 stream error: Not enough buffer for write headers")
             curPos += sRez;
         }
     }
@@ -1057,7 +1057,7 @@ void H264StreamReader::updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* ne
     auto tmpBuffer = std::make_unique<uint8_t[]>(oldSpsLen + 16);
     const long newSpsLen = sps->serializeBuffer(tmpBuffer.get(), tmpBuffer.get() + oldSpsLen + 16, false);
     if (newSpsLen == -1)
-        THROW(ERR_COMMON, "Track " << m_streamIndex
+        THROW(ERR_SOURCE, "Track " << m_streamIndex
                                    << ": its H.264 sequence parameter set could not be written again with the frame "
                                       "rate, as it does not hold what an H.264 stream holds there. "
                                    << "The usual reason is that the codec on the meta line is not the codec the file "
@@ -1066,7 +1066,7 @@ void H264StreamReader::updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* ne
     {
         const int sizeDiff = newSpsLen - oldSpsLen;
         if (m_bufEnd + sizeDiff > m_tmpBuffer + m_tmpBufferSize)
-            THROW(ERR_COMMON, "Track " << m_streamIndex
+            THROW(ERR_SOURCE, "Track " << m_streamIndex
                                        << ": its H.264 sequence parameter set could not be written again with the "
                                           "frame rate, as it does not hold what an H.264 stream holds there. "
                                        << "The usual reason is that the codec on the meta line is not the codec the "
@@ -1985,7 +1985,7 @@ int H264StreamReader::processSEI(uint8_t* buff)
             std::vector<uint8_t> tmpBuff(lastSEI.m_nalBufferLen + lastSEI.m_nalBufferLen / 2 + 16);
             int newSize = lastSEI.serializeBuffer(tmpBuff.data(), tmpBuff.data() + tmpBuff.size(), false);
             if (newSize == -1)
-                THROW(ERR_COMMON, "Not enough buffer")
+                THROW(ERR_SOURCE, "Not enough buffer")
 
             assert(newSize > 2);
 
@@ -1993,7 +1993,7 @@ int H264StreamReader::processSEI(uint8_t* buff)
             if (sizeDiff != 0)
             {
                 if (m_bufEnd + sizeDiff > m_tmpBuffer + m_tmpBufferSize)
-                    THROW(ERR_COMMON, "Not enough buffer")
+                    THROW(ERR_SOURCE, "Not enough buffer")
                 memmove(nextNal + sizeDiff, nextNal, m_bufEnd - nextNal);
                 m_bufEnd += sizeDiff;
             }

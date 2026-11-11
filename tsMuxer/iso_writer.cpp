@@ -3,6 +3,7 @@
 // ReSharper disable CppExpressionWithoutSideEffects
 
 #include "iso_writer.h"
+#include "vodCoreException.h"
 
 #include <algorithm>
 #include <cassert>
@@ -329,7 +330,7 @@ void ByteFileWriter::setBuffer(uint8_t* buffer, const int len)
 void ByteFileWriter::checkRoom(const size_t bytes) const
 {
     if (m_curPos + bytes > m_bufferEnd)
-        throw std::runtime_error("ISO error: the UDF writer ran out of buffer");
+        throw OutputError("ISO error: the UDF writer ran out of buffer");
 }
 
 void ByteFileWriter::writeLE8(const uint8_t value)
@@ -498,9 +499,9 @@ void FileEntryInfo::claimIdentifier(const FileEntryInfo* entry)
 {
     const auto [it, isNew] = m_childIdentifiers.emplace(serializeFileIdentifier(entry->name(), nullptr), entry->name());
     if (!isNew)
-        throw std::runtime_error("ISO: the names \"" + it->second + "\" and \"" + entry->name() +
-                                 "\" in one folder are the same as far as a UDF file identifier holds a name. "
-                                 "Shorten one of them.");
+        throw OutputError("ISO: the names \"" + it->second + "\" and \"" + entry->name() +
+                          "\" in one folder are the same as far as a UDF file identifier holds a name. "
+                          "Shorten one of them.");
 }
 
 void FileEntryInfo::addSubDir(FileEntryInfo* dir)
@@ -954,12 +955,12 @@ void IsoWriter::setVolumeLabel(const std::string& value)
 bool IsoWriter::open(const std::string& fileName, const int64_t diskSize, const int64_t extraISOBlocks)
 {
     if (const std::string why = tooManyExtraBlocks(extraISOBlocks); !why.empty())
-        throw std::runtime_error(why);
+        throw OutputError(why);
     const int64_t metaBlocks = diskSize > 0 ? metadataBlocks(diskSize, extraISOBlocks) : 0;
     if (metaBlocks > MAX_META_BLOCKS)
-        throw std::runtime_error("The metadata area of this image would be " + std::to_string(metaBlocks) +
-                                 " blocks of 64K, and an image holds at most " + std::to_string(MAX_META_BLOCKS) +
-                                 ". Give a smaller --extra-iso-space.");
+        throw OutputError("The metadata area of this image would be " + std::to_string(metaBlocks) +
+                          " blocks of 64K, and an image holds at most " + std::to_string(MAX_META_BLOCKS) +
+                          ". Give a smaller --extra-iso-space.");
     // Sequential hint: the image is written front-to-back with only a few descriptor seeks at finalize,
     // so FILE_FLAG_SEQUENTIAL_SCAN suits it better than the default random-access flag.
     if (!m_file.open(fileName.c_str(), File::ofWrite | File::ofSequential))
@@ -1228,7 +1229,7 @@ void IsoWriter::allocateMetadata()
         msg << "ISO error: not enough space in the metadata partition. It holds " << m_metadataFileLen / SECTOR_SIZE
             << " sectors and " << m_systemStreamLBN + 3 << " are needed for " << m_mappingEntries.size()
             << " files and directories. Use --extra-iso-space to enlarge it, in units of 64K.";
-        throw std::runtime_error(msg.str());
+        throw OutputError(msg.str());
     }
 
     // write udf unique id mapping file
@@ -1248,9 +1249,9 @@ void IsoWriter::allocateMetadata()
                                            static_cast<size_t>(ALLOC_BLOCK_SIZE)),
                                 0);
     if (mappingSize > static_cast<size_t>(m_mappingReserve))
-        throw std::runtime_error("ISO error: the UDF ID mapping of " + std::to_string(m_mappingEntries.size()) +
-                                 " files and folders does not fit the space reserved for it. Use --extra-iso-space "
-                                 "to enlarge the metadata, in units of 64K.");
+        throw OutputError("ISO error: the UDF ID mapping of " + std::to_string(m_mappingEntries.size()) +
+                          " files and folders does not fit the space reserved for it. Use --extra-iso-space "
+                          "to enlarge the metadata, in units of 64K.");
     ByteFileWriter writer;
     writer.setBuffer(buffer.data(), static_cast<int>(buffer.size()));
 
@@ -2288,7 +2289,7 @@ void IsoWriter::moveBackLookAhead()
                 (std::min<int64_t>)(dataEnd * SECTOR_SIZE - pos, static_cast<int64_t>(buffer.size())));
             reader.seek(pos);
             if (reader.read(buffer.data(), len) != static_cast<int>(len))
-                throw std::runtime_error("Can't read back " + m_file.getName() + " to move its last pairs");
+                throw OutputError("Can't read back " + m_file.getName() + " to move its last pairs");
             m_file.seek(pos - shift * SECTOR_SIZE);
             m_file.write(buffer.data(), len);
             pos += len;

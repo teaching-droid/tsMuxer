@@ -141,7 +141,7 @@ bool ParsedH264TrackData::spsppsExists(uint8_t* buff, const int size)
 void ParsedH264TrackData::extractData(AVPacket* pkt, uint8_t* buff, const int size)
 {
     if (m_nalSize < 2 || m_nalSize > 4)
-        THROW(ERR_COMMON, "Unsupported nal unit size " << static_cast<int>(m_nalSize))
+        THROW(ERR_SOURCE, "Unsupported nal unit size " << static_cast<int>(m_nalSize))
 
     int newBufSize = size;
     const uint8_t* curPos = buff;
