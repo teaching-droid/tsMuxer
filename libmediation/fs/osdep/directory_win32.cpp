@@ -28,6 +28,8 @@ string extractFileDir(const string& fileName)
 
 bool fileExists(const string& fileName)
 {
+    if (dryRun::enabled() && dryRun::has(fileName))
+        return true;
     File f;
     return f.open(fileName.c_str(), File::ofRead | File::ofOpenExisting);
 }
@@ -65,6 +67,8 @@ static bool isPathRoot(const std::string& dir)
 
 bool createDir(const std::string& dirNameAsGiven, const bool createParentDirs)
 {
+    if (dryRun::enabled())
+        return true;  // a run that writes nothing makes no folder either
     const std::string dirName = windowsPath(dirNameAsGiven);
     const bool ok = preCreateDir(
         [](auto&& parentDir)
@@ -88,6 +92,11 @@ bool createDir(const std::string& dirNameAsGiven, const bool createParentDirs)
 
 bool deleteFile(const string& fileName)
 {
+    if (dryRun::enabled() && dryRun::has(fileName))
+    {
+        dryRun::forget(fileName);
+        return true;
+    }
     if (DeleteFile(toWide(windowsPath(fileName)).data()))
     {
         return true;

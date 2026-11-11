@@ -32,6 +32,8 @@ string extractFileDir(const string& fileName)
 // A path inside a disc image is asked of the image (discImage.h); stat knows only the image file.
 bool fileExists(const string& name)
 {
+    if (dryRun::enabled() && dryRun::has(name))
+        return true;
     const std::string fileName = nameAlias::resolve(name);  // a second name of a file (nameAlias.h)
     if (discImage::isInside(fileName))
         return discImage::exists(fileName);
@@ -57,6 +59,8 @@ uint64_t getFileSize(const std::string& name)
 
 bool createDir(const std::string& dirName, bool createParentDirs)
 {
+    if (dryRun::enabled())
+        return true;  // a run that writes nothing makes no folder either
     auto ok = preCreateDir([](auto) { return false; },
                            [](auto&& parentDir)
                            {
@@ -72,7 +76,15 @@ bool createDir(const std::string& dirName, bool createParentDirs)
     return ok ? mkdir(dirName.c_str(), S_IREAD | S_IWRITE | S_IEXEC) == 0 : false;
 }
 
-bool deleteFile(const string& fileName) { return unlink(fileName.c_str()) == 0; }
+bool deleteFile(const string& fileName)
+{
+    if (dryRun::enabled() && dryRun::has(fileName))
+    {
+        dryRun::forget(fileName);
+        return true;
+    }
+    return unlink(fileName.c_str()) == 0;
+}
 
 // What an entry of a directory listing is. A symbolic link reports itself as a link, and some file systems report
 // every entry as unknown, so both are asked about what they point at. Only a regular file and a directory counted

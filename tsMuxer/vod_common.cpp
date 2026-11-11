@@ -1,6 +1,7 @@
 // Largely rewritten by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer).
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "vod_common.h"
+#include <fs/file.h>
 
 #include <atomic>
 #include <cctype>
@@ -718,6 +719,9 @@ int finishSaveSrt(const std::string& tempName, const std::string& name, std::str
         std::filesystem::remove(saveSrtPath(tempName), ec);
         return 1;
     }
+    // in a run that writes nothing the file is one that was only counted, and takes its name there
+    if (dryRun::enabled() && dryRun::rename(tempName, name))
+        return 0;
     std::filesystem::rename(saveSrtPath(tempName), saveSrtPath(name), ec);
     if (!ec)
         return 0;

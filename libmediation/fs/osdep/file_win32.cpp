@@ -77,6 +77,8 @@ File::File(const char* fName, const unsigned int oflag,
     // a second name of a source opens the file itself (nameAlias.h)
     const std::string realName = nameAlias::resolve(fName);
     fName = realName.c_str();
+    if (openDry(fName, oflag))
+        return;
     if (discImage::isInside(fName))
     {
         if (!openInImage(fName, oflag))
@@ -126,9 +128,12 @@ bool File::open(const char* fName, const unsigned int oflag, unsigned int system
     m_pos = 0;
     if (m_view)
         closeInImage();
+    closeDry();
     // a second name of a source opens the file itself (nameAlias.h)
     const std::string realName = nameAlias::resolve(fName);
     fName = realName.c_str();
+    if (openDry(fName, oflag))
+        return true;
     if (discImage::isInside(fName))
         return openInImage(fName, oflag);
 
@@ -167,6 +172,11 @@ bool File::open(const char* fName, const unsigned int oflag, unsigned int system
 
 bool File::close()
 {
+    if (m_dry)
+    {
+        closeDry();
+        return true;
+    }
     if (m_view)
     {
         closeInImage();
@@ -182,6 +192,8 @@ int File::read(void* buffer, const uint32_t count) const
 {
     if (!isOpen())
         return -1;
+    if (m_dry)
+        return readDry(buffer, count);
     if (m_view)
         return readInImage(buffer, count);
 
@@ -197,6 +209,8 @@ int File::read(void* buffer, const uint32_t count) const
 
 int File::write(const void* buffer, const uint32_t count)
 {
+    if (m_dry)
+        return writeDry(count);
     if (!isOpen() || m_view)
         return -1;
 
@@ -216,14 +230,19 @@ int File::write(const void* buffer, const uint32_t count)
 
 void File::sync()
 {
-    if (!m_view)
+    if (!m_view && !m_dry)
         FlushFileBuffers(m_impl);
 }
 
-bool File::isOpen() const { return m_view || m_impl != INVALID_HANDLE_VALUE; }
+bool File::isOpen() const { return m_view || m_dry || m_impl != INVALID_HANDLE_VALUE; }
 
 bool File::size(int64_t* const fileSize) const
 {
+    if (m_dry)
+    {
+        *fileSize = sizeDry();
+        return true;
+    }
     if (m_view)
     {
         *fileSize = sizeInImage();
@@ -243,6 +262,8 @@ int64_t File::seek(const int64_t offset, const SeekMethod whence) const
 {
     if (!isOpen())
         return -1;
+    if (m_dry)
+        return seekDry(offset, whence);
     if (m_view)
         return seekInImage(offset, whence);
 
@@ -274,6 +295,8 @@ int64_t File::seek(const int64_t offset, const SeekMethod whence) const
 
 bool File::truncate(const uint64_t newFileSize) const
 {
+    if (m_dry)
+        return truncateDry(newFileSize);
     if (m_view)
         return false;
     const LONG distanceToMoveLow = static_cast<LONG>(newFileSize);
@@ -288,6 +311,8 @@ bool File::truncate(const uint64_t newFileSize) const
 
 bool File::setSparse() const
 {
+    if (m_dry)
+        return true;
     if (!isOpen() || m_view)
         return false;
     DWORD bytesReturned = 0;

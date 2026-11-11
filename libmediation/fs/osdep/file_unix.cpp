@@ -72,6 +72,8 @@ File::File(const char* fName, unsigned int oflag, unsigned int systemDependentFl
     // a second name of a source opens the file itself (nameAlias.h)
     const std::string realName = nameAlias::resolve(fName);
     fName = realName.c_str();
+    if (openDry(fName, oflag))
+        return;
     if (discImage::isInside(fName))
     {
         if (!openInImage(fName, oflag))
@@ -111,6 +113,8 @@ bool File::open(const char* fName, unsigned int oflag, unsigned int systemDepend
     // a second name of a source opens the file itself (nameAlias.h)
     const std::string realName = nameAlias::resolve(fName);
     fName = realName.c_str();
+    if (openDry(fName, oflag))
+        return true;
     if (discImage::isInside(fName))
         return openInImage(fName, oflag);
 
@@ -127,6 +131,11 @@ bool File::open(const char* fName, unsigned int oflag, unsigned int systemDepend
 
 bool File::close()
 {
+    if (m_dry)
+    {
+        closeDry();
+        return true;
+    }
     if (m_view)
     {
         closeInImage();
@@ -145,6 +154,8 @@ int File::read(void* buffer, uint32_t count) const
 {
     if (!isOpen())
         return -1;
+    if (m_dry)
+        return readDry(buffer, count);
     if (m_view)
         return readInImage(buffer, count);
     m_pos += count;
@@ -157,6 +168,8 @@ int File::read(void* buffer, uint32_t count) const
 // reason, and the job stops on it.
 int File::write(const void* buffer, uint32_t count)
 {
+    if (m_dry)
+        return writeDry(count);
     if (!isOpen() || m_view)
         return -1;
     const auto* data = static_cast<const char*>(buffer);
@@ -182,7 +195,7 @@ int File::write(const void* buffer, uint32_t count)
     return static_cast<int>(count);
 }
 
-bool File::isOpen() const { return m_view || to_fd(m_impl) != -1; }
+bool File::isOpen() const { return m_view || m_dry || to_fd(m_impl) != -1; }
 
 bool File::size(int64_t* const fileSize) const
 {
@@ -190,6 +203,11 @@ bool File::size(int64_t* const fileSize) const
 
     struct stat buf;
 
+    if (m_dry)
+    {
+        *fileSize = sizeDry();
+        return true;
+    }
     if (m_view)
     {
         *fileSize = sizeInImage();
@@ -208,6 +226,8 @@ int64_t File::seek(const int64_t offset, const SeekMethod whence) const
 {
     if (!isOpen())
         return UINT64_C(-1);
+    if (m_dry)
+        return seekDry(offset, whence);
     if (m_view)
         return seekInImage(offset, whence);
 
@@ -228,18 +248,23 @@ int64_t File::seek(const int64_t offset, const SeekMethod whence) const
     return lseek(to_fd(m_impl), offset, sWhence);
 }
 
-bool File::truncate(const uint64_t newFileSize) const { return !m_view && ftruncate(to_fd(m_impl), newFileSize) == 0; }
+bool File::truncate(const uint64_t newFileSize) const
+{
+    if (m_dry)
+        return truncateDry(newFileSize);
+    return !m_view && ftruncate(to_fd(m_impl), newFileSize) == 0;
+}
 
 // POSIX files are sparse by default: extending with ftruncate() leaves a hole, and writing past a gap
 // keeps earlier gaps as holes. Nothing to enable, so just report that sparse behaviour is available.
-bool File::setSparse() const { return isOpen() && !m_view; }
+bool File::setSparse() const { return m_dry || (isOpen() && !m_view); }
 
 // Only Windows writes unbuffered (FILE_FLAG_NO_BUFFERING), so only there does the sector size matter.
 uint32_t File::volumeSectorSize(const char*) { return 0; }
 
 void File::sync()
 {
-    if (!m_view)
+    if (!m_view && !m_dry)
         ::sync();
 }
 

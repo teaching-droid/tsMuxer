@@ -1205,7 +1205,7 @@ void muxBlankPL(BlurayHelper& blurayHelper, const PIDListMap& pidList, DiskType 
         ~TemporaryFile() { deleteFile(name); }
     } temporaryFile{tmpFileName};
     File file;
-    if (!file.open(tmpFileName.c_str(), File::ofWrite))
+    if (!file.open(tmpFileName.c_str(), File::ofWrite | File::ofForReal))
         THROW(ERR_OUTPUT, "can't create file " << tmpFileName)
     // About half a second, as three patterns of four pictures are at 23.976: more of them at a higher rate
     const std::vector<uint8_t> blank = blankPatternAt(pattern, patternSize, fps);
@@ -1727,6 +1727,12 @@ All parameters in this group start with two dashes:
                       track), or a word of the track's name (VFQ). The video is
                       always taken, and so is a track without a language. On a
                       line of a --batch job list as well.
+--scan                tsMuxeR --scan <meta file or source> <output>: the mux is
+                      run and nothing is written. The sources are read as in
+                      the real run, with every warning it gives, and at the
+                      end the files it would write are listed with their
+                      sizes; an image (.iso) is told the disc it fits. The
+                      output is named as for the mux, and is not touched.
 --batch               Separate mode: tsMuxeR --batch <job list> [--batch-stop-on-error]
                       Runs a list of jobs one after the other. The job list is
                       a text file in UTF-8 with one job on each line, written
@@ -5271,6 +5277,81 @@ static void endBySignal()
 
 static int runTsMuxer(int argc, char** argv);
 
+// ** --scan: THE SIZE OF THE OUTPUT, BEFORE ANYTHING IS WRITTEN. ** Whether a mux fits its disc, or the room left on a
+// drive, was known when the output was written: hours for a film, and by then the room was taken. --scan runs the mux
+// and writes nothing (dryRun, file_dry.cpp): the sources are read as in a real run, so every warning and every
+// refusal of the run is said, and at the end the files the run would have written are listed with their sizes, which
+// are those of the real run, as the same code counts them. An image is judged against the discs it may go on.
+// The output is given as for the real run, and is not touched: the run is pointed at a name in the temp folder that
+// is never made, so an output of that name that is there already is neither replaced nor removed.
+static bool g_scan = false;
+static std::string g_scanOutput;   // the output as given
+static std::string g_scanScratch;  // the name the run is given in its place
+
+static void printScanSummary()
+{
+    if (!g_scan)
+        return;
+    std::string scratch = g_scanScratch;
+    std::replace(scratch.begin(), scratch.end(), '\\', '/');
+    std::vector<std::pair<std::string, int64_t>> files;
+    int64_t total = 0;
+    bool disc = false;
+    for (auto [name, size] : dryRun::files())
+    {
+        if (size <= 0)
+            continue;
+        // shown under the name of the output as it was given
+        if (name.compare(0, scratch.size(), scratch) == 0)
+            name = g_scanOutput + name.substr(scratch.size());
+        disc |= name.find("/BDMV/") != std::string::npos || name.find("\\BDMV\\") != std::string::npos;
+        total += size;
+        files.emplace_back(name, size);
+    }
+    const auto gb = [](const int64_t bytes)
+    {
+        return bytes >= 1000000000 ? doubleToStr(static_cast<double>(bytes) / 1e9, 2) + " GB"
+                                   : doubleToStr(static_cast<double>(bytes) / 1e6, 1) + " MB";
+    };
+    LTRACE(LT_INFO, 2, "");
+    LTRACE(LT_INFO, 2, "Scan: nothing was written. The run would write:");
+    std::stable_sort(files.begin(), files.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+    static constexpr size_t SHOWN = 12;
+    for (size_t i = 0; i < files.size() && i < SHOWN; ++i)
+        LTRACE(LT_INFO, 2, "  " << files[i].second << " bytes  " << files[i].first);
+    if (files.size() > SHOWN)
+        LTRACE(LT_INFO, 2, "  and " << files.size() - SHOWN << " smaller files");
+    LTRACE(LT_INFO, 2,
+           "Scan: " << files.size() << (files.size() == 1 ? " file, " : " files, ") << total << " bytes (" << gb(total)
+                    << ") in all.");
+    const std::string ext = strToLowerCase(extractFileExt(g_scanOutput));
+    if (ext == "iso" && files.size() >= 1)
+    {
+        // the sectors a recordable disc of each size has for data
+        static const std::pair<const char*, int64_t> DISCS[] = {{"25 GB", 12219392LL * 2048},
+                                                                {"50 GB", 24438784LL * 2048},
+                                                                {"100 GB", 48878592LL * 2048},
+                                                                {"128 GB", 62500864LL * 2048}};
+        const int64_t image = files[0].second;
+        const auto fits =
+            std::find_if(std::begin(DISCS), std::end(DISCS), [image](const auto& d) { return image <= d.second; });
+        if (fits == std::end(DISCS))
+        {
+            LTRACE(LT_INFO, 2, "Scan: the image is larger than a 128 GB disc, the largest there is.");
+        }
+        else
+        {
+            LTRACE(LT_INFO, 2,
+                   "Scan: the image fits a " << fits->first << " disc (" << fits->second << " bytes), with "
+                                             << (fits->second - image) / 1000000 << " MB free.");
+        }
+    }
+    else if (disc)
+        LTRACE(LT_INFO, 2,
+               "Scan: these are the files of the disc. An image of them is a little larger, by its file system: scan "
+               "with an output named .iso for its size and the disc it fits.");
+}
+
 int main(int argc, char** argv)
 {
 #ifdef _WIN32
@@ -5366,6 +5447,8 @@ int main(int argc, char** argv)
         return runMakeSample(argc, argv, sampleReport, ownReport);
     }
     const int exitCode = runTsMuxer(argc, argv);
+    if (exitCode == 0)
+        printScanSummary();
     // after the run, so that reading the sources again changes nothing the run says or writes
     writeReportListings();
     diagReport::close(exitCode);
@@ -5401,6 +5484,41 @@ static int runTsMuxer(int argc, char** argv)
                 g_takeLanguages.push_back(e);
         for (int k = i; k + 1 < argc; ++k) argv[k] = argv[k + 1];
         --argc;
+    }
+    // --scan (printScanSummary): taken out of the list as well. It goes with a mux: a meta file or a source, and the
+    // output.
+    for (int i = 1; i < argc;)
+    {
+        if (std::string(argv[i]) != "--scan")
+        {
+            ++i;
+            continue;
+        }
+        g_scan = true;
+        for (int k = i; k + 1 < argc; ++k) argv[k] = argv[k + 1];
+        --argc;
+    }
+    if (g_scan)
+    {
+        if (argc != 3 || (argv[1][0] == '-' && argv[1][1] == '-'))
+        {
+            LTRACE(LT_ERROR, 2,
+                   "--scan goes with a mux: tsMuxeR --scan <meta file or source> <output>. The output is named as for "
+                   "the mux, and is not written.");
+            return ExitCode::Usage;
+        }
+        g_scanOutput = argv[2];
+        std::error_code ec;
+        std::filesystem::path temp = std::filesystem::temp_directory_path(ec);
+        if (ec)
+            temp = ".";
+        const std::filesystem::path given = fsPath(unquoteStr(g_scanOutput));
+        const std::u8string scratch = (temp / ("tsMuxeR_scan_" + std::to_string(currentProcessId())) /
+                                       (given.has_filename() ? given.filename() : given.parent_path().filename()))
+                                          .u8string();
+        g_scanScratch.assign(scratch.begin(), scratch.end());
+        dryRun::enable();
+        argv[2] = g_scanScratch.data();
     }
     std::string langCodesGiven;  // the value of an earlier --lang-codes: given twice, the last won without a word
     for (int i = 1; i < argc;)
@@ -5857,7 +5975,7 @@ static int runTsMuxer(int argc, char** argv)
                          ("tsMuxeR_meta_" +
                           std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".meta"));
             File out;
-            if (!out.open(madeMeta.name.c_str(), File::ofWrite) ||
+            if (!out.open(madeMeta.name.c_str(), File::ofWrite | File::ofForReal) ||
                 out.write(text.data(), static_cast<uint32_t>(text.size())) != static_cast<int>(text.size()))
                 THROW(ERR_OUTPUT, "The meta file for " << argv[1] << " cannot be written to the temp folder.")
             out.close();

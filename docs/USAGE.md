@@ -186,6 +186,23 @@ The job list is a text file in UTF-8 with one job on each line, written as the a
 
 Each job runs as a process of its own, so a job that fails leaves the next ones as they are. What a job prints stands between a line that names the job and a line that gives its result, and a summary at the end says how each job ended. The exit code is 0 when every job was done, and 6 when one failed or was not run. `--batch-stop-on-error` ends the batch at the first job that fails; the jobs after it are listed as not run. Nothing else is given beside `--batch`: the options of a job go on its line.
 
+### The size of the output, before it is written
+
+`--scan` runs a mux and writes nothing. The sources are read as in the real run, so every warning and every refusal of the run is said, and at the end the files the run would write are listed with their sizes:
+
+```
+tsMuxeR --scan film.meta film.iso
+```
+
+```
+Scan: nothing was written. The run would write:
+  24812345344 bytes  film.iso
+Scan: 1 file, 24812345344 bytes (24.81 GB) in all.
+Scan: the image fits a 25 GB disc (25025314816 bytes), with 212 MB free.
+```
+
+The sizes are those of the real run, as the same code counts them. The output is named as for the mux and is not touched: a file or a folder of that name that is there already stays as it is. A scan takes as long as reading the sources takes. It goes on a line of a `--batch` job list as well.
+
 ### Exit codes
 
 The exit code says how a run ended, for a script that starts tsMuxeR:

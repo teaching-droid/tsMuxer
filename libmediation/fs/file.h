@@ -3,7 +3,22 @@
 #ifndef LIBMEDIATION_FILE_H
 #define LIBMEDIATION_FILE_H
 
+#include <string>
+#include <utility>
+#include <vector>
 #include "../types/types.h"
+
+// A run that writes nothing (file_dry.cpp): every file opened for writing only counts what is written to it
+namespace dryRun
+{
+void enable();
+bool enabled();
+// the files "written", by name, each with its size
+std::vector<std::pair<std::string, int64_t>> files();
+bool has(const std::string& name);
+void forget(const std::string& name);
+bool rename(const std::string& from, const std::string& to);
+}  // namespace dryRun
 
 class AbstractStream
 {
@@ -18,6 +33,8 @@ class AbstractStream
     static constexpr unsigned int ofCreateNew = 16;    // create new file. Return error If file exist
     static constexpr unsigned int ofNoTruncate = 32;   // keep file data while opening
     static constexpr unsigned int ofSequential = 64;   // hint: sequential access (win32: FILE_FLAG_SEQUENTIAL_SCAN)
+    // written also in a run that writes nothing (dryRun): a temporary file the run reads again
+    static constexpr unsigned int ofForReal = 128;
 
     virtual bool open(const char* fName, unsigned int oflag, unsigned int systemDependentFlags = 0) = 0;
     virtual bool close() = 0;
@@ -156,10 +173,21 @@ class File : public AbstractOutputStream
     int64_t seekInImage(int64_t offset, SeekMethod whence) const;
     int64_t sizeInImage() const;
 
+    // a file of a dry run (file_dry.cpp)
+    struct DryView;
+    bool openDry(const char* fName, unsigned int oflag);
+    void closeDry();
+    int writeDry(uint32_t count);
+    int readDry(void* buffer, uint32_t count) const;
+    int64_t seekDry(int64_t offset, SeekMethod whence) const;
+    int64_t sizeDry() const;
+    bool truncateDry(uint64_t newFileSize) const;
+
     void* m_impl;
     std::string m_name;
     mutable int64_t m_pos;
     ImageView* m_view = nullptr;
+    DryView* m_dry = nullptr;
 };
 
 class FileFactory
