@@ -4858,6 +4858,10 @@ Créer l'ISO malgré tout ?</translation>
         <translation>Langues à prendre :</translation>
     </message>
     <message>
+        <source>Preview with its delay</source>
+        <translation>Aperçu avec son décalage</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>Les pistes son et sous-titres des autres langues sont ajoutées non cochées. Indiquez les langues comme la liste des pistes les affiche, avec des virgules : deu, eng. Une étiquette de langue (fr-CA) ou un mot du nom d&apos;une piste (VFQ) distingue les doublages d&apos;une même langue. Vide : toutes les pistes sont cochées.</translation>
     </message>

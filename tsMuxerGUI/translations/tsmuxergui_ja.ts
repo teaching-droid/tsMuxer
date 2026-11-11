@@ -4858,6 +4858,10 @@ Build the ISO anyway?</source>
         <translation>取り込む言語:</translation>
     </message>
     <message>
+        <source>Preview with its delay</source>
+        <translation>遅延を適用してプレビュー</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>他の言語の音声トラックと字幕トラックは、チェックを外した状態で追加されます。言語はトラック一覧の表示どおりにカンマで区切って指定します: deu, eng。言語タグ (fr-CA) やトラック名の単語 (VFQ) で、同じ言語の吹き替えを区別できます。空の場合はすべてのトラックにチェックが入ります。</translation>
     </message>

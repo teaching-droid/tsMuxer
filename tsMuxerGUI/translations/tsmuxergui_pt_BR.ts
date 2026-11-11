@@ -4718,6 +4718,10 @@ Criar o ISO mesmo assim?</translation>
         <translation>Idiomas a incluir:</translation>
     </message>
     <message>
+        <source>Preview with its delay</source>
+        <translation>Pré-visualizar com o atraso</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>As faixas de som e de legendas de outros idiomas são adicionadas desmarcadas. Informe os idiomas como a lista de faixas os mostra, com vírgulas: deu, eng. Uma etiqueta de idioma (fr-CA) ou uma palavra do nome de uma faixa (VFQ) distingue as dublagens de um mesmo idioma. Vazio: todas as faixas ficam marcadas.</translation>
     </message>

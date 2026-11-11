@@ -28,6 +28,9 @@ struct PreviewSource
     int angle = 1;
     double start = 0;      // where the preview of a title starts, in seconds of the title
     double fileStart = 0;  // where the preview of a file starts, in seconds of the file
+    // A preview of tracks as the window muxes them: their lines of its meta file, with every parameter (a timeshift=
+    // to be heard before the mux). Given, the preview is always made from them, a file is not opened as it is.
+    QStringList metaLines;
 };
 
 // A preview of a title or file in a player outside the window: the one set on the General tab (a program and its

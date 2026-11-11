@@ -200,13 +200,16 @@ void PlayerLauncher::preview(const PreviewSource& source, QWidget* parent)
     // the preview to another player
     std::tie(m_program, m_arguments) = playerOf(source);
     // a file is opened as it is: any player plays a whole clip or file, and can go anywhere in it
-    if (!source.file.isEmpty() && QFileInfo(source.file).isFile())
+    if (source.metaLines.isEmpty())
     {
-        launch(QDir::toNativeSeparators(source.file), {}, parent);
-        return;
+        if (!source.file.isEmpty() && QFileInfo(source.file).isFile())
+        {
+            launch(QDir::toNativeSeparators(source.file), {}, parent);
+            return;
+        }
+        if (launchDirect(source, parent))
+            return;
     }
-    if (launchDirect(source, parent))
-        return;
     m_source = source;
     m_parent = parent;
     m_stopped = false;
@@ -216,7 +219,7 @@ void PlayerLauncher::preview(const PreviewSource& source, QWidget* parent)
     m_form->setWindowModality(Qt::ApplicationModal);
     m_form->prepare(wtr("Making a preview"));
     m_form->show();
-    if (m_source.tracks.isEmpty())
+    if (m_source.tracks.isEmpty() && m_source.metaLines.isEmpty())
         startList();
     else
         startMux();
@@ -311,8 +314,11 @@ void PlayerLauncher::startMux()
     if (from > 0)
         meta += QStringLiteral(" --cut-start=%1ms --cut-pictures=inside").arg(from);
     meta += QStringLiteral(" --cut-end=%1ms\n").arg(from + qRound64(PREVIEW_SECONDS * 1000));
-    for (const auto& [codec, track] : m_source.tracks)
-        meta += QStringLiteral("%1, %2, track=%3%4\n").arg(codec, source).arg(track).arg(angle);
+    if (!m_source.metaLines.isEmpty())
+        meta += m_source.metaLines.join('\n') + '\n';  // the tracks as the window muxes them
+    else
+        for (const auto& [codec, track] : m_source.tracks)
+            meta += QStringLiteral("%1, %2, track=%3%4\n").arg(codec, source).arg(track).arg(angle);
     QFile file(m_meta);
     if (!file.open(QIODevice::WriteOnly) || file.write(meta.toUtf8()) < 0)
     {

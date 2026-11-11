@@ -4858,6 +4858,10 @@ ISO trotzdem erstellen?</translation>
         <translation>Gewünschte Sprachen:</translation>
     </message>
     <message>
+        <source>Preview with its delay</source>
+        <translation>Vorschau mit Verzögerung</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>Ton- und Untertitelspuren anderer Sprachen werden ohne Häkchen hinzugefügt. Die Sprachen so angeben, wie die Spurliste sie zeigt, mit Kommas: deu, eng. Ein Sprach-Tag (fr-CA) oder ein Wort aus dem Namen einer Spur (VFQ) unterscheidet die Synchronfassungen einer Sprache. Leer: jede Spur bekommt ein Häkchen.</translation>
     </message>

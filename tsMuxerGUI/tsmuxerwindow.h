@@ -116,6 +116,8 @@ class TsMuxerWindow : public QWidget
     // "Play" on the input list: the item in the player for previews (playerLauncher.h)
     void onInputContextMenu(const QPoint& pos);
     void playInputItem(const QListWidgetItem* itm);
+    // "Preview with its delay" on the track list: the track with the video, as the meta file muxes them
+    void previewTrackDelay(int row);
     // The launcher with the player of the General tab as it is set now
     PlayerLauncher* previewPlayer();
     void setChecksMatching(int refRow, bool byLanguage, bool checked);

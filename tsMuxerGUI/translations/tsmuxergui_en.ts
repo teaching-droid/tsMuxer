@@ -4714,6 +4714,10 @@ Build the ISO anyway?</source>
         <translation>Languages to take:</translation>
     </message>
     <message>
+        <source>Preview with its delay</source>
+        <translation>Preview with its delay</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</translation>
     </message>

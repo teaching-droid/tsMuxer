@@ -4718,6 +4718,10 @@ Utworzyć mimo to ISO?</translation>
         <translation>Języki do pobrania:</translation>
     </message>
     <message>
+        <source>Preview with its delay</source>
+        <translation>Podgląd z opóźnieniem</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>Ścieżki dźwiękowe i napisy w innych językach są dodawane jako niezaznaczone. Podaj języki tak, jak pokazuje je lista ścieżek, oddzielone przecinkami: deu, eng. Znacznik języka (fr-CA) lub słowo z nazwy ścieżki (VFQ) pozwala odróżnić dubbingi jednego języka. Puste: wszystkie ścieżki są zaznaczone.</translation>
     </message>

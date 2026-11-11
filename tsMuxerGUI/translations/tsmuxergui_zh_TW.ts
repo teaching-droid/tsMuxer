@@ -4718,6 +4718,10 @@ Build the ISO anyway?</source>
         <translation>要保留的語言：</translation>
     </message>
     <message>
+        <source>Preview with its delay</source>
+        <translation>套用延遲預覽</translation>
+    </message>
+    <message>
         <source>The sound and subtitle tracks of other languages are added unticked. Give the languages as the track list shows them, with commas: deu, eng. A language tag (fr-CA) or a word of a track&apos;s name (VFQ) tells the dubs of one language apart. Empty: every track is ticked.</source>
         <translation>其他語言的音軌和字幕軌加入時不勾選。依軌道清單顯示的寫法填寫語言，以逗號分隔：deu, eng。語言標籤（fr-CA）或軌道名稱中的一個詞（VFQ）可以區分同一語言的不同配音。留空：所有軌道都勾選。</translation>
     </message>

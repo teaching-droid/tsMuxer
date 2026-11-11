@@ -7122,8 +7122,25 @@ void TsMuxerWindow::onTrackContextMenu(const QPoint& pos)
     const bool hasLang = !info->lang.isEmpty();
     checkLang->setEnabled(hasLang);
     uncheckLang->setEnabled(hasLang);
+    // ** A DELAY IS HEARD BEFORE THE MUX. ** Whether the delay given to a sound track is right showed only in the
+    // finished mux, an hour later for a film. The track is played with the video for 30 seconds as the meta file
+    // muxes them, its delay included, in the player for previews.
+    QAction* delayPreview = nullptr;
+    if (info->programName.startsWith('A'))
+    {
+        menu.addSeparator();
+        delayPreview = menu.addAction(tr("Preview with its delay"));
+        delayPreview->setEnabled(!previewPlayer()->busy());
+    }
 
     const QAction* chosen = menu.exec(ui->trackLV->viewport()->mapToGlobal(pos));
+    if (chosen == nullptr)
+        return;
+    if (chosen == delayPreview)
+    {
+        previewTrackDelay(row);
+        return;
+    }
     if (chosen == checkType)
         setChecksMatching(row, false, true);
     else if (chosen == uncheckType)
@@ -7132,6 +7149,50 @@ void TsMuxerWindow::onTrackContextMenu(const QPoint& pos)
         setChecksMatching(row, true, true);
     else if (chosen == uncheckLang)
         setChecksMatching(row, true, false);
+}
+
+// The sound track of a row with the first video track, each as its line of the meta file says, cut to 30 seconds a
+// tenth of the way into the file (at most 2 minutes in), and played. The meta file edited by hand is not used: the
+// lines are those the settings of the tabs give.
+void TsMuxerWindow::previewTrackDelay(const int row)
+{
+    const QStringList lines = buildMetaText().split('\n', Qt::SkipEmptyParts);
+    // a line for each row that has a track, after the MUXOPT line, in the order of the rows
+    QString videoLine, soundLine;
+    int lineIndex = 1;
+    for (int i = 0; i < ui->trackLV->rowCount() && lineIndex < lines.size(); ++i)
+    {
+        const QtvCodecInfo* info = getCodecInfo(i);
+        if (!info)
+            continue;
+        QString line = lines[lineIndex++];
+        while (line.startsWith('#')) line.remove(0, 1);
+        if (i == row)
+            soundLine = line;
+        else if (videoLine.isEmpty() && info->programName.startsWith('V') &&
+                 ui->trackLV->item(i, 0)->checkState() == Qt::Checked)
+            videoLine = line;
+    }
+    if (soundLine.isEmpty())
+        return;
+    PreviewSource source;
+    if (!videoLine.isEmpty())
+        source.metaLines << videoLine;
+    source.metaLines << soundLine;
+    // where: by the length of the file the track comes from, as the Play of the input list
+    double seconds = 0;
+    if (const QtvCodecInfo* info = getCodecInfo(row); info && !info->fileList.isEmpty())
+        for (int i = 0; i < ui->inputFilesLV->count(); ++i)
+        {
+            const QListWidgetItem* itm = ui->inputFilesLV->item(i);
+            if (QDir::fromNativeSeparators(myUnquoteStr(itm->data(FileNameRole).toString()))
+                    .compare(QDir::fromNativeSeparators(info->fileList[0]), Qt::CaseInsensitive) == 0)
+                seconds = itm->data(FileDurationRole).toDouble();
+        }
+    source.start = source.fileStart = PlayerLauncher::defaultStart(seconds);
+    // a file name for the player of files, not for that of disc titles
+    source.file = QStringLiteral("delay preview");
+    previewPlayer()->preview(source, this);
 }
 
 void TsMuxerWindow::onInputContextMenu(const QPoint& pos)
