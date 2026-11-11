@@ -106,6 +106,10 @@ struct Font
     float m_lineSpacing;
 };
 
+// Where a subtitle stands, from its first {\an<digit>} tag: 1 to 9 as on a number pad, 2 (the bottom centre) without
+// one
+int subtitleAlignment(const std::string& text);
+
 class TextSubtitlesRender
 {
    public:

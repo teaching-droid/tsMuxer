@@ -501,8 +501,31 @@ bool TextSubtitlesRender::textFits(const std::string& text)
     return fits && curY <= m_height;
 }
 
+// ** WHERE A SUBTITLE STANDS: {\an1} TO {\an9}. ** An SRT file made from an ASS script says with {\an<digit>} where
+// a subtitle stands, as on the number pad of a keyboard: 1 to 3 at the bottom, 4 to 6 in the middle, 7 to 9 at the top,
+// each from left to right. Only {\an8}, the top centre, was honoured; any other was drawn at the bottom centre, so a
+// sign translated at the top left stood over the dialogue. The digit of the first such tag of a subtitle, 2 (the
+// bottom centre) where it has none.
+int subtitleAlignment(const std::string& text)
+{
+    for (size_t open = text.find("{\\"); open != std::string::npos; open = text.find("{\\", open + 1))
+    {
+        const size_t close = text.find('}', open);
+        if (close == std::string::npos)
+            break;
+        const size_t tag = text.find("\\an", open);
+        if (tag != std::string::npos && tag + 3 < close && text[tag + 3] >= '1' && text[tag + 3] <= '9' &&
+            (tag + 4 == close || text[tag + 4] == '\\'))
+            return text[tag + 3] - '0';
+    }
+    return 2;
+}
+
 bool TextSubtitlesRender::rasterText(const std::string& text)
 {
+    // left, centre or right: a twentieth of the width is kept free at the side the lines stand at
+    const int column = (subtitleAlignment(text) - 1) % 3;
+    const int sideMargin = m_width / 20;
     bool forced = false;
     memset(m_pData, 0, static_cast<size_t>(m_width) * m_height * 4);
     vector<Font> fontStack;
@@ -535,7 +558,10 @@ bool TextSubtitlesRender::rasterText(const std::string& text)
             xSize.push_back(k + 1 == txtParts.size() ? mSize.cx : getTextAdvance(txtParts[k].second));
             tWidth += xSize.back();
         }
-        const int xOffs = (m_width - tWidth) / 2;
+        const int room = FFMAX(0, m_width - tWidth);
+        const int xOffs = column == 0   ? FFMIN(sideMargin, room)
+                          : column == 2 ? FFMAX(0, room - sideMargin)
+                                        : (m_width - tWidth) / 2;
         int curX = 0;
         for (size_t j = 0; j < txtParts.size(); j++)
         {
