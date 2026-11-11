@@ -4794,6 +4794,46 @@ ISO trotzdem erstellen?</translation>
         <translation>Disc hinzufügen</translation>
     </message>
     <message>
+        <source>Add to queue</source>
+        <translation>Zur Warteschlange</translation>
+    </message>
+    <message>
+        <source>Keep this job for later: it is checked as for a start and added to the queue. The queue runs its jobs one after the other.</source>
+        <translation>Diesen Auftrag für später merken: Er wird wie bei einem Start geprüft und in die Warteschlange gestellt. Die Warteschlange führt ihre Aufträge nacheinander aus.</translation>
+    </message>
+    <message>
+        <source>Show the jobs in the queue, take jobs out of it, or run them one after the other.</source>
+        <translation>Die Aufträge der Warteschlange anzeigen, Aufträge herausnehmen oder sie nacheinander ausführen.</translation>
+    </message>
+    <message>
+        <source>Queue (%1)...</source>
+        <translation>Warteschlange (%1)...</translation>
+    </message>
+    <message>
+        <source>Queue</source>
+        <translation>Warteschlange</translation>
+    </message>
+    <message>
+        <source>The jobs of the queue, in the order they run. Each is shown by its output.</source>
+        <translation>Die Aufträge der Warteschlange in der Reihenfolge, in der sie laufen. Jeder wird mit seiner Ausgabe gezeigt.</translation>
+    </message>
+    <message>
+        <source>Start the queue</source>
+        <translation>Warteschlange starten</translation>
+    </message>
+    <message>
+        <source>Take out</source>
+        <translation>Herausnehmen</translation>
+    </message>
+    <message>
+        <source>Empty the queue</source>
+        <translation>Warteschlange leeren</translation>
+    </message>
+    <message>
+        <source>Running the queue</source>
+        <translation>Die Warteschlange läuft</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>Einen Titel einer Blu-ray oder DVD hinzufügen: den Ordner der Disc wählen, den Ordner mit BDMV oder VIDEO_TS, oder ein Laufwerk. Ihre Titel werden aufgelistet, der Hauptfilm zuerst, und der gewählte wird hinzugefügt. Ein Disc-Image (.iso) wird mit &quot;hinzufügen&quot; hinzugefügt, und eine Disc kann auch auf das Fenster gezogen werden.</translation>
     </message>

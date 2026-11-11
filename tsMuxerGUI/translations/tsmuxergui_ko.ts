@@ -4654,6 +4654,46 @@ Build the ISO anyway?</source>
         <translation>디스크 추가</translation>
     </message>
     <message>
+        <source>Add to queue</source>
+        <translation>대기열에 추가</translation>
+    </message>
+    <message>
+        <source>Keep this job for later: it is checked as for a start and added to the queue. The queue runs its jobs one after the other.</source>
+        <translation>이 작업을 나중을 위해 보관합니다. 시작할 때와 같이 확인한 뒤 대기열에 추가합니다. 대기열은 작업을 하나씩 차례로 실행합니다.</translation>
+    </message>
+    <message>
+        <source>Show the jobs in the queue, take jobs out of it, or run them one after the other.</source>
+        <translation>대기열의 작업을 표시하고, 작업을 빼거나 차례로 실행합니다.</translation>
+    </message>
+    <message>
+        <source>Queue (%1)...</source>
+        <translation>대기열 (%1)...</translation>
+    </message>
+    <message>
+        <source>Queue</source>
+        <translation>대기열</translation>
+    </message>
+    <message>
+        <source>The jobs of the queue, in the order they run. Each is shown by its output.</source>
+        <translation>대기열의 작업을 실행 순서대로 표시합니다. 각 작업은 출력 이름으로 표시됩니다.</translation>
+    </message>
+    <message>
+        <source>Start the queue</source>
+        <translation>대기열 시작</translation>
+    </message>
+    <message>
+        <source>Take out</source>
+        <translation>빼기</translation>
+    </message>
+    <message>
+        <source>Empty the queue</source>
+        <translation>대기열 비우기</translation>
+    </message>
+    <message>
+        <source>Running the queue</source>
+        <translation>대기열 실행 중</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>Blu-ray 또는 DVD 디스크의 타이틀을 추가합니다: 디스크 폴더, BDMV 또는 VIDEO_TS가 들어 있는 폴더, 또는 드라이브를 선택하십시오. 타이틀이 본편 영화부터 나열되며, 선택한 타이틀이 추가됩니다. 디스크 이미지(.iso)는 &quot;추가&quot;로 추가하며, 디스크를 창에 끌어다 놓을 수도 있습니다.</translation>
     </message>

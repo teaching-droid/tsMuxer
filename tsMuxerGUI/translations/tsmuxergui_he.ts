@@ -4794,6 +4794,46 @@ Build the ISO anyway?</source>
         <translation>להוסיף דיסק</translation>
     </message>
     <message>
+        <source>Add to queue</source>
+        <translation>הוספה לתור</translation>
+    </message>
+    <message>
+        <source>Keep this job for later: it is checked as for a start and added to the queue. The queue runs its jobs one after the other.</source>
+        <translation>לשמור את המשימה הזו למועד מאוחר יותר: היא נבדקת כמו בהתחלה ומתווספת לתור. התור מריץ את המשימות שלו בזו אחר זו.</translation>
+    </message>
+    <message>
+        <source>Show the jobs in the queue, take jobs out of it, or run them one after the other.</source>
+        <translation>להציג את המשימות בתור, להוציא משימות או להריץ אותן בזו אחר זו.</translation>
+    </message>
+    <message>
+        <source>Queue (%1)...</source>
+        <translation>תור (%1)...</translation>
+    </message>
+    <message>
+        <source>Queue</source>
+        <translation>תור</translation>
+    </message>
+    <message>
+        <source>The jobs of the queue, in the order they run. Each is shown by its output.</source>
+        <translation>המשימות בתור, לפי סדר הרצתן. כל אחת מוצגת לפי הפלט שלה.</translation>
+    </message>
+    <message>
+        <source>Start the queue</source>
+        <translation>להתחיל את התור</translation>
+    </message>
+    <message>
+        <source>Take out</source>
+        <translation>להוציא</translation>
+    </message>
+    <message>
+        <source>Empty the queue</source>
+        <translation>לרוקן את התור</translation>
+    </message>
+    <message>
+        <source>Running the queue</source>
+        <translation>התור רץ</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>הוספת כותר מדיסק Blu-ray או DVD: בחרו את תיקיית הדיסק, את התיקייה שמכילה BDMV או VIDEO_TS, או כונן. הכותרים שלו מוצגים, הסרט הראשי ראשון, והכותר שנבחר מתווסף. דמות תקליטור (.iso) מתווספת עם &quot;להוסיף&quot;, ואפשר גם לגרור דיסק אל החלון.</translation>
     </message>

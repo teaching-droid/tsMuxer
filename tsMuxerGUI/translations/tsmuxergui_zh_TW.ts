@@ -4654,6 +4654,46 @@ Build the ISO anyway?</source>
         <translation>加入光碟</translation>
     </message>
     <message>
+        <source>Add to queue</source>
+        <translation>加入佇列</translation>
+    </message>
+    <message>
+        <source>Keep this job for later: it is checked as for a start and added to the queue. The queue runs its jobs one after the other.</source>
+        <translation>保留此工作以後執行：依開始時的方式檢查後加入佇列。佇列會依序執行其中的工作。</translation>
+    </message>
+    <message>
+        <source>Show the jobs in the queue, take jobs out of it, or run them one after the other.</source>
+        <translation>顯示佇列中的工作，移除工作，或依序執行。</translation>
+    </message>
+    <message>
+        <source>Queue (%1)...</source>
+        <translation>佇列 (%1)...</translation>
+    </message>
+    <message>
+        <source>Queue</source>
+        <translation>佇列</translation>
+    </message>
+    <message>
+        <source>The jobs of the queue, in the order they run. Each is shown by its output.</source>
+        <translation>佇列中的工作，依執行順序排列。每個工作以其輸出顯示。</translation>
+    </message>
+    <message>
+        <source>Start the queue</source>
+        <translation>開始佇列</translation>
+    </message>
+    <message>
+        <source>Take out</source>
+        <translation>移除</translation>
+    </message>
+    <message>
+        <source>Empty the queue</source>
+        <translation>清空佇列</translation>
+    </message>
+    <message>
+        <source>Running the queue</source>
+        <translation>正在執行佇列</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>加入 Blu-ray 或 DVD 光碟的標題: 選擇光碟的資料夾、包含 BDMV 或 VIDEO_TS 的資料夾，或磁碟機。其標題會列出，主影片排在最前面，並加入所選的標題。光碟映像檔 (.iso) 請以「加入」加入，也可以將光碟拖放到視窗上。</translation>
     </message>

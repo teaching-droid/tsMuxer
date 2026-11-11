@@ -4794,6 +4794,46 @@ Créer l'ISO malgré tout ?</translation>
         <translation>ajouter un disque</translation>
     </message>
     <message>
+        <source>Add to queue</source>
+        <translation>Ajouter à la file</translation>
+    </message>
+    <message>
+        <source>Keep this job for later: it is checked as for a start and added to the queue. The queue runs its jobs one after the other.</source>
+        <translation>Garder cette tâche pour plus tard : elle est vérifiée comme pour un démarrage et ajoutée à la file d&apos;attente. La file exécute ses tâches l&apos;une après l&apos;autre.</translation>
+    </message>
+    <message>
+        <source>Show the jobs in the queue, take jobs out of it, or run them one after the other.</source>
+        <translation>Afficher les tâches de la file d&apos;attente, en retirer ou les exécuter l&apos;une après l&apos;autre.</translation>
+    </message>
+    <message>
+        <source>Queue (%1)...</source>
+        <translation>File d&apos;attente (%1)...</translation>
+    </message>
+    <message>
+        <source>Queue</source>
+        <translation>File d&apos;attente</translation>
+    </message>
+    <message>
+        <source>The jobs of the queue, in the order they run. Each is shown by its output.</source>
+        <translation>Les tâches de la file d&apos;attente, dans l&apos;ordre de leur exécution. Chacune est indiquée par sa sortie.</translation>
+    </message>
+    <message>
+        <source>Start the queue</source>
+        <translation>Démarrer la file</translation>
+    </message>
+    <message>
+        <source>Take out</source>
+        <translation>Retirer</translation>
+    </message>
+    <message>
+        <source>Empty the queue</source>
+        <translation>Vider la file</translation>
+    </message>
+    <message>
+        <source>Running the queue</source>
+        <translation>Exécution de la file d&apos;attente</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>Ajouter un titre d&apos;un disque Blu-ray ou DVD : choisissez le dossier du disque, le dossier qui contient BDMV ou VIDEO_TS, ou un lecteur. Ses titres sont listés, le film principal en premier, et celui choisi est ajouté. Une image disque (.iso) s&apos;ajoute avec « ajouter », et un disque peut aussi être déposé sur la fenêtre.</translation>
     </message>

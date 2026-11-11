@@ -4795,6 +4795,46 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <translation>Añadir disco</translation>
     </message>
     <message>
+        <source>Add to queue</source>
+        <translation>Añadir a la cola</translation>
+    </message>
+    <message>
+        <source>Keep this job for later: it is checked as for a start and added to the queue. The queue runs its jobs one after the other.</source>
+        <translation>Guardar este trabajo para más tarde: se comprueba como al iniciar y se añade a la cola. La cola ejecuta sus trabajos uno tras otro.</translation>
+    </message>
+    <message>
+        <source>Show the jobs in the queue, take jobs out of it, or run them one after the other.</source>
+        <translation>Mostrar los trabajos de la cola, quitar trabajos o ejecutarlos uno tras otro.</translation>
+    </message>
+    <message>
+        <source>Queue (%1)...</source>
+        <translation>Cola (%1)...</translation>
+    </message>
+    <message>
+        <source>Queue</source>
+        <translation>Cola</translation>
+    </message>
+    <message>
+        <source>The jobs of the queue, in the order they run. Each is shown by its output.</source>
+        <translation>Los trabajos de la cola, en el orden en que se ejecutan. Cada uno se muestra por su salida.</translation>
+    </message>
+    <message>
+        <source>Start the queue</source>
+        <translation>Iniciar la cola</translation>
+    </message>
+    <message>
+        <source>Take out</source>
+        <translation>Quitar</translation>
+    </message>
+    <message>
+        <source>Empty the queue</source>
+        <translation>Vaciar la cola</translation>
+    </message>
+    <message>
+        <source>Running the queue</source>
+        <translation>Ejecutando la cola</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>Añadir un título de un disco Blu-ray o DVD: elija la carpeta del disco, la carpeta que contiene BDMV o VIDEO_TS, o una unidad. Se muestran sus títulos, la película principal primero, y se añade el elegido. Una imagen de disco (.iso) se añade con «Añadir», y un disco también se puede soltar sobre la ventana.</translation>
     </message>

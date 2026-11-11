@@ -4654,6 +4654,46 @@ Criar o ISO mesmo assim?</translation>
         <translation>adicionar disco</translation>
     </message>
     <message>
+        <source>Add to queue</source>
+        <translation>Adicionar à fila</translation>
+    </message>
+    <message>
+        <source>Keep this job for later: it is checked as for a start and added to the queue. The queue runs its jobs one after the other.</source>
+        <translation>Guardar este trabalho para depois: ele é verificado como em um início e adicionado à fila. A fila executa seus trabalhos um após o outro.</translation>
+    </message>
+    <message>
+        <source>Show the jobs in the queue, take jobs out of it, or run them one after the other.</source>
+        <translation>Mostrar os trabalhos da fila, retirar trabalhos ou executá-los um após o outro.</translation>
+    </message>
+    <message>
+        <source>Queue (%1)...</source>
+        <translation>Fila (%1)...</translation>
+    </message>
+    <message>
+        <source>Queue</source>
+        <translation>Fila</translation>
+    </message>
+    <message>
+        <source>The jobs of the queue, in the order they run. Each is shown by its output.</source>
+        <translation>Os trabalhos da fila, na ordem em que são executados. Cada um é mostrado pela sua saída.</translation>
+    </message>
+    <message>
+        <source>Start the queue</source>
+        <translation>Iniciar a fila</translation>
+    </message>
+    <message>
+        <source>Take out</source>
+        <translation>Retirar</translation>
+    </message>
+    <message>
+        <source>Empty the queue</source>
+        <translation>Esvaziar a fila</translation>
+    </message>
+    <message>
+        <source>Running the queue</source>
+        <translation>Executando a fila</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>Adiciona um título de um disco Blu-ray ou DVD: escolha a pasta do disco, a pasta que contém BDMV ou VIDEO_TS, ou uma unidade. Os seus títulos são listados, o filme principal primeiro, e o escolhido é adicionado. Uma imagem de disco (.iso) é adicionada com &quot;adicionar&quot;, e um disco também pode ser arrastado para a janela.</translation>
     </message>

@@ -4794,6 +4794,46 @@ Build the ISO anyway?</source>
         <translation>ディスクを追加</translation>
     </message>
     <message>
+        <source>Add to queue</source>
+        <translation>キューに追加</translation>
+    </message>
+    <message>
+        <source>Keep this job for later: it is checked as for a start and added to the queue. The queue runs its jobs one after the other.</source>
+        <translation>このジョブを後で実行するために保存します。開始時と同じ確認を行い、キューに追加します。キューはジョブを一つずつ順に実行します。</translation>
+    </message>
+    <message>
+        <source>Show the jobs in the queue, take jobs out of it, or run them one after the other.</source>
+        <translation>キューのジョブを表示し、ジョブを取り除くか、順に実行します。</translation>
+    </message>
+    <message>
+        <source>Queue (%1)...</source>
+        <translation>キュー (%1)...</translation>
+    </message>
+    <message>
+        <source>Queue</source>
+        <translation>キュー</translation>
+    </message>
+    <message>
+        <source>The jobs of the queue, in the order they run. Each is shown by its output.</source>
+        <translation>キューのジョブを実行順に表示します。各ジョブは出力名で表示されます。</translation>
+    </message>
+    <message>
+        <source>Start the queue</source>
+        <translation>キューを開始</translation>
+    </message>
+    <message>
+        <source>Take out</source>
+        <translation>取り除く</translation>
+    </message>
+    <message>
+        <source>Empty the queue</source>
+        <translation>キューを空にする</translation>
+    </message>
+    <message>
+        <source>Running the queue</source>
+        <translation>キューを実行中</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>Blu-ray または DVD ディスクのタイトルを追加します。ディスクのフォルダー (BDMV または VIDEO_TS を含むフォルダー) かドライブを選ぶと、そのタイトルが本編を先頭に一覧され、選んだタイトルが追加されます。ディスクイメージ (.iso) は「追加」で追加でき、ディスクはウィンドウにドロップすることもできます。</translation>
     </message>

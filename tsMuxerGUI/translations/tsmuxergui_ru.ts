@@ -4795,6 +4795,46 @@ Build the ISO anyway?</source>
         <translation>добавить диск</translation>
     </message>
     <message>
+        <source>Add to queue</source>
+        <translation>В очередь</translation>
+    </message>
+    <message>
+        <source>Keep this job for later: it is checked as for a start and added to the queue. The queue runs its jobs one after the other.</source>
+        <translation>Сохранить это задание на потом: оно проверяется как при запуске и добавляется в очередь. Очередь выполняет задания одно за другим.</translation>
+    </message>
+    <message>
+        <source>Show the jobs in the queue, take jobs out of it, or run them one after the other.</source>
+        <translation>Показать задания в очереди, убрать задания или выполнить их одно за другим.</translation>
+    </message>
+    <message>
+        <source>Queue (%1)...</source>
+        <translation>Очередь (%1)...</translation>
+    </message>
+    <message>
+        <source>Queue</source>
+        <translation>Очередь</translation>
+    </message>
+    <message>
+        <source>The jobs of the queue, in the order they run. Each is shown by its output.</source>
+        <translation>Задания очереди в порядке выполнения. Каждое показано по его выходному файлу.</translation>
+    </message>
+    <message>
+        <source>Start the queue</source>
+        <translation>Запустить очередь</translation>
+    </message>
+    <message>
+        <source>Take out</source>
+        <translation>Убрать</translation>
+    </message>
+    <message>
+        <source>Empty the queue</source>
+        <translation>Очистить очередь</translation>
+    </message>
+    <message>
+        <source>Running the queue</source>
+        <translation>Очередь выполняется</translation>
+    </message>
+    <message>
         <source>Add a title of a Blu-ray or DVD disc: choose the disc&apos;s folder, the folder holding BDMV or VIDEO_TS, or a drive. Its titles are listed, the main film first, and the one chosen is added. A disc image (.iso) is added with &quot;add&quot;, and a disc can also be dropped on the window.</source>
         <translation>Добавить титул диска Blu-ray или DVD: выберите папку диска, папку с BDMV или VIDEO_TS, или привод. Его титулы будут перечислены, основной фильм первым, и выбранный будет добавлен. Образ диска (.iso) добавляется кнопкой «добавить», а диск можно также перетащить в окно.</translation>
     </message>
