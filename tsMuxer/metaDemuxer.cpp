@@ -5609,6 +5609,18 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
                                                const bool quiet)
 {
     AbstractStreamReader* rez = nullptr;
+    // A parameter of the line that is refused below ends the function by an exception, after the reader was made: it
+    // was never freed then (a meta line with fps=abc).
+    struct FreeOnThrow
+    {
+        AbstractStreamReader*& reader;
+        bool given = false;
+        ~FreeOnThrow()
+        {
+            if (!given)
+                delete reader;
+        }
+    } freeOnThrow{rez};
     if (codecName == "V_MPEG4/ISO/AVC" || codecName == "V_MPEG4/ISO/MVC")
     {
         auto h264Reader = new H264StreamReader();
@@ -6003,6 +6015,7 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
     if (!mplsInfo.empty() && dynamic_cast<SimplePacketizerReader*>(rez))
         dynamic_cast<SimplePacketizerReader*>(rez)->setMPLSInfo(mplsInfo);
 
+    freeOnThrow.given = true;
     return rez;
 }
 
