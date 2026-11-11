@@ -21,6 +21,7 @@
 #include <cmath>
 #include <csignal>
 #include <cstdlib>
+#include "batchRunner.h"
 #include "bdSsifImport.h"
 #include "blank_patterns.h"
 #include "blurayHelper.h"
@@ -1131,7 +1132,8 @@ void doTruncatedFile(const char* fileName, const int64_t offset)
 
 void showHelp()
 {
-    constexpr char help[] = R"help(
+    constexpr char help[] =
+        R"help(
 tsMuxeR is a simple program to mux video to TS/M2TS/MKV files or create BD disks.
 tsMuxeR does not use external filters (codecs).
 
@@ -1291,7 +1293,7 @@ Additional parameters for video tracks:
 - ar                Override video aspect ratio: 1:1, 4:3, 16:9 or 2.21:1.
 
 )help"
-                            R"help(Additional parameters for H.264 video tracks:
+        R"help(Additional parameters for H.264 video tracks:
 - level             Overwrite the level in the H264 stream. Do note that this
                     option only updates the headers and does not reencode the
                     stream, which may not meet the requirements for a lower 
@@ -1422,7 +1424,7 @@ coincide with HTML: <b>, <i>, <u>, <strike>, <font>. Default relative font size
 </b>
 
 )help"
-                            R"help(Global additional parameters are placed in the first line of the META file,
+        R"help(Global additional parameters are placed in the first line of the META file,
 which must begin with the MUXOPT token.
 All parameters in this group start with two dashes:
 
@@ -1580,6 +1582,19 @@ All parameters in this group start with two dashes:
                       full the buffer is, whether the picture is late). A time
                       range of the output, as h:mm:ss or seconds, keeps it
                       small: a film gives millions of lines.
+)help"
+        R"help(--batch               Separate mode: tsMuxeR --batch <job list> [--batch-stop-on-error]
+                      Runs a list of jobs one after the other. The job list is
+                      a text file in UTF-8 with one job on each line, written
+                      as the arguments of a run of its own, for example:
+                        "film1.meta" "film1.m2ts"
+                        "disc.meta" "D:\out\disc" --report="disc report.txt"
+                      Empty lines and lines that begin with # are passed over.
+                      Each job runs as a process of its own, so a job that
+                      fails leaves the next ones as they are; a summary at the
+                      end says how each job ended. The exit code is 0 when
+                      every job is done. --batch-stop-on-error ends the batch
+                      at the first job that fails.
 --make-sample         Separate mode: tsMuxeR --make-sample [options] <source> <out.zip>
                       A part of a source to attach to a problem report in place
                       of the source itself: its bytes copied as they are, from
@@ -1644,7 +1659,7 @@ All parameters in this group start with two dashes:
                       newer, so on Windows 7 this option may not work; that is a
                       limit of the library build, not of tsMuxeR.
 )help"
-                            R"help(--start-time          Timestamp of the first video frame. May be defined as 45 kHz
+        R"help(--start-time          Timestamp of the first video frame. May be defined as 45 kHz
                       clock (just a number) or as time in hh:mm:ss.zzz format.
                       If not set, muxing starts at 600 s (27000000 ticks). For every
                       output except plain *.ts, values below 524280 ticks (11.65 s)
@@ -5034,6 +5049,44 @@ int main(int argc, char** argv)
     }
     argv = argv_vec.data();
 #endif
+    // ** --batch <job list> ** (batchRunner.h): the jobs of a list, each run as a process of its own, one after the
+    // other. Nothing else is given beside it but --batch-stop-on-error: every other option belongs to a job, on its
+    // line of the list.
+    for (int i = 1; i < argc; ++i)
+    {
+        const std::string arg = argv[i];
+        if (arg != "--batch" && !strStartWith(arg, "--batch="))
+            continue;
+        LTRACE(LT_INFO, 2, "tsMuxeR version " TSMUXER_VERSION << ". github.com/teaching-droid/tsMuxer");
+        std::string listFile = arg == "--batch" ? "" : unquoteStr(arg.substr(8));
+        bool stopOnError = false;
+        std::string wrong;
+        for (int k = 1; k < argc; ++k)
+        {
+            const std::string other = argv[k];
+            if (k == i)
+                continue;
+            if (other == "--batch-stop-on-error")
+                stopOnError = true;
+            else if (listFile.empty() && arg == "--batch" && k == i + 1)
+                listFile = other;
+            else if (wrong.empty())
+                wrong = other;
+        }
+        if (listFile.empty() || !wrong.empty())
+        {
+            if (!wrong.empty())
+                LTRACE(LT_ERROR, 2,
+                       "Error: \"" << wrong
+                                   << "\" cannot be given beside --batch. The options of a job go on its "
+                                      "line of the job list.");
+            LTRACE(LT_ERROR, 2,
+                   "Usage: tsMuxeR --batch <job list> [--batch-stop-on-error]. The job list is a text file with the "
+                   "arguments of one run on each line, for example: \"film.meta\" \"film.m2ts\"");
+            return -2;
+        }
+        return batch::run(listFile, stopOnError, argv[0]);
+    }
     // --make-sample writes a report of its own, which goes into the zip: to the temp folder, unless --report names one
     const bool sampleRun =
         std::any_of(argv + 1, argv + argc, [](const char* a) { return std::strcmp(a, "--make-sample") == 0; });

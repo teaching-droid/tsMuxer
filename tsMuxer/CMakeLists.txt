@@ -23,6 +23,7 @@ add_executable (tsmuxer
   assFile.cpp
   diagnosticReport.cpp
   sampleCutter.cpp
+  batchRunner.cpp
   oggFile.cpp
   assRender.cpp
   avCodecs.cpp

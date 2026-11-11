@@ -163,6 +163,25 @@ The output of the program is encoded in UTF-8, which means that non-ASCII charac
 
 An Ogg file (`.ogg`, `.oga`, `.opus`) of Opus or Vorbis sound is read as a source: each of its streams is a track, numbered from 1 in the order of the file, so `A_OPUS, "song.opus", track=1`; without `track=` the first one is taken. The pre-skip of Opus and the samples the last page cuts off are kept as in a Matroska file, and a LANGUAGE comment of three letters gives the track's language. Other streams in an Ogg file (Theora, FLAC, Speex) are left out with a warning, and a chained Ogg file, of several streams one after the other, is refused: split it and join the parts with `+`. Opus and Vorbis go to a Matroska output or a demux, and Opus to a TS as well; a Blu-ray disc has no form for either. A damaged page is left out with a warning; in an Opus track of one or two channels the time it held is filled with empty frames, which a decoder fills in by itself, so the sound after it stays at its time.
 
+### A list of jobs
+
+`--batch` runs a list of jobs one after the other, so a series of recordings or discs does not have to be started one by one:
+
+```
+tsMuxeR --batch jobs.txt
+```
+
+The job list is a text file in UTF-8 with one job on each line, written as the arguments of a run of its own: a meta file and an output, and any option a run takes. Empty lines and lines that begin with `#` are passed over:
+
+```
+# two films and a disc
+"film1.meta" "film1.m2ts"
+"film2.meta" "film2.mkv"
+"disc.meta" "D:\out\disc" --report="disc report.txt"
+```
+
+Each job runs as a process of its own, so a job that fails leaves the next ones as they are. What a job prints stands between a line that names the job and a line that gives its result, and a summary at the end says how each job ended. The exit code is 0 when every job is done. `--batch-stop-on-error` ends the batch at the first job that fails; the jobs after it are listed as not run. Nothing else is given beside `--batch`: the options of a job go on its line.
+
 ### Report for a problem report
 
 A problem with a mux can often be looked into without the source file, which may be too big to send. `--report=<file>` writes a text file of the run to attach to the problem report instead:
