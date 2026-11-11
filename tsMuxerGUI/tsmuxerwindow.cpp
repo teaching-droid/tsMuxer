@@ -6555,6 +6555,44 @@ void TsMuxerWindow::updateSizeEstimate()
         QList<const QtvCodecInfo*> tracks;
         QList<bool> ticked;
     };
+    // ** WHAT A TRANSPORT STREAM ADDS TO SOUND AND TO SUBTITLES. ** One factor for the whole file fits a film, whose
+    // size is its video. It was 11 per cent low for a file of a small video and several sound tracks: each sound
+    // frame is a PES packet of its own, filled up to whole packets of 188 bytes, so a frame of 576 bytes (MP2 at 192
+    // kbit/s) takes 752, a third more, and picture subtitles took half as much again in the file measured. A sound
+    // track of a fixed bitrate is counted by its frames, where the listing gives the rate and the kind says the
+    // length of a frame; subtitles in pictures by that half. This is what such a track takes beyond the factor.
+    const bool tsOutput = !ui->radioButtonMKV->isChecked() && !ui->radioButtonDemux->isChecked();
+    const auto tsExtra = [](const QtvCodecInfo* track, const double trackBytes, const double seconds)
+    {
+        static constexpr double FACTOR = 1.03;  // the factor of a transport stream, as below
+        if (track->programName == QLatin1String("S_HDMV/PGS"))
+            return trackBytes > 0 ? trackBytes * (1.5 - FACTOR) : 0.0;
+        if (!track->programName.startsWith('A') || track->descr.contains(QLatin1String("core")))
+            return 0.0;
+        static const QRegularExpression fixedRate(QStringLiteral("(?<!Peak b)(?:^|\\s)Bitrate: (\\d+)Kbps(?! \\()"));
+        static const QRegularExpression sampleRate(QStringLiteral("Sample Rate: ([0-9.]+)KHz"));
+        const QRegularExpressionMatch rate = fixedRate.match(track->descr);
+        const QRegularExpressionMatch hertz = sampleRate.match(track->descr);
+        // the samples of a frame, by the kind of sound
+        double samples = 0;
+        if (track->programName == QLatin1String("A_AC3") && !track->descr.contains(QLatin1String("TRUE-HD")))
+            samples = 1536;
+        else if (track->programName == QLatin1String("A_MP3"))
+            samples = track->descr.contains(QLatin1String("Layer: 1")) ? 384 : 1152;
+        else if (track->programName == QLatin1String("A_DTS") && track->displayName == QLatin1String("DTS"))
+            samples = 512;
+        if (samples == 0 || !rate.hasMatch() || !hertz.hasMatch() || hertz.captured(1).toDouble() <= 0)
+            return 0.0;
+        const double framesPerSecond = hertz.captured(1).toDouble() * 1000 / samples;
+        const double frameBytes = rate.captured(1).toDouble() * 125.0 / framesPerSecond;
+        const double bytes = trackBytes > 0 ? trackBytes : rate.captured(1).toDouble() * 125.0 * seconds;
+        if (frameBytes < 16 || bytes <= 0)
+            return 0.0;
+        // a frame behind its PES header of 14 bytes, in packets of 184 bytes of data
+        const double inStream = std::ceil((frameBytes + 14) / 184) * 188;
+        return bytes / frameBytes * inStream - bytes * FACTOR;
+    };
+    double extra = 0;  // what the tracks take beyond the factor, in a transport stream
     QMap<QString, Source> sources;
     for (int i = 0; i < ui->trackLV->rowCount(); ++i)
     {
@@ -6589,7 +6627,10 @@ void TsMuxerWindow::updateSizeEstimate()
         {
             for (int i = 0; i < source.tracks.size(); ++i)
                 if (source.ticked[i])
+                {
                     payload += static_cast<double>(source.tracks[i]->sizeBytes);
+                    extra += tsExtra(source.tracks[i], static_cast<double>(source.tracks[i]->sizeBytes), 0);
+                }
             continue;
         }
         bool known = false;
@@ -6624,6 +6665,14 @@ void TsMuxerWindow::updateSizeEstimate()
         for (const bool t : source.ticked) ticked |= t;
         if (ticked)
             payload += left;
+        // Of a source that is no transport stream itself: the size of a transport stream already holds what its
+        // sound frames take, and the factor it is divided by gives that back
+        const QString sourceKind = QFileInfo(files[0]).suffix().toLower();
+        if (known && files.size() == 1 && sourceKind != "ts" && sourceKind != "m2ts" && sourceKind != "mts" &&
+            sourceKind != "m2t" && sourceKind != "trp" && sourceKind != "ssif")
+            for (int i = 0; i < source.tracks.size(); ++i)
+                if (source.ticked[i])
+                    extra += tsExtra(source.tracks[i], 0, durationOfSource(files[0]));
     }
     if (payload <= 0)
         return hide();
@@ -6634,7 +6683,9 @@ void TsMuxerWindow::updateSizeEstimate()
         outGrowth = 1.001;
     else if (ui->radioButtonDemux->isChecked())
         outGrowth = 1.0;
-    const double bytes = payload * outGrowth;
+    double bytes = payload * outGrowth;
+    if (tsOutput)
+        bytes += (std::max)(0.0, extra) * (ui->radioButtonTS->isChecked() ? 1.0 : 192.0 / 188);
     const QString size = bytes >= 1e9 ? QStringLiteral("%1 GB").arg(bytes / 1e9, 0, 'f', bytes >= 1e10 ? 1 : 2)
                                       : QStringLiteral("%1 MB").arg(bytes / 1e6, 0, 'f', bytes >= 1e7 ? 0 : 1);
     m_sizeLabel->setText(atMost ? tr("Estimated size: at most %1").arg(size)
