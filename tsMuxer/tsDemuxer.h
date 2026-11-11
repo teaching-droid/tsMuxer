@@ -377,9 +377,14 @@ class TSDemuxer final : public AbstractDemuxer
     {
         std::vector<uint8_t> pending;  // the bytes of an access unit that is not complete yet
         bool headWritten = false;
+        int lastEndTrim = 0;  // the end_trim of the access unit read last, in samples; 0 where it has none
     };
     std::map<int, OpusFromTs> m_opusFromTs;
-    void opusFromTs(int pid, int channelConfig, const uint8_t* data, size_t size, std::vector<uint8_t>& out);
+    static void opusFromTs(OpusFromTs& opus, int channelConfig, const uint8_t* data, size_t size,
+                           std::vector<uint8_t>& out);
+    // The samples the last access unit of an Opus track says to leave out at its end, read from the end of the
+    // file; 0 where it says none or the end cannot be read
+    [[nodiscard]] int opusEndTrimOfFile(int pid) const;
     std::map<int, LatmToAdts> m_latm;
     std::set<int> m_latmProblemSaid;
     bool m_firstDemuxCall;

@@ -298,6 +298,11 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                 track.m_componentTag = snd.m_componentTag;
                 track.m_dataComponentId = snd.m_dataComponentId;
                 track.m_av1Declared = snd.m_av1Registration;
+                // the padding at the end of an Opus track (opusEndTrimOfFile), in ns as a Matroska source gives it;
+                // of a single file only: in a join the end is that of the last file
+                if (snd.m_opusRegistration && m_joinFiles.size() <= 1)
+                    if (const int trim = opusEndTrimOfFile(snd.m_pid); trim > 0)
+                        track.m_srcParams["srcendpadding"] = std::to_string(trim * 1000000000LL / 48000);
                 // What the PMT says is AC-4 is named by it, and left out: it is not guessed from
                 // its bytes, where a chance match could list it as another codec
                 if (snd.m_ac4Descriptor != 0 && snd.m_soundDescriptor == 0 && snd.m_dvbDescriptor == 0)
@@ -2073,7 +2078,7 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
         {
             // Opus: the Opus reader is given a head and packets behind their lengths (opusFromTs)
             std::vector<uint8_t> packets;
-            opusFromTs(pid, m_pmt.pidList[pid].m_opusChannelConfig, frameData + skip,
+            opusFromTs(m_opusFromTs[pid], m_pmt.pidList[pid].m_opusChannelConfig, frameData + skip,
                        static_cast<size_t>(payloadLen - skip), packets);
             if (!packets.empty())
             {
@@ -2115,10 +2120,9 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
 // OpusStreamReader takes. An access unit: 11 bits 0x3FF, start_trim_flag, end_trim_flag, control_extension_flag, 2
 // reserved bits; the size, as bytes of 255 and a last one below it; with the flags, 16 bits for each trim (13 of them
 // the samples) and an extension of a length byte and its bytes; then the packet.
-void TSDemuxer::opusFromTs(const int pid, const int channelConfig, const uint8_t* data, const size_t size,
+void TSDemuxer::opusFromTs(OpusFromTs& opus, const int channelConfig, const uint8_t* data, const size_t size,
                            std::vector<uint8_t>& out)
 {
-    OpusFromTs& opus = m_opusFromTs[pid];
     opus.pending.insert(opus.pending.end(), data, data + size);
     const std::vector<uint8_t>& p = opus.pending;
     size_t at = 0;
@@ -2154,10 +2158,12 @@ void TSDemuxer::opusFromTs(const int pid, const int channelConfig, const uint8_t
             startTrim = (p[i] & 0x1F) << 8 | p[i + 1];
             i += 2;
         }
+        int endTrim = 0;
         if (endTrimFlag)
         {
             if (i + 2 > p.size())
                 break;
+            endTrim = (p[i] & 0x1F) << 8 | p[i + 1];
             i += 2;
         }
         if (extension)
@@ -2217,6 +2223,7 @@ void TSDemuxer::opusFromTs(const int pid, const int channelConfig, const uint8_t
             }
             opus.headWritten = true;
         }
+        opus.lastEndTrim = endTrim;
         out.push_back(static_cast<uint8_t>(packet >> 24));
         out.push_back(static_cast<uint8_t>(packet >> 16));
         out.push_back(static_cast<uint8_t>(packet >> 8));
@@ -2226,6 +2233,70 @@ void TSDemuxer::opusFromTs(const int pid, const int channelConfig, const uint8_t
         at = i + packet;
     }
     opus.pending.erase(opus.pending.begin(), opus.pending.begin() + static_cast<std::ptrdiff_t>(at));
+}
+
+// ** THE PADDING AT THE END OF AN OPUS TRACK. ** The last packet of an Opus track is filled up with samples that are no
+// sound, and the last access unit of a transport stream says how many to leave out (end_trim). That is known only at
+// the end of the file, and an output wants it before the mux: a Matroska file writes it with the last block, a demux
+// in its last page. So the end of the file is read once, when the tracks are listed: the last megabytes, the packets
+// of the PID, its access units as the mux reads them (opusFromTs). Without it the padding was played, 13.5 ms of it
+// for a usual encoder.
+int TSDemuxer::opusEndTrimOfFile(const int pid) const
+{
+    File file;
+    int64_t size = 0;
+    if (m_streamName.empty() || !file.open(m_streamName.c_str(), File::ofRead) || !file.size(&size) || size < 188)
+        return 0;
+    static constexpr int64_t TAIL = 4 * 1024 * 1024;
+    const int64_t from = (std::max<int64_t>)(0, size - TAIL);
+    std::vector<uint8_t> tail(static_cast<size_t>(size - from));
+    if (file.seek(from) == -1 ||
+        file.read(tail.data(), static_cast<uint32_t>(tail.size())) != static_cast<int>(tail.size()))
+        return 0;
+    // the length of a packet and where one begins: a sync byte at that place and at the same place of the next four
+    size_t first = 0, length = 0;
+    for (const size_t candidate : {size_t{188}, size_t{192}, size_t{204}})
+    {
+        for (size_t at = 0; at < candidate && at + 4 * candidate < tail.size() && length == 0; ++at)
+            if (tail[at] == 0x47 && tail[at + candidate] == 0x47 && tail[at + 2 * candidate] == 0x47 &&
+                tail[at + 3 * candidate] == 0x47 && tail[at + 4 * candidate] == 0x47)
+            {
+                first = at;
+                length = candidate;
+            }
+        if (length != 0)
+            break;
+    }
+    if (length == 0)
+        return 0;
+    OpusFromTs opus;
+    std::vector<uint8_t> packets;
+    bool started = false;  // a PES of the PID has begun in the part read: what comes before it is the rest of one
+    for (size_t at = first; at + 188 <= tail.size(); at += length)
+    {
+        const uint8_t* p = tail.data() + at;
+        if (p[0] != 0x47 || ((p[1] & 0x1F) << 8 | p[2]) != pid || !(p[3] & 0x10))
+            continue;
+        size_t off = 4;
+        if (p[3] & 0x20)
+            off += 1 + p[4];
+        if (off >= 188)
+            continue;
+        if (p[1] & 0x40)
+        {
+            // past the PES header
+            if (off + 9 > 188 || p[off] != 0 || p[off + 1] != 0 || p[off + 2] != 1)
+                continue;
+            off += 9 + p[off + 8];
+            started = true;
+            if (off >= 188)
+                continue;
+        }
+        if (started)
+            opusFromTs(opus, 2, p + off, 188 - off, packets);
+        packets.clear();
+    }
+    return opus.lastEndTrim;
 }
 
 // ** THE PES LEFT OUT AT THE START ARE GIVEN BACK WHERE NO FRAME FOLLOWS. ** skipsLeadingPes leaves out the first PES
