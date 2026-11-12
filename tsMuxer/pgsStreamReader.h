@@ -159,10 +159,11 @@ class PGSStreamReader final : public AbstractStreamReader
     bool m_rateGuessed = false;
     bool m_replaceRate = false;
     std::function<void(double&, double&)> m_videoOfItsFile;
-    int m_firstRateIndex = -1;     // the frame rate code of the first PCS
-    bool m_mixedRateSaid = false;  // the warning that the PCS give more than one rate, once
-    int64_t m_compositions = 0;    // the PCS read (getDeliveredFrames)
-    bool m_badDescriptor = false;  // the first PCS gives a size or a frame rate code no PGS stream has
+    int m_firstRateIndex = -1;      // the frame rate code of the first PCS
+    bool m_mixedRateSaid = false;   // the warning that the PCS give more than one rate, once
+    int64_t m_compositions = 0;     // the PCS read (getDeliveredFrames)
+    bool m_badDescriptor = false;   // the first PCS gives a size or a frame rate code no PGS stream has
+    bool m_sizeChangeSaid = false;  // video_descriptor: another picture size than the first was said
 
     text_subtitles::TextToPGSConverter* m_render;
     uint8_t* m_renderedData;

@@ -67,8 +67,25 @@ PGSStreamReader::PGSStreamReader()
 
 void PGSStreamReader::video_descriptor(BitStreamReader& bitReader)
 {
-    m_video_width = bitReader.getBits<uint16_t>(16);
-    m_video_height = bitReader.getBits<uint16_t>(16);
+    // ** A PGS STREAM HAS ONE PICTURE SIZE. ** The pictures of a track that is drawn again at another size are drawn
+    // into buffers of the size its first composition gives. A later composition that gives another size, as a damaged
+    // one does, was taken at its word: a larger size was drawn past the end of those buffers. The size of the first
+    // composition stays once the buffers are made, and the other one is said once.
+    const auto width = bitReader.getBits<uint16_t>(16);
+    const auto height = bitReader.getBits<uint16_t>(16);
+    if (m_imgBuffer == nullptr)
+    {
+        m_video_width = width;
+        m_video_height = height;
+    }
+    else if ((width != m_video_width || height != m_video_height) && !m_sizeChangeSaid)
+    {
+        m_sizeChangeSaid = true;
+        LTRACE(LT_WARN, 2,
+               "Warning: PGS stream (track " << m_streamIndex << "): a composition gives a picture of " << width << ':'
+                                             << height << " where the stream began with " << m_video_width << ':'
+                                             << m_video_height << ". The size it began with is kept.");
+    }
     const auto frame_rate_index = bitReader.getBits<uint8_t>(4);
     m_frame_rate = pgs_frame_rates[frame_rate_index];
     bitReader.skipBits(4);
