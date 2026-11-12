@@ -26,7 +26,7 @@ class PGSStreamReader final : public AbstractStreamReader
     // it, where for any other PGS stream fps= converts the times from it.
     void setRateGuessed(const bool value) { m_rateGuessed = value; }
     // The track comes from the file of the video of the mux (see the note in readPacket): `rates` gives the frame
-    // rate that video's stream has and the one it is muxed at, 0 where one is not known yet.
+    // rate that video's stream has where fps= changes its speed, 0 where it does not, and the rate it is muxed at.
     void setVideoOfItsFile(std::function<void(double& stream, double& mux)> rates)
     {
         m_videoOfItsFile = std::move(rates);

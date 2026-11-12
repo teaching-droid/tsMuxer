@@ -515,8 +515,6 @@ void MPEGStreamReader::updateFPS(void* curNALUnit, uint8_t* buff, uint8_t* nextN
         m_badFpsSaid = true;
         spsFps = 0.0;
     }
-    if (spsFps != 0.0 && m_streamFps == 0.0)
-        m_streamFps = spsFps;
     if (spsFps == 0.0 && m_fps == 0.0)
     {
         setFPS(fallbackFps(curNALUnit));
@@ -571,6 +569,11 @@ void MPEGStreamReader::updateFPS(void* curNALUnit, uint8_t* buff, uint8_t* nextN
                                               << m_fps);
             m_isFirstFpsWarn = false;
         }
+        // The speed of the video is changed here where fps= of the line asks for another rate than the stream has.
+        // Not where the rate is that of the container, whose times the other tracks of the file are on already, and
+        // not where pulldown is taken out, which leaves the video as long as it was.
+        if (!m_fpsFromContainer && !m_removePulldown && m_speedChangedFrom == 0.0)
+            m_speedChangedFrom = spsFps;
         updateStreamFps(curNALUnit, buff, nextNal, oldSPSLen);
     }
     else if (spsFps == 0.0)

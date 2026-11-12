@@ -1248,7 +1248,7 @@ void METADemuxer::openFile(const string& streamName)
             pgs->setVideoOfItsFile(
                 [reader](double& stream, double& mux)
                 {
-                    stream = reader ? reader->streamFps() : 0.0;
+                    stream = reader ? reader->speedChangedFrom() : 0.0;
                     mux = reader ? reader->getFPS() : 0.0;
                 });
             break;

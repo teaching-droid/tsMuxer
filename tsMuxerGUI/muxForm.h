@@ -21,7 +21,8 @@ class MuxForm : public QDialog  // QWidget
     void setProgress(int value);
     void addStdOutLine(const QString& line);
     void addStdErrLine(const QString& line);
-    void muxFinished(int exitCode, const QString& prefix);
+    // scanEnded: the run was a scan and ended by itself, so exit code 7 is its "warnings were printed"
+    void muxFinished(int exitCode, const QString& prefix, bool scanEnded = false);
     void setProcess(QProcess* proc);
     void showStopped(const QString& label, const QString& outputLine);
     void abort() { onAbort(); }  // as the Abort button

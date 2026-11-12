@@ -1924,8 +1924,6 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
                 }
             }
 
-            if (m_firstPtsTime.find(pid) == m_firstPtsTime.end())
-                m_firstPtsTime[pid] = curPts;
             // the start of the sound of an Opus track, from its second PES (OpusStart)
             if (streamInfo != m_pmt.pidList.end() && streamInfo->second.m_streamType == StreamType::PRIVATE_DATA &&
                 streamInfo->second.m_opusRegistration)
@@ -1954,6 +1952,8 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
                     opus.first.pending.shrink_to_fit();
                 }
             }
+            if (m_firstPtsTime.find(pid) == m_firstPtsTime.end())
+                m_firstPtsTime[pid] = curPts;
             // ** A FIRST PES ON ANOTHER CLOCK IS NOT THE START. ** A recording can begin with a few PES left in the
             // receiver from before, on a time base hours away from the rest: the sound of such a recording was placed
             // 9.7 hours after its video, where the video reader had left its own leftover picture out, and a cut had
@@ -2304,7 +2304,7 @@ void TSDemuxer::opusFromTs(OpusFromTs& opus, const int channelConfig, const uint
             opus.headWritten = true;
         }
         opus.lastEndTrim = endTrim;
-        opus.startTrim += startTrim;
+        opus.startTrim = (std::min)(opus.startTrim + startTrim, 1 << 30);
         opus.kept += (std::max)(
             0, OpusStreamReader::parseFrameSamples(p.data() + i, static_cast<int>(packet)) - startTrim - endTrim);
         out.push_back(static_cast<uint8_t>(packet >> 24));

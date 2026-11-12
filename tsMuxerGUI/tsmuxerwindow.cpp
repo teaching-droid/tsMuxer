@@ -5246,6 +5246,8 @@ void TsMuxerWindow::onProcessFinished(int exitCode, QProcess::ExitStatus exitSta
     flushPendingOutput();
     processFinished = true;
     setProbeBusy(false);
+    // a number of a signal can be 7 as well: only a scan that ended by itself says "warnings" with it
+    const bool scanEnded = m_scanRunning && exitStatus == QProcess::NormalExit;
     if (!metaName.isEmpty())
     {
         QFile::remove(metaName);
@@ -5257,7 +5259,7 @@ void TsMuxerWindow::onProcessFinished(int exitCode, QProcess::ExitStatus exitSta
         if (ui->checkBoxSound->isChecked())
         {
             // 7 is a scan that ended well and printed warnings
-            if (exitCode == 0 || (exitCode == 7 && exitStatus == QProcess::NormalExit))
+            if (exitCode == 0 || (exitCode == 7 && scanEnded))
                 myPlaySound(":/sounds/success.wav");
             else
                 myPlaySound(":/sounds/fail.wav");
@@ -5283,7 +5285,7 @@ void TsMuxerWindow::onProcessFinished(int exitCode, QProcess::ExitStatus exitSta
         updateQueueButton();
     }
     const QString finishedWhat = m_queueRun ? tr("Queue") : ui->radioButtonDemux->isChecked() ? tr("Demux") : tr("Mux");
-    muxForm->muxFinished(processExitCode, finishedWhat);
+    muxForm->muxFinished(processExitCode, finishedWhat, scanEnded);
     m_queueRun = false;
     updateMuxButton();
     ui->addBtn->setEnabled(true);

@@ -192,7 +192,7 @@ void MuxForm::addStdErrLine(const QString& line)
     ui->stderrText->setTextCursor(c);
 }
 
-void MuxForm::muxFinished(int exitCode, const QString&)
+void MuxForm::muxFinished(int exitCode, const QString&, const bool scanEnded)
 {
     if (m_hiddenLines > 0)
     {
@@ -211,7 +211,7 @@ void MuxForm::muxFinished(int exitCode, const QString&)
         // and is no error. The number is that of its summary; at least 1, as the code says there were some.
         if (exitCode == 0)
             setWindowTitle(QObject::tr("tsMuxeR successfully finished"));
-        else if (exitCode == SCAN_WARNINGS)
+        else if (exitCode == SCAN_WARNINGS && scanEnded)
             setWindowTitle(QObject::tr("The scan finished. Lines of warnings: %1").arg(qMax(1, m_scanWarnings)));
         else
             setWindowTitle(QObject::tr("tsMuxeR finished with error code %1").arg(exitCode));
@@ -221,7 +221,7 @@ void MuxForm::muxFinished(int exitCode, const QString&)
     }
     ui->reportBtn->setEnabled(!m_reportFile.isEmpty());
     // a job that went wrong: a sample of its source may be what the problem report needs
-    ui->sampleBtn->setVisible(exitCode != 0 && exitCode != SCAN_WARNINGS && m_sampleOffered);
+    ui->sampleBtn->setVisible(exitCode != 0 && !(exitCode == SCAN_WARNINGS && scanEnded) && m_sampleOffered);
 }
 
 void MuxForm::onAbort()
