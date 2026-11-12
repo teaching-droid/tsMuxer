@@ -5978,6 +5978,11 @@ AbstractStreamReader* METADemuxer::createCodec(const string& codecName, const ma
         itr = addParams.find("video-height");
         if (itr != addParams.end())
             height = parsePictureSize("video-height", itr->second);
+        // One of the two alone gave a picture to draw into of no size at all, which was then written to
+        if ((width == 0) != (height == 0))
+            THROW(ERR_USAGE, "video-width and video-height go together on a line: "
+                                 << (width == 0 ? "video-width" : "video-height")
+                                 << " is missing. They are the size of the video the subtitles are drawn for.")
         dynamic_cast<PGSStreamReader*>(rez)->setVideoInfo(width, height, fps);
         itr = addParams.find("font-border");
         if (itr != addParams.end())

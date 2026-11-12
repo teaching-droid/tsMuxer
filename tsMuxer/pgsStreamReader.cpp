@@ -137,9 +137,12 @@ int PGSStreamReader::calcFpsIndex(const double fps)
 void PGSStreamReader::readPalette(const uint8_t* pos, const uint8_t* end)
 {
     m_palette.clear();
+    // its id and version, then entries of 5 bytes: a segment cut short was read past its end
+    if (end - pos < 2)
+        return;
     m_palleteID = *pos++;
     m_paletteVersion = *pos++;
-    while (pos < end)
+    while (end - pos >= 5)
     {
         YUVQuad color;
         int index = *pos++;
@@ -195,18 +198,25 @@ void PGSStreamReader::decodeRleData(const std::vector<uint8_t>& rle, uint8_t* ds
 
     int x = 0;
     int y = 0;
-    const auto put = [&](const uint8_t color, int count)
+    // ** A RUN IS WRITTEN AS FAR AS IT LIES IN THE PICTURE, AND THE COLUMN STOPS COUNTING. ** Each pixel of a run was
+    // stepped on its own, inside the picture or not, and the column was an int that only an end of line set back: data
+    // without an end of line, as damaged or made-up data has, counted it past the range of an int, where it turned
+    // negative and the pixel was written far before the buffer; and one segment of such runs cost hundreds of
+    // millions of steps. A line is not longer than the widest picture there is.
+    static constexpr int WIDEST = 1 << 16;
+    const auto put = [&](const uint8_t color, const int count)
     {
-        for (; count > 0; --count, ++x)
-        {
-            const int px = xOffset + x;
-            const int py = yOffset + y;
-            if (px < dstWidth && py < dstHeight)
-                dst[static_cast<size_t>(py) * dstWidth + px] = color;
-        }
+        const int px = xOffset + x;
+        const int py = yOffset + y;
+        if (px < dstWidth && py < dstHeight)
+            memset(dst + static_cast<size_t>(py) * dstWidth + px, color,
+                   static_cast<size_t>((std::min)(count, dstWidth - px)));
+        x = (std::min)(x + count, WIDEST);
     };
     while (src < srcEnd)
     {
+        if (yOffset + y >= dstHeight)
+            break;  // below the picture: nothing more of the object is drawn
         if (*src != 0)
         {
             put(*src++, 1);
@@ -269,7 +279,8 @@ void PGSStreamReader::readObjectDef(const uint8_t* pos, const uint8_t* end)
         object = PgsObject();
         object.width = AV_RB16(pos + 3);
         object.height = AV_RB16(pos + 5);
-        object.rle.reserve((std::min)(AV_RB24(pos), 1u << 24));
+        // not the 16 MB an object can claim, for each of 65536 ids: the data makes its own room as it comes
+        object.rle.reserve((std::min)(AV_RB24(pos), 1u << 20));
         pos += 7;  // object data length, width and height
     }
     object.rle.insert(object.rle.end(), pos, end);
@@ -294,10 +305,18 @@ bool PGSStreamReader::composeDisplaySet()
             decodeRleData(object.rle, m_imgBuffer, m_video_width, m_video_height, placed.x, placed.y);
             continue;
         }
-        whole.assign(static_cast<size_t>(object.width) * object.height, 0xff);
-        decodeRleData(object.rle, whole.data(), object.width, object.height, 0, 0);
-        const int right = (std::min)(placed.cropX + placed.cropWidth, static_cast<int>(object.width));
-        const int bottom = (std::min)(placed.cropY + placed.cropHeight, static_cast<int>(object.height));
+        // The object is drawn whole first, at the size its segment gives. A damaged one can give 65535x65535, 4 GB
+        // for each place it is shown at: no more of it is drawn than the crop and the picture can show.
+        const int objectWidth = (std::min)({static_cast<int>(object.width), placed.cropX + placed.cropWidth,
+                                            placed.cropX + static_cast<int>(m_video_width)});
+        const int objectHeight = (std::min)({static_cast<int>(object.height), placed.cropY + placed.cropHeight,
+                                             placed.cropY + static_cast<int>(m_video_height)});
+        if (objectWidth <= 0 || objectHeight <= 0)
+            continue;
+        whole.assign(static_cast<size_t>(objectWidth) * objectHeight, 0xff);
+        decodeRleData(object.rle, whole.data(), objectWidth, objectHeight, 0, 0);
+        const int right = (std::min)(placed.cropX + placed.cropWidth, objectWidth);
+        const int bottom = (std::min)(placed.cropY + placed.cropHeight, objectHeight);
         for (int y = placed.cropY; y < bottom; ++y)
         {
             const int py = placed.y + y - placed.cropY;
@@ -309,7 +328,7 @@ bool PGSStreamReader::composeDisplaySet()
                 if (px >= m_video_width)
                     break;
                 m_imgBuffer[static_cast<size_t>(py) * m_video_width + px] =
-                    whole[static_cast<size_t>(y) * object.width + x];
+                    whole[static_cast<size_t>(y) * objectWidth + x];
             }
         }
     }
@@ -1015,6 +1034,10 @@ int PGSStreamReader::readSourcePacket(AVPacket& avPacket)
             // more than one rate kept the others as they were. With fps= every PCS gets its rate; the times are
             // scaled as the first PCS decided.
             {
+                // Its first 5 bytes are the picture size and the frame rate, read and, with fps=, written here: a
+                // segment of fewer bytes, as the cut end of a file leaves, was read and written past its end.
+                if (segment_len < 5)
+                    break;
                 ++m_compositions;
                 const int ownIndex = m_curPos[4] >> 4;
                 if (m_firstRateIndex < 0)
@@ -1219,6 +1242,8 @@ void PGSStreamReader::intDecodeStream(uint8_t* buffer, const size_t len)
                 return;
         }
 
+        if (bufEnd - curPos < 3)
+            return;
         const uint8_t segment_type = *curPos;
         const auto segment_len = AV_RB16(curPos + 1);
         if (bufEnd - curPos < 3ll + segment_len)
