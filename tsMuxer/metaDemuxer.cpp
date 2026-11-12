@@ -1246,9 +1246,16 @@ void METADemuxer::openFile(const string& streamName)
         auto* pgs = dynamic_cast<PGSStreamReader*>(sub.m_streamReader);
         if (!pgs || sub.m_sourceFiles.empty())
             continue;
+        // the files as they are, of a track read under a second name as well (addStream)
+        const auto realFiles = [](std::vector<std::string> names)
+        {
+            for (auto& name : names) name = nameAlias::resolve(name);
+            return names;
+        };
         for (const auto& video : m_codecInfo)
         {
-            if (video.m_codec.empty() || video.m_codec[0] != 'V' || video.m_sourceFiles != sub.m_sourceFiles)
+            if (video.m_codec.empty() || video.m_codec[0] != 'V' ||
+                realFiles(video.m_sourceFiles) != realFiles(sub.m_sourceFiles))
                 continue;
             const auto* reader = dynamic_cast<const MPEGStreamReader*>(video.m_streamReader);
             pgs->setVideoOfItsFile(
@@ -1955,9 +1962,15 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
             {
                 const string given = unquoteStr(trimStr(fileList[i]));
                 const size_t folder = given.find_last_of("/\\");
-                const string second = folder == string::npos
-                                          ? "./" + given
-                                          : given.substr(0, folder + 1) + "./" + given.substr(folder + 1);
+                // not a name a line reads under already, as "./x.mkv" beside "x.mkv": two readers on one name would
+                // share its reader of the file, and split its blocks between them
+                string second = given;
+                do
+                    second = folder == string::npos ? "./" + second
+                                                    : second.substr(0, folder + 1) + "./" + second.substr(folder + 1);
+                while (m_containerReader.m_demuxers.find(second) != m_containerReader.m_demuxers.end() ||
+                       m_secondReads.count(second) > 0);
+                m_secondReads.insert(second);
                 nameAlias::add(second, nameAlias::resolve(given));
                 fileList[i] = second;
                 keys[i] += "|second";
@@ -3077,7 +3090,9 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
     // The language the clip information file of a disc clip gives the stream, which the listing shows
     const auto takeClipInfoLang = [&](const char* why)
     {
-        const std::string m2ts = unquoteStr(trimStr(fileList[0]));
+        // by the name as it was given: a second read has "./" in its name, which the walk up the folders trips on
+        const std::string read = unquoteStr(trimStr(fileList[0]));
+        const std::string m2ts = m_secondReads.count(read) > 0 ? nameAlias::resolve(read) : read;
         const std::string clpiFileName =
             findBluRayFile(extractFileDir(m2ts), "CLIPINF", extractFileName(m2ts) + ".clpi");
         CLPIParser clpi;
@@ -3540,7 +3555,7 @@ static bool isKnownTrackParam(const std::string& name)
 std::string METADemuxer::getTitle()
 {
     for (auto& [name, demuxerData] : m_containerReader.m_demuxers)
-        if (demuxerData.m_demuxer)
+        if (demuxerData.m_demuxer && m_secondReads.count(name) == 0)
             if (std::string title = demuxerData.m_demuxer->getTitle(); !title.empty())
                 return title;
     return {};
@@ -3565,7 +3580,7 @@ std::vector<uint8_t> METADemuxer::getPlainMatroskaChapters()
             return {};
     for (auto& [name, demuxerData] : m_containerReader.m_demuxers)
     {
-        if (!demuxerData.m_demuxer)
+        if (!demuxerData.m_demuxer || m_secondReads.count(name) > 0)
             continue;
         auto* mkv = dynamic_cast<MatroskaDemuxer*>(demuxerData.m_demuxer);
         // A Matroska file counts by its chapters as stored, also when its default edition shows none of them
@@ -3594,7 +3609,7 @@ std::vector<uint8_t> METADemuxer::getPlainMatroskaChapters()
 AbstractDemuxer::SourceEditions METADemuxer::getSourceEditions()
 {
     for (auto& [name, demuxerData] : m_containerReader.m_demuxers)
-        if (demuxerData.m_demuxer)
+        if (demuxerData.m_demuxer && m_secondReads.count(name) == 0)
             if (SourceEditions editions = demuxerData.m_demuxer->getSourceEditions();
                 !editions.chapters.empty() || !editions.segmentUid.empty())
                 return editions;
@@ -3763,7 +3778,7 @@ std::vector<AVChapter> METADemuxer::getChapters()
 
     for (auto& [name, demuxerData] : m_containerReader.m_demuxers)
     {
-        if (!demuxerData.m_demuxer)
+        if (!demuxerData.m_demuxer || m_secondReads.count(name) > 0)
             continue;
         std::vector<AVChapter> chapters = demuxerData.m_demuxer->getChapters();
         // A join ("a.mkv"+"b.mkv") is read through one demuxer that moves on from file to file, and only the file it

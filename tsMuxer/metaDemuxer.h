@@ -379,6 +379,9 @@ class METADemuxer final : public AbstractDemuxer
     // The text subtitle tracks muxed so far, by file and track: whether the line kept them as text (keep-text) or has
     // them drawn. A second line that asks for the other of the two reads the file a second time (addStream).
     std::map<std::string, bool> m_textTrackKept;
+    // the second names such lines read their files under: the same files as another source of the mux, so they are
+    // not asked where "the first source" gives something (the title, the chapters, the editions)
+    std::set<std::string> m_secondReads;
 
     friend class ContainerToReaderWrapper;
 
