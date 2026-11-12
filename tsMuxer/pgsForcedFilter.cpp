@@ -315,14 +315,30 @@ void PgsForcedTrack::push(const uint8_t* data, const size_t size, const int64_t 
         m_segmentDts = dts;
     }
     m_segment.insert(m_segment.end(), data, data + size);
-    if (m_segment.size() < 3)
-        return;
-    const size_t whole = 3 + (static_cast<size_t>(m_segment[1]) << 8 | m_segment[2]);
-    if (m_segment.size() < whole)
-        return;
+    // ** A PACKET CAN HOLD MORE THAN ONE SEGMENT. ** A track as it comes from its source has a segment to a packet. A
+    // track that is drawn again at another size hands out the segments of a picture together, a large object in
+    // several, and in a demux each behind the "PG" header of a .sup file, with its times. Only the first segment of a
+    // packet was taken and the rest dropped: the forced pictures of such a track came out with objects cut short, and
+    // in a demux not at all. Every whole segment is taken now, and the header passed over.
     std::deque<PgsForcedFilter::Segment> made;
-    m_filter.push(m_segment.data(), whole, m_segmentPts, m_segmentDts, made);
-    m_segment.clear();
+    size_t at = 0;
+    while (m_segment.size() - at >= 3)
+    {
+        const uint8_t* p = m_segment.data() + at;
+        if (p[0] == 'P' && p[1] == 'G')  // no segment type: the header of a .sup file, "PG" and two times
+        {
+            if (m_segment.size() - at < 10)
+                break;
+            at += 10;
+            continue;
+        }
+        const size_t whole = 3 + (static_cast<size_t>(p[1]) << 8 | p[2]);
+        if (m_segment.size() - at < whole)
+            break;
+        m_filter.push(p, whole, m_segmentPts, m_segmentDts, made);
+        at += whole;
+    }
+    m_segment.erase(m_segment.begin(), m_segment.begin() + static_cast<std::ptrdiff_t>(at));
     hand(made, out);
 }
 
