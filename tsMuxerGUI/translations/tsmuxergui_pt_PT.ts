@@ -5298,6 +5298,22 @@ Se isto apareceu enquanto um ficheiro ainda estava a ser examinado, ou quando a 
         <translation>Áudio AC-4</translation>
     </message>
     <message>
+        <source>AVS video</source>
+        <translation>Vídeo AVS</translation>
+    </message>
+    <message>
+        <source>AVS2 video</source>
+        <translation>Vídeo AVS2</translation>
+    </message>
+    <message>
+        <source>AVS3 video</source>
+        <translation>Vídeo AVS3</translation>
+    </message>
+    <message>
+        <source>AVS3 audio</source>
+        <translation>Áudio AVS3</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="2270"/>
         <source>Blu-ray text subtitles go into a Matroska file as SRT, which every player reads. Without this tick they stay TextST, which many players do not read.</source>
         <translation>As legendas de texto Blu-ray entram num ficheiro Matroska como SRT, que todos os leitores leem. Sem esta opção continuam TextST, que muitos leitores não leem.</translation>

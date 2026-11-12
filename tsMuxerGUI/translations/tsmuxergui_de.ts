@@ -5255,6 +5255,22 @@ Wenn dies erschien, während eine Datei noch untersucht wurde, oder beim Schlie�
         <translation>AC-4-Audio</translation>
     </message>
     <message>
+        <source>AVS video</source>
+        <translation>AVS-Video</translation>
+    </message>
+    <message>
+        <source>AVS2 video</source>
+        <translation>AVS2-Video</translation>
+    </message>
+    <message>
+        <source>AVS3 video</source>
+        <translation>AVS3-Video</translation>
+    </message>
+    <message>
+        <source>AVS3 audio</source>
+        <translation>AVS3-Audio</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="2270"/>
         <source>Blu-ray text subtitles go into a Matroska file as SRT, which every player reads. Without this tick they stay TextST, which many players do not read.</source>
         <translation>Blu-ray-Textuntertitel kommen als SRT in eine Matroska-Datei, das jeder Player liest. Ohne dieses Häkchen bleiben sie TextST, das viele Player nicht lesen.</translation>

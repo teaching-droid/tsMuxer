@@ -5298,6 +5298,22 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>AC-4 音訊</translation>
     </message>
     <message>
+        <source>AVS video</source>
+        <translation>AVS 視訊</translation>
+    </message>
+    <message>
+        <source>AVS2 video</source>
+        <translation>AVS2 視訊</translation>
+    </message>
+    <message>
+        <source>AVS3 video</source>
+        <translation>AVS3 視訊</translation>
+    </message>
+    <message>
+        <source>AVS3 audio</source>
+        <translation>AVS3 音訊</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="2270"/>
         <source>Blu-ray text subtitles go into a Matroska file as SRT, which every player reads. Without this tick they stay TextST, which many players do not read.</source>
         <translation>藍光文字字幕以 SRT 寫入 Matroska 檔案，所有播放器都能讀取。不勾選時保持為 TextST，許多播放器無法讀取。</translation>

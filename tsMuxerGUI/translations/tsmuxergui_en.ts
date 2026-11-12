@@ -5288,6 +5288,22 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>AVS video</source>
+        <translation>AVS video</translation>
+    </message>
+    <message>
+        <source>AVS2 video</source>
+        <translation>AVS2 video</translation>
+    </message>
+    <message>
+        <source>AVS3 video</source>
+        <translation>AVS3 video</translation>
+    </message>
+    <message>
+        <source>AVS3 audio</source>
+        <translation>AVS3 audio</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="2270"/>
         <source>Blu-ray text subtitles go into a Matroska file as SRT, which every player reads. Without this tick they stay TextST, which many players do not read.</source>
         <translation type="unfinished"></translation>

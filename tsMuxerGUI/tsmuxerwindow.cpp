@@ -3384,6 +3384,19 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
                 else if (dvbDescriptor == 0x7F || dvbDescriptor == 0x05)
                     description = tr("AC-4 audio");
                 break;
+            // the video and sound of Chinese broadcasts
+            case 0x42:
+                description = tr("AVS video");
+                break;
+            case 0xD2:
+                description = tr("AVS2 video");
+                break;
+            case 0xD4:
+                description = tr("AVS3 video");
+                break;
+            case 0xD5:
+                description = tr("AVS3 audio");
+                break;
             default:
                 break;
             }

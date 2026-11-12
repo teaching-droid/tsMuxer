@@ -973,6 +973,26 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
             default:
                 break;
             }
+            // ** AVS IS NAMED. ** The video and sound of Chinese broadcasts (AVS, AVS2, AVS3) are not read, and such
+            // a track was "Can't detect stream type (the container declares stream type 0x42)", which says a number
+            // where a name is known. The sound beside it (MPEG audio, AC-3) is read as before.
+            switch (streams[i].containerStreamType)
+            {
+            case 0x42:
+                known = "AVS video";
+                break;
+            case 0xD2:
+                known = "AVS2 video";
+                break;
+            case 0xD4:
+                known = "AVS3 video";
+                break;
+            case 0xD5:
+                known = "AVS3 audio";
+                break;
+            default:
+                break;
+            }
             if (!streams[i].notSupported.empty())
                 LTRACE(LT_INFO, 2,
                        "Not supported: " << streams[i].notSupported
