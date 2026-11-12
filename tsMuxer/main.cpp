@@ -1546,7 +1546,9 @@ Additional parameters for SRT tracks:
                     subtitles from a Matroska file are written as .ass, .ssa
                     and .vtt files instead, in their own form. Other outputs
                     draw the subtitles as usual, with a warning, which needs
-                    video-width, video-height and fps.
+                    video-width, video-height and fps. A text track can be
+                    given on two lines, one with keep-text and one without:
+                    the output then has it as text and drawn into pictures.
 - save-srt          save-srt="name.srt": while the subtitles are drawn into
                     pictures, also write them as text to that SRT file
                     (UTF-8, numbered from 1), as a demux with keep-text would.

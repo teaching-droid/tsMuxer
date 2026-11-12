@@ -376,6 +376,9 @@ class METADemuxer final : public AbstractDemuxer
     std::vector<AVChapter> m_dvdChapters;        // the chapters of the DVD title a line names with title=
     std::set<std::string> m_processedTracks;
     std::set<std::string> m_processedLines;  // the files and track of every line read, to tell a repeated line
+    // The text subtitle tracks muxed so far, by file and track: whether the line kept them as text (keep-text) or has
+    // them drawn. A second line that asks for the other of the two reads the file a second time (addStream).
+    std::map<std::string, bool> m_textTrackKept;
 
     friend class ContainerToReaderWrapper;
 

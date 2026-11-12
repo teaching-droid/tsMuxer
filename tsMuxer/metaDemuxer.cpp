@@ -1913,6 +1913,58 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         keys.push_back(fileKey(name) + trackPart);
         lineKey += keys.back() + "|";
     }
+    // ** A TEXT SUBTITLE TRACK CAN GO IN TWICE: AS TEXT AND DRAWN. ** A track of a file is read once, so a second line
+    // for the same track was refused or left out. For text subtitles there is a use for two: the text as it is (ASS
+    // with its styles, SRT), for a player that draws it, and beside it the same subtitles drawn into pictures, for a
+    // player that only shows pictures. A second line for a text track that an earlier line muxes the other way (one
+    // with keep-text, one without) reads its file once more, under a second name (nameAlias.h), as if it were a copy
+    // of the file. A third line, or a second one of the same way, is refused as before. Only for an output that keeps
+    // text, a Matroska file or a demux: any other draws both lines, and would get the same pictures twice.
+    if (codec == "S_TEXT/UTF8" && !fileList.empty() && addParams.find("subClip") == addParams.end() &&
+        (m_matroskaOutput != 0 || m_demuxOutput))
+    {
+        const bool kept = addParams.count("keep-text") > 0;
+        bool otherWay = true;
+        for (const auto& key : keys)
+        {
+            const auto earlier = m_textTrackKept.find(key);
+            otherWay &= earlier != m_textTrackKept.end() && earlier->second != kept;
+        }
+        std::vector<string> secondNames;
+        if (otherWay)
+            for (const auto& name : fileList)
+            {
+                const string real = unquoteStr(trimStr(name));
+                const string second = real + ".second." + extractFileExt(real);
+                // a file of that very name, or a name given out already (a third line), ends the try
+                if (fileExists(second) || nameAlias::resolve(second) != second)
+                {
+                    secondNames.clear();
+                    break;
+                }
+                secondNames.push_back(second);
+            }
+        if (!secondNames.empty() && secondNames.size() == fileList.size())
+        {
+            for (size_t i = 0; i < fileList.size(); ++i)
+                nameAlias::add(secondNames[i], unquoteStr(trimStr(fileList[i])));
+            LTRACE(LT_INFO, 2,
+                   "Track " << pid << " of " << unquotedStreamName << " is muxed a second time, "
+                            << (kept ? "as text beside the track drawn into pictures"
+                                     : "drawn into pictures beside the track kept as text")
+                            << ": the file is read once more for it.");
+            fileList = secondNames;
+            keys.clear();
+            lineKey.clear();
+            for (const auto& name : fileList)
+            {
+                keys.push_back(fileKey(name) + trackPart);
+                lineKey += keys.back() + "|";
+            }
+        }
+        else
+            for (const auto& key : keys) m_textTrackKept.try_emplace(key, kept);
+    }
     // A track of a file named by an earlier line with subClip= and here without it, or the other way round, is the
     // same track: two readers read it, and closing the first freed what the second still used. It is refused.
     const string otherTrackPart =
