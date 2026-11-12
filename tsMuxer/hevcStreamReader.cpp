@@ -1225,6 +1225,24 @@ bool HEVCStreamReader::isSuffix(const HevcUnit::NalType nalType) const
 
 void HEVCStreamReader::incTimings()
 {
+    if (StreamReport::wanted && m_reportNalType >= 0)
+    {
+        // slice_type: B 0, P 1, I 2. A picture whose slice header could not be read counts as a P picture. A group
+        // begins at an IDR picture (closed) and at a CRA or BLA picture (open). Below the random access pictures an
+        // odd unit type is a picture others refer to, an even one a picture nothing of its sub-layer refers to.
+        const auto nalType = static_cast<HevcUnit::NalType>(m_reportNalType);
+        const bool irap = nalType >= HevcUnit::NalType::BLA_W_LP && nalType <= HevcUnit::NalType::RSV_IRAP_VCL23;
+        const auto type = irap || m_reportSliceType == 2 ? StreamReport::Picture::I
+                          : m_reportSliceType == 0       ? StreamReport::Picture::B
+                                                         : StreamReport::Picture::P;
+        const auto group = nalType == HevcUnit::NalType::IDR_W_RADL || nalType == HevcUnit::NalType::IDR_N_LP
+                               ? StreamReport::Group::Closed
+                           : irap ? StreamReport::Group::Open
+                                  : StreamReport::Group::None;
+        m_report.picture(type, group, irap || (m_reportNalType & 1) != 0);
+        m_report.slices(m_reportSlices);
+    }
+    m_reportNalType = -1;
     if (m_totalFrameNum++ > 0)
         m_curDts += m_pcrIncPerFrame;
     const int delta = m_frameNum - m_fullPicOrder;
@@ -1660,6 +1678,9 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                     incTimings();
                     return 0;
                 }
+                m_reportNalType = static_cast<int>(nalType);
+                m_reportSliceType = -1;
+                m_reportSlices = 0;
                 // An IDR or BLA picture after the first one starts the count again after its leading pictures, which
                 // it has to know before it is given its order. Its period is that many places less deep than the
                 // pictures after it are in decode order (depthOfPeriod counts from the IDR picture).
@@ -1766,8 +1787,11 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                     m_fullPicOrder = toFullPicOrder(m_slice, m_sps->log2_max_pic_order_cnt_lsb);
                 }
                 notePicOrder(nalType);
+                if (rez == 0 && m_slice->slice_type <= 2)
+                    m_reportSliceType = static_cast<int>(m_slice->slice_type);
             }
             sliceFound = true;
+            ++m_reportSlices;
         }
         else if (!isSuffix(nalType))
         {  // first non-VCL prefix NAL (AUD, SEI...) following current frame

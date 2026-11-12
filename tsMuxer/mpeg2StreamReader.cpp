@@ -306,6 +306,9 @@ int MPEG2StreamReader::intDecodeNAL(uint8_t* buff)
                     seqLevel = false;
                     m_framesAtGop = -1;
                     m_lastRef = -1;
+                    // closed_gop comes after the 25 bits of the time code
+                    if (m_bufEnd - nextNal > 4)
+                        m_reportGroupHeader = (nextNal[4] & 0x40) ? 1 : 2;
                     break;
                 case PICTURE_START_SHORT_CODE:
                     rez = decodePicture(nextNal);
@@ -328,6 +331,8 @@ int MPEG2StreamReader::intDecodeNAL(uint8_t* buff)
             // that repeats the sequence header comes here through the case above and is unchanged.
             m_framesAtGop = -1;
             m_lastRef = -1;
+            if (m_bufEnd - buff > 4)
+                m_reportGroupHeader = (buff[4] & 0x40) ? 1 : 2;  // closed_gop, after the 25 bits of the time code
             nextNal = MPEGHeader::findNextMarker(buff, m_bufEnd) + 3;
             while (true)
             {
@@ -536,6 +541,22 @@ int MPEG2StreamReader::decodePicture(uint8_t* buff)
         m_framesAtGop++;
         m_lastRef = m_frame.ref;
         m_totalFrameNum++;
+        if (StreamReport::wanted)
+        {
+            // A group begins at an I picture: closed or open as its group header says, open where it has none.
+            const bool intra = m_frame.pict_type == PictureCodingType::I_FRAME;
+            const auto type = intra                                             ? StreamReport::Picture::I
+                              : m_frame.pict_type == PictureCodingType::B_FRAME ? StreamReport::Picture::B
+                                                                                : StreamReport::Picture::P;
+            const auto group = !intra                     ? StreamReport::Group::None
+                               : m_reportGroupHeader == 1 ? StreamReport::Group::Closed
+                                                          : StreamReport::Group::Open;
+            m_report.picture(type, group, type != StreamReport::Picture::B);
+            // MPEG-1 has frames only; its headers leave the two marks at 0
+            m_report.coded(field, m_seqExtFound && !m_sequence.progressive_sequence && !m_frame.progressive_frame);
+            m_report.shownFor(m_frame.repeat_first_field ? 3 : 2);
+        }
+        m_reportGroupHeader = 0;
 
         const int64_t shownFor = pictureDuration(m_frame.repeat_first_field != 0, m_frame.top_field_first != 0);
         // Without the marks every picture is one frame of the new rate

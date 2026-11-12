@@ -123,7 +123,23 @@ int MPEGStreamReader::flushPacket(AVPacket& avPacket)
     LTRACE(LT_DEBUG, 0, message);
     LTRACE(LT_INFO, 2, message);
     m_processedBytes += avPacket.size;
+    if (StreamReport::wanted)
+        m_report.bytes(avPacket.dts, avPacket.size);
     return static_cast<int>(m_tmpBufferLen);
+}
+
+void MPEGStreamReader::giveStreamReport()
+{
+    if (m_reportGiven || m_report.empty())
+        return;
+    m_reportGiven = true;
+    std::ostringstream heading;
+    heading << "Stream report, track " << m_streamIndex << " (" << getCodecInfo().displayName << ", "
+            << getStreamWidth() << "x" << getStreamHeight();
+    if (m_fps > 0)
+        heading << ", " << doubleToStr(m_fps, 3) << " fps";
+    heading << "):";
+    StreamReport::give(heading.str(), m_report.lines(m_fps, getInterlaced()));
 }
 
 int64_t MPEGStreamReader::pictureDts()
@@ -332,6 +348,8 @@ int MPEGStreamReader::readPacket(AVPacket& avPacket)
 
     m_tmpBufferLen = 0;
     m_processedBytes += avPacket.size;
+    if (StreamReport::wanted)
+        m_report.bytes(avPacket.dts, avPacket.size);
 
     return 0;
 }

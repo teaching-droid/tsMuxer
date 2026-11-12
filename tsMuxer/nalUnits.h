@@ -37,6 +37,7 @@ static constexpr double h264_ar_coeff[] = {
 
 static constexpr int SEI_MSG_BUFFERING_PERIOD = 0;
 static constexpr int SEI_MSG_PIC_TIMING = 1;
+static constexpr int SEI_MSG_RECOVERY_POINT = 6;
 static constexpr int SEI_MSG_MVC_SCALABLE_NESTING = 37;
 
 class NALUnit

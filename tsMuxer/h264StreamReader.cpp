@@ -1922,6 +1922,8 @@ int H264StreamReader::processSEI(uint8_t* buff)
         bool nonTimingSEI = false;
         for (auto& msg : lastSEI.m_processedMessages)
         {
+            if (msg == SEI_MSG_RECOVERY_POINT)
+                m_recoveryPoint = m_recoveryPointSeen = true;  // for the stream report (decodeSlice)
             if (msg == SEI_MSG_BUFFERING_PERIOD)
             {
                 timingSEI = true;
@@ -2397,6 +2399,32 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     m_isFirstFrame = false;
     m_totalFrameNum++;
 
+    if (StreamReport::wanted)
+    {
+        // The kind of the picture is that of its slices together (detectPrimaryPicType: I only, I and P, or B too).
+        // A group begins at an IDR picture, and at another I picture: one with a recovery point before it where the
+        // stream has such marks, as an I picture without one is a picture in the middle of its group.
+        const int kind = m_pict_type >= 5 ? m_pict_type - 5 : m_pict_type;
+        const auto type = kind <= 0   ? StreamReport::Picture::I
+                          : kind == 1 ? StreamReport::Picture::P
+                                      : StreamReport::Picture::B;
+        const auto group =
+            slice.isIDR() ? StreamReport::Group::Closed
+            : type == StreamReport::Picture::I && slice.isIFrame() && (m_recoveryPoint || !m_recoveryPointSeen)
+                ? StreamReport::Group::Open
+                : StreamReport::Group::None;
+        m_report.picture(type, group, slice.nal_ref_idc != 0);
+        m_report.slices(m_slicesOfPicture);
+        if (const SPSUnit* sps = slice.getSPS())
+        {
+            m_report.coded(slice.m_field_pic_flag != 0, sps->frame_mbs_only_flag == 0);
+            m_report.referenceFrames(static_cast<int>(sps->num_ref_frames));
+        }
+        if (m_lastPictStruct >= 0)
+            m_report.shownFor(fieldsShownOf(m_lastPictStruct));
+    }
+    m_recoveryPoint = false;
+
     if (slice.isIDR())
     {
         m_idrSliceCnt++;
@@ -2592,6 +2620,7 @@ int H264StreamReader::detectPrimaryPicType(const SliceUnit& firstSlice, uint8_t*
     m_nextFrameIdr = false;
     m_pict_type = -1;
     m_pict_type = (std::max)(m_pict_type, sliceTypeToPictType(firstSlice.slice_type));
+    m_slicesOfPicture = 1;
 
     uint8_t* nextSlice = NALUnit::findNextNAL(buff, m_bufEnd);
     if (nextSlice == m_bufEnd)
@@ -2622,6 +2651,7 @@ int H264StreamReader::detectPrimaryPicType(const SliceUnit& firstSlice, uint8_t*
                 return 0;  // next frame found
             }
             m_pict_type = (std::max)(m_pict_type, sliceTypeToPictType(slice.slice_type));
+            ++m_slicesOfPicture;
             break;
         default:
             break;

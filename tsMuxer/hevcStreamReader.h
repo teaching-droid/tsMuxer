@@ -187,6 +187,11 @@ class HEVCStreamReader final : public MPEGStreamReader
     // Lowest slice_type seen in the current access unit, for the pic_type of a generated access
     // unit delimiter. HEVC orders them B=0, P=1, I=2, so the lowest is the most permissive.
     int m_auMinSliceType;
+    // for the stream report, of the access unit being read (intDecodeNAL): the type of its first slice unit, the
+    // slice type of that slice (-1 where it could not be read), and its slice units
+    int m_reportNalType = -1;
+    int m_reportSliceType = -1;
+    int m_reportSlices = 0;
     bool m_audInsertReported;
 
     // Rewrite general_level_idc in a VPS or SPS that is already sitting in the stream buffer.

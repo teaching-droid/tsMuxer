@@ -9,6 +9,7 @@
 #include "abstractStreamReader.h"
 #include "limits.h"
 #include "streamDiscoveryData.h"
+#include "streamReport.h"
 #include "vod_common.h"
 
 // The buffer a video reader collects its input in starts at TMP_BUFFER_SIZE and grows, up to MAX_TMP_BUFFER_SIZE, when
@@ -160,6 +161,17 @@ class MPEGStreamReader : public AbstractStreamReader
     double m_speedChangedFrom = 0;  // speedChangedFrom()
     int64_t m_pcrIncPerFrame;
     int64_t m_pcrIncPerField;
+    // What a scan says of the stream (streamReport.h): a reader that knows its pictures gives them as they begin,
+    // and the bytes are counted here.
+    StreamReport m_report;
+    bool m_reportGiven = false;
+
+   public:
+    // The block is handed over when the mux ends (METADemuxer::readClose): by the mux, so that a mux which stops
+    // before the end of its sources (--cut-end) has its block, and a reader that only measures a file has none.
+    void giveStreamReport();
+
+   protected:
     const uint8_t* m_lastDecodedPos;
     // start-code scan cache for readPacket: m_cachedMarker points at the 01 byte of the
     // next start code ahead of m_curPos (nullptr = unknown); m_scanHighWater is the old

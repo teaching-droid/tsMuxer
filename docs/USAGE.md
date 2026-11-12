@@ -206,6 +206,22 @@ The sizes are those of the real run, as the same code counts them. The output is
 
 For a disc folder the summary reckons the image of the files, with its file system, and names the disc that image fits. Where the image is larger than one layer of that disc, the sectors of its layer changes are given.
 
+After the sizes comes a report of each H.264, HEVC and MPEG-2 video track, counted while the source is read:
+
+```
+Stream report, track 1 (H.264, 1920x1080, 23.976 fps):
+  Pictures:            172,584 (I 7,191, P 43,146, B 122,247)
+  Group of pictures:   24 pictures (1.00 s) throughout
+  Groups:              closed 1, open 7,190
+  B pictures in a row: 3 at most; 61,123 are used as reference
+  Reference frames:    4 at most
+  Slices per picture:  4
+  Cadence:             progressive, no pulldown
+  Bitrate:             18.4 Mbit/s on average, 31.2 Mbit/s at most over 1 s (at 01:12:44)
+```
+
+A group of pictures begins at an I picture a decoder can start at. It is closed where it begins with an IDR picture (H.264, HEVC) or its group header says so (MPEG-2), and open where it begins with another I picture. An H.264 stream that marks such pictures (recovery points) has its groups counted by the marks; in one without marks every I picture begins a group. The group the stream ends in is cut short by the end, and does not count as the shortest. The seconds of a group and the average bitrate are reckoned from the time the pictures are shown for, so they hold for a stream with pulldown as well. The bitrate is that of the video stream alone; its highest value is the largest of the whole seconds of the track, counted from its start by decoding time. A line a reader cannot fill is left out: the reference frames and the slices of MPEG-2, and the reference frames and the pulldown of HEVC. A mux does not print the report.
+
 The summary ends with the warnings of the run: `Scan: no warnings.`, or the number of warning lines and the lines once more, up to 40 of them. A scan that printed warnings ends with exit code 7, so a script can tell it from a clean one; a mux that prints the same warnings ends with 0. In a `--batch` list a scan that ends with 7 is a job done.
 
 ### Exit codes

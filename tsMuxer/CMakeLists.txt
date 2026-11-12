@@ -22,6 +22,7 @@ add_executable (tsmuxer
   ac3StreamReader.cpp
   assFile.cpp
   diagnosticReport.cpp
+  streamReport.cpp
   sampleCutter.cpp
   batchRunner.cpp
   pgsForcedFilter.cpp

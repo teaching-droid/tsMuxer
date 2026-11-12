@@ -62,6 +62,7 @@ class MPEG2StreamReader final : public MPEGStreamReader
     bool m_streamMsgPrinted;
     int m_lastRef;
     int m_framesAtGop;
+    int m_reportGroupHeader = 0;  // for the stream report: a group header since the last picture, 1 closed, 2 open
     bool m_isFirstFrame;
     bool spsFound;
     bool m_seqExtFound;

@@ -43,6 +43,7 @@
 #include "sampleCutter.h"
 #include "simplePacketizerReader.h"
 #include "singleFileMuxer.h"
+#include "streamReport.h"
 #include "tsMuxer.h"
 #include "vodCoreException.h"
 
@@ -1751,10 +1752,12 @@ All parameters in this group start with two dashes:
                       run and nothing is written. The sources are read as in
                       the real run, with every warning it gives, and at the
                       end the files it would write are listed with their
-                      sizes, the disc an image of them fits, and the warnings
-                      of the run once more. The output is named as for the
-                      mux, and is not touched. The exit code is 7 when the
-                      run printed warnings.
+                      sizes, the disc an image of them fits, a report of
+                      each H.264, HEVC and MPEG-2 video track (its pictures,
+                      groups of pictures, B pictures, cadence and bitrate),
+                      and the warnings of the run once more. The output is
+                      named as for the mux, and is not touched. The exit
+                      code is 7 when the run printed warnings.
 --batch               Separate mode: tsMuxeR --batch <job list> [--batch-stop-on-error]
                       Runs a list of jobs one after the other. The job list is
                       a text file in UTF-8 with one job on each line, written
@@ -5419,6 +5422,16 @@ static void printScanSummary()
                                << lbn << " (" << gb(static_cast<int64_t>(lbn) * SECTOR_SIZE) << " into the image).");
         }
     }
+    // what each video stream is made of (streamReport.h)
+    const std::vector<std::string> report = StreamReport::all();
+    for (const std::string& text : report)
+    {
+        if (!text.empty() && text[0] != ' ')
+            LTRACE(LT_INFO, 2, "");
+        LTRACE(LT_INFO, 2, text);
+    }
+    if (!report.empty())
+        LTRACE(LT_INFO, 2, "");
     // the warnings of the run, once more: they are what a scan is run for, and stand far up in a long log
     const size_t warnings = traceWarnings::count();
     if (warnings == 0)
@@ -5582,6 +5595,7 @@ static int runTsMuxer(int argc, char** argv)
         }
         g_scan = true;
         traceWarnings::keep = true;
+        StreamReport::wanted = true;
         for (int k = i; k + 1 < argc; ++k) argv[k] = argv[k + 1];
         --argc;
     }

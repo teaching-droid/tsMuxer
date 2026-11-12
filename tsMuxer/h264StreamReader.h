@@ -156,6 +156,9 @@ class H264StreamReader final : public MPEGStreamReader
     bool m_delimiterFound;
     uint8_t m_forcedLevel;
     int m_pict_type;
+    int m_slicesOfPicture = 0;         // detectPrimaryPicType: the slices of the picture it looked at
+    bool m_recoveryPointSeen = false;  // the stream marks the I pictures a decoder can start at (processSEI)
+    bool m_recoveryPoint = false;      // such a mark stands before the picture that comes next
     int m_iFramePtsOffset;
     int prevPicOrderCntMsb;
     int prevPicOrderCntLsb;

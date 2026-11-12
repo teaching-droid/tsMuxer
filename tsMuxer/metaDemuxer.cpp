@@ -3870,6 +3870,11 @@ int64_t METADemuxer::statedDurationNano(const bool sumJoins)
 
 void METADemuxer::readClose()
 {
+    // the stream report of a scan: the block of each video track of the mux, in the order of the tracks
+    if (StreamReport::wanted)
+        for (const auto& codecInfo : m_codecInfo)
+            if (auto* video = dynamic_cast<MPEGStreamReader*>(codecInfo.m_streamReader))
+                video->giveStreamReport();
     for (const auto& codecInfo : m_codecInfo)
     {
         if (codecInfo.m_mergeAc3ReaderId >= 0)
