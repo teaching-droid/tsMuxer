@@ -185,8 +185,11 @@ static bool tsHevcStartsAtRandomAccess(const BufferedReaderManager& readManager,
 // smallest PTS of the video. An HEVC stream that begins with a random access picture times the pictures shown before
 // it before the start, as a decoder leaves them out (they refer to pictures before the cut): that is the PTS of the
 // first video PES.
-static int64_t tsTrackStart(const BufferedReaderManager& readManager, const std::string& fileName, const int pid)
+static int64_t tsTrackStart(const BufferedReaderManager& readManager, const std::string& fileName, const int pid,
+                            bool* known = nullptr)
 {
+    if (known)
+        *known = false;
     static constexpr int64_t LATE_LIMIT = 1024LL * 1024 * 1024;
     // the pictures shown before the first one follow it in decode order within the depth of the picture reordering,
     // at most 16 frames, or 32 fields
@@ -213,7 +216,10 @@ static int64_t tsTrackStart(const BufferedReaderManager& readManager, const std:
     const bool fromFirstPes = video != tracks.end() &&
                               video->second.m_trackType == static_cast<int>(StreamType::VIDEO_H265) &&
                               tsHevcStartsAtRandomAccess(readManager, fileName, video->first);
-    return probe.getTrackStart(pid, fromFirstPes, ticks) ? ticks : 0;
+    const bool found = probe.getTrackStart(pid, fromFirstPes, ticks);
+    if (known)
+        *known = found;  // 0 can also be "not found": the name of a demuxed file tells the two apart (#259)
+    return found ? ticks : 0;
 }
 
 static void loadDvOriginalRpus(AbstractDemuxer* demuxer, HevcDolbyVisionFilter* filter)
@@ -3341,6 +3347,7 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         }
     }
     int64_t tsStart = 0;  // 90 kHz ticks
+    bool tsStartKnown = false;
     if (!timeShiftGiven && pid > 0 && !codec.empty() && codec[0] == 'A' && !fileList.empty() &&
         streamInfo.m_addParams.find("srcstartdelay") == streamInfo.m_addParams.end() &&
         !(anyPart && !clipParts.empty() && clipParts[0].startCut))
@@ -3348,7 +3355,8 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         const std::string first = unquoteStr(trimStr(fileList[0]));
         const std::string ext = strToUpperCase(extractFileExt(first));
         if (ext == "TS" || ext == "M2TS" || ext == "MTS" || ext == "M2T" || ext == "SSIF")
-            tsStart = tsTrackStart(m_readManager, first, SubTrackFilter::isSubTrack(pid) ? pid >> 16 : pid);
+            tsStart =
+                tsTrackStart(m_readManager, first, SubTrackFilter::isSubTrack(pid) ? pid >> 16 : pid, &tsStartKnown);
     }
     if (!timeShiftGiven)
         if (const auto start = streamInfo.m_addParams.find("srcstartdelay");
@@ -3375,6 +3383,15 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         }
     if (mp4EditStart)
         streamInfo.m_addParams["srcstartms"] = int64ToStr(mp4ListedMs);
+    // ** A DEMUXED SOUND FILE SAYS ITS DELAY ALSO WHERE IT IS ZERO. ** The name of a demuxed file carries the start of
+    // its track against the video ("DELAY -20ms"), and carried nothing where the track starts with the video. A name
+    // without a delay then meant two things: no delay, or a file whose delay nobody looked at (#259). Where the
+    // start was measured and is zero, the name says "DELAY 0ms". A track whose start is not known, as one of a file
+    // without video, keeps its plain name.
+    if (m_demuxOutput && !timeShiftGiven && !codec.empty() && codec[0] == 'A' &&
+        streamInfo.m_addParams.find("srcstartms") == streamInfo.m_addParams.end() &&
+        (tsStartKnown || streamInfo.m_addParams.find("srcstartknown") != streamInfo.m_addParams.end()))
+        streamInfo.m_addParams["srcstartms"] = "0";
     // A cut file's video keeps the pictures before the cut (srcvideolead, see MovDemuxer::mov_read_moov), so the sound
     // is moved back by its edit list start less that pre-roll. A Matroska output of AAC says the edit list start as
     // CodecDelay, and one of Opus says the pre-skip of its OpusHead (srcopusskip): only the rest is moved.
@@ -3514,7 +3531,7 @@ static bool isKnownTrackParam(const std::string& name)
         "srclangbcp47", "srcdefault", "srcname", "srcflags", "srccolour", "srcdisplay", "srcendpadding", "srcpgsrate",
         "srccrop", "srcfieldorder", "srcprojection", "srccodecdelay", "srcvideolead", "srcopusskip", "srcrighteye",
         "langbcp47", "srcvpxprivate", "srccodecid", "srcstartdelay", "srcstereomode", "srcalphamode", "srcstartms",
-        "srcaacsbr",
+        "srcaacsbr", "srcstartknown",
         // a part of a playlist's PG track (an eye of a stereo subtitle, an aligned subtitle), a picture-in-picture one
         "srcpgpart", "srcpip"};
     return known.find(name) != known.end();

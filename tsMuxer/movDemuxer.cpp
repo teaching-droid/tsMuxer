@@ -2312,6 +2312,16 @@ void MovDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             if (tracks[i]->type == IOContextTrackType::AUDIO || tracks[i]->type == IOContextTrackType::VIDEO)
                 if (const int64_t start = trackStartFromVideoNs(i + 1); start != 0)
                     trackList[i + 1].m_srcParams["srcstartdelay"] = std::to_string(start);
+            // The start of a sound track is measured where the file has video and gives both their starts: a demux
+            // then names the sound file with its delay, 0 as well (#259)
+            if (tracks[i]->type == IOContextTrackType::AUDIO && m_trackStartNs.count(i + 1) > 0)
+                for (int k = 0; k < num_tracks; k++)
+                    if (tracks[k]->type == IOContextTrackType::VIDEO)
+                    {
+                        if (m_trackStartNs.count(k + 1) > 0)
+                            trackList[i + 1].m_srcParams["srcstartknown"] = "1";
+                        break;
+                    }
             // The samples after the end of the edit list, which only fill the last frame of an Opus, Vorbis or AAC
             // track (srcendpadding, as a Matroska source's DiscardPadding gives them). They were not passed on, and a
             // Matroska output played them: 648 samples of Opus, 256 of Vorbis, 512 of AAC, and a join of Opus files

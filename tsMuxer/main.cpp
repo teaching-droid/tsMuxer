@@ -1658,7 +1658,8 @@ All parameters in this group start with two dashes:
                         into sup format.
                       - PCM audio is saved as WAV files.
                       Each file is named after its source and track, then DELAY
-                      <n>ms where the track starts away from the video, then an
+                      <n>ms where the track starts away from the video (a sound
+                      track also DELAY 0ms where it starts with it), then an
                       extension for its kind: .264 H.264, .mvc MVC, .hevc HEVC,
                       .vvc VVC, .vc1 VC-1, .mpv MPEG-2, .obu AV1, .ivf VP8 and
                       VP9; .ac3 AC-3, .ec3 E-AC-3, .ac3+ec3 E-AC-3 with an AC-3

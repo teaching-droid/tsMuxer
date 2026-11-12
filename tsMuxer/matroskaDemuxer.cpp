@@ -4729,6 +4729,9 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
             time = firstShown(tracks[i], time);
         else if (h264Video(tracks[i]))
             time = h264FirstShown(tracks[i], time);
+        // measured, also where it is the video's: a demux then names the sound file with its delay of 0 (#259)
+        if (tracks[i]->type == MatroskaTrackType::AUDIO)
+            m_trackExtras[tracks[i]->num]["srcstartknown"] = "1";
         if (time != videoTime)
             m_trackExtras[tracks[i]->num]["srcstartdelay"] =
                 std::to_string((time - videoTime) * static_cast<int64_t>(facts.timestampScale));

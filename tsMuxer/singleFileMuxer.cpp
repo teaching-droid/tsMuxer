@@ -232,7 +232,8 @@ void SingleFileMuxer::intAddStream(const std::string& streamName, const std::str
     if (itr != params.end())
     {
         const int64_t delayMs = parseTimeshiftToMs(itr->second);
-        if (delayMs != 0)
+        // a sound track says its delay also where it is zero: the name then tells "no delay" from "not known" (#259)
+        if (delayMs != 0 || (!codecName.empty() && codecName[0] == 'A'))
         {
             fileName = stripDelayToken(fileName);
             fileName += " DELAY ";
