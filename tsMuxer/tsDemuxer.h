@@ -56,7 +56,7 @@ class TSDemuxer final : public AbstractDemuxer
         if (m_firstPtsTime.find(pid) != m_firstPtsTime.end())
         {
             const int64_t video = videoReference(pid, true);
-            clockTicks = m_firstPtsTime[pid] - (video != -1 ? video : m_firstSeenPTS);
+            clockTicks = m_firstPtsTime[pid] + startFix(pid) - (video != -1 ? video : m_firstSeenPTS);
             return llround(static_cast<double>(clockTicks) / 90.0);  // convert to ms
         }
 
@@ -348,6 +348,17 @@ class TSDemuxer final : public AbstractDemuxer
     // of the file (first: the first PES in file order, else the smallest PTS). A stream of a program that has no
     // video, in a file with video of another program, is measured against the earliest stream of its own program.
     [[nodiscard]] int64_t videoReference(int32_t pid, bool first) const;
+
+   public:
+    // False while the start of a track cannot be told yet: an Opus track whose second PES has not been read
+    // (OpusStart). getTrackStart answers before that with the time of the first PES.
+    [[nodiscard]] bool trackStartSettled(const int32_t pid) const
+    {
+        const auto opus = m_opusStart.find(pid);
+        return opus == m_opusStart.end() || opus->second.pes != 1;
+    }
+
+   private:
     int64_t m_videoPesRead = 0;  // see videoPesRead
     int m_firstVideoPid = -1;    // see firstVideoPid
     // see packetsRead and missingProgramTable: packets with payload and those marked scrambled, of each track read
@@ -369,7 +380,7 @@ class TSDemuxer final : public AbstractDemuxer
     // AAC in LATM (stream type 0x11), turned into ADTS for the AAC reader (latm.h): 0 not looked at yet, 1 not LATM,
     // 2 LATM; the converter of each such PID, and whether its problem has been said
     uint8_t m_latmPid[8192]{};
-    // ** OPUS IN A TRANSPORT STREAM IS READ. ** tsMuxeR writes Opus into a transport stream (TS 101 154: stream type
+    // ** OPUS IN A TRANSPORT STREAM IS READ. ** tsMuxeR writes Opus into a transport stream (stream type
     // 0x06 with the registration "Opus", each packet behind a control header that gives its length and what to trim),
     // and could not read it back: the track was "Can't detect stream type". The access units are unpacked here into
     // the form the Opus reader takes from any container: an OpusHead, made from the channels the program map gives
@@ -379,8 +390,26 @@ class TSDemuxer final : public AbstractDemuxer
         std::vector<uint8_t> pending;  // the bytes of an access unit that is not complete yet
         bool headWritten = false;
         int lastEndTrim = 0;  // the end_trim of the access unit read last, in samples; 0 where it has none
+        int64_t kept = 0;     // the samples of the access units read so far, less what they trim
+        int startTrim = 0;    // the start_trim of the access units read so far, added up
     };
     std::map<int, OpusFromTs> m_opusFromTs;
+    // ** WHERE THE SOUND OF AN OPUS TRACK STARTS. ** The first access unit trims the pre-skip, and writers differ in
+    // the time they give it: the time of its first sample that is kept, or of its first sample (6.5 ms before, for a
+    // usual encoder). From the second PES on they agree: its time is that of its sound. So the start is taken from
+    // the second PES with a time: its time less the samples the first PES keeps. A track was placed by the time of its
+    // first PES, and that of the other way of writing came out 6.5 ms early against its picture. The access units of
+    // the first PES are read for it here, whether the track is taken or not (the listing reads PES headers only).
+    struct OpusStart
+    {
+        int pes = 0;       // PES with a time seen: 0, 1, or 2 for more
+        int64_t pts = -1;  // of the first
+        OpusFromTs first;  // the access units of the first PES
+        int64_t fix = 0;   // 90 kHz ticks to add to pts for the start of the sound
+    };
+    std::map<int, OpusStart> m_opusStart;
+    // What is to be added to the first time of a track for the start of its sound (OpusStart); 0 for any other track
+    [[nodiscard]] int64_t startFix(int32_t pid) const;
     static void opusFromTs(OpusFromTs& opus, int channelConfig, const uint8_t* data, size_t size,
                            std::vector<uint8_t>& out);
     // The samples the last access unit of an Opus track says to leave out at its end, read from the end of the

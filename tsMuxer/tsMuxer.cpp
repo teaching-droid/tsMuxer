@@ -1,6 +1,7 @@
 // Largely rewritten by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer).
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "tsMuxer.h"
+#include "opusStreamReader.h"
 
 #include <algorithm>
 #include <cmath>
@@ -746,8 +747,10 @@ void TSMuxer::intAddStream(const std::string& streamName, const std::string& cod
     }
     else if (codecName == "A_OPUS")
     {
-        // ETSI TS 101 154: Opus uses stream_type 0x06 (PRIVATE_DATA) with
+        // The draft "Opus in MPEG-2 TS": Opus uses stream_type 0x06 (PRIVATE_DATA) with
         // registration_descriptor 'Opus' and opus_audio_descriptor in the PMT.
+        if (auto* opus = dynamic_cast<OpusStreamReader*>(codecReader))
+            opus->setTsTiming(true);
         m_pmt.pidList[tsStreamIndex] = PMTStreamInfo(StreamType::PRIVATE_DATA, tsStreamIndex, descrBuffer,
                                                      descriptorLen, codecReader, lang, isSecondary);
     }

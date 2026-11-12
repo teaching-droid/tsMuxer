@@ -1,6 +1,7 @@
 // Largely rewritten by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer).
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "tsDemuxer.h"
+#include "opusStreamReader.h"
 
 #include "textstParser.h"
 
@@ -780,6 +781,16 @@ int64_t TSDemuxer::videoReference(const int32_t pid, const bool first) const
     return first ? m_firstSeenVideoPTS : m_firstVideoPTS;
 }
 
+int64_t TSDemuxer::startFix(const int32_t pid) const
+{
+    const auto opus = m_opusStart.find(pid);
+    const auto first = m_firstPtsTime.find(pid);
+    // only where the track starts at the PES the fix was reckoned from (a leftover PES before the start moves it)
+    return opus != m_opusStart.end() && first != m_firstPtsTime.end() && first->second == opus->second.pts
+               ? opus->second.fix
+               : 0;
+}
+
 bool TSDemuxer::getTrackStart(const int32_t pid, const bool fromFirstPes, int64_t& ticks) const
 {
     const auto first = m_firstPtsTime.find(pid);
@@ -789,7 +800,7 @@ bool TSDemuxer::getTrackStart(const int32_t pid, const bool fromFirstPes, int64_
     // A PTS has 33 bits and wraps after about 26.5 hours: a stream that starts just after the wrap and a video that
     // starts just before it are a moment apart, not a day
     static constexpr int64_t CLOCK_WRAP = 1LL << 33;
-    ticks = (first->second - reference) % CLOCK_WRAP;
+    ticks = (first->second + startFix(pid) - reference) % CLOCK_WRAP;
     if (ticks >= CLOCK_WRAP / 2)
         ticks -= CLOCK_WRAP;
     else if (ticks < -CLOCK_WRAP / 2)
@@ -1915,6 +1926,34 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
 
             if (m_firstPtsTime.find(pid) == m_firstPtsTime.end())
                 m_firstPtsTime[pid] = curPts;
+            // the start of the sound of an Opus track, from its second PES (OpusStart)
+            if (streamInfo != m_pmt.pidList.end() && streamInfo->second.m_streamType == StreamType::PRIVATE_DATA &&
+                streamInfo->second.m_opusRegistration)
+            {
+                OpusStart& opus = m_opusStart[pid];
+                if (opus.pes == 0)
+                {
+                    opus.pes = 1;
+                    opus.pts = curPts;
+                }
+                else if (opus.pes == 1)
+                {
+                    opus.pes = 2;
+                    // Only for a first PES that trims its start. A fix of more than the longest trim there can be
+                    // (13 bits of samples) is no fix: the two PES are not one after the other.
+                    static constexpr int64_t WRAP = 1LL << 33;
+                    static constexpr int64_t LONGEST = 0x1FFFLL * 90000 / 48000;
+                    int64_t fix = (curPts - opus.first.kept * 90000 / 48000 - opus.pts) % WRAP;
+                    if (fix >= WRAP / 2)
+                        fix -= WRAP;
+                    else if (fix < -WRAP / 2)
+                        fix += WRAP;
+                    if (opus.first.startTrim > 0 && opus.first.kept > 0 && fix >= -LONGEST && fix <= LONGEST)
+                        opus.fix = fix;
+                    opus.first.pending.clear();
+                    opus.first.pending.shrink_to_fit();
+                }
+            }
             // ** A FIRST PES ON ANOTHER CLOCK IS NOT THE START. ** A recording can begin with a few PES left in the
             // receiver from before, on a time base hours away from the rest: the sound of such a recording was placed
             // 9.7 hours after its video, where the video reader had left its own leftover picture out, and a cut had
@@ -2068,6 +2107,15 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
             }
         }
     }
+
+    // the access units of the first PES of an Opus track, for the start of its sound (OpusStart)
+    if (!m_opusStart.empty())
+        if (const auto opus = m_opusStart.find(pid);
+            opus != m_opusStart.end() && opus->second.pes == 1 && frameData < pkt + TS_FRAME_SIZE)
+        {
+            std::vector<uint8_t> unused;
+            opusFromTs(opus->second.first, 2, frameData, static_cast<size_t>(pkt + TS_FRAME_SIZE - frameData), unused);
+        }
 
     // if (acceptedPIDs.find(pid) == acceptedPIDs.end())
     if (!m_acceptedPidCache[pid])
@@ -2256,6 +2304,9 @@ void TSDemuxer::opusFromTs(OpusFromTs& opus, const int channelConfig, const uint
             opus.headWritten = true;
         }
         opus.lastEndTrim = endTrim;
+        opus.startTrim += startTrim;
+        opus.kept += (std::max)(
+            0, OpusStreamReader::parseFrameSamples(p.data() + i, static_cast<int>(packet)) - startTrim - endTrim);
         out.push_back(static_cast<uint8_t>(packet >> 24));
         out.push_back(static_cast<uint8_t>(packet >> 16));
         out.push_back(static_cast<uint8_t>(packet >> 8));

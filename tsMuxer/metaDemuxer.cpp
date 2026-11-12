@@ -203,7 +203,8 @@ static int64_t tsTrackStart(const BufferedReaderManager& readManager, const std:
     int64_t ticks = 0;
     for (int64_t read = 0; read < LATE_LIMIT; read += probe.getFileBlockSize())
     {
-        if (probe.videoPesRead() >= LEADING_PES && probe.getTrackStart(pid, false, ticks))
+        if (probe.videoPesRead() >= LEADING_PES && probe.trackStartSettled(pid) &&
+            probe.getTrackStart(pid, false, ticks))
             break;
         if (probe.simpleDemuxBlock(demuxedData, none, discardedSize) == BufferedReader::DATA_EOF)
             break;

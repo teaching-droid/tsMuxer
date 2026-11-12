@@ -125,7 +125,7 @@ const std::string OpusStreamReader::getStreamInfo()
 }
 
 // ---------------------------------------------------------------------------
-// TS descriptor for PMT (ETSI TS 101 154)
+// TS descriptor for PMT (the draft "Opus in MPEG-2 TS", version 0.1.3; ETSI TS 101 154 has no Opus)
 // ---------------------------------------------------------------------------
 
 int OpusStreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdmvDescriptors)
@@ -141,7 +141,7 @@ int OpusStreamReader::getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hd
     *dst++ = 's';
 
     // 2. opus_audio_descriptor  (DVB extension descriptor tag=0x7F, ext=0x80)
-    //    Per ETSI TS 101 154 Annex E: descriptor_tag=0x7F, descriptor_length=2,
+    //    As the draft has it: descriptor_tag=0x7F, descriptor_length=2,
     //    descriptor_tag_extension=0x80, channel_config_code.
     *dst++ = static_cast<uint8_t>(TSDescriptorTag::DVB_EXTENSION);  // descriptor_tag
     *dst++ = 2;                                                     // descriptor_length
@@ -354,8 +354,18 @@ int OpusStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, i
             return NOT_ENOUGH_BUFFER;
     }
 
-    // The last block of the stream ends with this packet: the samples the source trims at the end are in it
-    m_lastOfStream = m_lastBlock && end - buff == FRAME_PREFIX_LEN + frameLen;
+    // The last block of the stream ends with this packet: the samples the source trims at the end are in it.
+    //
+    // ** THE LAST PACKET IS KNOWN ONLY WHEN NOTHING COMES AFTER IT. ** The packets of a track come in blocks, and the
+    // block that is marked as the last one can be empty: with a video track beside it the last packet of the sound
+    // came at the end of a block that was not the last, was taken for a packet like any other, and the trim at the end
+    // was not written to a transport stream: the padding was played, 13.5 ms of it for a usual encoder. With the
+    // track alone the last block held the packet, and the trim was written. A packet that ends its block is now kept
+    // back until more comes or the stream ends (flushPacket), where a trim at the end is to be written.
+    const bool endsBlock = end - buff == FRAME_PREFIX_LEN + frameLen;
+    if (endsBlock && !m_lastBlock && !m_flushing && m_endTrimNs > 0)
+        return NOT_ENOUGH_BUFFER;
+    m_lastOfStream = (m_lastBlock || m_flushing) && endsBlock;
 
     // Parse the Opus packet to determine frame duration
     m_curFrameSamples = parseFrameSamples(buff + FRAME_PREFIX_LEN, frameLen);
@@ -369,7 +379,50 @@ int OpusStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, i
 // picture: 19.5 ms after the first joint of two files of a usual encoder. Whole packets are left out at each joint, the
 // last of the file before, as long as that brings the sound nearer to its picture, so that it stays within half a
 // packet of it however many files are joined. The packets of the next file follow on without a gap.
+int OpusStreamReader::flushPacket(AVPacket& avPacket)
+{
+    // the packet kept back by decodeFrame is the last of the stream
+    m_flushing = true;
+    const int rez = SimplePacketizerReader::flushPacket(avPacket);
+    m_flushing = false;
+    if (avPacket.size > 0)
+        timeForTs(avPacket);
+    return rez;
+}
+
+// ** IN A TRANSPORT STREAM THE TIME OF AN ACCESS UNIT IS THAT OF ITS SOUND. ** The packets of a track are counted on
+// from its start in whole packets, as a Matroska file times its blocks: the first packet at the start, the second 20 ms
+// after it, with the pre-skip said beside them (CodecDelay), which a player takes off every time. A transport stream
+// says the pre-skip as a trim of the first access units (start_trim), and there the time goes on by the samples that
+// are left: "the amount the PTS advances is reduced by the corresponding amount". The second access unit of a track
+// with a pre-skip of 312 samples is 13.5 ms after the first, not 20. It was written 20 ms after it, and with it every
+// later one: the sound of the whole track was played 6.5 ms late against its picture. The time of a packet is now less
+// by what the access units before it trim.
+void OpusStreamReader::timeForTs(AVPacket& avPacket)
+{
+    if (!m_tsTiming)
+        return;
+    if (m_timedTrimLeft < 0)
+        m_timedTrimLeft = m_preSkip;
+    const auto before = static_cast<int64_t>(static_cast<double>(m_timedTrim) / 48000.0 * INTERNAL_PTS_FREQ + 0.5);
+    avPacket.pts -= before;
+    avPacket.dts -= before;
+    // as writeAdditionData trims them
+    const int samples = (std::min)(parseFrameSamples(avPacket.data, avPacket.size), 0x1FFF);
+    const int trim = (std::min)(m_timedTrimLeft, samples);
+    m_timedTrimLeft -= trim;
+    m_timedTrim += trim;
+}
+
 int OpusStreamReader::readPacket(AVPacket& avPacket)
+{
+    const int rez = readJoinedPacket(avPacket);
+    if (rez == 0 && avPacket.size > 0)
+        timeForTs(avPacket);
+    return rez;
+}
+
+int OpusStreamReader::readJoinedPacket(AVPacket& avPacket)
 {
     while (true)
     {
@@ -569,7 +622,7 @@ int OpusStreamReader::writeAdditionData(uint8_t* dstBuffer, uint8_t* dstEnd, AVP
 {
     if (!m_demuxMode)
     {
-        // TS mux mode: write ETSI TS 101 154 opus_access_unit header before
+        // TS mux mode: write the opus_access_unit header of the draft before
         // each Opus packet.  The 16-bit control header fields are:
         //   bits [15:5]  = control_header_prefix = 0x3FF (11 bits)
         //   bit  [4]     = start_trim_flag       = 0, 1 on the first access units, as long as the pre-skip lasts
