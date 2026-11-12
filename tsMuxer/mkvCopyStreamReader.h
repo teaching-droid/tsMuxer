@@ -50,6 +50,7 @@ class MatroskaCopyStreamReader final : public AbstractStreamReader
         m_vobSubLang = lang;
     }
     [[nodiscard]] bool vobSubFileOutput() const { return m_vobSubFile; }
+    [[nodiscard]] const std::string& vobSubLang() const { return m_vobSubLang; }
     [[nodiscard]] std::string vobSubIndex() const;
     // A unit that goes into the .sub file: its packs in outData, their size returned, and its line of the .idx file
     int packVobSub(int64_t packetPts, const uint8_t* data, size_t size, const uint8_t** outData);

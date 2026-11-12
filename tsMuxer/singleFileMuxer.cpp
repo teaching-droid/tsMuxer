@@ -256,6 +256,12 @@ void SingleFileMuxer::intAddStream(const std::string& streamName, const std::str
             m_forcedPgs[streamIndex].fileName = fileName + ".forced" + fileExt;
     }
 
+    // a track of DVD subtitles written as a .sub file: its forced pictures also go to a pair of their own, unless
+    // the line says no-forced-track
+    if (const auto* copy = dynamic_cast<MatroskaCopyStreamReader*>(codecReader);
+        copy && fileExt == ".sub" && params.count("no-forced-track") == 0 && params.count("forced") == 0)
+        m_forcedVobSub[streamIndex].fileName = fileName + ".forced" + fileExt;
+
     auto streamInfo = new StreamInfo(static_cast<unsigned>(DEFAULT_FILE_BLOCK_SIZE));
     streamInfo->m_fileName = fileName + fileExt;
     if (streamInfo->m_fileName.size() > 254)
@@ -433,10 +439,66 @@ void SingleFileMuxer::writeForcedPgs(const int streamIndex, std::deque<PgsForced
     segments.clear();
 }
 
+// A unit of a DVD subtitle track: a forced one goes to the pair of the forced pictures as well, once the track has
+// shown both kinds
+void SingleFileMuxer::writeForcedVobSub(const int streamIndex, const AVPacket& avPacket)
+{
+    ForcedVobSub& forced = m_forcedVobSub[streamIndex];
+    auto* const source = dynamic_cast<MatroskaCopyStreamReader*>(avPacket.codec);
+    if (forced.failed || !source || !source->vobSubFileOutput())
+        return;
+    std::vector<VobSubForcedTrack::Unit> units;
+    forced.track.push(
+        {avPacket.pts, avPacket.duration, std::vector<uint8_t>(avPacket.data, avPacket.data + avPacket.size), {}},
+        units);
+    if (units.empty())
+        return;
+    if (!forced.open)
+    {
+        const std::string dir = closeDirPath(toNativeSeparators(m_origFileName));
+        forced.fileName = dir + forced.fileName;
+        auto packer = std::make_unique<MatroskaCopyStreamReader>("S_VOBSUB", source->codecPrivate(),
+                                                                 std::vector<std::vector<uint8_t>>(), 0);
+        packer->setVobSubFileOutput(source->vobSubLang());
+        forced.packer = std::move(packer);
+        if (forced.file.open(forced.fileName.c_str(), File::ofWrite))
+        {
+            forced.open = true;
+            LTRACE(LT_INFO, 2,
+                   "Track " << streamIndex + 1 << " has forced pictures beside its others. They are also written "
+                            << "to " << extractFileName2(forced.fileName)
+                            << " and its .idx file; the whole track stays as it is. no-forced-track on the meta line "
+                               "leaves them out.");
+        }
+        else
+        {
+            forced.failed = true;
+            LTRACE(LT_WARN, 2,
+                   "Warning: the file " << forced.fileName << " of the forced pictures cannot be "
+                                        << "made, so they are written with the whole track only.");
+            return;
+        }
+    }
+    auto* const packer = static_cast<MatroskaCopyStreamReader*>(forced.packer.get());
+    for (const VobSubForcedTrack::Unit& unit : units)
+    {
+        const uint8_t* packs = nullptr;
+        const int size = packer->packVobSub(unit.pts, unit.data.data(), unit.data.size(), &packs);
+        if (size > 0 && forced.file.write(packs, static_cast<uint32_t>(size)) != size)
+        {
+            forced.failed = true;
+            LTRACE(LT_WARN, 2, "Warning: the file " << forced.fileName << " of the forced pictures cannot be written.");
+            return;
+        }
+    }
+}
+
 bool SingleFileMuxer::muxPacket(AVPacket& avPacket)
 {
     if (avPacket.data == nullptr || avPacket.size == 0)
         return true;
+    if (m_forcedVobSub.count(avPacket.stream_index) > 0)
+        writeForcedVobSub(avPacket.stream_index, avPacket);
     if (const auto forced = m_forcedPgs.find(avPacket.stream_index); forced != m_forcedPgs.end())
     {
         std::deque<PgsForcedFilter::Segment> segments;
@@ -591,6 +653,23 @@ bool SingleFileMuxer::close()
             allFinished = false;
         }
         forced.open = false;
+    }
+    // the pairs of forced DVD subtitle pictures: the .sub file is closed, and its .idx file written beside it
+    for (auto& [streamIndex, forced] : m_forcedVobSub)
+    {
+        if (!forced.open)
+            continue;
+        forced.open = false;
+        const auto* packer = static_cast<const MatroskaCopyStreamReader*>(forced.packer.get());
+        const std::string text = packer->vobSubIndex();
+        const std::string name = forced.fileName.substr(0, forced.fileName.size() - 4) + ".idx";
+        File idx;
+        if (!forced.file.close() || forced.failed || !idx.open(name.c_str(), File::ofWrite) ||
+            idx.write(text.data(), static_cast<uint32_t>(text.size())) != static_cast<int>(text.size()) || !idx.close())
+        {
+            LTRACE(LT_ERROR, 2, "Error: the end of " << forced.fileName << " could not be written.");
+            allFinished = false;
+        }
     }
     for (const auto& [fst, outputs] : m_streamInfo)
         for (StreamInfo* streamInfo : outputs)

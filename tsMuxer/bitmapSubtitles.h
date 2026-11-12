@@ -96,6 +96,39 @@ class VobSubDecoder final : public BitmapSubDecoder
     bool m_warned = false;
 };
 
+// Whether a DVD subpicture unit is one a player shows also with subtitles off: one of its control sequences has the
+// command "forced start of display" (0x00) where a unit of the other kind has "start of display" (0x01).
+bool vobSubUnitForced(const uint8_t* spu, size_t size);
+
+// ** THE FORCED PICTURES OF A DVD SUBTITLE TRACK, WRITTEN BESIDE IT. ** A DVD marks the pictures a player shows also
+// with subtitles off, the translation of a sign or of a line in another language, unit by unit. In a Matroska file or
+// a .sub file the whole track is shown or none of it, as with the forced pictures of a Blu-ray (pgsForcedFilter.h),
+// and they are written the same way: a Matroska output and a demux write the forced units of a track kept as it is
+// (S_VOBSUB) also as a track or a file pair of their own. A unit is complete on its own, so it is copied as it is.
+// Only for a track that has both kinds: the forced units are held back until the track shows one that is not
+// forced, and a track that never does gives none.
+class VobSubForcedTrack
+{
+   public:
+    struct Unit
+    {
+        int64_t pts = 0;  // as the muxer has it (internal clock)
+        int64_t duration = 0;
+        std::vector<uint8_t> data;
+        std::vector<uint8_t> additions;  // of a Matroska block copied as it is
+    };
+    // A unit of the track. The forced units to write now are added to `out`.
+    void push(Unit unit, std::vector<Unit>& out);
+
+   private:
+    // the units held are small (a few KB each); a track of forced pictures alone as long as this is given up
+    static constexpr size_t MAX_HELD_BYTES = 64 * 1024 * 1024;
+    bool m_otherSeen = false;
+    bool m_givenUp = false;
+    size_t m_heldBytes = 0;
+    std::vector<Unit> m_held;
+};
+
 // The display sets of a DVB subtitle track (ETSI EN 300 743), S_DVBSUB in Matroska: the CodecPrivate holds the
 // composition and ancillary page ids, and every block is one display set. Regions, colour tables and the page persist
 // from one display set to the next, as the standard's page updates need.

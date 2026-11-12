@@ -1798,9 +1798,15 @@ void MatroskaMuxer::writeTracks()
     // Room as well for the track of the forced pictures a PGS track may turn out to have (forcedPgsTrack)
     int64_t forcedRoom = 0;
     for (const auto& [index, track] : m_tracks)
-        if (track.codecID == CODEC_S_PGS && !track.forcedDerived && !track.noForcedTrack &&
-            m_tracks.count(FORCED_PGS_STREAM_BASE + index) == 0)
+    {
+        if (track.forcedDerived || track.noForcedTrack || m_tracks.count(FORCED_PGS_STREAM_BASE + index) != 0)
+            continue;
+        if (track.codecID == CODEC_S_PGS)
             forcedRoom += FORCED_TRACK_RESERVE;
+        // a track of DVD subtitles: its entry holds the .idx text once more (feedForcedVobSub)
+        else if (track.codecID == CODEC_S_MKVCOPY && track.matroskaCodecID == "S_VOBSUB" && !m_webm)
+            forcedRoom += FORCED_TRACK_RESERVE + static_cast<int64_t>(track.codecPrivate.size());
+    }
     m_tracksReservedEnd = 0;
     if (!m_lateStreams.empty() || forcedRoom > 0)
     {
@@ -1879,6 +1885,74 @@ void MatroskaMuxer::writeForcedPgs(const int sourceStream, std::deque<PgsForcedF
         muxPacketInternal(packet);
     }
     segments.clear();
+}
+
+// A unit of a DVD subtitle track kept as it is: a forced one goes to a track of its own as well, if the track has
+// both kinds (VobSubForcedTrack). The track is made when its first unit is written, as that of a PGS track.
+void MatroskaMuxer::feedForcedVobSub(const int sourceStream, VobSubForcedTrack::Unit unit)
+{
+    std::vector<VobSubForcedTrack::Unit> units;
+    m_forcedVobSub[sourceStream].push(std::move(unit), units);
+    if (units.empty())
+        return;
+    const int forcedStream = FORCED_PGS_STREAM_BASE + sourceStream;
+    if (m_tracks.count(forcedStream) == 0)
+    {
+        MkvTrackInfo& source = m_tracks[sourceStream];
+        // a track that is marked forced itself is the forced track
+        if (const auto own = source.flags.find(MATROSKA_ID_TRACKFLAGFORCED); own != source.flags.end() && own->second)
+        {
+            source.noForcedTrack = true;
+            return;
+        }
+        // a track of the same language that is marked forced is that track already
+        for (const auto& [index, t] : m_tracks)
+            if (index != sourceStream && t.matroskaCodecID == source.matroskaCodecID && t.language == source.language)
+                if (const auto flag = t.flags.find(MATROSKA_ID_TRACKFLAGFORCED); flag != t.flags.end() && flag->second)
+                {
+                    source.noForcedTrack = true;
+                    return;
+                }
+        MkvTrackInfo forced;
+        forced.streamIndex = forcedStream;
+        forced.codecReader = source.codecReader;
+        forced.codecID = source.codecID;
+        forced.matroskaCodecID = source.matroskaCodecID;
+        forced.codecPrivate = source.codecPrivate;
+        forced.trackType = source.trackType;
+        forced.language = source.language;
+        forced.languageBCP47 = source.languageBCP47;
+        forced.name = source.name.empty() ? std::string("Forced") : source.name + " (forced)";
+        forced.flags[MATROSKA_ID_TRACKFLAGFORCED] = 1;
+        forced.markedDefault = false;
+        forced.forcedDerived = true;
+        forced.noForcedTrack = true;
+        static std::mt19937_64 rng(std::random_device{}());
+        forced.trackUID = rng() | 1ull << 63;  // 8 bytes always, as for every track
+        int last = 0;
+        for (const auto& [index, t] : m_tracks) last = (std::max)(last, t.trackNumber);
+        forced.trackNumber = last + 1;
+        LTRACE(LT_INFO, 2,
+               "Matroska: track " << source.trackNumber << " has forced pictures beside its others. They are also "
+                                  << "written as track " << forced.trackNumber
+                                  << ", with the forced flag, so that a player can show them alone; the whole track "
+                                     "stays as it is. no-forced-track on the meta line leaves that track out.");
+        m_tracks[forcedStream] = forced;
+        if (m_headerWritten)
+            rewriteTracks();
+    }
+    // written as the units of the whole track are: at once in a file of subtitles alone, else when the other tracks
+    // reach their time
+    bool othersPresent = false;
+    for (const auto& [idx, t] : m_tracks) othersPresent |= t.trackType != MKV_TRACK_TYPE_SUBTITLE;
+    for (VobSubForcedTrack::Unit& u : units)
+    {
+        if (!othersPresent)
+            writeTextBlock(m_tracks[forcedStream], u.data.data(), static_cast<int>(u.data.size()), u.pts, u.duration,
+                           u.additions);
+        else
+            m_heldText.emplace(u.pts, HeldText{forcedStream, u.duration, std::move(u.data), std::move(u.additions)});
+    }
 }
 
 // The end of the mux: what the filters still hold
@@ -4572,6 +4646,9 @@ bool MatroskaMuxer::muxPacketInternal(AVPacket& avPacket)
         HeldText held{avPacket.stream_index, avPacket.duration,
                       std::vector<uint8_t>(p + 4 + addSize, p + avPacket.size),
                       std::vector<uint8_t>(p + 4, p + 4 + addSize)};
+        // the forced units of DVD subtitles, to a track of their own (the map may grow: `track` stays valid in it)
+        if (track.matroskaCodecID == "S_VOBSUB" && !track.forcedDerived && !track.noForcedTrack && !m_webm)
+            feedForcedVobSub(avPacket.stream_index, {avPacket.pts, avPacket.duration, held.data, held.additions});
         bool othersPresent = false;
         for (const auto& [idx, t] : m_tracks) othersPresent |= t.trackType != MKV_TRACK_TYPE_SUBTITLE;
         if (!othersPresent)

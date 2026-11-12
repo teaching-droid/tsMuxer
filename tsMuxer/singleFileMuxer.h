@@ -5,7 +5,9 @@
 
 #include <types/types.h>
 #include <deque>
+#include <memory>
 #include <set>
+#include "bitmapSubtitles.h"
 #include "pgsForcedFilter.h"
 
 #include <map>
@@ -86,6 +88,21 @@ class SingleFileMuxer final : public AbstractMuxer
     std::map<int, std::string> m_pgsLanguage;    // the language of each PGS track of the demux
     std::set<std::string> m_forcedPgsLanguages;  // the languages that have a track marked forced already
     void writeForcedPgs(int streamIndex, std::deque<PgsForcedFilter::Segment>& segments);
+    // ** THE FORCED PICTURES OF A DVD SUBTITLE TRACK AS A FILE PAIR OF THEIR OWN ** (VobSubForcedTrack in
+    // bitmapSubtitles.h): <name>.forced.sub and .idx beside <name>.sub and .idx, for a track that has forced pictures
+    // and others. The pair is made when its first unit is written. `packer` makes the packs and the index of the pair
+    // as the reader of the track does for the whole track.
+    struct ForcedVobSub
+    {
+        VobSubForcedTrack track;
+        std::unique_ptr<AbstractStreamReader> packer;
+        File file;
+        std::string fileName;  // of the .sub file
+        bool open = false;
+        bool failed = false;
+    };
+    std::map<int, ForcedVobSub> m_forcedVobSub;  // by stream index
+    void writeForcedVobSub(int streamIndex, const AVPacket& avPacket);
     std::map<std::string, int> m_trackNameTmp;
     // std::map<int, std::string> m_fileNames;
     // std::map<int, File> m_file;

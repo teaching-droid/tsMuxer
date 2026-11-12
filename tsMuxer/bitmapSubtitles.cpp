@@ -280,6 +280,86 @@ class NibbleReader
 };
 }  // namespace
 
+bool vobSubUnitForced(const uint8_t* spu, const size_t size)
+{
+    if (spu == nullptr || size < 4)
+        return false;
+    const size_t unitSize = (std::min)(static_cast<size_t>(AV_RB16(spu)), size);
+    size_t pos = AV_RB16(spu + 2);
+    if (pos < 4)
+        return false;
+    // the control sequences, as VobSubDecoder::decode reads them: a date, the place of the next one, and commands
+    // until 0xFF
+    for (int sequences = 0; sequences < 64 && pos + 4 <= unitSize; ++sequences)
+    {
+        const size_t next = AV_RB16(spu + pos + 2);
+        size_t p = pos + 4;
+        bool end = false;
+        while (!end && p < unitSize)
+        {
+            switch (spu[p++])
+            {
+            case 0x00:  // forced start of display
+                return true;
+            case 0x01:  // start of display
+            case 0x02:  // stop of display
+                break;
+            case 0x03:  // the palette entries
+            case 0x04:  // the opacities
+                p += 2;
+                break;
+            case 0x05:  // the area
+                p += 6;
+                break;
+            case 0x06:  // where the lines of the two fields start
+                p += 4;
+                break;
+            case 0x07:  // colour and contrast changes: its size word counts itself
+                if (p + 2 > unitSize || AV_RB16(spu + p) < 2)
+                    return false;
+                p += AV_RB16(spu + p);
+                break;
+            default:  // 0xFF ends the sequence, and an unknown command cannot be stepped over
+                end = true;
+            }
+        }
+        if (next <= pos)
+            break;  // the last sequence points at itself
+        pos = next;
+    }
+    return false;
+}
+
+void VobSubForcedTrack::push(Unit unit, std::vector<Unit>& out)
+{
+    if (m_givenUp)
+        return;
+    if (!vobSubUnitForced(unit.data.data(), unit.data.size()))
+    {
+        if (!m_otherSeen)
+        {
+            m_otherSeen = true;
+            for (Unit& held : m_held) out.push_back(std::move(held));
+            m_held.clear();
+            m_heldBytes = 0;
+        }
+        return;
+    }
+    if (m_otherSeen)
+    {
+        out.push_back(std::move(unit));
+        return;
+    }
+    m_heldBytes += unit.data.size() + unit.additions.size();
+    if (m_heldBytes > MAX_HELD_BYTES)
+    {
+        m_givenUp = true;
+        m_held.clear();
+        return;
+    }
+    m_held.push_back(std::move(unit));
+}
+
 void VobSubDecoder::decode(const uint8_t* spu, const int size, const int64_t pts, const int64_t duration,
                            std::vector<uint8_t>& out)
 {

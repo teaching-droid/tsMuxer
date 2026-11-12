@@ -9,6 +9,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include "bitmapSubtitles.h"
 #include "pgsForcedFilter.h"
 
 #include "abstractMuxer.h"
@@ -433,6 +434,10 @@ class MatroskaMuxer final : public AbstractMuxer
     void feedForcedPgs(MkvTrackInfo& track, const AVPacket& avPacket);
     void writeForcedPgs(int sourceStream, std::deque<PgsForcedFilter::Segment>& segments);
     void finishForcedPgs();
+    // The same for the forced units of a DVD subtitle track kept as it is (S_VOBSUB, VobSubForcedTrack in
+    // bitmapSubtitles.h). Its entry has the .idx text of the whole track, so the room kept for it is that much more.
+    std::map<int, VobSubForcedTrack> m_forcedVobSub;  // by the stream index of the whole track
+    void feedForcedVobSub(int sourceStream, VobSubForcedTrack::Unit unit);
     int m_nextTrackNumber;
 
     // --dv-profile=8.1. A dual layer profile 7 disc is understood by few devices, while profile 8.1

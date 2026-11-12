@@ -1561,11 +1561,13 @@ Additional parameters for SRT tracks:
 - forced-pictures   A PGS track only: take the forced pictures of the track
                     alone, the ones a disc player shows with subtitles off.
                     Each is written complete on its own.
-- no-forced-track   A PGS track only. A Matroska output and a demux write the
-                    forced pictures of a PGS track that has such pictures and
-                    others also as a track of their own with the forced flag,
-                    or as <name>.forced.sup, beside the whole track. This
-                    leaves that track or file out.
+- no-forced-track   A Matroska output and a demux write the forced pictures
+                    of a PGS track that has such pictures and others also as
+                    a track of their own with the forced flag, or as
+                    <name>.forced.sup, beside the whole track; and those of
+                    a track of DVD subtitles kept as it is the same way, as
+                    <name>.forced.sub and .idx in a demux. This leaves that
+                    track or those files out.
 - ass-as-srt        Draw ASS and SSA subtitles as plain text with the font
                     parameters above, as SRT subtitles are drawn, instead of
                     with libass. Without it, ASS and SSA subtitles drawn into
