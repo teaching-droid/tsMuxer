@@ -345,7 +345,8 @@ class TSDemuxer final : public AbstractDemuxer
     std::map<int, int64_t> m_videoFirstPtsOfPid;
     std::map<int, int> m_videoPesOfPid;  // PES with a PTS of each video track of the file, counted
     // The video time a stream is measured against: that of its own program where the program has video, else that
-    // of the file (first: the first PES in file order, else the smallest PTS)
+    // of the file (first: the first PES in file order, else the smallest PTS). A stream of a program that has no
+    // video, in a file with video of another program, is measured against the earliest stream of its own program.
     [[nodiscard]] int64_t videoReference(int32_t pid, bool first) const;
     int64_t m_videoPesRead = 0;  // see videoPesRead
     int m_firstVideoPid = -1;    // see firstVideoPid

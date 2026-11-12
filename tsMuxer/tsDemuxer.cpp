@@ -741,9 +741,41 @@ int64_t TSDemuxer::videoReference(const int32_t pid, const bool first) const
     const auto stream = m_pmt.pidList.find(pid);
     if (stream != m_pmt.pidList.end() && stream->second.m_programNumber >= 0)
     {
+        const int program = stream->second.m_programNumber;
         const auto& times = first ? m_firstSeenVideoPtsOfProgram : m_firstVideoPtsOfProgram;
-        if (const auto own = times.find(stream->second.m_programNumber); own != times.end())
+        if (const auto own = times.find(program); own != times.end())
             return own->second;
+        // ** A PROGRAM WITHOUT VIDEO IS NOT MEASURED AGAINST THE VIDEO OF ANOTHER ONE. ** A multiplex holds programs
+        // of sound alone beside its television programs (a radio service, a sound feed), each on a clock of its own.
+        // Such a program has no picture, and its sound was measured against the first video of the file, that of
+        // another program: a sound track was listed with a delay of eleven hours. Its tracks are
+        // measured against the earliest of their own program, so they keep their places against each other. Only
+        // where the file has video of another program: a file of sound alone is as before.
+        const int64_t ofFile = first ? m_firstSeenVideoPTS : m_firstVideoPTS;
+        const auto own = m_firstPtsTime.find(pid);
+        bool programHasVideo = false;
+        for (const auto& [otherPid, info] : m_pmt.pidList)
+            programHasVideo |= info.m_programNumber == program && isVideoPID(info.m_streamType);
+        if (ofFile != -1 && !programHasVideo && own != m_firstPtsTime.end())
+        {
+            static constexpr int64_t CLOCK_WRAP = 1LL << 33;
+            int64_t earliest = own->second;
+            for (const auto& [otherPid, info] : m_pmt.pidList)
+            {
+                const auto other = m_firstPtsTime.find(otherPid);
+                if (info.m_programNumber != program || other == m_firstPtsTime.end())
+                    continue;
+                // across a wrap of the clock, as getTrackStart
+                int64_t before = (earliest - other->second) % CLOCK_WRAP;
+                if (before >= CLOCK_WRAP / 2)
+                    before -= CLOCK_WRAP;
+                else if (before < -CLOCK_WRAP / 2)
+                    before += CLOCK_WRAP;
+                if (before > 0)
+                    earliest = other->second;
+            }
+            return earliest;
+        }
     }
     return first ? m_firstSeenVideoPTS : m_firstVideoPTS;
 }
