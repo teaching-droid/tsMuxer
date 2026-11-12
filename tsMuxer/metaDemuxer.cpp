@@ -1923,9 +1923,14 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
     // for the same track was refused or left out. For text subtitles there is a use for two: the text as it is (ASS
     // with its styles, SRT), for a player that draws it, and beside it the same subtitles drawn into pictures, for a
     // player that only shows pictures. A second line for a text track that an earlier line muxes the other way (one
-    // with keep-text, one without) reads its file once more, under a second name (nameAlias.h), as if it were a copy
-    // of the file. A third line, or a second one of the same way, is refused as before. Only for an output that keeps
-    // text, a Matroska file or a demux: any other draws both lines, and would get the same pictures twice.
+    // with keep-text, one without) reads its file once more. Only for an output that keeps text, a Matroska file or a
+    // demux: any other draws both lines, and would get the same pictures twice.
+    //
+    // The file is read under a second name, which a reader of its own is kept by: the name with "./" before its last
+    // part, the same file to the system, so that everything taken from the name or from files beside the source (its
+    // language, the word forced, the clip information of a disc) is found as for the first line. The name is entered
+    // as a second name of the file all the same (nameAlias.h), for a source that is itself read under another name
+    // and for what is printed. The line has keys of its own, so a third line for the track is left out as before.
     if (codec == "S_TEXT/UTF8" && !fileList.empty() && addParams.find("subClip") == addParams.end() &&
         (m_matroskaOutput != 0 || m_demuxOutput))
     {
@@ -1934,38 +1939,29 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         for (const auto& key : keys)
         {
             const auto earlier = m_textTrackKept.find(key);
-            otherWay &= earlier != m_textTrackKept.end() && earlier->second != kept;
+            // not where the second read is taken already: a third line is left out below, as it was
+            otherWay &= earlier != m_textTrackKept.end() && earlier->second != kept &&
+                        m_processedTracks.count(key + "|second") == 0;
         }
-        std::vector<string> secondNames;
         if (otherWay)
-            for (const auto& name : fileList)
-            {
-                const string real = unquoteStr(trimStr(name));
-                const string second = real + ".second." + extractFileExt(real);
-                // a file of that very name, or a name given out already (a third line), ends the try
-                if (fileExists(second) || nameAlias::resolve(second) != second)
-                {
-                    secondNames.clear();
-                    break;
-                }
-                secondNames.push_back(second);
-            }
-        if (!secondNames.empty() && secondNames.size() == fileList.size())
         {
-            for (size_t i = 0; i < fileList.size(); ++i)
-                nameAlias::add(secondNames[i], unquoteStr(trimStr(fileList[i])));
             LTRACE(LT_INFO, 2,
                    "Track " << pid << " of " << unquotedStreamName << " is muxed a second time, "
                             << (kept ? "as text beside the track drawn into pictures"
                                      : "drawn into pictures beside the track kept as text")
                             << ": the file is read once more for it.");
-            fileList = secondNames;
-            keys.clear();
             lineKey.clear();
-            for (const auto& name : fileList)
+            for (size_t i = 0; i < fileList.size(); ++i)
             {
-                keys.push_back(fileKey(name) + trackPart);
-                lineKey += keys.back() + "|";
+                const string given = unquoteStr(trimStr(fileList[i]));
+                const size_t folder = given.find_last_of("/\\");
+                const string second = folder == string::npos
+                                          ? "./" + given
+                                          : given.substr(0, folder + 1) + "./" + given.substr(folder + 1);
+                nameAlias::add(second, nameAlias::resolve(given));
+                fileList[i] = second;
+                keys[i] += "|second";
+                lineKey += keys[i] + "|";
             }
         }
         else
