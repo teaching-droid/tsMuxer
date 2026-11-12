@@ -4590,6 +4590,14 @@ Build the ISO anyway?</source>
         <translation>שמור כתוביות SRT כטקסט (Matroska ו-Demux)</translation>
     </message>
     <message>
+        <source>Also as pictures, a second track (PGS)</source>
+        <translation>גם כתמונות, רצועה שנייה (PGS)</translation>
+    </message>
+    <message>
+        <source>Write each text subtitle track twice: as text, for a player that draws it, and drawn into pictures with the font and position settings below, for a player that only shows pictures. For Matroska and Demux, where the text is kept. The source is read a second time for the pictures.</source>
+        <translation>לכתוב כל רצועת כתוביות טקסט פעמיים: כטקסט, לנגן שמצייר אותו, וכתמונות מצוירות לפי הגדרות הגופן והמיקום שלמטה, לנגן שמציג תמונות בלבד. עבור Matroska ו-Demux, שבהם הטקסט נשמר. המקור נקרא פעם שנייה עבור התמונות.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="2105"/>
         <source>Copy each SRT subtitle as text, with its tags and times, instead of drawing it into pictures. Matroska keeps it as a text track and Demux writes an SRT file. The other outputs cannot carry text subtitles and always draw them. The font and position settings below do not apply to text.</source>
         <translation>העתק כל כתובית SRT כטקסט, עם התגים והזמנים שלה, במקום לצייר אותה כתמונות. Matroska שומר אותה כרצועת טקסט, ו-Demux כותב קובץ SRT. שאר הפלטים אינם יכולים לשאת כתוביות טקסט ותמיד מציירים אותן. הגדרות הגופן והמיקום שלמטה אינן חלות על טקסט.</translation>

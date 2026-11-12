@@ -2427,6 +2427,16 @@
          </widget>
         </item>
         <item>
+         <widget class="QCheckBox" name="alsoDrawnCheckBox">
+          <property name="toolTip">
+           <string>Write each text subtitle track twice: as text, for a player that draws it, and drawn into pictures with the font and position settings below, for a player that only shows pictures. For Matroska and Demux, where the text is kept. The source is read a second time for the pictures.</string>
+          </property>
+          <property name="text">
+           <string>Also as pictures, a second track (PGS)</string>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QCheckBox" name="saveSrtCheckBox">
           <property name="toolTip">
            <string>While SRT subtitles are drawn into pictures, also write each SRT track as text, to an .srt file named after the output and the track's row in the list.</string>

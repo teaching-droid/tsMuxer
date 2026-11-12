@@ -194,7 +194,7 @@ class TsMuxerWindow : public QWidget
     QString getAudioMetaInfo(QtvCodecInfo* codecInfo);
     QString getVideoMetaInfo(QtvCodecInfo* codecInfo);
     QString getFileList();
-    QString getSrtParams();
+    QString getSrtParams(bool asText);
     int findLangByCode(const QString& code);
     bool isLangCodeForMeta(const QString& code);
     void showMkvTrackOptions(const QtvCodecInfo* codecInfo);
@@ -320,6 +320,9 @@ class TsMuxerWindow : public QWidget
     bool folderOfDiscsBox(const QString& folder);
     // the text of the meta box as it stands, a no-break space kept (see its definition)
     [[nodiscard]] QString metaBoxText() const;
+    // The text subtitles are kept as text and go in drawn as well, as a second track of each (the tick under "Keep
+    // SRT subtitles as text"): the line of each text track is then written twice
+    [[nodiscard]] bool alsoDrawnApplies() const;
     bool m_scanRun = false;         // startMuxing was asked for a scan
     bool m_askNonDiscCodec = true;  // the question about a codec a Blu-ray does not have; off until the window closes
     bool m_scanRunning = false;     // the run in the progress window is a scan

@@ -4450,6 +4450,14 @@ Build the ISO anyway?</source>
         <translation>SRT 자막을 텍스트로 유지 (Matroska 및 디먹싱)</translation>
     </message>
     <message>
+        <source>Also as pictures, a second track (PGS)</source>
+        <translation>그림으로도, 두 번째 트랙 (PGS)</translation>
+    </message>
+    <message>
+        <source>Write each text subtitle track twice: as text, for a player that draws it, and drawn into pictures with the font and position settings below, for a player that only shows pictures. For Matroska and Demux, where the text is kept. The source is read a second time for the pictures.</source>
+        <translation>텍스트 자막 트랙마다 두 번 기록합니다. 하나는 텍스트 그대로(직접 그리는 플레이어용), 하나는 아래의 글꼴 및 위치 설정으로 그림으로 그린 것(그림만 표시하는 플레이어용)입니다. 텍스트를 유지하는 Matroska와 디먹스에서 쓸 수 있습니다. 그림을 위해 원본을 한 번 더 읽습니다.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="2105"/>
         <source>Copy each SRT subtitle as text, with its tags and times, instead of drawing it into pictures. Matroska keeps it as a text track and Demux writes an SRT file. The other outputs cannot carry text subtitles and always draw them. The font and position settings below do not apply to text.</source>
         <translation>각 SRT 자막을 그림으로 그리지 않고 태그와 시간을 포함한 텍스트로 복사합니다. Matroska는 텍스트 트랙으로 유지하고 디먹싱은 SRT 파일을 기록합니다. 다른 출력은 텍스트 자막을 담을 수 없어 항상 그림으로 그립니다. 아래의 글꼴 및 위치 설정은 텍스트에는 적용되지 않습니다.</translation>

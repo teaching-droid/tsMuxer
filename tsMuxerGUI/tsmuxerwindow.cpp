@@ -1150,6 +1150,12 @@ TsMuxerWindow::TsMuxerWindow()
                 updateKeepTextControls();
                 onSavedParamChanged();
             });
+    connect(ui->alsoDrawnCheckBox, &QCheckBox::toggled, this,
+            [this]
+            {
+                updateKeepTextControls();
+                onSavedParamChanged();
+            });
     connect(ui->saveSrtCheckBox, &QCheckBox::toggled, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->textStAsSrtCheckBox, &QCheckBox::toggled, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->assAsSrtCheckBox, &QCheckBox::toggled, this,
@@ -5923,11 +5929,11 @@ void TsMuxerWindow::setRendererAnimationTime(double value)
     ui->comboBoxAnimation->setCurrentIndex(index);
 }
 
-QString TsMuxerWindow::getSrtParams()
+QString TsMuxerWindow::getSrtParams(const bool asText)
 {
     // Kept as text, each subtitle is copied with its own text, tags and times: nothing that drawing
     // needs applies, and the muxer asks for none of it
-    if (keepTextApplies())
+    if (asText)
         return ",keep-text";
     auto& font = fontSettingsModel->font();
     auto rez = QString(",font-name=\"%1\",font-size=%2,font-color=0x%3")
@@ -6851,20 +6857,34 @@ QString TsMuxerWindow::buildMetaText()
             if (bluray3D)
                 postfix += QString(", 3d-plane=%1").arg(codecInfo->offsetId >= 0 ? codecInfo->offsetId : 255);
         }
+        // ** A TEXT TRACK AS TEXT AND AS PICTURES. ** With "Also as pictures" the line of a text track is written
+        // twice, once kept as text and once drawn: tsMuxeR then reads the track a second time and the output has both.
+        // What differs between the two lines stands in for itself until the line is finished (SRT_PART).
+        static const QString SRT_PART = QStringLiteral("\x01srt\x01");
+        QString srtKept, srtDrawn;
         if (codecInfo->displayName == "SRT")
         {
-            postfix += getSrtParams();
-            if (!keepTextApplies() && ui->saveSrtCheckBox->isChecked())
-                postfix += QString(", save-srt=\"%1\"").arg(saveSrtFileName(codecInfo, i));
-            if (keepTextApplies() && ui->radioButtonMKV->isChecked() && !ui->textStAsSrtCheckBox->isChecked() &&
-                codecInfo->descr.contains(QLatin1String("TextST")))
-                postfix += ", keep-textst";
-            // ASS and SSA from Matroska are drawn with libass; a track of another text format takes no notice of these
-            if (!keepTextApplies() && ui->assAsSrtCheckBox->isChecked())
-                postfix += ", ass-as-srt";
-            else if (!keepTextApplies() && !ui->fontsDirLineEdit->text().trimmed().isEmpty())
-                postfix +=
-                    QString(", fonts-dir=\"%1\"").arg(QDir::toNativeSeparators(ui->fontsDirLineEdit->text().trimmed()));
+            const auto srtPart = [&](const bool asText)
+            {
+                QString part = getSrtParams(asText);
+                // not beside the track kept as text, which is the text already
+                if (!asText && !keepTextApplies() && ui->saveSrtCheckBox->isChecked())
+                    part += QString(", save-srt=\"%1\"").arg(saveSrtFileName(codecInfo, i));
+                if (asText && ui->radioButtonMKV->isChecked() && !ui->textStAsSrtCheckBox->isChecked() &&
+                    codecInfo->descr.contains(QLatin1String("TextST")))
+                    part += ", keep-textst";
+                // ASS and SSA from Matroska are drawn with libass; a track of another text format takes no notice of
+                // these
+                if (!asText && ui->assAsSrtCheckBox->isChecked())
+                    part += ", ass-as-srt";
+                else if (!asText && !ui->fontsDirLineEdit->text().trimmed().isEmpty())
+                    part += QString(", fonts-dir=\"%1\"")
+                                .arg(QDir::toNativeSeparators(ui->fontsDirLineEdit->text().trimmed()));
+                return part;
+            };
+            srtKept = srtPart(true);
+            srtDrawn = srtPart(false);
+            postfix += SRT_PART;
             // The plane was written as offset=, which the mux does not know: the drawn subtitles sat at the depth of
             // the screen whatever plane was chosen. Written as for a PGS track, with 255 for "zero".
             if (bluray3D)
@@ -6929,7 +6949,21 @@ QString TsMuxerWindow::buildMetaText()
             {
                 postfix += QString(", default");
             }
-            metaContent.append(prefix + getAudioMetaInfo(codecInfo) + postfix + '\n');
+            if (codecInfo->displayName == "SRT")
+            {
+                QString first = postfix, second = postfix;
+                first.replace(SRT_PART, keepTextApplies() ? srtKept : srtDrawn);
+                metaContent.append(prefix + getAudioMetaInfo(codecInfo) + first + '\n');
+                // the same track once more, drawn; not the default track a second time
+                if (alsoDrawnApplies())
+                {
+                    second.replace(SRT_PART, srtDrawn);
+                    second.remove(QRegularExpression(QStringLiteral(", default(=[a-z]+)?(?=,|$)")));
+                    metaContent.append(prefix + getAudioMetaInfo(codecInfo) + second + '\n');
+                }
+            }
+            else
+                metaContent.append(prefix + getAudioMetaInfo(codecInfo) + postfix + '\n');
         }
     }
     return metaContent;
@@ -7808,16 +7842,20 @@ bool TsMuxerWindow::keepTextApplies() const
     return ui->keepTextCheckBox->isChecked() && (ui->radioButtonMKV->isChecked() || ui->radioButtonDemux->isChecked());
 }
 
+bool TsMuxerWindow::alsoDrawnApplies() const { return keepTextApplies() && ui->alsoDrawnCheckBox->isChecked(); }
+
 // The tick is a preference that is remembered, so it stays while an output that cannot carry text is
 // chosen; the box is greyed then, because the tick reaches nothing. While it applies, the settings that
 // only drawing uses are greyed instead, so the window does not offer what cannot happen.
 void TsMuxerWindow::updateKeepTextControls()
 {
     ui->keepTextCheckBox->setEnabled(ui->radioButtonMKV->isChecked() || ui->radioButtonDemux->isChecked());
-    const bool asText = keepTextApplies();
+    // a second track of pictures goes with the text that is kept; the settings of drawing then apply to it
+    ui->alsoDrawnCheckBox->setEnabled(keepTextApplies());
+    const bool asText = keepTextApplies() && !alsoDrawnApplies();
     // save-srt is for subtitles that are drawn: kept as text, the output or the demux holds the text already
     ui->saveSrtCheckBox->setEnabled(!asText);
-    ui->textStAsSrtCheckBox->setEnabled(asText && ui->radioButtonMKV->isChecked());
+    ui->textStAsSrtCheckBox->setEnabled(keepTextApplies() && ui->radioButtonMKV->isChecked());
     // libass draws only what is drawn, and a fonts folder is for libass alone
     ui->assAsSrtCheckBox->setEnabled(!asText);
     const bool libass = !asText && !ui->assAsSrtCheckBox->isChecked();
@@ -9129,6 +9167,7 @@ void TsMuxerWindow::writeSettings()
     settings->setValue("offset", ui->spinEditOffset->value());
     settings->setValue("fadeTime", getRendererAnimationTime());
     settings->setValue("keepText", ui->keepTextCheckBox->isChecked());
+    settings->setValue("alsoDrawn", ui->alsoDrawnCheckBox->isChecked());
     settings->setValue("saveSrt", ui->saveSrtCheckBox->isChecked());
     settings->setValue("assAsSrt", ui->assAsSrtCheckBox->isChecked());
     settings->setValue("textStAsSrt", ui->textStAsSrtCheckBox->isChecked());
@@ -9193,6 +9232,7 @@ bool TsMuxerWindow::readSettingsBody()
     ui->spinEditOffset->setValue(settings->value("offset", ui->spinEditOffset->value()).toInt());
     // On unless it was turned off: Matroska carries text subtitles itself, and text stays sharp, small and editable.
     ui->keepTextCheckBox->setChecked(settings->value("keepText", true).toBool());
+    ui->alsoDrawnCheckBox->setChecked(settings->value("alsoDrawn", false).toBool());
     ui->saveSrtCheckBox->setChecked(settings->value("saveSrt", false).toBool());
     ui->assAsSrtCheckBox->setChecked(settings->value("assAsSrt", false).toBool());
     ui->textStAsSrtCheckBox->setChecked(settings->value("textStAsSrt", true).toBool());

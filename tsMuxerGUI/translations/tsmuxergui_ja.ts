@@ -4590,6 +4590,14 @@ Build the ISO anyway?</source>
         <translation>SRT 字幕をテキストのまま保持 (Matroska と Demux)</translation>
     </message>
     <message>
+        <source>Also as pictures, a second track (PGS)</source>
+        <translation>画像としても書き出す (2 つ目のトラック、PGS)</translation>
+    </message>
+    <message>
+        <source>Write each text subtitle track twice: as text, for a player that draws it, and drawn into pictures with the font and position settings below, for a player that only shows pictures. For Matroska and Demux, where the text is kept. The source is read a second time for the pictures.</source>
+        <translation>テキスト字幕の各トラックを 2 回書き出します。1 つはテキストのまま (描画できるプレーヤー向け)、もう 1 つは下のフォントと位置の設定で画像として描画したもの (画像しか表示できないプレーヤー向け) です。テキストを保持する Matroska と分離出力で使えます。画像のためにソースをもう一度読み込みます。</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="2105"/>
         <source>Copy each SRT subtitle as text, with its tags and times, instead of drawing it into pictures. Matroska keeps it as a text track and Demux writes an SRT file. The other outputs cannot carry text subtitles and always draw them. The font and position settings below do not apply to text.</source>
         <translation>各 SRT 字幕を画像に描画せず、タグとタイミングを含めてテキストのままコピーします。Matroska ではテキストトラックとして保持され、Demux では SRT ファイルが書き出されます。その他の出力はテキスト字幕を格納できないため、常に描画されます。下のフォントと位置の設定はテキストには適用されません。</translation>

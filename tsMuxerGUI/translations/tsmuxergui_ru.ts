@@ -4591,6 +4591,14 @@ Build the ISO anyway?</source>
         <translation>Сохранять субтитры SRT как текст (Matroska и Демукс)</translation>
     </message>
     <message>
+        <source>Also as pictures, a second track (PGS)</source>
+        <translation>Также в виде изображений, вторая дорожка (PGS)</translation>
+    </message>
+    <message>
+        <source>Write each text subtitle track twice: as text, for a player that draws it, and drawn into pictures with the font and position settings below, for a player that only shows pictures. For Matroska and Demux, where the text is kept. The source is read a second time for the pictures.</source>
+        <translation>Записывать каждую дорожку текстовых субтитров дважды: текстом, для проигрывателя, который сам его рисует, и нарисованной в изображения с настройками шрифта и положения ниже, для проигрывателя, который показывает только изображения. Для Matroska и демультиплексирования, где текст сохраняется. Для изображений источник читается второй раз.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="2105"/>
         <source>Copy each SRT subtitle as text, with its tags and times, instead of drawing it into pictures. Matroska keeps it as a text track and Demux writes an SRT file. The other outputs cannot carry text subtitles and always draw them. The font and position settings below do not apply to text.</source>
         <translation>Копировать каждый субтитр SRT как текст, с его тегами и временем, вместо отрисовки в изображения. Matroska сохраняет его как текстовую дорожку, а Демукс записывает файл SRT. Остальные выходные форматы не могут содержать текстовые субтитры и всегда отрисовывают их. Настройки шрифта и положения ниже к тексту не применяются.</translation>

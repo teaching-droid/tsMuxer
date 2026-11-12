@@ -4450,6 +4450,14 @@ Criar o ISO mesmo assim?</translation>
         <translation>Manter legendas SRT como texto (Matroska e Demux)</translation>
     </message>
     <message>
+        <source>Also as pictures, a second track (PGS)</source>
+        <translation>Também como imagens, uma segunda faixa (PGS)</translation>
+    </message>
+    <message>
+        <source>Write each text subtitle track twice: as text, for a player that draws it, and drawn into pictures with the font and position settings below, for a player that only shows pictures. For Matroska and Demux, where the text is kept. The source is read a second time for the pictures.</source>
+        <translation>Escrever cada faixa de legendas de texto duas vezes: como texto, para um leitor que o desenha, e desenhada em imagens com as definições de tipo de letra e posição abaixo, para um leitor que só mostra imagens. Para Matroska e Demux, onde o texto é mantido. A origem é lida uma segunda vez para as imagens.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="2105"/>
         <source>Copy each SRT subtitle as text, with its tags and times, instead of drawing it into pictures. Matroska keeps it as a text track and Demux writes an SRT file. The other outputs cannot carry text subtitles and always draw them. The font and position settings below do not apply to text.</source>
         <translation>Copia cada legenda SRT como texto, com as suas tags e tempos, em vez de desenhá-la em imagens. O Matroska mantém-na como uma faixa de texto e o Demux grava um ficheiro SRT. As outras saídas não podem levar legendas de texto e desenham-nas sempre. As definições de tipo de letra e posição abaixo não se aplicam a texto.</translation>

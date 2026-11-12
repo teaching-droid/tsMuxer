@@ -4591,6 +4591,14 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <translation>Mantener los subtítulos SRT como texto (Matroska y Desmultiplexar)</translation>
     </message>
     <message>
+        <source>Also as pictures, a second track (PGS)</source>
+        <translation>También como imágenes, una segunda pista (PGS)</translation>
+    </message>
+    <message>
+        <source>Write each text subtitle track twice: as text, for a player that draws it, and drawn into pictures with the font and position settings below, for a player that only shows pictures. For Matroska and Demux, where the text is kept. The source is read a second time for the pictures.</source>
+        <translation>Escribir cada pista de subtítulos de texto dos veces: como texto, para un reproductor que lo dibuja, y dibujada en imágenes con los ajustes de fuente y posición de abajo, para un reproductor que solo muestra imágenes. Para Matroska y Demux, donde el texto se conserva. La fuente se lee una segunda vez para las imágenes.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="2105"/>
         <source>Copy each SRT subtitle as text, with its tags and times, instead of drawing it into pictures. Matroska keeps it as a text track and Demux writes an SRT file. The other outputs cannot carry text subtitles and always draw them. The font and position settings below do not apply to text.</source>
         <translation>Copia cada subtítulo SRT como texto, con sus etiquetas y tiempos, en lugar de dibujarlo en imágenes. Matroska lo guarda como pista de texto y Desmultiplexar escribe un archivo SRT. Las demás salidas no pueden llevar subtítulos de texto y siempre los dibujan. Los ajustes de fuente y posición de abajo no se aplican al texto.</translation>

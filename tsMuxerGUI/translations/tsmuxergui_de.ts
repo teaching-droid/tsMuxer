@@ -4590,6 +4590,14 @@ ISO trotzdem erstellen?</translation>
         <translation>SRT-Untertitel als Text behalten (Matroska und Demuxen)</translation>
     </message>
     <message>
+        <source>Also as pictures, a second track (PGS)</source>
+        <translation>Auch als Bilder, eine zweite Spur (PGS)</translation>
+    </message>
+    <message>
+        <source>Write each text subtitle track twice: as text, for a player that draws it, and drawn into pictures with the font and position settings below, for a player that only shows pictures. For Matroska and Demux, where the text is kept. The source is read a second time for the pictures.</source>
+        <translation>Jede Textuntertitelspur zweimal schreiben: als Text, für einen Player, der ihn zeichnet, und als Bilder mit den Schrift- und Positionseinstellungen unten, für einen Player, der nur Bilder zeigt. Für Matroska und Demux, wo der Text erhalten bleibt. Die Quelle wird für die Bilder ein zweites Mal gelesen.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="2105"/>
         <source>Copy each SRT subtitle as text, with its tags and times, instead of drawing it into pictures. Matroska keeps it as a text track and Demux writes an SRT file. The other outputs cannot carry text subtitles and always draw them. The font and position settings below do not apply to text.</source>
         <translation>Jeden SRT-Untertitel als Text übernehmen, mit seinen Tags und Zeiten, statt ihn in Bilder zu zeichnen. Matroska behält ihn als Textspur, Demuxen schreibt eine SRT-Datei. Die anderen Ausgaben können keine Text-Untertitel tragen und zeichnen sie immer. Die Schrift- und Positionseinstellungen darunter gelten für Text nicht.</translation>

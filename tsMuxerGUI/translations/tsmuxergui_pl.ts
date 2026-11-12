@@ -4450,6 +4450,14 @@ Utworzyć mimo to ISO?</translation>
         <translation>Zachowaj napisy SRT jako tekst (Matroska i Demuksowanie)</translation>
     </message>
     <message>
+        <source>Also as pictures, a second track (PGS)</source>
+        <translation>Także jako obrazy, druga ścieżka (PGS)</translation>
+    </message>
+    <message>
+        <source>Write each text subtitle track twice: as text, for a player that draws it, and drawn into pictures with the font and position settings below, for a player that only shows pictures. For Matroska and Demux, where the text is kept. The source is read a second time for the pictures.</source>
+        <translation>Zapisz każdą ścieżkę napisów tekstowych dwa razy: jako tekst, dla odtwarzacza, który go rysuje, oraz narysowaną w obrazach z ustawieniami czcionki i położenia poniżej, dla odtwarzacza, który pokazuje tylko obrazy. Dla Matroska i demuksu, gdzie tekst jest zachowywany. Źródło jest czytane drugi raz dla obrazów.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="2105"/>
         <source>Copy each SRT subtitle as text, with its tags and times, instead of drawing it into pictures. Matroska keeps it as a text track and Demux writes an SRT file. The other outputs cannot carry text subtitles and always draw them. The font and position settings below do not apply to text.</source>
         <translation>Kopiuj każdy napis SRT jako tekst, z jego znacznikami i czasami, zamiast rysować go na obrazach. Matroska zachowuje go jako ścieżkę tekstową, a Demuksowanie zapisuje plik SRT. Pozostałe wyjścia nie mogą przenosić napisów tekstowych i zawsze je rysują. Poniższe ustawienia czcionki i położenia nie dotyczą tekstu.</translation>

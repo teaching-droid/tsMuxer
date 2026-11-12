@@ -4450,6 +4450,14 @@ Creare comunque l&apos;ISO?</translation>
         <translation>Mantieni i sottotitoli SRT come testo (Matroska e Demux)</translation>
     </message>
     <message>
+        <source>Also as pictures, a second track (PGS)</source>
+        <translation>Anche come immagini, una seconda traccia (PGS)</translation>
+    </message>
+    <message>
+        <source>Write each text subtitle track twice: as text, for a player that draws it, and drawn into pictures with the font and position settings below, for a player that only shows pictures. For Matroska and Demux, where the text is kept. The source is read a second time for the pictures.</source>
+        <translation>Scrivere ogni traccia di sottotitoli di testo due volte: come testo, per un lettore che lo disegna, e disegnata in immagini con le impostazioni di carattere e posizione qui sotto, per un lettore che mostra solo immagini. Per Matroska e Demux, dove il testo viene mantenuto. La sorgente viene letta una seconda volta per le immagini.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="2105"/>
         <source>Copy each SRT subtitle as text, with its tags and times, instead of drawing it into pictures. Matroska keeps it as a text track and Demux writes an SRT file. The other outputs cannot carry text subtitles and always draw them. The font and position settings below do not apply to text.</source>
         <translation>Copia ogni sottotitolo SRT come testo, con i suoi tag e tempi, invece di disegnarlo in immagini. Matroska lo mantiene come traccia di testo e Demux scrive un file SRT. Le altre uscite non possono contenere sottotitoli di testo e li disegnano sempre. Le impostazioni di font e posizione qui sotto non si applicano al testo.</translation>
