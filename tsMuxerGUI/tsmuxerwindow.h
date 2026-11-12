@@ -318,6 +318,8 @@ class TsMuxerWindow : public QWidget
     // What tsMuxeR printed is its list of the discs of a folder ("... holds 3 discs ..."): the box that says so is
     // shown, and true returned
     bool folderOfDiscsBox(const QString& folder);
+    // the text of the meta box as it stands, a no-break space kept (see its definition)
+    [[nodiscard]] QString metaBoxText() const;
     bool m_scanRun = false;         // startMuxing was asked for a scan
     bool m_askNonDiscCodec = true;  // the question about a codec a Blu-ray does not have; off until the window closes
     bool m_scanRunning = false;     // the run in the progress window is a scan

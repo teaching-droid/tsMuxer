@@ -4582,7 +4582,7 @@ void TsMuxerWindow::updateMuxButton()
     bool hasTrack = ui->trackLV->rowCount() > 0;
     if (!hasTrack && m_metaUserOverride)
     {
-        const QStringList lines = ui->memoMeta->toPlainText().split('\n');
+        const QStringList lines = metaBoxText().split('\n');
         for (const QString& line : lines)
         {
             const QString t = line.trimmed();
@@ -5259,6 +5259,18 @@ void TsMuxerWindow::setProbeBusy(bool busy)
         QGuiApplication::setOverrideCursor(Qt::BusyCursor);
     else
         QGuiApplication::restoreOverrideCursor();
+}
+
+// ** THE TEXT OF THE META BOX, AS IT STANDS. ** The meta file of a job is written from the box. Read as plain text, a
+// no-break space in it comes out as an ordinary space (Qt does that for every text box), so a source whose name has
+// one, as a title copied from a web page often has, was named in the meta file with an ordinary space: the file was
+// listed, and the mux ended with "Can't open file ... (it does not exist)", the name looking right (#61). The text is
+// taken as it is, with its lines ended as the plain text ends them.
+QString TsMuxerWindow::metaBoxText() const
+{
+    QString text = ui->memoMeta->document()->toRawText();
+    for (const ushort separator : {0x2029, 0x2028, 0xFDD0, 0xFDD1}) text.replace(QChar(separator), QLatin1Char('\n'));
+    return text;
 }
 
 // ** A FOLDER OF DISCS IS CALLED ONE. ** A folder that holds several discs, a box set copied disc by disc, was
@@ -7159,7 +7171,7 @@ void TsMuxerWindow::onRemoveBtnClick()
         idx--;
     // A meta file edited by hand that names the removed file kept naming it, and the next mux muxed the file that had
     // been removed. The meta file is built from the settings again, as "Remove all" does, and the box above it says so.
-    const QString meta = ui->memoMeta->toPlainText();
+    const QString meta = metaBoxText();
     if (m_metaUserOverride && (meta.contains(QDir::toNativeSeparators(removedFile)) ||
                                meta.contains(QDir::fromNativeSeparators(removedFile))))
     {
@@ -8190,7 +8202,7 @@ void TsMuxerWindow::startMuxing()
     // --allow-extra-tracks. Asked here, with what it means; the answer adds the option to the meta file of this job.
     if (isDiskOutput())
     {
-        const QString meta = ui->memoMeta->toPlainText();
+        const QString meta = metaBoxText();
         const QStringList over = kindsOverDiscLimit(meta);
         if (!over.isEmpty() && !muxOptHas(meta, QStringLiteral("--allow-extra-tracks")))
         {
@@ -8241,7 +8253,7 @@ void TsMuxerWindow::startMuxing()
     // into it counts as well. The number of parts is known only at the end, so any part there is asked about. Only a
     // real option counts: a label holding "--split-size" asked about parts that are not written.
     QString existingOutput = ui->outFileName->text();
-    if (isFile && !ui->radioButtonBluRayISO->isChecked() && metaAsksForSplit(ui->memoMeta->toPlainText()))
+    if (isFile && !ui->radioButtonBluRayISO->isChecked() && metaAsksForSplit(metaBoxText()))
     {
         const QFileInfo out(ui->outFileName->text());
         const QRegularExpression partName("^" + QRegularExpression::escape(out.completeBaseName() + ".split.") +
@@ -8604,7 +8616,7 @@ bool TsMuxerWindow::saveMetaFile(const QString& metaName)
         msgBox.exec();
         return false;
     }
-    QByteArray metaText = ui->memoMeta->toPlainText().toUtf8();
+    QByteArray metaText = metaBoxText().toUtf8();
     file.write(metaText);
     file.close();
     return true;
