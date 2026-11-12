@@ -57,6 +57,7 @@ class VC1StreamReader final : public MPEGStreamReader
     int64_t m_prevDtsInc;
     bool m_lastIFrame;
     std::vector<uint8_t> m_entryPointBuffer;
+    int m_reportEntry = 0;  // for the stream report: an entry point since the last picture, 1 closed, 2 open
     std::vector<uint8_t> m_seqBuffer;
     bool m_isFirstFrame;
     int m_spsFound;

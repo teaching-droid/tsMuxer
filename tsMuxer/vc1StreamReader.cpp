@@ -293,6 +293,24 @@ int VC1StreamReader::decodeFrame(uint8_t* buff)
 
     m_lastIFrame = m_frame.pict_type == VC1PictType::I_TYPE;
     m_totalFrameNum++;
+    if (StreamReport::wanted)
+    {
+        // A group begins at an I picture that follows an entry point: closed or open as the entry point says. A BI
+        // picture is a B picture coded without reference, and counts as one. Nothing refers to a B picture.
+        const bool intra = m_frame.pict_type == VC1PictType::I_TYPE;
+        const auto type = intra                                      ? StreamReport::Picture::I
+                          : m_frame.pict_type == VC1PictType::P_TYPE ? StreamReport::Picture::P
+                                                                     : StreamReport::Picture::B;
+        const auto group = !intra || m_reportEntry == 0 ? StreamReport::Group::None
+                           : m_reportEntry == 1         ? StreamReport::Group::Closed
+                                                        : StreamReport::Group::Open;
+        m_report.picture(type, group, type != StreamReport::Picture::B);
+        // fcm: 0 a progressive frame, 1 an interlaced frame, 2 two fields
+        m_report.coded(m_frame.fcm == 2, m_frame.fcm == 1);
+        if (m_sequence.pulldown)
+            m_report.shownFor(!m_sequence.interlace || m_sequence.psf ? 2 * (m_frame.rptfrm + 1) : m_frame.rff ? 3 : 2);
+    }
+    m_reportEntry = 0;
 
     m_curDts += m_prevDtsInc;
 
@@ -360,6 +378,9 @@ int VC1StreamReader::decodeEntryPoint(uint8_t* buff)
     const uint8_t* nextNal = VC1Unit::findNextMarker(buff, m_bufEnd);
     if (nextNal == m_bufEnd)
         return NOT_ENOUGH_BUFFER;
+    // its first two bits: broken link, closed entry
+    if (nextNal - buff > 1)
+        m_reportEntry = (buff[1] & 0x40) ? 1 : 2;
     m_entryPointBuffer.clear();
     m_entryPointBuffer.push_back(0);
     m_entryPointBuffer.push_back(0);

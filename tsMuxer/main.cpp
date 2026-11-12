@@ -1758,11 +1758,11 @@ All parameters in this group start with two dashes:
                       the real run, with every warning it gives, and at the
                       end the files it would write are listed with their
                       sizes, the disc an image of them fits, a report of
-                      each H.264, HEVC and MPEG-2 video track (its pictures,
-                      groups of pictures, B pictures, cadence and bitrate),
-                      and the warnings of the run once more. The output is
-                      named as for the mux, and is not touched. The exit
-                      code is 7 when the run printed warnings.
+                      each H.264, HEVC, MPEG-2 and VC-1 video track (its
+                      pictures, groups of pictures, B pictures, cadence and
+                      bitrate), and the warnings of the run once more. The
+                      output is named as for the mux, and is not touched.
+                      The exit code is 7 when the run printed warnings.
 --batch               Separate mode: tsMuxeR --batch <job list> [--batch-stop-on-error]
                       Runs a list of jobs one after the other. The job list is
                       a text file in UTF-8 with one job on each line, written
