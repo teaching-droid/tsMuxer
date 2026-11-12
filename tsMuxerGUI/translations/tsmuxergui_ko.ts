@@ -4790,6 +4790,26 @@ Build the ISO anyway?</source>
         <translation>%1 파일을 쓸 수 없습니다.</translation>
     </message>
     <message>
+        <source>MPEG audio (MP2, MP3)</source>
+        <translation>MPEG 오디오 (MP2, MP3)</translation>
+    </message>
+    <message>
+        <source>Not a Blu-ray format</source>
+        <translation>Blu-ray 형식이 아님</translation>
+    </message>
+    <message>
+        <source>A Blu-ray disc has no %1.</source>
+        <translation>Blu-ray 디스크에는 %1이(가) 없습니다.</translation>
+    </message>
+    <message>
+        <source>A standalone player will most likely not play such a track, though a player on a computer may. For sound, AC-3 and LPCM play on every player. Leave the track out or convert it first, or write the disc anyway.</source>
+        <translation>단독 플레이어는 이런 트랙을 재생하지 못할 가능성이 큽니다. 컴퓨터의 플레이어는 재생할 수도 있습니다. 오디오는 AC-3와 LPCM이 모든 플레이어에서 재생됩니다. 트랙을 제외하거나 먼저 변환하거나, 그대로 디스크를 기록하십시오.</translation>
+    </message>
+    <message>
+        <source>Don&apos;t ask again until the window is closed</source>
+        <translation>창을 닫을 때까지 다시 묻지 않기</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>선택된 트랙을 합한 값에 출력 형식이 덧붙이는 양을 더한 값입니다. &quot;최대&quot;: 제외한 트랙의 크기를 알 수 없어 빼지 못했습니다. 자르기, 분할, 고정 먹싱 비트레이트를 쓰거나 디스크가 소스인 경우에는 예상 크기가 표시되지 않습니다.</translation>
     </message>

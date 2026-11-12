@@ -8073,6 +8073,51 @@ void TsMuxerWindow::startMuxing()
     if (isDiskOutput() && !m_metaUserOverride && !offerAc3Cores())
         return;
 
+    // ** A CODEC A BLU-RAY DOES NOT HAVE IS ASKED ABOUT. ** AAC, MPEG audio (MP2, MP3) and VVC can be muxed to a disc,
+    // and tsMuxeR warns that no Blu-ray player plays them. The warning is a line of the log, which is read after the
+    // mux if at all: a disc with AAC sound was made and reported for another fault, its maker never having seen it
+    // (#60). The window now asks before the mux. Not before a scan, whose log is what it is for.
+    if (isDiskOutput() && !m_scanRun && m_askNonDiscCodec)
+    {
+        QStringList kinds;
+        for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+        {
+            const QtvCodecInfo* info = getCodecInfo(i);
+            if (!info || ui->trackLV->item(i, 0)->checkState() != Qt::Checked)
+                continue;
+            QString kind;
+            if (info->programName == QLatin1String("A_AAC"))
+                kind = QStringLiteral("AAC");
+            else if (info->programName == QLatin1String("A_MP3"))
+                kind = tr("MPEG audio (MP2, MP3)");
+            else if (info->programName.contains(QLatin1String("VVC")))
+                kind = QStringLiteral("VVC (H.266)");
+            if (!kind.isEmpty() && !kinds.contains(kind))
+                kinds << kind;
+        }
+        if (!kinds.isEmpty())
+        {
+            QMessageBox box(this);
+            box.setWindowTitle(tr("Not a Blu-ray format"));
+            box.setIcon(QMessageBox::Question);
+            box.setText(tr("A Blu-ray disc has no %1.").arg(kinds.join(tr(" and "))));
+            box.setInformativeText(
+                tr("A standalone player will most likely not play such a track, though a player "
+                   "on a computer may. For sound, AC-3 and LPCM play on every player. Leave the "
+                   "track out or convert it first, or write the disc anyway."));
+            QPushButton* write = box.addButton(tr("Write the disc anyway"), QMessageBox::AcceptRole);
+            box.addButton(QMessageBox::Cancel);
+            box.setDefaultButton(QMessageBox::Cancel);
+            auto* dontAsk = new QCheckBox(tr("Don't ask again until the window is closed"), &box);
+            box.setCheckBox(dontAsk);
+            box.exec();
+            if (box.clickedButton() != write)
+                return;
+            if (dontAsk->isChecked())
+                m_askNonDiscCodec = false;
+        }
+    }
+
     // More than 32 tracks of one kind on a disc (#53): tsMuxeR refuses them unless the MUXOPT line has
     // --allow-extra-tracks. Asked here, with what it means; the answer adds the option to the meta file of this job.
     if (isDiskOutput())

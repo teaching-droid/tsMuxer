@@ -4930,6 +4930,26 @@ Build the ISO anyway?</source>
         <translation>לא ניתן היה לכתוב את הקובץ %1.</translation>
     </message>
     <message>
+        <source>MPEG audio (MP2, MP3)</source>
+        <translation>שמע MPEG (‏MP2, MP3)</translation>
+    </message>
+    <message>
+        <source>Not a Blu-ray format</source>
+        <translation>לא תבנית Blu-ray</translation>
+    </message>
+    <message>
+        <source>A Blu-ray disc has no %1.</source>
+        <translation>בתקליטור Blu-ray אין %1.</translation>
+    </message>
+    <message>
+        <source>A standalone player will most likely not play such a track, though a player on a computer may. For sound, AC-3 and LPCM play on every player. Leave the track out or convert it first, or write the disc anyway.</source>
+        <translation>נגן עצמאי כנראה לא ינגן רצועה כזו, אף שנגן במחשב עשוי לנגן. לשמע, AC-3 ו-LPCM מתנגנים בכל נגן. יש להשמיט את הרצועה או להמיר אותה קודם, או לכתוב את התקליטור בכל זאת.</translation>
+    </message>
+    <message>
+        <source>Don&apos;t ask again until the window is closed</source>
+        <translation>לא לשאול שוב עד לסגירת החלון</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>סכום הרצועות המסומנות, בתוספת מה שהפלט מוסיף סביבן. &quot;לכל היותר&quot;: רצועה שהושמטה לא הופחתה, כי גודלה אינו ידוע. לא ניתנת הערכה כשיש חיתוך, פיצול, קצב ריבוב קבוע או כשהמקור הוא תקליטור.</translation>
     </message>

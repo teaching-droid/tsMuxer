@@ -4790,6 +4790,26 @@ Build the ISO anyway?</source>
         <translation>無法寫入檔案 %1。</translation>
     </message>
     <message>
+        <source>MPEG audio (MP2, MP3)</source>
+        <translation>MPEG 音訊 (MP2, MP3)</translation>
+    </message>
+    <message>
+        <source>Not a Blu-ray format</source>
+        <translation>不是藍光格式</translation>
+    </message>
+    <message>
+        <source>A Blu-ray disc has no %1.</source>
+        <translation>藍光光碟沒有 %1。</translation>
+    </message>
+    <message>
+        <source>A standalone player will most likely not play such a track, though a player on a computer may. For sound, AC-3 and LPCM play on every player. Leave the track out or convert it first, or write the disc anyway.</source>
+        <translation>獨立播放機很可能無法播放這樣的軌道，電腦上的播放器也許可以。音訊方面，AC-3 和 LPCM 在所有播放機上都能播放。請去掉該軌道或先轉換，或者仍然寫入光碟。</translation>
+    </message>
+    <message>
+        <source>Don&apos;t ask again until the window is closed</source>
+        <translation>關閉視窗前不再詢問</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>已勾選軌道的總和，加上輸出格式在其外圍增加的部分。「最多」：未勾選的軌道大小不明，無法扣除。在剪切、分割、固定混流位元率或以光碟為來源時不提供估計值。</translation>
     </message>

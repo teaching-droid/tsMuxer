@@ -4790,6 +4790,26 @@ Criar o ISO mesmo assim?</translation>
         <translation>Não foi possível escrever o ficheiro %1.</translation>
     </message>
     <message>
+        <source>MPEG audio (MP2, MP3)</source>
+        <translation>Áudio MPEG (MP2, MP3)</translation>
+    </message>
+    <message>
+        <source>Not a Blu-ray format</source>
+        <translation>Não é um formato Blu-ray</translation>
+    </message>
+    <message>
+        <source>A Blu-ray disc has no %1.</source>
+        <translation>Um disco Blu-ray não tem %1.</translation>
+    </message>
+    <message>
+        <source>A standalone player will most likely not play such a track, though a player on a computer may. For sound, AC-3 and LPCM play on every player. Leave the track out or convert it first, or write the disc anyway.</source>
+        <translation>Um leitor de mesa muito provavelmente não reproduzirá uma faixa assim, embora um leitor no computador possa. Para o som, AC-3 e LPCM funcionam em qualquer leitor. Deixe a faixa de fora ou converta-a primeiro, ou escreva o disco mesmo assim.</translation>
+    </message>
+    <message>
+        <source>Don&apos;t ask again until the window is closed</source>
+        <translation>Não voltar a perguntar até a janela ser fechada</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>A soma das faixas marcadas, com o que a saída acrescenta à sua volta. «No máximo»: uma faixa excluída não pôde ser descontada, pois nada indica o seu tamanho. Não é dada qualquer estimativa com um corte, uma divisão, uma taxa de multiplexagem fixa ou um disco como origem.</translation>
     </message>

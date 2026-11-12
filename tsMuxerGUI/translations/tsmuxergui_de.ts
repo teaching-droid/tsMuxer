@@ -4930,6 +4930,26 @@ ISO trotzdem erstellen?</translation>
         <translation>Die Datei %1 konnte nicht geschrieben werden.</translation>
     </message>
     <message>
+        <source>MPEG audio (MP2, MP3)</source>
+        <translation>MPEG-Audio (MP2, MP3)</translation>
+    </message>
+    <message>
+        <source>Not a Blu-ray format</source>
+        <translation>Kein Blu-ray-Format</translation>
+    </message>
+    <message>
+        <source>A Blu-ray disc has no %1.</source>
+        <translation>Eine Blu-ray Disc kennt kein %1.</translation>
+    </message>
+    <message>
+        <source>A standalone player will most likely not play such a track, though a player on a computer may. For sound, AC-3 and LPCM play on every player. Leave the track out or convert it first, or write the disc anyway.</source>
+        <translation>Ein eigenständiger Player wird eine solche Spur höchstwahrscheinlich nicht abspielen, ein Player am Computer vielleicht schon. Beim Ton laufen AC-3 und LPCM auf jedem Player. Die Spur weglassen oder vorher umwandeln, oder die Disc trotzdem schreiben.</translation>
+    </message>
+    <message>
+        <source>Don&apos;t ask again until the window is closed</source>
+        <translation>Nicht mehr fragen, bis das Fenster geschlossen wird</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>Die Spuren mit Häkchen zusammengezählt, mit dem, was die Ausgabe um sie herum hinzufügt. „Höchstens“: Eine weggelassene Spur konnte nicht abgezogen werden, weil ihre Größe nicht bekannt ist. Bei einem Schnitt, einer Teilung, einer festen Mux-Rate oder einer Disc als Quelle wird keine Schätzung angezeigt.</translation>
     </message>

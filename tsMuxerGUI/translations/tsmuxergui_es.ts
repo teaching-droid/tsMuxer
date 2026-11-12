@@ -4931,6 +4931,26 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <translation>No se pudo escribir el archivo %1.</translation>
     </message>
     <message>
+        <source>MPEG audio (MP2, MP3)</source>
+        <translation>Audio MPEG (MP2, MP3)</translation>
+    </message>
+    <message>
+        <source>Not a Blu-ray format</source>
+        <translation>No es un formato de Blu-ray</translation>
+    </message>
+    <message>
+        <source>A Blu-ray disc has no %1.</source>
+        <translation>Un disco Blu-ray no admite %1.</translation>
+    </message>
+    <message>
+        <source>A standalone player will most likely not play such a track, though a player on a computer may. For sound, AC-3 and LPCM play on every player. Leave the track out or convert it first, or write the disc anyway.</source>
+        <translation>Lo más probable es que un reproductor de sobremesa no reproduzca una pista así, aunque un reproductor de ordenador quizá sí. Para el sonido, AC-3 y LPCM funcionan en todos los reproductores. Deje fuera la pista o conviértala antes, o escriba el disco de todos modos.</translation>
+    </message>
+    <message>
+        <source>Don&apos;t ask again until the window is closed</source>
+        <translation>No volver a preguntar hasta cerrar la ventana</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>La suma de las pistas marcadas, con lo que la salida añade a su alrededor. «Como máximo»: no se pudo restar una pista excluida porque nada indica su tamaño. No se da una estimación con un corte, una división, una tasa de multiplexado fija o un disco como origen.</translation>
     </message>

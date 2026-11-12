@@ -4930,6 +4930,26 @@ Build the ISO anyway?</source>
         <translation>ファイル %1 を書き込めませんでした。</translation>
     </message>
     <message>
+        <source>MPEG audio (MP2, MP3)</source>
+        <translation>MPEG オーディオ (MP2, MP3)</translation>
+    </message>
+    <message>
+        <source>Not a Blu-ray format</source>
+        <translation>Blu-ray の形式ではありません</translation>
+    </message>
+    <message>
+        <source>A Blu-ray disc has no %1.</source>
+        <translation>Blu-ray ディスクに %1 はありません。</translation>
+    </message>
+    <message>
+        <source>A standalone player will most likely not play such a track, though a player on a computer may. For sound, AC-3 and LPCM play on every player. Leave the track out or convert it first, or write the disc anyway.</source>
+        <translation>据え置き型プレーヤーではこのようなトラックはほぼ再生できません。パソコンのプレーヤーでは再生できる場合があります。音声は AC-3 と LPCM ならどのプレーヤーでも再生できます。トラックを外すか先に変換するか、このままディスクを書き込みます。</translation>
+    </message>
+    <message>
+        <source>Don&apos;t ask again until the window is closed</source>
+        <translation>ウィンドウを閉じるまで再度確認しない</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>チェックの入ったトラックの合計に、出力形式が付け加える分を足した値です。「最大」: 外したトラックのサイズが分からないため、差し引けませんでした。カット、分割、固定の多重化レート、またはディスクが入力の場合、推定値は表示されません。</translation>
     </message>

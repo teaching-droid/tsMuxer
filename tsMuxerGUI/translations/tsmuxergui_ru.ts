@@ -4931,6 +4931,26 @@ Build the ISO anyway?</source>
         <translation>Не удалось записать файл %1.</translation>
     </message>
     <message>
+        <source>MPEG audio (MP2, MP3)</source>
+        <translation>Звук MPEG (MP2, MP3)</translation>
+    </message>
+    <message>
+        <source>Not a Blu-ray format</source>
+        <translation>Не формат Blu-ray</translation>
+    </message>
+    <message>
+        <source>A Blu-ray disc has no %1.</source>
+        <translation>На диске Blu-ray не бывает %1.</translation>
+    </message>
+    <message>
+        <source>A standalone player will most likely not play such a track, though a player on a computer may. For sound, AC-3 and LPCM play on every player. Leave the track out or convert it first, or write the disc anyway.</source>
+        <translation>Отдельный проигрыватель, скорее всего, не воспроизведёт такую дорожку, хотя проигрыватель на компьютере может. Для звука AC-3 и LPCM воспроизводятся на любом проигрывателе. Исключите дорожку или сначала преобразуйте её, либо всё равно запишите диск.</translation>
+    </message>
+    <message>
+        <source>Don&apos;t ask again until the window is closed</source>
+        <translation>Больше не спрашивать, пока окно не закрыто</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>Сумма отмеченных дорожек вместе с тем, что добавляет к ним выходной формат. «Не более»: исключённую дорожку не удалось вычесть, так как её размер неизвестен. Оценка не показывается при обрезке, разделении, постоянной скорости мультиплексирования или если источником служит диск.</translation>
     </message>

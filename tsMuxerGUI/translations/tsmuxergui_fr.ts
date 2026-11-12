@@ -4930,6 +4930,26 @@ Créer l'ISO malgré tout ?</translation>
         <translation>Le fichier %1 n&apos;a pas pu être écrit.</translation>
     </message>
     <message>
+        <source>MPEG audio (MP2, MP3)</source>
+        <translation>Audio MPEG (MP2, MP3)</translation>
+    </message>
+    <message>
+        <source>Not a Blu-ray format</source>
+        <translation>Pas un format Blu-ray</translation>
+    </message>
+    <message>
+        <source>A Blu-ray disc has no %1.</source>
+        <translation>Un disque Blu-ray ne connaît pas %1.</translation>
+    </message>
+    <message>
+        <source>A standalone player will most likely not play such a track, though a player on a computer may. For sound, AC-3 and LPCM play on every player. Leave the track out or convert it first, or write the disc anyway.</source>
+        <translation>Un lecteur de salon ne lira très probablement pas une telle piste, même si un lecteur sur ordinateur le peut. Pour le son, l&apos;AC-3 et le LPCM passent sur tous les lecteurs. Écartez la piste ou convertissez-la d&apos;abord, ou écrivez le disque quand même.</translation>
+    </message>
+    <message>
+        <source>Don&apos;t ask again until the window is closed</source>
+        <translation>Ne plus demander jusqu&apos;à la fermeture de la fenêtre</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>La somme des pistes cochées, avec ce que la sortie ajoute autour d&apos;elles. « Au plus » : une piste écartée n&apos;a pas pu être déduite, car rien n&apos;indique sa taille. Aucune estimation n&apos;est donnée avec une coupe, un découpage, un débit de multiplexage fixe ou un disque comme source.</translation>
     </message>

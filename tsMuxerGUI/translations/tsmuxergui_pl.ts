@@ -4790,6 +4790,26 @@ Utworzyć mimo to ISO?</translation>
         <translation>Nie można zapisać pliku %1.</translation>
     </message>
     <message>
+        <source>MPEG audio (MP2, MP3)</source>
+        <translation>Dźwięk MPEG (MP2, MP3)</translation>
+    </message>
+    <message>
+        <source>Not a Blu-ray format</source>
+        <translation>To nie jest format Blu-ray</translation>
+    </message>
+    <message>
+        <source>A Blu-ray disc has no %1.</source>
+        <translation>Płyta Blu-ray nie zna formatu %1.</translation>
+    </message>
+    <message>
+        <source>A standalone player will most likely not play such a track, though a player on a computer may. For sound, AC-3 and LPCM play on every player. Leave the track out or convert it first, or write the disc anyway.</source>
+        <translation>Odtwarzacz stacjonarny najprawdopodobniej nie odtworzy takiej ścieżki, choć odtwarzacz na komputerze może. W przypadku dźwięku AC-3 i LPCM działają w każdym odtwarzaczu. Pomiń ścieżkę albo najpierw ją przekonwertuj, albo zapisz płytę mimo to.</translation>
+    </message>
+    <message>
+        <source>Don&apos;t ask again until the window is closed</source>
+        <translation>Nie pytaj ponownie do zamknięcia okna</translation>
+    </message>
+    <message>
         <source>The ticked tracks added up, with what the output adds around them. &quot;At most&quot;: a track that is left out could not be taken off, as nothing tells its size. No estimate is given with a cut, a split, a fixed mux rate or a disc as the source.</source>
         <translation>Suma zaznaczonych ścieżek wraz z tym, co dodaje wokół nich format wyjściowy. „Najwyżej”: pominiętej ścieżki nie można było odjąć, ponieważ jej rozmiar nie jest znany. Szacunek nie jest podawany przy cięciu, dzieleniu, stałej przepływności multipleksu ani wtedy, gdy źródłem jest płyta.</translation>
     </message>

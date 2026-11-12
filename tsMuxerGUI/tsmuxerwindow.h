@@ -315,10 +315,11 @@ class TsMuxerWindow : public QWidget
     bool m_addToQueue = false;  // startMuxing was asked for the queue: it stops after the checks and the meta file
     // "Scan": the job is run with --scan, which writes nothing and tells the size of the output
     QPushButton* m_scanBtn = nullptr;
-    bool m_scanRun = false;      // startMuxing was asked for a scan
-    bool m_scanRunning = false;  // the run in the progress window is a scan
-    bool m_queueRun = false;     // the run in the progress window is the queue
-    QSet<int> m_queueDone;       // the jobs of that run that ended well, counted from 1
+    bool m_scanRun = false;         // startMuxing was asked for a scan
+    bool m_askNonDiscCodec = true;  // the question about a codec a Blu-ray does not have; off until the window closes
+    bool m_scanRunning = false;     // the run in the progress window is a scan
+    bool m_queueRun = false;        // the run in the progress window is the queue
+    QSet<int> m_queueDone;          // the jobs of that run that ended well, counted from 1
     [[nodiscard]] QString queueDir() const;
     [[nodiscard]] QStringList queueLines() const;
     void writeQueueLines(const QStringList& lines);
