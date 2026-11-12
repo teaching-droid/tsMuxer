@@ -5243,7 +5243,8 @@ void TsMuxerWindow::onProcessFinished(int exitCode, QProcess::ExitStatus exitSta
         m_scanRunning = false;
         if (ui->checkBoxSound->isChecked())
         {
-            if (exitCode == 0)
+            // 7 is a scan that ended well and printed warnings
+            if (exitCode == 0 || (exitCode == 7 && exitStatus == QProcess::NormalExit))
                 myPlaySound(":/sounds/success.wav");
             else
                 myPlaySound(":/sounds/fail.wav");

@@ -2637,6 +2637,10 @@
         <translation>tsMuxeR הסתיים עם קוד שגיאה %1</translation>
     </message>
     <message>
+        <source>The scan finished. Lines of warnings: %1</source>
+        <translation>הסריקה הסתיימה. שורות אזהרה: %1</translation>
+    </message>
+    <message>
         <location filename="../muxForm.cpp" line="126"/>
         <source>terminating tsMuxeR...</source>
         <translation>מסיים את tsMuxeR...</translation>

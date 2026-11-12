@@ -17,24 +17,39 @@
 
 #if 1
 extern bool sLastMsg;
+// The lines of warnings a run has shown. A scan (--scan) ends with them: how many there were, and the lines once more,
+// as they are what a scan is run for and stand far up in a long log. Counted are the lines shown with LT_WARN or
+// LT_ERROR; a warning of several lines counts with each of them. The texts are kept only when keep is set, and the
+// first MAX_KEPT of them: some warnings come once per frame.
+namespace traceWarnings
+{
+static constexpr size_t MAX_KEPT = 40;
+extern bool keep;
+void note(const std::string& line);
+[[nodiscard]] size_t count();
+[[nodiscard]] std::vector<std::string> kept();
+}  // namespace traceWarnings
 // With --report every line goes to the report as well, the ones not shown included (diagnosticReport.h). A file read
 // under a second name is named by its own name (nameAlias.h, nameAlias::shown).
-#define LTRACE(level, errIndex, msg)                                                                      \
-    do                                                                                                    \
-    {                                                                                                     \
-        if (diagReport::active)                                                                           \
-        {                                                                                                 \
-            std::ostringstream ltrace_;                                                                   \
-            ltrace_ << msg;                                                                               \
-            diagReport::trace((level), (errIndex), nameAlias::shown(ltrace_.str()));                      \
-        }                                                                                                 \
-        else if (((errIndex) & 2) != 0 && (level) <= LT_INFO)                                             \
-        {                                                                                                 \
-            std::ostringstream ltrace_;                                                                   \
-            ltrace_ << msg;                                                                               \
-            ((level) <= LT_WARN ? std::cerr : std::cout) << nameAlias::shown(ltrace_.str()) << std::endl; \
-            sLastMsg = true;                                                                              \
-        }                                                                                                 \
+#define LTRACE(level, errIndex, msg)                                                      \
+    do                                                                                    \
+    {                                                                                     \
+        const bool ltraceShown_ = ((errIndex) & 2) != 0 && (level) <= LT_INFO;            \
+        if (diagReport::active || ltraceShown_)                                           \
+        {                                                                                 \
+            std::ostringstream ltrace_;                                                   \
+            ltrace_ << msg;                                                               \
+            const std::string ltraceText_ = nameAlias::shown(ltrace_.str());              \
+            if (ltraceShown_ && (level) <= LT_WARN)                                       \
+                traceWarnings::note(ltraceText_);                                         \
+            if (diagReport::active)                                                       \
+                diagReport::trace((level), (errIndex), ltraceText_);                      \
+            else                                                                          \
+            {                                                                             \
+                ((level) <= LT_WARN ? std::cerr : std::cout) << ltraceText_ << std::endl; \
+                sLastMsg = true;                                                          \
+            }                                                                             \
+        }                                                                                 \
     } while (false)
 
 class Process

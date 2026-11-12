@@ -1731,8 +1731,10 @@ All parameters in this group start with two dashes:
                       run and nothing is written. The sources are read as in
                       the real run, with every warning it gives, and at the
                       end the files it would write are listed with their
-                      sizes; an image (.iso) is told the disc it fits. The
-                      output is named as for the mux, and is not touched.
+                      sizes, the disc an image of them fits, and the warnings
+                      of the run once more. The output is named as for the
+                      mux, and is not touched. The exit code is 7 when the
+                      run printed warnings.
 --batch               Separate mode: tsMuxeR --batch <job list> [--batch-stop-on-error]
                       Runs a list of jobs one after the other. The job list is
                       a text file in UTF-8 with one job on each line, written
@@ -1967,7 +1969,8 @@ All parameters in this group start with two dashes:
 
 Exit codes: 0 done; 1 the command line or the meta file is wrong; 2 a source
 cannot be read or is not supported; 3 the output cannot be written; 5 an error
-inside the program; 6 --batch: a job failed or was not run.
+inside the program; 6 --batch: a job failed or was not run; 7 --scan: the run
+would end well, and warnings were printed.
 )help";
     LTRACE(LT_INFO, 2, help);
 }
@@ -3666,6 +3669,23 @@ static void reportHlgOnDisc(const MuxerManager& muxerManager)
 // finished size is checked against the disc and that it warns when it does not fit, and nothing did. The finished image
 // is measured now, or for a disc folder the files in it; a folder becomes slightly larger as an image, by its file
 // system.
+// A disc is burnt from an image, which adds its file system to the files: a folder of 39,618,392 bytes was
+// "within" 40,000,000 while the image of the same job is 41,353,216. The image is reckoned as IsoWriter lays
+// it out: 640 KB in front, the metadata area and its mirror, the files in whole sectors, a 64 KB block to align,
+// and 576 KB at the end, in whole blocks of 64 KB. It is the size of an .iso output of the same job; an image made
+// from the folder with --bdmv-to-iso reserves more metadata and is somewhat larger. `size` is the bytes of the files,
+// `sectorBytes` the same with each file in whole sectors.
+static int64_t imageOfDiscFolder(const int64_t size, const int64_t sectorBytes, const int64_t extraIsoBlocks)
+{
+    const int64_t meta = IsoWriter::metadataBlocks(size, extraIsoBlocks) * ALLOC_BLOCK_SIZE;
+    return static_cast<int64_t>(
+        roundUp64(static_cast<uint64_t>(static_cast<int64_t>(METADATA_START_ADDR) * SECTOR_SIZE + 2 * meta +
+                                        sectorBytes + ALLOC_BLOCK_SIZE + 1024 * 512 + ALLOC_BLOCK_SIZE),
+                  ALLOC_BLOCK_SIZE));
+}
+
+static int64_t g_scanExtraIsoBlocks = 0;  // what the scanned job reserves in an image, for printScanSummary
+
 static void reportFinishedDiscSize(const std::string& outputRoot, const int64_t discLimit, const int64_t extraIsoBlocks)
 {
     if (discLimit <= 0)
@@ -3711,16 +3731,7 @@ static void reportFinishedDiscSize(const std::string& outputRoot, const int64_t 
                    "The finished image is " << size << " bytes, within the " << discLimit << " bytes of --disc-size.");
         return;
     }
-    // A disc is burnt from an image, which adds its file system to the files: a folder of 39,618,392 bytes was
-    // "within" 40,000,000 while the image of the same job is 41,353,216. The image is reckoned as IsoWriter lays
-    // it out: 640 KB in front, the metadata area and its mirror, the files in whole sectors, a 64 KB block to align,
-    // and 576 KB at the end, in whole blocks of 64 KB. It is the size of an .iso output of the same job; an image made
-    // from the folder with --bdmv-to-iso reserves more metadata and is somewhat larger.
-    const int64_t meta = IsoWriter::metadataBlocks(size, extraIsoBlocks) * ALLOC_BLOCK_SIZE;
-    const int64_t imageEstimate = static_cast<int64_t>(
-        roundUp64(static_cast<uint64_t>(static_cast<int64_t>(METADATA_START_ADDR) * SECTOR_SIZE + 2 * meta +
-                                        sectorBytes + ALLOC_BLOCK_SIZE + 1024 * 512 + ALLOC_BLOCK_SIZE),
-                  ALLOC_BLOCK_SIZE));
+    const int64_t imageEstimate = imageOfDiscFolder(size, sectorBytes, extraIsoBlocks);
     if (imageEstimate > discLimit)
         LTRACE(LT_WARN, 2,
                "Warning: the files of the finished disc folder come to "
@@ -5310,10 +5321,17 @@ static void printScanSummary()
     std::vector<std::pair<std::string, int64_t>> files;
     int64_t total = 0;
     bool disc = false;
+    int64_t discBytes = 0, discSectorBytes = 0;  // what a disc holds of the files: the BDMV and CERTIFICATE folders
     for (auto [name, size] : dryRun::files())
     {
         if (size <= 0)
             continue;
+        for (const char* sub : {"/BDMV/", "/CERTIFICATE/"})
+            if (name.compare(0, scratch.size(), scratch) == 0 && name.compare(scratch.size(), strlen(sub), sub) == 0)
+            {
+                discBytes += size;
+                discSectorBytes += static_cast<int64_t>(roundUp64(static_cast<uint64_t>(size), SECTOR_SIZE));
+            }
         // shown under the name of the output as it was given; the parts of a split stand beside it
         const size_t folder = scratch.find_last_of('/');
         if (name.compare(0, scratch.size(), scratch) == 0 &&
@@ -5346,14 +5364,22 @@ static void printScanSummary()
            "Scan: " << files.size() << (files.size() == 1 ? " file, " : " files, ") << total << " bytes (" << gb(total)
                     << ") in all.");
     const std::string ext = strToLowerCase(extractFileExt(g_scanOutput));
-    if (ext == "iso" && files.size() >= 1)
+    // The disc an image fits, and the layer changes of that disc the image reaches. For a disc folder the image is
+    // reckoned (imageOfDiscFolder): a disc is burnt from an image, and the folder alone said nothing about the disc.
+    const bool isImage = ext == "iso" && files.size() >= 1;
+    if (isImage || (disc && discBytes > 0))
     {
         // the sectors a recordable disc of each size has for data
         static const std::pair<const char*, int64_t> DISCS[] = {{"25 GB", 12219392LL * 2048},
                                                                 {"50 GB", 24438784LL * 2048},
                                                                 {"100 GB", 48878592LL * 2048},
                                                                 {"128 GB", 62500864LL * 2048}};
-        const int64_t image = files[0].second;
+        const int64_t image =
+            isImage ? files[0].second : imageOfDiscFolder(discBytes, discSectorBytes, g_scanExtraIsoBlocks);
+        if (!isImage)
+            LTRACE(LT_INFO, 2,
+                   "Scan: these are the files of the disc. An image of them, with its file system, comes to about "
+                       << image << " bytes (" << gb(image) << ").");
         const auto fits =
             std::find_if(std::begin(DISCS), std::end(DISCS), [image](const auto& d) { return image <= d.second; });
         if (fits == std::end(DISCS))
@@ -5365,12 +5391,26 @@ static void printScanSummary()
             LTRACE(LT_INFO, 2,
                    "Scan: the image fits a " << fits->first << " disc (" << fits->second << " bytes), with "
                                              << (fits->second - image) / 1000000 << " MB free.");
+            std::string warning, error;
+            for (const int lbn : defaultLayerBreaks(fits->second, warning, error))
+                if (static_cast<int64_t>(lbn) * SECTOR_SIZE < image)
+                    LTRACE(LT_INFO, 2,
+                           "Scan: the image reaches a layer change of that disc, at sector "
+                               << lbn << " (" << gb(static_cast<int64_t>(lbn) * SECTOR_SIZE) << " into the image).");
         }
     }
-    else if (disc)
+    // the warnings of the run, once more: they are what a scan is run for, and stand far up in a long log
+    const size_t warnings = traceWarnings::count();
+    if (warnings == 0)
+        LTRACE(LT_INFO, 2, "Scan: no warnings.");
+    else
+    {
+        const std::vector<std::string> lines = traceWarnings::kept();
         LTRACE(LT_INFO, 2,
-               "Scan: these are the files of the disc. An image of them is a little larger, by its file system: scan "
-               "with an output named .iso for its size and the disc it fits.");
+               "Scan: " << warnings << (warnings == 1 ? " line" : " lines") << " of warnings"
+                        << (lines.size() < warnings ? ", the first of them once more:" : ", once more:"));
+        for (const std::string& line : lines) LTRACE(LT_INFO, 2, "  " << line);
+    }
 }
 
 int main(int argc, char** argv)
@@ -5467,9 +5507,14 @@ int main(int argc, char** argv)
         LTRACE(LT_INFO, 2, "tsMuxeR version " TSMUXER_VERSION << ". github.com/teaching-droid/tsMuxer");
         return runMakeSample(argc, argv, sampleReport, ownReport);
     }
-    const int exitCode = runTsMuxer(argc, argv);
+    int exitCode = runTsMuxer(argc, argv);
     if (exitCode == 0)
+    {
         printScanSummary();
+        // a scan that printed warnings says so with its exit code; a mux with warnings ends 0 as before
+        if (g_scan && traceWarnings::count() > 0)
+            exitCode = ExitCode::ScanWarnings;
+    }
     // after the run, so that reading the sources again changes nothing the run says or writes
     writeReportListings();
     diagReport::close(exitCode);
@@ -5516,6 +5561,7 @@ static int runTsMuxer(int argc, char** argv)
             continue;
         }
         g_scan = true;
+        traceWarnings::keep = true;
         for (int k = i; k + 1 < argc; ++k) argv[k] = argv[k + 1];
         --argc;
     }
@@ -6440,7 +6486,10 @@ static int runTsMuxer(int argc, char** argv)
             keepOld.commit();
             setSaveSrtJobSucceeded();
             if (dt != DiskType::NONE)
+            {
+                g_scanExtraIsoBlocks = muxerManager.getExtraISOBlocks();
                 reportFinishedDiscSize(outputRoot, muxerManager.getDiscSizeLimit(), muxerManager.getExtraISOBlocks());
+            }
             if (dt != DiskType::NONE && strToUpperCase(extractFileExt(outputRoot)) == "ISO" &&
                 muxerManager.getDiscSizeLimit() <= 0 && muxerManager.getLayerBreakLbns().empty())
                 reportBd50Layout(outputRoot, "--disc-size=bd100", "--disc-size=66735570944");

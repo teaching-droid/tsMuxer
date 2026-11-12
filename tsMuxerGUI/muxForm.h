@@ -48,6 +48,7 @@ class MuxForm : public QDialog  // QWidget
    private:
     int errCnt;
     int m_hiddenLines = 0;     // error-output lines that came in after the shown ones
+    int m_scanWarnings = 0;    // what the summary of a scan gives as its lines of warnings
     QStringList m_hiddenTail;  // the last of those, shown when the mux ends
     Ui_muxForm* ui;
     QProcess* muxProcess;

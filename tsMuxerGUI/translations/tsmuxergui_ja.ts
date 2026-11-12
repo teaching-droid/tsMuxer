@@ -2637,6 +2637,10 @@
         <translation>tsMuxeRはエラーコード %1 で終了しました</translation>
     </message>
     <message>
+        <source>The scan finished. Lines of warnings: %1</source>
+        <translation>スキャンが終了しました。警告の行数: %1</translation>
+    </message>
+    <message>
         <location filename="../muxForm.cpp" line="126"/>
         <source>terminating tsMuxeR...</source>
         <translation>tsMuxeRを終了しています...</translation>

@@ -199,9 +199,14 @@ Scan: nothing was written. The run would write:
   24812345344 bytes  film.iso
 Scan: 1 file, 24812345344 bytes (24.81 GB) in all.
 Scan: the image fits a 25 GB disc (25025314816 bytes), with 212 MB free.
+Scan: no warnings.
 ```
 
 The sizes are those of the real run, as the same code counts them. The output is named as for the mux and is not touched: a file or a folder of that name that is there already stays as it is. A scan takes as long as reading the sources takes. It goes on a line of a `--batch` job list as well.
+
+For a disc folder the summary reckons the image of the files, with its file system, and names the disc that image fits. Where the image is larger than one layer of that disc, the sectors of its layer changes are given.
+
+The summary ends with the warnings of the run: `Scan: no warnings.`, or the number of warning lines and the lines once more, up to 40 of them. A scan that printed warnings ends with exit code 7, so a script can tell it from a clean one; a mux that prints the same warnings ends with 0. In a `--batch` list a scan that ends with 7 is a job done.
 
 ### Exit codes
 
@@ -215,6 +220,7 @@ The exit code says how a run ended, for a script that starts tsMuxeR:
 | 3 | The output cannot be written. |
 | 5 | An error inside the program. |
 | 6 | `--batch`: a job failed or was not run. |
+| 7 | `--scan`: the run would end well, and warnings were printed. |
 
 A run stopped by Ctrl+C ends as the system ends a stopped program, so a script that runs it in a loop stops as well. 4 is not used.
 

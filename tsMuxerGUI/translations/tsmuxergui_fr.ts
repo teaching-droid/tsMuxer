@@ -2637,6 +2637,10 @@
         <translation>tsMuxeR a fini avec le code d&apos;erreur %1</translation>
     </message>
     <message>
+        <source>The scan finished. Lines of warnings: %1</source>
+        <translation>L&apos;analyse est terminée. Lignes d&apos;avertissements : %1</translation>
+    </message>
+    <message>
         <location filename="../muxForm.cpp" line="126"/>
         <source>terminating tsMuxeR...</source>
         <translation>tsMuxeR est en train de terminer...</translation>

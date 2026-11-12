@@ -263,11 +263,16 @@ int run(const string& listFile, const bool stopOnError, const string& argv0)
             result = "could not be started";
         else if (exitCode == 0)
             result = "done";
+        else if (exitCode == ExitCode::ScanWarnings)
+            result = "done, the scan printed warnings";
         else
             result = "failed, exit code " + to_string(exitCode);
         LTRACE(LT_INFO, 2, "=== Job " << i + 1 << " of " << total << " " << result << " (" << timeText(took) << ")");
-        const bool ok = started && exitCode == 0;
-        results.push_back(string(ok ? "done      " : "FAILED    ") + shown + (ok ? "" : "  (" + result + ")"));
+        // a scan that printed warnings (exit code 7) did what it was run for: a job done, with its note
+        const bool warned = started && exitCode == ExitCode::ScanWarnings;
+        const bool ok = started && (exitCode == 0 || warned);
+        results.push_back(string(ok ? "done      " : "FAILED    ") + shown +
+                          (ok && !warned ? "" : "  (" + (warned ? string("the scan printed warnings") : result) + ")"));
         if (!ok)
         {
             ++failed;

@@ -17,6 +17,7 @@
 #include <QPlainTextEdit>
 #include <QProcess>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QVBoxLayout>
 
 #include "ui_muxForm.h"
@@ -28,6 +29,7 @@
 // the mux ends shows how many were left out and the last TAIL_LINES of them, where a final error message would be.
 const static int MAX_SHOWN_LINES = 10000;
 const static int TAIL_LINES = 20;
+const static int SCAN_WARNINGS = 7;  // the exit code of a scan that printed warnings
 
 MuxForm::MuxForm(QWidget* parent) : QDialog(parent, Qt::WindowMaximizeButtonHint), ui(new Ui_muxForm), muxProcess(0)
 {
@@ -62,6 +64,7 @@ void MuxForm::prepare(const QString& label)
     errCnt = 0;
     m_hiddenLines = 0;
     m_hiddenTail.clear();
+    m_scanWarnings = 0;
     setWindowTitle(label);
     ui->muxLabel->setText(label + '.');
     ui->progressBar->setValue(0);
@@ -153,6 +156,11 @@ void MuxForm::setProgress(int value) { ui->progressBar->setValue(value); }
 
 void MuxForm::addStdOutLine(const QString& line)
 {
+    // the summary of a scan gives its lines of warnings; muxFinished says the number
+    static const QRegularExpression scanWarnings(QStringLiteral("Scan: (\\d+) lines? of warnings"));
+    const QRegularExpressionMatch found = scanWarnings.match(line);
+    if (found.hasMatch())
+        m_scanWarnings = found.captured(1).toInt();
     ui->stdoutText->append(line);
     QTextCursor c = ui->stdoutText->textCursor();
     c.movePosition(QTextCursor::End);
@@ -199,8 +207,12 @@ void MuxForm::muxFinished(int exitCode, const QString&)
     }
     if (muxProcess && ui->abortBtn->isEnabled())
     {
+        // A scan that printed warnings ends with 7 (ExitCode::ScanWarnings of tsMuxeR): it did what it was run for,
+        // and is no error. The number is that of its summary; at least 1, as the code says there were some.
         if (exitCode == 0)
             setWindowTitle(QObject::tr("tsMuxeR successfully finished"));
+        else if (exitCode == SCAN_WARNINGS)
+            setWindowTitle(QObject::tr("The scan finished. Lines of warnings: %1").arg(qMax(1, m_scanWarnings)));
         else
             setWindowTitle(QObject::tr("tsMuxeR finished with error code %1").arg(exitCode));
         ui->muxLabel->setText(windowTitle() + '.');
@@ -209,7 +221,7 @@ void MuxForm::muxFinished(int exitCode, const QString&)
     }
     ui->reportBtn->setEnabled(!m_reportFile.isEmpty());
     // a job that went wrong: a sample of its source may be what the problem report needs
-    ui->sampleBtn->setVisible(exitCode != 0 && m_sampleOffered);
+    ui->sampleBtn->setVisible(exitCode != 0 && exitCode != SCAN_WARNINGS && m_sampleOffered);
 }
 
 void MuxForm::onAbort()

@@ -96,12 +96,13 @@ static constexpr int ERR_FEC_UNSUPPORTED_FEATURE = 3000;
 namespace ExitCode
 {
 constexpr int Done = 0;
-constexpr int Usage = 1;     // the command line or the meta file is wrong
-constexpr int Source = 2;    // a source cannot be read or is not supported
-constexpr int Output = 3;    // the output cannot be written
-constexpr int Stopped = 4;   // kept free, see above
-constexpr int Internal = 5;  // an error inside the program
-constexpr int Batch = 6;     // --batch: a job failed or was not run
+constexpr int Usage = 1;         // the command line or the meta file is wrong
+constexpr int Source = 2;        // a source cannot be read or is not supported
+constexpr int Output = 3;        // the output cannot be written
+constexpr int Stopped = 4;       // kept free, see above
+constexpr int Internal = 5;      // an error inside the program
+constexpr int Batch = 6;         // --batch: a job failed or was not run
+constexpr int ScanWarnings = 7;  // --scan: the run would end well, and printed warnings. A mux with warnings ends 0.
 
 inline int of(const int errCode)
 {

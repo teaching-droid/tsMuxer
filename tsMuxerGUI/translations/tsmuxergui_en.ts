@@ -2637,6 +2637,10 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>The scan finished. Lines of warnings: %1</source>
+        <translation>The scan finished. Lines of warnings: %1</translation>
+    </message>
+    <message>
         <location filename="../muxForm.cpp" line="126"/>
         <source>terminating tsMuxeR...</source>
         <translation type="unfinished"></translation>

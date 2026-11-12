@@ -2637,6 +2637,10 @@
         <translation>tsMuxeR完成，错误代码为 %1</translation>
     </message>
     <message>
+        <source>The scan finished. Lines of warnings: %1</source>
+        <translation>扫描已完成。警告行数：%1</translation>
+    </message>
+    <message>
         <location filename="../muxForm.cpp" line="126"/>
         <source>terminating tsMuxeR...</source>
         <translation>正在终止tsMuxeR...</translation>

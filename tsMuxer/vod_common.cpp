@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <system_error>
@@ -25,6 +26,37 @@
 using namespace std;
 
 bool sLastMsg = false;
+
+namespace traceWarnings
+{
+bool keep = false;
+namespace
+{
+std::mutex g_lock;
+size_t g_count = 0;
+std::vector<std::string> g_kept;
+}  // namespace
+
+void note(const std::string& line)
+{
+    const std::lock_guard<std::mutex> guard(g_lock);
+    ++g_count;
+    if (keep && g_kept.size() < MAX_KEPT)
+        g_kept.push_back(line);
+}
+
+size_t count()
+{
+    const std::lock_guard<std::mutex> guard(g_lock);
+    return g_count;
+}
+
+std::vector<std::string> kept()
+{
+    const std::lock_guard<std::mutex> guard(g_lock);
+    return g_kept;
+}
+}  // namespace traceWarnings
 
 std::string toNativeSeparators(const std::string& dirName)
 {

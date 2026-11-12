@@ -2637,6 +2637,10 @@
         <translation>tsMuxeR가 오류 코드 %1(으)로 종료되었습니다</translation>
     </message>
     <message>
+        <source>The scan finished. Lines of warnings: %1</source>
+        <translation>스캔이 끝났습니다. 경고 줄 수: %1</translation>
+    </message>
+    <message>
         <location filename="../muxForm.cpp" line="126"/>
         <source>terminating tsMuxeR...</source>
         <translation>tsMuxeR 종료 중...</translation>
