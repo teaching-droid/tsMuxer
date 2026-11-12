@@ -3279,7 +3279,8 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
             std::map<int32_t, TrackInfo> firstTracks;
             probe.getTrackList(firstTracks);
             if (const auto t = firstTracks.find(pid); t != firstTracks.end())
-                for (const char* key : {"srccodecdelay", "srcvideolead", "srcopusskip", "srcstartdelay"})
+                for (const char* key :
+                     {"srccodecdelay", "srcvideolead", "srcopusskip", "srcstartdelay", "srcstartknown"})
                     if (const auto d = t->second.m_srcParams.find(key); d != t->second.m_srcParams.end())
                         streamInfo.m_addParams[key] = d->second;
         }
@@ -3383,9 +3384,11 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
     // its track against the video ("DELAY -20ms"), and carried nothing where the track starts with the video. A name
     // without a delay then meant two things: no delay, or a file whose delay nobody looked at (#259). Where the
     // start was measured and is zero, the name says "DELAY 0ms". A track whose start is not known, as one of a file
-    // without video, keeps its plain name.
+    // without video, keeps its plain name; so does one that a mux moves by the start-up samples of its codec (a
+    // CodecDelay of a Matroska file), whose place is not 0 to the mux.
     if (m_demuxOutput && !timeShiftGiven && !codec.empty() && codec[0] == 'A' &&
         streamInfo.m_addParams.find("srcstartms") == streamInfo.m_addParams.end() &&
+        streamInfo.m_addParams.find("srccodecdelay") == streamInfo.m_addParams.end() &&
         (tsStartKnown || streamInfo.m_addParams.find("srcstartknown") != streamInfo.m_addParams.end()))
         streamInfo.m_addParams["srcstartms"] = "0";
     // A cut file's video keeps the pictures before the cut (srcvideolead, see MovDemuxer::mov_read_moov), so the sound
