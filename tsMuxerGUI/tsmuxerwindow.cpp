@@ -3561,8 +3561,15 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
     m_updateMeta = true;
     if (codecList.isEmpty())
     {
-        QMessageBox msgBox(this);
         // A folder that holds discs has no tracks of its own: tsMuxeR names the discs in it, each to be added by itself
+        if (QFileInfo(unquoteStr(newFileName)).isDir() && folderOfDiscsBox(unquoteStr(newFileName)))
+        {
+            // as after the boxes below: the files chosen after this one are still examined
+            if (!addFileList.isEmpty() && m_addNextFile)
+                (this->*m_addNextFile)();
+            return;
+        }
+        QMessageBox msgBox(this);
         QStringList discsInFolder;
         if (QFileInfo(unquoteStr(newFileName)).isDir())
             for (const QString& line : procStdOutput)
@@ -4154,6 +4161,11 @@ void TsMuxerWindow::onDiscTitlesReceived()
     };
     if (list.titles.isEmpty())
     {
+        if (folderOfDiscsBox(m_discSource))
+        {
+            next();
+            return;
+        }
         QStringList lines;
         for (const QString& line : procStdOutput)
             if (!line.trimmed().isEmpty() && !line.startsWith(QLatin1String("tsMuxeR version")))
@@ -5247,6 +5259,35 @@ void TsMuxerWindow::setProbeBusy(bool busy)
         QGuiApplication::setOverrideCursor(Qt::BusyCursor);
     else
         QGuiApplication::restoreOverrideCursor();
+}
+
+// ** A FOLDER OF DISCS IS CALLED ONE. ** A folder that holds several discs, a box set copied disc by disc, was
+// answered with 'The disc "..." has no title to add' and tsMuxeR's line for the command line under it ("List the
+// titles of one with tsMuxeR <its path>"), which names no step of the window. The box now says what the folder is
+// and what to do, with the discs under it as tsMuxeR names them.
+bool TsMuxerWindow::folderOfDiscsBox(const QString& folder)
+{
+    static const QRegularExpression holds(QStringLiteral(" holds (\\d+) discs?\\. List the titles of one with"));
+    int count = 0;
+    QStringList discs;
+    for (const QString& line : procStdOutput)
+    {
+        const QRegularExpressionMatch m = holds.match(line);
+        if (m.hasMatch())
+            count = m.captured(1).toInt();
+        else if (count > 0 && !line.trimmed().isEmpty())
+            discs << line.trimmed();
+    }
+    if (count == 0)
+        return false;
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle(tr("A folder of discs"));
+    msgBox.setText(tr("The folder \"%1\" holds %2 discs. Add one of them with \"%3\":")
+                       .arg(QDir::toNativeSeparators(folder), QString::number(count), tr("add disc")));
+    msgBox.setInformativeText(discs.join('\n'));
+    msgBox.setIcon(QMessageBox::Information);
+    msgBox.exec();
+    return true;
 }
 
 void TsMuxerWindow::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)

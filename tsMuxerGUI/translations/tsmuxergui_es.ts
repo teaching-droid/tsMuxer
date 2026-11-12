@@ -5226,6 +5226,66 @@ Si esto apareció mientras se examinaba un archivo, o al cerrar la ventana, el p
         <translation>ángulo %1 de %2</translation>
     </message>
     <message>
+        <source>main film</source>
+        <translation>película principal</translation>
+    </message>
+    <message>
+        <source>main title</source>
+        <translation>título principal</translation>
+    </message>
+    <message>
+        <source>version of title %1</source>
+        <translation>versión del título %1</translation>
+    </message>
+    <message>
+        <source>version of title %1, %2 of %3 clips differ</source>
+        <translation>versión del título %1, difieren %2 de %3 clips</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips, other audio or subtitles</source>
+        <translation>versión del título %1: los mismos clips, otro audio u otros subtítulos</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips as title %2, other audio or subtitles</source>
+        <translation>versión del título %1: los mismos clips que el título %2, otro audio u otros subtítulos</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips, other parts of them</source>
+        <translation>versión del título %1: los mismos clips, otras partes de ellos</translation>
+    </message>
+    <message>
+        <source>version of title %1: a part of its clips</source>
+        <translation>versión del título %1: una parte de sus clips</translation>
+    </message>
+    <message>
+        <source>the same clips as title %1, other audio or subtitles</source>
+        <translation>los mismos clips que el título %1, otro audio u otros subtítulos</translation>
+    </message>
+    <message>
+        <source>one clip repeated %1 times</source>
+        <translation>un clip repetido %1 veces</translation>
+    </message>
+    <message>
+        <source>under %1 minutes</source>
+        <translation>menos de %1 minutos</translation>
+    </message>
+    <message>
+        <source>it cannot be read</source>
+        <translation>no se puede leer</translation>
+    </message>
+    <message>
+        <source>missing %1</source>
+        <translation>falta: %1</translation>
+    </message>
+    <message>
+        <source>A folder of discs</source>
+        <translation>Una carpeta de discos</translation>
+    </message>
+    <message>
+        <source>The folder &quot;%1&quot; holds %2 discs. Add one of them with &quot;%3&quot;:</source>
+        <translation>La carpeta &quot;%1&quot; contiene %2 discos. Añada uno de ellos con &quot;%3&quot;:</translation>
+    </message>
+    <message>
         <location filename="../discTitleDialog.cpp"/>
         <source>the first angle</source>
         <translation>el primer ángulo</translation>

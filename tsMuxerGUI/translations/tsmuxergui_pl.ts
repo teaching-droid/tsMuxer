@@ -5268,6 +5268,66 @@ Jeśli pojawiło się to podczas sprawdzania pliku lub zamykania okna, proces zo
         <translation>kąt %1 z %2</translation>
     </message>
     <message>
+        <source>main film</source>
+        <translation>film główny</translation>
+    </message>
+    <message>
+        <source>main title</source>
+        <translation>tytuł główny</translation>
+    </message>
+    <message>
+        <source>version of title %1</source>
+        <translation>wersja tytułu %1</translation>
+    </message>
+    <message>
+        <source>version of title %1, %2 of %3 clips differ</source>
+        <translation>wersja tytułu %1, różni się %2 z %3 klipów</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips, other audio or subtitles</source>
+        <translation>wersja tytułu %1: te same klipy, inny dźwięk lub napisy</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips as title %2, other audio or subtitles</source>
+        <translation>wersja tytułu %1: te same klipy co tytuł %2, inny dźwięk lub napisy</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips, other parts of them</source>
+        <translation>wersja tytułu %1: te same klipy, inne ich części</translation>
+    </message>
+    <message>
+        <source>version of title %1: a part of its clips</source>
+        <translation>wersja tytułu %1: część jego klipów</translation>
+    </message>
+    <message>
+        <source>the same clips as title %1, other audio or subtitles</source>
+        <translation>te same klipy co tytuł %1, inny dźwięk lub napisy</translation>
+    </message>
+    <message>
+        <source>one clip repeated %1 times</source>
+        <translation>jeden klip powtórzony %1 razy</translation>
+    </message>
+    <message>
+        <source>under %1 minutes</source>
+        <translation>poniżej %1 minut</translation>
+    </message>
+    <message>
+        <source>it cannot be read</source>
+        <translation>nie można odczytać</translation>
+    </message>
+    <message>
+        <source>missing %1</source>
+        <translation>brak: %1</translation>
+    </message>
+    <message>
+        <source>A folder of discs</source>
+        <translation>Folder z płytami</translation>
+    </message>
+    <message>
+        <source>The folder &quot;%1&quot; holds %2 discs. Add one of them with &quot;%3&quot;:</source>
+        <translation>W folderze &quot;%1&quot; są płyty (%2). Dodaj jedną z nich przyciskiem &quot;%3&quot;:</translation>
+    </message>
+    <message>
         <location filename="../discTitleDialog.cpp"/>
         <source>the first angle</source>
         <translation>pierwszy kąt</translation>

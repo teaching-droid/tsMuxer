@@ -22,6 +22,59 @@
 // The texts are the window's, so that they are translated with the others (tsmuxergui_*.ts, context TsMuxerWindow)
 static QString wtr(const char* text) { return QCoreApplication::translate("TsMuxerWindow", text); }
 
+// ** THE NOTE COLUMN IN THE LANGUAGE OF THE WINDOW. ** The notes are words of tsMuxeR's listing, which is English:
+// in a window of another language the heads, buttons and rows were translated and the Note column was not ("main
+// film", "version of title 1, 13 of 26 clips differ"). The listing gives each note in a fixed form, so the forms
+// are known here and written in the window's language, with their numbers. A note of another form stays as it came.
+// A cell can hold several, with "; " between them.
+static QString noteInWindowLanguage(const QString& cell)
+{
+    struct Form
+    {
+        const char* pattern;
+        const char* text;
+    };
+    static const Form FORMS[] = {
+        {"^main film$", QT_TRANSLATE_NOOP("TsMuxerWindow", "main film")},
+        {"^main title$", QT_TRANSLATE_NOOP("TsMuxerWindow", "main title")},
+        {"^version of title (\\d+)$", QT_TRANSLATE_NOOP("TsMuxerWindow", "version of title %1")},
+        {"^version of title (\\d+), (\\d+) of (\\d+) clips? differs?$",
+         QT_TRANSLATE_NOOP("TsMuxerWindow", "version of title %1, %2 of %3 clips differ")},
+        {"^version of title (\\d+): the same clips, other audio or subtitles$",
+         QT_TRANSLATE_NOOP("TsMuxerWindow", "version of title %1: the same clips, other audio or subtitles")},
+        {"^version of title (\\d+): the same clips as title (\\d+), other audio or subtitles$",
+         QT_TRANSLATE_NOOP("TsMuxerWindow",
+                           "version of title %1: the same clips as title %2, other audio or subtitles")},
+        {"^version of title (\\d+): the same clips, other parts of them$",
+         QT_TRANSLATE_NOOP("TsMuxerWindow", "version of title %1: the same clips, other parts of them")},
+        {"^version of title (\\d+): a part of its clips$",
+         QT_TRANSLATE_NOOP("TsMuxerWindow", "version of title %1: a part of its clips")},
+        {"^the same clips as title (\\d+), other audio or subtitles$",
+         QT_TRANSLATE_NOOP("TsMuxerWindow", "the same clips as title %1, other audio or subtitles")},
+        {"^one clip repeated (\\d+) times$", QT_TRANSLATE_NOOP("TsMuxerWindow", "one clip repeated %1 times")},
+        {"^under (\\d+) minutes?$", QT_TRANSLATE_NOOP("TsMuxerWindow", "under %1 minutes")},
+        {"^it cannot be read$", QT_TRANSLATE_NOOP("TsMuxerWindow", "it cannot be read")},
+        {"^missing (.+)$", QT_TRANSLATE_NOOP("TsMuxerWindow", "missing %1")},
+    };
+    QStringList parts = cell.split(QStringLiteral("; "));
+    for (QString& part : parts)
+        for (const Form& form : FORMS)
+        {
+            const QRegularExpressionMatch m = QRegularExpression(QLatin1String(form.pattern)).match(part);
+            if (!m.hasMatch())
+                continue;
+            QString text = wtr(form.text);
+            // not translated, as in English: the note of the listing stays, which has its singular forms ("1 of 43
+            // clips differs", "under 1 minute")
+            if (text == QLatin1String(form.text))
+                break;
+            for (int i = 1; i <= m.lastCapturedIndex(); ++i) text = text.arg(m.captured(i));
+            part = text;
+            break;
+        }
+    return parts.join(QStringLiteral("; "));
+}
+
 static double hmsSeconds(const QString& text)
 {
     double seconds = 0;
@@ -247,10 +300,10 @@ DiscTitleDialog::DiscTitleDialog(const QString& disc, const DiscTitleList& list,
         for (int angle = 1; angle <= (std::max)(1, list.titles[i].angles); ++angle)
         {
             const DiscTitleRow& row = list.titles[i];
-            QString note = row.note;
+            QString note = noteInWindowLanguage(row.note);
             if (row.angles > 1)
             {
-                const QString main = row.note.section(QLatin1String("; "), 1);
+                const QString main = noteInWindowLanguage(row.note.section(QLatin1String("; "), 1));
                 note = wtr("angle %1 of %2").arg(angle).arg(row.angles) + (main.isEmpty() ? QString() : "; " + main);
             }
             QStringList cells{QString::number(row.number)};

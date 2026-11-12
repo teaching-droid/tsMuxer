@@ -5225,6 +5225,66 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>זווית %1 מתוך %2</translation>
     </message>
     <message>
+        <source>main film</source>
+        <translation>הסרט הראשי</translation>
+    </message>
+    <message>
+        <source>main title</source>
+        <translation>כותר ראשי</translation>
+    </message>
+    <message>
+        <source>version of title %1</source>
+        <translation>גרסה של כותר %1</translation>
+    </message>
+    <message>
+        <source>version of title %1, %2 of %3 clips differ</source>
+        <translation>גרסה של כותר %1, %2 מתוך %3 קליפים שונים</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips, other audio or subtitles</source>
+        <translation>גרסה של כותר %1: אותם קליפים, שמע או כתוביות אחרים</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips as title %2, other audio or subtitles</source>
+        <translation>גרסה של כותר %1: אותם קליפים כמו כותר %2, שמע או כתוביות אחרים</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips, other parts of them</source>
+        <translation>גרסה של כותר %1: אותם קליפים, חלקים אחרים שלהם</translation>
+    </message>
+    <message>
+        <source>version of title %1: a part of its clips</source>
+        <translation>גרסה של כותר %1: חלק מהקליפים שלו</translation>
+    </message>
+    <message>
+        <source>the same clips as title %1, other audio or subtitles</source>
+        <translation>אותם קליפים כמו כותר %1, שמע או כתוביות אחרים</translation>
+    </message>
+    <message>
+        <source>one clip repeated %1 times</source>
+        <translation>קליפ אחד חוזר %1 פעמים</translation>
+    </message>
+    <message>
+        <source>under %1 minutes</source>
+        <translation>פחות מ-%1 דקות</translation>
+    </message>
+    <message>
+        <source>it cannot be read</source>
+        <translation>לא ניתן לקריאה</translation>
+    </message>
+    <message>
+        <source>missing %1</source>
+        <translation>חסר: %1</translation>
+    </message>
+    <message>
+        <source>A folder of discs</source>
+        <translation>תיקייה של דיסקים</translation>
+    </message>
+    <message>
+        <source>The folder &quot;%1&quot; holds %2 discs. Add one of them with &quot;%3&quot;:</source>
+        <translation>התיקייה &quot;%1&quot; מכילה %2 דיסקים. הוסיפו אחד מהם עם &quot;%3&quot;:</translation>
+    </message>
+    <message>
         <location filename="../discTitleDialog.cpp"/>
         <source>the first angle</source>
         <translation>הזווית הראשונה</translation>

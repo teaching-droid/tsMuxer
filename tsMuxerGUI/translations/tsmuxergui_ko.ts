@@ -5268,6 +5268,66 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>앵글 %1 / %2</translation>
     </message>
     <message>
+        <source>main film</source>
+        <translation>본편</translation>
+    </message>
+    <message>
+        <source>main title</source>
+        <translation>본편 타이틀</translation>
+    </message>
+    <message>
+        <source>version of title %1</source>
+        <translation>타이틀 %1의 다른 버전</translation>
+    </message>
+    <message>
+        <source>version of title %1, %2 of %3 clips differ</source>
+        <translation>타이틀 %1의 다른 버전, 클립 %3개 중 %2개가 다름</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips, other audio or subtitles</source>
+        <translation>타이틀 %1의 다른 버전: 같은 클립, 다른 오디오 또는 자막</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips as title %2, other audio or subtitles</source>
+        <translation>타이틀 %1의 다른 버전: 타이틀 %2와(과) 같은 클립, 다른 오디오 또는 자막</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips, other parts of them</source>
+        <translation>타이틀 %1의 다른 버전: 같은 클립의 다른 부분</translation>
+    </message>
+    <message>
+        <source>version of title %1: a part of its clips</source>
+        <translation>타이틀 %1의 다른 버전: 클립의 일부</translation>
+    </message>
+    <message>
+        <source>the same clips as title %1, other audio or subtitles</source>
+        <translation>타이틀 %1와(과) 같은 클립, 다른 오디오 또는 자막</translation>
+    </message>
+    <message>
+        <source>one clip repeated %1 times</source>
+        <translation>클립 하나를 %1번 반복</translation>
+    </message>
+    <message>
+        <source>under %1 minutes</source>
+        <translation>%1분 미만</translation>
+    </message>
+    <message>
+        <source>it cannot be read</source>
+        <translation>읽을 수 없음</translation>
+    </message>
+    <message>
+        <source>missing %1</source>
+        <translation>누락: %1</translation>
+    </message>
+    <message>
+        <source>A folder of discs</source>
+        <translation>디스크 폴더</translation>
+    </message>
+    <message>
+        <source>The folder &quot;%1&quot; holds %2 discs. Add one of them with &quot;%3&quot;:</source>
+        <translation>&quot;%1&quot; 폴더에 디스크가 %2개 있습니다. &quot;%3&quot;(으)로 그중 하나를 추가하십시오:</translation>
+    </message>
+    <message>
         <location filename="../discTitleDialog.cpp"/>
         <source>the first angle</source>
         <translation>첫 번째 앵글</translation>

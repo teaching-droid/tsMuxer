@@ -5226,6 +5226,66 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>ракурс %1 из %2</translation>
     </message>
     <message>
+        <source>main film</source>
+        <translation>основной фильм</translation>
+    </message>
+    <message>
+        <source>main title</source>
+        <translation>основной титул</translation>
+    </message>
+    <message>
+        <source>version of title %1</source>
+        <translation>версия титула %1</translation>
+    </message>
+    <message>
+        <source>version of title %1, %2 of %3 clips differ</source>
+        <translation>версия титула %1, отличаются %2 из %3 клипов</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips, other audio or subtitles</source>
+        <translation>версия титула %1: те же клипы, другой звук или субтитры</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips as title %2, other audio or subtitles</source>
+        <translation>версия титула %1: те же клипы, что у титула %2, другой звук или субтитры</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips, other parts of them</source>
+        <translation>версия титула %1: те же клипы, другие их части</translation>
+    </message>
+    <message>
+        <source>version of title %1: a part of its clips</source>
+        <translation>версия титула %1: часть его клипов</translation>
+    </message>
+    <message>
+        <source>the same clips as title %1, other audio or subtitles</source>
+        <translation>те же клипы, что у титула %1, другой звук или субтитры</translation>
+    </message>
+    <message>
+        <source>one clip repeated %1 times</source>
+        <translation>один клип повторён %1 раз</translation>
+    </message>
+    <message>
+        <source>under %1 minutes</source>
+        <translation>менее %1 мин</translation>
+    </message>
+    <message>
+        <source>it cannot be read</source>
+        <translation>не читается</translation>
+    </message>
+    <message>
+        <source>missing %1</source>
+        <translation>отсутствует: %1</translation>
+    </message>
+    <message>
+        <source>A folder of discs</source>
+        <translation>Папка с дисками</translation>
+    </message>
+    <message>
+        <source>The folder &quot;%1&quot; holds %2 discs. Add one of them with &quot;%3&quot;:</source>
+        <translation>В папке &quot;%1&quot; дисков: %2. Добавьте один из них кнопкой &quot;%3&quot;:</translation>
+    </message>
+    <message>
         <location filename="../discTitleDialog.cpp"/>
         <source>the first angle</source>
         <translation>первый ракурс</translation>

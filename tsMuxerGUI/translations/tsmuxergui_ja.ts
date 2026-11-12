@@ -5225,6 +5225,66 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>アングル %1 / %2</translation>
     </message>
     <message>
+        <source>main film</source>
+        <translation>本編</translation>
+    </message>
+    <message>
+        <source>main title</source>
+        <translation>本編タイトル</translation>
+    </message>
+    <message>
+        <source>version of title %1</source>
+        <translation>タイトル %1 の別バージョン</translation>
+    </message>
+    <message>
+        <source>version of title %1, %2 of %3 clips differ</source>
+        <translation>タイトル %1 の別バージョン、%3 クリップ中 %2 個が異なる</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips, other audio or subtitles</source>
+        <translation>タイトル %1 の別バージョン: 同じクリップ、音声または字幕が異なる</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips as title %2, other audio or subtitles</source>
+        <translation>タイトル %1 の別バージョン: タイトル %2 と同じクリップ、音声または字幕が異なる</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips, other parts of them</source>
+        <translation>タイトル %1 の別バージョン: 同じクリップの別の部分</translation>
+    </message>
+    <message>
+        <source>version of title %1: a part of its clips</source>
+        <translation>タイトル %1 の別バージョン: そのクリップの一部</translation>
+    </message>
+    <message>
+        <source>the same clips as title %1, other audio or subtitles</source>
+        <translation>タイトル %1 と同じクリップ、音声または字幕が異なる</translation>
+    </message>
+    <message>
+        <source>one clip repeated %1 times</source>
+        <translation>1 つのクリップを %1 回繰り返し</translation>
+    </message>
+    <message>
+        <source>under %1 minutes</source>
+        <translation>%1 分未満</translation>
+    </message>
+    <message>
+        <source>it cannot be read</source>
+        <translation>読み取れません</translation>
+    </message>
+    <message>
+        <source>missing %1</source>
+        <translation>不足: %1</translation>
+    </message>
+    <message>
+        <source>A folder of discs</source>
+        <translation>ディスクのフォルダー</translation>
+    </message>
+    <message>
+        <source>The folder &quot;%1&quot; holds %2 discs. Add one of them with &quot;%3&quot;:</source>
+        <translation>フォルダー &quot;%1&quot; には %2 枚のディスクがあります。&quot;%3&quot; でそのうちの 1 枚を追加してください:</translation>
+    </message>
+    <message>
         <location filename="../discTitleDialog.cpp"/>
         <source>the first angle</source>
         <translation>最初のアングル</translation>

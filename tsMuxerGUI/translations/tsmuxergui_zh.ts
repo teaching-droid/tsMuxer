@@ -5225,6 +5225,66 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>视角 %1 / %2</translation>
     </message>
     <message>
+        <source>main film</source>
+        <translation>正片</translation>
+    </message>
+    <message>
+        <source>main title</source>
+        <translation>主标题</translation>
+    </message>
+    <message>
+        <source>version of title %1</source>
+        <translation>标题 %1 的另一版本</translation>
+    </message>
+    <message>
+        <source>version of title %1, %2 of %3 clips differ</source>
+        <translation>标题 %1 的另一版本，%3 个片段中有 %2 个不同</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips, other audio or subtitles</source>
+        <translation>标题 %1 的另一版本：片段相同，音频或字幕不同</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips as title %2, other audio or subtitles</source>
+        <translation>标题 %1 的另一版本：片段与标题 %2 相同，音频或字幕不同</translation>
+    </message>
+    <message>
+        <source>version of title %1: the same clips, other parts of them</source>
+        <translation>标题 %1 的另一版本：片段相同，取用的部分不同</translation>
+    </message>
+    <message>
+        <source>version of title %1: a part of its clips</source>
+        <translation>标题 %1 的另一版本：其片段的一部分</translation>
+    </message>
+    <message>
+        <source>the same clips as title %1, other audio or subtitles</source>
+        <translation>片段与标题 %1 相同，音频或字幕不同</translation>
+    </message>
+    <message>
+        <source>one clip repeated %1 times</source>
+        <translation>一个片段重复 %1 次</translation>
+    </message>
+    <message>
+        <source>under %1 minutes</source>
+        <translation>不足 %1 分钟</translation>
+    </message>
+    <message>
+        <source>it cannot be read</source>
+        <translation>无法读取</translation>
+    </message>
+    <message>
+        <source>missing %1</source>
+        <translation>缺少：%1</translation>
+    </message>
+    <message>
+        <source>A folder of discs</source>
+        <translation>光盘文件夹</translation>
+    </message>
+    <message>
+        <source>The folder &quot;%1&quot; holds %2 discs. Add one of them with &quot;%3&quot;:</source>
+        <translation>文件夹“%1”中有 %2 张光盘。请用“%3”添加其中一张：</translation>
+    </message>
+    <message>
         <location filename="../discTitleDialog.cpp"/>
         <source>the first angle</source>
         <translation>第一个视角</translation>

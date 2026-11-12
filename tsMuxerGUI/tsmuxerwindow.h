@@ -315,6 +315,9 @@ class TsMuxerWindow : public QWidget
     bool m_addToQueue = false;  // startMuxing was asked for the queue: it stops after the checks and the meta file
     // "Scan": the job is run with --scan, which writes nothing and tells the size of the output
     QPushButton* m_scanBtn = nullptr;
+    // What tsMuxeR printed is its list of the discs of a folder ("... holds 3 discs ..."): the box that says so is
+    // shown, and true returned
+    bool folderOfDiscsBox(const QString& folder);
     bool m_scanRun = false;         // startMuxing was asked for a scan
     bool m_askNonDiscCodec = true;  // the question about a codec a Blu-ray does not have; off until the window closes
     bool m_scanRunning = false;     // the run in the progress window is a scan
