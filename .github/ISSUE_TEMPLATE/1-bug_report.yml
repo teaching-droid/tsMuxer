@@ -80,15 +80,15 @@ body:
   - type: textarea
     id: log
     attributes:
-      label: Program output / log
+      label: Program output / log (not needed with a report)
       description: >
-        Paste the text tsMuxeR printed, especially the lines at the end of the run. If you attach
-        a report below, write "see report": it holds the whole log. For a BDMV-to-ISO problem,
-        include the report and the .layerbreak.txt sidecar if you have them.
+        If you attach a report below, leave this empty: the report holds the whole log. Otherwise
+        paste the text tsMuxeR printed, especially the lines at the end of the run. For a
+        BDMV-to-ISO problem, include the .layerbreak.txt sidecar if you have it.
         This will be shown as code, no backticks needed.
       render: shell
     validations:
-      required: true
+      required: false
 
   - type: textarea
     id: report
