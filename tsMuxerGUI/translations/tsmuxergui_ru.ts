@@ -3055,6 +3055,26 @@ Build the ISO anyway?</source>
         <translation>Задать FPS как у видео</translation>
     </message>
     <message>
+        <source>Forced pictures:</source>
+        <translation>Принудительные субтитры:</translation>
+    </message>
+    <message>
+        <source>Also as a track of their own</source>
+        <translation>Также отдельной дорожкой</translation>
+    </message>
+    <message>
+        <source>No track of their own</source>
+        <translation>Без отдельной дорожки</translation>
+    </message>
+    <message>
+        <source>Only the forced pictures</source>
+        <translation>Только принудительные субтитры</translation>
+    </message>
+    <message>
+        <source>The pictures a disc shows also with subtitles off. A Matroska file and a demux write them also as a track of their own, named Forced, where a track has forced pictures and others. Every output can take the forced pictures alone.</source>
+        <translation>Изображения, которые диск показывает и при выключенных субтитрах. Файл Matroska и демультиплексирование записывают их также отдельной дорожкой с именем Forced, если в дорожке есть принудительные и другие изображения. Любой вывод может взять только принудительные изображения.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="768"/>
         <source>3d offset:</source>
         <translation>глубина 3D:</translation>

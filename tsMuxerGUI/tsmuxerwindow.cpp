@@ -1054,6 +1054,7 @@ TsMuxerWindow::TsMuxerWindow()
                            ui->mkvFlagOriginal, ui->mkvFlagCommentary})
         connect(box, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onMkvTrackOptionsChanged);
     connect(ui->offsetsComboBox, comboBoxIndexChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
+    connect(ui->forcedComboBox, comboBoxIndexChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->langCodesComboBox, comboBoxIndexChanged, this, &TsMuxerWindow::onSavedParamChanged);
     // The language box listed every code in its terminological form, so with Bibliographic chosen a track tagged
     // "cze" showed "ces (Czech)", although "cze" is what the track keeps and what is written. The box now shows the
@@ -3992,6 +3993,7 @@ void TsMuxerWindow::onAudioSubtitlesParamsChanged()
         loser->blockSignals(blocked);
     }
     codecInfo->offsetId = ui->offsetsComboBox->currentIndex() - 1;
+    codecInfo->forcedPictures = (std::max)(0, ui->forcedComboBox->currentIndex());
     codecInfo->lang = langForTrack(ui->langComboBox, codecInfo->lang);
 
     // TrueHD + AC-3 merge (CLI meta parameters on A_MLP only)
@@ -4492,6 +4494,12 @@ void TsMuxerWindow::trackLVItemSelectionChanged()
 
             bool isPGS = codecInfo->displayName == "PGS";
             ui->checkBoxKeepFps->setVisible(isPGS);
+            // ** THE FORCED PICTURES OF A PGS TRACK HAVE A BOX. ** What becomes of them was a word of the meta file
+            // only (no-forced-track, forced-pictures), so from the window a Matroska file or a demux always got the
+            // track of forced pictures, and the forced pictures alone could not be had at all (#20).
+            ui->forcedLabel->setVisible(isPGS);
+            ui->forcedComboBox->setVisible(isPGS);
+            ui->forcedComboBox->setCurrentIndex(codecInfo->forcedPictures);
             // a text subtitle is drawn into a PG stream, which a 3D disc places by a plane as well
             const bool hasPlane = isPGS || codecInfo->displayName == "SRT";
             ui->offsetsLabel->setVisible(hasPlane);
@@ -6780,6 +6788,10 @@ QString TsMuxerWindow::buildMetaText()
         {
             if (codecInfo->bindFps && !tmpFps.isEmpty())
                 postfix += QString(", fps=") + tmpFps;
+            if (codecInfo->forcedPictures == 1)
+                postfix += ", no-forced-track";
+            else if (codecInfo->forcedPictures == 2)
+                postfix += ", forced-pictures";
             // "zero" (offsetId -1) was written as no 3d-plane= at all, which gave the subtitle no offset (0xff). Since
             // the mux takes the playlist's offset when 3d-plane= is absent, "zero" on a track of a 3D playlist came
             // out at the playlist's plane. 255 is the core's own "no offset", the value it wrote for "zero" before.

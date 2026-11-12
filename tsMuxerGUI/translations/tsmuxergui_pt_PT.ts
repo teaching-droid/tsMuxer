@@ -2947,6 +2947,26 @@
         <translation>Associar ao FPS do vídeo</translation>
     </message>
     <message>
+        <source>Forced pictures:</source>
+        <translation>Imagens forçadas:</translation>
+    </message>
+    <message>
+        <source>Also as a track of their own</source>
+        <translation>Também como faixa própria</translation>
+    </message>
+    <message>
+        <source>No track of their own</source>
+        <translation>Sem faixa própria</translation>
+    </message>
+    <message>
+        <source>Only the forced pictures</source>
+        <translation>Apenas as imagens forçadas</translation>
+    </message>
+    <message>
+        <source>The pictures a disc shows also with subtitles off. A Matroska file and a demux write them also as a track of their own, named Forced, where a track has forced pictures and others. Every output can take the forced pictures alone.</source>
+        <translation>As imagens que um disco mostra mesmo com as legendas desligadas. Um ficheiro Matroska e um demux escrevem-nas também como faixa própria, chamada Forced, quando uma faixa tem imagens forçadas e outras. Qualquer saída pode levar apenas as imagens forçadas.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="768"/>
         <source>3d offset:</source>
         <translation>Deslocamento 3D:</translation>

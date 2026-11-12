@@ -2947,6 +2947,26 @@
         <translation>Powiąż z FPS wideo</translation>
     </message>
     <message>
+        <source>Forced pictures:</source>
+        <translation>Napisy wymuszone:</translation>
+    </message>
+    <message>
+        <source>Also as a track of their own</source>
+        <translation>Także jako osobna ścieżka</translation>
+    </message>
+    <message>
+        <source>No track of their own</source>
+        <translation>Bez osobnej ścieżki</translation>
+    </message>
+    <message>
+        <source>Only the forced pictures</source>
+        <translation>Tylko napisy wymuszone</translation>
+    </message>
+    <message>
+        <source>The pictures a disc shows also with subtitles off. A Matroska file and a demux write them also as a track of their own, named Forced, where a track has forced pictures and others. Every output can take the forced pictures alone.</source>
+        <translation>Obrazy, które płyta pokazuje także przy wyłączonych napisach. Plik Matroska i demuks zapisują je dodatkowo jako osobną ścieżkę o nazwie Forced, gdy ścieżka zawiera obrazy wymuszone i inne. Każde wyjście może przyjąć same obrazy wymuszone.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="768"/>
         <source>3d offset:</source>
         <translation>Przesunięcie 3D:</translation>

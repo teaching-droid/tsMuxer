@@ -3055,6 +3055,26 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas, seleccionables como
         <translation>Vincular a FPS del vídeo</translation>
     </message>
     <message>
+        <source>Forced pictures:</source>
+        <translation>Imágenes forzadas:</translation>
+    </message>
+    <message>
+        <source>Also as a track of their own</source>
+        <translation>También como pista propia</translation>
+    </message>
+    <message>
+        <source>No track of their own</source>
+        <translation>Sin pista propia</translation>
+    </message>
+    <message>
+        <source>Only the forced pictures</source>
+        <translation>Solo las imágenes forzadas</translation>
+    </message>
+    <message>
+        <source>The pictures a disc shows also with subtitles off. A Matroska file and a demux write them also as a track of their own, named Forced, where a track has forced pictures and others. Every output can take the forced pictures alone.</source>
+        <translation>Las imágenes que un disco muestra también con los subtítulos desactivados. Un archivo Matroska y un demux las escriben además como pista propia, llamada Forced, cuando una pista tiene imágenes forzadas y otras. Cualquier salida puede tomar solo las imágenes forzadas.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="768"/>
         <source>3d offset:</source>
         <translation>Ajustes 3D:</translation>

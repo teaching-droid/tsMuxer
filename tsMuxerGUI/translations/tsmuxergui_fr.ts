@@ -3055,6 +3055,26 @@ Créer l'ISO malgré tout ?</translation>
         <translation>Lier aux FPS de la vidéo</translation>
     </message>
     <message>
+        <source>Forced pictures:</source>
+        <translation>Images forcées :</translation>
+    </message>
+    <message>
+        <source>Also as a track of their own</source>
+        <translation>Aussi comme piste à part</translation>
+    </message>
+    <message>
+        <source>No track of their own</source>
+        <translation>Pas de piste à part</translation>
+    </message>
+    <message>
+        <source>Only the forced pictures</source>
+        <translation>Seulement les images forcées</translation>
+    </message>
+    <message>
+        <source>The pictures a disc shows also with subtitles off. A Matroska file and a demux write them also as a track of their own, named Forced, where a track has forced pictures and others. Every output can take the forced pictures alone.</source>
+        <translation>Les images qu&apos;un disque affiche même sous-titres désactivés. Un fichier Matroska et un démultiplexage les écrivent aussi comme piste à part, nommée Forced, quand une piste contient des images forcées et d&apos;autres. Toute sortie peut prendre les images forcées seules.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="768"/>
         <source>3d offset:</source>
         <translation>Décalage 3D :</translation>

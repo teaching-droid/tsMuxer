@@ -83,6 +83,10 @@ struct QtvCodecInfo
     QtvCodecInfo* parent = nullptr;
     QtvCodecInfo* child = nullptr;
     bool bindFps = true;
+    // A PGS row, its forced pictures: 0 also as a track of their own where the output has such a track (the
+    // default, nothing on the meta line), 1 no such track (no-forced-track), 2 the forced pictures alone
+    // (forced-pictures)
+    int forcedPictures = 0;
     QStringList mplsFiles;
     QString arText;
     bool enabledByDefault = true;

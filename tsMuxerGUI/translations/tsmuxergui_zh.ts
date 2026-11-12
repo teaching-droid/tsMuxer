@@ -3055,6 +3055,26 @@ Build the ISO anyway?</source>
         <translation>约束到视频FPS</translation>
     </message>
     <message>
+        <source>Forced pictures:</source>
+        <translation>强制字幕：</translation>
+    </message>
+    <message>
+        <source>Also as a track of their own</source>
+        <translation>同时作为独立轨道</translation>
+    </message>
+    <message>
+        <source>No track of their own</source>
+        <translation>不生成独立轨道</translation>
+    </message>
+    <message>
+        <source>Only the forced pictures</source>
+        <translation>仅强制字幕</translation>
+    </message>
+    <message>
+        <source>The pictures a disc shows also with subtitles off. A Matroska file and a demux write them also as a track of their own, named Forced, where a track has forced pictures and others. Every output can take the forced pictures alone.</source>
+        <translation>关闭字幕时光盘仍会显示的字幕。当一条轨道既有强制字幕又有其他字幕时，Matroska 文件和分离输出还会把强制字幕写成名为 Forced 的独立轨道。任何输出都可以只取强制字幕。</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="768"/>
         <source>3d offset:</source>
         <translation>3D偏移：</translation>

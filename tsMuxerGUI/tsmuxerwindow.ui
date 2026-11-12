@@ -883,6 +883,38 @@
                    </widget>
                   </item>
                   <item>
+                   <widget class="QLabel" name="forcedLabel">
+                    <property name="text">
+                     <string>Forced pictures:</string>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QComboBox" name="forcedComboBox">
+                    <property name="toolTip">
+                     <string>The pictures a disc shows also with subtitles off. A Matroska file and a demux write them also as a track of their own, named Forced, where a track has forced pictures and others. Every output can take the forced pictures alone.</string>
+                    </property>
+                    <property name="sizeAdjustPolicy">
+                     <enum>QComboBox::AdjustToContents</enum>
+                    </property>
+                    <item>
+                     <property name="text">
+                      <string>Also as a track of their own</string>
+                     </property>
+                    </item>
+                    <item>
+                     <property name="text">
+                      <string>No track of their own</string>
+                     </property>
+                    </item>
+                    <item>
+                     <property name="text">
+                      <string>Only the forced pictures</string>
+                     </property>
+                    </item>
+                   </widget>
+                  </item>
+                  <item>
                    <spacer name="horizontalSpacer_6">
                     <property name="orientation">
                      <enum>Qt::Horizontal</enum>

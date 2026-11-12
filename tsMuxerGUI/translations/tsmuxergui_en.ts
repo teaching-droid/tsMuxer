@@ -2947,6 +2947,26 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
+        <source>Forced pictures:</source>
+        <translation>Forced pictures:</translation>
+    </message>
+    <message>
+        <source>Also as a track of their own</source>
+        <translation>Also as a track of their own</translation>
+    </message>
+    <message>
+        <source>No track of their own</source>
+        <translation>No track of their own</translation>
+    </message>
+    <message>
+        <source>Only the forced pictures</source>
+        <translation>Only the forced pictures</translation>
+    </message>
+    <message>
+        <source>The pictures a disc shows also with subtitles off. A Matroska file and a demux write them also as a track of their own, named Forced, where a track has forced pictures and others. Every output can take the forced pictures alone.</source>
+        <translation>The pictures a disc shows also with subtitles off. A Matroska file and a demux write them also as a track of their own, named Forced, where a track has forced pictures and others. Every output can take the forced pictures alone.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="768"/>
         <source>3d offset:</source>
         <translation type="unfinished"></translation>

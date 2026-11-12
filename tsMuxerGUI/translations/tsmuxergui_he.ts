@@ -3055,6 +3055,26 @@ Build the ISO anyway?</source>
         <translation>קשירה לווידאו FPS</translation>
     </message>
     <message>
+        <source>Forced pictures:</source>
+        <translation>תמונות מאולצות:</translation>
+    </message>
+    <message>
+        <source>Also as a track of their own</source>
+        <translation>גם כרצועה נפרדת</translation>
+    </message>
+    <message>
+        <source>No track of their own</source>
+        <translation>ללא רצועה נפרדת</translation>
+    </message>
+    <message>
+        <source>Only the forced pictures</source>
+        <translation>רק התמונות המאולצות</translation>
+    </message>
+    <message>
+        <source>The pictures a disc shows also with subtitles off. A Matroska file and a demux write them also as a track of their own, named Forced, where a track has forced pictures and others. Every output can take the forced pictures alone.</source>
+        <translation>התמונות שתקליטור מציג גם כשהכתוביות כבויות. קובץ Matroska ו-demux כותבים אותן גם כרצועה נפרדת בשם Forced, כאשר ברצועה יש תמונות מאולצות ואחרות. כל פלט יכול לקחת את התמונות המאולצות לבדן.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="768"/>
         <source>3d offset:</source>
         <translation>היסט תלת מימדי:</translation>

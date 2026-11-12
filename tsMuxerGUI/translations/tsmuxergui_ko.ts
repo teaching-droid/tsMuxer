@@ -2947,6 +2947,26 @@
         <translation>비디오 FPS에 연결</translation>
     </message>
     <message>
+        <source>Forced pictures:</source>
+        <translation>강제 자막:</translation>
+    </message>
+    <message>
+        <source>Also as a track of their own</source>
+        <translation>별도 트랙으로도 기록</translation>
+    </message>
+    <message>
+        <source>No track of their own</source>
+        <translation>별도 트랙 없음</translation>
+    </message>
+    <message>
+        <source>Only the forced pictures</source>
+        <translation>강제 자막만</translation>
+    </message>
+    <message>
+        <source>The pictures a disc shows also with subtitles off. A Matroska file and a demux write them also as a track of their own, named Forced, where a track has forced pictures and others. Every output can take the forced pictures alone.</source>
+        <translation>자막을 꺼도 디스크가 표시하는 자막입니다. 강제 자막과 그 밖의 자막이 함께 있는 트랙은 Matroska 파일과 디먹스에서 Forced라는 별도 트랙으로도 기록됩니다. 어떤 출력에서든 강제 자막만 가져올 수 있습니다.</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="768"/>
         <source>3d offset:</source>
         <translation>3D 오프셋:</translation>

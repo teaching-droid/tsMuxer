@@ -2947,6 +2947,26 @@
         <translation>與視訊 FPS 綁定</translation>
     </message>
     <message>
+        <source>Forced pictures:</source>
+        <translation>強制字幕：</translation>
+    </message>
+    <message>
+        <source>Also as a track of their own</source>
+        <translation>同時作為獨立軌道</translation>
+    </message>
+    <message>
+        <source>No track of their own</source>
+        <translation>不產生獨立軌道</translation>
+    </message>
+    <message>
+        <source>Only the forced pictures</source>
+        <translation>僅強制字幕</translation>
+    </message>
+    <message>
+        <source>The pictures a disc shows also with subtitles off. A Matroska file and a demux write them also as a track of their own, named Forced, where a track has forced pictures and others. Every output can take the forced pictures alone.</source>
+        <translation>關閉字幕時光碟仍會顯示的字幕。當一條軌道既有強制字幕又有其他字幕時，Matroska 檔案和分離輸出還會把強制字幕寫成名為 Forced 的獨立軌道。任何輸出都可以只取強制字幕。</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="768"/>
         <source>3d offset:</source>
         <translation>3D 偏移:</translation>

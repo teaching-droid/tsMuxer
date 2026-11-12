@@ -3055,6 +3055,26 @@ Build the ISO anyway?</source>
         <translation>映像のFPSに合わせる</translation>
     </message>
     <message>
+        <source>Forced pictures:</source>
+        <translation>強制字幕:</translation>
+    </message>
+    <message>
+        <source>Also as a track of their own</source>
+        <translation>独立したトラックとしても書き出す</translation>
+    </message>
+    <message>
+        <source>No track of their own</source>
+        <translation>独立したトラックにしない</translation>
+    </message>
+    <message>
+        <source>Only the forced pictures</source>
+        <translation>強制字幕のみ</translation>
+    </message>
+    <message>
+        <source>The pictures a disc shows also with subtitles off. A Matroska file and a demux write them also as a track of their own, named Forced, where a track has forced pictures and others. Every output can take the forced pictures alone.</source>
+        <translation>字幕をオフにしてもディスクが表示する字幕です。強制字幕とそれ以外の字幕を含むトラックでは、Matroska ファイルと分離出力で Forced という名前の独立したトラックとしても書き出します。どの出力でも強制字幕だけを取り出せます。</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="768"/>
         <source>3d offset:</source>
         <translation>3Dオフセット:</translation>
