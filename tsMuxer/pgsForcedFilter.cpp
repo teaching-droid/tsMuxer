@@ -27,9 +27,10 @@ int64_t drawTicks(const double pixels) { return static_cast<int64_t>(ceil(90000.
 
 uint16_t be16(const uint8_t* p) { return static_cast<uint16_t>(p[0] << 8 | p[1]); }
 
-// the payload of a segment
+// The payload of a segment. Of no segment at all, as the windows of an epoch that has not defined any, the size is 0:
+// taken off an empty one it ran below zero, the size seemed endless, and the windows were read at address 3.
 const uint8_t* body(const std::vector<uint8_t>& segment) { return segment.data() + 3; }
-size_t bodySize(const std::vector<uint8_t>& segment) { return segment.size() - 3; }
+size_t bodySize(const std::vector<uint8_t>& segment) { return segment.size() >= 3 ? segment.size() - 3 : 0; }
 
 struct Placed
 {
