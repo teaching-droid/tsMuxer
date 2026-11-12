@@ -515,6 +515,8 @@ void MPEGStreamReader::updateFPS(void* curNALUnit, uint8_t* buff, uint8_t* nextN
         m_badFpsSaid = true;
         spsFps = 0.0;
     }
+    if (spsFps != 0.0 && m_streamFps == 0.0)
+        m_streamFps = spsFps;
     if (spsFps == 0.0 && m_fps == 0.0)
     {
         setFPS(fallbackFps(curNALUnit));

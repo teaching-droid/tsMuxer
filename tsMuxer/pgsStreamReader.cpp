@@ -745,7 +745,38 @@ int PGSStreamReader::readSourcePacket(AVPacket& avPacket)
                (m_renderedFromText ? "Drawing text subtitles into pictures (track " : "Decoding PGS stream (track ")
                    << m_streamIndex << "): " << " Resolution: " << m_video_width << ':' << m_video_height
                    << "  Frame rate: " << m_frame_rate);
-        if (m_newFps != 0.0 && fabs(m_newFps - m_frame_rate) > 1e-4 && m_rateGuessed)
+        // ** SUBTITLES OF THE VIDEO'S OWN FILE KEEP THEIR TIMES. ** fps= on a PGS line converts the track: its times
+        // are scaled from the frame rate its display sets carry to the one given, which is right for subtitles made
+        // for another version of the film (a track of 25 fps beside a video of 23.976). The window gives every
+        // subtitle track the frame rate of the video ("Bind to video FPS"), and so a track that came in the SAME file
+        // as the video was converted as well, where its display sets say another rate than the video has: marked
+        // 59.94 beside a video of 60 fps, every time was scaled by 59.94/60, and the subtitles of a film of 45 minutes
+        // ran 2.7 s out of step by its end, sound and picture staying together (#60). The times of such a track are
+        // those of its video already. They are scaled only by what the video itself is changed by (its stream's rate
+        // against the rate it is muxed at, as fps= on the video line sets it), and the rate of the display sets is
+        // written as the one given. A track of another file is converted as before.
+        if (m_newFps != 0.0 && m_videoOfItsFile && !m_rateGuessed)
+        {
+            double streamRate = 0, muxRate = 0;
+            m_videoOfItsFile(streamRate, muxRate);
+            const double change = streamRate > 0 && muxRate > 0 ? streamRate / muxRate : 1.0;
+            if (fabs(change - 1.0) > 1e-6)
+            {
+                LTRACE(LT_INFO, 2,
+                       "The video of its file is changed from " << streamRate << " to " << muxRate
+                                                                << " fps: the times of PGS stream #" << m_streamIndex
+                                                                << " follow it.");
+                m_scale = change;
+            }
+            if (fabs(m_newFps - m_frame_rate) > 1e-4)
+            {
+                LTRACE(LT_INFO, 2,
+                       "PGS stream #" << m_streamIndex << " is marked with frame rate " << m_newFps << " in place of "
+                                      << m_frame_rate << ". Its times are those of the video of its file, and stay.");
+                m_replaceRate = true;
+            }
+        }
+        else if (m_newFps != 0.0 && fabs(m_newFps - m_frame_rate) > 1e-4 && m_rateGuessed)
         {
             LTRACE(LT_INFO, 2, "PGS stream #" << m_streamIndex << " is marked with frame rate " << m_newFps);
             m_replaceRate = true;

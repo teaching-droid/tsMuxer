@@ -1233,6 +1233,27 @@ void METADemuxer::openFile(const string& streamName)
         file.readLine(str);
     }
 
+    // a PGS track of the file the video comes from is told so (PGSStreamReader::setVideoOfItsFile, #60)
+    for (auto& sub : m_codecInfo)
+    {
+        auto* pgs = dynamic_cast<PGSStreamReader*>(sub.m_streamReader);
+        if (!pgs || sub.m_sourceFiles.empty())
+            continue;
+        for (const auto& video : m_codecInfo)
+        {
+            if (video.m_codec.empty() || video.m_codec[0] != 'V' || video.m_sourceFiles != sub.m_sourceFiles)
+                continue;
+            const auto* reader = dynamic_cast<const MPEGStreamReader*>(video.m_streamReader);
+            pgs->setVideoOfItsFile(
+                [reader](double& stream, double& mux)
+                {
+                    stream = reader ? reader->streamFps() : 0.0;
+                    mux = reader ? reader->getFPS() : 0.0;
+                });
+            break;
+        }
+    }
+
     // A default= the user wrote on a subtitle line wins over one taken from a file name: a disc has one default
     // subtitle, the first that has one, so an earlier file named "forced" took it from a later line that said
     // default=all. The forced file keeps its forced mark for a Matroska output.

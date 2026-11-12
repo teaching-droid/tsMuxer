@@ -78,6 +78,9 @@ class MPEGStreamReader : public AbstractStreamReader
     void setPartStartSource(std::function<bool(int64_t)> source) { m_partStartSource = std::move(source); }
 
     [[nodiscard]] double getFPS() const { return m_fps; }
+    // The frame rate the stream itself gives, as first read; 0 while none was read. getFPS() is the rate of the mux,
+    // which fps= on the line may have set to another one.
+    [[nodiscard]] double streamFps() const { return m_streamFps; }
     // For a probe (checkStream) whose data is all the stream holds: its last unit is whole, not cut off
     void setProbeHoldsAll() { m_eof = true; }
     [[nodiscard]] VideoAspectRatio getStreamAR() const
@@ -154,6 +157,7 @@ class MPEGStreamReader : public AbstractStreamReader
     bool m_eof;
     double m_fps;
     bool m_fpsFromContainer = false;
+    double m_streamFps = 0;  // streamFps()
     int64_t m_pcrIncPerFrame;
     int64_t m_pcrIncPerField;
     const uint8_t* m_lastDecodedPos;

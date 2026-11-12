@@ -4,6 +4,7 @@
 #define PGS_STREAM_READER_H_
 
 #include <deque>
+#include <functional>
 #include <vector>
 #include "pgsForcedFilter.h"
 
@@ -24,6 +25,12 @@ class PGSStreamReader final : public AbstractStreamReader
     // The frame rate the stream is marked with is a guess (DVD subtitles from a file without video): fps= replaces
     // it, where for any other PGS stream fps= converts the times from it.
     void setRateGuessed(const bool value) { m_rateGuessed = value; }
+    // The track comes from the file of the video of the mux (see the note in readPacket): `rates` gives the frame
+    // rate that video's stream has and the one it is muxed at, 0 where one is not known yet.
+    void setVideoOfItsFile(std::function<void(double& stream, double& mux)> rates)
+    {
+        m_videoOfItsFile = std::move(rates);
+    }
     struct BitmapInfo
     {
         int Width;
@@ -151,6 +158,7 @@ class PGSStreamReader final : public AbstractStreamReader
     bool m_renderedFromText;
     bool m_rateGuessed = false;
     bool m_replaceRate = false;
+    std::function<void(double&, double&)> m_videoOfItsFile;
     int m_firstRateIndex = -1;     // the frame rate code of the first PCS
     bool m_mixedRateSaid = false;  // the warning that the PCS give more than one rate, once
     int64_t m_compositions = 0;    // the PCS read (getDeliveredFrames)
