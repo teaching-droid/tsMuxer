@@ -3,6 +3,8 @@
 #ifndef AC3_STREAM_READER_H_
 #define AC3_STREAM_READER_H_
 
+#include <vector>
+
 #include "abstractDemuxer.h"
 #include "ac3Codec.h"
 #include "avPacket.h"
@@ -42,7 +44,43 @@ class AC3StreamReader final : public SimplePacketizerReader, public AC3Codec
     bool isSecondary() override;
     void addTimeGap(int64_t atNs, int64_t gapNs) override;
 
+    // ** AC-3 INSIDE A WAV. ** A WAVE file can hold AC-3 or E-AC-3 in place of samples, in two forms. With frames as
+    // its data (format tag 0x2000, as an encoder or a capture card writes it) the frames are those of an .ac3 file,
+    // and the file is listed and muxed as the AC-3 it holds. Packed for a digital output (IEC 61937 bursts in 16-bit
+    // stereo samples, as made to be played over S/PDIF or HDMI) it was listed as LPCM and muxed as such, which plays
+    // as noise, and then refused with the reason. The frames are taken out of the bursts now (unpackBursts), in the
+    // listing and by the reader of a mux (setBuffer), and the track is the AC-3 or E-AC-3 the file holds.
+    enum class WavForm
+    {
+        none,
+        frames,  // AC-3 frames as the data of the file
+        bursts   // IEC 61937 bursts in the samples
+    };
+    // `data` is set to where the data of the file begins. `more`, when given, is set where the bytes are the start
+    // of a WAVE file and too few to tell: its data, or its first bursts, begin further on.
+    static WavForm wavForm(const uint8_t* buf, int len, int& data, bool* more = nullptr);
+    // The frames of the bursts in `in`, added to `out`. What stays in `in` is the start of a burst that goes on in the
+    // next block; with `last` nothing stays, and a burst the file ends inside gives the part of its frame that is
+    // there.
+    // `outside`, when given, is raised by the bytes that are neither a burst nor the zeros between bursts.
+    static void unpackBursts(std::vector<uint8_t>& in, std::vector<uint8_t>& out, bool last,
+                             int64_t* outside = nullptr);
+    void setBuffer(uint8_t* data, uint32_t dataLen, bool lastBlock = false) override;
+    int64_t getProcessedSize() override;
+
    private:
+    enum class Bursts
+    {
+        unknown,
+        no,
+        yes
+    };
+    Bursts m_bursts = Bursts::unknown;
+    std::vector<uint8_t> m_burstPending;
+    std::vector<uint8_t> m_burstOut;
+    int64_t m_burstIn = 0;       // the bytes of the file read so far
+    int64_t m_burstPassed = 0;   // the bytes of frames handed on for them
+    int64_t m_burstOutside = 0;  // the bytes that were no burst and no filling, left out
     // Find the lossless substream on THIS reader. Only runs for a track the discovery phase already
     // identified as TrueHD, and only once.
     void probeTrueHD();

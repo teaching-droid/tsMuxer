@@ -577,60 +577,6 @@ static NamedAs familyOfContent(const uint8_t* buf, const int len, const char** n
     return NamedAs::ctUnknown;
 }
 
-// ** AC-3 INSIDE A WAV. ** A WAVE file can hold AC-3 in place of samples, in two forms. With frames as its data (format
-// tag 0x2000, as an encoder or a capture card writes it) it was refused as "only PCM audio is supported", though the
-// frames are those of an .ac3 file: it is now listed and muxed as the AC-3 it holds. Packed for a digital output
-// (IEC 61937 bursts in 16-bit stereo samples, as made to be played over S/PDIF) it was listed as LPCM and muxed as
-// such, which plays as noise: that form is not unpacked, and is now refused with the reason.
-enum class WavAc3
-{
-    none,
-    frames,  // AC-3 frames as the data of the file
-    bursts   // IEC 61937 bursts in the samples
-};
-
-// `data` is set to where the data of the file begins
-static WavAc3 ac3InWav(const uint8_t* buf, const int len, int& data)
-{
-    if (len < 64 || memcmp(buf, "RIFF", 4) != 0 || memcmp(buf + 8, "WAVE", 4) != 0)
-        return WavAc3::none;
-    data = -1;
-    for (int at = 12; at + 8 <= len;)
-    {
-        const uint32_t size =
-            buf[at + 4] | buf[at + 5] << 8 | buf[at + 6] << 16 | static_cast<uint32_t>(buf[at + 7]) << 24;
-        if (memcmp(buf + at, "data", 4) == 0)
-        {
-            data = at + 8;
-            break;
-        }
-        if (size > static_cast<uint32_t>(len))
-            return WavAc3::none;
-        at += 8 + static_cast<int>(size) + static_cast<int>(size & 1);
-    }
-    if (data < 0 || data + 8 > len)
-        return WavAc3::none;
-    const uint8_t* d = buf + data;
-    const int left = len - data;
-    // frames: a sync word at the start of the data, and again one frame on, and one more
-    if (d[0] == 0x0B && d[1] == 0x77)
-    {
-        for (int n = 64; n <= 3840 && 2 * n + 2 <= left; n += 2)
-            if (d[n] == 0x0B && d[n + 1] == 0x77 && d[2 * n] == 0x0B && d[2 * n + 1] == 0x77)
-                return WavAc3::frames;
-        return WavAc3::none;
-    }
-    // bursts: the preamble Pa Pb (F872 4E1F, low byte first), the data type of AC-3 (1) or E-AC-3 (21) in Pc, and the
-    // sync word of the frame behind it, its bytes swapped as the words are; twice, as samples can hold these 8 bytes
-    int seen = 0;
-    for (int at = 0; at + 10 <= left && at < 256 * 1024; at += 2)
-        if (d[at] == 0x72 && d[at + 1] == 0xF8 && d[at + 2] == 0x1F && d[at + 3] == 0x4E &&
-            ((d[at + 4] & 0x1F) == 1 || (d[at + 4] & 0x1F) == 21) && d[at + 8] == 0x77 && d[at + 9] == 0x0B &&
-            ++seen == 2)
-            return WavAc3::bursts;
-    return WavAc3::none;
-}
-
 // A name without an extension, or with one tsMuxeR does not know, sends the file to the raw stream readers. A transport
 // stream or a Matroska file named so was "Can't detect stream type", or read as junk frames: such a name is now told
 // when the file is a container. Any other content under such a name is left to the readers, as before.
@@ -5072,17 +5018,27 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             containerType == AbstractStreamReader::ContainerType::ctLPCM && len > 0
                 ? DTSStreamReader::wordFormAt(tmpBuffer.get(), tmpBuffer.get() + len)
                 : DTSStreamReader::WordForm::unknown;
+        using WavAc3 = AC3StreamReader::WavForm;
         int wavData = 0;
         const WavAc3 wavAc3 = containerType == AbstractStreamReader::ContainerType::ctLPCM && len > 0 &&
                                       wavDts == DTSStreamReader::WordForm::unknown
-                                  ? ac3InWav(tmpBuffer.get(), len, wavData)
+                                  ? AC3StreamReader::wavForm(tmpBuffer.get(), len, wavData)
                                   : WavAc3::none;
-        if (wavAc3 == WavAc3::bursts)
-            THROW(ERR_SOURCE, fileName << " holds AC-3 packed for a digital audio output (IEC 61937) in the samples "
-                                       << "of a WAVE file. tsMuxeR does not unpack it, and read as samples it would be "
-                                       << "noise. Unpack it to an .ac3 file first.")
         CheckStreamRez trackRez;
-        if (wavAc3 == WavAc3::frames)
+        if (wavAc3 == WavAc3::bursts)
+        {
+            // listed as the reader of a mux reads it: its frames, taken out of the bursts
+            std::vector<uint8_t> in(tmpBuffer.get() + wavData, tmpBuffer.get() + len), frames;
+            AC3StreamReader::unpackBursts(in, frames, false);
+            trackRez = detectTrackReader(frames.data(), static_cast<int>(frames.size()),
+                                         AbstractStreamReader::ContainerType::ctNone, 0, 0);
+            if (trackRez.codecInfo.programName.empty())
+                THROW(ERR_SOURCE, fileName << " holds coded sound packed for a digital audio output (IEC 61937) in "
+                                           << "the samples of a WAVE file, and its frames could not be read as AC-3 "
+                                           << "or E-AC-3. Read as samples it would be noise.")
+            trackRez.streamDescr += " (packed for a digital output, in a WAV)";
+        }
+        else if (wavAc3 == WavAc3::frames)
             trackRez = detectTrackReader(tmpBuffer.get() + wavData, len - wavData,
                                          AbstractStreamReader::ContainerType::ctNone, 0, 0);
         else if (wavDts == DTSStreamReader::WordForm::unknown)

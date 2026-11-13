@@ -4,6 +4,7 @@
 
 #include <fs/systemlog.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <sstream>
@@ -524,4 +525,204 @@ int AC3StreamReader::readPacketTHD(AVPacket& avPacket)
             return 0;
         }
     }
+}
+
+AC3StreamReader::WavForm AC3StreamReader::wavForm(const uint8_t* buf, const int len, int& data, bool* more)
+{
+    if (more)
+        *more = false;
+    if (len < 64 || memcmp(buf, "RIFF", 4) != 0 || memcmp(buf + 8, "WAVE", 4) != 0)
+        return WavForm::none;
+    // a WAVE file: until its data is found and looked at, more of it may be needed to tell
+    if (more)
+        *more = true;
+    data = -1;
+    for (int at = 12; at + 8 <= len;)
+    {
+        const uint32_t size =
+            buf[at + 4] | buf[at + 5] << 8 | buf[at + 6] << 16 | static_cast<uint32_t>(buf[at + 7]) << 24;
+        if (memcmp(buf + at, "data", 4) == 0)
+        {
+            data = at + 8;
+            break;
+        }
+        if (size > static_cast<uint32_t>(len))
+            return WavForm::none;
+        at += 8 + static_cast<int>(size) + static_cast<int>(size & 1);
+    }
+    if (data < 0 || data + 8 > len)
+        return WavForm::none;
+    const uint8_t* d = buf + data;
+    const int left = len - data;
+    // frames: a sync word at the start of the data, and again one frame on, and one more
+    if (d[0] == 0x0B && d[1] == 0x77)
+    {
+        if (more)
+            *more = false;
+        for (int n = 64; n <= 3840 && 2 * n + 2 <= left; n += 2)
+            if (d[n] == 0x0B && d[n + 1] == 0x77 && d[2 * n] == 0x0B && d[2 * n + 1] == 0x77)
+                return WavForm::frames;
+        return WavForm::none;
+    }
+    // all that is looked at for bursts is there: what is found is the answer
+    if (more && left >= 256 * 1024 + 10)
+        *more = false;
+    // bursts: the preamble Pa Pb (F872 4E1F, low byte first), the data type of AC-3 (1) or E-AC-3 (21) in Pc, and the
+    // sync word of the frame behind it, its bytes swapped as the words are; twice, as samples can hold these 8 bytes
+    int seen = 0;
+    for (int at = 0; at + 10 <= left && at < 256 * 1024; at += 2)
+        if (d[at] == 0x72 && d[at + 1] == 0xF8 && d[at + 2] == 0x1F && d[at + 3] == 0x4E &&
+            ((d[at + 4] & 0x1F) == 1 || (d[at + 4] & 0x1F) == 21) && d[at + 8] == 0x77 && d[at + 9] == 0x0B &&
+            ++seen == 2)
+            return WavForm::bursts;
+    return WavForm::none;
+}
+
+// A burst is four words in front of its frame, each stored low byte first: Pa and Pb (F872, 4E1F), Pc with the kind of
+// data in its low 5 bits (1 AC-3, 21 E-AC-3), and Pd, the length of what follows, in bits for AC-3 and in bytes for
+// E-AC-3. The frame follows in words of the same form, so its bytes are swapped in pairs, and zeros fill the samples up
+// to the next burst. A burst of another kind (a pause) and samples that hold no burst are passed over.
+void AC3StreamReader::unpackBursts(std::vector<uint8_t>& in, std::vector<uint8_t>& out, const bool last,
+                                   int64_t* outside)
+{
+    size_t pos = 0;
+    const size_t size = in.size();
+    while (true)
+    {
+        while (pos + 10 <= size &&
+               !(in[pos] == 0x72 && in[pos + 1] == 0xF8 && in[pos + 2] == 0x1F && in[pos + 3] == 0x4E))
+        {
+            if (outside && in[pos] != 0)
+                ++*outside;
+            ++pos;
+        }
+        if (pos + 10 > size)
+            break;
+        const int kind = in[pos + 4] & 0x1F;
+        const size_t length = in[pos + 6] | static_cast<size_t>(in[pos + 7]) << 8;
+        const size_t bytes = kind == 21 ? length : (length + 7) / 8;
+        if ((kind != 1 && kind != 21) || bytes < 2 || in[pos + 8] != 0x77 || in[pos + 9] != 0x0B)
+        {
+            pos += 4;  // a pause, or these four bytes in other data
+            continue;
+        }
+        size_t have = (bytes + 1) / 2 * 2;  // in whole words
+        if (pos + 8 + have > size)
+        {
+            if (!last)
+                break;  // the rest of it is in the next block
+            have = (size - pos - 8) / 2 * 2;
+        }
+        const size_t before = out.size();
+        for (size_t i = 0; i < have; i += 2)
+        {
+            out.push_back(in[pos + 8 + i + 1]);
+            out.push_back(in[pos + 8 + i]);
+        }
+        if (out.size() - before > bytes)
+            out.resize(before + bytes);  // a frame of an odd number of bytes
+        pos += 8 + have;
+    }
+    if (last)
+        pos = size;
+    in.erase(in.begin(), in.begin() + static_cast<std::ptrdiff_t>(pos));
+}
+
+void AC3StreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const bool lastBlock)
+{
+    // bursts come in a WAV, a file of its own; a container's frames, each with its own time, are passed on as they come
+    if (m_bursts == Bursts::unknown && m_containerType != ContainerType::ctNone &&
+        m_containerType != ContainerType::ctLPCM)
+        m_bursts = Bursts::no;
+    if (m_bursts == Bursts::no)
+    {
+        SimplePacketizerReader::setBuffer(data, dataLen, lastBlock);
+        return;
+    }
+    const bool has = data != nullptr && dataLen > 0;
+    if (m_bursts == Bursts::unknown)
+    {
+        // Told from the start of the file: its header and the first bursts behind it. Where they do not lie in the
+        // first block, as behind a large chunk of tags, the blocks are kept until they do, as far as the listing of
+        // the file looks: the listing named such a file as packed sound, and the mux read its samples as frames.
+        const bool held = !m_burstPending.empty();
+        if (!held && !has)
+        {
+            SimplePacketizerReader::setBuffer(data, dataLen, lastBlock);
+            return;
+        }
+        if (held && has)
+            m_burstPending.insert(m_burstPending.end(), data + MAX_AV_PACKET_SIZE, data + MAX_AV_PACKET_SIZE + dataLen);
+        const uint8_t* start = held ? m_burstPending.data() : data + MAX_AV_PACKET_SIZE;
+        const size_t seen = held ? m_burstPending.size() : dataLen;
+        int at = 0;
+        bool more = false;
+        const WavForm form =
+            wavForm(start, static_cast<int>((std::min)(seen, static_cast<size_t>(1) << 30)), at, &more);
+        m_burstIn += dataLen;
+        if (form != WavForm::bursts && more && !lastBlock && seen < DETECT_STREAM_BUFFER_SIZE)
+        {
+            if (!held)
+                m_burstPending.assign(data + MAX_AV_PACKET_SIZE, data + MAX_AV_PACKET_SIZE + dataLen);
+            m_burstOut.assign(MAX_AV_PACKET_SIZE, 0);
+            SimplePacketizerReader::setBuffer(m_burstOut.data(), 0, false);  // more of the file first
+            return;
+        }
+        if (form != WavForm::bursts)
+        {
+            m_bursts = Bursts::no;
+            if (!held)
+            {
+                SimplePacketizerReader::setBuffer(data, dataLen, lastBlock);
+                return;
+            }
+            // the blocks kept, as they are
+            m_burstOut.assign(MAX_AV_PACKET_SIZE, 0);
+            m_burstOut.insert(m_burstOut.end(), m_burstPending.begin(), m_burstPending.end());
+            m_burstPending = std::vector<uint8_t>();
+            SimplePacketizerReader::setBuffer(m_burstOut.data(),
+                                              static_cast<uint32_t>(m_burstOut.size() - MAX_AV_PACKET_SIZE), lastBlock);
+            return;
+        }
+        m_bursts = Bursts::yes;
+        if (!m_testMode)
+            LTRACE(LT_INFO, 2,
+                   "The sound of track " << m_streamIndex
+                                         << " is packed for a digital audio output (IEC 61937) in the samples of a "
+                                            "WAVE file. Its frames are taken out of it.");
+        if (!held)
+            m_burstPending.assign(data + MAX_AV_PACKET_SIZE, data + MAX_AV_PACKET_SIZE + dataLen);
+    }
+    else
+    {
+        if (has)
+            m_burstPending.insert(m_burstPending.end(), data + MAX_AV_PACKET_SIZE, data + MAX_AV_PACKET_SIZE + dataLen);
+        m_burstIn += dataLen;
+    }
+    m_burstOut.assign(MAX_AV_PACKET_SIZE, 0);
+    unpackBursts(m_burstPending, m_burstOut, lastBlock, &m_burstOutside);
+    m_burstPassed += static_cast<int64_t>(m_burstOut.size() - MAX_AV_PACKET_SIZE);
+    // ** WHAT IS NOT PACKED SOUND IS SAID. ** Bytes that are no burst and no filling are passed over: the header of
+    // the file, and tags. A file of plain frames joined behind such a WAV was passed over whole in the same way, and
+    // the job ended as done with that file missing.
+    if (lastBlock && m_burstOutside > 65536 && !m_testMode)
+    {
+        LTRACE(LT_WARN, 2,
+               "Warning: " << m_burstOutside << " bytes of track " << m_streamIndex
+                           << " are not sound packed for a digital audio output, and were left out. A file of another "
+                              "form joined to it, such as plain AC-3 frames, is not read: join files of one form.");
+        m_burstOutside = 0;
+    }
+    SimplePacketizerReader::setBuffer(m_burstOut.data(), static_cast<uint32_t>(m_burstOut.size() - MAX_AV_PACKET_SIZE),
+                                      lastBlock);
+}
+
+// The bytes of the file that the frames handed on so far stand for: the progress of a mux is counted against the file
+int64_t AC3StreamReader::getProcessedSize()
+{
+    const int64_t processed = SimplePacketizerReader::getProcessedSize();
+    if (m_bursts != Bursts::yes || m_burstPassed <= 0)
+        return processed;
+    return static_cast<int64_t>(static_cast<double>(processed) * static_cast<double>(m_burstIn) /
+                                static_cast<double>(m_burstPassed));
 }
