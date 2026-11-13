@@ -5286,6 +5286,50 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>отсутствует: %1</translation>
     </message>
     <message>
+        <source>%1 short pieces</source>
+        <translation>коротких фрагментов: %1</translation>
+    </message>
+    <message>
+        <source>the same clips as %1 in another order</source>
+        <translation>те же клипы, что и %1, в другом порядке</translation>
+    </message>
+    <message>
+        <source>the same as %1 with other chapter marks</source>
+        <translation>то же, что и %1, с другими метками глав</translation>
+    </message>
+    <message>
+        <source>the same as DVD title %1</source>
+        <translation>то же, что и титул DVD %1</translation>
+    </message>
+    <message>
+        <source>the same cells as DVD title %1 in another order</source>
+        <translation>те же ячейки, что и титул DVD %1, в другом порядке</translation>
+    </message>
+    <message>
+        <source>the same as %1</source>
+        <translation>то же, что и %1</translation>
+    </message>
+    <message>
+        <source>%1 clips repeated over and over, %2 play items in all</source>
+        <translation>клипов, повторяемых снова и снова: %1, всего элементов воспроизведения: %2</translation>
+    </message>
+    <message>
+        <source>its title set has no chapter list for it</source>
+        <translation>в его наборе титулов нет списка глав для него</translation>
+    </message>
+    <message>
+        <source>it plays no cell</source>
+        <translation>не воспроизводит ни одной ячейки</translation>
+    </message>
+    <message>
+        <source>%1 of its %2 cells are shorter than a second</source>
+        <translation>ячеек короче секунды: %1 из %2</translation>
+    </message>
+    <message>
+        <source>missing %1 % of its cells</source>
+        <translation>отсутствует: %1 % ячеек</translation>
+    </message>
+    <message>
         <source>A folder of discs</source>
         <translation>Папка с дисками</translation>
     </message>

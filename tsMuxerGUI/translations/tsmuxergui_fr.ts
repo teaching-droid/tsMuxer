@@ -5285,6 +5285,50 @@ Si ce message est apparu pendant l&apos;examen d&apos;un fichier, ou à la ferme
         <translation>manquant : %1</translation>
     </message>
     <message>
+        <source>%1 short pieces</source>
+        <translation>%1 morceaux courts</translation>
+    </message>
+    <message>
+        <source>the same clips as %1 in another order</source>
+        <translation>mêmes clips que %1 dans un autre ordre</translation>
+    </message>
+    <message>
+        <source>the same as %1 with other chapter marks</source>
+        <translation>identique à %1 avec d&apos;autres marques de chapitre</translation>
+    </message>
+    <message>
+        <source>the same as DVD title %1</source>
+        <translation>identique au titre DVD %1</translation>
+    </message>
+    <message>
+        <source>the same cells as DVD title %1 in another order</source>
+        <translation>mêmes cellules que le titre DVD %1 dans un autre ordre</translation>
+    </message>
+    <message>
+        <source>the same as %1</source>
+        <translation>identique à %1</translation>
+    </message>
+    <message>
+        <source>%1 clips repeated over and over, %2 play items in all</source>
+        <translation>%1 clips répétés en boucle, %2 éléments de lecture au total</translation>
+    </message>
+    <message>
+        <source>its title set has no chapter list for it</source>
+        <translation>son jeu de titres n&apos;a pas de liste de chapitres pour lui</translation>
+    </message>
+    <message>
+        <source>it plays no cell</source>
+        <translation>ne lit aucune cellule</translation>
+    </message>
+    <message>
+        <source>%1 of its %2 cells are shorter than a second</source>
+        <translation>%1 de ses %2 cellules durent moins d&apos;une seconde</translation>
+    </message>
+    <message>
+        <source>missing %1 % of its cells</source>
+        <translation>manquant : %1 % de ses cellules</translation>
+    </message>
+    <message>
         <source>A folder of discs</source>
         <translation>Un dossier de disques</translation>
     </message>

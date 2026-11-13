@@ -5285,6 +5285,50 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>缺少：%1</translation>
     </message>
     <message>
+        <source>%1 short pieces</source>
+        <translation>%1 个短片段</translation>
+    </message>
+    <message>
+        <source>the same clips as %1 in another order</source>
+        <translation>与 %1 片段相同，顺序不同</translation>
+    </message>
+    <message>
+        <source>the same as %1 with other chapter marks</source>
+        <translation>与 %1 相同，章节标记不同</translation>
+    </message>
+    <message>
+        <source>the same as DVD title %1</source>
+        <translation>与 DVD 标题 %1 相同</translation>
+    </message>
+    <message>
+        <source>the same cells as DVD title %1 in another order</source>
+        <translation>与 DVD 标题 %1 单元相同，顺序不同</translation>
+    </message>
+    <message>
+        <source>the same as %1</source>
+        <translation>与 %1 相同</translation>
+    </message>
+    <message>
+        <source>%1 clips repeated over and over, %2 play items in all</source>
+        <translation>%1 个片段反复重复，共 %2 个播放项</translation>
+    </message>
+    <message>
+        <source>its title set has no chapter list for it</source>
+        <translation>其标题集没有此标题的章节列表</translation>
+    </message>
+    <message>
+        <source>it plays no cell</source>
+        <translation>不播放任何单元</translation>
+    </message>
+    <message>
+        <source>%1 of its %2 cells are shorter than a second</source>
+        <translation>%2 个单元中有 %1 个短于一秒</translation>
+    </message>
+    <message>
+        <source>missing %1 % of its cells</source>
+        <translation>缺少：%1% 的单元</translation>
+    </message>
+    <message>
         <source>A folder of discs</source>
         <translation>光盘文件夹</translation>
     </message>

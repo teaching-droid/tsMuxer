@@ -5328,6 +5328,50 @@ Jeśli pojawiło się to podczas sprawdzania pliku lub zamykania okna, proces zo
         <translation>brak: %1</translation>
     </message>
     <message>
+        <source>%1 short pieces</source>
+        <translation>krótkie fragmenty: %1</translation>
+    </message>
+    <message>
+        <source>the same clips as %1 in another order</source>
+        <translation>te same klipy co %1 w innej kolejności</translation>
+    </message>
+    <message>
+        <source>the same as %1 with other chapter marks</source>
+        <translation>to samo co %1 z innymi znacznikami rozdziałów</translation>
+    </message>
+    <message>
+        <source>the same as DVD title %1</source>
+        <translation>to samo co tytuł DVD %1</translation>
+    </message>
+    <message>
+        <source>the same cells as DVD title %1 in another order</source>
+        <translation>te same komórki co tytuł DVD %1 w innej kolejności</translation>
+    </message>
+    <message>
+        <source>the same as %1</source>
+        <translation>to samo co %1</translation>
+    </message>
+    <message>
+        <source>%1 clips repeated over and over, %2 play items in all</source>
+        <translation>klipy powtarzane wielokrotnie: %1, łącznie elementów odtwarzania: %2</translation>
+    </message>
+    <message>
+        <source>its title set has no chapter list for it</source>
+        <translation>jego zestaw tytułów nie ma dla niego listy rozdziałów</translation>
+    </message>
+    <message>
+        <source>it plays no cell</source>
+        <translation>nie odtwarza żadnej komórki</translation>
+    </message>
+    <message>
+        <source>%1 of its %2 cells are shorter than a second</source>
+        <translation>komórki krótsze niż sekunda: %1 z %2</translation>
+    </message>
+    <message>
+        <source>missing %1 % of its cells</source>
+        <translation>brak: %1% komórek</translation>
+    </message>
+    <message>
         <source>A folder of discs</source>
         <translation>Folder z płytami</translation>
     </message>

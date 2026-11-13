@@ -54,6 +54,25 @@ static QString noteInWindowLanguage(const QString& cell)
         {"^one clip repeated (\\d+) times$", QT_TRANSLATE_NOOP("TsMuxerWindow", "one clip repeated %1 times")},
         {"^under (\\d+) minutes?$", QT_TRANSLATE_NOOP("TsMuxerWindow", "under %1 minutes")},
         {"^it cannot be read$", QT_TRANSLATE_NOOP("TsMuxerWindow", "it cannot be read")},
+        // the notes of the titles left out (shown with "Show the left-out and short titles too") and of DVD titles;
+        // the more particular forms of "the same as" before the general one
+        {"^(\\d+) short pieces$", QT_TRANSLATE_NOOP("TsMuxerWindow", "%1 short pieces")},
+        {"^the same clips as (.+) in another order$",
+         QT_TRANSLATE_NOOP("TsMuxerWindow", "the same clips as %1 in another order")},
+        {"^the same as (.+) with other chapter marks$",
+         QT_TRANSLATE_NOOP("TsMuxerWindow", "the same as %1 with other chapter marks")},
+        {"^the same as DVD title (\\d+)$", QT_TRANSLATE_NOOP("TsMuxerWindow", "the same as DVD title %1")},
+        {"^the same cells as DVD title (\\d+) in another order$",
+         QT_TRANSLATE_NOOP("TsMuxerWindow", "the same cells as DVD title %1 in another order")},
+        {"^the same as (.+)$", QT_TRANSLATE_NOOP("TsMuxerWindow", "the same as %1")},
+        {"^(\\d+) clips repeated over and over, (\\d+) play items in all$",
+         QT_TRANSLATE_NOOP("TsMuxerWindow", "%1 clips repeated over and over, %2 play items in all")},
+        {"^its title set has no chapter list for it$",
+         QT_TRANSLATE_NOOP("TsMuxerWindow", "its title set has no chapter list for it")},
+        {"^it plays no cell$", QT_TRANSLATE_NOOP("TsMuxerWindow", "it plays no cell")},
+        {"^(\\d+) of its (\\d+) cells are shorter than a second$",
+         QT_TRANSLATE_NOOP("TsMuxerWindow", "%1 of its %2 cells are shorter than a second")},
+        {"^missing (\\d+) % of its cells$", QT_TRANSLATE_NOOP("TsMuxerWindow", "missing %1 % of its cells")},
         {"^missing (.+)$", QT_TRANSLATE_NOOP("TsMuxerWindow", "missing %1")},
     };
     QStringList parts = cell.split(QStringLiteral("; "));

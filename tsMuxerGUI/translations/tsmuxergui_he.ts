@@ -5285,6 +5285,50 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>חסר: %1</translation>
     </message>
     <message>
+        <source>%1 short pieces</source>
+        <translation>%1 קטעים קצרים</translation>
+    </message>
+    <message>
+        <source>the same clips as %1 in another order</source>
+        <translation>אותם קליפים כמו %1 בסדר אחר</translation>
+    </message>
+    <message>
+        <source>the same as %1 with other chapter marks</source>
+        <translation>זהה ל-%1 עם סימוני פרקים אחרים</translation>
+    </message>
+    <message>
+        <source>the same as DVD title %1</source>
+        <translation>זהה לכותר DVD %1</translation>
+    </message>
+    <message>
+        <source>the same cells as DVD title %1 in another order</source>
+        <translation>אותם תאים כמו כותר DVD %1 בסדר אחר</translation>
+    </message>
+    <message>
+        <source>the same as %1</source>
+        <translation>זהה ל-%1</translation>
+    </message>
+    <message>
+        <source>%1 clips repeated over and over, %2 play items in all</source>
+        <translation>%1 קליפים שחוזרים שוב ושוב, %2 פריטי ניגון בסך הכול</translation>
+    </message>
+    <message>
+        <source>its title set has no chapter list for it</source>
+        <translation>לערכת הכותרים שלו אין רשימת פרקים עבורו</translation>
+    </message>
+    <message>
+        <source>it plays no cell</source>
+        <translation>אינו מנגן אף תא</translation>
+    </message>
+    <message>
+        <source>%1 of its %2 cells are shorter than a second</source>
+        <translation>%1 מתוך %2 התאים שלו קצרים משנייה</translation>
+    </message>
+    <message>
+        <source>missing %1 % of its cells</source>
+        <translation>חסר: %1% מהתאים שלו</translation>
+    </message>
+    <message>
         <source>A folder of discs</source>
         <translation>תיקייה של דיסקים</translation>
     </message>

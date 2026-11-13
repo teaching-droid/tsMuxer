@@ -5318,6 +5318,50 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>missing %1</translation>
     </message>
     <message>
+        <source>%1 short pieces</source>
+        <translation>%1 short pieces</translation>
+    </message>
+    <message>
+        <source>the same clips as %1 in another order</source>
+        <translation>the same clips as %1 in another order</translation>
+    </message>
+    <message>
+        <source>the same as %1 with other chapter marks</source>
+        <translation>the same as %1 with other chapter marks</translation>
+    </message>
+    <message>
+        <source>the same as DVD title %1</source>
+        <translation>the same as DVD title %1</translation>
+    </message>
+    <message>
+        <source>the same cells as DVD title %1 in another order</source>
+        <translation>the same cells as DVD title %1 in another order</translation>
+    </message>
+    <message>
+        <source>the same as %1</source>
+        <translation>the same as %1</translation>
+    </message>
+    <message>
+        <source>%1 clips repeated over and over, %2 play items in all</source>
+        <translation>%1 clips repeated over and over, %2 play items in all</translation>
+    </message>
+    <message>
+        <source>its title set has no chapter list for it</source>
+        <translation>its title set has no chapter list for it</translation>
+    </message>
+    <message>
+        <source>it plays no cell</source>
+        <translation>it plays no cell</translation>
+    </message>
+    <message>
+        <source>%1 of its %2 cells are shorter than a second</source>
+        <translation>%1 of its %2 cells are shorter than a second</translation>
+    </message>
+    <message>
+        <source>missing %1 % of its cells</source>
+        <translation>missing %1 % of its cells</translation>
+    </message>
+    <message>
         <source>A folder of discs</source>
         <translation>A folder of discs</translation>
     </message>

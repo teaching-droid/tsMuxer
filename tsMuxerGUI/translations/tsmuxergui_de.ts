@@ -5285,6 +5285,50 @@ Wenn dies erschien, während eine Datei noch untersucht wurde, oder beim Schlie�
         <translation>fehlt: %1</translation>
     </message>
     <message>
+        <source>%1 short pieces</source>
+        <translation>%1 kurze Stücke</translation>
+    </message>
+    <message>
+        <source>the same clips as %1 in another order</source>
+        <translation>dieselben Clips wie %1 in anderer Reihenfolge</translation>
+    </message>
+    <message>
+        <source>the same as %1 with other chapter marks</source>
+        <translation>dasselbe wie %1 mit anderen Kapitelmarken</translation>
+    </message>
+    <message>
+        <source>the same as DVD title %1</source>
+        <translation>dasselbe wie DVD-Titel %1</translation>
+    </message>
+    <message>
+        <source>the same cells as DVD title %1 in another order</source>
+        <translation>dieselben Zellen wie DVD-Titel %1 in anderer Reihenfolge</translation>
+    </message>
+    <message>
+        <source>the same as %1</source>
+        <translation>dasselbe wie %1</translation>
+    </message>
+    <message>
+        <source>%1 clips repeated over and over, %2 play items in all</source>
+        <translation>%1 Clips immer wieder wiederholt, insgesamt %2 Abspielelemente</translation>
+    </message>
+    <message>
+        <source>its title set has no chapter list for it</source>
+        <translation>sein Titelset hat keine Kapitelliste dafür</translation>
+    </message>
+    <message>
+        <source>it plays no cell</source>
+        <translation>spielt keine Zelle ab</translation>
+    </message>
+    <message>
+        <source>%1 of its %2 cells are shorter than a second</source>
+        <translation>%1 seiner %2 Zellen sind kürzer als eine Sekunde</translation>
+    </message>
+    <message>
+        <source>missing %1 % of its cells</source>
+        <translation>fehlt: %1 % seiner Zellen</translation>
+    </message>
+    <message>
         <source>A folder of discs</source>
         <translation>Ein Ordner mit Discs</translation>
     </message>

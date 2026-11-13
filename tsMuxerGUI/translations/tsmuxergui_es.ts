@@ -5286,6 +5286,50 @@ Si esto apareció mientras se examinaba un archivo, o al cerrar la ventana, el p
         <translation>falta: %1</translation>
     </message>
     <message>
+        <source>%1 short pieces</source>
+        <translation>%1 fragmentos cortos</translation>
+    </message>
+    <message>
+        <source>the same clips as %1 in another order</source>
+        <translation>los mismos clips que %1 en otro orden</translation>
+    </message>
+    <message>
+        <source>the same as %1 with other chapter marks</source>
+        <translation>lo mismo que %1 con otras marcas de capítulo</translation>
+    </message>
+    <message>
+        <source>the same as DVD title %1</source>
+        <translation>lo mismo que el título de DVD %1</translation>
+    </message>
+    <message>
+        <source>the same cells as DVD title %1 in another order</source>
+        <translation>las mismas celdas que el título de DVD %1 en otro orden</translation>
+    </message>
+    <message>
+        <source>the same as %1</source>
+        <translation>lo mismo que %1</translation>
+    </message>
+    <message>
+        <source>%1 clips repeated over and over, %2 play items in all</source>
+        <translation>%1 clips repetidos una y otra vez, %2 elementos de reproducción en total</translation>
+    </message>
+    <message>
+        <source>its title set has no chapter list for it</source>
+        <translation>su conjunto de títulos no tiene lista de capítulos para él</translation>
+    </message>
+    <message>
+        <source>it plays no cell</source>
+        <translation>no reproduce ninguna celda</translation>
+    </message>
+    <message>
+        <source>%1 of its %2 cells are shorter than a second</source>
+        <translation>%1 de sus %2 celdas duran menos de un segundo</translation>
+    </message>
+    <message>
+        <source>missing %1 % of its cells</source>
+        <translation>falta: %1 % de sus celdas</translation>
+    </message>
+    <message>
         <source>A folder of discs</source>
         <translation>Una carpeta de discos</translation>
     </message>

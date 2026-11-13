@@ -5328,6 +5328,50 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>누락: %1</translation>
     </message>
     <message>
+        <source>%1 short pieces</source>
+        <translation>짧은 조각 %1개</translation>
+    </message>
+    <message>
+        <source>the same clips as %1 in another order</source>
+        <translation>%1과(와) 같은 클립, 순서가 다름</translation>
+    </message>
+    <message>
+        <source>the same as %1 with other chapter marks</source>
+        <translation>%1과(와) 같음, 챕터 표시가 다름</translation>
+    </message>
+    <message>
+        <source>the same as DVD title %1</source>
+        <translation>DVD 타이틀 %1과(와) 같음</translation>
+    </message>
+    <message>
+        <source>the same cells as DVD title %1 in another order</source>
+        <translation>DVD 타이틀 %1과(와) 같은 셀, 순서가 다름</translation>
+    </message>
+    <message>
+        <source>the same as %1</source>
+        <translation>%1과(와) 같음</translation>
+    </message>
+    <message>
+        <source>%1 clips repeated over and over, %2 play items in all</source>
+        <translation>클립 %1개를 반복, 재생 항목 총 %2개</translation>
+    </message>
+    <message>
+        <source>its title set has no chapter list for it</source>
+        <translation>타이틀 세트에 이 타이틀의 챕터 목록이 없음</translation>
+    </message>
+    <message>
+        <source>it plays no cell</source>
+        <translation>재생하는 셀이 없음</translation>
+    </message>
+    <message>
+        <source>%1 of its %2 cells are shorter than a second</source>
+        <translation>셀 %2개 중 %1개가 1초보다 짧음</translation>
+    </message>
+    <message>
+        <source>missing %1 % of its cells</source>
+        <translation>누락: 셀의 %1%</translation>
+    </message>
+    <message>
         <source>A folder of discs</source>
         <translation>디스크 폴더</translation>
     </message>

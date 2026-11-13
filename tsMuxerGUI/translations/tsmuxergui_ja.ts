@@ -5285,6 +5285,50 @@ If this appeared while a file was still being examined, or as the window was clo
         <translation>不足: %1</translation>
     </message>
     <message>
+        <source>%1 short pieces</source>
+        <translation>短い断片 %1 個</translation>
+    </message>
+    <message>
+        <source>the same clips as %1 in another order</source>
+        <translation>%1 と同じクリップ（順序が異なる）</translation>
+    </message>
+    <message>
+        <source>the same as %1 with other chapter marks</source>
+        <translation>%1 と同じ（チャプターマークが異なる）</translation>
+    </message>
+    <message>
+        <source>the same as DVD title %1</source>
+        <translation>DVD タイトル %1 と同じ</translation>
+    </message>
+    <message>
+        <source>the same cells as DVD title %1 in another order</source>
+        <translation>DVD タイトル %1 と同じセル（順序が異なる）</translation>
+    </message>
+    <message>
+        <source>the same as %1</source>
+        <translation>%1 と同じ</translation>
+    </message>
+    <message>
+        <source>%1 clips repeated over and over, %2 play items in all</source>
+        <translation>%1 個のクリップを繰り返し、再生項目は合計 %2 個</translation>
+    </message>
+    <message>
+        <source>its title set has no chapter list for it</source>
+        <translation>タイトルセットにこのタイトルのチャプターリストがない</translation>
+    </message>
+    <message>
+        <source>it plays no cell</source>
+        <translation>セルを再生しない</translation>
+    </message>
+    <message>
+        <source>%1 of its %2 cells are shorter than a second</source>
+        <translation>%2 個のセルのうち %1 個が 1 秒未満</translation>
+    </message>
+    <message>
+        <source>missing %1 % of its cells</source>
+        <translation>不足: セルの %1 %</translation>
+    </message>
+    <message>
         <source>A folder of discs</source>
         <translation>ディスクのフォルダー</translation>
     </message>

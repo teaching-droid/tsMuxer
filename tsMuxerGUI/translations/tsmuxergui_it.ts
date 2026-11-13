@@ -5289,31 +5289,31 @@ Se questo è apparso mentre un file era ancora in esame, o mentre la finestra si
     </message>
     <message>
         <source>version of title %1, %2 of %3 clips differ</source>
-        <translation>versione del titolo %1, %2 clip su %3 sono diversi</translation>
+        <translation>versione del titolo %1, %2 clip su %3 sono diverse</translation>
     </message>
     <message>
         <source>version of title %1: the same clips, other audio or subtitles</source>
-        <translation>versione del titolo %1: stessi clip, altro audio o altri sottotitoli</translation>
+        <translation>versione del titolo %1: stesse clip, altro audio o altri sottotitoli</translation>
     </message>
     <message>
         <source>version of title %1: the same clips as title %2, other audio or subtitles</source>
-        <translation>versione del titolo %1: stessi clip del titolo %2, altro audio o altri sottotitoli</translation>
+        <translation>versione del titolo %1: stesse clip del titolo %2, altro audio o altri sottotitoli</translation>
     </message>
     <message>
         <source>version of title %1: the same clips, other parts of them</source>
-        <translation>versione del titolo %1: stessi clip, altre parti di essi</translation>
+        <translation>versione del titolo %1: stesse clip, altre parti di esse</translation>
     </message>
     <message>
         <source>version of title %1: a part of its clips</source>
-        <translation>versione del titolo %1: una parte dei suoi clip</translation>
+        <translation>versione del titolo %1: una parte delle sue clip</translation>
     </message>
     <message>
         <source>the same clips as title %1, other audio or subtitles</source>
-        <translation>stessi clip del titolo %1, altro audio o altri sottotitoli</translation>
+        <translation>stesse clip del titolo %1, altro audio o altri sottotitoli</translation>
     </message>
     <message>
         <source>one clip repeated %1 times</source>
-        <translation>un clip ripetuto %1 volte</translation>
+        <translation>una clip ripetuta %1 volte</translation>
     </message>
     <message>
         <source>under %1 minutes</source>
@@ -5326,6 +5326,50 @@ Se questo è apparso mentre un file era ancora in esame, o mentre la finestra si
     <message>
         <source>missing %1</source>
         <translation>manca: %1</translation>
+    </message>
+    <message>
+        <source>%1 short pieces</source>
+        <translation>%1 brevi spezzoni</translation>
+    </message>
+    <message>
+        <source>the same clips as %1 in another order</source>
+        <translation>le stesse clip di %1 in un altro ordine</translation>
+    </message>
+    <message>
+        <source>the same as %1 with other chapter marks</source>
+        <translation>uguale a %1 con altri segni di capitolo</translation>
+    </message>
+    <message>
+        <source>the same as DVD title %1</source>
+        <translation>uguale al titolo DVD %1</translation>
+    </message>
+    <message>
+        <source>the same cells as DVD title %1 in another order</source>
+        <translation>le stesse celle del titolo DVD %1 in un altro ordine</translation>
+    </message>
+    <message>
+        <source>the same as %1</source>
+        <translation>uguale a %1</translation>
+    </message>
+    <message>
+        <source>%1 clips repeated over and over, %2 play items in all</source>
+        <translation>%1 clip ripetute più volte, %2 elementi di riproduzione in tutto</translation>
+    </message>
+    <message>
+        <source>its title set has no chapter list for it</source>
+        <translation>il suo title set non ha un elenco di capitoli per esso</translation>
+    </message>
+    <message>
+        <source>it plays no cell</source>
+        <translation>non riproduce alcuna cella</translation>
+    </message>
+    <message>
+        <source>%1 of its %2 cells are shorter than a second</source>
+        <translation>%1 delle sue %2 celle durano meno di un secondo</translation>
+    </message>
+    <message>
+        <source>missing %1 % of its cells</source>
+        <translation>manca: %1 % delle sue celle</translation>
     </message>
     <message>
         <source>A folder of discs</source>
