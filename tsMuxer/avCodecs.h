@@ -73,6 +73,9 @@ struct CheckStreamRez
     // cannot describe both. Empty for every other kind of track, and empty when the enhancement
     // layer's own parameter sets could not be read, which leaves the old behaviour in place.
     std::string elStreamDescr;
+    // A single layer Dolby Vision track whose picture is HDR10 by itself (profile 8 with an HDR10 base, "8.1"): the
+    // kind whose second layer can be made for a disc (dvLayerPicture.h)
+    bool dvSingleLayerHdr10 = false;
     std::string lang;
     // The full language tag the container gives (BCP 47, such as fr-CA or zh-Hant), where it gives one: lang holds
     // only the three letters an output takes

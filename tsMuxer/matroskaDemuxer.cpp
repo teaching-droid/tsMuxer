@@ -6298,6 +6298,13 @@ int MatroskaDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& ac
         const int readRez = readPacket(packet);
         if (readRez == BufferedReader::DATA_EOF)
         {
+            // what a filter still holds (the last pictures of a made Dolby Vision layer), once
+            if (!m_demuxEnded)
+                for (const auto& [filterPid, filter] : m_pidFilters)
+                {
+                    filter->flush(demuxedData, acceptedPIDs);
+                    reframed += filter->takeReframedBytes();
+                }
             m_demuxEnded = true;
             discardSize = m_processedBytes - m_lastProcessedBytes - demuxedSize + reframed;
             m_lastProcessedBytes = m_processedBytes;

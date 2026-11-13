@@ -25,6 +25,8 @@ namespace traceWarnings
 {
 static constexpr size_t MAX_KEPT = 40;
 extern bool keep;
+// set while a file is only looked at for what it is: the warnings of the look are not those of the job
+extern bool silent;
 void note(const std::string& line);
 [[nodiscard]] size_t count();
 [[nodiscard]] std::vector<std::string> kept();

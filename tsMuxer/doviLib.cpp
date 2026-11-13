@@ -18,6 +18,8 @@ namespace
 // libdovi's conversion mode 2 is "profile 7 to profile 8.1". The other modes convert between other
 // profiles and are not what this feature is for.
 constexpr uint8_t MODE_P7_TO_P81 = 2;
+// Mode 1 is "to the minimal enhancement layer": the RPU of a second layer that adds nothing to the picture.
+constexpr uint8_t MODE_TO_MEL = 1;
 
 #if defined(_WIN32) || defined(_WIN64)
 // The published Windows build ships exactly this file name and nothing else.
@@ -168,6 +170,17 @@ DoviLib::~DoviLib()
 
 bool DoviLib::convertRpuToProfile81(const uint8_t* nal, size_t len, std::vector<uint8_t>& out, std::string& err)
 {
+    return convertRpu(nal, len, MODE_P7_TO_P81, "conversion to profile 8.1 failed", out, err);
+}
+
+bool DoviLib::convertRpuToMel(const uint8_t* nal, size_t len, std::vector<uint8_t>& out, std::string& err)
+{
+    return convertRpu(nal, len, MODE_TO_MEL, "conversion to the RPU of a second layer failed", out, err);
+}
+
+bool DoviLib::convertRpu(const uint8_t* nal, size_t len, const uint8_t mode, const char* what,
+                         std::vector<uint8_t>& out, std::string& err)
+{
     if (!m_ok)
     {
         err = m_loadError;
@@ -194,10 +207,10 @@ bool DoviLib::convertRpuToProfile81(const uint8_t* nal, size_t len, std::vector<
         return false;
     }
 
-    if (m_convert(rpu, MODE_P7_TO_P81) != 0)
+    if (m_convert(rpu, mode) != 0)
     {
         const char* e = m_getError(rpu);
-        err = e ? e : "conversion to profile 8.1 failed";
+        err = e ? e : what;
         m_rpuFree(rpu);
         return false;
     }

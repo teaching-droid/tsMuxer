@@ -446,6 +446,9 @@ CheckStreamRez HEVCStreamReader::checkStream(uint8_t* buffer, const int len)
                 rez.streamDescr += " RPU";
             if (m_hdr->isDVEL)
                 rez.streamDescr += " EL";
+            // an RPU, no enhancement layer, 10 bits and PQ: profile 8 with an HDR10 base
+            rez.dvSingleLayerHdr10 = m_hdr->isDVRPU && !m_hdr->isDVEL && m_sps && m_sps->bit_depth_luma_minus8 == 2 &&
+                                     m_sps->transfer_characteristics == 16;
 
             // Both together means this ONE track holds a whole dual layer disc: the base layer,
             // the enhancement layer wrapped in unspecified NALs, and an RPU per picture. Saying so

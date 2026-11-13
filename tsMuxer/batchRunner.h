@@ -25,6 +25,14 @@ std::vector<std::string> splitJobLine(const std::string& line);
 // as not run. Returns 0 when every job ended with exit code 0, -1 when one failed or was not run, and -2 when the
 // list cannot be read or holds no job.
 int run(const std::string& listFile, bool stopOnError, const std::string& argv0);
+
+// The file of this program
+std::string programFile();
+
+// Starts a helper program with its arguments and waits for its end, for `seconds` at most. It gets no input, what
+// it prints is not shown, and it opens no window. Returns 0 when it ended (exitCode is what it ended with), 1 when
+// it could not be started, 2 when it was ended here because it ran longer than the limit.
+int runHelper(const std::string& program, const std::vector<std::string>& args, int seconds, int& exitCode);
 }  // namespace batch
 
 #endif

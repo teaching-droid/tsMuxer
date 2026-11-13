@@ -279,6 +279,13 @@ class METADemuxer final : public AbstractDemuxer
     void setMatroskaOutput(const int kind) { m_matroskaOutput = kind; }
     // The output is a demux: ASS, SSA and WebVTT subtitles kept as text are written in their own form
     void setDemuxOutput(const bool demux) { m_demuxOutput = demux; }
+    // A Blu-ray disc is written: a single layer Dolby Vision track gets its second layer made (addDvLayers), with
+    // the ffmpeg given for its picture, if one was
+    void setDvLayerMaking(const bool on, const std::string& ffmpeg)
+    {
+        m_dvLayerMaking = on;
+        m_dvLayerFfmpeg = ffmpeg;
+    }
     // A second pass over the sources of a mux, before it (MuxerManager::findCutKeyPictures): read as the mux reads
     // them, with the other's settings, but its readers give no advice, open no file to write (save-srt) and print no
     // progress
@@ -289,6 +296,10 @@ class METADemuxer final : public AbstractDemuxer
         m_playlistClipsPlayed = other.m_playlistClipsPlayed;
         m_matroskaOutput = other.m_matroskaOutput;
         m_demuxOutput = other.m_demuxOutput;
+        // the same lines become the same streams: a made layer in the mux and none in a pass before it gave "the
+        // meta file gave other tracks", and --cut-start lost the key picture before the cut
+        m_dvLayerMaking = other.m_dvLayerMaking;
+        m_dvLayerFfmpeg = other.m_dvLayerFfmpeg;
     }
     [[nodiscard]] SourceEditions getSourceEditions() override;
     // The Chapters element of the one Matroska file the output takes its chapters from, as it stands; empty when
@@ -363,7 +374,11 @@ class METADemuxer final : public AbstractDemuxer
     bool m_playlistClipsPlayed = PLAYLIST_CLIPS_PLAYED_BY_DEFAULT;  // --playlist-clips (setPlaylistClipsPlayed)
     int m_matroskaOutput = 0;                                       // setMatroskaOutput: 0 other, 1 Matroska, 2 WebM
     bool m_demuxOutput = false;                                     // setDemuxOutput
-    bool m_quiet = false;                                           // setQuiet
+    bool m_dvLayerMaking = false;                                   // setDvLayerMaking
+    std::string m_dvLayerFfmpeg;
+    bool addDvLayers(const std::string& codec, const std::string& lineStreamName,
+                     const std::map<std::string, std::string>& addParams);
+    bool m_quiet = false;                        // setQuiet
     std::set<std::string> m_pipPlacingReported;  // the playlists whose own placing of a picture-in-picture was said
     double m_lastProgress = 0.0;                 // the last value printed
     int64_t m_totalSize;

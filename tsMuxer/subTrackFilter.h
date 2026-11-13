@@ -14,6 +14,9 @@ class SubTrackFilter
 
     [[nodiscard]] bool isSupportedTrack(const int pid) const { return m_srcPID == pid; }
     virtual int demuxPacket(DemuxedData& demuxedData, const PIDSet& acceptedPIDs, AVPacket& avPacket) = 0;
+    // The source has ended: what the filter still holds is handed on. A filter that hands every packet on as it
+    // comes holds nothing.
+    virtual void flush(DemuxedData& /*demuxedData*/, const PIDSet& /*acceptedPIDs*/) {}
     // The bytes of the packets demuxPacket counted as handed on since the last call, less those it handed on: a filter
     // that frames the data anew hands on more or fewer. The container counts them as discarded, so that the source is
     // still read to its end by the count that checks it.

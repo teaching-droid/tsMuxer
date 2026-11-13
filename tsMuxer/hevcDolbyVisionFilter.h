@@ -52,6 +52,18 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
     ~HevcDolbyVisionFilter() override = default;
 
     int demuxPacket(DemuxedData& demuxedData, const PIDSet& acceptedPIDs, AVPacket& avPacket) override;
+    void flush(DemuxedData& demuxedData, const PIDSet& acceptedPIDs) override;
+
+    // ** THE SECOND LAYER OF A SINGLE LAYER TRACK IS MADE. ** A track with an RPU and no enhancement layer (profile
+    // 8) had nothing to split, and was refused. With a picture to write (dvLayerPicture.h) its second layer is made
+    // here: the base side gets the track without its RPUs, and the second side gets, for each picture of the track,
+    // the given picture and behind it the RPU of the track's picture, converted to the form a second layer carries.
+    // The given picture is a key picture each time, so the made layer is in the order the pictures are shown in,
+    // while the track comes in the order they are coded in: the RPUs are held by their times and handed on in the
+    // order of the times, as many held as HEVC can put pictures out of order, and the rest at the end (flush).
+    void setLayerPicture(const std::vector<uint8_t>& picture) { m_layerPicture = picture; }
+    [[nodiscard]] bool makesLayer() const { return m_kind == Kind::made; }
+    [[nodiscard]] int64_t picturesMade() const { return m_made; }
 
     // Hand over the preserved originals. Moved, never copied: a feature has upwards of 160,000 of
     // them. Anything wrong with them throws HERE, before a single picture has been written, rather
@@ -88,6 +100,30 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
     int64_t m_restored;  // RPUs swapped back for the disc's own
 
     std::map<int, int> m_startCodeByType;  // NAL type to 3 or 4, empty means four throughout
+
+    // a made second layer (setLayerPicture)
+    enum class Kind
+    {
+        undecided,  // no Dolby Vision NAL seen yet
+        dual,       // a merged dual layer track: split
+        made        // a single layer track: its second layer is made
+    };
+    Kind m_kind = Kind::undecided;
+    std::vector<uint8_t> m_layerPicture;
+    std::multimap<int64_t, std::vector<uint8_t>> m_held;  // the RPUs not yet handed on, by the time of their picture
+    std::vector<int64_t> m_before;                        // the times of the pictures before the first RPU
+    std::vector<uint8_t> m_lastRpu;                       // the RPU handed on last
+    int64_t m_made = 0;                                   // pictures of the made layer handed on
+    int64_t m_basePictures = 0;                           // pictures of the track
+    int64_t m_leading = 0;     // of them, shown before the first key picture: they get no picture of the layer
+    int64_t m_withoutRpu = 0;  // pictures of the layer written with the RPU of the picture before
+    int64_t m_firstKeyTime = AV_NOPTS_VALUE_INTERNAL;  // the time of the first key picture
+    int64_t m_lastTime = AV_NOPTS_VALUE_INTERNAL;      // the time of the picture handed on last
+    int64_t m_step = 0;                                // the least time between two pictures handed on
+    int64_t m_gaps = 0;                                // places where the times of the pictures leave some out
+    int demuxMade(DemuxedData& demuxedData, AVPacket& avPacket);
+    int64_t handOnHeld(DemuxedData& demuxedData, size_t keep);
+    void hold(int64_t time, std::vector<uint8_t>&& rpu);
 };
 
 #endif  // HEVC_DOLBY_VISION_FILTER_H_

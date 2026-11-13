@@ -31,6 +31,7 @@ bool sLastMsg = false;
 namespace traceWarnings
 {
 bool keep = false;
+bool silent = false;
 namespace
 {
 std::mutex g_lock;
@@ -40,6 +41,8 @@ std::vector<std::string> g_kept;
 
 void note(const std::string& line)
 {
+    if (silent)
+        return;
     const std::lock_guard<std::mutex> guard(g_lock);
     ++g_count;
     if (keep && g_kept.size() < MAX_KEPT)

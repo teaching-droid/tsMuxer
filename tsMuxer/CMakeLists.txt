@@ -49,6 +49,7 @@ add_executable (tsmuxer
   flacStreamReader.cpp
   h264StreamReader.cpp
   hevc.cpp
+  dvLayerPicture.cpp
   hevcDolbyVisionFilter.cpp
   hevcStreamReader.cpp
   ioContextDemuxer.cpp

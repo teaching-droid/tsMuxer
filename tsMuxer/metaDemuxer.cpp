@@ -32,7 +32,9 @@ static bool isKnownTrackParam(const std::string& name);
 #include "bufferedReaderManager.h"
 #include "combinedH264Demuxer.h"
 #include "discTitles.h"
+#include "doviLib.h"
 #include "dtsStreamReader.h"
+#include "dvLayerPicture.h"
 #include "dvbSubStreamReader.h"
 #include "dvdTitles.h"
 #include "flacStreamReader.h"
@@ -1182,7 +1184,8 @@ void METADemuxer::openFile(const string& streamName)
             m_MvcFound = codec == "V_MPEG4/ISO/MVC";
         if (codec == "V_MPEG4/ISO/MVC" && m_mvcSource.empty())
             m_mvcSource = unquoteStr(trimStr(splitQuotedStr(codecStreamName.c_str(), '+')[0]));
-        addStream(codec, codecStreamName, addParams);
+        if (!addDvLayers(codec, codecStreamName, addParams))
+            addStream(codec, codecStreamName, addParams);
         file.readLine(str);
     }
 
@@ -1631,6 +1634,117 @@ static int checkedLevel(const std::string& text, const char* codec, const int sc
 }
 
 VideoAspectRatio arNameToCode(const string& arName);  // below, with createCodec
+
+// ** A SINGLE LAYER DOLBY VISION TRACK GOES TO A DISC AS TWO LAYERS. ** A UHD Blu-ray player takes Dolby Vision from
+// two layers. A track of profile 8, which has the Dolby Vision data inside its one stream, was written to a disc as
+// it is, with a warning that it plays as HDR10 only. Its second layer is made now (HevcDolbyVisionFilter): the line
+// of the track becomes the two lines a dual layer track is given on, subTrack=1 and subTrack=2. What it needs: a
+// Matroska source, a picture of 3840x2160 whose base is HDR10, the Dolby Vision library for the RPUs, and the one
+// picture the layer is written with (given with --dv-layer-picture, or made by an ffmpeg the user has). Where one of
+// them is missing the track is written as before, and a line says what was missing.
+bool METADemuxer::addDvLayers(const string& codec, const string& lineStreamName, const map<string, string>& addParams)
+{
+    // a disc is written, not a Matroska file whose MUXOPT line still says --blu-ray; a main video of its own line
+    if (!m_dvLayerMaking || m_matroskaOutput != 0 || m_demuxOutput || codec != "V_MPEGH/ISO/HEVC" ||
+        addParams.count("subTrack") > 0 || addParams.count("track") == 0 || addParams.count("subClip") > 0 ||
+        addParams.count("secondary") > 0)
+        return false;
+    const vector<string> files = splitQuotedStr(lineStreamName.c_str(), '+');
+    if (files.size() != 1)
+        return false;
+    const string file = unquoteStr(trimStr(files[0]));
+    const string ext = strToLowerCase(extractFileExt(file));
+    if (ext != "mkv" && ext != "mk3d")
+        return false;
+    const int track = strToInt32(addParams.find("track")->second.c_str());
+    // The file is looked at here only to tell what the track is. What the look says or sets is of no concern to the
+    // job: its lines (a track of the file the job does not take can warn), its errors, and the marks it leaves for
+    // the disc (the HDR kind and the size of every video track it probes, V3_flags).
+    DetectStreamRez found;
+    {
+        struct Quiet
+        {
+            struct NullBuffer final : std::streambuf
+            {
+                int overflow(const int c) override { return traits_type::not_eof(c); }
+            } null;
+            std::streambuf* out = std::cout.rdbuf(&null);
+            std::streambuf* err = std::cerr.rdbuf(&null);
+            const bool lastMsg = sLastMsg;
+            const int flags = V3_flags;
+            const bool wasSilent = traceWarnings::silent;
+            Quiet() { traceWarnings::silent = true; }
+            Quiet(const Quiet&) = delete;
+            Quiet& operator=(const Quiet&) = delete;
+            ~Quiet()
+            {
+                std::cout.rdbuf(out);
+                std::cerr.rdbuf(err);
+                sLastMsg = lastMsg;
+                V3_flags = flags;
+                traceWarnings::silent = wasSilent;
+            }
+        } quiet;
+        try
+        {
+            found = DetectStreamReader(m_readManager, file, false);
+        }
+        catch (...)
+        {
+            return false;  // the line is read as before, and says what is wrong with the file
+        }
+    }
+    const CheckStreamRez* video = nullptr;
+    bool largerVideo = false;  // another HEVC track of the file with a larger picture: this one is its second layer
+    for (const CheckStreamRez& stream : found.streams)
+        if (stream.trackID == track && stream.codecInfo.programName == codec)
+            video = &stream;
+    if (video == nullptr || !video->dvSingleLayerHdr10)
+        return false;
+    for (const CheckStreamRez& stream : found.streams)
+        largerVideo |= &stream != video && stream.codecInfo.programName == codec &&
+                       stream.streamDescr.find("Resolution: 3840:2160") != string::npos &&
+                       video->streamDescr.find("Resolution: 3840:2160") == string::npos;
+    if (largerVideo)
+        return false;
+    const auto note = [&](const string& why)
+    {
+        LTRACE(LT_WARN, 2,
+               "Track " << track << " of " << file
+                        << " is single layer Dolby Vision, which a Blu-ray player plays as HDR10 only. Its second "
+                           "layer, which would keep Dolby Vision on the disc, is not made: "
+                        << why << ".");
+        return false;
+    };
+    if (video->streamDescr.find("Resolution: 3840:2160") == string::npos)
+        return note("the picture is not 3840x2160, the size a dual layer disc has");
+    if (!DoviLib::instance().available())
+        return note(string("the Dolby Vision library (") + DoviLib::libraryName() + ") is needed for it, and " +
+                    DoviLib::instance().loadError());
+    if (dvLayer::picture().empty())
+    {
+        double fps = 0;
+        if (const auto given = addParams.find("fps"); given != addParams.end())
+            fps = strToDouble(given->second.c_str());
+        else if (const size_t at = video->streamDescr.find("Frame rate: "); at != string::npos)
+            fps = strToDouble(video->streamDescr.c_str() + at + 12);
+        if (const string why = dvLayer::make(m_dvLayerFfmpeg, fps); !why.empty())
+            return note("the picture it is written with could not be made, as " + why);
+    }
+    LTRACE(LT_INFO, 2,
+           "Track " << track << " of " << file
+                    << " is single layer Dolby Vision (profile 8). A Blu-ray player takes Dolby Vision from two "
+                       "layers, so its second layer is made: the track is written as a base layer and a second "
+                       "layer of 1920x1080 with the Dolby Vision data of each picture.");
+    map<string, string> base = addParams;
+    base["subTrack"] = "1";
+    map<string, string> layer = addParams;
+    layer["subTrack"] = "2";
+    layer["level"] = "5.1";  // the level the second layer of a disc has, whatever the encoder of the picture chose
+    addStream(codec, lineStreamName, base);
+    addStream(codec, lineStreamName, layer);
+    return true;
+}
 
 int METADemuxer::addStream(const string& codecName, const string& lineStreamName, const map<string, string>& addParams)
 {
@@ -3935,7 +4049,8 @@ void METADemuxer::readClose()
 // A track whose probed data holds no wrapped enhancement layer NAL has nothing to split off, and is refused here, by
 // what the stream holds: the filter refuses such a track only after 32 pictures without one, so a shorter plain HEVC
 // track was split into an empty second track and called successful.
-static void probeSubTrack(uint8_t* data, const size_t size, const int subTrackNo, StreamDiscoveryData& dd)
+static void probeSubTrack(uint8_t* data, const size_t size, const int subTrackNo, StreamDiscoveryData& dd,
+                          const bool layerCanBeMade)
 {
     static constexpr uint8_t startCode[4] = {0, 0, 0, 1};
     std::vector<uint8_t> half;
@@ -3965,7 +4080,12 @@ static void probeSubTrack(uint8_t* data, const size_t size, const int subTrackNo
         }
         nal = NALUnit::findNextNAL(next, end);
     }
-    if (wrapped == 0)
+    // A single layer track whose second layer is made (HevcDolbyVisionFilter::setLayerPicture): its base half is the
+    // track without its RPUs, which `half` holds already, and its second half is the picture the layer is made of.
+    const bool made = layerCanBeMade && wrapped == 0 && rpu > 0 && !dvLayer::picture().empty();
+    if (made && subTrackNo == HevcDolbyVisionFilter::EL_SUB_TRACK)
+        half = dvLayer::picture();
+    if (wrapped == 0 && !made)
         THROW(ERR_SOURCE, (rpu > 0 ? "Dolby Vision: this track carries an RPU but no enhancement layer, so it is "
                                      "single layer and cannot be split into two."
                                    : "This HEVC track carries no Dolby Vision enhancement layer, so it cannot be "
@@ -4194,7 +4314,11 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
                         // 0x1012, with no 0x1015. The half is cut out of the probed data as the subTrack filter
                         // cuts it, and probed on its own.
                         if (subTrackNo != 0 && dynamic_cast<HEVCStreamReader*>(videoReader))
-                            probeSubTrack(vect.data(), vect.size(), subTrackNo, dd);
+                        {
+                            const string kind = strToLowerCase(extractFileExt(unquoted));
+                            probeSubTrack(vect.data(), vect.size(), subTrackNo, dd,
+                                          kind == "mkv" || kind == "mk3d" || kind == "webm" || kind == "mka");
+                        }
                         // Restore codec-private from container
                         if (dd.codecPrivate.empty() && cp && cpSize > 0)
                             dd.codecPrivate.assign(cp, cp + cpSize);
@@ -6984,6 +7108,10 @@ bool ContainerToReaderWrapper::openStream(int readerID, const char* streamName, 
                 // A merged dual layer Dolby Vision track, split back into base layer and
                 // enhancement layer. subTrack=1 is the base layer, subTrack=2 the enhancement.
                 auto dvFilter = new HevcDolbyVisionFilter(srcPID);
+                // a picture to make the second layer of a single layer track of. From a Matroska file, which hands
+                // the filter one picture at a time, with its time, and says when the file has ended.
+                if (dynamic_cast<MatroskaDemuxer*>(demuxer) != nullptr)
+                    dvFilter->setLayerPicture(dvLayer::picture());
                 // If the file was written as profile 8.1 its RPUs were converted, and the disc's
                 // own are attached beside them. Load them now, before anything is written, so a
                 // file that no longer matches its metadata fails at once instead of half way

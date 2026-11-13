@@ -1850,6 +1850,24 @@ All parameters in this group start with two dashes:
                       muxing starts. The published dovi.dll needs Windows 8 or
                       newer, so on Windows 7 this option may not work; that is a
                       limit of the library build, not of tsMuxeR.
+--ffmpeg              Blu-ray output: the ffmpeg to use for a single layer Dolby
+                      Vision track (profile 8 with an HDR10 base) of a Matroska
+                      source. A disc player takes Dolby Vision from two layers, so
+                      the second layer of such a track is made: a black picture of
+                      1920x1080 for each picture of the film, with the Dolby
+                      Vision data of that picture. ffmpeg is asked for that one
+                      picture only; nothing of the film is encoded again.
+                      Without this option an ffmpeg beside tsMuxeR or on the
+                      search path is taken. tsMuxeR does not ship ffmpeg. The
+                      libdovi library is needed as well. Where one of them is
+                      missing, the track is written as one stream, as before,
+                      and a line says what was missing.
+--no-dv-layer         Blu-ray output: write a single layer Dolby Vision track as
+                      the one stream it is. It plays as HDR10 on a disc player.
+--dv-layer-picture    Blu-ray output: the picture of a made second layer, as a
+                      file, in place of one made by ffmpeg: an HEVC stream of one
+                      key picture, Main 10, 1920x1080, marked as PQ with chroma
+                      sample location 2.
 )help"
         R"help(--start-time          Timestamp of the first video frame. May be defined as 45 kHz
                       clock (just a number) or as time in hh:mm:ss.zzz format.

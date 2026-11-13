@@ -52,7 +52,13 @@ class DoviLib
     // RPU is what makes the conversion reversible.
     bool convertRpuToProfile81(const uint8_t* nal, size_t len, std::vector<uint8_t>& out, std::string& err);
 
+    // Convert one RPU NAL of a single layer stream (profile 8) to the form the second layer of a dual layer disc
+    // carries where that layer adds nothing to the picture (profile 7, MEL). Input and output as above.
+    bool convertRpuToMel(const uint8_t* nal, size_t len, std::vector<uint8_t>& out, std::string& err);
+
    private:
+    bool convertRpu(const uint8_t* nal, size_t len, uint8_t mode, const char* what, std::vector<uint8_t>& out,
+                    std::string& err);
     DoviLib();
     ~DoviLib();
     DoviLib(const DoviLib&) = delete;

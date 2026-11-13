@@ -4,6 +4,7 @@
 
 #include <fs/systemlog.h>
 
+#include "doviLib.h"
 #include "hevc.h"
 #include "nalUnits.h"
 #include "vodCoreException.h"
@@ -113,6 +114,39 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
     }
 
     uint8_t* dataEnd = avPacket.data + avPacket.size;
+    // What the track is, told by its first packet with a Dolby Vision NAL: a wrapped enhancement layer NAL makes it
+    // a merged dual layer track; an RPU without one makes it single layer, whose second layer is made where a
+    // picture for it was given (and which is refused below, as before, where none was).
+    if (m_kind == Kind::undecided)
+    {
+        bool wrapped = false, rpu = false;
+        int pictures = 0;
+        for (uint8_t* nal = NALUnit::findNextNAL(avPacket.data, dataEnd); nal < dataEnd;)
+        {
+            if (dataEnd - nal >= 3)
+            {
+                const int type = (nal[0] >> 1) & 0x3F;
+                wrapped |= type == static_cast<int>(HevcUnit::NalType::DVEL);
+                rpu |= type == static_cast<int>(HevcUnit::NalType::DVRPU);
+                pictures += type < 32 && (nal[2] & 0x80) ? 1 : 0;  // the first slice of a picture
+            }
+            nal = NALUnit::findNextNAL(NALUnit::findNALWithStartCode(nal, dataEnd, true), dataEnd);
+        }
+        if (wrapped)
+        {
+            m_kind = Kind::dual;
+            m_before.clear();
+        }
+        else if (rpu && !m_layerPicture.empty())
+            m_kind = Kind::made;
+        // A picture in front of the first RPU: the layer has a picture for it as well, or every later one would
+        // stand one place early. Kept until the track is known for single layer.
+        else if (!m_layerPicture.empty() && avPacket.pts != AV_NOPTS_VALUE_INTERNAL && m_before.size() < 64)
+            for (int i = 0; i < pictures; ++i) m_before.push_back(avPacket.pts);
+    }
+    if (m_kind == Kind::made)
+        return demuxMade(demuxedData, avPacket);
+
     uint8_t* curNal = NALUnit::findNextNAL(avPacket.data, dataEnd);
     int64_t discardSize = 0;
     int64_t handedOn = 0;
@@ -209,4 +243,174 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
     const int counted = avPacket.size - static_cast<int>(discardSize);
     m_reframed += counted - handedOn;
     return counted;
+}
+
+// How many RPUs are held before the earliest goes on: HEVC puts a picture at most 16 places out of order
+static constexpr size_t HELD_PICTURES = 16;
+
+// The held RPUs beyond `keep`, earliest first, each behind the given picture: the bytes handed on
+int64_t HevcDolbyVisionFilter::handOnHeld(DemuxedData& demuxedData, const size_t keep)
+{
+    int64_t handedOn = 0;
+    while (m_held.size() > keep)
+    {
+        const auto first = m_held.begin();
+        // a picture whose RPU is missing or could not be converted takes that of the picture before
+        if (first->second.empty() && !m_lastRpu.empty())
+        {
+            first->second = m_lastRpu;
+            ++m_withoutRpu;
+        }
+        if (m_elStreamIndex >= 0)
+        {
+            MemoryBlock& layer = demuxedData[m_elStreamIndex];
+            layer.append(m_layerPicture.data(), static_cast<int>(m_layerPicture.size()));
+            handedOn += static_cast<int64_t>(m_layerPicture.size());
+            if (!first->second.empty())
+            {
+                layer.append(START_CODE, sizeof(START_CODE));
+                layer.append(first->second.data(), static_cast<int>(first->second.size()));
+                handedOn += static_cast<int64_t>(sizeof(START_CODE) + first->second.size());
+            }
+        }
+        // The layer is timed by counting its pictures, the track by what its pictures say: where the times of the
+        // track leave pictures out (a damaged file, a file put together from parts), the two are out of step from
+        // there on. Counted, and said at the end.
+        if (m_lastTime != AV_NOPTS_VALUE_INTERNAL && first->first > m_lastTime)
+        {
+            const int64_t step = first->first - m_lastTime;
+            if (m_step == 0 || step < m_step)
+                m_step = step;
+            else if (step > m_step * 5 / 2)
+                ++m_gaps;
+        }
+        m_lastTime = first->first;
+        if (!first->second.empty())
+            m_lastRpu = std::move(first->second);
+        ++m_made;
+        m_held.erase(first);
+    }
+    return handedOn;
+}
+
+// A picture of the track with its RPU, to be handed on in the order of the times
+void HevcDolbyVisionFilter::hold(const int64_t time, std::vector<uint8_t>&& rpu)
+{
+    // ** THE LAYER BEGINS WITH THE FIRST KEY PICTURE. ** A track that begins with a key picture and pictures shown
+    // before it (an open group at the start of a cut) is timed from the key picture: those pictures stand before the
+    // start. The layer is timed by counting, so a picture of it for each of them moved every RPU that follows that
+    // many pictures late, for the whole film. They get none.
+    if (m_firstKeyTime != AV_NOPTS_VALUE_INTERNAL && time < m_firstKeyTime)
+    {
+        ++m_leading;
+        return;
+    }
+    m_held.emplace(time, std::move(rpu));
+}
+
+int HevcDolbyVisionFilter::demuxMade(DemuxedData& demuxedData, AVPacket& avPacket)
+{
+    // The order the pictures are shown in comes from their times: without them the layer cannot be put in order
+    if (avPacket.pts == AV_NOPTS_VALUE_INTERNAL)
+        THROW(ERR_SOURCE,
+              "Dolby Vision: a picture of this track has no time in its file, so the second layer "
+              "cannot be put in the order its pictures are shown in. --no-dv-layer on the MUXOPT line "
+              "writes the track as the one stream it is.")
+    // the pictures in front of the first RPU, each with no RPU of its own
+    for (const int64_t time : m_before) hold(time, {});
+    m_before.clear();
+
+    uint8_t* dataEnd = avPacket.data + avPacket.size;
+    int64_t discardSize = 0;
+    int64_t handedOn = 0;
+    // the pictures of this packet (one, as a rule): each begins with its first slice, and its RPU follows its slices
+    std::vector<std::vector<uint8_t>> rpus;
+    bool key = false;
+    for (uint8_t* curNal = NALUnit::findNextNAL(avPacket.data, dataEnd); curNal < dataEnd;)
+    {
+        uint8_t* nextNal = NALUnit::findNALWithStartCode(curNal, dataEnd, true);
+        uint8_t* nalEnd = nextNal;
+        if (nextNal < dataEnd)
+            while (nalEnd > curNal && nalEnd[-1] == 0) nalEnd--;  // the zeroes of the next start code
+        if (nalEnd - curNal >= 2)
+        {
+            const int nalType = (curNal[0] >> 1) & 0x3F;
+            if (nalType == static_cast<int>(HevcUnit::NalType::DVRPU))
+            {
+                std::string why;
+                std::vector<uint8_t> rpu;
+                if (!DoviLib::instance().convertRpuToMel(curNal, static_cast<size_t>(nalEnd - curNal), rpu, why))
+                {
+                    // The first one: the library cannot do it, and nothing is written yet. A later one: one RPU
+                    // of a long film, which takes that of the picture before (handOnHeld) and is counted.
+                    if (m_rpu == 0)
+                        THROW(ERR_SOURCE,
+                              "Dolby Vision: the RPU of the first picture could not be converted for "
+                              "the second layer ("
+                                  << why
+                                  << "), so the layer cannot be made. --no-dv-layer on the MUXOPT line "
+                                     "writes the track as the one stream it is.")
+                    rpu.clear();
+                }
+                ++m_rpu;
+                if (rpus.empty())
+                    rpus.emplace_back();
+                rpus.back() = std::move(rpu);
+            }
+            else if (nalType == static_cast<int>(HevcUnit::NalType::DVEL))
+                THROW(ERR_SOURCE,
+                      "Dolby Vision: this track began as single layer and now carries an enhancement "
+                      "layer. It is not one stream, and no second layer is made for it.")
+            else
+            {
+                handedOn += emit(m_blStreamIndex, curNal, nalEnd, demuxedData, discardSize, nalType);
+                if (nalType < 32 && nalEnd - curNal >= 3 && (curNal[2] & 0x80))
+                {
+                    rpus.emplace_back();
+                    key |= nalType >= 16 && nalType <= 23;
+                }
+            }
+        }
+        curNal = NALUnit::findNextNAL(nextNal, dataEnd);
+    }
+    if (key && m_firstKeyTime == AV_NOPTS_VALUE_INTERNAL)
+        m_firstKeyTime = avPacket.pts;
+    // one picture of the layer for each picture of the track; a second picture of the packet stands a tick later
+    for (size_t i = 0; i < rpus.size(); ++i)
+    {
+        ++m_basePictures;
+        hold(avPacket.pts + static_cast<int64_t>(i), std::move(rpus[i]));
+    }
+    handedOn += handOnHeld(demuxedData, HELD_PICTURES);
+    ++m_packets;
+    // the count of what was read stays whole, as in demuxPacket: the difference goes to the container
+    const int counted = avPacket.size - static_cast<int>(discardSize);
+    m_reframed += counted - handedOn;
+    return counted;
+}
+
+void HevcDolbyVisionFilter::flush(DemuxedData& demuxedData, const PIDSet& /*acceptedPIDs*/)
+{
+    if (m_kind != Kind::made)
+        return;
+    m_reframed -= handOnHeld(demuxedData, 0);
+    LTRACE(LT_INFO, 2,
+           "Dolby Vision: the second layer was made with " << m_made << " pictures for the " << m_basePictures
+                                                           << " pictures of the track.");
+    if (m_leading > 0)
+        LTRACE(LT_INFO, 2,
+               "Dolby Vision: " << m_leading
+                                << " pictures of the track are shown before its first key picture; the "
+                                   "layer begins with that key picture.");
+    if (m_withoutRpu > 0)
+        LTRACE(LT_WARN, 2,
+               "Warning: " << m_withoutRpu
+                           << " pictures of the track have no Dolby Vision data that could be used; "
+                              "in the second layer they have the data of the picture before.");
+    if (m_gaps > 0)
+        LTRACE(LT_WARN, 2,
+               "Warning: the times of the track's pictures leave pictures out at "
+                   << m_gaps
+                   << " places. If pictures are missing there, the Dolby Vision data of the second layer is "
+                      "out of step with the picture after such a place.");
 }

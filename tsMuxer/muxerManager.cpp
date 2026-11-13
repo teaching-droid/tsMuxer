@@ -1,6 +1,7 @@
 // Largely rewritten by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer).
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "muxerManager.h"
+#include "dvLayerPicture.h"
 
 #include <algorithm>
 #include <cmath>
@@ -1428,6 +1429,7 @@ bool MuxerManager::openMetaFile(const string& fileName)
     }
 
     m_metaDemuxer.setDemuxOutput(m_demuxMode);
+    m_metaDemuxer.setDvLayerMaking(m_bluRayMode && !m_avchdMode && !m_demuxMode && !m_noDvLayer, m_ffmpeg);
     m_metaDemuxer.openFile(fileName);
     m_metaFileName = fileName;
     return true;
@@ -1611,8 +1613,10 @@ void MuxerManager::warnUnknownMuxOpts(const string& opts)
                                                       "--cut-start",
                                                       "--demux",
                                                       "--disc-size",
+                                                      "--dv-layer-picture",
                                                       "--dv-profile",
                                                       "--extra-iso-space",
+                                                      "--ffmpeg",
                                                       "--inner-only",
                                                       "--insertBlankPL",
                                                       "--keep-editions",
@@ -1628,6 +1632,7 @@ void MuxerManager::warnUnknownMuxOpts(const string& opts)
                                                       "--new-audio-pes",
                                                       "--no-asyncio",
                                                       "--no-chapters",
+                                                      "--no-dv-layer",
                                                       "--no-hdmv-descriptors",
                                                       "--no-layer-break-guard",
                                                       "--no-navigation",
@@ -1804,6 +1809,26 @@ void MuxerManager::parseMuxOpt(const string& opts)
         // this option the run writes its clip, clip information and playlist, and leaves those two files alone.
         else if (paramPair[0] == "--no-navigation")
             m_noNavigation = true;
+        else if (paramPair[0] == "--no-dv-layer")
+            m_noDvLayer = true;
+        else if (paramPair[0] == "--ffmpeg")
+        {
+            if (paramPair.size() < 2)
+                THROW(ERR_USAGE, "Missing value for " << paramPair[0]);
+            m_ffmpeg = unquoteStr(trimStr(paramPair[1]));
+            UtfConverter::metaTextToUtf8(m_ffmpeg);
+        }
+        // The picture a made Dolby Vision second layer is written with (dvLayerPicture.h), as a file
+        else if (paramPair[0] == "--dv-layer-picture")
+        {
+            if (paramPair.size() < 2)
+                THROW(ERR_USAGE, "Missing value for " << paramPair[0]);
+            std::string name = unquoteStr(trimStr(paramPair[1]));
+            UtfConverter::metaTextToUtf8(name);
+            if (const std::string why = dvLayer::takeFile(name); !why.empty())
+                THROW(ERR_USAGE, "--dv-layer-picture: " << name << " cannot be used as the picture of a second "
+                                                        << "Dolby Vision layer: " << why << ".")
+        }
         else if (paramPair[0] == "--meta-dir")
         {
             if (paramPair.size() < 2)

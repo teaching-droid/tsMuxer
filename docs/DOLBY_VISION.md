@@ -171,9 +171,36 @@ the Dolby Vision data needed to rebuild the disc is gone. Keep the original.
 ## A single layer Dolby Vision file
 
 A file that is already single layer, profile 5 or profile 8, has no enhancement layer to separate.
-Asking for a split is refused with an explanation rather than producing an empty second track.
-Mux it as one track instead.
+Mux it as one track.
 
 On a Blu-ray disc, single layer Dolby Vision plays **without** Dolby Vision: a UHD Blu-ray player
-takes Dolby Vision from two layers only, and shows the HDR10, SDR or HLG base instead. tsMuxeR says
-so with a warning, and writes the disc as before. To keep Dolby Vision, mux it to Matroska instead.
+takes Dolby Vision from two layers only, and shows the HDR10, SDR or HLG base instead.
+
+### The second layer is made for a disc
+
+For a profile 8 track whose base is HDR10 (often written 8.1), tsMuxeR makes the second layer when
+it writes a Blu-ray disc, so that the disc keeps Dolby Vision. Nothing of the film is encoded again:
+
+- the film's stream goes to the disc as the base layer, without its Dolby Vision data;
+- the second layer is a black picture of 1920x1080, written once for every picture of the film,
+  each time with the Dolby Vision data of that picture behind it.
+
+In this kind of second layer only the data counts, so its picture can be the same every time. The
+layer adds about 0.7 KB for each picture of the film.
+
+What it needs:
+
+| | |
+|---|---|
+| a Matroska source | the track on one line of the meta file, as the window writes it |
+| a picture of 3840x2160 | the size a dual layer disc has |
+| the libdovi library | as for profile 8.1, see above |
+| ffmpeg | for the one black picture. tsMuxeR does not ship it. It is taken from `--ffmpeg=<file>` on the MUXOPT line, else from beside tsMuxeR, else from a folder of the search path, and it is asked for that one picture only. Its libx265 encoder is used, or the HEVC encoder of the graphics hardware (NVIDIA, Intel, AMD). |
+
+Where one of them is missing, the disc is written with the single layer, as before, and a line says
+what was missing. `--no-dv-layer` on the MUXOPT line keeps the single layer on purpose.
+`--dv-layer-picture=<file>` gives the picture as a file in place of one made by ffmpeg: an HEVC
+stream of one key picture, Main 10, 1920x1080, marked as PQ with chroma sample location 2.
+
+Players differ in what they accept. If a player does not show Dolby Vision from a disc made this
+way, please report it with the model of the player.

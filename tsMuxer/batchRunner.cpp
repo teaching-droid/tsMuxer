@@ -266,6 +266,98 @@ string timeText(const int64_t seconds)
 }
 }  // namespace
 
+string programFile() { return ownProgram(string()); }
+
+int runHelper(const string& program, const vector<string>& args, const int seconds, int& exitCode)
+{
+    fflush(stdout);
+    fflush(stderr);
+#ifdef _WIN32
+    wstring commandLine = quoteArg(program);
+    for (const string& arg : args) commandLine += L" " + quoteArg(arg);
+    SECURITY_ATTRIBUTES inherit{};
+    inherit.nLength = sizeof(inherit);
+    inherit.bInheritHandle = TRUE;
+    const HANDLE nothing = CreateFileW(L"NUL", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                       &inherit, OPEN_EXISTING, 0, nullptr);
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    if (nothing != INVALID_HANDLE_VALUE)
+    {
+        startup.dwFlags = STARTF_USESTDHANDLES;
+        startup.hStdInput = startup.hStdOutput = startup.hStdError = nothing;
+    }
+    PROCESS_INFORMATION process{};
+    const vector<wchar_t> wideProgram = toWide(program);
+    const BOOL started = CreateProcessW(wideProgram.data(), commandLine.data(), nullptr, nullptr, TRUE,
+                                        CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
+    if (nothing != INVALID_HANDLE_VALUE)
+        CloseHandle(nothing);
+    if (!started)
+        return 1;
+    int result = 0;
+    if (WaitForSingleObject(process.hProcess, static_cast<DWORD>(seconds) * 1000) != WAIT_OBJECT_0)
+    {
+        TerminateProcess(process.hProcess, 1);
+        WaitForSingleObject(process.hProcess, 5000);
+        result = 2;
+    }
+    DWORD code = 0;
+    GetExitCodeProcess(process.hProcess, &code);
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+    exitCode = static_cast<int>(code);
+    return result;
+#else
+    vector<char*> argv;
+    string programCopy = program;
+    vector<string> copies = args;
+    argv.push_back(programCopy.data());
+    for (string& arg : copies) argv.push_back(arg.data());
+    argv.push_back(nullptr);
+    const pid_t child = fork();
+    if (child < 0)
+        return 1;
+    if (child == 0)
+    {
+        if (FILE* nothing = fopen("/dev/null", "r+"))
+        {
+            dup2(fileno(nothing), 0);
+            dup2(fileno(nothing), 1);
+            dup2(fileno(nothing), 2);
+        }
+        execv(program.c_str(), argv.data());
+        _exit(127);  // the program could not be started
+    }
+    const auto limit = chrono::steady_clock::now() + chrono::seconds(seconds);
+    int status = 0;
+    for (;;)
+    {
+        const pid_t ended = waitpid(child, &status, WNOHANG);
+        if (ended == child)
+            break;
+        if (ended < 0 && errno != EINTR)
+            return 1;
+        if (chrono::steady_clock::now() > limit)
+        {
+            kill(child, SIGKILL);
+            while (waitpid(child, &status, 0) < 0 && errno == EINTR)
+            {
+            }
+            return 2;
+        }
+        usleep(20000);
+    }
+    if (WIFEXITED(status))
+    {
+        exitCode = WEXITSTATUS(status);
+        return exitCode == 127 ? 1 : 0;
+    }
+    exitCode = -1;
+    return 0;
+#endif
+}
+
 int run(const string& listFile, const bool stopOnError, const string& argv0)
 {
     File file;

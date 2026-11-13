@@ -183,10 +183,38 @@ Bewahren Sie das Original auf.
 ## Eine Single-Layer-Datei mit Dolby Vision
 
 Eine Datei, die bereits Single Layer ist, Profil 5 oder Profil 8, hat keinen Enhancement Layer, den
-man abtrennen könnte. Eine angeforderte Aufteilung wird mit einer Erklärung abgelehnt, statt eine
-leere zweite Spur zu erzeugen. Muxen Sie sie stattdessen als eine einzige Spur.
+man abtrennen könnte. Muxen Sie sie als eine einzige Spur.
 
 Auf einer Blu-ray-Disc spielt Single-Layer-Dolby-Vision **ohne** Dolby Vision: Ein UHD-Blu-ray-Player
 nimmt Dolby Vision nur aus zwei Layern und zeigt stattdessen die Basis in HDR10, SDR oder HLG.
-tsMuxeR weist mit einer Warnung darauf hin und schreibt die Disc wie bisher. Um Dolby Vision zu
-behalten, muxen Sie stattdessen nach Matroska.
+
+### Der zweite Layer wird für eine Disc erzeugt
+
+Für eine Spur mit Profil 8, deren Basis HDR10 ist (oft 8.1 geschrieben), erzeugt tsMuxeR den zweiten
+Layer, wenn es eine Blu-ray-Disc schreibt, damit die Disc Dolby Vision behält. Vom Film wird nichts
+neu kodiert:
+
+- der Stream des Films geht als Base Layer auf die Disc, ohne seine Dolby-Vision-Daten;
+- der zweite Layer ist ein schwarzes Bild mit 1920x1080, einmal für jedes Bild des Films
+  geschrieben, jeweils gefolgt von den Dolby-Vision-Daten dieses Bildes.
+
+Bei dieser Art von zweitem Layer zählen nur die Daten, das Bild darf also jedes Mal dasselbe sein.
+Der Layer braucht etwa 0,7 KB für jedes Bild des Films.
+
+Was dafür nötig ist:
+
+| | |
+|---|---|
+| eine Matroska-Quelle | die Spur in einer Zeile der Meta-Datei, so wie das Fenster sie schreibt |
+| ein Bild mit 3840x2160 | die Größe einer Dual-Layer-Disc |
+| die Bibliothek libdovi | wie für Profil 8.1, siehe oben |
+| ffmpeg | für das eine schwarze Bild. tsMuxeR liefert es nicht mit. Es wird aus `--ffmpeg=<Datei>` in der MUXOPT-Zeile genommen, sonst neben tsMuxeR gesucht, sonst in einem Ordner des Suchpfads, und nur für dieses eine Bild gebraucht. Verwendet wird sein Encoder libx265 oder der HEVC-Encoder der Grafikhardware (NVIDIA, Intel, AMD). |
+
+Fehlt eines davon, wird die Disc wie bisher mit dem einen Layer geschrieben, und eine Zeile sagt,
+was gefehlt hat. `--no-dv-layer` in der MUXOPT-Zeile behält den einen Layer mit Absicht.
+`--dv-layer-picture=<Datei>` übergibt das Bild als Datei, statt es von ffmpeg erzeugen zu lassen:
+ein HEVC-Stream mit einem Schlüsselbild, Main 10, 1920x1080, als PQ markiert und mit Chroma Sample
+Location 2.
+
+Player unterscheiden sich darin, was sie annehmen. Zeigt ein Player von einer so erzeugten Disc kein
+Dolby Vision, melden Sie es bitte mit dem Modell des Players.
