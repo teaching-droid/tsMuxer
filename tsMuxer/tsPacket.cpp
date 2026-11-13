@@ -1348,6 +1348,16 @@ void CLPIParser::parseExtensionData(uint8_t* buffer, const uint8_t* end)
     }
 }
 
+// ** A PART THAT BEGINS OUTSIDE ITS FILE. ** A playlist and a clip information file name the place of each of their
+// parts in their first bytes. The places were taken as written: in a damaged file, or one that is no such file at
+// all, a place behind the end of the data was read all the same, far outside the file, and the program ended with a
+// crash in place of the line that says the file cannot be read.
+static void checkPartStart(const uint32_t address, const int64_t len)
+{
+    if (len < 0 || address > static_cast<uint64_t>(len))
+        THROW_BITSTREAM_ERR;
+}
+
 void CLPIParser::parse(uint8_t* buffer, const int64_t len)
 {
     BitStreamReader reader{};
@@ -1364,6 +1374,9 @@ void CLPIParser::parse(uint8_t* buffer, const int64_t len)
         const uint32_t extensionData_start_address = reader.getBits(32);
         for (int i = 0; i < 3; i++) reader.skipBits(32);  // reserved_for_future_use
         parseClipInfo(reader);
+        for (const uint32_t address : {sequenceInfo_start_address, programInfo_start_address, CPI_start_address,
+                                       clipMark_start_address, extensionData_start_address})
+            checkPartStart(address, len);
         parseSequenceInfo(buffer + sequenceInfo_start_address, buffer + len);
         parseProgramInfo(buffer + programInfo_start_address, buffer + len, m_programInfo, m_streamInfo);
         parseCPI(buffer + CPI_start_address, buffer + len);
@@ -1499,9 +1512,14 @@ void MPLSParser::parse(uint8_t* buffer, const int len)
         char version_number[5];
         CLPIStreamInfo::readString(type_indicator, reader, 4);
         CLPIStreamInfo::readString(version_number, reader, 4);
-        const int playList_start_address = reader.getBits<int>(32);
-        const int playListMark_start_address = reader.getBits<int>(32);
-        const int extensionData_start_address = reader.getBits<int>(32);
+        const uint32_t playListStart = reader.getBits(32);
+        const uint32_t playListMarkStart = reader.getBits(32);
+        const uint32_t extensionDataStart = reader.getBits(32);
+        for (const uint32_t address : {playListStart, playListMarkStart, extensionDataStart})
+            checkPartStart(address, len);
+        const int playList_start_address = static_cast<int>(playListStart);
+        const int playListMark_start_address = static_cast<int>(playListMarkStart);
+        const int extensionData_start_address = static_cast<int>(extensionDataStart);
         for (int i = 0; i < 5; i++) reader.skipBits(32);  // reserved_for_future_use
         AppInfoPlayList(reader);
         parsePlayList(buffer + playList_start_address, len - playList_start_address);

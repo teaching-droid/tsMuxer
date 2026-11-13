@@ -179,6 +179,8 @@ static bool languageWanted(const CheckStreamRez& stream)
     return false;
 }
 
+static DetectStreamRez listingOfPlaylist(const std::string& playlist);
+
 // The meta file for a mux of every track of `source` that tsMuxeR reads, to an output of the kind its name says
 static std::string metaFromSource(const std::string& source, const std::string& output)
 {
@@ -191,7 +193,13 @@ static std::string metaFromSource(const std::string& source, const std::string& 
     if (strEndWith(strToLowerCase(source), ".iso"))
         THROW(ERR_USAGE, source << " is a disc image. Name its title in a meta file, for example: V_MPEG4/ISO/AVC, \""
                                 << source << "\", title=main. tsMuxeR " << source << " lists the titles.")
-    DetectStreamRez listing = METADemuxer::DetectStreamReader(readManager, source, true);
+    // ** A PLAYLIST IN PLACE OF THE META FILE. ** The tracks of a playlist are those of its clips, and its lines name
+    // the playlist with the track of the clip. It was read as a stream file of its own: the bytes of the playlist
+    // were taken for some sound, the line had no track, and the mux ended with "need track parameter".
+    const std::string sourceExt = strToLowerCase(extractFileExt(source));
+    DetectStreamRez listing = sourceExt == "mpls" || sourceExt == "mpl"
+                                  ? listingOfPlaylist(source)
+                                  : METADemuxer::DetectStreamReader(readManager, source, true);
     if (listing.streams.empty() && !listing.noTracksReason.empty())
         THROW(ERR_SOURCE, listing.noTracksReason)
     std::string meta = "MUXOPT --no-pcr-on-video-pid --new-audio-pes --vbr --vbv-len=500\n";
@@ -705,6 +713,52 @@ static void describeAsChosenClip(vector<CheckStreamRez>& streams, const string& 
 
 // The languages of a DVD title listed with --show-title, by track: the IFO files give them, and the VOB files do not
 static std::map<int, std::string> dvdTitleLanguages;
+
+// The tracks of a playlist given as the source of a mux: those of its first clip and what its later clips add, in
+// the order of the playlist, as the listing of the playlist has them
+static DetectStreamRez listingOfPlaylist(const std::string& playlist)
+{
+    const bool shortExt = strToLowerCase(extractFileExt(playlist)) == "mpl";
+    MPLSParser mplsParser;
+    if (!mplsParser.parse(playlist.c_str()))
+        THROW(ERR_SOURCE,
+              "Can't parse play list file " << playlist << ": it is no Blu-ray playlist (MPLS), or it is damaged.")
+    if (mplsParser.isDependStreamExist)
+        THROW(ERR_USAGE, playlist << " is the playlist of a 3D title, whose two views go on lines of their own. "
+                                  << "Write a meta file for it: tsMuxeR " << playlist << " lists its tracks.")
+    if (mplsParser.m_playItems.empty())
+        THROW(ERR_SOURCE, "The playlist " << playlist << " names no clip, so there is nothing to mux.")
+    const string streamDir = METADemuxer::playlistStreamDir(playlist);
+    const std::string mediaExt = shortExt ? ".MTS" : ".m2ts";
+    const std::string ssifExt = shortExt ? ".SIF" : ".ssif";
+    const auto mediaOf = [&](const std::string& name)
+    {
+        const string media = streamDir + name + mediaExt;
+        return fileExists(media) ? media : streamDir + string("SSIF") + getDirSeparator() + name + ssifExt;
+    };
+    const string first = mediaOf(mplsParser.m_playItems[0].fileName);
+    if (!fileExists(first))
+        THROW(ERR_FILE_NOT_FOUND, "Can't open file: " << streamDir + mplsParser.m_playItems[0].fileName + mediaExt
+                                                      << ", the first clip of the playlist " << playlist)
+    vector<LaterClip> laterClips;
+    vector<string> laterFiles;
+    const string clipInfoDir = streamDir + ".." + getDirSeparator() + "CLIPINF" + getDirSeparator();
+    for (size_t i = 1; i < mplsParser.m_playItems.size(); ++i)
+    {
+        const string& name = mplsParser.m_playItems[i].fileName;
+        const string media = mediaOf(name);
+        if (!fileExists(media))
+            continue;
+        laterClips.push_back(
+            {media, clipInfoDir + name + (shortExt ? ".CPI" : ".clpi"), i == mplsParser.chosenStnItem()});
+        laterFiles.push_back(media);
+    }
+    DetectStreamRez listing = METADemuxer::DetectStreamReader(readManager, first, false, laterFiles);
+    if (!laterClips.empty())
+        addTracksFromLaterClips(listing.streams, mplsParser, first, laterClips);
+    orderAsPlaylist(listing.streams, mplsParser);
+    return listing;
+}
 
 void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSubMode,
                         const vector<LaterClip>* laterClips = nullptr, const string& firstClipInfo = string())
