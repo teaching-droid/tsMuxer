@@ -7161,8 +7161,12 @@ bool ContainerToReaderWrapper::openStream(int readerID, const char* streamName, 
                 const bool pieces = dynamic_cast<TSDemuxer*>(demuxer) != nullptr;
                 if (pieces)
                     dvFilter->setPieces();
-                if (pieces || dynamic_cast<MatroskaDemuxer*>(demuxer) != nullptr ||
-                    dynamic_cast<MovDemuxer*>(demuxer) != nullptr)
+                // Of one file, not of a join (or the clips of a playlist): the HEVC reader starts the count of
+                // the pictures again with each file, and the filter is not told where one ends. A single layer
+                // track of a join given on two lines is refused as before, as a track that cannot be split.
+                const bool oneFile = m_demuxers[streamName].m_iterator == nullptr;
+                if (oneFile && (pieces || dynamic_cast<MatroskaDemuxer*>(demuxer) != nullptr ||
+                                dynamic_cast<MovDemuxer*>(demuxer) != nullptr))
                     dvFilter->setLayerPicture(dvLayer::picture());
                 // If the file was written as profile 8.1 its RPUs were converted, and the disc's
                 // own are attached beside them. Load them now, before anything is written, so a

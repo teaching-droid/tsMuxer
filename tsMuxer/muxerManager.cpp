@@ -1120,6 +1120,7 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     // -1), and for each such track the times of its pictures that are kept around the cut
     std::map<int, int> trackOfLayer;
     std::map<int, int> layerOfTrack;
+    std::map<int, int> askedForLayer;
     std::map<int, std::set<int64_t>> keptAround;
     std::set<int> mutedByCut;            // --cut-start: the video streams that gave pictures, none of them kept
     std::map<int, int64_t> lastPicture;  // --cut-start: per video stream, the time of its last picture, and
@@ -1245,11 +1246,16 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
                 // The layer of a track is handed on some pictures after the track (its pictures are put in the order
                 // they are shown in first), so at a cut near the start it has given no packet when the track ends:
                 // the mux ended there, and the layer was empty. It is waited for from the first packet of its track.
+                // (asked again for the first packets of a track: whether a layer is made is known only when the
+                // first RPU of the track has been read)
                 auto layer = layerOfTrack.find(avPacket.stream_index);
                 if (layer == layerOfTrack.end())
-                    layer = layerOfTrack
-                                .emplace(avPacket.stream_index, m_metaDemuxer.madeLayerOfTrack(avPacket.stream_index))
-                                .first;
+                    layer = layerOfTrack.emplace(avPacket.stream_index, -1).first;
+                if (layer->second < 0 && askedForLayer[avPacket.stream_index] < 64)
+                {
+                    ++askedForLayer[avPacket.stream_index];
+                    layer->second = m_metaDemuxer.madeLayerOfTrack(avPacket.stream_index);
+                }
                 if (layer->second >= 0)
                 {
                     withPackets.insert(layer->second);
