@@ -45,6 +45,9 @@ class VVCStreamReader final : public MPEGStreamReader
     void incTimings();
     int toFullPicOrder(const VvcSliceHeader* slice, int pic_bits);
     int placesOfLeadingPictures(uint8_t* nal, uint8_t* end) const;
+    // The depth incTimings will find in the period that begins at this picture (an IDR picture, or the IRAP picture
+    // that begins the stream), from the pictures after it; -1 when more data is needed and can come
+    int depthOfPeriod(uint8_t* nal, uint8_t* end, int firstLsb) const;
     static void storeBuffer(MemoryBlock& dst, const uint8_t* data, const uint8_t* dataEnd);
     uint8_t* writeBuffer(MemoryBlock& srcData, uint8_t* dstBuffer, const uint8_t* dstEnd) const;
     uint8_t* writeNalPrefix(uint8_t* curPos) const;

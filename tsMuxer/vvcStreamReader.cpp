@@ -482,6 +482,63 @@ int VVCStreamReader::periodStart() const
 // many places before it as its order count is below the IDR picture's (the slice header read last). Counted up to the
 // first picture that is not a leading picture. Returns -1 when more data is needed and can come; it is read no further
 // than 32 MiB past the picture.
+// The depth incTimings will find in the period that begins at this picture, from the pictures after it: up to 65 of
+// them (a group of 32 B pictures and its leading pictures) or the next IDR picture, whichever comes first, read no
+// further than 32 MiB past the picture. As HEVCStreamReader::depthOfPeriod; a picture begins at its picture header
+// unit or at a slice that carries its picture header, as in placesOfLeadingPictures.
+int VVCStreamReader::depthOfPeriod(uint8_t* nal, uint8_t* end, const int firstLsb) const
+{
+    static constexpr int MAX_PICTURES = 65;
+    static constexpr std::ptrdiff_t MAX_AHEAD = 32 * 1024 * 1024;
+    const int range = 1 << m_sps->log2_max_pic_order_cnt_lsb;
+    VvcSliceHeader header;
+    int prevLsb = firstLsb;
+    int order = 0;  // the order count from this picture's, as toFullPicOrder steps it
+    int pictures = 0;
+    int depth = 0;
+    bool phPending = false;
+    int phLsb = 0;
+    for (uint8_t* cur = NALUnit::findNextNAL(nal, end); cur < end - 4; cur = NALUnit::findNextNAL(cur, end))
+    {
+        if ((cur[0] & 0x3f) != 0)
+            continue;  // a unit of a layer above the base layer
+        const auto type = static_cast<VvcUnit::NalType>(cur[1] >> 3);
+        const bool phUnit = type == VvcUnit::NalType::PH;
+        const bool phInSlice = isSlice(type) && (cur[2] & 0x80);
+        if (!phUnit && !(isSlice(type) && (phInSlice || phPending)))
+            continue;  // not a picture header, nor the first slice of a picture
+        if (isSlice(type) && (type == VvcUnit::NalType::IDR_W_RADL || type == VvcUnit::NalType::IDR_N_LP))
+            return depth;  // the next period
+        uint8_t* next = NALUnit::findNALWithStartCode(cur, end, true);
+        if (next == end && !m_eof && cur - nal < MAX_AHEAD)
+            return -1;
+        header.decodeBuffer(cur, FFMIN(cur + MAX_SLICE_HEADER, next));
+        if (phUnit)
+        {
+            if (header.deserializePictureHeader(m_sps) != 0)
+                return depth;
+            phLsb = static_cast<int>(header.pic_order_cnt_lsb);
+            phPending = true;
+            continue;
+        }
+        if (phInSlice && header.deserialize(m_sps, m_pps) != 0)
+            return depth;
+        const int lsb = phInSlice ? static_cast<int>(header.pic_order_cnt_lsb) : phLsb;
+        int diff = lsb - prevLsb;
+        if (diff <= -range / 2)
+            diff += range;
+        else if (diff >= range / 2)
+            diff -= range;
+        prevLsb = lsb;
+        order += diff;
+        depth = (std::max)(depth, ++pictures - order);
+        phPending = false;
+        if (pictures >= MAX_PICTURES)
+            return depth;
+    }
+    return m_eof || end - nal >= MAX_AHEAD ? depth : -1;
+}
+
 int VVCStreamReader::placesOfLeadingPictures(uint8_t* nal, uint8_t* end) const
 {
     static constexpr std::ptrdiff_t MAX_AHEAD = 32 * 1024 * 1024;
@@ -668,6 +725,30 @@ int VVCStreamReader::intDecodeNAL(uint8_t* buff)
                         if (places == -1)
                             return NOT_ENOUGH_BUFFER;
                         m_restartLeading = places;
+                    }
+                    // ** THE DEPTH OF A PERIOD IS READ AHEAD. ** The depth of the decoding times was found only at
+                    // the picture that needs it, and a deeper one moved the decoding time of that picture back behind
+                    // the times already given: on a stream of an encoder with groups of 16 and 32 B pictures, whose
+                    // pictures were too large for the first look at the file to reach them, the decoding times went
+                    // back 7, 4, 2 and 1 picture at its start, and 15, 8, 4, 2 and 1 at a later deeper period. As in
+                    // the HEVC reader, the period is read ahead from an IDR picture and from the IRAP picture that
+                    // begins the stream, and the decoding times catch up over the first pictures (deepenAfterOutput).
+                    if (m_slice->isIDR() || (!m_picOrderStarted && irap))
+                    {
+                        int ahead = depthOfPeriod(curPos, m_bufEnd, static_cast<int>(m_slice->pic_order_cnt_lsb));
+                        if (ahead == -1)
+                            return NOT_ENOUGH_BUFFER;
+                        // the period begins before the count by the pictures shown before the start (periodStart)
+                        ahead += (std::max)(0, m_frameNum - periodStart()) - m_restartLeading;
+                        if (ahead > m_frameDepth)
+                        {
+                            const int depthBefore = m_frameDepth;
+                            m_frameDepth = ahead;
+                            LTRACE(LT_INFO, 2,
+                                   "B-pyramid level " << m_frameDepth - 1 << " detected. Shift DTS to " << m_frameDepth
+                                                      << " frames");
+                            deepenAfterOutput(depthBefore);
+                        }
                     }
                     m_fullPicOrder = toFullPicOrder(m_slice, m_sps->log2_max_pic_order_cnt_lsb);
                 }
