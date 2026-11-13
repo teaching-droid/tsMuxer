@@ -1,7 +1,9 @@
 // Largely rewritten by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer).
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "tsDemuxer.h"
+
 #include "opusStreamReader.h"
+#include "subTrackFilter.h"
 
 #include "textstParser.h"
 
@@ -1456,6 +1458,14 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         for (const int acceptedPID : acceptedPIDs)
             if (acceptedPID >= 0 && acceptedPID < 8192)
                 m_acceptedPidCache[acceptedPID] = 1;
+        // a track with a filter is taken for its sub tracks, whose numbers are above those of a PID
+        for (const auto& [filterPid, filter] : m_pidFilters)
+            if (filterPid >= 0 && filterPid < 8192)
+            {
+                m_acceptedPidCache[filterPid] = 1;
+                m_filterOfPid.resize(8192, nullptr);
+                m_filterOfPid[filterPid] = filter;
+            }
         m_firstDemuxCall = false;
         // The mux reads a file without listing it first: the tracks of a file without a PAT are found here as the
         // listing finds them (getTrackList), so a meta line that names one is read as the listing read it. Only where
@@ -1470,6 +1480,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     int lastPid = -1;
 
     for (int acceptedPID : acceptedPIDs) demuxedData[acceptedPID];
+    m_acceptedPids = &acceptedPIDs;
 
     discardSize = 0;
     uint32_t readedBytes;
@@ -1542,6 +1553,21 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
                     convertDvbSubtitlePes(pid, sub, demuxedData, true, discardSize);
             m_lastReadRez = readRez;
             return 0;
+        }
+        // what a filter still holds (the last pictures of a made Dolby Vision layer), once
+        if (!m_filtersFlushed)
+        {
+            m_filtersFlushed = true;
+            for (const auto& [filterPid, filter] : m_pidFilters)
+            {
+                filter->flush(demuxedData, acceptedPIDs);
+                discardSize += filter->takeReframedBytes();
+            }
+            if (!m_pidFilters.empty())
+            {
+                m_lastReadRez = readRez;
+                return 0;
+            }
         }
         m_lastReadRez = readRez;
         reportDamage();
@@ -2181,6 +2207,23 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
                 LTRACE(LT_WARN, 2,
                        "Warning: track " << pid << " of \"" << m_streamName << "\" is AAC in LATM, and "
                                          << latm.problem() << ". The track gives no sound.");
+        }
+        else if (payloadLen > skip && !m_filterOfPid.empty() && m_filterOfPid[pid] != nullptr &&
+                 m_acceptedPids != nullptr)
+        {
+            // a track with a filter: the filter hands on what it makes of the bytes, to the sub tracks. What it
+            // handed on is what counts as read from the file; the rest it still holds or has left out.
+            AVPacket piece;
+            piece.data = frameData + skip;
+            piece.size = static_cast<int32_t>(payloadLen - skip);
+            piece.pts = piece.dts = AV_NOPTS_VALUE_INTERNAL;
+            SubTrackFilter* filter = m_filterOfPid[pid];
+            const int counted = filter->demuxPacket(demuxedData, *m_acceptedPids, piece);
+            discardSize -= counted - filter->takeReframedBytes();
+            // the buffers of the sub tracks may have been made just now
+            vect = nullptr;
+            lastPid = -1;
+            return;
         }
         else if (vect != nullptr && payloadLen > skip)
         {

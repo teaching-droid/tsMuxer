@@ -1676,7 +1676,8 @@ VideoAspectRatio arNameToCode(const string& arName);  // below, with createCodec
 // two layers. A track of profile 8, which has the Dolby Vision data inside its one stream, was written to a disc as
 // it is, with a warning that it plays as HDR10 only. Its second layer is made now (HevcDolbyVisionFilter): the line
 // of the track becomes the two lines a dual layer track is given on, subTrack=1 and subTrack=2. What it needs: a
-// Matroska or MP4 source, a picture of 3840x2160 whose base is HDR10, the Dolby Vision library for the RPUs, and the
+// Matroska, MP4 or transport stream source, a picture of 3840x2160 whose base is HDR10, the Dolby Vision library
+// for the RPUs, and the
 // one picture the layer is written with (given with --dv-layer-picture, or made by an ffmpeg the user has). Where one
 // of them is missing the track is written as before, and a line says what was missing.
 bool METADemuxer::addDvLayers(const string& codec, const string& lineStreamName, const map<string, string>& addParams)
@@ -1692,7 +1693,8 @@ bool METADemuxer::addDvLayers(const string& codec, const string& lineStreamName,
     const string file = unquoteStr(trimStr(files[0]));
     const string ext = strToLowerCase(extractFileExt(file));
     // the containers whose reader hands a track to the filter that makes the layer
-    if (ext != "mkv" && ext != "mk3d" && ext != "mp4" && ext != "m4v" && ext != "mov")
+    if (ext != "mkv" && ext != "mk3d" && ext != "mp4" && ext != "m4v" && ext != "mov" && ext != "ts" && ext != "m2ts" &&
+        ext != "mts" && ext != "m2t")
         return false;
     const int track = strToInt32(addParams.find("track")->second.c_str());
     // The file is looked at here only to tell what the track is. What the look says or sets is of no concern to the
@@ -4355,10 +4357,11 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
                         {
                             const string kind = strToLowerCase(extractFileExt(unquoted));
                             // the containers a second layer can be made from, as addStream gives the filter its
-                            // picture: Matroska and MP4
+                            // picture: Matroska, MP4 and a transport stream
                             probeSubTrack(vect.data(), vect.size(), subTrackNo, dd,
                                           kind == "mkv" || kind == "mk3d" || kind == "webm" || kind == "mka" ||
-                                              kind == "mp4" || kind == "m4v" || kind == "mov");
+                                              kind == "mp4" || kind == "m4v" || kind == "mov" || kind == "ts" ||
+                                              kind == "m2ts" || kind == "mts" || kind == "m2t");
                         }
                         // Restore codec-private from container
                         if (dd.codecPrivate.empty() && cp && cpSize > 0)
@@ -7137,7 +7140,10 @@ bool ContainerToReaderWrapper::openStream(int readerID, const char* streamName, 
 
     if (SubTrackFilter::isSubTrack(pid))
     {
-        if (!demuxer || !demuxer->isPidFilterSupported())
+        // of a transport stream only an HEVC track: its filter puts the pieces a transport stream comes in together
+        // to whole pictures, and the filter of H.264 does not
+        if (!demuxer || !demuxer->isPidFilterSupported() ||
+            (dynamic_cast<TSDemuxer*>(demuxer) != nullptr && codecInfo->codecID != CODEC_V_MPEG4_H265))
             THROW(ERR_INVALID_CODEC_FORMAT, "Unsupported parameter subTrack for format " << extractFileExt(streamName))
         int srcPID = pid >> 16;
         if (demuxer->getPidFilter(srcPID) == nullptr)
@@ -7150,8 +7156,13 @@ bool ContainerToReaderWrapper::openStream(int readerID, const char* streamName, 
                 // enhancement layer. subTrack=1 is the base layer, subTrack=2 the enhancement.
                 auto dvFilter = new HevcDolbyVisionFilter(srcPID);
                 // a picture to make the second layer of a single layer track of. From a Matroska or an MP4 file,
-                // whose readers hand the filter whole pictures and say when the file has ended.
-                if (dynamic_cast<MatroskaDemuxer*>(demuxer) != nullptr || dynamic_cast<MovDemuxer*>(demuxer) != nullptr)
+                // whose readers hand the filter whole pictures and say when the file has ended, and from a
+                // transport stream, whose reader hands it pieces.
+                const bool pieces = dynamic_cast<TSDemuxer*>(demuxer) != nullptr;
+                if (pieces)
+                    dvFilter->setPieces();
+                if (pieces || dynamic_cast<MatroskaDemuxer*>(demuxer) != nullptr ||
+                    dynamic_cast<MovDemuxer*>(demuxer) != nullptr)
                     dvFilter->setLayerPicture(dvLayer::picture());
                 // If the file was written as profile 8.1 its RPUs were converted, and the disc's
                 // own are attached beside them. Load them now, before anything is written, so a

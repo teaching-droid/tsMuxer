@@ -40,6 +40,7 @@ class TSDemuxer final : public AbstractDemuxer
     // The dialog style segment of a text subtitle track, as far as the file has been read; empty when there is none
     [[nodiscard]] std::vector<uint8_t> textStStyle(int pid) const;
     void setFileIterator(FileNameIterator* itr) override;
+    [[nodiscard]] bool isPidFilterSupported() const override { return true; }
     int64_t getTrackDelay(const int32_t pid) override
     {
         // The delay of a stream is measured from the FIRST timestamp seen for it, not its smallest one. Of the sound
@@ -377,6 +378,16 @@ class TSDemuxer final : public AbstractDemuxer
 
     // cache to improve speed
     uint8_t m_acceptedPidCache[8192];
+    // ** A TRACK OF A TRANSPORT STREAM CAN HAVE A FILTER. ** The filter that makes the second layer of a single
+    // layer Dolby Vision track (HevcDolbyVisionFilter) could be given to a Matroska or an MP4 reader only. The
+    // payload of a track with a filter goes to the filter in place of the track's buffer, the track is taken though
+    // only its sub tracks are asked for, and the filters are told when the file has ended.
+    // By PID; empty while no track has a filter. Not an array in the object: a reader is also made on the stack,
+    // one inside the call of another (the looks at a file before it is muxed), and with a table of 64 KB more in
+    // each of them the stack of a Windows program (1 MB) ran out: the program ended without a word.
+    std::vector<SubTrackFilter*> m_filterOfPid;
+    bool m_filtersFlushed = false;
+    const PIDSet* m_acceptedPids = nullptr;  // of the call of simpleDemuxBlock that is running
     // AAC in LATM (stream type 0x11), turned into ADTS for the AAC reader (latm.h): 0 not looked at yet, 1 not LATM,
     // 2 LATM; the converter of each such PID, and whether its problem has been said
     uint8_t m_latmPid[8192]{};

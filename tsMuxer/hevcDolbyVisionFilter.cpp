@@ -107,8 +107,79 @@ int64_t HevcDolbyVisionFilter::emit(const int streamIndex, const uint8_t* data, 
     return 0;
 }
 
+size_t HevcDolbyVisionFilter::wholePictures()
+{
+    const uint8_t* d = m_pending.data();
+    const size_t n = m_pending.size();
+    size_t whole = 0;
+    size_t pos = m_scanPos;
+    // each start code from where the last search ended; only the new bytes are looked at
+    while (pos + 3 <= n)
+    {
+        size_t s = pos;
+        while (s + 3 <= n && !(d[s] == 0 && d[s + 1] == 0 && d[s + 2] == 1)) ++s;
+        if (s + 3 > n)
+        {
+            pos = n - 2;  // the last two bytes can be the start of a start code
+            break;
+        }
+        if (s + 6 > n)
+        {
+            pos = s;  // the two bytes of the NAL header and the byte after them are not here yet
+            break;
+        }
+        const int type = (d[s + 3] >> 1) & 0x3F;
+        const bool slice = type < 32;
+        // what a picture can begin with, once the one before has given a slice (H.265, 7.4.2.4.4)
+        const bool begins = type == static_cast<int>(HevcUnit::NalType::AUD) || (type >= 32 && type <= 34) ||
+                            type == 39 || (type >= 41 && type <= 44) || (type >= 48 && type <= 55) ||
+                            (slice && (d[s + 5] & 0x80) != 0);
+        if (m_seenSlice && begins)
+        {
+            whole = s > 0 && d[s - 1] == 0 ? s - 1 : s;  // with the zero byte of a four byte start code
+            m_seenSlice = false;
+        }
+        if (slice)
+            m_seenSlice = true;
+        pos = s + 3;
+    }
+    m_scanPos = pos;
+    return whole;
+}
+
+int HevcDolbyVisionFilter::handOnWhole(DemuxedData& demuxedData, const PIDSet& acceptedPIDs, const size_t size)
+{
+    AVPacket pictures;
+    pictures.data = m_pending.data();
+    pictures.size = static_cast<int32_t>(size);
+    pictures.pts = pictures.dts = AV_NOPTS_VALUE_INTERNAL;
+    struct WholeNow
+    {
+        bool& flag;
+        explicit WholeNow(bool& f) : flag(f) { flag = true; }
+        ~WholeNow() { flag = false; }
+        WholeNow(const WholeNow&) = delete;
+        WholeNow& operator=(const WholeNow&) = delete;
+    };
+    int counted = 0;
+    {
+        const WholeNow whole(m_wholeNow);
+        counted = demuxPacket(demuxedData, acceptedPIDs, pictures);
+    }
+    m_pending.erase(m_pending.begin(), m_pending.begin() + static_cast<std::ptrdiff_t>(size));
+    m_scanPos = m_scanPos > size ? m_scanPos - size : 0;
+    return counted;
+}
+
 int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& acceptedPIDs, AVPacket& avPacket)
 {
+    // pieces of a transport stream: gathered until they are whole pictures (setPieces)
+    if (m_pieces && !m_wholeNow)
+    {
+        m_pending.insert(m_pending.end(), avPacket.data, avPacket.data + avPacket.size);
+        const size_t whole = wholePictures();
+        return whole > 0 ? handOnWhole(demuxedData, acceptedPIDs, whole) : 0;
+    }
     if (m_firstDemuxCall)
     {
         fillPids(acceptedPIDs, m_srcPID);
@@ -543,8 +614,12 @@ int HevcDolbyVisionFilter::demuxMade(DemuxedData& demuxedData, AVPacket& avPacke
     return counted;
 }
 
-void HevcDolbyVisionFilter::flush(DemuxedData& demuxedData, const PIDSet& /*acceptedPIDs*/)
+void HevcDolbyVisionFilter::flush(DemuxedData& demuxedData, const PIDSet& acceptedPIDs)
 {
+    // the last picture of a source that comes in pieces: nothing follows it to say that it is whole. What it gives
+    // is counted as handed on beyond what was read, as the pictures held below are.
+    if (m_pieces && !m_pending.empty())
+        m_reframed -= handOnWhole(demuxedData, acceptedPIDs, m_pending.size());
     if (m_kind != Kind::made)
         return;
     m_reframed -= handOnHeld(demuxedData, 0);

@@ -71,6 +71,13 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
     // header (placeOf), which is what the HEVC reader times the picture of the track by. So the layer is made the
     // same way from every container, and it stands where the reader puts the pictures.
     void setLayerPicture(const std::vector<uint8_t>& picture) { m_layerPicture = picture; }
+    // ** WHOLE PICTURES FROM THE PIECES OF A TRANSPORT STREAM. ** A Matroska or MP4 reader hands the filter whole
+    // pictures. A transport stream reader hands on what one packet of 188 bytes carries, wherever in a picture
+    // that is, so the filter could not be used with it, and a single layer Dolby Vision track of a transport stream
+    // got no second layer. Told so here, the filter gathers the pieces and works on whole pictures: a picture is
+    // whole when the next one begins (an access unit delimiter, a parameter set, a prefix SEI or the first slice of
+    // a picture, after a slice), and the last one when the file has ended (flush).
+    void setPieces() { m_pieces = true; }
     [[nodiscard]] bool makesLayer() const override { return m_kind == Kind::made; }
     [[nodiscard]] int64_t picturesMade() const { return m_made; }
 
@@ -139,6 +146,17 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
         false;  // a step far smaller than the usual one was met: the steps say nothing of missing pictures
     int64_t stepsBefore(int64_t time);
     int demuxMade(DemuxedData& demuxedData, AVPacket& avPacket);
+    // pieces (setPieces): the bytes not yet handed on, how far they were searched for start codes, and whether a
+    // slice was met since the last picture began
+    bool m_pieces = false;
+    bool m_wholeNow = false;  // demuxPacket is running on whole pictures put together from pieces
+    std::vector<uint8_t> m_pending;
+    size_t m_scanPos = 0;
+    bool m_seenSlice = false;
+    // How many of the first bytes of m_pending are whole pictures: up to where the last picture found begins
+    size_t wholePictures();
+    // Runs demuxPacket on the first `size` bytes of m_pending and takes them out of it; what demuxPacket returns
+    int handOnWhole(DemuxedData& demuxedData, const PIDSet& acceptedPIDs, size_t size);
     // The places of the pictures of a packet, in the order they are in it (placeOf), with the parameter sets of the
     // packet taken first; and the place of its first key picture, or AV_NOPTS_VALUE_INTERNAL
     std::vector<int64_t> placesIn(uint8_t* data, uint8_t* dataEnd, int64_t& firstKey);
