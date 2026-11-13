@@ -106,6 +106,7 @@ void PGSStreamReader::composition_object(BitStreamReader& bitReader)
     bitReader.skipBits(8);  // window_id_ref
     placed.cropped = bitReader.getBit();
     m_forced_on_flag = bitReader.getBit();
+    placed.forced = m_forced_on_flag;
     bitReader.skipBits(6);
     placed.x = bitReader.getBits<uint16_t>(16);
     placed.y = bitReader.getBits<uint16_t>(16);
@@ -289,12 +290,14 @@ void PGSStreamReader::readObjectDef(const uint8_t* pos, const uint8_t* end)
 
 // The picture of the display set, of the objects its PCS shows: each at its place, and of a cropped object only the
 // part the PCS gives (the cropping was not read, and the whole object was drawn). False when it shows none.
-bool PGSStreamReader::composeDisplaySet()
+bool PGSStreamReader::composeDisplaySet(const int which)
 {
     bool drawn = false;
     std::vector<uint8_t> whole;
     for (const PgsPlacedObject& placed : m_dsObjects)
     {
+        if ((which == 1 && !placed.forced) || (which == 2 && placed.forced))
+            continue;
         const auto found = m_objects.find(placed.id);
         if (found == m_objects.end() || found->second.rle.empty())
             continue;
@@ -345,40 +348,190 @@ void PGSStreamReader::renderDisplaySet()
 {
     m_dsOpen = false;
     const size_t size = static_cast<size_t>(m_video_width) * m_video_height;
-    memset(m_imgBuffer, 0xff, size);
-    memset(m_rgbBuffer, 0x00, size * 4);
-    memset(m_scaledRgbBuffer, 0x00, static_cast<size_t>(m_scaled_width) * m_scaled_height * 4);
-    m_dsDrawn = composeDisplaySet();
+    // ** forced-pictures ON A LINE THAT IS DRAWN AGAIN. ** The filter of the forced pictures works on the segments of
+    // the source, which a stream drawn at another size does not hand on: the line gave the whole track. With it, only
+    // the forced objects of a set are drawn, and a set without one clears what the set before showed.
+    const int which = m_forcedOnly ? 1 : 0;
+    const auto draw = [&](const int part)
+    {
+        memset(m_imgBuffer, 0xff, size);
+        memset(m_rgbBuffer, 0x00, size * 4);
+        memset(m_scaledRgbBuffer, 0x00, static_cast<size_t>(m_scaled_width) * m_scaled_height * 4);
+        return composeDisplaySet(part);
+    };
+    m_dsDrawn = draw(which);
     if (m_dsDrawn)
     {
-        // the same picture in the same colours, shown again without object data: it stays on the screen as it is
-        if (!m_dsHasObjectData && m_pictureShown && m_palette == m_shownPalette && m_shownPicture.size() == size &&
-            memcmp(m_shownPicture.data(), m_imgBuffer, size) == 0)
+        // the same picture in the same colours, shown again without object data: it stays on the screen as it is.
+        // So does the forced part of a set whose other object changed, where the forced pictures alone are drawn.
+        if ((!m_dsHasObjectData || which == 1) && m_pictureShown && m_palette == m_shownPalette &&
+            m_shownPicture.size() == size && memcmp(m_shownPicture.data(), m_imgBuffer, size) == 0)
             return;
         m_shownPicture.assign(m_imgBuffer, m_imgBuffer + size);
         m_shownPalette = m_palette;
-        yuvToRgb(m_fontBorder ? Y_THRESHOLD : 0);
-        BitmapInfo bmpDest;
-        BitmapInfo bmpRef;
-
-        bmpRef.buffer = reinterpret_cast<RGBQUAD*>(m_rgbBuffer);
-        bmpRef.Width = m_video_width;
-        bmpRef.Height = m_video_height;
-        bmpDest.buffer = reinterpret_cast<RGBQUAD*>(m_scaledRgbBuffer);
-        bmpDest.Width = m_scaled_width;
-        bmpDest.Height = m_scaled_height;
-
-        rescaleRGB(&bmpDest, &bmpRef);
-        if (m_fontBorder)
-            TextSubtitlesRender::addBorder(m_fontBorder, m_scaledRgbBuffer, m_scaled_width, m_scaled_height);
+        // ** A FORCED OBJECT AND ANOTHER IN ONE SET STAY TWO OBJECTS. ** The set was drawn as one picture and written
+        // as one object, marked as forced where one of its objects was: a player that shows the forced subtitles
+        // alone showed the other object with them, and the forced track a Matroska output and a demux write beside
+        // the track held the other objects too. Each of the two is drawn by itself and written as an object in a
+        // window of its own, with its own mark. Where that cannot be (the two touch after scaling), one object as
+        // before.
+        bool forcedOne = false, otherOne = false;
+        for (const PgsPlacedObject& placed : m_dsObjects)
+            if (const auto found = m_objects.find(placed.id); found != m_objects.end() && !found->second.rle.empty())
+                (placed.forced ? forcedOne : otherOne) = true;
+        if (which == 0 && forcedOne && otherOne)
+        {
+            if (renderTwoObjects(m_dsTime))
+            {
+                m_pictureShown = true;
+                return;
+            }
+            draw(0);
+        }
+        scaleDrawn();
         renderTextShow(m_dsTime);
         m_pictureShown = true;
     }
-    else if (m_dsClears && m_pictureShown)
+    else if ((m_dsClears || m_forcedOnly) && m_pictureShown)
     {
         renderTextHide(m_dsTime);
         m_pictureShown = false;
     }
+}
+
+// The picture drawn at the size of the source (m_imgBuffer), in colours and at the size of the output
+void PGSStreamReader::scaleDrawn()
+{
+    yuvToRgb(m_fontBorder ? Y_THRESHOLD : 0);
+    BitmapInfo bmpDest;
+    BitmapInfo bmpRef;
+
+    bmpRef.buffer = reinterpret_cast<RGBQUAD*>(m_rgbBuffer);
+    bmpRef.Width = m_video_width;
+    bmpRef.Height = m_video_height;
+    bmpDest.buffer = reinterpret_cast<RGBQUAD*>(m_scaledRgbBuffer);
+    bmpDest.Width = m_scaled_width;
+    bmpDest.Height = m_scaled_height;
+
+    rescaleRGB(&bmpDest, &bmpRef);
+    if (m_fontBorder)
+        TextSubtitlesRender::addBorder(m_fontBorder, m_scaledRgbBuffer, m_scaled_width, m_scaled_height);
+}
+
+// The forced object of the set and the other one, each drawn by itself, packed with one palette for both, and written
+// as two objects in two windows (see renderDisplaySet). False where they cannot be two: one of them draws nothing at
+// the size of the output, or their boxes touch there, which two windows must not.
+bool PGSStreamReader::renderTwoObjects(const int64_t inTime)
+{
+    using Placed = TextToPGSConverter::PlacedObject;
+    const size_t size = static_cast<size_t>(m_video_width) * m_video_height;
+    const size_t scaledBytes = static_cast<size_t>(m_scaled_width) * m_scaled_height * 4;
+    std::vector<uint8_t> pictures[2];
+    for (int part = 0; part < 2; ++part)
+    {
+        memset(m_imgBuffer, 0xff, size);
+        memset(m_rgbBuffer, 0x00, size * 4);
+        memset(m_scaledRgbBuffer, 0x00, scaledBytes);
+        if (!composeDisplaySet(part + 1))
+            return false;
+        scaleDrawn();
+        pictures[part].assign(m_scaledRgbBuffer, m_scaledRgbBuffer + scaledBytes);
+    }
+    // one palette for both objects: the colours of both are reduced together until they fit it
+    std::vector<Placed> objects(2);
+    std::vector<uint8_t> packed[2];
+    uint32_t mask = 0;
+    bool fits = false;
+    for (int step = 0; step < 64 && !fits; ++step)
+    {
+        fits = true;
+        for (int part = 0; part < 2 && fits; ++part)
+        {
+            m_render->setImageBuffer(pictures[part].data());
+            fits = m_render->rlePack(mask, part == 1);
+            if (!fits)
+                break;
+            if (m_render->m_rleLen == 0)
+            {
+                m_render->setImageBuffer(m_scaledRgbBuffer);
+                return false;  // nothing of it is left at this size
+            }
+            objects[part].top = m_render->padToLeastHeight(m_render->minLine());
+            objects[part].height = static_cast<uint16_t>(FFMAX(8, m_render->renderedHeight()));
+            objects[part].left = m_render->m_objectLeft;
+            objects[part].width = m_render->m_objectWidth;
+            objects[part].forced = part == 0;
+            m_render->takePacked(packed[part]);
+        }
+        if (!fits)
+        {
+            // reduce colors, as renderTextShow does
+            const auto tmp = reinterpret_cast<uint8_t*>(&mask);
+            const int idx = step % 4;
+            tmp[idx] <<= 1;
+            tmp[idx]++;
+        }
+    }
+    m_render->setImageBuffer(m_scaledRgbBuffer);
+    if (!fits)
+        return false;
+    const Placed& a = objects[0];
+    const Placed& b = objects[1];
+    const bool apart = a.left + a.width <= b.left || b.left + b.width <= a.left || a.top + a.height <= b.top ||
+                       b.top + b.height <= a.top;
+    const size_t room = static_cast<size_t>(m_scaled_width + 16) * m_scaled_height + 16384;
+    if (!apart || packed[0].size() + packed[1].size() + 4096 > room)
+        return false;
+
+    m_renderedBlocks.clear();
+    m_firstRenderedPacket = true;
+    m_twoWindows = objects;
+    // The times, as renderTextShow has them for one object: the plane is cleared while the first object is decoded,
+    // the second is decoded after the first, and the windows are drawn one after the other.
+    const double pixels[2] = {static_cast<double>(a.width) * a.height, static_cast<double>(b.width) * b.height};
+    const int64_t decodeTime[2] = {TextToPGSConverter::objectDecodeTime(pixels[0]),
+                                   TextToPGSConverter::objectDecodeTime(pixels[1])};
+    const int64_t drawTime =
+        TextToPGSConverter::windowDrawTime(pixels[0]) + TextToPGSConverter::windowDrawTime(pixels[1]);
+    const int64_t decodeDuration =
+        FFMAX(TextToPGSConverter::windowDrawTime(static_cast<double>(m_scaled_width) * m_scaled_height),
+              decodeTime[0] + decodeTime[1]) +
+        drawTime;
+    int64_t pts = gridTime(inTime);
+    int64_t dts = pts - decodeDuration;
+    if (m_demuxMode && dts < 1)
+    {
+        pts += 1 - dts;
+        dts = 1;
+    }
+    keepSetOrder(pts, dts, drawTime);
+    const int64_t firstDone = dts + decodeTime[0];
+    const int64_t bothDone = firstDone + decodeTime[1];
+    m_setWritten = true;
+    m_lastSetPts = pts;
+    m_lastSetEndDts = bothDone;
+
+    uint8_t* curPos = m_renderedData;
+    int rLen = m_render->composePresentationSegment(curPos, CompositionMode::Start, pts, dts, objects, m_demuxMode);
+    m_renderedBlocks.emplace_back(pts, dts, rLen, curPos);
+    curPos += rLen;
+    rLen = m_render->composeWindowDefinition(curPos, pts - drawTime, dts, objects, m_demuxMode);
+    m_renderedBlocks.emplace_back(pts - drawTime, dts, rLen, curPos);
+    curPos += rLen;
+    rLen = m_render->composePaletteDefinition(m_render->m_paletteByColor, curPos, dts, dts, m_demuxMode);
+    m_renderedBlocks.emplace_back(dts, dts, rLen, curPos);
+    curPos += rLen;
+    m_render->givePacked(packed[0], a.width);
+    rLen = m_render->composeObjectDefinition(curPos, firstDone, dts, 0, a.height - 1, m_demuxMode, 0);
+    m_renderedBlocks.emplace_back(firstDone, dts, rLen, curPos);
+    curPos += rLen;
+    m_render->givePacked(packed[1], b.width);
+    rLen = m_render->composeObjectDefinition(curPos, bothDone, firstDone, 0, b.height - 1, m_demuxMode, 1);
+    m_renderedBlocks.emplace_back(bothDone, firstDone, rLen, curPos);
+    curPos += rLen;
+    rLen = m_render->composeEnd(curPos, bothDone, bothDone, m_demuxMode);
+    m_renderedBlocks.emplace_back(bothDone, bothDone, rLen, curPos);
+    return true;
 }
 
 // The time of a display set on the frame grid of the video, in 90 kHz ticks: rounded to the nearest frame as
@@ -476,6 +629,7 @@ void PGSStreamReader::renderTextShow(int64_t inTime)
 {
     m_renderedBlocks.clear();
     m_firstRenderedPacket = true;
+    m_twoWindows.clear();
 
     uint32_t mask = 0;
     int step = 0;
@@ -547,9 +701,15 @@ void PGSStreamReader::renderTextShow(int64_t inTime)
 void PGSStreamReader::renderTextHide(int64_t outTime)
 {
     // The clear takes the drawing of the window and one tick, and ends at its decoding time, as the clear of a drawn
-    // text does. It was decoded 90 ticks before that.
-    const int64_t drawTime =
+    // text does. It was decoded 90 ticks before that. A set of two objects is cleared with its two windows.
+    int64_t drawTime =
         TextToPGSConverter::windowDrawTime(static_cast<double>(m_objectWindowHeight) * m_objectWindowWidth);
+    if (!m_twoWindows.empty())
+    {
+        drawTime = 0;
+        for (const auto& window : m_twoWindows)
+            drawTime += TextToPGSConverter::windowDrawTime(static_cast<double>(window.width) * window.height);
+    }
     int64_t pts = gridTime(outTime);
     int64_t dts = pts - drawTime - 1;
     if (m_demuxMode && dts < 1)
@@ -565,12 +725,17 @@ void PGSStreamReader::renderTextHide(int64_t outTime)
     m_firstRenderedPacket = true;
     m_renderedBlocks.clear();
     uint8_t* curPos = m_renderedData;
-    int rLen = m_render->composePresentationSegment(curPos, CompositionMode::Finish, pts, dts, m_objectWindowLeft,
-                                                    m_objectWindowTop, m_demuxMode, false);
+    int rLen = m_twoWindows.empty()
+                   ? m_render->composePresentationSegment(curPos, CompositionMode::Finish, pts, dts, m_objectWindowLeft,
+                                                          m_objectWindowTop, m_demuxMode, false)
+                   : m_render->composePresentationSegment(curPos, CompositionMode::Finish, pts, dts, m_twoWindows,
+                                                          m_demuxMode);
     m_renderedBlocks.emplace_back(pts, dts, rLen, curPos);
     curPos += rLen;
-    rLen = m_render->composeWindowDefinition(curPos, pts - drawTime, dts, m_objectWindowLeft, m_objectWindowTop,
-                                             m_objectWindowWidth, m_objectWindowHeight, m_demuxMode);
+    rLen = m_twoWindows.empty()
+               ? m_render->composeWindowDefinition(curPos, pts - drawTime, dts, m_objectWindowLeft, m_objectWindowTop,
+                                                   m_objectWindowWidth, m_objectWindowHeight, m_demuxMode)
+               : m_render->composeWindowDefinition(curPos, pts - drawTime, dts, m_twoWindows, m_demuxMode);
     m_renderedBlocks.emplace_back(pts - drawTime, dts, rLen, curPos);
     curPos += rLen;
     rLen = m_render->composeEnd(curPos, dts, dts, m_demuxMode);
@@ -625,7 +790,8 @@ void PGSStreamReader::warnSupDamage()
 // ** forced-pictures: THE FORCED PICTURES ALONE. ** The packets of the source carry its segments, one to a packet, a
 // long one in pieces. Each segment is gathered whole and given to the filter with its times, and the segments the
 // filter writes are handed out in their place, each as a packet (in pieces where it is long), with the times the
-// filter gave them. A stream drawn at another size is not filtered: its packets are the drawn ones.
+// filter gave them. A stream drawn at another size is not filtered here: its packets are the drawn ones, and only its
+// forced objects are drawn (renderDisplaySet).
 int PGSStreamReader::readPacket(AVPacket& avPacket)
 {
     if (!m_forcedOnly || m_needRescale)
@@ -663,6 +829,15 @@ int PGSStreamReader::readPacket(AVPacket& avPacket)
         }
         AVPacket in;
         const int rez = readSourcePacket(in);
+        // The first composition tells whether the stream is drawn at another size, and it is read here: from it on
+        // the packets are the drawn ones, handed on as they are. They were taken for segments of the source and
+        // given to the filter, and the line wrote an empty track.
+        if (m_needRescale)
+        {
+            avPacket = in;
+            m_forcedPacket = false;
+            return rez;
+        }
         if (rez != 0)
             return rez;
         if (in.size <= 0 || in.data == nullptr)

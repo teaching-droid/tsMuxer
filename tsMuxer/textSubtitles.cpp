@@ -274,11 +274,12 @@ void TextToPGSConverter::reduceColors(uint8_t mask) const
     for (; dst < end; ++dst) *dst &= val;
 }
 
-bool TextToPGSConverter::rlePack(const uint32_t colorMask)
+bool TextToPGSConverter::rlePack(const uint32_t colorMask, const bool keepPalette)
 {
     try
     {
-        m_paletteYUV.clear();
+        if (!keepPalette)
+            m_paletteYUV.clear();
         const auto srcData = reinterpret_cast<uint32_t*>(m_textRender ? m_textRender->m_pData : m_imageBuffer);
         assert(srcData);
         m_rleLen = 0;
@@ -803,6 +804,67 @@ long TextToPGSConverter::composePresentationSegment(uint8_t* buff, const Composi
     return static_cast<long>(curPos - buff);
 }
 
+long TextToPGSConverter::composePresentationSegment(uint8_t* buff, const CompositionMode mode, const int64_t pts,
+                                                    const int64_t dts, const std::vector<PlacedObject>& objects,
+                                                    const bool needPgHeader)
+{
+    uint8_t* curPos = buff;
+    if (needPgHeader)
+        curPos += writePGHeader(curPos, pts, dts);
+    *curPos++ = PCS_DEF_SEGMENT;
+    curPos += 2;  // skip length field
+    uint8_t* startPos = curPos;
+
+    curPos += composeVideoDescriptor(curPos);
+    curPos += composeCompositionDescriptor(curPos, m_composition_number++,
+                                           mode == CompositionMode::Start ? EPOTH_START : EPOTH_NORMAL);
+    *curPos++ = static_cast<uint8_t>(palette_update_flag << 7);  // palette_update_flag = 0 and 7 reserved bits
+    *curPos++ = m_paletteID;                                     // paletteID ref
+    const size_t count = mode != CompositionMode::Finish ? objects.size() : 0;
+    *curPos++ = static_cast<uint8_t>(count);  // number_of_composition_objects
+    for (size_t i = 0; i < count; ++i)
+    {
+        *curPos++ = 0;  // objectID ref
+        *curPos++ = static_cast<uint8_t>(i);
+        *curPos++ = static_cast<uint8_t>(i);          // windowID ref
+        *curPos++ = objects[i].forced ? 0x40 : 0x00;  // object_cropped_flag = false, forced_on_flag
+        AV_WB16(curPos, objects[i].left);
+        curPos += 2;  // object horizontal position
+        AV_WB16(curPos, objects[i].top);
+        curPos += 2;  // object vertical position
+    }
+    AV_WB16(startPos - 2, static_cast<uint16_t>(curPos - startPos));
+    return static_cast<long>(curPos - buff);
+}
+
+long TextToPGSConverter::composeWindowDefinition(uint8_t* buff, const int64_t pts, const int64_t dts,
+                                                 const std::vector<PlacedObject>& windows,
+                                                 const bool needPgHeader) const
+{
+    uint8_t* curPos = buff;
+    if (needPgHeader)
+        curPos += writePGHeader(curPos, pts, dts);
+    *curPos++ = WINDOWS_DEF_SEGMENT;
+    curPos += 2;  // skip length field
+    uint8_t* startPos = curPos;
+    *curPos++ = static_cast<uint8_t>(windows.size());  // number of windows
+    for (size_t i = 0; i < windows.size(); ++i)
+    {
+        const long len = composeWindow(curPos, windows[i].left, windows[i].top, windows[i].width, windows[i].height);
+        *curPos = static_cast<uint8_t>(i);  // window ID
+        curPos += len;
+    }
+    AV_WB16(startPos - 2, static_cast<uint16_t>(curPos - startPos));
+    return static_cast<long>(curPos - buff);
+}
+
+void TextToPGSConverter::givePacked(const std::vector<uint8_t>& packed, const uint16_t width)
+{
+    memcpy(m_renderedData, packed.data(), packed.size());
+    m_rleLen = static_cast<int>(packed.size());
+    m_objectWidth = width;
+}
+
 long TextToPGSConverter::composeVideoDescriptor(uint8_t* buff) const
 {
     uint8_t* curPos = buff;
@@ -879,7 +941,8 @@ long TextToPGSConverter::composePaletteDefinition(const Palette& palette, uint8_
 }
 
 long TextToPGSConverter::composeObjectDefinition(uint8_t* buff, const int64_t pts, const int64_t dts,
-                                                 const int firstLine, const int lastLine, const bool needPgHeader) const
+                                                 const int firstLine, const int lastLine, const bool needPgHeader,
+                                                 const uint16_t objectId) const
 {
     std::vector<uint8_t*> seqPos;
 
@@ -895,9 +958,9 @@ long TextToPGSConverter::composeObjectDefinition(uint8_t* buff, const int64_t pt
         *curPos++ = OBJECT_DEF_SEGMENT;
         curPos += 2;  // skip length field
         uint8_t* fragmentStart = curPos;
-        *curPos++ = 0;  // objectID
-        *curPos++ = 0;  // objectID
-        *curPos++ = 0;  // object version number
+        *curPos++ = static_cast<uint8_t>(objectId >> 8);  // objectID
+        *curPos++ = static_cast<uint8_t>(objectId);       // objectID
+        *curPos++ = 0;                                    // object version number
         seqPos.push_back(curPos);
         *curPos++ = 0;  // 0xc0; // sequence descriptor: first=true, last=true
 

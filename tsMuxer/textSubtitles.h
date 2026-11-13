@@ -106,17 +106,36 @@ class TextToPGSConverter  //: public TextSubtitlesRenderWin32
                                     uint16_t top, bool needPgHeader, bool forced);
     long composeWindowDefinition(uint8_t* buff, int64_t pts, int64_t dts, uint16_t left, uint16_t top, uint16_t width,
                                  uint16_t height, bool needPgHeader = true) const;
+    // A display set of several objects, each in a window of its own, the object and the window numbered by their
+    // place in the list (a PGS stream drawn again whose set holds a forced object and another, PGSStreamReader)
+    struct PlacedObject
+    {
+        uint16_t left = 0;
+        uint16_t top = 0;
+        uint16_t width = 0;
+        uint16_t height = 0;
+        bool forced = false;
+    };
+    long composePresentationSegment(uint8_t* buff, CompositionMode mode, int64_t pts, int64_t dts,
+                                    const std::vector<PlacedObject>& objects, bool needPgHeader);
+    long composeWindowDefinition(uint8_t* buff, int64_t pts, int64_t dts, const std::vector<PlacedObject>& windows,
+                                 bool needPgHeader) const;
+    // The picture packed last, taken out and put back: the objects of such a set are packed one after the other, and
+    // each is written when the times of the set are known
+    void takePacked(std::vector<uint8_t>& out) const { out.assign(m_renderedData, m_renderedData + m_rleLen); }
+    void givePacked(const std::vector<uint8_t>& packed, uint16_t width);
     static long composeWindow(uint8_t* buff, uint16_t left, uint16_t top, uint16_t width, uint16_t height);
     long composePaletteDefinition(const Palette& palette, uint8_t* buff, int64_t pts, int64_t dts,
                                   bool needPgHeader = true) const;
     long composeObjectDefinition(uint8_t* buff, int64_t pts, int64_t dts, int firstLine, int lastLine,
-                                 bool needPgHeader) const;
+                                 bool needPgHeader, uint16_t objectId = 0) const;
     long composeVideoDescriptor(uint8_t* buff) const;
     static long composeCompositionDescriptor(uint8_t* buff, uint16_t number, uint8_t state);
     long composeEnd(uint8_t* buff, int64_t pts, int64_t dts, bool needPgHeader = true);
     static long writePGHeader(uint8_t* buff, int64_t pts, int64_t dts);
     [[nodiscard]] double alignToGrid(double value) const;
-    bool rlePack(uint32_t colorMask);
+    // keepPalette: the colours of the picture packed before stay, for a second object of the same display set
+    bool rlePack(uint32_t colorMask, bool keepPalette = false);
     uint8_t* packRun(uint8_t* dst, const uint32_t* src, int repCnt, uint32_t colorMask);
     void packDrawnBox(const uint32_t* picture, uint32_t colorMask);
     void padLines(int above, int below);

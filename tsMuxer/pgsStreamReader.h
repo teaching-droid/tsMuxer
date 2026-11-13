@@ -185,6 +185,7 @@ class PGSStreamReader final : public AbstractStreamReader
         uint16_t id = 0;
         uint16_t x = 0;
         uint16_t y = 0;
+        bool forced = false;
         bool cropped = false;
         uint16_t cropX = 0;
         uint16_t cropY = 0;
@@ -203,6 +204,11 @@ class PGSStreamReader final : public AbstractStreamReader
     void renderTextShow(int64_t inTime);
     void renderTextHide(int64_t outTime);
     void renderDisplaySet();
+    // A display set with a forced object and another, drawn as two objects (renderTwoObjects): the windows of the set
+    // on the screen, for its clear; empty after a set of one object
+    std::vector<text_subtitles::TextToPGSConverter::PlacedObject> m_twoWindows;
+    bool renderTwoObjects(int64_t inTime);
+    void scaleDrawn();
     int64_t gridTime(int64_t internalTime) const;
 
     // A PGS stream drawn at another size: the display set being read, from its PCS to its END
@@ -223,7 +229,8 @@ class PGSStreamReader final : public AbstractStreamReader
     void readObjectDef(const uint8_t* pos, const uint8_t* end);
     void decodeRleData(const std::vector<uint8_t>& rle, uint8_t* dst, int dstWidth, int dstHeight, int xOffset,
                        int yOffset) const;
-    bool composeDisplaySet();
+    // which: 0 every object of the set, 1 the forced ones alone, 2 the others alone
+    bool composeDisplaySet(int which = 0);
     void yuvToRgb(int minY) const;
     static void rescaleRGB(const BitmapInfo* bmpDest, const BitmapInfo* bmpRef);
     void intDecodeStream(uint8_t* buffer, size_t len);
