@@ -6173,9 +6173,12 @@ void TsMuxerWindow::onLanguageComboBoxIndexChanged(int idx)
     // European Portuguese has no qtbase catalogue in Qt 6.8, only an old qt_pt_PT without the standard buttons, so its
     // dialogs showed English buttons. The buttons this window uses (Yes, No, OK, Cancel, Close) have the same words in
     // both forms of Portuguese: the Brazilian catalogue is taken where there is no European one.
+    // A window that is one file has them inside it (:/qtbase, the build option TSMUXER_QTBASE_QM_DIR): there is no
+    // file beside it to look for.
     auto loadQtCatalogue = [this](const QString& code)
     {
-        return qtCoreTranslator.load(QString("qtbase_%1").arg(code), QCoreApplication::applicationDirPath()) ||
+        return qtCoreTranslator.load(QString("qtbase_%1").arg(code), QStringLiteral(":/qtbase")) ||
+               qtCoreTranslator.load(QString("qtbase_%1").arg(code), QCoreApplication::applicationDirPath()) ||
                qtCoreTranslator.load(QString("qtbase_%1").arg(code),
                                      QLibraryInfo::path(QLibraryInfo::TranslationsPath));
     };

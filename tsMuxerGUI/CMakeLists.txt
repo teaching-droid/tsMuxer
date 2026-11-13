@@ -67,7 +67,32 @@ qt6_add_translation(QM_FILES ${tsmuxer_ts_files})
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/${lang_qrc}
                             PROPERTIES OBJECT_DEPENDS "${QM_FILES}")
 
+# ** THE WINDOW AS ONE FILE. ** Qt's own texts, the standard buttons of a dialog, are files beside the program in a
+# package (qtbase_<language>.qm). A window built with a static Qt is one file with nothing beside it: given the
+# folder of those files, the build puts them inside the program, where the window looks first (:/qtbase).
+set(TSMUXER_QTBASE_QM_DIR "" CACHE PATH "A folder of qtbase_<language>.qm files to put inside tsMuxerGUI")
+set(tsmuxer_qtbase_qrc "")
+if(TSMUXER_QTBASE_QM_DIR)
+  file(GLOB tsmuxer_qtbase_qm "${TSMUXER_QTBASE_QM_DIR}/qtbase_*.qm")
+  if(tsmuxer_qtbase_qm)
+    set(tsmuxer_qtbase_qrc "${CMAKE_CURRENT_BINARY_DIR}/qtbase_texts.qrc")
+    set(tsmuxer_qtbase_lines "")
+    foreach(qm ${tsmuxer_qtbase_qm})
+      get_filename_component(qm_name "${qm}" NAME)
+      string(APPEND tsmuxer_qtbase_lines "<file alias=\"${qm_name}\">${qm}</file>
+")
+    endforeach()
+    file(WRITE "${tsmuxer_qtbase_qrc}"
+         "<!DOCTYPE RCC><RCC version=\"1.0\">
+<qresource prefix=\"qtbase\">
+${tsmuxer_qtbase_lines}</qresource>
+</RCC>
+")
+  endif()
+endif()
+
 set(tsmuxer_gui_sources
+  ${tsmuxer_qtbase_qrc}
   main.cpp
   tsmuxerwindow.cpp
   muxForm.cpp
