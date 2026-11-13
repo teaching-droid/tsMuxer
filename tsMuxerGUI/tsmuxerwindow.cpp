@@ -6690,10 +6690,15 @@ void TsMuxerWindow::updateSizeEstimate()
         return hide();
     double payload = 0;
     bool atMost = false;
+    double longest = 0;  // the length of the longest source in seconds, where it is known
     for (auto it = sources.constBegin(); it != sources.constEnd(); ++it)
     {
         const Source& source = it.value();
         const QStringList& files = source.tracks[0]->fileList;
+        bool anyTicked = false;
+        for (const bool t : source.ticked) anyTicked |= t;
+        if (files.size() == 1 && anyTicked)
+            longest = (std::max)(longest, durationOfSource(files[0]));
         qint64 fileBytes = 0;
         for (const QString& name : files)
         {
@@ -6769,6 +6774,12 @@ void TsMuxerWindow::updateSizeEstimate()
     double bytes = payload * outGrowth;
     if (tsOutput)
         bytes += (std::max)(0.0, extra) * (ui->radioButtonTS->isChecked() ? 1.0 : 192.0 / 188);
+    // ** AN M2TS REPEATS ITS TABLES WITH EVERY CLOCK STAMP. ** A transport stream writes its two tables four times a
+    // second, an M2TS and a disc with each clock stamp, about eleven times a second: 15 packets more each second
+    // (2966 bytes), whatever the tracks hold. In a film that is nothing; of a file of 0.4 Mbit/s it was 5 per cent,
+    // which the estimate of an M2TS came out low by, where that of the transport stream was right.
+    if (tsOutput && !ui->radioButtonTS->isChecked())
+        bytes += longest * 2966.0;
     const QString size = bytes >= 1e9 ? QStringLiteral("%1 GB").arg(bytes / 1e9, 0, 'f', bytes >= 1e10 ? 1 : 2)
                                       : QStringLiteral("%1 MB").arg(bytes / 1e6, 0, 'f', bytes >= 1e7 ? 0 : 1);
     m_sizeLabel->setText(atMost ? tr("Estimated size: at most %1").arg(size)
