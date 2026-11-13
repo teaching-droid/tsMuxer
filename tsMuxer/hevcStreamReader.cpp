@@ -1767,11 +1767,26 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                 // access unit should carry: every prefix NAL of it has now been seen, so what the
                 // source already supplied is known rather than guessed. The slice moves forward by
                 // whatever was inserted in front of it.
+                //
+                // ** NO HDR SEI IN FRONT OF A SLICE THE READER REFUSES. ** A first slice whose header has a value
+                // no stream has (see below) is handed on as a packet of its own, from the start of what is in front
+                // of it, which was the SEI just inserted, and the next call came to the same slice again: the SEI
+                // was inserted and handed on again and again, 573954 times for a key picture of a damaged stream,
+                // which came out 20 times its size and took 26 s for 400 KB. The header is read first; the SEI goes
+                // in front of a slice that is taken, whole or damaged, as before, and not in front of one refused.
                 if (nalType >= HevcUnit::NalType::BLA_W_LP)
                 {
-                    const int hdrAdded = repeatHdrSeiAtIrap(curPos);
-                    curPos += hdrAdded;
-                    nextNal += hdrAdded;
+                    const uint8_t* headerEnd = nextNal;
+                    if (nextNal < m_bufEnd)
+                        headerEnd = nextNal[-4] == 0 ? nextNal - 4 : nextNal - 3;
+                    m_slice->decodeBuffer(curPos, FFMIN(curPos + MAX_SLICE_HEADER, headerEnd));
+                    const int taken = firstSliceFlag ? m_slice->deserialize(m_sps, m_pps) : UNIT_DAMAGED;
+                    if (taken == 0 || taken == UNIT_DAMAGED)
+                    {
+                        const int hdrAdded = repeatHdrSeiAtIrap(curPos);
+                        curPos += hdrAdded;
+                        nextNal += hdrAdded;
+                    }
                 }
                 // nextNal points past the next start code: the header is read up to that start code, as the check
                 // does, or a header cut short read the start code's zero bytes as its own fields and was taken
