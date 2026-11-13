@@ -13,6 +13,7 @@
 #include <iomanip>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <set>
 #include <sstream>
 #include <vector>
@@ -1774,6 +1775,8 @@ All parameters in this group start with two dashes:
                       fails leaves the next ones as they are; a summary at the
                       end says how each job ended. The exit code is 0 when
                       every job is done, and 6 when one failed or was not run.
+                      A batch that is asked to stop passes the request on to
+                      the job that runs, starts no other, and ends with 4.
                       --batch-stop-on-error ends the batch at the first job
                       that fails.
 --make-sample         Separate mode: tsMuxeR --make-sample [options] <source> <out.zip>
@@ -1999,9 +2002,11 @@ All parameters in this group start with two dashes:
                               top of what is counted from the folder's files and names.
 
 Exit codes: 0 done; 1 the command line or the meta file is wrong; 2 a source
-cannot be read or is not supported; 3 the output cannot be written; 5 an error
-inside the program; 6 --batch: a job failed or was not run; 7 --scan: the run
-would end well, and warnings were printed.
+cannot be read or is not supported; 3 the output cannot be written; 4 the run
+was stopped on request; 5 an error inside the program; 6 --batch: a job failed
+or was not run; 7 --scan: the run would end well, and warnings were printed.
+Ctrl+C in a terminal ends the program as the system does, without a code of
+tsMuxeR's own.
 )help";
     LTRACE(LT_INFO, 2, help);
 }
@@ -2092,6 +2097,20 @@ static bool findM2tsPcrMedian(const string& fileName, const int64_t offset, cons
 // called: a guard pad placed before the first pair sits in between. The layer break report maps a
 // pad to the file it interrupted by sector range, so a range that started before its own pad would
 // leave that pad describing itself.
+// ** A STOP DURING THE COPY OF AN IMAGE ENDS IT AS A FAILED JOB ENDS. ** The copy of a folder into an image
+// (--bdmv-to-iso, and the second step of a mux with --inner-only) was not among the places that look at a stop: Ctrl+C
+// or a request to end stopped the program where it stood, and the part of the image written so far stayed under the
+// name of the output, as the mux loop once left its own. The copy looks at it now after each block, says so, and the
+// unfinished image is removed.
+static bool imageCopyStopped()
+{
+    const int sig = stopSignal();
+    if (sig == 0)
+        return false;
+    LTRACE(LT_ERROR, 2, "The job was stopped by " << stopSignalName(sig) << " before it was finished.");
+    return true;
+}
+
 static bool writeSsifGroup(IsoWriter* iso, const string& srcRoot, const BdSsifGroup& g, vector<uint8_t>& buf,
                            int64_t& written, const int64_t total, int& lastTenths, int64_t& dataStartLbn)
 {
@@ -2117,6 +2136,8 @@ static bool writeSsifGroup(IsoWriter* iso, const string& srcRoot, const BdSsifGr
         {
             const auto want = static_cast<uint32_t>(
                 bytes < static_cast<int64_t>(buf.size()) ? bytes : static_cast<int64_t>(buf.size()));
+            if (stopSignal() != 0)
+                return false;  // said by the caller (imageCopyStopped)
             const int rd = in.read(buf.data(), want);
             if (rd <= 0)
                 return false;
@@ -2228,6 +2249,7 @@ static void printRemovedOutputNotes()
 
 // sizeRefused, when given, comes back true when the finished image was refused because it does not fit the disc
 static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused = nullptr);
+static bool endBySignal();
 
 // "100.0% complete" was printed when the sources were read, and a job that then failed, a track found empty, an image
 // too big for the disc, had shown it before its error. The progress lines stop at 99.9 percent, and this is printed
@@ -2404,7 +2426,11 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     opt.extraIsoSpace = extraIsoSpace;
     opt.discLabel = discLabel;
     opt.metaDir = metaDir;
-    return buildGuardedIso(opt);
+    const int result = buildGuardedIso(opt);
+    // stopped during the copy: after Ctrl+C the program ends here as the system ends a stopped one
+    if (result == ExitCode::Stopped)
+        endBySignal();
+    return result;
 }
 
 // Without a disc size and without --layer-break-lbn, an image is laid out for the layer break of a BD-R DL: the second
@@ -3294,6 +3320,15 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
     ranges.reserve(items.size());
     int64_t restBytes = total;                                                      // this item and every one after it
     int64_t restStreams = std::count_if(items.begin(), items.end(), isStreamItem);  // of them, the stream files
+    // the copy looks at a stop (imageCopyStopped); what follows it is short and ends at once, as before
+    struct CopyStopWatch
+    {
+        CopyStopWatch() { setStopWatched(true); }
+        ~CopyStopWatch() { setStopWatched(false); }
+        CopyStopWatch(const CopyStopWatch&) = delete;
+        CopyStopWatch& operator=(const CopyStopWatch&) = delete;
+    };
+    auto copyStopWatch = std::make_unique<CopyStopWatch>();
     for (auto& item : items)
     {
         // Layer-fit: start the file after the break instead of splitting it, when it fits there.
@@ -3316,7 +3351,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
             int64_t dataStartLbn = startLbn;
             if (!writeSsifGroup(iso, srcRoot, ssifGroups[item.ssifGroup], buf, written, total, lastTenths,
                                 dataStartLbn))
-                return ExitCode::Source;
+                return imageCopyStopped() ? ExitCode::Stopped : ExitCode::Source;
             ranges.push_back({dataStartLbn, iso->currentImageLBA(), dataStartLbn});
             continue;
         }
@@ -3333,6 +3368,8 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         int64_t copied = 0;
         while ((n = in.read(buf.data(), static_cast<uint32_t>(buf.size()))) > 0)
         {
+            if (imageCopyStopped())
+                return ExitCode::Stopped;
             if (out->write(buf.data(), static_cast<uint32_t>(n)) < 0)
             {
                 LTRACE(LT_ERROR, 2, "Write error on " << item.rel);
@@ -3368,6 +3405,9 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         }
         ranges.push_back({startLbn, iso->currentImageLBA(), dataLbn});
     }
+    copyStopWatch.reset();
+    if (imageCopyStopped())  // asked for with the last block
+        return ExitCode::Stopped;
     LTRACE(LT_INFO, 2,
            "Finishing the image: writing the last folders and files and the file system"
                << (discCapacitySectors > 0 ? ", and checking that it fits the disc..." : "..."));
@@ -5330,26 +5370,76 @@ static void reportLostData(const MuxerManager& muxerManager)
 
 // Ctrl+C (SIGINT) and SIGTERM during the mux loop stop the job there (MuxerManager::doMux), so that it ends as a failed
 // job does and its unfinished output is removed; outside the loop, and at a second signal, the program ends at once,
-// as it always did. The exit code stays that of the signal (endBySignal).
+// as it always did. After Ctrl+C the exit code stays that of the signal (endBySignal).
+// ** A STOP THAT WAS ASKED FOR ENDS WITH EXIT CODE 4. ** A request to end (SIGTERM: a scheduler, a container being
+// stopped, kill), the terminal being closed (SIGHUP) and, on Windows, the console window being closed or Ctrl+Break
+// ended the program as the system ends one, with a code that differs by system and that a script could not tell from
+// a crash. They end it with 4 now, in the loop and outside it. Ctrl+C in a terminal is left as it was: the shell
+// that started the program sees it stopped by the signal, and a loop or a batch file around it stops too.
+// ** A SECOND REQUEST DOES NOT CUT THE STOP SHORT. ** A job often gets the request twice: its terminal is closed and
+// the batch that runs it passes the request on, or a service manager tells both. The second one ended the job at
+// once, while it was removing its unfinished output, which then stayed. A request that comes while a stop is under
+// way changes nothing now. A second Ctrl+C still ends the program at once, as it always did.
+// ** NO REQUEST IS LOST AT THE END OF A LOOP. ** The handler sets the signal and then looks once more whether a loop
+// is watching; the loop stops watching and then looks once more at the signal (stopAfterLoop). One of the two sees
+// the other, so a request is either acted on by the loop or ends the program here.
 static void onStopSignal(const int sig)
 {
-    if (!stopWatched() || stopSignal() != 0)
-    {
-        diagReport::signalNote(sig);
-        std::signal(sig, SIG_DFL);
-        std::raise(sig);
+    if (stopSignal() != 0 && stopOnRequest(sig))
         return;
+    if (stopSignal() == 0 && stopWatched())
+    {
+        setStopSignal(sig);
+        if (stopWatched())
+            return;
     }
-    setStopSignal(sig);
+    diagReport::signalNote(sig);
+    if (stopOnRequest(sig))
+        std::_Exit(ExitCode::Stopped);
+    std::signal(sig, SIG_DFL);
+    std::raise(sig);
 }
 
-static void endBySignal()
+#ifdef _WIN32
+// The console window being closed, Ctrl+Break, the end of the session. Ctrl+C is left to the C runtime, which raises
+// SIGINT (onStopSignal). The system calls this on a thread of its own. After a closed window or the end of a session
+// it ends the program when this returns, after 5 seconds at the latest: the mux loop has that time to stop, remove
+// its unfinished output and end with the code, so this waits. After Ctrl+Break the program goes on when this
+// returns, to its own end, and the thread is free for the next key. The rules of onStopSignal hold here too.
+static BOOL WINAPI onConsoleEvent(const DWORD event)
+{
+    if (event == CTRL_C_EVENT)
+        return FALSE;
+    const int sig = event == CTRL_BREAK_EVENT ? SIGBREAK : SIGTERM;
+    bool taken = stopSignal() != 0;  // a stop is under way already
+    if (!taken && stopWatched())
+    {
+        setStopSignal(sig);
+        taken = stopWatched();
+    }
+    if (!taken)
+    {
+        diagReport::signalNote(sig);
+        std::_Exit(ExitCode::Stopped);
+    }
+    if (event == CTRL_BREAK_EVENT)
+        return TRUE;
+    Sleep(INFINITE);
+    return TRUE;
+}
+#endif
+
+// True when the job was stopped on request: the run then ends with ExitCode::Stopped. After Ctrl+C this does not
+// come back.
+static bool endBySignal()
 {
     if (const int sig = stopSignal(); sig != 0)
     {
         std::cout.flush();  // the signal ends the program without flushing, and a log in a file lost the last lines
         std::cerr.flush();
         diagReport::stopped(sig);
+        if (stopOnRequest(sig))
+            return true;
 #ifdef _WIN32
         // Raised again, SIGINT ends the program with code 3 here; Ctrl+C ended it with STATUS_CONTROL_C_EXIT
         std::_Exit(static_cast<int>(0xC000013AU));
@@ -5358,6 +5448,7 @@ static void endBySignal()
         std::raise(sig);
 #endif
     }
+    return false;
 }
 
 static int runTsMuxer(int argc, char** argv);
@@ -5596,9 +5687,17 @@ static int runTsMuxer(int argc, char** argv)
 {
     LTRACE(LT_INFO, 2, "tsMuxeR version " TSMUXER_VERSION << ". github.com/teaching-droid/tsMuxer");
     // A signal the program was started with ignored, as a job in the background of a script is for Ctrl+C, stays so
+#ifdef _WIN32
     for (const int sig : {SIGINT, SIGTERM})
+#else
+    for (const int sig : {SIGINT, SIGTERM, SIGHUP})  // SIGHUP stays ignored under nohup
+#endif
         if (std::signal(sig, onStopSignal) == SIG_IGN)
             std::signal(sig, SIG_IGN);
+#ifdef _WIN32
+    // after the lines above, so that it is asked before the handler of the C runtime
+    SetConsoleCtrlHandler(onConsoleEvent, TRUE);
+#endif
 
     // Which form a language read out of a source is reported in. It has to work when LISTING a
     // file as well as when muxing one, and listing is invoked as "tsMuxeR <file>" with no meta
@@ -6650,7 +6749,8 @@ static int runTsMuxer(int argc, char** argv)
             LTRACE2(LT_ERROR, "Error: ")
         LTRACE(LT_ERROR, 2, e.m_errStr.c_str());
         printRemovedOutputNotes();
-        endBySignal();
+        if (endBySignal())
+            return ExitCode::Stopped;
         return ExitCode::of(e.m_errCode);
     }
     catch (BitStreamException& e)

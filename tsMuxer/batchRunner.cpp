@@ -7,8 +7,10 @@
 #include <fs/systemlog.h>
 #include <types/types.h>
 
+#include <atomic>
 #include <cerrno>
 #include <chrono>
+#include <csignal>
 #include <cstdio>
 #include <cstring>
 #include <iterator>
@@ -18,6 +20,7 @@
 #ifdef _WIN32
 #include <windows.h>
 #else
+#include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #ifdef __APPLE__
@@ -112,6 +115,47 @@ wstring quoteArg(const string& arg)
 }
 #endif
 
+// ** A BATCH THAT IS ASKED TO STOP STOPS ITS JOB. ** A request to end (SIGTERM, the terminal or console window being
+// closed, Ctrl+Break on Windows) ended the batch where it stood, and where the request went to the batch alone, as
+// kill and a scheduler send it, the job it had started ran on with nobody waiting for it. The request is passed on
+// to the job, which removes its unfinished output and ends with 4; no other job is started, and the batch ends with
+// 4 after its summary. Ctrl+C in a terminal goes to the batch and its job alike and is left as it was.
+atomic<int> stopAsked{0};
+#ifdef _WIN32
+// The system tells every program of the console, the job as well: nothing to pass on. After a closed window it ends
+// this program when the handler returns, so it waits for the job and the summary; after Ctrl+Break the program goes
+// on by itself, and the thread is free for the next key.
+BOOL WINAPI onConsoleEvent(const DWORD event)
+{
+    if (event == CTRL_C_EVENT)
+        return FALSE;
+    stopAsked.store(1);
+    if (event == CTRL_BREAK_EVENT)
+        return TRUE;
+    Sleep(INFINITE);
+    return TRUE;
+}
+#else
+atomic<pid_t> runningJob{0};
+void onStopRequest(const int sig)
+{
+    stopAsked.store(sig);
+    if (const pid_t job = runningJob.load(); job > 0)
+        kill(job, SIGTERM);
+}
+#endif
+
+void watchStopRequests()
+{
+#ifdef _WIN32
+    SetConsoleCtrlHandler(onConsoleEvent, TRUE);
+#else
+    for (const int sig : {SIGTERM, SIGHUP})  // SIGHUP stays ignored under nohup
+        if (std::signal(sig, onStopRequest) == SIG_IGN)
+            std::signal(sig, SIG_IGN);
+#endif
+}
+
 // Runs one job and waits for its end. Returns whether it could be started; exitCode is what it ended with.
 bool runJob(const string& program, const vector<string>& args, int& exitCode)
 {
@@ -141,24 +185,74 @@ bool runJob(const string& program, const vector<string>& args, int& exitCode)
     argv.push_back(programCopy.data());
     for (string& arg : copies) argv.push_back(arg.data());
     argv.push_back(nullptr);
+    // ** NO REQUEST IS LOST WHILE A JOB STARTS OR ENDS. ** The requests are held back from before the job is made
+    // until its number is known here: one that came in between ran the handler in the new process, which is still
+    // this program until the job's own begins, and was gone, and the job ran to its end. The new process takes the
+    // system's own way with a request (it ends) until the job has set up its own. At the end the job's number is
+    // given up before the system can hand it to another process.
+    sigset_t requests, before;
+    sigemptyset(&requests);
+    sigaddset(&requests, SIGTERM);
+    sigaddset(&requests, SIGHUP);
+    sigprocmask(SIG_BLOCK, &requests, &before);
+    if (stopAsked.load() != 0)
+    {
+        // asked for after the last look at it: the job is not started
+        sigprocmask(SIG_SETMASK, &before, nullptr);
+        exitCode = ExitCode::Stopped;
+        return true;
+    }
     const pid_t child = fork();
     if (child < 0)
+    {
+        sigprocmask(SIG_SETMASK, &before, nullptr);
         return false;
+    }
     if (child == 0)
     {
+        for (const int sig : {SIGTERM, SIGHUP})
+        {
+            struct sigaction action
+            {
+            };
+            if (sigaction(sig, nullptr, &action) == 0 && action.sa_handler == onStopRequest)
+                signal(sig, SIG_DFL);  // one that is ignored (nohup) stays ignored
+        }
+        sigprocmask(SIG_SETMASK, &before, nullptr);
         execv(program.c_str(), argv.data());
         _exit(127);  // the program could not be started
     }
+    runningJob.store(child);
+    sigprocmask(SIG_SETMASK, &before, nullptr);
+    // wait for its end without taking its number back yet: a request in between still goes to this job, or to
+    // nobody, and never to another process that got the number
+    siginfo_t ended{};
+    while (waitid(P_PID, static_cast<id_t>(child), &ended, WEXITED | WNOWAIT) < 0)
+        if (errno != EINTR)
+            break;
+    sigprocmask(SIG_BLOCK, &requests, &before);
+    runningJob.store(0);
     int status = 0;
+    bool reaped = true;
     while (waitpid(child, &status, 0) < 0)
         if (errno != EINTR)
-            return false;
+        {
+            reaped = false;
+            break;
+        }
+    sigprocmask(SIG_SETMASK, &before, nullptr);
+    if (!reaped)
+        return false;
     if (WIFEXITED(status))
     {
         exitCode = WEXITSTATUS(status);
         return exitCode != 127;
     }
-    exitCode = WIFSIGNALED(status) ? 128 + WTERMSIG(status) : -1;
+    // ended by the request before it had set up its own way of stopping: stopped on request all the same
+    if (WIFSIGNALED(status) && stopAsked.load() != 0 && (WTERMSIG(status) == SIGTERM || WTERMSIG(status) == SIGHUP))
+        exitCode = ExitCode::Stopped;
+    else
+        exitCode = WIFSIGNALED(status) ? 128 + WTERMSIG(status) : -1;
     return true;
 #endif
 }
@@ -241,12 +335,13 @@ int run(const string& listFile, const bool stopOnError, const string& argv0)
     size_t failed = 0;
     bool stopped = false;
     const auto batchStart = chrono::steady_clock::now();
+    watchStopRequests();
     for (size_t i = 0; i < total; ++i)
     {
         string shown;
         for (const string& arg : jobs[i].args)
             shown += (shown.empty() ? "" : " ") + (arg.find(' ') == string::npos ? arg : "\"" + arg + "\"");
-        if (stopped)
+        if (stopped || stopAsked.load() != 0)
         {
             results.push_back("not run   " + shown);
             ++failed;
@@ -265,14 +360,22 @@ int run(const string& listFile, const bool stopOnError, const string& argv0)
             result = "done";
         else if (exitCode == ExitCode::ScanWarnings)
             result = "done, the scan printed warnings";
+        else if (exitCode == ExitCode::Stopped)
+            result = "stopped on request";
         else
             result = "failed, exit code " + to_string(exitCode);
         LTRACE(LT_INFO, 2, "=== Job " << i + 1 << " of " << total << " " << result << " (" << timeText(took) << ")");
         // a scan that printed warnings (exit code 7) did what it was run for: a job done, with its note
         const bool warned = started && exitCode == ExitCode::ScanWarnings;
         const bool ok = started && (exitCode == 0 || warned);
-        results.push_back(string(ok ? "done      " : "FAILED    ") + shown +
-                          (ok && !warned ? "" : "  (" + (warned ? string("the scan printed warnings") : result) + ")"));
+        // a job that was stopped on request (exit code 4) did not fail of itself: it is named so
+        const bool jobStopped = started && exitCode == ExitCode::Stopped;
+        if (jobStopped)
+            results.push_back("stopped   " + shown);
+        else
+            results.push_back(
+                string(ok ? "done      " : "FAILED    ") + shown +
+                (ok && !warned ? "" : "  (" + (warned ? string("the scan printed warnings") : result) + ")"));
         if (!ok)
         {
             ++failed;
@@ -284,8 +387,14 @@ int run(const string& listFile, const bool stopOnError, const string& argv0)
     LTRACE(LT_INFO, 2, "");
     LTRACE(LT_INFO, 2,
            "=== Batch summary: " << total - failed << " of " << total << " jobs done, " << failed
-                                 << " failed or not run (" << timeText(all) << ")");
+                                 << (stopAsked.load() != 0 ? " stopped or not run (" : " failed or not run (")
+                                 << timeText(all) << ")");
     for (size_t i = 0; i < results.size(); ++i) LTRACE(LT_INFO, 2, "  " << i + 1 << ". " << results[i]);
+    if (stopAsked.load() != 0)
+    {
+        LTRACE(LT_INFO, 2, "The batch was stopped on request.");
+        return ExitCode::Stopped;
+    }
     return failed == 0 ? ExitCode::Done : ExitCode::Batch;
 }
 }  // namespace batch

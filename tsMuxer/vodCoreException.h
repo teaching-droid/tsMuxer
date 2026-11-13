@@ -91,15 +91,17 @@ static constexpr int ERR_FEC_UNSUPPORTED_FEATURE = 3000;
 // ** EXIT CODES WITH A MEANING. ** The program ended with -1, -2, -3 or -4 by the kind of exception that ended it,
 // which said nothing about what was wrong: a script could tell success from failure and no more. The code now names the
 // reason, so that a script can stop on a wrong command line and go on after a source it cannot read.
-// A stop by Ctrl+C or SIGTERM is not among them: the program then ends as the system ends one that is stopped, so a
-// script that runs it in a loop stops too (endBySignal in main.cpp). 4 is kept free for it.
+// A stop by Ctrl+C in a terminal is not among them: the program then ends as the system ends one that is stopped, so a
+// script that runs it in a loop stops too (endBySignal in main.cpp). 4 is a stop that was asked for in another way: a
+// request to end (SIGTERM, as a scheduler, a container being stopped or kill sends it), the terminal or the console
+// window being closed, Ctrl+Break on Windows.
 namespace ExitCode
 {
 constexpr int Done = 0;
 constexpr int Usage = 1;         // the command line or the meta file is wrong
 constexpr int Source = 2;        // a source cannot be read or is not supported
 constexpr int Output = 3;        // the output cannot be written
-constexpr int Stopped = 4;       // kept free, see above
+constexpr int Stopped = 4;       // the run was stopped on request, see above
 constexpr int Internal = 5;      // an error inside the program
 constexpr int Batch = 6;         // --batch: a job failed or was not run
 constexpr int ScanWarnings = 7;  // --scan: the run would end well, and printed warnings. A mux with warnings ends 0.

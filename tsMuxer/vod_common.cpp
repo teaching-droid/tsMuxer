@@ -7,6 +7,7 @@
 #include <cctype>
 #include <climits>
 #include <cmath>
+#include <csignal>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -739,6 +740,22 @@ bool saveSrtJobSucceeded() { return saveSrtSucceeded; }
 static std::atomic<int> stopSignalNumber{0};
 int stopSignal() { return stopSignalNumber.load(); }
 void setStopSignal(const int sig) { stopSignalNumber.store(sig); }
+bool stopOnRequest(const int sig) { return sig != SIGINT; }
+std::string stopSignalName(const int sig)
+{
+    if (sig == SIGINT)
+        return "Ctrl+C (SIGINT)";
+#ifdef _WIN32
+    // Windows has no SIGTERM of its own: the number stands for the console window being closed (main.cpp)
+    if (sig == SIGBREAK)
+        return "Ctrl+Break";
+    return "the closing of its console window";
+#else
+    if (sig == SIGHUP)
+        return "the closing of its terminal (SIGHUP)";
+    return "SIGTERM";
+#endif
+}
 static std::atomic<bool> stopWatchedNow{false};
 bool stopWatched() { return stopWatchedNow.load(); }
 void setStopWatched(const bool value) { stopWatchedNow.store(value); }

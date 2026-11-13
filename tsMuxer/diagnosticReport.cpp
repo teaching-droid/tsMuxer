@@ -761,6 +761,8 @@ std::string exitText(const int code)
         return "-3, a stream that could not be read";
     case -4:
         return "-4, an error of an unknown kind";
+    case 4:
+        return "4, the run was stopped on request";
     default:
         return std::to_string(code);
     }
@@ -1362,6 +1364,13 @@ void stopped(const int signal)
     if (!active)
         return;
     const std::lock_guard<std::recursive_mutex> guard(lock);
+    // a stop that was asked for ends with exit code 4: the report said -2 and named Ctrl+C for it
+    if (stopOnRequest(signal))
+    {
+        record(LT_INFO, false, "Stopped on request, by " + stopSignalName(signal));
+        close(4);
+        return;
+    }
     record(LT_INFO, false, "Stopped by signal " + std::to_string(signal) + " (Ctrl+C, or Abort in the window)");
     close(-2);
 }

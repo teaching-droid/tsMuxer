@@ -233,11 +233,12 @@ The exit code says how a run ended, for a script that starts tsMuxeR:
 | 1 | The command line or the meta file is wrong. |
 | 2 | A source cannot be read or is not supported. |
 | 3 | The output cannot be written. |
+| 4 | The run was stopped on request. |
 | 5 | An error inside the program. |
 | 6 | `--batch`: a job failed or was not run. |
 | 7 | `--scan`: the run would end well, and warnings were printed. |
 
-A run stopped by Ctrl+C ends as the system ends a stopped program, so a script that runs it in a loop stops as well. 4 is not used.
+4 is a stop that was asked for: a request to end (SIGTERM, as a scheduler, a container being stopped or `kill` sends it), the terminal or the console window being closed, or Ctrl+Break on Windows. During a mux the unfinished output is removed first. A `--batch` passes the request on to the job that runs, starts no other job, and ends with 4 as well. Ctrl+C in a terminal ends the program as the system does, without a code of tsMuxeR's own, so a script that runs it in a loop stops as well.
 
 ### Report for a problem report
 

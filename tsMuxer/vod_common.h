@@ -231,6 +231,10 @@ bool saveSrtJobSucceeded();
 // Ctrl+C or SIGTERM: the signal number, set by the handler main installs; the mux stops at its next packet
 int stopSignal();
 void setStopSignal(int sig);
+// What stopped the job, for its message: "Ctrl+C (SIGINT)", "SIGTERM", the closing of the terminal or console window
+std::string stopSignalName(int sig);
+// Whether the stop was asked for in another way than by Ctrl+C in a terminal: the run then ends with exit code 4
+bool stopOnRequest(int sig);
 // Whether a mux loop is running, which looks at stopSignal: outside one, the signal ends the program as before
 bool stopWatched();
 void setStopWatched(bool value);

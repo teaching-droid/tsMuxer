@@ -9,6 +9,7 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <memory>
 #include <set>
 #include <sstream>
 #include <streambuf>
@@ -1136,14 +1137,14 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
         ~StopWatch() { setStopWatched(false); }
         StopWatch(const StopWatch&) = delete;
         StopWatch& operator=(const StopWatch&) = delete;
-    } stopWatch;
+    };
+    auto stopWatch = std::make_unique<StopWatch>();
     while (true)
     {
         // Ctrl+C or SIGTERM ended the program where it stood, and the part written so far stayed under the name of
         // the output with no word. It now ends as a failed job does: the unfinished output is removed and said so.
         if (const int sig = stopSignal(); sig != 0)
-            THROW(ERR_COMMON, "The job was stopped by " << (sig == SIGINT ? "Ctrl+C (SIGINT)" : "SIGTERM")
-                                                        << " before it was finished.")
+            THROW(ERR_COMMON, "The job was stopped by " << stopSignalName(sig) << " before it was finished.")
         const int avRez = m_metaDemuxer.readPacket(avPacket);
 
         if (avRez == BufferedReader::DATA_EOF)
@@ -1248,6 +1249,11 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
         else
             m_mainMuxer->muxPacket(avPacket);
     }
+
+    // a request that came with the last packet: looked at once more, after the watching has ended (see main.cpp)
+    stopWatch.reset();
+    if (const int sig = stopSignal(); sig != 0)
+        THROW(ERR_COMMON, "The job was stopped by " << stopSignalName(sig) << " before it was finished.")
 
     // Everything is read. What follows can take a while on a large output and can still fail, so the progress line
     // stays below 100 percent (METADemuxer::updateReport) and this says what is going on.
