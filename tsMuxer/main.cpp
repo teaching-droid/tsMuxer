@@ -3361,7 +3361,8 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
             LTRACE(LT_ERROR, 2, "Can't read " << item.full);
             return ExitCode::Source;
         }
-        ISOFile* out = iso->createFile();
+        // freed on every way out of the copy: a stop, like a write error before it, left it behind
+        const std::unique_ptr<ISOFile> out(iso->createFile());
         out->open(item.rel.c_str(), File::ofWrite);
         const int64_t dataLbn = iso->currentImageLBA();
         int n;
@@ -3391,7 +3392,6 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
             }
         }
         out->close();
-        delete out;
         in.close();
         // A read that fails part way, a scratched disc or a mount that drops, ended the loop above as if the file had
         // ended there: the file went into the image short and the run finished as if nothing had happened. A 3D
