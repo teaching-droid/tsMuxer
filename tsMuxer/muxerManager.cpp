@@ -2006,7 +2006,12 @@ void MuxerManager::findCutKeyPictures()
             {
                 if (own.count(packet.stream_index) == 0)
                     continue;
-                if ((packet.flags & AVPacket::IS_IFRAME) && packet.pts <= m_cutStart)
+                // ** A KEY PICTURE ON THE CUT IS THE ONE THE PICTURE BEGINS WITH. ** The time of a picture is counted
+                // from the length of a frame, and where a file gives that length rounded (a Matroska file, in ns),
+                // the key picture at 4 s stands some billionths of a second after 4 s. A cut at 4 s then did not
+                // take it as "at or before the cut" and began with the key picture before it, seconds earlier. A key
+                // picture within one tick of the 90 kHz clock after the cut is on the cut.
+                if ((packet.flags & AVPacket::IS_IFRAME) && packet.pts < m_cutStart + INT_FREQ_TO_TS_FREQ)
                     found[packet.stream_index] = packet.pts;
                 if (packet.pts >= m_cutStart)
                     reaches.insert(packet.stream_index);
