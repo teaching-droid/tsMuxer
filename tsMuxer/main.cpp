@@ -6296,7 +6296,7 @@ static int runTsMuxer(int argc, char** argv)
                 muxerManager.setChapterInfo(chapterInfo);
             muxerManager.setFinishingNote(
                 "Finishing the output: writing the index, closing the file and checking the tracks...");
-            muxerManager.doMux(keepOld.forFile(dstFile, muxerManager.totalSize()), nullptr);
+            muxerManager.doMux(keepOld.forFile(dstFile, muxerManager.sourceSize()), nullptr);
 
             checkSourceConsumed(muxerManager);
             try
@@ -6462,13 +6462,13 @@ static int runTsMuxer(int argc, char** argv)
                     std::filesystem::remove_all(innerFolder.path, ec);
                     const auto space = std::filesystem::space(
                         out.has_parent_path() ? out.parent_path() : std::filesystem::path("."), ec);
-                    if (!ec && static_cast<int64_t>(space.available) < 2 * muxerManager.totalSize())
+                    if (!ec && static_cast<int64_t>(space.available) < 2 * muxerManager.sourceSize())
                         LTRACE(
                             LT_WARN, 2,
                             "Warning: --inner-only writes the disc into a folder beside the image first, so the drive "
                             "needs room for both: about "
                                 << space.available / 1000000 << " MB are free, and the two may need about "
-                                << 2 * muxerManager.totalSize() / 1000000 << " MB.");
+                                << 2 * muxerManager.sourceSize() / 1000000 << " MB.");
                     LTRACE(LT_INFO, 2,
                            "--inner-only, step 1 of 2: the disc is muxed into the folder "
                                << innerFolder.str() << "; step 2 lays out the image from it.");
@@ -6476,8 +6476,8 @@ static int runTsMuxer(int argc, char** argv)
                 }
                 else
                     dstFile = strToUpperCase(extractFileExt(dstFile)) == "ISO"
-                                  ? keepOld.forFile(dstFile, muxerManager.totalSize())
-                                  : keepOld.forDiscFolder(dstFile, muxerManager.totalSize(),
+                                  ? keepOld.forFile(dstFile, muxerManager.sourceSize())
+                                  : keepOld.forDiscFolder(dstFile, muxerManager.sourceSize(),
                                                           {discNumbersGiven, firstMplsOffset, firstM2tsOffset,
                                                            insertBlankPL ? blankNum : -1});
                 // The guard of an --inner-only image is laid out in step 2, and the folder has no sectors for it.
@@ -6526,7 +6526,7 @@ static int runTsMuxer(int argc, char** argv)
                         }
                     }
                 }
-                if (!blurayHelper.open(dstFile, dt, muxerManager.totalSize(), muxerManager.getExtraISOBlocks(),
+                if (!blurayHelper.open(dstFile, dt, muxerManager.sourceSize(), muxerManager.getExtraISOBlocks(),
                                        muxerManager.useReproducibleIsoHeader(),
                                        innerIso       ? -1
                                        : defaultGuard ? DEFAULT_GUARD_AFTER_MB
@@ -6540,7 +6540,7 @@ static int runTsMuxer(int argc, char** argv)
                 dstFile = blurayHelper.m2tsFileName(firstM2tsOffset);
             }
             else
-                dstFile = keepOld.forFile(dstFile, muxerManager.totalSize());
+                dstFile = keepOld.forFile(dstFile, muxerManager.sourceSize());
             if (dt != DiskType::NONE)
                 muxerManager.setFinishingNote(
                     std::string("Finishing the output: closing the clips, writing the clip information and the "
@@ -6623,7 +6623,7 @@ static int runTsMuxer(int argc, char** argv)
                 // first, at the start of layer 0, then the clips in the order they play.
                 GuardedIsoOptions iso;
                 iso.srcRoot = innerFolder.str();
-                iso.outIso = keepOld.forFile(outputRoot, muxerManager.totalSize());
+                iso.outIso = keepOld.forFile(outputRoot, muxerManager.sourceSize());
                 iso.layerBreakLbns = muxerManager.getLayerBreakLbns();
                 iso.originalOrder = true;
                 iso.discCapacitySectors = muxerManager.getDiscSizeLimit() / 2048;
@@ -6701,7 +6701,7 @@ static int runTsMuxer(int argc, char** argv)
             if (sMuxer.keepEditions())
                 THROW(ERR_USAGE, "--keep-editions applies to a Matroska output (.mkv) only.")
             sMuxer.setDemuxFolder(dstFile);
-            const std::string demuxDir = keepOld.forDemuxFolder(dstFile, sMuxer.totalSize());
+            const std::string demuxDir = keepOld.forDemuxFolder(dstFile, sMuxer.sourceSize());
             createDir(demuxDir, true);
             sMuxer.setFinishingNote("Finishing the demux: closing the track files and checking the tracks...");
             sMuxer.doMux(demuxDir, nullptr);

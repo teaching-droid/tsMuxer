@@ -108,6 +108,8 @@ class MuxerManager final
     // written with the left eye as the base view
     [[nodiscard]] bool isMvcBaseViewR() const { return m_mvcBaseViewR || m_metaDemuxer.mplsBaseViewRight(); }
     [[nodiscard]] int64_t totalSize() const { return m_metaDemuxer.totalSize(); }
+    // The size of the sources, each file once (METADemuxer::sourceSize): what the room for an output is counted from
+    [[nodiscard]] int64_t sourceSize() const { return m_metaDemuxer.sourceSize(); }
     // What has actually been read out of the sources. The ratio of this to totalSize() is the
     // figure the progress line prints, and a finished mux must have consumed everything.
     [[nodiscard]] int64_t getDemuxedSize() { return m_metaDemuxer.getDemuxedSize(); }

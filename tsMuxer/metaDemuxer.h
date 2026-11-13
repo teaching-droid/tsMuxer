@@ -326,6 +326,11 @@ class METADemuxer final : public AbstractDemuxer
 
     int getLastReadRez() override { return m_lastReadRez; }
     [[nodiscard]] int64_t totalSize() const { return m_totalSize; }
+    // ** A FILE READ TWICE IS ONE FILE. ** A text track taken as text and drawn has its file read once more, under a
+    // second name, and the size of the file was counted once for each: the room an output is given, and what a drive
+    // was asked to have free, came out a whole file too large. totalSize is what is READ, which the progress and the
+    // check that all was read are counted against; this is the size of the sources, each file once.
+    [[nodiscard]] int64_t sourceSize() const { return m_totalSize - m_secondReadSize; }
     // The size of the sources the tracks taken are read from, less what the tracks left out take of a transport
     // stream file of its own (measured on a sample of the file): the size the image is estimated from
     [[nodiscard]] int64_t selectedSourceSize();
@@ -382,6 +387,7 @@ class METADemuxer final : public AbstractDemuxer
     // the second names such lines read their files under: the same files as another source of the mux, so they are
     // not asked where "the first source" gives something (the title, the chapters, the editions)
     std::set<std::string> m_secondReads;
+    int64_t m_secondReadSize = 0;  // of m_totalSize, the bytes of the files read a second time
 
     friend class ContainerToReaderWrapper;
 

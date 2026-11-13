@@ -3412,6 +3412,8 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
             if (File tagFile; tagFile.open(name.c_str(), File::ofRead))
                 fileSize -= SimplePacketizerReader::tagChainAtFileEnd(tagFile);
     m_totalSize += fileSize;
+    if (m_secondReads.count(fileList[0]) > 0)
+        m_secondReadSize += fileSize;
 
     if (auto* mergeReader = dynamic_cast<TrueHDAC3MergeReader*>(codecReader))
     {
@@ -3838,12 +3840,14 @@ static double transportStreamShare(const std::string& fileName, const std::map<i
 
 int64_t METADemuxer::selectedSourceSize()
 {
-    int64_t size = m_totalSize;
+    int64_t size = sourceSize();
     for (const auto& [name, demuxerData] : m_containerReader.m_demuxers)
     {
         // A file of its own, not a join or the clips of a playlist, which keep their whole size
         if (!demuxerData.m_demuxer || demuxerData.m_iterator || demuxerData.m_pids.empty())
             continue;
+        if (m_secondReads.count(name) > 0)
+            continue;  // the second read of a file: its size is not among the sources
         const std::string ext = strToUpperCase(extractFileExt(name));
         if (ext != "TS" && ext != "M2TS" && ext != "MTS" && ext != "M2T")
             continue;

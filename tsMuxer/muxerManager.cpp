@@ -998,7 +998,7 @@ int MuxerManager::getExtraISOBlocks()
     if (m_isoSplitBytes > 0)
         // A part is cut at the first key frame past the size, so none is smaller, and the transport stream adds
         // about 5 per cent to what the sources hold.
-        parts = (std::max)(parts, totalSize() / 100 * 106 / m_isoSplitBytes + 1);
+        parts = (std::max)(parts, sourceSize() / 100 * 106 / m_isoSplitBytes + 1);
     if (m_isoSplitTicks > 0)
     {
         const auto toNano = [](const int64_t pts)
@@ -1021,7 +1021,7 @@ int MuxerManager::getExtraISOBlocks()
     // About twenty sectors for what every disc has, and three a part in 2D, seven in 3D; counted with room to spare.
     constexpr int64_t SECTORS_PER_BLOCK = ALLOC_BLOCK_SIZE / SECTOR_SIZE;
     const int64_t needed = 64 + parts * (getMvcFound() ? 8 : 4);
-    const int64_t room = IsoWriter::metadataBlocks(totalSize(), m_extraIsoBlocks) * SECTORS_PER_BLOCK;
+    const int64_t room = IsoWriter::metadataBlocks(sourceSize(), m_extraIsoBlocks) * SECTORS_PER_BLOCK;
     if (needed <= room)
         return m_extraIsoBlocks + given;
     return m_extraIsoBlocks + static_cast<int>((needed - room + SECTORS_PER_BLOCK - 1) / SECTORS_PER_BLOCK) + given;
