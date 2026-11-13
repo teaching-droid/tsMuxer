@@ -46,6 +46,9 @@ class OpusStreamReader final : public SimplePacketizerReader
     // header of the last access unit (writeAdditionData).
     bool beforeFileCloseEvent(File& file) override;
     void setEndTrim(const int64_t nanoseconds) { m_endTrimNs = nanoseconds; }
+    // The padding at the end of the stream, in nanoseconds: the one given (setEndTrim), or the one the last packet
+    // read said itself (decodeFrame)
+    [[nodiscard]] int64_t endTrim() const { return m_endTrimNs; }
     // A join: the end padding of each file, in nanoseconds, in the order of the join (the DiscardPadding of its last
     // block). At each joint the end padding of the file before and the pre-skip of the file after add up to samples
     // that are not sound; whole packets of them are left out (readPacket).
@@ -102,6 +105,7 @@ class OpusStreamReader final : public SimplePacketizerReader
     int64_t m_joinExcess = 0;  // samples at the joints so far that are not sound and are still played
     int m_nextPreSkip = -1;    // decodeFrame: the packet just decoded is the last of its file; the next file's pre-skip
     bool m_lastOfStream = false;  // decodeFrame: the packet just decoded ends the stream
+    bool m_trimOfPacket = false;  // decodeFrame: m_endTrimNs is what a packet said of itself
     bool m_flushing = false;      // flushPacket: what decodeFrame is given is the end of the stream
     bool m_tsTiming = false;      // setTsTiming
     int m_timedTrimLeft = -1;     // timeForTs: the pre-skip not yet counted; -1 before the first packet

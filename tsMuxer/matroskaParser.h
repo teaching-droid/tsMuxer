@@ -522,9 +522,12 @@ class ParsedOpusTrackData final : public ParsedTrackPrivData
     ParsedOpusTrackData(uint8_t* buff, int size);
     ~ParsedOpusTrackData() override = default;
     void extractData(AVPacket* pkt, uint8_t* buff, int size) override;
+    // The DiscardPadding of the block whose packet comes next, in nanoseconds: it goes with that packet (extractData)
+    void setEndPadding(const int64_t nanoseconds) { m_endPaddingNs = nanoseconds; }
 
    private:
     bool m_firstPacket;
+    int64_t m_endPaddingNs = 0;
     std::vector<uint8_t> m_codecPrivate;
 };
 

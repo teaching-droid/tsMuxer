@@ -4109,7 +4109,12 @@ void MatroskaMuxer::writeBlock(MkvTrackInfo& track, const uint8_t* frameData, in
             if (lastNs > 0 && lastNs + 500000 < static_cast<double>(track.audioFrameNs))
                 lastFrameMs = (std::max)(int64_t{1}, static_cast<int64_t>(llround(lastNs / 1e6)));
         }
-    if (track.finalFlush && (track.endPaddingNs > 0 || lastFrameMs > 0))
+    // the padding of an Opus track that was not known before the mux: its last packet said it (OpusStreamReader)
+    int64_t endPaddingNs = track.endPaddingNs;
+    if (track.finalFlush && endPaddingNs <= 0 && track.codecID == CODEC_A_OPUS)
+        if (const auto opus = dynamic_cast<OpusStreamReader*>(track.codecReader))
+            endPaddingNs = opus->endTrim();
+    if (track.finalFlush && (endPaddingNs > 0 || lastFrameMs > 0))
     {
         uint8_t trackNumBuf[8];
         const int trackNumLen = ebml_write_size(trackNumBuf, track.trackNumber);
@@ -4123,8 +4128,8 @@ void MatroskaMuxer::writeBlock(MkvTrackInfo& track, const uint8_t* frameData, in
         if (lastFrameMs > 0)
             paddingLen +=
                 ebml_write_uint(paddingElement, MATROSKA_ID_BLOCKDURATION, static_cast<uint64_t>(lastFrameMs));
-        if (track.endPaddingNs > 0)
-            paddingLen += ebml_write_sint(paddingElement + paddingLen, MATROSKA_ID_DISCARDPADDING, track.endPaddingNs);
+        if (endPaddingNs > 0)
+            paddingLen += ebml_write_sint(paddingElement + paddingLen, MATROSKA_ID_DISCARDPADDING, endPaddingNs);
         // the frame's BlockAdditions as well: the correction part of the last frame of a hybrid WavPack track was lost
         std::vector<uint8_t> additions;
         uint8_t additionsHeader[16];

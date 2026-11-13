@@ -2307,10 +2307,20 @@ void TSDemuxer::opusFromTs(OpusFromTs& opus, const int channelConfig, const uint
         opus.startTrim = (std::min)(opus.startTrim + startTrim, 1 << 30);
         opus.kept += (std::max)(
             0, OpusStreamReader::parseFrameSamples(p.data() + i, static_cast<int>(packet)) - startTrim - endTrim);
-        out.push_back(static_cast<uint8_t>(packet >> 24));
+        // an access unit with an end trim says so with its packet (the top bit of the length, and the padding in
+        // nanoseconds behind it): a track that ends before the last megabytes of its file had its padding played
+        out.push_back(static_cast<uint8_t>((packet >> 24) | (endTrim > 0 ? 0x80 : 0)));
         out.push_back(static_cast<uint8_t>(packet >> 16));
         out.push_back(static_cast<uint8_t>(packet >> 8));
         out.push_back(static_cast<uint8_t>(packet));
+        if (endTrim > 0)
+        {
+            const auto ns = static_cast<uint32_t>(endTrim * 1000000000LL / 48000);
+            out.push_back(static_cast<uint8_t>(ns >> 24));
+            out.push_back(static_cast<uint8_t>(ns >> 16));
+            out.push_back(static_cast<uint8_t>(ns >> 8));
+            out.push_back(static_cast<uint8_t>(ns));
+        }
         out.insert(out.end(), p.begin() + static_cast<std::ptrdiff_t>(i),
                    p.begin() + static_cast<std::ptrdiff_t>(i + packet));
         at = i + packet;

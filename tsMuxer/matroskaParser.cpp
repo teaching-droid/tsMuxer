@@ -881,33 +881,35 @@ void ParsedOpusTrackData::extractData(AVPacket* pkt, uint8_t* buff, const int si
 {
     // Each Opus packet is prefixed with a 4-byte big-endian length so that
     // OpusStreamReader can find frame boundaries (Opus has no sync codes).
-    static constexpr int PREFIX = 4;
-
-    if (m_firstPacket && !m_codecPrivate.empty())
-    {
-        // First packet: prepend raw OpusHead so the stream reader can parse it.
-        m_firstPacket = false;
-        const int privSize = static_cast<int>(m_codecPrivate.size());
-        pkt->size = privSize + PREFIX + size;
-        pkt->data = new uint8_t[pkt->size];
+    // ** THE PADDING AT THE END OF A TRACK GOES WITH ITS PACKET. ** The block that ends an Opus track says how much of
+    // its packet is padding (DiscardPadding). It was looked up before the mux, among the last clusters of the file,
+    // and a track that ends long before its file, as the sound of a film that stops minutes before the picture, has
+    // no block there: the padding was played, in every output. The packet now carries it: the top bit of its length
+    // is set, and 4 bytes with the padding in nanoseconds follow the length (OpusStreamReader::decodeFrame).
+    const bool padded = m_endPaddingNs > 0;
+    const int prefix = padded ? 8 : 4;
+    const int privSize = m_firstPacket && !m_codecPrivate.empty() ? static_cast<int>(m_codecPrivate.size()) : 0;
+    // First packet: prepend raw OpusHead so the stream reader can parse it.
+    m_firstPacket = m_firstPacket && privSize == 0;
+    pkt->size = privSize + prefix + size;
+    pkt->data = new uint8_t[pkt->size];
+    if (privSize > 0)
         memcpy(pkt->data, m_codecPrivate.data(), privSize);
-        // Length prefix for the Opus audio packet
-        pkt->data[privSize] = static_cast<uint8_t>((size >> 24) & 0xFF);
-        pkt->data[privSize + 1] = static_cast<uint8_t>((size >> 16) & 0xFF);
-        pkt->data[privSize + 2] = static_cast<uint8_t>((size >> 8) & 0xFF);
-        pkt->data[privSize + 3] = static_cast<uint8_t>(size & 0xFF);
-        memcpy(pkt->data + privSize + PREFIX, buff, size);
-    }
-    else
+    uint8_t* at = pkt->data + privSize;
+    at[0] = static_cast<uint8_t>(((size >> 24) & 0x7F) | (padded ? 0x80 : 0));
+    at[1] = static_cast<uint8_t>((size >> 16) & 0xFF);
+    at[2] = static_cast<uint8_t>((size >> 8) & 0xFF);
+    at[3] = static_cast<uint8_t>(size & 0xFF);
+    if (padded)
     {
-        pkt->size = PREFIX + size;
-        pkt->data = new uint8_t[pkt->size];
-        pkt->data[0] = static_cast<uint8_t>((size >> 24) & 0xFF);
-        pkt->data[1] = static_cast<uint8_t>((size >> 16) & 0xFF);
-        pkt->data[2] = static_cast<uint8_t>((size >> 8) & 0xFF);
-        pkt->data[3] = static_cast<uint8_t>(size & 0xFF);
-        memcpy(pkt->data + PREFIX, buff, size);
+        const auto ns = static_cast<uint32_t>((std::min)(m_endPaddingNs, static_cast<int64_t>(UINT32_MAX)));
+        at[4] = static_cast<uint8_t>(ns >> 24);
+        at[5] = static_cast<uint8_t>(ns >> 16);
+        at[6] = static_cast<uint8_t>(ns >> 8);
+        at[7] = static_cast<uint8_t>(ns);
+        m_endPaddingNs = 0;
     }
+    memcpy(at + prefix, buff, size);
 }
 
 // ------------ PG ---------------

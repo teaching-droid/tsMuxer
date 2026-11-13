@@ -269,10 +269,12 @@ uint8_t* OpusStreamReader::findFrame(uint8_t* buff, uint8_t* end)
     // Opus packet.
     while (buff + FRAME_PREFIX_LEN <= end)
     {
-        const uint32_t len = (static_cast<uint32_t>(buff[0]) << 24) | (buff[1] << 16) | (buff[2] << 8) | buff[3];
+        // the top bit of the length: 4 bytes with the padding of the packet follow it (decodeFrame)
+        const uint32_t len = (static_cast<uint32_t>(buff[0] & 0x7F) << 24) | (buff[1] << 16) | (buff[2] << 8) | buff[3];
+        const int prefix = (buff[0] & 0x80) ? 2 * FRAME_PREFIX_LEN : FRAME_PREFIX_LEN;
         if (len >= 1 && len <= MAX_OPUS_PACKET)
         {
-            if (buff + FRAME_PREFIX_LEN + static_cast<int>(len) <= end)
+            if (end - buff >= prefix + static_cast<int>(len))
                 return buff;
             else
                 return nullptr;  // need more data
@@ -333,13 +335,25 @@ int OpusStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, i
         return NOT_ENOUGH_BUFFER;
     buff += head;
 
-    const uint32_t len = (static_cast<uint32_t>(buff[0]) << 24) | (buff[1] << 16) | (buff[2] << 8) | buff[3];
+    const uint32_t len = (static_cast<uint32_t>(buff[0] & 0x7F) << 24) | (buff[1] << 16) | (buff[2] << 8) | buff[3];
 
     if (len == 0 || len > MAX_OPUS_PACKET)
         return 0;  // invalid
 
+    // ** A PACKET THAT SAYS ITS OWN PADDING. ** The top bit of the length: 4 more bytes follow it, the padding at the
+    // end of this packet in nanoseconds, as the block of a Matroska file or the access unit of a transport stream
+    // says it (ParsedOpusTrackData::extractData, TSDemuxer::opusFromTs). The padding of a track was known only where
+    // it was found before the mux, at the end of the file; a track that ends long before its file had it played.
+    const bool padded = buff[0] & 0x80;
+    const int prefixLen = padded ? 2 * FRAME_PREFIX_LEN : FRAME_PREFIX_LEN;
+    if (end - buff < prefixLen)
+        return NOT_ENOUGH_BUFFER;
+    skipBeforeBytes = head + prefixLen;
+    const int64_t ownPadNs =
+        padded ? (static_cast<int64_t>(buff[4]) << 24) | (buff[5] << 16) | (buff[6] << 8) | buff[7] : 0;
+
     const int frameLen = static_cast<int>(len);
-    if (end - buff < FRAME_PREFIX_LEN + frameLen)
+    if (end - buff < prefixLen + frameLen)
         return NOT_ENOUGH_BUFFER;
 
     // In a join whose paddings are known, whether the next file's OpusHead follows this packet: then it is the last
@@ -347,7 +361,7 @@ int OpusStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, i
     m_nextPreSkip = -1;
     if (!m_joinEndPadNs.empty() && m_joinFile + 1 < m_joinEndPadNs.size())
     {
-        const uint8_t* after = buff + FRAME_PREFIX_LEN + frameLen;
+        const uint8_t* after = buff + prefixLen + frameLen;
         if (end - after >= 12 && memcmp(after, OPUS_HEAD_MAGIC, 8) == 0)
             m_nextPreSkip = after[10] | after[11] << 8;
         else if (end - after < 12 && !m_lastBlock)
@@ -362,13 +376,27 @@ int OpusStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, i
     // was not written to a transport stream: the padding was played, 13.5 ms of it for a usual encoder. With the
     // track alone the last block held the packet, and the trim was written. A packet that ends its block is now kept
     // back until more comes or the stream ends (flushPacket), where a trim at the end is to be written.
-    const bool endsBlock = end - buff == FRAME_PREFIX_LEN + frameLen;
-    if (endsBlock && !m_lastBlock && !m_flushing && m_endTrimNs > 0)
+    // A packet that says its padding ends its track, and needs no waiting. In a join the joints are worked out from
+    // the padding of each file, known before the mux, and what a packet says is passed over. The padding of a packet
+    // is its own: the next packet, if one comes after all, has none.
+    const bool ownPad = ownPadNs > 0 && m_joinEndPadNs.empty();
+    if (ownPad)
+    {
+        m_endTrimNs = ownPadNs;
+        m_trimOfPacket = true;
+    }
+    else if (m_trimOfPacket)
+    {
+        m_endTrimNs = 0;
+        m_trimOfPacket = false;
+    }
+    const bool endsBlock = end - buff == prefixLen + frameLen;
+    if (endsBlock && !m_lastBlock && !m_flushing && m_endTrimNs > 0 && !ownPad)
         return NOT_ENOUGH_BUFFER;
-    m_lastOfStream = (m_lastBlock || m_flushing) && endsBlock;
+    m_lastOfStream = ownPad || ((m_lastBlock || m_flushing) && endsBlock);
 
     // Parse the Opus packet to determine frame duration
-    m_curFrameSamples = parseFrameSamples(buff + FRAME_PREFIX_LEN, frameLen);
+    m_curFrameSamples = parseFrameSamples(buff + prefixLen, frameLen);
 
     return frameLen;  // the actual Opus packet size (without prefix)
 }

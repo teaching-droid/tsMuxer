@@ -955,6 +955,11 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
                     if (n == 0 && !m_pendingAdditions.empty())
                         tracks[track]->parsed_priv_data->setBlockAdditions(m_pendingAdditions.data(),
                                                                            static_cast<int>(m_pendingAdditions.size()));
+                    // the padding of the block's last frame goes with its packet; in a join the reader works the
+                    // joints out from the padding of each file, known before the mux
+                    if (n == laces - 1 && discardNs > 0 && m_joinFiles.size() <= 1)
+                        if (auto* opusData = dynamic_cast<ParsedOpusTrackData*>(tracks[track]->parsed_priv_data))
+                            opusData->setEndPadding(discardNs);
                     tracks[track]->parsed_priv_data->extractData(pkt, curPtr, slice_size + offset);
                 }
                 else if (slice_size + offset > 0)
