@@ -161,6 +161,17 @@ endif()
 if (WIN32)
   target_sources(tsmuxer PRIVATE osdep/textSubtitlesRenderWin32.cpp)
   target_link_libraries(tsmuxer gdiplus)
+  # THE STACK OF THE WINDOWS PROGRAM. A Windows program gets a stack of 1 MB unless it asks for more; on Linux and
+  # macOS the main thread has 8 MB. The reader of a transport stream holds tables of about 140 KB, and such readers
+  # are also made on the stack, one inside the call of another, where a file is looked at before it is muxed. A
+  # job of a video and a sound track of a transport stream was measured at 770 to 900 KB of stack: one table more in
+  # that reader, and the program ended at once without a word (exit 127). 8 MB are asked for, as elsewhere: address
+  # space that is reserved, and memory only as far as it is used.
+  if(MSVC)
+    target_link_options(tsmuxer PRIVATE "/STACK:8388608")
+  else()
+    target_link_options(tsmuxer PRIVATE "-Wl,--stack,8388608")
+  endif()
 else()
   target_sources(tsmuxer PRIVATE osdep/textSubtitlesRenderFT.cpp)
   # on osxcross use the static freetype library explicitly
