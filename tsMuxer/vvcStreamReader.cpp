@@ -60,6 +60,10 @@ CheckStreamRez VVCStreamReader::checkStream(uint8_t* buffer, const int len)
         {
             r->m_totalFrameNum = r->m_frameNum = r->m_fullPicOrder = 0;
             r->m_curDts = r->m_curPts = 0;
+            r->m_picOrderStarted = false;
+            r->m_maxFullPicOrder = -1;
+            r->m_shownBeforeStart = 0;
+            r->m_restartLeading = 0;
         }
     } resetCounters{this};
     // A parameter set is read into a unit of its own and kept only when it is whole; a damaged one is skipped and the
@@ -409,6 +413,9 @@ void VVCStreamReader::incTimings()
     const int delta = m_frameNum - m_fullPicOrder;
     m_curPts = m_curDts - delta * m_pcrIncPerFrame;
     m_frameNum++;
+    m_maxFullPicOrder = (std::max)(m_maxFullPicOrder, m_fullPicOrder);
+    if (m_fullPicOrder < 0)
+        ++m_shownBeforeStart;
     m_firstFrame = false;
 
     if (delta > m_frameDepth)
@@ -427,9 +434,18 @@ int VVCStreamReader::toFullPicOrder(const VvcSliceHeader* slice, const int pic_b
     // An IDR picture after the first goes after its RADL pictures, which follow it in decode order and are shown before
     // it (placesOfLeadingPictures). Its count used to start again at its own place, so its RADL pictures took the times
     // of the last pictures before it, and the last times of the stream were given to no picture.
-    if (slice->isIDR())
+    //
+    // ** A STREAM THAT BEGINS ON ANOTHER PICTURE BEGINS ITS COUNT THERE. ** A stream that begins with a CRA picture
+    // and the pictures that lead it, as a cut of an open group does, kept the count of the order from the base the
+    // first look at the file had left, and from 0 where there was none: the first picture stood at its own order
+    // count (47 pictures, 1.9 s, on a sample), so the times of the stream began that late against the sound, and the
+    // first IDR picture went back by as much, over the times of the pictures before it. The first picture now begins
+    // the count at its own place, as in the HEVC reader; the pictures that lead it are shown before the start.
+    if (slice->isIDR() || !m_picOrderStarted)
     {
-        m_picOrderBase = m_frameNum + m_restartLeading - static_cast<int>(slice->pic_order_cnt_lsb);
+        // m_restartLeading is set only for an IDR picture after the first picture (counted), as before
+        m_picOrderBase = periodStart() + m_restartLeading - static_cast<int>(slice->pic_order_cnt_lsb);
+        m_picOrderStarted = true;
         m_restartLeading = 0;
         m_picOrderMsb = 0;
         m_prevPicOrder = static_cast<int>(slice->pic_order_cnt_lsb);
@@ -447,6 +463,19 @@ int VVCStreamReader::toFullPicOrder(const VvcSliceHeader* slice, const int pic_b
     }
 
     return slice->pic_order_cnt_lsb + m_picOrderMsb + m_picOrderBase;
+}
+
+// A period begins at the count of the pictures before it, less the pictures shown before the start (the leading
+// pictures of a first CRA picture, or the RADL pictures of a first IDR picture, which have places below 0, but are
+// counted): with them the first IDR picture after such a start stood as many places late, with a hole of that length
+// in the times (HEVCStreamReader::periodStart), and then never at a place already given. A stream with no such
+// pictures begins each period at the count, as it did: a stream that lacks pictures is not moved here (the VVC
+// reader has no handling of a gap, as the HEVC reader has).
+int VVCStreamReader::periodStart() const
+{
+    if (!m_picOrderStarted || m_shownBeforeStart == 0)
+        return m_frameNum;
+    return (std::max)(m_maxFullPicOrder + 1, m_frameNum - m_shownBeforeStart);
 }
 
 // The places in time the RADL pictures of an IDR picture take before it, as for HEVC: the first of them is shown as

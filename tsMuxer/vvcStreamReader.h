@@ -61,7 +61,12 @@ class VVCStreamReader final : public MPEGStreamReader
     int m_frameNum;
     int m_fullPicOrder;
     int m_picOrderBase;
-    int m_restartLeading = 0;  // placesOfLeadingPictures of an IDR picture after the first picture
+    int m_restartLeading = 0;        // placesOfLeadingPictures of an IDR picture after the first picture
+    bool m_picOrderStarted = false;  // the first picture of the stream has set m_picOrderBase
+    int m_maxFullPicOrder = -1;      // the latest place a picture was given
+    int m_shownBeforeStart = 0;      // pictures given a place below 0: counted, and shown before the start
+    // The place a period that begins at the picture being read begins at (toFullPicOrder)
+    [[nodiscard]] int periodStart() const;
     int m_frameDepth;
 
     int m_picOrderMsb;
