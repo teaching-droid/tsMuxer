@@ -6069,13 +6069,27 @@ static int runTsMuxer(int argc, char** argv)
                     // The parser has already dropped any clip whose streams contradict the rest, so
                     // this is the first clip that fits the playlist. It may still carry fewer
                     // streams than the playlist declares, and those come from the later clips.
+                    // ** A CLIP NAMED IN OTHER LETTERS IS FOUND. ** The clips were looked for under one spelling of
+                    // their ending, .m2ts beside a .mpls. A disc copied with its names in capitals (00000.M2TS) has
+                    // them under another, and where the file system tells the two apart the listing of its playlist
+                    // ended with "Can't open stream", though a mux of the same playlist opens the clip
+                    // (clipNameAsOnDisc). The name is taken as the disc has it.
+                    const auto onDisc = [](const string& name)
+                    {
+                        if (fileExists(name))
+                            return name;
+                        const size_t dot = name.rfind('.');
+                        const string other = METADemuxer::clipNameAsOnDisc(name.substr(0, dot + 1),
+                                                                           strToLowerCase(name.substr(dot + 1)));
+                        return fileExists(other) ? other : name;
+                    };
                     MPLSPlayItem& item = mplsParser.m_playItems[0];
-                    string itemName = streamDir + item.fileName + mediaExt;
+                    string itemName = onDisc(streamDir + item.fileName + mediaExt);
                     if (fileExists(itemName))
                     {
                         if (mode3D && !mplsParser.m_mvcFiles.empty())
                         {
-                            string subItemName = streamDir + mplsParser.m_mvcFiles[0] + mediaExt;
+                            string subItemName = onDisc(streamDir + mplsParser.m_mvcFiles[0] + mediaExt);
                             if (fileExists(subItemName))
                                 detectStreamReader(subItemName.c_str(), &mplsParser, true);
                             else
@@ -6088,7 +6102,8 @@ static int runTsMuxer(int argc, char** argv)
                     }
                     if (switchToSsif)
                     {
-                        string ssifName = streamDir + string("SSIF") + getDirSeparator() + item.fileName + ssifExt;
+                        string ssifName =
+                            onDisc(streamDir + string("SSIF") + getDirSeparator() + item.fileName + ssifExt);
                         if (fileExists(ssifName))
                             itemName = ssifName;  // if m2ts file absent then swith to ssif
                     }
@@ -6097,15 +6112,15 @@ static int runTsMuxer(int argc, char** argv)
                     for (size_t i = 1; i < mplsParser.m_playItems.size(); ++i)
                     {
                         const string& name = mplsParser.m_playItems[i].fileName;
-                        string media = streamDir + name + mediaExt;
+                        string media = onDisc(streamDir + name + mediaExt);
                         if (!fileExists(media))
-                            media = streamDir + string("SSIF") + getDirSeparator() + name + ssifExt;
+                            media = onDisc(streamDir + string("SSIF") + getDirSeparator() + name + ssifExt);
                         if (fileExists(media))
-                            laterClips.push_back({media, clipInfoDir + name + (shortExt ? ".CPI" : ".clpi"),
+                            laterClips.push_back({media, onDisc(clipInfoDir + name + (shortExt ? ".CPI" : ".clpi")),
                                                   i == mplsParser.chosenStnItem()});
                     }
                     detectStreamReader(itemName.c_str(), &mplsParser, false, &laterClips,
-                                       clipInfoDir + item.fileName + (shortExt ? ".CPI" : ".clpi"));
+                                       onDisc(clipInfoDir + item.fileName + (shortExt ? ".CPI" : ".clpi")));
                 }
                 // The lengths and marks of the play items, as the mux places them (the default of --playlist-clips)
                 METADemuxer::cutPlayItems(mplsParser, argv[1], listPlaylistPlayed);
