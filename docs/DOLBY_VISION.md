@@ -192,7 +192,7 @@ What it needs:
 
 | | |
 |---|---|
-| a Matroska source | the track on one line of the meta file, as the window writes it |
+| a Matroska, MP4 or transport stream source | a file (.mkv, .mp4, .ts, .m2ts), with the track on one line of the meta file, as the window writes it. Not a playlist or a disc: give the file of the film |
 | a picture of 3840x2160 | the size a dual layer disc has |
 | the libdovi library | as for profile 8.1, see above |
 | ffmpeg | for the one black picture. tsMuxeR does not ship it. It is taken from `--ffmpeg=<file>` on the MUXOPT line, else from beside tsMuxeR, else from a folder of the search path, and it is asked for that one picture only. Its libx265 encoder is used, or the HEVC encoder of the graphics hardware (NVIDIA, Intel, AMD). |

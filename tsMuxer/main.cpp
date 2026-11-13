@@ -2028,12 +2028,13 @@ All parameters in this group start with two dashes:
                       newer, so on Windows 7 this option may not work; that is a
                       limit of the library build, not of tsMuxeR.
 --ffmpeg              Blu-ray output: the ffmpeg to use for a single layer Dolby
-                      Vision track (profile 8 with an HDR10 base) of a Matroska
-                      source. A disc player takes Dolby Vision from two layers, so
-                      the second layer of such a track is made: a black picture of
-                      1920x1080 for each picture of the film, with the Dolby
-                      Vision data of that picture. ffmpeg is asked for that one
-                      picture only; nothing of the film is encoded again.
+                      Vision track (profile 8 with an HDR10 base) of a Matroska,
+                      MP4 or transport stream file. A disc player takes Dolby
+                      Vision from two layers, so the second layer of such a
+                      track is made: a black picture of 1920x1080 for each
+                      picture of the film, with the Dolby Vision data of that
+                      picture. ffmpeg is asked for that one picture only;
+                      nothing of the film is encoded again.
                       Without this option an ffmpeg beside tsMuxeR or on the
                       search path is taken. tsMuxeR does not ship ffmpeg. The
                       libdovi library is needed as well. Where one of them is

@@ -205,7 +205,7 @@ Was dafür nötig ist:
 
 | | |
 |---|---|
-| eine Matroska-Quelle | die Spur in einer Zeile der Meta-Datei, so wie das Fenster sie schreibt |
+| eine Matroska-, MP4- oder Transportstrom-Quelle | eine Datei (.mkv, .mp4, .ts, .m2ts), mit der Spur in einer Zeile der Meta-Datei, so wie das Fenster sie schreibt. Keine Playlist und keine Disc: geben Sie die Datei des Films an |
 | ein Bild mit 3840x2160 | die Größe einer Dual-Layer-Disc |
 | die Bibliothek libdovi | wie für Profil 8.1, siehe oben |
 | ffmpeg | für das eine schwarze Bild. tsMuxeR liefert es nicht mit. Es wird aus `--ffmpeg=<Datei>` in der MUXOPT-Zeile genommen, sonst neben tsMuxeR gesucht, sonst in einem Ordner des Suchpfads, und nur für dieses eine Bild gebraucht. Verwendet wird sein Encoder libx265 oder der HEVC-Encoder der Grafikhardware (NVIDIA, Intel, AMD). |
