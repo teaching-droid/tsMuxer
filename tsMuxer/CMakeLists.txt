@@ -50,6 +50,7 @@ add_executable (tsmuxer
   h264StreamReader.cpp
   hevc.cpp
   dvLayerPicture.cpp
+  jsonListing.cpp
   hevcDolbyVisionFilter.cpp
   hevcStreamReader.cpp
   ioContextDemuxer.cpp

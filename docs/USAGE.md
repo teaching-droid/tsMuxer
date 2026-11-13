@@ -120,6 +120,68 @@ V_MPEG-2, "dvd.iso", title=main, track=224
 A_AC3, "dvd.iso", title=main, track=128
 ```
 
+### The listing as a JSON document
+
+`--json` before the source gives a listing as one JSON document on the standard output, for a program that reads it: `tsMuxeR --json film.mkv`, `tsMuxeR --json film.iso`, `tsMuxeR --json --show-title=main film.iso`. It lists what the same call lists without it: the tracks of a file or a playlist, the titles of a disc, the tracks of one title, or the discs of a folder. The options of a listing may stand before the source: `--all-playlists`, `--min-title-length=`, `--show-title=`, `--lang-codes=` and `--playlist-clips=`. `--json` does not go with a mux or with any other option.
+
+Nothing but the document is written, to the standard output or to the error output: no version line, no notes, no warnings. What the text listing would have said beside its facts is in `messages`. A listing that fails gives a document as well, with `error` in it, and the exit code is the one the text listing ends with. Only a listing that is stopped on request (exit code 4) writes nothing.
+
+```
+{
+  "format": 1,
+  "program": "tsMuxeR",
+  "version": "3.2.0",
+  "source": "film.mkv",
+  "listing": "tracks",
+  "tracks": [
+    {
+      "id": 1,
+      "kind": "video",
+      "type": "HEVC",
+      "codec": "V_MPEGH/ISO/HEVC",
+      "info": "Profile: Main10@5.0 Resolution: 3840:2160p  Frame rate: 24",
+      "language": "und"
+    },
+    {
+      "id": 2,
+      "kind": "audio",
+      "type": "AC3",
+      "codec": "A_AC3",
+      "info": "Bitrate: 640Kbps Sample Rate: 48KHz Channels: 5.1",
+      "language": "eng",
+      "languageTag": "en",
+      "name": "English",
+      "delayMs": -24
+    }
+  ],
+  "durationSeconds": 7120.48,
+  "chapters": [0, 300, 600]
+}
+```
+
+`"format": 1` is the form of the document. A later version may add members without a new number; a member that changes its meaning or goes away raises it. Times are numbers of seconds. A member that has no value is left out, so a reader asks whether it is there. Every document has `format`, `program` and `version`. `source` is the source as it was given, and `listing` says what is listed: `tracks`, `titles` or `discs`. A call that is refused as a whole has neither, and a listing that fails before the kind of its source is known has no `listing`.
+
+| Member | Listing | What it holds |
+|---|---|---|
+| `tracks` | tracks | The tracks that can be muxed, in the order of the text listing. `id` is the number a meta line takes with `track=` (left out for a file that is one stream); `kind` is `video`, `audio` or `subtitle`; `type` and `codec` are the "Stream type" and "Stream ID" of the text listing, and `codec` is the first word of a meta line; `info` is the "Stream info" line |
+| | | Also, where they apply: `language` (three letters), `languageTag` (the tag of the file, such as `fr-CA`), `name`, `flags` (a list of `forced`, `hearing-impaired`, `visual-impaired`, `text-descriptions`, `original`, `commentary`), `bytes` (the size of the track where the file counts it), `delayMs`, `subTrack` (1 or 2, a layer or view of a combined track), `secondary` and `unselected` (true or left out), `dependentView` (a track of the second view of a 3D playlist), `playlistOrder` and `clipOrder` (the place of the track among its kind in the playlist and in its clip), `file` (the clip of a text subtitle that a playlist plays from a clip of its own) |
+| `notOffered` | tracks | The tracks that cannot be muxed: `reason` (the sentence of the text listing), and where known `id`, `streamType` (the number the container gives), `matroskaCodec`, `language` |
+| `durationSeconds`, `videoStartSeconds`, `videoEndSeconds`, `writingApplication`, `discTitle` | tracks | As the lines of the same names in the text listing. Of a playlist, `durationSeconds` is what it plays in all, the sum of its clips |
+| `chapters` | tracks | The chapter marks of the file or the playlist, in seconds from its start |
+| `clips` | tracks, of a playlist | The clips the playlist plays, in order: `file`, `durationSeconds`, `inSeconds` and `outSeconds` (the part of the clip that is played, on the clock of the clip), `startSeconds` (where it begins in the playlist), `chapters` (the marks inside it, in seconds of the playlist), `missingFile` (the file that is not there) |
+| `skippedClips`, `baseView` | tracks, of a playlist | The clips left out of the playlist as the text listing names them; `left` or `right` for a 3D playlist |
+| `title`, `titleSource` | tracks, with `--show-title` | The title asked for, and the playlist or the first file it was listed from. Of a DVD also `dvdTitle` (the number for `dvd-title=`), `metaSource` (the source for a meta line), `discLanguages` (`track`, `language`) and `titleChapters` |
+| `disc`, `video` | titles | `Blu-ray` or `DVD`; of a DVD also its video as the text listing names it, such as "MPEG-2 720x576 25 fps 16:9" |
+| `titles` | titles | The titles, the main film first: `number` (for `title=`), `durationSeconds`, `chapterCount`, `main` (true or false), `angles`, `picture` (`SDR`, `HDR10`, ...), `note`, `angleParts` (`startSeconds`, `endSeconds`: where the angles differ) |
+| | | Of a Blu-ray also `playlist` (its name), `file` (its path), `clipCount`, `audioLanguages`, `is3d`, `pictureLines`, `angleClips` (for each angle its clips), `versionOf` and `versionParts` (a version of a main title: of which, and where it plays clips of its own, each part with `startSeconds`, `endSeconds` and `clips`, the names of those clips) |
+| | | Of a DVD also `dvdTitle`, `titleSet`, `chapters` (seconds), `audio` (`track`, `coding`, `channels`, `language`), `subtitleLanguages` (the subtitles as the disc counts them), `subtitleTracks` (`track`, `language`: the tracks they are in the VOB files, where one subtitle can be several, one for each form of the picture), `pictureWidth`, `pictureHeight`, `encrypted` |
+| `mainTitles`, `minTitleSeconds`, `minTitleApplied` | titles | How many main titles the disc has; the length a title needs, and false when no playlist was that long and the shorter ones are listed |
+| `leftOut` | titles | The playlists or DVD titles that are no title, each with its `reason` |
+| `shortPlaylists`, `shortTitles` | titles | The names of the playlists, or the numbers of the DVD titles, under the length a title needs |
+| `discs` | discs | The discs in a folder of discs: `kind`, `path` |
+| `messages` | all | The lines the text listing would have written beside its facts, in order: `level` (`info` or `warning`) and `text` |
+| `error` | all | Only when the listing failed: `exitCode` and `message` |
+
 A title of several angles is listed with the number of its angles and, under it, where they differ: the times, and on a Blu-ray the clip each angle plays there. Take the angle with `angle=<n>` on the meta line; the window's Choose a title shows a row for each angle, with these lines under it.
 ```
 Title 1  00011.mpls    1:52:14   24 chapters     3 clips  eng deu spa  2 angles  SDR  (main film)

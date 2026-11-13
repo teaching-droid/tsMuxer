@@ -1,6 +1,8 @@
 // Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "discTitles.h"
+
+#include "jsonListing.h"
 #include "vodCoreException.h"
 
 #include <fs/directory.h>
@@ -778,6 +780,60 @@ std::string describeDiscTitles(const DiscTitles& t)
         s << "\nGive the playlist of a title as the source to list its tracks, or name the disc with title=<number> "
              "or title=main in a meta file.\n";
     return s.str();
+}
+
+void discTitlesToJson(const DiscTitles& t, jsonListing::Value& doc)
+{
+    doc.text("listing", "titles").text("disc", "Blu-ray");
+    doc.seconds("minTitleSeconds", t.minSeconds).flag("minTitleApplied", t.minApplied);
+    doc.number("mainTitles", t.mainTitles);
+    doc.list("titles");  // there also when the disc has no title
+    for (const DiscTitle& title : t.titles)
+    {
+        jsonListing::Value& o = doc.list("titles").addObject();
+        o.number("number", title.number).text("playlist", title.name).text("file", title.playlist);
+        o.seconds("durationSeconds", title.seconds);
+        o.number("chapterCount", static_cast<int64_t>(title.chapters));
+        o.number("clipCount", static_cast<int64_t>(title.clips));
+        o.list("audioLanguages");
+        for (const std::string& lang : title.audio) o.list("audioLanguages").addText(lang);
+        o.flag("main", title.isMain);
+        if (title.is3d)
+            o.flag("is3d", true);
+        o.number("angles", title.angles);
+        if (!title.picture.empty())
+            o.text("picture", title.picture);
+        if (title.pictureLines > 0)
+            o.number("pictureLines", title.pictureLines);
+        if (!title.note.empty())
+            o.text("note", title.note);
+        // where the angles differ, and the clips of each angle there
+        for (const auto& [start, end] : title.angleParts)
+            o.list("angleParts").addObject().seconds("startSeconds", start).seconds("endSeconds", end);
+        for (const auto& clips : title.angleClips)
+        {
+            jsonListing::Value& angle = o.list("angleClips").addList();
+            for (const std::string& clip : clips) angle.addText(clip);
+        }
+        // a version of a main title: of which, and where it plays clips of its own
+        if (title.versionOf > 0)
+            o.number("versionOf", title.versionOf);
+        for (size_t i = 0; i < title.versionParts.size(); ++i)
+        {
+            jsonListing::Value& part = o.list("versionParts").addObject();
+            part.seconds("startSeconds", title.versionParts[i].first);
+            part.seconds("endSeconds", title.versionParts[i].second);
+            if (i < title.versionClips.size())
+                part.text("clips", title.versionClips[i]);
+        }
+    }
+    for (const DiscTitle& title : t.leftOut)
+        doc.list("leftOut")
+            .addObject()
+            .text("playlist", title.name)
+            .text("file", title.playlist)
+            .text("reason", title.note);
+    for (const std::string& name : t.shortOnes) doc.list("shortPlaylists").addText(name);
 }
 
 void addPictureLabels(DiscTitles& t, const std::string& root)

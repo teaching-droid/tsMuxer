@@ -1,7 +1,9 @@
 // Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "dvdTitles.h"
+
 #include "discTitles.h"
+#include "jsonListing.h"
 #include "vodCoreException.h"
 
 #include <fs/directory.h>
@@ -689,6 +691,75 @@ static std::string mainTitlesText(const DvdTitles& t)
 void addPictureLabels(DvdTitles& t)
 {
     for (auto& title : t.titles) title.picture = "SDR";
+}
+
+void dvdTitlesToJson(const DvdTitles& t, jsonListing::Value& doc)
+{
+    doc.text("listing", "titles").text("disc", "DVD");
+    if (!t.video.empty())
+        doc.text("video", t.video);
+    doc.seconds("minTitleSeconds", t.minSeconds).flag("minTitleApplied", t.minApplied);
+    doc.number("mainTitles", t.mainTitles);
+    doc.list("titles");  // there also when the disc has no title
+    for (const DvdTitle& title : t.titles)
+    {
+        jsonListing::Value& o = doc.list("titles").addObject();
+        o.number("number", title.number).number("dvdTitle", title.discTitle).number("titleSet", title.titleSet);
+        o.seconds("durationSeconds", title.seconds);
+        o.number("chapterCount", static_cast<int64_t>(title.chapters.size()));
+        o.list("chapters");
+        for (const double chapter : title.chapters) o.list("chapters").addSeconds(chapter);
+        o.list("audio");
+        for (const DvdAudio& a : title.audio)
+        {
+            jsonListing::Value& audio = o.list("audio").addObject();
+            audio.number("track", a.track).text("coding", a.coding).number("channels", a.channels);
+            if (!a.lang.empty())
+                audio.text("language", a.lang);
+        }
+        // the subtitles as the disc counts them, by language, and the tracks they are in the VOB files: one of
+        // them can be in several, one for each form of the picture
+        o.list("subtitleLanguages");
+        for (const std::string& lang : title.subpictures) o.list("subtitleLanguages").addText(lang);
+        for (const auto& [track, lang] : title.subpictureTracks)
+        {
+            jsonListing::Value& sub = o.list("subtitleTracks").addObject();
+            sub.number("track", track);
+            if (!lang.empty())
+                sub.text("language", lang);
+        }
+        o.flag("main", title.isMain);
+        o.number("angles", title.angles);
+        o.number("pictureWidth", title.pictureWidth).number("pictureHeight", title.pictureHeight);
+        if (title.encrypted)
+            o.flag("encrypted", true);
+        if (!title.picture.empty())
+            o.text("picture", title.picture);
+        if (!title.note.empty())
+            o.text("note", title.note);
+        // where the angles differ: each angle block, at its time in the title, as the text listing says it
+        double at = 0;
+        std::vector<std::pair<double, double>> parts;
+        for (const DvdCell& c : title.cells)
+        {
+            if (!firstAngle(c))
+                continue;
+            if (c.angle)
+            {
+                if (!parts.empty() && std::abs(parts.back().second - at) < 0.5)
+                    parts.back().second = at + c.seconds;
+                else
+                    parts.emplace_back(at, at + c.seconds);
+            }
+            at += c.seconds;
+        }
+        if (title.angles > 1)
+            for (const auto& [start, end] : parts)
+                o.list("angleParts").addObject().seconds("startSeconds", start).seconds("endSeconds", end);
+    }
+    for (const DvdTitle& title : t.leftOut)
+        doc.list("leftOut").addObject().number("dvdTitle", title.discTitle).text("reason", title.note);
+    for (const int n : t.shortOnes) doc.list("shortTitles").addNumber(n);
 }
 
 std::string describeDvdTitles(const DvdTitles& t)

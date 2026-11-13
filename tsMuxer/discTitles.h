@@ -88,6 +88,13 @@ void addPictureLabels(DiscTitles& t, const std::string& root);
 // The listing printed for a disc folder or image given alone on the command line.
 std::string describeDiscTitles(const DiscTitles& t);
 
+// The same listing as members of a JSON document (--json, jsonListing.h): "titles", "leftOut", "shortPlaylists".
+namespace jsonListing
+{
+class Value;
+}
+void discTitlesToJson(const DiscTitles& t, jsonListing::Value& doc);
+
 // The playlist of title=<number> or title=main of a disc folder or image. Throws with the reason when there is none.
 // minSeconds and all: the listing the number counts in (--show-title after --min-title-length or --all-playlists).
 std::string discTitlePlaylist(const std::string& discPath, const std::string& title, double minSeconds = 120,

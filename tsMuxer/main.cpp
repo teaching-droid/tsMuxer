@@ -34,6 +34,7 @@
 #include "h264StreamReader.h"
 #include "hevcStreamReader.h"
 #include "iso_writer.h"
+#include "jsonListing.h"
 #include "matroskaDemuxer.h"
 #include "matroskaMuxer.h"
 #include "metaDemuxer.h"
@@ -764,8 +765,7 @@ static DetectStreamRez listingOfPlaylist(const std::string& playlist)
     if (mplsParser.m_playItems.empty())
         THROW(ERR_SOURCE, "The playlist " << playlist << " names no clip, so there is nothing to mux.")
     const string streamDir = METADemuxer::playlistStreamDir(playlist);
-    const std::string mediaExt = shortExt ? ".MTS" : ".m2ts";
-    const std::string ssifExt = shortExt ? ".SIF" : ".ssif";
+    // each clip under the name the disc has, in small letters or in capitals, as the mux opens it (clipNameAsOnDisc)
     const auto mediaOf = [&](const std::string& name)
     {
         const string media = METADemuxer::clipNameAsOnDisc(streamDir + name + ".", shortExt ? "mts" : "m2ts");
@@ -776,7 +776,8 @@ static DetectStreamRez listingOfPlaylist(const std::string& playlist)
     };
     const string first = mediaOf(mplsParser.m_playItems[0].fileName);
     if (!fileExists(first))
-        THROW(ERR_FILE_NOT_FOUND, "Can't open file: " << streamDir + mplsParser.m_playItems[0].fileName + mediaExt
+        THROW(ERR_FILE_NOT_FOUND, "Can't open file: " << streamDir + mplsParser.m_playItems[0].fileName
+                                                      << (shortExt ? ".mts" : ".m2ts")
                                                       << ", the first clip of the playlist " << playlist)
     vector<LaterClip> laterClips;
     vector<string> laterFiles;
@@ -830,7 +831,11 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
     // The film's name, as the disc gives it: the window names the output by it
     if (!isSubMode)
         if (const std::string title = discTitleOfSource(fileName); !title.empty())
-            LTRACE(LT_INFO, 2, "Disc title: " << title);
+        {
+            LISTLINE("Disc title: " << title);
+            if (jsonListing::active)
+                jsonListing::doc().text("discTitle", title);
+        }
 
     // A 3D disc's .m2ts names ONE view, so this file may be half a picture. The disc says so
     // in its playlists; say it too, on the video line, rather than leaving someone to find out
@@ -862,8 +867,8 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
         if (streams[i].trackID != 0)
         {
             if (i > 0)
-                LTRACE(LT_INFO, 2, "");
-            LTRACE(LT_INFO, 2, "Track ID:    " << streams[i].trackID);
+                LISTLINE("");
+            LISTLINE("Track ID:    " << streams[i].trackID);
         }
         if (streams[i].codecInfo.codecID)
         {
@@ -884,13 +889,13 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
             string postfix;
             if (isSubMode && streams[i].codecInfo.codecID == CODEC_S_PGS)
                 postfix = " (depended view)";
-            LTRACE(LT_INFO, 2, "Stream type: " << streams[i].codecInfo.displayName << postfix);
+            LISTLINE("Stream type: " << streams[i].codecInfo.displayName << postfix);
             if (streams[i].isSecondary)
-                LTRACE(LT_INFO, 2, "Secondary: 1");
+                LISTLINE("Secondary: 1");
             if (streams[i].unused)
-                LTRACE(LT_INFO, 2, "Unselected: 1");
+                LISTLINE("Unselected: 1");
 
-            LTRACE(LT_INFO, 2, "Stream ID:   " << streams[i].codecInfo.programName);
+            LISTLINE("Stream ID:   " << streams[i].codecInfo.programName);
             std::string descr = streams[i].streamDescr;
             // The subtitles of the picture-in-picture video were listed as ordinary ones, numbered after the film's
             if (streams[i].codecInfo.codecID == CODEC_S_PGS && mplsParser &&
@@ -955,25 +960,24 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                                          streams[i].codecInfo.codecID == CODEC_V_MPEG4_H264_DEP))
                 descr += ssifIsBaseView ? "   3D: base view only, both views are in " + ssifPartner
                                         : "   3D: dependent view only, both views are in " + ssifPartner;
-            LTRACE(LT_INFO, 2, "Stream info: " << descr);
-            LTRACE(LT_INFO, 2, "Stream lang: " << streams[i].lang);
+            LISTLINE("Stream info: " << descr);
+            LISTLINE("Stream lang: " << streams[i].lang);
             // ** THE FULL LANGUAGE TAG OF A TRACK IS LISTED. ** A Matroska track can name its language in BCP 47, such
             // as fr-CA beside fr-FR, or zh-Hant, and the listing gave only the three letters every output takes, so two
             // dubs of one language could not be told apart. The tag the file gives is listed on a line of its own,
             // which the window and scripts that read "Stream lang: " pass over; a meta line takes it with lang=. A tag
             // of "und" (undetermined) says nothing and is not listed.
             if (!streams[i].langTag.empty() && streams[i].langTag != "und")
-                LTRACE(LT_INFO, 2, "Stream language tag: " << streams[i].langTag);
+                LISTLINE("Stream language tag: " << streams[i].langTag);
             // ** THE SIZE OF A TRACK IS LISTED WHERE THE FILE COUNTS IT. ** How large a mux will be could not be told
             // before it was made. A Matroska file whose writer counted the bytes of each track gives them here (see
             // MatroskaDemuxer::getTrackBytes), and the window adds up the tracks that are ticked.
             if (streams[i].sizeBytes >= 0)
-                LTRACE(LT_INFO, 2, "Stream size: " << streams[i].sizeBytes << " bytes");
+                LISTLINE("Stream size: " << streams[i].sizeBytes << " bytes");
             // Where a playlist puts the track among its kind, against where its clip has it (#52): a player numbers the
             // tracks in the playlist's order, which may differ from the clip's
             if (streams[i].playlistPlace > 0)
-                LTRACE(LT_INFO, 2,
-                       "Stream order: playlist " << streams[i].playlistPlace << ", clip " << streams[i].clipPlace);
+                LISTLINE("Stream order: playlist " << streams[i].playlistPlace << ", clip " << streams[i].clipPlace);
             // A Matroska track's name and the flags it has set, under the names the meta takes, so the window can
             // start from them. The name is the file's own text, on one line.
             if (!streams[i].name.empty())
@@ -982,8 +986,9 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                 for (char& c : name)
                     if (c == '\r' || c == '\n')
                         c = ' ';
-                LTRACE(LT_INFO, 2, "Stream name: " << name);
+                LISTLINE("Stream name: " << name);
             }
+            std::vector<std::string> flagNames;  // the flags set, under the names the meta takes
             if (!streams[i].flags.empty())
             {
                 static const std::pair<const char*, const char*> NAMES[] = {
@@ -994,12 +999,16 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                 for (const std::string& item : splitStr(streams[i].flags.c_str(), ','))
                     for (const auto& [src, option] : NAMES)
                         if (item == src)
+                        {
                             set += std::string(set.empty() ? "" : ", ") + option;
+                            flagNames.emplace_back(option);
+                        }
                 if (!set.empty())
-                    LTRACE(LT_INFO, 2, "Stream flags: " << set);
+                    LISTLINE("Stream flags: " << set);
             }
             if (streams[i].delay)
-                LTRACE(LT_INFO, 2, "Stream delay: " << streams[i].delay);
+                LISTLINE("Stream delay: " << streams[i].delay);
+            int subTrackShown = 0;
             if (streams[i].multiSubStream)
             {
                 // Print what the entry says it is. Deriving the number from the codec id worked
@@ -1009,7 +1018,48 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                 const int subTrack = streams[i].subTrack != 0
                                          ? streams[i].subTrack
                                          : (streams[i].codecInfo.codecID == CODEC_V_MPEG4_H264_DEP ? 1 : 2);
-                LTRACE(LT_INFO, 2, "subTrack: " << subTrack);
+                LISTLINE("subTrack: " << subTrack);
+                subTrackShown = subTrack;
+            }
+            // --json: the same facts as the lines above, as one object of "tracks"
+            if (jsonListing::active)
+            {
+                jsonListing::Value& track = jsonListing::doc().list("tracks").addObject();
+                if (streams[i].trackID != 0)
+                    track.number("id", streams[i].trackID);
+                const std::string& codecName = streams[i].codecInfo.programName;
+                track.text("kind", codecName.rfind("V_", 0) == 0   ? "video"
+                                   : codecName.rfind("A_", 0) == 0 ? "audio"
+                                   : codecName.rfind("S_", 0) == 0 ? "subtitle"
+                                                                   : "other");
+                track.text("type", streams[i].codecInfo.displayName);
+                track.text("codec", codecName);
+                track.text("info", descr);
+                if (!streams[i].lang.empty())
+                    track.text("language", streams[i].lang);
+                if (!streams[i].langTag.empty() && streams[i].langTag != "und")
+                    track.text("languageTag", streams[i].langTag);
+                if (!streams[i].name.empty())
+                    track.text("name", streams[i].name);
+                if (!flagNames.empty())
+                {
+                    jsonListing::Value& flags = track.list("flags");
+                    for (const std::string& flag : flagNames) flags.addText(flag);
+                }
+                if (streams[i].sizeBytes >= 0)
+                    track.number("bytes", streams[i].sizeBytes);
+                if (streams[i].delay)
+                    track.number("delayMs", streams[i].delay);
+                if (subTrackShown)
+                    track.number("subTrack", subTrackShown);
+                if (streams[i].isSecondary)
+                    track.flag("secondary", true);
+                if (streams[i].unused)
+                    track.flag("unselected", true);
+                if (isSubMode)
+                    track.flag("dependentView", true);
+                if (streams[i].playlistPlace > 0)
+                    track.number("playlistOrder", streams[i].playlistPlace).number("clipOrder", streams[i].clipPlace);
             }
         }
         else
@@ -1071,16 +1121,15 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
             default:
                 break;
             }
+            std::ostringstream said;
             if (!streams[i].notSupported.empty())
-                LTRACE(LT_INFO, 2,
-                       "Not supported: " << streams[i].notSupported
-                                         << (streams[i].notSupported.find("encrypted") != std::string::npos
-                                                 ? ". tsMuxeR cannot read an encrypted track, so the track is skipped."
-                                             // a reason of its own, as the reader's refusal of a PCM track
-                                             : streams[i].notSupported.back() == '.'
-                                                 ? " The track is skipped."
-                                                 : ". Muxing this kind of track is not implemented, so the track is "
-                                                   "skipped."));
+                said << "Not supported: " << streams[i].notSupported
+                     << (streams[i].notSupported.find("encrypted") != std::string::npos
+                             ? ". tsMuxeR cannot read an encrypted track, so the track is skipped."
+                         // a reason of its own, as the reader's refusal of a PCM track
+                         : streams[i].notSupported.back() == '.'
+                             ? " The track is skipped."
+                             : ". Muxing this kind of track is not implemented, so the track is skipped.");
             else if (known)
             {
                 // The descriptor goes in the line as well as the stream type. The window rebuilds
@@ -1094,21 +1143,31 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                 else if (!aribKnown.empty())
                     codes << ", data component 0x" << std::hex << std::setw(4) << std::setfill('0')
                           << streams[i].containerDataComponentId << std::dec << std::setfill(' ');
-                LTRACE(LT_INFO, 2,
-                       "Not supported: " << known << " (" << codes.str()
-                                         << "). Muxing this stream type is not implemented, "
-                                            "so the track is skipped.");
+                said << "Not supported: " << known << " (" << codes.str()
+                     << "). Muxing this stream type is not implemented, so the track is skipped.";
             }
             else if (streams[i].containerStreamType)
-                LTRACE(LT_INFO, 2,
-                       "Can't detect stream type (the container declares stream type 0x"
-                           << std::hex << streams[i].containerStreamType << std::dec << ")");
+                said << "Can't detect stream type (the container declares stream type 0x" << std::hex
+                     << streams[i].containerStreamType << std::dec << ")";
             // A Matroska track says what it is by its CodecID, which is worth passing on: "V_FFV1" says why at once,
             // and for a codec tsMuxeR reads it points at the data instead.
             else if (!streams[i].codecId.empty())
-                LTRACE(LT_INFO, 2, "Can't detect stream type (Matroska codec " << streams[i].codecId << ")");
+                said << "Can't detect stream type (Matroska codec " << streams[i].codecId << ")";
             else
-                LTRACE(LT_INFO, 2, "Can't detect stream type");
+                said << "Can't detect stream type";
+            LISTLINE(said.str());
+            // --json: a track that is not offered, with the reason as the listing says it
+            if (jsonListing::active)
+            {
+                jsonListing::Value& track = jsonListing::doc().list("notOffered").addObject();
+                if (streams[i].trackID != 0)
+                    track.number("id", streams[i].trackID);
+                track.text("reason", said.str());
+                if (streams[i].containerStreamType)
+                    track.number("streamType", streams[i].containerStreamType);
+                if (!streams[i].codecId.empty())
+                    track.text("matroskaCodec", streams[i].codecId);
+            }
         }
     }
 
@@ -1143,15 +1202,26 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                                    << applyLangCodeStyle(entry.language_code) << " are played from "
                                    << mplsParser->m_subPaths[entry.refSubPathId].clips.size()
                                    << " clips. Only the first is offered.");
-                    LTRACE(LT_INFO, 2, "");
-                    LTRACE(LT_INFO, 2, "Track ID:    " << entry.streamPID);
-                    LTRACE(LT_INFO, 2, "Stream type: SRT");
-                    LTRACE(LT_INFO, 2, "Stream ID:   S_TEXT/UTF8");
-                    LTRACE(LT_INFO, 2, "Stream info: TextST text subtitles");
-                    LTRACE(LT_INFO, 2, "Stream lang: " << applyLangCodeStyle(entry.language_code));
+                    LISTLINE("");
+                    LISTLINE("Track ID:    " << entry.streamPID);
+                    LISTLINE("Stream type: SRT");
+                    LISTLINE("Stream ID:   S_TEXT/UTF8");
+                    LISTLINE("Stream info: TextST text subtitles");
+                    LISTLINE("Stream lang: " << applyLangCodeStyle(entry.language_code));
                     if (shift != 0)
-                        LTRACE(LT_INFO, 2, "Stream delay: " << shift);
-                    LTRACE(LT_INFO, 2, "Stream file: " << clipFile);
+                        LISTLINE("Stream delay: " << shift);
+                    LISTLINE("Stream file: " << clipFile);
+                    if (jsonListing::active)
+                    {
+                        jsonListing::Value& track = jsonListing::doc().list("tracks").addObject();
+                        track.number("id", entry.streamPID).text("kind", "subtitle").text("type", "SRT");
+                        track.text("codec", "S_TEXT/UTF8").text("info", "TextST text subtitles");
+                        if (const std::string textLang = applyLangCodeStyle(entry.language_code); !textLang.empty())
+                            track.text("language", textLang);
+                        if (shift != 0)
+                            track.number("delayMs", shift);
+                        track.text("file", clipFile);
+                    }
                     continue;
                 }
             }
@@ -1167,11 +1237,18 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
             const std::string what = codingType == 0x92   ? "Text subtitles (Text-ST)"
                                      : codingType == 0x90 ? "Presentation graphics subtitles in a separate clip"
                                                           : kind + " in a separate clip";
-            LTRACE(LT_INFO, 2, "");
-            LTRACE(LT_INFO, 2,
-                   "Not supported: " << what << " (" << where.str()
-                                     << "). The playlist plays it from a clip of its own, and a stream of such a "
-                                        "clip is not muxed from the playlist, so the track is skipped.");
+            const std::string reason = "Not supported: " + what + " (" + where.str() +
+                                       "). The playlist plays it from a clip of its own, and a stream of such a "
+                                       "clip is not muxed from the playlist, so the track is skipped.";
+            LISTLINE("");
+            LISTLINE(reason);
+            if (jsonListing::active)
+            {
+                jsonListing::Value& track = jsonListing::doc().list("notOffered").addObject();
+                track.number("id", entry.streamPID).text("reason", reason).number("streamType", codingType);
+                if (isLanguageCode(lang))
+                    track.text("language", lang);
+            }
         }
     }
 
@@ -1184,6 +1261,27 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
             writingApp += c;
     const bool timeLines =
         !chapters.empty() || streamInfo.fileDurationNano > 0 || streamInfo.videoEndNano > 0 || !writingApp.empty();
+    // --json: the same as the lines below, in seconds; the marks as "chapters". The dependent view of a 3D playlist
+    // (isSubMode) only adds its tracks.
+    if (jsonListing::active)
+    {
+        jsonListing::Value& d = jsonListing::doc();
+        if (!isSubMode && !writingApp.empty())
+            d.text("writingApplication", writingApp);
+        if (!isSubMode && streamInfo.fileDurationNano)
+            d.seconds("durationSeconds", static_cast<double>(streamInfo.fileDurationNano) / 1e9);
+        if (!isSubMode && streamInfo.videoEndNano > 0)
+        {
+            d.seconds("videoStartSeconds", static_cast<double>(streamInfo.videoStartNano) / 1e9);
+            d.seconds("videoEndSeconds", static_cast<double>(streamInfo.videoEndNano) / 1e9);
+        }
+        if (!isSubMode && !chapters.empty())
+        {
+            jsonListing::Value& marks = d.list("chapters");
+            for (size_t j = 0; j < chapters.size(); j++) marks.addSeconds(static_cast<double>(chapters[j].start) / 1e9);
+        }
+        return;
+    }
     if (timeLines)
         LTRACE(LT_INFO, 2, "");
     if (!writingApp.empty())
@@ -1378,6 +1476,9 @@ A Blu-ray or DVD disc folder or image given alone lists its titles, the main fil
 first: tsMuxeR [--all-playlists] [--min-title-length=<seconds>] <disc>
 tsMuxeR --show-title=<number|main> <disc> lists the tracks of one title.
 A folder of disc folders or images given alone names the discs in it.
+--json before the source gives any of these listings, of a file, a playlist
+or a disc, as one JSON document on the standard output, for a program to read:
+tsMuxeR --json <source>. Nothing else is written. See USAGE.md for its members.
 On a meta line, title=main or title=<number> after a disc folder or image
 takes that title: the playlist of a Blu-ray, the cells of a DVD title.
 dvd-title=<number> names a DVD title by the disc's own number.
@@ -5673,6 +5774,8 @@ static void printScanSummary()
     }
 }
 
+static int runProgram(int argc, char** argv);
+
 int main(int argc, char** argv)
 {
 #ifdef _WIN32
@@ -5692,6 +5795,41 @@ int main(int argc, char** argv)
     }
     argv = argv_vec.data();
 #endif
+    // ** --json ** (jsonListing.h): the listing of a source as one JSON document, and no line of text. Before
+    // everything else, as from here on nothing but the document goes to the standard output; and around everything
+    // else, so that the document is written on whatever way the run ends.
+    if (!jsonListing::takeOption(argc, argv, TSMUXER_VERSION))
+    {
+        jsonListing::finish(ExitCode::Usage);
+        return ExitCode::Usage;
+    }
+    if (!jsonListing::active)
+        return runProgram(argc, argv);
+    int exitCode = ExitCode::Internal;
+    try
+    {
+        exitCode = runProgram(argc, argv);
+    }
+    catch (const VodCoreException& e)
+    {
+        jsonListing::fail(e.m_errStr);
+        exitCode = ExitCode::of(e.m_errCode);
+    }
+    catch (const std::exception& e)
+    {
+        jsonListing::fail(e.what());
+    }
+    catch (...)
+    {
+        jsonListing::fail("Unknown exception");
+    }
+    jsonListing::finish(exitCode);
+    return exitCode;
+}
+
+// Everything the program does, after its arguments are read as UTF-8 and --json is taken out of them
+static int runProgram(int argc, char** argv)
+{
     // ** --batch <job list> ** (batchRunner.h): the jobs of a list, each run as a process of its own, one after the
     // other. Nothing else is given beside it but --batch-stop-on-error: every other option belongs to a job, on its
     // line of the list.
@@ -5783,7 +5921,7 @@ int main(int argc, char** argv)
 
 static int runTsMuxer(int argc, char** argv)
 {
-    LTRACE(LT_INFO, 2, "tsMuxeR version " TSMUXER_VERSION << ". github.com/teaching-droid/tsMuxer");
+    LISTLINE("tsMuxeR version " TSMUXER_VERSION << ". github.com/teaching-droid/tsMuxer");
     // A signal the program was started with ignored, as a job in the background of a script is for Ctrl+C, stays so
 #ifdef _WIN32
     for (const int sig : {SIGINT, SIGTERM})
@@ -5961,6 +6099,8 @@ static int runTsMuxer(int argc, char** argv)
                 refuseUnknownOption(argv[a]);
             if (a == argc - 1 && !oneTitle.empty())
             {
+                if (jsonListing::active)
+                    jsonListing::doc().text("listing", "tracks");
                 // One title: listed as its playlist, or as the first run of cells of the DVD title, as any source is.
                 // The reason a title cannot be read is said as a sentence of its own, as on a meta line.
                 try
@@ -5975,27 +6115,38 @@ static int runTsMuxer(int argc, char** argv)
                         const string source = dvdTitleSource(videoTs, oneTitle, &languages, &chapters, false,
                                                              minSeconds, all, &discTitle);
                         titleSource = unquoteStr(splitQuotedStr(source.c_str(), '+')[0]);
+                        // with --json the three lines below are members of the document, and are not written
+                        std::ostream noLines(nullptr);
+                        std::ostream& lines = jsonListing::active ? noLines : cout;
                         // by the disc's own number, which a meta line reads the same whatever options listed the titles
-                        cout << "Source for a meta line: \"" << argv[a] << "\", dvd-title=" << discTitle << " ("
-                             << source << ")" << endl;
+                        lines << "Source for a meta line: \"" << argv[a] << "\", dvd-title=" << discTitle << " ("
+                              << source << ")" << endl;
                         if (!languages.empty())
                         {
-                            cout << "Languages of the disc:";
+                            lines << "Languages of the disc:";
                             for (const auto& [track, lang] : languages)
                             {
-                                cout << " track " << track << " " << lang;
+                                lines << " track " << track << " " << lang;
                                 if (const string code = iso639FromBcp47(lang); !code.empty())
                                     dvdTitleLanguages[track] = applyLangCodeStyle(code);
                             }
-                            cout << endl;
+                            lines << endl;
                         }
                         // A Matroska output takes them from the line; a disc's marks come only from this option
                         if (!chapters.empty())
                         {
-                            cout << "Chapters of the title, for a disc: --custom-chapters=";
+                            lines << "Chapters of the title, for a disc: --custom-chapters=";
                             for (size_t i = 0; i < chapters.size(); ++i)
-                                cout << (i ? ";" : "") << floatToTime(chapters[i]);
-                            cout << endl;
+                                lines << (i ? ";" : "") << floatToTime(chapters[i]);
+                            lines << endl;
+                        }
+                        if (jsonListing::active)
+                        {
+                            jsonListing::Value& d = jsonListing::doc();
+                            d.number("dvdTitle", discTitle).text("metaSource", source);
+                            for (const auto& [track, lang] : languages)
+                                d.list("discLanguages").addObject().number("track", track).text("language", lang);
+                            for (const double chapter : chapters) d.list("titleChapters").addSeconds(chapter);
                         }
                     }
                     else
@@ -6007,6 +6158,9 @@ static int runTsMuxer(int argc, char** argv)
                 {
                     THROW(dynamic_cast<const UsageError*>(&e) ? ERR_USAGE : ERR_SOURCE, e.what() << ".")
                 }
+                // --json: which title was asked for, and the file it is listed from
+                if (jsonListing::active)
+                    jsonListing::doc().text("title", oneTitle).text("titleSource", titleSource);
                 argv[1] = titleSource.data();
                 argc = 2;
                 titleOptions = false;
@@ -6016,7 +6170,8 @@ static int runTsMuxer(int argc, char** argv)
                 // the titles of a disc, also in the report (--report): printed here, past the lines LTRACE gives it
                 const auto listTitles = [&](const std::string& titles)
                 {
-                    cout << titles;
+                    if (!jsonListing::active)
+                        cout << titles;
                     if (diagReport::active)
                     {
                         diagReport::section(std::string("Titles of ") + argv[a]);
@@ -6026,15 +6181,23 @@ static int runTsMuxer(int argc, char** argv)
                 // the picture of each title only here, in the listing: a mux and its report read no more than before
                 if (const string root = blurayDiscRoot(argv[a]); !root.empty())
                 {
+                    if (jsonListing::active)
+                        jsonListing::doc().text("listing", "titles");
                     DiscTitles titles = listDiscTitles(root, minSeconds, all);
                     addPictureLabels(titles, root);
+                    if (jsonListing::active)
+                        discTitlesToJson(titles, jsonListing::doc());
                     listTitles(describeDiscTitles(titles));
                     return 0;
                 }
                 if (const string videoTs = dvdVideoTs(argv[a]); !videoTs.empty())
                 {
+                    if (jsonListing::active)
+                        jsonListing::doc().text("listing", "titles");
                     DvdTitles titles = listDvdTitles(videoTs, minSeconds, all);
                     addPictureLabels(titles);
+                    if (jsonListing::active)
+                        dvdTitlesToJson(titles, jsonListing::doc());
                     listTitles(describeDvdTitles(titles));
                     return 0;
                 }
@@ -6061,6 +6224,8 @@ static int runTsMuxer(int argc, char** argv)
                 return ExitCode::Usage;
             }
             refuseUnknownOption(str);
+            if (jsonListing::active)
+                jsonListing::doc().text("listing", "tracks");
             string fileExt = extractFileExt(str);
             fileExt = strToLowerCase(fileExt);
             if (fileExt == "mpls" || fileExt == "mpl")
@@ -6083,7 +6248,11 @@ static int runTsMuxer(int argc, char** argv)
                 bool mode3D = mplsParser.isDependStreamExist;
                 bool switchToSsif = false;
                 for (const std::string& clip : mplsParser.m_skippedClips)
-                    LTRACE(LT_INFO, 2, "Skipped clip: " << clip << mediaExt);
+                {
+                    LISTLINE("Skipped clip: " << clip << mediaExt);
+                    if (jsonListing::active)
+                        jsonListing::doc().list("skippedClips").addText(clip + mediaExt);
+                }
                 mplsParser.reportLeftOut(argv[1], true);
 
                 if (!mplsParser.m_playItems.empty())
@@ -6172,8 +6341,8 @@ static int runTsMuxer(int argc, char** argv)
                             METADemuxer::clipNameAsOnDisc(itemName.substr(0, itemName.size() - mediaExt.size() + 1),
                                                           strToLowerCase(mediaExt.substr(1)));
 
-                    LTRACE(LT_INFO, 2, "");
-                    LTRACE(LT_INFO, 2, "File #" << strPadLeft(int64ToStr(i), 5, '0') << " name=" << itemName);
+                    LISTLINE("");
+                    LISTLINE("File #" << strPadLeft(int64ToStr(i), 5, '0') << " name=" << itemName);
                     // A 3D clip is read from its two .m2ts, as the mux reads it, and from the .ssif only when one of
                     // them is missing; a folder without the SSIF folder is complete
                     string missingName;
@@ -6205,30 +6374,35 @@ static int runTsMuxer(int argc, char** argv)
                     if (!missingName.empty() &&
                         std::find(missingClips.begin(), missingClips.end(), missingName) == missingClips.end())
                         missingClips.push_back(missingName);
-                    LTRACE(LT_INFO, 2,
-                           "Duration: " << floatToTime(
-                               (mplsParser.m_playItems[i].OUT_time - mplsParser.m_playItems[i].IN_time) /
-                               (double)45000.0));
+                    LISTLINE("Duration: "
+                             << floatToTime((mplsParser.m_playItems[i].OUT_time - mplsParser.m_playItems[i].IN_time) /
+                                            (double)45000.0));
                     if (mplsParser.isDependStreamExist)
                     {
                         if (mplsParser.mvc_base_view_r)
                         {
-                            LTRACE(LT_INFO, 2, "Base view: right-eye");
+                            LISTLINE("Base view: right-eye");
                         }
                         else
                         {
-                            LTRACE(LT_INFO, 2, "Base view: left-eye");
+                            LISTLINE("Base view: left-eye");
                         }
                     }
                     if (!mplsParser.m_playItems.empty())
-                        LTRACE(LT_INFO, 2, "start-time: " << mplsParser.m_playItems[0].IN_time);
+                        LISTLINE("start-time: " << mplsParser.m_playItems[0].IN_time);
                     int marksPerFile = 0;
+                    std::vector<double> clipMarks;  // --json: the marks of this clip, on the timeline of the playlist
                     for (; markIndex < mplsParser.m_marks.size(); markIndex++)
                     {
                         PlayListMark& curMark = mplsParser.m_marks[markIndex];
                         if (static_cast<unsigned>(curMark.m_playItemID) > i)
                             break;
                         uint64_t time = curMark.m_markTime - mplsParser.m_playItems[i].IN_time + prevFileOffset;
+                        if (jsonListing::active)
+                        {
+                            clipMarks.push_back(static_cast<double>(time) / 45000.0);
+                            continue;
+                        }
                         if (marksPerFile % 5 == 0)
                         {
                             if (marksPerFile > 0)
@@ -6240,6 +6414,26 @@ static int runTsMuxer(int argc, char** argv)
                     }
                     if (marksPerFile > 0)
                         LTRACE(LT_INFO, 2, "");
+                    // --json: the clip as an object of "clips": its file, what the playlist plays of it, its marks
+                    if (jsonListing::active)
+                    {
+                        jsonListing::Value& d = jsonListing::doc();
+                        if (mplsParser.isDependStreamExist)
+                            d.text("baseView", mplsParser.mvc_base_view_r ? "right" : "left");
+                        for (const double mark : clipMarks) d.list("chapters").addSeconds(mark);
+                        jsonListing::Value& clip = d.list("clips").addObject();
+                        clip.text("file", itemName);
+                        clip.seconds("durationSeconds", (item.OUT_time - item.IN_time) / 45000.0);
+                        clip.seconds("inSeconds", item.IN_time / 45000.0);
+                        clip.seconds("outSeconds", item.OUT_time / 45000.0);
+                        clip.seconds("startSeconds", static_cast<double>(prevFileOffset) / 45000.0);
+                        // what the playlist plays in all, up to and with this clip
+                        d.seconds("durationSeconds",
+                                  static_cast<double>(prevFileOffset + item.OUT_time - item.IN_time) / 45000.0);
+                        if (!missingName.empty())
+                            clip.text("missingFile", missingName);
+                        for (const double mark : clipMarks) clip.list("chapters").addSeconds(mark);
+                    }
                     prevFileOffset += mplsParser.m_playItems[i].OUT_time - mplsParser.m_playItems[i].IN_time;
                 }
                 if (!missingClips.empty())
@@ -6263,6 +6457,13 @@ static int runTsMuxer(int argc, char** argv)
                 // each to be listed on its own
                 if (const auto discs = discsInFolder(str); !discs.empty())
                 {
+                    if (jsonListing::active)
+                    {
+                        jsonListing::doc().text("listing", "discs");
+                        for (const auto& [path, kind] : discs)
+                            jsonListing::doc().list("discs").addObject().text("kind", kind).text("path", path);
+                        return 0;
+                    }
                     cout << str << " holds " << discs.size() << (discs.size() == 1 ? " disc" : " discs")
                          << ". List the titles of one with tsMuxeR <its path>:" << endl;
                     for (const auto& [path, kind] : discs) cout << "  " << kind << ": " << path << endl;
@@ -6858,10 +7059,13 @@ static int runTsMuxer(int argc, char** argv)
     }
     catch (runtime_error& e)
     {
-        if (argc == 2)
+        if (jsonListing::active)
+            jsonListing::fail(e.what());
+        else if (argc == 2)
             LTRACE2(LT_ERROR, "Error: ")
         // on a line of its own, as the other errors are: the shell prompt followed the text
-        LTRACE(LT_ERROR, 2, e.what());
+        if (!jsonListing::active)
+            LTRACE(LT_ERROR, 2, e.what());
         printRemovedOutputNotes();
         if (dynamic_cast<OutputError*>(&e))
             return ExitCode::Output;
@@ -6869,9 +7073,12 @@ static int runTsMuxer(int argc, char** argv)
     }
     catch (VodCoreException& e)
     {
-        if (argc == 2)
+        if (jsonListing::active)
+            jsonListing::fail(e.m_errStr);
+        else if (argc == 2)
             LTRACE2(LT_ERROR, "Error: ")
-        LTRACE(LT_ERROR, 2, e.m_errStr.c_str());
+        if (!jsonListing::active)
+            LTRACE(LT_ERROR, 2, e.m_errStr.c_str());
         printRemovedOutputNotes();
         if (endBySignal())
             return ExitCode::Stopped;
@@ -6879,17 +7086,23 @@ static int runTsMuxer(int argc, char** argv)
     }
     catch (BitStreamException& e)
     {
-        if (argc == 2)
+        if (jsonListing::active)
+            jsonListing::fail(std::string("Bitstream exception ") + e.what() + EXCEPTION_ERR_MSG);
+        else if (argc == 2)
             LTRACE2(LT_ERROR, "Error: ")
-        LTRACE(LT_ERROR, 2, "Bitstream exception " << e.what() << EXCEPTION_ERR_MSG);
+        if (!jsonListing::active)
+            LTRACE(LT_ERROR, 2, "Bitstream exception " << e.what() << EXCEPTION_ERR_MSG);
         printRemovedOutputNotes();
         return ExitCode::Internal;
     }
     catch (...)
     {
-        if (argc == 2)
+        if (jsonListing::active)
+            jsonListing::fail(std::string("Unknown exception") + EXCEPTION_ERR_MSG);
+        else if (argc == 2)
             LTRACE2(LT_ERROR, "Error: ")
-        LTRACE(LT_ERROR, 2, "Unknown exception" << EXCEPTION_ERR_MSG);
+        if (!jsonListing::active)
+            LTRACE(LT_ERROR, 2, "Unknown exception" << EXCEPTION_ERR_MSG);
         printRemovedOutputNotes();
         return ExitCode::Internal;
     }

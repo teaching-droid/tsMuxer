@@ -81,6 +81,13 @@ void addPictureLabels(DvdTitles& t);
 
 std::string describeDvdTitles(const DvdTitles& t);
 
+// The same listing as members of a JSON document (--json, jsonListing.h): "titles", "leftOut", "shortTitles".
+namespace jsonListing
+{
+class Value;
+}
+void dvdTitlesToJson(const DvdTitles& t, jsonListing::Value& doc);
+
 // The source of title=<number> or title=main of a DVD folder or image, for a meta line: the cells of the title, in
 // the angle given (from 1; angle=), as parts of its VOB files under names that read them (discImage::addVirtualFile),
 // one for each run of cells whose timestamps follow on, joined as "part 1"+"part 2". Throws with the reason when there
