@@ -407,8 +407,16 @@ CheckStreamRez HEVCStreamReader::checkStream(uint8_t* buffer, const int len)
             // depth, which the mux keeps, moved every decoding time of the file.
             if (r == UNIT_DAMAGED)
                 m_fullPicOrder = guessPicOrder(nalType);
+            else if (r == NOT_ENOUGH_BUFFER)
+                return rez;
             else if (r)
-                return rez;  // not enough buffer or error
+            {
+                // A value no stream has (a PPS number above 63, a slice type above 2): the mux passes such a slice on
+                // and counts no picture for it, and so does this look. It ended the look, and the whole track was
+                // listed as "Can't detect stream type", for one damaged slice.
+                auOpen = true;
+                continue;
+            }
             else
             {
                 if (!m_picOrderStarted && nalType < HevcUnit::NalType::BLA_W_LP)
