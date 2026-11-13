@@ -1561,6 +1561,43 @@ std::string METADemuxer::mplsTrackToFullName(const std::string& mplsFileName, co
 // A camera's card names its clips in capitals, 00000.MTS beside 00000.MPL, and the listing named them so, but the mux
 // opened 00000.mts, which a file system that tells case apart (Linux, macOS) does not have. The name is taken in the
 // case that exists, lower case first; lower case when neither does, for the message that it cannot be opened.
+SubTrackFilter* ContainerToReaderWrapper::pidFilterOf(const std::string& streamName, const int pid) const
+{
+    const auto it = m_demuxers.find(streamName);
+    return it != m_demuxers.end() && it->second.m_demuxer != nullptr ? it->second.m_demuxer->getPidFilter(pid)
+                                                                     : nullptr;
+}
+
+int METADemuxer::trackOfMadeLayer(const int streamIndex) const
+{
+    for (const StreamInfo& si : m_codecInfo)
+    {
+        if (si.m_streamReader == nullptr || si.m_streamReader->getStreamIndex() != streamIndex)
+            continue;
+        if (si.m_dataReader != &m_containerReader || !SubTrackFilter::isSubTrack(si.m_pid) || (si.m_pid & 0xffff) != 2)
+            return -1;
+        const SubTrackFilter* filter = m_containerReader.pidFilterOf(si.m_streamName, si.m_pid >> 16);
+        if (filter == nullptr || !filter->makesLayer())
+            return -1;
+        // the track: the first sub track of the same track of the same source
+        for (const StreamInfo& other : m_codecInfo)
+            if (other.m_streamReader != nullptr && other.m_dataReader == si.m_dataReader &&
+                other.m_streamName == si.m_streamName && other.m_pid == ((si.m_pid >> 16) << 16) + 1)
+                return other.m_streamReader->getStreamIndex();
+        return -1;
+    }
+    return -1;
+}
+
+int METADemuxer::madeLayerOfTrack(const int streamIndex) const
+{
+    for (const StreamInfo& si : m_codecInfo)
+        if (si.m_streamReader != nullptr && si.m_streamReader->getStreamIndex() != streamIndex &&
+            trackOfMadeLayer(si.m_streamReader->getStreamIndex()) == streamIndex)
+            return si.m_streamReader->getStreamIndex();
+    return -1;
+}
+
 std::string METADemuxer::clipNameAsOnDisc(const std::string& stem, const std::string& lowerExt)
 {
     const string lower = stem + lowerExt;

@@ -148,6 +148,8 @@ class ContainerToReaderWrapper final : public AbstractReader
     bool incSeek(int readerID, int64_t offset) override { return false; }
     void notify(int readerID, uint32_t dataReaded) override {}
     int createReader(int readBuffOffset = 0) override;
+    // The filter of a track of a source read through a container, or nullptr when the track has none
+    [[nodiscard]] SubTrackFilter* pidFilterOf(const std::string& streamName, int pid) const;
     void deleteReader(int readerID) override;
     bool openStream(int readerID, const char* streamName, int pid = 0, const CodecInfo* codecInfo = nullptr) override;
     void setFileIterator(const char* streamName, FileNameIterator* itr);
@@ -328,6 +330,12 @@ class METADemuxer final : public AbstractDemuxer
     static DetectStreamRez DetectStreamReader(const BufferedReaderManager& readManager, const std::string& fileName,
                                               bool calcDuration, const std::vector<std::string>& laterFiles = {});
     std::vector<StreamInfo>& getCodecInfo() { return m_codecInfo; }
+    // For the stream with that index, when it is a second layer that is made for a single layer Dolby Vision track
+    // (a stream of key pictures, one for each picture of the track; SubTrackFilter::makesLayer): the stream index
+    // of that track. -1 for any other stream.
+    [[nodiscard]] int trackOfMadeLayer(int streamIndex) const;
+    // The other way round: for the stream of a track, the stream index of the layer that is made for it, or -1
+    [[nodiscard]] int madeLayerOfTrack(int streamIndex) const;
 
     /// Run a self-contained discovery pass: for every track in m_codecInfo,
     /// open a temporary demuxer, probe the first few frames, and return a

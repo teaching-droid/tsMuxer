@@ -1110,12 +1110,17 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
     m_fileWriter = std::make_unique<BufferedFileWriter>();
     AVPacket avPacket;
     bool anyMuxed = false;
-    bool anyAfterCutStart = false;       // a packet of the sources at or after --cut-start, kept or not
-    std::set<int> endedByCut;            // streams that have reached --cut-end
-    std::set<int> withPackets;           // streams that have given a packet, subtitles left out (--cut-end)
-    std::map<int, int64_t> firstMuxed;   // the time of each stream's first packet muxed (the demux of a --cut-start)
-    int64_t mainVideoDts = -1;           // the decoding time of the main video's last packet (--cut-end)
-    std::set<int> shownBeforeEnd;        // the video streams that have given a picture shown before --cut-end
+    bool anyAfterCutStart = false;      // a packet of the sources at or after --cut-start, kept or not
+    std::set<int> endedByCut;           // streams that have reached --cut-end
+    std::set<int> withPackets;          // streams that have given a packet, subtitles left out (--cut-end)
+    std::map<int, int64_t> firstMuxed;  // the time of each stream's first packet muxed (the demux of a --cut-start)
+    int64_t mainVideoDts = -1;          // the decoding time of the main video's last packet (--cut-end)
+    std::set<int> shownBeforeEnd;       // the video streams that have given a picture shown before --cut-end
+    // --cut-end and a made Dolby Vision layer (below): for each video stream the track it is the made layer of (or
+    // -1), and for each such track the times of its pictures that are kept around the cut
+    std::map<int, int> trackOfLayer;
+    std::map<int, int> layerOfTrack;
+    std::map<int, std::set<int64_t>> keptAround;
     std::set<int> mutedByCut;            // --cut-start: the video streams that gave pictures, none of them kept
     std::map<int, int64_t> lastPicture;  // --cut-start: per video stream, the time of its last picture, and
     std::map<int, int64_t> lastKey;      // of its last key picture
@@ -1213,7 +1218,58 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
             if (video && avPacket.pts < m_cutEnd && endedByCut.count(avPacket.stream_index) == 0)
                 shownBeforeEnd.insert(avPacket.stream_index);
             const bool endByDecoding = coverEnd && video && shownBeforeEnd.count(avPacket.stream_index) != 0;
-            if ((endByDecoding ? avPacket.dts : avPacket.pts) >= m_cutEnd)
+            // ** A MADE DOLBY VISION LAYER ENDS WITH THE PICTURES OF ITS TRACK. ** The second layer that is made for
+            // a single layer track is a stream of key pictures, one for each picture of the track. It ended by the
+            // rule of any stream, at the cut, while the track ends by what its pictures are made from: with cover it
+            // keeps the pictures decoded before the cut and shown after it, and those had no picture of the layer,
+            // so a player's second decoder had nothing for them at the end of the clip; with inside it leaves out
+            // the last pictures before the cut, and the layer had pictures the track did not. The layer now keeps
+            // what the track keeps: around the cut, the picture of each time the track kept a picture of. A picture
+            // of the layer needs no other, so the ones between are left out. The pictures of the track come first:
+            // a picture of the track is decoded before the layer's picture of that time. The layer has ended when
+            // the track has, and a picture of the layer is later than the last one the track kept.
+            bool noPictureOfTheTrack = false;
+            int track = -1;  // the track this stream is the made layer of
+            if (video)
+            {
+                auto known = trackOfLayer.find(avPacket.stream_index);
+                if (known == trackOfLayer.end())
+                {
+                    known = trackOfLayer
+                                .emplace(avPacket.stream_index, m_metaDemuxer.trackOfMadeLayer(avPacket.stream_index))
+                                .first;
+                    if (known->second >= 0)
+                        keptAround[known->second];
+                }
+                track = known->second;
+                // The layer of a track is handed on some pictures after the track (its pictures are put in the order
+                // they are shown in first), so at a cut near the start it has given no packet when the track ends:
+                // the mux ended there, and the layer was empty. It is waited for from the first packet of its track.
+                auto layer = layerOfTrack.find(avPacket.stream_index);
+                if (layer == layerOfTrack.end())
+                    layer = layerOfTrack
+                                .emplace(avPacket.stream_index, m_metaDemuxer.madeLayerOfTrack(avPacket.stream_index))
+                                .first;
+                if (layer->second >= 0)
+                {
+                    withPackets.insert(layer->second);
+                    keptAround[avPacket.stream_index];
+                }
+            }
+            if (track >= 0)
+            {
+                const std::set<int64_t>& kept = keptAround[track];
+                const bool trackEnded = endedByCut.count(track) != 0;
+                if (trackEnded || avPacket.pts >= m_cutEnd)
+                {
+                    const auto near = kept.lower_bound(avPacket.pts - INT_FREQ_TO_TS_FREQ);
+                    noPictureOfTheTrack = near == kept.end() || *near > avPacket.pts + INT_FREQ_TO_TS_FREQ;
+                    if (noPictureOfTheTrack && trackEnded &&
+                        (kept.empty() || avPacket.pts > *kept.rbegin() + INT_FREQ_TO_TS_FREQ))
+                        endedByCut.insert(avPacket.stream_index);
+                }
+            }
+            else if ((endByDecoding ? avPacket.dts : avPacket.pts) >= m_cutEnd)
                 endedByCut.insert(avPacket.stream_index);
             // With cover, the first picture of the main video shown at or after the cut, kept or not: the one a disc
             // stops before, and the next part starts with. It is known once a picture decoded after its time is read.
@@ -1233,11 +1289,16 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
                 if ((allEnded && shownToKnown) || avPacket.dts >= m_cutEnd + 2 * INTERNAL_PTS_FREQ)
                     break;
             }
-            if (endedByCut.count(avPacket.stream_index) != 0)
+            if (endedByCut.count(avPacket.stream_index) != 0 || noPictureOfTheTrack)
             {
                 leftOut(avPacket);
                 continue;
             }
+            // the pictures of a track with a made layer that are kept around the cut: from 2 s before it, further
+            // than any picture is decoded ahead of the time it is shown at
+            if (const auto kept = keptAround.find(avPacket.stream_index);
+                kept != keptAround.end() && avPacket.pts >= m_cutEnd - 2 * INTERNAL_PTS_FREQ)
+                kept->second.insert(avPacket.pts);
         }
 
         // The first picture of the main video shown at or after --cut-start: where a disc starts playing

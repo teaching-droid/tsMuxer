@@ -17,6 +17,9 @@ class SubTrackFilter
     // The source has ended: what the filter still holds is handed on. A filter that hands every packet on as it
     // comes holds nothing.
     virtual void flush(DemuxedData& /*demuxedData*/, const PIDSet& /*acceptedPIDs*/) {}
+    // True when the second sub track is not part of the source but made here, one picture for each picture of the
+    // track (the second layer of a single layer Dolby Vision track). Known once the first packets are read.
+    [[nodiscard]] virtual bool makesLayer() const { return false; }
     // The bytes of the packets demuxPacket counted as handed on since the last call, less those it handed on: a filter
     // that frames the data anew hands on more or fewer. The container counts them as discarded, so that the source is
     // still read to its end by the count that checks it.

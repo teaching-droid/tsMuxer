@@ -63,7 +63,7 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
     // while the track comes in the order they are coded in: the RPUs are held by their times and handed on in the
     // order of the times, as many held as HEVC can put pictures out of order, and the rest at the end (flush).
     void setLayerPicture(const std::vector<uint8_t>& picture) { m_layerPicture = picture; }
-    [[nodiscard]] bool makesLayer() const { return m_kind == Kind::made; }
+    [[nodiscard]] bool makesLayer() const override { return m_kind == Kind::made; }
     [[nodiscard]] int64_t picturesMade() const { return m_made; }
 
     // Hand over the preserved originals. Moved, never copied: a feature has upwards of 160,000 of
