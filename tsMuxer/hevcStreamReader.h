@@ -109,9 +109,11 @@ class HEVCStreamReader final : public MPEGStreamReader
     void readElParameterSet(const uint8_t* nal, const uint8_t* nextNal);
     void incTimings();
     int toFullPicOrder(const HevcSliceHeader* slice, unsigned pic_bits);
+    // The place a period that begins at the picture being read begins at (toFullPicOrder)
+    [[nodiscard]] int periodStart() const;
     int picturesShownBeforeFirst(uint8_t* nal, uint8_t* end) const;
     int placesOfLeadingPictures(uint8_t* nal, uint8_t* end) const;
-    int depthOfPeriod(uint8_t* nal, uint8_t* end) const;
+    int depthOfPeriod(uint8_t* nal, uint8_t* end, int firstLsb = 0) const;
     // The full order a picture would get as the next of the period (toFullPicOrder, without moving its state)
     [[nodiscard]] int nextFullPicOrder(const HevcSliceHeader* slice) const;
     std::set<int> m_periodOrders;  // the full orders given since the last IDR or BLA picture, for a join
@@ -148,6 +150,8 @@ class HEVCStreamReader final : public MPEGStreamReader
     int m_fullPicOrder;
     int m_picOrderBase;
     int m_maxFullPicOrder = -1;  // the latest place a picture was given, for a Dolby Vision gap (toFullPicOrder)
+    int m_shownBeforeStart = 0;  // pictures given a place below 0: counted, and shown before the start (periodStart)
+    int m_orderGivenTo = -1;     // the picture (m_totalFrameNum) that has its order, where its call is repeated
     bool m_dvGapReported = false;
     int m_frameDepth;
 

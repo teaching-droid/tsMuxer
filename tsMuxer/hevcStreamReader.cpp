@@ -260,6 +260,13 @@ CheckStreamRez HEVCStreamReader::checkStream(uint8_t* buffer, const int len)
             r->m_curDts = r->m_curPts = 0;
             r->m_picOrderStarted = false;
             r->m_maxFullPicOrder = -1;
+            r->m_shownBeforeStart = 0;
+            r->m_orderGivenTo = -1;
+            // what the check noted of its last groups is not what stands in front of the first picture of the mux:
+            // a first picture whose header is damaged was given the order of a picture of the check's last group
+            r->m_gopOrderOffsets.clear();
+            r->m_prevGopOrderOffsets.clear();
+            r->m_periodOrders.clear();
         }
     } resetCounters{this};
     // A parameter set is read into a unit of its own and kept only when it is whole: a damaged one (see
@@ -1252,15 +1259,18 @@ void HEVCStreamReader::incTimings()
     m_curPts = m_curDts - delta * m_pcrIncPerFrame;
     m_frameNum++;
     m_maxFullPicOrder = (std::max)(m_maxFullPicOrder, m_fullPicOrder);
+    if (m_fullPicOrder < 0)
+        ++m_shownBeforeStart;
     m_firstFrame = false;
 
     // How far a picture can be presented before it would be decoded, which is how far the decoding times are moved
     // back. It was held at 4 frames, and a stream that begins on a CRA picture needs more: the leading pictures behind
     // that CRA are decoded after it but shown before it, which adds their number to every later picture, and the
-    // pictures past 4 were presented before they were decoded. 16 is the most pictures an HEVC decoder holds.
+    // pictures past 4 were presented before they were decoded. 16 is the most pictures an HEVC decoder holds; the
+    // pictures shown before the start come on top of them, for the whole stream (periodStart).
     if (delta > m_frameDepth)
     {
-        m_frameDepth = FFMIN(16, delta);
+        m_frameDepth = FFMIN(16 + m_shownBeforeStart, delta);
         LTRACE(LT_INFO, 2,
                "B-pyramid level " << m_frameDepth - 1 << " detected. Shift DTS to " << m_frameDepth << " frames");
     }
@@ -1347,14 +1357,15 @@ int HEVCStreamReader::placesOfLeadingPictures(uint8_t* nal, uint8_t* end) const
 
 // The depth incTimings will find in the period that begins at this IDR picture, from the pictures after it: up to 33
 // of them or the next IDR or BLA picture, whichever comes first. Returns -1 when more data is needed and can come;
-// it is read no further than 32 MiB past the picture.
-int HEVCStreamReader::depthOfPeriod(uint8_t* nal, uint8_t* end) const
+// it is read no further than 32 MiB past the picture. For a CRA or BLA picture that begins a stream, firstLsb is
+// its own order count, which is not 0 as an IDR picture's is.
+int HEVCStreamReader::depthOfPeriod(uint8_t* nal, uint8_t* end, const int firstLsb) const
 {
     static constexpr int MAX_PICTURES = 33;
     static constexpr std::ptrdiff_t MAX_AHEAD = 32 * 1024 * 1024;
     const int range = 1 << m_sps->log2_max_pic_order_cnt_lsb;
-    int prevLsb = 0;  // an IDR picture's order count
-    int order = 0;    // the order count from this picture's, as toFullPicOrder steps it
+    int prevLsb = firstLsb;  // an IDR picture's order count is 0
+    int order = 0;           // the order count from this picture's, as toFullPicOrder steps it
     int pictures = 0;
     int depth = 0;
     HevcSliceHeader slice;
@@ -1433,14 +1444,7 @@ int HEVCStreamReader::toFullPicOrder(const HevcSliceHeader* slice, const unsigne
                           : 0;
         if (m_picOrderStarted && !m_joinRestart && (slice->isIDR() || bla) && !partStart)
             leading = m_restartLeading;
-        // ** A PERIOD BEGINS AT THE FIRST FREE PLACE. ** It began at the count of the pictures before it, which is
-        // the first free place when every one of them has a place of its own. The pictures that lead the first key
-        // picture of a stream (it begins with a CRA picture, as a cut of an open group does) are shown before the
-        // start and take no place, but they are counted: the first IDR or BLA picture after such a start stood as
-        // many places late as there are such pictures, and every picture after it with it, 3 pictures (125 ms at 24
-        // a second) against the sound for a group of 3 B pictures. It begins one past the latest place given. The
-        // count of the pictures stays what it is: the decoding times go by it.
-        const int start = m_picOrderStarted ? m_maxFullPicOrder + 1 : m_frameNum;
+        const int start = periodStart();
         m_restartLeading = 0;
         m_joinRestart = false;
         m_picOrderStarted = true;
@@ -1461,6 +1465,22 @@ int HEVCStreamReader::toFullPicOrder(const HevcSliceHeader* slice, const unsigne
     }
 
     return slice->pic_order_cnt_lsb + m_picOrderMsb + m_picOrderBase;
+}
+
+// ** A PERIOD DOES NOT BEGIN LATE BY THE PICTURES SHOWN BEFORE THE START. ** A period began at the count of the
+// pictures before it. The pictures that lead the first key picture of a stream (it begins with a CRA picture, as a cut
+// of an open group does) are shown before the start and have places below 0, but they are counted: the first IDR or
+// BLA picture after such a start stood as many places late as there are such pictures, and every picture after it
+// with it, 3 pictures (125 ms at 24 a second) against the sound for a group of 3 B pictures, with a hole of that
+// length in the times. The period begins at the count less those pictures; never at a place already given (the count
+// of a stream that lacks pictures was moved on to the first free place before this is asked). Every other stream
+// begins its periods where it did. The count itself stays what it is: the decoding times go by it, so from there on
+// each picture is that many pictures deeper than its group makes it (incTimings, and the depth read ahead).
+int HEVCStreamReader::periodStart() const
+{
+    if (!m_picOrderStarted)
+        return m_frameNum;
+    return (std::max)(m_maxFullPicOrder + 1, m_frameNum - m_shownBeforeStart);
 }
 
 int HEVCStreamReader::nextFullPicOrder(const HevcSliceHeader* slice) const
@@ -1696,8 +1716,15 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                 // it has to know before it is given its order. Its period is that many places less deep than the
                 // pictures after it are in decode order (depthOfPeriod counts from the IDR picture).
                 const bool restart = nalType >= HevcUnit::NalType::BLA_W_LP && nalType <= HevcUnit::NalType::IDR_N_LP;
-                m_restartLeading = 0;
-                if (restart && m_picOrderStarted && !isPartStart())
+                // ** A PICTURE IS GIVEN ITS ORDER ONCE. ** Where the buffer ends inside a picture, after its first
+                // slice, the call ends with NOT_ENOUGH_BUFFER and is repeated with more data, and the picture was
+                // given its order again: noted twice in the pattern of its group (which a picture with a damaged
+                // header takes its order from, so that order depended on where the buffers ended), and a BLA picture
+                // that begins a stream went behind its leading pictures the second time, as one after the first does.
+                const bool orderGiven = m_orderGivenTo == m_totalFrameNum;
+                if (!orderGiven)
+                    m_restartLeading = 0;
+                if (!orderGiven && restart && m_picOrderStarted && !isPartStart())
                 {
                     const int places = placesOfLeadingPictures(curPos, m_bufEnd);
                     if (places == -1)
@@ -1708,12 +1735,16 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                 // Found only at its first deep picture, the larger depth moved the decoding time of that picture
                 // back behind the times already given. The period is read ahead from its IDR picture, and the
                 // decoding times catch up over its first pictures (deepenAfterOutput).
-                if (nalType == HevcUnit::NalType::IDR_W_RADL || nalType == HevcUnit::NalType::IDR_N_LP)
+                if (!orderGiven && (nalType == HevcUnit::NalType::IDR_W_RADL || nalType == HevcUnit::NalType::IDR_N_LP))
                 {
                     int ahead = depthOfPeriod(curPos, m_bufEnd);
                     if (ahead == -1)
                         return NOT_ENOUGH_BUFFER;
-                    ahead = (std::min)(16, ahead - m_restartLeading);
+                    // the pictures of the period are deeper by the places it begins before the count (periodStart);
+                    // the leading pictures of a first picture are not counted yet, and there are 16 at most
+                    const int before = (std::max)(0, m_frameNum - periodStart());
+                    const int most = m_picOrderStarted ? 16 + m_shownBeforeStart : 32;
+                    ahead = (std::min)(most, ahead - m_restartLeading + before);
                     if (ahead > m_frameDepth)
                     {
                         const int depthBefore = m_frameDepth;
@@ -1756,7 +1787,8 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                                    << "is kept, with the time of the picture at its place in the GOP before.");
                     if (nalType >= HevcUnit::NalType::BLA_W_LP)
                         m_lastIFrame = true;
-                    m_fullPicOrder = guessPicOrder(nalType);
+                    if (!orderGiven)
+                        m_fullPicOrder = guessPicOrder(nalType);
                 }
                 else
                 {
@@ -1774,8 +1806,28 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                     // already has: it continued the count of the file before, its pictures took times that file had
                     // given, and the two parts overlapped. It begins as a stream does, after the pictures before it,
                     // its leading pictures with it. A file that continues the stream before it gives no order twice.
+                    // A stream that begins with a CRA or BLA picture is read ahead as a period is at its IDR
+                    // picture: the pictures that lead it are shown before it, so the first of them needs the depth
+                    // they make already at the picture before it, the first of the stream. Where the first look at
+                    // the file had not reached that far (pictures of megabytes), the depth was found at that
+                    // picture, which was then given the decoding time of the first one.
+                    if (!orderGiven && !m_picOrderStarted && nalType >= HevcUnit::NalType::BLA_W_LP &&
+                        nalType <= HevcUnit::NalType::RSV_IRAP_VCL23 && !m_slice->isIDR())
+                    {
+                        int ahead = depthOfPeriod(curPos, m_bufEnd, static_cast<int>(m_slice->pic_order_cnt_lsb));
+                        if (ahead == -1)
+                            return NOT_ENOUGH_BUFFER;
+                        ahead = (std::min)(32, ahead);
+                        if (ahead > m_frameDepth)
+                        {
+                            m_frameDepth = ahead;
+                            LTRACE(LT_INFO, 2,
+                                   "B-pyramid level " << m_frameDepth - 1 << " detected. Shift DTS to " << m_frameDepth
+                                                      << " frames");
+                        }
+                    }
                     bool joinStart = false;
-                    if (m_joinPos && curPos >= m_joinPos)
+                    if (!orderGiven && m_joinPos && curPos >= m_joinPos)
                     {
                         joinStart = m_picOrderStarted &&
                                     (nalType < HevcUnit::NalType::BLA_W_LP || nalType == HevcUnit::NalType::CRA) &&
@@ -1783,7 +1835,7 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                         if (!joinStart)
                             m_joinPos = nullptr;
                     }
-                    if ((!m_picOrderStarted && nalType < HevcUnit::NalType::BLA_W_LP) || joinStart)
+                    if (!orderGiven && ((!m_picOrderStarted && nalType < HevcUnit::NalType::BLA_W_LP) || joinStart))
                     {
                         const int leading = picturesShownBeforeFirst(curPos, m_bufEnd);
                         if (leading == -1)
@@ -1795,9 +1847,12 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                         m_joinPos = nullptr;
                         m_joinRestart = true;
                     }
-                    m_fullPicOrder = toFullPicOrder(m_slice, m_sps->log2_max_pic_order_cnt_lsb);
+                    if (!orderGiven)
+                        m_fullPicOrder = toFullPicOrder(m_slice, m_sps->log2_max_pic_order_cnt_lsb);
                 }
-                notePicOrder(nalType);
+                if (!orderGiven)
+                    notePicOrder(nalType);
+                m_orderGivenTo = m_totalFrameNum;
                 if (rez == 0 && m_slice->slice_type <= 2)
                     m_reportSliceType = static_cast<int>(m_slice->slice_type);
             }
