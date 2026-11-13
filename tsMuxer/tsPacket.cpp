@@ -907,7 +907,7 @@ bool readClipEntryPoints(const std::string& clpiFileName, int& videoPid, std::ve
         return false;
     const auto be = [&d](const size_t pos, const size_t bytes, uint32_t& value)
     {
-        if (pos + bytes > d.size())
+        if (bytes > d.size() || pos > d.size() - bytes)  // not pos + bytes, which goes round where a size is 32 bits
             return false;
         value = 0;
         for (size_t i = 0; i < bytes; ++i) value = value << 8 | d[pos + i];
@@ -1323,7 +1323,9 @@ void CLPIParser::parseExtensionData(uint8_t* buffer, const uint8_t* end)
         const uint32_t dataAddress = reader.getBits(32);
         const uint32_t dataLength = reader.getBits(32);
 
-        if (dataAddress + dataLength > static_cast<uint32_t>(end - buffer))
+        // in 64 bits: the sum of the two numbers of a damaged file went round in 32 and passed as a small one, and
+        // the part was read far outside the file
+        if (static_cast<uint64_t>(dataAddress) + dataLength > static_cast<uint64_t>(end - buffer))
         {
             LTRACE(LT_WARN, 2, "Invalid extended clip info entry skipped.");
             continue;
@@ -2707,14 +2709,13 @@ void MPLSParser::parseExtensionData(uint8_t* data, const uint8_t* dataEnd)
             const uint32_t dataAddress = reader.getBits(32);
             const uint32_t dataLength = reader.getBits(32);
 
-            if (dataAddress + dataLength > static_cast<uint32_t>(dataEnd - data))
+            // in 64 bits: the sum of the two numbers of a damaged file went round in 32 and passed as a small one,
+            // and the part was read far outside the file
+            if (static_cast<uint64_t>(dataAddress) + dataLength > static_cast<uint64_t>(dataEnd - data))
             {
                 LTRACE(LT_WARN, 2, "Invalid playlist extension entry skipped.");
                 continue;
             }
-
-            if (dataAddress + dataLength > static_cast<uint32_t>(dataEnd - data))
-                continue;  // invalid entry
 
             switch (dataID)
             {
