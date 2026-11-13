@@ -348,17 +348,17 @@ std::vector<int64_t> HevcDolbyVisionFilter::placesIn(uint8_t* data, uint8_t* dat
 }
 
 // ** THE LAYER STAYS IN STEP WHERE THE TRACK LEAVES A PICTURE OUT. ** The layer is timed by counting its pictures,
-// the track by the times its pictures have in the file. Where those times leave a picture out, as in a file cut or
-// put together from parts, or a damaged one, the layer had no picture for the hole either, so every picture of the
-// layer after it stood one picture early: the Dolby Vision data of the rest of the film belonged to the picture
-// after. The layer now gets a picture for each one the track leaves out, with the data of the picture before, and
-// the two stay in step.
+// the track by the places of its pictures in the order shown (their picture order counts). Where those leave a
+// picture out, as in a file cut or put together from parts, or a damaged one, the layer had no picture for the hole
+// either, so every picture of the layer after it stood one picture early: the Dolby Vision data of the rest of the
+// film belonged to the picture after. The layer now gets a picture for each one the track leaves out, with the data
+// of the picture before, and the two stay in step.
 //
-// How many pictures the track leaves out before the picture at `time`: the time since the picture before, in
-// picture times. A picture time is the mean of the last steps that were one picture (the times of a Matroska file
-// are rounded, to a millisecond as a rule, so single steps differ), and a step of 1.75 of them or more is a hole.
-// Not known before three steps are, and not at all where two pictures stood nearly at one time. A hole of more
-// than MAX_FILLED pictures is no missing picture but another part of a film: it is counted (m_gaps) and said.
+// How many pictures the track leaves out before the picture at the place `time`: the step from the picture before,
+// in steps of one picture. Such a step is the mean of the last steps that were one picture (encoders differ in what
+// they count a picture as), and a step of 1.75 of them or more is a hole. Not known before three steps are, and
+// not from one period to the next. A hole of more than MAX_FILLED pictures is no missing picture but another part
+// of a film: it is counted (m_gaps) and said.
 int64_t HevcDolbyVisionFilter::stepsBefore(const int64_t time)
 {
     static constexpr size_t STEPS_KEPT = 16;
@@ -568,14 +568,14 @@ void HevcDolbyVisionFilter::flush(DemuxedData& demuxedData, const PIDSet& /*acce
                               "in the second layer they have the data of the picture before.");
     if (m_fillers > 0)
         LTRACE(LT_WARN, 2,
-               "Warning: the times of the track's pictures leave "
+               "Warning: the track's pictures leave "
                    << m_fillers << (m_fillers == 1 ? " picture" : " pictures") << " out, at " << m_holes
                    << (m_holes == 1 ? " place" : " places")
                    << ". The second layer has a picture for each of them, with the Dolby Vision data of the picture "
                       "before, so the two layers stay in step.");
     if (m_gaps > 0)
         LTRACE(LT_WARN, 2,
-               "Warning: the times of the track's pictures jump over more than 600 pictures at "
+               "Warning: the order of the track's pictures jumps over more than 600 pictures at "
                    << m_gaps << (m_gaps == 1 ? " place" : " places")
                    << ". If pictures are missing there, the Dolby Vision data of the second layer is out of step "
                       "with the picture after such a place.");

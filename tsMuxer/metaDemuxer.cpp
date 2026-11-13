@@ -1676,9 +1676,9 @@ VideoAspectRatio arNameToCode(const string& arName);  // below, with createCodec
 // two layers. A track of profile 8, which has the Dolby Vision data inside its one stream, was written to a disc as
 // it is, with a warning that it plays as HDR10 only. Its second layer is made now (HevcDolbyVisionFilter): the line
 // of the track becomes the two lines a dual layer track is given on, subTrack=1 and subTrack=2. What it needs: a
-// Matroska source, a picture of 3840x2160 whose base is HDR10, the Dolby Vision library for the RPUs, and the one
-// picture the layer is written with (given with --dv-layer-picture, or made by an ffmpeg the user has). Where one of
-// them is missing the track is written as before, and a line says what was missing.
+// Matroska or MP4 source, a picture of 3840x2160 whose base is HDR10, the Dolby Vision library for the RPUs, and the
+// one picture the layer is written with (given with --dv-layer-picture, or made by an ffmpeg the user has). Where one
+// of them is missing the track is written as before, and a line says what was missing.
 bool METADemuxer::addDvLayers(const string& codec, const string& lineStreamName, const map<string, string>& addParams)
 {
     // a disc is written, not a Matroska file whose MUXOPT line still says --blu-ray; a main video of its own line
@@ -1691,7 +1691,8 @@ bool METADemuxer::addDvLayers(const string& codec, const string& lineStreamName,
         return false;
     const string file = unquoteStr(trimStr(files[0]));
     const string ext = strToLowerCase(extractFileExt(file));
-    if (ext != "mkv" && ext != "mk3d")
+    // the containers whose reader hands a track to the filter that makes the layer
+    if (ext != "mkv" && ext != "mk3d" && ext != "mp4" && ext != "m4v" && ext != "mov")
         return false;
     const int track = strToInt32(addParams.find("track")->second.c_str());
     // The file is looked at here only to tell what the track is. What the look says or sets is of no concern to the
@@ -4353,8 +4354,11 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
                         if (subTrackNo != 0 && dynamic_cast<HEVCStreamReader*>(videoReader))
                         {
                             const string kind = strToLowerCase(extractFileExt(unquoted));
+                            // the containers a second layer can be made from, as addStream gives the filter its
+                            // picture: Matroska and MP4
                             probeSubTrack(vect.data(), vect.size(), subTrackNo, dd,
-                                          kind == "mkv" || kind == "mk3d" || kind == "webm" || kind == "mka");
+                                          kind == "mkv" || kind == "mk3d" || kind == "webm" || kind == "mka" ||
+                                              kind == "mp4" || kind == "m4v" || kind == "mov");
                         }
                         // Restore codec-private from container
                         if (dd.codecPrivate.empty() && cp && cpSize > 0)
@@ -7145,9 +7149,9 @@ bool ContainerToReaderWrapper::openStream(int readerID, const char* streamName, 
                 // A merged dual layer Dolby Vision track, split back into base layer and
                 // enhancement layer. subTrack=1 is the base layer, subTrack=2 the enhancement.
                 auto dvFilter = new HevcDolbyVisionFilter(srcPID);
-                // a picture to make the second layer of a single layer track of. From a Matroska file, which hands
-                // the filter one picture at a time, with its time, and says when the file has ended.
-                if (dynamic_cast<MatroskaDemuxer*>(demuxer) != nullptr)
+                // a picture to make the second layer of a single layer track of. From a Matroska or an MP4 file,
+                // whose readers hand the filter whole pictures and say when the file has ended.
+                if (dynamic_cast<MatroskaDemuxer*>(demuxer) != nullptr || dynamic_cast<MovDemuxer*>(demuxer) != nullptr)
                     dvFilter->setLayerPicture(dvLayer::picture());
                 // If the file was written as profile 8.1 its RPUs were converted, and the disc's
                 // own are attached beside them. Load them now, before anything is written, so a

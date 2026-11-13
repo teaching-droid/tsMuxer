@@ -202,6 +202,7 @@ class MovDemuxer final : public IOContextDemuxer
     AVPacket m_deliveredPacket;
     std::vector<uint8_t> m_tmpChunkBuffer;
     bool m_firstDemux;
+    bool m_filtersFlushed = false;  // the filters were told that the file has ended (SubTrackFilter::flush)
     bool m_readerUsed;
     FileNameIterator* m_fileIterator;
     std::string m_fileName;

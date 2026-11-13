@@ -135,7 +135,8 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
     int64_t m_fillers = 0;
     int64_t m_holes = 0;
     int64_t m_gaps = 0;
-    bool m_unevenTimes = false;  // two pictures stood nearly at one time: the times say nothing of missing pictures
+    bool m_unevenTimes =
+        false;  // a step far smaller than the usual one was met: the steps say nothing of missing pictures
     int64_t stepsBefore(int64_t time);
     int demuxMade(DemuxedData& demuxedData, AVPacket& avPacket);
     // The places of the pictures of a packet, in the order they are in it (placeOf), with the parameter sets of the

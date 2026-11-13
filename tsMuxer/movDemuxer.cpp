@@ -2046,6 +2046,16 @@ int MovDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepte
         }
     }
 
+    // what a filter still holds (the last pictures of a made Dolby Vision layer), once
+    if (!m_filtersFlushed)
+    {
+        m_filtersFlushed = true;
+        for (const auto& [filterPid, filter] : m_pidFilters)
+        {
+            filter->flush(demuxedData, acceptedPIDs);
+            discardSize += filter->takeReframedBytes();
+        }
+    }
     m_lastReadRez = BufferedReader::DATA_EOF;
     return m_lastReadRez;
 }
