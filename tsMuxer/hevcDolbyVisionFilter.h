@@ -6,10 +6,12 @@
 #include <cstdint>
 #include <deque>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "abstractDemuxer.h"
+#include "hevc.h"
 #include "subTrackFilter.h"
 
 // Split one merged Dolby Vision video track back into its two layers.
@@ -60,8 +62,14 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
     // here: the base side gets the track without its RPUs, and the second side gets, for each picture of the track,
     // the given picture and behind it the RPU of the track's picture, converted to the form a second layer carries.
     // The given picture is a key picture each time, so the made layer is in the order the pictures are shown in,
-    // while the track comes in the order they are coded in: the RPUs are held by their times and handed on in the
-    // order of the times, as many held as HEVC can put pictures out of order, and the rest at the end (flush).
+    // while the track comes in the order they are coded in: the RPUs are held by the place of their picture in the
+    // order shown and handed on in that order, as many held as HEVC can put pictures out of order, and the rest at
+    // the end (flush).
+    // ** THE PLACE OF A PICTURE IS READ FROM THE VIDEO. ** The place was the time its file gives the picture, which
+    // only a Matroska file gives for each picture: an MP4 file hands over its pictures a chunk at a time, and a
+    // transport stream a packet at a time. It is now the picture order count of the picture, read from its slice
+    // header (placeOf), which is what the HEVC reader times the picture of the track by. So the layer is made the
+    // same way from every container, and it stands where the reader puts the pictures.
     void setLayerPicture(const std::vector<uint8_t>& picture) { m_layerPicture = picture; }
     [[nodiscard]] bool makesLayer() const override { return m_kind == Kind::made; }
     [[nodiscard]] int64_t picturesMade() const { return m_made; }
@@ -130,6 +138,18 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
     bool m_unevenTimes = false;  // two pictures stood nearly at one time: the times say nothing of missing pictures
     int64_t stepsBefore(int64_t time);
     int demuxMade(DemuxedData& demuxedData, AVPacket& avPacket);
+    // The places of the pictures of a packet, in the order they are in it (placeOf), with the parameter sets of the
+    // packet taken first; and the place of its first key picture, or AV_NOPTS_VALUE_INTERNAL
+    std::vector<int64_t> placesIn(uint8_t* data, uint8_t* dataEnd, int64_t& firstKey);
+    int64_t placeOf(const uint8_t* nal, const uint8_t* nalEnd, int nalType);
+    std::unique_ptr<HevcSpsUnit> m_orderSps;  // the parameter sets the slice headers are read with: the last of each
+    std::unique_ptr<HevcPpsUnit> m_orderPps;
+    bool m_orderStarted = false;
+    int64_t m_period = 0;        // a new one begins at each IDR or BLA picture, where the order count begins again
+    int64_t m_orderMsb = 0;      // the part of the order count above what a slice header carries
+    int m_prevLsb = 0;           // the part a slice header carries, of the picture before
+    int64_t m_lastCount = 0;     // the order count of the picture before
+    int64_t m_orderGuessed = 0;  // pictures whose slice header could not be read: placed after the one before
     int64_t handOnHeld(DemuxedData& demuxedData, size_t keep);
     void hold(int64_t time, std::vector<uint8_t>&& rpu);
 };

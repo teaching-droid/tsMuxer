@@ -122,7 +122,6 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
     if (m_kind == Kind::undecided)
     {
         bool wrapped = false, rpu = false;
-        int pictures = 0;
         for (uint8_t* nal = NALUnit::findNextNAL(avPacket.data, dataEnd); nal < dataEnd;)
         {
             if (dataEnd - nal >= 3)
@@ -130,7 +129,6 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
                 const int type = (nal[0] >> 1) & 0x3F;
                 wrapped |= type == static_cast<int>(HevcUnit::NalType::DVEL);
                 rpu |= type == static_cast<int>(HevcUnit::NalType::DVRPU);
-                pictures += type < 32 && (nal[2] & 0x80) ? 1 : 0;  // the first slice of a picture
             }
             nal = NALUnit::findNextNAL(NALUnit::findNALWithStartCode(nal, dataEnd, true), dataEnd);
         }
@@ -142,9 +140,16 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
         else if (rpu && !m_layerPicture.empty())
             m_kind = Kind::made;
         // A picture in front of the first RPU: the layer has a picture for it as well, or every later one would
-        // stand one place early. Kept until the track is known for single layer.
-        else if (!m_layerPicture.empty() && avPacket.pts != AV_NOPTS_VALUE_INTERNAL && m_before.size() < 64)
-            for (int i = 0; i < pictures; ++i) m_before.push_back(avPacket.pts);
+        // stand one place early. Kept, by its place, until the track is known for single layer.
+        else if (!m_layerPicture.empty())
+        {
+            int64_t firstKey = AV_NOPTS_VALUE_INTERNAL;
+            for (const int64_t place : placesIn(avPacket.data, dataEnd, firstKey))
+                if (m_before.size() < 64)
+                    m_before.push_back(place);
+            if (m_firstKeyTime == AV_NOPTS_VALUE_INTERNAL)
+                m_firstKeyTime = firstKey;
+        }
     }
     if (m_kind == Kind::made)
         return demuxMade(demuxedData, avPacket);
@@ -250,6 +255,98 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
 // How many RPUs are held before the earliest goes on: HEVC puts a picture at most 16 places out of order
 static constexpr size_t HELD_PICTURES = 16;
 
+// A place is the period in its upper bits and, below them, the order count moved up by half the room, so that the
+// counts below that of the first picture of a period (the pictures shown before it) stay in order
+static constexpr int PERIOD_SHIFT = 32;
+static constexpr int64_t COUNT_ZERO = 1ll << 31;
+// as far as a slice header is read: the order count is in its first bytes (the same reach as the HEVC reader's)
+static constexpr int ORDER_SLICE_HEADER = 64;
+
+// The place of a picture in the order they are shown in, from the first slice of the picture: its picture order
+// count, in the period it is in. The count begins again at an IDR picture (at 0) and at a BLA picture (at the part
+// its slice header carries); between them the slice header carries its lower bits, and the upper part goes up or
+// down where those bits wrap, measured from the picture before, as the HEVC reader does it. A slice header that
+// cannot be read (no parameter sets yet, or damaged) puts the picture one place after the picture before: counted,
+// and said at the end.
+int64_t HevcDolbyVisionFilter::placeOf(const uint8_t* nal, const uint8_t* nalEnd, const int nalType)
+{
+    const bool idr = nalType == static_cast<int>(HevcUnit::NalType::IDR_W_RADL) ||
+                     nalType == static_cast<int>(HevcUnit::NalType::IDR_N_LP);
+    const bool bla = nalType >= static_cast<int>(HevcUnit::NalType::BLA_W_LP) &&
+                     nalType <= static_cast<int>(HevcUnit::NalType::BLA_N_LP);
+    HevcSliceHeader slice;
+    slice.decodeBuffer(nal, (std::min)(nal + ORDER_SLICE_HEADER, nalEnd));
+    const bool read =
+        m_orderSps != nullptr && m_orderPps != nullptr && slice.deserialize(m_orderSps.get(), m_orderPps.get()) == 0;
+    const int lsb = read ? static_cast<int>(slice.pic_order_cnt_lsb) : 0;
+    if (idr || bla || !m_orderStarted)
+    {
+        if (m_orderStarted)
+            ++m_period;
+        m_orderStarted = true;
+        m_orderMsb = 0;
+        m_prevLsb = lsb;
+        m_lastCount = lsb;
+        if (!read && !idr)
+            ++m_orderGuessed;
+    }
+    else if (!read)
+    {
+        ++m_orderGuessed;
+        ++m_lastCount;
+    }
+    else
+    {
+        const int range = 1 << m_orderSps->log2_max_pic_order_cnt_lsb;
+        if (lsb < m_prevLsb && m_prevLsb - lsb >= range / 2)
+            m_orderMsb += range;
+        else if (lsb > m_prevLsb && lsb - m_prevLsb >= range / 2)
+            m_orderMsb -= range;
+        m_prevLsb = lsb;
+        m_lastCount = lsb + m_orderMsb;
+    }
+    return (m_period << PERIOD_SHIFT) + COUNT_ZERO + m_lastCount;
+}
+
+std::vector<int64_t> HevcDolbyVisionFilter::placesIn(uint8_t* data, uint8_t* dataEnd, int64_t& firstKey)
+{
+    std::vector<int64_t> places;
+    firstKey = AV_NOPTS_VALUE_INTERNAL;
+    for (uint8_t* curNal = NALUnit::findNextNAL(data, dataEnd); curNal < dataEnd;)
+    {
+        uint8_t* nextNal = NALUnit::findNALWithStartCode(curNal, dataEnd, true);
+        const uint8_t* nalEnd = nextNal;
+        if (nextNal < dataEnd)
+            while (nalEnd > curNal && nalEnd[-1] == 0) nalEnd--;  // the zeroes of the next start code
+        if (nalEnd - curNal >= 3)
+        {
+            const int nalType = (curNal[0] >> 1) & 0x3F;
+            if (nalType == static_cast<int>(HevcUnit::NalType::SPS))
+            {
+                auto sps = std::make_unique<HevcSpsUnit>();
+                sps->decodeBuffer(curNal, nalEnd);
+                if (sps->deserialize() == 0)
+                    m_orderSps = std::move(sps);
+            }
+            else if (nalType == static_cast<int>(HevcUnit::NalType::PPS))
+            {
+                auto pps = std::make_unique<HevcPpsUnit>();
+                pps->decodeBuffer(curNal, nalEnd);
+                if (pps->deserialize() == 0)
+                    m_orderPps = std::move(pps);
+            }
+            else if (nalType < 32 && (curNal[2] & 0x80))  // the first slice of a picture
+            {
+                places.push_back(placeOf(curNal, nalEnd, nalType));
+                if (nalType >= 16 && nalType <= 23 && firstKey == AV_NOPTS_VALUE_INTERNAL)
+                    firstKey = places.back();
+            }
+        }
+        curNal = NALUnit::findNextNAL(nextNal, dataEnd);
+    }
+    return places;
+}
+
 // ** THE LAYER STAYS IN STEP WHERE THE TRACK LEAVES A PICTURE OUT. ** The layer is timed by counting its pictures,
 // the track by the times its pictures have in the file. Where those times leave a picture out, as in a file cut or
 // put together from parts, or a damaged one, the layer had no picture for the hole either, so every picture of the
@@ -267,6 +364,9 @@ int64_t HevcDolbyVisionFilter::stepsBefore(const int64_t time)
     static constexpr size_t STEPS_KEPT = 16;
     static constexpr int64_t MAX_FILLED = 600;
     if (m_lastTime == AV_NOPTS_VALUE_INTERNAL || time <= m_lastTime || m_unevenTimes)
+        return 0;
+    // the order count begins again with a period (placeOf): a step from one period to the next says nothing
+    if ((time >> PERIOD_SHIFT) != (m_lastTime >> PERIOD_SHIFT))
         return 0;
     const int64_t step = time - m_lastTime;
     if (m_steps.size() >= 3)
@@ -352,7 +452,7 @@ int64_t HevcDolbyVisionFilter::handOnHeld(DemuxedData& demuxedData, const size_t
     return handedOn;
 }
 
-// A picture of the track with its RPU, to be handed on in the order of the times
+// A picture of the track with its RPU, to be handed on in the order of the places (placeOf)
 void HevcDolbyVisionFilter::hold(const int64_t time, std::vector<uint8_t>&& rpu)
 {
     // ** THE LAYER BEGINS WITH THE FIRST KEY PICTURE. ** A track that begins with a key picture and pictures shown
@@ -369,22 +469,20 @@ void HevcDolbyVisionFilter::hold(const int64_t time, std::vector<uint8_t>&& rpu)
 
 int HevcDolbyVisionFilter::demuxMade(DemuxedData& demuxedData, AVPacket& avPacket)
 {
-    // The order the pictures are shown in comes from their times: without them the layer cannot be put in order
-    if (avPacket.pts == AV_NOPTS_VALUE_INTERNAL)
-        THROW(ERR_SOURCE,
-              "Dolby Vision: a picture of this track has no time in its file, so the second layer "
-              "cannot be put in the order its pictures are shown in. --no-dv-layer on the MUXOPT line "
-              "writes the track as the one stream it is.")
+    uint8_t* dataEnd = avPacket.data + avPacket.size;
+    // the places of the pictures of this packet, in the order they are in it
+    int64_t firstKey = AV_NOPTS_VALUE_INTERNAL;
+    const std::vector<int64_t> places = placesIn(avPacket.data, dataEnd, firstKey);
+    if (m_firstKeyTime == AV_NOPTS_VALUE_INTERNAL)
+        m_firstKeyTime = firstKey;
     // the pictures in front of the first RPU, each with no RPU of its own
-    for (const int64_t time : m_before) hold(time, {});
+    for (const int64_t place : m_before) hold(place, {});
     m_before.clear();
 
-    uint8_t* dataEnd = avPacket.data + avPacket.size;
     int64_t discardSize = 0;
     int64_t handedOn = 0;
     // the pictures of this packet (one, as a rule): each begins with its first slice, and its RPU follows its slices
     std::vector<std::vector<uint8_t>> rpus;
-    bool key = false;
     for (uint8_t* curNal = NALUnit::findNextNAL(avPacket.data, dataEnd); curNal < dataEnd;)
     {
         uint8_t* nextNal = NALUnit::findNALWithStartCode(curNal, dataEnd, true);
@@ -424,21 +522,18 @@ int HevcDolbyVisionFilter::demuxMade(DemuxedData& demuxedData, AVPacket& avPacke
             {
                 handedOn += emit(m_blStreamIndex, curNal, nalEnd, demuxedData, discardSize, nalType);
                 if (nalType < 32 && nalEnd - curNal >= 3 && (curNal[2] & 0x80))
-                {
                     rpus.emplace_back();
-                    key |= nalType >= 16 && nalType <= 23;
-                }
             }
         }
         curNal = NALUnit::findNextNAL(nextNal, dataEnd);
     }
-    if (key && m_firstKeyTime == AV_NOPTS_VALUE_INTERNAL)
-        m_firstKeyTime = avPacket.pts;
-    // one picture of the layer for each picture of the track; a second picture of the packet stands a tick later
+    // one picture of the layer for each picture of the track, at the place of that picture. (An RPU in front of
+    // the first picture of a packet makes one entry more than there are pictures: it has no place, and goes after
+    // the last.)
     for (size_t i = 0; i < rpus.size(); ++i)
     {
         ++m_basePictures;
-        hold(avPacket.pts + static_cast<int64_t>(i), std::move(rpus[i]));
+        hold(i < places.size() ? places[i] : (places.empty() ? m_lastTime : places.back()) + 1, std::move(rpus[i]));
     }
     handedOn += handOnHeld(demuxedData, HELD_PICTURES);
     ++m_packets;
@@ -461,6 +556,11 @@ void HevcDolbyVisionFilter::flush(DemuxedData& demuxedData, const PIDSet& /*acce
                "Dolby Vision: " << m_leading
                                 << " pictures of the track are shown before its first key picture; the "
                                    "layer begins with that key picture.");
+    if (m_orderGuessed > 0)
+        LTRACE(LT_WARN, 2,
+               "Warning: the place of " << m_orderGuessed << (m_orderGuessed == 1 ? " picture" : " pictures")
+                                        << " of the track among the others could not be read from the video; "
+                                           "they are taken in the order they are stored in.");
     if (m_withoutRpu > 0)
         LTRACE(LT_WARN, 2,
                "Warning: " << m_withoutRpu
