@@ -4,6 +4,7 @@
 #define HEVC_DOLBY_VISION_FILTER_H_
 
 #include <cstdint>
+#include <deque>
 #include <map>
 #include <memory>
 #include <string>
@@ -61,14 +62,14 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
     // here: the base side gets the track without its RPUs, and the second side gets, for each picture of the track,
     // the given picture and behind it the RPU of the track's picture, converted to the form a second layer carries.
     // The given picture is a key picture each time, so the made layer is in the order the pictures are shown in,
-    // while the track comes in the order they are coded in: the RPUs are held by the place of their picture in the
-    // order shown and handed on in that order, as many held as HEVC can put pictures out of order, and the rest at
-    // the end (flush).
-    // ** THE PLACE OF A PICTURE IS READ FROM THE VIDEO. ** The place was the time its file gives the picture, which
-    // only a Matroska file gives for each picture: an MP4 file hands over its pictures a chunk at a time, and a
-    // transport stream a packet at a time. It is now the picture order count of the picture, read from its slice
-    // header (placeOf), which is what the HEVC reader times the picture of the track by. So the layer is made the
-    // same way from every container, and it stands where the reader puts the pictures.
+    // while the track comes in the order they are coded in: the RPUs are held by the slot of their picture on the
+    // timeline and handed on slot by slot, as many held as HEVC can put pictures out of order, and the rest at the
+    // end (flush).
+    // ** THE SLOT OF A PICTURE IS READ FROM THE VIDEO. ** It was the time its file gives the picture, which only a
+    // Matroska file gives for each picture: an MP4 file hands over its pictures a chunk at a time, and a transport
+    // stream a packet at a time. It is now worked out from the picture order count in the slice header of the
+    // picture, as the HEVC reader works out the time of the picture (slotQueued). So the layer is made the same way
+    // from every container, and it stands where the reader puts the pictures.
     void setLayerPicture(const std::vector<uint8_t>& picture) { m_layerPicture = picture; }
     // ** WHOLE PICTURES FROM THE PIECES OF A TRANSPORT STREAM. ** A Matroska or MP4 reader hands the filter whole
     // pictures. A transport stream reader hands on what one packet of 188 bytes carries, wherever in a picture
@@ -125,24 +126,8 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
     };
     Kind m_kind = Kind::undecided;
     std::vector<uint8_t> m_layerPicture;
-    std::multimap<int64_t, std::vector<uint8_t>> m_held;  // the RPUs not yet handed on, by the time of their picture
-    std::vector<int64_t> m_before;                        // the times of the pictures before the first RPU
-    std::vector<uint8_t> m_lastRpu;                       // the RPU handed on last
-    int64_t m_made = 0;                                   // pictures of the made layer handed on
-    int64_t m_basePictures = 0;                           // pictures of the track
-    int64_t m_leading = 0;     // of them, shown before the first key picture: they get no picture of the layer
-    int64_t m_withoutRpu = 0;  // pictures of the layer written with the RPU of the picture before
-    int64_t m_firstKeyTime = AV_NOPTS_VALUE_INTERNAL;  // the time of the first key picture
-    int64_t m_lastTime = AV_NOPTS_VALUE_INTERNAL;      // the time of the picture handed on last
-    // Where the track leaves pictures out (stepsBefore): the step from one picture to the next in the counts of
-    // this track (the least one met; 1 for every encoder known), how many pictures of the layer were written for
-    // pictures the track does not have and at how many places, and the places where that could not be done.
-    int64_t m_unit = 0;
-    int64_t m_fillers = 0;
-    int64_t m_holes = 0;
-    int64_t m_gaps = 0;
-    int64_t stepsBefore(int64_t time);
     int demuxMade(DemuxedData& demuxedData, AVPacket& avPacket);
+
     // pieces (setPieces): the bytes not yet handed on, how far they were searched for start codes, and whether a
     // slice was met since the last picture began
     bool m_pieces = false;
@@ -154,56 +139,79 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
     size_t wholePictures();
     // Runs demuxPacket on the first `size` bytes of m_pending and takes them out of it; what demuxPacket returns
     int handOnWhole(DemuxedData& demuxedData, const PIDSet& acceptedPIDs, size_t size);
-    // ** THE PICTURES ARE COUNTED AS THE HEVC READER COUNTS THEM. ** The layer has one picture for each picture the
-    // reader of the track gives a time, so the two have to agree on what a picture is, and where it stands.
-    // A picture begins at a slice that says it is the first of its picture, or at the first slice after anything
-    // that is no slice and no suffix (the reader's rule: isSlice, isSuffix, auOpen).
-    // The reader knows the parameter sets of the track before the mux begins (it has looked at the file), so it
-    // counts the pictures in front of the first parameter sets of the stream as well, as a recording that begins in
-    // the middle of a group has them. The filter sees the parameter sets only where they come in the stream: such
-    // pictures are kept back (m_deferred, with the beginning of their first slice and their RPU) and are placed when
-    // the parameter sets have come, before the picture that follows them.
+
+    // ** THE LAYER HAS ONE PICTURE FOR EACH SLOT OF THE TRACK'S TIMELINE. ** The made layer is a stream of its own,
+    // and its reader times it by counting: its first picture at the start, each next one a picture later. The track
+    // is timed by its own HEVC reader, which gives each picture a slot on that timeline from its picture order
+    // count (hevcStreamReader.cpp: toFullPicOrder, incTimings, guessPicOrder). So the layer is right exactly when
+    // its picture number k carries the RPU of the track's picture at slot k, for every slot from 0 to the last.
     //
-    // A picture of a packet: where it begins and ends, and its place (placeOf); DEFERRED while the parameter sets
-    // are not known; NO_PLACE for a picture that cannot be placed (its slice header cannot be read): such a picture
-    // gets no picture of the layer of its own, and its RPU goes nowhere.
-    struct PictureAt
+    // The filter therefore works out the slot the reader gives each picture, by the reader's own rules, and not a
+    // place of its own making (it had one: the time of the file first, then the order count in its period, each of
+    // which agreed with the reader for an undamaged stream that begins with a key picture, and not for others):
+    //  - A picture begins at a slice that says it is the first of its picture, or at the first slice after anything
+    //    that is no slice and no suffix; the first slice of the stream begins one whatever it says.
+    //  - A period (it begins at an IDR or BLA picture, and with the first picture) starts one past the highest slot
+    //    given, after the places of its own leading pictures.
+    //  - A first picture that is no key picture stands after the pictures that follow it and are shown before it.
+    //  - A picture whose slice header cannot be read (or that begins without saying so) takes the slot of the
+    //    picture at the same place of the group before, or the count of the pictures so far.
+    // The reader knows the parameter sets of the track before the mux begins (it has looked at the file) and counts
+    // the pictures in front of the first parameter sets of the stream too. The filter sees them only where they
+    // come, so the pictures wait in a queue, with the beginning of their first slice, until they can be read. They
+    // also wait where a slot depends on the pictures that follow (the leading pictures of a period).
+    //
+    // The layer then gets, slot by slot: the RPU of the track's picture of that slot; where the track has none (a
+    // picture it leaves out), the RPU of the slot before; a picture of a slot below 0 (shown before the start, as the
+    // leading pictures of a first key picture are) gets none, and neither does a second picture of one slot.
+    struct Picture
     {
-        const uint8_t* nal;
-        const uint8_t* nalEnd;
-        int nalType;
-        int64_t place;
-    };
-    static constexpr int64_t NO_PLACE = INT64_MIN + 1;
-    static constexpr int64_t DEFERRED = INT64_MIN + 2;
-    struct Deferred
-    {
-        std::vector<uint8_t> head;  // the beginning of the first slice, as far as a slice header is read
-        int nalType;
+        std::vector<uint8_t> head;  // the beginning of its first slice, as far as a slice header is read
+        int nalType = 0;
+        bool firstSlice = false;  // the slice says it is the first of its picture
+        bool parsed = false;      // readable and lsb are set (the parameter sets were there)
+        bool readable = false;    // its slice header was read
+        int lsb = 0;              // the part of the picture order count the slice header carries
         std::vector<uint8_t> rpu;
     };
-    std::vector<Deferred> m_deferred;  // the pictures in front of the parameter sets, in the order they came
-    // of them, those placed since: place and RPU, to be held with the pictures of the packet that is read
-    std::vector<std::pair<int64_t, std::vector<uint8_t>>> m_placedLate;
-    std::vector<PictureAt> picturesIn(uint8_t* data, uint8_t* dataEnd);
-    void keepBack(const PictureAt& picture);
-    // The place of a picture that is counted, and what follows from the first of them (the first key picture)
-    int64_t placePicture(const uint8_t* nal, const uint8_t* nalEnd, int nalType, bool firstSlice);
-    int64_t placeOf(const uint8_t* nal, const uint8_t* nalEnd, int nalType);
-    bool m_orderVps = false;          // a VPS was met
-    bool m_auOpen = false;            // something that is no slice and no suffix was met since the last picture began
-    bool m_firstCounted = false;      // the first picture the reader counts was met
-    int64_t m_rpuWithoutPicture = 0;  // RPUs that belong to no picture: left out
+    std::deque<Picture> m_queue;  // the pictures not yet given a slot, in the order they came
+    // Notes a NAL of the track: a parameter set, and whether a picture begins with it (then it is put at the end of
+    // the queue, and true comes back)
+    bool notePicture(const uint8_t* nal, const uint8_t* nalEnd, int nalType);
+    void readHeader(Picture& picture) const;
+    // Gives the pictures of the queue their slots, as far as that can be done; all of them when `last` is set
+    void slotQueued(bool last);
+    // The layer's pictures of the slots that are certain: all but the latest `keep`; the bytes handed on
+    int64_t handOnSlots(DemuxedData& demuxedData, size_t keep);
+    int64_t writeLayerPicture(DemuxedData& demuxedData, const std::vector<uint8_t>& rpu);
+
     std::unique_ptr<HevcSpsUnit> m_orderSps;  // the parameter sets the slice headers are read with: the last of each
     std::unique_ptr<HevcPpsUnit> m_orderPps;
-    bool m_orderStarted = false;
-    int64_t m_period = 0;        // a new one begins at each IDR or BLA picture, where the order count begins again
-    int64_t m_orderMsb = 0;      // the part of the order count above what a slice header carries
-    int m_prevLsb = 0;           // the part a slice header carries, of the picture before
-    int64_t m_lastCount = 0;     // the order count of the picture before
-    int64_t m_orderGuessed = 0;  // pictures whose slice header could not be read: they get no picture of the layer
-    int64_t handOnHeld(DemuxedData& demuxedData, size_t keep);
-    void hold(int64_t time, std::vector<uint8_t>&& rpu);
+    bool m_orderVps = false;  // a VPS was met
+    bool m_auOpen = true;     // the next slice begins a picture whatever it says (see above)
+    // the reader's state, as toFullPicOrder and incTimings keep it
+    bool m_started = false;
+    int64_t m_frameNum = 0;                 // the pictures so far, with the slots a period was moved on by
+    int64_t m_maxSlot = -1;                 // the highest slot given
+    int64_t m_base = 0;                     // what the order count of a picture of this period is added to
+    int64_t m_msb = 0;                      // the part of the order count above what a slice header carries
+    int m_prevLsb = 0;                      // the part a slice header carries, of the picture before
+    std::vector<int64_t> m_gopOffsets;      // slot less picture count, of each picture of this group
+    std::vector<int64_t> m_prevGopOffsets;  // and of the group before
+
+    std::map<int64_t, std::vector<uint8_t>> m_slots;  // the RPU of each slot not yet handed on
+    int64_t m_nextSlot = 0;                           // the slot the next picture of the layer is of
+    std::vector<uint8_t> m_lastRpu;                   // the RPU handed on last
+    int64_t m_made = 0;                               // pictures of the made layer handed on
+    int64_t m_basePictures = 0;                       // pictures of the track
+    int64_t m_leading = 0;     // of them, at a slot below 0 (shown before the start): no picture of the layer
+    int64_t m_sameSlot = 0;    // of them, at a slot another picture has, or one that is past: no picture of its own
+    int64_t m_withoutRpu = 0;  // pictures of the layer written with the RPU of the picture before
+    int64_t m_fillers = 0;     // pictures of the layer for slots the track has no picture of, at m_holes places
+    int64_t m_holes = 0;
+    int64_t m_gaps = 0;               // places where the slots jump too far to be filled
+    int64_t m_orderGuessed = 0;       // pictures whose slice header could not be read
+    int64_t m_rpuWithoutPicture = 0;  // RPUs that belong to no picture: left out
 };
 
 #endif  // HEVC_DOLBY_VISION_FILTER_H_
