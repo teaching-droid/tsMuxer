@@ -1433,10 +1433,18 @@ int HEVCStreamReader::toFullPicOrder(const HevcSliceHeader* slice, const unsigne
                           : 0;
         if (m_picOrderStarted && !m_joinRestart && (slice->isIDR() || bla) && !partStart)
             leading = m_restartLeading;
+        // ** A PERIOD BEGINS AT THE FIRST FREE PLACE. ** It began at the count of the pictures before it, which is
+        // the first free place when every one of them has a place of its own. The pictures that lead the first key
+        // picture of a stream (it begins with a CRA picture, as a cut of an open group does) are shown before the
+        // start and take no place, but they are counted: the first IDR or BLA picture after such a start stood as
+        // many places late as there are such pictures, and every picture after it with it, 3 pictures (125 ms at 24
+        // a second) against the sound for a group of 3 B pictures. It begins one past the latest place given. The
+        // count of the pictures stays what it is: the decoding times go by it.
+        const int start = m_picOrderStarted ? m_maxFullPicOrder + 1 : m_frameNum;
         m_restartLeading = 0;
         m_joinRestart = false;
         m_picOrderStarted = true;
-        m_picOrderBase = m_frameNum + leading - static_cast<int>(slice->pic_order_cnt_lsb);
+        m_picOrderBase = start + leading - static_cast<int>(slice->pic_order_cnt_lsb);
         m_picOrderMsb = 0;
         m_prevPicOrder = static_cast<int>(slice->pic_order_cnt_lsb);
     }
