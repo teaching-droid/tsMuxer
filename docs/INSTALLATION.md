@@ -11,6 +11,8 @@ newest run of each build.
 |--------|---------|
 | Windows, 64-bit | `tsMuxeR-<version>-windows-x64.zip` |
 | Windows, 32-bit | `tsMuxeR-<version>-windows-x86.zip` |
+| Windows, 64-bit, two stand-alone programs | `tsMuxeR-<version>-windows-x64-standalone.zip` |
+| Windows, 32-bit, two stand-alone programs | `tsMuxeR-<version>-windows-x86-standalone.zip` |
 | Linux, any current distribution | `tsMuxeR-<version>-x86_64.AppImage` |
 | Linux, with Qt 6.7 or newer installed | `tsMuxeR-<version>-linux-x64.zip` |
 | macOS, Apple silicon | `tsMuxeR-<version>-macos-arm64.zip` |
@@ -23,6 +25,10 @@ are no dependencies. The Windows binaries are built with Qt 6.8 and the
 [qt6windows7](https://github.com/crystalidea/qt6windows7) patches, so the standard builds run on
 Windows 7 and newer. libass, which draws ASS and SSA subtitles with their styles, is in the package
 too.
+
+The stand-alone package holds `tsMuxeR.exe` and `tsMuxerGUI.exe` alone, each a single file that needs
+no library beside it, for a place where one file is wanted. libass is a set of files of its own and
+is not in it: ASS and SSA subtitles are drawn there in the simpler way, without their styles.
 
 ### If your antivirus flags it
 
