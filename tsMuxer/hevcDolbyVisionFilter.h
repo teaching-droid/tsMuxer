@@ -4,6 +4,7 @@
 #define HEVC_DOLBY_VISION_FILTER_H_
 
 #include <cstdint>
+#include <deque>
 #include <map>
 #include <string>
 #include <vector>
@@ -119,8 +120,15 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
     int64_t m_withoutRpu = 0;  // pictures of the layer written with the RPU of the picture before
     int64_t m_firstKeyTime = AV_NOPTS_VALUE_INTERNAL;  // the time of the first key picture
     int64_t m_lastTime = AV_NOPTS_VALUE_INTERNAL;      // the time of the picture handed on last
-    int64_t m_step = 0;                                // the least time between two pictures handed on
-    int64_t m_gaps = 0;                                // places where the times of the pictures leave some out
+    // Where the times of the track leave pictures out (stepsBefore): the time from one picture to the next for the
+    // last pictures handed on, how many pictures of the layer were written for pictures the track does not have and
+    // at how many places, and the places where that could not be done.
+    std::deque<int64_t> m_steps;
+    int64_t m_fillers = 0;
+    int64_t m_holes = 0;
+    int64_t m_gaps = 0;
+    bool m_unevenTimes = false;  // two pictures stood nearly at one time: the times say nothing of missing pictures
+    int64_t stepsBefore(int64_t time);
     int demuxMade(DemuxedData& demuxedData, AVPacket& avPacket);
     int64_t handOnHeld(DemuxedData& demuxedData, size_t keep);
     void hold(int64_t time, std::vector<uint8_t>&& rpu);

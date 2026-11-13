@@ -216,5 +216,9 @@ was gefehlt hat. `--no-dv-layer` in der MUXOPT-Zeile behält den einen Layer mit
 ein HEVC-Stream mit einem Schlüsselbild, Main 10, 1920x1080, als PQ markiert und mit Chroma Sample
 Location 2.
 
+Wo die Zeiten der Bilder des Films ein Bild auslassen, etwa in einer geschnittenen oder aus Teilen
+zusammengesetzten Datei, erhält auch der zweite Layer dort ein Bild, mit den Dolby-Vision-Daten des
+Bildes davor. So bleiben die beiden Layer im Gleichschritt. Eine Zeile nennt die Zahl solcher Bilder.
+
 Player unterscheiden sich darin, was sie annehmen. Zeigt ein Player von einer so erzeugten Disc kein
 Dolby Vision, melden Sie es bitte mit dem Modell des Players.

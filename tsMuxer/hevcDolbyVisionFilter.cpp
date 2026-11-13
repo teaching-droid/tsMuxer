@@ -2,6 +2,8 @@
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "hevcDolbyVisionFilter.h"
 
+#include <algorithm>
+
 #include <fs/systemlog.h>
 
 #include "doviLib.h"
@@ -248,6 +250,55 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
 // How many RPUs are held before the earliest goes on: HEVC puts a picture at most 16 places out of order
 static constexpr size_t HELD_PICTURES = 16;
 
+// ** THE LAYER STAYS IN STEP WHERE THE TRACK LEAVES A PICTURE OUT. ** The layer is timed by counting its pictures,
+// the track by the times its pictures have in the file. Where those times leave a picture out, as in a file cut or
+// put together from parts, or a damaged one, the layer had no picture for the hole either, so every picture of the
+// layer after it stood one picture early: the Dolby Vision data of the rest of the film belonged to the picture
+// after. The layer now gets a picture for each one the track leaves out, with the data of the picture before, and
+// the two stay in step.
+//
+// How many pictures the track leaves out before the picture at `time`: the time since the picture before, in
+// picture times. A picture time is the mean of the last steps that were one picture (the times of a Matroska file
+// are rounded, to a millisecond as a rule, so single steps differ), and a step of 1.75 of them or more is a hole.
+// Not known before three steps are, and not at all where two pictures stood nearly at one time. A hole of more
+// than MAX_FILLED pictures is no missing picture but another part of a film: it is counted (m_gaps) and said.
+int64_t HevcDolbyVisionFilter::stepsBefore(const int64_t time)
+{
+    static constexpr size_t STEPS_KEPT = 16;
+    static constexpr int64_t MAX_FILLED = 600;
+    if (m_lastTime == AV_NOPTS_VALUE_INTERNAL || time <= m_lastTime || m_unevenTimes)
+        return 0;
+    const int64_t step = time - m_lastTime;
+    if (m_steps.size() >= 3)
+    {
+        std::vector<int64_t> sorted(m_steps.begin(), m_steps.end());
+        std::sort(sorted.begin(), sorted.end());
+        const int64_t usual = sorted[sorted.size() / 2];
+        if (step * 2 < usual)
+        {
+            m_unevenTimes = true;
+            return 0;
+        }
+        if (step * 4 >= usual * 7)
+        {
+            double mean = 0;
+            for (const int64_t s : m_steps) mean += static_cast<double>(s);
+            mean /= static_cast<double>(m_steps.size());
+            const auto missing = static_cast<int64_t>(static_cast<double>(step) / mean + 0.5) - 1;
+            if (missing > MAX_FILLED)
+            {
+                ++m_gaps;
+                return 0;
+            }
+            return missing;
+        }
+    }
+    m_steps.push_back(step);
+    if (m_steps.size() > STEPS_KEPT)
+        m_steps.pop_front();
+    return 0;
+}
+
 // The held RPUs beyond `keep`, earliest first, each behind the given picture: the bytes handed on
 int64_t HevcDolbyVisionFilter::handOnHeld(DemuxedData& demuxedData, const size_t keep)
 {
@@ -255,6 +306,25 @@ int64_t HevcDolbyVisionFilter::handOnHeld(DemuxedData& demuxedData, const size_t
     while (m_held.size() > keep)
     {
         const auto first = m_held.begin();
+        // a picture of the layer for each picture the track leaves out before this one (stepsBefore)
+        if (const int64_t missing = stepsBefore(first->first); missing > 0)
+        {
+            ++m_holes;
+            m_fillers += missing;
+            for (int64_t i = 0; i < missing && m_elStreamIndex >= 0; ++i)
+            {
+                MemoryBlock& layer = demuxedData[m_elStreamIndex];
+                layer.append(m_layerPicture.data(), static_cast<int>(m_layerPicture.size()));
+                handedOn += static_cast<int64_t>(m_layerPicture.size());
+                if (!m_lastRpu.empty())
+                {
+                    layer.append(START_CODE, sizeof(START_CODE));
+                    layer.append(m_lastRpu.data(), static_cast<int>(m_lastRpu.size()));
+                    handedOn += static_cast<int64_t>(sizeof(START_CODE) + m_lastRpu.size());
+                }
+                ++m_made;
+            }
+        }
         // a picture whose RPU is missing or could not be converted takes that of the picture before
         if (first->second.empty() && !m_lastRpu.empty())
         {
@@ -272,17 +342,6 @@ int64_t HevcDolbyVisionFilter::handOnHeld(DemuxedData& demuxedData, const size_t
                 layer.append(first->second.data(), static_cast<int>(first->second.size()));
                 handedOn += static_cast<int64_t>(sizeof(START_CODE) + first->second.size());
             }
-        }
-        // The layer is timed by counting its pictures, the track by what its pictures say: where the times of the
-        // track leave pictures out (a damaged file, a file put together from parts), the two are out of step from
-        // there on. Counted, and said at the end.
-        if (m_lastTime != AV_NOPTS_VALUE_INTERNAL && first->first > m_lastTime)
-        {
-            const int64_t step = first->first - m_lastTime;
-            if (m_step == 0 || step < m_step)
-                m_step = step;
-            else if (step > m_step * 5 / 2)
-                ++m_gaps;
         }
         m_lastTime = first->first;
         if (!first->second.empty())
@@ -407,10 +466,17 @@ void HevcDolbyVisionFilter::flush(DemuxedData& demuxedData, const PIDSet& /*acce
                "Warning: " << m_withoutRpu
                            << " pictures of the track have no Dolby Vision data that could be used; "
                               "in the second layer they have the data of the picture before.");
+    if (m_fillers > 0)
+        LTRACE(LT_WARN, 2,
+               "Warning: the times of the track's pictures leave "
+                   << m_fillers << (m_fillers == 1 ? " picture" : " pictures") << " out, at " << m_holes
+                   << (m_holes == 1 ? " place" : " places")
+                   << ". The second layer has a picture for each of them, with the Dolby Vision data of the picture "
+                      "before, so the two layers stay in step.");
     if (m_gaps > 0)
         LTRACE(LT_WARN, 2,
-               "Warning: the times of the track's pictures leave pictures out at "
-                   << m_gaps
-                   << " places. If pictures are missing there, the Dolby Vision data of the second layer is "
-                      "out of step with the picture after such a place.");
+               "Warning: the times of the track's pictures jump over more than 600 pictures at "
+                   << m_gaps << (m_gaps == 1 ? " place" : " places")
+                   << ". If pictures are missing there, the Dolby Vision data of the second layer is out of step "
+                      "with the picture after such a place.");
 }

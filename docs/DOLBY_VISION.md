@@ -202,5 +202,9 @@ what was missing. `--no-dv-layer` on the MUXOPT line keeps the single layer on p
 `--dv-layer-picture=<file>` gives the picture as a file in place of one made by ffmpeg: an HEVC
 stream of one key picture, Main 10, 1920x1080, marked as PQ with chroma sample location 2.
 
+Where the times of the film's pictures leave a picture out, as in a file that was cut or put
+together from parts, the second layer gets a picture there too, with the Dolby Vision data of the
+picture before, so the two layers stay in step. A line says how many such pictures there were.
+
 Players differ in what they accept. If a player does not show Dolby Vision from a disc made this
 way, please report it with the model of the player.
