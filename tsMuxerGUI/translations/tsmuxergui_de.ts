@@ -2793,6 +2793,14 @@
         <source>tsMuxeR could not be started, so no sample was made.</source>
         <translation>tsMuxeR konnte nicht gestartet werden, daher wurde keine Probe erstellt.</translation>
     </message>
+    <message>
+        <source>A Blu-ray title: the sample is of the clip the title plays at the part chosen, and a time counts from the start of the title. The playlist and the information file of that clip go into the .zip as well.</source>
+        <translation>Ein Blu-ray-Titel: Die Probe stammt aus dem Clip, den der Titel an der gewählten Stelle abspielt, und eine Zeit zählt ab dem Anfang des Titels. Die Playlist und die Informationsdatei dieses Clips kommen ebenfalls in die .zip.</translation>
+    </message>
+    <message>
+        <source>A DVD title cannot be the source of a sample. Choose one of its .VOB files with the ... button beside Source.</source>
+        <translation>Ein DVD-Titel kann nicht die Quelle einer Probe sein. Wählen Sie eine seiner .VOB-Dateien mit der Schaltfläche ... neben Quelle.</translation>
+    </message>
 </context>
 <context>
     <name>TsMuxerWindow</name>
@@ -4906,8 +4914,8 @@ ISO trotzdem erstellen?</translation>
         <translation>Scan</translation>
     </message>
     <message>
-        <source>Run the job without writing anything. The progress window shows what the mux would warn of, and at the end the size of the output and, for a disc image, the disc it fits. A scan takes as long as reading the sources takes.</source>
-        <translation>Den Auftrag ausführen, ohne etwas zu schreiben. Das Fortschrittsfenster zeigt, wovor der Mux warnen würde, und am Ende die Größe der Ausgabe und, bei einem Disc-Image, die Disc, auf die es passt. Ein Scan dauert so lange wie das Lesen der Quellen.</translation>
+        <source>Run the job without writing anything. The progress window shows what the mux would warn of, a report of each video stream, and at the end the size of the output and, for a disc image or folder, the disc it fits. A scan takes as long as reading the sources takes.</source>
+        <translation>Den Auftrag ausführen, ohne etwas zu schreiben. Das Fortschrittsfenster zeigt, wovor der Mux warnen würde, einen Bericht zu jedem Videostream und am Ende die Größe der Ausgabe und, bei einem Disc-Image oder -Ordner, die Disc, auf die es passt. Ein Scan dauert so lange wie das Lesen der Quellen.</translation>
     </message>
     <message>
         <source>Scan in progress</source>
@@ -5511,6 +5519,26 @@ Wenn dies erschien, während eine Datei noch untersucht wurde, oder beim Schlie�
     <message>
         <source>Click to play this clip in the player for previews.</source>
         <translation>Klicken, um diesen Clip im Player für Vorschauen abzuspielen.</translation>
+    </message>
+    <message>
+        <source>Make the second Dolby Vision layer</source>
+        <translation>Den zweiten Dolby-Vision-Layer erstellen</translation>
+    </message>
+    <message>
+        <source>A UHD Blu-ray player shows Dolby Vision from two layers only. For a single layer Dolby Vision track (profile 8 with an HDR10 base, 3840x2160) in a Matroska, MP4 or transport stream file, tsMuxeR makes the second layer, so that the disc plays in Dolby Vision. It needs the libdovi library and ffmpeg: the ffmpeg chosen for an AC-3 core, else one beside tsMuxeR or on the search path. Unticked, the track is written as one stream and plays as HDR10.</source>
+        <translation>Ein UHD-Blu-ray-Player zeigt Dolby Vision nur aus zwei Layern. Für eine Single-Layer-Dolby-Vision-Spur (Profil 8 mit HDR10-Basis, 3840x2160) in einer Matroska-, MP4- oder Transport-Stream-Datei erstellt tsMuxeR den zweiten Layer, sodass die Disc in Dolby Vision läuft. Dafür sind die Bibliothek libdovi und ffmpeg nötig: das für einen AC-3-Kern gewählte ffmpeg, sonst eines neben tsMuxeR oder im PATH. Ohne Haken wird die Spur als ein Stream geschrieben und läuft als HDR10.</translation>
+    </message>
+    <message>
+        <source>A part of the chosen file or Blu-ray title, to attach to a problem report in place of the whole source. A sample of a DVD title is made of one of its .VOB files.</source>
+        <translation>Ein Teil der gewählten Datei oder des gewählten Blu-ray-Titels, der statt der ganzen Quelle an eine Problemmeldung angehängt wird. Eine Probe eines DVD-Titels wird aus einer seiner .VOB-Dateien erstellt.</translation>
+    </message>
+    <message>
+        <source>Stop at the first job that fails</source>
+        <translation>Beim ersten fehlgeschlagenen Auftrag anhalten</translation>
+    </message>
+    <message>
+        <source>The jobs after a job that fails are not run and stay in the queue. Unticked, every job runs.</source>
+        <translation>Die Aufträge nach einem fehlgeschlagenen Auftrag werden nicht ausgeführt und bleiben in der Warteschlange. Ohne Haken laufen alle Aufträge.</translation>
     </message>
 </context>
 <context>

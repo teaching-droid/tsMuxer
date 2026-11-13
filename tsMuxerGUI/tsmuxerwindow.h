@@ -108,6 +108,8 @@ class TsMuxerWindow : public QWidget
     void onPlaylistPartsChanged();
     void onRemoveBtnClick();
     void onMakeSample();
+    // "Make a sample...": enabled for the chosen input that a sample can be made of, and its tooltip
+    void updateSampleButton();
     void onAppendButtonClick();
     void onRemoveTrackButtonClick();
     void onRemoveAllTracksButtonClick();
@@ -310,8 +312,11 @@ class TsMuxerWindow : public QWidget
     QLabel* m_sizeLabel = nullptr;  // "Estimated size: about 23.4 GB", in the Output box
     [[nodiscard]] QStringList takeLanguages() const;
     [[nodiscard]] bool languageWanted(const QtvCodecInfo& info, const QStringList& wanted) const;
+    // "Make the second Dolby Vision layer" on the Blu-ray tab: unticked, --no-dv-layer on the MUXOPT line
+    QCheckBox* m_dvLayerCheck = nullptr;
     QPushButton* m_queueAddBtn = nullptr;
     QPushButton* m_queueBtn = nullptr;
+    bool m_queueStopOnError = false;  // "Stop at the first job that fails" in the queue: --batch-stop-on-error
     bool m_addToQueue = false;  // startMuxing was asked for the queue: it stops after the checks and the meta file
     // "Scan": the job is run with --scan, which writes nothing and tells the size of the output
     QPushButton* m_scanBtn = nullptr;

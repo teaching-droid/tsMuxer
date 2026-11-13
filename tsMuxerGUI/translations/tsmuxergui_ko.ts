@@ -2793,6 +2793,14 @@
         <source>tsMuxeR could not be started, so no sample was made.</source>
         <translation>tsMuxeR를 시작할 수 없어 샘플이 만들어지지 않았습니다.</translation>
     </message>
+    <message>
+        <source>A Blu-ray title: the sample is of the clip the title plays at the part chosen, and a time counts from the start of the title. The playlist and the information file of that clip go into the .zip as well.</source>
+        <translation>Blu-ray 타이틀: 샘플은 선택한 부분에서 타이틀이 재생하는 클립에서 만들어지며, 시간은 타이틀의 시작부터 셉니다. 재생 목록과 그 클립의 정보 파일도 .zip에 들어갑니다.</translation>
+    </message>
+    <message>
+        <source>A DVD title cannot be the source of a sample. Choose one of its .VOB files with the ... button beside Source.</source>
+        <translation>DVD 타이틀은 샘플의 원본이 될 수 없습니다. 원본 옆의 ... 버튼으로 해당 .VOB 파일 중 하나를 선택하십시오.</translation>
+    </message>
 </context>
 <context>
     <name>TsMuxerWindow</name>
@@ -4766,8 +4774,8 @@ Build the ISO anyway?</source>
         <translation>스캔</translation>
     </message>
     <message>
-        <source>Run the job without writing anything. The progress window shows what the mux would warn of, and at the end the size of the output and, for a disc image, the disc it fits. A scan takes as long as reading the sources takes.</source>
-        <translation>아무것도 쓰지 않고 작업을 실행합니다. 진행 창에 먹싱에서 나올 경고가 표시되고, 끝에는 출력 크기와 디스크 이미지의 경우 들어가는 디스크가 표시됩니다. 스캔에는 소스를 읽는 만큼의 시간이 걸립니다.</translation>
+        <source>Run the job without writing anything. The progress window shows what the mux would warn of, a report of each video stream, and at the end the size of the output and, for a disc image or folder, the disc it fits. A scan takes as long as reading the sources takes.</source>
+        <translation>아무것도 쓰지 않고 작업을 실행합니다. 진행 창에 먹싱에서 나올 경고와 각 비디오 스트림의 보고서가 표시되고, 끝에는 출력 크기와 디스크 이미지 또는 디스크 폴더의 경우 들어가는 디스크가 표시됩니다. 스캔에는 소스를 읽는 만큼의 시간이 걸립니다.</translation>
     </message>
     <message>
         <source>Scan in progress</source>
@@ -5554,6 +5562,26 @@ If this appeared while a file was still being examined, or as the window was clo
     <message>
         <source>Click to play this clip in the player for previews.</source>
         <translation>클릭하면 이 클립을 미리보기용 플레이어에서 재생합니다.</translation>
+    </message>
+    <message>
+        <source>Make the second Dolby Vision layer</source>
+        <translation>두 번째 Dolby Vision 레이어 만들기</translation>
+    </message>
+    <message>
+        <source>A UHD Blu-ray player shows Dolby Vision from two layers only. For a single layer Dolby Vision track (profile 8 with an HDR10 base, 3840x2160) in a Matroska, MP4 or transport stream file, tsMuxeR makes the second layer, so that the disc plays in Dolby Vision. It needs the libdovi library and ffmpeg: the ffmpeg chosen for an AC-3 core, else one beside tsMuxeR or on the search path. Unticked, the track is written as one stream and plays as HDR10.</source>
+        <translation>UHD Blu-ray 플레이어는 두 레이어에서만 Dolby Vision을 표시합니다. Matroska, MP4 또는 트랜스포트 스트림 파일에 있는 싱글 레이어 Dolby Vision 트랙(HDR10 기반 프로파일 8, 3840x2160)에 대해 tsMuxeR가 두 번째 레이어를 만들어 디스크가 Dolby Vision으로 재생되도록 합니다. 이를 위해 libdovi 라이브러리와 ffmpeg가 필요합니다: AC-3 코어용으로 선택한 ffmpeg를 사용하고, 없으면 tsMuxeR 옆이나 PATH에 있는 ffmpeg를 사용합니다. 선택하지 않으면 트랙은 하나의 스트림으로 기록되어 HDR10으로 재생됩니다.</translation>
+    </message>
+    <message>
+        <source>A part of the chosen file or Blu-ray title, to attach to a problem report in place of the whole source. A sample of a DVD title is made of one of its .VOB files.</source>
+        <translation>원본 전체 대신 문제 보고서에 첨부할, 선택한 파일 또는 Blu-ray 타이틀의 일부. DVD 타이틀의 샘플은 해당 .VOB 파일 중 하나로 만듭니다.</translation>
+    </message>
+    <message>
+        <source>Stop at the first job that fails</source>
+        <translation>처음 실패한 작업에서 중지</translation>
+    </message>
+    <message>
+        <source>The jobs after a job that fails are not run and stay in the queue. Unticked, every job runs.</source>
+        <translation>실패한 작업 이후의 작업은 실행되지 않고 대기열에 남습니다. 선택하지 않으면 모든 작업이 실행됩니다.</translation>
     </message>
 </context>
 <context>

@@ -15,13 +15,17 @@ class QSpinBox;
 class QTimeEdit;
 
 // "Make a sample...": a part of a source for a problem report, made by tsMuxeR --make-sample (sampleCutter.h). The
-// dialog offers what the command offers for the source: an MP4 file only its start, a video stream on its own no time.
+// dialog offers what the command offers for the source: an MP4 file only its start, a video stream on its own no time,
+// and a Blu-ray title, given as its playlist, the clip it plays at the part asked for.
 class SampleDialog : public QDialog
 {
     Q_OBJECT
    public:
     // exePath: tsMuxeR itself; lastReport: the report of the last job, which can go into the zip ("" for none)
     SampleDialog(QWidget* parent, const QString& exePath, const QString& source, const QString& lastReport);
+    // The input chosen is a DVD title, which is no source of a sample: the dialog says so, and a .VOB file can be
+    // chosen
+    void explainDvdTitle();
 
    private:
     void setSource(const QString& source);

@@ -2793,6 +2793,14 @@
         <source>tsMuxeR could not be started, so no sample was made.</source>
         <translation type="unfinished"></translation>
     </message>
+    <message>
+        <source>A Blu-ray title: the sample is of the clip the title plays at the part chosen, and a time counts from the start of the title. The playlist and the information file of that clip go into the .zip as well.</source>
+        <translation>A Blu-ray title: the sample is of the clip the title plays at the part chosen, and a time counts from the start of the title. The playlist and the information file of that clip go into the .zip as well.</translation>
+    </message>
+    <message>
+        <source>A DVD title cannot be the source of a sample. Choose one of its .VOB files with the ... button beside Source.</source>
+        <translation>A DVD title cannot be the source of a sample. Choose one of its .VOB files with the ... button beside Source.</translation>
+    </message>
 </context>
 <context>
     <name>TsMuxerWindow</name>
@@ -4762,8 +4770,8 @@ Build the ISO anyway?</source>
         <translation>Scan</translation>
     </message>
     <message>
-        <source>Run the job without writing anything. The progress window shows what the mux would warn of, and at the end the size of the output and, for a disc image, the disc it fits. A scan takes as long as reading the sources takes.</source>
-        <translation>Run the job without writing anything. The progress window shows what the mux would warn of, and at the end the size of the output and, for a disc image, the disc it fits. A scan takes as long as reading the sources takes.</translation>
+        <source>Run the job without writing anything. The progress window shows what the mux would warn of, a report of each video stream, and at the end the size of the output and, for a disc image or folder, the disc it fits. A scan takes as long as reading the sources takes.</source>
+        <translation>Run the job without writing anything. The progress window shows what the mux would warn of, a report of each video stream, and at the end the size of the output and, for a disc image or folder, the disc it fits. A scan takes as long as reading the sources takes.</translation>
     </message>
     <message>
         <source>Scan in progress</source>
@@ -5544,6 +5552,26 @@ If this appeared while a file was still being examined, or as the window was clo
     <message>
         <source>Click to play this clip in the player for previews.</source>
         <translation>Click to play this clip in the player for previews.</translation>
+    </message>
+    <message>
+        <source>Make the second Dolby Vision layer</source>
+        <translation>Make the second Dolby Vision layer</translation>
+    </message>
+    <message>
+        <source>A UHD Blu-ray player shows Dolby Vision from two layers only. For a single layer Dolby Vision track (profile 8 with an HDR10 base, 3840x2160) in a Matroska, MP4 or transport stream file, tsMuxeR makes the second layer, so that the disc plays in Dolby Vision. It needs the libdovi library and ffmpeg: the ffmpeg chosen for an AC-3 core, else one beside tsMuxeR or on the search path. Unticked, the track is written as one stream and plays as HDR10.</source>
+        <translation>A UHD Blu-ray player shows Dolby Vision from two layers only. For a single layer Dolby Vision track (profile 8 with an HDR10 base, 3840x2160) in a Matroska, MP4 or transport stream file, tsMuxeR makes the second layer, so that the disc plays in Dolby Vision. It needs the libdovi library and ffmpeg: the ffmpeg chosen for an AC-3 core, else one beside tsMuxeR or on the search path. Unticked, the track is written as one stream and plays as HDR10.</translation>
+    </message>
+    <message>
+        <source>A part of the chosen file or Blu-ray title, to attach to a problem report in place of the whole source. A sample of a DVD title is made of one of its .VOB files.</source>
+        <translation>A part of the chosen file or Blu-ray title, to attach to a problem report in place of the whole source. A sample of a DVD title is made of one of its .VOB files.</translation>
+    </message>
+    <message>
+        <source>Stop at the first job that fails</source>
+        <translation>Stop at the first job that fails</translation>
+    </message>
+    <message>
+        <source>The jobs after a job that fails are not run and stay in the queue. Unticked, every job runs.</source>
+        <translation>The jobs after a job that fails are not run and stay in the queue. Unticked, every job runs.</translation>
     </message>
 </context>
 <context>

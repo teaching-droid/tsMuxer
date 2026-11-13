@@ -91,7 +91,9 @@ the order they run, each by its output. "Start the queue" runs them one after th
 queue" take jobs out, and "Add a folder..." makes a job for each video file of a folder (TS, M2TS, MKV, WebM, MP4,
 MOV, MPEG and VOB files), each muxed with all its tracks to MKV, M2TS or TS, with the "Languages to take" of the
 General tab. The queue is kept on disk, so it is still there after the window was closed; a job that failed stays
-in it for another run. The jobs are run as a `--batch` of tsMuxeR (see "A list of jobs" below).
+in it for another run. The jobs are run as a `--batch` of tsMuxeR (see "A list of jobs" below). With "Stop at the
+first job that fails" ticked in that list, the queue ends at a job that fails (`--batch-stop-on-error`), and the jobs
+after it stay in the queue.
 
 The Output box shows the estimated size of the mux: the ticked tracks added up, with what the output adds around
 them, or "at most" where a track's size is not known.
@@ -361,7 +363,7 @@ The names are replaced as in the report: the sample is `source1.mkv` in the zip,
 
 A source that fits in the sample is taken whole, whatever part is asked for, and a time past the end takes the end. A file inside a disc image can be named as the source, as `film.iso/BDMV/STREAM/00001.m2ts`.
 
-In the window, "Make a sample..." on the Input tab makes one of the file chosen there, and the progress window offers it when a job ends with an error.
+In the window, "Make a sample..." on the Input tab makes one of the file or Blu-ray title chosen there, and the progress window offers it when a job ends with an error. A Blu-ray title is given as its playlist. A DVD title is not taken: choose one of its .VOB files in the sample window instead.
 
 A title of a Blu-ray disc can be the source as well: a playlist, or the disc folder or image with `--title=<number>` or `--title=main`, the number as in the listing of the disc. The sample is then of the clip the title plays first, last with `--from-end`, or at the time of `--at`, which counts in the title; the report says which clip that is. The playlist and the information file of that clip, a few kilobytes without picture or sound, go into the zip beside the sample:
 
@@ -622,8 +624,8 @@ Parameter           | Description
 --layer-break-guard-before | ISO output: the size in MB of the zeros BEFORE the break, in place of a sixteenth of --layer-break-guard.
 --layer-break-lbn   | The layer break sector(s), in 2048 byte sectors: the total sectors of the disc divided by its layers. Write the number without grouping: a comma separates breaks, so `12,219,392` is refused. One value for a BD-R/RE DL (`12219392` for a full 50 GB disc, the default), two for a 100 GB BD-R XL, three for 128 GB. Work them out from the "Free Sectors" your own disc reports when it is fully formatted. See [DISC_AUTHORING.md](DISC_AUTHORING.md).
 --dv-profile        | **MKV output only, from a dual layer Dolby Vision source.** `7`, the default, keeps the disc as it is. `8.1` converts the Dolby Vision metadata so the file plays as single layer profile 8.1, while the disc can still be built again from it; the file is not smaller. Needs the libdovi library (dovi.dll on Windows) beside tsMuxeR. See [DOLBY_VISION.md](DOLBY_VISION.md).
---ffmpeg            | **Blu-ray output.** The ffmpeg to use for a single layer Dolby Vision track (profile 8 with an HDR10 base) of a Matroska, MP4 or transport stream file: the second layer a disc player needs for Dolby Vision is made, and ffmpeg is asked only for the one black picture it is written with. Nothing of the film is encoded again. Without the option an ffmpeg beside tsMuxeR or on the search path is taken; tsMuxeR does not ship ffmpeg. Needs the libdovi library too. Where one of them is missing, the track is written as one stream, as before, and a line says what was missing. See [DOLBY_VISION.md](DOLBY_VISION.md).
---no-dv-layer       | **Blu-ray output.** A single layer Dolby Vision track is written as the one stream it is, and no second layer is made. It plays as HDR10 on a disc player.
+--ffmpeg            | **Blu-ray output.** The ffmpeg to use for a single layer Dolby Vision track (profile 8 with an HDR10 base) of a Matroska, MP4 or transport stream file: the second layer a disc player needs for Dolby Vision is made, and ffmpeg is asked only for the one black picture it is written with. Nothing of the film is encoded again. Without the option an ffmpeg beside tsMuxeR or on the search path is taken; tsMuxeR does not ship ffmpeg. Needs the libdovi library too. Where one of them is missing, the track is written as one stream, as before, and a line says what was missing. In the window, the ffmpeg chosen with "Choose ffmpeg..." for an AC-3 core goes on the MUXOPT line with this option. See [DOLBY_VISION.md](DOLBY_VISION.md).
+--no-dv-layer       | **Blu-ray output.** A single layer Dolby Vision track is written as the one stream it is, and no second layer is made. It plays as HDR10 on a disc player. In the window: "Make the second Dolby Vision layer" on the Blu-ray tab, unticked.
 --dv-layer-picture  | **Blu-ray output.** The picture of a made Dolby Vision second layer as a file, in place of one made by ffmpeg: an HEVC stream of one key picture, Main 10, 1920x1080, marked as PQ with chroma sample location 2.
 
 ### BDMV folder to ISO

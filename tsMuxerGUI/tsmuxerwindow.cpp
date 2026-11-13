@@ -1012,6 +1012,8 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->btnAppend, &QPushButton::clicked, this, &TsMuxerWindow::onAppendButtonClick);
     connect(ui->removeFile, &QPushButton::clicked, this, &TsMuxerWindow::onRemoveBtnClick);
     connect(ui->sampleBtn, &QPushButton::clicked, this, &TsMuxerWindow::onMakeSample);
+    updateSampleButton();
+    m_retranslateHooks.push_back([this]() { updateSampleButton(); });
     connect(ui->removeTrackBtn, &QPushButton::clicked, this, &TsMuxerWindow::onRemoveTrackButtonClick);
     connect(ui->removeAllTracksBtn, &QPushButton::clicked, this, &TsMuxerWindow::onRemoveAllTracksButtonClick);
     connect(ui->moveupBtn, &QPushButton::clicked, this, &TsMuxerWindow::onMoveUpButtonCLick);
@@ -1105,6 +1107,30 @@ TsMuxerWindow::TsMuxerWindow()
     ui->comboRateLimit->addItem(tr("64 Mbit/s (the inner zone of a 50 GB disc)"), 64000);
     ui->comboRateLimit->addItem(tr("127.9 Mbit/s (high transfer rate zone)"), 127900);
     connect(ui->comboRateLimit, comboBoxIndexChanged, this, &TsMuxerWindow::updateMetaLines);
+    // ** THE MADE DOLBY VISION LAYER. ** tsMuxeR makes the second layer of a single layer Dolby Vision track on a
+    // Blu-ray output by default (docs/DOLBY_VISION.md), and the window had no word for it: the layer could not be left
+    // out, and the ffmpeg chosen in the window for an AC-3 core was not used for its picture. Unticked, the MUXOPT line
+    // gets --no-dv-layer; ticked, --ffmpeg names that ffmpeg when one is chosen (getMuxOpts).
+    {
+        m_dvLayerCheck = new QCheckBox(ui->BDOptionsGroupBox);
+        m_dvLayerCheck->setObjectName(QStringLiteral("dvLayerCheck"));
+        m_dvLayerCheck->setChecked(true);
+        ui->verticalLayout_19->insertWidget(ui->verticalLayout_19->indexOf(ui->horizontalLayoutRateLimit) + 1,
+                                            m_dvLayerCheck);
+        const auto texts = [this]()
+        {
+            m_dvLayerCheck->setText(tr("Make the second Dolby Vision layer"));
+            m_dvLayerCheck->setToolTip(wrapTip(
+                tr("A UHD Blu-ray player shows Dolby Vision from two layers only. For a single layer Dolby Vision "
+                   "track (profile 8 with an HDR10 base, 3840x2160) in a Matroska, MP4 or transport stream file, "
+                   "tsMuxeR makes the second layer, so that the disc plays in Dolby Vision. It needs the libdovi "
+                   "library and ffmpeg: the ffmpeg chosen for an AC-3 core, else one beside tsMuxeR or on the search "
+                   "path. Unticked, the track is written as one stream and plays as HDR10.")));
+        };
+        texts();
+        m_retranslateHooks.push_back(texts);
+        connect(m_dvLayerCheck, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::updateMetaLines);
+    }
     connect(ui->BlackplaylistCombo, spinBoxValueChanged, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->checkBoxNewAudioPes, &QAbstractButton::clicked, this, &TsMuxerWindow::onSavedParamChanged);
     connect(ui->checkBoxCrop, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onSavedParamChanged);
@@ -1298,8 +1324,8 @@ TsMuxerWindow::TsMuxerWindow()
         m_scanBtn->setText(tr("Scan"));
         m_scanBtn->setToolTip(
             wrapTip(tr("Run the job without writing anything. The progress window shows what the mux would warn "
-                       "of, and at the end the size of the output and, for a disc image, the disc it fits. A scan "
-                       "takes as long as reading the sources takes.")));
+                       "of, a report of each video stream, and at the end the size of the output and, for a disc "
+                       "image or folder, the disc it fits. A scan takes as long as reading the sources takes.")));
     };
     scanTexts();
     m_retranslateHooks.push_back(scanTexts);
@@ -3046,7 +3072,8 @@ static const char* const CHOICE_WIDGETS[] = {
     "checkBoxVBR", "checkBoxRVBR", "checkBoxCBR", "editMaxBitrate", "editMinBitrate", "editCBRBitrate", "editVBVLen",
     "radioButtonNoChapters", "radioButtonAutoChapter", "radioButtonCustomChapters", "spinEditChapterLen",
     // Blu-ray tab
-    "checkBoxV3", "checkBoxRateLimit", "comboRateLimit", "spinBoxMplsNum", "spinBoxM2tsNum", "pipTransparencySpinBox",
+    "checkBoxV3", "checkBoxRateLimit", "comboRateLimit", "dvLayerCheck", "spinBoxMplsNum", "spinBoxM2tsNum",
+    "pipTransparencySpinBox",
     // Split and cut tab
     "noSplit", "splitByDuration", "splitBySize", "splitByChapters", "spinEditSplitDuration", "editSplitSize",
     "comboBoxMeasure",
@@ -4685,24 +4712,46 @@ void TsMuxerWindow::onMuxStopped()
                          outputLine);
 }
 
-// The file of an item of the input list a sample can be made of (--make-sample): a file, also a clip of a playlist, and
-// not a playlist, a DVD title, a disc image or a folder, whose titles a sample does not follow yet. Empty for none.
+// The source of a sample (--make-sample) for an item of the input list: a file, also a clip of a playlist, and a
+// Blu-ray title or playlist, which is given as its playlist. A title of a disc folder or image is listed by its
+// playlist (discPlaylistPath), also inside an image, where the name is no file of its own; tsMuxeR takes the sample of
+// the clip the title plays at the part asked for. Not a DVD title, whose titles --make-sample does not follow, and not
+// a disc image itself. Empty for none.
 static QString sampleSource(const QListWidgetItem* itm)
 {
-    if (itm == nullptr || itm->data(MplsItemRole).toInt() == MPLS_PRIMARY || itm->data(DvdTitleRole).toInt() != 0)
+    if (itm == nullptr || itm->data(DvdTitleRole).toInt() != 0)
         return {};
     const QString name = myUnquoteStr(itm->data(FileNameRole).toString());
     const QFileInfo fi(name);
     const QString ext = fi.suffix().toLower();
-    if (name.isEmpty() || !fi.isFile() || ext == "iso" || ext == "img" || ext == "udf" || ext == "mpls")
+    if (name.isEmpty())
+        return {};
+    if (itm->data(MplsItemRole).toInt() == MPLS_PRIMARY)
+        return ext == "mpls" || ext == "mpl" ? name : QString();
+    if (!fi.isFile() || ext == "iso" || ext == "img" || ext == "udf")
         return {};
     return name;
+}
+
+static bool isDvdTitleItem(const QListWidgetItem* itm)
+{
+    return itm != nullptr && itm->data(DvdTitleRole).toInt() != 0;
+}
+
+void TsMuxerWindow::updateSampleButton()
+{
+    const QListWidgetItem* itm = ui->inputFilesLV->currentItem();
+    // A DVD title opens the dialog without a source, which then says why and lets a .VOB file be chosen
+    ui->sampleBtn->setEnabled(!sampleSource(itm).isEmpty() || isDvdTitleItem(itm));
+    ui->sampleBtn->setToolTip(
+        wrapTip(tr("A part of the chosen file or Blu-ray title, to attach to a problem report in place of the whole "
+                   "source. A sample of a DVD title is made of one of its .VOB files.")));
 }
 
 void TsMuxerWindow::inputFilesLVChanged()
 {
     QListWidgetItem* itm = ui->inputFilesLV->currentItem();
-    ui->sampleBtn->setEnabled(sampleSource(itm).size() > 0);
+    updateSampleButton();
     if (!itm)
     {
         ui->btnAppend->setEnabled(false);
@@ -5514,6 +5563,8 @@ void TsMuxerWindow::onMakeSample()
         itm = ui->inputFilesLV->item(0);
     SampleDialog dialog(muxForm->isVisible() ? static_cast<QWidget*>(muxForm) : this, getTsMuxerBinaryPath(),
                         sampleSource(itm), muxForm->reportFile());
+    if (isDvdTitleItem(itm))
+        dialog.explainDvdTitle();
     dialog.exec();
 }
 
@@ -5670,6 +5721,13 @@ QString TsMuxerWindow::getMuxOpts()
             rez += QString(" --meta-dir=\"%1\"").arg(metaDir);
         else if (ui->comboDiscMeta->currentIndex() == 2)
             rez += " --meta-dir=none";
+        // The made second layer of a single layer Dolby Vision track: on by default, so a word only when it is not
+        // wanted. The ffmpeg chosen in the window goes with it when it is still there; without one, tsMuxeR looks
+        // beside itself and on the search path.
+        if (m_dvLayerCheck && !m_dvLayerCheck->isChecked())
+            rez += " --no-dv-layer";
+        else if (!m_coreEncoderPath.isEmpty() && QFileInfo(m_coreEncoderPath).isFile())
+            rez += QString(" --ffmpeg=\"%1\"").arg(QDir::toNativeSeparators(m_coreEncoderPath));
     }
     else if (ui->radioButtonAVCHD->isChecked())
         rez += " --avchd";
@@ -6457,7 +6515,10 @@ bool TsMuxerWindow::offerAc3Cores()
         const Ac3CoreDialog::Choice choice =
             Ac3CoreDialog::ask(this, question, names, sourceProblem, &m_coreEncoderPath);
         if (m_coreEncoderPath != savedBefore)
+        {
             writeSettings();
+            updateMetaLines();  // a Blu-ray's MUXOPT line names the ffmpeg chosen (--ffmpeg)
+        }
         if (choice.what == Ac3CoreDialog::Choice::Cancel)
         {
             dropPendingCores();
@@ -7076,6 +7137,9 @@ void TsMuxerWindow::updateBluRayTabEnabled()
     ui->checkBoxRateLimit->setText(ui->checkBoxV3->isChecked() && bd
                                        ? tr("Hold the disc to the rate a player can read:")
                                        : tr("Hold the disc to the rate a player can read (48 Mbit/s)"));
+    // tsMuxeR makes the second Dolby Vision layer for a Blu-ray only, not for AVCHD
+    if (m_dvLayerCheck)
+        m_dvLayerCheck->setEnabled(bd);     // --no-dv-layer, --ffmpeg
     ui->checkBoxBlankPL->setEnabled(disk);  // --insertBlankPL
     const bool blankPL = disk && ui->checkBoxBlankPL->isChecked();
     ui->BlackplaylistCombo->setEnabled(blankPL);
@@ -8460,6 +8524,20 @@ void TsMuxerWindow::showQueue()
     list->setSelectionMode(QAbstractItemView::ExtendedSelection);
     for (const QString& line : queueLines()) list->addItem(line.section('"', 3, 3));
     layout->addWidget(list);
+    // Every job runs, also after one that failed; ticked, the queue ends there (--batch-stop-on-error), and the jobs
+    // not run stay in it
+    auto* stopOnError = new QCheckBox(tr("Stop at the first job that fails"), &dialog);
+    stopOnError->setObjectName(QStringLiteral("queueStopOnError"));
+    stopOnError->setToolTip(
+        wrapTip(tr("The jobs after a job that fails are not run and stay in the queue. Unticked, every job runs.")));
+    stopOnError->setChecked(m_queueStopOnError);
+    connect(stopOnError, &QCheckBox::toggled, &dialog,
+            [this](const bool on)
+            {
+                m_queueStopOnError = on;
+                writeSettings();
+            });
+    layout->addWidget(stopOnError);
     auto* buttons = new QDialogButtonBox(&dialog);
     QPushButton* start = buttons->addButton(tr("Start the queue"), QDialogButtonBox::AcceptRole);
     QPushButton* remove = buttons->addButton(tr("Take out"), QDialogButtonBox::ActionRole);
@@ -8565,7 +8643,10 @@ void TsMuxerWindow::startQueue()
     runInMuxMode = true;
     m_queueRun = true;
     m_queueDone.clear();
-    tsMuxerExecute(QStringList() << QStringLiteral("--batch") << QDir::toNativeSeparators(queueDir() + "/jobs.txt"));
+    QStringList args = {QStringLiteral("--batch"), QDir::toNativeSeparators(queueDir() + "/jobs.txt")};
+    if (m_queueStopOnError)
+        args << QStringLiteral("--batch-stop-on-error");
+    tsMuxerExecute(args);
 }
 
 // A meta file could only ever be handed to the command line version, and that is what blocks the
@@ -9152,6 +9233,7 @@ void TsMuxerWindow::writeSettings()
     settings->setValue("writeReport", ui->checkBoxReport->isChecked());
     settings->setValue("askExtraTracks", ui->checkBoxAskExtraTracks->isChecked());
     settings->setValue("coreEncoder", m_coreEncoderPath);
+    settings->setValue("queueStopOnError", m_queueStopOnError);
     settings->setValue("inputDir", lastInputDir);
     settings->setValue("outputDir", lastOutputDir);
     settings->setValue("useBlankPL", ui->checkBoxBlankPL->isChecked());
@@ -9421,6 +9503,7 @@ bool TsMuxerWindow::readGeneralSettings(const QString& prefix)
     ui->checkBoxReport->setChecked(settings->value("writeReport", false).toBool());
     ui->checkBoxAskExtraTracks->setChecked(settings->value("askExtraTracks", true).toBool());
     m_coreEncoderPath = settings->value("coreEncoder").toString();
+    m_queueStopOnError = settings->value("queueStopOnError", false).toBool();
     ui->checkBoxBlankPL->setChecked(settings->value("useBlankPL", ui->checkBoxBlankPL->isChecked()).toBool());
     // 0 is a playlist number like any other: it was skipped, and the box kept its default of 1900
     if (settings->contains("blankPLNum"))

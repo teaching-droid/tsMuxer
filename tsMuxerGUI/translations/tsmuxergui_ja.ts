@@ -2793,6 +2793,14 @@
         <source>tsMuxeR could not be started, so no sample was made.</source>
         <translation>tsMuxeR を起動できなかったため、サンプルは作成されませんでした。</translation>
     </message>
+    <message>
+        <source>A Blu-ray title: the sample is of the clip the title plays at the part chosen, and a time counts from the start of the title. The playlist and the information file of that clip go into the .zip as well.</source>
+        <translation>Blu-ray タイトル: サンプルは、選んだ部分でタイトルが再生するクリップから作成され、時間はタイトルの先頭から数えます。プレイリストとそのクリップの情報ファイルも .zip に入ります。</translation>
+    </message>
+    <message>
+        <source>A DVD title cannot be the source of a sample. Choose one of its .VOB files with the ... button beside Source.</source>
+        <translation>DVD タイトルはサンプルのソースにできません。ソースの横の ... ボタンで、その .VOB ファイルの 1 つを選んでください。</translation>
+    </message>
 </context>
 <context>
     <name>TsMuxerWindow</name>
@@ -4906,8 +4914,8 @@ Build the ISO anyway?</source>
         <translation>スキャン</translation>
     </message>
     <message>
-        <source>Run the job without writing anything. The progress window shows what the mux would warn of, and at the end the size of the output and, for a disc image, the disc it fits. A scan takes as long as reading the sources takes.</source>
-        <translation>何も書き込まずにジョブを実行します。進行状況ウィンドウには多重化で出る警告が表示され、最後に出力のサイズと、ディスクイメージの場合は収まるディスクが表示されます。スキャンにはソースの読み取りと同じだけ時間がかかります。</translation>
+        <source>Run the job without writing anything. The progress window shows what the mux would warn of, a report of each video stream, and at the end the size of the output and, for a disc image or folder, the disc it fits. A scan takes as long as reading the sources takes.</source>
+        <translation>何も書き込まずにジョブを実行します。進行状況ウィンドウには多重化で出る警告と各ビデオストリームのレポートが表示され、最後に出力のサイズと、ディスクイメージまたはディスクフォルダーの場合は収まるディスクが表示されます。スキャンにはソースの読み取りと同じだけ時間がかかります。</translation>
     </message>
     <message>
         <source>Scan in progress</source>
@@ -5511,6 +5519,26 @@ If this appeared while a file was still being examined, or as the window was clo
     <message>
         <source>Click to play this clip in the player for previews.</source>
         <translation>クリックすると、このクリップをプレビュー用プレーヤーで再生します。</translation>
+    </message>
+    <message>
+        <source>Make the second Dolby Vision layer</source>
+        <translation>Dolby Vision の第 2 レイヤーを作成</translation>
+    </message>
+    <message>
+        <source>A UHD Blu-ray player shows Dolby Vision from two layers only. For a single layer Dolby Vision track (profile 8 with an HDR10 base, 3840x2160) in a Matroska, MP4 or transport stream file, tsMuxeR makes the second layer, so that the disc plays in Dolby Vision. It needs the libdovi library and ffmpeg: the ffmpeg chosen for an AC-3 core, else one beside tsMuxeR or on the search path. Unticked, the track is written as one stream and plays as HDR10.</source>
+        <translation>UHD Blu-ray プレーヤーは 2 つのレイヤーからしか Dolby Vision を表示しません。Matroska、MP4 またはトランスポートストリームのファイルにあるシングルレイヤーの Dolby Vision トラック (HDR10 ベースのプロファイル 8、3840x2160) について、tsMuxeR は第 2 レイヤーを作成し、ディスクが Dolby Vision で再生されるようにします。これには libdovi ライブラリと ffmpeg が必要です。AC-3 コア用に選んだ ffmpeg を使い、なければ tsMuxeR と同じ場所か PATH 上の ffmpeg を使います。チェックしないと、トラックは 1 つのストリームとして書き込まれ、HDR10 として再生されます。</translation>
+    </message>
+    <message>
+        <source>A part of the chosen file or Blu-ray title, to attach to a problem report in place of the whole source. A sample of a DVD title is made of one of its .VOB files.</source>
+        <translation>選択したファイルまたは Blu-ray タイトルの一部で、ソース全体の代わりに問題報告に添付するもの。DVD タイトルのサンプルは、その .VOB ファイルの 1 つから作成します。</translation>
+    </message>
+    <message>
+        <source>Stop at the first job that fails</source>
+        <translation>最初に失敗したジョブで停止</translation>
+    </message>
+    <message>
+        <source>The jobs after a job that fails are not run and stay in the queue. Unticked, every job runs.</source>
+        <translation>失敗したジョブより後のジョブは実行されず、キューに残ります。チェックしないと、すべてのジョブを実行します。</translation>
     </message>
 </context>
 <context>

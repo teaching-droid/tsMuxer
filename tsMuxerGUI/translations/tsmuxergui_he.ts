@@ -2793,6 +2793,14 @@
         <source>tsMuxeR could not be started, so no sample was made.</source>
         <translation>לא ניתן היה להפעיל את tsMuxeR, ולכן לא נוצרה דוגמה.</translation>
     </message>
+    <message>
+        <source>A Blu-ray title: the sample is of the clip the title plays at the part chosen, and a time counts from the start of the title. The playlist and the information file of that clip go into the .zip as well.</source>
+        <translation>כותר Blu-ray: הדוגמה נלקחת מהקליפ שהכותר מנגן בחלק שנבחר, וזמן נספר מתחילת הכותר. רשימת ההשמעה וקובץ המידע של אותו קליפ נכנסים גם הם לקובץ ה-.zip.</translation>
+    </message>
+    <message>
+        <source>A DVD title cannot be the source of a sample. Choose one of its .VOB files with the ... button beside Source.</source>
+        <translation>כותר DVD אינו יכול להיות המקור של דוגמה. בחרו אחד מקובצי ה-.VOB שלו בעזרת הכפתור ... שליד מקור.</translation>
+    </message>
 </context>
 <context>
     <name>TsMuxerWindow</name>
@@ -4906,8 +4914,8 @@ Build the ISO anyway?</source>
         <translation>סריקה</translation>
     </message>
     <message>
-        <source>Run the job without writing anything. The progress window shows what the mux would warn of, and at the end the size of the output and, for a disc image, the disc it fits. A scan takes as long as reading the sources takes.</source>
-        <translation>מריץ את העבודה בלי לכתוב דבר. חלון ההתקדמות מציג את האזהרות שהריבוב היה נותן, ובסוף את גודל הפלט, ולדמות תקליטור גם את התקליטור שהיא נכנסת בו. סריקה נמשכת כזמן קריאת המקורות.</translation>
+        <source>Run the job without writing anything. The progress window shows what the mux would warn of, a report of each video stream, and at the end the size of the output and, for a disc image or folder, the disc it fits. A scan takes as long as reading the sources takes.</source>
+        <translation>מריץ את העבודה בלי לכתוב דבר. חלון ההתקדמות מציג את האזהרות שהריבוב היה נותן, דוח על כל זרם וידאו, ובסוף את גודל הפלט, ולדמות תקליטור או לתיקיית תקליטור גם את התקליטור שהיא נכנסת בו. סריקה נמשכת כזמן קריאת המקורות.</translation>
     </message>
     <message>
         <source>Scan in progress</source>
@@ -5511,6 +5519,26 @@ If this appeared while a file was still being examined, or as the window was clo
     <message>
         <source>Click to play this clip in the player for previews.</source>
         <translation>לחצו כדי לנגן קליפ זה בנגן לתצוגות מקדימות.</translation>
+    </message>
+    <message>
+        <source>Make the second Dolby Vision layer</source>
+        <translation>ליצור את שכבת ה-Dolby Vision השנייה</translation>
+    </message>
+    <message>
+        <source>A UHD Blu-ray player shows Dolby Vision from two layers only. For a single layer Dolby Vision track (profile 8 with an HDR10 base, 3840x2160) in a Matroska, MP4 or transport stream file, tsMuxeR makes the second layer, so that the disc plays in Dolby Vision. It needs the libdovi library and ffmpeg: the ffmpeg chosen for an AC-3 core, else one beside tsMuxeR or on the search path. Unticked, the track is written as one stream and plays as HDR10.</source>
+        <translation>נגן UHD Blu-ray מציג Dolby Vision משתי שכבות בלבד. עבור מסלול Dolby Vision חד-שכבתי (פרופיל 8 עם בסיס HDR10, 3840x2160) בקובץ Matroska, MP4 או זרם תעבורה (TS), tsMuxeR יוצר את השכבה השנייה, כך שהדיסק מתנגן ב-Dolby Vision. לשם כך נדרשים ספריית libdovi ו-ffmpeg: ה-ffmpeg שנבחר עבור ליבת AC-3, ואחרת ffmpeg שנמצא ליד tsMuxeR או ב-PATH. כשלא מסומן, המסלול נכתב כזרם אחד ומתנגן כ-HDR10.</translation>
+    </message>
+    <message>
+        <source>A part of the chosen file or Blu-ray title, to attach to a problem report in place of the whole source. A sample of a DVD title is made of one of its .VOB files.</source>
+        <translation>חלק מהקובץ או מכותר ה-Blu-ray שנבחר, לצירוף לדיווח על בעיה במקום המקור כולו. דוגמה של כותר DVD נוצרת מאחד מקובצי ה-.VOB שלו.</translation>
+    </message>
+    <message>
+        <source>Stop at the first job that fails</source>
+        <translation>לעצור במשימה הראשונה שנכשלת</translation>
+    </message>
+    <message>
+        <source>The jobs after a job that fails are not run and stay in the queue. Unticked, every job runs.</source>
+        <translation>המשימות שאחרי משימה שנכשלה אינן מורצות ונשארות בתור. כשלא מסומן, כל המשימות מורצות.</translation>
     </message>
 </context>
 <context>

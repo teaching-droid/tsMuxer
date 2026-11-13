@@ -168,6 +168,20 @@ void SampleDialog::setSource(const QString& source)
     if ((!end && m_end->isChecked()) || (!at && m_at->isChecked()))
         m_start->setChecked(true);
     m_make->setEnabled(!source.isEmpty());
+    // A Blu-ray title is given as its playlist: tsMuxeR takes the sample of one of its clips
+    m_state->setText(ext == "mpls" || ext == "mpl"
+                         ? tr("A Blu-ray title: the sample is of the clip the title plays at the part chosen, and "
+                              "a time counts from the start of the title. The playlist and the information file of "
+                              "that clip go into the .zip as well.")
+                         : QString());
+}
+
+void SampleDialog::explainDvdTitle()
+{
+    setSource(QString());
+    m_state->setText(
+        tr("A DVD title cannot be the source of a sample. Choose one of its .VOB files with the ... button beside "
+           "Source."));
 }
 
 void SampleDialog::onBrowseSource()

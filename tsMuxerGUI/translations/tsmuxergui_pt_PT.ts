@@ -2793,6 +2793,14 @@
         <source>tsMuxeR could not be started, so no sample was made.</source>
         <translation>Não foi possível iniciar o tsMuxeR, por isso nenhuma amostra foi criada.</translation>
     </message>
+    <message>
+        <source>A Blu-ray title: the sample is of the clip the title plays at the part chosen, and a time counts from the start of the title. The playlist and the information file of that clip go into the .zip as well.</source>
+        <translation>Um título Blu-ray: a amostra é do clipe que o título reproduz na parte escolhida, e um tempo conta a partir do início do título. A playlist e o ficheiro de informações desse clipe também vão para o .zip.</translation>
+    </message>
+    <message>
+        <source>A DVD title cannot be the source of a sample. Choose one of its .VOB files with the ... button beside Source.</source>
+        <translation>Um título de DVD não pode ser a origem de uma amostra. Escolha um dos seus ficheiros .VOB com o botão ... ao lado de Origem.</translation>
+    </message>
 </context>
 <context>
     <name>TsMuxerWindow</name>
@@ -4766,8 +4774,8 @@ Criar o ISO mesmo assim?</translation>
         <translation>Analisar</translation>
     </message>
     <message>
-        <source>Run the job without writing anything. The progress window shows what the mux would warn of, and at the end the size of the output and, for a disc image, the disc it fits. A scan takes as long as reading the sources takes.</source>
-        <translation>Executa o trabalho sem escrever nada. A janela de progresso mostra os avisos que a multiplexagem daria e, no fim, o tamanho da saída e, para uma imagem de disco, o disco em que cabe. Uma análise demora o tempo de leitura das origens.</translation>
+        <source>Run the job without writing anything. The progress window shows what the mux would warn of, a report of each video stream, and at the end the size of the output and, for a disc image or folder, the disc it fits. A scan takes as long as reading the sources takes.</source>
+        <translation>Executa o trabalho sem escrever nada. A janela de progresso mostra os avisos que a multiplexagem daria, um relatório de cada fluxo de vídeo e, no fim, o tamanho da saída e, para uma imagem ou pasta de disco, o disco em que cabe. Uma análise demora o tempo de leitura das origens.</translation>
     </message>
     <message>
         <source>Scan in progress</source>
@@ -5554,6 +5562,26 @@ Se isto apareceu enquanto um ficheiro ainda estava a ser examinado, ou quando a 
     <message>
         <source>Click to play this clip in the player for previews.</source>
         <translation>Clique para reproduzir este clipe no leitor para pré-visualizações.</translation>
+    </message>
+    <message>
+        <source>Make the second Dolby Vision layer</source>
+        <translation>Criar a segunda camada Dolby Vision</translation>
+    </message>
+    <message>
+        <source>A UHD Blu-ray player shows Dolby Vision from two layers only. For a single layer Dolby Vision track (profile 8 with an HDR10 base, 3840x2160) in a Matroska, MP4 or transport stream file, tsMuxeR makes the second layer, so that the disc plays in Dolby Vision. It needs the libdovi library and ffmpeg: the ffmpeg chosen for an AC-3 core, else one beside tsMuxeR or on the search path. Unticked, the track is written as one stream and plays as HDR10.</source>
+        <translation>Um leitor UHD Blu-ray mostra Dolby Vision apenas a partir de duas camadas. Para uma faixa Dolby Vision de camada única (perfil 8 com base HDR10, 3840x2160) num ficheiro Matroska, MP4 ou de fluxo de transporte, o tsMuxeR cria a segunda camada, para que o disco seja reproduzido em Dolby Vision. São necessários a biblioteca libdovi e o ffmpeg: o ffmpeg escolhido para um núcleo AC-3 ou, caso contrário, um ao lado do tsMuxeR ou no PATH. Desmarcado, a faixa é gravada como um único fluxo e é reproduzida como HDR10.</translation>
+    </message>
+    <message>
+        <source>A part of the chosen file or Blu-ray title, to attach to a problem report in place of the whole source. A sample of a DVD title is made of one of its .VOB files.</source>
+        <translation>Uma parte do ficheiro ou do título Blu-ray escolhido, para anexar a um relato de problema em vez da origem inteira. A amostra de um título de DVD é feita a partir de um dos seus ficheiros .VOB.</translation>
+    </message>
+    <message>
+        <source>Stop at the first job that fails</source>
+        <translation>Parar no primeiro trabalho que falhe</translation>
+    </message>
+    <message>
+        <source>The jobs after a job that fails are not run and stay in the queue. Unticked, every job runs.</source>
+        <translation>Os trabalhos a seguir a um trabalho que falha não são executados e ficam na fila. Desmarcado, todos os trabalhos são executados.</translation>
     </message>
 </context>
 <context>

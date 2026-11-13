@@ -2793,6 +2793,14 @@
         <source>tsMuxeR could not be started, so no sample was made.</source>
         <translation>無法啟動 tsMuxeR，因此未製作樣本。</translation>
     </message>
+    <message>
+        <source>A Blu-ray title: the sample is of the clip the title plays at the part chosen, and a time counts from the start of the title. The playlist and the information file of that clip go into the .zip as well.</source>
+        <translation>Blu-ray 標題：樣本取自該標題在所選部分播放的片段，時間從標題開頭起算。播放清單和該片段的資訊檔也會放入 .zip。</translation>
+    </message>
+    <message>
+        <source>A DVD title cannot be the source of a sample. Choose one of its .VOB files with the ... button beside Source.</source>
+        <translation>DVD 標題不能作為樣本的來源。請用「來源」旁邊的 ... 按鈕選擇它的其中一個 .VOB 檔案。</translation>
+    </message>
 </context>
 <context>
     <name>TsMuxerWindow</name>
@@ -4766,8 +4774,8 @@ Build the ISO anyway?</source>
         <translation>掃描</translation>
     </message>
     <message>
-        <source>Run the job without writing anything. The progress window shows what the mux would warn of, and at the end the size of the output and, for a disc image, the disc it fits. A scan takes as long as reading the sources takes.</source>
-        <translation>執行工作但不寫入任何內容。進度視窗會顯示混流時會給出的警告，最後顯示輸出的大小，若為光碟映像檔還會顯示能容納它的光碟。掃描所需時間與讀取來源的時間相同。</translation>
+        <source>Run the job without writing anything. The progress window shows what the mux would warn of, a report of each video stream, and at the end the size of the output and, for a disc image or folder, the disc it fits. A scan takes as long as reading the sources takes.</source>
+        <translation>執行工作但不寫入任何內容。進度視窗會顯示混流時會給出的警告和每個視訊串流的報告，最後顯示輸出的大小，若為光碟映像檔或光碟資料夾還會顯示能容納它的光碟。掃描所需時間與讀取來源的時間相同。</translation>
     </message>
     <message>
         <source>Scan in progress</source>
@@ -5554,6 +5562,26 @@ If this appeared while a file was still being examined, or as the window was clo
     <message>
         <source>Click to play this clip in the player for previews.</source>
         <translation>按一下以在預覽播放器中播放此片段。</translation>
+    </message>
+    <message>
+        <source>Make the second Dolby Vision layer</source>
+        <translation>製作第二個 Dolby Vision 層</translation>
+    </message>
+    <message>
+        <source>A UHD Blu-ray player shows Dolby Vision from two layers only. For a single layer Dolby Vision track (profile 8 with an HDR10 base, 3840x2160) in a Matroska, MP4 or transport stream file, tsMuxeR makes the second layer, so that the disc plays in Dolby Vision. It needs the libdovi library and ffmpeg: the ffmpeg chosen for an AC-3 core, else one beside tsMuxeR or on the search path. Unticked, the track is written as one stream and plays as HDR10.</source>
+        <translation>UHD Blu-ray 播放器只從兩層顯示 Dolby Vision。對於 Matroska、MP4 或傳輸串流檔案中的單層 Dolby Vision 視訊軌 (以 HDR10 為基礎的 Profile 8，3840x2160)，tsMuxeR 會製作第二層，讓光碟以 Dolby Vision 播放。這需要 libdovi 函式庫和 ffmpeg：使用為 AC-3 核心選擇的 ffmpeg，否則使用 tsMuxeR 旁邊或 PATH 中的 ffmpeg。未勾選時，視訊軌會寫成一個串流，並以 HDR10 播放。</translation>
+    </message>
+    <message>
+        <source>A part of the chosen file or Blu-ray title, to attach to a problem report in place of the whole source. A sample of a DVD title is made of one of its .VOB files.</source>
+        <translation>所選檔案或 Blu-ray 標題的一部分，用來附加到問題回報中，以取代整個來源。DVD 標題的樣本是從其中一個 .VOB 檔案製作的。</translation>
+    </message>
+    <message>
+        <source>Stop at the first job that fails</source>
+        <translation>在第一個失敗的工作停止</translation>
+    </message>
+    <message>
+        <source>The jobs after a job that fails are not run and stay in the queue. Unticked, every job runs.</source>
+        <translation>失敗工作之後的工作不會執行，並留在佇列中。未勾選時，所有工作都會執行。</translation>
     </message>
 </context>
 <context>
