@@ -16,8 +16,7 @@ the details and the layer-break calculator.
 
 An ISO image whose data crosses a layer break gets a layer-break guard by default: 288 MB after the break and
 18 MB before it (306 MB) are left empty, as a burnt dual-layer disc often reads badly at the layer change and a
-player then stalls there. The break is the one of `--layer-break-lbn`, else of `--disc-size` (`--disc-capacity` for
-`--bdmv-to-iso`), else that of a BD-R DL. An image that would not fit the disc with the guard is written without it,
+player then stalls there. The break is the one of `--layer-break-lbn`, else of `--disc-size`, else that of a BD-R DL. An image that would not fit the disc with the guard is written without it,
 with a warning. `--no-layer-break-guard` leaves the guard out; `--layer-break-guard=<MB>` sets its size (the zone
 before the break is a sixteenth of it, at least 4 MB, unless `--layer-break-guard-before` gives it). Folder, TS and
 MKV output, images that end before the break and `--inner-only` are not affected.
@@ -539,7 +538,7 @@ Parameter           | Description
 --constant-iso-hdr  | Generates an ISO header that does not depend on the program version or the current time. Normally, the ISO header's "application ID", "implementation ID", and "volume ID" fields are set to strings containing the program version and/or a random number, while the access/modification/creation times of the files in the image are set to the current time. This option disables this behaviour by filling these fields with hardcoded values and setting the file times to `1 Jan 1970 00:00:01 UTC`, written as UTC, so the header is the same in every time zone. Using this option is not recommended for normal usage, as it is meant only for testing ISO output validity.
 --inner-only        | ISO output with --disc-size: keep the data on the inner part of every layer and fill the outer edge of the disc with zeros. The disc is muxed into a folder beside the image first and the image is then laid out from it, as --bdmv-to-iso --inner-only lays it out, so the drive needs room for both while it runs. Replaces --layer-break-guard; a MUXOPT line with both is refused. See [DISC_AUTHORING.md](DISC_AUTHORING.md).
 --no-layer-break-guard | ISO output: leave out the layer-break guard an image crossing a layer break gets by default (288 MB after the break, 18 MB before it). A guard given with --layer-break-guard is still written.
---disc-size         | Blu-ray or ISO output: refuse the job before muxing when the estimated image does not fit the target disc. Takes `bd25`, `bd50`, `bd100`, `bd128`, or a byte count with an optional k, m, g (decimal) or ki, mi, gi (binary) suffix, such as `25000000000`, `24g` or `23gib`. It also chooses the layer breaks of the image.
+--disc-size         | Blu-ray or ISO output: refuse the job before muxing when the estimated image does not fit the target disc. Takes `bd25`, `bd50`, `bd100`, `bd128`, or a byte count with an optional k, m, g (decimal) or ki, mi, gi (binary) suffix, such as `25000000000`, `24g` or `23gib`, or the sectors of the disc with an s behind them, such as `24438784s` (the "Free Sectors" a burning program shows). It also chooses the layer breaks of the image.
 --allow-oversize    | With --disc-size, an image too large for the disc is a warning instead of an error, and it is built anyway.
 --allow-extra-tracks | Writes more than 32 tracks of one kind (audio, subtitles, secondary audio, secondary video) to a disc, with a warning. A disc has numbers for 32 of each kind; some players show the tracks past the 32nd, others leave them out. Without it, such a disc is refused.
 --layer-break-guard | ISO output: the size in MB of the zeros AFTER each layer break of a BD-R/RE DL or BD-R XL, where a burnt disc is most often defective, plus a sixteenth of it (at least 4 MB) before the break. The film crossing the break stays one file and plays without a pause. 0 aligns to the break without zeros. Without the option an image crossing a break gets 288 MB after it and 18 MB before it. Not with --inner-only.
@@ -558,7 +557,7 @@ It wraps an existing BDMV folder into a UDF 2.50 BD-ROM ISO image byte for byte,
 Option              | Description
 ---                 | ---
 --layer-break-guard, --layer-break-guard-before, --no-layer-break-guard, --layer-break-lbn, --allow-oversize, --inner-only, --constant-iso-hdr, --label, --extra-iso-space | As in the MUXOPT line above.
---disc-capacity     | The total sectors of the target disc, from its full formatted capacity. Needed by --inner-only; with it the image is also checked against the disc before and after it is built.
+--disc-size         | The target disc, as in the MUXOPT line above: a name, bytes, or its total sectors with an s behind them (`24438784s`), from its full formatted capacity. Needed by --inner-only; with it the image is also checked against the disc before and after it is built. `--disc-capacity=<sectors>`, the older name of this option here, is still read.
 --keep-extra-files  | Copy everything in the source folder, not only BDMV, CERTIFICATE and AACS.
 --3d-single-copy    | Store a 3D disc's video once instead of twice, as the source disc does.
 --original-order    | Write the files in disc order instead of the largest .m2ts first. Better for seamless branching titles.

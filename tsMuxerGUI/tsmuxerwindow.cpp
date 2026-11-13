@@ -2504,7 +2504,7 @@ TsMuxerWindow::TsMuxerWindow()
                 // Lets the engine's layer-fit placement know the true disc end, so a file is only
                 // moved wholly past the break when it genuinely still fits on the disc.
                 if (const qint64 fsSectors = readFreeSectors(); fsSectors > 0)
-                    args << ("--disc-capacity=" + QString::number(fsSectors));
+                    args << ("--disc-size=" + QString::number(fsSectors) + "s");
                 if (keepExtrasCheck->isChecked())
                     args << "--keep-extra-files";
                 if (innerOnlyCheck->isChecked())

@@ -118,6 +118,9 @@ class MuxerManager final
 
     // Fit-to-disc guard: target disc capacity in bytes (0 = disabled) + oversize override.
     [[nodiscard]] int64_t getDiscSizeLimit() const { return m_discSizeLimit; }
+    // The value of --disc-size in bytes: a name (bd25, bd50, bd100, bd128), bytes with an optional unit, or sectors
+    // of 2048 bytes with an s behind them. 0 when the text is none of these.
+    static int64_t parseDiscSize(const std::string& raw);
     [[nodiscard]] bool getAllowOversize() const { return m_allowOversize; }
     // The bytes a constant bitrate output takes, null packets included: the rate the muxer pads to (--bitrate, or
     // --minbitrate under --maxbitrate) over the length of the title, in 192 byte packets. 0 when nothing is padded,

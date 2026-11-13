@@ -1882,7 +1882,8 @@ All parameters in this group start with two dashes:
                       the estimated image will not fit the target disc. Accepts the
                       keywords bd25/bd50/bd100/bd128, or a byte count with an optional
                       k/m/g (decimal) or ki/mi/gi (binary) suffix (e.g. 25000000000,
-                      24g, 23gib).
+                      24g, 23gib), or the sectors of the disc with an s behind them
+                      (e.g. 24438784s, the "Free Sectors" a burning program shows).
 --allow-extra-tracks  Write more than 32 tracks of one kind to a Blu-ray disc,
                       with a warning. Some players show the tracks past the
                       32nd, others leave them out.
@@ -1954,7 +1955,9 @@ All parameters in this group start with two dashes:
                         --layer-break-guard-before=<MB>  see above
                         --no-layer-break-guard           see above
                         --layer-break-lbn=<s[,s...]>     see above
-                        --disc-capacity=<sectors>  Total sectors of the target disc. Read it from
+                        --disc-size=<size>  The target disc, as in a MUXOPT line: bd25, bd50,
+                              bd100, bd128, bytes, or its total sectors with an s behind them
+                              (24438784s). Read the sectors from
                               the disc's FULL formatted capacity. Needed by --inner-only, used to
                               decide whether a file fits after the break, and used to CHECK THE
                               RESULT: with it, the build is refused up front when the payload plus
@@ -1980,7 +1983,7 @@ All parameters in this group start with two dashes:
                               the disc. Multi-layer discs run from the centre out on layer 0,
                               back in on layer 1, out again on layer 2, so only the 1st and
                               3rd breaks are at the edge and padded; the 2nd, at the centre,
-                              is not. Requires --disc-capacity. A single layer disc has
+                              is not. Requires --disc-size. A single layer disc has
                               nothing to pad and is written as without it.
                         --constant-iso-hdr  An image header that does not depend on the
                               program version or the current time, as in a MUXOPT line.
@@ -2239,6 +2242,7 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     bool originalOrder = false;
     bool layerFit = true;
     int64_t discCapacitySectors = 0;
+    int64_t discSizeSectors = 0;  // of --disc-size; --disc-capacity is its older name here, in sectors only
     bool keepExtras = false;
     bool singleCopy3d = false;
     bool innerOnly = false;
@@ -2275,6 +2279,22 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
                     return ExitCode::Usage;
                 }
                 for (const auto& warning : warnings) LTRACE(LT_WARN, 2, "Warning: " << warning);
+            }
+            else if (a.rfind("--disc-size=", 0) == 0)
+            {
+                // The disc as a mux takes it: a name, bytes, or sectors with an s. Whole sectors of it are counted.
+                const std::string value = a.substr(12);
+                const int64_t bytes = MuxerManager::parseDiscSize(value);
+                if (bytes < 2048)
+                {
+                    LTRACE(LT_ERROR, 2,
+                           "--disc-size=" << value
+                                          << " is not the size of a disc. Use bd25/bd50/bd100/bd128, a byte count "
+                                             "with an optional k/m/g/gib suffix (e.g. 25000000000, 24g, 23gib), or "
+                                             "the sectors of the disc with an s behind them (e.g. 24438784s).");
+                    return ExitCode::Usage;
+                }
+                discSizeSectors = bytes / 2048;
             }
             else if (a.rfind("--disc-capacity=", 0) == 0)
             {
@@ -2345,12 +2365,22 @@ static int bdmvFolderToGuardedIso(const int argc, char** argv)
     {
         LTRACE(LT_ERROR, 2,
                "Usage: tsMuxeR --bdmv-to-iso [--layer-break-guard=<MB>] [--layer-break-guard-before=<MB>] "
-               "[--layer-break-lbn=<sector>] [--disc-capacity=<sectors>] [--original-order] [--no-layer-fit] "
+               "[--layer-break-lbn=<sector>] [--disc-size=<size>] [--original-order] [--no-layer-fit] "
                "[--keep-extra-files] [--3d-single-copy] [--inner-only] [--allow-oversize] [--label=<string>] "
                "[--extra-iso-space=<64K blocks>] [--constant-iso-hdr] [--meta-dir=<folder>|none] "
                "<BDMV_folder> <out.iso>");
         return ExitCode::Usage;
     }
+    // The older name and the new one say the same thing: one of them is enough, and two that differ are no size
+    if (discSizeSectors > 0 && discCapacitySectors > 0 && discSizeSectors != discCapacitySectors)
+    {
+        LTRACE(LT_ERROR, 2,
+               "--disc-size and --disc-capacity both give the size of the disc, and they differ: "
+                   << discSizeSectors << " sectors against " << discCapacitySectors << ". Give one of them.");
+        return ExitCode::Usage;
+    }
+    if (discSizeSectors > 0)
+        discCapacitySectors = discSizeSectors;
     GuardedIsoOptions opt;
     opt.srcRoot = positional[0];
     opt.outIso = positional[1];
@@ -2832,7 +2862,9 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
     {
         if (discCapacitySectors <= 0)
         {
-            LTRACE(LT_ERROR, 2, "--inner-only needs the disc capacity; add --disc-capacity=<sectors>");
+            LTRACE(LT_ERROR, 2,
+                   "--inner-only needs the disc capacity; add --disc-size, such as --disc-size=bd50, or the Free "
+                   "Sectors of your disc with an s behind them (--disc-size=24438784s)");
             return ExitCode::Usage;
         }
         // A disc of one layer has no layer change and no outer edge before one: its data starts at the centre and
@@ -3143,7 +3175,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
     // inner-only build. The exact check below still applies, and matters most there, since that path
     // fills the disc deliberately.
     if (discCapacitySectors <= 0)
-        LTRACE(LT_INFO, 2, "  no --disc-capacity given, so the image is NOT checked against a disc size");
+        LTRACE(LT_INFO, 2, "  no --disc-size given, so the image is NOT checked against a disc size");
     else if (innerOnly)
         LTRACE(LT_INFO, 2, "  capacity: --inner-only sized the guard from the disc; the image is checked when written");
     else
@@ -3465,7 +3497,7 @@ static int buildGuardedIso(const GuardedIsoOptions& opt, bool* sizeRefused)
         }
     }
     else if (opt.layerBreakLbns.empty())
-        reportBd50Layout(outIso, "--disc-capacity=48878592", "--disc-capacity=32585728");
+        reportBd50Layout(outIso, "--disc-size=bd100", "--disc-size=32585728s");
     unfinished.keep = true;
     // Written in place over an image that was there (--bdmv-to-iso), an image with no pads left the layer break map of
     // the old image beside it, which described a disc that was no longer there. Over a temporary name (KeepOldOutput)
@@ -4425,7 +4457,8 @@ static bool innerOnlyIsoAsked(const MuxerManager& muxerManager, const DiskType d
     if (discBytes <= 0)
         THROW(ERR_USAGE,
               "--inner-only needs the disc it is for, to know where its layers end: add --disc-size, such as "
-              "--disc-size=bd50, or the Free Sectors of your disc times 2048. Nothing has been written.")
+              "--disc-size=bd50, or the Free Sectors of your disc with an s behind them (--disc-size=24438784s). "
+              "Nothing has been written.")
     std::vector<int> breaks = muxerManager.getLayerBreakLbns();
     if (breaks.empty())
     {
@@ -6531,7 +6564,7 @@ static int runTsMuxer(int argc, char** argv)
             }
             if (dt != DiskType::NONE && strToUpperCase(extractFileExt(outputRoot)) == "ISO" &&
                 muxerManager.getDiscSizeLimit() <= 0 && muxerManager.getLayerBreakLbns().empty())
-                reportBd50Layout(outputRoot, "--disc-size=bd100", "--disc-size=66735570944");
+                reportBd50Layout(outputRoot, "--disc-size=bd100", "--disc-size=32585728s");
             reportJobComplete();
             LTRACE(LT_INFO, 2, "Mux successful complete");
             reportSplitWithoutParameterSets(muxerManager);

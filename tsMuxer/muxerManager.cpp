@@ -1497,12 +1497,14 @@ int MuxerManager::syncWriteBuffer(AbstractMuxer* muxer, const uint8_t* buff, con
     return rez;
 }
 
-namespace
-{
 // Parse a --disc-size value: a bd25/bd50/bd100/bd128 keyword, or a raw number with an optional
 // unit suffix (k/m/g = decimal 10^3/10^6/10^9; ki/mi/gi = binary; none or b = bytes).
 // Returns the capacity in bytes, or 0 if the value is unparseable.
-int64_t parseDiscSizeValue(const string& raw)
+// ** ONE OPTION SAYS HOW LARGE THE DISC IS. ** A mux took the size of its disc in bytes (--disc-size) and
+// --bdmv-to-iso took it in sectors (--disc-capacity): two names and two units for one fact, and the number a burning
+// program shows, the sectors of the disc, had to be multiplied by 2048 for the first. A count of sectors is taken
+// here too, with an s behind it (24438784s), and --bdmv-to-iso reads --disc-size as a mux does.
+int64_t MuxerManager::parseDiscSize(const string& raw)
 {
     const string s = strToUpperCase(trimStr(raw));
     if (s == "BD25" || s == "25")
@@ -1528,7 +1530,14 @@ int64_t parseDiscSizeValue(const string& raw)
     }
     const string unit = s.substr(i);
     double mult;
-    if (unit.empty() || unit == "B")
+    if (unit == "S")
+    {
+        // sectors of 2048 bytes: a whole number of them
+        if (s.find('.') != string::npos)
+            return 0;
+        mult = 2048.0;
+    }
+    else if (unit.empty() || unit == "B")
         mult = 1.0;
     else if (unit == "K" || unit == "KB")
         mult = 1e3;
@@ -1544,9 +1553,11 @@ int64_t parseDiscSizeValue(const string& raw)
         mult = 1024.0 * 1024.0 * 1024.0;
     else
         return 0;
+    // more than any disc holds: not a number the cast below can take either
+    if (num * mult >= 1e15)
+        return 0;
     return static_cast<int64_t>(num * mult);
 }
-}  // namespace
 
 // An option this program does not know was ignored without a word, so a misspelt one (--no-pcr-on-vide-pid) changed
 // nothing and nobody was told. Each option of a MUXOPT line is checked against the ones a meta file can carry; one
@@ -1749,12 +1760,13 @@ void MuxerManager::parseMuxOpt(const string& opts)
         {
             if (paramPair.size() < 2)
                 THROW(ERR_USAGE, "Missing value for " << paramPair[0]);
-            m_discSizeLimit = parseDiscSizeValue(paramPair[1]);
+            m_discSizeLimit = parseDiscSize(paramPair[1]);
             if (m_discSizeLimit <= 0)
                 THROW(ERR_USAGE, "Invalid --disc-size value '"
                                      << paramPair[1]
-                                     << "'. Use bd25/bd50/bd100/bd128, or a byte count with an optional "
-                                        "k/m/g/gib suffix (e.g. 25000000000, 24g, 23gib).");
+                                     << "'. Use bd25/bd50/bd100/bd128, a byte count with an optional "
+                                        "k/m/g/gib suffix (e.g. 25000000000, 24g, 23gib), or the sectors of "
+                                        "the disc with an s behind them (e.g. 24438784s).");
         }
         else if (paramPair[0] == "--allow-oversize")
         {
