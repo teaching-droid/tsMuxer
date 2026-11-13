@@ -288,6 +288,9 @@ class METADemuxer final : public AbstractDemuxer
         m_dvLayerMaking = on;
         m_dvLayerFfmpeg = ffmpeg;
     }
+    // Second layers are made in this job, and an HEVC track came in a way no layer is made for (a join, a playlist,
+    // a file without a container), of which no line has said anything
+    [[nodiscard]] bool dvLayerLeftUnsaid() const { return m_dvLayerMaking && m_dvLayerOtherWay && !m_dvLayerNoted; }
     // A second pass over the sources of a mux, before it (MuxerManager::findCutKeyPictures): read as the mux reads
     // them, with the other's settings, but its readers give no advice, open no file to write (save-srt) and print no
     // progress
@@ -382,7 +385,10 @@ class METADemuxer final : public AbstractDemuxer
     bool m_playlistClipsPlayed = PLAYLIST_CLIPS_PLAYED_BY_DEFAULT;  // --playlist-clips (setPlaylistClipsPlayed)
     int m_matroskaOutput = 0;                                       // setMatroskaOutput: 0 other, 1 Matroska, 2 WebM
     bool m_demuxOutput = false;                                     // setDemuxOutput
-    bool m_dvLayerMaking = false;                                   // setDvLayerMaking
+    bool m_dvLayerNoted = false;                                    // addDvLayers said why it made no layer
+    bool m_dvLayerOtherWay =
+        false;                     // addDvLayers met an HEVC track of a join, a playlist or a file without a container
+    bool m_dvLayerMaking = false;  // setDvLayerMaking
     std::string m_dvLayerFfmpeg;
     bool addDvLayers(const std::string& codec, const std::string& lineStreamName,
                      const std::map<std::string, std::string>& addParams);

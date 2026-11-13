@@ -73,6 +73,7 @@ class MuxerManager final
     // then ignored because it does not apply to the chosen output.
     [[nodiscard]] const std::string& getMuxOpts() const { return m_muxOpts; }
     [[nodiscard]] const std::vector<StreamInfo>& getStreamInfo() const { return m_metaDemuxer.getStreamInfo(); }
+    [[nodiscard]] bool dvLayerLeftUnsaid() const { return m_metaDemuxer.dvLayerLeftUnsaid(); }
     // The source file the given name is the same file as, or an empty string: every file a track reads counts
     [[nodiscard]] std::string sourceSameAs(const std::string& fileName) const;
     // A demux into a folder that exists is written into a temporary folder inside it first (KeepOldOutput in main):

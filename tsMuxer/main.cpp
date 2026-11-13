@@ -3918,12 +3918,20 @@ static void reportSingleLayerDvOnDisc(const MuxerManager& muxerManager)
         if (compatibility == 0)
             continue;
         const char* base = compatibility == 2 ? "SDR" : compatibility == 4 ? "HLG" : "HDR10";
+        // The second layer is made for such a track with an HDR10 base (METADemuxer::addDvLayers), and where it was
+        // not, a line said why; but a track that comes in a way no layer is made for went to the disc without a
+        // word on it, and the disc played as HDR10 as before.
+        const bool unsaid = compatibility == 1 && muxerManager.dvLayerLeftUnsaid();
         LTRACE(LT_WARN, 2,
                "Warning: the video is single layer Dolby Vision (profile "
                    << profile
                    << "). A UHD Blu-ray player plays Dolby Vision from "
                       "two layers only, so this disc plays as "
-                   << base << ".");
+                   << base << "."
+                   << (unsaid ? " The second layer that keeps Dolby Vision on a disc is made for a track of "
+                                "3840x2160 from one Matroska, MP4 or transport stream file: not for a join of "
+                                "files, a playlist, or a video file without a container."
+                              : ""));
         return;
     }
 }

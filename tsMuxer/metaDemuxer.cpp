@@ -1684,18 +1684,28 @@ bool METADemuxer::addDvLayers(const string& codec, const string& lineStreamName,
 {
     // a disc is written, not a Matroska file whose MUXOPT line still says --blu-ray; a main video of its own line
     if (!m_dvLayerMaking || m_matroskaOutput != 0 || m_demuxOutput || codec != "V_MPEGH/ISO/HEVC" ||
-        addParams.count("subTrack") > 0 || addParams.count("track") == 0 || addParams.count("subClip") > 0 ||
-        addParams.count("secondary") > 0)
+        addParams.count("subTrack") > 0 || addParams.count("subClip") > 0 || addParams.count("secondary") > 0)
         return false;
+    if (addParams.count("track") == 0)
+    {
+        m_dvLayerOtherWay = true;  // a video file without a container
+        return false;
+    }
     const vector<string> files = splitQuotedStr(lineStreamName.c_str(), '+');
     if (files.size() != 1)
+    {
+        m_dvLayerOtherWay = true;
         return false;
+    }
     const string file = unquoteStr(trimStr(files[0]));
     const string ext = strToLowerCase(extractFileExt(file));
     // the containers whose reader hands a track to the filter that makes the layer
     if (ext != "mkv" && ext != "mk3d" && ext != "mp4" && ext != "m4v" && ext != "mov" && ext != "ts" && ext != "m2ts" &&
         ext != "mts" && ext != "m2t")
+    {
+        m_dvLayerOtherWay = true;
         return false;
+    }
     const int track = strToInt32(addParams.find("track")->second.c_str());
     // The file is looked at here only to tell what the track is. What the look says or sets is of no concern to the
     // job: its lines (a track of the file the job does not take can warn), its errors, and the marks it leaves for
@@ -1749,6 +1759,7 @@ bool METADemuxer::addDvLayers(const string& codec, const string& lineStreamName,
         return false;
     const auto note = [&](const string& why)
     {
+        m_dvLayerNoted = true;
         LTRACE(LT_WARN, 2,
                "Track " << track << " of " << file
                         << " is single layer Dolby Vision, which a Blu-ray player plays as HDR10 only. Its second "
