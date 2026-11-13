@@ -1130,7 +1130,9 @@ void MuxerManager::doMux(const string& outFileName, FileFactory* fileFactory)
             copied->frameLeftOut();
     };
 
-    // Only this loop looks at the signal: a signal before or after it ends the program as before (main)
+    // Only this loop looks at the signal: a signal before or after it ends the program as before (main). It stops
+    // watching where it ends, not where the mux does: a request that came while the output was being finished was
+    // taken, nobody looked at it any more, and the job ran on to its end.
     struct StopWatch
     {
         StopWatch() { setStopWatched(true); }
@@ -1628,6 +1630,7 @@ void MuxerManager::warnUnknownMuxOpts(const string& opts)
                                                       "--no-chapters",
                                                       "--no-hdmv-descriptors",
                                                       "--no-layer-break-guard",
+                                                      "--no-navigation",
                                                       "--no-pcr-on-video-pid",
                                                       "--playlist-clips",
                                                       "--right-eye",
@@ -1794,6 +1797,13 @@ void MuxerManager::parseMuxOpt(const string& opts)
         // directly could not keep its data on the inner part of the disc, only one made from a folder in a second step.
         else if (paramPair[0] == "--inner-only")
             m_innerOnly = true;
+        // ** --no-navigation: THE TITLE WITHOUT THE FILES THAT START A DISC. ** A run into a disc folder writes
+        // index.bdmv and MovieObject.bdmv each time, with their BACKUP copies, which play the title it has just
+        // written. Where a disc is put together from several runs and its navigation is written by another step,
+        // those of each run were written over what that step had made, or had to be replaced after each run. With
+        // this option the run writes its clip, clip information and playlist, and leaves those two files alone.
+        else if (paramPair[0] == "--no-navigation")
+            m_noNavigation = true;
         else if (paramPair[0] == "--meta-dir")
         {
             if (paramPair.size() < 2)

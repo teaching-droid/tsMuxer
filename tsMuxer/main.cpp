@@ -4663,6 +4663,10 @@ static DiscMeta discMetaForMux(const MuxerManager& muxerManager)
 
 static void warnMetaDirIgnored(const MuxerManager& muxerManager)
 {
+    if (muxerManager.getNoNavigation())
+        LTRACE(LT_WARN, 2,
+               "Warning: --no-navigation leaves index.bdmv and MovieObject.bdmv out of a disc folder, and this job "
+               "makes no disc. It was ignored.");
     if (!muxerManager.getMetaDir().empty())
         LTRACE(LT_WARN, 2,
                "Warning: --meta-dir gives a Blu-ray disc its title and pictures, and this job makes no Blu-ray disc. "
@@ -6448,6 +6452,12 @@ static int runTsMuxer(int argc, char** argv)
                                                                    << " GB target disc.");
                 }
                 muxerManager.checkTracksBeforeOutput();  // before the folders are made, as for a demux
+                // an image is finished when it is written: its navigation cannot be added to it afterwards
+                if (muxerManager.getNoNavigation() && strToUpperCase(extractFileExt(dstFile)) == "ISO")
+                    THROW(ERR_USAGE,
+                          "--no-navigation is for a disc folder, which another step can still add "
+                          "index.bdmv and MovieObject.bdmv to. An image is written whole: mux to a "
+                          "folder, and make the image from it with --bdmv-to-iso.")
                 if (innerIso)
                 {
                     // Beside the image, named like the temporary outputs of KeepOldOutput. A folder of that name left
@@ -6554,7 +6564,12 @@ static int runTsMuxer(int argc, char** argv)
             muxerManager.doMux(dstFile, dt != DiskType::NONE ? &blurayHelper : nullptr);
             if (dt != DiskType::NONE)
             {
-                blurayHelper.writeBluRayFiles(muxerManager, insertBlankPL, firstMplsOffset, blankNum, stereoMode);
+                if (muxerManager.getNoNavigation())
+                    LTRACE(LT_INFO, 2,
+                           "index.bdmv and MovieObject.bdmv are not written, as --no-navigation says. A player takes "
+                           "the folder for a disc only when it has them.");
+                else
+                    blurayHelper.writeBluRayFiles(muxerManager, insertBlankPL, firstMplsOffset, blankNum, stereoMode);
                 blurayHelper.writeDiscMeta(discMeta);
                 auto mainMuxer = dynamic_cast<TSMuxer*>(muxerManager.getMainMuxer());
                 auto subMuxer = dynamic_cast<TSMuxer*>(muxerManager.getSubMuxer());
