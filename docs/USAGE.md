@@ -84,9 +84,21 @@ Then either:
 - use **Merge AC-3 file** / `merge-ac3-file="compat.ac3"` directly, or
 - **remux** `compat.ac3` back into the MKV as a separate audio track (e.g. with `mkvmerge`) and use **Merge AC-3 track** / `merge-ac3-track` with the new AC-3 track number.
 
+### The queue in the GUI
+
+"Add to queue" keeps the job the window shows, after the same checks as a start, and "Queue (N)..." lists the jobs in
+the order they run, each by its output. "Start the queue" runs them one after the other, "Take out" and "Empty the
+queue" take jobs out, and "Add a folder..." makes a job for each video file of a folder (TS, M2TS, MKV, WebM, MP4,
+MOV, MPEG and VOB files), each muxed with all its tracks to MKV, M2TS or TS, with the "Languages to take" of the
+General tab. The queue is kept on disk, so it is still there after the window was closed; a job that failed stays
+in it for another run. The jobs are run as a `--batch` of tsMuxeR (see "A list of jobs" below).
+
+The Output box shows the estimated size of the mux: the ticked tracks added up, with what the output adds around
+them, or "at most" where a track's size is not known.
+
 ### Preview in the GUI
 
-Set a player for previews on the General tab, or leave it empty for the system's default player. `{file}` in its arguments stands for what is played; without it, it comes last. A player can also be given for Blu-ray titles and one for DVD titles; left empty, they use the player above. Preview in Choose a title plays the title chosen, in its angle; a click on the clip of an angle under it plays that clip; Play in the context menu of the input list plays an item. A clip of a disc folder, or a file, is opened as it is. For a title, or a clip inside an image, tsMuxeR first makes a 30 second preview (from where the angles differ, or a tenth of the way in, at most 2 minutes) into a temporary folder, which is removed when the window closes. mpv opens a Blu-ray title directly in its angle (mpv 0.41 or later), VLC a DVD title in its first angle. A 3D title has no angle choice; its clip played directly shows the 2D base view.
+Set a player for previews on the General tab, or leave it empty for the system's default player. `{file}` in its arguments stands for what is played; without it, it comes last. A player can also be given for Blu-ray titles and one for DVD titles; left empty, they use the player above. Preview in Choose a title plays the title chosen, in its angle; a click on the clip of an angle under it plays that clip; Play in the context menu of the input list plays an item. A clip of a disc folder, or a file, is opened as it is. For a title, or a clip inside an image, tsMuxeR first makes a 30 second preview (from where the angles differ, or a tenth of the way in, at most 2 minutes) into a temporary folder, which is removed when the window closes. mpv opens a Blu-ray title directly in its angle (mpv 0.41 or later), VLC a DVD title in its first angle. A 3D title has no angle choice; its clip played directly shows the 2D base view. "Preview with its delay" in the menu of a sound track plays 30 seconds of the track with the video, as the mux would write them, so a delay can be checked by ear before the mux.
 
 ## Command Line
 
@@ -207,6 +219,8 @@ A demux writes DVD subtitles as `name.idx` and `name.sub`. Such a pair is read a
 A Blu-ray plays text subtitles (TextST) from clips of their own. The listing of a playlist gives each one with `Stream file:` and `Stream delay:`. The meta line names that clip, with the delay as `timeshift=`:
 `S_TEXT/UTF8, "BDMV/STREAM/00013.m2ts", track=6144, timeshift=-10000ms, lang=fra`
 The window does this by itself.
+
+A transport stream is also read with packets of 204 bytes (the 16 bytes after each packet are passed over), and without a PAT, as a cut of a recording can be: each PID that carries video, sound or private data is then a track, and its codec is found from its data.
 
 A folder that holds several disc folders or images, such as a box set copied disc by disc, given alone names them: `tsMuxeR D:/discs/box` prints each Blu-ray and DVD disc folder and image in it, to be listed with its own path.
 
@@ -402,13 +416,13 @@ V_VP8             | VP8 (read from MKV, WebM and .ivf files; MKV output, or demu
 V_VP9             | VP9 (read from MKV, WebM, MP4 and .ivf files; MKV output, or demuxed to an .ivf file)
 V_MPEG4/ISO/ASP   | MPEG-4 Part 2 video (read from MP4 and MOV; copied into MKV output only)
 V_PRORES          | Apple ProRes (read from MOV; copied into MKV output only)
-A_AC3             | AC3/AC3+/TRUE-HD 
+A_AC3             | AC3/AC3+/TRUE-HD. Also read from a WAV file that holds AC-3 frames, or AC-3 or E-AC-3 packed for a digital output (IEC 61937 bursts).
 A_AAC             | AAC. AAC in LATM from a transport stream is read and written as ADTS.
 A_DTS             | DTS/DTS-Express/DTS-HD 
 A_MP3             | MPEG audio layer 1/2/3 
-A_LPCM            | raw pcm data or PCM WAV file: 8, 16, 20, 24 or 32 bit integers, or 32 or 64 bit floating point. A disc and a TS carry 16, 20 or 24 bit, so 8 bit samples become 16 bit and 32 bit and floating point ones 24 bit there; a Matroska output and a demux keep the samples as they are. 
+A_LPCM            | raw pcm data or PCM WAV file: 8, 16, 20, 24 or 32 bit integers, or 32 or 64 bit floating point. A disc and a TS carry 16, 20 or 24 bit, so 8 bit samples become 16 bit and 32 bit and floating point ones 24 bit there; a Matroska output and a demux keep the samples as they are. A disc and a TS take 48, 96 and 192 kHz; a Matroska output and a demux take any sample rate, such as the 44.1 kHz of a CD. 
 A_FLAC            | FLAC (MKV and demux output only)
-A_OPUS            | Opus (also read from an Ogg file, .opus or .ogg; TS, MKV, and demux output only)
+A_OPUS            | Opus (also read from an Ogg file, .opus or .ogg, and from a transport stream; TS, MKV, and demux output only)
 A_VORBIS          | Vorbis (read from MKV, WebM, MP4 and Ogg; MKV output, or demuxed to an .ogg file)
 A_ALAC            | Apple Lossless (read from MKV and MP4; MKV output only)
 A_WAVPACK4        | WavPack (read from MKV and from .wv files; MKV output, or demuxed to .wv). Hybrid WavPack: the correction part (from the MKV, or the .wvc file beside the .wv) is kept in a Matroska output; a demux writes the lossy part only.
