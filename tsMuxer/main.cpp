@@ -216,6 +216,12 @@ static std::string metaFromSource(const std::string& source, const std::string& 
                                              << "sound track is taken.");
     for (const CheckStreamRez& stream : listing.streams)
     {
+        if (!stream.codecInfo.programName.empty() && stream.unused)
+        {
+            LTRACE(LT_INFO, 2,
+                   "Track " << stream.trackID << " of the clip is left out: the playlist does not play it.");
+            continue;
+        }
         if (stream.codecInfo.programName.empty() || stream.unused)
         {
             LTRACE(LT_INFO, 2, "Track " << stream.trackID << " of the source is left out: tsMuxeR does not read it.");
@@ -714,6 +720,35 @@ static void describeAsChosenClip(vector<CheckStreamRez>& streams, const string& 
 // The languages of a DVD title listed with --show-title, by track: the IFO files give them, and the VOB files do not
 static std::map<int, std::string> dvdTitleLanguages;
 
+// What a playlist says of a track of its clips: that it is a secondary one, its language, and whether the playlist
+// plays the track at all (unused, "Unselected" in the listing). True when the language was taken from the playlist
+// where the clip says another; clipLang is then what the clip says.
+//
+// A disc says what language a stream is in TWICE, in the playlist and in the clip's CLPI, and a re-authored disc can
+// have the two disagree. The language came from the CLPI alone, so such a disc was reported in the language the clip
+// was originally in rather than the one the playlist offers.
+//
+// The playlist wins here, because it is what a player presents to the viewer and what the disc's own navigation
+// uses. A bare .m2ts opened on its own has no playlist, so nothing changes there: the CLPI is still the only source.
+static bool describeByPlaylist(CheckStreamRez& stream, MPLSParser& mpls, std::string& clipLang)
+{
+    const MPLSStreamInfo mplsStreamInfo = mpls.getStreamByPID(stream.trackID);
+    if (!mplsStreamInfo.streamPID)
+    {
+        if (!(stream.codecInfo.codecID == CODEC_V_MPEG4_H264_DEP && mpls.isDependStreamExist))
+            stream.unused = true;
+        return false;
+    }
+    if (mplsStreamInfo.isSecondary)
+        stream.isSecondary = true;
+    const std::string mplsLang = applyLangCodeStyle(mplsStreamInfo.language_code);
+    if (!isLanguageCode(mplsLang) || mplsLang == "und" || mplsLang == stream.lang)
+        return false;
+    clipLang = stream.lang;
+    stream.lang = mplsLang;
+    return true;
+}
+
 // The tracks of a playlist given as the source of a mux: those of its first clip and what its later clips add, in
 // the order of the playlist, as the listing of the playlist has them
 static DetectStreamRez listingOfPlaylist(const std::string& playlist)
@@ -733,8 +768,11 @@ static DetectStreamRez listingOfPlaylist(const std::string& playlist)
     const std::string ssifExt = shortExt ? ".SIF" : ".ssif";
     const auto mediaOf = [&](const std::string& name)
     {
-        const string media = streamDir + name + mediaExt;
-        return fileExists(media) ? media : streamDir + string("SSIF") + getDirSeparator() + name + ssifExt;
+        const string media = METADemuxer::clipNameAsOnDisc(streamDir + name + ".", shortExt ? "mts" : "m2ts");
+        return fileExists(media)
+                   ? media
+                   : METADemuxer::clipNameAsOnDisc(streamDir + string("SSIF") + getDirSeparator() + name + ".",
+                                                   shortExt ? "sif" : "ssif");
     };
     const string first = mediaOf(mplsParser.m_playItems[0].fileName);
     if (!fileExists(first))
@@ -749,14 +787,19 @@ static DetectStreamRez listingOfPlaylist(const std::string& playlist)
         const string media = mediaOf(name);
         if (!fileExists(media))
             continue;
-        laterClips.push_back(
-            {media, clipInfoDir + name + (shortExt ? ".CPI" : ".clpi"), i == mplsParser.chosenStnItem()});
+        laterClips.push_back({media, METADemuxer::clipNameAsOnDisc(clipInfoDir + name + ".", shortExt ? "cpi" : "clpi"),
+                              i == mplsParser.chosenStnItem()});
         laterFiles.push_back(media);
     }
     DetectStreamRez listing = METADemuxer::DetectStreamReader(readManager, first, false, laterFiles);
     if (!laterClips.empty())
         addTracksFromLaterClips(listing.streams, mplsParser, first, laterClips);
     orderAsPlaylist(listing.streams, mplsParser);
+    // what the playlist says of each track, as the listing takes it: its language, a secondary track, and a track of
+    // the clip that the playlist does not play, which is left out
+    for (CheckStreamRez& stream : listing.streams)
+        if (std::string clipLang; stream.codecInfo.codecID)
+            describeByPlaylist(stream, mplsParser, clipLang);
     return listing;
 }
 
@@ -826,34 +869,13 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
         {
             if (mplsParser)
             {
-                MPLSStreamInfo mplsStreamInfo = mplsParser->getStreamByPID(streams[i].trackID);
-                if (mplsStreamInfo.streamPID)
-                {
-                    if (mplsStreamInfo.isSecondary)
-                        streams[i].isSecondary = true;
-                    // A disc says what language a stream is in TWICE, in the playlist and in the
-                    // clip's CLPI, and a re-authored disc can have the two disagree. The language
-                    // came from the CLPI alone, so such a disc was reported in the language the
-                    // clip was originally in rather than the one the playlist offers.
-                    //
-                    // The playlist wins here, because it is what a player presents to the viewer
-                    // and what the disc's own navigation uses. A bare .m2ts opened on its own has
-                    // no playlist, so nothing changes there: the CLPI is still the only source.
-                    const std::string mplsLang = applyLangCodeStyle(mplsStreamInfo.language_code);
-                    if (isLanguageCode(mplsLang) && mplsLang != "und" && mplsLang != streams[i].lang)
-                    {
-                        LTRACE(LT_INFO, 2,
-                               "Language for track " << streams[i].trackID << " taken from the playlist, " << mplsLang
-                                                     << ", where the clip says "
-                                                     << (streams[i].lang.empty() ? "nothing" : streams[i].lang));
-                        streams[i].lang = mplsLang;
-                    }
-                }
-                else
-                {
-                    if (!(streams[i].codecInfo.codecID == CODEC_V_MPEG4_H264_DEP && mplsParser->isDependStreamExist))
-                        streams[i].unused = true;
-                }
+                // the language, a secondary track, a track the playlist does not play (describeByPlaylist)
+                std::string clipLang;
+                if (describeByPlaylist(streams[i], *mplsParser, clipLang))
+                    LTRACE(LT_INFO, 2,
+                           "Language for track " << streams[i].trackID << " taken from the playlist, "
+                                                 << streams[i].lang << ", where the clip says "
+                                                 << (clipLang.empty() ? "nothing" : clipLang));
             }
 
             if (const auto dvd = dvdTitleLanguages.find(streams[i].trackID);
