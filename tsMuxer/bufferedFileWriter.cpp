@@ -32,12 +32,27 @@ BufferedFileWriter::BufferedFileWriter() : m_terminated(false), m_writeQueue(WRI
     run(this);
 }
 
+// ** A JOB THAT IS STOPPED DOES NOT WRITE WHAT IS STILL WAITING. ** Up to 256 MB wait here to be written, and a job
+// that was stopped (Ctrl+C, a request to end, its console window closed) wrote all of it before it removed the
+// output it had written it to. On a busy machine that took longer than the 5 seconds Windows gives a program whose
+// window is closed: the program was ended in the middle, and the unfinished output stayed. The blocks that wait are
+// let go; the files are still closed, so that they can be removed.
+static bool letGo(const WriterData& data)
+{
+    return stopSignal() != 0 && data.m_command == WriterData::Commands::wdWrite;
+}
+
 BufferedFileWriter::~BufferedFileWriter()
 {
     terminate();
     while (!m_writeQueue.empty())
     {
         WriterData writerData = m_writeQueue.pop();
+        if (letGo(writerData))
+        {
+            delete[] writerData.m_buffer;
+            continue;
+        }
         try
         {
             writerData.execute();  // RAII frees the buffer even if the write fails
@@ -63,7 +78,9 @@ void BufferedFileWriter::thread_main()
     while (!m_terminated)
     {
         WriterData writerData = m_writeQueue.peek();
-        if (m_lastErrorCode.load() == 0)
+        if (letGo(writerData))
+            delete[] writerData.m_buffer;
+        else if (m_lastErrorCode.load() == 0)
         {
             try
             {
