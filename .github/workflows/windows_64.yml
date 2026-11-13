@@ -321,6 +321,131 @@ jobs:
         retention-days: 30
       name: upload-artifact
 
+    # ** THE STAND-ALONE PACKAGE. ** A second package of the two programs alone: tsMuxeR.exe and tsMuxerGUI.exe, each
+    # one file with no libraries beside it, as tsMuxeR was shipped for years. Qt is built once more, as a static
+    # library, from the same sources as above, and both programs are linked with the C runtime inside them. Qt's part
+    # for Windows 8 and newer (WinRT) is left out of that build, so nothing of it is in the program and it starts on
+    # Windows 7; the package above gets there by taking Qt's files from a build made for Windows 7. The library that
+    # draws ASS subtitles is a set of files of its own and is not in this package: such subtitles are drawn in the
+    # simpler way there.
+    - name: Cache static Qt6 (stand-alone package)
+      id: cache-qt6-static
+      uses: actions/cache@v6
+      with:
+        path: ${{ runner.temp }}\qt6-static-install
+        key: qt6-static-windows7-x64-6.8.3-s1
+
+    - name: Build static Qt6 (stand-alone package)
+      if: steps.cache-qt6-static.outputs.cache-hit != 'true'
+      run: |
+        $ErrorActionPreference = "Stop"
+        $SRC = "${{ runner.temp }}\qt6-static-src"
+        $BUILD = "${{ runner.temp }}\qt6-static-build"
+        $INSTALL = "${{ runner.temp }}\qt6-static-install"
+        $work = "${{ runner.temp }}\qt6-static-dl"
+        New-Item -ItemType Directory -Force $work | Out-Null
+        Invoke-WebRequest -Uri "https://github.com/qt/qtbase/archive/refs/tags/v6.8.3.zip" -OutFile "$work\qtbase.zip"
+        Invoke-WebRequest -Uri "https://github.com/crystalidea/qt6windows7/archive/refs/tags/v6.8.3.zip" -OutFile "$work\patches.zip"
+        Expand-Archive -Path "$work\qtbase.zip" -DestinationPath $work -Force
+        Expand-Archive -Path "$work\patches.zip" -DestinationPath $work -Force
+        Move-Item "$work\qtbase-6.8.3" $SRC
+        Copy-Item -Path "$work\qt6windows7-6.8.3\qtbase\src\*" -Destination "$SRC\src" -Recurse -Force
+        New-Item -ItemType Directory -Force $BUILD | Out-Null
+        cd $BUILD
+        cmake "$SRC" `
+          -G Ninja `
+          -DCMAKE_INSTALL_PREFIX="$INSTALL" `
+          -DCMAKE_BUILD_TYPE=Release `
+          -DBUILD_SHARED_LIBS=OFF `
+          -DFEATURE_static_runtime=ON `
+          -DFEATURE_cpp_winrt=OFF `
+          -DQT_BUILD_EXAMPLES=OFF `
+          -DQT_BUILD_TESTS=OFF `
+          -DQT_BUILD_DOCUMENTATION=OFF `
+          -DFEATURE_tracepointgen=OFF `
+          -DFEATURE_sql_psql=OFF `
+          -DFEATURE_sql_mysql=OFF `
+          -DFEATURE_sql_odbc=OFF `
+          -DFEATURE_sql_sqlite=OFF
+        if ($LASTEXITCODE -ne 0) { throw "static Qt configure failed" }
+        cmake --build .
+        if ($LASTEXITCODE -ne 0) { throw "static Qt build failed" }
+        cmake --install .
+        if ($LASTEXITCODE -ne 0) { throw "static Qt install failed" }
+
+    - name: Build the stand-alone programs
+      run: |
+        $ErrorActionPreference = "Stop"
+        $QT_STATIC = "${{ runner.temp }}\qt6-static-install"
+        $QT_TOOLS = "${{ runner.temp }}\qt6-install"
+        $ZSRC = "${{ runner.temp }}\zlib-src"
+        $ZMT = "${{ runner.temp }}\zlib-install-mt"
+        # zlib once more, with the C runtime inside it as the programs have it
+        cmake -S "$ZSRC" -B "${{ runner.temp }}\zlib-build-mt" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$ZMT" -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+        if ($LASTEXITCODE -ne 0) { throw "zlib (static runtime) configure failed" }
+        cmake --build "${{ runner.temp }}\zlib-build-mt"
+        if ($LASTEXITCODE -ne 0) { throw "zlib (static runtime) build failed" }
+        cmake --install "${{ runner.temp }}\zlib-build-mt"
+        if ($LASTEXITCODE -ne 0) { throw "zlib (static runtime) install failed" }
+        # Qt's own texts (the standard buttons), made for the package above: they go inside the window
+        $QM = "${{ runner.temp }}\qtbase-qm"
+        New-Item -ItemType Directory -Force $QM | Out-Null
+        Copy-Item "bin\qtbase_*.qm" $QM -Force
+        mkdir build-standalone
+        cd build-standalone
+        cmake ../ `
+          -G Ninja `
+          -DCMAKE_PREFIX_PATH="$QT_STATIC" `
+          -DQt6LinguistTools_DIR="$QT_TOOLS\lib\cmake\Qt6LinguistTools" `
+          -DZLIB_INCLUDE_DIR="$ZMT\include" `
+          -DZLIB_LIBRARY="$ZMT\lib\zlibstatic.lib" `
+          -DTSMUXER_GUI=ON `
+          -DTSMUXER_QTBASE_QM_DIR="$QM" `
+          -DCMAKE_POLICY_DEFAULT_CMP0091=NEW `
+          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
+          -DCMAKE_BUILD_TYPE=Release
+        if ($LASTEXITCODE -ne 0) { throw "stand-alone configure failed" }
+        cmake --build .
+        if ($LASTEXITCODE -ne 0) { throw "stand-alone build failed" }
+        cd ..
+        New-Item -ItemType Directory -Force "bin-standalone" | Out-Null
+        Copy-Item "build-standalone/tsMuxer/tsmuxer.exe" "bin-standalone/tsMuxeR.exe" -Force
+        Copy-Item "build-standalone/tsMuxerGUI/tsmuxergui.exe" "bin-standalone/tsMuxerGUI.exe" -Force
+        Copy-Item "LICENSE" "bin-standalone/LICENSE" -Force
+        Copy-Item "NOTICE" "bin-standalone/NOTICE" -Force
+        Copy-Item "packaging/notices/Windows-standalone.txt" "bin-standalone/THIRD-PARTY-NOTICES.txt" -Force
+        New-Item -ItemType Directory -Force "bin-standalone/licenses" | Out-Null
+        Copy-Item "licenses/LGPL-3.0.txt","licenses/GPL-3.0.txt","licenses/zlib.txt" "bin-standalone/licenses/" -Force
+        # Each program is one file: nothing of Qt, of the C runtime or of Windows 8 and newer may be a library it
+        # needs. The names are looked for in the files themselves.
+        foreach ($exe in @("bin-standalone/tsMuxeR.exe", "bin-standalone/tsMuxerGUI.exe")) {
+          $ascii = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes((Resolve-Path $exe)))
+          foreach ($name in @("api-ms-win-core-winrt", "Qt6Core.dll", "Qt6Gui.dll", "Qt6Widgets.dll", "vcruntime140", "msvcp140", "api-ms-win-crt-")) {
+            if ($ascii.ToLower().Contains($name.ToLower())) { throw "Stand-alone check FAILED: $exe names $name." }
+          }
+        }
+        Write-Host "Stand-alone check passed: the two programs need no library of Qt, of the C runtime or of Windows 8."
+        & "bin-standalone/tsMuxeR.exe" --help | Select-Object -First 1
+        if ($LASTEXITCODE -ne 0) { throw "The stand-alone tsMuxeR.exe did not run." }
+        $ver = $env:GITHUB_REF_NAME -replace '^v',''
+        $asset = "tsMuxeR-$ver-windows-x64-standalone.zip"
+        Add-Content -Path $env:GITHUB_ENV -Value "ASSET_STANDALONE=$asset"
+        cd bin-standalone
+        7z a -y "$asset" *
+        cd ..
+        python scripts/check_package.py "bin-standalone/$asset"
+        if ($LASTEXITCODE -ne 0) { throw "The stand-alone package holds FFmpeg, GStreamer or Qt Multimedia, or lacks LICENSE or NOTICE." }
+        $hash = (Get-FileHash -Algorithm SHA256 "bin-standalone\$asset").Hash.ToLower()
+        [System.IO.File]::WriteAllText("$PWD\bin-standalone\$asset.sha256", "$hash  $asset`n")
+        Get-Content "bin-standalone\$asset.sha256"
+
+    - uses: actions/upload-artifact@v6
+      with:
+        name: tsMuxer-w64-standalone
+        path: bin-standalone/${{ env.ASSET_STANDALONE }}
+        retention-days: 30
+      name: upload-artifact (stand-alone)
+
     - name: Upload to Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v3
@@ -328,5 +453,7 @@ jobs:
         files: |
           bin/${{ env.ASSET }}
           bin/${{ env.ASSET }}.sha256
+          bin-standalone/${{ env.ASSET_STANDALONE }}
+          bin-standalone/${{ env.ASSET_STANDALONE }}.sha256
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

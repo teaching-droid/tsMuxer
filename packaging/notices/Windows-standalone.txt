@@ -1,0 +1,58 @@
+THIRD-PARTY NOTICES
+
+This package includes third-party software. The notices below are provided to
+comply with the licenses of that software. Full license texts are in the
+licenses/ folder.
+
+================================================================================
+Qt 6.8.3  (used by the graphical interface, tsMuxerGUI.exe)
+================================================================================
+
+The graphical interface uses the Qt framework version 6.8.3, licensed under the
+GNU Lesser General Public License version 3 (LGPLv3). The full LGPLv3 text, and
+the GNU General Public License version 3 that it incorporates by reference, are
+included:
+
+    licenses/LGPL-3.0.txt
+    licenses/GPL-3.0.txt
+
+Qt is a product of The Qt Company Ltd and the Qt Project contributors.
+
+Static linking / rebuilding with another Qt:
+    In this package the Qt libraries are linked into tsMuxerGUI.exe; there are no
+    Qt DLLs beside it. To use the program with a changed or another version of
+    Qt, build it again: the complete source of tsMuxerGUI.exe is in this
+    repository under the Apache License 2.0, and the steps that built this
+    package, with the configuration of Qt, are recorded in
+    .github/workflows/windows_64.yml (and windows_32.yml). The source of the Qt
+    used is named below. The package with Qt as separate DLLs, which can be
+    replaced without building, is published beside this one.
+
+Complete corresponding source of the (modified) Qt used here:
+    The Qt in this package is built from Qt 6.8.3 with the "qt6windows7" patches
+    that let it run on Windows 7. The complete corresponding source is the two
+    upstream repositories at these exact tags:
+
+        Qt base source:     https://github.com/qt/qtbase             tag v6.8.3
+        Windows 7 patches:  https://github.com/crystalidea/qt6windows7  tag v6.8.3
+
+    Together with the build configuration recorded in
+    .github/workflows/windows_64.yml (and windows_32.yml) in this repository,
+    these constitute the corresponding source of the Qt linked into the program.
+    If those upstream sources ever become unavailable, the maintainer will
+    provide the exact patched source and build configuration on request; open an
+    issue.
+
+Qt's own bundled third-party components:
+    Qt itself includes further third-party software, for example FreeType (under
+    the FreeType License), HarfBuzz, PCRE2, zlib and libpng. Their licenses are
+    listed at:
+        https://doc.qt.io/qt-6/licenses-used-in-qt.html
+
+================================================================================
+tsMuxeR
+================================================================================
+
+tsMuxeR (tsMuxeR.exe) and this fork are licensed under the Apache License 2.0;
+see the LICENSE file in this repository. tsMuxeR statically links zlib
+(https://zlib.net), used under the zlib license.
