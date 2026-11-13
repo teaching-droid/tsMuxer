@@ -229,7 +229,7 @@ int HevcDolbyVisionFilter::demuxPacket(DemuxedData& demuxedData, const PIDSet& a
                 const uint8_t* nalEnd = next;
                 if (next < dataEnd)
                     while (nalEnd > nal && nalEnd[-1] == 0) nalEnd--;
-                if (nalEnd - nal >= 3)
+                if (nalEnd - nal >= 2)
                     notePicture(nal, nalEnd, (nal[0] >> 1) & 0x3F);
                 nal = NALUnit::findNextNAL(next, dataEnd);
             }
@@ -352,49 +352,84 @@ void HevcDolbyVisionFilter::readHeader(Picture& picture) const
 {
     picture.parsed = true;
     picture.readable = false;
+    picture.refused = false;
     picture.lsb = 0;
+    picture.range = 1 << m_orderSps->log2_max_pic_order_cnt_lsb;
     // a slice that begins a picture without saying so has a header that is not that of a first slice
     if (!picture.firstSlice || picture.head.size() < 3)
         return;
     HevcSliceHeader slice;
     slice.decodeBuffer(picture.head.data(), picture.head.data() + picture.head.size());
-    if (slice.deserialize(m_orderSps.get(), m_orderPps.get()) != 0)
-        return;
-    picture.readable = true;
-    picture.lsb = static_cast<int>(slice.pic_order_cnt_lsb);
+    const int rez = slice.deserialize(m_orderSps.get(), m_orderPps.get());
+    if (rez == 0)
+    {
+        picture.readable = true;
+        picture.lsb = static_cast<int>(slice.pic_order_cnt_lsb);
+    }
+    else if (rez != UNIT_DAMAGED)
+        picture.refused = true;  // a value no stream has: the reader passes the slice on and begins no picture
 }
 
 bool HevcDolbyVisionFilter::notePicture(const uint8_t* nal, const uint8_t* nalEnd, const int nalType)
 {
+    // A damaged parameter set leaves the last whole one of its kind in use. Before the first whole one the reader
+    // has none of that kind left to read a slice with, and counts no picture until one comes: the layer has none
+    // for those pictures either.
+    const auto noteSet = [this](const int rez, const bool had, const unsigned kind)
+    {
+        if (rez != UNIT_DAMAGED)
+            m_lostSets &= ~kind;
+        else if (!had)
+            m_lostSets |= kind;
+    };
     if (nalType == static_cast<int>(HevcUnit::NalType::VPS))
-        m_orderVps = true;
+    {
+        HevcVpsUnit vps;
+        vps.decodeBuffer(nal, nalEnd);
+        const int rez = vps.deserialize();
+        noteSet(rez, m_orderVps, 1);
+        if (rez != UNIT_DAMAGED)
+            m_orderVps = true;
+    }
     else if (nalType == static_cast<int>(HevcUnit::NalType::SPS))
     {
         auto sps = std::make_unique<HevcSpsUnit>();
         sps->decodeBuffer(nal, nalEnd);
-        if (sps->deserialize() == 0)
+        const int rez = sps->deserialize();
+        noteSet(rez, m_orderSps != nullptr, 2);
+        if (rez == 0)
             m_orderSps = std::move(sps);
     }
     else if (nalType == static_cast<int>(HevcUnit::NalType::PPS))
     {
         auto pps = std::make_unique<HevcPpsUnit>();
         pps->decodeBuffer(nal, nalEnd);
-        if (pps->deserialize() == 0)
+        const int rez = pps->deserialize();
+        noteSet(rez, m_orderPps != nullptr, 4);
+        if (rez == 0)
             m_orderPps = std::move(pps);
     }
     // a slice, and what may follow the slices of a picture, as the HEVC reader has them (isSlice, isSuffix)
     const bool slice = nalType <= 9 || (nalType >= 16 && nalType <= 23);
     const bool suffix = nalType == 38 || nalType == 40 || (nalType >= 45 && nalType <= 47) || nalType >= 56;
-    if (!slice)
+    if (!slice || m_lostSets != 0 || nalEnd - nal < 3)
     {
-        if (!suffix)
-            m_auOpen = true;
+        if (!suffix || m_lostSets != 0)
+        {
+            m_auOpen = true;  // something of the next picture
+            m_currentQueued = false;
+        }
         return false;
     }
     const bool firstSlice = (nal[2] & 0x80) != 0;
     if (!firstSlice && !m_auOpen)
+    {
+        if (m_currentQueued && !m_queue.empty())
+            m_queue.back().moreSlices = true;
         return false;  // a further slice of the picture
+    }
     m_auOpen = false;
+    m_currentQueued = false;
     ++m_basePictures;
     if (m_queue.size() >= MAX_QUEUED)
     {
@@ -409,6 +444,7 @@ bool HevcDolbyVisionFilter::notePicture(const uint8_t* nal, const uint8_t* nalEn
     if (m_orderVps && m_orderSps != nullptr && m_orderPps != nullptr)
         readHeader(picture);
     m_queue.push_back(std::move(picture));
+    m_currentQueued = true;
     return true;
 }
 
@@ -439,7 +475,23 @@ void HevcDolbyVisionFilter::slotQueued(const bool last)
         for (Picture& queued : m_queue)
             if (!queued.parsed)
                 readHeader(queued);
-        const int range = 1 << m_orderSps->log2_max_pic_order_cnt_lsb;
+        // A first slice the reader does not take: it begins the picture at the next slice, which has no order of its
+        // own to read, and a picture of that one slice is no picture to it
+        if (m_queue.front().refused)
+        {
+            Picture& refused = m_queue.front();
+            if (!refused.moreSlices)
+            {
+                --m_basePictures;
+                if (!refused.rpu.empty())
+                    ++m_rpuWithoutPicture;
+                m_queue.pop_front();
+                continue;
+            }
+            refused.refused = false;
+            refused.firstSlice = false;
+        }
+        const int range = m_queue.front().range;
         // the difference of two order counts as their lower parts give it, to half the room either way
         const auto apart = [range](const int lsb, const int from)
         {
@@ -515,11 +567,12 @@ void HevcDolbyVisionFilter::slotQueued(const bool last)
             const int lsb = idr ? 0 : picture.lsb;
             if (idr || bla || !m_started)
             {
-                // a period begins at the first free slot: one past the highest given (the count of the pictures
-                // moves on to it where pictures are missing before it)
+                // A period begins at the count of the pictures, less those shown before the start, and never at
+                // a slot already given: the count moves on to the first free slot where pictures are missing
+                // (HEVCStreamReader::periodStart)
                 if (m_started && m_maxSlot + 1 > m_frameNum)
                     m_frameNum = m_maxSlot + 1;
-                const int64_t start = m_started ? m_maxSlot + 1 : m_frameNum;
+                const int64_t start = m_started ? (std::max)(m_maxSlot + 1, m_frameNum - m_leading) : m_frameNum;
                 int64_t leading = !m_started && type < 16 ? firstLeading : 0;
                 if (m_started && (idr || bla))
                     leading = restartLeading;
@@ -621,7 +674,8 @@ int HevcDolbyVisionFilter::demuxMade(DemuxedData& demuxedData, AVPacket& avPacke
     // ** AN RPU WITHOUT A PICTURE GOES NOWHERE. ** An RPU follows the slices of its picture. One in front of the
     // first picture of a packet (the end of a picture whose beginning a recording does not have) made a picture of
     // the layer of its own: one picture too many, and every RPU after it one picture late.
-    bool pictureOpen = false;  // a picture began in this packet, and nothing of a next one has come
+    // m_currentQueued: a picture began in this packet, is in the queue, and nothing of a next one has come
+    m_currentQueued = false;
     for (uint8_t* curNal = NALUnit::findNextNAL(avPacket.data, dataEnd); curNal < dataEnd;)
     {
         uint8_t* nextNal = NALUnit::findNALWithStartCode(curNal, dataEnd, true);
@@ -631,14 +685,7 @@ int HevcDolbyVisionFilter::demuxMade(DemuxedData& demuxedData, AVPacket& avPacke
         if (nalEnd - curNal >= 2)
         {
             const int nalType = (curNal[0] >> 1) & 0x3F;
-            if (nalEnd - curNal >= 3)
-            {
-                const bool auWasOpen = m_auOpen;
-                if (notePicture(curNal, nalEnd, nalType))
-                    pictureOpen = true;
-                else if (m_auOpen && !auWasOpen)
-                    pictureOpen = false;  // something of the next picture
-            }
+            notePicture(curNal, nalEnd, nalType);
             if (nalType == static_cast<int>(HevcUnit::NalType::DVRPU))
             {
                 // The last NAL of a packet can have zero bytes behind it (a transport stream may fill with them);
@@ -661,7 +708,7 @@ int HevcDolbyVisionFilter::demuxMade(DemuxedData& demuxedData, AVPacket& avPacke
                     rpu.clear();
                 }
                 ++m_rpu;
-                if (pictureOpen && !m_queue.empty())
+                if (m_currentQueued && !m_queue.empty())
                     m_queue.back().rpu = std::move(rpu);
                 else
                     ++m_rpuWithoutPicture;
@@ -737,6 +784,6 @@ void HevcDolbyVisionFilter::flush(DemuxedData& demuxedData, const PIDSet& accept
         LTRACE(LT_WARN, 2,
                "Warning: the order of the track's pictures jumps over more than 600 pictures at "
                    << m_gaps << (m_gaps == 1 ? " place" : " places")
-                   << ". If pictures are missing there, the Dolby Vision data of the second layer is out of step "
-                      "with the picture after such a place.");
+                   << ". The second layer has no pictures for such a jump, so its Dolby Vision data is out of "
+                      "step with the picture from there on.");
 }

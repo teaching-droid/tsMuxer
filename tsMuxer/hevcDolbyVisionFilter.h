@@ -171,7 +171,10 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
         bool firstSlice = false;  // the slice says it is the first of its picture
         bool parsed = false;      // readable and lsb are set (the parameter sets were there)
         bool readable = false;    // its slice header was read
+        bool refused = false;     // its first slice is one the reader does not take: the picture begins at the next
+        bool moreSlices = false;  // it has more slices than its first
         int lsb = 0;              // the part of the picture order count the slice header carries
+        int range = 0;            // the room of that part, by the SPS the header was read with
         std::vector<uint8_t> rpu;
     };
     std::deque<Picture> m_queue;  // the pictures not yet given a slot, in the order they came
@@ -188,7 +191,11 @@ class HevcDolbyVisionFilter final : public SubTrackFilter
     std::unique_ptr<HevcSpsUnit> m_orderSps;  // the parameter sets the slice headers are read with: the last of each
     std::unique_ptr<HevcPpsUnit> m_orderPps;
     bool m_orderVps = false;  // a VPS was met
-    bool m_auOpen = true;     // the next slice begins a picture whatever it says (see above)
+    // The kinds of parameter set (VPS 1, SPS 2, PPS 4) of which a damaged one came before any whole one: the reader
+    // has none of that kind then, and counts no picture until a whole one comes (keepLastGoodUnit)
+    unsigned m_lostSets = 0;
+    bool m_auOpen = true;          // the next slice begins a picture whatever it says (see above)
+    bool m_currentQueued = false;  // the picture whose units are coming is the last of the queue
     // the reader's state, as toFullPicOrder and incTimings keep it
     bool m_started = false;
     int64_t m_frameNum = 0;                 // the pictures so far, with the slots a period was moved on by
