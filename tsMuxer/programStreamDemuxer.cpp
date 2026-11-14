@@ -2,6 +2,8 @@
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "programStreamDemuxer.h"
 
+#include <algorithm>
+
 #include <fs/systemlog.h>
 
 #include <numeric>
@@ -26,9 +28,11 @@ static constexpr int LPCM_FREQS[4] = {48000, 96000, 44100, 32000};
 // is not where it starts, and a short packet at the end stopped the read with "Invalid copyLen".
 // Returns the length of an MPEG-1 packet header, with its PTS (-1 without one); 0 when the packet has none, and -1 when
 // the header goes on past end.
-static int mpeg1PacketHeader(const uint8_t* buff, const uint8_t* end, int64_t& pts)
+static int mpeg1PacketHeader(const uint8_t* buff, const uint8_t* end, int64_t& pts, int64_t* dts = nullptr)
 {
     pts = -1;
+    if (dts)
+        *dts = -1;
     if (buff[3] == PES_PRIVATE_DATA2 || (buff[6] & 0xc0) == 0x80)
         return 0;
     const int64_t avail = end - buff;
@@ -65,6 +69,10 @@ static int mpeg1PacketHeader(const uint8_t* buff, const uint8_t* end, int64_t& p
         return h;
     if (fieldLen > 1)
         pts = get_pts(buff + pos);
+    // the decoding time of a picture that is reordered: a B picture's PTS is lower than the one before it, which a
+    // test of the decoding times took for a new part of the file at every group of pictures
+    if (dts)
+        *dts = fieldLen == 10 ? get_pts(buff + pos + 5) : pts;
     return pos + fieldLen;
 }
 
@@ -344,44 +352,104 @@ void ProgramStreamDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
     }
 }
 
-// For trackStartTicks: the first PTS of each track, and the earliest picture of the video from its first PES with a
-// sequence header (MPEG-1/2 00 00 01 B3, VC-1 00 00 01 0F, H.264 an SPS, HEVC an SPS), in the first part of the file
-void ProgramStreamDemuxer::noteStart(const int pid, const int64_t pts, const uint8_t* payload, const int len)
+// For trackStartTicks, from every PES with or without a PTS (also those not demuxed): the first PTS of each track,
+// and of the first video stream the earliest picture from its first sequence header (MPEG-1/2 00 00 01 B3, VC-1
+// 00 00 01 0F, an SPS of H.264, HEVC or VVC), found also where it is split between two PES or comes in a PES without a
+// PTS (then the next picture with one is the base). HEVC is timed from that picture, the pictures shown before it are
+// left out by the decoder (as tsTrackStart does). The first part of the file ends where the decoding time of that
+// video steps back more than half a second or on more than two (the clock starts again); its 33-bit turn is no step.
+void ProgramStreamDemuxer::noteStart(const int pid, const bool hasPts, const int64_t pts, const int64_t dts,
+                                     const uint8_t* payload, const int len)
 {
-    if (m_parts > 0)
-        return;  // the clock jumped: a later part of the file
-    if (!isVideoPID(pid))
-    {
-        m_startTrackPts.emplace(pid, pts);
+    if (m_startEnded)
         return;
+    const bool video = isVideoPID(pid) || (pid > 0xff && isVideoPID(pid & 0xff));
+    if (!video)
+    {
+        if (hasPts)
+            m_startTrackPts.emplace(pid, pts);
+        return;
+    }
+    if (m_startVideoPid < 0)
+        m_startVideoPid = pid;
+    if (pid != m_startVideoPid)
+        return;
+    if (hasPts)
+    {
+        if (m_startLastDts >= 0)
+        {
+            const int64_t step = wrapped(dts - m_startLastDts);
+            if (step < -45000 || step > 180000)
+            {
+                m_startEnded = true;
+                return;
+            }
+        }
+        m_startLastDts = dts;
     }
     if (m_startVideoBase < 0)
     {
-        const int type = m_psm_es_type[pid & 0xff];
-        bool sequence = false;
-        for (int i = 0; i + 4 <= len && !sequence; ++i)
+        scanStart(pid, payload, len);
+        if (m_startSequenceSeen && hasPts)
         {
-            if (payload[i] != 0 || payload[i + 1] != 0 || payload[i + 2] != 1)
-                continue;
-            const uint8_t code = payload[i + 3];
-            if (type == static_cast<int>(StreamType::VIDEO_H264) || type == static_cast<int>(StreamType::VIDEO_MVC))
-                sequence = (code & 0x1f) == 7;
-            else if (type == static_cast<int>(StreamType::VIDEO_H265))
-                sequence = ((code >> 1) & 0x3f) == 33;
-            else if (type == static_cast<int>(StreamType::VIDEO_H266))
-                sequence = i + 5 <= len && ((payload[i + 4] >> 3) & 0x1f) == 15;
-            else if (pid >= 0x55 && pid <= 0x5f)
-                sequence = code == 0x0f;
-            else
-                sequence = code == 0xb3;
+            m_startVideoBase = pts;
+            m_startVideoMin = 0;
         }
-        if (!sequence)
-            return;
-        m_startVideoBase = pts;
-        m_startVideoMin = 0;
         return;
     }
-    m_startVideoMin = (std::min)(m_startVideoMin, wrapped(pts - m_startVideoBase));
+    const int type = m_psm_es_type[pid & 0xff];
+    if (hasPts && type != static_cast<int>(StreamType::VIDEO_H265))
+        m_startVideoMin = (std::min)(m_startVideoMin, wrapped(pts - m_startVideoBase));
+}
+
+// The bytes of the first video stream until its first sequence header, across PES (m_startScan holds the last bytes)
+void ProgramStreamDemuxer::scanStart(const int pid, const uint8_t* data, const int len)
+{
+    if (m_startSequenceSeen || m_startVideoBase >= 0 || pid != m_startVideoPid)
+        return;
+    const int type = m_psm_es_type[pid & 0xff];
+    const bool vc1 = pid > 0xff || (pid >= 0x55 && pid <= 0x5f);
+    for (int i = 0; i < len && !m_startSequenceSeen; ++i)
+    {
+        m_startScan = (m_startScan << 8 | data[i]) & 0xffffffffffULL;
+        if (m_startH264Sps)
+        {
+            m_startH264Sps = false;
+            static constexpr uint8_t PROFILES[] = {66, 77, 88,  100, 110, 122, 244, 44,
+                                                   83, 86, 118, 128, 138, 139, 134, 135};
+            if (std::find(std::begin(PROFILES), std::end(PROFILES), data[i]) != std::end(PROFILES))
+            {
+                m_startSequenceSeen = true;
+                break;
+            }
+        }
+        // the start code prefix 00 00 01, then one byte (or two, for VVC)
+        const bool one = (m_startScan & 0xffffff00ULL) == 0x00000100ULL;
+        const auto code = static_cast<uint8_t>(m_startScan & 0xff);
+        if (type == static_cast<int>(StreamType::VIDEO_H266))
+            m_startSequenceSeen = (m_startScan & 0xffffff0000ULL) == 0x0000010000ULL && ((code >> 3) & 0x1f) == 15;
+        else if (!one)
+            continue;
+        else if (type == static_cast<int>(StreamType::VIDEO_H264) || type == static_cast<int>(StreamType::VIDEO_MVC))
+            m_startSequenceSeen = (code & 0x1f) == 7;
+        else if (type == static_cast<int>(StreamType::VIDEO_H265))
+            m_startSequenceSeen = ((code >> 1) & 0x3f) == 33;
+        else if (vc1)
+            m_startSequenceSeen = code == 0x0f;
+        else if (type == 0)
+        {
+            // No stream map names the codec: MPEG-1/2 (a picture start code 00 00 01 00, which H.264 has not) or
+            // H.264 (an SPS, nal_ref_idc not 0, whose next byte is a profile H.264 has), told apart here
+            if (code == 0x00)
+                m_startMpeg2Seen = true;
+            m_startSequenceSeen = code == 0xb3;
+            if (!m_startMpeg2Seen && (code == 0x67 || code == 0x47 || code == 0x27))
+                m_startH264Sps = true;  // decided with the next byte
+            continue;
+        }
+        else
+            m_startSequenceSeen = code == 0xb3;
+    }
 }
 
 bool ProgramStreamDemuxer::isVideoPID(const uint32_t pid) const
@@ -432,6 +500,8 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
     if (m_lastPesLen > 0)
     {
         const int copyLen = FFMIN(readedBytes, m_lastPesLen);
+        if (m_startCutPid >= 0)
+            scanStart(m_startCutPid, curBuf, copyLen);
         if (m_lastPID >= 0x20 && m_lastPID <= 0x3f)
         {
             addSubPicture(m_lastPID, curBuf, copyLen, -1, demuxedData[m_lastPID]);
@@ -478,7 +548,8 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
             (startcode == PES_PRIVATE_DATA2))
         {
             int64_t mpeg1Pts;
-            const int mpeg1HeaderLen = mpeg1PacketHeader(curBuf, end, mpeg1Pts);
+            int64_t mpeg1Dts;
+            const int mpeg1HeaderLen = mpeg1PacketHeader(curBuf, end, mpeg1Pts, &mpeg1Dts);
             const int headerLen = mpeg1HeaderLen > 0 ? mpeg1HeaderLen : pesPacket->getHeaderLength();
             // The header of a sub-stream of private stream 1 is read with the PES header: 4 bytes of it at most, but 7
             // for LPCM. An LPCM header cut by the end of a read, in packs not of 2048 bytes, ended the job with
@@ -499,8 +570,9 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
                 if (hasPts)
                 {
                     const int64_t pts = mpeg1HeaderLen > 0 ? mpeg1Pts : pesPacket->getPts();
-                    noteVideoTime(
-                        pts, mpeg1HeaderLen == 0 && (pesPacket->flagsLo & 0xc0) == 0xc0 ? pesPacket->getDts() : pts);
+                    noteVideoTime(pts, mpeg1HeaderLen > 0                    ? mpeg1Dts
+                                       : (pesPacket->flagsLo & 0xc0) == 0xc0 ? pesPacket->getDts()
+                                                                             : pts);
                 }
                 const uint8_t* p = curBuf + headerLen + afterPesHeader;
                 const int len = pesPacket->getPacketLength() - headerLen - afterPesHeader;
@@ -511,6 +583,19 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
                     releaseSubPictures(demuxedData, false);
                 }
                 m_lastPesVideo = have < len;
+            }
+            {
+                const uint8_t* payloadStart = curBuf + headerLen + afterPesHeader;
+                const int64_t length = pesPacket->getPacketLength() - headerLen - afterPesHeader;
+                const int64_t ptsOf = !hasPts ? -1 : mpeg1HeaderLen > 0 ? mpeg1Pts : pesPacket->getPts();
+                const int64_t dtsOf = !hasPts                               ? -1
+                                      : mpeg1HeaderLen > 0                  ? mpeg1Dts
+                                      : (pesPacket->flagsLo & 0xc0) == 0xc0 ? pesPacket->getDts()
+                                                                            : ptsOf;
+                noteStart(startcode, hasPts, ptsOf, dtsOf, payloadStart,
+                          static_cast<int>(
+                              (std::max)(int64_t{0}, (std::min)(length, static_cast<int64_t>(end - payloadStart)))));
+                m_startCutPid = length > end - payloadStart ? startcode : -1;
             }
             const bool subPicture = startcode >= 0x20 && startcode <= 0x3f;
             if (subPicture && acceptedPIDs.find(startcode) != acceptedPIDs.end())
@@ -546,11 +631,6 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
                         m_firstVideoPTS = curPts;
                     if (m_firstPtsTime.find(startcode) == m_firstPtsTime.end() || curPts < m_firstPtsTime[startcode])
                         m_firstPtsTime[startcode] = curPts;
-                    const uint8_t* payloadStart = curBuf + headerLen + afterPesHeader;
-                    noteStart(startcode, curPts, payloadStart,
-                              static_cast<int>((std::min)(
-                                  static_cast<int64_t>(pesPacket->getPacketLength() - headerLen - afterPesHeader),
-                                  static_cast<int64_t>(end - payloadStart))));
                 }
 
                 StreamData& vect = demuxedData[startcode];
@@ -648,7 +728,7 @@ void ProgramStreamDemuxer::noteVideoTime(const int64_t pts, const int64_t dts)
     // is decoded no later than the one before, or a second after it, begins a new part, the next file of a join or
     // the clock of the VOB starting again (a title of the disc parted at a break of its clock, dvdTitleSource). The
     // part before is as long as the fields its pictures show.
-    if (m_lastDts >= 0 && (dts <= m_lastDts || dts > m_lastDts + 90000))
+    if (m_lastDts >= 0 && (wrapped(dts - m_lastDts) <= 0 || wrapped(dts - m_lastDts) > 90000))
     {
         const double length = static_cast<double>(m_segFields) * m_frameTicks / 2;
         LTRACE(LT_DEBUG, 0,

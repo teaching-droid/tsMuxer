@@ -62,6 +62,14 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
     }
     // A sequence header was found in the video read so far (else trackStartTicks counts every video PES)
     [[nodiscard]] bool videoStartSeen() const { return m_startVideoBase >= 0; }
+    // The PTS of the first picture the mux keeps (trackStartTicks), on the 33-bit clock; false where not known
+    [[nodiscard]] bool videoReference(int64_t& pts) const
+    {
+        if (m_startVideoBase < 0)
+            return false;
+        pts = ((m_startVideoBase + m_startVideoMin) % (1LL << 33) + (1LL << 33)) % (1LL << 33);
+        return true;
+    }
 
    private:
     uint32_t m_tmpBufferLen;
@@ -84,13 +92,22 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
     int64_t m_startVideoBase = -1;
     int64_t m_startVideoMin = 0;
     std::map<int, int64_t> m_startTrackPts;
+    int m_startVideoPid = -1;          // the video stream the start is measured on: the first one
+    int64_t m_startLastDts = -1;       // its last decoding time, for a clock that starts again
+    bool m_startEnded = false;         // the first part of the file has ended
+    bool m_startSequenceSeen = false;  // its first sequence header has come (the base: this or the next PTS)
+    uint64_t m_startScan = 0;          // the last bytes of the scan for it, across PES
+    int m_startCutPid = -1;            // the stream of a PES cut by the end of a read
+    bool m_startMpeg2Seen = false;     // without a stream map: a picture start code of MPEG-1/2 came
+    bool m_startH264Sps = false;       // without a stream map: an SPS byte of H.264, its profile next
     static int64_t wrapped(const int64_t d)
     {
         constexpr int64_t TURN = 1LL << 33;
         int64_t r = ((d % TURN) + TURN) % TURN;
         return r >= TURN / 2 ? r - TURN : r;
     }
-    void noteStart(int pid, int64_t pts, const uint8_t* payload, int len);
+    void noteStart(int pid, bool hasPts, int64_t pts, int64_t dts, const uint8_t* payload, int len);
+    void scanStart(int pid, const uint8_t* data, int len);
     MemoryBlock m_lpcmWaveHeader[16];
     bool m_lpcpHeaderAdded[16];
     // ** DVD LPCM IS TURNED ROUND AS IT IS HANDED ON. ** The big endian samples of sub-streams 0xA0 to 0xAF go on as a

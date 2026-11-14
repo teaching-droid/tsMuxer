@@ -233,7 +233,7 @@ static int64_t tsTrackStart(const BufferedReaderManager& readManager, const std:
 // delay; ProgramStreamDemuxer::trackStartTicks), read until both are known and a few megabytes further, as the
 // pictures shown before the first one come after it.
 static int64_t psTrackStart(const BufferedReaderManager& readManager, const std::string& fileName, const int pid,
-                            bool* known)
+                            bool* known, int64_t* reference = nullptr, bool* referenceKnown = nullptr)
 {
     *known = false;
     static constexpr int64_t LATE_LIMIT = 256LL * 1024 * 1024;
@@ -241,27 +241,32 @@ static int64_t psTrackStart(const BufferedReaderManager& readManager, const std:
     static constexpr int64_t AFTER_BOTH = 4LL * 1024 * 1024;
     ProgramStreamDemuxer probe(readManager);
     probe.openFile(fileName);
-    // the track and the video only: the sub-pictures and the other sound are not read for this
-    PIDSet wanted = {pid};
-    for (int i = 0x55; i <= 0x5f; ++i) wanted.insert(i);
-    for (int i = 0xe0; i <= 0xef; ++i) wanted.insert(i);
+    // nothing is demuxed: the times are noted for every PES (ProgramStreamDemuxer::noteStart), and the sound and
+    // the sub-pictures are not read for this (nor say their notes again)
+    const PIDSet none;
     DemuxedData demuxedData;
     int64_t discardedSize = 0;
     int64_t ticks = 0;
+    int64_t read = 0;  // bytes of the file
     int64_t bothAt = -1;
-    while (probe.getDemuxedSize() < LATE_LIMIT)
+    while (read < LATE_LIMIT)
     {
         demuxedData.clear();
-        if (probe.simpleDemuxBlock(demuxedData, wanted, discardedSize) == BufferedReader::DATA_EOF)
+        const int64_t before = probe.getDemuxedSize();
+        const int rez = probe.simpleDemuxBlock(demuxedData, none, discardedSize);
+        read += probe.getDemuxedSize() - before + discardedSize;
+        if (rez == BufferedReader::DATA_EOF)
             break;
-        if (!probe.videoStartSeen() && probe.getDemuxedSize() >= NO_VIDEO_LIMIT)
+        if (!probe.videoStartSeen() && read >= NO_VIDEO_LIMIT)
             break;
         if (bothAt < 0 && probe.trackStartTicks(pid, ticks))
-            bothAt = probe.getDemuxedSize();
-        if (bothAt >= 0 && probe.getDemuxedSize() - bothAt >= AFTER_BOTH)
+            bothAt = read;
+        if (bothAt >= 0 && read - bothAt >= AFTER_BOTH)
             break;
     }
     *known = probe.trackStartTicks(pid, ticks);
+    if (reference && referenceKnown)
+        *referenceKnown = probe.videoReference(*reference);
     return *known ? ticks : 0;
 }
 
@@ -2179,6 +2184,20 @@ bool METADemuxer::convertLine(const string& codec, const string& lineStreamName,
             source.timeKnown = true;
             source.wrapsAt33Bits = true;
             source.startSeconds = static_cast<double>(reference % (1LL << 33)) / 90000.0;
+        }
+    }
+    else if (programStream && track != 0)
+    {
+        // a program stream from the first picture the mux keeps, as its sound is measured (psTrackStart): ffmpeg's
+        // earliest picture takes the pictures before the first sequence header, which the mux leaves out
+        bool known = false, referenceKnown = false;
+        int64_t reference = 0;
+        psTrackStart(m_readManager, file, track, &known, &reference, &referenceKnown);
+        if (referenceKnown)
+        {
+            source.timeKnown = true;
+            source.wrapsAt33Bits = true;
+            source.startSeconds = static_cast<double>(reference) / 90000.0;
         }
     }
     else if (mp4 && mp4Anchor)
