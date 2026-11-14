@@ -235,8 +235,8 @@ class TSDemuxer final : public AbstractDemuxer
     std::pair<int64_t, int64_t> m_videoSpanDts{-1, -1};  // the first and the last decoding time of the first video
     std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_joinGaps;  // by PID, see takeTimeGaps
     std::map<int, std::vector<TimeJump>> m_soundJumps;                   // by PID, see takeTimeJumps
-    std::map<int, int64_t> m_handedBytes;  // the bytes handed on for each track so far (for m_soundJumps)
-    std::set<int> m_reframedPids;          // tracks handed on through a filter, whose bytes are not counted
+    int64_t m_handedBytes[8192]{};  // the bytes handed on for each track so far (for m_soundJumps)
+    bool m_reframedPid[8192]{};     // tracks handed on through a filter, whose bytes are not counted
    public:
     std::vector<TimeJump> takeTimeJumps(int pid) override;
 
@@ -288,8 +288,15 @@ class TSDemuxer final : public AbstractDemuxer
     LeadPes skipsLeadingPes(int pid, StreamType type, const uint8_t* payload, const uint8_t* end,
                             const uint8_t* pkt = nullptr);
     // The payload of the PES that begins in the packet at pkt, its first packet's and those of the packets of the same
-    // PID after it in the block being read, up to the next PES, at most `limit` bytes (pesStart)
-    std::vector<uint8_t> pesStart(const uint8_t* pkt, int pid, const uint8_t* payload, size_t limit) const;
+    // PID after it in the block being read, up to the next PES, at most `limit` bytes; complete: false where the
+    // block ended first
+    std::vector<uint8_t> pesStart(const uint8_t* pkt, int pid, const uint8_t* payload, size_t limit,
+                                  bool* complete) const;
+    // a held PES that went on past its block, decided where the next PES of its PID begins (resolveLeadPes)
+    bool m_leadUndecided[8192]{};
+    size_t m_leadUndecidedAt[8192]{};
+    void resolveLeadPes(int pid, StreamType type, DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,
+                        MemoryBlock*& vect, int& lastPid);
     const uint8_t* m_blockStart = nullptr;  // the block being read (pesStart)
     const uint8_t* m_blockEnd = nullptr;
     void demuxPacket(uint8_t* pkt, int pid, DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,

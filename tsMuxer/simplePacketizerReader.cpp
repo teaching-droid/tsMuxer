@@ -1142,9 +1142,9 @@ void SimplePacketizerReader::addTimeGap(const int64_t atNs, const int64_t gapNs)
     m_timeGaps.emplace_back(atNs, gapNs);
 }
 
-void SimplePacketizerReader::addTimeJump(const int64_t atByte, const int64_t toNs, int64_t, int64_t)
+void SimplePacketizerReader::addTimeJump(const int64_t atByte, const int64_t toNs, int64_t, const int64_t gapNs)
 {
-    m_timeJumps.emplace_back(atByte, toNs);
+    m_timeJumps.push_back(Jump{atByte, toNs, gapNs});
 }
 
 // ** THE SOUND AFTER A PAUSE STARTS AT ITS OWN TIME, TO THE FRAME. ** The gap of a pause of the sound in a transport
@@ -1157,9 +1157,15 @@ void SimplePacketizerReader::applyTimeJumps()
     if (m_timeJumps.empty())
         return;
     const int64_t at = m_readBytes - (m_bufEnd - m_curPos);  // where the next frame begins in the data given
-    while (!m_timeJumps.empty() && at >= m_timeJumps.front().first)
+    while (!m_timeJumps.empty() && at >= m_timeJumps.front().atByte)
     {
-        m_curPts = PTS_CONST_OFFSET + static_cast<double>(m_timeJumps.front().second) * INTERNAL_PTS_FREQ / 1e9;
+        // Where the clock of the reader is not that of the demuxer's PES times (a first PES on another clock, or a
+        // damaged one, that the start of the track was measured past), the time would be off by that much: the gap
+        // is taken then, as before, within the second it may be off by.
+        const Jump& jump = m_timeJumps.front();
+        const double to = PTS_CONST_OFFSET + static_cast<double>(jump.toNs) * INTERNAL_PTS_FREQ / 1e9;
+        const double byGap = m_curPts + static_cast<double>(jump.gapNs) * INTERNAL_PTS_FREQ / 1e9;
+        m_curPts = std::abs(to - byGap) <= INTERNAL_PTS_FREQ ? to : byGap;
         m_timeJumps.erase(m_timeJumps.begin());
     }
 }

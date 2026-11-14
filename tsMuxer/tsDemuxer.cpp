@@ -645,42 +645,90 @@ static bool beginsPictures(const uint8_t* p, const uint8_t* end)
            ((hevcType >= 16 && hevcType <= 21) || hevcType == 32 || hevcType == 33 || hevcType == 35 || hevcType == 39);
 }
 
-// Whether the start of a PES of H.264 holds a sequence parameter set (NAL unit type 7)
-static bool holdsH264Sps(const uint8_t* p, const uint8_t* end)
+// Whether the start of a PES of H.264 holds a sequence parameter set (NAL unit type 7) before its first picture: 1 it
+// does, 0 a picture (a slice, NAL unit types 1 to 5) comes first, -1 neither within the bytes. An SPS after a picture
+// belongs to a later access unit of the PES, and the pictures before it cannot be decoded.
+static int h264SpsFirst(const uint8_t* p, const uint8_t* end)
 {
     for (; end - p >= 4; ++p)
-        if (p[0] == 0 && p[1] == 0 && p[2] == 1 && (p[3] & 0x80) == 0 && (p[3] & 0x1F) == 7)
-            return true;
-    return false;
+        if (p[0] == 0 && p[1] == 0 && p[2] == 1 && (p[3] & 0x80) == 0)
+        {
+            const int type = p[3] & 0x1F;
+            if (type == 7)
+                return 1;
+            if (type >= 1 && type <= 5)
+                return 0;
+        }
+    return -1;
 }
 
-// Whether the start of a PES of MPEG-2 or MPEG-1 video holds a sequence header (start code 0xB3)
-static bool holdsMpeg2SequenceHeader(const uint8_t* p, const uint8_t* end)
+// The same for MPEG-2 or MPEG-1 video: a sequence header (start code 0xB3) before the first picture (0x00)
+static int mpeg2SequenceFirst(const uint8_t* p, const uint8_t* end)
 {
     for (; end - p >= 4; ++p)
-        if (p[0] == 0 && p[1] == 0 && p[2] == 1 && p[3] == 0xB3)
-            return true;
-    return false;
+        if (p[0] == 0 && p[1] == 0 && p[2] == 1)
+        {
+            if (p[3] == 0xB3)
+                return 1;
+            if (p[3] == 0x00)
+                return 0;
+        }
+    return -1;
 }
 
-std::vector<uint8_t> TSDemuxer::pesStart(const uint8_t* pkt, const int pid, const uint8_t* payload,
-                                         const size_t limit) const
+static int parameterSetsFirst(const StreamType type, const uint8_t* p, const uint8_t* end)
 {
-    std::vector<uint8_t> out(payload, pkt + TS_FRAME_SIZE);
+    return type == StreamType::VIDEO_H264 ? h264SpsFirst(p, end) : mpeg2SequenceFirst(p, end);
+}
+
+std::vector<uint8_t> TSDemuxer::pesStart(const uint8_t* pkt, const int pid, const uint8_t* payload, const size_t limit,
+                                         bool* complete) const
+{
+    *complete = true;
+    // a PES header longer than its packet (damaged) leaves nothing of the packet: an empty start
+    const uint8_t* const packetEnd = pkt + TS_FRAME_SIZE;
+    std::vector<uint8_t> out(payload < packetEnd ? payload : packetEnd, packetEnd);
     // only a packet of the block being read (not one held back and given back later)
-    if (pkt == nullptr || m_blockEnd == nullptr || pkt < m_blockStart || pkt + TS_FRAME_SIZE > m_blockEnd)
+    if (m_blockEnd == nullptr || pkt < m_blockStart || packetEnd > m_blockEnd)
         return out;
     const int step = m_m2tsMode ? 192 : TS_FRAME_SIZE + m_tail;
-    for (const uint8_t* p = pkt + step; p + TS_FRAME_SIZE <= m_blockEnd && out.size() < limit; p += step)
+    const uint8_t* p = pkt + step;
+    for (; p + TS_FRAME_SIZE <= m_blockEnd && out.size() < limit; p += step)
     {
         const auto ts = reinterpret_cast<const TSPacket*>(p);
         if (p[0] != 0x47 || ts->getPID() != pid)
             continue;
         if (ts->payloadStart)
-            break;  // the next PES
+            return out;  // the next PES: this one is whole
         if (!ts->dataExists || ts->getHeaderSize() >= TS_FRAME_SIZE)
             continue;
         out.insert(out.end(), p + ts->getHeaderSize(), p + TS_FRAME_SIZE);
+    }
+    // the block ended before the PES did (not the limit): what the rest holds is not known yet
+    *complete = out.size() >= limit;
+    return out;
+}
+
+// The payload of the PES held for the PID from byte `from` of its held packets (its first packet holds the PES header)
+static std::vector<uint8_t> heldPes(const std::vector<uint8_t>& held, const size_t from, const int pid)
+{
+    std::vector<uint8_t> out;
+    for (size_t i = from; i + TS_FRAME_SIZE <= held.size(); i += TS_FRAME_SIZE)
+    {
+        const uint8_t* p = held.data() + i;
+        const auto ts = reinterpret_cast<const TSPacket*>(p);
+        if (p[0] != 0x47 || ts->getPID() != pid || !ts->dataExists || ts->getHeaderSize() >= TS_FRAME_SIZE)
+            continue;
+        const uint8_t* payload = p + ts->getHeaderSize();
+        if (i == from && ts->payloadStart)
+        {
+            const auto pes = reinterpret_cast<const PESPacket*>(payload);
+            if (TS_FRAME_SIZE - ts->getHeaderSize() < 9)
+                continue;
+            payload += pes->getHeaderLength();
+        }
+        if (payload < p + TS_FRAME_SIZE)
+            out.insert(out.end(), payload, p + TS_FRAME_SIZE);
     }
     return out;
 }
@@ -694,25 +742,33 @@ TSDemuxer::LeadPes TSDemuxer::skipsLeadingPes(const int pid, const StreamType ty
     // a broadcast recording that began 27 fields before its first parameter sets came 80 ms late. They are left out,
     // from the first file of the source only: the next part of a split recording goes on with the parameter sets of
     // the part before, and its first pictures can be decoded. A stream whose parameter sets do not come within the
-    // first LEAD_VIDEO_PES_MAX PES, or not at the start of a PES, is read whole, as before.
+    // first LEAD_VIDEO_PES_MAX PES, or not before the first picture of a PES, is read whole, as before.
     // ** THE PARAMETER SETS ARE LOOKED FOR IN THE WHOLE START OF THE PES. ** Only its first packet was read: x264 puts
     // an SEI of its settings (about 700 bytes) in front of the first parameter sets, so they come in the PES's third
     // or fourth packet, the first group of pictures was taken for pictures without them and left out, and the film
     // began 2 s late, at its second group (also the sound that goes with it). The packets of the PES in the block
-    // read are looked through, 16 KB at most.
-    const auto whole = [&](const uint8_t* p, const uint8_t* e)
+    // read are looked through, 16 KB at most, up to its first picture: parameter sets after a picture belong to a
+    // later access unit of the PES, and the pictures before them cannot be decoded. A PES that goes on past the end
+    // of the block, with no answer in its part in the block, is held and decided where the next PES begins, from its
+    // packets held (resolveLeadPes).
+    if ((type == StreamType::VIDEO_H264 || type == StreamType::VIDEO_MPEG2 || type == StreamType::VIDEO_MPEG1) &&
+        m_holdLeadVideo)
     {
-        std::vector<uint8_t> bytes = pkt != nullptr ? pesStart(pkt, pid, payload, 16384) : std::vector<uint8_t>(p, e);
-        return bytes;
-    };
-    if (type == StreamType::VIDEO_H264 && m_holdLeadVideo)
-    {
-        const std::vector<uint8_t> start = whole(payload, end);
-        const bool parameterSets = holdsH264Sps(start.data(), start.data() + start.size());
-        if (!parameterSets && ++m_leadPes[pid] <= LEAD_VIDEO_PES_MAX)
+        bool complete = true;
+        const std::vector<uint8_t> start = pkt != nullptr ? pesStart(pkt, pid, payload, 16384, &complete)
+                                                          : std::vector<uint8_t>(payload < end ? payload : end, end);
+        const int first = parameterSetsFirst(type, start.data(), start.data() + start.size());
+        if (first != 1 && ++m_leadPes[pid] <= LEAD_VIDEO_PES_MAX)
+        {
+            if (first == -1 && !complete)
+            {
+                m_leadUndecided[pid] = true;
+                m_leadUndecidedAt[pid] = m_leadHeld[pid].size();  // where this PES's packets begin when held
+            }
             return LeadPes::Hold;
+        }
         m_leadPes[pid] = LEAD_PES_DONE;
-        return parameterSets ? LeadPes::Keep : LeadPes::GiveBack;
+        return first == 1 ? LeadPes::Keep : LeadPes::GiveBack;
     }
     // ** AND SO DOES ONE OF MPEG-2 THAT BEGINS INSIDE A GROUP OF PICTURES. ** A cut recording begins with the pictures
     // left of a group, which cannot be decoded without the sequence header and I picture before them. The reader leaves
@@ -720,16 +776,7 @@ TSDemuxer::LeadPes TSDemuxer::skipsLeadingPes(const int pid, const StreamType ty
     // time of the first PES, one of those left out: the first I picture was shown that much early, and the sound was
     // late by as much (0.36 s on a DVB recording that began 0.44 s before its first sequence header, in every output).
     // The PES before the first one with a sequence header are left out here as well, so the video starts with the
-    // pictures the reader keeps; from the first file only, as for H.264.
-    if ((type == StreamType::VIDEO_MPEG2 || type == StreamType::VIDEO_MPEG1) && m_holdLeadVideo)
-    {
-        const std::vector<uint8_t> start = whole(payload, end);
-        const bool sequenceHeader = holdsMpeg2SequenceHeader(start.data(), start.data() + start.size());
-        if (!sequenceHeader && ++m_leadPes[pid] <= LEAD_VIDEO_PES_MAX)
-            return LeadPes::Hold;
-        m_leadPes[pid] = LEAD_PES_DONE;
-        return sequenceHeader ? LeadPes::Keep : LeadPes::GiveBack;
-    }
+    // pictures the reader keeps; from the first file only, as for H.264 (above, with it).
     const auto at = [&](const std::initializer_list<uint8_t> bytes)
     {
         if (end - payload < static_cast<int64_t>(bytes.size()))
@@ -1142,7 +1189,7 @@ void TSDemuxer::noteSoundGap(const int pid, const int64_t pts, const bool cutPar
         const int64_t origin = m_soundGap[pid].origin;
         // placed by the data where the bytes of the track are counted (applyTimeJumps): the PES after the pause
         // begins at the byte handed on next
-        if (m_reframedPids.count(pid) == 0)
+        if (!m_reframedPid[pid])
             m_soundJumps[pid].push_back(TimeJump{m_handedBytes[pid], (pts - origin) * 100000 / 9,
                                                  (end - origin) * 100000 / 9, pause * 100000 / 9});
         else
@@ -1880,6 +1927,8 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
                         pesPacket, TS_FRAME_SIZE - (frameData - pkt)))
             return;
         m_leadDrop[pid] = false;
+        if (m_leadPes[pid] != LEAD_PES_DONE && m_leadUndecided[pid] && streamInfo != m_pmt.pidList.end())
+            resolveLeadPes(pid, streamInfo->second.m_streamType, demuxedData, discardSize, part, vect, lastPid);
         if (m_leadPes[pid] != LEAD_PES_DONE && streamInfo != m_pmt.pidList.end())
         {
             if ((pesPacket->flagsLo & 0x80) == 0x80)
@@ -2266,7 +2315,7 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
         else if (payloadLen > skip && !m_filterOfPid.empty() && m_filterOfPid[pid] != nullptr &&
                  m_acceptedPids != nullptr)
         {
-            m_reframedPids.insert(pid);  // its bytes are not counted (m_handedBytes): a pause is a gap, as before
+            m_reframedPid[pid] = true;  // its bytes are not counted (m_handedBytes): a pause is a gap, as before
             // a track with a filter: the filter hands on what it makes of the bytes, to the sub tracks. What it
             // handed on is what counts as read from the file; the rest it still holds or has left out.
             AVPacket piece;
@@ -2501,6 +2550,27 @@ int TSDemuxer::opusEndTrimOfFile(const int pid) const
 // before the PES that ended the search. A PES that begins with a frame within the limit still drops them, which is
 // the case skipsLeadingPes is for. Where the first PES held back was the first PES of the file, its time is the
 // first time of the file again (m_firstSeenPTS, which times the sound of a file without video).
+// A held PES of H.264 or MPEG-2 that went on past the end of its block (skipsLeadingPes), now whole in its held
+// packets: where it holds the parameter sets before its first picture, the track starts with it, and the PES held
+// before it are left out.
+void TSDemuxer::resolveLeadPes(const int pid, const StreamType type, DemuxedData& demuxedData, int64_t& discardSize,
+                               const ClipPart* part, MemoryBlock*& vect, int& lastPid)
+{
+    m_leadUndecided[pid] = false;
+    const auto held = m_leadHeld.find(pid);
+    if (held == m_leadHeld.end() || m_leadUndecidedAt[pid] >= held->second.size())
+        return;
+    const size_t from = m_leadUndecidedAt[pid];
+    const std::vector<uint8_t> bytes = heldPes(held->second, from, pid);
+    const size_t look = (std::min)(bytes.size(), size_t{16384});
+    if (parameterSetsFirst(type, bytes.data(), bytes.data() + look) != 1)
+        return;
+    held->second.erase(held->second.begin(), held->second.begin() + static_cast<std::ptrdiff_t>(from));
+    m_leadFirstSeen[pid] = false;
+    m_leadPes[pid] = LEAD_PES_DONE;
+    giveBackLeadPes(pid, demuxedData, discardSize, part, vect, lastPid);
+}
+
 void TSDemuxer::giveBackLeadPes(const int pid, DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,
                                 MemoryBlock*& vect, int& lastPid)
 {
@@ -2920,6 +2990,7 @@ void TSDemuxer::openFile(const std::string& streamName)
     memset(m_leadDrop, 0, sizeof(m_leadDrop));
     memset(m_leadFirstSeen, 0, sizeof(m_leadFirstSeen));
     m_leadHeld.clear();
+    memset(m_leadUndecided, 0, sizeof(m_leadUndecided));
     memset(m_lastCounter, 0xFF, sizeof(m_lastCounter));
     m_firstDtsTime.clear();
     m_clipStartOfPid.clear();

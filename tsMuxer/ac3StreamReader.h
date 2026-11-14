@@ -3,6 +3,7 @@
 #ifndef AC3_STREAM_READER_H_
 #define AC3_STREAM_READER_H_
 
+#include <array>
 #include <vector>
 
 #include "abstractDemuxer.h"
@@ -43,13 +44,21 @@ class AC3StreamReader final : public SimplePacketizerReader, public AC3Codec
     bool isIFrame(AVPacket* packet) override { return isPriorityData(packet); }
     bool isSecondary() override;
     void addTimeGap(int64_t atNs, int64_t gapNs) override;
-    // TrueHD with its core times its units by samples (readPacketTHD): the gap, as before; AC-3 alone by its data
+    // TrueHD with its core times its units by samples (readPacketTHD): the gap, as before; AC-3 alone by its data.
+    // Which it is, is known once the reader reads (probeTrueHD): decided there (takePendingJumps).
     void addTimeJump(const int64_t atByte, const int64_t toNs, const int64_t atNs, const int64_t gapNs) override
     {
-        if (m_true_hd_mode)
-            addTimeGap(atNs, gapNs);
-        else
-            SimplePacketizerReader::addTimeJump(atByte, toNs, atNs, gapNs);
+        m_pendingJumps.push_back({atByte, toNs, atNs, gapNs});
+    }
+    std::vector<std::array<int64_t, 4>> m_pendingJumps;
+    void takePendingJumps()
+    {
+        for (const auto& j : m_pendingJumps)
+            if (m_true_hd_mode && !m_downconvertToAC3)
+                addTimeGap(j[2], j[3]);
+            else
+                SimplePacketizerReader::addTimeJump(j[0], j[1], j[2], j[3]);
+        m_pendingJumps.clear();
     }
 
     // ** AC-3 INSIDE A WAV. ** A WAVE file can hold AC-3 or E-AC-3 in place of samples, in two forms. With frames as

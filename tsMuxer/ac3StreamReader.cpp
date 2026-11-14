@@ -259,6 +259,8 @@ int AC3StreamReader::readPacket(AVPacket& avPacket)
         m_needTrueHDProbe = false;
         probeTrueHD();
     }
+    if (!m_pendingJumps.empty())
+        takePendingJumps();
     if (m_true_hd_mode && !m_downconvertToAC3)
         return readPacketTHD(avPacket);
     const int rez = SimplePacketizerReader::readPacket(avPacket);

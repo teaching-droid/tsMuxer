@@ -187,7 +187,13 @@ class SimplePacketizerReader : public AbstractStreamReader
     double m_curPts;
     std::vector<std::pair<int64_t, int64_t>> m_timeGaps;  // addTimeGap, in the order they come
     void applyTimeGaps();
-    std::vector<std::pair<int64_t, int64_t>> m_timeJumps;  // addTimeJump: (byte, time in ns), in the order they come
+    struct Jump
+    {
+        int64_t atByte;
+        int64_t toNs;
+        int64_t gapNs;
+    };
+    std::vector<Jump> m_timeJumps;  // addTimeJump, in the order they come
     void applyTimeJumps();
     double m_lastMplsTime;
     double m_mplsOffset;
