@@ -92,17 +92,23 @@ double progressSeconds(const QByteArray& value)
 }  // namespace
 
 // The first program that can do the job, looked for beside tsMuxeR, on the PATH and at the path in the settings.
-// What it can do is asked, not read from a version number: builds differ in what they leave out.
-static QString findEncoder(const QString& savedPath, QString* problem)
+// What it can do is asked, not read from a version number: builds differ in what they leave out. A core is made of
+// TrueHD, so the program must read it; sound converted for a disc (convert=) is of other kinds. With savedOnly, a
+// saved path that is a file is the only one asked: tsMuxeR takes the --ffmpeg it is given and looks for no other.
+QString Ac3CoreDialog::findFfmpeg(const QString& savedPath, QString* problem, const bool readsTrueHd,
+                                  const bool savedOnly)
 {
     QStringList candidates;
-    const QString beside =
-        QStandardPaths::findExecutable(QStringLiteral("ffmpeg"), {QCoreApplication::applicationDirPath()});
-    if (!beside.isEmpty())
-        candidates << beside;
-    const QString onPath = QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
-    if (!onPath.isEmpty() && !candidates.contains(onPath))
-        candidates << onPath;
+    if (!(savedOnly && !savedPath.isEmpty() && QFileInfo(savedPath).isFile()))
+    {
+        const QString beside =
+            QStandardPaths::findExecutable(QStringLiteral("ffmpeg"), {QCoreApplication::applicationDirPath()});
+        if (!beside.isEmpty())
+            candidates << beside;
+        const QString onPath = QStandardPaths::findExecutable(QStringLiteral("ffmpeg"));
+        if (!onPath.isEmpty() && !candidates.contains(onPath))
+            candidates << onPath;
+    }
     if (!savedPath.isEmpty() && !candidates.contains(savedPath))
         candidates << savedPath;
 
@@ -113,7 +119,8 @@ static QString findEncoder(const QString& savedPath, QString* problem)
         if (!askProgram(path, {QStringLiteral("-hide_banner"), QStringLiteral("-version")})
                  .startsWith(QLatin1String("ffmpeg")))
             *problem = Ac3CoreDialog::tr("%1 does not start here.").arg(name);
-        else if (!listsAudioCodec(askProgram(path, {QStringLiteral("-hide_banner"), QStringLiteral("-decoders")}),
+        else if (readsTrueHd &&
+                 !listsAudioCodec(askProgram(path, {QStringLiteral("-hide_banner"), QStringLiteral("-decoders")}),
                                   QStringLiteral("truehd")))
             *problem = Ac3CoreDialog::tr("%1 cannot read TrueHD.").arg(name);
         else if (!listsAudioCodec(askProgram(path, {QStringLiteral("-hide_banner"), QStringLiteral("-encoders")}),
@@ -179,7 +186,7 @@ Ac3CoreDialog::Choice Ac3CoreDialog::ask(QWidget* parent, const QString& questio
     const auto showEncoder = [&]
     {
         QString problem;
-        encoder = sourceProblem.isEmpty() ? findEncoder(*savedEncoder, &problem) : QString();
+        encoder = sourceProblem.isEmpty() ? findFfmpeg(*savedEncoder, &problem, true) : QString();
         const bool usable = !encoder.isEmpty();
         create->setEnabled(usable);
         if (!usable && create->isChecked())

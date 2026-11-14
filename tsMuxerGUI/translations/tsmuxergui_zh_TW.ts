@@ -5583,6 +5583,134 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>The jobs after a job that fails are not run and stay in the queue. Unticked, every job runs.</source>
         <translation>失敗工作之後的工作不會執行，並留在佇列中。未勾選時，所有工作都會執行。</translation>
     </message>
+    <message>
+        <source>AC-3 plays on every Blu-ray player. Suggested: a step above the rate of the source, as AC-3 needs more bits than AAC for the same sound, but never more than the source can fill: an AAC track of 192 kbit/s gains nothing from AC-3 at 640 kbit/s. A lossless source gets the most: 320 kbit/s for stereo, 640 kbit/s for more channels. 7.1 is folded down to 5.1.</source>
+        <translation>AC-3 在所有藍光播放機上都能播放。建議值：比來源的位元率高一級，因為同樣的聲音 AC-3 需要比 AAC 更多的位元，但絕不超過來源能填滿的程度：192 kbit/s 的 AAC 音軌轉成 640 kbit/s 的 AC-3 毫無收益。無損來源取最高值：立體聲 320 kbit/s，更多聲道 640 kbit/s。7.1 會縮混為 5.1。</translation>
+    </message>
+    <message>
+        <source>LPCM keeps every bit of a lossless source, but it is large: 5.1 at 48 kHz takes about 3.1 GB an hour at 24 bit, 2.1 GB at 16 bit. It makes a lossy source no better. As the source: 24 bit for a lossless source of more than 16 bit, else 16 bit, at the rate of the source where a disc has it, else at 48 or 96 kHz.</source>
+        <translation>LPCM 保留無損來源的每一個位元，但檔案很大：48 kHz 的 5.1 在 24 位元時每小時約 3.1 GB，16 位元時約 2.1 GB。它不會讓有損來源變得更好。與來源相同：超過 16 位元的無損來源用 24 位元，否則用 16 位元；取樣率在光碟支援時與來源相同，否則為 48 或 96 kHz。</translation>
+    </message>
+    <message>
+        <source>Suggested</source>
+        <translation>建議值</translation>
+    </message>
+    <message>
+        <source>%1 kbit/s</source>
+        <translation>%1 kbit/s</translation>
+    </message>
+    <message>
+        <source>As the source</source>
+        <translation>與來源相同</translation>
+    </message>
+    <message>
+        <source>%1 bit</source>
+        <translation>%1 位元</translation>
+    </message>
+    <message>
+        <source>As they are</source>
+        <translation>聲道不變</translation>
+    </message>
+    <message>
+        <source>Stereo</source>
+        <translation>立體聲</translation>
+    </message>
+    <message>
+        <source>Both: as they are, and a stereo track</source>
+        <translation>兩者：聲道不變，並加一條立體聲音軌</translation>
+    </message>
+    <message>
+        <source>Sound a Blu-ray does not carry</source>
+        <translation>藍光不支援的音訊</translation>
+    </message>
+    <message>
+        <source>Ask me</source>
+        <translation>詢問我</translation>
+    </message>
+    <message>
+        <source>Convert to AC-3</source>
+        <translation>轉換為 AC-3</translation>
+    </message>
+    <message>
+        <source>Convert to LPCM</source>
+        <translation>轉換為 LPCM</translation>
+    </message>
+    <message>
+        <source>Leave it as it is</source>
+        <translation>保持原樣</translation>
+    </message>
+    <message>
+        <source>A Blu-ray carries LPCM, Dolby and DTS sound. A track of AAC, MP3, MP2, Opus, Vorbis, FLAC, ALAC or WavPack, or LPCM at a rate a disc does not have, plays on few players or is left out of the disc. Your ffmpeg can convert it on a Blu-ray or AVCHD output: to AC-3, which plays on every Blu-ray player, or to LPCM. ffmpeg is not part of tsMuxeR: it is the one chosen for an AC-3 core, else one beside tsMuxeR or on the search path. Ask me: the window asks about each such track when the disc is muxed, queued or scanned.</source>
+        <translation>藍光支援 LPCM、Dolby 和 DTS 音訊。AAC、MP3、MP2、Opus、Vorbis、FLAC、ALAC 或 WavPack 音軌，以及取樣率為光碟所沒有的 LPCM，只能在少數播放機上播放，或者會被排除在光碟之外。在藍光或 AVCHD 輸出時，您的 ffmpeg 可以轉換它：轉換為在所有藍光播放機上都能播放的 AC-3，或轉換為 LPCM。ffmpeg 不是 tsMuxeR 的一部分：使用為 AC-3 核心選擇的 ffmpeg，否則使用 tsMuxeR 旁邊或 PATH 中的 ffmpeg。詢問我：在混流、加入佇列或掃描光碟時，視窗會對每條這樣的音軌進行詢問。</translation>
+    </message>
+    <message>
+        <source>Channels:</source>
+        <translation>聲道：</translation>
+    </message>
+    <message>
+        <source>Stereo: the converted track has two channels. Both: a track of more than two channels is converted as it is, and a stereo track of the same sound is added beside it, not as the default track.</source>
+        <translation>立體聲：轉換後的音軌有兩個聲道。兩者：超過兩個聲道的音軌按原樣轉換，並在旁邊加入一條相同聲音的立體聲音軌，該音軌不是預設音軌。</translation>
+    </message>
+    <message>
+        <source>AC-3 stereo:</source>
+        <translation>AC-3 立體聲：</translation>
+    </message>
+    <message>
+        <source>AC-3 5.1:</source>
+        <translation>AC-3 5.1：</translation>
+    </message>
+    <message>
+        <source>LPCM:</source>
+        <translation>LPCM：</translation>
+    </message>
+    <message>
+        <source>A Blu-ray player plays LPCM, Dolby and DTS sound. The tracks below are of other kinds: a player will most likely not play them, and some are left out of the disc. Convert them, or leave them as they are.</source>
+        <translation>藍光播放機播放 LPCM、Dolby 和 DTS 音訊。下面的音軌屬於其他類型：播放機很可能無法播放，其中一些會被排除在光碟之外。請轉換它們，或保持原樣。</translation>
+    </message>
+    <message>
+        <source>sound</source>
+        <translation>音訊</translation>
+    </message>
+    <message>
+        <source>convert to</source>
+        <translation>轉換為</translation>
+    </message>
+    <message>
+        <source>quality</source>
+        <translation>品質</translation>
+    </message>
+    <message>
+        <source>channels</source>
+        <translation>聲道</translation>
+    </message>
+    <message>
+        <source>mono</source>
+        <translation>單聲道</translation>
+    </message>
+    <message>
+        <source>stereo</source>
+        <translation>立體聲</translation>
+    </message>
+    <message>
+        <source>Your ffmpeg converts the sound. tsMuxeR does not come with ffmpeg.</source>
+        <translation>音訊由您的 ffmpeg 轉換。tsMuxeR 不隨附 ffmpeg。</translation>
+    </message>
+    <message>
+        <source>Remember my choice</source>
+        <translation>記住我的選擇</translation>
+    </message>
+    <message>
+        <source>The choice of the first track, with its channels and the suggested rate, becomes the setting on the General tab for every such track, and this question does not come again. Ask me on the General tab brings it back.</source>
+        <translation>第一條音軌的選擇，連同其聲道和建議位元率，會成為「一般」分頁上針對所有此類音軌的設定，此詢問不會再出現。在「一般」分頁選擇「詢問我」即可恢復。</translation>
+    </message>
+    <message>
+        <source>Convert</source>
+        <translation>轉換</translation>
+    </message>
+    <message>
+        <source>Converted with %1.</source>
+        <translation>使用 %1 轉換。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

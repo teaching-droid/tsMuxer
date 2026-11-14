@@ -5541,6 +5541,134 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>The jobs after a job that fails are not run and stay in the queue. Unticked, every job runs.</source>
         <translation>Задания после задания с ошибкой не выполняются и остаются в очереди. Если не отмечено, выполняются все задания.</translation>
     </message>
+    <message>
+        <source>AC-3 plays on every Blu-ray player. Suggested: a step above the rate of the source, as AC-3 needs more bits than AAC for the same sound, but never more than the source can fill: an AAC track of 192 kbit/s gains nothing from AC-3 at 640 kbit/s. A lossless source gets the most: 320 kbit/s for stereo, 640 kbit/s for more channels. 7.1 is folded down to 5.1.</source>
+        <translation>AC-3 воспроизводится на любом проигрывателе Blu-ray. Предлагаемый: на ступень выше битрейта источника, так как AC-3 нужно больше битов, чем AAC, для того же звука, но не больше, чем источник может заполнить: дорожка AAC с битрейтом 192 кбит/с ничего не выигрывает от AC-3 с 640 кбит/с. Источник без потерь получает наибольший: 320 кбит/с для стерео, 640 кбит/с для большего числа каналов. 7.1 сводится к 5.1.</translation>
+    </message>
+    <message>
+        <source>LPCM keeps every bit of a lossless source, but it is large: 5.1 at 48 kHz takes about 3.1 GB an hour at 24 bit, 2.1 GB at 16 bit. It makes a lossy source no better. As the source: 24 bit for a lossless source of more than 16 bit, else 16 bit, at the rate of the source where a disc has it, else at 48 or 96 kHz.</source>
+        <translation>LPCM сохраняет каждый бит источника без потерь, но занимает много места: 5.1 при 48 кГц занимает около 3,1 ГБ в час при 24 битах, 2,1 ГБ при 16 битах. Источник с потерями от этого лучше не становится. Как в источнике: 24 бита для источника без потерь с разрядностью больше 16 бит, иначе 16 бит, с частотой источника, если она есть у диска, иначе 48 или 96 кГц.</translation>
+    </message>
+    <message>
+        <source>Suggested</source>
+        <translation>Предлагаемый</translation>
+    </message>
+    <message>
+        <source>%1 kbit/s</source>
+        <translation>%1 кбит/с</translation>
+    </message>
+    <message>
+        <source>As the source</source>
+        <translation>Как в источнике</translation>
+    </message>
+    <message>
+        <source>%1 bit</source>
+        <translation>%1-битный</translation>
+    </message>
+    <message>
+        <source>As they are</source>
+        <translation>Как есть</translation>
+    </message>
+    <message>
+        <source>Stereo</source>
+        <translation>Стерео</translation>
+    </message>
+    <message>
+        <source>Both: as they are, and a stereo track</source>
+        <translation>Оба: как есть, и стереодорожка</translation>
+    </message>
+    <message>
+        <source>Sound a Blu-ray does not carry</source>
+        <translation>Звук, который Blu-ray не поддерживает</translation>
+    </message>
+    <message>
+        <source>Ask me</source>
+        <translation>Спрашивать</translation>
+    </message>
+    <message>
+        <source>Convert to AC-3</source>
+        <translation>Преобразовать в AC-3</translation>
+    </message>
+    <message>
+        <source>Convert to LPCM</source>
+        <translation>Преобразовать в LPCM</translation>
+    </message>
+    <message>
+        <source>Leave it as it is</source>
+        <translation>Оставить как есть</translation>
+    </message>
+    <message>
+        <source>A Blu-ray carries LPCM, Dolby and DTS sound. A track of AAC, MP3, MP2, Opus, Vorbis, FLAC, ALAC or WavPack, or LPCM at a rate a disc does not have, plays on few players or is left out of the disc. Your ffmpeg can convert it on a Blu-ray or AVCHD output: to AC-3, which plays on every Blu-ray player, or to LPCM. ffmpeg is not part of tsMuxeR: it is the one chosen for an AC-3 core, else one beside tsMuxeR or on the search path. Ask me: the window asks about each such track when the disc is muxed, queued or scanned.</source>
+        <translation>Blu-ray поддерживает звук LPCM, Dolby и DTS. Дорожка AAC, MP3, MP2, Opus, Vorbis, FLAC, ALAC или WavPack, или LPCM с частотой, которой нет у диска, воспроизводится на немногих проигрывателях или исключается с диска. Ваш ffmpeg может преобразовать её при выводе на Blu-ray или AVCHD: в AC-3, который воспроизводится на любом проигрывателе Blu-ray, или в LPCM. ffmpeg не входит в tsMuxeR: это ffmpeg, выбранный для ядра AC-3, а иначе ffmpeg рядом с tsMuxeR или в PATH. Спрашивать: окно спрашивает о каждой такой дорожке, когда диск муксируется, ставится в очередь или сканируется.</translation>
+    </message>
+    <message>
+        <source>Channels:</source>
+        <translation>Каналы:</translation>
+    </message>
+    <message>
+        <source>Stereo: the converted track has two channels. Both: a track of more than two channels is converted as it is, and a stereo track of the same sound is added beside it, not as the default track.</source>
+        <translation>Стерео: преобразованная дорожка имеет два канала. Оба: дорожка с более чем двумя каналами преобразуется как есть, и рядом добавляется стереодорожка того же звука, не как дорожка по умолчанию.</translation>
+    </message>
+    <message>
+        <source>AC-3 stereo:</source>
+        <translation>AC-3 стерео:</translation>
+    </message>
+    <message>
+        <source>AC-3 5.1:</source>
+        <translation>AC-3 5.1:</translation>
+    </message>
+    <message>
+        <source>LPCM:</source>
+        <translation>LPCM:</translation>
+    </message>
+    <message>
+        <source>A Blu-ray player plays LPCM, Dolby and DTS sound. The tracks below are of other kinds: a player will most likely not play them, and some are left out of the disc. Convert them, or leave them as they are.</source>
+        <translation>Проигрыватель Blu-ray воспроизводит звук LPCM, Dolby и DTS. Дорожки ниже других видов: проигрыватель, скорее всего, их не воспроизведёт, а некоторые исключаются с диска. Преобразуйте их или оставьте как есть.</translation>
+    </message>
+    <message>
+        <source>sound</source>
+        <translation>звук</translation>
+    </message>
+    <message>
+        <source>convert to</source>
+        <translation>преобразовать в</translation>
+    </message>
+    <message>
+        <source>quality</source>
+        <translation>качество</translation>
+    </message>
+    <message>
+        <source>channels</source>
+        <translation>каналы</translation>
+    </message>
+    <message>
+        <source>mono</source>
+        <translation>моно</translation>
+    </message>
+    <message>
+        <source>stereo</source>
+        <translation>стерео</translation>
+    </message>
+    <message>
+        <source>Your ffmpeg converts the sound. tsMuxeR does not come with ffmpeg.</source>
+        <translation>Звук преобразует ваш ffmpeg. tsMuxeR поставляется без ffmpeg.</translation>
+    </message>
+    <message>
+        <source>Remember my choice</source>
+        <translation>Запомнить мой выбор</translation>
+    </message>
+    <message>
+        <source>The choice of the first track, with its channels and the suggested rate, becomes the setting on the General tab for every such track, and this question does not come again. Ask me on the General tab brings it back.</source>
+        <translation>Выбор для первой дорожки, с её каналами и предлагаемым битрейтом, становится настройкой на вкладке «Общие» для каждой такой дорожки, и этот вопрос больше не появляется. Вариант «Спрашивать» на вкладке «Общие» возвращает его.</translation>
+    </message>
+    <message>
+        <source>Convert</source>
+        <translation>Преобразовать</translation>
+    </message>
+    <message>
+        <source>Converted with %1.</source>
+        <translation>Преобразовано с помощью %1.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

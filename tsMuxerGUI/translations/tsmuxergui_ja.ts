@@ -5540,6 +5540,134 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>The jobs after a job that fails are not run and stay in the queue. Unticked, every job runs.</source>
         <translation>失敗したジョブより後のジョブは実行されず、キューに残ります。チェックしないと、すべてのジョブを実行します。</translation>
     </message>
+    <message>
+        <source>AC-3 plays on every Blu-ray player. Suggested: a step above the rate of the source, as AC-3 needs more bits than AAC for the same sound, but never more than the source can fill: an AAC track of 192 kbit/s gains nothing from AC-3 at 640 kbit/s. A lossless source gets the most: 320 kbit/s for stereo, 640 kbit/s for more channels. 7.1 is folded down to 5.1.</source>
+        <translation>AC-3 はどの Blu-ray プレーヤーでも再生できます。推奨: ソースのビットレートより 1 段階上です。同じ音声に AC-3 は AAC より多くのビットを必要とするためです。ただし、ソースが埋められる以上にはしません。192 kbit/s の AAC トラックを 640 kbit/s の AC-3 にしても何も得られません。ロスレスのソースは最大になります: ステレオは 320 kbit/s、それより多いチャンネルは 640 kbit/s です。7.1 は 5.1 にダウンミックスされます。</translation>
+    </message>
+    <message>
+        <source>LPCM keeps every bit of a lossless source, but it is large: 5.1 at 48 kHz takes about 3.1 GB an hour at 24 bit, 2.1 GB at 16 bit. It makes a lossy source no better. As the source: 24 bit for a lossless source of more than 16 bit, else 16 bit, at the rate of the source where a disc has it, else at 48 or 96 kHz.</source>
+        <translation>LPCM はロスレスのソースのビットをすべて保ちますが、サイズが大きくなります: 48 kHz の 5.1 は 24 ビットで 1 時間あたり約 3.1 GB、16 ビットで約 2.1 GB です。非可逆のソースが良くなることはありません。ソースどおり: 16 ビットを超えるロスレスのソースは 24 ビット、それ以外は 16 ビットで、ディスクにあるサンプリングレートならソースのレート、なければ 48 または 96 kHz です。</translation>
+    </message>
+    <message>
+        <source>Suggested</source>
+        <translation>推奨</translation>
+    </message>
+    <message>
+        <source>%1 kbit/s</source>
+        <translation>%1 kbit/s</translation>
+    </message>
+    <message>
+        <source>As the source</source>
+        <translation>ソースどおり</translation>
+    </message>
+    <message>
+        <source>%1 bit</source>
+        <translation>%1 ビット</translation>
+    </message>
+    <message>
+        <source>As they are</source>
+        <translation>そのまま</translation>
+    </message>
+    <message>
+        <source>Stereo</source>
+        <translation>ステレオ</translation>
+    </message>
+    <message>
+        <source>Both: as they are, and a stereo track</source>
+        <translation>両方: そのままと、ステレオトラック</translation>
+    </message>
+    <message>
+        <source>Sound a Blu-ray does not carry</source>
+        <translation>Blu-ray が扱わない音声</translation>
+    </message>
+    <message>
+        <source>Ask me</source>
+        <translation>確認する</translation>
+    </message>
+    <message>
+        <source>Convert to AC-3</source>
+        <translation>AC-3 に変換</translation>
+    </message>
+    <message>
+        <source>Convert to LPCM</source>
+        <translation>LPCM に変換</translation>
+    </message>
+    <message>
+        <source>Leave it as it is</source>
+        <translation>そのままにする</translation>
+    </message>
+    <message>
+        <source>A Blu-ray carries LPCM, Dolby and DTS sound. A track of AAC, MP3, MP2, Opus, Vorbis, FLAC, ALAC or WavPack, or LPCM at a rate a disc does not have, plays on few players or is left out of the disc. Your ffmpeg can convert it on a Blu-ray or AVCHD output: to AC-3, which plays on every Blu-ray player, or to LPCM. ffmpeg is not part of tsMuxeR: it is the one chosen for an AC-3 core, else one beside tsMuxeR or on the search path. Ask me: the window asks about each such track when the disc is muxed, queued or scanned.</source>
+        <translation>Blu-ray が扱う音声は LPCM、Dolby、DTS です。AAC、MP3、MP2、Opus、Vorbis、FLAC、ALAC、WavPack のトラックや、ディスクにないサンプリングレートの LPCM は、再生できるプレーヤーが少ないか、ディスクから外されます。Blu-ray または AVCHD の出力では、お使いの ffmpeg で変換できます: どの Blu-ray プレーヤーでも再生できる AC-3 か、LPCM にします。ffmpeg は tsMuxeR に含まれていません。AC-3 コア用に選んだ ffmpeg を使い、なければ tsMuxeR と同じ場所か PATH 上の ffmpeg を使います。確認する: ディスクを多重化、キューに追加、またはスキャンするときに、そのようなトラックごとに確認します。</translation>
+    </message>
+    <message>
+        <source>Channels:</source>
+        <translation>チャンネル:</translation>
+    </message>
+    <message>
+        <source>Stereo: the converted track has two channels. Both: a track of more than two channels is converted as it is, and a stereo track of the same sound is added beside it, not as the default track.</source>
+        <translation>ステレオ: 変換したトラックは 2 チャンネルになります。両方: 2 チャンネルを超えるトラックはそのまま変換し、その横に同じ音声のステレオトラックを追加します。追加したトラックはデフォルトトラックにはなりません。</translation>
+    </message>
+    <message>
+        <source>AC-3 stereo:</source>
+        <translation>AC-3 ステレオ:</translation>
+    </message>
+    <message>
+        <source>AC-3 5.1:</source>
+        <translation>AC-3 5.1:</translation>
+    </message>
+    <message>
+        <source>LPCM:</source>
+        <translation>LPCM:</translation>
+    </message>
+    <message>
+        <source>A Blu-ray player plays LPCM, Dolby and DTS sound. The tracks below are of other kinds: a player will most likely not play them, and some are left out of the disc. Convert them, or leave them as they are.</source>
+        <translation>Blu-ray プレーヤーが再生する音声は LPCM、Dolby、DTS です。下のトラックはそれ以外の種類です。プレーヤーではほぼ再生できず、ディスクから外されるものもあります。変換するか、そのままにしてください。</translation>
+    </message>
+    <message>
+        <source>sound</source>
+        <translation>音声</translation>
+    </message>
+    <message>
+        <source>convert to</source>
+        <translation>変換先</translation>
+    </message>
+    <message>
+        <source>quality</source>
+        <translation>品質</translation>
+    </message>
+    <message>
+        <source>channels</source>
+        <translation>チャンネル</translation>
+    </message>
+    <message>
+        <source>mono</source>
+        <translation>モノラル</translation>
+    </message>
+    <message>
+        <source>stereo</source>
+        <translation>ステレオ</translation>
+    </message>
+    <message>
+        <source>Your ffmpeg converts the sound. tsMuxeR does not come with ffmpeg.</source>
+        <translation>音声はお使いの ffmpeg で変換します。tsMuxeR に ffmpeg は付属していません。</translation>
+    </message>
+    <message>
+        <source>Remember my choice</source>
+        <translation>この選択を記憶する</translation>
+    </message>
+    <message>
+        <source>The choice of the first track, with its channels and the suggested rate, becomes the setting on the General tab for every such track, and this question does not come again. Ask me on the General tab brings it back.</source>
+        <translation>最初のトラックの選択が、そのチャンネルと推奨ビットレートとともに、このようなすべてのトラックに対する「全般」タブの設定になり、この確認は今後表示されません。「全般」タブで「確認する」を選ぶと再び表示されます。</translation>
+    </message>
+    <message>
+        <source>Convert</source>
+        <translation>変換</translation>
+    </message>
+    <message>
+        <source>Converted with %1.</source>
+        <translation>%1 で変換します。</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

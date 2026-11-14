@@ -5583,6 +5583,134 @@ Se questo è apparso mentre un file era ancora in esame, o mentre la finestra si
         <source>The jobs after a job that fails are not run and stay in the queue. Unticked, every job runs.</source>
         <translation>I lavori dopo un lavoro non riuscito non vengono eseguiti e restano nella coda. Se non spuntato, vengono eseguiti tutti i lavori.</translation>
     </message>
+    <message>
+        <source>AC-3 plays on every Blu-ray player. Suggested: a step above the rate of the source, as AC-3 needs more bits than AAC for the same sound, but never more than the source can fill: an AAC track of 192 kbit/s gains nothing from AC-3 at 640 kbit/s. A lossless source gets the most: 320 kbit/s for stereo, 640 kbit/s for more channels. 7.1 is folded down to 5.1.</source>
+        <translation>AC-3 viene riprodotto da ogni lettore Blu-ray. Suggerito: un gradino sopra il bitrate della sorgente, perché AC-3 richiede più bit di AAC per lo stesso audio, ma mai più di quanto la sorgente possa riempire: una traccia AAC a 192 kbit/s non guadagna nulla da AC-3 a 640 kbit/s. Una sorgente senza perdita riceve il massimo: 320 kbit/s per lo stereo, 640 kbit/s per più canali. Il 7.1 viene ridotto a 5.1.</translation>
+    </message>
+    <message>
+        <source>LPCM keeps every bit of a lossless source, but it is large: 5.1 at 48 kHz takes about 3.1 GB an hour at 24 bit, 2.1 GB at 16 bit. It makes a lossy source no better. As the source: 24 bit for a lossless source of more than 16 bit, else 16 bit, at the rate of the source where a disc has it, else at 48 or 96 kHz.</source>
+        <translation>LPCM conserva ogni bit di una sorgente senza perdita, ma occupa molto: 5.1 a 48 kHz occupa circa 3,1 GB all&apos;ora a 24 bit, 2,1 GB a 16 bit. Non migliora una sorgente con perdita. Come la sorgente: 24 bit per una sorgente senza perdita di più di 16 bit, altrimenti 16 bit, alla frequenza della sorgente quando un disco la prevede, altrimenti a 48 o 96 kHz.</translation>
+    </message>
+    <message>
+        <source>Suggested</source>
+        <translation>Suggerito</translation>
+    </message>
+    <message>
+        <source>%1 kbit/s</source>
+        <translation>%1 kbit/s</translation>
+    </message>
+    <message>
+        <source>As the source</source>
+        <translation>Come la sorgente</translation>
+    </message>
+    <message>
+        <source>%1 bit</source>
+        <translation>%1 bit</translation>
+    </message>
+    <message>
+        <source>As they are</source>
+        <translation>Come sono</translation>
+    </message>
+    <message>
+        <source>Stereo</source>
+        <translation>Stereo</translation>
+    </message>
+    <message>
+        <source>Both: as they are, and a stereo track</source>
+        <translation>Entrambi: come sono, e una traccia stereo</translation>
+    </message>
+    <message>
+        <source>Sound a Blu-ray does not carry</source>
+        <translation>Audio che un Blu-ray non prevede</translation>
+    </message>
+    <message>
+        <source>Ask me</source>
+        <translation>Chiedimelo</translation>
+    </message>
+    <message>
+        <source>Convert to AC-3</source>
+        <translation>Converti in AC-3</translation>
+    </message>
+    <message>
+        <source>Convert to LPCM</source>
+        <translation>Converti in LPCM</translation>
+    </message>
+    <message>
+        <source>Leave it as it is</source>
+        <translation>Lascia com&apos;è</translation>
+    </message>
+    <message>
+        <source>A Blu-ray carries LPCM, Dolby and DTS sound. A track of AAC, MP3, MP2, Opus, Vorbis, FLAC, ALAC or WavPack, or LPCM at a rate a disc does not have, plays on few players or is left out of the disc. Your ffmpeg can convert it on a Blu-ray or AVCHD output: to AC-3, which plays on every Blu-ray player, or to LPCM. ffmpeg is not part of tsMuxeR: it is the one chosen for an AC-3 core, else one beside tsMuxeR or on the search path. Ask me: the window asks about each such track when the disc is muxed, queued or scanned.</source>
+        <translation>Un Blu-ray prevede audio LPCM, Dolby e DTS. Una traccia AAC, MP3, MP2, Opus, Vorbis, FLAC, ALAC o WavPack, o LPCM a una frequenza che un disco non prevede, viene riprodotta da pochi lettori o viene esclusa dal disco. Il tuo ffmpeg può convertirla per un&apos;uscita Blu-ray o AVCHD: in AC-3, che viene riprodotto da ogni lettore Blu-ray, o in LPCM. ffmpeg non fa parte di tsMuxeR: è quello scelto per un core AC-3, altrimenti uno accanto a tsMuxeR o nel PATH. Chiedimelo: la finestra chiede di ogni traccia del genere quando il disco viene muxato, aggiunto alla coda o analizzato.</translation>
+    </message>
+    <message>
+        <source>Channels:</source>
+        <translation>Canali:</translation>
+    </message>
+    <message>
+        <source>Stereo: the converted track has two channels. Both: a track of more than two channels is converted as it is, and a stereo track of the same sound is added beside it, not as the default track.</source>
+        <translation>Stereo: la traccia convertita ha due canali. Entrambi: una traccia di più di due canali viene convertita così com&apos;è, e accanto viene aggiunta una traccia stereo dello stesso audio, non come traccia predefinita.</translation>
+    </message>
+    <message>
+        <source>AC-3 stereo:</source>
+        <translation>AC-3 stereo:</translation>
+    </message>
+    <message>
+        <source>AC-3 5.1:</source>
+        <translation>AC-3 5.1:</translation>
+    </message>
+    <message>
+        <source>LPCM:</source>
+        <translation>LPCM:</translation>
+    </message>
+    <message>
+        <source>A Blu-ray player plays LPCM, Dolby and DTS sound. The tracks below are of other kinds: a player will most likely not play them, and some are left out of the disc. Convert them, or leave them as they are.</source>
+        <translation>Un lettore Blu-ray riproduce audio LPCM, Dolby e DTS. Le tracce qui sotto sono di altri tipi: molto probabilmente un lettore non le riprodurrà, e alcune vengono escluse dal disco. Convertirle, oppure lasciarle come sono.</translation>
+    </message>
+    <message>
+        <source>sound</source>
+        <translation>audio</translation>
+    </message>
+    <message>
+        <source>convert to</source>
+        <translation>converti in</translation>
+    </message>
+    <message>
+        <source>quality</source>
+        <translation>qualità</translation>
+    </message>
+    <message>
+        <source>channels</source>
+        <translation>canali</translation>
+    </message>
+    <message>
+        <source>mono</source>
+        <translation>mono</translation>
+    </message>
+    <message>
+        <source>stereo</source>
+        <translation>stereo</translation>
+    </message>
+    <message>
+        <source>Your ffmpeg converts the sound. tsMuxeR does not come with ffmpeg.</source>
+        <translation>Il tuo ffmpeg converte l&apos;audio. tsMuxeR non include ffmpeg.</translation>
+    </message>
+    <message>
+        <source>Remember my choice</source>
+        <translation>Ricorda la mia scelta</translation>
+    </message>
+    <message>
+        <source>The choice of the first track, with its channels and the suggested rate, becomes the setting on the General tab for every such track, and this question does not come again. Ask me on the General tab brings it back.</source>
+        <translation>La scelta della prima traccia, con i suoi canali e il bitrate suggerito, diventa l&apos;impostazione della scheda Generale per ogni traccia del genere, e questa domanda non torna più. Chiedimelo nella scheda Generale la fa tornare.</translation>
+    </message>
+    <message>
+        <source>Convert</source>
+        <translation>Converti</translation>
+    </message>
+    <message>
+        <source>Converted with %1.</source>
+        <translation>Convertito con %1.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -5540,6 +5540,134 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>The jobs after a job that fails are not run and stay in the queue. Unticked, every job runs.</source>
         <translation>המשימות שאחרי משימה שנכשלה אינן מורצות ונשארות בתור. כשלא מסומן, כל המשימות מורצות.</translation>
     </message>
+    <message>
+        <source>AC-3 plays on every Blu-ray player. Suggested: a step above the rate of the source, as AC-3 needs more bits than AAC for the same sound, but never more than the source can fill: an AAC track of 192 kbit/s gains nothing from AC-3 at 640 kbit/s. A lossless source gets the most: 320 kbit/s for stereo, 640 kbit/s for more channels. 7.1 is folded down to 5.1.</source>
+        <translation>AC-3 מתנגן בכל נגן Blu-ray. מוצע: דרגה אחת מעל קצב הסיביות של המקור, כי AC-3 צריך יותר סיביות מ-AAC לאותו שמע, אך לעולם לא יותר ממה שהמקור יכול למלא: רצועת AAC של 192 kbit/s אינה מרוויחה דבר מ-AC-3 ב-640 kbit/s. מקור ללא אובדן מקבל את המרב: 320 kbit/s לסטריאו, 640 kbit/s ליותר ערוצים. 7.1 מומר ל-5.1.</translation>
+    </message>
+    <message>
+        <source>LPCM keeps every bit of a lossless source, but it is large: 5.1 at 48 kHz takes about 3.1 GB an hour at 24 bit, 2.1 GB at 16 bit. It makes a lossy source no better. As the source: 24 bit for a lossless source of more than 16 bit, else 16 bit, at the rate of the source where a disc has it, else at 48 or 96 kHz.</source>
+        <translation>LPCM שומר כל סיבית של מקור ללא אובדן, אך הוא גדול: 5.1 ב-48 kHz תופס כ-3.1 GB לשעה ב-24 סיביות, 2.1 GB ב-16 סיביות. הוא אינו משפר מקור עם אובדן. כמו המקור: 24 סיביות למקור ללא אובדן של יותר מ-16 סיביות, אחרת 16 סיביות, בתדר של המקור כאשר לדיסק יש אותו, אחרת ב-48 או 96 kHz.</translation>
+    </message>
+    <message>
+        <source>Suggested</source>
+        <translation>מוצע</translation>
+    </message>
+    <message>
+        <source>%1 kbit/s</source>
+        <translation>%1 kbit/s</translation>
+    </message>
+    <message>
+        <source>As the source</source>
+        <translation>כמו המקור</translation>
+    </message>
+    <message>
+        <source>%1 bit</source>
+        <translation>%1 סיביות</translation>
+    </message>
+    <message>
+        <source>As they are</source>
+        <translation>כפי שהם</translation>
+    </message>
+    <message>
+        <source>Stereo</source>
+        <translation>סטריאו</translation>
+    </message>
+    <message>
+        <source>Both: as they are, and a stereo track</source>
+        <translation>שניהם: כפי שהם, ורצועת סטריאו</translation>
+    </message>
+    <message>
+        <source>Sound a Blu-ray does not carry</source>
+        <translation>שמע ש-Blu-ray אינו נושא</translation>
+    </message>
+    <message>
+        <source>Ask me</source>
+        <translation>לשאול אותי</translation>
+    </message>
+    <message>
+        <source>Convert to AC-3</source>
+        <translation>המרה ל-AC-3</translation>
+    </message>
+    <message>
+        <source>Convert to LPCM</source>
+        <translation>המרה ל-LPCM</translation>
+    </message>
+    <message>
+        <source>Leave it as it is</source>
+        <translation>להשאיר כפי שהוא</translation>
+    </message>
+    <message>
+        <source>A Blu-ray carries LPCM, Dolby and DTS sound. A track of AAC, MP3, MP2, Opus, Vorbis, FLAC, ALAC or WavPack, or LPCM at a rate a disc does not have, plays on few players or is left out of the disc. Your ffmpeg can convert it on a Blu-ray or AVCHD output: to AC-3, which plays on every Blu-ray player, or to LPCM. ffmpeg is not part of tsMuxeR: it is the one chosen for an AC-3 core, else one beside tsMuxeR or on the search path. Ask me: the window asks about each such track when the disc is muxed, queued or scanned.</source>
+        <translation>Blu-ray נושא שמע LPCM, Dolby ו-DTS. רצועת AAC, MP3, MP2, Opus, Vorbis, FLAC, ALAC או WavPack, או LPCM בתדר שאין לדיסק, מתנגנת בנגנים מעטים או מושמטת מהדיסק. ה-ffmpeg שלך יכול להמיר אותה בפלט Blu-ray או AVCHD: ל-AC-3, שמתנגן בכל נגן Blu-ray, או ל-LPCM. ffmpeg אינו חלק מ-tsMuxeR: זה ה-ffmpeg שנבחר עבור ליבת AC-3, ואחרת ffmpeg שנמצא ליד tsMuxeR או ב-PATH. לשאול אותי: החלון שואל על כל רצועה כזו כאשר הדיסק עובר ריבוב, נוסף לתור או נסרק.</translation>
+    </message>
+    <message>
+        <source>Channels:</source>
+        <translation>ערוצים:</translation>
+    </message>
+    <message>
+        <source>Stereo: the converted track has two channels. Both: a track of more than two channels is converted as it is, and a stereo track of the same sound is added beside it, not as the default track.</source>
+        <translation>סטריאו: לרצועה המומרת יש שני ערוצים. שניהם: רצועה של יותר משני ערוצים מומרת כפי שהיא, ולצידה מתווספת רצועת סטריאו של אותו שמע, לא כרצועת ברירת המחדל.</translation>
+    </message>
+    <message>
+        <source>AC-3 stereo:</source>
+        <translation>AC-3 סטריאו:</translation>
+    </message>
+    <message>
+        <source>AC-3 5.1:</source>
+        <translation>AC-3 5.1:</translation>
+    </message>
+    <message>
+        <source>LPCM:</source>
+        <translation>LPCM:</translation>
+    </message>
+    <message>
+        <source>A Blu-ray player plays LPCM, Dolby and DTS sound. The tracks below are of other kinds: a player will most likely not play them, and some are left out of the disc. Convert them, or leave them as they are.</source>
+        <translation>נגן Blu-ray מנגן שמע LPCM, Dolby ו-DTS. הרצועות שלהלן מסוגים אחרים: נגן כנראה לא ינגן אותן, וחלקן מושמטות מהדיסק. יש להמיר אותן, או להשאיר אותן כפי שהן.</translation>
+    </message>
+    <message>
+        <source>sound</source>
+        <translation>שמע</translation>
+    </message>
+    <message>
+        <source>convert to</source>
+        <translation>יעד ההמרה</translation>
+    </message>
+    <message>
+        <source>quality</source>
+        <translation>איכות</translation>
+    </message>
+    <message>
+        <source>channels</source>
+        <translation>ערוצים</translation>
+    </message>
+    <message>
+        <source>mono</source>
+        <translation>מונו</translation>
+    </message>
+    <message>
+        <source>stereo</source>
+        <translation>סטריאו</translation>
+    </message>
+    <message>
+        <source>Your ffmpeg converts the sound. tsMuxeR does not come with ffmpeg.</source>
+        <translation>ה-ffmpeg שלך ממיר את השמע. tsMuxeR אינו מגיע עם ffmpeg.</translation>
+    </message>
+    <message>
+        <source>Remember my choice</source>
+        <translation>לזכור את הבחירה שלי</translation>
+    </message>
+    <message>
+        <source>The choice of the first track, with its channels and the suggested rate, becomes the setting on the General tab for every such track, and this question does not come again. Ask me on the General tab brings it back.</source>
+        <translation>הבחירה של הרצועה הראשונה, עם הערוצים שלה וקצב הסיביות המוצע, הופכת להגדרה בכרטיסייה &quot;כללי&quot; לכל רצועה כזו, והשאלה הזו לא תחזור. &quot;לשאול אותי&quot; בכרטיסייה &quot;כללי&quot; מחזיר אותה.</translation>
+    </message>
+    <message>
+        <source>Convert</source>
+        <translation>המרה</translation>
+    </message>
+    <message>
+        <source>Converted with %1.</source>
+        <translation>הומר באמצעות %1.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -5583,6 +5583,134 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>The jobs after a job that fails are not run and stay in the queue. Unticked, every job runs.</source>
         <translation>실패한 작업 이후의 작업은 실행되지 않고 대기열에 남습니다. 선택하지 않으면 모든 작업이 실행됩니다.</translation>
     </message>
+    <message>
+        <source>AC-3 plays on every Blu-ray player. Suggested: a step above the rate of the source, as AC-3 needs more bits than AAC for the same sound, but never more than the source can fill: an AAC track of 192 kbit/s gains nothing from AC-3 at 640 kbit/s. A lossless source gets the most: 320 kbit/s for stereo, 640 kbit/s for more channels. 7.1 is folded down to 5.1.</source>
+        <translation>AC-3는 모든 Blu-ray 플레이어에서 재생됩니다. 권장: 원본 비트레이트보다 한 단계 위입니다. 같은 소리에 AC-3는 AAC보다 많은 비트가 필요하기 때문입니다. 단, 원본이 채울 수 있는 것보다 높이지는 않습니다: 192 kbit/s의 AAC 트랙은 640 kbit/s의 AC-3로 얻는 것이 없습니다. 무손실 원본은 최대값을 받습니다: 스테레오는 320 kbit/s, 그보다 많은 채널은 640 kbit/s입니다. 7.1은 5.1로 다운믹스됩니다.</translation>
+    </message>
+    <message>
+        <source>LPCM keeps every bit of a lossless source, but it is large: 5.1 at 48 kHz takes about 3.1 GB an hour at 24 bit, 2.1 GB at 16 bit. It makes a lossy source no better. As the source: 24 bit for a lossless source of more than 16 bit, else 16 bit, at the rate of the source where a disc has it, else at 48 or 96 kHz.</source>
+        <translation>LPCM은 무손실 원본의 모든 비트를 유지하지만 크기가 큽니다: 48 kHz의 5.1은 24비트에서 시간당 약 3.1 GB, 16비트에서 약 2.1 GB입니다. 손실 원본이 더 좋아지지는 않습니다. 원본대로: 16비트를 넘는 무손실 원본은 24비트, 그 외에는 16비트이며, 디스크에 있는 샘플링 레이트면 원본의 레이트, 없으면 48 또는 96 kHz입니다.</translation>
+    </message>
+    <message>
+        <source>Suggested</source>
+        <translation>권장</translation>
+    </message>
+    <message>
+        <source>%1 kbit/s</source>
+        <translation>%1 kbit/s</translation>
+    </message>
+    <message>
+        <source>As the source</source>
+        <translation>원본대로</translation>
+    </message>
+    <message>
+        <source>%1 bit</source>
+        <translation>%1비트</translation>
+    </message>
+    <message>
+        <source>As they are</source>
+        <translation>그대로</translation>
+    </message>
+    <message>
+        <source>Stereo</source>
+        <translation>스테레오</translation>
+    </message>
+    <message>
+        <source>Both: as they are, and a stereo track</source>
+        <translation>둘 다: 그대로, 그리고 스테레오 트랙</translation>
+    </message>
+    <message>
+        <source>Sound a Blu-ray does not carry</source>
+        <translation>Blu-ray가 지원하지 않는 오디오</translation>
+    </message>
+    <message>
+        <source>Ask me</source>
+        <translation>묻기</translation>
+    </message>
+    <message>
+        <source>Convert to AC-3</source>
+        <translation>AC-3로 변환</translation>
+    </message>
+    <message>
+        <source>Convert to LPCM</source>
+        <translation>LPCM으로 변환</translation>
+    </message>
+    <message>
+        <source>Leave it as it is</source>
+        <translation>그대로 두기</translation>
+    </message>
+    <message>
+        <source>A Blu-ray carries LPCM, Dolby and DTS sound. A track of AAC, MP3, MP2, Opus, Vorbis, FLAC, ALAC or WavPack, or LPCM at a rate a disc does not have, plays on few players or is left out of the disc. Your ffmpeg can convert it on a Blu-ray or AVCHD output: to AC-3, which plays on every Blu-ray player, or to LPCM. ffmpeg is not part of tsMuxeR: it is the one chosen for an AC-3 core, else one beside tsMuxeR or on the search path. Ask me: the window asks about each such track when the disc is muxed, queued or scanned.</source>
+        <translation>Blu-ray는 LPCM, Dolby, DTS 오디오를 지원합니다. AAC, MP3, MP2, Opus, Vorbis, FLAC, ALAC, WavPack 트랙이나 디스크에 없는 샘플링 레이트의 LPCM은 재생되는 플레이어가 적거나 디스크에서 제외됩니다. Blu-ray 또는 AVCHD 출력에서는 사용자의 ffmpeg로 변환할 수 있습니다: 모든 Blu-ray 플레이어에서 재생되는 AC-3 또는 LPCM으로 변환합니다. ffmpeg는 tsMuxeR에 포함되어 있지 않습니다: AC-3 코어용으로 선택한 ffmpeg를 사용하고, 없으면 tsMuxeR 옆이나 PATH에 있는 ffmpeg를 사용합니다. 묻기: 디스크를 먹싱하거나 대기열에 추가하거나 스캔할 때 이런 트랙마다 묻습니다.</translation>
+    </message>
+    <message>
+        <source>Channels:</source>
+        <translation>채널:</translation>
+    </message>
+    <message>
+        <source>Stereo: the converted track has two channels. Both: a track of more than two channels is converted as it is, and a stereo track of the same sound is added beside it, not as the default track.</source>
+        <translation>스테레오: 변환된 트랙은 2채널입니다. 둘 다: 2채널을 넘는 트랙은 그대로 변환하고, 그 옆에 같은 소리의 스테레오 트랙을 추가합니다. 추가된 트랙은 기본 트랙이 아닙니다.</translation>
+    </message>
+    <message>
+        <source>AC-3 stereo:</source>
+        <translation>AC-3 스테레오:</translation>
+    </message>
+    <message>
+        <source>AC-3 5.1:</source>
+        <translation>AC-3 5.1:</translation>
+    </message>
+    <message>
+        <source>LPCM:</source>
+        <translation>LPCM:</translation>
+    </message>
+    <message>
+        <source>A Blu-ray player plays LPCM, Dolby and DTS sound. The tracks below are of other kinds: a player will most likely not play them, and some are left out of the disc. Convert them, or leave them as they are.</source>
+        <translation>Blu-ray 플레이어는 LPCM, Dolby, DTS 오디오를 재생합니다. 아래 트랙은 다른 종류입니다: 플레이어가 재생하지 못할 가능성이 크고, 일부는 디스크에서 제외됩니다. 변환하거나 그대로 두십시오.</translation>
+    </message>
+    <message>
+        <source>sound</source>
+        <translation>오디오</translation>
+    </message>
+    <message>
+        <source>convert to</source>
+        <translation>변환 형식</translation>
+    </message>
+    <message>
+        <source>quality</source>
+        <translation>품질</translation>
+    </message>
+    <message>
+        <source>channels</source>
+        <translation>채널</translation>
+    </message>
+    <message>
+        <source>mono</source>
+        <translation>모노</translation>
+    </message>
+    <message>
+        <source>stereo</source>
+        <translation>스테레오</translation>
+    </message>
+    <message>
+        <source>Your ffmpeg converts the sound. tsMuxeR does not come with ffmpeg.</source>
+        <translation>오디오는 사용자의 ffmpeg로 변환합니다. tsMuxeR에는 ffmpeg가 포함되어 있지 않습니다.</translation>
+    </message>
+    <message>
+        <source>Remember my choice</source>
+        <translation>내 선택 기억</translation>
+    </message>
+    <message>
+        <source>The choice of the first track, with its channels and the suggested rate, becomes the setting on the General tab for every such track, and this question does not come again. Ask me on the General tab brings it back.</source>
+        <translation>첫 번째 트랙의 선택이 그 채널 및 권장 비트레이트와 함께 이런 모든 트랙에 대한 일반 탭의 설정이 되며, 이 질문은 다시 나타나지 않습니다. 일반 탭에서 묻기를 선택하면 다시 나타납니다.</translation>
+    </message>
+    <message>
+        <source>Convert</source>
+        <translation>변환</translation>
+    </message>
+    <message>
+        <source>Converted with %1.</source>
+        <translation>%1(으)로 변환합니다.</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

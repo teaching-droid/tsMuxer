@@ -58,6 +58,12 @@ struct QtvCodecInfo
     QString mergeAc3File;
     // The answer "Continue without a core" to the question at Start muxing: not asked again for this track
     bool noCoreWanted = false;
+    // Sound a Blu-ray does not carry, converted by the user's ffmpeg on a disc output: the answer of the question at
+    // Start muxing, as the words of the meta line take it. convertTo: "ac3:448:stereo", "lpcm:24", "none" (left as
+    // it is), empty while not asked (the General tab's setting then counts); stereoTo: a stereo track beside it
+    // ("ac3"), or empty.
+    QString convertTo;
+    QString stereoTo;
     int offsetId = -1;
     int maxPgOffsets = 0;
     QList<QString> fileList;

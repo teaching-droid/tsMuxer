@@ -49,6 +49,11 @@ class Ac3CoreDialog : public QDialog
     static Choice ask(QWidget* parent, const QString& question, const QStringList& ac3Tracks,
                       const QString& sourceProblem, QString* savedEncoder);
 
+    // The ffmpeg to use: the first one that starts and writes AC-3 (and reads TrueHD, where readsTrueHd), of the one
+    // beside tsMuxeR, the one on the search path and savedPath; with savedOnly, savedPath alone where it is a file.
+    // Empty when there is none; problem then says why.
+    static QString findFfmpeg(const QString& savedPath, QString* problem, bool readsTrueHd, bool savedOnly = false);
+
     explicit Ac3CoreDialog(QWidget* parent, const Job& job);
 
     // Starts the encoder as the dialog opens; Accepted when the file is complete

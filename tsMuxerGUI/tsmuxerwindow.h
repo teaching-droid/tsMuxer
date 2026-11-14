@@ -227,6 +227,20 @@ class TsMuxerWindow : public QWidget
     // when the user cancels. A core to make goes onto the meta line now and is made by makeAc3Cores, after the other
     // questions of Start muxing, so that a No to one of them has not cost the time of an encode.
     bool offerAc3Cores();
+    // ** SOUND A BLU-RAY DOES NOT CARRY. ** A track of such a kind that can be converted for a disc: AAC, MPEG audio,
+    // Opus, Vorbis, FLAC, ALAC, WavPack, or LPCM at a rate a disc has not, of one file (not a join, a playlist or a
+    // disc title, which ffmpeg cannot read as one file)
+    [[nodiscard]] bool convertibleForDisc(const QtvCodecInfo* info) const;
+    // The words ", convert=..., stereo=..." of the track's meta line on a disc output: its own answer, else the
+    // General tab's setting; empty where the track stays as it is
+    [[nodiscard]] QString convertWords(const QtvCodecInfo* info) const;
+    // The track is converted, or still to be asked about ("Ask me"): it is not shown as left out of a disc
+    [[nodiscard]] bool mayBeConverted(const QtvCodecInfo* info) const;
+    // At Start muxing with "Ask me": the box for the ticked tracks not yet answered. False when the user cancels.
+    bool askAudioConversion();
+    // The General tab's setting changed: the earlier answers of the box give way to it
+    void onConvertSettingChanged();
+    void updateConvertSettingEnabled();
     bool makeAc3Cores();
     void dropPendingCores();
     // The cores made for the job that ended well, or for a window that closes: they were only there for the mux
@@ -314,6 +328,14 @@ class TsMuxerWindow : public QWidget
     [[nodiscard]] bool languageWanted(const QtvCodecInfo& info, const QStringList& wanted) const;
     // "Make the second Dolby Vision layer" on the Blu-ray tab: unticked, --no-dv-layer on the MUXOPT line
     QCheckBox* m_dvLayerCheck = nullptr;
+    // "Sound a Blu-ray does not carry" on the General tab: Ask me, AC-3, LPCM, Leave it as it is; the channels; the
+    // AC-3 rate of a stereo track and of a track of more channels; the LPCM bits. Index 0 of each is the start value.
+    QComboBox* m_convertAudioCombo = nullptr;
+    QComboBox* m_convertChannelsCombo = nullptr;
+    QComboBox* m_convertRateStereoCombo = nullptr;
+    QComboBox* m_convertRateMultiCombo = nullptr;
+    QComboBox* m_convertBitsCombo = nullptr;
+    bool m_convertSetByBox = false;  // the box sets the setting ("Remember my choice"): the answers stay
     QPushButton* m_queueAddBtn = nullptr;
     QPushButton* m_queueBtn = nullptr;
     bool m_queueStopOnError = false;  // "Stop at the first job that fails" in the queue: --batch-stop-on-error

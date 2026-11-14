@@ -601,6 +601,87 @@ QString TsMuxerWindow::getDefaultOutputFileName() const
 // wrapper turns on word wrapping without touching the translated strings themselves.
 static QString wrapTip(const QString& text) { return QStringLiteral("<p>") + text + QStringLiteral("</p>"); }
 
+// ** SOUND A BLU-RAY DOES NOT CARRY, AS THE LISTING GIVES IT. ** The channels of "Channels: 5.1" (six) or
+// "Channels: 2", 0 when the listing has none
+static int channelsOfDescr(const QString& descr)
+{
+    const int p = descr.indexOf(QLatin1String("Channels: "));
+    if (p < 0)
+        return 0;
+    int n = 0;
+    for (const QString& part : QtCompat::strMid(descr, p + 10).section(' ', 0, 0).split('.')) n += part.toInt();
+    return n;
+}
+
+// The sample rate in Hz of "Sample Rate: 44.1KHz" or "Sample Rate: 44100", 0 when the listing has none
+static int sampleRateOfDescr(const QString& descr)
+{
+    static const QRegularExpression rate(QStringLiteral("Sample Rate: ([0-9.]+)\\s*(KHz|kHz)?"));
+    const QRegularExpressionMatch m = rate.match(descr);
+    if (!m.hasMatch())
+        return 0;
+    const double value = m.captured(1).toDouble();
+    return static_cast<int>(qRound(m.captured(2).isEmpty() ? value : value * 1000));
+}
+
+static bool isLosslessSound(const QString& programName)
+{
+    return programName == QLatin1String("A_FLAC") || programName == QLatin1String("A_ALAC") ||
+           programName == QLatin1String("A_WAVPACK4") || programName == QLatin1String("A_LPCM");
+}
+
+// The tooltips of the AC-3 rate and of the LPCM bits, on the General tab and in the question at Start muxing
+static QString convertAc3Tip()
+{
+    return wrapTip(
+        TsMuxerWindow::tr("AC-3 plays on every Blu-ray player. Suggested: a step above the rate of the source, as "
+                          "AC-3 needs more bits than AAC for the same sound, but never more than the source can "
+                          "fill: an AAC track of 192 kbit/s gains nothing from AC-3 at 640 kbit/s. A lossless source "
+                          "gets the most: 320 kbit/s for stereo, 640 kbit/s for more channels. 7.1 is folded down "
+                          "to 5.1."));
+}
+
+static QString convertLpcmTip()
+{
+    return wrapTip(
+        TsMuxerWindow::tr("LPCM keeps every bit of a lossless source, but it is large: 5.1 at 48 kHz takes about "
+                          "3.1 GB an hour at 24 bit, 2.1 GB at 16 bit. It makes a lossy source no better. As the "
+                          "source: 24 bit for a lossless source of more than 16 bit, else 16 bit, at the rate of "
+                          "the source where a disc has it, else at 48 or 96 kHz."));
+}
+
+// Fills a combo box anew, in the language of the window, and keeps the entry chosen by its place
+static void refillCombo(QComboBox* combo, const QList<QPair<QString, int>>& items)
+{
+    const QSignalBlocker block(combo);
+    const int keep = combo->currentIndex();
+    combo->clear();
+    for (const auto& [text, value] : items) combo->addItem(text, value);
+    combo->setCurrentIndex(keep >= 0 && keep < combo->count() ? keep : 0);
+}
+
+static QList<QPair<QString, int>> ac3RateItems(const bool stereo)
+{
+    QList<QPair<QString, int>> items = {{TsMuxerWindow::tr("Suggested"), 0}};
+    for (const int kbps : stereo ? QList<int>{192, 224, 256, 320} : QList<int>{384, 448, 512, 576, 640})
+        items.append({TsMuxerWindow::tr("%1 kbit/s").arg(kbps), kbps});
+    return items;
+}
+
+static QList<QPair<QString, int>> lpcmBitsItems()
+{
+    return {{TsMuxerWindow::tr("As the source"), 0},
+            {TsMuxerWindow::tr("%1 bit").arg(16), 16},
+            {TsMuxerWindow::tr("%1 bit").arg(24), 24}};
+}
+
+static QList<QPair<QString, int>> convertChannelsItems()
+{
+    return {{TsMuxerWindow::tr("As they are"), 0},
+            {TsMuxerWindow::tr("Stereo"), 1},
+            {TsMuxerWindow::tr("Both: as they are, and a stereo track"), 2}};
+}
+
 // A simple text chapter file can be pasted in as it is. eac3to and MKVToolNix both write CHAPTER01=00:00:00.000
 // followed by CHAPTER01NAME=, and every one of those lines used to be rejected because this box wants a bare time. The
 // time is taken from a CHAPTERnn= line and a CHAPTERnnNAME= line is skipped (empty); the names are dropped because a
@@ -1247,6 +1328,85 @@ TsMuxerWindow::TsMuxerWindow()
         m_languagesEdit->setText(settings->value("takeLanguages").toStringList().join(", "));
         settings->endGroup();
         connect(m_languagesEdit, &QLineEdit::editingFinished, this, [this]() { writeSettings(); });
+    }
+    // ** SOUND A BLU-RAY DOES NOT CARRY. ** AAC, MPEG audio, Opus, Vorbis, FLAC, ALAC, WavPack and LPCM at a rate a
+    // disc has not were written to a disc with a question, or left out of it. tsMuxeR now converts such a track by the
+    // user's ffmpeg (convert= on its meta line, see convertWords). The setting says what is done: asked at Start
+    // muxing (askAudioConversion), AC-3 or LPCM for every such track, or nothing. Saved with the other choices
+    // (CHOICE_WIDGETS).
+    {
+        auto* group = new QGroupBox(ui->tab_3);
+        group->setObjectName(QStringLiteral("convertAudioGroup"));
+        auto* grid = new QGridLayout(group);
+        m_convertAudioCombo = new QComboBox(group);
+        m_convertAudioCombo->setObjectName(QStringLiteral("convertAudioCombo"));
+        m_convertChannelsCombo = new QComboBox(group);
+        m_convertChannelsCombo->setObjectName(QStringLiteral("convertChannelsCombo"));
+        m_convertRateStereoCombo = new QComboBox(group);
+        m_convertRateStereoCombo->setObjectName(QStringLiteral("convertRateStereoCombo"));
+        m_convertRateMultiCombo = new QComboBox(group);
+        m_convertRateMultiCombo->setObjectName(QStringLiteral("convertRateMultiCombo"));
+        m_convertBitsCombo = new QComboBox(group);
+        m_convertBitsCombo->setObjectName(QStringLiteral("convertBitsCombo"));
+        auto* channelsLabel = new QLabel(group);
+        auto* stereoLabel = new QLabel(group);
+        auto* multiLabel = new QLabel(group);
+        auto* bitsLabel = new QLabel(group);
+        channelsLabel->setBuddy(m_convertChannelsCombo);
+        stereoLabel->setBuddy(m_convertRateStereoCombo);
+        multiLabel->setBuddy(m_convertRateMultiCombo);
+        bitsLabel->setBuddy(m_convertBitsCombo);
+        grid->addWidget(m_convertAudioCombo, 0, 0, 1, 2);
+        grid->addWidget(channelsLabel, 0, 2);
+        grid->addWidget(m_convertChannelsCombo, 0, 3, 1, 3);
+        grid->addWidget(stereoLabel, 1, 0);
+        grid->addWidget(m_convertRateStereoCombo, 1, 1);
+        grid->addWidget(multiLabel, 1, 2);
+        grid->addWidget(m_convertRateMultiCombo, 1, 3);
+        grid->addWidget(bitsLabel, 1, 4);
+        grid->addWidget(m_convertBitsCombo, 1, 5);
+        grid->setColumnStretch(6, 1);
+        ui->gridLayout_14->addWidget(group, 3, 0, 1, 2);
+        const auto texts = [this, group, channelsLabel, stereoLabel, multiLabel, bitsLabel]()
+        {
+            group->setTitle(tr("Sound a Blu-ray does not carry"));
+            refillCombo(m_convertAudioCombo, {{tr("Ask me"), 0},
+                                              {tr("Convert to AC-3"), 1},
+                                              {tr("Convert to LPCM"), 2},
+                                              {tr("Leave it as it is"), 3}});
+            m_convertAudioCombo->setToolTip(wrapTip(
+                tr("A Blu-ray carries LPCM, Dolby and DTS sound. A track of AAC, MP3, MP2, Opus, Vorbis, FLAC, ALAC "
+                   "or WavPack, or LPCM at a rate a disc does not have, plays on few players or is left out of the "
+                   "disc. Your ffmpeg can convert it on a Blu-ray or AVCHD output: to AC-3, which plays on every "
+                   "Blu-ray player, or to LPCM. ffmpeg is not part of tsMuxeR: it is the one chosen for an AC-3 "
+                   "core, else one beside tsMuxeR or on the search path. Ask me: the window asks about each such "
+                   "track when the disc is muxed, queued or scanned.")));
+            channelsLabel->setText(tr("Channels:"));
+            refillCombo(m_convertChannelsCombo, convertChannelsItems());
+            const QString channelsTip =
+                wrapTip(tr("Stereo: the converted track has two channels. Both: a track of more than two channels is "
+                           "converted as it is, and a stereo track of the same sound is added beside it, not as the "
+                           "default track."));
+            channelsLabel->setToolTip(channelsTip);
+            m_convertChannelsCombo->setToolTip(channelsTip);
+            stereoLabel->setText(tr("AC-3 stereo:"));
+            multiLabel->setText(tr("AC-3 5.1:"));
+            refillCombo(m_convertRateStereoCombo, ac3RateItems(true));
+            refillCombo(m_convertRateMultiCombo, ac3RateItems(false));
+            for (QWidget* w : std::initializer_list<QWidget*>{stereoLabel, multiLabel, m_convertRateStereoCombo,
+                                                              m_convertRateMultiCombo})
+                w->setToolTip(convertAc3Tip());
+            bitsLabel->setText(tr("LPCM:"));
+            refillCombo(m_convertBitsCombo, lpcmBitsItems());
+            bitsLabel->setToolTip(convertLpcmTip());
+            m_convertBitsCombo->setToolTip(convertLpcmTip());
+        };
+        texts();
+        m_retranslateHooks.push_back(texts);
+        for (QComboBox* combo : {m_convertAudioCombo, m_convertChannelsCombo, m_convertRateStereoCombo,
+                                 m_convertRateMultiCombo, m_convertBitsCombo})
+            connect(combo, comboBoxIndexChanged, this, &TsMuxerWindow::onConvertSettingChanged);
+        updateConvertSettingEnabled();
     }
     // ** A CHAPTER FILE BY BUTTON. ** A chapter file could be dropped on the chapter list, which nothing in the window
     // said, and the list could not be saved at all. "Load..." asks for the file and fills the list as a drop does;
@@ -3071,6 +3231,8 @@ static const char* const CHOICE_WIDGETS[] = {
     // General tab
     "checkBoxVBR", "checkBoxRVBR", "checkBoxCBR", "editMaxBitrate", "editMinBitrate", "editCBRBitrate", "editVBVLen",
     "radioButtonNoChapters", "radioButtonAutoChapter", "radioButtonCustomChapters", "spinEditChapterLen",
+    // sound a Blu-ray does not carry
+    "convertAudioCombo", "convertChannelsCombo", "convertRateStereoCombo", "convertRateMultiCombo", "convertBitsCombo",
     // Blu-ray tab
     "checkBoxV3", "checkBoxRateLimit", "comboRateLimit", "dvLayerCheck", "spinBoxMplsNum", "spinBoxM2tsNum",
     "pipTransparencySpinBox",
@@ -3818,7 +3980,8 @@ void TsMuxerWindow::colorizeCurrentRow(const QtvCodecInfo* codecInfo, int rowInd
         return;
 
     // Check if this audio codec is incompatible with the selected output format
-    const bool codecIncompat = isCodecIncompatibleWithFormat(codecInfo->programName);
+    // A track converted for a disc, or still to be asked about, is not left out
+    const bool codecIncompat = isCodecIncompatibleWithFormat(codecInfo->programName) && !mayBeConverted(codecInfo);
 
     if (codecIncompat)
     {
@@ -5647,6 +5810,8 @@ static QStringList kindsOverDiscLimit(const QString& meta)
 {
     int audio = 0, secondaryAudio = 0, subtitles = 0, secondaryVideo = 0;
     static const QRegularExpression secondaryParam(QStringLiteral(",\\s*secondary\\s*(,|$)"));
+    // stereo= adds a second track of the same sound beside the one of the line (convertWords)
+    static const QRegularExpression stereoParam(QStringLiteral(",\\s*stereo\\s*="));
     for (const QString& rawLine : meta.split('\n'))
     {
         const QString line = rawLine.trimmed();
@@ -5655,7 +5820,7 @@ static QStringList kindsOverDiscLimit(const QString& meta)
         const QString codec = line.section(',', 0, 0).trimmed();
         const bool secondary = line.contains(secondaryParam);
         if (codec.startsWith('A'))
-            ++(secondary ? secondaryAudio : audio);
+            (secondary ? secondaryAudio : audio) += line.contains(stereoParam) ? 2 : 1;
         else if (codec.startsWith('S'))
             ++subtitles;
         else if (codec.startsWith('V') && secondary)
@@ -5713,6 +5878,13 @@ QString TsMuxerWindow::getMuxOpts()
         if (over)
             rez += " --allow-extra-tracks";
     }
+    // The ffmpeg chosen in the window, for the made Dolby Vision layer and for the sound converted for a disc
+    const QString ffmpegWord = !m_coreEncoderPath.isEmpty() && QFileInfo(m_coreEncoderPath).isFile()
+                                   ? QString(" --ffmpeg=\"%1\"").arg(QDir::toNativeSeparators(m_coreEncoderPath))
+                                   : QString();
+    bool converting = false;
+    for (int i = 0; i < ui->trackLV->rowCount() && isDiskOutput() && !converting; ++i)
+        converting = ui->trackLV->item(i, 0)->checkState() == Qt::Checked && !convertWords(getCodecInfo(i)).isEmpty();
     // The disc's title and pictures (#30): kept from the source disc unless a folder or none is chosen
     if (ui->radioButtonBluRay->isChecked() || ui->radioButtonBluRayISO->isChecked())
     {
@@ -5724,13 +5896,18 @@ QString TsMuxerWindow::getMuxOpts()
         // The made second layer of a single layer Dolby Vision track: on by default, so a word only when it is not
         // wanted. The ffmpeg chosen in the window goes with it when it is still there; without one, tsMuxeR looks
         // beside itself and on the search path.
+        // A track converted for the disc (convert=) is converted by that ffmpeg as well, with or without the layer.
         if (m_dvLayerCheck && !m_dvLayerCheck->isChecked())
             rez += " --no-dv-layer";
-        else if (!m_coreEncoderPath.isEmpty() && QFileInfo(m_coreEncoderPath).isFile())
-            rez += QString(" --ffmpeg=\"%1\"").arg(QDir::toNativeSeparators(m_coreEncoderPath));
+        if (!m_dvLayerCheck || m_dvLayerCheck->isChecked() || converting)
+            rez += ffmpegWord;
     }
     else if (ui->radioButtonAVCHD->isChecked())
+    {
         rez += " --avchd";
+        if (converting)
+            rez += ffmpegWord;
+    }
     else if (ui->radioButtonDemux->isChecked())
         rez += " --demux";
     else if (ui->radioButtonMKV->isChecked() && ui->comboBoxDvProfile->isVisible() &&
@@ -6180,6 +6357,8 @@ QString TsMuxerWindow::getAudioMetaInfo(QtvCodecInfo* codecInfo)
         rezStr += ", w64";
     if (codecInfo->isSecondary)
         rezStr += ", secondary";
+    // sound a Blu-ray does not carry, converted for a disc output
+    rezStr += convertWords(codecInfo);
     return rezStr;
 }
 
@@ -6570,6 +6749,341 @@ bool TsMuxerWindow::offerAc3Cores()
     return true;
 }
 
+bool TsMuxerWindow::convertibleForDisc(const QtvCodecInfo* info) const
+{
+    // ffmpeg reads one file: not a join, a playlist, a disc title, nor a track merged with a core. Not a secondary
+    // track either: a disc carries secondary sound as E-AC-3 or DTS-HD, and tsMuxeR refuses to convert it
+    if (info == nullptr || info->fileList.size() != 1 || !info->mplsFiles.isEmpty() || info->dvdTitle != 0 ||
+        info->subTrack != 0 || info->mergeAc3Track > 0 || !info->mergeAc3File.isEmpty() || info->isSecondary)
+        return false;
+    const QString& codec = info->programName;
+    bool notOnDisc = codec == QLatin1String("A_AAC") || codec == QLatin1String("A_MP3") ||
+                     codec == QLatin1String("A_OPUS") || codec == QLatin1String("A_VORBIS") ||
+                     codec == QLatin1String("A_FLAC") || codec == QLatin1String("A_ALAC") ||
+                     codec == QLatin1String("A_WAVPACK4");
+    // LPCM at 48 or 96 kHz is a disc's, and at 192 kHz up to 6 channels; a rate the listing does not give is left
+    if (codec == QLatin1String("A_LPCM"))
+    {
+        const int rate = sampleRateOfDescr(info->descr);
+        notOnDisc =
+            rate != 0 && rate != 48000 && rate != 96000 && !(rate == 192000 && channelsOfDescr(info->descr) <= 6);
+    }
+    if (!notOnDisc)
+        return false;
+    const QFileInfo file(unquoteStr(info->fileList[0]));
+    const QString ext = file.suffix().toLower();
+    return file.isFile() && ext != QLatin1String("iso") && ext != QLatin1String("mpls") && ext != QLatin1String("mpl");
+}
+
+QString TsMuxerWindow::convertWords(const QtvCodecInfo* info) const
+{
+    if (!isDiskOutput() || !convertibleForDisc(info))
+        return QString();
+    QString to = info->convertTo;
+    QString beside = info->stereoTo;
+    if (to.isEmpty())
+    {
+        // the General tab's setting: AC-3 or LPCM for every such track; "Ask me" asks at Start muxing
+        const int kind = m_convertAudioCombo ? m_convertAudioCombo->currentIndex() : 0;
+        if (kind != 1 && kind != 2)
+            return QString();
+        const int channels = channelsOfDescr(info->descr);
+        const int how = m_convertChannelsCombo->currentIndex();  // as they are, stereo, both
+        const bool stereoOut = how == 1;
+        // both: a stereo track beside a track of more channels, as --convert-stereo=both does
+        const bool addStereo = how == 2 && channels != 1 && channels != 2;
+        if (kind == 1)
+        {
+            const int stereoRate = m_convertRateStereoCombo->currentData().toInt();
+            // a rate of more channels only where the track has more than two; else the suggested one
+            const int rate = stereoOut || (channels > 0 && channels <= 2)
+                                 ? stereoRate
+                                 : (channels > 2 ? m_convertRateMultiCombo->currentData().toInt() : 0);
+            to = QStringLiteral("ac3") + (rate > 0 ? QStringLiteral(":%1").arg(rate) : QString());
+            if (addStereo)
+                beside = QStringLiteral("ac3") + (stereoRate > 0 ? QStringLiteral(":%1").arg(stereoRate) : QString());
+        }
+        else
+        {
+            const int bits = m_convertBitsCombo->currentData().toInt();
+            to = QStringLiteral("lpcm") + (bits > 0 ? QStringLiteral(":%1").arg(bits) : QString());
+            if (addStereo)
+                beside = to;
+        }
+        if (stereoOut)
+            to += QStringLiteral(":stereo");
+    }
+    if (to == QLatin1String("none"))
+        return QString();
+    QString words = QStringLiteral(", convert=") + to;
+    if (!beside.isEmpty())
+        words += QStringLiteral(", stereo=") + beside;
+    return words;
+}
+
+bool TsMuxerWindow::mayBeConverted(const QtvCodecInfo* info) const
+{
+    if (!isDiskOutput() || !convertibleForDisc(info))
+        return false;
+    if (!info->convertTo.isEmpty())
+        return info->convertTo != QLatin1String("none");
+    return m_convertAudioCombo && m_convertAudioCombo->currentIndex() != 3;
+}
+
+void TsMuxerWindow::updateConvertSettingEnabled()
+{
+    if (!m_convertAudioCombo)
+        return;
+    const int kind = m_convertAudioCombo->currentIndex();
+    m_convertChannelsCombo->setEnabled(kind == 1 || kind == 2);
+    m_convertRateStereoCombo->setEnabled(kind == 1);
+    m_convertRateMultiCombo->setEnabled(kind == 1);
+    m_convertBitsCombo->setEnabled(kind == 2);
+    for (QLabel* label : m_convertAudioCombo->parentWidget()->findChildren<QLabel*>())
+        if (label->buddy())
+            label->setEnabled(label->buddy()->isEnabled());
+}
+
+void TsMuxerWindow::onConvertSettingChanged()
+{
+    updateConvertSettingEnabled();
+    // a setting changed by hand counts for every track, the ones answered in the box too
+    if (!m_convertSetByBox)
+        for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+            if (QtvCodecInfo* info = getCodecInfo(i))
+            {
+                info->convertTo.clear();
+                info->stereoTo.clear();
+            }
+    colorizeAllRows();
+    updateMetaLines();
+}
+
+// ** THE QUESTION ABOUT SOUND A BLU-RAY DOES NOT CARRY. ** One box for all the ticked tracks of such kinds that have no
+// answer yet, a row each: to AC-3 (the start for a lossy track), to LPCM (for a lossless one) or left as it is, the
+// rate or the bits, and the channels. The answer goes into each track's info, so the meta box and a job of the queue
+// have it. "Remember my choice" makes the first row's choice the General tab's setting, and the box does not come
+// again.
+bool TsMuxerWindow::askAudioConversion()
+{
+    if (!m_convertAudioCombo || m_convertAudioCombo->currentIndex() != 0)
+        return true;  // the setting counts for every such track
+    QList<int> rows;
+    for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+    {
+        const QtvCodecInfo* info = getCodecInfo(i);
+        if (info != nullptr && ui->trackLV->item(i, 0)->checkState() == Qt::Checked && info->convertTo.isEmpty() &&
+            convertibleForDisc(info))
+            rows << i;
+    }
+    if (rows.isEmpty())
+        return true;
+
+    QDialog box(this);
+    box.setObjectName(QStringLiteral("convertAudioBox"));
+    box.setWindowTitle(tr("Sound a Blu-ray does not carry"));
+    auto* layout = new QVBoxLayout(&box);
+    auto* text = new QLabel(tr("A Blu-ray player plays LPCM, Dolby and DTS sound. The tracks below are of other kinds: "
+                               "a player will most likely not play them, and some are left out of the disc. Convert "
+                               "them, or leave them as they are."),
+                            &box);
+    text->setWordWrap(true);
+    layout->addWidget(text);
+
+    auto* grid = new QGridLayout;
+    const QStringList heads = {QString(),        tr("source file"), tr("codec"),   tr("sound"),
+                               tr("convert to"), tr("quality"),     tr("channels")};
+    for (int c = 0; c < heads.size(); ++c)
+    {
+        auto* head = new QLabel(heads[c], &box);
+        QFont font = head->font();
+        font.setBold(true);
+        head->setFont(font);
+        grid->addWidget(head, 0, c);
+    }
+    struct Row
+    {
+        QtvCodecInfo* info;
+        int channels;
+        QComboBox* kind;
+        QComboBox* quality;
+        QComboBox* how;
+    };
+    QList<Row> list;
+    for (int n = 0; n < rows.size(); ++n)
+    {
+        const int i = rows[n];
+        QtvCodecInfo* info = getCodecInfo(i);
+        const int channels = channelsOfDescr(info->descr);
+        const int rate = sampleRateOfDescr(info->descr);
+        QStringList sound;
+        if (channels == 1)
+            sound << tr("mono");
+        else if (channels == 2)
+            sound << tr("stereo");
+        else if (channels > 0)
+            sound << QtCompat::strMid(info->descr, info->descr.indexOf(QLatin1String("Channels: ")) + 10)
+                         .section(' ', 0, 0);
+        if (rate > 0)
+            sound << QStringLiteral("%1 kHz").arg(rate / 1000.0, 0, 'g', 5);
+        const int place = n + 1;
+        grid->addWidget(new QLabel(QString::number(i + 1), &box), place, 0);
+        grid->addWidget(new QLabel(ui->trackLV->item(i, 1) ? ui->trackLV->item(i, 1)->text() : QString(), &box), place,
+                        1);
+        grid->addWidget(new QLabel(info->displayName, &box), place, 2);
+        grid->addWidget(new QLabel(sound.join(QStringLiteral(", ")), &box), place, 3);
+        Row row{info, channels, new QComboBox(&box), new QComboBox(&box), new QComboBox(&box)};
+        row.kind->setObjectName(QStringLiteral("convertKindCombo%1").arg(place));
+        row.quality->setObjectName(QStringLiteral("convertQualityCombo%1").arg(place));
+        row.how->setObjectName(QStringLiteral("convertHowCombo%1").arg(place));
+        row.kind->addItem(QStringLiteral("AC-3"), 1);
+        row.kind->addItem(QStringLiteral("LPCM"), 2);
+        row.kind->addItem(tr("Leave it as it is"), 3);
+        row.kind->setCurrentIndex(isLosslessSound(info->programName) ? 1 : 0);
+        for (const auto& [itemText, value] : convertChannelsItems()) row.how->addItem(itemText, value);
+        row.how->setToolTip(m_convertChannelsCombo->toolTip());
+        grid->addWidget(row.kind, place, 4);
+        grid->addWidget(row.quality, place, 5);
+        grid->addWidget(row.how, place, 6);
+        list << row;
+    }
+    grid->setColumnStretch(1, 1);
+    layout->addLayout(grid);
+
+    // the rate or the bits, by the kind and the channels; a choice that is still offered is kept
+    const auto refreshRow = [](const Row& row)
+    {
+        const int kind = row.kind->currentData().toInt();
+        const bool twoOrFewer = row.channels == 1 || row.channels == 2;
+        row.how->setEnabled(kind != 3 && !twoOrFewer);
+        if (!row.how->isEnabled())
+            row.how->setCurrentIndex(0);
+        const int keep = row.quality->currentData().toInt();
+        const QSignalBlocker block(row.quality);
+        row.quality->clear();
+        if (kind == 1)
+            for (const auto& [itemText, value] : ac3RateItems(row.how->currentIndex() == 1 || twoOrFewer))
+                row.quality->addItem(itemText, value);
+        else if (kind == 2)
+            for (const auto& [itemText, value] : lpcmBitsItems()) row.quality->addItem(itemText, value);
+        const int idx = row.quality->findData(keep);
+        row.quality->setCurrentIndex(idx < 0 ? 0 : idx);
+        row.quality->setEnabled(kind != 3);
+        row.quality->setToolTip(kind == 1 ? convertAc3Tip() : kind == 2 ? convertLpcmTip() : QString());
+    };
+
+    auto* note = new QLabel(tr("Your ffmpeg converts the sound. tsMuxeR does not come with ffmpeg."), &box);
+    note->setWordWrap(true);
+    layout->addWidget(note);
+    auto* found = new QLabel(&box);
+    found->setObjectName(QStringLiteral("convertFfmpegLabel"));
+    found->setWordWrap(true);
+    layout->addWidget(found);
+    auto* choose = new QPushButton(Ac3CoreDialog::tr("Choose ffmpeg..."), &box);
+    choose->setObjectName(QStringLiteral("convertChooseFfmpegBtn"));
+    auto* chooseRow = new QHBoxLayout;
+    chooseRow->addWidget(choose);
+    chooseRow->addStretch();
+    layout->addLayout(chooseRow);
+    auto* remember = new QCheckBox(tr("Remember my choice"), &box);
+    remember->setObjectName(QStringLiteral("convertRememberCheck"));
+    remember->setToolTip(
+        wrapTip(tr("The choice of the first track, with its channels and the suggested rate, becomes the setting on "
+                   "the General tab for every such track, and this question does not come again. Ask me on the "
+                   "General tab brings it back.")));
+    layout->addWidget(remember);
+    auto* buttons = new QDialogButtonBox(&box);
+    QPushButton* convert = buttons->addButton(tr("Convert"), QDialogButtonBox::AcceptRole);
+    convert->setObjectName(QStringLiteral("convertAudioOkBtn"));
+    buttons->addButton(QDialogButtonBox::Cancel);
+    convert->setDefault(true);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &box, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &box, &QDialog::reject);
+
+    // tsMuxeR takes the ffmpeg saved here (--ffmpeg) and no other, else one beside it or on the search path
+    QString ffmpeg;
+    const auto updateConvert = [&]
+    {
+        const bool anyConverted =
+            std::any_of(list.cbegin(), list.cend(), [](const Row& r) { return r.kind->currentData().toInt() != 3; });
+        convert->setEnabled(!ffmpeg.isEmpty() || !anyConverted);
+    };
+    const auto showFfmpeg = [&]
+    {
+        QString problem;
+        ffmpeg = Ac3CoreDialog::findFfmpeg(m_coreEncoderPath, &problem, false, true);
+        found->setText(ffmpeg.isEmpty() ? problem : tr("Converted with %1.").arg(QDir::toNativeSeparators(ffmpeg)));
+        choose->setVisible(ffmpeg.isEmpty());
+        updateConvert();
+    };
+    for (const Row& row : list)
+    {
+        refreshRow(row);
+        connect(row.kind, &QComboBox::currentIndexChanged, &box,
+                [&, row]
+                {
+                    refreshRow(row);
+                    updateConvert();
+                });
+        connect(row.how, &QComboBox::currentIndexChanged, &box, [&, row] { refreshRow(row); });
+    }
+    showFfmpeg();
+    const QString savedBefore = m_coreEncoderPath;
+    connect(choose, &QPushButton::clicked, &box,
+            [&]
+            {
+                const QString path = QFileDialog::getOpenFileName(&box, Ac3CoreDialog::tr("Choose ffmpeg"));
+                if (path.isEmpty())
+                    return;
+                m_coreEncoderPath = path;
+                showFfmpeg();
+            });
+    box.resize(qMax(640, box.sizeHint().width()), box.sizeHint().height());
+    const bool accepted = box.exec() == QDialog::Accepted;
+    if (m_coreEncoderPath != savedBefore)
+        writeSettings();  // the MUXOPT line names it (--ffmpeg): updateMetaLines below
+    if (!accepted)
+    {
+        updateMetaLines();
+        return false;
+    }
+
+    for (const Row& row : list)
+    {
+        const int kind = row.kind->currentData().toInt();
+        if (kind == 3)
+        {
+            row.info->convertTo = QStringLiteral("none");
+            row.info->stereoTo.clear();
+            continue;
+        }
+        const int value = row.quality->currentData().toInt();
+        const int how = row.how->currentIndex();
+        const QString base = kind == 1 ? QStringLiteral("ac3") : QStringLiteral("lpcm");
+        row.info->convertTo = base + (value > 0 ? QStringLiteral(":%1").arg(value) : QString()) +
+                              (how == 1 ? QStringLiteral(":stereo") : QString());
+        // the stereo track beside: AC-3 at the suggested rate, LPCM with the same bits
+        row.info->stereoTo = how != 2    ? QString()
+                             : kind == 1 ? base
+                                         : base + (value > 0 ? QStringLiteral(":%1").arg(value) : QString());
+    }
+    if (remember->isChecked())
+    {
+        m_convertSetByBox = true;
+        m_convertRateStereoCombo->setCurrentIndex(0);
+        m_convertRateMultiCombo->setCurrentIndex(0);
+        m_convertBitsCombo->setCurrentIndex(0);
+        m_convertChannelsCombo->setCurrentIndex(list.first().how->currentIndex());
+        m_convertAudioCombo->setCurrentIndex(list.first().kind->currentData().toInt());
+        m_convertSetByBox = false;
+        writeSettings();
+    }
+    colorizeAllRows();
+    updateMetaLines();
+    return true;
+}
+
 bool TsMuxerWindow::makeAc3Cores()
 {
     while (!m_pendingCores.isEmpty())
@@ -6892,8 +7406,8 @@ QString TsMuxerWindow::buildMetaText()
         if (!codecInfo)
             continue;
 
-        // Force-disable audio tracks when the output format doesn't support them
-        if (isCodecIncompatibleWithFormat(codecInfo->programName))
+        // Force-disable audio tracks when the output format doesn't support them, unless converted for the disc
+        if (isCodecIncompatibleWithFormat(codecInfo->programName) && convertWords(codecInfo).isEmpty())
             prefix = "#";
 
         // A track folded into a TrueHD track travels inside it, so it must not also be muxed
@@ -8268,6 +8782,10 @@ void TsMuxerWindow::startMuxing()
     const auto dropCores = qScopeGuard([this] { dropPendingCores(); });
     if (isDiskOutput() && !m_metaUserOverride && !offerAc3Cores())
         return;
+    // Sound a Blu-ray does not carry: with "Ask me", what to do with each such track, once. Before the question below,
+    // which a track converted no longer concerns, and before the #53 question, as a stereo track beside is one more.
+    if (isDiskOutput() && !m_metaUserOverride && !askAudioConversion())
+        return;
 
     // ** A CODEC A BLU-RAY DOES NOT HAVE IS ASKED ABOUT. ** AAC, MPEG audio (MP2, MP3) and VVC can be muxed to a disc,
     // and tsMuxeR warns that no Blu-ray player plays them. The warning is a line of the log, which is read after the
@@ -8279,7 +8797,8 @@ void TsMuxerWindow::startMuxing()
         for (int i = 0; i < ui->trackLV->rowCount(); ++i)
         {
             const QtvCodecInfo* info = getCodecInfo(i);
-            if (!info || ui->trackLV->item(i, 0)->checkState() != Qt::Checked)
+            // a track converted to AC-3 or LPCM is one a Blu-ray has
+            if (!info || ui->trackLV->item(i, 0)->checkState() != Qt::Checked || !convertWords(info).isEmpty())
                 continue;
             QString kind;
             if (info->programName == QLatin1String("A_AAC"))
