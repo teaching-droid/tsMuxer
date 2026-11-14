@@ -722,6 +722,10 @@ static std::vector<uint8_t> heldPes(const std::vector<uint8_t>& held, const size
         if (p[0] != 0x47 || ts->getPID() != pid || !ts->dataExists || ts->getHeaderSize() >= TS_FRAME_SIZE)
             continue;
         const uint8_t* payload = p + ts->getHeaderSize();
+        // the next PES (a PES without a time held after it): this one is whole, as pesStart takes it
+        if (i > from && ts->payloadStart && ts->getHeaderSize() + 3 <= TS_FRAME_SIZE && payload[0] == 0 &&
+            payload[1] == 0 && payload[2] == 1)
+            break;
         if (i == from && ts->payloadStart)
         {
             const auto pes = reinterpret_cast<const PESPacket*>(payload);
@@ -764,8 +768,8 @@ TSDemuxer::LeadPes TSDemuxer::skipsLeadingPes(const int pid, const StreamType ty
         // PES begins (resolveLeadPes), which gives the held ones back if it holds no parameter sets either
         if (first != 1 && (++m_leadPes[pid] <= LEAD_VIDEO_PES_MAX || (first == -1 && !complete)))
         {
-            if (m_leadPes[pid] > LEAD_VIDEO_PES_MAX)
-                m_leadPes[pid] = LEAD_VIDEO_PES_MAX;
+            if (m_leadPes[pid] > LEAD_VIDEO_PES_MAX + 1)
+                m_leadPes[pid] = LEAD_VIDEO_PES_MAX + 1;
             if (first == -1 && !complete)
             {
                 m_leadUndecided[pid] = true;
@@ -1692,6 +1696,33 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     }
 
     int64_t handedOn = 0;  // bytes of subtitles written here (clearSubtitlesAtPartEnd), counted against the discarded
+    if (isFirstBlock && !m_leadHeld.empty() && m_firstPTS != -1)
+    {
+        // ** WHAT A FILE HOLDS AT ITS START IS DECIDED WITH IT. ** The PES held at the start of a file
+        // (skipsLeadingPes) went on into the next file of a join or a playlist, and the first PES there decided them:
+        // kept, the held video of the file before was lost; given back, its packets were read on the clock and the part
+        // of the next file. They are decided at the end of their own file, as at the end of the last one.
+        const ClipPart* part = m_curFileNum < m_clipParts.size() && m_clipParts[m_curFileNum].isCut()
+                                   ? &m_clipParts[m_curFileNum]
+                                   : nullptr;
+        MemoryBlock* heldVect = nullptr;
+        int heldLastPid = -1;
+        discardSize = 0;
+        std::vector<int> pids;
+        for (const auto& [pid, held] : m_leadHeld) pids.push_back(pid);
+        for (const int pid : pids)
+        {
+            if (m_leadUndecided[pid] && m_leadPes[pid] != LEAD_PES_DONE)
+                if (const auto info = m_pmt.pidList.find(pid); info != m_pmt.pidList.end())
+                    resolveLeadPes(pid, info->second.m_streamType, demuxedData, discardSize, part, heldVect,
+                                   heldLastPid);
+            m_leadPes[pid] = LEAD_PES_DONE;
+            m_leadDrop[pid] = false;
+            giveBackLeadPes(pid, demuxedData, discardSize, part, heldVect, heldLastPid);
+        }
+        handedOn -= discardSize;  // what the give-back counted as discarded, carried into this call's count
+        discardSize = 0;
+    }
     if (isFirstBlock)
     {
         if (isJoinOfFiles())
@@ -2576,7 +2607,16 @@ void TSDemuxer::resolveLeadPes(const int pid, const StreamType type, DemuxedData
     const std::vector<uint8_t> bytes = heldPes(held->second, from, pid);
     const size_t look = (std::min)(bytes.size(), size_t{16384});
     if (parameterSetsFirst(type, bytes.data(), bytes.data() + look) != 1)
+    {
+        // the last PES the search looks at: no parameter sets within the limit, the stream is read whole, as where
+        // that PES had not run past its block
+        if (m_leadPes[pid] > LEAD_VIDEO_PES_MAX)
+        {
+            m_leadPes[pid] = LEAD_PES_DONE;
+            giveBackLeadPes(pid, demuxedData, discardSize, part, vect, lastPid);
+        }
         return;
+    }
     held->second.erase(held->second.begin(), held->second.begin() + static_cast<std::ptrdiff_t>(from));
     if (from > 0)
         m_leadFirstSeen[pid] = false;  // the first PES of the file was among those left out
