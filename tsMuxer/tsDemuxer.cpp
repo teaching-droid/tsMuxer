@@ -2647,10 +2647,35 @@ void TSDemuxer::giveBackLeadPes(const int pid, DemuxedData& demuxedData, int64_t
     // the PES being read (a give-back from within demuxPacket) keeps its decision of the part, which the held PES
     // set again as they came back: its packets after the first, and the PES without a time after it, went by the
     // last held one
-    const uint8_t partKeep = m_partKeep[pid];
-    const auto cut = m_partCut.find(pid);
-    const bool cutKeep = cut != m_partCut.end() && cut->second.keep;
-    const bool wasGivingBack = m_givingBack;
+    // (restored also where a packet throws: a guard)
+    struct Restore
+    {
+        TSDemuxer& d;
+        const int pid;
+        const uint8_t partKeep;
+        const std::map<int, PartCut>::iterator cut;  // a map: it stays valid
+        const bool cutKeep;
+        const bool wasGivingBack;
+        ~Restore()
+        {
+            d.m_givingBack = wasGivingBack;
+            d.m_partKeep[pid] = partKeep;
+            if (cut != d.m_partCut.end())
+                cut->second.keep = cutKeep;
+        }
+        Restore(TSDemuxer& demuxer, const int p, const std::map<int, PartCut>::iterator c)
+            : d(demuxer),
+              pid(p),
+              partKeep(demuxer.m_partKeep[p]),
+              cut(c),
+              cutKeep(c != demuxer.m_partCut.end() && c->second.keep),
+              wasGivingBack(demuxer.m_givingBack)
+        {
+        }
+        Restore(const Restore&) = delete;
+        Restore& operator=(const Restore&) = delete;
+    };
+    const Restore restore(*this, pid, m_partCut.find(pid));
     m_givingBack = true;
     for (size_t i = 0; i + TS_FRAME_SIZE <= packets.size(); i += TS_FRAME_SIZE)
     {
@@ -2661,10 +2686,6 @@ void TSDemuxer::giveBackLeadPes(const int pid, DemuxedData& demuxedData, int64_t
                 m_partKeep[pid] = 1;
         demuxPacket(packets.data() + i, pid, demuxedData, discardSize, part, vect, lastPid);
     }
-    m_givingBack = wasGivingBack;
-    m_partKeep[pid] = partKeep;
-    if (const auto again = m_partCut.find(pid); again != m_partCut.end() && cut != m_partCut.end())
-        again->second.keep = cutKeep;
 }
 
 // A clip file of a playlist begins: the state of the part before is cleared. The sound of a cut part carries where
