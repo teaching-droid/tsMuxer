@@ -34,6 +34,9 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
 
     int64_t getTrackDelay(const int32_t pid) override
     {
+        // the start the mux measures (trackStartTicks), where it is known
+        if (int64_t ticks = 0; trackStartTicks(pid, ticks))
+            return llround(static_cast<double>(ticks) / 90.0);
         if (m_firstPtsTime.find(pid) != m_firstPtsTime.end())
             return llround(
                 static_cast<double>(m_firstPtsTime[pid] - (m_firstVideoPTS != -1 ? m_firstVideoPTS : m_firstPTS)) /
@@ -43,16 +46,22 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
     }
 
     [[nodiscard]] int64_t getFileDurationNano() const override;
-    // The first PTS of a stream against the first (smallest) PTS of the video read so far, in 90 kHz ticks: where the
-    // mux puts the stream (METADemuxer::addStream). False where either is not known yet.
+    // ** THE START OF A TRACK OF A PROGRAM STREAM, AS THE MUX MEASURES IT. ** The first PTS of the track against the
+    // first picture the video reader keeps, in 90 kHz ticks: the earliest picture from the first video PES with a
+    // sequence header (an MPEG-2 or MPEG-1 reader leaves out what comes before it, a file cut inside a group of
+    // pictures), in the first part of the file (before its clock jumps: a VOB of a short logo cell and then the
+    // film), on the 33-bit clock across its turn. The smallest PTS of all the file took the left-out pictures and
+    // the next part, and a value across the turn was 26 hours off. False where either is not known yet.
     [[nodiscard]] bool trackStartTicks(const int pid, int64_t& ticks) const
     {
-        const auto first = m_firstPtsTime.find(pid);
-        if (first == m_firstPtsTime.end() || m_firstVideoPTS == -1)
+        const auto first = m_startTrackPts.find(pid);
+        if (first == m_startTrackPts.end() || m_startVideoBase < 0)
             return false;
-        ticks = first->second - m_firstVideoPTS;
+        ticks = wrapped(first->second - m_startVideoBase) - m_startVideoMin;
         return true;
     }
+    // A sequence header was found in the video read so far (else trackStartTicks counts every video PES)
+    [[nodiscard]] bool videoStartSeen() const { return m_startVideoBase >= 0; }
 
    private:
     uint32_t m_tmpBufferLen;
@@ -70,6 +79,18 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
     std::map<int, int64_t> m_firstPtsTime;
     int64_t m_firstVideoPTS;
     int64_t m_firstPTS;
+    // trackStartTicks: the PTS of the first video PES with a sequence header, the earliest picture since against it,
+    // and the first PTS of each track (no sequence header found: not known, the listing as before)
+    int64_t m_startVideoBase = -1;
+    int64_t m_startVideoMin = 0;
+    std::map<int, int64_t> m_startTrackPts;
+    static int64_t wrapped(const int64_t d)
+    {
+        constexpr int64_t TURN = 1LL << 33;
+        int64_t r = ((d % TURN) + TURN) % TURN;
+        return r >= TURN / 2 ? r - TURN : r;
+    }
+    void noteStart(int pid, int64_t pts, const uint8_t* payload, int len);
     MemoryBlock m_lpcmWaveHeader[16];
     bool m_lpcpHeaderAdded[16];
     // ** DVD LPCM IS TURNED ROUND AS IT IS HANDED ON. ** The big endian samples of sub-streams 0xA0 to 0xAF go on as a

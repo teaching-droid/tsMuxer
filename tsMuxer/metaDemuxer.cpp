@@ -229,19 +229,22 @@ static int64_t tsTrackStart(const BufferedReaderManager& readManager, const std:
 // first picture (110 ms in a file of MPEG-2 video and MP2) was muxed with the sound from the first picture: it came
 // that much early, in every output and in every version, where the meta file gave no timeshift= (a meta written by
 // hand, a source given in place of the meta file). The window writes the listed delay as timeshift=, which hid it.
-// The start of the track against the first picture, in 90 kHz ticks, as the listing gives it (Stream delay): the
-// first PTS of the track against the smallest PTS of the video, read until both are known and a few megabytes
-// further, as the pictures shown before the first one come after it.
+// The start of the track against the first picture the mux keeps, in 90 kHz ticks, as the listing gives it (Stream
+// delay; ProgramStreamDemuxer::trackStartTicks), read until both are known and a few megabytes further, as the
+// pictures shown before the first one come after it.
 static int64_t psTrackStart(const BufferedReaderManager& readManager, const std::string& fileName, const int pid,
                             bool* known)
 {
     *known = false;
     static constexpr int64_t LATE_LIMIT = 256LL * 1024 * 1024;
+    static constexpr int64_t NO_VIDEO_LIMIT = 32LL * 1024 * 1024;  // a file of sound alone: no start against video
     static constexpr int64_t AFTER_BOTH = 4LL * 1024 * 1024;
     ProgramStreamDemuxer probe(readManager);
     probe.openFile(fileName);
-    PIDSet all;
-    for (int i = 0; i < 256; ++i) all.insert(i);
+    // the track and the video only: the sub-pictures and the other sound are not read for this
+    PIDSet wanted = {pid};
+    for (int i = 0x55; i <= 0x5f; ++i) wanted.insert(i);
+    for (int i = 0xe0; i <= 0xef; ++i) wanted.insert(i);
     DemuxedData demuxedData;
     int64_t discardedSize = 0;
     int64_t ticks = 0;
@@ -249,7 +252,9 @@ static int64_t psTrackStart(const BufferedReaderManager& readManager, const std:
     while (probe.getDemuxedSize() < LATE_LIMIT)
     {
         demuxedData.clear();
-        if (probe.simpleDemuxBlock(demuxedData, all, discardedSize) == BufferedReader::DATA_EOF)
+        if (probe.simpleDemuxBlock(demuxedData, wanted, discardedSize) == BufferedReader::DATA_EOF)
+            break;
+        if (!probe.videoStartSeen() && probe.getDemuxedSize() >= NO_VIDEO_LIMIT)
             break;
         if (bothAt < 0 && probe.trackStartTicks(pid, ticks))
             bothAt = probe.getDemuxedSize();

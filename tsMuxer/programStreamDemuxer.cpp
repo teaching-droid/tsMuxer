@@ -344,6 +344,46 @@ void ProgramStreamDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
     }
 }
 
+// For trackStartTicks: the first PTS of each track, and the earliest picture of the video from its first PES with a
+// sequence header (MPEG-1/2 00 00 01 B3, VC-1 00 00 01 0F, H.264 an SPS, HEVC an SPS), in the first part of the file
+void ProgramStreamDemuxer::noteStart(const int pid, const int64_t pts, const uint8_t* payload, const int len)
+{
+    if (m_parts > 0)
+        return;  // the clock jumped: a later part of the file
+    if (!isVideoPID(pid))
+    {
+        m_startTrackPts.emplace(pid, pts);
+        return;
+    }
+    if (m_startVideoBase < 0)
+    {
+        const int type = m_psm_es_type[pid & 0xff];
+        bool sequence = false;
+        for (int i = 0; i + 4 <= len && !sequence; ++i)
+        {
+            if (payload[i] != 0 || payload[i + 1] != 0 || payload[i + 2] != 1)
+                continue;
+            const uint8_t code = payload[i + 3];
+            if (type == static_cast<int>(StreamType::VIDEO_H264) || type == static_cast<int>(StreamType::VIDEO_MVC))
+                sequence = (code & 0x1f) == 7;
+            else if (type == static_cast<int>(StreamType::VIDEO_H265))
+                sequence = ((code >> 1) & 0x3f) == 33;
+            else if (type == static_cast<int>(StreamType::VIDEO_H266))
+                sequence = i + 5 <= len && ((payload[i + 4] >> 3) & 0x1f) == 15;
+            else if (pid >= 0x55 && pid <= 0x5f)
+                sequence = code == 0x0f;
+            else
+                sequence = code == 0xb3;
+        }
+        if (!sequence)
+            return;
+        m_startVideoBase = pts;
+        m_startVideoMin = 0;
+        return;
+    }
+    m_startVideoMin = (std::min)(m_startVideoMin, wrapped(pts - m_startVideoBase));
+}
+
 bool ProgramStreamDemuxer::isVideoPID(const uint32_t pid) const
 {
     return (pid >= 0x55 && pid <= 0x5f) ||  // vc1
@@ -506,6 +546,11 @@ int ProgramStreamDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSe
                         m_firstVideoPTS = curPts;
                     if (m_firstPtsTime.find(startcode) == m_firstPtsTime.end() || curPts < m_firstPtsTime[startcode])
                         m_firstPtsTime[startcode] = curPts;
+                    const uint8_t* payloadStart = curBuf + headerLen + afterPesHeader;
+                    noteStart(startcode, curPts, payloadStart,
+                              static_cast<int>((std::min)(
+                                  static_cast<int64_t>(pesPacket->getPacketLength() - headerLen - afterPesHeader),
+                                  static_cast<int64_t>(end - payloadStart))));
                 }
 
                 StreamData& vect = demuxedData[startcode];
