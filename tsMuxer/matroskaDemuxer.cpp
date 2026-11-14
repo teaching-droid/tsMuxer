@@ -2065,6 +2065,7 @@ int MatroskaDemuxer::matroska_read_header()
 {
     for (int i = 0; i < num_tracks; i++) freeTrack(tracks[i]);
     num_tracks = 0;
+    m_rawTrackType.clear();
 
     // MatroskaDemuxContext *matroska = s->priv_data;
     char* doctype = nullptr;
@@ -5713,6 +5714,32 @@ int MatroskaDemuxer::readTrackEncodings(MatroskaTrack* track)
     return 0;
 }
 
+// ** FFMPEG IS GIVEN THE TRACK BY ITS PLACE AMONG THE STREAMS IT MAKES. ** ffmpeg gives the streams of a Matroska
+// file no id, so a converted track (audioConvert) is named by its place; ffmpeg leaves out the entries of another type
+// (complex, logo, buttons, control) and those without a CodecID, which tsMuxeR numbers: with such an entry before it,
+// the track after it was taken.
+int MatroskaDemuxer::getStreamPlace(const int pid) const
+{
+    const auto kept = [&](const int i)
+    {
+        const auto type = m_rawTrackType.find(i);
+        const int64_t t = type == m_rawTrackType.end() ? 0 : type->second;
+        if (!(t == 1 || t == 2 || t == 0x11 || t == 0x21) || !tracks[i] || !tracks[i]->codec_id)
+            return false;
+        // ffmpeg leaves out an entry whose CodecID does not fit its type: A_ for sound, V_ for video, S_ or D_
+        // for subtitles and metadata (an empty CodecID fits none)
+        const char letter = tracks[i]->codec_id[0];
+        return t == 1 ? letter == 'V' : t == 2 ? letter == 'A' : letter == 'S' || letter == 'D';
+    };
+    if (pid < 1 || pid > num_tracks || !kept(pid - 1))
+        return -1;
+    int place = 0;
+    for (int i = 0; i < pid - 1; ++i)
+        if (kept(i))
+            ++place;
+    return place;
+}
+
 int MatroskaDemuxer::matroska_add_stream()
 {
     int res = 0;
@@ -5781,6 +5808,8 @@ int MatroskaDemuxer::matroska_add_stream()
             int64_t num;
             if ((res = ebml_read_uint(&id, &num)) < 0)
                 break;
+            // as the file gives it, the last of the entry (getStreamPlace: ffmpeg keeps the last)
+            m_rawTrackType[listed ? num_tracks - 1 : num_tracks] = num;
             if (track->type != IOContextTrackType::UNDEFINED && static_cast<int64_t>(track->type) != num)
             {
                 LTRACE(LT_INFO, 0, "More than one tracktype in an entry - skip");

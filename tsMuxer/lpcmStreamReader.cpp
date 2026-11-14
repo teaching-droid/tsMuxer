@@ -674,8 +674,8 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
             std::ostringstream text;
             text << "Track " << m_streamIndex << " is PCM at " << m_freq
                  << " Hz, and the LPCM of a Blu-ray disc and of a transport stream has the rates 48000, 96000 and "
-                    "192000 Hz only. Convert the audio to 48000 Hz first, or mux it into a Matroska file, which keeps "
-                    "its rate.";
+                    "192000 Hz only. Convert it with convert=lpcm on its line (by your ffmpeg, see --ffmpeg), or "
+                    "mux it into a Matroska file, which keeps its rate.";
             m_rateRefusal = text.str();
         }
         m_bitsPerSample = waveFormatPCMEx->wBitsPerSample;

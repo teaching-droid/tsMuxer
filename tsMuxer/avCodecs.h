@@ -87,6 +87,8 @@ struct CheckStreamRez
     // The number the container itself gives the track (the tkhd track_ID of an MP4), where it differs from trackID
     // (the place of the track in the file); -1 where it does not give one
     int64_t containerNumber = -1;
+    // The place of the track among the streams ffmpeg makes of the file (getStreamPlace); -1 where not known
+    int streamPlace = -1;
     int64_t delay;  // auto delay for audio
     // stream_coding_type as declared by a TS/M2TS PMT, 0 for other containers. Kept so that a
     // track no reader accepts can still be named in diagnostics instead of just failing.

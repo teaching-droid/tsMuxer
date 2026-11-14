@@ -7104,6 +7104,9 @@ static int runTsMuxer(int argc, char** argv)
         if (!jsonListing::active)
             LTRACE(LT_ERROR, 2, e.what());
         printRemovedOutputNotes();
+        // a stop that was taken (by a conversion, which watches for it) and an error that came after it
+        if (endBySignal())
+            return ExitCode::Stopped;
         if (dynamic_cast<OutputError*>(&e))
             return ExitCode::Output;
         return dynamic_cast<UsageError*>(&e) ? ExitCode::Usage : ExitCode::Source;

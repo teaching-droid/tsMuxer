@@ -1897,6 +1897,33 @@ bool METADemuxer::convertLine(const string& codec, const string& lineStreamName,
     if (specText.empty() && besideText.empty() && !byDefault)
         return false;
 
+    // ** THE SECOND PASS OVER THE META FILE TAKES WHAT THE FIRST MADE. ** The tracks a converted line became, by the
+    // line and the settings: the second pass (the search of the key pictures of a cut) listed the source again and
+    // read up to 1 GB of a transport stream for its start before it reached the converted file
+    static std::map<std::string, std::vector<std::pair<std::string, map<string, string>>>> lineMade;
+    string lineKey = codec + "\n" + lineStreamName + "\n" + m_convertDefault + "\n" + m_convertStereo + "\n" +
+                     (m_convertDisc ? "d" : "") + (m_convertAvchd ? "a" : "") + "\n" + m_convertFfmpeg;
+    for (const auto& [k, v] : addParams) lineKey += "\n" + k + "=" + v;
+    if (const auto known = lineMade.find(lineKey); known != lineMade.end())
+    {
+        if (known->second.empty())
+            return false;
+        for (const auto& [made, params] : known->second)
+            addStream(made.substr(0, made.find('\n')), made.substr(made.find('\n') + 1), params);
+        return true;
+    }
+    std::vector<std::pair<std::string, map<string, string>>> madeLines;
+    const auto keep = [&](const bool done) -> bool
+    {
+        lineMade[lineKey] = done ? madeLines : decltype(madeLines)();
+        return done;
+    };
+    const auto addMade = [&](const string& c, const string& name, const map<string, string>& params)
+    {
+        addStream(c, name, params);
+        madeLines.emplace_back(c + "\n" + name, params);
+    };
+
     const vector<string> files = splitQuotedStr(lineStreamName.c_str(), '+');
     const string file = unquoteStr(trimStr(files[0]));
     const string ext = strToLowerCase(extractFileExt(file));
@@ -1906,7 +1933,15 @@ bool METADemuxer::convertLine(const string& codec, const string& lineStreamName,
     const auto refuse = [&](const string& why) -> bool
     {
         if (byDefault && given == addParams.end() && besideGiven == addParams.end())
-            return false;  // the choice of the MUXOPT line leaves such a track as it is
+        {
+            // the choice of the MUXOPT line leaves such a track as it is, and says so; not for LPCM, whose rate
+            // decides whether it is converted at all (LPCM at 48 kHz of a playlist is no such track)
+            if (!m_quiet && codec != "A_LPCM")
+                LTRACE(LT_WARN, 2,
+                       "Warning: the " << codec << " track of " << lineStreamName
+                                       << " is left as it is (--convert-audio): " << why);
+            return keep(false);
+        }
         THROW(ERR_USAGE, what << " on the " << codec << " line of " << lineStreamName << ": " << why)
     };
     if (files.size() != 1)
@@ -1949,6 +1984,10 @@ bool METADemuxer::convertLine(const string& codec, const string& lineStreamName,
     source.codec = codec;
     CheckStreamRez listed;  // the track as the listing gives it
     bool isListed = false;
+    bool mp4Anchor = false;
+    int64_t mp4AnchorNs = 0;
+    int64_t mp4SkipNs = 0;
+    string readExt = ext;
     {
         DetectStreamRez found;
         {
@@ -1977,11 +2016,51 @@ bool METADemuxer::convertLine(const string& codec, const string& lineStreamName,
             } quiet;
             try
             {
+                // the kind of container by the name the file is read as: an MP4 named .mkv is read as an MP4
+                readExt = strToLowerCase(extractFileExt(readAsName(file, ext)));
+            }
+            catch (...)
+            {
+            }
+            try
+            {
                 found = DetectStreamReader(m_readManager, file, false);
             }
             catch (...)
             {
             }
+            // ** THE SOUND OF AN MP4 IS PUT WHERE THE MUX PUTS IT. ** By the start of the track's edit, which the mux
+            // puts after its first picture by the track's start and the pictures a cut file keeps (MovDemuxer).
+            // Aligned to ffmpeg's first picture, the converted sound of a file cut inside a picture came half a
+            // picture (20 ms at 25 fps) late: ffmpeg starts the pictures at the next whole one, the edit list inside
+            // the one before. Read here, where the reader's warnings are not said a second time.
+            const bool mp4Kind =
+                readExt == "mp4" || readExt == "mov" || readExt == "m4a" || readExt == "m4v" || readExt == "3gp";
+            bool video = false;
+            for (const CheckStreamRez& s : found.streams)
+                video = video || (!s.codecInfo.programName.empty() && s.codecInfo.programName[0] == 'V');
+            if (mp4Kind && track != 0 && video)
+                try
+                {
+                    MovDemuxer probe(m_readManager);
+                    probe.openFile(file);
+                    std::map<int32_t, TrackInfo> tracks;
+                    probe.getTrackList(tracks);
+                    if (const auto t = tracks.find(track); t != tracks.end())
+                    {
+                        const auto ns = [&](const char* key) -> int64_t
+                        {
+                            const auto it = t->second.m_srcParams.find(key);
+                            return it == t->second.m_srcParams.end() ? 0 : strtoll(it->second.c_str(), nullptr, 10);
+                        };
+                        mp4Anchor = true;
+                        mp4AnchorNs = ns("srcstartdelay") + ns("srcvideolead");
+                        mp4SkipNs = ns("srccodecdelay");
+                    }
+                }
+                catch (...)
+                {
+                }
         }
         const CheckStreamRez* stream = nullptr;
         for (const CheckStreamRez& s : found.streams)
@@ -1999,7 +2078,7 @@ bool METADemuxer::convertLine(const string& codec, const string& lineStreamName,
                        "Warning: " << what << " on the " << codec << " line of " << lineStreamName
                                    << " is not done: the listing of the file has no " << codec << " track"
                                    << (track ? " " + std::to_string(track) : string()) << ".");
-            return false;
+            return keep(false);
         }
         if (stream)
         {
@@ -2041,21 +2120,38 @@ bool METADemuxer::convertLine(const string& codec, const string& lineStreamName,
         }
     }
     const CheckStreamRez* const stream = isListed ? &listed : nullptr;
+    // LPCM is converted by the MUXOPT choice only at a rate a disc does not have, or with too many channels for
+    // 192 kHz: decided before the start of a transport stream is read (up to 1 GB), and kept for the second pass
+    if (byDefault && specText.empty() && given == addParams.end() && codec == "A_LPCM" &&
+        (source.rate == 48000 || source.rate == 96000 || (source.rate == 192000 && source.channels <= 6) ||
+         source.rate == 0))
+    {
+        if (besideText.empty())
+            return keep(false);
+        auto p = addParams;
+        p["convert"] = "none";
+        return convertLine(codec, lineStreamName, p);
+    }
+    // Opus is decoded at 48 kHz whatever its header names as the rate of what was encoded (44.1 kHz from a CD)
+    if (codec == "A_OPUS")
+        source.rate = 0;
+    source.avchd = m_convertAvchd;
     source.lossless = codec == "A_FLAC" || codec == "A_ALAC" || codec == "A_WAVPACK4" || codec == "A_LPCM";
     if (source.lossless)
         source.kbps = 0;
-    const bool matroska = ext == "mkv" || ext == "mka" || ext == "mks" || ext == "mk3d" || ext == "webm";
+    const bool matroska =
+        readExt == "mkv" || readExt == "mka" || readExt == "mks" || readExt == "mk3d" || readExt == "webm";
     // ffmpeg's number of the track (checked by audioConvert::run against the codec): Matroska by its place (ffmpeg
     // gives its streams no id); MP4 by the tkhd track_ID (tsMuxeR numbers its tracks by their place: a file with
     // IDs 101 and 201 or a removed track had no such stream); a program stream's MPEG audio by its whole start code
     // (0x1C0, where tsMuxeR has 0xC0: the private stream's sub-ids agree); a transport stream by its PID.
-    const bool mp4 = ext == "mp4" || ext == "mov" || ext == "m4a" || ext == "m4v" || ext == "3gp";
-    const bool programStream = ext == "vob" || ext == "mpg" || ext == "mpeg" || ext == "m2p" || ext == "evo" ||
-                               ext == "vro" || ext == "mod" || ext == "ps";
+    const bool mp4 = readExt == "mp4" || readExt == "mov" || readExt == "m4a" || readExt == "m4v" || readExt == "3gp";
+    const bool programStream = readExt == "vob" || readExt == "mpg" || readExt == "mpeg" || readExt == "m2p" ||
+                               readExt == "evo" || readExt == "vro" || readExt == "mod" || readExt == "ps";
     if (track == 0)
         source.map = "0:a:0";
     else if (matroska)
-        source.map = "0:" + std::to_string(track - 1);
+        source.map = "0:" + std::to_string(stream && stream->streamPlace >= 0 ? stream->streamPlace : track - 1);
     else if (mp4 && stream && stream->containerNumber > 0)
         source.map = "0:i:" + std::to_string(stream->containerNumber);
     else if (programStream && track >= 0xC0 && track <= 0xDF)
@@ -2068,30 +2164,26 @@ bool METADemuxer::convertLine(const string& codec, const string& lineStreamName,
     // in the file where the first parameter sets are not at the start of their PES (TSDemuxer::skipsLeadingPes).
     // ffmpeg's earliest picture was taken: on such a stream the converted sound came 2 s late.
     source.firstPacket = matroska;
-    if (ext == "ts" || ext == "m2ts" || ext == "mts" || ext == "m2t")
+    if (readExt == "ts" || readExt == "m2ts" || readExt == "mts" || readExt == "m2t")
     {
         bool known = false;
         const int64_t reference = tsVideoReference(m_readManager, file, track, &known);
         if (known)
         {
             source.timeKnown = true;
+            source.wrapsAt33Bits = true;
             source.startSeconds = static_cast<double>(reference % (1LL << 33)) / 90000.0;
         }
+    }
+    else if (mp4 && mp4Anchor)
+    {
+        source.soundAnchor = true;
+        source.anchorSeconds = static_cast<double>(mp4AnchorNs) / 1e9;
+        source.editSkipSeconds = static_cast<double>(mp4SkipNs) / 1e9;
     }
 
     if (byDefault && specText.empty() && given == addParams.end())
     {
-        // LPCM is converted only at a rate a disc does not have, or with too many channels for 192 kHz
-        if (codec == "A_LPCM" && (source.rate == 48000 || source.rate == 96000 ||
-                                  (source.rate == 192000 && source.channels <= 6) || source.rate == 0))
-            return besideText.empty() ? false
-                                      : convertLine(codec, lineStreamName,
-                                                    [&]
-                                                    {
-                                                        auto p = addParams;
-                                                        p["convert"] = "none";
-                                                        return p;
-                                                    }());
         if (const string why = audioConvert::parse(m_convertDefault, spec); !why.empty())
             THROW(ERR_USAGE, "--convert-audio=" << m_convertDefault << ": " << why)
         if (m_convertStereo == "only")
@@ -2145,7 +2237,8 @@ bool METADemuxer::convertLine(const string& codec, const string& lineStreamName,
     }
     const int64_t listedTicks = (stream ? stream->delay : 0) * (INTERNAL_PTS_FREQ / 1000);
     const string trackText = (track ? "Track " + std::to_string(track) + " of " : string("The track of ")) + file;
-    const auto convertOne = [&](const audioConvert::Spec& s, const map<string, string>& lineParams)
+    // false where the MUXOPT choice leaves the track as it is (ffmpeg reads the times of the file otherwise)
+    const auto convertOne = [&](const audioConvert::Spec& s, const map<string, string>& lineParams) -> bool
     {
         if (!m_quiet)
             LTRACE(LT_INFO, 2,
@@ -2154,8 +2247,18 @@ bool METADemuxer::convertLine(const string& codec, const string& lineStreamName,
         string made;
         bool aligned = false;
         if (const string why = audioConvert::run(ffmpeg, source, s, made, aligned); !why.empty())
+        {
+            if (byDefault && given == addParams.end() && besideGiven == addParams.end() &&
+                why.rfind(audioConvert::TIMES_DIFFER, 0) == 0)
+            {
+                if (!m_quiet)
+                    LTRACE(LT_WARN, 2,
+                           "Warning: " << trackText << " is left as it is (--convert-audio): " << why << ".");
+                return false;
+            }
             THROW(ERR_SOURCE,
                   trackText << " could not be converted to " << audioConvert::describe(s, source) << ": " << why << ".")
+        }
         map<string, string> p = lineParams;
         p.erase("timeshift");
         if (shiftGiven)
@@ -2164,20 +2267,28 @@ bool METADemuxer::convertLine(const string& codec, const string& lineStreamName,
             if (shift != 0)
                 p["timeshift"] = std::to_string(shift / (INTERNAL_PTS_FREQ / 1000000)) + "us";
         }
-        addStream(audioConvert::codecOf(s), "\"" + made + "\"", p);
+        addMade(audioConvert::codecOf(s), "\"" + made + "\"", p);
+        return true;
     };
+    const auto asItIs = [&]
+    {
+        auto p = addParams;
+        p.erase("convert");
+        p.erase("stereo");
+        return p;
+    };
+    bool leftAlone = false;
     if (spec.kind != audioConvert::Spec::Kind::none)
-        convertOne(spec, params);
+    {
+        if (!convertOne(spec, params))
+        {
+            leftAlone = true;
+            addMade(codec, lineStreamName, asItIs());
+        }
+    }
     else
-        addStream(codec, lineStreamName,
-                  [&]
-                  {
-                      auto p = addParams;
-                      p.erase("convert");
-                      p.erase("stereo");
-                      return p;
-                  }());
-    if (beside.kind != audioConvert::Spec::Kind::none)
+        addMade(codec, lineStreamName, asItIs());
+    if (beside.kind != audioConvert::Spec::Kind::none && !leftAlone)
     {
         // the stereo track is not the one a player starts with
         map<string, string> besideParams = params;
@@ -2185,7 +2296,7 @@ bool METADemuxer::convertLine(const string& codec, const string& lineStreamName,
         besideParams.erase("forced");
         convertOne(beside, besideParams);
     }
-    return true;
+    return keep(true);
 }
 
 int METADemuxer::addStream(const string& codecName, const string& lineStreamName, const map<string, string>& addParams)
@@ -5408,6 +5519,7 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
                     trackRez.delay = demuxer->getTrackDelay(itr.first);
             }
             trackRez.containerNumber = demuxer->getContainerTrackNumber(itr.first);
+            trackRez.streamPlace = demuxer->getStreamPlace(itr.first);
             trackRez.trackID = itr.first;
             trackRez.lang = acceptedPidMap[trackRez.trackID].m_lang;
             trackRez.langTag = acceptedPidMap[trackRez.trackID].m_langBCP47;

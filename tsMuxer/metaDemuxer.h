@@ -292,12 +292,13 @@ class METADemuxer final : public AbstractDemuxer
     // which counts for the tracks a disc does not carry when a disc is written; and the ffmpeg to ask (--ffmpeg). A
     // convert= or stereo= on a track's line counts for any output.
     void setAudioConversion(const std::string& defaultSpec, const std::string& stereoMode, const bool discOutput,
-                            const std::string& ffmpeg)
+                            const std::string& ffmpeg, const bool avchd)
     {
         m_convertDefault = defaultSpec;
         m_convertStereo = stereoMode;
         m_convertDisc = discOutput;
         m_convertFfmpeg = ffmpeg;
+        m_convertAvchd = avchd;
     }
     // Second layers are made in this job, and an HEVC track came in a way no layer is made for (a join, a playlist,
     // a file without a container), of which no line has said anything
@@ -320,6 +321,7 @@ class METADemuxer final : public AbstractDemuxer
         m_convertStereo = other.m_convertStereo;
         m_convertDisc = other.m_convertDisc;
         m_convertFfmpeg = other.m_convertFfmpeg;
+        m_convertAvchd = other.m_convertAvchd;
     }
     [[nodiscard]] SourceEditions getSourceEditions() override;
     // The Chapters element of the one Matroska file the output takes its chapters from, as it stands; empty when
@@ -411,6 +413,7 @@ class METADemuxer final : public AbstractDemuxer
     std::string m_convertStereo;
     bool m_convertDisc = false;
     std::string m_convertFfmpeg;
+    bool m_convertAvchd = false;
     // A sound track with convert= or stereo=, or one the MUXOPT line's choice converts: the converted file (and the
     // stereo one) is added in its place. False where the line is not converted and is added as it is.
     bool convertLine(const std::string& codec, const std::string& lineStreamName,

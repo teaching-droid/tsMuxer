@@ -34,6 +34,7 @@ namespace
 {
 // the rates of AC-3 (ATSC A/52, frmsizecod), in kbit/s
 constexpr int AC3_RATES[] = {32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640};
+constexpr int MONO_STEPS[] = {96, 112, 128, 160, 192};
 constexpr int STEREO_STEPS[] = {192, 224, 256, 320};
 constexpr int MULTI_STEPS[] = {384, 448, 512, 576, 640};
 // six hours: the longest a conversion may take before it is given up
@@ -76,6 +77,30 @@ int process()
 #endif
 }
 
+// The name of this computer, letters and digits only: a container that shares the folder for temporary files has
+// process numbers of its own, and its files are not taken for those of a run that is gone
+std::string host()
+{
+    static const std::string name = []
+    {
+        char buf[256] = {};
+#ifdef _WIN32
+        DWORD size = sizeof(buf);
+        if (!GetComputerNameA(buf, &size))
+            buf[0] = 0;
+#else
+        if (gethostname(buf, sizeof(buf) - 1) != 0)
+            buf[0] = 0;
+#endif
+        std::string out;
+        for (const char* p = buf; *p && out.size() < 32; ++p)
+            if (isalnum(static_cast<unsigned char>(*p)))
+                out += *p;
+        return out.empty() ? std::string("host") : out;
+    }();
+    return name;
+}
+
 // A name in the folder for temporary files that this run has not used
 // Whether a process of that number runs (here or for another user); true where it cannot be told
 bool running(const long long pid)
@@ -96,13 +121,13 @@ bool running(const long long pid)
 // ** WHAT A KILLED RUN CONVERTED IS REMOVED BY THE NEXT. ** A run ended hard (the task manager, SIGKILL) runs no code
 // of its own, and its converted sound, gigabytes of LPCM for a film, stayed in the folder for temporary files. The
 // files of a run whose process is gone are removed, once, by the first conversion of a later run.
-void removeLeftOver(const std::filesystem::path& folder)
+void removeLeftOverIn(const std::filesystem::path& folder)
 {
     static bool done = false;
     if (done)
         return;
     done = true;
-    static const std::string HEAD = "tsMuxeR_convert_";
+    const std::string HEAD = "tsMuxeR_convert_" + host() + "_";
     std::error_code ec;
     for (std::filesystem::directory_iterator it(folder, ec), end; !ec && it != end; it.increment(ec))
     {
@@ -129,11 +154,11 @@ std::filesystem::path tempFile(const std::string& ext, std::string& why)
         why = "the folder for temporary files could not be found";
         return {};
     }
-    removeLeftOver(folder);
+    removeLeftOverIn(folder);
     for (int n = 1;; ++n)
     {
-        std::filesystem::path p =
-            folder / ("tsMuxeR_convert_" + std::to_string(process()) + "_" + std::to_string(n) + "." + ext);
+        std::filesystem::path p = folder / ("tsMuxeR_convert_" + host() + "_" + std::to_string(process()) + "_" +
+                                            std::to_string(n) + "." + ext);
         if (!std::filesystem::exists(p, ec))
             return p;
     }
@@ -257,6 +282,50 @@ bool videoStart(const std::string& ffmpeg, const std::string& file, const bool f
     return true;
 }
 
+// The time of the first sample of the track ffmpeg decodes, with the times of the file kept: for an MP4 the start
+// of the track's edit (what the edit list skips, priming and the sound before a cut, is skipped by the decoder)
+// decoded: the first sample the decoder gives; otherwise the first packet as it is read (before the decoder skips
+// what the edit list skips)
+bool firstSoundTime(const std::string& ffmpeg, const Source& source, double& seconds, const bool decoded = true)
+{
+    std::vector<std::string> lines;
+    std::vector<std::string> args = {"-hide_banner", "-nostdin", "-loglevel", "error", "-copyts",   "-i",
+                                     source.file,    "-map",     source.map,  "-vn",   "-frames:a", "1"};
+    if (decoded)
+        args.insert(args.end(), {"-c:a", "pcm_s16le"});
+    else
+        args.insert(args.end(), {"-c", "copy"});
+    if (!probeLines(ffmpeg, args, lines))
+        return false;
+    double tbNum = 0, tbDen = 0;
+    for (const std::string& line : lines)
+    {
+        if (line.rfind("#tb 0:", 0) == 0)
+        {
+            const size_t slash = line.find('/');
+            if (slash != std::string::npos)
+            {
+                tbNum = std::atof(line.c_str() + 6);
+                tbDen = std::atof(line.c_str() + slash + 1);
+            }
+            continue;
+        }
+        if (line.empty() || line[0] == '#')
+            continue;
+        std::istringstream fields(line);
+        std::string stream, dts, pts;
+        if (!std::getline(fields, stream, ',') || !std::getline(fields, dts, ',') || !std::getline(fields, pts, ',') ||
+            pts.find("NOPTS") != std::string::npos || tbNum <= 0 || tbDen <= 0)
+            return false;
+        const long long p = std::atoll(pts.c_str());
+        if (p == LLONG_MIN)
+            return false;
+        seconds = static_cast<double>(p) * tbNum / tbDen;
+        return true;
+    }
+    return false;
+}
+
 // The codecs ffmpeg names for a codec of tsMuxeR; empty: any sound
 std::vector<std::string> ffmpegCodecs(const std::string& codec)
 {
@@ -374,9 +443,11 @@ std::string parse(const std::string& text, Spec& spec)
 
 int suggestedKbps(const Source& source, const bool stereo)
 {
+    // a mono track stays mono (channelsOut), and 192 kbit/s is twice what mono AAC of 96 kbit/s can fill
+    const bool mono = source.channels == 1;
     const bool two = stereo || (source.channels > 0 && source.channels <= 2);
-    const int* steps = two ? STEREO_STEPS : MULTI_STEPS;
-    const size_t count = two ? std::size(STEREO_STEPS) : std::size(MULTI_STEPS);
+    const int* steps = mono ? MONO_STEPS : two ? STEREO_STEPS : MULTI_STEPS;
+    const size_t count = mono ? std::size(MONO_STEPS) : two ? std::size(STEREO_STEPS) : std::size(MULTI_STEPS);
     int lowest = steps[0];
     if (!two && source.channels >= 5)
         lowest = 448;
@@ -394,7 +465,7 @@ int suggestedKbps(const Source& source, const bool stereo)
 
 int suggestedBits(const Source& source)
 {
-    if (!source.lossless)
+    if (!source.lossless || source.avchd)
         return 16;
     return source.bits == 0 || source.bits > 16 ? 24 : 16;
 }
@@ -402,6 +473,8 @@ int suggestedBits(const Source& source)
 int suggestedRate(const Source& source, const bool stereo)
 {
     const int channels = stereo ? 2 : source.channels;
+    if (source.avchd)
+        return 48000;  // the LPCM of an AVCHD disc as cameras write it
     if (source.rate == 48000 || source.rate == 96000)
         return source.rate;
     if (source.rate == 192000)
@@ -465,7 +538,40 @@ std::string run(const std::string& ffmpeg, const Source& source, const Spec& spe
 
     // where the film starts, on the timeline the conversion is read with
     double start = source.startSeconds;
-    aligned = source.timeKnown || videoStart(ffmpeg, source.file, source.firstPacket, start);
+    if (source.soundAnchor)
+    {
+        double first = 0;
+        if (!firstSoundTime(ffmpeg, source, first))
+            return "ffmpeg could not read the start of the track";
+        // ** FFMPEG HAS TO READ THE TIMES AS THE MUX DOES. ** The decoder skips at the start of the track what its edit
+        // list skips (and the pre-skip of Opus, a frame at most beyond it). A fragmented MP4 whose edit lists ffmpeg
+        // reads otherwise skipped 1.75 s more, a jump in its times, and the converted sound came 1.75 s early. Such a
+        // file is not converted; muxed into a Matroska file first, it is. (ffmpeg's pictures are no measure: in a
+        // fragmented file it leaves their edit list out.)
+        double packet = 0;
+        if (firstSoundTime(ffmpeg, source, packet, false) &&
+            (first - packet > source.editSkipSeconds + 0.05 || first - packet < -0.001))
+            return std::string(TIMES_DIFFER) + ": it skips " + std::to_string(std::lround((first - packet) * 1000)) +
+                   " ms at the start of the sound, where the edit list of the track skips " +
+                   std::to_string(std::llround(source.editSkipSeconds * 1000)) +
+                   " ms. Mux the file into a Matroska file first, and convert the track of that file";
+        start = first - source.anchorSeconds;
+        aligned = true;
+    }
+    else if (source.timeKnown)
+    {
+        aligned = true;
+        double video = 0;
+        static constexpr double WRAP = 8589934592.0 / 90000.0;
+        // only where the rest is small: the first picture of a multiplex can be of another program, whose clock
+        // has nothing to do with this one
+        if (source.wrapsAt33Bits && videoStart(ffmpeg, source.file, true, video))
+            if (const double turns = std::round((video - start) / WRAP);
+                turns != 0 && std::abs(video - start - turns * WRAP) < 60)
+                start += turns * WRAP;
+    }
+    else
+        aligned = videoStart(ffmpeg, source.file, source.firstPacket, start);
     std::vector<std::string> args = {"-hide_banner", "-nostdin", "-loglevel", "error", "-y"};
     if (aligned)
         args.push_back("-copyts");
@@ -528,11 +634,26 @@ std::string run(const std::string& ffmpeg, const Source& source, const Spec& spe
     return {};
 }
 
-void removeMade()
+void removeLeftOver()
 {
     std::error_code ec;
-    for (const auto& f : madeFiles) std::filesystem::remove(f, ec);
-    madeFiles.clear();
+    const std::filesystem::path folder = std::filesystem::temp_directory_path(ec);
+    if (!ec)
+        removeLeftOverIn(folder);
+}
+
+void removeMade()
+{
+    // a file still open (the mux reads it, on Windows without leave to remove it) is kept on the list, for the
+    // removal when the program ends (endBySignal, RemoveAtExit), after the readers are closed
+    std::vector<std::filesystem::path> left;
+    for (const auto& f : madeFiles)
+    {
+        std::error_code ec;
+        if (!std::filesystem::remove(f, ec) && ec && std::filesystem::exists(f, ec))
+            left.push_back(f);
+    }
+    madeFiles = left;
     doneFiles.clear();
 }
 }  // namespace audioConvert

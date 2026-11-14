@@ -744,10 +744,15 @@ void MuxerManager::checkMatroskaOnlyCodecs(const vector<StreamInfo>& ci, const b
                     THROW(ERR_USAGE, only->displayName
                                          << " can only be muxed into a Matroska file (.mkv): a demux has no file "
                                             "of its own to write it to. Choose MKV output, or leave the track out.")
+                // sound: converted (audioConvert) it goes into a transport stream or onto a disc
                 THROW(ERR_USAGE, only->displayName
                                      << " can only be muxed into a Matroska file (.mkv). It has no form in a "
                                         "transport stream or on a Blu-ray disc. Choose MKV output"
-                                     << (demuxWrites ? ", a demux (--demux)" : "") << ", or leave the track out.")
+                                     << (demuxWrites ? ", a demux (--demux)" : "") << ", or leave the track out"
+                                     << (only->programName[0] == 'A'
+                                             ? ", or convert it: convert=ac3 or convert=lpcm on its line, by your "
+                                               "ffmpeg (see --ffmpeg)."
+                                             : "."))
             }
 }
 
@@ -776,7 +781,8 @@ void MuxerManager::checkOtherTracks(const vector<StreamInfo>& ci) const
         else if (si.m_codec == opusCodecInfo.programName && m_bluRayMode)
             THROW(ERR_USAGE,
                   "Opus has no form on a Blu-ray or AVCHD disc: the clip information of a disc has no "
-                  "stream coding type for it. Choose TS or MKV output, or leave the track out.")
+                  "stream coding type for it. Choose TS or MKV output, leave the track out, or convert it: "
+                  "convert=ac3 or convert=lpcm on its line, by your ffmpeg (see --ffmpeg).")
         else if (si.m_codec == vvcCodecInfo.programName)
             notOnDisc.emplace_back("VVC (H.266)");
         // ** AV1 HAS NO FORM ON A DISC EITHER. ** As with Opus, the clip information has no stream coding type for it:
@@ -1501,7 +1507,9 @@ bool MuxerManager::openMetaFile(const string& fileName)
     if (!m_convertStereo.empty() && m_convertAudio.empty())
         THROW(ERR_USAGE, "--convert-stereo goes with --convert-audio, which names the kind to convert to.")
     m_metaDemuxer.setAudioConversion(m_convertAudio, m_convertStereo, (m_bluRayMode || m_avchdMode) && !m_demuxMode,
-                                     m_ffmpeg);
+                                     m_ffmpeg, m_avchdMode);
+    // what a run that was killed converted (it ran no code of its own to remove it)
+    audioConvert::removeLeftOver();
     // said once, also where the meta file is read twice
     static bool convertIgnoredSaid = false;
     if (!m_convertAudio.empty() && !((m_bluRayMode || m_avchdMode) && !m_demuxMode) && !convertIgnoredSaid)
@@ -2108,6 +2116,11 @@ void MuxerManager::findCutKeyPictures()
             AVPacket packet;
             while (past.size() < own.size() && pass.readPacket(packet) != BufferedReader::DATA_EOF)
             {
+                // a stop request is acted on here too: the search reads a source as far as the cut, which can be an
+                // hour into it, and a request that came after a conversion (which watches for it) waited for that.
+                // It ends the search; the job ends after it (below, outside the catch of the search)
+                if (stopSignal() != 0)
+                    break;
                 if (own.count(packet.stream_index) == 0)
                     continue;
                 // ** A KEY PICTURE ON THE CUT IS THE ONE THE PICTURE BEGINS WITH. ** The time of a picture is counted
@@ -2136,6 +2149,9 @@ void MuxerManager::findCutKeyPictures()
             failure = "unknown error";
         }
     }
+    // the search was ended by a stop request (above): the job ends here, the readers of the search closed
+    if (stopSignal() != 0)
+        THROW(ERR_COMMON, "The job was stopped by " << stopSignalName(stopSignal()) << " before it was finished.")
     m_cutPassFailed = !failure.empty();
     if (!failure.empty())
     {

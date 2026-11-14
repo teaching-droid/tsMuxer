@@ -54,6 +54,17 @@ struct Source
     bool timeKnown = false;
     double startSeconds = 0;
     bool firstPacket = false;
+    // timeKnown on a 33-bit clock (a transport stream): the start is moved to the turn of the clock nearest ffmpeg's
+    // first picture, which counts on past the wrap
+    bool wrapsAt33Bits = false;
+    // An MP4 with video: the made sound begins with the first sample ffmpeg decodes, the start of the track's edit,
+    // which the mux puts `anchorSeconds` after its first picture (the track's start plus the pictures a cut file
+    // keeps). ffmpeg's picture times are not used: where the video's edit begins inside a picture, ffmpeg starts the
+    // pictures at the next whole one, half a picture off the edit list.
+    bool soundAnchor = false;
+    double anchorSeconds = 0;
+    double editSkipSeconds = 0;  // what the track's edit list skips at its start (its media time), for the check
+    bool avchd = false;          // an AVCHD output: LPCM is suggested at 48 kHz and 16 bit
 };
 
 // The AC-3 rate a track gets where none is given: a step above the source's own rate, as AC-3 needs more bits than
@@ -78,6 +89,10 @@ std::string run(const std::string& ffmpeg, const Source& source, const Spec& spe
 
 // Removes the files run() made in this run
 void removeMade();
+// The start of the reason run() gives where ffmpeg reads the times of the file otherwise than the mux
+inline constexpr const char* TIMES_DIFFER = "ffmpeg reads the times of this file otherwise";
+// Removes what runs that are gone (killed hard) converted, once in a run
+void removeLeftOver();
 }  // namespace audioConvert
 
 #endif

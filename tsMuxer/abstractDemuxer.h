@@ -209,6 +209,9 @@ class AbstractDemuxer
     // The number the container gives a track, where it is not the track's number here (the tkhd track_ID of an MP4,
     // whose tracks are numbered by their place); -1 otherwise
     [[nodiscard]] virtual int64_t getContainerTrackNumber(int pid) const { return -1; }
+    // The place of a track among the tracks of the file that a reader such as ffmpeg makes streams of (Matroska:
+    // video, audio, subtitles and metadata entries with a CodecID), from 0; -1 where it is not known or not one
+    [[nodiscard]] virtual int getStreamPlace(int pid) const { return -1; }
     // Data a container stores beside the frames of a track (Matroska BlockAdditions, such as HDR10+ metadata): the
     // track's MaxBlockAdditionID and BlockAdditionMapping bodies, and the additions of the block at a time (the
     // internal clock, as the demuxer gave it), taken out once asked for. False where there are none.

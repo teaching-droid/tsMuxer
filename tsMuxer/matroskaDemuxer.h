@@ -119,7 +119,12 @@ class MatroskaDemuxer final : public IOContextDemuxer
     {
         return pid >= 1 && pid <= num_tracks && tracks[pid - 1] ? tracks[pid - 1]->uid : 0;
     }
+    [[nodiscard]] int getStreamPlace(int pid) const override;
 
+   private:
+    std::map<int, int64_t> m_rawTrackType;  // the TrackType of each entry as the file gives it, by its place
+
+   public:
     // A joined input, "a"+"b": the files in the order they are read, so that each part is framed as its own record
     // says when the stream reaches it.
     void setFileIterator(FileNameIterator* itr) override;
