@@ -1696,7 +1696,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     }
 
     int64_t handedOn = 0;  // bytes of subtitles written here (clearSubtitlesAtPartEnd), counted against the discarded
-    if (isFirstBlock && !m_leadHeld.empty() && m_firstPTS != -1)
+    if (isFirstBlock && !m_leadHeld.empty())
     {
         // ** WHAT A FILE HOLDS AT ITS START IS DECIDED WITH IT. ** The PES held at the start of a file
         // (skipsLeadingPes) went on into the next file of a join or a playlist, and the first PES there decided them:
@@ -1732,7 +1732,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
             m_soundGap.clear();  // each clip of a playlist has its own clock (noteSoundGap)
             m_gapVideoPrev = -1;
         }
-        handedOn = clearSubtitlesAtPartEnd(demuxedData);
+        handedOn += clearSubtitlesAtPartEnd(demuxedData);
         if (m_curFileNum < m_mplsInfo.size())
             m_prevFileLen +=
                 static_cast<int64_t>(m_mplsInfo[m_curFileNum].OUT_time - m_mplsInfo[m_curFileNum].IN_time) *
@@ -1961,10 +1961,20 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
     {
         const auto pesPacket = reinterpret_cast<PESPacket*>(frameData);
         auto streamInfo = m_pmt.pidList.find(pid);
-        if (part != nullptr &&
-            !keptInPart(*part, pid,
-                        streamInfo != m_pmt.pidList.end() ? streamInfo->second.m_streamType : StreamType::RESERVED,
-                        pesPacket, TS_FRAME_SIZE - (frameData - pkt)))
+        // a held video PES of a part was kept when it came (keptInPart, before it was held): given back, it is not
+        // asked again, as the part may have ended while it was held, which dropped all of them; its picture is
+        // counted again (the hold took it out of the count)
+        const bool givenBackVideo =
+            m_givingBack && streamInfo != m_pmt.pidList.end() && isVideoPID(streamInfo->second.m_streamType);
+        if (part != nullptr && givenBackVideo)
+        {
+            if ((pesPacket->flagsLo & 0x80) == 0x80)
+                m_keptPictures[pid]++;
+        }
+        else if (part != nullptr &&
+                 !keptInPart(*part, pid,
+                             streamInfo != m_pmt.pidList.end() ? streamInfo->second.m_streamType : StreamType::RESERVED,
+                             pesPacket, TS_FRAME_SIZE - (frameData - pkt)))
             return;
         m_leadDrop[pid] = false;
         if (m_leadPes[pid] != LEAD_PES_DONE && m_leadUndecided[pid] && (pesPacket->flagsLo & 0x80) == 0x80 &&
@@ -2634,8 +2644,27 @@ void TSDemuxer::giveBackLeadPes(const int pid, DemuxedData& demuxedData, int64_t
     m_leadHeld.erase(held);
     if (m_leadFirstSeen[pid])
         m_firstSeenPTS = -1;
+    // the PES being read (a give-back from within demuxPacket) keeps its decision of the part, which the held PES
+    // set again as they came back: its packets after the first, and the PES without a time after it, went by the
+    // last held one
+    const uint8_t partKeep = m_partKeep[pid];
+    const auto cut = m_partCut.find(pid);
+    const bool cutKeep = cut != m_partCut.end() && cut->second.keep;
+    const bool wasGivingBack = m_givingBack;
+    m_givingBack = true;
     for (size_t i = 0; i + TS_FRAME_SIZE <= packets.size(); i += TS_FRAME_SIZE)
+    {
+        // a held video PES was kept by its part: so are its packets after the first
+        if (part != nullptr)
+            if (const auto info = m_pmt.pidList.find(pid);
+                info != m_pmt.pidList.end() && isVideoPID(info->second.m_streamType))
+                m_partKeep[pid] = 1;
         demuxPacket(packets.data() + i, pid, demuxedData, discardSize, part, vect, lastPid);
+    }
+    m_givingBack = wasGivingBack;
+    m_partKeep[pid] = partKeep;
+    if (const auto again = m_partCut.find(pid); again != m_partCut.end() && cut != m_partCut.end())
+        again->second.keep = cutKeep;
 }
 
 // A clip file of a playlist begins: the state of the part before is cleared. The sound of a cut part carries where

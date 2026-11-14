@@ -295,6 +295,7 @@ class TSDemuxer final : public AbstractDemuxer
     // a held PES that went on past its block, decided where the next PES of its PID begins (resolveLeadPes)
     bool m_leadUndecided[8192]{};
     std::map<int, size_t> m_leadUndecidedAt;
+    bool m_givingBack = false;  // giveBackLeadPes is handing held packets on again (demuxPacket)
     void resolveLeadPes(int pid, StreamType type, DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,
                         MemoryBlock*& vect, int& lastPid);
     const uint8_t* m_blockStart = nullptr;  // the block being read (pesStart)
