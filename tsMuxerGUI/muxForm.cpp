@@ -18,6 +18,7 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QSysInfo>
 #include <QThread>
 #include <QVBoxLayout>
 
@@ -241,13 +242,27 @@ void MuxForm::onAbort()
     // gigabytes of LPCM for a film. Its ffmpeg ends with it.
     if (pid > 0)
     {
+        // the computer as tsMuxeR names it (audioConvert: its letters and digits): a folder shared with a container
+        // holds files of other computers, whose process numbers mean nothing here
+        QString host;
+#ifdef Q_OS_WIN
+        const QString computer = qEnvironmentVariable("COMPUTERNAME");
+#else
+        const QString computer = QSysInfo::machineHostName();
+#endif
+        for (const QChar c : computer)
+            if (c.unicode() < 128 && c.isLetterOrNumber() && host.size() < 32)
+                host += c;
+        if (host.isEmpty())
+            host = QStringLiteral("host");
         const QDir temp(QDir::tempPath());
         // its ffmpeg, ended with it, may hold its file a moment longer: a few tries
         for (int attempt = 0; attempt < 10; ++attempt)
         {
             bool left = false;
             for (const QString& name : temp.entryList({QStringLiteral("tsMuxeR_convert_*")}, QDir::Files))
-                if (name.section(QLatin1Char('_'), 3, 3) == QString::number(pid) && !QFile::remove(temp.filePath(name)))
+                if (name.section(QLatin1Char('_'), 2, 2) == host &&
+                    name.section(QLatin1Char('_'), 3, 3) == QString::number(pid) && !QFile::remove(temp.filePath(name)))
                     left = true;
             if (!left)
                 break;

@@ -31,6 +31,7 @@
 #include <QGroupBox>
 #include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QHash>
 #include <QHeaderView>
 #include <QInputDialog>
 #include <QKeyEvent>
@@ -7020,10 +7021,23 @@ bool TsMuxerWindow::askAudioConversion()
             std::any_of(list.cbegin(), list.cend(), [](const Row& r) { return r.kind->currentData().toInt() != 3; });
         convert->setEnabled(!ffmpeg.isEmpty() || !anyConverted);
     };
+    // what ffmpeg answered, by its path and whether AC-3 is asked: a change of a row asked it again each time, and
+    // the box stood still while it answered
+    QHash<QString, QPair<QString, QString>> asked;
     const auto showFfmpeg = [&]
     {
         QString problem;
-        ffmpeg = Ac3CoreDialog::findFfmpeg(m_coreEncoderPath, &problem, false, true, anyAc3());
+        const QString key = m_coreEncoderPath + (anyAc3() ? QStringLiteral("|ac3") : QStringLiteral("|pcm"));
+        if (const auto known = asked.constFind(key); known != asked.constEnd())
+        {
+            ffmpeg = known->first;
+            problem = known->second;
+        }
+        else
+        {
+            ffmpeg = Ac3CoreDialog::findFfmpeg(m_coreEncoderPath, &problem, false, true, anyAc3());
+            asked.insert(key, {ffmpeg, problem});
+        }
         found->setText(ffmpeg.isEmpty() ? problem : tr("Converted with %1.").arg(QDir::toNativeSeparators(ffmpeg)));
         choose->setVisible(ffmpeg.isEmpty());
         updateConvert();
