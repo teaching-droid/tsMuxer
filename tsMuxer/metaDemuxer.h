@@ -288,6 +288,17 @@ class METADemuxer final : public AbstractDemuxer
         m_dvLayerMaking = on;
         m_dvLayerFfmpeg = ffmpeg;
     }
+    // Sound a disc does not carry (audioConvert): the choice of the MUXOPT line (--convert-audio, --convert-stereo),
+    // which counts for the tracks a disc does not carry when a disc is written; and the ffmpeg to ask (--ffmpeg). A
+    // convert= or stereo= on a track's line counts for any output.
+    void setAudioConversion(const std::string& defaultSpec, const std::string& stereoMode, const bool discOutput,
+                            const std::string& ffmpeg)
+    {
+        m_convertDefault = defaultSpec;
+        m_convertStereo = stereoMode;
+        m_convertDisc = discOutput;
+        m_convertFfmpeg = ffmpeg;
+    }
     // Second layers are made in this job, and an HEVC track came in a way no layer is made for (a join, a playlist,
     // a file without a container), of which no line has said anything
     [[nodiscard]] bool dvLayerLeftUnsaid() const { return m_dvLayerMaking && m_dvLayerOtherWay && !m_dvLayerNoted; }
@@ -305,6 +316,10 @@ class METADemuxer final : public AbstractDemuxer
         // meta file gave other tracks", and --cut-start lost the key picture before the cut
         m_dvLayerMaking = other.m_dvLayerMaking;
         m_dvLayerFfmpeg = other.m_dvLayerFfmpeg;
+        m_convertDefault = other.m_convertDefault;
+        m_convertStereo = other.m_convertStereo;
+        m_convertDisc = other.m_convertDisc;
+        m_convertFfmpeg = other.m_convertFfmpeg;
     }
     [[nodiscard]] SourceEditions getSourceEditions() override;
     // The Chapters element of the one Matroska file the output takes its chapters from, as it stands; empty when
@@ -391,6 +406,14 @@ class METADemuxer final : public AbstractDemuxer
     bool m_dvLayerMaking = false;  // setDvLayerMaking
     std::string m_dvLayerFfmpeg;
     bool addDvLayers(const std::string& codec, const std::string& lineStreamName,
+                     const std::map<std::string, std::string>& addParams);
+    std::string m_convertDefault;  // setAudioConversion
+    std::string m_convertStereo;
+    bool m_convertDisc = false;
+    std::string m_convertFfmpeg;
+    // A sound track with convert= or stereo=, or one the MUXOPT line's choice converts: the converted file (and the
+    // stereo one) is added in its place. False where the line is not converted and is added as it is.
+    bool convertLine(const std::string& codec, const std::string& lineStreamName,
                      const std::map<std::string, std::string>& addParams);
     bool m_quiet = false;                        // setQuiet
     std::set<std::string> m_pipPlacingReported;  // the playlists whose own placing of a picture-in-picture was said

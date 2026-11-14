@@ -262,6 +262,8 @@ std::string makeWith(const std::string& ffmpeg, const double fps)
 }
 }  // namespace
 
+std::string ffmpegToUse(const std::string& given) { return findFfmpeg(given); }
+
 std::string make(const std::string& ffmpegGiven, const double fps)
 {
     // nothing here ends the job: a job without the picture is written as it always was

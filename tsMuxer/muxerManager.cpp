@@ -1,6 +1,7 @@
 // Largely rewritten by teaching-droid, 2026 (https://github.com/teaching-droid/tsMuxer).
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "muxerManager.h"
+#include "audioConvert.h"
 #include "dvLayerPicture.h"
 
 #include <algorithm>
@@ -1497,6 +1498,19 @@ bool MuxerManager::openMetaFile(const string& fileName)
 
     m_metaDemuxer.setDemuxOutput(m_demuxMode);
     m_metaDemuxer.setDvLayerMaking(m_bluRayMode && !m_avchdMode && !m_demuxMode && !m_noDvLayer, m_ffmpeg);
+    if (!m_convertStereo.empty() && m_convertAudio.empty())
+        THROW(ERR_USAGE, "--convert-stereo goes with --convert-audio, which names the kind to convert to.")
+    m_metaDemuxer.setAudioConversion(m_convertAudio, m_convertStereo, (m_bluRayMode || m_avchdMode) && !m_demuxMode,
+                                     m_ffmpeg);
+    // said once, also where the meta file is read twice
+    static bool convertIgnoredSaid = false;
+    if (!m_convertAudio.empty() && !((m_bluRayMode || m_avchdMode) && !m_demuxMode) && !convertIgnoredSaid)
+    {
+        convertIgnoredSaid = true;
+        LTRACE(LT_WARN, 2,
+               "Warning: --convert-audio is for a Blu-ray or AVCHD output; the sound of this output is left as it is. "
+               "convert= on a track's line converts that track on any output.");
+    }
     m_metaDemuxer.openFile(fileName);
     m_metaFileName = fileName;
     return true;
@@ -1677,6 +1691,8 @@ void MuxerManager::warnUnknownMuxOpts(const string& opts)
                                                       "--custom-chapters",
                                                       "--cut-end",
                                                       "--cut-pictures",
+                                                      "--convert-audio",
+                                                      "--convert-stereo",
                                                       "--cut-start",
                                                       "--demux",
                                                       "--disc-size",
@@ -1878,6 +1894,27 @@ void MuxerManager::parseMuxOpt(const string& opts)
             m_noNavigation = true;
         else if (paramPair[0] == "--no-dv-layer")
             m_noDvLayer = true;
+        // ** SOUND A DISC DOES NOT CARRY, CONVERTED ON A DISC OUTPUT (audioConvert). ** --convert-audio=ac3[:<kbit/s>]
+        // or lpcm[:16|24[:48|96]] converts every such track of the job by the user's ffmpeg; --convert-stereo=only
+        // makes it stereo, both adds a stereo track beside a track of more channels. convert= and stereo= on a track's
+        // line choose for that track.
+        else if (paramPair[0] == "--convert-audio")
+        {
+            if (paramPair.size() < 2 || trimStr(paramPair[1]).empty())
+                THROW(ERR_USAGE, "Missing value for --convert-audio: ac3, ac3:<kbit/s>, lpcm or lpcm:<16|24>[:<48|96>]")
+            m_convertAudio = trimStr(paramPair[1]);
+            audioConvert::Spec probe;
+            if (const std::string why = audioConvert::parse(m_convertAudio, probe); !why.empty())
+                THROW(ERR_USAGE, "--convert-audio=" << m_convertAudio << ": " << why << ".")
+        }
+        else if (paramPair[0] == "--convert-stereo")
+        {
+            m_convertStereo = paramPair.size() < 2 ? std::string() : strToLowerCase(trimStr(paramPair[1]));
+            if (m_convertStereo != "only" && m_convertStereo != "both")
+                THROW(ERR_USAGE,
+                      "--convert-stereo takes only (the converted track is stereo) or both (a stereo "
+                      "track is added beside a track of more channels).")
+        }
         else if (paramPair[0] == "--ffmpeg")
         {
             if (paramPair.size() < 2)

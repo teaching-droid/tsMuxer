@@ -265,6 +265,8 @@ class MuxerManager final
     bool m_innerOnly = false;            // --inner-only
     bool m_noNavigation = false;         // --no-navigation: a disc folder without index.bdmv and MovieObject.bdmv
     bool m_noDvLayer = false;            // --no-dv-layer: a single layer Dolby Vision track stays one stream
+    std::string m_convertAudio;          // --convert-audio: the conversion of sound a disc does not carry
+    std::string m_convertStereo;         // --convert-stereo: only, both
     std::string m_ffmpeg;                // --ffmpeg: the ffmpeg to have the picture of a made layer made by
     std::string m_metaDir;             // --meta-dir: the folder of the disc's title and pictures; "none" for none (#30)
     bool m_noLayerBreakGuard = false;  // --no-layer-break-guard

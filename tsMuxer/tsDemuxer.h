@@ -74,6 +74,12 @@ class TSDemuxer final : public AbstractDemuxer
     [[nodiscard]] bool hasVideoStream() const;
     // The video PES read, of all video streams and files, and the stream of the first one (-1: none yet)
     [[nodiscard]] int64_t videoPesRead() const { return m_videoPesRead; }
+    // The time (90 kHz) the start of the track is measured against (getTrackStart): the first picture of its
+    // program that the mux keeps; -1 where it is not known
+    [[nodiscard]] int64_t trackReference(const int32_t pid, const bool fromFirstPes) const
+    {
+        return videoReference(pid, fromFirstPes);
+    }
     [[nodiscard]] int firstVideoPid() const { return m_firstVideoPid; }
     // ** WHY A TRACK OR A FILE GIVES NOTHING TO READ. ** A listing said "Can't detect stream type" for a track whose
     // every packet is scrambled (the recording of an encrypted channel) and for a track the program map names but the

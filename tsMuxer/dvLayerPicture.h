@@ -36,6 +36,10 @@ std::string takeFile(const std::string& name);
 // (NVIDIA, Intel, AMD), which are told the colour of the picture by a filter. fps is the frame rate of the film.
 // Returns the reason when no picture could be made; empty when it was.
 std::string make(const std::string& ffmpegGiven, double fps);
+
+// The ffmpeg to start: the one given (--ffmpeg), else one beside tsMuxeR, else one on the search path; empty when
+// there is none (also when the one given is not there). Used for the sound a disc does not carry too (audioConvert).
+std::string ffmpegToUse(const std::string& given);
 }  // namespace dvLayer
 
 #endif  // DV_LAYER_PICTURE_H_

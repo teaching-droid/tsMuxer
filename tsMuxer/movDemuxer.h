@@ -33,6 +33,7 @@ class MovDemuxer final : public IOContextDemuxer
     void readClose() override;
     int simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& acceptedPIDs, int64_t& discardSize) override;
     void getTrackList(std::map<int32_t, TrackInfo>& trackList) override;
+    [[nodiscard]] int64_t getContainerTrackNumber(int pid) const override;
     int64_t getTrackDelay(const int32_t pid) override
     {
         // This track's start relative to the first video track's, in ms (rounded), as the TS and PS demuxers give it.

@@ -2386,6 +2386,14 @@ void MovDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
     }
 }
 
+int64_t MovDemuxer::getContainerTrackNumber(const int pid) const
+{
+    if (pid <= 0 || pid > num_tracks || !tracks[pid - 1])
+        return -1;
+    const uint32_t id = reinterpret_cast<const MOVStreamContext*>(tracks[pid - 1])->trackId;
+    return id != 0 ? static_cast<int64_t>(id) : -1;
+}
+
 const uint8_t* MovDemuxer::getTrackCodecPrivate(const int32_t pid, int& size)
 {
     // MOV/MP4 track PIDs are 1-based (see getTrackList)

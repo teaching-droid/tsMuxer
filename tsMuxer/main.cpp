@@ -22,6 +22,7 @@
 #include <cmath>
 #include <csignal>
 #include <cstdlib>
+#include "audioConvert.h"
 #include "batchRunner.h"
 #include "bdSsifImport.h"
 #include "blank_patterns.h"
@@ -1553,6 +1554,20 @@ Additional parameters for audio tracks:
 - timeshift         Shift a track by the given time: 120ms, 1.5s, 500us or 2000ns.
                     A number alone is in milliseconds. Video too, see below.
                     Can be negative.
+- convert           Converts the track by your ffmpeg (see --ffmpeg), to a kind a Blu-ray
+                    carries: convert=ac3, convert=ac3:448 (kbit/s: 192 to 320 stereo, 384
+                    to 640 for more channels), convert=lpcm, convert=lpcm:24 (or 16 bit),
+                    convert=lpcm:24:96 (48, 96 or 192 kHz); :stereo makes it stereo, such as
+                    convert=ac3:224:stereo. Without a rate the choice is made from the
+                    track: AC-3 a step above the rate of a lossy track (AC-3 needs more
+                    bits than AAC for the same sound), the most for a lossless one; LPCM
+                    as the track's bits and rate where a disc takes them, 16 bit for a
+                    lossy track. The converted sound starts where the picture of the same
+                    file starts, as the track did. A track of a join, a playlist or a disc
+                    is not converted: mux it into one Matroska file first.
+                    convert=none keeps the track as it is (beside a stereo= track).
+- stereo            Adds a stereo track of the same sound, converted as above: stereo=ac3,
+                    stereo=ac3:224, stereo=lpcm. Not the default track of the output.
 - down-to-dts       Available only for DTS-HD tracks. Filter out HD part.
 - down-to-ac3       For TRUE-HD and E-AC3 (DD+) tracks. Keep the AC-3 core, drop the HD part.
 - drop-ac3-core     A Blu-ray TrueHD stream carries an AC-3 core beside its
@@ -2042,6 +2057,17 @@ All parameters in this group start with two dashes:
                       and a line says what was missing.
 --no-dv-layer         Blu-ray output: write a single layer Dolby Vision track as
                       the one stream it is. It plays as HDR10 on a disc player.
+--convert-audio       Blu-ray and AVCHD output: convert every sound track a disc
+                      does not carry (AAC, MP3, MP2, Opus, Vorbis, FLAC, ALAC,
+                      WavPack, LPCM at a rate a disc has not) by your ffmpeg:
+                      --convert-audio=ac3, ac3:<kbit/s>, lpcm,
+                      lpcm:<16|24>[:<48|96|192>], as convert= on a track's line,
+                      which counts first. ffmpeg is the one --ffmpeg names, else
+                      one beside tsMuxeR or on the search path; tsMuxeR does not
+                      ship ffmpeg.
+--convert-stereo      With --convert-audio: only makes each converted track stereo;
+                      both adds a stereo track beside each converted track of more
+                      channels.
 --dv-layer-picture    Blu-ray output: the picture of a made second layer, as a
                       file, in place of one made by ffmpeg: an HEVC stream of one
                       key picture, Main 10, 1920x1080, marked as PQ with chroma
@@ -5643,6 +5669,8 @@ static bool endBySignal()
 {
     if (const int sig = stopSignal(); sig != 0)
     {
+        // the program ends without its static objects: the sound it converted (audioConvert) is removed here
+        audioConvert::removeMade();
         std::cout.flush();  // the signal ends the program without flushing, and a log in a file lost the last lines
         std::cerr.flush();
         diagReport::stopped(sig);
