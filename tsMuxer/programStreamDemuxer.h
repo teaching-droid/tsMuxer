@@ -43,6 +43,16 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
     }
 
     [[nodiscard]] int64_t getFileDurationNano() const override;
+    // The first PTS of a stream against the first (smallest) PTS of the video read so far, in 90 kHz ticks: where the
+    // mux puts the stream (METADemuxer::addStream). False where either is not known yet.
+    [[nodiscard]] bool trackStartTicks(const int pid, int64_t& ticks) const
+    {
+        const auto first = m_firstPtsTime.find(pid);
+        if (first == m_firstPtsTime.end() || m_firstVideoPTS == -1)
+            return false;
+        ticks = first->second - m_firstVideoPTS;
+        return true;
+    }
 
    private:
     uint32_t m_tmpBufferLen;

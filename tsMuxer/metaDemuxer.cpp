@@ -225,6 +225,41 @@ static int64_t tsTrackStart(const BufferedReaderManager& readManager, const std:
     return found ? ticks : 0;
 }
 
+// ** THE SOUND OF A PROGRAM STREAM STARTS WHERE THE FILE SAYS. ** A VOB or MPEG-PS file whose sound starts after its
+// first picture (110 ms in a file of MPEG-2 video and MP2) was muxed with the sound from the first picture: it came
+// that much early, in every output and in every version, where the meta file gave no timeshift= (a meta written by
+// hand, a source given in place of the meta file). The window writes the listed delay as timeshift=, which hid it.
+// The start of the track against the first picture, in 90 kHz ticks, as the listing gives it (Stream delay): the
+// first PTS of the track against the smallest PTS of the video, read until both are known and a few megabytes
+// further, as the pictures shown before the first one come after it.
+static int64_t psTrackStart(const BufferedReaderManager& readManager, const std::string& fileName, const int pid,
+                            bool* known)
+{
+    *known = false;
+    static constexpr int64_t LATE_LIMIT = 256LL * 1024 * 1024;
+    static constexpr int64_t AFTER_BOTH = 4LL * 1024 * 1024;
+    ProgramStreamDemuxer probe(readManager);
+    probe.openFile(fileName);
+    PIDSet all;
+    for (int i = 0; i < 256; ++i) all.insert(i);
+    DemuxedData demuxedData;
+    int64_t discardedSize = 0;
+    int64_t ticks = 0;
+    int64_t bothAt = -1;
+    while (probe.getDemuxedSize() < LATE_LIMIT)
+    {
+        demuxedData.clear();
+        if (probe.simpleDemuxBlock(demuxedData, all, discardedSize) == BufferedReader::DATA_EOF)
+            break;
+        if (bothAt < 0 && probe.trackStartTicks(pid, ticks))
+            bothAt = probe.getDemuxedSize();
+        if (bothAt >= 0 && probe.getDemuxedSize() - bothAt >= AFTER_BOTH)
+            break;
+    }
+    *known = probe.trackStartTicks(pid, ticks);
+    return *known ? ticks : 0;
+}
+
 // The time (90 kHz) the start of a track of a transport stream is measured against (tsTrackStart): the first
 // picture the mux keeps. For the converted sound of the track (METADemuxer::convertLine).
 static int64_t tsVideoReference(const BufferedReaderManager& readManager, const std::string& fileName, const int pid,
@@ -3836,6 +3871,10 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         if (ext == "TS" || ext == "M2TS" || ext == "MTS" || ext == "M2T" || ext == "SSIF")
             tsStart =
                 tsTrackStart(m_readManager, first, SubTrackFilter::isSubTrack(pid) ? pid >> 16 : pid, &tsStartKnown);
+        else if ((ext == "VOB" || ext == "MPG" || ext == "MPEG" || ext == "M2P" || ext == "EVO" || ext == "VRO" ||
+                  ext == "MOD") &&
+                 !SubTrackFilter::isSubTrack(pid))
+            tsStart = psTrackStart(m_readManager, first, pid, &tsStartKnown);
     }
     if (!timeShiftGiven)
         if (const auto start = streamInfo.m_addParams.find("srcstartdelay");
