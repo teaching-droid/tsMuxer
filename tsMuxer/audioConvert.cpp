@@ -608,10 +608,12 @@ std::string run(const std::string& ffmpeg, const Source& source, const Spec& spe
     args.push_back(textOf(out));
     madeFiles.push_back(out);
     // ** A CLOCK THAT STARTS AGAIN IS NOT CONVERTED. ** A recording or a VOB whose clock starts again inside it (a
-    // short clip before the film, a joined recording) is read by the mux part after part; ffmpeg, keeping the times
-    // of the file, padded the jump with silence or cut the sound at it: the sound of a VOB with a 2 s first part came
-    // 4 s off, and broken. The times of the track's packets are listed in the same run (reading the file once) and
-    // checked: a step back of more than a tenth of a second, or on of more than 10 s, refuses the conversion.
+    // short clip before the film, a joined recording, a left-out cell) is read by the mux part after part; ffmpeg,
+    // keeping the times of the file, padded the jump with silence or cut the sound at it: the sound of a VOB with a
+    // 2 s first part came 4 s off, and broken. The times of the first video are listed in the same run (reading the
+    // file once) and checked as the mux parts the file (ProgramStreamDemuxer::noteVideoTime): a decoding time that
+    // goes back (the list holds it at the last one: three pictures at one time), or on more than a second, refuses
+    // the conversion. A gap in the sound alone is padded, as the mux keeps it. A file without video is not checked.
     std::filesystem::path times;
     if (source.clockMayJump)
     {
@@ -619,7 +621,7 @@ std::string run(const std::string& ffmpeg, const Source& source, const Spec& spe
         if (!times.empty())
         {
             madeFiles.push_back(times);
-            args.insert(args.end(), {"-map", source.map, "-c", "copy", "-f", "framecrc", textOf(times)});
+            args.insert(args.end(), {"-map", "0:V:0?", "-c", "copy", "-f", "framecrc", textOf(times)});
         }
     }
     int exitCode = 0;
@@ -674,9 +676,9 @@ std::string run(const std::string& ffmpeg, const Source& source, const Spec& spe
             if (last != LLONG_MIN)
             {
                 const double step = static_cast<double>(d - last) * tbNum / tbDen;
-                // the writer of the list holds a time that goes back at the last one: packets that do not move on
+                // the writer of the list holds a time that goes back at the last one: pictures that do not move on
                 stalled = d == last ? stalled + 1 : 0;
-                if (step < -0.1 || step > 10 || stalled >= 3)
+                if (step < 0 || step > 1 || stalled >= 2)
                     jump =
                         (stalled >= 3 ? std::string("a step back") : std::to_string(std::lround(step * 1000)) + " ms") +
                         " at " + std::to_string(std::lround(static_cast<double>(last) * tbNum / tbDen)) + " s";

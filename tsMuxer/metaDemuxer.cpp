@@ -4008,7 +4008,7 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
             tsStart =
                 tsTrackStart(m_readManager, first, SubTrackFilter::isSubTrack(pid) ? pid >> 16 : pid, &tsStartKnown);
         else if ((ext == "VOB" || ext == "MPG" || ext == "MPEG" || ext == "M2P" || ext == "EVO" || ext == "VRO" ||
-                  ext == "MOD") &&
+                  ext == "PS" || ext == "MOD") &&
                  !SubTrackFilter::isSubTrack(pid))
             tsStart = psTrackStart(m_readManager, first, pid, &tsStartKnown);
     }

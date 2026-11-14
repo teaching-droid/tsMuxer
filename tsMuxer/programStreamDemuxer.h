@@ -99,7 +99,10 @@ class ProgramStreamDemuxer final : public AbstractDemuxer
     uint64_t m_startScan = 0;          // the last bytes of the scan for it, across PES
     int m_startCutPid = -1;            // the stream of a PES cut by the end of a read
     bool m_startMpeg2Seen = false;     // without a stream map: a picture start code of MPEG-1/2 came
-    bool m_startH264Sps = false;       // without a stream map: an SPS byte of H.264, its profile next
+    int m_startH264Sps = 0;            // without a stream map: the bytes of an H.264 SPS checked so far (0: none)
+    bool m_startHevc = false;          // without a stream map: HEVC, timed from its first picture
+    int64_t m_startScanned = 0;        // the bytes scanned for the first sequence header
+    int64_t m_startCutPts = -1;        // the PTS of the PES cut by the end of a read (-1: none)
     static int64_t wrapped(const int64_t d)
     {
         constexpr int64_t TURN = 1LL << 33;
