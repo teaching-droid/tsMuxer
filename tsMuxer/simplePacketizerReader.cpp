@@ -2,6 +2,8 @@
 // Apache License 2.0, see LICENSE and NOTICE.
 #include "simplePacketizerReader.h"
 
+#include <cmath>
+
 #include <fs/systemlog.h>
 
 #include <algorithm>

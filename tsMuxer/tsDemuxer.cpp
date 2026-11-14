@@ -698,7 +698,9 @@ std::vector<uint8_t> TSDemuxer::pesStart(const uint8_t* pkt, const int pid, cons
         const auto ts = reinterpret_cast<const TSPacket*>(p);
         if (p[0] != 0x47 || ts->getPID() != pid)
             continue;
-        if (ts->payloadStart)
+        const uint8_t* const data = p + ts->getHeaderSize();
+        if (ts->payloadStart && ts->getHeaderSize() + 3 <= TS_FRAME_SIZE && data[0] == 0 && data[1] == 0 &&
+            data[2] == 1)
             return out;  // the next PES: this one is whole
         if (!ts->dataExists || ts->getHeaderSize() >= TS_FRAME_SIZE)
             continue;
@@ -758,8 +760,12 @@ TSDemuxer::LeadPes TSDemuxer::skipsLeadingPes(const int pid, const StreamType ty
         const std::vector<uint8_t> start = pkt != nullptr ? pesStart(pkt, pid, payload, 16384, &complete)
                                                           : std::vector<uint8_t>(payload < end ? payload : end, end);
         const int first = parameterSetsFirst(type, start.data(), start.data() + start.size());
-        if (first != 1 && ++m_leadPes[pid] <= LEAD_VIDEO_PES_MAX)
+        // a PES not decided (it runs past the block) is held also where it reaches the count: decided where the next
+        // PES begins (resolveLeadPes), which gives the held ones back if it holds no parameter sets either
+        if (first != 1 && (++m_leadPes[pid] <= LEAD_VIDEO_PES_MAX || (first == -1 && !complete)))
         {
+            if (m_leadPes[pid] > LEAD_VIDEO_PES_MAX)
+                m_leadPes[pid] = LEAD_VIDEO_PES_MAX;
             if (first == -1 && !complete)
             {
                 m_leadUndecided[pid] = true;
@@ -1603,6 +1609,9 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
             for (const auto& [pid, held] : m_leadHeld) pids.push_back(pid);
             for (const int pid : pids)
             {
+                if (m_leadUndecided[pid] && m_leadPes[pid] != LEAD_PES_DONE)
+                    if (const auto info = m_pmt.pidList.find(pid); info != m_pmt.pidList.end())
+                        resolveLeadPes(pid, info->second.m_streamType, demuxedData, discardSize, part, vect, lastPid);
                 m_leadPes[pid] = LEAD_PES_DONE;
                 m_leadDrop[pid] = false;
                 giveBackLeadPes(pid, demuxedData, discardSize, part, vect, lastPid);
@@ -1927,7 +1936,8 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
                         pesPacket, TS_FRAME_SIZE - (frameData - pkt)))
             return;
         m_leadDrop[pid] = false;
-        if (m_leadPes[pid] != LEAD_PES_DONE && m_leadUndecided[pid] && streamInfo != m_pmt.pidList.end())
+        if (m_leadPes[pid] != LEAD_PES_DONE && m_leadUndecided[pid] && (pesPacket->flagsLo & 0x80) == 0x80 &&
+            streamInfo != m_pmt.pidList.end())
             resolveLeadPes(pid, streamInfo->second.m_streamType, demuxedData, discardSize, part, vect, lastPid);
         if (m_leadPes[pid] != LEAD_PES_DONE && streamInfo != m_pmt.pidList.end())
         {
@@ -1941,6 +1951,8 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
                     if (m_leadHeld[pid].empty())
                         m_leadFirstSeen[pid] = m_firstSeenPTS == -1;
                     m_leadDrop[pid] = true;
+                    if (part != nullptr && isVideoPID(streamInfo->second.m_streamType) && m_keptPictures[pid] > 0)
+                        m_keptPictures[pid]--;
                 }
                 else if (lead == LeadPes::GiveBack)
                     giveBackLeadPes(pid, demuxedData, discardSize, part, vect, lastPid);
@@ -2566,7 +2578,8 @@ void TSDemuxer::resolveLeadPes(const int pid, const StreamType type, DemuxedData
     if (parameterSetsFirst(type, bytes.data(), bytes.data() + look) != 1)
         return;
     held->second.erase(held->second.begin(), held->second.begin() + static_cast<std::ptrdiff_t>(from));
-    m_leadFirstSeen[pid] = false;
+    if (from > 0)
+        m_leadFirstSeen[pid] = false;  // the first PES of the file was among those left out
     m_leadPes[pid] = LEAD_PES_DONE;
     giveBackLeadPes(pid, demuxedData, discardSize, part, vect, lastPid);
 }

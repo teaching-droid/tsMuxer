@@ -235,8 +235,8 @@ class TSDemuxer final : public AbstractDemuxer
     std::pair<int64_t, int64_t> m_videoSpanDts{-1, -1};  // the first and the last decoding time of the first video
     std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_joinGaps;  // by PID, see takeTimeGaps
     std::map<int, std::vector<TimeJump>> m_soundJumps;                   // by PID, see takeTimeJumps
-    int64_t m_handedBytes[8192]{};  // the bytes handed on for each track so far (for m_soundJumps)
-    bool m_reframedPid[8192]{};     // tracks handed on through a filter, whose bytes are not counted
+    std::map<int, int64_t> m_handedBytes;  // the bytes handed on for each track so far (for m_soundJumps)
+    bool m_reframedPid[8192]{};            // tracks handed on through a filter, whose bytes are not counted
    public:
     std::vector<TimeJump> takeTimeJumps(int pid) override;
 
@@ -294,7 +294,7 @@ class TSDemuxer final : public AbstractDemuxer
                                   bool* complete) const;
     // a held PES that went on past its block, decided where the next PES of its PID begins (resolveLeadPes)
     bool m_leadUndecided[8192]{};
-    size_t m_leadUndecidedAt[8192]{};
+    std::map<int, size_t> m_leadUndecidedAt;
     void resolveLeadPes(int pid, StreamType type, DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,
                         MemoryBlock*& vect, int& lastPid);
     const uint8_t* m_blockStart = nullptr;  // the block being read (pesStart)
