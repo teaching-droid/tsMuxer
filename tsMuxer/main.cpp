@@ -6151,7 +6151,8 @@ static int runTsMuxer(int argc, char** argv)
                         int discTitle = 0;
                         const string source = dvdTitleSource(videoTs, oneTitle, &languages, &chapters, false,
                                                              minSeconds, all, &discTitle);
-                        titleSource = unquoteStr(splitQuotedStr(source.c_str(), '+')[0]);
+                        const std::vector<std::string> parts = splitQuotedStr(source.c_str(), '+');
+                        titleSource = parts.empty() ? std::string() : unquoteStr(parts[0]);
                         // with --json the three lines below are members of the document, and are not written
                         std::ostream noLines(nullptr);
                         std::ostream& lines = jsonListing::active ? noLines : cout;

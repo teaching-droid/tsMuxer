@@ -1263,8 +1263,11 @@ void METADemuxer::openFile(const string& streamName)
             m_HevcFound = (codec.find("HEVC") == 12);
         if (!m_MvcFound)
             m_MvcFound = codec == "V_MPEG4/ISO/MVC";
+        // a line without a file (a meta line of commas) has no first file: it read past the end of an empty list
+        // and the program ended (3.1.0 as well), where the checks of the line (addStream) name the fault
         if (codec == "V_MPEG4/ISO/MVC" && m_mvcSource.empty())
-            m_mvcSource = unquoteStr(trimStr(splitQuotedStr(codecStreamName.c_str(), '+')[0]));
+            if (const vector<string> parts = splitQuotedStr(codecStreamName.c_str(), '+'); !parts.empty())
+                m_mvcSource = unquoteStr(trimStr(parts[0]));
         if (!convertLine(codec, codecStreamName, addParams) && !addDvLayers(codec, codecStreamName, addParams))
             addStream(codec, codecStreamName, addParams);
         file.readLine(str);
@@ -1935,6 +1938,9 @@ bool METADemuxer::convertLine(const string& codec, const string& lineStreamName,
     };
 
     const vector<string> files = splitQuotedStr(lineStreamName.c_str(), '+');
+    // a line without a file (a meta line of commas) is left to the checks of the line (addStream), which name it
+    if (files.empty() || trimStr(files[0]).empty())
+        return false;
     const string file = unquoteStr(trimStr(files[0]));
     const string ext = strToLowerCase(extractFileExt(file));
     const string what = given != addParams.end()         ? "convert="

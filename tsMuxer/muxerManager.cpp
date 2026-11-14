@@ -288,8 +288,10 @@ void MuxerManager::preinitMux(const std::string& outFileName, FileFactory* fileF
                     bool fromMatroska = false;
                     for (const auto& si : m_metaDemuxer.getStreamInfo())
                     {
-                        const std::string ext = strToUpperCase(
-                            extractFileExt(unquoteStr(trimStr(splitQuotedStr(si.m_fullStreamName.c_str(), '+')[0]))));
+                        const std::vector<std::string> parts = splitQuotedStr(si.m_fullStreamName.c_str(), '+');
+                        const std::string ext = parts.empty()
+                                                    ? std::string()
+                                                    : strToUpperCase(extractFileExt(unquoteStr(trimStr(parts[0]))));
                         fromMatroska = fromMatroska || ext == "MKV" || ext == "MKA" || ext == "MKS" || ext == "MK3D" ||
                                        ext == "WEBM";
                     }
