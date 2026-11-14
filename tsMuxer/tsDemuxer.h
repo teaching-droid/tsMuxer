@@ -278,7 +278,13 @@ class TSDemuxer final : public AbstractDemuxer
         Keep,     // it begins with a frame: read it, and drop the PES held before it
         GiveBack  // the search ended without a frame: read the PES held before it, then this one
     };
-    LeadPes skipsLeadingPes(int pid, StreamType type, const uint8_t* payload, const uint8_t* end);
+    LeadPes skipsLeadingPes(int pid, StreamType type, const uint8_t* payload, const uint8_t* end,
+                            const uint8_t* pkt = nullptr);
+    // The payload of the PES that begins in the packet at pkt, its first packet's and those of the packets of the same
+    // PID after it in the block being read, up to the next PES, at most `limit` bytes (pesStart)
+    std::vector<uint8_t> pesStart(const uint8_t* pkt, int pid, const uint8_t* payload, size_t limit) const;
+    const uint8_t* m_blockStart = nullptr;  // the block being read (pesStart)
+    const uint8_t* m_blockEnd = nullptr;
     void demuxPacket(uint8_t* pkt, int pid, DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,
                      MemoryBlock*& vect, int& lastPid);
     void giveBackLeadPes(int pid, DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,

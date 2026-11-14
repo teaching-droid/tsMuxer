@@ -663,8 +663,30 @@ static bool holdsMpeg2SequenceHeader(const uint8_t* p, const uint8_t* end)
     return false;
 }
 
+std::vector<uint8_t> TSDemuxer::pesStart(const uint8_t* pkt, const int pid, const uint8_t* payload,
+                                         const size_t limit) const
+{
+    std::vector<uint8_t> out(payload, pkt + TS_FRAME_SIZE);
+    // only a packet of the block being read (not one held back and given back later)
+    if (pkt == nullptr || m_blockEnd == nullptr || pkt < m_blockStart || pkt + TS_FRAME_SIZE > m_blockEnd)
+        return out;
+    const int step = m_m2tsMode ? 192 : TS_FRAME_SIZE + m_tail;
+    for (const uint8_t* p = pkt + step; p + TS_FRAME_SIZE <= m_blockEnd && out.size() < limit; p += step)
+    {
+        const auto ts = reinterpret_cast<const TSPacket*>(p);
+        if (p[0] != 0x47 || ts->getPID() != pid)
+            continue;
+        if (ts->payloadStart)
+            break;  // the next PES
+        if (!ts->dataExists || ts->getHeaderSize() >= TS_FRAME_SIZE)
+            continue;
+        out.insert(out.end(), p + ts->getHeaderSize(), p + TS_FRAME_SIZE);
+    }
+    return out;
+}
+
 TSDemuxer::LeadPes TSDemuxer::skipsLeadingPes(const int pid, const StreamType type, const uint8_t* payload,
-                                              const uint8_t* end)
+                                              const uint8_t* end, const uint8_t* pkt)
 {
     // A recording of H.264 that begins before its first parameter sets: its pictures up to there cannot be decoded,
     // having no picture parameter set, and the reader passed them on with times of its own. Of coded fields these came
@@ -673,9 +695,20 @@ TSDemuxer::LeadPes TSDemuxer::skipsLeadingPes(const int pid, const StreamType ty
     // from the first file of the source only: the next part of a split recording goes on with the parameter sets of
     // the part before, and its first pictures can be decoded. A stream whose parameter sets do not come within the
     // first LEAD_VIDEO_PES_MAX PES, or not at the start of a PES, is read whole, as before.
+    // ** THE PARAMETER SETS ARE LOOKED FOR IN THE WHOLE START OF THE PES. ** Only its first packet was read: x264 puts
+    // an SEI of its settings (about 700 bytes) in front of the first parameter sets, so they come in the PES's third
+    // or fourth packet, the first group of pictures was taken for pictures without them and left out, and the film
+    // began 2 s late, at its second group (also the sound that goes with it). The packets of the PES in the block
+    // read are looked through, 16 KB at most.
+    const auto whole = [&](const uint8_t* p, const uint8_t* e)
+    {
+        std::vector<uint8_t> bytes = pkt != nullptr ? pesStart(pkt, pid, payload, 16384) : std::vector<uint8_t>(p, e);
+        return bytes;
+    };
     if (type == StreamType::VIDEO_H264 && m_holdLeadVideo)
     {
-        const bool parameterSets = holdsH264Sps(payload, end);
+        const std::vector<uint8_t> start = whole(payload, end);
+        const bool parameterSets = holdsH264Sps(start.data(), start.data() + start.size());
         if (!parameterSets && ++m_leadPes[pid] <= LEAD_VIDEO_PES_MAX)
             return LeadPes::Hold;
         m_leadPes[pid] = LEAD_PES_DONE;
@@ -690,7 +723,8 @@ TSDemuxer::LeadPes TSDemuxer::skipsLeadingPes(const int pid, const StreamType ty
     // pictures the reader keeps; from the first file only, as for H.264.
     if ((type == StreamType::VIDEO_MPEG2 || type == StreamType::VIDEO_MPEG1) && m_holdLeadVideo)
     {
-        const bool sequenceHeader = holdsMpeg2SequenceHeader(payload, end);
+        const std::vector<uint8_t> start = whole(payload, end);
+        const bool sequenceHeader = holdsMpeg2SequenceHeader(start.data(), start.data() + start.size());
         if (!sequenceHeader && ++m_leadPes[pid] <= LEAD_VIDEO_PES_MAX)
             return LeadPes::Hold;
         m_leadPes[pid] = LEAD_PES_DONE;
@@ -1640,6 +1674,8 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     }
 
     const uint8_t* lastFrameAddr = data + readedBytes - TS_FRAME_SIZE;
+    m_blockStart = data;  // pesStart looks into the packets after the one being read
+    m_blockEnd = data + readedBytes;
 
     if (m_firstCall && !m_m2tsMode)
     {
@@ -1832,8 +1868,9 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
         {
             if ((pesPacket->flagsLo & 0x80) == 0x80)
             {
-                const LeadPes lead = skipsLeadingPes(pid, streamInfo->second.m_streamType,
-                                                     frameData + pesPacket->getHeaderLength(), pkt + TS_FRAME_SIZE);
+                const LeadPes lead =
+                    skipsLeadingPes(pid, streamInfo->second.m_streamType, frameData + pesPacket->getHeaderLength(),
+                                    pkt + TS_FRAME_SIZE, pkt);
                 if (lead == LeadPes::Hold)
                 {
                     if (m_leadHeld[pid].empty())
