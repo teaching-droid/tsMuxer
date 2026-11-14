@@ -31,8 +31,11 @@ std::string programFile();
 
 // Starts a helper program with its arguments and waits for its end, for `seconds` at most. It gets no input, what
 // it prints is not shown, and it opens no window. Returns 0 when it ended (exitCode is what it ended with), 1 when
-// it could not be started, 2 when it was ended here because it ran longer than the limit.
-int runHelper(const std::string& program, const std::vector<std::string>& args, int seconds, int& exitCode);
+// it could not be started, 2 when it was ended here because it ran longer than the limit. With `stoppable`, a stop
+// request (stopSignal) ends it too, within a fifth of a second, and 3 is returned: the caller watches the stop
+// (setStopWatched) while it runs.
+int runHelper(const std::string& program, const std::vector<std::string>& args, int seconds, int& exitCode,
+              bool stoppable = false);
 }  // namespace batch
 
 #endif

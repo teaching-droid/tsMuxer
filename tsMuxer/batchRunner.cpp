@@ -23,6 +23,9 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
 #ifdef __APPLE__
 #include <mach-o/dyld.h>
 #endif
@@ -268,7 +271,7 @@ string timeText(const int64_t seconds)
 
 string programFile() { return ownProgram(string()); }
 
-int runHelper(const string& program, const vector<string>& args, const int seconds, int& exitCode)
+int runHelper(const string& program, const vector<string>& args, const int seconds, int& exitCode, const bool stoppable)
 {
     fflush(stdout);
     fflush(stderr);
@@ -289,23 +292,48 @@ int runHelper(const string& program, const vector<string>& args, const int secon
     }
     PROCESS_INFORMATION process{};
     const vector<wchar_t> wideProgram = toWide(program);
+    // ** THE HELPER ENDS WITH TSMUXER. ** In a job that ends it when tsMuxeR's handle of the job is closed, also by a
+    // hard kill of tsMuxeR (the task manager, a window that ends its queue): a conversion by ffmpeg went on for hours
+    // and wrote its file to the end. Where the job cannot be made (Windows 7 allows no job in a job), as before.
+    const HANDLE job = CreateJobObjectW(nullptr, nullptr);
+    if (job)
+    {
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
+    }
     const BOOL started = CreateProcessW(wideProgram.data(), commandLine.data(), nullptr, nullptr, TRUE,
-                                        CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
+                                        CREATE_NO_WINDOW | CREATE_SUSPENDED, nullptr, nullptr, &startup, &process);
     if (nothing != INVALID_HANDLE_VALUE)
         CloseHandle(nothing);
     if (!started)
-        return 1;
-    int result = 0;
-    if (WaitForSingleObject(process.hProcess, static_cast<DWORD>(seconds) * 1000) != WAIT_OBJECT_0)
     {
-        TerminateProcess(process.hProcess, 1);
-        WaitForSingleObject(process.hProcess, 5000);
-        result = 2;
+        if (job)
+            CloseHandle(job);
+        return 1;
+    }
+    if (job)
+        AssignProcessToJobObject(job, process.hProcess);
+    ResumeThread(process.hThread);
+    int result = 0;
+    const auto limit = chrono::steady_clock::now() + chrono::seconds(seconds);
+    while (WaitForSingleObject(process.hProcess, 200) != WAIT_OBJECT_0)
+    {
+        const bool stopped = stoppable && stopSignal() != 0;
+        if (stopped || chrono::steady_clock::now() > limit)
+        {
+            TerminateProcess(process.hProcess, 1);
+            WaitForSingleObject(process.hProcess, 5000);
+            result = stopped ? 3 : 2;
+            break;
+        }
     }
     DWORD code = 0;
     GetExitCodeProcess(process.hProcess, &code);
     CloseHandle(process.hThread);
     CloseHandle(process.hProcess);
+    if (job)
+        CloseHandle(job);
     exitCode = static_cast<int>(code);
     return result;
 #else
@@ -315,11 +343,18 @@ int runHelper(const string& program, const vector<string>& args, const int secon
     argv.push_back(programCopy.data());
     for (string& arg : copies) argv.push_back(arg.data());
     argv.push_back(nullptr);
+    const pid_t parent = getpid();
     const pid_t child = fork();
     if (child < 0)
         return 1;
     if (child == 0)
     {
+#ifdef __linux__
+        // ends with tsMuxeR, also when it is killed (SIGKILL): a conversion by ffmpeg went on writing its file
+        prctl(PR_SET_PDEATHSIG, SIGKILL);
+        if (getppid() != parent)
+            _exit(127);
+#endif
         if (FILE* nothing = fopen("/dev/null", "r+"))
         {
             dup2(fileno(nothing), 0);
@@ -338,13 +373,14 @@ int runHelper(const string& program, const vector<string>& args, const int secon
             break;
         if (ended < 0 && errno != EINTR)
             return 1;
-        if (chrono::steady_clock::now() > limit)
+        const bool stopped = stoppable && stopSignal() != 0;
+        if (stopped || chrono::steady_clock::now() > limit)
         {
             kill(child, SIGKILL);
             while (waitpid(child, &status, 0) < 0 && errno == EINTR)
             {
             }
-            return 2;
+            return stopped ? 3 : 2;
         }
         usleep(20000);
     }
