@@ -28,6 +28,7 @@ class MLPStreamReader : public SimplePacketizerReader, public MLPCodec
     int readPacket(AVPacket& avPacket) override;
     int flushPacket(AVPacket& avPacket) override;
     void addTimeGap(int64_t atNs, int64_t gapNs) override { m_thdGaps.emplace_back(atNs, gapNs); }
+    void addTimeJump(int64_t, int64_t, const int64_t atNs, const int64_t gapNs) override { addTimeGap(atNs, gapNs); }
 
    protected:
     int64_t m_totalTHDSamples;

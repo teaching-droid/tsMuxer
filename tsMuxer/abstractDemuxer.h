@@ -223,6 +223,15 @@ class AbstractDemuxer
     // Gaps in a track's times the demuxer has found, taken out once asked for: (where, how long), in ns on the clock
     // of the track's reader (AbstractStreamReader::addTimeGap)
     virtual std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(int pid) { return {}; }
+    // The same, placed by the data handed on for the track (AbstractStreamReader::addTimeJump)
+    struct TimeJump
+    {
+        int64_t atByte;  // the first byte after the gap, in the data handed on for the track
+        int64_t toNs;    // where the sound after it comes, on the clock of the track's reader
+        int64_t atNs;    // the gap as (where, how long), for a reader that cannot place it by its data
+        int64_t gapNs;
+    };
+    virtual std::vector<TimeJump> takeTimeJumps(int pid) { return {}; }
     // The text subtitles of a track that the next one follows at once, without a gap: their start times, in ms as the
     // SRT text the demuxer hands on gives them, taken out once asked for (SRTStreamReader::addTouchingCue)
     virtual std::vector<int64_t> takeTouchingCues(int pid) { return {}; }

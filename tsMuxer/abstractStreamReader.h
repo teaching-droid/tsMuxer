@@ -82,6 +82,10 @@ class AbstractStreamReader : public BaseAbstractStreamReader
     // and every frame after it, come gapNs later (a part of a join with less sound than picture). A reader that
     // counts its times by frames keeps it; the others do not take gaps.
     virtual void addTimeGap(int64_t atNs, int64_t gapNs) {}
+    // The same gap, placed by the data: the frame that begins at or after byte atByte of the data given to the
+    // reader is the first after the gap, and it comes toNs after the track's first frame. A reader that counts its
+    // frames from the data keeps it exactly; the others take it as the gap (atNs, gapNs).
+    virtual void addTimeJump(int64_t atByte, int64_t toNs, int64_t atNs, int64_t gapNs) { addTimeGap(atNs, gapNs); }
     // The data of the next setBuffer begins a later file of a join of files read one after the other
     virtual void onJoinedFileStart() {}
     unsigned m_flags;

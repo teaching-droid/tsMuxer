@@ -173,6 +173,7 @@ class ContainerToReaderWrapper final : public AbstractReader
     int64_t getTrackClipStart(uint32_t readerID);
     // The gaps the demuxer found in the stream's times (see AbstractDemuxer::takeTimeGaps).
     std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(uint32_t readerID);
+    std::vector<AbstractDemuxer::TimeJump> takeTimeJumps(uint32_t readerID);
     // The text subtitles the next one follows at once (see AbstractDemuxer::takeTouchingCues).
     std::vector<int64_t> takeTouchingCues(uint32_t readerID);
     // The text subtitles whose next one starts after a gap (see AbstractDemuxer::takeNextCueStarts).

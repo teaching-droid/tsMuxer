@@ -1142,6 +1142,28 @@ void SimplePacketizerReader::addTimeGap(const int64_t atNs, const int64_t gapNs)
     m_timeGaps.emplace_back(atNs, gapNs);
 }
 
+void SimplePacketizerReader::addTimeJump(const int64_t atByte, const int64_t toNs, int64_t, int64_t)
+{
+    m_timeJumps.emplace_back(atByte, toNs);
+}
+
+// ** THE SOUND AFTER A PAUSE STARTS AT ITS OWN TIME, TO THE FRAME. ** The gap of a pause of the sound in a transport
+// stream (TSDemuxer::noteSoundGap) began where the sound before it was taken to end: its last PES plus the shortest
+// step between two PES. Where that PES held more frames, the rest of them came after the gap, and every frame after
+// the pause one frame late (21.3 ms for AAC in PES of one or two frames). The pause is placed by the data now: the
+// frame that begins at the first byte of the PES after it comes at that PES's time.
+void SimplePacketizerReader::applyTimeJumps()
+{
+    if (m_timeJumps.empty())
+        return;
+    const int64_t at = m_readBytes - (m_bufEnd - m_curPos);  // where the next frame begins in the data given
+    while (!m_timeJumps.empty() && at >= m_timeJumps.front().first)
+    {
+        m_curPts = PTS_CONST_OFFSET + static_cast<double>(m_timeJumps.front().second) * INTERNAL_PTS_FREQ / 1e9;
+        m_timeJumps.erase(m_timeJumps.begin());
+    }
+}
+
 // A gap the source asks for (addTimeGap) begins at the frame that comes at its time, within half a frame
 void SimplePacketizerReader::applyTimeGaps()
 {
@@ -1402,6 +1424,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
             m_curPos = frame;
             m_needSync = false;
         }
+        applyTimeJumps();
         avPacket.dts = avPacket.pts = static_cast<int64_t>(m_curPts * m_stretch) + m_timeOffset;
         if (m_bufEnd - m_curPos < getHeaderLen())
         {

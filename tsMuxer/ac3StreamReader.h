@@ -43,6 +43,14 @@ class AC3StreamReader final : public SimplePacketizerReader, public AC3Codec
     bool isIFrame(AVPacket* packet) override { return isPriorityData(packet); }
     bool isSecondary() override;
     void addTimeGap(int64_t atNs, int64_t gapNs) override;
+    // TrueHD with its core times its units by samples (readPacketTHD): the gap, as before; AC-3 alone by its data
+    void addTimeJump(const int64_t atByte, const int64_t toNs, const int64_t atNs, const int64_t gapNs) override
+    {
+        if (m_true_hd_mode)
+            addTimeGap(atNs, gapNs);
+        else
+            SimplePacketizerReader::addTimeJump(atByte, toNs, atNs, gapNs);
+    }
 
     // ** AC-3 INSIDE A WAV. ** A WAVE file can hold AC-3 or E-AC-3 in place of samples, in two forms. With frames as
     // its data (format tag 0x2000, as an encoder or a capture card writes it) the frames are those of an .ac3 file,

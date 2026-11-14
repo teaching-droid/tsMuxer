@@ -1140,7 +1140,13 @@ void TSDemuxer::noteSoundGap(const int pid, const int64_t pts, const bool cutPar
                                           "whole files only. Mux the playlist with --playlist-clips=whole, or its "
                                           "clips as a join of their files.")
         const int64_t origin = m_soundGap[pid].origin;
-        m_joinGaps[pid].emplace_back((end - origin) * 100000 / 9, pause * 100000 / 9);
+        // placed by the data where the bytes of the track are counted (applyTimeJumps): the PES after the pause
+        // begins at the byte handed on next
+        if (m_reframedPids.count(pid) == 0)
+            m_soundJumps[pid].push_back(TimeJump{m_handedBytes[pid], (pts - origin) * 100000 / 9,
+                                                 (end - origin) * 100000 / 9, pause * 100000 / 9});
+        else
+            m_joinGaps[pid].emplace_back((end - origin) * 100000 / 9, pause * 100000 / 9);
         LTRACE(LT_INFO, 2,
                "Track " << pid << " has no data from " << floatToTime(static_cast<double>(end - origin) / 90000.0)
                         << " for " << (pause + 45) / 90
@@ -1178,6 +1184,16 @@ int64_t TSDemuxer::soundPause(const int pid, const int64_t pts, int64_t& end)
     }
     sound.videoJumps = m_videoJumps;
     return pause;
+}
+
+std::vector<AbstractDemuxer::TimeJump> TSDemuxer::takeTimeJumps(const int pid)
+{
+    auto found = m_soundJumps.find(pid);
+    if (found == m_soundJumps.end() || found->second.empty())
+        return {};
+    std::vector<TimeJump> result;
+    result.swap(found->second);
+    return result;
 }
 
 std::vector<std::pair<int64_t, int64_t>> TSDemuxer::takeTimeGaps(const int pid)
@@ -2227,6 +2243,7 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
             {
                 vect->grow(packets.size());
                 memcpy(vect->data() + vect->size() - packets.size(), packets.data(), packets.size());
+                m_handedBytes[pid] += static_cast<int64_t>(packets.size());
             }
         }
         else if (vect != nullptr && payloadLen > skip && m_latmPid[pid] == 2)
@@ -2239,6 +2256,7 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
             {
                 vect->grow(adts.size());
                 memcpy(vect->data() + vect->size() - adts.size(), adts.data(), adts.size());
+                m_handedBytes[pid] += static_cast<int64_t>(adts.size());
             }
             if (!latm.problem().empty() && m_latmProblemSaid.insert(pid).second)
                 LTRACE(LT_WARN, 2,
@@ -2248,6 +2266,7 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
         else if (payloadLen > skip && !m_filterOfPid.empty() && m_filterOfPid[pid] != nullptr &&
                  m_acceptedPids != nullptr)
         {
+            m_reframedPids.insert(pid);  // its bytes are not counted (m_handedBytes): a pause is a gap, as before
             // a track with a filter: the filter hands on what it makes of the bytes, to the sub tracks. What it
             // handed on is what counts as read from the file; the rest it still holds or has left out.
             AVPacket piece;
@@ -2267,6 +2286,7 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
             vect->grow(static_cast<size_t>(payloadLen - skip));
             uint8_t* dst = vect->data() + vect->size() - (payloadLen - skip);
             memcpy(dst, frameData + skip, static_cast<size_t>(payloadLen - skip));
+            m_handedBytes[pid] += payloadLen - skip;
         }
         if (m_joinSoundPid[pid])
             m_joinSound[pid].pesBytes += payloadLen;

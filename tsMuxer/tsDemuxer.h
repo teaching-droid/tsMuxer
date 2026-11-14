@@ -234,7 +234,14 @@ class TSDemuxer final : public AbstractDemuxer
     std::map<int, int64_t> m_fileFirstDts;              // the first decoding time of each video stream in the file
     std::pair<int64_t, int64_t> m_videoSpanDts{-1, -1};  // the first and the last decoding time of the first video
     std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_joinGaps;  // by PID, see takeTimeGaps
-    std::map<int, size_t> m_joinGapsTaken;                               // by track asking, see takeTimeGaps
+    std::map<int, std::vector<TimeJump>> m_soundJumps;                   // by PID, see takeTimeJumps
+    std::map<int, int64_t> m_handedBytes;  // the bytes handed on for each track so far (for m_soundJumps)
+    std::set<int> m_reframedPids;          // tracks handed on through a filter, whose bytes are not counted
+   public:
+    std::vector<TimeJump> takeTimeJumps(int pid) override;
+
+   private:
+    std::map<int, size_t> m_joinGapsTaken;  // by track asking, see takeTimeGaps
     [[nodiscard]] bool isJoinOfFiles() const;
     // A join reads no program table ahead, and its first block may not hold the map of every program of a file
     void completeProgramMap();
