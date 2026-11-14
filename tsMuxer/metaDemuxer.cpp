@@ -2169,6 +2169,7 @@ bool METADemuxer::convertLine(const string& codec, const string& lineStreamName,
     // in the file where the first parameter sets are not at the start of their PES (TSDemuxer::skipsLeadingPes).
     // ffmpeg's earliest picture was taken: on such a stream the converted sound came 2 s late.
     source.firstPacket = matroska;
+    source.clockMayJump = programStream || readExt == "ts" || readExt == "m2ts" || readExt == "mts" || readExt == "m2t";
     if (readExt == "ts" || readExt == "m2ts" || readExt == "mts" || readExt == "m2t")
     {
         bool known = false;

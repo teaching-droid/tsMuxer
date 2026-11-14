@@ -607,6 +607,21 @@ std::string run(const std::string& ffmpeg, const Source& source, const Spec& spe
     }
     args.push_back(textOf(out));
     madeFiles.push_back(out);
+    // ** A CLOCK THAT STARTS AGAIN IS NOT CONVERTED. ** A recording or a VOB whose clock starts again inside it (a
+    // short clip before the film, a joined recording) is read by the mux part after part; ffmpeg, keeping the times
+    // of the file, padded the jump with silence or cut the sound at it: the sound of a VOB with a 2 s first part came
+    // 4 s off, and broken. The times of the track's packets are listed in the same run (reading the file once) and
+    // checked: a step back of more than a tenth of a second, or on of more than 10 s, refuses the conversion.
+    std::filesystem::path times;
+    if (source.clockMayJump)
+    {
+        times = tempFile("txt", why);
+        if (!times.empty())
+        {
+            madeFiles.push_back(times);
+            args.insert(args.end(), {"-map", source.map, "-c", "copy", "-f", "framecrc", textOf(times)});
+        }
+    }
     int exitCode = 0;
     // A request to stop ends the conversion and the job (exit code 4), as it ends a mux (the stop is watched, above):
     // the ffmpeg it started would go on writing a file no one removes
@@ -626,6 +641,58 @@ std::string run(const std::string& ffmpeg, const Source& source, const Spec& spe
     if (exitCode != 0 || !std::filesystem::is_regular_file(out, ec) || std::filesystem::file_size(out, ec) == 0)
         return "ffmpeg ended with exit code " + std::to_string(exitCode) + " and made no sound file (" + source.map +
                " of " + source.file + ")";
+    if (!times.empty())
+    {
+        std::ifstream in(times);
+        double tbNum = 0, tbDen = 0;
+        long long last = LLONG_MIN;
+        int stalled = 0;
+        std::string line;
+        std::string jump;
+        while (jump.empty() && std::getline(in, line))
+        {
+            if (line.rfind("#tb 0:", 0) == 0)
+            {
+                const size_t slash = line.find('/');
+                if (slash != std::string::npos)
+                {
+                    tbNum = std::atof(line.c_str() + 6);
+                    tbDen = std::atof(line.c_str() + slash + 1);
+                }
+                continue;
+            }
+            if (line.empty() || line[0] == '#' || tbNum <= 0 || tbDen <= 0)
+                continue;
+            std::istringstream fields(line);
+            std::string stream, dts;
+            if (!std::getline(fields, stream, ',') || !std::getline(fields, dts, ',') ||
+                dts.find("NOPTS") != std::string::npos)
+                continue;
+            const long long d = std::atoll(dts.c_str());
+            if (d == LLONG_MIN)
+                continue;
+            if (last != LLONG_MIN)
+            {
+                const double step = static_cast<double>(d - last) * tbNum / tbDen;
+                // the writer of the list holds a time that goes back at the last one: packets that do not move on
+                stalled = d == last ? stalled + 1 : 0;
+                if (step < -0.1 || step > 10 || stalled >= 3)
+                    jump =
+                        (stalled >= 3 ? std::string("a step back") : std::to_string(std::lround(step * 1000)) + " ms") +
+                        " at " + std::to_string(std::lround(static_cast<double>(last) * tbNum / tbDen)) + " s";
+            }
+            last = d;
+        }
+        in.close();
+        std::filesystem::remove(times, ec);
+        if (!jump.empty())
+        {
+            std::filesystem::remove(out, ec);
+            return std::string(TIMES_DIFFER) + ": its clock starts again inside it (" + jump +
+                   " on the clock of the file). Mux the file into a Matroska file first, and convert the track of that "
+                   "file";
+        }
+    }
     if (!aligned)
         LTRACE(LT_INFO, 2,
                "The file has no video ffmpeg could time, so the converted sound keeps the start of its own track.");

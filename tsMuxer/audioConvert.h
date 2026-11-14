@@ -65,6 +65,8 @@ struct Source
     double anchorSeconds = 0;
     double editSkipSeconds = 0;  // what the track's edit list skips at its start (its media time), for the check
     bool avchd = false;          // an AVCHD output: LPCM is suggested at 48 kHz and 16 bit
+    // a transport or program stream, whose clock can start again inside the file: its times are checked
+    bool clockMayJump = false;
 };
 
 // The AC-3 rate a track gets where none is given: a step above the source's own rate, as AC-3 needs more bits than
