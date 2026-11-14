@@ -5701,6 +5701,14 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>Converted with %1.</source>
         <translation>Converted with %1.</translation>
     </message>
+    <message>
+        <source>The sound of this job is to be converted by ffmpeg, and no ffmpeg that can do it was found: %1</source>
+        <translation>The sound of this job is to be converted by ffmpeg, and no ffmpeg that can do it was found: %1</translation>
+    </message>
+    <message>
+        <source>Leave the sound as it is</source>
+        <translation>Leave the sound as it is</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

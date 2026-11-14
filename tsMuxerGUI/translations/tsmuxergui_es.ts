@@ -5669,6 +5669,14 @@ Si esto apareció mientras se examinaba un archivo, o al cerrar la ventana, el p
         <source>Converted with %1.</source>
         <translation>Convertido con %1.</translation>
     </message>
+    <message>
+        <source>The sound of this job is to be converted by ffmpeg, and no ffmpeg that can do it was found: %1</source>
+        <translation>El sonido de este trabajo debe convertirse con ffmpeg y no se encontró ningún ffmpeg que pueda hacerlo: %1</translation>
+    </message>
+    <message>
+        <source>Leave the sound as it is</source>
+        <translation>Dejar el sonido como está</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

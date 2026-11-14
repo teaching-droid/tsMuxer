@@ -5668,6 +5668,14 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>Converted with %1.</source>
         <translation>הומר באמצעות %1.</translation>
     </message>
+    <message>
+        <source>The sound of this job is to be converted by ffmpeg, and no ffmpeg that can do it was found: %1</source>
+        <translation>יש להמיר את הקול של משימה זו באמצעות ffmpeg, ולא נמצא ffmpeg שיכול לעשות זאת: %1</translation>
+    </message>
+    <message>
+        <source>Leave the sound as it is</source>
+        <translation>השאר את הקול כפי שהוא</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

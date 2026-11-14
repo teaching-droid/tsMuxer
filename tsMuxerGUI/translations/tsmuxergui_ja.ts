@@ -5668,6 +5668,14 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>Converted with %1.</source>
         <translation>%1 で変換します。</translation>
     </message>
+    <message>
+        <source>The sound of this job is to be converted by ffmpeg, and no ffmpeg that can do it was found: %1</source>
+        <translation>このジョブの音声は ffmpeg で変換する設定ですが、変換できる ffmpeg が見つかりませんでした: %1</translation>
+    </message>
+    <message>
+        <source>Leave the sound as it is</source>
+        <translation>音声をそのままにする</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

@@ -5668,6 +5668,14 @@ Wenn dies erschien, während eine Datei noch untersucht wurde, oder beim Schlie�
         <source>Converted with %1.</source>
         <translation>Umgewandelt mit %1.</translation>
     </message>
+    <message>
+        <source>The sound of this job is to be converted by ffmpeg, and no ffmpeg that can do it was found: %1</source>
+        <translation>Der Ton dieses Auftrags soll mit ffmpeg umgewandelt werden, aber es wurde kein ffmpeg gefunden, das es kann: %1</translation>
+    </message>
+    <message>
+        <source>Leave the sound as it is</source>
+        <translation>Ton unverändert lassen</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

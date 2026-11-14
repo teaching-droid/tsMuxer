@@ -238,6 +238,16 @@ class TsMuxerWindow : public QWidget
     [[nodiscard]] bool mayBeConverted(const QtvCodecInfo* info) const;
     // At Start muxing with "Ask me": the box for the ticked tracks not yet answered. False when the user cancels.
     bool askAudioConversion();
+    bool checkConversionFfmpeg();
+    void restoreConvertLeftOnce();
+    // the tracks "Leave the sound as it is" left for one job, with their answers before
+    struct LeftOnce
+    {
+        QtvCodecInfo* info;
+        QString convertTo;
+        QString stereoTo;
+    };
+    QList<LeftOnce> m_convertLeftOnce;
     // The General tab's setting changed: the earlier answers of the box give way to it
     void onConvertSettingChanged();
     void updateConvertSettingEnabled();

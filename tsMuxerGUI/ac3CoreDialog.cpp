@@ -96,7 +96,7 @@ double progressSeconds(const QByteArray& value)
 // TrueHD, so the program must read it; sound converted for a disc (convert=) is of other kinds. With savedOnly, a
 // saved path that is a file is the only one asked: tsMuxeR takes the --ffmpeg it is given and looks for no other.
 QString Ac3CoreDialog::findFfmpeg(const QString& savedPath, QString* problem, const bool readsTrueHd,
-                                  const bool savedOnly)
+                                  const bool savedOnly, const bool needsAc3)
 {
     QStringList candidates;
     if (!(savedOnly && !savedPath.isEmpty() && QFileInfo(savedPath).isFile()))
@@ -123,7 +123,8 @@ QString Ac3CoreDialog::findFfmpeg(const QString& savedPath, QString* problem, co
                  !listsAudioCodec(askProgram(path, {QStringLiteral("-hide_banner"), QStringLiteral("-decoders")}),
                                   QStringLiteral("truehd")))
             *problem = Ac3CoreDialog::tr("%1 cannot read TrueHD.").arg(name);
-        else if (!listsAudioCodec(askProgram(path, {QStringLiteral("-hide_banner"), QStringLiteral("-encoders")}),
+        else if (needsAc3 &&
+                 !listsAudioCodec(askProgram(path, {QStringLiteral("-hide_banner"), QStringLiteral("-encoders")}),
                                   QStringLiteral("ac3")))
             *problem = Ac3CoreDialog::tr("%1 cannot write AC-3.").arg(name);
         else

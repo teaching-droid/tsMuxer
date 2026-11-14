@@ -5668,6 +5668,14 @@ Si ce message est apparu pendant l&apos;examen d&apos;un fichier, ou à la ferme
         <source>Converted with %1.</source>
         <translation>Converti avec %1.</translation>
     </message>
+    <message>
+        <source>The sound of this job is to be converted by ffmpeg, and no ffmpeg that can do it was found: %1</source>
+        <translation>Le son de cette tâche doit être converti par ffmpeg, et aucun ffmpeg capable de le faire n&apos;a été trouvé : %1</translation>
+    </message>
+    <message>
+        <source>Leave the sound as it is</source>
+        <translation>Laisser le son tel quel</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

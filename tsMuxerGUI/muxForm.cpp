@@ -18,6 +18,7 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QThread>
 #include <QVBoxLayout>
 
 #include "ui_muxForm.h"
@@ -232,8 +233,27 @@ void MuxForm::onAbort()
     ui->abortBtn->setEnabled(false);
     ui->okBtn->setEnabled(true);
     setWindowTitle(QObject::tr("terminating tsMuxeR..."));
+    const qint64 pid = muxProcess->processId();
     muxProcess->kill();
     muxProcess->waitForFinished();
+    // ** THE SOUND A STOPPED JOB CONVERTED IS REMOVED. ** tsMuxeR is ended at once and runs no code of its own: the
+    // sound it converted (tsMuxeR_convert_<computer>_<process>_<n>, in the folder for temporary files) stayed, up to
+    // gigabytes of LPCM for a film. Its ffmpeg ends with it.
+    if (pid > 0)
+    {
+        const QDir temp(QDir::tempPath());
+        // its ffmpeg, ended with it, may hold its file a moment longer: a few tries
+        for (int attempt = 0; attempt < 10; ++attempt)
+        {
+            bool left = false;
+            for (const QString& name : temp.entryList({QStringLiteral("tsMuxeR_convert_*")}, QDir::Files))
+                if (name.section(QLatin1Char('_'), 3, 3) == QString::number(pid) && !QFile::remove(temp.filePath(name)))
+                    left = true;
+            if (!left)
+                break;
+            QThread::msleep(100);
+        }
+    }
     setWindowTitle(QObject::tr("tsMuxeR is terminated"));
     muxProcess = nullptr;
     ui->reportBtn->setEnabled(!m_reportFile.isEmpty());  // the lines up to the stop are in it

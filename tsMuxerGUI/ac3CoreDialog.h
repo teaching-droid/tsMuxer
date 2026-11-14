@@ -52,7 +52,9 @@ class Ac3CoreDialog : public QDialog
     // The ffmpeg to use: the first one that starts and writes AC-3 (and reads TrueHD, where readsTrueHd), of the one
     // beside tsMuxeR, the one on the search path and savedPath; with savedOnly, savedPath alone where it is a file.
     // Empty when there is none; problem then says why.
-    static QString findFfmpeg(const QString& savedPath, QString* problem, bool readsTrueHd, bool savedOnly = false);
+    // needsAc3: the ffmpeg has to write AC-3 (not for a conversion to LPCM alone)
+    static QString findFfmpeg(const QString& savedPath, QString* problem, bool readsTrueHd, bool savedOnly = false,
+                              bool needsAc3 = true);
 
     explicit Ac3CoreDialog(QWidget* parent, const Job& job);
 

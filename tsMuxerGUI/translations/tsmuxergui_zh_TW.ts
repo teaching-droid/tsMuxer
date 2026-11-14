@@ -5711,6 +5711,14 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>Converted with %1.</source>
         <translation>使用 %1 轉換。</translation>
     </message>
+    <message>
+        <source>The sound of this job is to be converted by ffmpeg, and no ffmpeg that can do it was found: %1</source>
+        <translation>此工作的音訊需要由 ffmpeg 轉換，但找不到能完成此操作的 ffmpeg：%1</translation>
+    </message>
+    <message>
+        <source>Leave the sound as it is</source>
+        <translation>保持音訊不變</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

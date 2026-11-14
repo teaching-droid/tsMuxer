@@ -5711,6 +5711,14 @@ Se isto apareceu enquanto um ficheiro ainda estava a ser examinado, ou quando a 
         <source>Converted with %1.</source>
         <translation>Convertido com %1.</translation>
     </message>
+    <message>
+        <source>The sound of this job is to be converted by ffmpeg, and no ffmpeg that can do it was found: %1</source>
+        <translation>O som desta tarefa deve ser convertido pelo ffmpeg, e não foi encontrado nenhum ffmpeg capaz de o fazer: %1</translation>
+    </message>
+    <message>
+        <source>Leave the sound as it is</source>
+        <translation>Deixar o som como está</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

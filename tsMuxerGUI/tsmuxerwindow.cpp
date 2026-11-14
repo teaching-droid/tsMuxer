@@ -660,10 +660,12 @@ static void refillCombo(QComboBox* combo, const QList<QPair<QString, int>>& item
     combo->setCurrentIndex(keep >= 0 && keep < combo->count() ? keep : 0);
 }
 
-static QList<QPair<QString, int>> ac3RateItems(const bool stereo)
+static QList<QPair<QString, int>> ac3RateItems(const bool stereo, const bool mono = false)
 {
     QList<QPair<QString, int>> items = {{TsMuxerWindow::tr("Suggested"), 0}};
-    for (const int kbps : stereo ? QList<int>{192, 224, 256, 320} : QList<int>{384, 448, 512, 576, 640})
+    for (const int kbps : mono     ? QList<int>{96, 112, 128, 160, 192}
+                          : stereo ? QList<int>{192, 224, 256, 320}
+                                   : QList<int>{384, 448, 512, 576, 640})
         items.append({TsMuxerWindow::tr("%1 kbit/s").arg(kbps), kbps});
     return items;
 }
@@ -6796,7 +6798,9 @@ QString TsMuxerWindow::convertWords(const QtvCodecInfo* info) const
         {
             const int stereoRate = m_convertRateStereoCombo->currentData().toInt();
             // a rate of more channels only where the track has more than two; else the suggested one
-            const int rate = stereoOut || (channels > 0 && channels <= 2)
+            // a mono track stays mono: the rate suggested for it (the stereo rates are twice what it needs)
+            const int rate = channels == 1 ? 0
+                             : stereoOut || (channels > 0 && channels <= 2)
                                  ? stereoRate
                                  : (channels > 2 ? m_convertRateMultiCombo->currentData().toInt() : 0);
             to = QStringLiteral("ac3") + (rate > 0 ? QStringLiteral(":%1").arg(rate) : QString());
@@ -6866,8 +6870,10 @@ void TsMuxerWindow::onConvertSettingChanged()
 // again.
 bool TsMuxerWindow::askAudioConversion()
 {
-    if (!m_convertAudioCombo || m_convertAudioCombo->currentIndex() != 0)
-        return true;  // the setting counts for every such track
+    if (!m_convertAudioCombo)
+        return true;
+    if (m_convertAudioCombo->currentIndex() != 0)
+        return checkConversionFfmpeg();  // the setting counts for every such track
     QList<int> rows;
     for (int i = 0; i < ui->trackLV->rowCount(); ++i)
     {
@@ -6877,8 +6883,19 @@ bool TsMuxerWindow::askAudioConversion()
             rows << i;
     }
     if (rows.isEmpty())
-        return true;
+        return checkConversionFfmpeg();  // tracks answered before
 
+    struct Row
+    {
+        QtvCodecInfo* info;
+        int channels;
+        QComboBox* kind;
+        QComboBox* quality;
+        QComboBox* how;
+    };
+    // before the box: its connections, which use them, end with it
+    QList<Row> list;
+    QString ffmpeg;
     QDialog box(this);
     box.setObjectName(QStringLiteral("convertAudioBox"));
     box.setWindowTitle(tr("Sound a Blu-ray does not carry"));
@@ -6901,15 +6918,6 @@ bool TsMuxerWindow::askAudioConversion()
         head->setFont(font);
         grid->addWidget(head, 0, c);
     }
-    struct Row
-    {
-        QtvCodecInfo* info;
-        int channels;
-        QComboBox* kind;
-        QComboBox* quality;
-        QComboBox* how;
-    };
-    QList<Row> list;
     for (int n = 0; n < rows.size(); ++n)
     {
         const int i = rows[n];
@@ -6962,7 +6970,8 @@ bool TsMuxerWindow::askAudioConversion()
         const QSignalBlocker block(row.quality);
         row.quality->clear();
         if (kind == 1)
-            for (const auto& [itemText, value] : ac3RateItems(row.how->currentIndex() == 1 || twoOrFewer))
+            for (const auto& [itemText, value] :
+                 ac3RateItems(row.how->currentIndex() == 1 || twoOrFewer, row.channels == 1))
                 row.quality->addItem(itemText, value);
         else if (kind == 2)
             for (const auto& [itemText, value] : lpcmBitsItems()) row.quality->addItem(itemText, value);
@@ -7002,7 +7011,9 @@ bool TsMuxerWindow::askAudioConversion()
     connect(buttons, &QDialogButtonBox::rejected, &box, &QDialog::reject);
 
     // tsMuxeR takes the ffmpeg saved here (--ffmpeg) and no other, else one beside it or on the search path
-    QString ffmpeg;
+    const auto anyAc3 = [&] {
+        return std::any_of(list.cbegin(), list.cend(), [](const Row& r) { return r.kind->currentData().toInt() == 1; });
+    };
     const auto updateConvert = [&]
     {
         const bool anyConverted =
@@ -7012,7 +7023,7 @@ bool TsMuxerWindow::askAudioConversion()
     const auto showFfmpeg = [&]
     {
         QString problem;
-        ffmpeg = Ac3CoreDialog::findFfmpeg(m_coreEncoderPath, &problem, false, true);
+        ffmpeg = Ac3CoreDialog::findFfmpeg(m_coreEncoderPath, &problem, false, true, anyAc3());
         found->setText(ffmpeg.isEmpty() ? problem : tr("Converted with %1.").arg(QDir::toNativeSeparators(ffmpeg)));
         choose->setVisible(ffmpeg.isEmpty());
         updateConvert();
@@ -7024,7 +7035,7 @@ bool TsMuxerWindow::askAudioConversion()
                 [&, row]
                 {
                     refreshRow(row);
-                    updateConvert();
+                    showFfmpeg();  // an ffmpeg without AC-3 is enough for LPCM
                 });
         connect(row.how, &QComboBox::currentIndexChanged, &box, [&, row] { refreshRow(row); });
     }
@@ -7036,11 +7047,30 @@ bool TsMuxerWindow::askAudioConversion()
                 const QString path = QFileDialog::getOpenFileName(&box, Ac3CoreDialog::tr("Choose ffmpeg"));
                 if (path.isEmpty())
                     return;
+                // kept only when it is an ffmpeg that does the job: a wrong file went on the MUXOPT line as
+                // --ffmpeg, the only one tsMuxeR then takes, also for the Dolby Vision layer
+                const QString before = m_coreEncoderPath;
                 m_coreEncoderPath = path;
                 showFfmpeg();
+                if (ffmpeg.isEmpty())
+                {
+                    m_coreEncoderPath = before;
+                    const QString why = found->text();
+                    showFfmpeg();
+                    found->setText(why);
+                }
             });
     box.resize(qMax(640, box.sizeHint().width()), box.sizeHint().height());
     const bool accepted = box.exec() == QDialog::Accepted;
+    // the connections use the state of this function by reference: they end before it does, not with the box
+    for (const Row& row : list)
+    {
+        QObject::disconnect(row.kind, nullptr, &box, nullptr);
+        QObject::disconnect(row.how, nullptr, &box, nullptr);
+    }
+    QObject::disconnect(choose, nullptr, &box, nullptr);
+    if (!accepted)
+        m_coreEncoderPath = savedBefore;  // Cancel keeps the ffmpeg as it was
     if (m_coreEncoderPath != savedBefore)
         writeSettings();  // the MUXOPT line names it (--ffmpeg): updateMetaLines below
     if (!accepted)
@@ -7081,7 +7111,93 @@ bool TsMuxerWindow::askAudioConversion()
     }
     colorizeAllRows();
     updateMetaLines();
-    return true;
+    // the tracks answered at an earlier start need an ffmpeg as well (AC-3 where this box had LPCM alone)
+    return checkConversionFfmpeg();
+}
+
+// ** A CONVERSION NEEDS AN FFMPEG, ALSO BY THE SETTING. ** With the General tab set to AC-3 or LPCM (or answers given
+// before), every disc job failed in tsMuxeR on a computer without ffmpeg ("needs ffmpeg, and none was found"). The
+// start now looks for one first, and where there is none it says so: choose one, leave the sound of this job as it is,
+// or cancel.
+bool TsMuxerWindow::checkConversionFfmpeg()
+{
+    bool any = false, ac3 = false;
+    for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+    {
+        const QtvCodecInfo* info = getCodecInfo(i);
+        if (info == nullptr || ui->trackLV->item(i, 0)->checkState() != Qt::Checked)
+            continue;
+        const QString words = convertWords(info);
+        if (words.isEmpty())
+            continue;
+        any = true;
+        ac3 = ac3 || words.contains(QLatin1String("=ac3"));
+    }
+    if (!any)
+        return true;
+    for (;;)
+    {
+        QString problem;
+        if (!Ac3CoreDialog::findFfmpeg(m_coreEncoderPath, &problem, false, true, ac3).isEmpty())
+            return true;
+        QMessageBox box(QMessageBox::Warning, tr("Sound a Blu-ray does not carry"),
+                        tr("The sound of this job is to be converted by ffmpeg, and no ffmpeg that can do it was "
+                           "found: %1")
+                            .arg(problem),
+                        QMessageBox::NoButton, this);
+        QPushButton* choose = box.addButton(Ac3CoreDialog::tr("Choose ffmpeg..."), QMessageBox::ActionRole);
+        QPushButton* leave = box.addButton(tr("Leave the sound as it is"), QMessageBox::AcceptRole);
+        box.addButton(QMessageBox::Cancel);
+        box.exec();
+        if (box.clickedButton() == leave)
+        {
+            // for this job: the answers and the setting come back after it (restoreConvertLeftOnce), so that the next
+            // job, with an ffmpeg installed, converts again
+            for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+                if (QtvCodecInfo* info = getCodecInfo(i);
+                    info && ui->trackLV->item(i, 0)->checkState() == Qt::Checked && !convertWords(info).isEmpty())
+                {
+                    m_convertLeftOnce.append({info, info->convertTo, info->stereoTo});
+                    info->convertTo = QStringLiteral("none");
+                    info->stereoTo.clear();
+                }
+            colorizeAllRows();
+            updateMetaLines();
+            return true;
+        }
+        if (box.clickedButton() != choose)
+            return false;
+        const QString path = QFileDialog::getOpenFileName(this, Ac3CoreDialog::tr("Choose ffmpeg"));
+        if (path.isEmpty())
+            continue;
+        const QString before = m_coreEncoderPath;
+        m_coreEncoderPath = path;
+        if (Ac3CoreDialog::findFfmpeg(m_coreEncoderPath, &problem, false, true, ac3).isEmpty())
+            m_coreEncoderPath = before;  // not kept: the next round says why
+        else
+        {
+            writeSettings();
+            updateMetaLines();
+            return true;
+        }
+    }
+}
+
+// The tracks "Leave the sound as it is" left for one job (checkConversionFfmpeg) get their answers back
+void TsMuxerWindow::restoreConvertLeftOnce()
+{
+    if (m_convertLeftOnce.isEmpty())
+        return;
+    for (const LeftOnce& left : m_convertLeftOnce)
+        for (int i = 0; i < ui->trackLV->rowCount(); ++i)
+            if (getCodecInfo(i) == left.info)  // still a track of the window
+            {
+                left.info->convertTo = left.convertTo;
+                left.info->stereoTo = left.stereoTo;
+            }
+    m_convertLeftOnce.clear();
+    colorizeAllRows();
+    updateMetaLines();
 }
 
 bool TsMuxerWindow::makeAc3Cores()
@@ -8786,6 +8902,7 @@ void TsMuxerWindow::startMuxing()
     // which a track converted no longer concerns, and before the #53 question, as a stereo track beside is one more.
     if (isDiskOutput() && !m_metaUserOverride && !askAudioConversion())
         return;
+    const auto leftOnce = qScopeGuard([this] { restoreConvertLeftOnce(); });
 
     // ** A CODEC A BLU-RAY DOES NOT HAVE IS ASKED ABOUT. ** AAC, MPEG audio (MP2, MP3) and VVC can be muxed to a disc,
     // and tsMuxeR warns that no Blu-ray player plays them. The warning is a line of the log, which is read after the

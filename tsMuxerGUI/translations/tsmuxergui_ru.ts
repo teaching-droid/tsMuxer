@@ -5669,6 +5669,14 @@ If this appeared while a file was still being examined, or as the window was clo
         <source>Converted with %1.</source>
         <translation>Преобразовано с помощью %1.</translation>
     </message>
+    <message>
+        <source>The sound of this job is to be converted by ffmpeg, and no ffmpeg that can do it was found: %1</source>
+        <translation>Звук этого задания должен быть преобразован с помощью ffmpeg, но подходящий ffmpeg не найден: %1</translation>
+    </message>
+    <message>
+        <source>Leave the sound as it is</source>
+        <translation>Оставить звук как есть</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>

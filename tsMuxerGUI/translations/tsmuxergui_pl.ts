@@ -5711,6 +5711,14 @@ Jeśli pojawiło się to podczas sprawdzania pliku lub zamykania okna, proces zo
         <source>Converted with %1.</source>
         <translation>Przekonwertowane przez %1.</translation>
     </message>
+    <message>
+        <source>The sound of this job is to be converted by ffmpeg, and no ffmpeg that can do it was found: %1</source>
+        <translation>Dźwięk tego zadania ma zostać przekonwertowany przez ffmpeg, ale nie znaleziono ffmpeg, który to potrafi: %1</translation>
+    </message>
+    <message>
+        <source>Leave the sound as it is</source>
+        <translation>Pozostaw dźwięk bez zmian</translation>
+    </message>
 </context>
 <context>
     <name>muxForm</name>
