@@ -5572,11 +5572,18 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             const int soundDescriptor = soundDescriptorOf(acceptedPidMap[itr.first]);
             // A track the container declares as AV1 may begin inside an OBU (#57): the AV1 reader is asked first, and
             // told so. Where it finds no AV1, every probe is asked as for any track.
+            // ** A TRACK THE PROGRAM MAP SAYS NOTHING OF IS LOOKED AT FOR AV1 TOO. ** Stream type 0x06 is "private
+            // data", the type of anything without a number of its own, and without a descriptor it names no codec.
+            // Some muxers write AV1 so, in the low overhead format: the listing said "Can't detect stream type", and
+            // the window could not offer the track. The AV1 reader is asked for it on the strict rule of such data
+            // alone (a chain of 16 sized OBUs, a sequence header and a frame; no start code is searched for, as stray
+            // ones occur in sound), and every probe after it where it finds none.
             CheckStreamRez trackRez;
-            if (acceptedPidMap[itr.first].m_av1Declared)
+            if (acceptedPidMap[itr.first].m_av1Declared || acceptedPidMap[itr.first].m_bareTrack)
             {
                 AV1StreamReader av1;
                 av1.setDeclaredAv1(true);
+                av1.setBareTrack(!acceptedPidMap[itr.first].m_av1Declared);
                 trackRez = av1.checkStream(vect.data(), static_cast<int>(vect.size()));
             }
             // ** ONE PCM TRACK THAT CANNOT BE READ DOES NOT END THE LISTING. ** An LPCM track the reader refuses, as
@@ -6180,7 +6187,10 @@ static uint32_t parseFontColor(const std::string& text)
 }
 
 // Whether the container file declares its track pid as AV1 (TrackInfo::m_av1Declared): a transport stream, Matroska or
-// MP4 file. Its track list is read by a demuxer of its own, as the mux has not begun.
+// MP4 file. Its track list is read by a demuxer of its own, as the mux has not begun. Asked only for a line that names
+// V_AV1: so a track of a transport stream whose program map says nothing of its codec (stream type 0x06 without any
+// descriptor, as some muxers write AV1) counts as declared too, by the word of the meta line (#57). A track with any
+// descriptor, or a stream type of its own, does not.
 bool METADemuxer::containerDeclaresAv1(const std::string& fileName, const int pid) const
 {
     const std::string ext = strToUpperCase(extractFileExt(fileName));
@@ -6204,7 +6214,7 @@ bool METADemuxer::containerDeclaresAv1(const std::string& fileName, const int pi
         return false;  // the mux itself says what is wrong with the file
     }
     const auto track = tracks.find(pid);
-    return track != tracks.end() && track->second.m_av1Declared;
+    return track != tracks.end() && (track->second.m_av1Declared || track->second.m_bareTrack);
 }
 
 CheckStreamRez METADemuxer::detectTrackReader(uint8_t* tmpBuffer, int len,

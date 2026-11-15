@@ -370,6 +370,8 @@ bool TS_program_map_section::deserialize(uint8_t* buffer, const int buf_size)
             }
             if (stream_type == StreamType::PRIVATE_DATA && regId == 0x41563031 /* 'AV01' */)
                 pmtStreamInfo.m_av1Registration = true;
+            if (stream_type == StreamType::PRIVATE_DATA && es_info_len == 0)
+                pmtStreamInfo.m_bare = true;
             if (stream_type == StreamType::PRIVATE_DATA && regId == 0x4F707573 /* 'Opus' */)
                 pmtStreamInfo.m_opusRegistration = true;
 

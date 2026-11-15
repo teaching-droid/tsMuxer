@@ -326,6 +326,9 @@ struct PMTStreamInfo final
     // A private stream of a file of PES alone (no PAT) whose data begins with the sync word of AC-3 or DTS: sound, as
     // the start of a file without video counts it (TSDemuxer::isSoundTrack); its subtitles and teletext are not
     bool m_pesSound = false;
+    // Stream type 0x06 with no descriptor at all (ES_info_length 0): the program map says nothing of its codec, as a
+    // transport stream written by some muxers carries AV1 (TrackInfo::m_bareTrack)
+    bool m_bare = false;
     // The sound a descriptor names, as the stream type that names the same codec (0x81 AC-3, 0x87 E-AC-3, 0x82 DTS,
     // 0x0F AAC), zero for none: the AC-3, enhanced AC-3, DTS or AAC descriptor of EN 300 468, which is how a DVB stream
     // declares these (TS 101 154: AC-3, E-AC-3 and DTS are carried as stream type 0x06 with the descriptor), or the

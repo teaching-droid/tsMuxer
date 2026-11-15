@@ -300,6 +300,7 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                 track.m_componentTag = snd.m_componentTag;
                 track.m_dataComponentId = snd.m_dataComponentId;
                 track.m_av1Declared = snd.m_av1Registration;
+                track.m_bareTrack = snd.m_bare;
                 // the padding at the end of an Opus track (opusEndTrimOfFile), in ns as a Matroska source gives it;
                 // of a single file only: in a join the end is that of the last file
                 if (snd.m_opusRegistration && m_joinFiles.size() <= 1)
@@ -587,6 +588,20 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                  (startsWith(0x7F, 0xFF, 0xFE) && bytes->second.size() >= 4 && bytes->second[2] == 0x80 &&
                   bytes->second[3] == 0x01)))
                 stream.m_pesSound = true;
+            // ** A VIDEO PES THAT DOES NOT BEGIN WITH A START CODE NAMES NO CODEC. ** It was taken for MPEG-2 (as a cut
+            // of one begins so), and AV1 in the low overhead format, as some muxers write it under stream ID 0xE0,
+            // was then listed and read as MPEG-2. Such a track, and a private stream that is neither sound nor
+            // captions, says nothing of its codec (m_bare): the listing asks the AV1 reader on its strict rule first
+            // (TrackInfo::m_bareTrack), and every probe after it as before.
+            const bool startCode = bytes != pesFirstBytes.end() && bytes->second.size() >= 3 &&
+                                   bytes->second[0] == 0 && bytes->second[1] == 0 &&
+                                   (bytes->second[2] == 1 || (bytes->second.size() >= 4 && bytes->second[2] == 0 &&
+                                                              bytes->second[3] == 1));
+            if ((id >= 0xE0 && id <= 0xEF && !startCode) || (id == 0xBD && !aribCaptions && !stream.m_pesSound))
+            {
+                stream.m_bare = true;
+                track.m_bareTrack = true;
+            }
             if (aribCaptions)
             {
                 // the data component of captions; the component tag that would tell the service is in the PMT only

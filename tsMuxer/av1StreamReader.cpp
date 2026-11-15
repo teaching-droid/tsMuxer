@@ -91,6 +91,49 @@ bool AV1StreamReader::isLowOverhead(const uint8_t* buf, const uint8_t* end)
     return obus >= 2;
 }
 
+// ** A CUT OF A LOW OVERHEAD STREAM BEGINS INSIDE AN OBU (#57). ** Some muxers write AV1 into a transport stream as it
+// lies in a file, OBUs with their sizes and no start codes; a cut of such a stream begins in the middle of an OBU,
+// where neither a start code nor a size can be read, and the 00 00 01 found there are bytes of OBU payloads. The OBUs
+// are found again at the first byte from which a chain of them reads, each header valid and each size landing on the
+// next: 16 in a row, or to the end of the data with 8 at least, which data that is no such chain does not give.
+int AV1StreamReader::lowOverheadLead(const uint8_t* buf, const uint8_t* end)
+{
+    static constexpr int MAX_DECLARED_LEAD = 4 * 1024 * 1024;
+    if (end - buf >= 4 && buf[0] == 0 && buf[1] == 0 && (buf[2] == 1 || (buf[2] == 0 && buf[3] == 1)))
+        return 0;
+    const auto chain = [&](const uint8_t* p)
+    {
+        int obus = 0;
+        while (obus < 16)
+        {
+            if (p == end)
+                return obus >= 8;
+            Av1ObuHeader hdr;
+            const int hdrLen = hdr.parse(p, end);
+            if (hdrLen < 0 || !hdr.obu_has_size_field)
+                return false;
+            const int type = static_cast<int>(hdr.obu_type);
+            if (type == 0 || (type > 8 && type != 15))
+                return false;
+            int lebLen = 0;
+            const int64_t payloadLen = decodeLeb128(p + hdrLen, end, lebLen);
+            if (payloadLen < 0)
+                return obus >= 8;
+            const uint8_t* next = p + hdrLen + lebLen + payloadLen;
+            if (next > end || next <= p)
+                return obus >= 8;
+            p = next;
+            obus++;
+        }
+        return true;
+    };
+    const uint8_t* const last = buf + (std::min)(static_cast<int64_t>(end - buf), static_cast<int64_t>(MAX_DECLARED_LEAD));
+    for (const uint8_t* p = buf; p < last; ++p)
+        if (chain(p))
+            return static_cast<int>(p - buf);
+    return -1;
+}
+
 size_t AV1StreamReader::convertPending(const bool lastBlock)
 {
     const uint8_t* src = m_pending.data();
@@ -363,6 +406,16 @@ void AV1StreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const boo
             m_framing = isLowOverhead(block, block + dataLen) ? Av1Framing::LOW_OVERHEAD : Av1Framing::START_CODES;
             if (m_framing == Av1Framing::LOW_OVERHEAD)
                 LTRACE(LT_INFO, 2, "AV1 elementary stream in the low overhead format, converting OBU framing on read");
+            // a declared track cut inside an OBU of a low overhead stream: it is read from its first whole OBU
+            else if (m_declaredAv1)
+                if (const int lead = lowOverheadLead(block, block + dataLen); lead > 0)
+                {
+                    m_framing = Av1Framing::LOW_OVERHEAD;
+                    m_leadSkip = static_cast<uint32_t>(lead);
+                    LTRACE(LT_INFO, 2,
+                           "AV1 in the low overhead format, cut inside an OBU: read from its first whole OBU, "
+                               << lead << " bytes on");
+                }
         }
     }
 
@@ -421,7 +474,9 @@ void AV1StreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const boo
         return;
     }
 
-    m_pending.insert(m_pending.end(), block, block + dataLen);
+    const uint32_t skip = (std::min)(m_leadSkip, dataLen);
+    m_leadSkip -= skip;
+    m_pending.insert(m_pending.end(), block + skip, block + dataLen);
     const size_t converted = convertPending(lastBlock);
     MPEGStreamReader::setBuffer(m_convBuffer.data(), static_cast<uint32_t>(converted), lastBlock);
 }
@@ -446,6 +501,29 @@ CheckStreamRez AV1StreamReader::checkStream(uint8_t* buffer, const int len)
     std::vector<uint8_t> probe;
     uint8_t* scanBuf = buffer;
     int scanLen = len;
+    // a declared track of a low overhead stream cut inside an OBU (#57): looked at from its first whole OBU; a track
+    // the container says nothing of (m_bareTrack) only where such a chain is found, from its first byte or later
+    bool obuChain = false;
+    const bool startCode =
+        len >= 4 && buffer[0] == 0 && buffer[1] == 0 && (buffer[2] == 1 || (buffer[2] == 0 && buffer[3] == 1));
+    if (m_declaredAv1 && len > 0 && !isAnnexB(buffer, buffer + len))
+    {
+        if (!startCode && !m_bareTrack && isLowOverhead(buffer, buffer + len))
+            obuChain = true;  // a chain from its first byte, as before
+        else if (!startCode)
+            if (const int lead = lowOverheadLead(buffer, buffer + len); lead >= 0)
+            {
+                scanBuf = buffer + lead;
+                scanLen = len - lead;
+                obuChain = true;
+            }
+    }
+    // a track the container says nothing of: AV1 by an OBU chain, or framed with start codes from its very first byte,
+    // as a file without a container is taken (#48); never by a start code searched for inside its data
+    if (m_bareTrack && !obuChain && !startCode)
+        return rez;
+    if (m_bareTrack && !obuChain)
+        m_declaredAv1 = false;  // from the front only, by the rule of a file without a container
     // An IVF file: its frames, out of their IVF headers, are a low overhead stream
     std::vector<uint8_t> ivfFrames;
     double ivfFps = 0;

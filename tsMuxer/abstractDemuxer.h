@@ -109,6 +109,10 @@ struct TrackInfo
     // The container declares the track AV1: a transport stream by the registration descriptor "AV01", Matroska by
     // V_AV1, MP4 by an av01 sample entry. Its data may then begin inside an OBU (AV1StreamReader::setDeclaredAv1).
     bool m_av1Declared = false;
+    // A track of a transport stream whose program map entry is stream type 0x06 with no descriptor at all: it may be
+    // AV1 written without its "AV01" descriptor, and is taken as declared AV1 where the meta line names V_AV1 for it
+    // (METADemuxer::containerDeclaresAv1)
+    bool m_bareTrack = false;
     TrackInfo() : m_trackType(0), m_delay(0), m_dvbDescriptor(0), m_defaultFlag(-1) {}
     TrackInfo(const int trackType, const char* lang, const int64_t delay, const int dvbDescriptor = 0,
               const int defaultFlag = -1)

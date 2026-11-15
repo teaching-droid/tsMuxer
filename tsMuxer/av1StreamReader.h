@@ -20,6 +20,9 @@ class AV1StreamReader final : public MPEGStreamReader
     CheckStreamRez checkStream(uint8_t* buffer, int len);
     // The container declares the track AV1 (TrackInfo::m_av1Declared): its data may begin inside an OBU
     void setDeclaredAv1(const bool declared) { m_declaredAv1 = declared; }
+    // A track the container says nothing of (TrackInfo::m_bareTrack), asked for AV1 by the listing: AV1 only in the
+    // low overhead format, by a chain of 16 sized OBUs (lowOverheadLead), never by a start code found in it
+    void setBareTrack(const bool bare) { m_bareTrack = bare; }
     void applyDiscoveryData(const StreamDiscoveryData& data) override;
     [[nodiscard]] bool needSPSForSplit() const override { return false; }
     void setBuffer(uint8_t* data, uint32_t dataLen, bool lastBlock = false) override;
@@ -65,6 +68,10 @@ class AV1StreamReader final : public MPEGStreamReader
      * out of container OBUs. These turn the one into the other as the file is read.
      */
     static bool isLowOverhead(const uint8_t* buf, const uint8_t* end);
+    // Of a declared track in the low overhead format that begins inside an OBU (a cut transport stream): the offset
+    // of the first byte from which a chain of sized OBUs reads, within the first MAX_DECLARED_LEAD bytes; 0 where the
+    // data begins with a start code or an OBU chain already, -1 where none is found
+    static int lowOverheadLead(const uint8_t* buf, const uint8_t* end);
     size_t convertPending(bool lastBlock);
 
     enum class Av1Framing
@@ -97,6 +104,8 @@ class AV1StreamReader final : public MPEGStreamReader
     bool m_firstFileFrame;
     bool m_notAv1 = false;       // checkStream saw data that does not begin as AV1
     bool m_declaredAv1 = false;  // see setDeclaredAv1
+    uint32_t m_leadSkip = 0;     // bytes before the first whole OBU of a cut low overhead stream, left out
+    bool m_bareTrack = false;    // see setBareTrack
     // A stream without temporal delimiters, which a temporal unit must begin with: -1 until its first frame is read,
     // then 1 when no delimiter came before it. Its temporal units are then found by their frames (intDecodeNAL), and
     // each gets a delimiter on output (writeAdditionData, prepareDemuxPacket).
