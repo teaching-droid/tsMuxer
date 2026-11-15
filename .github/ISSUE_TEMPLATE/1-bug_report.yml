@@ -82,9 +82,9 @@ body:
     attributes:
       label: How did you meet this in real use?
       description: >
-        What were you doing when it happened: what the source is, where it came from (a disc, a recording, a
-        download, a file you made), and what you wanted to make of it. A case made only to test tsMuxeR can be
-        reported too; say so here. Reports from real use are looked at first.
+        What were you doing when it happened? What is the source, where did it come from (a disc, a recording, a
+        download, a file you made), and what did you want to make of it? If the file was made only to test tsMuxeR,
+        please say so.
     validations:
       required: true
 
