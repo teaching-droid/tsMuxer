@@ -415,7 +415,7 @@ jobs:
         Copy-Item "NOTICE" "bin-standalone/NOTICE" -Force
         Copy-Item "packaging/notices/Windows-standalone.txt" "bin-standalone/THIRD-PARTY-NOTICES.txt" -Force
         New-Item -ItemType Directory -Force "bin-standalone/licenses" | Out-Null
-        Copy-Item "licenses/LGPL-3.0.txt","licenses/GPL-3.0.txt","licenses/zlib.txt" "bin-standalone/licenses/" -Force
+        Copy-Item "licenses/LGPL-3.0.txt","licenses/GPL-3.0.txt","licenses/zlib.txt","licenses/Qt-6.8.3-third-party.txt" "bin-standalone/licenses/" -Force
         # Each program is one file: nothing of Qt, of the C runtime or of Windows 8 and newer may be a library it
         # needs. The names are looked for in the files themselves.
         foreach ($exe in @("bin-standalone/tsMuxeR.exe", "bin-standalone/tsMuxerGUI.exe")) {
