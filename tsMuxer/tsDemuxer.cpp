@@ -954,9 +954,11 @@ bool TSDemuxer::getTrackStartInFile(const int32_t pid, int64_t& ticks, bool* far
         ticks -= CLOCK_WRAP;
     else if (ticks < -CLOCK_WRAP / 2)
         ticks += CLOCK_WRAP;
-    // a start more than 10 s from that of its program is not taken (a leftover or damaged first PES, or a track that
-    // lies far from the rest): the track stays at the start, in the listing and the mux alike, and the mux says so
-    if (ticks > 10 * 90000 || ticks < -10 * 90000)
+    // A start more than 10 s before that of its program is not taken: only a track left out of the program's start
+    // lies there, a lone leftover PES. Nor is one an hour or more after it. Such a track stays at the start, in the
+    // listing and the mux alike, and the mux says so. A track that starts some seconds after the others (a language
+    // that comes in late) keeps its place.
+    if (ticks < -10 * 90000 || ticks >= 3600LL * 90000)
     {
         if (farOff)
             *farOff = true;

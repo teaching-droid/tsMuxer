@@ -81,7 +81,8 @@ class TSDemuxer final : public AbstractDemuxer
     // Of a file without video read: where a stream starts against the earliest sound track of its program
     // (fileStartReference), in 90 kHz ticks across a wrap of the clock, as the listing gives it (getTrackDelay) and
     // the mux applies it (tsTrackStart). False while no PES of the stream has been read.
-    // farOff: set where the start lies more than 10 s from that of its program, and is taken as 0
+    // farOff: set where the start lies more than 10 s before that of its program, or an hour or more after it, and is
+    // taken as 0
     [[nodiscard]] bool getTrackStartInFile(int32_t pid, int64_t& ticks, bool* farOff = nullptr) const;
     [[nodiscard]] static bool isSoundTrack(const PMTStreamInfo& info);
     // A probe that reads the first block of a subtitle track (keep-textst): its packets never wait for the video

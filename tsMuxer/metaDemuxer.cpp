@@ -194,8 +194,9 @@ static bool tsHevcStartsAtRandomAccess(const BufferedReaderManager& readManager,
 // first video PES.
 // The start of a track of a transport stream without video read (TSDemuxer::getTrackStartInFile), read as the listing
 // reads it: its first 64 MB (or all of it), so that the first times of every track are settled, and further, up to
-// 1 GB, for a track that starts later. A start more than 10 s from the earliest sound of its program is not applied
-// (said): the first PES of such a track is taken for one left over or damaged, as 0 was used before.
+// 1 GB, for a track that starts later. A start more than 10 s before the start of its program's sound, or an hour or
+// more after it, is not applied (said): the first PES of such a track is taken for one left over or damaged, as 0 was
+// used before (TSDemuxer::getTrackStartInFile).
 static constexpr int64_t TS_NO_VIDEO_LIMIT = 64LL * 1024 * 1024;
 // how far the listing reads at most for a track that starts late: its 64 MB, and 1 GB more (readLateTracks)
 static constexpr int64_t TS_LATE_LIMIT = TS_NO_VIDEO_LIMIT + 1024LL * 1024 * 1024;
@@ -218,8 +219,9 @@ static bool noVideoTrackStart(TSDemuxer& probe, const int pid, int64_t read, boo
     {
         LTRACE(LT_WARN, 2,
                "Warning: track " << pid
-                                 << " starts more than 10 s from the start of the sound of its program, in a file "
-                                    "without video. Its start is not moved; give timeshift= on its line to place it.");
+                                 << " starts more than 10 s before the sound of its program, or an hour or more after "
+                                    "it, in a file without video. Its start is not moved; give timeshift= on its line "
+                                    "to place it.");
         return false;
     }
     return true;
