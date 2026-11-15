@@ -1,6 +1,6 @@
 # tsMuxeR in Docker
 
-The image holds the command line program, tsMuxeR, for x86-64 and ARM64 (arm64) Linux, such as a NAS. The window is
+The image holds the command line program, tsMuxeR, for x86-64 Linux, such as a NAS. The window is
 not part of it. It is published with each release as `ghcr.io/teaching-droid/tsmuxer`, tagged with the version and
 `latest`.
 
@@ -39,8 +39,7 @@ Docker and Podman map to your own user.
 
 ffmpeg is not part of the image. The audio conversion (`convert=`, `--convert-audio`) and the made Dolby Vision
 layer use an ffmpeg of your own: put a static build of ffmpeg for Linux in a folder, mount it at `/config`, and
-give it with `--ffmpeg=/config/ffmpeg` on the MUXOPT line or the command line. It must be built for the machine the
-container runs on (arm64 on an ARM NAS), and USER_ID must be allowed to run it.
+give it with `--ffmpeg=/config/ffmpeg` on the MUXOPT line or the command line. It must be built for x86-64, and USER_ID must be allowed to run it.
 
     docker run --rm -v "$PWD:/storage" -v "$HOME/tools:/config" ghcr.io/teaching-droid/tsmuxer conv.meta disc_folder
 

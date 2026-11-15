@@ -22,6 +22,9 @@ permissions:
   contents: write
 
 env:
+  # The ARM64 packages are built and tested, but not yet published with a release: set this to "true" to publish
+  # them.
+  PUBLISH_ARM64: "false"
   # The tools come from fixed releases, and each download is checked against the sha256 written for its platform in
   # the matrix below, so a moved tag or a changed file stops the build instead of going into the AppImage.
   LINUXDEPLOY_URL: https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1
@@ -383,7 +386,7 @@ jobs:
     steps:
     - uses: actions/download-artifact@v6
       with:
-        pattern: tsMuxeR-linux-appimage-*
+        pattern: ${{ env.PUBLISH_ARM64 == 'true' && 'tsMuxeR-linux-appimage-*' || 'tsMuxeR-linux-appimage-x86_64' }}
         merge-multiple: true
         path: out
 

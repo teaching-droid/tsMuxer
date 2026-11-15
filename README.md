@@ -37,8 +37,7 @@ Some of the major features include:
 * MP4 and MOV input with what the file says about itself: track names, the title, chapters, the cover picture and the colour and HDR data go into a Matroska output
 * A report of a run and a sample of a source, made by tsMuxeR, to attach to a problem report: see [Reporting a problem](docs/REPORTING_A_PROBLEM.md)
 * A Linux AppImage that runs on most current distributions, with what an update tool needs to fetch the next release
-* Packages for ARM64: Windows on ARM64, and Linux on ARM64 as an AppImage and a ZIP, each with the window and the command line
-* A Docker image of the command line, for x86-64 and arm64 Linux, a NAS for example: see [DOCKER.md](docs/DOCKER.md)
+* A Docker image of the command line, for x86-64 Linux, a NAS for example: see [DOCKER.md](docs/DOCKER.md)
 
 Additions in this fork (see [DISC_AUTHORING.md](docs/DISC_AUTHORING.md) for details):
 
@@ -183,7 +182,7 @@ Version numbering follows the [Semantic versioning](https://semver.org/) approac
 
 We're using the Apache 2.0 license for simplicity and flexibility. You are free to use it in your own project.
 
-Distributed builds bundle third-party software. In particular, the graphical interface links the Qt framework under the LGPLv3. Each package holds the notices and license texts of what it bundles: [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) for Windows, [packaging/notices/Windows-arm64.txt](packaging/notices/Windows-arm64.txt) for Windows on ARM64, [packaging/notices/macOS.txt](packaging/notices/macOS.txt) for macOS, [packaging/notices/AppImage.txt](packaging/notices/AppImage.txt) for the AppImage and [packaging/notices/Docker.txt](packaging/notices/Docker.txt) for the Docker image, with the full license texts in the [licenses/](licenses/) folder.
+Distributed builds bundle third-party software. In particular, the graphical interface links the Qt framework under the LGPLv3. Each package holds the notices and license texts of what it bundles: [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) for Windows, [packaging/notices/macOS.txt](packaging/notices/macOS.txt) for macOS, [packaging/notices/AppImage.txt](packaging/notices/AppImage.txt) for the AppImage and [packaging/notices/Docker.txt](packaging/notices/Docker.txt) for the Docker image, with the full license texts in the [licenses/](licenses/) folder.
 
 ## Credits
 
