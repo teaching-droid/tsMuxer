@@ -727,18 +727,43 @@ bool SingleFileMuxer::close()
             if (const auto* sound = dynamic_cast<const SimplePacketizerReader*>(streamInfo->m_codecReader);
                 sound && sound->startGapNs() > 0 && streamInfo->m_part <= 1)
             {
+                // only the name of the file changes, not its folder (whose name can hold a dot or a DELAY too)
                 const std::string& old = streamInfo->m_fileName;
-                const size_t dot = old.find_last_of('.');
                 const size_t slash = old.find_last_of("/\\");
-                const bool hasExt = dot != std::string::npos && (slash == std::string::npos || dot > slash);
-                const std::string base = hasExt ? old.substr(0, dot) : old;
-                const std::string ext = hasExt ? old.substr(dot) : std::string();
-                const int64_t ms = delayFromFileName(old) + (sound->startGapNs() + 500000) / 1000000;
-                const std::string newName = stripDelayToken(base) + " DELAY " + int64ToStr(ms) + "ms" + ext;
-                deleteFile(newName);
-                if (!(dryRun::enabled() && dryRun::rename(old, newName)) && rename(old.c_str(), newName.c_str()) != 0)
-                    THROW(ERR_OUTPUT, "Can't rename file " << old << " to " << newName)
-                streamInfo->m_fileName = newName;
+                const std::string dir = slash == std::string::npos ? std::string() : old.substr(0, slash + 1);
+                const std::string name = slash == std::string::npos ? old : old.substr(slash + 1);
+                const size_t dot = name.find_last_of('.');
+                const std::string base = dot == std::string::npos ? name : name.substr(0, dot);
+                const std::string ext = dot == std::string::npos ? std::string() : name.substr(dot);
+                const int64_t ms = delayFromFileName(name) + (sound->startGapNs() + 500000) / 1000000;
+                const std::string newName = dir + stripDelayToken(base) + " DELAY " + int64ToStr(ms) + "ms" + ext;
+                // a name that is too long, a source, or a rename that fails: the file keeps its name, and it is said;
+                // the other files are finished all the same
+                std::string why;
+                if (newName.size() - dir.size() > 254)
+                    why = "the name would be too long";
+                else if (m_owner)
+                {
+                    // where the files end up (a demux written into a temporary folder first: openDstFile)
+                    const std::string finalDir = m_owner->demuxFolder().empty()
+                                                     ? dir
+                                                     : closeDirPath(toNativeSeparators(m_owner->demuxFolder()));
+                    if (!m_owner->sourceSameAs(finalDir + newName.substr(dir.size())).empty())
+                        why = "a source has that name";
+                }
+                if (why.empty())
+                {
+                    deleteFile(newName);
+                    if (!(dryRun::enabled() && dryRun::rename(old, newName)) && rename(old.c_str(), newName.c_str()) != 0)
+                        why = "it could not be renamed";
+                }
+                if (why.empty())
+                    streamInfo->m_fileName = newName;
+                else
+                    LTRACE(LT_WARN, 2,
+                           "Warning: " << old << " starts " << ms << " ms after the start of the film, which its name "
+                                       << "does not say (" << why << "). Give the track timeshift=" << ms
+                                       << "ms when it is muxed again.");
             }
             if (streamInfo->m_part > 1)
             {

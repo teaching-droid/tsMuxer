@@ -197,9 +197,11 @@ static bool tsHevcStartsAtRandomAccess(const BufferedReaderManager& readManager,
 // 1 GB, for a track that starts later. A start more than 10 s from the earliest sound of its program is not applied
 // (said): the first PES of such a track is taken for one left over or damaged, as 0 was used before.
 static constexpr int64_t TS_NO_VIDEO_LIMIT = 64LL * 1024 * 1024;
+// how far the listing reads at most for a track that starts late: its 64 MB, and 1 GB more (readLateTracks)
+static constexpr int64_t TS_LATE_LIMIT = TS_NO_VIDEO_LIMIT + 1024LL * 1024 * 1024;
 static bool noVideoTrackStart(TSDemuxer& probe, const int pid, int64_t read, bool eof, int64_t& ticks)
 {
-    static constexpr int64_t LATE_LIMIT = 1024LL * 1024 * 1024;
+    static constexpr int64_t LATE_LIMIT = TS_LATE_LIMIT;
     DemuxedData demuxedData;
     const PIDSet none;
     int64_t discardedSize = 0;
@@ -209,15 +211,15 @@ static bool noVideoTrackStart(TSDemuxer& probe, const int pid, int64_t read, boo
             break;
         eof = probe.simpleDemuxBlock(demuxedData, none, discardedSize) == BufferedReader::DATA_EOF;
     }
-    if (!probe.getTrackStartInFile(pid, ticks))
+    bool farOff = false;
+    if (!probe.getTrackStartInFile(pid, ticks, &farOff))
         return false;
-    if (ticks > 10 * 90000 || ticks < -10 * 90000)
+    if (farOff)
     {
         LTRACE(LT_WARN, 2,
-               "Warning: track " << pid << " starts " << (ticks > 0 ? ticks : -ticks) / 90000
-                                 << " s from the earliest sound of its program in a file without video. Its start "
-                                    "is not moved; give timeshift= on its line to place it.");
-        ticks = 0;
+               "Warning: track " << pid
+                                 << " starts more than 10 s from the start of the sound of its program, in a file "
+                                    "without video. Its start is not moved; give timeshift= on its line to place it.");
         return false;
     }
     return true;
@@ -228,7 +230,7 @@ static int64_t tsTrackStart(const BufferedReaderManager& readManager, const std:
 {
     if (known)
         *known = false;
-    static constexpr int64_t LATE_LIMIT = 1024LL * 1024 * 1024;
+    static constexpr int64_t LATE_LIMIT = TS_LATE_LIMIT;  // as the listing
     // the pictures shown before the first one follow it in decode order within the depth of the picture reordering,
     // at most 16 frames, or 32 fields
     static constexpr int64_t LEADING_PES = 34;
@@ -328,7 +330,7 @@ static int64_t tsVideoReference(const BufferedReaderManager& readManager, const 
                                 bool* known)
 {
     *known = false;
-    static constexpr int64_t LATE_LIMIT = 1024LL * 1024 * 1024;
+    static constexpr int64_t LATE_LIMIT = TS_LATE_LIMIT;  // as the listing
     static constexpr int64_t LEADING_PES = 34;
     TSDemuxer probe(readManager, "");
     probe.openFile(fileName);
@@ -3064,6 +3066,7 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         if (ext == "M2TS" || ext == "MTS" || ext == "TS" || ext == "M2T")
         {
             TSDemuxer probe(m_readManager, "");
+            probe.setNoSubtitleWait();  // the style is read from the first block, even where the video is held
             probe.openFile(first);
             std::map<int32_t, TrackInfo> tracks;
             probe.getTrackList(tracks);

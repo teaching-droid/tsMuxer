@@ -81,7 +81,11 @@ class TSDemuxer final : public AbstractDemuxer
     // Of a file without video read: where a stream starts against the earliest sound track of its program
     // (fileStartReference), in 90 kHz ticks across a wrap of the clock, as the listing gives it (getTrackDelay) and
     // the mux applies it (tsTrackStart). False while no PES of the stream has been read.
-    [[nodiscard]] bool getTrackStartInFile(int32_t pid, int64_t& ticks) const;
+    // farOff: set where the start lies more than 10 s from that of its program, and is taken as 0
+    [[nodiscard]] bool getTrackStartInFile(int32_t pid, int64_t& ticks, bool* farOff = nullptr) const;
+    [[nodiscard]] static bool isSoundTrack(const PMTStreamInfo& info);
+    // A probe that reads the first block of a subtitle track (keep-textst): its packets never wait for the video
+    void setNoSubtitleWait() { m_noSubtitleWait = true; }
     // That reference: the earliest first PTS (run-corrected, m_firstPtsTime) of the sound tracks of the track's own
     // program, and of the track itself, across a wrap; the tracks of each program of a multiplex keep their own clock.
     // -1 where the track has no PES yet.
@@ -299,13 +303,6 @@ class TSDemuxer final : public AbstractDemuxer
     uint8_t m_leadDrop[8192]{};  // the PES being read of the PID is held back, and the packets carrying its rest
     // The packets of the PES held back, by PID, until the search ends (giveBackLeadPes)
     std::map<int, std::vector<uint8_t>> m_leadHeld;
-    uint8_t m_leadFirstSeen[8192]{};  // the first PES held back of the PID came before any other PES of the file
-    // the place in the file of the first PES held back of each PID (1, 2, ...: the order the holds began), and that of
-    // the PID whose given-back PES set m_firstSeenPTS (0: none): of two PIDs held from the first PES of the file, the
-    // one first in the file sets it, whichever is given back first
-    uint32_t m_leadFirstSeenOrder[8192]{};
-    uint32_t m_leadHolds = 0;
-    uint32_t m_firstSeenHolder = 0;
     enum class LeadPes
     {
         Hold,     // left out for now: no frame begins it, and the search goes on
@@ -342,6 +339,7 @@ class TSDemuxer final : public AbstractDemuxer
     bool m_subWaitOn = false;     // the subtitles of this file wait
     bool m_subWaitDone = false;   // they waited, and wait no more in this file
     bool m_subHandingOn = false;  // handOnWaitingSubtitles is handing them on (demuxPacket)
+    bool m_noSubtitleWait = false;  // setNoSubtitleWait
     static constexpr size_t SUB_WAIT_MAX = 8 << 20;  // past that, they go on, counted as before
     [[nodiscard]] bool isSubtitlePid(int pid) const;
     [[nodiscard]] bool videoStartSettled() const;
@@ -404,7 +402,6 @@ class TSDemuxer final : public AbstractDemuxer
     int64_t m_tmpBufferLen;
     // int64_t m_firstDTS;
     int64_t m_firstPTS;
-    int64_t m_firstSeenPTS;  // first PTS seen on any PID, in file order (never a minimum)
     int64_t m_lastPTS;
     int64_t m_prevFileLen;
     uint32_t m_curFileNum;

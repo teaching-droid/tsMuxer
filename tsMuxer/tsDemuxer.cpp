@@ -205,8 +205,6 @@ TSDemuxer::TSDemuxer(const BufferedReaderManager& readManager, const char* strea
     m_lastReadRez = 0;
     m_m2tsHdrDiscarded = false;
     m_firstPTS = -1;
-    m_firstSeenPTS = -1;
-    m_firstSeenHolder = 0;
     m_lastPTS = -1;
     m_firstVideoPTS = -1;
     m_firstSeenVideoPTS = -1;
@@ -584,6 +582,11 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                 continue;
             TrackInfo track(type, "", 0);
             PMTStreamInfo stream(mapped, pid, nullptr, 0, nullptr, "", false);
+            if (id == 0xBD && !aribCaptions &&
+                (startsWith(0x0B, 0xFF, 0x77) ||
+                 (startsWith(0x7F, 0xFF, 0xFE) && bytes->second.size() >= 4 && bytes->second[2] == 0x80 &&
+                  bytes->second[3] == 0x01)))
+                stream.m_pesSound = true;
             if (aribCaptions)
             {
                 // the data component of captions; the component tag that would tell the service is in the PMT only
@@ -851,26 +854,10 @@ int64_t TSDemuxer::videoReference(const int32_t pid, const bool first) const
         bool programHasVideo = false;
         for (const auto& [otherPid, info] : m_pmt.pidList)
             programHasVideo |= info.m_programNumber == program && isVideoPID(info.m_streamType);
+        // the same start as the sound of a file without video (fileStartReference): its sound tracks, a lone
+        // leftover PES left aside
         if (ofFile != -1 && !programHasVideo && own != m_firstPtsTime.end())
-        {
-            static constexpr int64_t CLOCK_WRAP = 1LL << 33;
-            int64_t earliest = own->second;
-            for (const auto& [otherPid, info] : m_pmt.pidList)
-            {
-                const auto other = m_firstPtsTime.find(otherPid);
-                if (info.m_programNumber != program || other == m_firstPtsTime.end())
-                    continue;
-                // across a wrap of the clock, as getTrackStart
-                int64_t before = (earliest - other->second) % CLOCK_WRAP;
-                if (before >= CLOCK_WRAP / 2)
-                    before -= CLOCK_WRAP;
-                else if (before < -CLOCK_WRAP / 2)
-                    before += CLOCK_WRAP;
-                if (before > 0)
-                    earliest = other->second;
-            }
-            return earliest;
-        }
+            return fileStartReference(pid);
     }
     return first ? m_firstSeenVideoPTS : m_firstVideoPTS;
 }
@@ -902,21 +889,19 @@ bool TSDemuxer::getTrackStart(const int32_t pid, const bool fromFirstPes, int64_
     return true;
 }
 
+// ** ONE START FOR THE SOUND OF A PROGRAM. ** The tracks of a file without video are placed against one time of their
+// program, the same for every track: the earliest first time of its sound tracks that has another of them within
+// 10 s after it. A lone leftover PES (a run of one) hours before the rest is no such start, nor is a track that lies
+// far from every other; where no two tracks lie that close, the earliest of them. -1 where the track has no PES yet.
 int64_t TSDemuxer::fileStartReference(const int32_t pid) const
 {
     const auto own = m_firstPtsTime.find(pid);
     if (own == m_firstPtsTime.end())
         return -1;
     static constexpr int64_t CLOCK_WRAP = 1LL << 33;
+    static constexpr int64_t NEAR = 10 * 90000;
     const auto stream = m_pmt.pidList.find(pid);
     const int program = stream != m_pmt.pidList.end() ? stream->second.m_programNumber : -1;
-    // sound as the runs of the first PES take it (a type of sound, or 0x06 with a descriptor of its codec), Opus, and
-    // a private stream of a file of PES alone (AC-3, DTS) that is no caption track
-    const auto isSound = [&](const PMTStreamInfo& info)
-    {
-        return isAudioStreamType(info.m_streamType) || info.m_soundDescriptor != 0 || info.m_opusRegistration ||
-               (m_tracksFromPes && info.m_streamType == StreamType::PRIVATE_DATA && info.m_dataComponentId < 0);
-    };
     const auto apart = [&](const int64_t a, const int64_t b)  // a - b across a wrap
     {
         int64_t d = (a - b) % CLOCK_WRAP;
@@ -926,24 +911,39 @@ int64_t TSDemuxer::fileStartReference(const int32_t pid) const
             d += CLOCK_WRAP;
         return d;
     };
-    int64_t earliest = own->second;
+    // the first times of the program's sound tracks, against this track's
+    std::vector<int64_t> starts;
     for (const auto& [otherPid, info] : m_pmt.pidList)
     {
         const auto other = m_firstPtsTime.find(otherPid);
-        if (other == m_firstPtsTime.end() || !isSound(info) || (program >= 0 && info.m_programNumber != program))
-            continue;
-        // a track whose first time is more than 10 s before this one's is no start of this sound (a lone leftover
-        // PES, a run of one): the tracks keep their places against each other, in the listing and the mux alike
-        if (apart(own->second, other->second) > 10 * 90000)
-            continue;
-        if (apart(earliest, other->second) > 0)
-            earliest = other->second;
+        if (other != m_firstPtsTime.end() && isSoundTrack(info) && (program < 0 || info.m_programNumber == program))
+            starts.push_back(apart(other->second, own->second));
     }
-    return earliest;
+    if (starts.empty())
+        return own->second;
+    std::sort(starts.begin(), starts.end());
+    int64_t chosen = starts.front();
+    for (size_t i = 0; i + 1 < starts.size(); ++i)
+        if (starts[i + 1] - starts[i] <= NEAR)
+        {
+            chosen = starts[i];
+            break;
+        }
+    return ((own->second + chosen) % CLOCK_WRAP + CLOCK_WRAP) % CLOCK_WRAP;
 }
 
-bool TSDemuxer::getTrackStartInFile(const int32_t pid, int64_t& ticks) const
+// sound as the runs of the first PES take it (a type of sound, or 0x06 with a descriptor of its codec), Opus, and a
+// private stream of a file of PES alone whose first bytes are those of AC-3 or DTS (m_pesSound)
+bool TSDemuxer::isSoundTrack(const PMTStreamInfo& info)
 {
+    return isAudioStreamType(info.m_streamType) || info.m_soundDescriptor != 0 || info.m_opusRegistration ||
+           info.m_pesSound;
+}
+
+bool TSDemuxer::getTrackStartInFile(const int32_t pid, int64_t& ticks, bool* farOff) const
+{
+    if (farOff)
+        *farOff = false;
     const auto first = m_firstPtsTime.find(pid);
     const int64_t reference = fileStartReference(pid);
     if (first == m_firstPtsTime.end() || reference == -1)
@@ -954,6 +954,14 @@ bool TSDemuxer::getTrackStartInFile(const int32_t pid, int64_t& ticks) const
         ticks -= CLOCK_WRAP;
     else if (ticks < -CLOCK_WRAP / 2)
         ticks += CLOCK_WRAP;
+    // a start more than 10 s from that of its program is not taken (a leftover or damaged first PES, or a track that
+    // lies far from the rest): the track stays at the start, in the listing and the mux alike, and the mux says so
+    if (ticks > 10 * 90000 || ticks < -10 * 90000)
+    {
+        if (farOff)
+            *farOff = true;
+        ticks = 0;
+    }
     return true;
 }
 
@@ -1834,8 +1842,6 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
                 m_prevFileLen += (m_lastPTS - m_firstPTS);
         }
         m_firstPTS = -1;
-        m_firstSeenPTS = -1;
-        m_firstSeenHolder = 0;
         m_lastPTS = -1;
         m_ptsWrapOffset = 0;  // each file has its own clock
         m_lastFullPts = -1;
@@ -2151,16 +2157,12 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
                                     pkt + TS_FRAME_SIZE, pkt);
                 if (lead == LeadPes::Hold)
                 {
-                    if (m_leadHeld[pid].empty())
-                    {
-                        m_leadFirstSeen[pid] = m_firstSeenPTS == -1;
-                        m_leadFirstSeenOrder[pid] = ++m_leadHolds;
-                    }
                     m_leadDrop[pid] = true;
                     if (part != nullptr && isVideoPID(streamInfo->second.m_streamType) && m_keptPictures[pid] > 0)
                         m_keptPictures[pid]--;
                     // a video held at the start of the file: its subtitles wait for its start (m_subWaitOn)
-                    if (isVideoPID(streamInfo->second.m_streamType) && m_firstVideoPTS == -1 && !m_subWaitDone)
+                    if (isVideoPID(streamInfo->second.m_streamType) && m_firstVideoPTS == -1 && !m_subWaitDone &&
+                        !m_noSubtitleWait)
                         m_subWaitOn = true;
                 }
                 else if (lead == LeadPes::GiveBack)
@@ -2225,8 +2227,6 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
             if (m_firstPTS == -1 || curPts < m_firstPTS)
                 m_firstPTS = curPts;
 
-            if (m_firstSeenPTS == -1)
-                m_firstSeenPTS = curPts;
 
             if (streamInfo != m_pmt.pidList.end() && isVideoPID(streamInfo->second.m_streamType))
             {
@@ -2802,8 +2802,8 @@ int TSDemuxer::opusEndTrimOfFile(const int pid) const
 // broadcast AC-3 stream of one frame in each PES, 128 ms of sound, and the stream started 128 ms later than 2.20.0
 // started it. They are now held back, packet by packet, and read here as they would have been read, times and all,
 // before the PES that ended the search. A PES that begins with a frame within the limit still drops them, which is
-// the case skipsLeadingPes is for. Where the first PES held back was the first PES of the file, its time is the
-// first time of the file again (m_firstSeenPTS, which times the sound of a file without video).
+// the case skipsLeadingPes is for. (The sound of a file without video is timed against the earliest sound of its
+// program, fileStartReference, which the order of the give-backs does not change.)
 // A held PES of H.264 or MPEG-2 that went on past the end of its block (skipsLeadingPes), now whole in its held
 // packets: where it holds the parameter sets before its first picture, the track starts with it, and the PES held
 // before it are left out.
@@ -2829,8 +2829,6 @@ void TSDemuxer::resolveLeadPes(const int pid, const StreamType type, DemuxedData
         return;
     }
     held->second.erase(held->second.begin(), held->second.begin() + static_cast<std::ptrdiff_t>(from));
-    if (from > 0)
-        m_leadFirstSeen[pid] = false;  // the first PES of the file was among those left out
     m_leadPes[pid] = LEAD_PES_DONE;
     giveBackLeadPes(pid, demuxedData, discardSize, part, vect, lastPid);
 }
@@ -2843,14 +2841,6 @@ void TSDemuxer::giveBackLeadPes(const int pid, DemuxedData& demuxedData, int64_t
         return;
     std::vector<uint8_t> packets = std::move(held->second);
     m_leadHeld.erase(held);
-    // ** THE FIRST OF THE FILE, NOT THE LAST GIVEN BACK. ** Two PIDs held from the very first PES of the file both
-    // counted as first, and the one given back last set the first time of the file, by the order of the tracks and
-    // not of the file. The one whose hold began first sets it now.
-    if (m_leadFirstSeen[pid] && (m_firstSeenHolder == 0 || m_leadFirstSeenOrder[pid] < m_firstSeenHolder))
-    {
-        m_firstSeenPTS = -1;
-        m_firstSeenHolder = m_leadFirstSeenOrder[pid];
-    }
     // the PES being read (a give-back from within demuxPacket) keeps its decision of the part, which the held PES
     // set again as they came back: its packets after the first, and the PES without a time after it, went by the
     // last held one
@@ -3298,14 +3288,10 @@ void TSDemuxer::openFile(const std::string& streamName)
     m_videoPesOfPid.clear();
     memset(m_leadPes, 0, sizeof(m_leadPes));
     memset(m_leadDrop, 0, sizeof(m_leadDrop));
-    memset(m_leadFirstSeen, 0, sizeof(m_leadFirstSeen));
     m_subWait.clear();
     m_subWaitOn = false;
     m_subWaitDone = false;
     m_partCutBeforeHold.clear();
-    memset(m_leadFirstSeenOrder, 0, sizeof(m_leadFirstSeenOrder));
-    m_leadHolds = 0;
-    m_firstSeenHolder = 0;
     m_leadHeld.clear();
     memset(m_leadUndecided, 0, sizeof(m_leadUndecided));
     memset(m_lastCounter, 0xFF, sizeof(m_lastCounter));

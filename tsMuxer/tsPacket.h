@@ -323,6 +323,9 @@ struct PMTStreamInfo final
     // Opus audio descriptor (extension descriptor 0x80, TS 101 154), -1 without one
     bool m_opusRegistration = false;
     int m_opusChannelConfig = -1;
+    // A private stream of a file of PES alone (no PAT) whose data begins with the sync word of AC-3 or DTS: sound, as
+    // the start of a file without video counts it (TSDemuxer::isSoundTrack); its subtitles and teletext are not
+    bool m_pesSound = false;
     // The sound a descriptor names, as the stream type that names the same codec (0x81 AC-3, 0x87 E-AC-3, 0x82 DTS,
     // 0x0F AAC), zero for none: the AC-3, enhanced AC-3, DTS or AAC descriptor of EN 300 468, which is how a DVB stream
     // declares these (TS 101 154: AC-3, E-AC-3 and DTS are carried as stream type 0x06 with the descriptor), or the
