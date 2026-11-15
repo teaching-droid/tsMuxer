@@ -41,8 +41,11 @@ Complete corresponding source of the (modified) Qt used here:
 
 Qt's own bundled third-party components:
     Qt itself includes further third-party software, for example FreeType (under
-    the FreeType License), HarfBuzz, PCRE2, zlib and libpng. Their licenses are
-    listed at:
+    the FreeType License), HarfBuzz, PCRE2, zlib, libpng and libjpeg. Each part
+    of the Qt in this package is listed with its copyright and its full license
+    text in:
+        licenses/Qt-6.8.3-third-party.txt
+    Qt's own list of them is at:
         https://doc.qt.io/qt-6/licenses-used-in-qt.html
 
 ================================================================================
