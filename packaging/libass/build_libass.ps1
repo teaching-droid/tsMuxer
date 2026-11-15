@@ -7,7 +7,8 @@
 #
 #   build_libass.ps1 -Triplet x64-windows -Work <scratch folder> -Out <folder for the DLLs>
 #
-# Used by .github/workflows/windows_64.yml (x64-windows) and windows_32.yml (x86-windows).
+# Used by .github/workflows/windows_64.yml (x64-windows), windows_32.yml (x86-windows) and windows_arm64.yml
+# (arm64-windows).
 param(
     [Parameter(Mandatory = $true)][string]$Triplet,
     [Parameter(Mandatory = $true)][string]$Work,

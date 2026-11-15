@@ -1,0 +1,32 @@
+THIRD-PARTY NOTICES (Docker image, command line)
+
+This image includes third-party software. The notices below are provided to
+comply with the licenses of that software. tsMuxeR itself is under the Apache
+License 2.0, in LICENSE beside this file, with NOTICE.
+
+================================================================================
+The libraries and fonts of the image
+================================================================================
+
+The image is built on Ubuntu 24.04. The libraries tsMuxeR uses (FreeType, zlib,
+and libass with FriBidi and HarfBuzz for drawing ASS and SSA subtitles), the
+fonts (Liberation, DejaVu), and tini and setpriv (util-linux), which start the
+program, are the unmodified Ubuntu 24.04 packages they belong to. The
+copyright and license file of each package is in
+/usr/share/doc/<package>/copyright, and PACKAGES.txt beside this file names
+each package of the image and its version. Their source is available from
+Ubuntu, for example with "apt-get source <package>=<version>" on Ubuntu 24.04,
+and at:
+    https://packages.ubuntu.com/noble/
+
+License texts of some of them are also in licenses/ beside this file.
+
+================================================================================
+Not in this image
+================================================================================
+
+ffmpeg is not part of this image. The audio conversion (convert=, --convert-audio)
+and the made Dolby Vision layer use an ffmpeg of your own, given with
+--ffmpeg=<file>, for example one placed in the folder mounted at /config. The
+made Dolby Vision layer also needs libdovi, which is not part of this image
+either.

@@ -4,14 +4,15 @@ name: Build AppImage for Linux
 
 # One file that runs on most current Linux distributions (glibc 2.35 or newer), with the window and the command line
 # program inside, and the update information an update tool such as AppImageUpdate or Gear Lever needs. It comes on
-# top of the Linux zip, which is built as before by linux.yml.
+# top of the Linux zip, which is built as before by linux.yml. One AppImage for x86-64 (x86_64) and one for ARM64
+# (aarch64), each built and tested on a runner of its own kind.
 
 on:
   # A build by hand from the Actions tab gives the files as artifacts only, under a dev version name.
   workflow_dispatch:
   push:
     tags: ["v*"]
-  # A change of this file in a pull request builds and tests the AppImage, without publishing anything.
+  # A change of this file in a pull request builds and tests the AppImages, without publishing anything.
   pull_request:
     branches: [master]
     paths:
@@ -21,25 +22,47 @@ permissions:
   contents: write
 
 env:
-  # The tools come from fixed releases, and each download is checked against the sha256 written here, so a moved tag
-  # or a changed file stops the build instead of going into the AppImage.
-  LINUXDEPLOY_URL: https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage
-  LINUXDEPLOY_SHA256: c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d
-  LINUXDEPLOY_QT_URL: https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-qt-x86_64.AppImage
-  LINUXDEPLOY_QT_SHA256: 15106be885c1c48a021198e7e1e9a48ce9d02a86dd0a1848f00bdbf3c1c92724
-  APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
-  APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+  # The tools come from fixed releases, and each download is checked against the sha256 written for its platform in
+  # the matrix below, so a moved tag or a changed file stops the build instead of going into the AppImage.
+  LINUXDEPLOY_URL: https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1
+  LINUXDEPLOY_QT_URL: https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/1-alpha-20250213-1
+  APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/1.9.1
   # appimagetool would fetch the runtime from a release that moves; this one is fixed.
-  RUNTIME_URL: https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
-  RUNTIME_SHA256: 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
-  # "latest" is the newest full release: an update tool never offers a prerelease.
-  UPDATE_INFO: gh-releases-zsync|teaching-droid|tsMuxer|latest|tsMuxeR-*-x86_64.AppImage.zsync
+  RUNTIME_URL: https://github.com/AppImage/type2-runtime/releases/download/20251108
 
 jobs:
   build-appimage:
 
-    # The oldest glibc the AppImage needs is the one it is built on: 2.35 here.
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        # The oldest glibc the AppImage needs is the one it is built on: 2.35 here, on both. Qt's own build for
+        # ARM64 needs glibc 2.30.
+        - arch: x86_64
+          runner: ubuntu-22.04
+          qt_host: linux
+          qt_arch: linux_gcc_64
+          linuxdeploy_sha256: c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d
+          linuxdeploy_qt_sha256: 15106be885c1c48a021198e7e1e9a48ce9d02a86dd0a1848f00bdbf3c1c92724
+          appimagetool_sha256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+          runtime_sha256: 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
+        - arch: aarch64
+          runner: ubuntu-22.04-arm
+          qt_host: linux_arm64
+          qt_arch: linux_gcc_arm64
+          linuxdeploy_sha256: 620095110d693282b8ebeb244a95b5e911cf8f65f76c88b4b47d16ae6346fcff
+          linuxdeploy_qt_sha256: bf1c24aff6d749b5cf423afad6f15abd4440f81dec1aab95706b25f6667cdcf1
+          appimagetool_sha256: f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158
+          runtime_sha256: 00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444
+
+    runs-on: ${{ matrix.runner }}
+
+    env:
+      ARCH: ${{ matrix.arch }}
+      # "latest" is the newest full release: an update tool never offers a prerelease. Each AppImage looks for the
+      # update of its own platform.
+      UPDATE_INFO: gh-releases-zsync|teaching-droid|tsMuxer|latest|tsMuxeR-*-${{ matrix.arch }}.AppImage.zsync
 
     steps:
     - uses: actions/checkout@v5
@@ -64,7 +87,7 @@ jobs:
           sha="${{ github.event.pull_request.head.sha || github.sha }}"
           ver="${base}-dev-${sha:0:8}"
         fi
-        echo "APPIMAGE=tsMuxeR-${ver}-x86_64.AppImage" >> "$GITHUB_ENV"
+        echo "APPIMAGE=tsMuxeR-${ver}-${ARCH}.AppImage" >> "$GITHUB_ENV"
         echo "Version: ${ver}"
 
     - name: Install dependencies
@@ -81,6 +104,8 @@ jobs:
       uses: jurplel/install-qt-action@v4
       with:
         version: '6.7.*'
+        host: ${{ matrix.qt_host }}
+        arch: ${{ matrix.qt_arch }}
         # No qtmultimedia: its deployment put Qt's FFmpeg plug-in and the FFmpeg libraries into the package, and
         # tsMuxeR ships no FFmpeg. The window plays its end-of-mux sound through the system.
 
@@ -117,11 +142,11 @@ jobs:
             exit 1
           fi
         }
-        get linuxdeploy-x86_64.AppImage "$LINUXDEPLOY_URL" "$LINUXDEPLOY_SHA256"
-        get linuxdeploy-plugin-qt-x86_64.AppImage "$LINUXDEPLOY_QT_URL" "$LINUXDEPLOY_QT_SHA256"
-        get appimagetool-x86_64.AppImage "$APPIMAGETOOL_URL" "$APPIMAGETOOL_SHA256"
-        get runtime-x86_64 "$RUNTIME_URL" "$RUNTIME_SHA256"
-        chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage appimagetool-x86_64.AppImage
+        get linuxdeploy-$ARCH.AppImage "$LINUXDEPLOY_URL/linuxdeploy-$ARCH.AppImage" "${{ matrix.linuxdeploy_sha256 }}"
+        get linuxdeploy-plugin-qt-$ARCH.AppImage "$LINUXDEPLOY_QT_URL/linuxdeploy-plugin-qt-$ARCH.AppImage" "${{ matrix.linuxdeploy_qt_sha256 }}"
+        get appimagetool-$ARCH.AppImage "$APPIMAGETOOL_URL/appimagetool-$ARCH.AppImage" "${{ matrix.appimagetool_sha256 }}"
+        get runtime-$ARCH "$RUNTIME_URL/runtime-$ARCH" "${{ matrix.runtime_sha256 }}"
+        chmod +x linuxdeploy-$ARCH.AppImage linuxdeploy-plugin-qt-$ARCH.AppImage appimagetool-$ARCH.AppImage
 
     - name: Make the AppDir
       run: |
@@ -146,7 +171,7 @@ jobs:
         cat > AppRun <<'EOF'
         #!/bin/sh
         # Starts the window, or the command line program when the first argument is tsMuxeR or tsmuxer:
-        #   ./tsMuxeR-x86_64.AppImage tsMuxeR movie.meta out.ts
+        #   ./tsMuxeR-<version>-<arch>.AppImage tsMuxeR movie.meta out.ts
         HERE="$(dirname "$(readlink -f "$0")")"
         export APPDIR="${APPDIR:-$HERE}"
         export PATH="$APPDIR/usr/bin:$PATH"
@@ -173,7 +198,7 @@ jobs:
       run: |
         export PATH="$PWD/tools:$PATH"
         export QMAKE="$QT_ROOT_DIR/bin/qmake"
-        linuxdeploy-x86_64.AppImage --appdir AppDir \
+        linuxdeploy-$ARCH.AppImage --appdir AppDir \
           --executable AppDir/usr/bin/tsMuxerGUI \
           --executable AppDir/usr/bin/tsMuxeR \
           --desktop-file tsmuxergui.desktop \
@@ -223,10 +248,9 @@ jobs:
     - name: Make the AppImage
       env:
         APPIMAGE_EXTRACT_AND_RUN: 1
-        ARCH: x86_64
       run: |
         mkdir -p out
-        ./tools/appimagetool-x86_64.AppImage --runtime-file tools/runtime-x86_64 -u "$UPDATE_INFO" \
+        ./tools/appimagetool-$ARCH.AppImage --runtime-file tools/runtime-$ARCH -u "$UPDATE_INFO" \
           AppDir "out/$APPIMAGE"
         # appimagetool writes the .zsync file when it is given update information; an update tool needs it.
         if [ ! -f "out/$APPIMAGE.zsync" ] && [ -f "$APPIMAGE.zsync" ]; then
@@ -255,7 +279,7 @@ jobs:
 
     - uses: actions/upload-artifact@v6
       with:
-         name: tsMuxeR-linux-appimage
+         name: tsMuxeR-linux-appimage-${{ matrix.arch }}
          path: |
            out/${{ env.APPIMAGE }}
            out/${{ env.APPIMAGE }}.zsync
@@ -266,12 +290,17 @@ jobs:
   test-appimage:
 
     needs: build-appimage
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
 
     strategy:
       fail-fast: false
       matrix:
+        arch: [x86_64, aarch64]
         image: ["debian:12", "fedora:latest", "archlinux:latest", "ubuntu:22.04"]
+        exclude:
+        # Arch Linux has no image for ARM64
+        - arch: aarch64
+          image: "archlinux:latest"
 
     container: ${{ matrix.image }}
 
@@ -292,40 +321,40 @@ jobs:
 
     - uses: actions/download-artifact@v6
       with:
-        name: tsMuxeR-linux-appimage
+        name: tsMuxeR-linux-appimage-${{ matrix.arch }}
 
     - name: Check the download
       run: |
-        sha256sum -c tsMuxeR-*-x86_64.AppImage.sha256
-        chmod +x tsMuxeR-*-x86_64.AppImage
+        sha256sum -c tsMuxeR-*-${{ matrix.arch }}.AppImage.sha256
+        chmod +x tsMuxeR-*-${{ matrix.arch }}.AppImage
 
     - name: Run the command line program
       run: |
-        app="$(ls tsMuxeR-*-x86_64.AppImage)"
+        app="$(ls tsMuxeR-*-${{ matrix.arch }}.AppImage)"
         # A container has no FUSE, so the AppImage unpacks itself and runs from there.
         out="$(./"$app" --appimage-extract-and-run tsMuxeR 2>&1 || true)"
         echo "$out" | head -n 5
         if ! echo "$out" | grep -q "tsMuxeR version"; then
-          echo "::error::The tsMuxeR inside the AppImage did not start on ${{ matrix.image }}."
+          echo "::error::The tsMuxeR inside the AppImage did not start on ${{ matrix.image }} (${{ matrix.arch }})."
           exit 1
         fi
 
     - name: Check the libraries
       run: |
-        app="$(ls tsMuxeR-*-x86_64.AppImage)"
+        app="$(ls tsMuxeR-*-${{ matrix.arch }}.AppImage)"
         ./"$app" --appimage-extract > /dev/null
         # Every program and library inside, the Qt plugins included, must find what it links against.
         missing="$(find squashfs-root -type f \( -name '*.so*' -o -path '*/usr/bin/*' \) -exec ldd {} \; 2>/dev/null \
           | grep 'not found' | sort -u || true)"
         if [ -n "$missing" ]; then
           echo "$missing"
-          echo "::error::Libraries missing on ${{ matrix.image }}."
+          echo "::error::Libraries missing on ${{ matrix.image }} (${{ matrix.arch }})."
           exit 1
         fi
 
     - name: Start the window
       run: |
-        app="$(ls tsMuxeR-*-x86_64.AppImage)"
+        app="$(ls tsMuxeR-*-${{ matrix.arch }}.AppImage)"
         # The window starts with the plugin that draws without a screen. Still running after 15 s is a pass;
         # ending before that, or a plugin that does not load, is a fail.
         set +e
@@ -337,11 +366,11 @@ jobs:
         # there with "cannot open shared object file". Only a plugin inside the AppImage that does not load,
         # a program that does not find its libraries, or a symbol that is not found is a fail.
         if grep -Eiq "could not load the qt platform plugin|cannot load library .*/usr/plugins/|error while loading shared libraries|undefined symbol" gui.log; then
-          echo "::error::The window could not load its Qt libraries or plugins on ${{ matrix.image }}."
+          echo "::error::The window could not load its Qt libraries or plugins on ${{ matrix.image }} (${{ matrix.arch }})."
           exit 1
         fi
         if [ "$rc" -ne 124 ]; then
-          echo "::error::The window ended after less than 15 s (exit code $rc) on ${{ matrix.image }}."
+          echo "::error::The window ended after less than 15 s (exit code $rc) on ${{ matrix.image }} (${{ matrix.arch }})."
           exit 1
         fi
 
@@ -354,7 +383,8 @@ jobs:
     steps:
     - uses: actions/download-artifact@v6
       with:
-        name: tsMuxeR-linux-appimage
+        pattern: tsMuxeR-linux-appimage-*
+        merge-multiple: true
         path: out
 
     - name: Upload to Release

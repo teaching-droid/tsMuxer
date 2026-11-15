@@ -1,0 +1,5 @@
+# Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
+# Apache License 2.0, see LICENSE and NOTICE.
+# Shell scripts and the Dockerfile keep LF line ends on every checkout, Windows too: a script with CRLF does not run.
+*.sh text eol=lf
+Dockerfile text eol=lf

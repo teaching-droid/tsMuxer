@@ -16,9 +16,23 @@ permissions:
 jobs:
   build:
 
+    # One zip for x86-64 and one for ARM64, each built on a runner of its own kind.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - arch: x64
+          runner: ubuntu-22.04
+          qt_host: linux
+          qt_arch: linux_gcc_64
+        - arch: arm64
+          runner: ubuntu-22.04-arm
+          qt_host: linux_arm64
+          qt_arch: linux_gcc_arm64
+
     # Not ubuntu-latest: a program needs the glibc of the system it is built on or newer, and ubuntu-latest
     # moved to Ubuntu 26 (glibc 2.43), so the Linux programs no longer started on Ubuntu 24.04 or Debian 12.
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.runner }}
     
     steps:
     - uses: actions/checkout@v5
@@ -27,12 +41,14 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libfreetype-dev zlib1g-dev ninja-build
+        sudo apt-get install -y libfreetype-dev zlib1g-dev ninja-build zip
       
     - name: Install Qt
       uses: jurplel/install-qt-action@v4
       with:
         version: '6.7.*'
+        host: ${{ matrix.qt_host }}
+        arch: ${{ matrix.qt_arch }}
         # No qtmultimedia: its deployment put Qt's FFmpeg plug-in and the FFmpeg libraries into the package, and
         # tsMuxeR ships no FFmpeg. The window plays its end-of-mux sound through the system.
       
@@ -42,7 +58,7 @@ jobs:
     - name: Package
       run: |
         ver="${GITHUB_REF_NAME#v}"
-        asset="tsMuxeR-${ver}-linux-x64.zip"
+        asset="tsMuxeR-${ver}-linux-${{ matrix.arch }}.zip"
         echo "ASSET=${asset}" >> "$GITHUB_ENV"
         mkdir -p bin
         # -iname and not -name. The CMake targets are "tsmuxer" and "tsMuxerGUI", find is case
@@ -89,7 +105,7 @@ jobs:
 
     - uses: actions/upload-artifact@v6
       with:
-         name: tsMuxer-linux
+         name: tsMuxer-linux-${{ matrix.arch }}
          path: bin/${{ env.ASSET }}
          retention-days: 30
       name: upload-artefact

@@ -1,0 +1,26 @@
+# Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
+# Apache License 2.0, see LICENSE and NOTICE.
+# What the image build does not need: the history, the workflows, build folders, media and local files.
+.git
+.github
+.vs
+.vscode
+.claude
+bin
+build
+build-*
+bld
+climsvc
+msvcbuild
+guibuild*
+clibuild*
+**/CMakeFiles
+**/CMakeCache.txt
+**/cmake_install.cmake
+build.ninja
+*.log
+*.iso
+*.m2ts
+*.mkv
+*.ts
+tsMuxerGUI/translations/*.qm

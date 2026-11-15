@@ -1,0 +1,117 @@
+# Copyright 2026 teaching-droid (https://github.com/teaching-droid/tsMuxer).
+# Apache License 2.0, see LICENSE and NOTICE.
+name: Build the Docker image
+
+# The command line program in a container image for x86-64 and arm64 (packaging/docker, docs/DOCKER.md), published
+# to the GitHub container registry when a version tag is pushed: ghcr.io/<owner>/tsmuxer:<version> and :latest.
+
+on:
+  # A build by hand from the Actions tab builds and tests both platforms, and publishes nothing, from a tag too.
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+  # A change of what goes into the image, in a pull request, builds and tests it without publishing anything.
+  pull_request:
+    branches: [master]
+    paths:
+    - '.github/workflows/docker.yml'
+    - '.dockerignore'
+    - 'packaging/docker/**'
+    - 'packaging/notices/Docker.txt'
+    - 'licenses/**'
+    - 'CMakeLists.txt'
+    - 'tsMuxer/CMakeLists.txt'
+    - 'libmediation/CMakeLists.txt'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v5
+      with:
+        persist-credentials: false
+    - uses: docker/setup-qemu-action@v3
+    - uses: docker/setup-buildx-action@v3
+    - name: Names
+      id: names
+      env:
+        OWNER: ${{ github.repository_owner }}
+        EVENT: ${{ github.event_name }}
+      run: |
+        owner=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+        echo "image=ghcr.io/$owner/tsmuxer" >> "$GITHUB_OUTPUT"
+        echo "rev=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+        # only a pushed version tag publishes; a build by hand started from a tag does not
+        if [[ "$EVENT" == push && "$GITHUB_REF" == refs/tags/v* ]]; then
+          echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "publish=false" >> "$GITHUB_OUTPUT"
+        fi
+    - name: Build and test the image of each platform
+      env:
+        REV: ${{ steps.names.outputs.rev }}
+      run: |
+        set -eu
+        mkdir -p job
+        # two seconds of silence as a WAV file, the source of a real job
+        python3 - <<'EOF'
+        import struct
+        rate, ch, n = 48000, 2, 96000
+        data = bytes(n * ch * 2)
+        hdr = b'RIFF' + struct.pack('<I', 36 + len(data)) + b'WAVEfmt ' + struct.pack('<IHHIIHH', 16, 1, ch, rate, rate * ch * 2, ch * 2, 16) + b'data' + struct.pack('<I', len(data))
+        open('job/tone.wav', 'wb').write(hdr + data)
+        EOF
+        printf 'MUXOPT --no-pcr-on-video-pid\nA_LPCM, "tone.wav"\n' > job/tone.meta
+        for plat in linux/amd64 linux/arm64; do
+          echo "::group::$plat"
+          tag="tsmuxer:test-${plat#linux/}"
+          docker buildx build --platform $plat --load --build-arg TSMUXER_GIT_REV=$REV -f packaging/docker/Dockerfile -t $tag .
+          run() { docker run --rm --platform $plat -v "$PWD/job:/storage" "$@"; }
+          rm -f job/*.ts; chmod 777 job
+          # the program starts and names its version
+          docker run --rm --platform $plat $tag > job/version.txt 2>&1 || true
+          grep "tsMuxeR version" job/version.txt
+          # a real job, written as user 1000, then as the user given
+          run $tag tone.meta out.ts
+          test "$(stat -c %u:%g job/out.ts)" = "1000:1000"
+          run -e USER_ID=1234 -e GROUP_ID=2345 $tag tone.meta ids.ts
+          test "$(stat -c %u:%g job/ids.ts)" = "1234:2345"
+          # a user number that is not a number is refused with code 1
+          rc=0; run -e USER_ID= $tag tone.meta bad.ts 2> job/bad.txt || rc=$?
+          test $rc = 1 && grep -q "are numbers" job/bad.txt
+          # no ffmpeg in the image; the license, the notices and the packages' own copyright files are
+          docker run --rm --platform $plat --entrypoint sh $tag -c 'test -z "$(command -v ffmpeg)" && ls /usr/share/doc/tsmuxer/LICENSE /usr/share/doc/tsmuxer/NOTICE /usr/share/doc/tsmuxer/THIRD-PARTY-NOTICES.txt /usr/share/doc/tsmuxer/PACKAGES.txt /usr/share/doc/libass9/copyright /usr/share/doc/libfreetype6/copyright /usr/share/doc/tini/copyright'
+          echo "::endgroup::"
+        done
+    - name: Log in to the container registry
+      if: steps.names.outputs.publish == 'true'
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Publish both platforms
+      if: steps.names.outputs.publish == 'true'
+      env:
+        IMAGE: ${{ steps.names.outputs.image }}
+        VERSION: ${{ steps.names.outputs.version }}
+        REV: ${{ steps.names.outputs.rev }}
+      run: |
+        # the platforms were built in the step above; this build takes them from the cache of the builder
+        docker buildx build --platform linux/amd64,linux/arm64 --build-arg TSMUXER_GIT_REV=$REV \
+          -f packaging/docker/Dockerfile -t "$IMAGE:$VERSION" -t "$IMAGE:latest" --push .
+    - name: Check that the image can be fetched without logging in
+      if: steps.names.outputs.publish == 'true'
+      env:
+        IMAGE: ${{ steps.names.outputs.image }}
+        VERSION: ${{ steps.names.outputs.version }}
+      run: |
+        docker logout ghcr.io
+        # A new package of a personal account is private at first: its visibility is set to Public once, in the
+        # settings of the package on GitHub. Until then a "docker run" by anyone else is refused.
+        docker pull "$IMAGE:$VERSION" || echo "::warning::$IMAGE:$VERSION cannot be fetched without logging in. Set the package to Public in its settings on GitHub."

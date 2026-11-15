@@ -13,8 +13,12 @@ newest run of each build.
 | Windows, 32-bit | `tsMuxeR-<version>-windows-x86.zip` |
 | Windows, 64-bit, two stand-alone programs | `tsMuxeR-<version>-windows-x64-standalone.zip` |
 | Windows, 32-bit, two stand-alone programs | `tsMuxeR-<version>-windows-x86-standalone.zip` |
+| Windows 11 on ARM64 | `tsMuxeR-<version>-windows-arm64.zip` |
 | Linux, any current distribution | `tsMuxeR-<version>-x86_64.AppImage` |
+| Linux on ARM64, any current distribution | `tsMuxeR-<version>-aarch64.AppImage` |
 | Linux, with Qt 6.7 or newer installed | `tsMuxeR-<version>-linux-x64.zip` |
+| Linux on ARM64, with Qt 6.7 or newer installed | `tsMuxeR-<version>-linux-arm64.zip` |
+| Linux, x86-64 or arm64, the command line in Docker | `ghcr.io/teaching-droid/tsmuxer:<version>` (see [DOCKER.md](DOCKER.md)) |
 | macOS, Apple silicon | `tsMuxeR-<version>-macos-arm64.zip` |
 | macOS, Intel | `tsMuxeR-<version>-macos-x86_64.zip` |
 
@@ -25,6 +29,9 @@ are no dependencies. The Windows binaries are built with Qt 6.8 and the
 [qt6windows7](https://github.com/crystalidea/qt6windows7) patches, so the standard builds run on
 Windows 7 and newer. libass, which draws ASS and SSA subtitles with their styles, is in the package
 too.
+
+The package for Windows on ARM64 runs on Windows 11 on ARM64 computers, without emulation. It
+holds the window and the command line program, with Qt 6.8 and libass built for ARM64.
 
 The stand-alone package holds `tsMuxeR.exe` and `tsMuxerGUI.exe` alone, each a single file that needs
 no library beside it, for a place where one file is wanted. libass is a set of files of its own and
@@ -59,8 +66,8 @@ project.
 ### AppImage
 
 The AppImage holds the window and the command line program in one file, with the Qt libraries the
-window needs. It runs on most current distributions (glibc 2.35 or newer). Make it executable and
-start it:
+window needs. It runs on most current distributions (glibc 2.35 or newer). There is one for x86-64
+(`x86_64`) and one for 64-bit ARM (`aarch64`). Make it executable and start it:
 ```
 chmod +x tsMuxeR-<version>-x86_64.AppImage
 ./tsMuxeR-<version>-x86_64.AppImage
