@@ -180,8 +180,12 @@ static bool tsHevcStartsAtRandomAccess(const BufferedReaderManager& readManager,
 }
 
 // Where a stream of a transport stream file starts against the first picture of its video that is shown, in 90 kHz
-// ticks (TSDemuxer::getTrackStart); 0 for a file without video, or where the stream or the video is not found as far
-// as the listing looks for a track that starts late. Only the PES headers are read: no stream is handed on.
+// ticks (TSDemuxer::getTrackStart); 0 where the stream or the video is not found as far as the listing looks for a
+// track that starts late. Only the PES headers are read: no stream is handed on.
+// ** THE TRACKS OF A FILE WITHOUT VIDEO KEEP THEIR PLACES. ** A file of sound alone was muxed with every track from 0:
+// two tracks 200 ms apart in the file, listed so, came out at the same time where the meta file gave no timeshift=
+// (one written by hand). Such a track starts now where the listing says, against the first time of the file
+// (TSDemuxer::getTrackStartInFile).
 //
 // The video readers time the pictures from the first one shown. H.264 and MPEG-2 show first the pictures that follow
 // the first picture in decode order and are shown before it (an open GOP at the start of a cut), so that is the
@@ -189,7 +193,7 @@ static bool tsHevcStartsAtRandomAccess(const BufferedReaderManager& readManager,
 // it before the start, as a decoder leaves them out (they refer to pictures before the cut): that is the PTS of the
 // first video PES.
 static int64_t tsTrackStart(const BufferedReaderManager& readManager, const std::string& fileName, const int pid,
-                            bool* known = nullptr)
+                            bool* known = nullptr, bool* noVideo = nullptr)
 {
     if (known)
         *known = false;
@@ -201,12 +205,36 @@ static int64_t tsTrackStart(const BufferedReaderManager& readManager, const std:
     probe.openFile(fileName);
     std::map<int32_t, TrackInfo> tracks;
     probe.getTrackList(tracks);
-    if (tracks.find(pid) == tracks.end() || !probe.hasVideoStream() || probe.getFileBlockSize() == 0)
+    if (tracks.find(pid) == tracks.end() || probe.getFileBlockSize() == 0)
         return 0;
     DemuxedData demuxedData;
     const PIDSet none;
     int64_t discardedSize = 0;
     int64_t ticks = 0;
+    if (!probe.hasVideoStream())
+    {
+        // as far as the listing reads; the first time of the file is that of its first PES, known at once
+        static constexpr int64_t NO_VIDEO_LIMIT = 64LL * 1024 * 1024;
+        bool found = false;
+        for (int64_t read = 0; read < NO_VIDEO_LIMIT; read += probe.getFileBlockSize())
+        {
+            if (probe.trackStartSettled(pid) && probe.getTrackStartInFile(pid, ticks))
+            {
+                found = true;
+                break;
+            }
+            if (probe.simpleDemuxBlock(demuxedData, none, discardedSize) == BufferedReader::DATA_EOF)
+            {
+                found = probe.getTrackStartInFile(pid, ticks);
+                break;
+            }
+        }
+        if (known)
+            *known = found;
+        if (noVideo)
+            *noVideo = true;
+        return found ? ticks : 0;
+    }
     for (int64_t read = 0; read < LATE_LIMIT; read += probe.getFileBlockSize())
     {
         if (probe.videoPesRead() >= LEADING_PES && probe.trackStartSettled(pid) &&
@@ -4004,6 +4032,7 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
     }
     int64_t tsStart = 0;  // 90 kHz ticks
     bool tsStartKnown = false;
+    bool tsStartOfFile = false;  // measured against the first track of a file without video
     if (!timeShiftGiven && pid > 0 && !codec.empty() && codec[0] == 'A' && !fileList.empty() &&
         streamInfo.m_addParams.find("srcstartdelay") == streamInfo.m_addParams.end() &&
         !(anyPart && !clipParts.empty() && clipParts[0].startCut))
@@ -4012,7 +4041,8 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         const std::string ext = strToUpperCase(extractFileExt(first));
         if (ext == "TS" || ext == "M2TS" || ext == "MTS" || ext == "M2T" || ext == "SSIF")
             tsStart =
-                tsTrackStart(m_readManager, first, SubTrackFilter::isSubTrack(pid) ? pid >> 16 : pid, &tsStartKnown);
+                tsTrackStart(m_readManager, first, SubTrackFilter::isSubTrack(pid) ? pid >> 16 : pid, &tsStartKnown,
+                             &tsStartOfFile);
         else if ((ext == "VOB" || ext == "MPG" || ext == "MPEG" || ext == "M2P" || ext == "EVO" || ext == "VRO" ||
                   ext == "PS" || ext == "MOD") &&
                  !SubTrackFilter::isSubTrack(pid))
@@ -4038,7 +4068,9 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
                        "Track " << pid << " of " << unquoteStr(fileList[0]) << " starts "
                                 << doubleToStr(static_cast<double>(ns > 0 ? ns : -ns) / 1e6, 3) << " ms "
                                 << (ns > 0 ? "after" : "before")
-                                << " the first video track of the file, so its times are moved by that much.");
+                                << (tsStartOfFile ? " the first track of the file (it has no video)"
+                                                  : " the first video track of the file")
+                                << ", so its times are moved by that much.");
             }
         }
     if (mp4EditStart)

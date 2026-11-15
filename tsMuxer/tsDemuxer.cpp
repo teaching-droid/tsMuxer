@@ -902,6 +902,20 @@ bool TSDemuxer::getTrackStart(const int32_t pid, const bool fromFirstPes, int64_
     return true;
 }
 
+bool TSDemuxer::getTrackStartInFile(const int32_t pid, int64_t& ticks) const
+{
+    const auto first = m_firstPtsTime.find(pid);
+    if (first == m_firstPtsTime.end() || m_firstSeenPTS == -1 || !m_leadHeld.empty())
+        return false;
+    static constexpr int64_t CLOCK_WRAP = 1LL << 33;
+    ticks = (first->second + startFix(pid) - m_firstSeenPTS) % CLOCK_WRAP;
+    if (ticks >= CLOCK_WRAP / 2)
+        ticks -= CLOCK_WRAP;
+    else if (ticks < -CLOCK_WRAP / 2)
+        ticks += CLOCK_WRAP;
+    return true;
+}
+
 void TSDemuxer::completeProgramMap()
 {
     if (m_curFileNum >= m_joinFiles.size())
@@ -2169,11 +2183,28 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
                         if (const auto before = m_partCutBeforeHold.find(pid); before != m_partCutBeforeHold.end())
                         {
                             const int64_t step = m_partCut[pid].step;  // learnt from the PES left out
+                            const int64_t heldFirst = m_partCut[pid].firstKeptPts;  // the first PES left out
                             m_partCut[pid] = before->second;
                             m_partCut[pid].step = step;
                             if (!keptInPart(*part, pid, streamInfo->second.m_streamType, pesPacket,
                                             TS_FRAME_SIZE - (frameData - pkt)))
                                 return;  // with the PES left out it falls before the part
+                            // ** THE SOUND OF THE PART STARTS AT ITS OWN TIME. ** The first frame kept was put where
+                            // the first PES left out would have been: the sound of the part came early by the PES
+                            // left out (48 ms for two of MP2). A gap of their time comes before it now, as the sound
+                            // of a whole file starts at its own time (tsTrackStart). Only the first part holds PES
+                            // (skipsLeadingPes), and its sound starts with the part.
+                            const int64_t gap = pesPacket->getPts() - heldFirst;
+                            if (m_curFileNum == 0 && part->startCut && heldFirst >= 0 && gap > 0 && gap < 90000)
+                            {
+                                m_joinGaps[pid].emplace_back(0, gap * 100000 / 9);
+                                m_partCut[pid].outPos += gap;  // where the part's sound ends, for the next part
+                                LTRACE(LT_INFO, 2,
+                                       "The sound of track " << pid << " begins " << (gap + 45) / 90
+                                                             << " ms into the part the playlist plays, after PES "
+                                                                "that do not begin with a frame: it starts after "
+                                                                "a gap, at its own time.");
+                            }
                         }
                 }
                 if (lead != LeadPes::Hold)

@@ -70,6 +70,10 @@ class TSDemuxer final : public AbstractDemuxer
     // less the smallest PTS of the video read so far, or with fromFirstPes the PTS of the first video PES, across a
     // wrap of the 33 bit clock. False while no PES of the stream or of the video has been read.
     [[nodiscard]] bool getTrackStart(int32_t pid, bool fromFirstPes, int64_t& ticks) const;
+    // Of a file without video: where a stream starts against the first time of the file (the first PES in file order,
+    // m_firstSeenPTS), as the listing gives it (getTrackDelay), in 90 kHz ticks across a wrap of the clock. False
+    // while no PES of the stream has been read, or the first PES of a track are still held back (skipsLeadingPes).
+    [[nodiscard]] bool getTrackStartInFile(int32_t pid, int64_t& ticks) const;
     // The program map lists a video stream
     [[nodiscard]] bool hasVideoStream() const;
     // The video PES read, of all video streams and files, and the stream of the first one (-1: none yet)
