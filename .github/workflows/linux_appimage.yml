@@ -4,15 +4,14 @@ name: Build AppImage for Linux
 
 # One file that runs on most current Linux distributions (glibc 2.35 or newer), with the window and the command line
 # program inside, and the update information an update tool such as AppImageUpdate or Gear Lever needs. It comes on
-# top of the Linux zip, which is built as before by linux.yml. One AppImage for x86-64 (x86_64) and one for ARM64
-# (aarch64), each built and tested on a runner of its own kind.
+# top of the Linux zip, which is built as before by linux.yml.
 
 on:
   # A build by hand from the Actions tab gives the files as artifacts only, under a dev version name.
   workflow_dispatch:
   push:
     tags: ["v*"]
-  # A change of this file in a pull request builds and tests the AppImages, without publishing anything.
+  # A change of this file in a pull request builds and tests the AppImage, without publishing anything.
   pull_request:
     branches: [master]
     paths:
@@ -22,9 +21,6 @@ permissions:
   contents: write
 
 env:
-  # The ARM64 packages are built and tested, but not yet published with a release: set this to "true" to publish
-  # them.
-  PUBLISH_ARM64: "false"
   # The tools come from fixed releases, and each download is checked against the sha256 written for its platform in
   # the matrix below, so a moved tag or a changed file stops the build instead of going into the AppImage.
   LINUXDEPLOY_URL: https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1
@@ -40,8 +36,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        # The oldest glibc the AppImage needs is the one it is built on: 2.35 here, on both. Qt's own build for
-        # ARM64 needs glibc 2.30.
+        # The oldest glibc the AppImage needs is the one it is built on: 2.35 here.
         - arch: x86_64
           runner: ubuntu-22.04
           qt_host: linux
@@ -50,14 +45,6 @@ jobs:
           linuxdeploy_qt_sha256: 15106be885c1c48a021198e7e1e9a48ce9d02a86dd0a1848f00bdbf3c1c92724
           appimagetool_sha256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
           runtime_sha256: 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
-        - arch: aarch64
-          runner: ubuntu-22.04-arm
-          qt_host: linux_arm64
-          qt_arch: linux_gcc_arm64
-          linuxdeploy_sha256: 620095110d693282b8ebeb244a95b5e911cf8f65f76c88b4b47d16ae6346fcff
-          linuxdeploy_qt_sha256: bf1c24aff6d749b5cf423afad6f15abd4440f81dec1aab95706b25f6667cdcf1
-          appimagetool_sha256: f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158
-          runtime_sha256: 00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444
 
     runs-on: ${{ matrix.runner }}
 
@@ -293,17 +280,13 @@ jobs:
   test-appimage:
 
     needs: build-appimage
-    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86_64, aarch64]
+        arch: [x86_64]
         image: ["debian:12", "fedora:latest", "archlinux:latest", "ubuntu:22.04"]
-        exclude:
-        # Arch Linux has no image for ARM64
-        - arch: aarch64
-          image: "archlinux:latest"
 
     container: ${{ matrix.image }}
 
@@ -386,7 +369,7 @@ jobs:
     steps:
     - uses: actions/download-artifact@v6
       with:
-        pattern: ${{ env.PUBLISH_ARM64 == 'true' && 'tsMuxeR-linux-appimage-*' || 'tsMuxeR-linux-appimage-x86_64' }}
+        pattern: tsMuxeR-linux-appimage-*
         merge-multiple: true
         path: out
 

@@ -13,15 +13,9 @@ on:
 permissions:
   contents: write
 
-# The ARM64 packages are built and tested, but not yet published with a release: set this to "true" to publish
-# them.
-env:
-  PUBLISH_ARM64: "false"
-
 jobs:
   build:
 
-    # One zip for x86-64 and one for ARM64, each built on a runner of its own kind.
     strategy:
       fail-fast: false
       matrix:
@@ -30,10 +24,6 @@ jobs:
           runner: ubuntu-22.04
           qt_host: linux
           qt_arch: linux_gcc_64
-        - arch: arm64
-          runner: ubuntu-22.04-arm
-          qt_host: linux_arm64
-          qt_arch: linux_gcc_arm64
 
     # Not ubuntu-latest: a program needs the glibc of the system it is built on or newer, and ubuntu-latest
     # moved to Ubuntu 26 (glibc 2.43), so the Linux programs no longer started on Ubuntu 24.04 or Debian 12.
@@ -116,7 +106,7 @@ jobs:
       name: upload-artefact
 
     - name: Upload to Release
-      if: startsWith(github.ref, 'refs/tags/') && (matrix.arch != 'arm64' || env.PUBLISH_ARM64 == 'true')
+      if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v3
       with:
         files: |

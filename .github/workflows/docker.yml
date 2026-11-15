@@ -5,12 +5,8 @@ name: Build the Docker image
 # The command line program in a container image for x86-64 (packaging/docker, docs/DOCKER.md), published
 # to the GitHub container registry when a version tag is pushed: ghcr.io/<owner>/tsmuxer:<version> and :latest.
 
-# arm64 is built and tested too, but not yet published: set PUBLISH_ARM64 to "true" to publish it.
-env:
-  PUBLISH_ARM64: "false"
-
 on:
-  # A build by hand from the Actions tab builds and tests both platforms, and publishes nothing, from a tag too.
+  # A build by hand from the Actions tab builds and tests the image, and publishes nothing, from a tag too.
   workflow_dispatch:
   push:
     tags: ["v*"]
@@ -56,7 +52,7 @@ jobs:
         else
           echo "publish=false" >> "$GITHUB_OUTPUT"
         fi
-    - name: Build and test the image of each platform
+    - name: Build and test the image
       env:
         REV: ${{ steps.names.outputs.rev }}
       run: |
@@ -71,7 +67,7 @@ jobs:
         open('job/tone.wav', 'wb').write(hdr + data)
         EOF
         printf 'MUXOPT --no-pcr-on-video-pid\nA_LPCM, "tone.wav"\n' > job/tone.meta
-        for plat in linux/amd64 linux/arm64; do
+        for plat in linux/amd64; do
           echo "::group::$plat"
           tag="tsmuxer:test-${plat#linux/}"
           docker buildx build --platform $plat --load --build-arg TSMUXER_GIT_REV=$REV -f packaging/docker/Dockerfile -t $tag .
@@ -106,8 +102,8 @@ jobs:
         VERSION: ${{ steps.names.outputs.version }}
         REV: ${{ steps.names.outputs.rev }}
       run: |
-        # the platforms were built in the step above; this build takes them from the cache of the builder
-        docker buildx build --platform ${{ env.PUBLISH_ARM64 == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }} --build-arg TSMUXER_GIT_REV=$REV \
+        # the image was built in the step above; this build takes it from the cache of the builder
+        docker buildx build --platform linux/amd64 --build-arg TSMUXER_GIT_REV=$REV \
           -f packaging/docker/Dockerfile -t "$IMAGE:$VERSION" -t "$IMAGE:latest" --push .
     - name: Check that the image can be fetched without logging in
       if: steps.names.outputs.publish == 'true'
