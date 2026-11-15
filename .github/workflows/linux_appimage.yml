@@ -206,7 +206,7 @@ jobs:
         cp LICENSE "$doc/LICENSE"
         cp NOTICE "$doc/NOTICE"
         cp packaging/notices/AppImage.txt "$doc/THIRD-PARTY-NOTICES.txt"
-        cp licenses/LGPL-3.0.txt licenses/GPL-3.0.txt licenses/LGPL-2.1.txt "$doc/licenses/"
+        cp licenses/LGPL-3.0.txt licenses/GPL-3.0.txt licenses/LGPL-2.1.txt licenses/Qt-6.7-third-party.txt "$doc/licenses/"
         : > packages.txt
         missing=0
         for lib in $(find AppDir/usr/lib -type f -name '*.so*' | sort); do
