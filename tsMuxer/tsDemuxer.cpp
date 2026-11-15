@@ -910,19 +910,33 @@ int64_t TSDemuxer::fileStartReference(const int32_t pid) const
     static constexpr int64_t CLOCK_WRAP = 1LL << 33;
     const auto stream = m_pmt.pidList.find(pid);
     const int program = stream != m_pmt.pidList.end() ? stream->second.m_programNumber : -1;
+    // sound as the runs of the first PES take it (a type of sound, or 0x06 with a descriptor of its codec), Opus, and
+    // a private stream of a file of PES alone (AC-3, DTS) that is no caption track
+    const auto isSound = [&](const PMTStreamInfo& info)
+    {
+        return isAudioStreamType(info.m_streamType) || info.m_soundDescriptor != 0 || info.m_opusRegistration ||
+               (m_tracksFromPes && info.m_streamType == StreamType::PRIVATE_DATA && info.m_dataComponentId < 0);
+    };
+    const auto apart = [&](const int64_t a, const int64_t b)  // a - b across a wrap
+    {
+        int64_t d = (a - b) % CLOCK_WRAP;
+        if (d >= CLOCK_WRAP / 2)
+            d -= CLOCK_WRAP;
+        else if (d < -CLOCK_WRAP / 2)
+            d += CLOCK_WRAP;
+        return d;
+    };
     int64_t earliest = own->second;
     for (const auto& [otherPid, info] : m_pmt.pidList)
     {
         const auto other = m_firstPtsTime.find(otherPid);
-        if (other == m_firstPtsTime.end() || !isAudioStreamType(info.m_streamType) ||
-            (program >= 0 && info.m_programNumber != program))
+        if (other == m_firstPtsTime.end() || !isSound(info) || (program >= 0 && info.m_programNumber != program))
             continue;
-        int64_t before = (earliest - other->second) % CLOCK_WRAP;
-        if (before >= CLOCK_WRAP / 2)
-            before -= CLOCK_WRAP;
-        else if (before < -CLOCK_WRAP / 2)
-            before += CLOCK_WRAP;
-        if (before > 0)
+        // a track whose first time is more than 10 s before this one's is no start of this sound (a lone leftover
+        // PES, a run of one): the tracks keep their places against each other, in the listing and the mux alike
+        if (apart(own->second, other->second) > 10 * 90000)
+            continue;
+        if (apart(earliest, other->second) > 0)
             earliest = other->second;
     }
     return earliest;

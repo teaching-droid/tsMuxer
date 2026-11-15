@@ -720,6 +720,26 @@ bool SingleFileMuxer::close()
                 }
             }
 
+            // ** A DEMUXED SOUND FILE SAYS THE GAP IT STARTS AFTER. ** The sound of a part a playlist cuts starts after a
+            // gap where its first PES are left out (TSDemuxer::demuxOnePacket), which a mux puts in its times; a raw
+            // file has none, and the demuxed files muxed again put that sound early by the gap. Known only once the
+            // track is read, so it is added to the name here, to the delay the name says already.
+            if (const auto* sound = dynamic_cast<const SimplePacketizerReader*>(streamInfo->m_codecReader);
+                sound && sound->startGapNs() > 0 && streamInfo->m_part <= 1)
+            {
+                const std::string& old = streamInfo->m_fileName;
+                const size_t dot = old.find_last_of('.');
+                const size_t slash = old.find_last_of("/\\");
+                const bool hasExt = dot != std::string::npos && (slash == std::string::npos || dot > slash);
+                const std::string base = hasExt ? old.substr(0, dot) : old;
+                const std::string ext = hasExt ? old.substr(dot) : std::string();
+                const int64_t ms = delayFromFileName(old) + (sound->startGapNs() + 500000) / 1000000;
+                const std::string newName = stripDelayToken(base) + " DELAY " + int64ToStr(ms) + "ms" + ext;
+                deleteFile(newName);
+                if (!(dryRun::enabled() && dryRun::rename(old, newName)) && rename(old.c_str(), newName.c_str()) != 0)
+                    THROW(ERR_OUTPUT, "Can't rename file " << old << " to " << newName)
+                streamInfo->m_fileName = newName;
+            }
             if (streamInfo->m_part > 1)
             {
                 std::string newName = getNewName(streamInfo->m_fileName, streamInfo->m_part);

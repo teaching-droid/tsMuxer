@@ -566,9 +566,19 @@ std::string run(const std::string& ffmpeg, const Source& source, const Spec& spe
         // only where the rest is small: the first picture of a multiplex can be of another program, whose clock
         // has nothing to do with this one
         if (source.wrapsAt33Bits && videoStart(ffmpeg, source.file, true, video))
+        {
             if (const double turns = std::round((video - start) / WRAP);
                 turns != 0 && std::abs(video - start - turns * WRAP) < 60)
                 start += turns * WRAP;
+        }
+        // a file without video (its reference is the earliest sound of the program): the turns are taken against
+        // ffmpeg's first time of the track, which counts on past a turn of the clock
+        else if (double sound = 0; source.wrapsAt33Bits && firstSoundTime(ffmpeg, source, sound, false))
+        {
+            if (const double turns = std::round((sound - start) / WRAP);
+                turns != 0 && std::abs(sound - start - turns * WRAP) < 60)
+                start += turns * WRAP;
+        }
     }
     else
         aligned = videoStart(ffmpeg, source.file, source.firstPacket, start);

@@ -1179,6 +1179,8 @@ void SimplePacketizerReader::applyTimeGaps()
                                       static_cast<double>(m_timeGaps.front().first))
     {
         m_curPts += static_cast<double>(m_timeGaps.front().second) * INTERNAL_PTS_FREQ / 1e9;
+        if (m_timeGaps.front().first == 0)  // only a cut part's sound starts after a gap; joins and pauses are later
+            m_startGapNs += m_timeGaps.front().second;
         m_timeGaps.erase(m_timeGaps.begin());
     }
 }

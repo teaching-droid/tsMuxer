@@ -196,7 +196,7 @@ static bool tsHevcStartsAtRandomAccess(const BufferedReaderManager& readManager,
 // reads it: its first 64 MB (or all of it), so that the first times of every track are settled, and further, up to
 // 1 GB, for a track that starts later. A start more than 10 s from the earliest sound of its program is not applied
 // (said): the first PES of such a track is taken for one left over or damaged, as 0 was used before.
-static constexpr int64_t NO_VIDEO_LIMIT = 64LL * 1024 * 1024;
+static constexpr int64_t TS_NO_VIDEO_LIMIT = 64LL * 1024 * 1024;
 static bool noVideoTrackStart(TSDemuxer& probe, const int pid, int64_t read, bool eof, int64_t& ticks)
 {
     static constexpr int64_t LATE_LIMIT = 1024LL * 1024 * 1024;
@@ -205,7 +205,7 @@ static bool noVideoTrackStart(TSDemuxer& probe, const int pid, int64_t read, boo
     int64_t discardedSize = 0;
     for (; !eof && read < LATE_LIMIT; read += probe.getFileBlockSize())
     {
-        if (read >= NO_VIDEO_LIMIT && probe.trackStartSettled(pid) && probe.getTrackStartInFile(pid, ticks))
+        if (read >= TS_NO_VIDEO_LIMIT && probe.trackStartSettled(pid) && probe.getTrackStartInFile(pid, ticks))
             break;
         eof = probe.simpleDemuxBlock(demuxedData, none, discardedSize) == BufferedReader::DATA_EOF;
     }
@@ -250,15 +250,14 @@ static int64_t tsTrackStart(const BufferedReaderManager& readManager, const std:
             if (probe.videoPesRead() >= LEADING_PES && probe.trackStartSettled(pid) &&
                 probe.getTrackStart(pid, false, ticks))
                 break;
-            // a video track the program map names that carries nothing (scrambled, or a placeholder): no video
-            if (read >= NO_VIDEO_LIMIT && probe.videoPesRead() == 0)
-                break;
             if (probe.simpleDemuxBlock(demuxedData, none, discardedSize) == BufferedReader::DATA_EOF)
             {
                 eof = true;
                 break;
             }
         }
+    // a video track the program map names that carries nothing up to the end, or the listing's limit (scrambled, a
+    // placeholder): read as a file without video, as the listing measures it
     if (!probe.hasVideoStream() || probe.videoPesRead() == 0)
     {
         const bool found = noVideoTrackStart(probe, pid, read, eof, ticks);
@@ -348,8 +347,6 @@ static int64_t tsVideoReference(const BufferedReaderManager& readManager, const 
         {
             if (probe.videoPesRead() >= LEADING_PES && probe.trackStartSettled(pid) &&
                 probe.getTrackStart(pid, false, ticks))
-                break;
-            if (read >= NO_VIDEO_LIMIT && probe.videoPesRead() == 0)
                 break;
             if (probe.simpleDemuxBlock(demuxedData, none, discardedSize) == BufferedReader::DATA_EOF)
             {
@@ -2326,8 +2323,10 @@ bool METADemuxer::convertLine(const string& codec, const string& lineStreamName,
     }
     // ** THE DELAY OF THE TRACK IS GIVEN ONCE. ** A converted file aligned to the picture has the start of the track
     // in it already (the sound is padded or trimmed from the picture): a timeshift= stands for the listed delay, as
-    // the window writes it, so the track is moved by the difference. A track of a file with no video keeps its own
-    // start: the timeshift= is applied as given, and the delay in the name of a raw file, which the made file has not.
+    // the window writes it, so the track is moved by the difference; so is one of a transport stream without video,
+    // aligned to the earliest sound of its program (tsVideoReference). A track of any other file with no video keeps
+    // its own start: the timeshift= is applied as given, and the delay in the name of a raw file, which the made file
+    // has not.
     int64_t givenTicks = 0;
     bool shiftGiven = false;
     if (const auto ts = params.find("timeshift"); ts != params.end())
