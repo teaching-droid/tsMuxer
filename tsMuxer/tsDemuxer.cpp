@@ -2392,8 +2392,7 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
                     opus.first.pending.shrink_to_fit();
                 }
             }
-            if (m_firstPtsTime.find(pid) == m_firstPtsTime.end())
-                m_firstPtsTime[pid] = curPts;
+            // (fileStartReference) noted before the first time and its runs below, which are one if/else chain
             if (m_pesWithTime[pid] < 2)
                 ++m_pesWithTime[pid];
             if (const uint8_t streamId = reinterpret_cast<const uint8_t*>(pesPacket)[3];
@@ -2403,6 +2402,8 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
                      data + 4 <= pkt + TS_FRAME_SIZE && data[0] == 0 && data[1] == 0 && data[2] == 1 &&
                      (data[3] == 0x10 || data[3] == 0x12))
                 m_pesVideoId[pid] = true;
+            if (m_firstPtsTime.find(pid) == m_firstPtsTime.end())
+                m_firstPtsTime[pid] = curPts;
             // ** A FIRST PES ON ANOTHER CLOCK IS NOT THE START. ** A recording can begin with a few PES left in the
             // receiver from before, on a time base hours away from the rest: the sound of such a recording was placed
             // 9.7 hours after its video, where the video reader had left its own leftover picture out, and a cut had
