@@ -206,6 +206,7 @@ TSDemuxer::TSDemuxer(const BufferedReaderManager& readManager, const char* strea
     m_m2tsHdrDiscarded = false;
     m_firstPTS = -1;
     m_firstSeenPTS = -1;
+    m_firstSeenHolder = 0;
     m_lastPTS = -1;
     m_firstVideoPTS = -1;
     m_firstSeenVideoPTS = -1;
@@ -1620,6 +1621,17 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
                 m_leadDrop[pid] = false;
                 giveBackLeadPes(pid, demuxedData, discardSize, part, vect, lastPid);
             }
+            endSubtitleWait(demuxedData, discardSize, part, vect, lastPid);
+            m_lastReadRez = readRez;
+            return 0;
+        }
+        if (!m_subWait.empty())
+        {
+            // the file ended while its subtitles waited for the start of its video: they go on
+            const ClipPart* part = m_curFileNum < m_clipParts.size() && m_clipParts[m_curFileNum].isCut()
+                                       ? &m_clipParts[m_curFileNum]
+                                       : nullptr;
+            endSubtitleWait(demuxedData, discardSize, part, vect, lastPid);
             m_lastReadRez = readRez;
             return 0;
         }
@@ -1723,6 +1735,24 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         handedOn -= discardSize;  // what the give-back counted as discarded, carried into this call's count
         discardSize = 0;
     }
+    if (isFirstBlock && !m_subWait.empty())
+    {
+        // the subtitles of the file before that waited for its video go on with that file, as its held PES do
+        const ClipPart* part = m_curFileNum < m_clipParts.size() && m_clipParts[m_curFileNum].isCut()
+                                   ? &m_clipParts[m_curFileNum]
+                                   : nullptr;
+        MemoryBlock* subVect = nullptr;
+        int subLastPid = -1;
+        discardSize = 0;
+        endSubtitleWait(demuxedData, discardSize, part, subVect, subLastPid);
+        handedOn -= discardSize;
+        discardSize = 0;
+    }
+    if (isFirstBlock)
+    {
+        m_subWaitOn = false;  // each file waits on its own video
+        m_subWaitDone = false;
+    }
     if (isFirstBlock)
     {
         if (isJoinOfFiles())
@@ -1750,6 +1780,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         }
         m_firstPTS = -1;
         m_firstSeenPTS = -1;
+        m_firstSeenHolder = 0;
         m_lastPTS = -1;
         m_ptsWrapOffset = 0;  // each file has its own clock
         m_lastFullPts = -1;
@@ -1894,9 +1925,97 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     return 0;
 }
 
-// One TS packet of a PID from its payload on: the PES header and its times, and the payload into demuxedData
+bool TSDemuxer::isSubtitlePid(const int pid) const
+{
+    const auto info = m_pmt.pidList.find(pid);
+    if (info == m_pmt.pidList.end())
+        return false;
+    return info->second.m_streamType == StreamType::SUB_PGS || info->second.m_streamType == StreamType::SUB_TGS ||
+           isDvbSubtitlePid(pid) || isAribPid(pid);
+}
+
+bool TSDemuxer::countsPictures(const int pid) const
+{
+    const auto info = m_pmt.pidList.find(pid);
+    return info == m_pmt.pidList.end() || info->second.m_streamType != StreamType::VIDEO_H264 || m_h264ParamsSeen[pid];
+}
+
+// A picture of a video PID kept (delta 1) or held back after all (-1): counted, or set aside while the reader would
+// not count it yet (countsPictures)
+void TSDemuxer::countPicture(const int pid, const int delta)
+{
+    int64_t& n = countsPictures(pid) ? m_keptPictures[pid] : m_uncountedPictures[pid];
+    if (delta > 0 || n > 0)
+        n += delta;
+}
+
+// The start of the video of the file is known and settled: no PES held at the start, and enough of its PES read that
+// a picture shown before the first one would have come (canStart: the lowest time is among the first 32)
+bool TSDemuxer::videoStartSettled() const
+{
+    if (m_firstVideoPTS == -1)
+        return false;
+    for (const auto& [pid, held] : m_leadHeld)
+        if (const auto info = m_pmt.pidList.find(pid); info != m_pmt.pidList.end() && isVideoPID(info->second.m_streamType))
+            return false;
+    for (const auto& [pid, pes] : m_videoPesOfPid)
+        if (pes >= 32)
+            return true;
+    return false;
+}
+
+// The subtitle packets that waited for the start of the video (m_subWait), handed on in the order they came
+void TSDemuxer::handOnWaitingSubtitles(DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,
+                                       MemoryBlock*& vect, int& lastPid)
+{
+    if (m_subWait.empty() || m_subHandingOn)
+        return;
+    std::vector<uint8_t> packets = std::move(m_subWait);
+    m_subWait.clear();
+    m_subHandingOn = true;
+    struct Restore
+    {
+        bool& flag;
+        ~Restore() { flag = false; }
+    } const restore{m_subHandingOn};
+    for (size_t i = 0; i + TS_FRAME_SIZE <= packets.size(); i += TS_FRAME_SIZE)
+    {
+        uint8_t* pkt = packets.data() + i;
+        demuxOnePacket(pkt, reinterpret_cast<TSPacket*>(pkt)->getPID(), demuxedData, discardSize, part, vect, lastPid);
+    }
+}
+
+// One TS packet of a PID; a subtitle packet waits while the video of the file is held at its start (m_subWaitOn)
 void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedData, int64_t& discardSize,
                             const ClipPart* part, MemoryBlock*& vect, int& lastPid)
+{
+    if (m_subWaitOn && !m_subHandingOn && m_acceptedPidCache[pid] && isSubtitlePid(pid))
+    {
+        if (m_subWait.size() < SUB_WAIT_MAX)
+        {
+            m_subWait.insert(m_subWait.end(), pkt, pkt + TS_FRAME_SIZE);
+            return;
+        }
+        endSubtitleWait(demuxedData, discardSize, part, vect, lastPid);  // and they no longer wait in this file
+    }
+    demuxOnePacket(pkt, pid, demuxedData, discardSize, part, vect, lastPid);
+    // the start of the video is settled: the subtitles that waited for it go on, once the PES held at the start of the
+    // file are all given back and the pictures shown before the first one have come (their lowest time is the start)
+    if (m_subWaitOn && !m_givingBack && !m_subHandingOn && videoStartSettled())
+        endSubtitleWait(demuxedData, discardSize, part, vect, lastPid);
+}
+
+void TSDemuxer::endSubtitleWait(DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,
+                                MemoryBlock*& vect, int& lastPid)
+{
+    m_subWaitOn = false;
+    m_subWaitDone = true;
+    handOnWaitingSubtitles(demuxedData, discardSize, part, vect, lastPid);
+}
+
+// One TS packet of a PID from its payload on: the PES header and its times, and the payload into demuxedData
+void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxedData, int64_t& discardSize,
+                               const ClipPart* part, MemoryBlock*& vect, int& lastPid)
 {
     const auto tsPacket = reinterpret_cast<TSPacket*>(pkt);
     uint8_t* frameData = pkt + tsPacket->getHeaderSize();
@@ -1966,20 +2085,55 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
         // counted again (the hold took it out of the count)
         const bool givenBackVideo =
             m_givingBack && streamInfo != m_pmt.pidList.end() && isVideoPID(streamInfo->second.m_streamType);
+        const bool paramsBefore = m_h264ParamsSeen[pid];
+        if (streamInfo != m_pmt.pidList.end() && streamInfo->second.m_streamType == StreamType::VIDEO_H264 &&
+            !m_h264ParamsSeen[pid] && (pesPacket->flagsLo & 0x80) == 0x80 &&
+            frameData + pesPacket->getHeaderLength() <= pkt + TS_FRAME_SIZE)
+        {
+            bool complete = true;
+            const std::vector<uint8_t> start =
+                pesStart(pkt, pid, frameData + pesPacket->getHeaderLength(), 16384, &complete);
+            if (h264SpsFirst(start.data(), start.data() + start.size()) == 1)
+                m_h264ParamsSeen[pid] = true;  // taken back below where the part leaves this PES out
+            else if (++m_h264PesWithoutParams[pid] > LEAD_VIDEO_PES_MAX + 1)
+            {
+                // no PES begins with them: every picture is counted, as before, those so far too
+                m_h264ParamsSeen[pid] = true;
+                m_keptPictures[pid] += m_uncountedPictures[pid];
+                m_uncountedPictures[pid] = 0;
+            }
+        }
+        const bool countedHere = countsPictures(pid);  // how keptInPart counts this PES
+        const bool leadSound = part != nullptr && m_leadPes[pid] != LEAD_PES_DONE && streamInfo != m_pmt.pidList.end() &&
+                               !isVideoPID(streamInfo->second.m_streamType) && (pesPacket->flagsLo & 0x80) == 0x80;
+        if (leadSound && m_leadHeld.find(pid) == m_leadHeld.end())
+            m_partCutBeforeHold[pid] = m_partCut[pid];  // before the PES that may be the first held
         if (part != nullptr && givenBackVideo)
         {
             if ((pesPacket->flagsLo & 0x80) == 0x80)
-                m_keptPictures[pid]++;
+                countPicture(pid, 1);
         }
         else if (part != nullptr &&
                  !keptInPart(*part, pid,
                              streamInfo != m_pmt.pidList.end() ? streamInfo->second.m_streamType : StreamType::RESERVED,
                              pesPacket, TS_FRAME_SIZE - (frameData - pkt)))
+        {
+            m_h264ParamsSeen[pid] = paramsBefore;  // the reader does not get the parameter sets of a PES left out
             return;
+        }
         m_leadDrop[pid] = false;
         if (m_leadPes[pid] != LEAD_PES_DONE && m_leadUndecided[pid] && (pesPacket->flagsLo & 0x80) == 0x80 &&
             streamInfo != m_pmt.pidList.end())
+        {
             resolveLeadPes(pid, streamInfo->second.m_streamType, demuxedData, discardSize, part, vect, lastPid);
+            // decided with the parameter sets of the PES held: this PES, which keptInPart did not count, is counted now
+            if (part != nullptr && !givenBackVideo && !countedHere && countsPictures(pid) &&
+                isVideoPID(streamInfo->second.m_streamType) && m_uncountedPictures[pid] > 0)
+            {
+                m_uncountedPictures[pid]--;
+                m_keptPictures[pid]++;
+            }
+        }
         if (m_leadPes[pid] != LEAD_PES_DONE && streamInfo != m_pmt.pidList.end())
         {
             if ((pesPacket->flagsLo & 0x80) == 0x80)
@@ -1990,15 +2144,35 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
                 if (lead == LeadPes::Hold)
                 {
                     if (m_leadHeld[pid].empty())
+                    {
                         m_leadFirstSeen[pid] = m_firstSeenPTS == -1;
+                        m_leadFirstSeenOrder[pid] = ++m_leadHolds;
+                    }
                     m_leadDrop[pid] = true;
-                    if (part != nullptr && isVideoPID(streamInfo->second.m_streamType) && m_keptPictures[pid] > 0)
-                        m_keptPictures[pid]--;
+                    if (part != nullptr && isVideoPID(streamInfo->second.m_streamType))
+                        countPicture(pid, -1);
+                    // a video held at the start of the file: its subtitles wait for its start (m_subWaitOn)
+                    if (isVideoPID(streamInfo->second.m_streamType) && m_firstVideoPTS == -1 && !m_subWaitDone)
+                        m_subWaitOn = true;
                 }
                 else if (lead == LeadPes::GiveBack)
                     giveBackLeadPes(pid, demuxedData, discardSize, part, vect, lastPid);
                 else
-                    m_leadHeld.erase(pid);
+                {
+                    const bool leftOut = m_leadHeld.erase(pid) != 0;
+                    if (leadSound && leftOut)
+                        if (const auto before = m_partCutBeforeHold.find(pid); before != m_partCutBeforeHold.end())
+                        {
+                            const int64_t step = m_partCut[pid].step;  // learnt from the PES left out
+                            m_partCut[pid] = before->second;
+                            m_partCut[pid].step = step;
+                            if (!keptInPart(*part, pid, streamInfo->second.m_streamType, pesPacket,
+                                            TS_FRAME_SIZE - (frameData - pkt)))
+                                return;  // with the PES left out it falls before the part
+                        }
+                }
+                if (lead != LeadPes::Hold)
+                    m_partCutBeforeHold.erase(pid);
             }
             else  // a PES without a time among the held ones stays with them
                 m_leadDrop[pid] = m_leadHeld.find(pid) != m_leadHeld.end();
@@ -2628,6 +2802,8 @@ void TSDemuxer::resolveLeadPes(const int pid, const StreamType type, DemuxedData
         return;
     }
     held->second.erase(held->second.begin(), held->second.begin() + static_cast<std::ptrdiff_t>(from));
+    if (type == StreamType::VIDEO_H264)
+        m_h264ParamsSeen[pid] = true;  // the PES given back first holds them (countsPictures)
     if (from > 0)
         m_leadFirstSeen[pid] = false;  // the first PES of the file was among those left out
     m_leadPes[pid] = LEAD_PES_DONE;
@@ -2642,8 +2818,14 @@ void TSDemuxer::giveBackLeadPes(const int pid, DemuxedData& demuxedData, int64_t
         return;
     std::vector<uint8_t> packets = std::move(held->second);
     m_leadHeld.erase(held);
-    if (m_leadFirstSeen[pid])
+    // ** THE FIRST OF THE FILE, NOT THE LAST GIVEN BACK. ** Two PIDs held from the very first PES of the file both
+    // counted as first, and the one given back last set the first time of the file, by the order of the tracks and
+    // not of the file. The one whose hold began first sets it now.
+    if (m_leadFirstSeen[pid] && (m_firstSeenHolder == 0 || m_leadFirstSeenOrder[pid] < m_firstSeenHolder))
+    {
         m_firstSeenPTS = -1;
+        m_firstSeenHolder = m_leadFirstSeenOrder[pid];
+    }
     // the PES being read (a give-back from within demuxPacket) keeps its decision of the part, which the held PES
     // set again as they came back: its packets after the first, and the PES without a time after it, went by the
     // last held one
@@ -2750,7 +2932,7 @@ bool TSDemuxer::keptInPart(const ClipPart& part, const int pid, const StreamType
             if (!cut.keptAny && m_curFileNum > 0 && !part.continuesPrevious)
                 m_partStartPictures[pid].insert(m_keptPictures[pid]);
             cut.keptAny = true;
-            m_keptPictures[pid]++;
+            countPicture(pid, 1);
         }
     }
     else if (type == StreamType::SUB_PGS)
@@ -3092,6 +3274,13 @@ void TSDemuxer::openFile(const std::string& streamName)
     memset(m_leadPes, 0, sizeof(m_leadPes));
     memset(m_leadDrop, 0, sizeof(m_leadDrop));
     memset(m_leadFirstSeen, 0, sizeof(m_leadFirstSeen));
+    m_subWait.clear();
+    m_subWaitOn = false;
+    m_subWaitDone = false;
+    m_partCutBeforeHold.clear();
+    memset(m_leadFirstSeenOrder, 0, sizeof(m_leadFirstSeenOrder));
+    m_leadHolds = 0;
+    m_firstSeenHolder = 0;
     m_leadHeld.clear();
     memset(m_leadUndecided, 0, sizeof(m_leadUndecided));
     memset(m_lastCounter, 0xFF, sizeof(m_lastCounter));

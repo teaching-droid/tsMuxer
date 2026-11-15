@@ -193,10 +193,24 @@ class TSDemuxer final : public AbstractDemuxer
     };
     std::vector<ClipPart> m_clipParts;
     std::map<int, PartCut> m_partCut;
+    // ** A SOUND PES LEFT OUT AT THE START IS NOT THE FIRST KEPT. ** The state of a sound PID's part from before its
+    // first PES held back at the start (skipsLeadingPes): where those PES are left out, it is put back, and the PES
+    // that begins with a frame is the first one kept. They counted as kept, and the end of the part's sound handed to
+    // the next part came late by them, up to 4 PES.
+    std::map<int, PartCut> m_partCutBeforeHold;
     uint8_t m_partKeep[8192]{};
     int64_t m_partVideoStep = -1;                          // the smallest step of the decoding times of the video kept
     int64_t m_partLastVideoDts = -1;                       // the decoding time of the last picture kept
     std::map<int, int64_t> m_keptPictures;                 // the pictures of each video track kept so far
+    // ** THE PICTURES ARE COUNTED AS THE READER COUNTS THEM. ** The H.264 reader counts no picture before the first
+    // parameter sets of its track, which it cannot read; the parts counted every picture kept, and where the first
+    // were given back without parameter sets (skipsLeadingPes), the start pictures of the parts after it were off by
+    // them. A picture of H.264 is counted once the track's parameter sets have come (countsPictures).
+    bool m_h264ParamsSeen[8192]{};
+    uint16_t m_h264PesWithoutParams[8192]{};          // PES looked at before them; past LEAD_VIDEO_PES_MAX all count
+    std::map<int, int64_t> m_uncountedPictures;        // pictures kept while not counted yet
+    [[nodiscard]] bool countsPictures(int pid) const;
+    void countPicture(int pid, int delta);
     std::map<int, std::set<int64_t>> m_partStartPictures;  // their numbers where a part begins (isPartStartPicture)
     void startPart();
     int64_t clearSubtitlesAtPartEnd(DemuxedData& demuxedData);
@@ -279,6 +293,12 @@ class TSDemuxer final : public AbstractDemuxer
     // The packets of the PES held back, by PID, until the search ends (giveBackLeadPes)
     std::map<int, std::vector<uint8_t>> m_leadHeld;
     uint8_t m_leadFirstSeen[8192]{};  // the first PES held back of the PID came before any other PES of the file
+    // the place in the file of the first PES held back of each PID (1, 2, ...: the order the holds began), and that of
+    // the PID whose given-back PES set m_firstSeenPTS (0: none): of two PIDs held from the first PES of the file, the
+    // one first in the file sets it, whichever is given back first
+    uint32_t m_leadFirstSeenOrder[8192]{};
+    uint32_t m_leadHolds = 0;
+    uint32_t m_firstSeenHolder = 0;
     enum class LeadPes
     {
         Hold,     // left out for now: no frame begins it, and the search goes on
@@ -302,6 +322,26 @@ class TSDemuxer final : public AbstractDemuxer
     const uint8_t* m_blockEnd = nullptr;
     void demuxPacket(uint8_t* pkt, int pid, DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,
                      MemoryBlock*& vect, int& lastPid);
+    void demuxOnePacket(uint8_t* pkt, int pid, DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,
+                        MemoryBlock*& vect, int& lastPid);
+    // ** SUBTITLES WAIT FOR THE START OF THE VIDEO. ** The times of a subtitle are counted from the first picture of
+    // the file. Where the video of the file had not started yet, as while its first PES are held back
+    // (skipsLeadingPes), they were counted from the first time of any track, the sound's, and came early by the
+    // sound's lead. Their packets wait here until the video has its start, or the file ends, in the order they came.
+    // Only while the video of the file is held at its start (skipsLeadingPes) and until its start is settled: a file
+    // whose video starts with its parameter sets, or whose subtitles come before its first video PES, is read as
+    // before.
+    std::vector<uint8_t> m_subWait;
+    bool m_subWaitOn = false;     // the subtitles of this file wait
+    bool m_subWaitDone = false;   // they waited, and wait no more in this file
+    bool m_subHandingOn = false;  // handOnWaitingSubtitles is handing them on (demuxPacket)
+    static constexpr size_t SUB_WAIT_MAX = 8 << 20;  // past that, they go on, counted as before
+    [[nodiscard]] bool isSubtitlePid(int pid) const;
+    [[nodiscard]] bool videoStartSettled() const;
+    void handOnWaitingSubtitles(DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,
+                                MemoryBlock*& vect, int& lastPid);
+    void endSubtitleWait(DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part, MemoryBlock*& vect,
+                         int& lastPid);
     void giveBackLeadPes(int pid, DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,
                          MemoryBlock*& vect, int& lastPid);
     // A packet sent twice (ISO/IEC 13818-1, 2.4.3.3): the continuity counter and a hash of the payload of the last
