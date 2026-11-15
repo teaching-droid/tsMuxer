@@ -167,12 +167,17 @@ bool mapCrcGood(const uint8_t* buffer, const int len)
     return end - section >= 3 + sectionLength && calculateCRC32(section, 3 + sectionLength) == 0;
 }
 
-// The program number of the program map section of a buffer that begins with its pointer field (isFullBuff is true)
-int programOfMap(const uint8_t* buffer)
+// The program number of the program map section of a buffer that begins with its pointer field (isFullBuff is true);
+// -1 where the section is too short to hold one. A damaged map of a few bytes passed the test of a full section, and
+// its program number was read past the end of the buffer (found by fuzzing).
+int programOfMap(const uint8_t* buffer, const size_t len)
 {
+    if (len < 1 || static_cast<size_t>(buffer[0]) + 1 + 5 > len)
+        return -1;
     const uint8_t* section = buffer + 1 + buffer[0];
     return section[3] << 8 | section[4];
 }
+int programOfMap(const std::vector<uint8_t>& buffer) { return programOfMap(buffer.data(), buffer.size()); }
 }  // namespace
 
 bool isM2TSExt(const std::string& streamName)
@@ -408,7 +413,7 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                     {
                         if (shared.taken || !isProgramMap(section))
                             continue;
-                        const int program = programOfMap(section.data());
+                        const int program = programOfMap(section);
                         if (!named.count(program))
                         {
                             if (shared.firstOther.empty())
@@ -451,7 +456,7 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                         m_goodPmtSeen = true;
                         // The map of a program the PAT does not name on this PID: the PID is read as a shared one
                         // from here on, and this map is taken only if none of the program the PAT names comes
-                        if (!named.empty() && !named.count(programOfMap(pmtBuffer.data())))
+                        if (!named.empty() && !named.count(programOfMap(pmtBuffer)))
                         {
                             m_sharedPmtPids.insert(pid);
                             sharedPids[pid].firstOther = pmtBuffer;
@@ -1504,7 +1509,7 @@ void TSDemuxer::readProgramTables(uint8_t* data, const uint8_t* lastFrameAddr, c
                         continue;
                     }
                     m_goodPmtSeen = m_goodPmtSeen || crcGood;
-                    const bool namedProgram = named.empty() || named.count(programOfMap(pmtBuffer.data()));
+                    const bool namedProgram = named.empty() || named.count(programOfMap(pmtBuffer));
                     if (!laterClip && !namedProgram)
                     {
                         // a map of a program the PAT does not name on this PID: read as a shared PID from here on
@@ -1552,7 +1557,7 @@ void TSDemuxer::takeProgramMap(uint8_t* section, const int len, const int pid)
         m_nonMVCVideoFound = true;
     m_pmtVersionPid = pid;
     m_pmtVersion = -2;
-    m_pmtVersionProgram = m_sharedPmtPids.count(pid) ? programOfMap(section) : -1;
+    m_pmtVersionProgram = m_sharedPmtPids.count(pid) ? programOfMap(section, static_cast<size_t>(len)) : -1;
     tracePmt(m_streamName, m_pmt, pid);
 }
 
@@ -1576,7 +1581,7 @@ void TSDemuxer::takeSharedMaps(std::vector<std::pair<int, std::vector<uint8_t>>>
         {
             if (otherPid != pid)
                 continue;
-            const int program = programOfMap(other.data());
+            const int program = programOfMap(other);
             if (!named.count(program))
                 continue;
             found.insert(program);
@@ -1592,7 +1597,7 @@ void TSDemuxer::takeSharedMaps(std::vector<std::pair<int, std::vector<uint8_t>>>
     for (auto& [pid, section] : sections)
     {
         const std::set<int>& programs = taken[pid];
-        if (programs.empty() || programs.count(programOfMap(section.data())))
+        if (programs.empty() || programs.count(programOfMap(section)))
             takeProgramMap(section.data(), static_cast<int>(section.size()), pid);
     }
 }
