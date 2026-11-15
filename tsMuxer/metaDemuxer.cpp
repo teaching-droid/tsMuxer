@@ -4958,7 +4958,14 @@ std::vector<StreamDiscoveryData> METADemuxer::discoverStreams() const
                     else if (auto* vvc = dynamic_cast<VVCStreamReader*>(videoReader))
                         rez = vvc->checkStream(vect.data(), static_cast<int>(vect.size()));
                     else if (auto* av1 = dynamic_cast<AV1StreamReader*>(videoReader))
+                    {
+                        // a track its container declares as AV1, or names no codec for, may begin inside an OBU (#57),
+                        // as the mux reads it (containerDeclaresAv1): its rate and description are found so too
+                        if (const auto known = acceptedPidMap.find(probePid);
+                            known != acceptedPidMap.end() && (known->second.m_av1Declared || known->second.m_bareTrack))
+                            av1->setDeclaredAv1(true);
                         rez = av1->checkStream(vect.data(), static_cast<int>(vect.size()));
+                    }
                     else if (auto* mpeg2 = dynamic_cast<MPEG2StreamReader*>(videoReader))
                         rez = mpeg2->checkStream(vect.data(), static_cast<int>(vect.size()));
 

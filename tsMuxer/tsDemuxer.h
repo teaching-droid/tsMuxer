@@ -371,6 +371,12 @@ class TSDemuxer final : public AbstractDemuxer
     std::map<int, int64_t> m_lastPesPts;
     std::map<int, int64_t> m_lastPesDts;
     std::map<int, int64_t> m_firstPtsTime;  // first PTS per PID, in file order (never a minimum)
+    // PES with a PTS of each PID, counted up to 2 (fileStartReference: a lone PES is no start), and whether its PES
+    // carry pictures by their own sign: a video stream ID (0xE0 to 0xEF, as some muxers write AV1), or data that
+    // begins with a start code and the temporal delimiter of AV1 (0x10, or 0x12 with its size), as tsMuxeR writes it
+    // under private stream 1 (0xBD). Sound, teletext and subtitles begin with neither.
+    uint8_t m_pesWithTime[8192]{};
+    bool m_pesVideoId[8192]{};
     std::map<int, int> m_ptsPesSeen;        // PES with a PTS after the first, per PID, until the start is settled (-1)
                                             // (a first PES on another clock or damaged, see processTsPacket)
     // A run of the first PES of a track, within 10 seconds of each other: the first, the last and the lowest time

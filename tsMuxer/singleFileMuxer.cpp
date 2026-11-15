@@ -751,7 +751,14 @@ bool SingleFileMuxer::close()
                     if (!m_owner->sourceSameAs(finalDir + newName.substr(dir.size())).empty())
                         why = "a source has that name";
                 }
-                if (why.empty())
+                // the same name (a gap that rounds to 0 ms, a name that says it already): nothing to rename, and the
+                // file is not deleted under its own name
+#ifdef _WIN32
+                const bool sameName = strToLowerCase(newName) == strToLowerCase(old);
+#else
+                const bool sameName = newName == old;
+#endif
+                if (why.empty() && !sameName)
                 {
                     deleteFile(newName);
                     if (!(dryRun::enabled() && dryRun::rename(old, newName)) && rename(old.c_str(), newName.c_str()) != 0)

@@ -583,11 +583,19 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
                 continue;
             TrackInfo track(type, "", 0);
             PMTStreamInfo stream(mapped, pid, nullptr, 0, nullptr, "", false);
-            if (id == 0xBD && !aribCaptions &&
-                (startsWith(0x0B, 0xFF, 0x77) ||
-                 (startsWith(0x7F, 0xFF, 0xFE) && bytes->second.size() >= 4 && bytes->second[2] == 0x80 &&
-                  bytes->second[3] == 0x01)))
+            // sound: every stream of private stream 2's extension (0xFD: TrueHD, DTS-HD, the sound of a second track),
+            // and a private stream 1 that is no caption, teletext (data identifier 0x10 to 0x1F, 0x99 to 0x9B), DVB
+            // subtitle (20 00) or PGS segment (0x14 to 0x18, 0x80): AC-3, DTS of any form, LPCM with its header
+            if (id == 0xFD)
                 stream.m_pesSound = true;
+            else if (id == 0xBD && !aribCaptions && bytes != pesFirstBytes.end() && !bytes->second.empty())
+            {
+                const uint8_t b0 = bytes->second[0];
+                const bool teletext = (b0 >= 0x10 && b0 <= 0x1F) || (b0 >= 0x99 && b0 <= 0x9B);
+                const bool dvbSubtitle = startsWith(0x20, 0xFF, 0x00);
+                const bool pgs = b0 == 0x80 || (b0 >= 0x14 && b0 <= 0x18);
+                stream.m_pesSound = !teletext && !dvbSubtitle && !pgs;
+            }
             // ** A VIDEO PES THAT DOES NOT BEGIN WITH A START CODE NAMES NO CODEC. ** It was taken for MPEG-2 (as a cut
             // of one begins so), and AV1 in the low overhead format, as some muxers write it under stream ID 0xE0,
             // was then listed and read as MPEG-2. Such a track, and a private stream that is neither sound nor
@@ -904,17 +912,22 @@ bool TSDemuxer::getTrackStart(const int32_t pid, const bool fromFirstPes, int64_
     return true;
 }
 
-// ** ONE START FOR THE SOUND OF A PROGRAM. ** The tracks of a file without video are placed against one time of their
-// program, the same for every track: the earliest first time of its sound tracks that has another of them within
-// 10 s after it. A lone leftover PES (a run of one) hours before the rest is no such start, nor is a track that lies
-// far from every other; where no two tracks lie that close, the earliest of them. -1 where the track has no PES yet.
+// ** ONE START FOR A PROGRAM WITHOUT A VIDEO TYPE OF ITS OWN. ** The tracks of a program that has no stream of a video
+// type (a file of sound alone, a radio service, AV1 under stream type 0x06) are placed against one time, the same for
+// every track of the program:
+// - the start of its AV1 picture where it has one ("AV01", or stream type 0x06 without a descriptor whose PES carry a
+//   video stream ID), as a picture is the start of a program with video: the sound of an AV1 film keeps its delay;
+// - else the earliest start of its sound tracks that has more than one PES: a lone leftover PES of another track, a
+//   run of one, is no start, and a real track that stands alone is one (tracks at 0, 12 and 14 s keep their places);
+// - a program whose tracks no rule takes for sound (stream type 0x06 without a descriptor): the earliest start of all
+//   its tracks, as before.
+// -1 where the track has no PES yet.
 int64_t TSDemuxer::fileStartReference(const int32_t pid) const
 {
     const auto own = m_firstPtsTime.find(pid);
     if (own == m_firstPtsTime.end())
         return -1;
     static constexpr int64_t CLOCK_WRAP = 1LL << 33;
-    static constexpr int64_t NEAR = 10 * 90000;
     const auto stream = m_pmt.pidList.find(pid);
     const int program = stream != m_pmt.pidList.end() ? stream->second.m_programNumber : -1;
     const auto apart = [&](const int64_t a, const int64_t b)  // a - b across a wrap
@@ -926,24 +939,35 @@ int64_t TSDemuxer::fileStartReference(const int32_t pid) const
             d += CLOCK_WRAP;
         return d;
     };
-    // the first times of the program's sound tracks, against this track's
-    std::vector<int64_t> starts;
-    for (const auto& [otherPid, info] : m_pmt.pidList)
+    // the earliest start, against this track's, of the tracks of the program that pass the test; INT64_MAX: none
+    const auto earliest = [&](const auto& test)
     {
-        const auto other = m_firstPtsTime.find(otherPid);
-        if (other != m_firstPtsTime.end() && isSoundTrack(info) && (program < 0 || info.m_programNumber == program))
-            starts.push_back(apart(other->second, own->second));
-    }
-    if (starts.empty())
-        return own->second;
-    std::sort(starts.begin(), starts.end());
-    int64_t chosen = starts.front();
-    for (size_t i = 0; i + 1 < starts.size(); ++i)
-        if (starts[i + 1] - starts[i] <= NEAR)
+        int64_t best = INT64_MAX;
+        for (const auto& [otherPid, info] : m_pmt.pidList)
         {
-            chosen = starts[i];
-            break;
+            const auto other = m_firstPtsTime.find(otherPid);
+            if (other == m_firstPtsTime.end() || (program >= 0 && info.m_programNumber != program) ||
+                !test(otherPid, info))
+                continue;
+            best = (std::min)(best, apart(other->second, own->second));
         }
+        return best;
+    };
+    int64_t chosen = earliest(
+        [&](const int p, const PMTStreamInfo& info)
+        {
+            return info.m_streamType == StreamType::PRIVATE_DATA &&
+                   (info.m_av1Registration || (info.m_bare && m_pesVideoId[p]));
+        });
+    if (chosen == INT64_MAX)
+        chosen = earliest([&](const int p, const PMTStreamInfo& info)
+                          { return isSoundTrack(info) && m_pesWithTime[p] >= 2; });
+    if (chosen == INT64_MAX)
+        chosen = earliest([&](const int, const PMTStreamInfo& info) { return isSoundTrack(info); });
+    if (chosen == INT64_MAX)
+        chosen = earliest([&](const int, const PMTStreamInfo&) { return true; });
+    if (chosen == INT64_MAX)
+        chosen = 0;
     return ((own->second + chosen) % CLOCK_WRAP + CLOCK_WRAP) % CLOCK_WRAP;
 }
 
@@ -2092,6 +2116,11 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
     // A padding PES has no header and holds nothing: its 0xFF bytes were read as the flags of a PES with both times
     if (pesStartCode && frameData[3] == 0xBE)
         return;
+    // nor is a PES header read past it: its flags, its length and its times lie in the packet, or the packet is a
+    // damaged one, and is left (a header that goes on into the next packet is no stream's)
+    if (pesStartCode && (frameData + PESPacket::HEADER_SIZE > pkt + TS_FRAME_SIZE ||
+                         frameData + PESPacket::HEADER_SIZE + frameData[8] > pkt + TS_FRAME_SIZE))
+        return;
     if (isAribPid(pid))
     {
         if (!m_acceptedPidCache[pid])
@@ -2360,6 +2389,15 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
             }
             if (m_firstPtsTime.find(pid) == m_firstPtsTime.end())
                 m_firstPtsTime[pid] = curPts;
+            if (m_pesWithTime[pid] < 2)
+                ++m_pesWithTime[pid];
+            if (const uint8_t streamId = reinterpret_cast<const uint8_t*>(pesPacket)[3];
+                streamId >= 0xE0 && streamId <= 0xEF)
+                m_pesVideoId[pid] = true;
+            else if (const uint8_t* data = frameData + pesPacket->getHeaderLength();
+                     data + 4 <= pkt + TS_FRAME_SIZE && data[0] == 0 && data[1] == 0 && data[2] == 1 &&
+                     (data[3] == 0x10 || data[3] == 0x12))
+                m_pesVideoId[pid] = true;
             // ** A FIRST PES ON ANOTHER CLOCK IS NOT THE START. ** A recording can begin with a few PES left in the
             // receiver from before, on a time base hours away from the rest: the sound of such a recording was placed
             // 9.7 hours after its video, where the video reader had left its own leftover picture out, and a cut had
@@ -3306,6 +3344,8 @@ void TSDemuxer::openFile(const std::string& streamName)
     m_fullPtsTime.clear();
     m_fullDtsTime.clear();
     m_firstPtsTime.clear();
+    memset(m_pesWithTime, 0, sizeof(m_pesWithTime));
+    memset(m_pesVideoId, 0, sizeof(m_pesVideoId));
     m_ptsPesSeen.clear();
     m_startRuns.clear();
     m_videoFirstPtsOfPid.clear();

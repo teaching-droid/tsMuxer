@@ -82,9 +82,10 @@ bool AV1StreamReader::isLowOverhead(const uint8_t* buf, const uint8_t* end)
         const int64_t payloadLen = decodeLeb128(p + hdrLen, end, lebLen);
         if (payloadLen < 0)
             return obus >= 2;  // the length itself runs off this buffer
-        const uint8_t* next = p + hdrLen + lebLen + payloadLen;
-        if (next > end || next < p)
+        // compared before it is added: a length of up to 2^56 must not wrap the pointer on a 32-bit build
+        if (payloadLen > end - (p + hdrLen + lebLen))
             return obus >= 2;  // a whole OBU chain that simply continues past this buffer
+        const uint8_t* next = p + hdrLen + lebLen + payloadLen;
         p = next;
         obus++;
     }
@@ -117,11 +118,11 @@ int AV1StreamReader::lowOverheadLead(const uint8_t* buf, const uint8_t* end)
                 return false;
             int lebLen = 0;
             const int64_t payloadLen = decodeLeb128(p + hdrLen, end, lebLen);
-            if (payloadLen < 0)
+            if (payloadLen < 0 || payloadLen > end - (p + hdrLen + lebLen))  // compared before it is added
                 return obus >= 8;
             const uint8_t* next = p + hdrLen + lebLen + payloadLen;
-            if (next > end || next <= p)
-                return obus >= 8;
+            if (next <= p)
+                return false;
             p = next;
             obus++;
         }
@@ -403,19 +404,29 @@ void AV1StreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const boo
         }
         else
         {
-            m_framing = isLowOverhead(block, block + dataLen) ? Av1Framing::LOW_OVERHEAD : Av1Framing::START_CODES;
-            if (m_framing == Av1Framing::LOW_OVERHEAD)
-                LTRACE(LT_INFO, 2, "AV1 elementary stream in the low overhead format, converting OBU framing on read");
-            // a declared track cut inside an OBU of a low overhead stream: it is read from its first whole OBU
-            else if (m_declaredAv1)
-                if (const int lead = lowOverheadLead(block, block + dataLen); lead > 0)
-                {
-                    m_framing = Av1Framing::LOW_OVERHEAD;
-                    m_leadSkip = static_cast<uint32_t>(lead);
+            // a declared track: the strong chain (lowOverheadLead) decides first, as a cut that begins inside an OBU
+            // passes the weak test of two OBUs now and then, and was then read from a byte in the middle of an OBU
+            const int lead = m_declaredAv1 ? lowOverheadLead(block, block + dataLen) : -1;
+            const bool startCode = dataLen >= 4 && block[0] == 0 && block[1] == 0 &&
+                                   (block[2] == 1 || (block[2] == 0 && block[3] == 1));
+            if (lead > 0)
+            {
+                // a declared track cut inside an OBU of a low overhead stream: read from its first whole OBU
+                m_framing = Av1Framing::LOW_OVERHEAD;
+                m_leadSkip = static_cast<uint32_t>(lead);
+                LTRACE(LT_INFO, 2,
+                       "AV1 in the low overhead format, cut inside an OBU: read from its first whole OBU, " << lead
+                                                                                                         << " bytes on");
+            }
+            else
+            {
+                m_framing = (lead == 0 && !startCode) || (lead < 0 && isLowOverhead(block, block + dataLen))
+                                ? Av1Framing::LOW_OVERHEAD
+                                : Av1Framing::START_CODES;
+                if (m_framing == Av1Framing::LOW_OVERHEAD)
                     LTRACE(LT_INFO, 2,
-                           "AV1 in the low overhead format, cut inside an OBU: read from its first whole OBU, "
-                               << lead << " bytes on");
-                }
+                           "AV1 elementary stream in the low overhead format, converting OBU framing on read");
+            }
         }
     }
 
