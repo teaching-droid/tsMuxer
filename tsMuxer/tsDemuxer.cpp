@@ -2065,8 +2065,15 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
                                const ClipPart* part, MemoryBlock*& vect, int& lastPid)
 {
     const auto tsPacket = reinterpret_cast<TSPacket*>(pkt);
+    // ** A PACKET WITHOUT PAYLOAD IS NOT READ PAST ITS END. ** An adaptation field that fills the whole packet leaves
+    // no payload, and the PES start was looked for in the bytes after the packet: those of the next packet in a block
+    // read, and past the end of the memory where the packet was one held back and given back alone (a damaged
+    // stream, found by fuzzing). Such a packet carries nothing; the start code is looked for only inside the packet.
+    if (tsPacket->getHeaderSize() >= TS_FRAME_SIZE)
+        return;
     uint8_t* frameData = pkt + tsPacket->getHeaderSize();
-    const bool pesStartCode = frameData[0] == 0 && frameData[1] == 0 && frameData[2] == 1 && tsPacket->payloadStart;
+    const bool pesStartCode = frameData + 4 <= pkt + TS_FRAME_SIZE && frameData[0] == 0 && frameData[1] == 0 &&
+                              frameData[2] == 1 && tsPacket->payloadStart;
     // A padding PES has no header and holds nothing: its 0xFF bytes were read as the flags of a PES with both times
     if (pesStartCode && frameData[3] == 0xBE)
         return;
