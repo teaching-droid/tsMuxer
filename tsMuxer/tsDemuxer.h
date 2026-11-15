@@ -218,15 +218,6 @@ class TSDemuxer final : public AbstractDemuxer
     int64_t m_partVideoStep = -1;                          // the smallest step of the decoding times of the video kept
     int64_t m_partLastVideoDts = -1;                       // the decoding time of the last picture kept
     std::map<int, int64_t> m_keptPictures;                 // the pictures of each video track kept so far
-    // ** THE PICTURES ARE COUNTED AS THE READER COUNTS THEM. ** The H.264 reader counts no picture before the first
-    // parameter sets of its track, which it cannot read; the parts counted every picture kept, and where the first
-    // were given back without parameter sets (skipsLeadingPes), the start pictures of the parts after it were off by
-    // them. A picture of H.264 is counted once the track's parameter sets have come (countsPictures).
-    bool m_h264ParamsSeen[8192]{};
-    uint16_t m_h264PesWithoutParams[8192]{};          // PES looked at before them; past LEAD_VIDEO_PES_MAX all count
-    std::map<int, int64_t> m_uncountedPictures;        // pictures kept while not counted yet
-    [[nodiscard]] bool countsPictures(int pid) const;
-    void countPicture(int pid, int delta);
     std::map<int, std::set<int64_t>> m_partStartPictures;  // their numbers where a part begins (isPartStartPicture)
     void startPart();
     int64_t clearSubtitlesAtPartEnd(DemuxedData& demuxedData);
