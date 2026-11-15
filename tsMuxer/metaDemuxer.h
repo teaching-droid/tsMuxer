@@ -84,6 +84,7 @@ struct StreamInfo
     // The gaps a join put in this stream's times (takeTimeGaps), in the internal clock, the packet after each not read
     // yet; and that packet, held back until the other streams have come up to its time (METADemuxer::readPacket)
     std::vector<int64_t> m_joinGaps;
+    bool m_dataOut = false;  // a packet with data of the stream has been handed on (a gap at its start, readPacket)
     bool m_held = false;
     AVPacket m_heldPacket;
 };

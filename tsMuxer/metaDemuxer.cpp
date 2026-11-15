@@ -192,6 +192,37 @@ static bool tsHevcStartsAtRandomAccess(const BufferedReaderManager& readManager,
 // smallest PTS of the video. An HEVC stream that begins with a random access picture times the pictures shown before
 // it before the start, as a decoder leaves them out (they refer to pictures before the cut): that is the PTS of the
 // first video PES.
+// The start of a track of a transport stream without video read (TSDemuxer::getTrackStartInFile), read as the listing
+// reads it: its first 64 MB (or all of it), so that the first times of every track are settled, and further, up to
+// 1 GB, for a track that starts later. A start more than 10 s from the earliest sound of its program is not applied
+// (said): the first PES of such a track is taken for one left over or damaged, as 0 was used before.
+static constexpr int64_t NO_VIDEO_LIMIT = 64LL * 1024 * 1024;
+static bool noVideoTrackStart(TSDemuxer& probe, const int pid, int64_t read, bool eof, int64_t& ticks)
+{
+    static constexpr int64_t LATE_LIMIT = 1024LL * 1024 * 1024;
+    DemuxedData demuxedData;
+    const PIDSet none;
+    int64_t discardedSize = 0;
+    for (; !eof && read < LATE_LIMIT; read += probe.getFileBlockSize())
+    {
+        if (read >= NO_VIDEO_LIMIT && probe.trackStartSettled(pid) && probe.getTrackStartInFile(pid, ticks))
+            break;
+        eof = probe.simpleDemuxBlock(demuxedData, none, discardedSize) == BufferedReader::DATA_EOF;
+    }
+    if (!probe.getTrackStartInFile(pid, ticks))
+        return false;
+    if (ticks > 10 * 90000 || ticks < -10 * 90000)
+    {
+        LTRACE(LT_WARN, 2,
+               "Warning: track " << pid << " starts " << (ticks > 0 ? ticks : -ticks) / 90000
+                                 << " s from the earliest sound of its program in a file without video. Its start "
+                                    "is not moved; give timeshift= on its line to place it.");
+        ticks = 0;
+        return false;
+    }
+    return true;
+}
+
 static int64_t tsTrackStart(const BufferedReaderManager& readManager, const std::string& fileName, const int pid,
                             bool* known = nullptr, bool* noVideo = nullptr)
 {
@@ -211,37 +242,31 @@ static int64_t tsTrackStart(const BufferedReaderManager& readManager, const std:
     const PIDSet none;
     int64_t discardedSize = 0;
     int64_t ticks = 0;
-    if (!probe.hasVideoStream())
-    {
-        // as far as the listing reads; the first time of the file is that of its first PES, known at once
-        static constexpr int64_t NO_VIDEO_LIMIT = 64LL * 1024 * 1024;
-        bool found = false;
-        for (int64_t read = 0; read < NO_VIDEO_LIMIT; read += probe.getFileBlockSize())
+    int64_t read = 0;
+    bool eof = false;
+    if (probe.hasVideoStream())
+        for (; read < LATE_LIMIT; read += probe.getFileBlockSize())
         {
-            if (probe.trackStartSettled(pid) && probe.getTrackStartInFile(pid, ticks))
-            {
-                found = true;
+            if (probe.videoPesRead() >= LEADING_PES && probe.trackStartSettled(pid) &&
+                probe.getTrackStart(pid, false, ticks))
                 break;
-            }
+            // a video track the program map names that carries nothing (scrambled, or a placeholder): no video
+            if (read >= NO_VIDEO_LIMIT && probe.videoPesRead() == 0)
+                break;
             if (probe.simpleDemuxBlock(demuxedData, none, discardedSize) == BufferedReader::DATA_EOF)
             {
-                found = probe.getTrackStartInFile(pid, ticks);
+                eof = true;
                 break;
             }
         }
+    if (!probe.hasVideoStream() || probe.videoPesRead() == 0)
+    {
+        const bool found = noVideoTrackStart(probe, pid, read, eof, ticks);
         if (known)
             *known = found;
         if (noVideo)
             *noVideo = true;
         return found ? ticks : 0;
-    }
-    for (int64_t read = 0; read < LATE_LIMIT; read += probe.getFileBlockSize())
-    {
-        if (probe.videoPesRead() >= LEADING_PES && probe.trackStartSettled(pid) &&
-            probe.getTrackStart(pid, false, ticks))
-            break;
-        if (probe.simpleDemuxBlock(demuxedData, none, discardedSize) == BufferedReader::DATA_EOF)
-            break;
     }
     const auto video = tracks.find(probe.firstVideoPid());
     const bool fromFirstPes = video != tracks.end() &&
@@ -310,19 +335,38 @@ static int64_t tsVideoReference(const BufferedReaderManager& readManager, const 
     probe.openFile(fileName);
     std::map<int32_t, TrackInfo> tracks;
     probe.getTrackList(tracks);
-    if (tracks.find(pid) == tracks.end() || !probe.hasVideoStream() || probe.getFileBlockSize() == 0)
+    if (tracks.find(pid) == tracks.end() || probe.getFileBlockSize() == 0)
         return 0;
     DemuxedData demuxedData;
     const PIDSet none;
     int64_t discardedSize = 0;
     int64_t ticks = 0;
-    for (int64_t read = 0; read < LATE_LIMIT; read += probe.getFileBlockSize())
+    int64_t read = 0;
+    bool eof = false;
+    if (probe.hasVideoStream())
+        for (; read < LATE_LIMIT; read += probe.getFileBlockSize())
+        {
+            if (probe.videoPesRead() >= LEADING_PES && probe.trackStartSettled(pid) &&
+                probe.getTrackStart(pid, false, ticks))
+                break;
+            if (read >= NO_VIDEO_LIMIT && probe.videoPesRead() == 0)
+                break;
+            if (probe.simpleDemuxBlock(demuxedData, none, discardedSize) == BufferedReader::DATA_EOF)
+            {
+                eof = true;
+                break;
+            }
+        }
+    // ** THE CONVERTED SOUND OF A FILE WITHOUT VIDEO KEEPS ITS PLACE TOO. ** Measured against the earliest sound of
+    // its program, as the tracks the mux takes as they are (tsTrackStart): the converted track stayed at 0 while those
+    // moved to their places.
+    if (!probe.hasVideoStream() || probe.videoPesRead() == 0)
     {
-        if (probe.videoPesRead() >= LEADING_PES && probe.trackStartSettled(pid) &&
-            probe.getTrackStart(pid, false, ticks))
-            break;
-        if (probe.simpleDemuxBlock(demuxedData, none, discardedSize) == BufferedReader::DATA_EOF)
-            break;
+        if (!noVideoTrackStart(probe, pid, read, eof, ticks))
+            return 0;
+        const int64_t reference = probe.fileStartReference(pid);
+        *known = reference != -1;
+        return reference;
     }
     const auto video = tracks.find(probe.firstVideoPid());
     const bool fromFirstPes = video != tracks.end() &&
@@ -953,8 +997,13 @@ int METADemuxer::readPacket(AVPacket& avPacket)
                 // 3 pictures came up to 71 ms late; three MP4 parts whose AAC is shorter than their picture: one
                 // picture 9.8 ms late at each joint. That packet is now held back until the other streams have come
                 // up to its time; the gap itself, which keeps the sound of each file against its picture, stays.
+                // before the stream's first data the gap is measured from the stream's own start (a gap at the start
+                // of a cut part's sound): a first read that asked for more data set its time to the gap already
+                const bool firstData = !chosen.m_dataOut;
+                if (avPacket.size > 0)
+                    chosen.m_dataOut = true;
                 if (!chosen.m_joinGaps.empty() && !chosen.m_flushed && avPacket.size > 0 &&
-                    avPacket.dts - endBefore >= chosen.m_joinGaps.front() / 2)
+                    avPacket.dts - (firstData ? chosen.m_timeShift : endBefore) >= chosen.m_joinGaps.front() / 2)
                 {
                     chosen.m_joinGaps.erase(chosen.m_joinGaps.begin());
                     bool othersBehind = false;
@@ -4068,7 +4117,7 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
                        "Track " << pid << " of " << unquoteStr(fileList[0]) << " starts "
                                 << doubleToStr(static_cast<double>(ns > 0 ? ns : -ns) / 1e6, 3) << " ms "
                                 << (ns > 0 ? "after" : "before")
-                                << (tsStartOfFile ? " the first track of the file (it has no video)"
+                                << (tsStartOfFile ? " the earliest sound of its program (the file has no video)"
                                                   : " the first video track of the file")
                                 << ", so its times are moved by that much.");
             }
@@ -4078,8 +4127,9 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
     // ** A DEMUXED SOUND FILE SAYS ITS DELAY ALSO WHERE IT IS ZERO. ** The name of a demuxed file carries the start of
     // its track against the video ("DELAY -20ms"), and carried nothing where the track starts with the video. A name
     // without a delay then meant two things: no delay, or a file whose delay nobody looked at (#259). Where the
-    // start was measured and is zero, the name says "DELAY 0ms". A track whose start is not known, as one of a file
-    // without video, keeps its plain name; so does one that a mux moves by the start-up samples of its codec (a
+    // start was measured and is zero, the name says "DELAY 0ms" (also in a file without video, against the earliest
+    // sound of its program). A track whose start is not known keeps its plain name; so does one that a mux moves by
+    // the start-up samples of its codec (a
     // CodecDelay of a Matroska file) or by the pictures a cut MP4 keeps before its cut, whose place is not 0 to the
     // mux.
     if (m_demuxOutput && !timeShiftGiven && !codec.empty() && codec[0] == 'A' &&

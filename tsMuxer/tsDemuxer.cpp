@@ -902,13 +902,40 @@ bool TSDemuxer::getTrackStart(const int32_t pid, const bool fromFirstPes, int64_
     return true;
 }
 
+int64_t TSDemuxer::fileStartReference(const int32_t pid) const
+{
+    const auto own = m_firstPtsTime.find(pid);
+    if (own == m_firstPtsTime.end())
+        return -1;
+    static constexpr int64_t CLOCK_WRAP = 1LL << 33;
+    const auto stream = m_pmt.pidList.find(pid);
+    const int program = stream != m_pmt.pidList.end() ? stream->second.m_programNumber : -1;
+    int64_t earliest = own->second;
+    for (const auto& [otherPid, info] : m_pmt.pidList)
+    {
+        const auto other = m_firstPtsTime.find(otherPid);
+        if (other == m_firstPtsTime.end() || !isAudioStreamType(info.m_streamType) ||
+            (program >= 0 && info.m_programNumber != program))
+            continue;
+        int64_t before = (earliest - other->second) % CLOCK_WRAP;
+        if (before >= CLOCK_WRAP / 2)
+            before -= CLOCK_WRAP;
+        else if (before < -CLOCK_WRAP / 2)
+            before += CLOCK_WRAP;
+        if (before > 0)
+            earliest = other->second;
+    }
+    return earliest;
+}
+
 bool TSDemuxer::getTrackStartInFile(const int32_t pid, int64_t& ticks) const
 {
     const auto first = m_firstPtsTime.find(pid);
-    if (first == m_firstPtsTime.end() || m_firstSeenPTS == -1 || !m_leadHeld.empty())
+    const int64_t reference = fileStartReference(pid);
+    if (first == m_firstPtsTime.end() || reference == -1)
         return false;
     static constexpr int64_t CLOCK_WRAP = 1LL << 33;
-    ticks = (first->second + startFix(pid) - m_firstSeenPTS) % CLOCK_WRAP;
+    ticks = (first->second + startFix(pid) - reference) % CLOCK_WRAP;
     if (ticks >= CLOCK_WRAP / 2)
         ticks -= CLOCK_WRAP;
     else if (ticks < -CLOCK_WRAP / 2)
@@ -2194,7 +2221,9 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
                             // left out (48 ms for two of MP2). A gap of their time comes before it now, as the sound
                             // of a whole file starts at its own time (tsTrackStart). Only the first part holds PES
                             // (skipsLeadingPes), and its sound starts with the part.
-                            const int64_t gap = pesPacket->getPts() - heldFirst;
+                            int64_t gap = (pesPacket->getPts() - heldFirst) % (1LL << 33);  // across a wrap
+                            if (gap < 0)
+                                gap += 1LL << 33;
                             if (m_curFileNum == 0 && part->startCut && heldFirst >= 0 && gap > 0 && gap < 90000)
                             {
                                 m_joinGaps[pid].emplace_back(0, gap * 100000 / 9);

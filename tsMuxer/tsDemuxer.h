@@ -57,7 +57,15 @@ class TSDemuxer final : public AbstractDemuxer
         if (m_firstPtsTime.find(pid) != m_firstPtsTime.end())
         {
             const int64_t video = videoReference(pid, true);
-            clockTicks = m_firstPtsTime[pid] + startFix(pid) - (video != -1 ? video : m_firstSeenPTS);
+            if (video == -1)
+            {
+                // no video read: against the earliest sound of the track's program, as the mux puts it
+                // (getTrackStartInFile)
+                if (!getTrackStartInFile(pid, clockTicks))
+                    return 0;
+                return llround(static_cast<double>(clockTicks) / 90.0);
+            }
+            clockTicks = m_firstPtsTime[pid] + startFix(pid) - video;
             return llround(static_cast<double>(clockTicks) / 90.0);  // convert to ms
         }
 
@@ -70,10 +78,14 @@ class TSDemuxer final : public AbstractDemuxer
     // less the smallest PTS of the video read so far, or with fromFirstPes the PTS of the first video PES, across a
     // wrap of the 33 bit clock. False while no PES of the stream or of the video has been read.
     [[nodiscard]] bool getTrackStart(int32_t pid, bool fromFirstPes, int64_t& ticks) const;
-    // Of a file without video: where a stream starts against the first time of the file (the first PES in file order,
-    // m_firstSeenPTS), as the listing gives it (getTrackDelay), in 90 kHz ticks across a wrap of the clock. False
-    // while no PES of the stream has been read, or the first PES of a track are still held back (skipsLeadingPes).
+    // Of a file without video read: where a stream starts against the earliest sound track of its program
+    // (fileStartReference), in 90 kHz ticks across a wrap of the clock, as the listing gives it (getTrackDelay) and
+    // the mux applies it (tsTrackStart). False while no PES of the stream has been read.
     [[nodiscard]] bool getTrackStartInFile(int32_t pid, int64_t& ticks) const;
+    // That reference: the earliest first PTS (run-corrected, m_firstPtsTime) of the sound tracks of the track's own
+    // program, and of the track itself, across a wrap; the tracks of each program of a multiplex keep their own clock.
+    // -1 where the track has no PES yet.
+    [[nodiscard]] int64_t fileStartReference(int32_t pid) const;
     // The program map lists a video stream
     [[nodiscard]] bool hasVideoStream() const;
     // The video PES read, of all video streams and files, and the stream of the first one (-1: none yet)
