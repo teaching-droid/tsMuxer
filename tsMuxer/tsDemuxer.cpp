@@ -2173,11 +2173,14 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
     // The same for LPCM, each PES of which begins with its header of the samples' layout, and for DTS Express, whose
     // reader tells a stream without a core by the first bytes it is given: from the rest of a PES before the first
     // header neither was found, and a cut of a disc clip listed both as "Can't detect stream type".
+    // ** AND SO DOES EVERY SOUND TRACK. ** The other sound readers take the whole frames of those bytes, which have no
+    // time either, and time them from the first PES: the sound of a cut MPEG-2 recording whose first PES header came
+    // after two whole AC-3 frames of the PES before it was muxed two frames (64 ms) late, at 1 of 20 cut points (found
+    // by a test of the Moonghost analysis; 3.1.0 likewise). A sound track of a file begins with its first PES now, as
+    // in a part of a playlist; the frames before it come before the first time the track has.
     if (!pesStartCode && m_clipStartOfPid.find(pid) == m_clipStartOfPid.end())
         if (const auto info = m_pmt.pidList.find(pid);
-            info != m_pmt.pidList.end() && (info->second.m_streamType == StreamType::AUDIO_TRUE_HD ||
-                                            info->second.m_streamType == StreamType::AUDIO_LPCM ||
-                                            info->second.m_streamType == StreamType::AUDIO_DTS_HD_SECONDARY))
+            info != m_pmt.pidList.end() && isAudioStreamType(info->second.m_streamType))
             return;
     if (pesStartCode)
     {
