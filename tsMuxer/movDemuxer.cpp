@@ -1772,17 +1772,53 @@ std::map<std::string, MovDemuxer::CutOff>& MovDemuxer::cutOffFiles()
     return files;
 }
 
-// Chunk `chunk` (from 0) of a track lies past the end of the file: the time of its first sample, by stsc and stts
-static void noteCutOff(const std::string& fileName, const int64_t fileSize, const MOVStreamContext* st,
-                       const size_t chunk)
+// The samples of each chunk of a track, by stsc, in one pass (empty where the table is missing or broken)
+static std::vector<uint32_t> chunkSampleCounts(const MOVStreamContext* st)
 {
-    uint64_t sample = 0;
+    std::vector<uint32_t> n(st->chunk_offsets.size(), 0);
     for (size_t e = 0; e < st->stsc_data.size(); ++e)
     {
         const size_t first = st->stsc_data[e].first;  // 1-based
-        const size_t last = e + 1 < st->stsc_data.size() ? st->stsc_data[e + 1].first : chunk + 2;
-        for (size_t c = first; c < last && c <= chunk; ++c) sample += st->stsc_data[e].count;
+        const size_t last = e + 1 < st->stsc_data.size() ? st->stsc_data[e + 1].first : n.size() + 1;  // exclusive
+        if (first == 0 || last < first)
+            return {};
+        for (size_t c = first; c < last && c <= n.size(); ++c) n[c - 1] = st->stsc_data[e].count;
     }
+    return n;
+}
+
+// The samples of a chunk that begins at `pos` with `count` samples, the first of them sample `first` of the track,
+// that the file holds whole; the byte the first missing one begins at goes to `missingFrom` (-1 where all are whole).
+// Without the sizes of its samples nothing is known: -1.
+static int64_t wholeSamplesOfChunk(const MOVStreamContext* st, const uint64_t first, const uint32_t count, int64_t pos,
+                                   const int64_t fileSize, int64_t& missingFrom)
+{
+    missingFrom = -1;
+    for (uint32_t s = 0; s < count; ++s)
+    {
+        const int64_t size = st->sample_size != 0              ? st->sample_size
+                             : first + s < st->m_index.size() ? st->m_index[first + s]
+                                                               : -1;
+        if (size < 0)
+            return -1;
+        if (pos + size > fileSize)
+        {
+            missingFrom = pos;
+            return s;
+        }
+        pos += size;
+    }
+    return count;
+}
+
+static void recordCutOff(const std::string& fileName, int64_t fileSize, const MOVStreamContext* st, double from,
+                         int64_t missingFrom);
+
+// From sample `sample` (from 0) on, which begins at byte `missingFrom`, a track lists data past the end of the file:
+// the time of that sample, by stts
+static void noteCutOff(const std::string& fileName, const int64_t fileSize, const MOVStreamContext* st,
+                       uint64_t sample, const int64_t missingFrom)
+{
     uint64_t time = 0;
     for (const auto& e : st->stts_data)
     {
@@ -1790,7 +1826,14 @@ static void noteCutOff(const std::string& fileName, const int64_t fileSize, cons
         time += n * e.duration;
         sample -= n;
     }
-    const double from = st->time_scale > 0 ? static_cast<double>(time) / st->time_scale : 0;
+    recordCutOff(fileName, fileSize, st, st->time_scale > 0 ? static_cast<double>(time) / st->time_scale : 0,
+                 missingFrom);
+}
+
+// A track lists data past the end of the file from `from` s on, from byte `missingFrom` on: the job ends saying so
+static void recordCutOff(const std::string& fileName, const int64_t fileSize, const MOVStreamContext* st,
+                         const double from, const int64_t missingFrom)
+{
     auto [it, added] = MovDemuxer::cutOffFiles().emplace(fileName, MovDemuxer::CutOff{from, st->ffindex});
     if (!added && from < it->second.from)
         it->second = MovDemuxer::CutOff{from, st->ffindex};
@@ -1798,7 +1841,7 @@ static void noteCutOff(const std::string& fileName, const int64_t fileSize, cons
     if (warned.insert(fileName).second)
         LTRACE(LT_WARN, 2,
                "Warning: " << fileName << " is cut off: track " << st->ffindex << " lists data from byte "
-                           << st->chunk_offsets[chunk] << " on, and the file ends at byte " << fileSize
+                           << missingFrom << " on, and the file ends at byte " << fileSize
                            << ". What the file holds is read; the rest is missing.");
 }
 
@@ -1827,23 +1870,50 @@ void MovDemuxer::buildIndex()
         {
             const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
             const std::vector<int64_t> bytes = found_moof ? std::vector<int64_t>() : ownChunkBytes(st);
-            for (size_t k = 0; k < st->chunk_offsets.size(); ++k)
+            const std::vector<uint32_t> counts = found_moof ? std::vector<uint32_t>() : chunkSampleCounts(st);
+            uint64_t firstSample = 0;  // of chunk k
+            bool cutNoted = false;     // the first chunk past the end has the earliest sample; one note a track
+            for (size_t k = 0; k < st->chunk_offsets.size(); firstSample += k < counts.size() ? counts[k] : 0, ++k)
             {
                 const int64_t j = st->chunk_offsets[k];
+                // ** A FILE CUT OFF INSIDE ITS MDAT. ** An mdat that runs past the end of the file is read up to the
+                // end, so a chunk at or after the end, or one whose samples run past it, counted as inside it, and a
+                // download cut off in the middle was muxed with half its pictures and "Mux successful complete"
+                // (#64): ffmpeg puts all the samples of a short file in one chunk. A chunk that begins at the end or
+                // later holds nothing; a chunk whose samples run past the end is read as far as the file goes. Both
+                // end the job saying the file is cut off, from the first sample that is missing.
+                if (!found_moof && j >= m_fileSize)
+                {
+                    if (!cutNoted)
+                        noteCutOff(m_fileName, m_fileSize, st, firstSample, j);
+                    cutNoted = true;
+                    continue;
+                }
+                if (!found_moof && !cutNoted && k < counts.size())
+                {
+                    // the bytes of its samples: from the sample table, or one size times their number
+                    const int64_t own = k < bytes.size() && bytes[k] >= 0 ? bytes[k]
+                                        : st->sample_size != 0 ? static_cast<int64_t>(counts[k]) * st->sample_size
+                                                               : -1;
+                    int64_t missingFrom = -1;
+                    if (own > 0 && j + own > m_fileSize)
+                        if (const int64_t whole = wholeSamplesOfChunk(st, firstSample, counts[k], j, m_fileSize,
+                                                                      missingFrom);
+                            whole >= 0 && missingFrom >= 0)
+                        {
+                            noteCutOff(m_fileName, m_fileSize, st, firstSample + static_cast<uint64_t>(whole),
+                                       missingFrom);
+                            cutNoted = true;
+                        }
+                }
                 if (!found_moof && (j < m_mdat_pos || j > m_mdat_pos + m_mdat_size))
                 {
                     const auto in = std::find_if(mdats.begin(), mdats.end(), [j](const auto& m)
                                                  { return j >= m.first && j <= m.first + m.second; });
                     if (in == mdats.end())
                     {
-                        // A chunk past the end of the file: the file was cut off. It was refused whole with
-                        // "Invalid chunk offset", just after the warning that its mdat is read up to the end of the
-                        // file. What the file holds is read now, and the job ends saying that the rest is missing.
-                        if (j >= m_fileSize)
-                        {
-                            noteCutOff(m_fileName, m_fileSize, st, k);
-                            continue;
-                        }
+                        // (A chunk past the end of the file was taken above: it was refused whole with "Invalid
+                        // chunk offset", just after the warning that its mdat is read up to the end of the file.)
                         THROW(ERR_MOV_PARSE, "Invalid chunk offset " << j)
                     }
                     // where its own samples end, or its mdat where its tables do not say (-1: all samples one size)
@@ -2929,6 +2999,11 @@ int MovDemuxer::mov_read_trun(MOVAtom atom)
     int64_t offset = (flags & 0x001) || frag->runs == 0 ? frag->base_data_offset + data_offset : frag->moof_offset;
     frag->runs++;
     sc->chunk_offsets.push_back(offset);
+    // ** A FRAGMENT CUT OFF. ** A fragmented file cut off inside the mdat of a fragment, as an interrupted download
+    // leaves it, was read up to its end and muxed with "Mux successful complete", the rest of the fragment's samples
+    // missing without a word (#64, the same in an ordinary MP4). The first sample of a run whose bytes run past the end
+    // of the file ends the job saying the file is cut off, from that sample on; what the file holds is read.
+    bool cutNoted = m_memoryOnly || m_fileSize <= 0;
     for (size_t i = 0; i < entries; i++)
     {
         unsigned sample_size = frag->size;
@@ -2959,6 +3034,12 @@ int MovDemuxer::mov_read_trun(MOVAtom atom)
         // The size of each sample, as stsz gives it for an ordinary file: the audio and text readers cut a chunk into
         // its samples by it. A fragmented file's stsz is empty, so its AAC had no sizes to go by and was not read.
         sc->m_index.push_back(sample_size);
+        if (!cutNoted && offset + sample_size > m_fileSize)
+        {
+            recordCutOff(m_fileName, m_fileSize, sc,
+                         sc->time_scale > 0 ? static_cast<double>(sc->fragDts.back()) / sc->time_scale : 0, offset);
+            cutNoted = true;
+        }
         offset += sample_size;
     }
     frag->moof_offset = offset;
