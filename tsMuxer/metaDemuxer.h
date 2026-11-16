@@ -408,6 +408,8 @@ class METADemuxer final : public AbstractDemuxer
     bool m_dvLayerOtherWay =
         false;                     // addDvLayers met an HEVC track of a join, a playlist or a file without a container
     bool m_dvLayerMaking = false;  // setDvLayerMaking
+    // each file of a join probed once a job for the codec of its tracks (addStream), by file name
+    std::map<std::string, DetectStreamRez> m_joinProbes;
     std::string m_dvLayerFfmpeg;
     bool addDvLayers(const std::string& codec, const std::string& lineStreamName,
                      const std::map<std::string, std::string>& addParams);

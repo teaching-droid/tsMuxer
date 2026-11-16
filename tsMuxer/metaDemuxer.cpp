@@ -2910,41 +2910,55 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
     // (checkEmptyTracks) was reached by the DTS file alone. A file whose sound the listing gives under another line
     // name stops here too; the names of a family are one (AC-3, E-AC-3 and TrueHD are all A_AC3, DTS and DTS-HD
     // A_DTS, and TrueHD without its core may be given as A_MLP).
+    // The probe is quiet, and leaves nothing behind: its lines, its warnings (counted for --scan), and the marks it
+    // sets for the disc (V3_flags: the 4K size and the HDR kind of every video track of the file, which put the PGS
+    // of a 1080p disc on the PIDs of a UHD one where only the sound of a join of UHD clips was named). Each file is
+    // probed once a job, whatever lines name it, and a playlist is not, as its table names the codec of every PID.
     const auto soundLine = [](const std::string& name) { return name == "A_MLP" ? std::string("A_AC3") : name; };
-    if (const int named = videoCodecId(codec);
-        (named != 0 || strStartWith(codec, "A_")) && fileList.size() > 1 && !SubTrackFilter::isSubTrack(pid))
+    if (const int named = videoCodecId(codec); (named != 0 || strStartWith(codec, "A_")) && fileList.size() > 1 &&
+                                               !SubTrackFilter::isSubTrack(pid) && mplsInfoList.empty())
         for (size_t i = 0; i < fileList.size(); ++i)
         {
             const std::string file = unquoteStr(trimStr(fileList[i]));
-            struct Silence
+            auto cached = m_joinProbes.find(file);
+            if (cached == m_joinProbes.end())
             {
-                struct NullBuffer final : std::streambuf
+                struct Quiet
                 {
-                    int overflow(const int c) override { return traits_type::not_eof(c); }
-                } null;
-                std::streambuf* out = std::cout.rdbuf(&null);
-                std::streambuf* err = std::cerr.rdbuf(&null);
-                const bool lastMsg = sLastMsg;
-                Silence() = default;
-                Silence(const Silence&) = delete;
-                Silence& operator=(const Silence&) = delete;
-                ~Silence()
+                    struct NullBuffer final : std::streambuf
+                    {
+                        int overflow(const int c) override { return traits_type::not_eof(c); }
+                    } null;
+                    std::streambuf* out = std::cout.rdbuf(&null);
+                    std::streambuf* err = std::cerr.rdbuf(&null);
+                    const bool lastMsg = sLastMsg;
+                    const int flags = V3_flags;
+                    const bool wasSilent = traceWarnings::silent;
+                    Quiet() { traceWarnings::silent = true; }
+                    Quiet(const Quiet&) = delete;
+                    Quiet& operator=(const Quiet&) = delete;
+                    ~Quiet()
+                    {
+                        std::cout.rdbuf(out);
+                        std::cerr.rdbuf(err);
+                        sLastMsg = lastMsg;
+                        V3_flags = flags;
+                        traceWarnings::silent = wasSilent;
+                    }
+                };
+                DetectStreamRez probe;
+                try
                 {
-                    std::cout.rdbuf(out);
-                    std::cerr.rdbuf(err);
-                    sLastMsg = lastMsg;
+                    Quiet quiet;
+                    probe = DetectStreamReader(m_readManager, file, false);
                 }
-            };
-            DetectStreamRez probe;
-            try
-            {
-                Silence silence;
-                probe = DetectStreamReader(m_readManager, file, false);
+                catch (...)
+                {
+                    probe = DetectStreamRez();  // a file it cannot read is left to the rules that follow
+                }
+                cached = m_joinProbes.emplace(file, std::move(probe)).first;
             }
-            catch (...)
-            {
-                continue;
-            }
+            const DetectStreamRez& probe = cached->second;
             const CheckStreamRez* track = nullptr;
             if (pid == 0)
             {
