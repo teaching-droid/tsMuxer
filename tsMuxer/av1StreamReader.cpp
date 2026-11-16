@@ -151,6 +151,27 @@ size_t AV1StreamReader::convertPending(const bool lastBlock)
     uint8_t* dst = dstStart;
 
     bool broken = false;
+    // ** THE CHAIN IS FOUND AGAIN AFTER A BREAK. ** Where the OBUs stop reading (the second file of a join of two cuts
+    // begins inside an OBU, or the stream is damaged), the rest of the stream was dropped: every later block went on
+    // from inside an OBU too, and the join of two cut recordings kept its first file and stopped. The chain is looked
+    // for again from the break on, by the strict rule of the start of a cut (lowOverheadLead), and read from there.
+    const auto resync = [&]
+    {
+        const int lead = lowOverheadLead(src + 1, end);
+        if (lead < 0)
+            return false;
+        const size_t skipped = static_cast<size_t>(lead) + 1;
+        if (!m_brokenObuWarned)
+        {
+            LTRACE(LT_WARN, 2,
+                   "AV1: the OBU chain breaks after " << m_totalFrameNum << " frames; it is found again " << skipped
+                                                      << " bytes on, and the bytes between are left out");
+            m_brokenObuWarned = true;
+        }
+        src += skipped;
+        broken = false;
+        return true;
+    };
     while (src < end)
     {
         Av1ObuHeader hdr;
@@ -158,6 +179,8 @@ size_t AV1StreamReader::convertPending(const bool lastBlock)
         if (hdrLen < 0 || !hdr.obu_has_size_field)
         {
             broken = true;
+            if (resync())
+                continue;
             break;
         }
         int lebLen = 0;
@@ -167,7 +190,11 @@ size_t AV1StreamReader::convertPending(const bool lastBlock)
             // Eight bytes present and still no end to the length means it is not a length at
             // all; fewer than that means it is split across the block boundary.
             if (end - (src + hdrLen) >= 8)
+            {
                 broken = true;
+                if (resync())
+                    continue;
+            }
             break;
         }
         const uint8_t* payload = src + hdrLen + lebLen;
@@ -198,8 +225,8 @@ size_t AV1StreamReader::convertPending(const bool lastBlock)
 
     if (broken)
     {
-        // Neither carrying these bytes for ever nor writing them out as if they were video is
-        // right, so they are dropped and said out loud, once.
+        // No chain in what is here yet: the bytes are dropped and said out loud, once, but for the last ones, in which
+        // the chain may begin that the next block goes on with
         if (!m_brokenObuWarned)
         {
             LTRACE(LT_WARN, 2,
@@ -207,7 +234,11 @@ size_t AV1StreamReader::convertPending(const bool lastBlock)
                                                       << " bytes skipped");
             m_brokenObuWarned = true;
         }
-        m_pending.clear();
+        static constexpr size_t KEEP_FOR_CHAIN = 256 * 1024;
+        if (m_pending.size() > KEEP_FOR_CHAIN)
+            m_pending.erase(m_pending.begin(), m_pending.end() - KEEP_FOR_CHAIN);
+        if (lastBlock)
+            m_pending.clear();
     }
     else if (lastBlock && !m_pending.empty())
     {
