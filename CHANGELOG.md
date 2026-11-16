@@ -116,7 +116,7 @@
 
 * **Opus is read from a transport stream.** tsMuxeR wrote Opus into a transport stream and listed it there as "Can't detect stream type". It is now listed and muxed, with up to 8 channels.
 
-* **A demuxed sound file is named with its delay also where it is zero** ([justdan96/tsMuxer#259](https://github.com/justdan96/tsMuxer/issues/259)): `film.track_2 DELAY 0ms.ac3`, where the start of the track against the video was measured. A raw file, whose delay is not known, keeps a name without one. [Note for the user: this renames the sound file of most demuxes of a film.]
+* **A demuxed sound file is named with its delay also where it is zero** ([justdan96/tsMuxer#259](https://github.com/justdan96/tsMuxer/issues/259)): `film.track_2 DELAY 0ms.ac3`, where the start of the track against the video was measured. A raw file, whose delay is not known, keeps a name without one.
 
 * **Sound a Blu-ray does not carry can be converted, by your own ffmpeg.** AAC, MP2, MP3, Opus, Vorbis, FLAC, ALAC, WavPack and LPCM at another rate are converted to AC-3 or LPCM before the mux, so a disc player plays them. `convert=ac3`, `convert=ac3:448`, `convert=lpcm:24` on a track's line, or `--convert-audio=ac3` for every such track of a Blu-ray or AVCHD output. AC-3 gets a rate a step above that of a lossy track, the most for a lossless one; LPCM keeps the bits and rate of the track where a disc takes them. `:stereo` makes the sound stereo, and `stereo=ac3` (or `--convert-stereo=both`) adds a stereo track beside a track of more channels. The converted sound keeps its place against the picture. ffmpeg is not part of tsMuxeR: give it with `--ffmpeg`, or put it beside tsMuxeR or on the search path. A track of a join, a playlist or a disc title is not converted. In the window, the General tab has the setting (Ask me, AC-3, LPCM, or leave the sound as it is), with the channels and the rate; with Ask me, Start muxing asks once for all such tracks, and "Remember my choice" keeps the answer.
 
@@ -138,7 +138,7 @@
 
 * **A text subtitle track can go into one output as text and drawn.** Given on two lines of the meta file, one with `keep-text` and one without, a text track (ASS, SSA, SRT) goes into a Matroska output or a demux twice: as text, for a player that draws it, and as pictures (PGS), for one that does not. A second line for the same track was left out. In the window: "Also as pictures, a second track (PGS)" on the Subtitles tab.
 
-* **`{\an1}` to `{\an9}` in an SRT file place a drawn subtitle** (#31 K57). Only `{\an8}` was honoured; any other tag was drawn at the bottom centre.
+* **`{\an1}` to `{\an9}` in an SRT file place a drawn subtitle** (#31 K57). Only `{\an8}` was honoured; any other tag was drawn at the bottom centre. The older form `{\a1}` to `{\a11}`, which older tools write, is read too.
 
 * **PGS subtitles of a Blu-ray made in the window ran out of step with the picture** (#60), by 0.1 %: 2.7 s at the end of a film of 45 minutes. The window gives every subtitle track the frame rate of the video, and a PGS track whose own display sets say another rate (59.94 beside a video of 60 fps) had all its times scaled to it, though it came in the same file as the video and was in step with it. Such a track now keeps its times. A subtitle file of its own is converted as before. Thanks to @ANIVIXE.
 
