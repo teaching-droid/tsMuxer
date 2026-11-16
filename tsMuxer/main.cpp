@@ -5381,6 +5381,14 @@ static int runMakeSample(int argc, char** argv, const std::string& reportFile, c
         request.maxBytes = ZIP_LIMIT - addedSize - ROOM_FOR_REPORT;
     if (error.empty() && request.maxBytes < 1000000)
         error = "The report of --add-report is too large to leave room for a sample under 25 MB.";
+    // ** A FOLDER IS NO SOURCE OF A SAMPLE ON ITS OWN. ** A disc folder given without --title (a Blu-ray folder, a
+    // DVD folder or its VIDEO_TS) was taken as a file of no bytes: the zip held a sample of 0 bytes, and the run said
+    // the sample was written. A Blu-ray folder needs --title, and of any other folder one of its files is the source.
+    if (std::error_code dirError;
+        error.empty() && sampleTitle.empty() && std::filesystem::is_directory(fsPath(positional[0]), dirError))
+        error = positional[0] +
+                " is a folder. A sample is made of a file, or of a title of a Blu-ray disc folder or "
+                "image with --title=main or --title=<number>; of a DVD, give one of its VOB files.";
     if (!error.empty())
     {
         LTRACE(LT_ERROR, 2, error);
