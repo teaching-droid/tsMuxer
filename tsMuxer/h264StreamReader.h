@@ -314,6 +314,8 @@ class H264StreamReader final : public MPEGStreamReader
     int m_firstSpsWidth = 0;  // the picture size of the first SPS: a join of files of other sizes changes it
     int m_firstSpsHeight = 0;
     bool m_sizeChangeSaid = false;
+    double m_firstSpsFps = 0;  // the rate the first SPS gives, to tell a change of it
+    bool m_rateChangeSaid = false;
     // Whether the two flags above hold a real stream's values yet, as opposed to the
     // constructor's false. Without it the first SPS was compared against the defaults and
     // reported as a change.

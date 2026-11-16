@@ -87,6 +87,8 @@ class HEVCStreamReader final : public MPEGStreamReader
     unsigned m_firstSpsWidth = 0;
     unsigned m_firstSpsHeight = 0;
     bool m_sizeChangeSaid = false;
+    double m_firstSpsFps = 0;  // warnSizeChangeOnDisc: the rate the first SPS gives, to tell a change
+    bool m_rateChangeSaid = false;
     bool isIFrame() override { return m_lastIFrame; }
 
     void updateStreamFps(void* nalUnit, uint8_t* buff, uint8_t* nextNal, int oldSpsLen) override;

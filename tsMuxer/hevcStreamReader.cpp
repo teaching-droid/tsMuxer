@@ -1098,6 +1098,24 @@ void HEVCStreamReader::refuseMultiLayer() const
 // clip with the first size in its clip information, without a word. Said once, for a disc only.
 void HEVCStreamReader::warnSizeChangeOnDisc()
 {
+    // ** A CHANGE OF THE FRAME RATE, IN EVERY OUTPUT. ** A join of files of different rates (1080p at 24 and at 25 fps)
+    // is one stream to the reader, which times all its pictures at one rate: the part after the change played at the
+    // wrong speed, out of step with its sound, and the job said it was successful. Said once; a demux writes no times.
+    if (const double fps = m_sps ? m_sps->getFPS() : 0; fps > 0)
+    {
+        if (m_firstSpsFps == 0)
+            m_firstSpsFps = fps;
+        else if (!m_rateChangeSaid && !m_demuxMode && std::abs(fps - m_firstSpsFps) > m_firstSpsFps * 0.005)
+        {
+            m_rateChangeSaid = true;
+            LTRACE(LT_WARN, 2,
+                   "Warning: the HEVC stream changes its frame rate from "
+                       << doubleToStr(m_firstSpsFps, 3) << " to " << doubleToStr(fps, 3)
+                       << " fps within the stream, as a join of files of different rates does. Its pictures are "
+                          "all timed at one rate, so the part after the change plays at a wrong speed and out of "
+                          "step with its sound. Join files of one frame rate only.");
+        }
+    }
     const unsigned width = getStreamWidth();
     const unsigned height = getStreamHeight();
     if (m_firstSpsWidth == 0)
