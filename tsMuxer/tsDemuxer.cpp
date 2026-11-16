@@ -606,10 +606,10 @@ void TSDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             // was then listed and read as MPEG-2. Such a track, and a private stream that is neither sound nor
             // captions, says nothing of its codec (m_bare): the listing asks the AV1 reader on its strict rule first
             // (TrackInfo::m_bareTrack), and every probe after it as before.
-            const bool startCode = bytes != pesFirstBytes.end() && bytes->second.size() >= 3 &&
-                                   bytes->second[0] == 0 && bytes->second[1] == 0 &&
-                                   (bytes->second[2] == 1 || (bytes->second.size() >= 4 && bytes->second[2] == 0 &&
-                                                              bytes->second[3] == 1));
+            const bool startCode = bytes != pesFirstBytes.end() && bytes->second.size() >= 3 && bytes->second[0] == 0 &&
+                                   bytes->second[1] == 0 &&
+                                   (bytes->second[2] == 1 ||
+                                    (bytes->second.size() >= 4 && bytes->second[2] == 0 && bytes->second[3] == 1));
             if ((id >= 0xE0 && id <= 0xEF && !startCode) || (id == 0xBD && !aribCaptions && !stream.m_pesSound))
             {
                 stream.m_bare = true;
@@ -2188,8 +2188,9 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
         // counted again (the hold took it out of the count)
         const bool givenBackVideo =
             m_givingBack && streamInfo != m_pmt.pidList.end() && isVideoPID(streamInfo->second.m_streamType);
-        const bool leadSound = part != nullptr && m_leadPes[pid] != LEAD_PES_DONE && streamInfo != m_pmt.pidList.end() &&
-                               !isVideoPID(streamInfo->second.m_streamType) && (pesPacket->flagsLo & 0x80) == 0x80;
+        const bool leadSound = part != nullptr && m_leadPes[pid] != LEAD_PES_DONE &&
+                               streamInfo != m_pmt.pidList.end() && !isVideoPID(streamInfo->second.m_streamType) &&
+                               (pesPacket->flagsLo & 0x80) == 0x80;
         if (leadSound && m_leadHeld.find(pid) == m_leadHeld.end())
             m_partCutBeforeHold[pid] = m_partCut[pid];  // before the PES that may be the first held
         if (part != nullptr && givenBackVideo)
@@ -2231,7 +2232,7 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
                     if (leadSound && leftOut)
                         if (const auto before = m_partCutBeforeHold.find(pid); before != m_partCutBeforeHold.end())
                         {
-                            const int64_t step = m_partCut[pid].step;  // learnt from the PES left out
+                            const int64_t step = m_partCut[pid].step;               // learnt from the PES left out
                             const int64_t heldFirst = m_partCut[pid].firstKeptPts;  // the first PES left out
                             m_partCut[pid] = before->second;
                             m_partCut[pid].step = step;
@@ -2284,7 +2285,6 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
 
             if (m_firstPTS == -1 || curPts < m_firstPTS)
                 m_firstPTS = curPts;
-
 
             if (streamInfo != m_pmt.pidList.end() && isVideoPID(streamInfo->second.m_streamType))
             {

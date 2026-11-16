@@ -337,10 +337,10 @@ class TSDemuxer final : public AbstractDemuxer
     // whose video starts with its parameter sets, or whose subtitles come before its first video PES, is read as
     // before.
     std::vector<uint8_t> m_subWait;
-    bool m_subWaitOn = false;     // the subtitles of this file wait
-    bool m_subWaitDone = false;   // they waited, and wait no more in this file
-    bool m_subHandingOn = false;  // handOnWaitingSubtitles is handing them on (demuxPacket)
-    bool m_noSubtitleWait = false;  // setNoSubtitleWait
+    bool m_subWaitOn = false;                        // the subtitles of this file wait
+    bool m_subWaitDone = false;                      // they waited, and wait no more in this file
+    bool m_subHandingOn = false;                     // handOnWaitingSubtitles is handing them on (demuxPacket)
+    bool m_noSubtitleWait = false;                   // setNoSubtitleWait
     static constexpr size_t SUB_WAIT_MAX = 8 << 20;  // past that, they go on, counted as before
     [[nodiscard]] bool isSubtitlePid(int pid) const;
     [[nodiscard]] bool videoStartSettled() const;
@@ -377,8 +377,8 @@ class TSDemuxer final : public AbstractDemuxer
     // under private stream 1 (0xBD). Sound, teletext and subtitles begin with neither.
     uint8_t m_pesWithTime[8192]{};
     bool m_pesVideoId[8192]{};
-    std::map<int, int> m_ptsPesSeen;        // PES with a PTS after the first, per PID, until the start is settled (-1)
-                                            // (a first PES on another clock or damaged, see processTsPacket)
+    std::map<int, int> m_ptsPesSeen;  // PES with a PTS after the first, per PID, until the start is settled (-1)
+                                      // (a first PES on another clock or damaged, see processTsPacket)
     // A run of the first PES of a track, within 10 seconds of each other: the first, the last and the lowest time
     struct StartRun
     {

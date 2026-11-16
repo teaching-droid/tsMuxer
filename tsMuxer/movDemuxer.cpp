@@ -1782,7 +1782,7 @@ static std::vector<uint32_t> chunkSampleCounts(const MOVStreamContext* st)
     std::vector<uint32_t> n(st->chunk_offsets.size(), 0);
     for (size_t e = 0; e < st->stsc_data.size(); ++e)
     {
-        const size_t first = st->stsc_data[e].first;  // 1-based
+        const size_t first = st->stsc_data[e].first;                                                   // 1-based
         const size_t last = e + 1 < st->stsc_data.size() ? st->stsc_data[e + 1].first : n.size() + 1;  // exclusive
         if (first == 0 || last < first)
             return {};
@@ -1800,9 +1800,9 @@ static int64_t wholeSamplesOfChunk(const MOVStreamContext* st, const uint64_t fi
     missingFrom = -1;
     for (uint32_t s = 0; s < count; ++s)
     {
-        const int64_t size = st->sample_size != 0              ? st->sample_size
+        const int64_t size = st->sample_size != 0             ? st->sample_size
                              : first + s < st->m_index.size() ? st->m_index[first + s]
-                                                               : -1;
+                                                              : -1;
         if (size < 0)
             return -1;
         if (pos + size > fileSize)
@@ -1820,8 +1820,8 @@ static void recordCutOff(const std::string& fileName, int64_t fileSize, const MO
 
 // From sample `sample` (from 0) on, which begins at byte `missingFrom`, a track lists data past the end of the file:
 // the time of that sample, by stts
-static void noteCutOff(const std::string& fileName, const int64_t fileSize, const MOVStreamContext* st,
-                       uint64_t sample, const int64_t missingFrom)
+static void noteCutOff(const std::string& fileName, const int64_t fileSize, const MOVStreamContext* st, uint64_t sample,
+                       const int64_t missingFrom)
 {
     uint64_t time = 0;
     for (const auto& e : st->stts_data)
@@ -1901,8 +1901,8 @@ void MovDemuxer::buildIndex()
                                                                : -1;
                     int64_t missingFrom = -1;
                     if (own > 0 && j + own > m_fileSize)
-                        if (const int64_t whole = wholeSamplesOfChunk(st, firstSample, counts[k], j, m_fileSize,
-                                                                      missingFrom);
+                        if (const int64_t whole =
+                                wholeSamplesOfChunk(st, firstSample, counts[k], j, m_fileSize, missingFrom);
                             whole >= 0 && missingFrom >= 0)
                         {
                             noteCutOff(m_fileName, m_fileSize, st, firstSample + static_cast<uint64_t>(whole),

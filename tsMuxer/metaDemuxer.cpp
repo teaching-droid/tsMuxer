@@ -2964,8 +2964,8 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
             const CodecInfo& found = track->codecInfo;
             const int foundId = found.codecID == CODEC_V_MPEG4_H264_DEP ? CODEC_V_MPEG4_H264 : found.codecID;
             const bool otherVideo = named != 0 && foundId != named && isVideoCodecId(foundId);
-            const bool otherSound = named == 0 && strStartWith(found.programName, "A_") &&
-                                    soundLine(found.programName) != soundLine(codec);
+            const bool otherSound =
+                named == 0 && strStartWith(found.programName, "A_") && soundLine(found.programName) != soundLine(codec);
             if (otherVideo || otherSound)
                 THROW(ERR_USAGE, "File " << i + 1 << " of the join on the " << codec << " line, " << file
                                          << (pid > 0 ? ", track " + std::to_string(pid) : std::string()) << ", is "
@@ -4120,9 +4120,8 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         const std::string first = unquoteStr(trimStr(fileList[0]));
         const std::string ext = strToUpperCase(extractFileExt(first));
         if (ext == "TS" || ext == "M2TS" || ext == "MTS" || ext == "M2T" || ext == "SSIF")
-            tsStart =
-                tsTrackStart(m_readManager, first, SubTrackFilter::isSubTrack(pid) ? pid >> 16 : pid, &tsStartKnown,
-                             &tsStartOfFile);
+            tsStart = tsTrackStart(m_readManager, first, SubTrackFilter::isSubTrack(pid) ? pid >> 16 : pid,
+                                   &tsStartKnown, &tsStartOfFile);
         else if ((ext == "VOB" || ext == "MPG" || ext == "MPEG" || ext == "M2P" || ext == "EVO" || ext == "VRO" ||
                   ext == "PS" || ext == "MOD") &&
                  !SubTrackFilter::isSubTrack(pid))

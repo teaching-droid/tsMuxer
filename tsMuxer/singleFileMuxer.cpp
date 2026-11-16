@@ -720,8 +720,8 @@ bool SingleFileMuxer::close()
                 }
             }
 
-            // ** A DEMUXED SOUND FILE SAYS THE GAP IT STARTS AFTER. ** The sound of a part a playlist cuts starts after a
-            // gap where its first PES are left out (TSDemuxer::demuxOnePacket), which a mux puts in its times; a raw
+            // ** A DEMUXED SOUND FILE SAYS THE GAP IT STARTS AFTER. ** The sound of a part a playlist cuts starts after
+            // a gap where its first PES are left out (TSDemuxer::demuxOnePacket), which a mux puts in its times; a raw
             // file has none, and the demuxed files muxed again put that sound early by the gap. Known only once the
             // track is read, so it is added to the name here, to the delay the name says already.
             if (const auto* sound = dynamic_cast<const SimplePacketizerReader*>(streamInfo->m_codecReader);
@@ -745,9 +745,8 @@ bool SingleFileMuxer::close()
                 else if (m_owner)
                 {
                     // where the files end up (a demux written into a temporary folder first: openDstFile)
-                    const std::string finalDir = m_owner->demuxFolder().empty()
-                                                     ? dir
-                                                     : closeDirPath(toNativeSeparators(m_owner->demuxFolder()));
+                    const std::string finalDir =
+                        m_owner->demuxFolder().empty() ? dir : closeDirPath(toNativeSeparators(m_owner->demuxFolder()));
                     if (!m_owner->sourceSameAs(finalDir + newName.substr(dir.size())).empty())
                         why = "a source has that name";
                 }
@@ -761,7 +760,8 @@ bool SingleFileMuxer::close()
                 if (why.empty() && !sameName)
                 {
                     deleteFile(newName);
-                    if (!(dryRun::enabled() && dryRun::rename(old, newName)) && rename(old.c_str(), newName.c_str()) != 0)
+                    if (!(dryRun::enabled() && dryRun::rename(old, newName)) &&
+                        rename(old.c_str(), newName.c_str()) != 0)
                         why = "it could not be renamed";
                 }
                 if (why.empty())
