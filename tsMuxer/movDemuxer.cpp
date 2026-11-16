@@ -1227,7 +1227,11 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
         // delay in the listing, so nothing else moves it.
         // A later file of a join starts where the pictures of the files before it end: its cues came at their own
         // times, before that point, in the middle of the file before.
-        const int64_t startNs = m_demuxer->trackStartNs(static_cast<int32_t>(m_sc->ffindex)) + m_demuxer->joinStartNs();
+        // In a file cut without re-encoding (ffmpeg -ss ... -c copy) the edit list of the text track skips the text
+        // before the cut, and the video keeps the pictures from the key picture before it: the cues came as if the file
+        // were not cut, seconds late (#63). The text track starts as the sound does (textStartNs): less what its edit
+        // list skips, plus the pictures the video keeps. In a file that is not cut both are 0.
+        const int64_t startNs = m_demuxer->textStartNs(static_cast<int32_t>(m_sc->ffindex)) + m_demuxer->joinStartNs();
         const int64_t startMs = (startNs >= 0 ? startNs + 500000 : startNs - 500000) / 1000000;
         while (used < size)
         {

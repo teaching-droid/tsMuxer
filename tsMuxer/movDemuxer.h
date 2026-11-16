@@ -53,8 +53,9 @@ class MovDemuxer final : public IOContextDemuxer
     [[nodiscard]] bool isPidFilterSupported() const override { return true; }
     [[nodiscard]] int64_t getFileDurationNano() const override;
     const uint8_t* getTrackCodecPrivate(int32_t pid, int& size) override;
-    // where track pid starts against the first video track, in ns (the text reader moves its cues by it)
-    [[nodiscard]] int64_t trackStartNs(const int32_t pid) const { return trackStartFromVideoNs(pid); }
+    // where the cues of text track pid start against the first picture, in ns, as a sound track does (soundOffsetNs):
+    // its start against the first video track, less what its edit list skips, plus the pictures before a cut
+    [[nodiscard]] int64_t textStartNs(const int32_t pid) const { return soundOffsetNs(pid - 1); }
     // Where the open file of a join starts: the pictures of the files before it, as the video reader times them (the
     // text reader moves its cues by it as well)
     [[nodiscard]] int64_t joinStartNs() const { return m_joinStartNs; }
