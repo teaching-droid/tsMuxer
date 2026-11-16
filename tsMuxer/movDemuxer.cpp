@@ -1785,7 +1785,7 @@ static std::vector<uint32_t> chunkSampleCounts(const MOVStreamContext* st)
         const size_t first = st->stsc_data[e].first;                                                   // 1-based
         const size_t last = e + 1 < st->stsc_data.size() ? st->stsc_data[e + 1].first : n.size() + 1;  // exclusive
         if (first == 0 || last < first)
-            return {};
+            break;  // a broken entry: the counts of the entries before it are kept, as ownChunkBytes keeps its own
         for (size_t c = first; c < last && c <= n.size(); ++c) n[c - 1] = st->stsc_data[e].count;
     }
     return n;
@@ -1886,19 +1886,19 @@ void MovDemuxer::buildIndex()
                 // (#64): ffmpeg puts all the samples of a short file in one chunk. A chunk that begins at the end or
                 // later holds nothing; a chunk whose samples run past the end is read as far as the file goes. Both
                 // end the job saying the file is cut off, from the first sample that is missing.
-                if (!found_moof && j >= m_fileSize)
+                if (!found_moof && m_fileSize > 0 && j >= m_fileSize)
                 {
                     if (!cutNoted)
                         noteCutOff(m_fileName, m_fileSize, st, firstSample, j);
                     cutNoted = true;
                     continue;
                 }
-                if (!found_moof && !cutNoted && k < counts.size())
+                if (!found_moof && m_fileSize > 0 && !cutNoted && k < counts.size())
                 {
-                    // the bytes of its samples: from the sample table, or one size times their number
-                    const int64_t own = k < bytes.size() && bytes[k] >= 0 ? bytes[k]
-                                        : st->sample_size != 0 ? static_cast<int64_t>(counts[k]) * st->sample_size
-                                                               : -1;
+                    // the bytes of its samples, where the sample table gives them (ownChunkBytes): one size for all
+                    // samples counts them in units that are not bytes for compressed QuickTime sound (IMA4, MP3 in a
+                    // MOV), and was taken for a chunk past the end of a whole file
+                    const int64_t own = k < bytes.size() ? bytes[k] : -1;
                     int64_t missingFrom = -1;
                     if (own > 0 && j + own > m_fileSize)
                         if (const int64_t whole =
@@ -3040,8 +3040,11 @@ int MovDemuxer::mov_read_trun(MOVAtom atom)
         sc->m_index.push_back(sample_size);
         if (!cutNoted && offset + sample_size > m_fileSize)
         {
-            recordCutOff(m_fileName, m_fileSize, sc,
-                         sc->time_scale > 0 ? static_cast<double>(sc->fragDts.back()) / sc->time_scale : 0, offset);
+            // from the track's first sample: the decode times of a fragment count from its tfdt, which may be hours
+            recordCutOff(
+                m_fileName, m_fileSize, sc,
+                sc->time_scale > 0 ? static_cast<double>(sc->fragDts.back() - sc->fragDts.front()) / sc->time_scale : 0,
+                offset);
             cutNoted = true;
         }
         offset += sample_size;
