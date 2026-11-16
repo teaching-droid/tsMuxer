@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 44 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 45 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -169,6 +169,8 @@
 * **VVC with very large pictures had decoding times that went back.** Where the pictures are so large (about 2 MB each) that the first look at a file reaches only a few of them, the depth of the groups of B pictures was found only picture by picture, and the decoding times went back by up to 7 pictures at the start and by up to 15 at a deeper group later, which a player cannot follow. The depth is now read ahead, as for HEVC. Ordinary VVC files were not affected.
 
 * **A damaged HEVC stream could grow many times its size.** Where the HDR metadata of a stream comes only once, it is put in front of each key picture. A key picture with a damaged first slice got it again and again: a stream of 400 KB came out at 8.6 MB and took 26 s. The metadata now goes only in front of a slice that is read.
+
+* **A join of video files of different frame rates was muxed without a word.** All the pictures of a join are timed at one rate, so 1080p at 25 fps joined to 1080p at 24 played its second part 4 % slow and out of step with its sound. tsMuxeR now says so.
 
 ### Packages
 
