@@ -85,12 +85,16 @@ class AV1StreamReader final : public MPEGStreamReader
     static bool isAnnexB(const uint8_t* buf, const uint8_t* end);
     Av1Framing m_framing;
     bool m_brokenObuWarned;
-    std::vector<uint8_t> m_pending;      // source bytes not yet converted, an OBU may span blocks
-    std::vector<uint8_t> m_ivfRaw;       // IVF (or Annex B) bytes whose frame is not complete yet
-    int m_ivfHeaderLeft = 0;             // bytes of the IVF file header still to skip
-    int64_t m_ivfRead = 0;               // the bytes of an IVF file handed over so far
-    int64_t m_ivfLeftOut = 0;            // of them, the bytes left out after a damaged frame size
-    bool m_ivfDamaged = false;           // a frame size no frame can have was met: the rest is left out
+    std::vector<uint8_t> m_pending;  // source bytes not yet converted, an OBU may span blocks
+    std::vector<uint8_t> m_ivfRaw;   // IVF (or Annex B) bytes whose frame is not complete yet
+    int m_ivfHeaderLeft = 0;         // bytes of the IVF file header still to skip
+    int64_t m_ivfRead = 0;           // the bytes of an IVF file handed over so far
+    int64_t m_ivfLeftOut = 0;        // of them, the bytes left out after a damaged frame size
+    // the bytes of a low overhead stream left out (a cut's lead, the bytes of a break), counted as read: a damaged
+    // stream read to its end is no mux that stopped early (getProcessedSize)
+    int64_t m_lowLeftOut = 0;
+    bool m_seekChain = false;   // convertPending: the chain broke and was not found again; it is looked for first
+    bool m_ivfDamaged = false;  // a frame size no frame can have was met: the rest is left out
     std::vector<uint8_t> m_convBuffer;   // front pad plus the converted OBUs handed to the base
     std::vector<uint8_t> m_demuxBuffer;  // the same OBUs turned back into the on disk form
     bool m_demuxSeqHdrPending;           // a sequence header owed to the head of a demuxed part

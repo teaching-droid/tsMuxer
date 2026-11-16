@@ -155,28 +155,67 @@ size_t AV1StreamReader::convertPending(const bool lastBlock)
     // begins inside an OBU, or the stream is damaged), the rest of the stream was dropped: every later block went on
     // from inside an OBU too, and the join of two cut recordings kept its first file and stopped. The chain is looked
     // for again from the break on, by the strict rule of the start of a cut (lowOverheadLead), and read from there.
+    // The first byte from `from` on where a chain reads (not a start code, which lowOverheadLead takes as the start of
+    // data of another framing): end where none is in what is here yet
+    const auto findChain = [&](const uint8_t* from)
+    {
+        while (from < end)
+        {
+            const int lead = lowOverheadLead(from, end);
+            if (lead < 0)
+                return end;
+            const uint8_t* at = from + lead;
+            if (end - at >= 3 && at[0] == 0 && at[1] == 0 && (at[2] == 1 || at[2] == 0))
+            {
+                from = at + 1;
+                continue;
+            }
+            return at;
+        }
+        return end;
+    };
+    // A block after one that broke without the chain found again begins with bytes of the damage: they are not read
+    // as OBUs (one in eight random bytes reads as a header, and a size of four bytes or more made the reader wait for
+    // an OBU of up to 2^56 bytes for the rest of the file), the chain is looked for first.
+    if (m_seekChain)
+    {
+        const uint8_t* at = findChain(src);
+        if (at == end)
+            broken = true;
+        else
+        {
+            m_seekChain = false;
+            m_lowLeftOut += at - src;
+            src = at;
+        }
+    }
     const auto resync = [&]
     {
-        const int lead = lowOverheadLead(src + 1, end);
-        if (lead < 0)
+        const uint8_t* at = findChain(src + 1);
+        if (at == end)
             return false;
-        const size_t skipped = static_cast<size_t>(lead) + 1;
+        const size_t skipped = static_cast<size_t>(at - src);
         if (!m_brokenObuWarned)
         {
             LTRACE(LT_WARN, 2,
-                   "AV1: the OBU chain breaks after " << m_totalFrameNum << " frames; it is found again " << skipped
-                                                      << " bytes on, and the bytes between are left out");
+                   "AV1: the OBU chain breaks; it is found again " << skipped
+                                                                   << " bytes on, and the bytes between are left out");
             m_brokenObuWarned = true;
         }
         src += skipped;
+        m_lowLeftOut += static_cast<int64_t>(skipped);
         broken = false;
         return true;
     };
-    while (src < end)
+    // an OBU larger than this is no OBU of a picture: the size is that of damaged bytes (a picture is far smaller)
+    static constexpr int64_t MAX_OBU_SIZE = 64 * 1024 * 1024;
+    while (!broken && src < end)
     {
         Av1ObuHeader hdr;
         const int hdrLen = hdr.parse(src, end);
-        if (hdrLen < 0 || !hdr.obu_has_size_field)
+        // the types a stream has (1 to 8, and 15 for padding; 0 and 9 to 14 are reserved), as the chain is read
+        const int type = hdrLen < 0 ? 0 : static_cast<int>(hdr.obu_type);
+        if (hdrLen < 0 || !hdr.obu_has_size_field || type == 0 || (type > 8 && type != 15))
         {
             broken = true;
             if (resync())
@@ -185,11 +224,11 @@ size_t AV1StreamReader::convertPending(const bool lastBlock)
         }
         int lebLen = 0;
         const int64_t payloadLen = decodeLeb128(src + hdrLen, end, lebLen);
-        if (payloadLen < 0)
+        if (payloadLen < 0 || payloadLen > MAX_OBU_SIZE)
         {
             // Eight bytes present and still no end to the length means it is not a length at
             // all; fewer than that means it is split across the block boundary.
-            if (end - (src + hdrLen) >= 8)
+            if (end - (src + hdrLen) >= 8 || payloadLen > MAX_OBU_SIZE)
             {
                 broken = true;
                 if (resync())
@@ -230,19 +269,28 @@ size_t AV1StreamReader::convertPending(const bool lastBlock)
         if (!m_brokenObuWarned)
         {
             LTRACE(LT_WARN, 2,
-                   "AV1: the OBU chain breaks after " << m_totalFrameNum << " frames, " << m_pending.size()
-                                                      << " bytes skipped");
+                   "AV1: the OBU chain breaks, and is not found again in the next " << m_pending.size() << " bytes");
             m_brokenObuWarned = true;
         }
-        static constexpr size_t KEEP_FOR_CHAIN = 256 * 1024;
+        // as much as the start of a cut is searched in (lowOverheadLead): a key picture of 4K, larger than a block,
+        // is where the chain begins again, and a shorter tail lost it
+        static constexpr size_t KEEP_FOR_CHAIN = 4 * 1024 * 1024;
         if (m_pending.size() > KEEP_FOR_CHAIN)
+        {
+            m_lowLeftOut += static_cast<int64_t>(m_pending.size() - KEEP_FOR_CHAIN);
             m_pending.erase(m_pending.begin(), m_pending.end() - KEEP_FOR_CHAIN);
-        if (lastBlock)
+        }
+        m_seekChain = true;
+        if (lastBlock || m_ivfDamaged)  // the end, or a damaged IVF whose rest is left out: nothing more comes
+        {
+            m_lowLeftOut += static_cast<int64_t>(m_pending.size());
             m_pending.clear();
+        }
     }
     else if (lastBlock && !m_pending.empty())
     {
         LTRACE(LT_WARN, 2, "AV1: the stream ends inside an OBU, " << m_pending.size() << " trailing bytes ignored");
+        m_lowLeftOut += static_cast<int64_t>(m_pending.size());
         m_pending.clear();
     }
 
@@ -408,6 +456,8 @@ bool AV1StreamReader::isAnnexB(const uint8_t* buf, const uint8_t* end)
 
 int64_t AV1StreamReader::getProcessedSize()
 {
+    if (m_framing == Av1Framing::LOW_OVERHEAD)
+        return MPEGStreamReader::getProcessedSize() + m_lowLeftOut;
     if (m_framing != Av1Framing::IVF && m_framing != Av1Framing::ANNEX_B)
         return MPEGStreamReader::getProcessedSize();
     return m_ivfRead - m_ivfLeftOut;
@@ -519,6 +569,7 @@ void AV1StreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const boo
 
     const uint32_t skip = (std::min)(m_leadSkip, dataLen);
     m_leadSkip -= skip;
+    m_lowLeftOut += skip;
     m_pending.insert(m_pending.end(), block + skip, block + dataLen);
     const size_t converted = convertPending(lastBlock);
     MPEGStreamReader::setBuffer(m_convBuffer.data(), static_cast<uint32_t>(converted), lastBlock);
