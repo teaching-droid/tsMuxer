@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 46 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 48 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -71,6 +71,10 @@
 * **An MP4 cut off inside its media data was muxed as successful.** An MP4 that ends in the middle of its data, as an interrupted download leaves it, gave half its pictures and "Mux successful complete", alone or in a join; the same held for a MOV and a fragmented MP4. It now ends with an error that says the file is cut off, and from which time. The output holds what the file has. (#64) Thanks to @Moonghost-coder.
 
 * **A join of files of different codecs could be muxed as successful.** Where the tracks of a join are named by `track=`, as for MP4, Matroska and transport stream files, a file of another video codec was not checked: H.264 joined to HEVC gave only the pictures of the first file. A DTS file joined to an AC-3 file on a DTS line lost the AC-3 file without a word. Each file of a join is now checked, and a file of another codec stops the mux before anything is written. (#65) Thanks to @Moonghost-coder.
+
+* **The sound and subtitles of a fragmented MP4 without fragment start times came late.** A fragmented file whose fragments do not give their start time (a tfdt box), as MP4Box writes it with -frag, counted the start of its video edit list twice: the sound and the subtitles came 80 ms late with two B pictures. Such a file now gives the same times as the same streams in an ordinary MP4.
+
+* **The subtitles of a fragmented MP4 could come late.** A text track in fragments was timed by adding up the lengths of its samples, not by the start each fragment gives. Where a sample runs past the start of the next fragment, as in a DASH file of MP4Box with a gap before the first subtitle, every later subtitle came that much late: 0.92 s in a test. Each subtitle now comes at the time its fragment gives.
 
 ### Matroska input
 

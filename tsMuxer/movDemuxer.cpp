@@ -1244,10 +1244,31 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
             else if (indexCur < m_sc->m_index.size())
                 sampleSize = m_sc->m_index[indexCur++];
             sampleSize = (std::min)(sampleSize, size - used);
+            // A text track whose samples are all in fragments starts each sample at its decode time in its fragment
+            // (its tfdt, ISO/IEC 14496-12, 8.8.12), from that of its first sample. The durations were added up instead,
+            // so one that runs past the next fragment's tfdt moved every later cue: the subtitles of an MP4Box DASH
+            // file, whose first empty sample lasts 6 s from 0.92 s, came 0.92 s late.
+            // A sample ends at its duration, or where the next sample starts if that is earlier, so that a cue never
+            // runs into the next one; the time an empty sample hands on to the text after it is where that text
+            // starts. A damaged tfdt can be any 64-bit value: a time before the first sample or beyond 2^40 units
+            // (12 days at 1 MHz) is not taken (-1), and the durations go on as before.
+            const bool fragTimed = m_sc->stts_data.empty() && sttsCnt == 0;
+            const auto fragAt = [this, fragTimed](const size_t i) -> int64_t
+            {
+                if (!fragTimed || i >= m_sc->fragDts.size() || i >= m_sc->fragDur.size())
+                    return -1;
+                const uint64_t at =
+                    static_cast<uint64_t>(m_sc->fragDts[i]) - static_cast<uint64_t>(m_sc->fragDts.front());
+                return at < (uint64_t{1} << 40) ? static_cast<int64_t>(at) : -1;
+            };
+            if (const int64_t at = fragAt(fragPos); at >= 0)
+                timeOffset = at;
             // The times are added up in the track's own time scale and only each cue's time is rounded to
             // milliseconds: every duration was cut to whole milliseconds and then added, so the cues came earlier
             // and earlier (480 ms by the 1200th subtitle at a time scale of 600).
-            const int64_t endUnits = timeOffset + getSttsVal();
+            int64_t endUnits = timeOffset + getSttsVal();
+            if (const int64_t next = fragAt(fragPos); next >= timeOffset && next < endUnits)
+                endUnits = next;  // fragPos is the next sample now
             const auto toMs = [this](const int64_t units)
             { return (units * 1000 + m_sc->time_scale / 2) / m_sc->time_scale; };
             const int64_t startTime = (std::max)(int64_t{0}, toMs(timeOffset) + startMs);
@@ -1273,8 +1294,12 @@ class MovParsedSRTTrackData final : public ParsedTrackPrivData
                         m_demuxer->addTouchingCue(static_cast<int>(m_sc->ffindex), startTime);
                     else if (indexCur + 1 < m_sc->m_index.size() && m_sc->m_index[indexCur + 1] > emptySize)
                         if (const int64_t gap = peekSttsVal(); gap > 0)
-                            m_demuxer->addNextCueStart(static_cast<int>(m_sc->ffindex), startTime,
-                                                       (std::max)(int64_t{0}, toMs(endUnits + gap) + startMs));
+                        {
+                            const int64_t textAt = fragAt(fragPos + 1);
+                            m_demuxer->addNextCueStart(
+                                static_cast<int>(m_sc->ffindex), startTime,
+                                (std::max)(int64_t{0}, toMs(textAt >= endUnits ? textAt : endUnits + gap) + startMs));
+                        }
                 }
             }
             timeOffset = endUnits;
@@ -3030,6 +3055,12 @@ int MovDemuxer::mov_read_trun(MOVAtom atom)
     // runs gave the samples of the first run twice and lost those of the second.
     int64_t offset = (flags & 0x001) || frag->runs == 0 ? frag->base_data_offset + data_offset : frag->moof_offset;
     frag->runs++;
+    // A track whose samples begin in a fragment with no tfdt starts at decode time 0, the sum of the durations before
+    // it (ISO/IEC 14496-12, 8.8.12). Such a track was not timed in fragmentStartDelays, so the lead of mov_read_moov
+    // stood: its whole edit list start, as the moov has no composition offsets. The sound and subtitles of such a
+    // file (MP4Box -frag) came 80 ms late for two B pictures.
+    if (sc->chunk_offsets.empty() && m_firstTfdt.find(frag->track_id) == m_firstTfdt.end())
+        m_firstTfdt[frag->track_id] = sc->fragNextDts;
     sc->chunk_offsets.push_back(offset);
     // ** A FRAGMENT CUT OFF. ** A fragmented file cut off inside the mdat of a fragment, as an interrupted download
     // leaves it, was read up to its end and muxed with "Mux successful complete", the rest of the fragment's samples
