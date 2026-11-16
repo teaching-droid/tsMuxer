@@ -1437,7 +1437,7 @@ bool TSDemuxer::checkForRealM2ts(const uint8_t* buffer, const uint8_t* end) cons
     static std::set<std::string> warned;
     {
         const std::lock_guard<std::mutex> guard(lock);
-        if (!warned.insert(m_streamName).second)
+        if (traceWarnings::silent || !warned.insert(m_streamName).second)
             return true;
     }
     LTRACE(LT_WARN, 2, "Warning! The file " << m_streamName << " has a M2TS format.");
@@ -1657,7 +1657,7 @@ void TSDemuxer::checkPmtVersion(uint8_t* payload, const uint8_t* end)
     m_pmtChangeReported = true;
     // once per file: the file is read by more than one demuxer (the tracks are told before the mux)
     static std::set<std::string> reported;
-    if (!reported.insert(m_streamNameLow).second)
+    if (traceWarnings::silent || !reported.insert(m_streamNameLow).second)  // a quiet look uses it up not
         return;
     LTRACE(LT_WARN, 2,
            "Warning: the program map of the transport stream changes inside the file."
@@ -2165,27 +2165,20 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
     }
     if (!pesStartCode && m_joinDrop[pid])
         return;
-    // ** A TRUEHD TRACK BEGINS WITH ITS FIRST PES. ** A file cut from a clip begins inside a PES, and the rest of it
-    // was handed on in front of the first PES header. Its bytes have no time, and they are the end of an access unit
-    // the cut has cut, so the readers could not count the access units from the start of the track to the time of the
-    // first PES: the TrueHD of such a cut lost the time of the units it leaves out and came 30 ms early. Only for
-    // TrueHD, whose readers count those units; a part of a playlist leaves out such bytes for every stream already.
-    // The same for LPCM, each PES of which begins with its header of the samples' layout, and for DTS Express, whose
-    // reader tells a stream without a core by the first bytes it is given: from the rest of a PES before the first
-    // header neither was found, and a cut of a disc clip listed both as "Can't detect stream type".
-    // ** AND SO DOES EVERY SOUND TRACK. ** The other sound readers take the whole frames of those bytes, which have no
-    // time either, and time them from the first PES: the sound of a cut MPEG-2 recording whose first PES header came
-    // after two whole AC-3 frames of the PES before it was muxed two frames (64 ms) late, at 1 of 20 cut points (found
-    // by a test of the Moonghost analysis; 3.1.0 likewise). A sound track of a file begins with its first PES now, as
-    // in a part of a playlist; the frames before it come before the first time the track has. Only in the first file
-    // of a source: a later file of a join of a recording split by its recorder goes on with the rest of the PES the
-    // file before ended in, which belongs to the track (the joins have rules of their own, m_joinDrop).
+    // ** A SOUND TRACK BEGINS WITH ITS FIRST PES. ** A file cut from a clip or a recording begins inside a PES, and the
+    // rest of it was handed on in front of the first PES header. Its bytes have no time. The TrueHD readers count the
+    // access units from the start of the track to the time of the first PES and could not (the TrueHD of such a cut
+    // came 30 ms early); each PES of LPCM begins with its header of the samples' layout, and the reader of DTS Express
+    // tells a stream without a core by the first bytes it is given (a cut of a disc clip listed both as "Can't detect
+    // stream type"); the other sound readers took the whole frames of those bytes and timed them from the first PES:
+    // the sound of a cut MPEG-2 recording whose first PES header came after two whole AC-3 frames was muxed two frames
+    // (64 ms) late. Such bytes are left out for every sound track, as in a part of a playlist. In a join they are only
+    // before the first PES of the track in the source: the next file of a recording split by its recorder goes on
+    // with the rest of the PES the file before ended in, and the files of a join are read without opening the source
+    // again, so the track's first PES is still known (m_clipStartOfPid).
     if (!pesStartCode && m_clipStartOfPid.find(pid) == m_clipStartOfPid.end())
         if (const auto info = m_pmt.pidList.find(pid);
-            info != m_pmt.pidList.end() && (info->second.m_streamType == StreamType::AUDIO_TRUE_HD ||
-                                            info->second.m_streamType == StreamType::AUDIO_LPCM ||
-                                            info->second.m_streamType == StreamType::AUDIO_DTS_HD_SECONDARY ||
-                                            (m_prevFileLen == 0 && isAudioStreamType(info->second.m_streamType))))
+            info != m_pmt.pidList.end() && isAudioStreamType(info->second.m_streamType))
             return;
     if (pesStartCode)
     {

@@ -1270,7 +1270,7 @@ int MatroskaDemuxer::ebml_read_binary(uint32_t* id, uint8_t** binary, int* size,
         if (!added && from < it->second.from)
             it->second = CutOff{from, track};
         static std::set<std::string> warned;  // a job opens a file more than once
-        if (warned.insert(file).second)
+        if (!traceWarnings::silent && warned.insert(file).second)
             LTRACE(LT_WARN, 2,
                    "Warning: " << file << " is cut off: a block of track " << track << " at " << doubleToStr(from, 3)
                                << " s runs past the end of the file. What the file holds is read; the rest is "

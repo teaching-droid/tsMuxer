@@ -86,7 +86,13 @@ std::string take(const uint8_t* data, const size_t size)
     struct KeepDiscMarks
     {
         const int flags = V3_flags;
-        ~KeepDiscMarks() { V3_flags = flags; }
+        unsigned hdr10[6] = {HDR10_metadata[0], HDR10_metadata[1], HDR10_metadata[2],
+                             HDR10_metadata[3], HDR10_metadata[4], HDR10_metadata[5]};
+        ~KeepDiscMarks()
+        {
+            V3_flags = flags;
+            std::copy(hdr10, hdr10 + 6, HDR10_metadata);  // the light levels of the probed file are not the disc's
+        }
     } keepDiscMarks;
     HEVCStreamReader reader;
     std::vector<uint8_t> probe = kept;

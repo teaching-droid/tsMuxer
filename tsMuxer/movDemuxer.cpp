@@ -369,9 +369,11 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
                 left -= frameSize;
             }
         }
-        if (left > 4 && m_sc->sample_size == 0)
-            THROW(ERR_MOV_PARSE,
-                  "Invalid AAC frame for track #" << m_sc->ffindex << " at position " << m_demuxer->getProcessedBytes())
+        // A chunk that the end of the file cuts off ends in the middle of a frame: what is whole is taken, and the job
+        // ends saying the file is cut off (buildIndex). That stopped it with "Invalid AAC frame", also for AC-3 (#64).
+        if (left > 4 && m_sc->sample_size == 0 && m_demuxer->getProcessedBytes() < m_demuxer->fileSize())
+            THROW(ERR_MOV_PARSE, "Invalid audio frame in track #" << m_sc->ffindex << " at position "
+                                                                  << m_demuxer->getProcessedBytes())
         // the frames extractData leaves out: neither their bytes nor their headers. Empty samples are no frames.
         unsigned dropped = 0;
         const int drop = (std::min)(m_dropLeft, i - empties);
@@ -607,7 +609,7 @@ class MovParsedH264TrackData : public ParsedTrackPrivData
                 if (end - zeroStart >= 16 && std::all_of(zeroStart, end, [](const uint8_t b) { return b == 0; }))
                 {
                     static std::set<std::pair<std::string, int>> told;  // the file is opened more than once in a job
-                    if (told.emplace(m_demuxer->fileName(), m_sc->ffindex).second)
+                    if (!traceWarnings::silent && told.emplace(m_demuxer->fileName(), m_sc->ffindex).second)
                         LTRACE(LT_WARN, 2,
                                "Warning: video track #"
                                    << m_sc->ffindex << " of " << m_demuxer->fileName()
@@ -1710,7 +1712,7 @@ void MovDemuxer::warnUnreadBoxes(const int64_t from) const
         if (pos >= from && (type == MKTAG('m', 'o', 'o', 'f') ||
                             (type == MKTAG('m', 'd', 'a', 't') && size > static_cast<uint64_t>(header))))
         {
-            if (warned.emplace(m_fileName, pos).second)
+            if (!traceWarnings::silent && warned.emplace(m_fileName, pos).second)
                 LTRACE(LT_WARN, 2,
                        "Warning: the MP4 box '" << std::string(reinterpret_cast<const char*>(h + 4), 4) << "' at byte "
                                                 << pos << " holds no sample the moov lists; it is not read.");
@@ -1718,7 +1720,7 @@ void MovDemuxer::warnUnreadBoxes(const int64_t from) const
         }
         if (size > static_cast<uint64_t>(m_fileSize - pos))
         {
-            if (pos >= from && warned.emplace(m_fileName, pos).second)
+            if (pos >= from && !traceWarnings::silent && warned.emplace(m_fileName, pos).second)
                 LTRACE(LT_WARN, 2,
                        "Warning: the MP4 box '" << std::string(reinterpret_cast<const char*>(h + 4), 4) << "' at byte "
                                                 << pos << " says it is " << size << " bytes long, "
@@ -1842,7 +1844,7 @@ static void recordCutOff(const std::string& fileName, const int64_t fileSize, co
     if (!added && from < it->second.from)
         it->second = MovDemuxer::CutOff{from, st->ffindex};
     static std::set<std::string> warned;  // a job opens a file more than once
-    if (warned.insert(fileName).second)
+    if (!traceWarnings::silent && warned.insert(fileName).second)
         LTRACE(LT_WARN, 2,
                "Warning: " << fileName << " is cut off: track " << st->ffindex << " lists data from byte "
                            << missingFrom << " on, and the file ends at byte " << fileSize
@@ -1895,10 +1897,13 @@ void MovDemuxer::buildIndex()
                 }
                 if (!found_moof && m_fileSize > 0 && !cutNoted && k < counts.size())
                 {
-                    // the bytes of its samples, where the sample table gives them (ownChunkBytes): one size for all
-                    // samples counts them in units that are not bytes for compressed QuickTime sound (IMA4, MP3 in a
-                    // MOV), and was taken for a chunk past the end of a whole file
-                    const int64_t own = k < bytes.size() ? bytes[k] : -1;
+                    // the bytes of its samples: from the sample table (ownChunkBytes), or one size times their number
+                    // where that size is the bytes of a frame (CBR AC-3, MP2, DTS as ffmpeg writes them). A size of
+                    // 1 counts compressed QuickTime sound (IMA4, MP3 in a MOV) in units that are not bytes, and a
+                    // whole file of that kind was taken for one cut off.
+                    const int64_t own = k < bytes.size() && bytes[k] >= 0 ? bytes[k]
+                                        : st->sample_size > 1 ? static_cast<int64_t>(counts[k]) * st->sample_size
+                                                              : -1;
                     int64_t missingFrom = -1;
                     if (own > 0 && j + own > m_fileSize)
                         if (const int64_t whole =
@@ -2000,7 +2005,7 @@ int MovDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepte
             const auto sc = reinterpret_cast<MOVStreamContext*>(tracks[trackId]);
             static std::set<std::pair<std::string, int>> told;  // the file is opened more than once in a job
             if (m_curChunk + 1 < chunks.size() && dynamic_cast<MovParsedPCMTrackData*>(sc->parsed_priv_data) &&
-                told.emplace(m_fileName, trackId).second)
+                !traceWarnings::silent && told.emplace(m_fileName, trackId).second)
                 LTRACE(LT_WARN, 2,
                        "Warning: audio track #" << sc->ffindex << " of the MP4 file has "
                                                 << chunkSize - m_chunkBytes[m_curChunk]
@@ -2702,7 +2707,8 @@ int MovDemuxer::mov_read_default(MOVAtom atom)
         {
             // A job opens a file more than once (its tracks are asked for, then read): the warning comes once a box
             static std::set<std::pair<std::string, int64_t>> warned;
-            if (m_pastEndWarnings++ == 0 && warned.emplace(m_fileName, m_processedBytes - 8).second)
+            if (m_pastEndWarnings++ == 0 && !traceWarnings::silent &&
+                warned.emplace(m_fileName, m_processedBytes - 8).second)
                 LTRACE(LT_WARN, 2,
                        "Warning: the MP4 box '" << std::string(reinterpret_cast<const char*>(&a.type), 4)
                                                 << "' at byte " << m_processedBytes - 8 << " says it is " << a.size
@@ -3235,7 +3241,7 @@ void MovDemuxer::aacWithoutConfig()
         static std::mutex warnMtx;
         static std::set<std::string> warned;  // a job opens a file more than once
         const std::lock_guard<std::mutex> lock(warnMtx);
-        if (warned.insert(m_fileName + "|" + std::to_string(i + 1)).second)
+        if (!traceWarnings::silent && warned.insert(m_fileName + "|" + std::to_string(i + 1)).second)
             LTRACE(LT_WARN, 2,
                    "Warning: the AAC of track " << i + 1 << " of " << m_fileName
                                                 << " has no AudioSpecificConfig, and its frames last " << samples
@@ -3489,7 +3495,7 @@ void MovDemuxer::pictureLengths()
             continue;
         {
             const std::lock_guard<std::mutex> lock(warnedMtx);
-            if (!warned.insert(m_fileName + "|" + std::to_string(i + 1)).second)
+            if (traceWarnings::silent || !warned.insert(m_fileName + "|" + std::to_string(i + 1)).second)
                 continue;
         }
         // How far the video ends from where the file's own times end, so the warning says how much is at stake: a
@@ -3617,7 +3623,7 @@ int MovDemuxer::mov_read_moov(MOVAtom atom)
         static std::mutex partsMtx;
         static std::set<std::string> partsWarned;  // a job opens a file more than once
         const std::lock_guard<std::mutex> lock(partsMtx);
-        if (parts && partsWarned.insert(m_fileName + "|" + std::to_string(track)).second)
+        if (parts && !traceWarnings::silent && partsWarned.insert(m_fileName + "|" + std::to_string(track)).second)
             LTRACE(LT_WARN, 2,
                    "Warning: the edit list of track " << track << " of " << m_fileName << " plays " << edits.size()
                                                       << " parts of it. tsMuxeR takes the track from where the first "
