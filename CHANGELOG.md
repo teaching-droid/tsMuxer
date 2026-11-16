@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 45 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 46 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -15,6 +15,8 @@
 * **A damaged playlist or clip information file could end tsMuxeR without a message.** Such a file names the place of each of its parts, and a place behind the end of the file was read all the same. It is now said that the playlist cannot be read; a disc with such a clip information file is read without it.
 
 * **The listing of a playlist failed where its clips are named in capitals.** A disc copied with names such as 00000.M2TS, on a file system that tells capitals apart, was listed with "Can't open stream", though a mux of the same playlist opened the clip. The clips are found under the name the disc has.
+
+* **A sample of a disc folder was empty.** `--make-sample` of a Blu-ray or DVD folder given without `--title` said the sample was written, and the zip held a sample of no bytes. Such a folder is refused now, with what to give: `--title` for a Blu-ray disc, one of its VOB files for a DVD.
 
 ### Blu-ray and transport stream
 
