@@ -2177,10 +2177,15 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
     // time either, and time them from the first PES: the sound of a cut MPEG-2 recording whose first PES header came
     // after two whole AC-3 frames of the PES before it was muxed two frames (64 ms) late, at 1 of 20 cut points (found
     // by a test of the Moonghost analysis; 3.1.0 likewise). A sound track of a file begins with its first PES now, as
-    // in a part of a playlist; the frames before it come before the first time the track has.
+    // in a part of a playlist; the frames before it come before the first time the track has. Only in the first file
+    // of a source: a later file of a join of a recording split by its recorder goes on with the rest of the PES the
+    // file before ended in, which belongs to the track (the joins have rules of their own, m_joinDrop).
     if (!pesStartCode && m_clipStartOfPid.find(pid) == m_clipStartOfPid.end())
         if (const auto info = m_pmt.pidList.find(pid);
-            info != m_pmt.pidList.end() && isAudioStreamType(info->second.m_streamType))
+            info != m_pmt.pidList.end() && (info->second.m_streamType == StreamType::AUDIO_TRUE_HD ||
+                                            info->second.m_streamType == StreamType::AUDIO_LPCM ||
+                                            info->second.m_streamType == StreamType::AUDIO_DTS_HD_SECONDARY ||
+                                            (m_prevFileLen == 0 && isAudioStreamType(info->second.m_streamType))))
             return;
     if (pesStartCode)
     {
