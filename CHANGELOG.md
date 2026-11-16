@@ -80,7 +80,7 @@
 
 * **The window has a queue.** "Add to queue" keeps the job the window shows, after the same checks as a start, and the "Queue" button lists the jobs, takes jobs out and runs them one after the other. The queue is kept on disk, so it is still there after the window was closed; a job that failed stays in it for another run. "Add a folder..." makes a job for each video file of a folder, each muxed with all its tracks to MKV, M2TS or TS. "Stop at the first job that fails" ends the run there.
 
-* **A source in place of the meta file.** `tsMuxeR film.ts film.mkv` muxes every track of the source that tsMuxeR reads, with a meta file it makes for the run and shows, for an output named .ts, .m2ts or .mkv. A playlist (.mpls) is taken as such a source too, with the tracks of its clips.
+* **A source in place of the meta file.** `tsMuxeR film.ts film.mkv` muxes every track of the source that tsMuxeR reads, with a meta file it makes for the run and shows, for an output named .ts, .m2ts or .mkv. A track only a Matroska file can carry is left out of a .ts or .m2ts output, and said. A playlist (.mpls) is taken as such a source too, with the tracks of its clips.
 
 * **Only the tracks of the languages wanted.** `--languages=deu,eng` with a source in place of the meta file, also on a line of a `--batch` job list, takes only the sound and subtitle tracks of those languages. An entry is a language, a language tag of the file (fr-CA, or fr for every French track) or a word of the track's name. The video is always taken, and so is a track without a language. In the window, "Languages to take" on the General tab does the same when a file is added: the tracks of other languages are added unticked.
 
