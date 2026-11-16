@@ -6,8 +6,9 @@
 #include <fs/systemlog.h>
 
 #include <cstdint>
+#include <map>
 #include <mutex>
-#include <set>
+#include <sstream>
 #include <vector>
 
 #include "vodCoreException.h"
@@ -96,32 +97,65 @@ Sampled sampleProgramStream(const File& file, const int64_t size)
 }
 }  // namespace
 
+// ** THE VERDICT ON A FILE IS KEPT, NOT ONLY THAT IT WAS TESTED. ** A file is tested once a job, and the name was
+// noted before the test could stop the job. A quiet look at a file before its mux (the check of the codec of each file
+// of a join, the made Dolby Vision layer, convert=) caught the "still encrypted" error and went on, and the mux,
+// finding the name noted, read the encrypted file without a word. The verdict is noted now and given on every call; the
+// warning of a partly encrypted file is given where its lines are shown (not in a quiet look), once.
 void checkEncryptedInput(const std::string& fileName, const bool m2ts)
 {
+    struct Verdict
+    {
+        std::string error;    // the file cannot be read
+        std::string warning;  // a part of it cannot
+        bool warned = false;
+    };
     static std::mutex mutex;
-    static std::set<std::string> checked;
+    static std::map<std::string, Verdict> checked;
     {
         std::lock_guard lock(mutex);
-        if (!checked.insert(fileName).second)
+        if (const auto known = checked.find(fileName); known != checked.end())
+        {
+            if (!known->second.error.empty())
+                THROW(ERR_SOURCE, known->second.error)
+            if (!known->second.warning.empty() && !known->second.warned && !traceWarnings::silent)
+            {
+                known->second.warned = true;
+                LTRACE(LT_WARN, 2, known->second.warning);
+            }
             return;
+        }
     }
+    Verdict verdict;
     const std::string name = unquoteStr(fileName);
     File file;
-    if (!file.open(name.c_str(), File::ofRead | File::ofOpenExisting))
-        return;  // the reader says why it cannot be opened
-    const int64_t size = file.size();
-    const Sampled s = m2ts ? sampleM2ts(file, size) : sampleProgramStream(file, size);
-    file.close();
-    if (s.encrypted == 0)
-        return;
-    const std::string what = m2ts ? " units of 6144 bytes tested" : " sectors tested";
-    if (s.encrypted * 2 >= s.tested)
-        THROW(ERR_SOURCE, "\"" << name << "\" is still encrypted: " << s.encrypted << " of the " << s.tested << what
-                               << (m2ts ? " cannot be read past their first 16 bytes"
-                                        : (s.encrypted == 1 ? " is marked scrambled" : " are marked scrambled"))
-                               << ". tsMuxeR cannot read an encrypted file; it needs to be decrypted before muxing.")
-    LTRACE(LT_WARN, 2,
-           "Warning: " << s.encrypted << " of the " << s.tested << what << " of \"" << name
-                       << "\" are still encrypted. What they hold cannot be read, and the pictures and sound there "
-                          "are damaged.");
+    if (file.open(name.c_str(), File::ofRead | File::ofOpenExisting))  // else the reader says why it cannot be opened
+    {
+        const int64_t size = file.size();
+        const Sampled s = m2ts ? sampleM2ts(file, size) : sampleProgramStream(file, size);
+        file.close();
+        const std::string what = m2ts ? " units of 6144 bytes tested" : " sectors tested";
+        if (s.encrypted > 0 && s.encrypted * 2 >= s.tested)
+        {
+            std::ostringstream text;
+            text << "\"" << name << "\" is still encrypted: " << s.encrypted << " of the " << s.tested << what
+                 << (m2ts ? " cannot be read past their first 16 bytes"
+                          : (s.encrypted == 1 ? " is marked scrambled" : " are marked scrambled"))
+                 << ". tsMuxeR cannot read an encrypted file; it needs to be decrypted before muxing.";
+            verdict.error = text.str();
+        }
+        else if (s.encrypted > 0)
+        {
+            std::ostringstream text;
+            text << "Warning: " << s.encrypted << " of the " << s.tested << what << " of \"" << name
+                 << "\" are still encrypted. What they hold cannot be read, and the pictures and sound there are "
+                    "damaged.";
+            verdict.warning = text.str();
+        }
+    }
+    {
+        std::lock_guard lock(mutex);
+        checked.emplace(fileName, verdict);
+    }
+    checkEncryptedInput(fileName, m2ts);  // gives the verdict just noted
 }

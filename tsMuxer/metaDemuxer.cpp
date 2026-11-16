@@ -13,6 +13,7 @@
 #include <unistd.h>
 #endif
 #include <algorithm>
+#include <array>
 #include <climits>
 #include <cmath>
 #include <filesystem>
@@ -38,6 +39,7 @@ static bool isKnownTrackParam(const std::string& name);
 #include "dvLayerPicture.h"
 #include "dvbSubStreamReader.h"
 #include "dvdTitles.h"
+#include "encryptedInput.h"
 #include "flacStreamReader.h"
 #include "h264StreamReader.h"
 #include "hevcDolbyVisionFilter.h"
@@ -473,6 +475,15 @@ static void loadDvOriginalRpus(AbstractDemuxer* demuxer, HevcDolbyVisionFilter* 
 }
 
 using namespace std;
+
+// The mastering display and light levels the HEVC reader keeps for the disc (HDR10_metadata, global), as they are:
+// a quiet look at a file puts them back after it, as it does the marks of V3_flags
+static std::array<unsigned, 6> keptHdr10()
+{
+    std::array<unsigned, 6> out{};
+    std::copy(HDR10_metadata, HDR10_metadata + 6, out.begin());
+    return out;
+}
 
 // What one track of a container may hold waiting to be muxed. It was 192 MiB, below the 256 MiB a video reader takes a
 // picture up to (MAX_TMP_BUFFER_SIZE): a 250 MiB picture from Matroska was refused here, with a message about
@@ -1884,6 +1895,7 @@ bool METADemuxer::addDvLayers(const string& codec, const string& lineStreamName,
             std::streambuf* err = std::cerr.rdbuf(&null);
             const bool lastMsg = sLastMsg;
             const int flags = V3_flags;
+            const std::array<unsigned, 6> hdr10 = keptHdr10();
             const bool wasSilent = traceWarnings::silent;
             Quiet() { traceWarnings::silent = true; }
             Quiet(const Quiet&) = delete;
@@ -1894,6 +1906,7 @@ bool METADemuxer::addDvLayers(const string& codec, const string& lineStreamName,
                 std::cerr.rdbuf(err);
                 sLastMsg = lastMsg;
                 V3_flags = flags;
+                std::copy(hdr10.begin(), hdr10.end(), HDR10_metadata);
                 traceWarnings::silent = wasSilent;
             }
         } quiet;
@@ -2095,6 +2108,7 @@ bool METADemuxer::convertLine(const string& codec, const string& lineStreamName,
                 std::streambuf* err = std::cerr.rdbuf(&null);
                 const bool lastMsg = sLastMsg;
                 const int flags = V3_flags;
+                const std::array<unsigned, 6> hdr10 = keptHdr10();
                 const bool wasSilent = traceWarnings::silent;
                 Quiet() { traceWarnings::silent = true; }
                 Quiet(const Quiet&) = delete;
@@ -2105,6 +2119,7 @@ bool METADemuxer::convertLine(const string& codec, const string& lineStreamName,
                     std::cerr.rdbuf(err);
                     sLastMsg = lastMsg;
                     V3_flags = flags;
+                    std::copy(hdr10.begin(), hdr10.end(), HDR10_metadata);
                     traceWarnings::silent = wasSilent;
                 }
             } quiet;
@@ -2896,6 +2911,21 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
         }
     }
 
+    // ** EVERY FILE OF A JOIN IS TESTED FOR ENCRYPTION. ** A reader tests the file it opens (checkEncryptedInput),
+    // and the files after the first of a join, or the later clips of a playlist, are read without opening them: an
+    // encrypted VOB or .m2ts there was muxed as noise and "Mux successful complete". Each one is tested here; a file
+    // is tested once a job.
+    if (fileList.size() > 1)
+        for (const std::string& name : fileList)
+        {
+            const std::string file = unquoteStr(trimStr(name));
+            const std::string ext = strToUpperCase(extractFileExt(file));
+            if (ext == "M2TS" || ext == "MTS" || ext == "SSIF")
+                checkEncryptedInput(file, true);
+            else if (ext == "EVO" || ext == "VOB" || ext == "MPG" || ext == "MPEG")
+                checkEncryptedInput(file, false);
+        }
+
     // ** EVERY FILE OF A JOIN HOLDS THE CODEC OF ITS LINE. ** A join of elementary files is one stream to the reader,
     // which read the files after the first as the codec of the line too: an HEVC file joined to an H.264 one on an
     // H.264 line gave pictures of HEVC data, and "Mux successful complete", as the pictures of the first file were
@@ -2933,6 +2963,7 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
                     std::streambuf* err = std::cerr.rdbuf(&null);
                     const bool lastMsg = sLastMsg;
                     const int flags = V3_flags;
+                    const std::array<unsigned, 6> hdr10 = keptHdr10();
                     const bool wasSilent = traceWarnings::silent;
                     Quiet() { traceWarnings::silent = true; }
                     Quiet(const Quiet&) = delete;
@@ -2943,6 +2974,7 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
                         std::cerr.rdbuf(err);
                         sLastMsg = lastMsg;
                         V3_flags = flags;
+                        std::copy(hdr10.begin(), hdr10.end(), HDR10_metadata);
                         traceWarnings::silent = wasSilent;
                     }
                 };
