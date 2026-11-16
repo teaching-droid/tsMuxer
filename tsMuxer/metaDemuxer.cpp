@@ -2903,7 +2903,16 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
     // file of such a join is detected as the listing detects it, and a file of another video codec stops here.
     // The probe says nothing: what its reader has to say about the stream, the mux says again, and a file it cannot
     // read is left to the rules that follow.
-    if (const int named = videoCodecId(codec); pid == 0 && named != 0 && fileList.size() > 1)
+    // The same held for a join of tracks named by track=, of MP4, Matroska or transport stream files: an H.264 track
+    // joined to an HEVC one on an H.264 line gave the pictures of the first file and "Mux successful complete" (#65).
+    // Each file's track of that number is detected as the listing detects it. And for sound: a DTS file joined to an
+    // AC-3 one on an A_DTS line lost the AC-3 file without a word, as the half of the bytes the frames have to carry
+    // (checkEmptyTracks) was reached by the DTS file alone. A file whose sound the listing gives under another line
+    // name stops here too; the names of a family are one (AC-3, E-AC-3 and TrueHD are all A_AC3, DTS and DTS-HD
+    // A_DTS, and TrueHD without its core may be given as A_MLP).
+    const auto soundLine = [](const std::string& name) { return name == "A_MLP" ? std::string("A_AC3") : name; };
+    if (const int named = videoCodecId(codec);
+        (named != 0 || strStartWith(codec, "A_")) && fileList.size() > 1 && !SubTrackFilter::isSubTrack(pid))
         for (size_t i = 0; i < fileList.size(); ++i)
         {
             const std::string file = unquoteStr(trimStr(fileList[i]));
@@ -2936,12 +2945,30 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
             {
                 continue;
             }
-            if (probe.streams.size() != 1)
-                continue;  // a container: its tracks are named by track=
-            const CodecInfo& found = probe.streams[0].codecInfo;
+            const CheckStreamRez* track = nullptr;
+            if (pid == 0)
+            {
+                if (probe.streams.size() != 1)
+                    continue;  // a container without track=: the mux says which track it would take
+                track = &probe.streams[0];
+            }
+            else
+                for (const CheckStreamRez& s : probe.streams)
+                    if (s.trackID == pid)
+                    {
+                        track = &s;
+                        break;
+                    }
+            if (track == nullptr)
+                continue;  // no track of that number: the mux says so
+            const CodecInfo& found = track->codecInfo;
             const int foundId = found.codecID == CODEC_V_MPEG4_H264_DEP ? CODEC_V_MPEG4_H264 : found.codecID;
-            if (foundId != named && isVideoCodecId(foundId))
-                THROW(ERR_USAGE, "File " << i + 1 << " of the join on the " << codec << " line, " << file << ", is "
+            const bool otherVideo = named != 0 && foundId != named && isVideoCodecId(foundId);
+            const bool otherSound = named == 0 && strStartWith(found.programName, "A_") &&
+                                    soundLine(found.programName) != soundLine(codec);
+            if (otherVideo || otherSound)
+                THROW(ERR_USAGE, "File " << i + 1 << " of the join on the " << codec << " line, " << file
+                                         << (pid > 0 ? ", track " + std::to_string(pid) : std::string()) << ", is "
                                          << found.displayName << ", not the codec of the line. Every file of a "
                                          << "join has to hold the codec of its line. Nothing was written.")
         }
