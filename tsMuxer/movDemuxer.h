@@ -24,8 +24,9 @@ class MovDemuxer final : public IOContextDemuxer
     // and in which track the first of it is missing. Asked once the mux is over (main.cpp).
     struct CutOff
     {
-        double from = 0;
+        double from = 0;  // in the file's own time, as the error says it
         unsigned track = 0;
+        double joinStart = 0;  // where the file starts in a join, s: --cut-end counts from the join's start
     };
     static std::map<std::string, CutOff>& cutOffFiles();
     std::string getTitle() override;

@@ -1818,12 +1818,12 @@ static int64_t wholeSamplesOfChunk(const MOVStreamContext* st, const uint64_t fi
 }
 
 static void recordCutOff(const std::string& fileName, int64_t fileSize, const MOVStreamContext* st, double from,
-                         int64_t missingFrom);
+                         int64_t missingFrom, double joinStart);
 
 // From sample `sample` (from 0) on, which begins at byte `missingFrom`, a track lists data past the end of the file:
 // the time of that sample, by stts
 static void noteCutOff(const std::string& fileName, const int64_t fileSize, const MOVStreamContext* st, uint64_t sample,
-                       const int64_t missingFrom)
+                       const int64_t missingFrom, const double joinStart)
 {
     uint64_t time = 0;
     for (const auto& e : st->stts_data)
@@ -1833,16 +1833,22 @@ static void noteCutOff(const std::string& fileName, const int64_t fileSize, cons
         sample -= n;
     }
     recordCutOff(fileName, fileSize, st, st->time_scale > 0 ? static_cast<double>(time) / st->time_scale : 0,
-                 missingFrom);
+                 missingFrom, joinStart);
 }
 
-// A track lists data past the end of the file from `from` s on, from byte `missingFrom` on: the job ends saying so
+// A track lists data past the end of the file from `from` s on, from byte `missingFrom` on: the job ends saying so.
+// joinStart: where the file starts in a join, as --cut-end counts (a cut that ends before the missing part of the
+// second file of a join was refused, as its time in the file was taken for its time in the join)
 static void recordCutOff(const std::string& fileName, const int64_t fileSize, const MOVStreamContext* st,
-                         const double from, const int64_t missingFrom)
+                         const double from, const int64_t missingFrom, const double joinStart)
 {
-    auto [it, added] = MovDemuxer::cutOffFiles().emplace(fileName, MovDemuxer::CutOff{from, st->ffindex});
+    auto [it, added] = MovDemuxer::cutOffFiles().emplace(fileName, MovDemuxer::CutOff{from, st->ffindex, joinStart});
+    // The file is read on its own first (the listing of its tracks, the check of a join), at the start of no join: the
+    // read of the mux, where it starts in the join, is the one --cut-end is measured against.
     if (!added && from < it->second.from)
-        it->second = MovDemuxer::CutOff{from, st->ffindex};
+        it->second = MovDemuxer::CutOff{from, st->ffindex, joinStart};
+    else if (!added && from == it->second.from)
+        it->second.joinStart = (std::max)(it->second.joinStart, joinStart);
     static std::set<std::string> warned;  // a job opens a file more than once
     if (!traceWarnings::silent && warned.insert(fileName).second)
         LTRACE(LT_WARN, 2,
@@ -1891,7 +1897,8 @@ void MovDemuxer::buildIndex()
                 if (!found_moof && m_fileSize > 0 && j >= m_fileSize)
                 {
                     if (!cutNoted)
-                        noteCutOff(m_fileName, m_fileSize, st, firstSample, j);
+                        noteCutOff(m_fileName, m_fileSize, st, firstSample, j,
+                                   static_cast<double>(m_joinStartNs) / 1e9);
                     cutNoted = true;
                     continue;
                 }
@@ -1911,7 +1918,7 @@ void MovDemuxer::buildIndex()
                             whole >= 0 && missingFrom >= 0)
                         {
                             noteCutOff(m_fileName, m_fileSize, st, firstSample + static_cast<uint64_t>(whole),
-                                       missingFrom);
+                                       missingFrom, static_cast<double>(m_joinStartNs) / 1e9);
                             cutNoted = true;
                         }
                 }
@@ -3050,7 +3057,7 @@ int MovDemuxer::mov_read_trun(MOVAtom atom)
             recordCutOff(
                 m_fileName, m_fileSize, sc,
                 sc->time_scale > 0 ? static_cast<double>(sc->fragDts.back() - sc->fragDts.front()) / sc->time_scale : 0,
-                offset);
+                offset, static_cast<double>(m_joinStartNs) / 1e9);
             cutNoted = true;
         }
         offset += sample_size;

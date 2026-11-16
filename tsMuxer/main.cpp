@@ -4929,17 +4929,20 @@ static void checkSourceConsumed(MuxerManager& muxerManager)
 // what is missing, unless --cut-end stops before the first of it.
 static void checkSourcesCutOff(const MuxerManager& muxerManager)
 {
-    const auto check =
-        [&muxerManager](const std::string& file, const double from, const unsigned track, const char* what)
+    // from: in the file's own time, as the error says it; joinStart: where the file starts in a join, which
+    // --cut-end counts from
+    const auto check = [&muxerManager](const std::string& file, const double from, const unsigned track,
+                                       const char* what, const double joinStart = 0)
     {
-        if (muxerManager.getCutEnd() > 0 && static_cast<double>(muxerManager.getCutEnd()) / INTERNAL_PTS_FREQ <= from)
+        if (muxerManager.getCutEnd() > 0 &&
+            static_cast<double>(muxerManager.getCutEnd()) / INTERNAL_PTS_FREQ <= joinStart + from)
             return;
         THROW(ERR_SOURCE, "The source " << file << " is cut off: " << what << ", in track " << track << " from "
                                         << doubleToStr(from, 3)
                                         << " s on. The output holds what the file has and is incomplete.")
     };
     for (const auto& [file, cut] : MovDemuxer::cutOffFiles())
-        check(file, cut.from, cut.track, "its index lists data past the end of the file");
+        check(file, cut.from, cut.track, "its index lists data past the end of the file", cut.joinStart);
     for (const auto& [file, cut] : MatroskaDemuxer::cutOffFiles())
         check(file, cut.from, cut.track, "a block runs past the end of the file");
 }
