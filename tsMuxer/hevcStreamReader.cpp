@@ -18,6 +18,17 @@
 
 using namespace std;
 
+// Two rates of one film, as the timing of a stream may give them: by fields or by pictures (2:1), and with pulldown
+// (24 to 30 is 4:5, to 60 is 2:5, and fields of 24 to 30 is 5:8). The rate of such a stream changes in its parameter
+// sets where its pulldown begins late, and no join is there; a change between two of them is no other rate.
+static bool sameFilmRate(const double a, const double b)
+{
+    for (const double r : {2.0, 0.5, 1.25, 0.8, 2.5, 0.4, 1.6, 0.625})
+        if (std::abs(a / b - r) < r * 0.005)
+            return true;
+    return false;
+}
+
 static constexpr int MAX_SLICE_HEADER = 64;
 
 HEVCStreamReader::HEVCStreamReader()
@@ -1105,7 +1116,8 @@ void HEVCStreamReader::warnSizeChangeOnDisc()
     {
         if (m_firstSpsFps == 0)
             m_firstSpsFps = fps;
-        else if (!m_rateChangeSaid && !m_demuxMode && std::abs(fps - m_firstSpsFps) > m_firstSpsFps * 0.005)
+        else if (!m_rateChangeSaid && !m_demuxMode && std::abs(fps - m_firstSpsFps) > m_firstSpsFps * 0.005 &&
+                 !sameFilmRate(fps, m_firstSpsFps))
         {
             m_rateChangeSaid = true;
             LTRACE(LT_WARN, 2,
