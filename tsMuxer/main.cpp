@@ -206,6 +206,7 @@ static std::string metaFromSource(const std::string& source, const std::string& 
         THROW(ERR_SOURCE, listing.noTracksReason)
     std::string meta = "MUXOPT --no-pcr-on-video-pid --new-audio-pes --vbr --vbv-len=500\n";
     int tracks = 0;
+    int onlyMatroska = 0;  // tracks left out as they can only go into a Matroska file
     // --languages: when no sound track is of a language wanted, the sound is all taken, as a film without sound is
     // not what was asked for
     bool soundWanted = false;
@@ -229,6 +230,23 @@ static std::string metaFromSource(const std::string& source, const std::string& 
             LTRACE(LT_INFO, 2, "Track " << stream.trackID << " of the source is left out: tsMuxeR does not read it.");
             continue;
         }
+        // ** A TRACK THE OUTPUT CANNOT CARRY IS LEFT OUT. ** VP8, VP9, Vorbis, FLAC, ALAC, MPEG-4 ASP, ProRes and
+        // WavPack have no form in a transport stream (MuxerManager::checkMatroskaOnlyCodecs): a source of such a
+        // track beside its film was refused whole for a .ts or .m2ts output, where the meta file is made to take
+        // every track that output can have. It is left out and said; a Matroska output takes it.
+        if (ext != "MKV" && ext != "MKA" && ext != "MKS" && ext != "WEBM")
+            if (const std::string& name = stream.codecInfo.programName;
+                name == vp8CodecInfo.programName || name == vp9CodecInfo.programName ||
+                name == vorbisCodecInfo.programName || name == flacCodecInfo.programName ||
+                name == alacCodecInfo.programName || name == mpeg4AspCodecInfo.programName ||
+                name == proresCodecInfo.programName || name == wavpackCodecInfo.programName)
+            {
+                LTRACE(LT_INFO, 2,
+                       "Track " << stream.trackID << " (" << stream.codecInfo.displayName
+                                << ") is left out: it can only be muxed into a Matroska file (.mkv).");
+                ++onlyMatroska;
+                continue;
+            }
         if (!languageWanted(stream) && (soundWanted || stream.codecInfo.programName[0] != 'A'))
         {
             LTRACE(LT_INFO, 2,
@@ -252,6 +270,9 @@ static std::string metaFromSource(const std::string& source, const std::string& 
         meta += line + "\n";
         ++tracks;
     }
+    if (tracks == 0 && onlyMatroska > 0)
+        THROW(ERR_USAGE, "No track of " << source << " can go into a transport stream: each can only be muxed into "
+                                        << "a Matroska file. Name the output .mkv.")
     if (tracks == 0)
         THROW(ERR_SOURCE, "tsMuxeR reads no track of " << source << ", so there is nothing to mux.")
     return meta;
