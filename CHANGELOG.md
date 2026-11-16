@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 43 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 44 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -59,6 +59,8 @@
 * **The sound of a VOB or MPEG program stream came early by its delay.** A file whose sound starts after its first picture was muxed with the sound from the first picture, in every output, where the meta file gave no `timeshift=`, as in one written by hand: 110 ms early in a usual case. The start of the track is now taken from the file, as for a transport stream, a Matroska file and an MP4.
 
 * **The delay a program stream's sound was listed with could be wrong**, and the window writes it as `timeshift=`. A file cut inside a group of pictures was measured from pictures the mux leaves out (-490 ms where -610 ms is right), a file whose first part is a short clip before its clock starts again from the second part (110 ms where 300 ms is right), and a file whose clock turns over at its start was off by the turn (38 ms where 110 ms is right). The delay is now measured from the first picture the mux keeps, in the first part of the file.
+
+* **An encrypted file after the first of a join was muxed as successful.** Only the first file of a join, or of a playlist, was tested for encryption, so an encrypted VOB or .m2ts after it was muxed as noise with "Mux successful complete". Every file is tested now.
 
 ### MP4 and MOV input
 
