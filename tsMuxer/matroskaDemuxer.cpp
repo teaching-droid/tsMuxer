@@ -1418,6 +1418,9 @@ void MatroskaDemuxer::openFile(const std::string& streamName)
     m_attachments.clear();
     m_sourceName = streamName;
 
+    // a demuxer may open a file again (a join of one file with itself): what the file before named is freed
+    delete[] writing_app;
+    delete[] muxing_app;
     writing_app = nullptr;
     muxing_app = nullptr;
     num_tracks = 0;
@@ -1884,6 +1887,8 @@ void MatroskaDemuxer::readClose()
 {
     delete[] writing_app;
     delete[] muxing_app;
+    writing_app = nullptr;  // openFile frees them again
+    muxing_app = nullptr;
     // The packet handed out last is freed at the next read; a reader that stops before it, as a probe does, left it
     if (m_lastDeliveryPacket)
     {
@@ -2565,6 +2570,7 @@ int MatroskaDemuxer::matroska_parse_info()
             char* text;
             if ((res = ebml_read_utf8(&id, &text)) < 0)
                 break;
+            delete[] writing_app;  // a second Info element names it again
             writing_app = text;
             break;
         }
@@ -2574,6 +2580,7 @@ int MatroskaDemuxer::matroska_parse_info()
             char* text;
             if ((res = ebml_read_utf8(&id, &text)) < 0)
                 break;
+            delete[] muxing_app;
             muxing_app = text;
             break;
         }

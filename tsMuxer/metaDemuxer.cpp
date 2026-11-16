@@ -7875,7 +7875,17 @@ bool ContainerToReaderWrapper::openStream(int readerID, const char* streamName, 
             THROW(ERR_UNSUPPORTER_CONTAINER_FORMAT, "Unsupported container format: " << streamName)
         demuxer->setFileIterator(m_demuxers[streamName].m_iterator);
 
-        demuxer->openFile(streamName);
+        // a file the demuxer cannot open (still encrypted, damaged) ends the job: the demuxer is not left behind
+        try
+        {
+            demuxer->openFile(streamName);
+        }
+        catch (...)
+        {
+            delete demuxer;
+            m_demuxers[streamName].m_demuxer = nullptr;
+            throw;
+        }
     }
 
     if (SubTrackFilter::isSubTrack(pid))
