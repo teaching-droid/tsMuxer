@@ -506,17 +506,33 @@ bool TextSubtitlesRender::textFits(const std::string& text)
 // each from left to right. Only {\an8}, the top centre, was honoured; any other was drawn at the bottom centre, so a
 // sign translated at the top left stood over the dialogue. The digit of the first such tag of a subtitle, 2 (the
 // bottom centre) where it has none.
+// The older form of the tag, {\a<n>} of SSA, which older tools write into SRT files ({\a6} for the top), was left out
+// unread, and the subtitle stood at the bottom: 1 to 3 at the bottom, 5 to 7 at the top and 9 to 11 in the middle, each
+// from left to right. It is read too, the first tag of either form deciding, as in an ASS script.
 int subtitleAlignment(const std::string& text)
 {
+    static constexpr int LEGACY[12] = {0, 1, 2, 3, 0, 7, 8, 9, 0, 4, 5, 6};  // {\a<n>} -> the number pad
     for (size_t open = text.find("{\\"); open != std::string::npos; open = text.find("{\\", open + 1))
     {
         const size_t close = text.find('}', open);
         if (close == std::string::npos)
             break;
-        const size_t tag = text.find("\\an", open);
-        if (tag != std::string::npos && tag + 3 < close && text[tag + 3] >= '1' && text[tag + 3] <= '9' &&
-            (tag + 4 == close || text[tag + 4] == '\\'))
-            return text[tag + 3] - '0';
+        for (size_t tag = text.find('\\', open); tag != std::string::npos && tag < close;
+             tag = text.find('\\', tag + 1))
+        {
+            if (tag + 2 >= close || text[tag + 1] != 'a')
+                continue;
+            const size_t digits = tag + (text[tag + 2] == 'n' ? 3 : 2);
+            size_t end = digits;
+            while (end < close && text[end] >= '0' && text[end] <= '9') ++end;
+            if (end == digits || end - digits > 2 || (end != close && text[end] != '\\'))
+                continue;  // \alpha and the like, or no number
+            const int n = std::stoi(text.substr(digits, end - digits));
+            if (text[tag + 2] == 'n' && n >= 1 && n <= 9)
+                return n;
+            if (text[tag + 2] != 'n' && n >= 1 && n <= 11 && LEGACY[n] != 0)
+                return LEGACY[n];
+        }
     }
     return 2;
 }
