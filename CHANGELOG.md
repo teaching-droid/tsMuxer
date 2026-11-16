@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 48 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 49 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -79,6 +79,8 @@
 ### Matroska input
 
 * **The sound of some Matroska files came early.** An H.264 track that begins with a group that is not closed, as a recording cut from a broadcast does, had its sound measured from the first I picture and not from the first picture shown: the sound came early by the pictures between, 40 to 280 ms on 4 of 13 recordings, in every output.
+
+* **A default track chosen for a Matroska output was not marked when the source marks another.** Where a Matroska source marks its first audio track as the default and the Default tracks box of the window, or `default` on a meta line, chose another one, the source's choice was kept: the chosen track was written as not default, with a warning that `default` was given on two tracks. The default chosen in the meta now decides; the source's flags count only for a type of track the meta names no default for.
 
 ### Command line and window
 

@@ -490,6 +490,7 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
         {
             track.defaultExplicit = true;
             track.markedDefault = srcDefault->second == "1";
+            track.defaultSrc = true;
         }
     }
     track.dropAc3Core = params.find("drop-ac3-core") != params.end();
@@ -2470,6 +2471,14 @@ void MatroskaMuxer::refreshTrackProperties()
     // A type counts as settled if ANY of its tracks carried the key, whatever the key said. That
     // is what makes "no default" expressible: default=none on every track of a type leaves the type
     // settled with nothing wanted, where before the key had to say yes to count at all.
+    // The meta's own default= on any track of a type decides that type: the source's flags of its other tracks stand
+    // in only where the meta says nothing about the type. A source whose first audio track is its default kept it
+    // when the meta (the window's Default tracks box) chose the second: the second was written as not default, with a
+    // warning that default= was given on two tracks.
+    std::set<uint8_t> typeHasMeta;
+    for (auto& [streamIdx, track] : m_tracks)
+        if (track.defaultExplicit && !track.defaultSrc)
+            typeHasMeta.insert(track.trackType);
     std::set<uint8_t> typeHasExplicit;
     for (auto& [streamIdx, track] : m_tracks)
         if (track.defaultExplicit)
@@ -2477,8 +2486,9 @@ void MatroskaMuxer::refreshTrackProperties()
     std::set<uint8_t> typeDone;
     for (auto& [streamIdx, track] : m_tracks)
     {
-        const bool wantIt =
-            typeHasExplicit.count(track.trackType) ? track.markedDefault : !typeDone.count(track.trackType);
+        const bool wantIt = typeHasMeta.count(track.trackType)       ? track.markedDefault && !track.defaultSrc
+                            : typeHasExplicit.count(track.trackType) ? track.markedDefault
+                                                                     : !typeDone.count(track.trackType);
         track.isDefault = wantIt && !typeDone.count(track.trackType);
         if (track.isDefault)
             typeDone.insert(track.trackType);
