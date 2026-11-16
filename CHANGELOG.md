@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 42 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 43 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -51,6 +51,8 @@
 * **A program of sound alone in a multiplex was listed with a delay of hours.** A radio service or a sound feed beside the television programs of a transport stream was measured against the video of another program, on another clock. Its tracks are now measured against the earliest of their own program.
 
 * **The sound of a program in a multiplex could come early by the pictures before its first I picture.** The programs of a multiplex each have a clock of their own, and where the count of its wraps differed between two pictures of one video track, a B picture shown before the first I picture looked later than it: the video was measured from the I picture, and the sound came early by the pictures between (84 ms on a recording). The two times are now compared as the clock counts them.
+
+* **The sound of a cut transport stream could come late by a frame or two.** Where a recording is cut inside a sound PES, the whole frames of that PES before the first PES header were muxed with the time of that header, so the sound came late by them: 64 ms in a test. A sound track now begins with its first PES, as in a part of a playlist.
 
 ### VOB and MPEG program stream
 
