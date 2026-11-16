@@ -695,6 +695,8 @@ static void describeAsChosenClip(vector<CheckStreamRez>& streams, const string& 
     std::streambuf* const out = std::cout.rdbuf(nullptr);
     std::streambuf* const err = std::cerr.rdbuf(nullptr);
     const bool lastMsg = sLastMsg;
+    const bool wasSilent = traceWarnings::silent;
+    traceWarnings::silent = true;  // a warning given once a file is not used up by this look
     try
     {
         rez = METADemuxer::DetectStreamReader(readManager, clip->media, false);
@@ -702,6 +704,7 @@ static void describeAsChosenClip(vector<CheckStreamRez>& streams, const string& 
     catch (...)
     {
     }
+    traceWarnings::silent = wasSilent;
     std::cout.rdbuf(out);
     std::cerr.rdbuf(err);
     sLastMsg = lastMsg;

@@ -342,7 +342,8 @@ class MovParsedAudioTrackData final : public ParsedTrackPrivData
             // loop never ended: the file could not even be listed. They are left out now, as extractData leaves them.
             if (m_sc->sample_size != 0 && m_sc->sample_size > left)
             {
-                if (!m_tailWarned)
+                // (not where the end of the file cuts the chunk: the file is said to be cut off)
+                if (!m_tailWarned && m_demuxer->getProcessedBytes() < m_demuxer->fileSize())
                     LTRACE(LT_WARN, 2,
                            "Warning: audio track #" << m_sc->ffindex << " of the MP4 file has " << left
                                                     << " bytes after the samples of a chunk; they are left out.");
@@ -1842,9 +1843,9 @@ static void noteCutOff(const std::string& fileName, const int64_t fileSize, cons
 static void recordCutOff(const std::string& fileName, const int64_t fileSize, const MOVStreamContext* st,
                          const double from, const int64_t missingFrom, const double joinStart)
 {
-    auto [it, added] = MovDemuxer::cutOffFiles().emplace(fileName, MovDemuxer::CutOff{from, st->ffindex, joinStart});
     // The file is read on its own first (the listing of its tracks, the check of a join), at the start of no join: the
     // read of the mux, where it starts in the join, is the one --cut-end is measured against.
+    auto [it, added] = MovDemuxer::cutOffFiles().emplace(fileName, MovDemuxer::CutOff{from, st->ffindex, joinStart});
     if (!added && from < it->second.from)
         it->second = MovDemuxer::CutOff{from, st->ffindex, joinStart};
     else if (!added && from == it->second.from)
@@ -1898,19 +1899,22 @@ void MovDemuxer::buildIndex()
                 {
                     if (!cutNoted)
                         noteCutOff(m_fileName, m_fileSize, st, firstSample, j,
-                                   static_cast<double>(m_joinStartNs) / 1e9);
+                                   static_cast<double>(m_partStartNs) / 1e9);
                     cutNoted = true;
                     continue;
                 }
                 if (!found_moof && m_fileSize > 0 && !cutNoted && k < counts.size())
                 {
                     // the bytes of its samples: from the sample table (ownChunkBytes), or one size times their number
-                    // where that size is the bytes of a frame (CBR AC-3, MP2, DTS as ffmpeg writes them). A size of
-                    // 1 counts compressed QuickTime sound (IMA4, MP3 in a MOV) in units that are not bytes, and a
-                    // whole file of that kind was taken for one cut off.
+                    // where one sample is one frame of a codec read frame by frame (AC-3, E-AC-3, the mp4a sound,
+                    // MovParsedAudioTrackData), as ffmpeg writes CBR AC-3. QuickTime sound descriptions count other
+                    // units (IMA4, MP3 in a MOV: a size of 1, or the bytes of a packet of many samples), and a whole
+                    // file of that kind was taken for one cut off.
+                    const bool frames = dynamic_cast<const MovParsedAudioTrackData*>(st->parsed_priv_data) != nullptr;
                     const int64_t own = k < bytes.size() && bytes[k] >= 0 ? bytes[k]
-                                        : st->sample_size > 1 ? static_cast<int64_t>(counts[k]) * st->sample_size
-                                                              : -1;
+                                        : frames && st->sample_size > 1
+                                            ? static_cast<int64_t>(counts[k]) * st->sample_size
+                                            : -1;
                     int64_t missingFrom = -1;
                     if (own > 0 && j + own > m_fileSize)
                         if (const int64_t whole =
@@ -1918,7 +1922,7 @@ void MovDemuxer::buildIndex()
                             whole >= 0 && missingFrom >= 0)
                         {
                             noteCutOff(m_fileName, m_fileSize, st, firstSample + static_cast<uint64_t>(whole),
-                                       missingFrom, static_cast<double>(m_joinStartNs) / 1e9);
+                                       missingFrom, static_cast<double>(m_partStartNs) / 1e9);
                             cutNoted = true;
                         }
                 }
@@ -2236,7 +2240,18 @@ int64_t MovDemuxer::partVideoNs(const int audioIndex) const
 void MovDemuxer::accountJoinPart()
 {
     if (const int64_t videoNs = videoLengthNs(); videoNs > 0)
+    {
         m_joinStartNs += videoNs;
+        m_partStartNs += videoNs;
+    }
+    else
+    {
+        int64_t soundNs = 0;  // a join of sound alone: the longest of its sound tracks
+        for (int i = 0; i < num_tracks; ++i)
+            if (tracks[i]->type == IOContextTrackType::AUDIO)
+                soundNs = (std::max)(soundNs, partVideoNs(i));
+        m_partStartNs += soundNs;
+    }
     for (int i = 0; i < num_tracks; ++i)
     {
         const auto st = reinterpret_cast<MOVStreamContext*>(tracks[i]);
@@ -3057,7 +3072,7 @@ int MovDemuxer::mov_read_trun(MOVAtom atom)
             recordCutOff(
                 m_fileName, m_fileSize, sc,
                 sc->time_scale > 0 ? static_cast<double>(sc->fragDts.back() - sc->fragDts.front()) / sc->time_scale : 0,
-                offset, static_cast<double>(m_joinStartNs) / 1e9);
+                offset, static_cast<double>(m_partStartNs) / 1e9);
             cutNoted = true;
         }
         offset += sample_size;

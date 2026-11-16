@@ -111,6 +111,9 @@ class MovDemuxer final : public IOContextDemuxer
     int m_joinPart = 0;  // which file of a join is open: 0 the first
     // where the open file of a join starts (joinStartNs)
     int64_t m_joinStartNs = 0;
+    // where the open file starts in a join for its cut-off (--cut-end): as m_joinStartNs, and by its sound where it
+    // has no video
+    int64_t m_partStartNs = 0;
     // An audio track of a join (dropJoinPriming): where its first frame plays against the join's first picture, the
     // frames handed on so far, and where the pictures of the parts so far end
     struct JoinAudio

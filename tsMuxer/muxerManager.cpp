@@ -2082,13 +2082,16 @@ void MuxerManager::findCutKeyPictures()
         NullBuffer null;
         std::streambuf* out = std::cout.rdbuf(&null);
         std::streambuf* err = std::cerr.rdbuf(&null);
-        Silence() = default;
+        // its warnings are not the job's, and a warning given once a file is given by the mux, not used up here
+        const bool wasSilent = traceWarnings::silent;
+        Silence() { traceWarnings::silent = true; }
         Silence(const Silence&) = delete;
         Silence& operator=(const Silence&) = delete;
         ~Silence()
         {
             std::cout.rdbuf(out);
             std::cerr.rdbuf(err);
+            traceWarnings::silent = wasSilent;
         }
     };
     std::map<int, int64_t> found;
