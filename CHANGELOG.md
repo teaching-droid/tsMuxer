@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 50 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 51 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -69,6 +69,8 @@
 * **The subtitles of a cut MP4 came seconds late.** In an MP4 cut without re-encoding, the edit list of the text track was not applied, and the subtitles came as if the file were not cut: 4 s late in a test, and later still where the cut was written as fragments. The text track now starts as the sound does. (#63) Thanks to @Moonghost-coder.
 
 * **An MP4 cut off inside its media data was muxed as successful.** An MP4 that ends in the middle of its data, as an interrupted download leaves it, gave half its pictures and "Mux successful complete", alone or in a join; the same held for a MOV and a fragmented MP4. It now ends with an error that says the file is cut off, and from which time. The output holds what the file has. (#64) Thanks to @Moonghost-coder.
+
+* **A whole track of a cut-off MP4 could not be muxed.** Where a file stores its tracks one after the other and is cut off in the last one, a job that muxed only the whole one, as the video of a file whose sound comes after it, was refused for the track it does not mux. Only the tracks the job muxes are judged now, at the places it muxes them.
 
 * **A join of files of different codecs could be muxed as successful.** Where the tracks of a join are named by `track=`, as for MP4, Matroska and transport stream files, a file of another video codec was not checked: H.264 joined to HEVC gave only the pictures of the first file. A DTS file joined to an AC-3 file on a DTS line lost the AC-3 file without a word. Each file of a join is now checked, and a file of another codec stops the mux before anything is written. (#65) Thanks to @Moonghost-coder.
 

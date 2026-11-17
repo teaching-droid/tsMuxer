@@ -47,6 +47,7 @@
 #include "simplePacketizerReader.h"
 #include "singleFileMuxer.h"
 #include "streamReport.h"
+#include "subTrackFilter.h"
 #include "tsMuxer.h"
 #include "vodCoreException.h"
 
@@ -4986,8 +4987,29 @@ static void checkSourcesCutOff(const MuxerManager& muxerManager)
                                         << doubleToStr(from, 3)
                                         << " s on. The output holds what the file has and is incomplete.")
     };
+    // An MP4: each track of it the job muxes that is cut, at each place the job muxes it. A line of the file alone
+    // starts it at 0; a join, at each place the mux read of a join opened it, and none where the join never reached
+    // it (a --cut-end before it).
     for (const auto& [file, cut] : MovDemuxer::cutOffFiles())
-        check(file, cut.from, cut.track, "its index lists data past the end of the file", cut.joinStart);
+        for (const StreamInfo& si : muxerManager.getStreamInfo())
+        {
+            if (SubTrackFilter::isSubTrack(si.m_pid))
+                continue;
+            const auto track = cut.tracks.find(static_cast<unsigned>(si.m_pid));
+            if (track == cut.tracks.end())
+                continue;
+            const std::vector<std::string> files =
+                si.m_sourceFiles.empty() ? std::vector<std::string>{si.m_streamName} : si.m_sourceFiles;
+            if (std::none_of(files.begin(), files.end(),
+                             [&file](const std::string& f) { return unquoteStr(trimStr(f)) == file; }))
+                continue;
+            if (files.size() == 1)
+                check(file, track->second, track->first, "its index lists data past the end of the file");
+            else
+                for (const double joinStart : cut.joinStarts)
+                    check(file, track->second, track->first, "its index lists data past the end of the file",
+                          joinStart);
+        }
     for (const auto& [file, cut] : MatroskaDemuxer::cutOffFiles())
         check(file, cut.from, cut.track, "a block runs past the end of the file");
 }

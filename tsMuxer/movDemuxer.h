@@ -20,13 +20,13 @@ class MovDemuxer final : public IOContextDemuxer
     // The file open now (for a reader's messages)
     [[nodiscard]] const std::string& fileName() const { return m_fileName; }
     [[nodiscard]] int64_t fileSize() const { return m_fileSize; }
-    // A file whose index lists data past its end, as a file that was cut off: from when (s, in the file's own time)
-    // and in which track the first of it is missing. Asked once the mux is over (main.cpp).
+    // A file whose index lists data past its end, as a file that was cut off: each track that does, from when (s, in
+    // the file's own time) it is missing, and where a join the mux read opened the file. Asked once the mux is over
+    // (main.cpp), for the tracks the job muxes of it at the places it muxes them.
     struct CutOff
     {
-        double from = 0;  // in the file's own time, as the error says it
-        unsigned track = 0;
-        double joinStart = 0;  // where the file starts in a join, s: --cut-end counts from the join's start
+        std::map<unsigned, double> tracks;  // track: from when it is missing, in the file's own time
+        std::set<double> joinStarts;        // s, where a join opened the file: --cut-end counts from the join's start
     };
     static std::map<std::string, CutOff>& cutOffFiles();
     std::string getTitle() override;
