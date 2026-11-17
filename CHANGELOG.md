@@ -226,12 +226,6 @@ This is also in 3.1.0.
 
 * **A made Dolby Vision layer of a stream that begins before its first parameter sets is timed as in 3.1.0.** Where a single layer Dolby Vision track whose start lost its parameter sets is written to a Blu-ray with its second layer made, the first picture that can be decoded is shown at the start of the stream, early by the pictures before it (0.5 s in a test). Written with `--no-dv-layer`, or to another output, it keeps its time.
 
-
-
-
-
-
-
 ## tsMuxeR 3.1.0
 
 **3.1.0 fixes 66 faults of earlier versions and brings 30 new features and improvements**, each listed below. Every fault that the final tests turned up was fixed before this release. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.

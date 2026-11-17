@@ -111,7 +111,6 @@ body:
         film itself, and an issue is public. How to make them:
         https://github.com/teaching-droid/tsMuxer/blob/master/docs/REPORTING_A_PROBLEM.md
         Please attach a sample, not the whole file: whole films or discs, and links to them, are removed.
-
     validations:
       required: false
 
