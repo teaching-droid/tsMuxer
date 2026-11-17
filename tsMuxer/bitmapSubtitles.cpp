@@ -21,13 +21,17 @@ using text_subtitles::YUVQuad;
 using text_subtitles::RGBQUAD;  // windows.h has it on Windows
 #endif
 
+// ** THE NEAREST RATE, NOT THE FIRST NEAR ONE. ** 23.976 lies within 0.5 % of 24, 29.97 of 30 and 59.94 of 60, and the
+// first rate of the list within 0.5 % was taken: text drawn at fps=24, 30 or 60 was timed at the 1001 rate and came
+// early by 0.1 %, 2.7 s at 45 minutes, while its pictures said 24, 30 or 60 (since 3.0.0).
 double nearestPgsFrameRate(const double fps)
 {
     static constexpr double RATES[] = {24000.0 / 1001, 24, 25, 30000.0 / 1001, 30, 50, 60000.0 / 1001, 60};
+    double best = 0;
     for (const double rate : RATES)
-        if (fabs(fps - rate) < rate * 0.005)
-            return rate;
-    return 0;
+        if (fabs(fps - rate) < rate * 0.005 && (best == 0 || fabs(fps - rate) < fabs(fps - best)))
+            best = rate;
+    return best;
 }
 
 BitmapToPgs::BitmapToPgs() : m_pgs(std::make_unique<TextToPGSConverter>(false)) {}

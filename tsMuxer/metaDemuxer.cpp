@@ -1369,10 +1369,26 @@ void METADemuxer::openFile(const string& streamName)
         auto* pgs = dynamic_cast<PGSStreamReader*>(sub.m_streamReader);
         if (!pgs || sub.m_sourceFiles.empty())
             continue;
-        // the files as they are, of a track read under a second name as well (addStream)
+        // the files as they are, of a track read under a second name as well (addStream), and however their names are
+        // written: the same file named one way on the video line and another way on the subtitle line (./ or ..,
+        // other capitals on Windows) was taken for another file, and its track was converted
         const auto realFiles = [](std::vector<std::string> names)
         {
-            for (auto& name : names) name = nameAlias::resolve(name);
+            for (auto& name : names)
+            {
+                name = nameAlias::resolve(name);
+                std::error_code ec;
+                const std::filesystem::path p(std::u8string(name.begin(), name.end()));
+                const std::filesystem::path c = std::filesystem::weakly_canonical(p, ec);
+                if (!ec)
+                {
+                    const std::u8string u = c.generic_u8string();
+                    name.assign(u.begin(), u.end());
+                }
+#ifdef _WIN32
+                name = strToLowerCase(name);
+#endif
+            }
             return names;
         };
         for (const auto& video : m_codecInfo)

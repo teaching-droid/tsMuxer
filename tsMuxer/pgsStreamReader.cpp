@@ -971,7 +971,18 @@ int PGSStreamReader::readSourcePacket(AVPacket& avPacket)
             double streamRate = 0, muxRate = 0;
             m_videoOfItsFile(streamRate, muxRate);
             const double change = streamRate > 0 && muxRate > 0 ? streamRate / muxRate : 1.0;
-            if (fabs(change - 1.0) > 1e-6)
+            // A track read from a transport stream comes as PES, whose times are not scaled (only the segments of a
+            // .sup file or a Matroska track are): it was said to follow the video, and kept its times.
+            const bool fromPes = m_containerType == ContainerType::ctTS || m_containerType == ContainerType::ctM2TS;
+            if (fabs(change - 1.0) > 1e-6 && fromPes)
+                LTRACE(LT_WARN, 2,
+                       "Warning: the video of its file is changed from "
+                           << streamRate << " to " << muxRate << " fps, and PGS stream #" << m_streamIndex
+                           << " of a transport stream keeps its times: its subtitles move against the picture by "
+                           << doubleToStr(fabs(change - 1.0) * 100.0, 2)
+                           << " % of the time. Demux it to a .sup file and mux that with the same fps= to have it "
+                              "follow.");
+            else if (fabs(change - 1.0) > 1e-6)
             {
                 LTRACE(LT_INFO, 2,
                        "The video of its file is changed from " << streamRate << " to " << muxRate

@@ -7532,6 +7532,10 @@ QString TsMuxerWindow::buildMetaText()
 {
     QString metaContent;
     metaContent.append(getMuxOpts() + '\n');
+    // The frame rate a subtitle track is bound to ("Bind to video FPS"): that of the first video track the job muxes.
+    // An unticked video row was taken as well, so a demux of the subtitles of a file alone converted them to the rate
+    // of a video not in the job (the #60 shift again: a track marked 59.94 beside its own video of 60). With no video
+    // muxed, nothing is bound.
     QString tmpFps;
     for (int i = 0; i < ui->trackLV->rowCount(); ++i)
     {
@@ -7539,7 +7543,7 @@ QString TsMuxerWindow::buildMetaText()
         if (!codecInfo)
             continue;
 
-        if (isVideoCodec(codecInfo->displayName))
+        if (isVideoCodec(codecInfo->displayName) && ui->trackLV->item(i, 0)->checkState() == Qt::Checked)
         {
             if (codecInfo->checkFPS)
                 tmpFps = fpsTextToFpsStr(codecInfo->fpsText);
