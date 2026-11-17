@@ -4501,9 +4501,10 @@ void MatroskaDemuxer::loadTrackExtras(const std::string& fileName)
                         for (const auto& [cid, cb, clen] : elementsOf(eb, elen))
                             if (cid == 0x5035 || (cid == 0x5033 && readUInt(cb, clen) == 1))
                                 encrypted = true;
-            static const std::pair<uint32_t, const char*> FLAGS[] = {{0x55AA, "forced"},   {0x55AB, "hearing"},
-                                                                     {0x55AC, "visual"},   {0x55AD, "descriptions"},
-                                                                     {0x55AE, "original"}, {0x55AF, "commentary"}};
+            // FlagEnabled (0xB9) too: a track the source marks as not to be played came out as one to be played
+            static const std::pair<uint32_t, const char*> FLAGS[] = {
+                {0x55AA, "forced"},   {0x55AB, "hearing"},    {0x55AC, "visual"}, {0x55AD, "descriptions"},
+                {0x55AE, "original"}, {0x55AF, "commentary"}, {0xB9, "enabled"}};
             if (id == MATROSKA_ID_TRACKNUMBER)
                 number = static_cast<int64_t>(readUInt(b, len));
             for (const auto& [flagId, flagName] : FLAGS)
@@ -5786,7 +5787,7 @@ int MatroskaDemuxer::matroska_add_stream()
     // FlagDefault's default VALUE in Matroska is 1, so a track that does not carry the element is
     // the default one, and muxers leave it out exactly when it is true. The track is raw zeroed
     // memory here, so without this an absent element read as "not the default", which is backwards.
-    // FlagEnabled defaults to 1 as well; nothing reads that one, so it is left alone.
+    // FlagEnabled defaults to 1 as well; it goes on to a Matroska output through srcflags (loadTrackExtras).
     track->flags |= MATROSKA_TRACK_DEFAULT;
 
     /* start with the master */

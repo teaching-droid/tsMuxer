@@ -386,7 +386,8 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
         static const std::pair<const char*, uint32_t> NAMES[] = {
             {"forced", MATROSKA_ID_TRACKFLAGFORCED},         {"hearing", MATROSKA_ID_TRACKFLAGHEARINGIMPAIRED},
             {"visual", MATROSKA_ID_TRACKFLAGVISUALIMPAIRED}, {"descriptions", MATROSKA_ID_TRACKFLAGTEXTDESCRIPTIONS},
-            {"original", MATROSKA_ID_TRACKFLAGORIGINAL},     {"commentary", MATROSKA_ID_TRACKFLAGCOMMENTARY}};
+            {"original", MATROSKA_ID_TRACKFLAGORIGINAL},     {"commentary", MATROSKA_ID_TRACKFLAGCOMMENTARY},
+            {"enabled", MATROSKA_ID_TRACKFLAGENABLED}};
         for (const std::string& item : splitStr(src->second.c_str(), ','))
         {
             const size_t eq = item.find('=');
@@ -1422,10 +1423,10 @@ std::vector<uint8_t> MatroskaMuxer::buildTrackEntry(const MkvTrackInfo& track, i
     pos += ebml_write_uint(inner.data() + pos, MATROSKA_ID_TRACKTYPE, track.trackType);
     pos += ebml_write_uint(inner.data() + pos, MATROSKA_ID_TRACKFLAGLACING, 0);
     pos += ebml_write_uint(inner.data() + pos, MATROSKA_ID_TRACKFLAGDEFAULT, track.isDefault ? 1 : 0);
-    // WebM has FlagForced but not the flags RFC 9559 added (hearing and visual impaired, text descriptions, original,
-    // commentary): a .webm output carries only the elements of the WebM subset
+    // WebM has FlagForced and FlagEnabled but not the flags RFC 9559 added (hearing and visual impaired, text
+    // descriptions, original, commentary): a .webm output carries only the elements of the WebM subset
     for (const auto& [flagId, value] : track.flags)
-        if (!m_webm || flagId == MATROSKA_ID_TRACKFLAGFORCED)
+        if (!m_webm || flagId == MATROSKA_ID_TRACKFLAGFORCED || flagId == MATROSKA_ID_TRACKFLAGENABLED)
             pos += ebml_write_uint(inner.data() + pos, flagId, value);
     if (!track.name.empty())
         pos += ebml_write_string(inner.data() + pos, MATROSKA_ID_TRACKNAME, track.name);
