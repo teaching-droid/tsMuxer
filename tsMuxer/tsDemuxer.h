@@ -353,7 +353,9 @@ class TSDemuxer final : public AbstractDemuxer
     // from that start now (subtitleBase), and wait until it is settled: every sound track of the program that has
     // begun has its first PES taken in runs (m_ptsPesSeen), or the file ends. Only the first file of a source, whose
     // starts are those its sound is placed by, and a program that lists sound and no video.
-    int m_subWaitSoundPid = -1;  // the subtitle track whose program's sound start the subtitles wait for; -1: none
+    int m_subWaitSoundPid = -1;    // the subtitle track whose program's sound start the subtitles wait for; -1: none
+    int64_t m_subWaitPackets = 0;  // TS packets read while they wait for the sound
+    static constexpr int64_t SUB_WAIT_SOUND_PACKETS = 64 * 1024;  // 12 MB: some seconds of a usual broadcast
     [[nodiscard]] bool timedFromSound(int pid) const;
     [[nodiscard]] bool soundStartSettled(int pid) const;
     // where the PGS timeline of a subtitle track begins, 90 kHz

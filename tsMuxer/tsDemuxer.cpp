@@ -1872,6 +1872,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         m_subWaitOn = false;  // each file waits on its own video
         m_subWaitSoundPid = -1;
         m_subWaitDone = false;
+        m_subWaitPackets = 0;
     }
     if (isFirstBlock)
     {
@@ -2174,6 +2175,11 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
         m_subWaitOn = true;
         m_subWaitSoundPid = pid;
     }
+    // A sound track of fewer PES than its start is taken from (a lone leftover PES, a short Opus track) never
+    // settles: the subtitles waited to the end of the file, and came behind every other packet of it. They wait the
+    // packets of a few seconds of a usual broadcast at most.
+    if (m_subWaitOn && m_subWaitSoundPid != -1 && ++m_subWaitPackets > SUB_WAIT_SOUND_PACKETS)
+        endSubtitleWait(demuxedData, discardSize, part, vect, lastPid);
     if (m_subWaitOn && !m_subHandingOn && m_acceptedPidCache[pid] && isSubtitlePid(pid))
     {
         if (m_subWait.size() < SUB_WAIT_MAX)
@@ -2196,6 +2202,7 @@ void TSDemuxer::endSubtitleWait(DemuxedData& demuxedData, int64_t& discardSize, 
 {
     m_subWaitOn = false;
     m_subWaitSoundPid = -1;
+    m_subWaitPackets = 0;
     m_subWaitDone = true;
     handOnWaitingSubtitles(demuxedData, discardSize, part, vect, lastPid);
 }
@@ -3459,6 +3466,7 @@ void TSDemuxer::openFile(const std::string& streamName)
     m_subWaitOn = false;
     m_subWaitSoundPid = -1;
     m_subWaitDone = false;
+    m_subWaitPackets = 0;
     m_partCutBeforeHold.clear();
     m_leadHeld.clear();
     memset(m_leadUndecided, 0, sizeof(m_leadUndecided));
