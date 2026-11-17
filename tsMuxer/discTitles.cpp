@@ -384,6 +384,29 @@ std::string versionPartsText(const DiscTitle& title)
     return s.str();
 }
 
+// ** THE FOLDERS OF A DISC IN ANY LETTERS. ** A disc copied or mounted with its names in small letters (bdmv/playlist,
+// as some copies and mounts give them) was looked for at BDMV/PLAYLIST, which a file system that tells capitals apart
+// does not have: the folder was no disc, and title= named nothing in it. The folder `name` in `parent` as it is on the
+// drive, in any letters; as written where there is none (and always on Windows, which does not tell them apart).
+std::string discFolder(const std::string& parent, const char* name)
+{
+    const std::string asWritten = parent + getDirSeparator() + name;
+#ifndef _WIN32
+    if (isFolder(asWritten) || discImage::isInside(parent))
+        return asWritten;
+    std::error_code ec;
+    for (const auto& entry : std::filesystem::directory_iterator(std::u8string(parent.begin(), parent.end()), ec))
+    {
+        const std::u8string u = entry.path().filename().u8string();
+        const std::string found(u.begin(), u.end());
+        std::error_code typeEc;
+        if (strToUpperCase(found) == strToUpperCase(name) && entry.is_directory(typeEc))
+            return parent + getDirSeparator() + found;
+    }
+#endif
+    return asWritten;
+}
+
 std::string blurayDiscRoot(const std::string& path)
 {
     const std::string p = withoutEndSeparators(path);
@@ -393,7 +416,7 @@ std::string blurayDiscRoot(const std::string& path)
     const std::string last = strToUpperCase(sep == std::string::npos ? p : p.substr(sep + 1));
     if (last == "BDMV" && isFolder(p))
         return sep == std::string::npos ? std::string(".") : sep == 0 ? p.substr(0, 1) : p.substr(0, sep);
-    if (isFolder(p + "/BDMV"))
+    if (isFolder(p + "/BDMV") || isFolder(discFolder(p, "BDMV")))
         return p;
     return {};
 }
@@ -430,7 +453,7 @@ DiscTitles listDiscTitles(const std::string& root, const double minSeconds, cons
 {
     DiscTitles result;
     result.minSeconds = minSeconds;
-    const std::string dir = root + getDirSeparator() + "BDMV" + getDirSeparator() + "PLAYLIST" + getDirSeparator();
+    const std::string dir = discFolder(discFolder(root, "BDMV"), "PLAYLIST") + getDirSeparator();
     std::vector<std::string> names;
     findFiles(dir, "*", &names, false);
     names.erase(std::remove_if(names.begin(), names.end(),
@@ -677,7 +700,7 @@ DiscTitles listDiscTitles(const std::string& root, const double minSeconds, cons
                 }
     }
     // A title whose clips are not all there cannot be muxed whole: said in its note
-    const std::string streamDir = root + getDirSeparator() + "BDMV" + getDirSeparator() + "STREAM" + getDirSeparator();
+    const std::string streamDir = discFolder(discFolder(root, "BDMV"), "STREAM") + getDirSeparator();
     for (Playlist* p : titles)
     {
         std::set<std::string> missing;
@@ -838,7 +861,7 @@ void discTitlesToJson(const DiscTitles& t, jsonListing::Value& doc)
 
 void addPictureLabels(DiscTitles& t, const std::string& root)
 {
-    const std::string streamDir = root + getDirSeparator() + "BDMV" + getDirSeparator() + "STREAM" + getDirSeparator();
+    const std::string streamDir = discFolder(discFolder(root, "BDMV"), "STREAM") + getDirSeparator();
     std::map<std::string, ClipPicture> read;  // the main titles of a disc can share their main clip
     for (auto& title : t.titles)
     {

@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 58 faults of earlier versions and brings 37 new features and improvements**, each listed below. Five faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 58 faults of earlier versions and brings 37 new features and improvements**, each listed below. Four faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -14,7 +14,7 @@
 
 * **A damaged playlist or clip information file could end tsMuxeR without a message.** Such a file names the place of each of its parts, and a place behind the end of the file was read all the same. It is now said that the playlist cannot be read; a disc with such a clip information file is read without it.
 
-* **The listing of a playlist failed where its clips are named in capitals.** A disc copied with names such as 00000.M2TS, on a file system that tells capitals apart, was listed with "Can't open stream", though a mux of the same playlist opened the clip. The clips are found under the name the disc has, also where its folders are named in small letters (bdmv/stream): such a playlist could be neither listed nor muxed.
+* **The listing of a playlist failed where its clips are named in capitals.** A disc copied with names such as 00000.M2TS, on a file system that tells capitals apart, was listed with "Can't open stream", though a mux of the same playlist opened the clip. The clips are found under the name the disc has, also where its folders are named in small letters (bdmv/stream): such a disc could be neither listed nor muxed, through its playlist or as a folder with title=.
 
 * **A sample of a disc folder was empty.** `--make-sample` of a Blu-ray or DVD folder given without `--title` said the sample was written, and the zip held a sample of no bytes. Such a folder is refused now, with what to give: `--title` for a Blu-ray disc, one of its VOB files for a DVD.
 
@@ -223,7 +223,6 @@ These are also in 3.1.0.
 
 * **PGS of a transport stream does not follow a video whose speed is changed.** With `fps=` on the video line changing its speed, a PGS track of the same TS or M2TS keeps its times, and the mux warns. Demux the PGS to a .sup file and mux that with the same `fps=`.
 
-* **A disc folder whose folders are named in small letters is not found as a disc on Linux and macOS.** A copy with bdmv/playlist in place of BDMV/PLAYLIST is not listed as a disc, and `title=` names nothing in it. Give its playlist instead, such as bdmv/playlist/00800.mpls: that is listed and muxed.
 
 * **HEVC: pictures that cannot be read are joined into one.** Where a cut file begins with a key picture whose parameter sets were cut off, the pictures before the first parameter sets are muxed as one access unit.
 
