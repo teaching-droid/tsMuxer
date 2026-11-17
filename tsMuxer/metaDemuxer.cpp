@@ -1811,9 +1811,10 @@ static std::string pathAnyCase(const std::string& path)
             std::error_code ec;
             const std::string folder = done.empty() ? "." : done;
             bool found = false;
-            for (const auto& entry : std::filesystem::directory_iterator(folder, ec))
+            // stepped without exceptions: a folder that cannot be read leaves the name as written
+            for (std::filesystem::directory_iterator it(folder, ec), end; !ec && it != end; it.increment(ec))
             {
-                const std::string name = entry.path().filename().string();
+                const std::string name = it->path().filename().string();
                 if (strToLowerCase(name) == strToLowerCase(part))
                 {
                     next = done + name;
@@ -1821,7 +1822,7 @@ static std::string pathAnyCase(const std::string& path)
                     break;
                 }
             }
-            if (ec || !found)
+            if (!found)
                 return path;  // not there in any letters
         }
         done = next + (to < path.size() ? "/" : "");
@@ -1840,9 +1841,9 @@ std::string METADemuxer::clipNameAsOnDisc(const std::string& stem, const std::st
         if (fileExists(upper))
             return upper;
 #ifndef _WIN32
-        for (const string& name : {lower, upper})
-            if (const string onDisc = pathAnyCase(name); onDisc != name)
-                return onDisc;
+        // one look is enough: the letters of every part, the ending too, are compared in any case
+        if (const string onDisc = pathAnyCase(lower); onDisc != lower)
+            return onDisc;
 #endif
     }
     return lower;
@@ -7415,14 +7416,27 @@ string METADemuxer::findBluRayFile(const string& streamDir, const string& reques
             dirName = streamDir.substr(0, pos);
     }
 
+    // ** IN ANY LETTERS. ** A disc copied with its names in small letters (bdmv/clipinf/00000.clpi) or its files in
+    // capitals (00000.CLPI) had no clip information found: a playlist whose play items play parts of their clips was
+    // muxed with the whole clips, as successful and without a word, and the languages of the clips were lost.
+    const auto onDisc = [](const string& name)
+    {
+#ifndef _WIN32
+        if (!fileExists(name))
+            if (const string found = pathAnyCase(name); found != name && fileExists(found))
+                return found;
+#endif
+        return name;
+    };
     const size_t tmp = dirName.find_last_of("/\\");
     if (tmp != std::string::npos)
     {
         dirName = streamDir.substr(0, tmp + 1);
-        string fileName = dirName + requestDir + getDirSeparator() + requestFile;
+        string fileName = onDisc(dirName + requestDir + getDirSeparator() + requestFile);
         if (!fileExists(fileName))
         {
-            fileName = dirName + string("BACKUP") + getDirSeparator() + requestDir + getDirSeparator() + requestFile;
+            fileName =
+                onDisc(dirName + string("BACKUP") + getDirSeparator() + requestDir + getDirSeparator() + requestFile);
             if (!fileExists(fileName))
                 return "";
 
