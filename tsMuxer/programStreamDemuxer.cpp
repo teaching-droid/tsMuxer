@@ -3,10 +3,12 @@
 #include "programStreamDemuxer.h"
 
 #include <algorithm>
+#include <cstdio>
 
 #include <fs/systemlog.h>
 
 #include <numeric>
+#include <sstream>
 
 #include "dvdTitles.h"
 #include "encryptedInput.h"
@@ -340,6 +342,22 @@ int ProgramStreamDemuxer::processPES(uint8_t* buff, uint8_t* end, const int head
 
 void ProgramStreamDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
 {
+    // The height a VobSubDecoder takes from the pair's .idx (720x576 where it gives none), for the rate below
+    bool ntscPair = false;
+    if (m_vobSubPair)
+    {
+        int height = 576;
+        std::istringstream lines(dvdSubtitleIdx(m_streamName));
+        std::string line;
+        while (std::getline(lines, line))
+        {
+            int w = 0, h = 0;
+            if (line.rfind("size:", 0) == 0 && sscanf(line.c_str() + 5, " %dx%d", &w, &h) == 2 && w > 0 && h > 0 &&
+                w <= 1920 && h <= 1080)
+                height = h;
+        }
+        ntscPair = height != 576;
+    }
     for (int i = 0x20; i < 0xff; i++)
     {
         if (i >= 0xa0 && i <= 0xaf)
@@ -348,7 +366,20 @@ void ProgramStreamDemuxer::getTrackList(std::map<int32_t, TrackInfo>& trackList)
             trackList[i] = TrackInfo(0, "", 0);  // autodetect
         // Sub-streams 0x20 to 0x3F of private stream 1 are DVD subpictures, read as PGS (addSubPicture)
         if (i >= 0x20 && i <= 0x3f)
+        {
             trackList[i] = TrackInfo(static_cast<int>(StreamType::SUB_PGS), "", 0);
+            // ** THE 29.97 OF AN NTSC VOBSUB PAIR IS NO RATE TO CONVERT FROM. ** A .sub file holds no video: its
+            // display sets are given the rate of the television standard of its picture height, 25 for 576 lines
+            // and 29.97 for the others. fps= on its line converted the times from it, which is right for 25: a PAL
+            // release runs 4 % fast, and its subtitles beside the film at 23.976 are to be slowed with it. An NTSC DVD
+            // is not sped up: its subtitle times are real times, those of the film at 23.976 too. Beside a video
+            // of 23.976 fps, as the window writes it for a DVD's subtitles muxed with an encode of the film, every
+            // subtitle came 25 % late (100 s at 125 s). For a pair of any height but 576, fps= now gives the rate of
+            // the pictures and the times stay (srcpgsrate, PGSStreamReader), as for DVD subtitles of a Matroska file
+            // without video.
+            if (ntscPair)
+                trackList[i].m_srcParams["srcpgsrate"] = "guessed";
+        }
     }
 }
 
