@@ -100,6 +100,7 @@ class MPEGStreamReader : public AbstractStreamReader
     int64_t getProcessedSize() override;
     void setBuffer(uint8_t* data, uint32_t dataLen, bool lastBlock = false) override;
     void onJoinedFileStart() override { m_joinPending = true; }
+    void addJoinStart(const int64_t atByte) override { m_joinStarts.push_back(atByte); }
     int readPacket(AVPacket& avPacket) override;
     int flushPacket(AVPacket& avPacket) override;
     /*
@@ -183,7 +184,9 @@ class MPEGStreamReader : public AbstractStreamReader
     // Where a later file of a join begins in the buffer, until the reader has looked at its first picture; rebased
     // like m_cachedMarker
     uint8_t* m_joinPos = nullptr;
-    bool m_joinPending = false;  // onJoinedFileStart: the next setBuffer begins a later file
+    bool m_joinPending = false;         // onJoinedFileStart: the next setBuffer begins a later file
+    std::vector<int64_t> m_joinStarts;  // addJoinStart: the bytes of the data given where later files begin, in order
+    int64_t m_bytesGiven = 0;           // the bytes given by setBuffer so far
     int m_totalFrameNum;
 
    public:

@@ -71,6 +71,17 @@ void MPEGStreamReader::setBuffer(uint8_t* data, const uint32_t dataLen, const bo
         m_joinPending = false;
         m_joinPos = m_tmpBuffer + keptLen;
     }
+    // ** A JOIN READ AS ONE STREAM BEGINS ITS LATER FILES TOO. ** A demuxer that reads the files of a join as one
+    // stream (transport streams, Matroska) says where each later file begins in the data (addJoinStart); the reader
+    // was told nothing, so a later file that begins inside an open group went on with the count of the file before.
+    const int64_t blockStart = m_bytesGiven;
+    m_bytesGiven += dataLen;
+    while (!m_joinStarts.empty() && m_joinStarts.front() < m_bytesGiven)
+    {
+        if (m_joinStarts.front() >= blockStart && !m_joinPos)
+            m_joinPos = m_tmpBuffer + keptLen + (m_joinStarts.front() - blockStart);
+        m_joinStarts.erase(m_joinStarts.begin());
+    }
     m_tmpBufferLen = 0;
 }
 

@@ -65,6 +65,7 @@ class VVCStreamReader final : public MPEGStreamReader
     int m_fullPicOrder;
     int m_picOrderBase;
     int m_restartLeading = 0;        // placesOfLeadingPictures of an IDR picture after the first picture
+    bool m_joinRestart = false;      // the picture being read begins a later file of a join as a stream of its own
     bool m_picOrderStarted = false;  // the first picture of the stream has set m_picOrderBase
     int m_maxFullPicOrder = -1;      // the latest place a picture was given
     int m_shownBeforeStart = 0;      // pictures given a place below 0: counted, and shown before the start

@@ -1353,6 +1353,16 @@ int64_t TSDemuxer::soundPause(const int pid, const int64_t pts, int64_t& end)
     return pause;
 }
 
+std::vector<int64_t> TSDemuxer::takeJoinStarts(const int pid)
+{
+    const auto found = m_joinStartBytes.find(pid);
+    if (found == m_joinStartBytes.end())
+        return {};
+    std::vector<int64_t> result;
+    result.swap(found->second);
+    return result;
+}
+
 std::vector<AbstractDemuxer::TimeJump> TSDemuxer::takeTimeJumps(const int pid)
 {
     auto found = m_soundJumps.find(pid);
@@ -1865,7 +1875,14 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     if (isFirstBlock)
     {
         if (isJoinOfFiles())
+        {
             endJoinFile();
+            // the next file begins here in the data of each track handed on whole (not through a filter), after
+            // what the file before held back (giveBackLeadPes)
+            for (const auto& [pid, info] : m_pmt.pidList)
+                if (pid >= 0 && pid < 8192 && !m_reframedPid[pid])
+                    m_joinStartBytes[pid].push_back(m_handedBytes[pid]);
+        }
         else
         {
             m_soundGap.clear();  // each clip of a playlist has its own clock (noteSoundGap)

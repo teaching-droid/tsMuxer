@@ -88,6 +88,9 @@ class AbstractStreamReader : public BaseAbstractStreamReader
     virtual void addTimeJump(int64_t atByte, int64_t toNs, int64_t atNs, int64_t gapNs) { addTimeGap(atNs, gapNs); }
     // The data of the next setBuffer begins a later file of a join of files read one after the other
     virtual void onJoinedFileStart() {}
+    // The same, placed by the data: a later file of a join begins at byte atByte of the data given to the reader (a
+    // join of transport streams or Matroska files, which their demuxer reads as one stream)
+    virtual void addJoinStart(int64_t atByte) {}
     unsigned m_flags;
     virtual const CodecInfo& getCodecInfo() = 0;  // get codecInfo struct. (CodecID, codec name)
     void setSrcContainerType(const ContainerType containerType) { m_containerType = containerType; }

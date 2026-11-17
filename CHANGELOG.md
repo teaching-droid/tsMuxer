@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 58 faults of earlier versions and brings 37 new features and improvements**, each listed below. Three faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 59 faults of earlier versions and brings 37 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -180,6 +180,8 @@
 
 ### Video
 
+* **A join of files that begin inside an open group was timed wrong at the joint.** Where a later file of a join begins with an HEVC or VVC CRA picture or an H.264 recovery point, with the pictures shown before it, those pictures were put over the end of the file before, or before their own decoding in a join of TS or Matroska files, and a join of such an HEVC file could leave a gap of 4.6 s. A later file now goes on right after the last picture of the file before, its leading pictures kept, in a join of raw streams, TS and Matroska files alike.
+
 * **AVS tracks are named in the listing.** The video and sound of Chinese broadcasts (AVS, AVS2, AVS3) are not read; such a track was "Can't detect stream type" with a number, and is now named. MPEG audio or AC-3 beside it is read as before.
 
 * **A single layer Dolby Vision track goes to a Blu-ray disc with a second layer.** A UHD Blu-ray player takes Dolby Vision from two layers, so a profile 8 track (HDR10 base) played as HDR10 only from a disc. For such a track of 3840x2160 in one Matroska, MP4 or transport stream file tsMuxeR now makes the second layer: a black picture of 1920x1080 for each picture of the film, with the Dolby Vision data of that picture. Nothing of the film is encoded again. It needs the libdovi library and an ffmpeg, which is asked for the one picture only (`--ffmpeg=<file>`, or beside tsMuxeR, or on the search path; tsMuxeR does not ship ffmpeg). Where one of them is missing the disc is written as before and a line says what was missing. `--no-dv-layer` keeps the single layer; `--dv-layer-picture=<file>` gives the picture as a file. In the window: "Make the second Dolby Vision layer" on the Blu-ray options, with the ffmpeg chosen there. Thanks to Coopervid.
@@ -219,7 +221,6 @@
 These are also in 3.1.0.
 
 
-* **Joins of files that begin inside an open group are timed wrong at the join.** Where a later file of a join begins with an HEVC CRA, VVC CRA or H.264 recovery point and the pictures shown before it, those pictures are put over the end of the file before, and a join of such an HEVC file can leave a gap of seconds. Join files that begin with a closed group, or cut them at an IDR picture.
 
 
 

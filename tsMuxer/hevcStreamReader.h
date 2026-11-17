@@ -119,7 +119,9 @@ class HEVCStreamReader final : public MPEGStreamReader
     // The full order a picture would get as the next of the period (toFullPicOrder, without moving its state)
     [[nodiscard]] int nextFullPicOrder(const HevcSliceHeader* slice) const;
     std::set<int> m_periodOrders;  // the full orders given since the last IDR or BLA picture, for a join
-    bool m_joinRestart = false;    // the picture being read begins a later file of a join as a stream of its own
+    // How many places after the next free one a later file of a join may go on from the file before (intDecodeNAL)
+    static constexpr int MAX_JOIN_PLACES = 16;
+    bool m_joinRestart = false;  // the picture being read begins a later file of a join as a stream of its own
     static void storeBuffer(MemoryBlock& dst, const uint8_t* data, const uint8_t* dataEnd);
     void captureHdrSei(const uint8_t* nal, const uint8_t* nalEnd);
     // A mastering display SEI makes the stream HDR10 unless its SPS says SDR or HLG (see the definition)

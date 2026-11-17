@@ -260,6 +260,13 @@ class MatroskaDemuxer final : public IOContextDemuxer
     bool m_partVideoDone = false;          // and its last
     bool keepBlock(const MatroskaTrack* track, int64_t ns, bool keyFrame);
     void nextJoinPart();
+    // A plain join: the packets queued so far when each later file began (m_queuedPackets), and the bytes handed on
+    // for each track when its first packet came out (takeJoinStarts)
+    size_t m_queuedPackets = 0;
+    size_t m_deliveredPackets = 0;
+    std::vector<size_t> m_joinPacketMarks;
+    std::map<int, int64_t> m_handedBytes;
+    std::map<int, std::vector<int64_t>> m_joinStartBytes;
     // A plain join: the sound of each later part starts against its own picture (see keepJoinSound). Times in ns, on
     // the timeline of the join (m_joinShiftNs).
     struct JoinSound
@@ -312,6 +319,7 @@ class MatroskaDemuxer final : public IOContextDemuxer
     static int flacSampleRate(const MatroskaTrack* track);
     int64_t m_blockDiscardNs = 0;  // the DiscardPadding of the block group being read
     std::vector<std::pair<int64_t, int64_t>> takeTimeGaps(int pid) override;
+    std::vector<int64_t> takeJoinStarts(int pid) override;
     std::vector<int64_t> takeTouchingCues(int pid) override;
     std::vector<std::pair<int64_t, int64_t>> takeNextCueStarts(int pid) override;
 

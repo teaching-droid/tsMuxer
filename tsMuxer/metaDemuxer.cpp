@@ -7584,6 +7584,9 @@ int StreamInfo::read()
                 m_streamReader->addTimeJump(jump.atByte, jump.toNs, jump.atNs, jump.gapNs);
                 m_joinGaps.push_back(llround(static_cast<double>(jump.gapNs) * INTERNAL_PTS_FREQ / 1e9));
             }
+            // where a later file of a join of transport streams or Matroska files begins in the track's data, as
+            // onJoinedFileStart says it for a join of elementary streams
+            for (const int64_t atByte : wrapper->takeJoinStarts(m_readerID)) m_streamReader->addJoinStart(atByte);
             if (auto* srt = dynamic_cast<SRTStreamReader*>(m_streamReader))
             {
                 for (const int64_t ms : wrapper->takeTouchingCues(m_readerID)) srt->addTouchingCue(ms);
@@ -7841,6 +7844,15 @@ std::vector<std::pair<int64_t, int64_t>> ContainerToReaderWrapper::takeNextCueSt
         return {};
     const ReaderInfo& ri = it->second;
     return ri.m_demuxerData.m_demuxer->takeNextCueStarts(ri.m_pid);
+}
+
+std::vector<int64_t> ContainerToReaderWrapper::takeJoinStarts(const uint32_t readerID)
+{
+    const auto it = m_readerInfo.find(readerID);
+    if (it == m_readerInfo.end())
+        return {};
+    const ReaderInfo& ri = it->second;
+    return ri.m_demuxerData.m_demuxer->takeJoinStarts(ri.m_pid);
 }
 
 std::vector<AbstractDemuxer::TimeJump> ContainerToReaderWrapper::takeTimeJumps(const uint32_t readerID)

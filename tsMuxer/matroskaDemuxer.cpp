@@ -384,7 +384,21 @@ int MatroskaDemuxer::ebml_read_header(char** doctype, int* version)
     return 0;
 }
 
-void MatroskaDemuxer::matroska_queue_packet(AVPacket* pkt) { packets.push(pkt); }
+void MatroskaDemuxer::matroska_queue_packet(AVPacket* pkt)
+{
+    packets.push(pkt);
+    ++m_queuedPackets;
+}
+
+std::vector<int64_t> MatroskaDemuxer::takeJoinStarts(const int pid)
+{
+    const auto found = m_joinStartBytes.find(pid);
+    if (found == m_joinStartBytes.end())
+        return {};
+    std::vector<int64_t> result;
+    result.swap(found->second);
+    return result;
+}
 
 int MatroskaDemuxer::rv_offset(const uint8_t* data, const int slice, const int slices)
 {
@@ -466,6 +480,7 @@ int MatroskaDemuxer::matroska_deliver_packet(AVPacket*& avPacket)
     {
         avPacket = packets.front();
         packets.pop();
+        ++m_deliveredPackets;
         return 0;
     }
 
@@ -2060,6 +2075,8 @@ int MatroskaDemuxer::readPacket(AVPacket& avPacket)
                 queueFinalPackets();
                 matroska_read_header();
                 nextJoinPart();
+                if (m_joinRanges.empty() && m_joinPart < m_joinFiles.size())
+                    m_joinPacketMarks.push_back(m_queuedPackets);
                 m_tracksFinished = false;
                 break;
             default:
@@ -6400,6 +6417,14 @@ int MatroskaDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& ac
             return readRez;
         }
 
+        // the first packet of a later file of a plain join: that file begins here in the data of each track
+        if (!m_joinPacketMarks.empty() && m_deliveredPackets - 1 >= m_joinPacketMarks.front())
+        {
+            m_joinPacketMarks.erase(m_joinPacketMarks.begin());
+            for (const int pid : acceptedPIDs)
+                if (m_pidFilters.find(pid) == m_pidFilters.end())
+                    m_joinStartBytes[pid].push_back(m_handedBytes[pid]);
+        }
         auto itr = m_pidFilters.find(packet.stream_index);
         if (itr != m_pidFilters.end())
         {
@@ -6413,6 +6438,8 @@ int MatroskaDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& ac
                 MemoryBlock& vect = demuxedData[packet.stream_index];
                 if (packet.size > 0)
                     vect.append(packet.data, packet.size);
+                if (packet.size > 0)
+                    m_handedBytes[packet.stream_index] += packet.size;
                 demuxedSize += packet.size;
             }
         }

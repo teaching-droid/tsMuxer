@@ -262,9 +262,11 @@ class TSDemuxer final : public AbstractDemuxer
     std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_joinGaps;  // by PID, see takeTimeGaps
     std::map<int, std::vector<TimeJump>> m_soundJumps;                   // by PID, see takeTimeJumps
     std::map<int, int64_t> m_handedBytes;  // the bytes handed on for each track so far (for m_soundJumps)
-    bool m_reframedPid[8192]{};            // tracks handed on through a filter, whose bytes are not counted
+    std::map<int, std::vector<int64_t>> m_joinStartBytes;  // by PID, see takeJoinStarts
+    bool m_reframedPid[8192]{};  // tracks handed on through a filter, whose bytes are not counted
    public:
     std::vector<TimeJump> takeTimeJumps(int pid) override;
+    std::vector<int64_t> takeJoinStarts(int pid) override;
 
    private:
     std::map<int, size_t> m_joinGapsTaken;  // by track asking, see takeTimeGaps

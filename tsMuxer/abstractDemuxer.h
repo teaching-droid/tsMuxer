@@ -236,6 +236,9 @@ class AbstractDemuxer
         int64_t gapNs;
     };
     virtual std::vector<TimeJump> takeTimeJumps(int pid) { return {}; }
+    // Where each later file of a plain join begins in the data handed on for a track, in bytes, taken out once asked
+    // for (AbstractStreamReader::addJoinStart)
+    virtual std::vector<int64_t> takeJoinStarts(int pid) { return {}; }
     // The text subtitles of a track that the next one follows at once, without a gap: their start times, in ms as the
     // SRT text the demuxer hands on gives them, taken out once asked for (SRTStreamReader::addTouchingCue)
     virtual std::vector<int64_t> takeTouchingCues(int pid) { return {}; }

@@ -441,8 +441,9 @@ int VVCStreamReader::toFullPicOrder(const VvcSliceHeader* slice, const int pic_b
     // count (47 pictures, 1.9 s, on a sample), so the times of the stream began that late against the sound, and the
     // first IDR picture went back by as much, over the times of the pictures before it. The first picture now begins
     // the count at its own place, as in the HEVC reader; the pictures that lead it are shown before the start.
-    if (slice->isIDR() || !m_picOrderStarted)
+    if (slice->isIDR() || !m_picOrderStarted || m_joinRestart)
     {
+        m_joinRestart = false;
         // m_restartLeading is set only for an IDR picture after the first picture (counted), as before
         m_picOrderBase = periodStart() + m_restartLeading - static_cast<int>(slice->pic_order_cnt_lsb);
         m_picOrderStarted = true;
@@ -726,6 +727,39 @@ int VVCStreamReader::intDecodeNAL(uint8_t* buff)
                             return NOT_ENOUGH_BUFFER;
                         m_restartLeading = places;
                     }
+                    // ** A LATER FILE OF A JOIN THAT BEGINS ON A CRA PICTURE BEGINS AS A STREAM DOES. ** As in the
+                    // HEVC reader: it went on with the count of the file before, and a file that begins inside an
+                    // open group, as a cut does, put its pictures on the times of that file (all 26 of a cut joined
+                    // to itself). Where its first picture shown would not take the next free place (periodStart),
+                    // or a few places after it, it begins there, after its leading pictures, as an IDR picture does.
+                    bool joinStart = false;
+                    if (m_joinPos && curPos >= m_joinPos)
+                    {
+                        if (m_picOrderStarted && nalType == VvcUnit::NalType::CRA)
+                        {
+                            const int places = placesOfLeadingPictures(curPos, m_bufEnd);
+                            if (places == -1)
+                                return NOT_ENOUGH_BUFFER;
+                            const int range = 1 << m_sps->log2_max_pic_order_cnt_lsb;
+                            const int lsb = static_cast<int>(m_slice->pic_order_cnt_lsb);
+                            int msb = m_picOrderMsb;
+                            if (lsb < m_prevPicOrder && m_prevPicOrder - lsb >= range / 2)
+                                msb += range;
+                            else if (lsb > m_prevPicOrder && lsb - m_prevPicOrder >= range / 2)
+                                msb -= range;
+                            const int firstShown = lsb + msb + m_picOrderBase - places;
+                            const int start = periodStart();
+                            static constexpr int MAX_JOIN_PLACES = 16;
+                            joinStart = firstShown < start || firstShown > start + MAX_JOIN_PLACES;
+                            if (joinStart)
+                                m_restartLeading = places;
+                        }
+                        m_joinPos = nullptr;
+                    }
+                    // kept where the call is repeated with more data (depthOfPeriod below), until toFullPicOrder
+                    if (joinStart)
+                        m_joinRestart = true;
+                    joinStart = m_joinRestart;
                     // ** THE DEPTH OF A PERIOD IS READ AHEAD. ** The depth of the decoding times was found only at
                     // the picture that needs it, and a deeper one moved the decoding time of that picture back behind
                     // the times already given: on a stream of an encoder with groups of 16 and 32 B pictures, whose
@@ -733,7 +767,7 @@ int VVCStreamReader::intDecodeNAL(uint8_t* buff)
                     // back 7, 4, 2 and 1 picture at its start, and 15, 8, 4, 2 and 1 at a later deeper period. As in
                     // the HEVC reader, the period is read ahead from an IDR picture and from the IRAP picture that
                     // begins the stream, and the decoding times catch up over the first pictures (deepenAfterOutput).
-                    if (m_slice->isIDR() || (!m_picOrderStarted && irap))
+                    if (m_slice->isIDR() || (!m_picOrderStarted && irap) || joinStart)
                     {
                         int ahead = depthOfPeriod(curPos, m_bufEnd, static_cast<int>(m_slice->pic_order_cnt_lsb));
                         if (ahead == -1)

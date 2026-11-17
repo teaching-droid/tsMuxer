@@ -1879,12 +1879,26 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                                                       << " frames");
                         }
                     }
+                    // ** AND WHERE IT WOULD NOT GO ON AT THE NEXT FREE PLACE. ** Only a first picture whose own order
+                    // was given before was taken for such a start. Its leading pictures were not looked at: a CRA
+                    // picture just after the pictures before it put its RASL pictures on their times (3 pictures
+                    // shown twice), and a file whose order count wraps against the one before (the same cut joined
+                    // to itself) went on a whole range of the count later, a hole of 4.6 s. A later file goes on
+                    // from the file before where its first picture shown takes the next free place (periodStart),
+                    // or a few places after it; at any other place it begins as a stream does.
                     bool joinStart = false;
                     if (!orderGiven && m_joinPos && curPos >= m_joinPos)
                     {
-                        joinStart = m_picOrderStarted &&
-                                    (nalType < HevcUnit::NalType::BLA_W_LP || nalType == HevcUnit::NalType::CRA) &&
-                                    m_periodOrders.count(nextFullPicOrder(m_slice)) > 0;
+                        if (m_picOrderStarted &&
+                            (nalType < HevcUnit::NalType::BLA_W_LP || nalType == HevcUnit::NalType::CRA))
+                        {
+                            const int leading = picturesShownBeforeFirst(curPos, m_bufEnd);
+                            if (leading == -1)
+                                return NOT_ENOUGH_BUFFER;
+                            const int firstShown = nextFullPicOrder(m_slice) - leading;
+                            const int start = periodStart();
+                            joinStart = firstShown < start || firstShown > start + MAX_JOIN_PLACES;
+                        }
                         if (!joinStart)
                             m_joinPos = nullptr;
                     }

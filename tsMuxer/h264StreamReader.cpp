@@ -2285,12 +2285,24 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
     // its pictures took times the file before had given, and the two parts overlapped (4 of 268 times repeated).
     // It begins as a stream does, by the rule above, after the pictures before it. A file that continues the
     // stream before it, as the parts of a split recording do, gives no order twice and goes on as before.
+    // A later file that would go on from the file before at another place than the next free one, a few places
+    // after it at most, begins in the same way: one whose first picture comes just after the pictures before it in
+    // the order shown put the B pictures before it on their times (3 pictures shown twice).
     bool joinStart = false;
     if (m_joinPos && buff >= m_joinPos)
     {
-        joinStart = !slice.isIDR() && !guessOrder && !damaged && !slice.m_field_pic_flag && !m_fieldPicturesSeen &&
-                    slice.getSPS()->pic_order_cnt_type != 2 && m_ptsGiven &&
-                    m_periodOrders.count(nextPicOrder(slice)) > 0;
+        static constexpr int MAX_JOIN_PLACES = 16;
+        if (!slice.isIDR() && !guessOrder && !damaged && !slice.m_field_pic_flag && !m_fieldPicturesSeen &&
+            slice.getSPS()->pic_order_cnt_type != 2 && m_ptsGiven && !m_periodOrders.empty())
+        {
+            const int leading = leadingPicturesOfFirst(slice, buff);
+            if (leading == -1)
+                return NOT_ENOUGH_BUFFER;
+            const int firstShown = nextPicOrder(slice) - (std::max)(0, leading);
+            const int next = *m_periodOrders.rbegin() + 1;
+            joinStart = m_periodOrders.count(nextPicOrder(slice)) > 0 || firstShown < next ||
+                        firstShown > next + MAX_JOIN_PLACES;
+        }
         if (!joinStart)
             m_joinPos = nullptr;
     }
