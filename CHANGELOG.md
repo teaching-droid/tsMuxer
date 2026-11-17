@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 54 faults of earlier versions and brings 37 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 55 faults of earlier versions and brings 37 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -79,6 +79,8 @@
 * **The subtitles of a fragmented MP4 could come late.** A text track in fragments was timed by adding up the lengths of its samples, not by the start each fragment gives. Where a sample runs past the start of the next fragment, as in a DASH file of MP4Box with a gap before the first subtitle, every later subtitle came that much late: 0.92 s in a test. Each subtitle now comes at the time its fragment gives.
 
 ### Matroska input
+
+* **The video of a 3D Matroska output was not the default track.** With the two views of a 3D film in the order the listing gives them, as the window writes them, the second view took the Default flag and was then folded into the first: the one video track was written with Default = No. The second view now takes no part, and the first view's line decides.
 
 * **A track a Matroska source marks as disabled came out enabled.** The source's FlagEnabled 0, which tells a player not to play the track, was read and dropped, so a Matroska or WebM output offered the track as any other. It is kept now, as the other track flags are.
 

@@ -2477,17 +2477,26 @@ void MatroskaMuxer::refreshTrackProperties()
     // in only where the meta says nothing about the type. A source whose first audio track is its default kept it
     // when the meta (the window's Default tracks box) chose the second: the second was written as not default, with a
     // warning that default= was given on two tracks.
+    // ** THE SECOND VIEW OF 3D TAKES NO PART. ** It is folded into its base view (pairMvcViews) and is no track of its
+    // own, so its base view's line decides. In the order a listing gives them, the second view first, it took the
+    // default and was folded away: the one video track of a 3D Matroska output was written with Default = No.
+    const auto secondView = [](const MkvTrackInfo& t) { return t.codecID == CODEC_V_MPEG4_H264_DEP; };
     std::set<uint8_t> typeHasMeta;
     for (auto& [streamIdx, track] : m_tracks)
-        if (track.defaultExplicit && !track.defaultSrc)
+        if (track.defaultExplicit && !track.defaultSrc && !secondView(track))
             typeHasMeta.insert(track.trackType);
     std::set<uint8_t> typeHasExplicit;
     for (auto& [streamIdx, track] : m_tracks)
-        if (track.defaultExplicit)
+        if (track.defaultExplicit && !secondView(track))
             typeHasExplicit.insert(track.trackType);
     std::set<uint8_t> typeDone;
     for (auto& [streamIdx, track] : m_tracks)
     {
+        if (secondView(track))
+        {
+            track.isDefault = false;
+            continue;
+        }
         const bool wantIt = typeHasMeta.count(track.trackType)       ? track.markedDefault && !track.defaultSrc
                             : typeHasExplicit.count(track.trackType) ? track.markedDefault
                                                                      : !typeDone.count(track.trackType);
