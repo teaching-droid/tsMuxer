@@ -159,6 +159,7 @@ class PGSStreamReader final : public AbstractStreamReader
     bool m_rateGuessed = false;
     bool m_replaceRate = false;
     std::function<void(double&, double&)> m_videoOfItsFile;
+    bool m_scalePes = false;        // the PES times of a transport stream follow its own video's change of speed
     int m_firstRateIndex = -1;      // the frame rate code of the first PCS
     bool m_mixedRateSaid = false;   // the warning that the PCS give more than one rate, once
     int64_t m_compositions = 0;     // the PCS read (getDeliveredFrames)

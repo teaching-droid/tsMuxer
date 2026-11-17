@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 58 faults of earlier versions and brings 37 new features and improvements**, each listed below. Four faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 58 faults of earlier versions and brings 37 new features and improvements**, each listed below. Three faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -168,7 +168,7 @@
 
 * **`{\an1}` to `{\an9}` in an SRT file place a drawn subtitle** (#31 K57). Only `{\an8}` was honoured; any other tag was drawn at the bottom centre. The older form `{\a1}` to `{\a11}`, which older tools write, is read too.
 
-* **PGS subtitles of a Blu-ray made in the window ran out of step with the picture** (#60), by 0.1 %: 2.7 s at the end of a film of 45 minutes. The window gives every subtitle track the frame rate of the video, and a PGS track whose own display sets say another rate (59.94 beside a video of 60 fps) had all its times scaled to it, though it came in the same file as the video and was in step with it. Such a track now keeps its times, also where the two lines name the file in different ways, and so does a demux of the subtitles of such a file alone: the window binds subtitles to a video it muxes only. A subtitle file of its own is converted as before. Thanks to @ANIVIXE.
+* **PGS subtitles of a Blu-ray made in the window ran out of step with the picture** (#60), by 0.1 %: 2.7 s at the end of a film of 45 minutes. The window gives every subtitle track the frame rate of the video, and a PGS track whose own display sets say another rate (59.94 beside a video of 60 fps) had all its times scaled to it, though it came in the same file as the video and was in step with it. Such a track now keeps its times, also where the two lines name the file in different ways, and so does a demux of the subtitles of such a file alone: the window binds subtitles to a video it muxes only. A subtitle file of its own is converted as before. Where the video's own speed is changed with fps= on its line, a PGS track of the same transport stream now follows it, as one of a Matroska file does; it kept its times. Thanks to @ANIVIXE.
 
 * **Text subtitles drawn at 24, 30 or 60 fps came early,** by 0.1 %: 2.7 s at the end of 45 minutes. The rate was taken as 23.976, 29.97 or 59.94, the first standard rate near the one given, while the pictures said 24, 30 or 60. The nearest rate is taken now, for drawn text and for DVD and DVB subtitle pictures alike.
 
@@ -221,7 +221,6 @@ These are also in 3.1.0.
 
 * **Joins of files that begin inside an open group are timed wrong at the join.** Where a later file of a join begins with an HEVC CRA, VVC CRA or H.264 recovery point and the pictures shown before it, those pictures are put over the end of the file before, and a join of such an HEVC file can leave a gap of seconds. Join files that begin with a closed group, or cut them at an IDR picture.
 
-* **PGS of a transport stream does not follow a video whose speed is changed.** With `fps=` on the video line changing its speed, a PGS track of the same TS or M2TS keeps its times, and the mux warns. Demux the PGS to a .sup file and mux that with the same `fps=`.
 
 
 * **HEVC: pictures that cannot be read are joined into one.** Where a cut file begins with a key picture whose parameter sets were cut off, the pictures before the first parameter sets are muxed as one access unit.

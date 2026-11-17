@@ -971,24 +971,17 @@ int PGSStreamReader::readSourcePacket(AVPacket& avPacket)
             double streamRate = 0, muxRate = 0;
             m_videoOfItsFile(streamRate, muxRate);
             const double change = streamRate > 0 && muxRate > 0 ? streamRate / muxRate : 1.0;
-            // A track read from a transport stream comes as PES, whose times are not scaled (only the segments of a
-            // .sup file or a Matroska track are): it was said to follow the video, and kept its times.
-            const bool fromPes = m_containerType == ContainerType::ctTS || m_containerType == ContainerType::ctM2TS;
-            if (fabs(change - 1.0) > 1e-6 && fromPes)
-                LTRACE(LT_WARN, 2,
-                       "Warning: the video of its file is changed from "
-                           << streamRate << " to " << muxRate << " fps, and PGS stream #" << m_streamIndex
-                           << " of a transport stream keeps its times: its subtitles move against the picture by "
-                           << doubleToStr(fabs(change - 1.0) * 100.0, 2)
-                           << " % of the time. Demux it to a .sup file and mux that with the same fps= to have it "
-                              "follow.");
-            else if (fabs(change - 1.0) > 1e-6)
+            // A track read from a transport stream comes as PES, whose times the TS demuxer has put on the clock of the
+            // video's first picture: they are scaled as those of a .sup file are (m_scalePes). They were not, while
+            // the log said they followed the video, and its subtitles moved against the picture by the change.
+            if (fabs(change - 1.0) > 1e-6)
             {
                 LTRACE(LT_INFO, 2,
                        "The video of its file is changed from " << streamRate << " to " << muxRate
                                                                 << " fps: the times of PGS stream #" << m_streamIndex
                                                                 << " follow it.");
                 m_scale = change;
+                m_scalePes = true;
             }
             if (fabs(m_newFps - m_frame_rate) > 1e-4)
             {
@@ -1131,13 +1124,17 @@ int PGSStreamReader::readSourcePacket(AVPacket& avPacket)
             memmove(m_tmpBuffer.data(), m_curPos, static_cast<size_t>(m_tmpBufferLen));
             return NEED_MORE_DATA;
         }
+        // scaled only where its own video's speed is changed; fps= on a track of another transport stream does not
+        // convert it, as before
+        const double pesScale = m_scalePes ? m_scale : 1.0;
         if (pesPacket->flagsLo & 0x80)
         {  // pts exists
-            m_lastDTS = m_lastPTS = getTimeValueNano(pesPacket->getPts());
+            m_lastDTS = m_lastPTS =
+                static_cast<int64_t>(static_cast<double>(getTimeValueNano(pesPacket->getPts())) * pesScale);
             m_maxPTS = FFMAX(m_lastPTS, m_maxPTS);
         }
         if ((pesPacket->flagsLo & 0xc0) == 0xc0)  // dts exists
-            m_lastDTS = getTimeValueNano(pesPacket->getDts());
+            m_lastDTS = static_cast<int64_t>(static_cast<double>(getTimeValueNano(pesPacket->getDts())) * pesScale);
         m_curPos += pesHeaderLen;
         m_processedSize += pesHeaderLen;
         m_state = State::stParsePGS;
