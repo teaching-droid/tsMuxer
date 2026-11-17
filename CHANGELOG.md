@@ -70,7 +70,7 @@
 
 * **An MP4 cut off inside its media data was muxed as successful.** An MP4 that ends in the middle of its data, as an interrupted download leaves it, gave half its pictures and "Mux successful complete", alone or in a join; the same held for a MOV and a fragmented MP4. It now ends with an error that says the file is cut off, and from which time. The output holds what the file has. (#64) Thanks to @Moonghost-coder.
 
-* **A whole track of a cut-off MP4 could not be muxed.** Where a file stores its tracks one after the other and is cut off in the last one, a job that muxed only the whole one, as the video of a file whose sound comes after it, was refused for the track it does not mux. Only the tracks the job muxes are judged now, at the places it muxes them.
+* **A whole track of a cut-off MP4 could not be muxed.** Where a file stores its tracks one after the other and is cut off in the last one, a job that muxed only the whole one, as the video of a file whose sound comes after it, was refused for the track it does not mux. Only the tracks the job muxes are judged now, at the places it muxes them; a fragmented file, whose later fragments are missing for every track, stops the job for any of its tracks.
 
 * **A join of files of different codecs could be muxed as successful.** Where the tracks of a join are named by `track=`, as for MP4, Matroska and transport stream files, a file of another video codec was not checked: H.264 joined to HEVC gave only the pictures of the first file. A DTS file joined to an AC-3 file on a DTS line lost the AC-3 file without a word. Each file of a join is now checked, and a file of another codec stops the mux before anything is written. (#65) Thanks to @Moonghost-coder.
 
@@ -138,7 +138,7 @@
 
 * **AC-3 packed for a digital output inside a WAV was muxed as noise.** A WAVE file whose samples hold AC-3 or E-AC-3 as IEC 61937 bursts, as made to be played over S/PDIF or HDMI, was listed as LPCM and muxed as LPCM, with a warning that it plays as noise. Its frames are now taken out, and the track is the AC-3 or E-AC-3 the file holds.
 
-* **AC-3 or DTS packed for a digital output in the LPCM track of an M2TS was muxed as noise without a word.** Such a track, and the PCM track of a Matroska file that holds such bursts, is now listed with a note that it plays as noise, and the mux warns. The bursts are not taken out of a container's track.
+* **AC-3 or DTS packed for a digital output in the LPCM track of an M2TS was muxed as noise without a word.** Such a track, and the PCM track of a Matroska file that holds such bursts, now gets a warning at the mux that it plays as noise, and the listing notes it where its first frames show the bursts. The bursts are not taken out of a container's track.
 
 * **Opus written to a transport stream was 6.5 ms late** for a usual encoder, and its padding at the end was played where a video track stood beside it. The time of an access unit now goes on by the samples the one before it keeps, and the last access unit says the samples to leave out.
 

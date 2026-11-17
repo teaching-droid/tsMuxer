@@ -27,6 +27,7 @@ class MovDemuxer final : public IOContextDemuxer
     {
         std::map<unsigned, double> tracks;  // track: from when it is missing, in the file's own time
         std::set<double> joinStarts;        // s, where a join opened the file: --cut-end counts from the join's start
+        bool fragmented = false;            // a fragmented file: what follows the cut is missing for every track
     };
     static std::map<std::string, CutOff>& cutOffFiles();
     std::string getTitle() override;

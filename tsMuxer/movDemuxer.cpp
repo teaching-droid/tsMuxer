@@ -1868,7 +1868,7 @@ static void noteCutOff(const std::string& fileName, const int64_t fileSize, cons
 // ** A CUT FILE IS JUDGED BY WHAT THE JOB MUXES OF IT, WHERE IT MUXES IT. ** One record a file kept the earliest
 // missing time of any track and the latest join start. So a whole track of a cut file, muxed without the cut one, was
 // refused (the pictures of a file whose sound is stored after them); a join whose --cut-end ends before it reaches
-// the cut file was refused, as the read of its listing recorded it at the start of no join; and a cut track muxed
+// the cut file was refused, as the read of its listing recorded it at the start of no join; and a cut file read
 // alone on one line and in a join on another was measured from the later place, so its missing end at the earlier
 // one was muxed as successful.
 static void recordCutOff(const std::string& fileName, const int64_t fileSize, const MOVStreamContext* st,
@@ -3109,6 +3109,7 @@ int MovDemuxer::mov_read_trun(MOVAtom atom)
                 m_fileName, m_fileSize, sc,
                 sc->time_scale > 0 ? static_cast<double>(sc->fragDts.back() - sc->fragDts.front()) / sc->time_scale : 0,
                 offset, static_cast<double>(m_partStartNs) / 1e9, m_fileIterator != nullptr);
+            MovDemuxer::cutOffFiles()[m_fileName].fragmented = true;
             cutNoted = true;
         }
         offset += sample_size;

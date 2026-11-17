@@ -4987,49 +4987,64 @@ static void checkSourcesCutOff(const MuxerManager& muxerManager)
                                         << doubleToStr(from, 3)
                                         << " s on. The output holds what the file has and is incomplete.")
     };
-    // The files a line reads: 0 where it does not read `file`, else how many (more than 1 for a join)
-    const auto filesOf = [](const StreamInfo& si, const std::string& file) -> size_t
+    // The files a line reads for its track: those of a join or a playlist, without the AC-3 file merge-ac3-file adds
+    const auto filesOf = [](const StreamInfo& si)
     {
-        const std::vector<std::string> files =
+        std::vector<std::string> files =
             si.m_sourceFiles.empty() ? std::vector<std::string>{si.m_streamName} : si.m_sourceFiles;
-        return std::any_of(files.begin(), files.end(),
-                           [&file](const std::string& f) { return unquoteStr(trimStr(f)) == file; })
-                   ? files.size()
-                   : 0;
+        if (const auto merge = si.m_addParams.find("merge-ac3-file");
+            merge != si.m_addParams.end() && files.size() > 1 &&
+            unquoteStr(trimStr(files.back())) == unquoteStr(trimStr(merge->second)))
+            files.pop_back();
+        return files;
     };
-    // Each line that reads the file, at each place it reads it: a line of the file alone starts it at 0; a join, at
-    // each place the mux read of a join opened it, and none where the join never reached it (a --cut-end before it)
-    const auto atEachPlace = [&check](const std::string& file, const size_t files, const double from,
-                                      const unsigned track, const char* what, const std::set<double>& joinStarts)
+    const auto named = [](const std::string& f, const std::string& file) { return unquoteStr(trimStr(f)) == file; };
+    // Each line that reads the file, at each place it reads it. A line whose first file it is starts it at 0; a join
+    // or a play timeline at each place its mux read put the file, none where a join never reached it (a --cut-end
+    // before it). `timeline`: the file is a part of a play timeline, which puts it where the timeline says, also when
+    // it is the first file of its line.
+    const auto atEachPlace = [&check, &named](const std::vector<std::string>& files, const std::string& file,
+                                              const double from, const unsigned track, const char* what,
+                                              const std::set<double>& joinStarts, const bool timeline)
     {
-        if (files == 1)
+        if (named(files.front(), file) && !timeline)
             check(file, from, track, what);
-        else
+        if (files.size() > 1 || timeline)
             for (const double joinStart : joinStarts) check(file, from, track, what, joinStart);
     };
-    // An MP4: each track of it the job muxes that is cut. Its other tracks are whole.
+    // An MP4: each cut track of it the job muxes, also as a sub-track (a layer of a dual layer Dolby Vision track) or
+    // as the AC-3 core merge-ac3-track takes. Its other tracks are whole, unless the file is fragmented: the fragments
+    // after the cut are missing for every track, and only the track whose fragment the cut fell in was recorded.
     for (const auto& [file, cut] : MovDemuxer::cutOffFiles())
         for (const StreamInfo& si : muxerManager.getStreamInfo())
         {
-            if (SubTrackFilter::isSubTrack(si.m_pid))
+            const std::vector<std::string> files = filesOf(si);
+            if (std::none_of(files.begin(), files.end(), [&](const std::string& f) { return named(f, file); }))
                 continue;
-            const auto track = cut.tracks.find(static_cast<unsigned>(si.m_pid));
-            if (const size_t files = filesOf(si, file); files > 0 && track != cut.tracks.end())
-                atEachPlace(file, files, track->second, track->first, "its index lists data past the end of the file",
-                            cut.joinStarts);
+            std::vector<unsigned> own{
+                static_cast<unsigned>(SubTrackFilter::isSubTrack(si.m_pid) ? si.m_pid >> 16 : si.m_pid)};
+            if (const auto core = si.m_addParams.find("merge-ac3-track"); core != si.m_addParams.end())
+                own.push_back(static_cast<unsigned>(strToInt32(core->second.c_str())));
+            for (const auto& [track, from] : cut.tracks)
+                if (cut.fragmented || std::find(own.begin(), own.end(), track) != own.end())
+                    atEachPlace(files, file, from, track, "its index lists data past the end of the file",
+                                cut.joinStarts, false);
         }
-    // A Matroska file ends where it is cut, so every track of it the job muxes is judged. A file no line names, as a
-    // linked segment an ordered edition reads, is judged from its own start, as before.
+    // A Matroska file ends where it is cut, so every track of it the job muxes is judged. A cut file no line names is
+    // judged from its own start, so that it is never let through.
     for (const auto& [file, cut] : MatroskaDemuxer::cutOffFiles())
     {
-        bool named = false;
+        bool isNamed = false;
         for (const StreamInfo& si : muxerManager.getStreamInfo())
-            if (const size_t files = filesOf(si, file); files > 0)
-            {
-                named = true;
-                atEachPlace(file, files, cut.from, cut.track, "a block runs past the end of the file", cut.joinStarts);
-            }
-        if (!named)
+        {
+            const std::vector<std::string> files = filesOf(si);
+            if (std::none_of(files.begin(), files.end(), [&](const std::string& f) { return named(f, file); }))
+                continue;
+            isNamed = true;
+            atEachPlace(files, file, cut.from, cut.track, "a block runs past the end of the file", cut.joinStarts,
+                        cut.timeline);
+        }
+        if (!isNamed)
             check(file, cut.from, cut.track, "a block runs past the end of the file");
     }
 }

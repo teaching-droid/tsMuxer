@@ -160,6 +160,7 @@ class MatroskaDemuxer final : public IOContextDemuxer
         double from = 0;
         unsigned track = 0;
         std::set<double> joinStarts;  // s, the shift of the part on the join's clock where a join read it
+        bool timeline = false;        // a part of a play timeline: its places are in joinStarts, also as a first file
     };
     static std::map<std::string, CutOff>& cutOffFiles();
 
@@ -274,9 +275,10 @@ class MatroskaDemuxer final : public IOContextDemuxer
         bool started = false;      // a frame of the track has been kept in the part
         bool pause = false;        // the sound of the part pauses before the frame that comes next (soundPause)
     };
-    std::map<int, JoinSound> m_joinSound;  // by track (stream index)
-    int64_t m_joinPartStartNs = 0;         // a plain join: the video length of the parts before the one being read
-    bool m_joinPartStartKnown = true;      // each part before had a video span (or a duration)
+    std::map<int, JoinSound> m_joinSound;    // by track (stream index)
+    int64_t m_joinPartStartNs = 0;           // a plain join: the video length of the parts before the one being read
+    bool m_joinPartStartKnown = true;        // each part before had a video span (or a duration)
+    int64_t m_partFirstBlockNs = INT64_MIN;  // the earliest block time of the part being read, on its own clock
     bool m_joinShiftKnown = true;  // where each part is put is known (m_joinShiftNs): a part of unknown length is not
     std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_timeGaps;  // by track, see takeTimeGaps
     // A sound track of one file that has no block for a while, with the picture going on (see noteSoundGap), in ns
