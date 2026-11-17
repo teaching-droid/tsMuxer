@@ -3723,10 +3723,39 @@ int MovDemuxer::mov_read_moov(MOVAtom atom)
         m_videoLeadTrack = i + 1;
         // signed, as below: read unsigned, a first offset of -1024 (a cut file written with negative composition
         // offsets) left no pre-roll, and the sound came 500 ms early
-        const int64_t firstOffset =
+        int64_t firstOffset =
             st->ctts_data.empty()
                 ? 0
                 : static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(st->ctts_data[0].duration)));
+        // ** H.264 THAT BEGINS INSIDE AN OPEN GROUP. ** A cut whose first sample is an I picture with B pictures shown
+        // before it (a recording cut from a broadcast) has an edit list that starts at the I picture. The H.264
+        // reader shows those B pictures first, as it does in a transport stream (H264StreamReader::
+        // leadingPicturesOfFirst), so the picture starts with the earliest of them: the sound, timed from the I
+        // picture, came early by them (125 ms for three at 24 fps). Measured from the earliest picture of the first
+        // group, as for a Matroska file. Not HEVC, whose reader leaves such pictures out.
+        if (dynamic_cast<const MovParsedH264TrackData*>(st->parsed_priv_data) &&
+            !dynamic_cast<const MovParsedH265TrackData*>(st->parsed_priv_data) && !st->ctts_data.empty() &&
+            !st->stts_data.empty() && st->keyframes.size() > 1 && st->keyframes.front() == 1)
+        {
+            const uint32_t groupEnd = (std::min)(st->keyframes[1] - 1, 600u);  // samples of the first group
+            int64_t dts = 0, earliest = firstOffset;
+            size_t sttsAt = 0, cttsAt = 0;
+            uint32_t sttsLeft = st->stts_data[0].count, cttsLeft = st->ctts_data[0].count;
+            for (uint32_t n = 0; n < groupEnd; ++n)
+            {
+                if (sttsLeft == 0 || cttsLeft == 0)
+                    break;
+                const int64_t cto =
+                    static_cast<int64_t>(static_cast<int32_t>(static_cast<uint32_t>(st->ctts_data[cttsAt].duration)));
+                earliest = (std::min)(earliest, dts + cto);
+                dts += st->stts_data[sttsAt].duration;
+                if (--sttsLeft == 0 && ++sttsAt < st->stts_data.size())
+                    sttsLeft = st->stts_data[sttsAt].count;
+                if (--cttsLeft == 0 && ++cttsAt < st->ctts_data.size())
+                    cttsLeft = st->ctts_data[cttsAt].count;
+            }
+            firstOffset = earliest;
+        }
         const int64_t lead = st->editMediaTime - firstOffset;
         if (lead > 0)
             m_videoLeadNs = lead * 1000000000LL / st->time_scale;

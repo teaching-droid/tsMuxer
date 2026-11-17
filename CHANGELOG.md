@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 57 faults of earlier versions and brings 37 new features and improvements**, each listed below. Six faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 58 faults of earlier versions and brings 37 new features and improvements**, each listed below. Five faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -65,6 +65,8 @@
 * **An encrypted file after the first of a join was muxed as successful.** Only the first file of a join, or of a playlist, was tested for encryption, so an encrypted VOB or .m2ts after it was muxed as noise with "Mux successful complete". Every file is tested now.
 
 ### MP4 and MOV input
+
+* **The sound of an MP4 that begins inside an open group of H.264 came early.** A cut whose first I picture has B pictures shown before it, as a recording cut from a broadcast has, gave its sound early by those pictures: 125 ms for three at 24 fps. It is measured from the first picture shown now, as for a Matroska file.
 
 * **The subtitles of a cut MP4 came seconds late.** In an MP4 cut without re-encoding, the edit list of the text track was not applied, and the subtitles came as if the file were not cut: 4 s late in a test, and later still where the cut was written as fragments. The text track now starts as the sound does. (#63) Thanks to @Moonghost-coder.
 
@@ -216,7 +218,6 @@
 
 These are also in 3.1.0.
 
-* **Sound of an MP4 that begins inside an open group of H.264 comes early.** A cut whose first I picture has B pictures shown before it, as a recording cut from a broadcast has, gives its sound early by those pictures (125 ms for three at 24 fps). The same stream in a Matroska file is right: remux it to MKV first, or give the sound `timeshift=` by those pictures.
 
 * **Joins of files that begin inside an open group are timed wrong at the join.** Where a later file of a join begins with an HEVC CRA, VVC CRA or H.264 recovery point and the pictures shown before it, those pictures are put over the end of the file before, and a join of such an HEVC file can leave a gap of seconds. Join files that begin with a closed group, or cut them at an IDR picture.
 
