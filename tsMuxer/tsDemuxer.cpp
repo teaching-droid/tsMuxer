@@ -1879,10 +1879,14 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         {
             endJoinFile();
             // the next file begins here in the data of each track handed on whole (not through a filter), after
-            // what the file before held back (giveBackLeadPes)
-            for (const auto& [pid, info] : m_pmt.pidList)
-                if (pid >= 0 && pid < 8192 && !m_reframedPid[pid])
-                    m_joinStartBytes[pid].push_back(m_handedBytes[pid]);
+            // what the file before held back (giveBackLeadPes). Not where it goes on from the clock of the file
+            // before (m_joinOneClock): a recording split by size, inside a group of pictures, is one stream, and
+            // its next file begins with pictures shown before the end of the file before; taken for a new start, the
+            // pictures of an HEVC recording split so had holes and the sound ran 160 ms off at each joint.
+            if (!m_joinOneClock)
+                for (const auto& [pid, info] : m_pmt.pidList)
+                    if (pid >= 0 && pid < 8192 && !m_reframedPid[pid])
+                        m_joinStartBytes[pid].push_back(m_handedBytes[pid]);
         }
         else
         {

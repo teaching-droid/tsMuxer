@@ -1960,15 +1960,23 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
                     bool joinStart = false;
                     if (!orderGiven && m_joinPos && curPos >= m_joinPos)
                     {
+                        // Only at a CRA picture: a file that begins with other pictures is a stream split by size
+                        // inside a group, whose pictures go on from the file before (taken for a start, an HEVC
+                        // recording split so had holes in its picture times); it starts where a picture's own
+                        // order was given before, as it always did.
                         if (m_picOrderStarted &&
                             (nalType < HevcUnit::NalType::BLA_W_LP || nalType == HevcUnit::NalType::CRA))
                         {
-                            const int leading = picturesShownBeforeFirst(curPos, m_bufEnd);
-                            if (leading == -1)
-                                return NOT_ENOUGH_BUFFER;
-                            const int firstShown = nextFullPicOrder(m_slice) - leading;
-                            const int start = periodStart();
-                            joinStart = firstShown < start || firstShown > start + MAX_JOIN_PLACES;
+                            joinStart = m_periodOrders.count(nextFullPicOrder(m_slice)) > 0;
+                            if (!joinStart && nalType == HevcUnit::NalType::CRA)
+                            {
+                                const int leading = picturesShownBeforeFirst(curPos, m_bufEnd);
+                                if (leading == -1)
+                                    return NOT_ENOUGH_BUFFER;
+                                const int firstShown = nextFullPicOrder(m_slice) - leading;
+                                const int start = periodStart();
+                                joinStart = firstShown < start || firstShown > start + MAX_JOIN_PLACES;
+                            }
                         }
                         if (!joinStart)
                             m_joinPos = nullptr;

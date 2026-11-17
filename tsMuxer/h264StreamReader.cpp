@@ -2295,13 +2295,19 @@ int H264StreamReader::processSliceNal(uint8_t* buff, const bool auFirst)
         if (!slice.isIDR() && !guessOrder && !damaged && !slice.m_field_pic_flag && !m_fieldPicturesSeen &&
             slice.getSPS()->pic_order_cnt_type != 2 && m_ptsGiven && !m_periodOrders.empty())
         {
-            const int leading = leadingPicturesOfFirst(slice, buff);
-            if (leading == -1)
-                return NOT_ENOUGH_BUFFER;
-            const int firstShown = nextPicOrder(slice) - (std::max)(0, leading);
-            const int next = *m_periodOrders.rbegin() + 1;
-            joinStart = m_periodOrders.count(nextPicOrder(slice)) > 0 || firstShown < next ||
-                        firstShown > next + MAX_JOIN_PLACES;
+            joinStart = m_periodOrders.count(nextPicOrder(slice)) > 0;
+            // Only at an I picture: a file that begins with other pictures is a stream split by size inside a
+            // group, whose pictures go on from the file before (taken for a start, a recording split so had holes in
+            // its picture times); it starts where a picture's own order was given before, as it always did.
+            if (!joinStart && slice.isIFrame())
+            {
+                const int leading = leadingPicturesOfFirst(slice, buff);
+                if (leading == -1)
+                    return NOT_ENOUGH_BUFFER;
+                const int firstShown = nextPicOrder(slice) - (std::max)(0, leading);
+                const int next = *m_periodOrders.rbegin() + 1;
+                joinStart = firstShown < next || firstShown > next + MAX_JOIN_PLACES;
+            }
         }
         if (!joinStart)
             m_joinPos = nullptr;
