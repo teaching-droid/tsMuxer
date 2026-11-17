@@ -4066,9 +4066,10 @@ void TsMuxerWindow::addTrackToDefaultComboBox(int trackRowIdx)
         ui->defaultAudioTrackComboBox->addItem(text, trackRowIdx);
     }
     // A video track as a Matroska output writes it: the second view of 3D (MVC) and the second layer of a dual layer
-    // Dolby Vision track are folded into the first, and are no track of their own.
-    else if (codecInfo->programName.startsWith('V') && codecInfo->subTrack < 2 &&
-             !codecInfo->programName.contains(QLatin1String("MVC")))
+    // Dolby Vision track (sub-track 2 of HEVC) are folded into the first, and are no track of their own. The base view
+    // of a combined 3D track is its sub-track 2 (the listing gives the second view first).
+    else if (codecInfo->programName.startsWith('V') && !codecInfo->programName.contains(QLatin1String("MVC")) &&
+             !(codecInfo->subTrack >= 2 && codecInfo->programName.contains(QLatin1String("HEVC"))))
     {
         ui->defaultVideoTrackComboBox->addItem(text, trackRowIdx);
     }
@@ -7685,6 +7686,7 @@ QString TsMuxerWindow::buildMetaText()
         // The video track chosen as the default one (#66): Matroska only, as a disc and a transport stream have no such
         // flag for video. It stands above the source's own flag, as the audio and subtitle choices do.
         if (ui->radioButtonMKV->isChecked() && ui->defaultVideoTrackCheckBox->isChecked() &&
+            ui->defaultVideoTrackComboBox->currentData().isValid() &&
             ui->defaultVideoTrackComboBox->currentData().toInt() == i && codecInfo->programName.startsWith('V'))
             postfix += QString(", default");
         if (isVideoCodec(codecInfo->displayName))

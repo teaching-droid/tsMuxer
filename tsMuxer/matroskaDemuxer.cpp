@@ -696,9 +696,11 @@ int MatroskaDemuxer::matroska_parse_block(uint8_t* data, int size, const int64_t
         const bool timeline = m_joinPart < m_joinRanges.size() && m_joinRanges[m_joinPart].startNs >= 0;
         const int64_t blockNs =
             timecode == AV_NOPTS_VALUE ? AV_NOPTS_VALUE : timecode * static_cast<int64_t>(time_scale);
+        const bool isVideo = tracks[track]->type == IOContextTrackType::VIDEO;
         if (blockNs != AV_NOPTS_VALUE && (m_partFirstBlockNs == INT64_MIN || blockNs < m_partFirstBlockNs))
             m_partFirstBlockNs = blockNs;
-        const bool isVideo = tracks[track]->type == IOContextTrackType::VIDEO;
+        if (blockNs != AV_NOPTS_VALUE && isVideo && (m_partFirstVideoNs == INT64_MIN || blockNs < m_partFirstVideoNs))
+            m_partFirstVideoNs = blockNs;
         const bool keepVideo = !timeline || !isVideo || keepBlock(tracks[track], blockNs, is_keyframe != 0);
         const int64_t timelineShiftNs =
             timeline ? m_joinRanges[m_joinPart].offsetNs - m_joinRanges[m_joinPart].startNs : m_joinShiftNs;
@@ -1268,35 +1270,43 @@ int MatroskaDemuxer::ebml_read_binary(uint32_t* id, uint8_t** binary, int* size,
         m_isEOF = true;
         m_lastReadRez = BufferedReader::DATA_EOF;
         const std::string& file = m_joinPart < m_joinFiles.size() ? m_joinFiles[m_joinPart] : m_sourceName;
-        // In a join, the place the part is put on the join's clock, which --cut-end counts on: a join whose cut ended
-        // before the missing part of a later file was refused, as the time in the file was taken for the time in the
-        // join. A part whose place is not known counts from 0.
+        // ** WHERE THE CUT FALLS IN THE OUTPUT. ** --cut-end counts on the output's clock, from its first picture. The
+        // time of the block is the file's own, which need not start at 0 (a remux of a broadcast keeps its hours), and
+        // in a join or a play timeline the part is put at a place of its own: the time in the file was taken for the
+        // time in the output, so a --cut-end before the missing part was refused, or one after it let through.
+        const auto ns = [](const double s) { return static_cast<int64_t>(llround(s * 1e9)); };
+        const int64_t blockNs = ns(from);
+        // the part's first picture, or its first block where it has no picture before the cut, or the cut itself
+        const int64_t firstNs = m_partFirstVideoNs != INT64_MIN   ? m_partFirstVideoNs
+                                : m_partFirstBlockNs != INT64_MIN ? m_partFirstBlockNs
+                                                                  : blockNs;
         auto& cut = cutOffFiles()[file];
         if (cut.track == 0 || from < cut.from)
         {
             cut.from = from;
             cut.track = track;
         }
-        // A play timeline puts the part where it says, also a timeline of one part of one file.
-        const bool timeline = m_joinPart < m_joinRanges.size() && m_joinRanges[m_joinPart].startNs >= 0;
-        if (timeline)
-        {
-            cut.timeline = true;
-            cut.joinStarts.insert(
-                static_cast<double>(m_joinRanges[m_joinPart].offsetNs - m_joinRanges[m_joinPart].startNs) / 1e9);
-        }
+        if (m_joinPart < m_joinRanges.size() && m_joinRanges[m_joinPart].startNs >= 0)  // a play timeline
+            cut.joinAt.insert(
+                static_cast<double>(blockNs + m_joinRanges[m_joinPart].offsetNs - m_joinRanges[m_joinPart].startNs) /
+                1e9);
         else if (m_joinFiles.size() > 1)
         {
-            // A cut file has no video span of its own, so its shift is often not known. The part then starts where
-            // the parts before it end, and its first block there: from that block's time, its own clock, which need
-            // not start at 0, is put on the join's clock. The cut block is the first where none came before it.
-            const int64_t firstNs =
-                m_partFirstBlockNs != INT64_MIN ? m_partFirstBlockNs : static_cast<int64_t>(llround(from * 1e9));
-            const int64_t shiftNs = m_joinShiftKnown       ? m_joinShiftNs
-                                    : m_joinPartStartKnown ? m_joinPartStartNs - (std::max)(firstNs, int64_t{0})
-                                                           : 0;
-            cut.joinStarts.insert(static_cast<double>(shiftNs) / 1e9);
+            int64_t atNs = 0;
+            if (m_joinPart == 0)
+                atNs = blockNs - firstNs;
+            else if (m_joinShiftKnown && m_joinBaseNs != INT64_MIN)  // put on the clock of the first part
+                atNs = blockNs + m_joinShiftNs - m_joinBaseNs;
+            else if (m_joinPart < m_joinStartsNs.size())  // subtitles beside a joined video: where its file starts
+                atNs = m_joinStartsNs[m_joinPart] + blockNs - firstNs;
+            else if (m_joinPartStartKnown)  // after the pictures of the parts before
+                atNs = m_joinPartStartNs + blockNs - firstNs;
+            else
+                atNs = blockNs - firstNs;  // not known: as early as it can be
+            cut.joinAt.insert(static_cast<double>((std::max)(atNs, int64_t{0})) / 1e9);
         }
+        else
+            cut.aloneAt.insert(static_cast<double>((std::max)(blockNs - firstNs, int64_t{0})) / 1e9);
         static std::set<std::string> warned;  // a job opens a file more than once
         if (!traceWarnings::silent && warned.insert(file).second)
             LTRACE(LT_WARN, 2,
@@ -1456,6 +1466,8 @@ void MatroskaDemuxer::openFile(const std::string& streamName)
     m_joinPartStartNs = 0;
     m_joinPartStartKnown = true;
     m_partFirstBlockNs = INT64_MIN;
+    m_partFirstVideoNs = INT64_MIN;
+    m_joinBaseNs = INT64_MIN;
     matroska_read_header();
     // Separately, on its own handle, so nothing about the streaming read is disturbed.
     loadAttachments(streamName);
@@ -1568,9 +1580,12 @@ void MatroskaDemuxer::nextJoinPart()
         m_soundGap.clear();
         m_gapVideoPrev = INT64_MIN;
     }
+    if (m_joinPart == 0)
+        m_joinBaseNs = m_partFirstVideoNs != INT64_MIN ? m_partFirstVideoNs : m_partFirstBlockNs;
     if (++m_joinPart >= m_joinFiles.size())
         return;
     m_partFirstBlockNs = INT64_MIN;
+    m_partFirstVideoNs = INT64_MIN;
     // A plain join puts each file where the video of the one before ends (see METADemuxer::getChapters). The video
     // and the audio follow by counting their frames; the tracks whose times come from the container, the subtitles,
     // started again at the next file's own clock, so every subtitle of a second file came where the first one's

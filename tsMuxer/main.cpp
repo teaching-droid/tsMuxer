@@ -1647,6 +1647,8 @@ Additional parameters for audio tracks:
                     hearing or the visually impaired, text descriptions of the picture,
                     the original language, commentary. =1 (or the name alone) sets the
                     flag, =0 clears it. A Matroska source's own flags are kept otherwise.
+- enabled           MKV output only: enabled=0 (or =no) marks the track as one a player
+                    does not play (FlagEnabled 0). Every track is enabled otherwise.
 - stretch           Stretch audio by a given factor. Can be a decimal value or a
                     fraction (e.g. 25/24), from 0.5 up to 2. Useful for fixing A/V
                     sync issues caused by frame rate discrepancies. Audio tracks only.
@@ -1749,6 +1751,8 @@ Additional parameters for PG and SRT tracks:
                     hearing or the visually impaired, text descriptions of the picture,
                     the original language, commentary. =1 (or the name alone) sets the
                     flag, =0 clears it. A Matroska source's own flags are kept otherwise.
+- enabled           MKV output only: enabled=0 (or =no) marks the track as one a player
+                    does not play (FlagEnabled 0). Every track is enabled otherwise.
 - fps               Video fps. It is recommended to define this parameter in
                     order to enable more careful timing processing.
 - 3d-plane          Defines the number of the '3D offset track' which is placed
@@ -3918,8 +3922,8 @@ static void reportOptionsIgnored(const MuxerManager& muxerManager, const int aut
             LTRACE(LT_WARN, 2,
                    "Warning: --title is written into a Matroska file only, and is ignored for this output.");
         for (const StreamInfo& si : muxerManager.getStreamInfo())
-            for (const char* name :
-                 {"track-name", "hearing-impaired", "visual-impaired", "text-descriptions", "original", "commentary"})
+            for (const char* name : {"track-name", "hearing-impaired", "visual-impaired", "text-descriptions",
+                                     "original", "commentary", "enabled"})
                 if (si.m_addParams.count(name))
                     LTRACE(LT_WARN, 2,
                            "Warning: " << name << " is written into a Matroska file only, and is ignored for track "
@@ -4976,13 +4980,11 @@ static void checkSourceConsumed(MuxerManager& muxerManager)
 // what is missing, unless --cut-end stops before the first of it.
 static void checkSourcesCutOff(const MuxerManager& muxerManager)
 {
-    // from: in the file's own time, as the error says it; joinStart: where the file starts in a join, which
-    // --cut-end counts from
+    // from: in the file's own time, as the error says it; at: where that falls in the output, which --cut-end counts on
     const auto check = [&muxerManager](const std::string& file, const double from, const unsigned track,
-                                       const char* what, const double joinStart = 0)
+                                       const char* what, const double at)
     {
-        if (muxerManager.getCutEnd() > 0 &&
-            static_cast<double>(muxerManager.getCutEnd()) / INTERNAL_PTS_FREQ <= joinStart + from)
+        if (muxerManager.getCutEnd() > 0 && static_cast<double>(muxerManager.getCutEnd()) / INTERNAL_PTS_FREQ <= at)
             return;
         THROW(ERR_SOURCE, "The source " << file << " is cut off: " << what << ", in track " << track << " from "
                                         << doubleToStr(from, 3)
@@ -5000,22 +5002,11 @@ static void checkSourcesCutOff(const MuxerManager& muxerManager)
         return files;
     };
     const auto named = [](const std::string& f, const std::string& file) { return unquoteStr(trimStr(f)) == file; };
-    // Each line that reads the file, at each place it reads it. A line whose first file it is starts it at 0; a join
-    // or a play timeline at each place its mux read put the file, none where a join never reached it (a --cut-end
-    // before it). `timeline`: the file is a part of a play timeline, which puts it where the timeline says, also when
-    // it is the first file of its line.
-    const auto atEachPlace = [&check, &named](const std::vector<std::string>& files, const std::string& file,
-                                              const double from, const unsigned track, const char* what,
-                                              const std::set<double>& joinStarts, const bool timeline)
-    {
-        if (named(files.front(), file) && !timeline)
-            check(file, from, track, what);
-        if (files.size() > 1 || timeline)
-            for (const double joinStart : joinStarts) check(file, from, track, what, joinStart);
-    };
     // An MP4: each cut track of it the job muxes, also as a sub-track (a layer of a dual layer Dolby Vision track) or
-    // as the AC-3 core merge-ac3-track takes. Its other tracks are whole, unless the file is fragmented: the fragments
-    // after the cut are missing for every track, and only the track whose fragment the cut fell in was recorded.
+    // as the AC-3 core merge-ac3-track takes for a TrueHD line. Its other tracks are whole, unless the file is
+    // fragmented: the fragments after the cut are missing for every track, and only the track whose fragment the cut
+    // fell in was recorded. A line whose first file it is starts it at 0; a join at each place its mux read opened
+    // it, and none where a join never reached it (a --cut-end before it).
     for (const auto& [file, cut] : MovDemuxer::cutOffFiles())
         for (const StreamInfo& si : muxerManager.getStreamInfo())
         {
@@ -5024,17 +5015,26 @@ static void checkSourcesCutOff(const MuxerManager& muxerManager)
                 continue;
             std::vector<unsigned> own{
                 static_cast<unsigned>(SubTrackFilter::isSubTrack(si.m_pid) ? si.m_pid >> 16 : si.m_pid)};
-            if (const auto core = si.m_addParams.find("merge-ac3-track"); core != si.m_addParams.end())
+            if (const auto core = si.m_addParams.find("merge-ac3-track");
+                core != si.m_addParams.end() && si.m_codec == "A_MLP")
                 own.push_back(static_cast<unsigned>(strToInt32(core->second.c_str())));
             for (const auto& [track, from] : cut.tracks)
                 if (cut.fragmented || std::find(own.begin(), own.end(), track) != own.end())
-                    atEachPlace(files, file, from, track, "its index lists data past the end of the file",
-                                cut.joinStarts, false);
+                {
+                    const char* what = "its index lists data past the end of the file";
+                    if (named(files.front(), file))
+                        check(file, from, track, what, from);
+                    if (files.size() > 1)
+                        for (const double joinStart : cut.joinStarts) check(file, from, track, what, joinStart + from);
+                }
         }
-    // A Matroska file ends where it is cut, so every track of it the job muxes is judged. A cut file no line names is
-    // judged from its own start, so that it is never let through.
+    // A Matroska file ends where it is cut, so every track of it the job muxes is judged: a line of the file alone by
+    // where the reads of the file alone put the cut, a join or a play timeline by where its parts put it. A read that
+    // never reached the cut put it nowhere. A cut file no line names is judged from its own start, so that it is
+    // never let through.
     for (const auto& [file, cut] : MatroskaDemuxer::cutOffFiles())
     {
+        const char* what = "a block runs past the end of the file";
         bool isNamed = false;
         for (const StreamInfo& si : muxerManager.getStreamInfo())
         {
@@ -5042,11 +5042,14 @@ static void checkSourcesCutOff(const MuxerManager& muxerManager)
             if (std::none_of(files.begin(), files.end(), [&](const std::string& f) { return named(f, file); }))
                 continue;
             isNamed = true;
-            atEachPlace(files, file, cut.from, cut.track, "a block runs past the end of the file", cut.joinStarts,
-                        cut.timeline);
+            // a line of one file can be a play timeline of it as well (an ordered edition), whose read put the cut
+            // as a part: such a line is judged by both, which only ever makes it the stricter
+            for (const double at : cut.joinAt) check(file, cut.from, cut.track, what, at);
+            if (files.size() == 1)
+                for (const double at : cut.aloneAt) check(file, cut.from, cut.track, what, at);
         }
         if (!isNamed)
-            check(file, cut.from, cut.track, "a block runs past the end of the file");
+            check(file, cut.from, cut.track, what, 0);
     }
 }
 
