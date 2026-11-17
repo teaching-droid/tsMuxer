@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 52 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 53 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -87,6 +87,8 @@
 * **A default track chosen for a Matroska output was not marked when the source marks another.** Where a Matroska source marks its first audio track as the default and the Default tracks box of the window, or `default` on a meta line, chose another one, the source's choice was kept: the chosen track was written as not default, with a warning that `default` was given on two tracks. The default chosen in the meta now decides; the source's flags count only for a type of track the meta names no default for.
 
 ### Command line and window
+
+* **The "Disc title and pictures" box of the window sat far from its label** (#30). For a disc from the source disc or without a title, the box took the right half of the row. It now sits beside its label, and the folder box fills the row where it is shown. Thanks to @NTMPowers.
 
 * **A list of jobs, one after the other.** `tsMuxeR --batch <job list>` runs the jobs of a text file, one job on each line, written as the arguments of a run of its own. Each job is a process of its own, so a job that fails leaves the next ones as they are, and a summary at the end says how each job ended. `--batch-stop-on-error` ends the batch at the first job that fails. (Thanks to Coopervid for the idea of keeping a queue.)
 

@@ -3027,7 +3027,7 @@ p, li { white-space: pre-wrap; }
            </layout>
           </item>
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayoutDiscMeta">
+           <layout class="QHBoxLayout" name="horizontalLayoutDiscMeta" stretch="0,0,100,0,1">
             <item>
              <widget class="QLabel" name="discMetaLabel">
               <property name="text">
@@ -3051,6 +3051,19 @@ p, li { white-space: pre-wrap; }
                <string>Browse</string>
               </property>
              </widget>
+            </item>
+            <item>
+             <spacer name="horizontalSpacerDiscMeta">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>0</width>
+                <height>0</height>
+               </size>
+              </property>
+             </spacer>
             </item>
            </layout>
           </item>
