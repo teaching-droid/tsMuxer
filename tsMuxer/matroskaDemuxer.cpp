@@ -1266,9 +1266,26 @@ int MatroskaDemuxer::ebml_read_binary(uint32_t* id, uint8_t** binary, int* size,
         m_isEOF = true;
         m_lastReadRez = BufferedReader::DATA_EOF;
         const std::string& file = m_joinPart < m_joinFiles.size() ? m_joinFiles[m_joinPart] : m_sourceName;
-        auto [it, added] = cutOffFiles().emplace(file, CutOff{from, track});
-        if (!added && from < it->second.from)
-            it->second = CutOff{from, track};
+        // In a join, the place the part is put on the join's clock, which --cut-end counts on: a join whose cut ended
+        // before the missing part of a later file was refused, as the time in the file was taken for the time in the
+        // join. A part whose place is not known counts from 0.
+        auto& cut = cutOffFiles()[file];
+        if (cut.track == 0 || from < cut.from)
+        {
+            cut.from = from;
+            cut.track = track;
+        }
+        if (m_joinFiles.size() > 1)
+        {
+            const bool timeline = m_joinPart < m_joinRanges.size() && m_joinRanges[m_joinPart].startNs >= 0;
+            // a cut file has no video span of its own, so its shift is not known: where the part starts, the length
+            // of the parts before it, still is
+            const int64_t shiftNs = timeline ? m_joinRanges[m_joinPart].offsetNs - m_joinRanges[m_joinPart].startNs
+                                    : m_joinShiftKnown     ? m_joinShiftNs
+                                    : m_joinPartStartKnown ? m_joinPartStartNs
+                                                           : 0;
+            cut.joinStarts.insert(static_cast<double>(shiftNs) / 1e9);
+        }
         static std::set<std::string> warned;  // a job opens a file more than once
         if (!traceWarnings::silent && warned.insert(file).second)
             LTRACE(LT_WARN, 2,
@@ -1425,6 +1442,8 @@ void MatroskaDemuxer::openFile(const std::string& streamName)
     muxing_app = nullptr;
     num_tracks = 0;
     m_joinPart = 0;
+    m_joinPartStartNs = 0;
+    m_joinPartStartKnown = true;
     matroska_read_header();
     // Separately, on its own handle, so nothing about the streaming read is disturbed.
     loadAttachments(streamName);
@@ -1559,6 +1578,10 @@ void MatroskaDemuxer::nextJoinPart()
         int64_t prevStart = 0, prevEnd = 0, start = 0, end = 0;
         span(m_joinFiles[m_joinPart - 1], prevStart, prevEnd);
         span(m_joinFiles[m_joinPart], start, end);
+        if (prevEnd > prevStart)
+            m_joinPartStartNs += prevEnd - prevStart;
+        else
+            m_joinPartStartKnown = false;
         // Files without video, of subtitles only, beside a video joined from as many files: each starts where the
         // video file at its place does (setJoinStarts), not where the subtitles of the file before end
         if (m_joinPart < m_joinStartsNs.size() && !m_joinShiftKnown)

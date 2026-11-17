@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 51 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 52 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -79,6 +79,8 @@
 * **The subtitles of a fragmented MP4 could come late.** A text track in fragments was timed by adding up the lengths of its samples, not by the start each fragment gives. Where a sample runs past the start of the next fragment, as in a DASH file of MP4Box with a gap before the first subtitle, every later subtitle came that much late: 0.92 s in a test. Each subtitle now comes at the time its fragment gives.
 
 ### Matroska input
+
+* **A join of Matroska files was refused for a cut-off later file that the cut does not reach.** Where a later file of a join is cut off, `--cut-end` was compared with the time in that file, not in the join, so a cut that ends before its missing part, or before the file, was refused. The place of the file in the join is counted now.
 
 * **The sound of some Matroska files came early.** An H.264 track that begins with a group that is not closed, as a recording cut from a broadcast does, had its sound measured from the first I picture and not from the first picture shown: the sound came early by the pictures between, 40 to 280 ms on 4 of 13 recordings, in every output.
 

@@ -153,11 +153,13 @@ class MatroskaDemuxer final : public IOContextDemuxer
         m_addMappings[pid] = mappings;
     }
     // A file cut off inside a block: from when (s, in the file's own time) and in which track (as track= counts) the
-    // first of it is missing. Asked once the mux is over (main.cpp), as MovDemuxer::cutOffFiles.
+    // first of it is missing, and where a join the mux read put it. Asked once the mux is over (main.cpp), as
+    // MovDemuxer::cutOffFiles: the file ends there, so every track of it the job muxes is judged.
     struct CutOff
     {
         double from = 0;
         unsigned track = 0;
+        std::set<double> joinStarts;  // s, the shift of the part on the join's clock where a join read it
     };
     static std::map<std::string, CutOff>& cutOffFiles();
 
@@ -273,6 +275,8 @@ class MatroskaDemuxer final : public IOContextDemuxer
         bool pause = false;        // the sound of the part pauses before the frame that comes next (soundPause)
     };
     std::map<int, JoinSound> m_joinSound;  // by track (stream index)
+    int64_t m_joinPartStartNs = 0;         // a plain join: the video length of the parts before the one being read
+    bool m_joinPartStartKnown = true;      // each part before had a video span (or a duration)
     bool m_joinShiftKnown = true;  // where each part is put is known (m_joinShiftNs): a part of unknown length is not
     std::map<int, std::vector<std::pair<int64_t, int64_t>>> m_timeGaps;  // by track, see takeTimeGaps
     // A sound track of one file that has no block for a while, with the picture going on (see noteSoundGap), in ns

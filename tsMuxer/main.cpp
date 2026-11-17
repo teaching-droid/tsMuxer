@@ -4987,31 +4987,51 @@ static void checkSourcesCutOff(const MuxerManager& muxerManager)
                                         << doubleToStr(from, 3)
                                         << " s on. The output holds what the file has and is incomplete.")
     };
-    // An MP4: each track of it the job muxes that is cut, at each place the job muxes it. A line of the file alone
-    // starts it at 0; a join, at each place the mux read of a join opened it, and none where the join never reached
-    // it (a --cut-end before it).
+    // The files a line reads: 0 where it does not read `file`, else how many (more than 1 for a join)
+    const auto filesOf = [](const StreamInfo& si, const std::string& file) -> size_t
+    {
+        const std::vector<std::string> files =
+            si.m_sourceFiles.empty() ? std::vector<std::string>{si.m_streamName} : si.m_sourceFiles;
+        return std::any_of(files.begin(), files.end(),
+                           [&file](const std::string& f) { return unquoteStr(trimStr(f)) == file; })
+                   ? files.size()
+                   : 0;
+    };
+    // Each line that reads the file, at each place it reads it: a line of the file alone starts it at 0; a join, at
+    // each place the mux read of a join opened it, and none where the join never reached it (a --cut-end before it)
+    const auto atEachPlace = [&check](const std::string& file, const size_t files, const double from,
+                                      const unsigned track, const char* what, const std::set<double>& joinStarts)
+    {
+        if (files == 1)
+            check(file, from, track, what);
+        else
+            for (const double joinStart : joinStarts) check(file, from, track, what, joinStart);
+    };
+    // An MP4: each track of it the job muxes that is cut. Its other tracks are whole.
     for (const auto& [file, cut] : MovDemuxer::cutOffFiles())
         for (const StreamInfo& si : muxerManager.getStreamInfo())
         {
             if (SubTrackFilter::isSubTrack(si.m_pid))
                 continue;
             const auto track = cut.tracks.find(static_cast<unsigned>(si.m_pid));
-            if (track == cut.tracks.end())
-                continue;
-            const std::vector<std::string> files =
-                si.m_sourceFiles.empty() ? std::vector<std::string>{si.m_streamName} : si.m_sourceFiles;
-            if (std::none_of(files.begin(), files.end(),
-                             [&file](const std::string& f) { return unquoteStr(trimStr(f)) == file; }))
-                continue;
-            if (files.size() == 1)
-                check(file, track->second, track->first, "its index lists data past the end of the file");
-            else
-                for (const double joinStart : cut.joinStarts)
-                    check(file, track->second, track->first, "its index lists data past the end of the file",
-                          joinStart);
+            if (const size_t files = filesOf(si, file); files > 0 && track != cut.tracks.end())
+                atEachPlace(file, files, track->second, track->first, "its index lists data past the end of the file",
+                            cut.joinStarts);
         }
+    // A Matroska file ends where it is cut, so every track of it the job muxes is judged. A file no line names, as a
+    // linked segment an ordered edition reads, is judged from its own start, as before.
     for (const auto& [file, cut] : MatroskaDemuxer::cutOffFiles())
-        check(file, cut.from, cut.track, "a block runs past the end of the file");
+    {
+        bool named = false;
+        for (const StreamInfo& si : muxerManager.getStreamInfo())
+            if (const size_t files = filesOf(si, file); files > 0)
+            {
+                named = true;
+                atEachPlace(file, files, cut.from, cut.track, "a block runs past the end of the file", cut.joinStarts);
+            }
+        if (!named)
+            check(file, cut.from, cut.track, "a block runs past the end of the file");
+    }
 }
 
 // ** AN AUDIO OR VIDEO TRACK THAT GAVE NOTHING IS A FAILED JOB. **
