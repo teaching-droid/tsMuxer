@@ -1772,6 +1772,49 @@ int METADemuxer::madeLayerOfTrack(const int streamIndex) const
     return -1;
 }
 
+#ifndef _WIN32
+// ** THE FOLDERS OF A DISC IN OTHER LETTERS ARE FOUND TOO. ** A disc copied or mounted with its names in small letters
+// (bdmv/stream/00000.m2ts, as some copies and mounts give them) was opened at BDMV/STREAM, which a file system that
+// tells capitals apart does not have: its playlist could be neither listed nor muxed ("Can't open file"). Each part of
+// the path that does not exist as written is looked for in its folder in any letters. Windows does not tell them apart.
+static std::string pathAnyCase(const std::string& path)
+{
+    if (path.empty() || fileExists(path))
+        return path;
+    std::string done = path[0] == '/' ? "/" : "";
+    size_t from = path[0] == '/' ? 1 : 0;
+    while (from <= path.size())
+    {
+        size_t to = path.find('/', from);
+        if (to == std::string::npos)
+            to = path.size();
+        const std::string part = path.substr(from, to - from);
+        std::string next = done + part;
+        if (!part.empty() && part != "." && part != ".." && !fileExists(next))
+        {
+            std::error_code ec;
+            const std::string folder = done.empty() ? "." : done;
+            bool found = false;
+            for (const auto& entry : std::filesystem::directory_iterator(folder, ec))
+            {
+                const std::string name = entry.path().filename().string();
+                if (strToLowerCase(name) == strToLowerCase(part))
+                {
+                    next = done + name;
+                    found = true;
+                    break;
+                }
+            }
+            if (ec || !found)
+                return path;  // not there in any letters
+        }
+        done = next + (to < path.size() ? "/" : "");
+        from = to + 1;
+    }
+    return done;
+}
+#endif
+
 std::string METADemuxer::clipNameAsOnDisc(const std::string& stem, const std::string& lowerExt)
 {
     const string lower = stem + lowerExt;
@@ -1780,6 +1823,11 @@ std::string METADemuxer::clipNameAsOnDisc(const std::string& stem, const std::st
         const string upper = stem + strToUpperCase(lowerExt);
         if (fileExists(upper))
             return upper;
+#ifndef _WIN32
+        for (const string& name : {lower, upper})
+            if (const string onDisc = pathAnyCase(name); onDisc != name)
+                return onDisc;
+#endif
     }
     return lower;
 }
