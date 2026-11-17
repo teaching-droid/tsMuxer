@@ -3732,9 +3732,10 @@ int MovDemuxer::mov_read_moov(MOVAtom atom)
         // reader shows those B pictures first, as it does in a transport stream (H264StreamReader::
         // leadingPicturesOfFirst), so the picture starts with the earliest of them: the sound, timed from the I
         // picture, came early by them (125 ms for three at 24 fps). Measured from the earliest picture of the first
-        // group, as for a Matroska file. Not HEVC, whose reader leaves such pictures out.
+        // group, as for a Matroska file. H.264 only: an HEVC MP4 cut so is in step as it is (measured); VVC was not.
         if (dynamic_cast<const MovParsedH264TrackData*>(st->parsed_priv_data) &&
-            !dynamic_cast<const MovParsedH265TrackData*>(st->parsed_priv_data) && !st->ctts_data.empty() &&
+            !dynamic_cast<const MovParsedH265TrackData*>(st->parsed_priv_data) &&
+            !dynamic_cast<const MovParsedH266TrackData*>(st->parsed_priv_data) && !st->ctts_data.empty() &&
             !st->stts_data.empty() && st->keyframes.size() > 1 && st->keyframes.front() == 1)
         {
             const uint32_t groupEnd = (std::min)(st->keyframes[1] - 1, 600u);  // samples of the first group
