@@ -1237,6 +1237,11 @@ double HEVCStreamReader::getStreamFPS(void* curNalUnit)
 
 bool HEVCStreamReader::skipNal(uint8_t* nal)
 {
+    // every unit of a picture before the first parameter sets, from the first unit of its access unit on: decodeNal
+    // reads the access unit at its first unit, and asks this for that unit and each one after it up to the next
+    if (m_auLeftOut)
+        return true;
+
     const auto nalType = static_cast<HevcUnit::NalType>((*nal >> 1) & 0x3f);
 
     if (nalType == HevcUnit::NalType::FD)
@@ -1271,8 +1276,44 @@ bool HEVCStreamReader::isSuffix(const HevcUnit::NalType nalType) const
             (nalType >= HevcUnit::NalType::UNSPEC56 && nalType <= HevcUnit::NalType::DVEL));
 }
 
+// ** A PICTURE BEFORE THE FIRST PARAMETER SETS IS LEFT OUT, AND KEEPS ITS PLACE. ** A stream that begins before its
+// first VPS, SPS and PPS (a recording cut at any picture; a playlist whose first clip lost them) has pictures nothing
+// can read. Their slices were not taken for slices, having no parameter sets to read them with, nor were the
+// delimiters between them taken for the start of a picture: every unit up to the first slice after the parameter sets
+// went into one access unit, which held the slices of 22 pictures and the first decodable picture at its end (no
+// decoder read it: PPS id out of range). The pictures were counted as one, and the pictures of the later parts of a cut
+// playlist, which are counted by the demuxer (TSDemuxer::keptInPart), took the times of other pictures. Each such
+// picture is now an access unit of its own, as its delimiter or its first slice begins it, and is left out: it is
+// counted, and its time passes, as for a picture a cut leaves out, so the pictures after it keep their places and the
+// sound its place against them; it is not written, nor counted in "Processed N video frames".
+void HEVCStreamReader::passPictureLeftOut()
+{
+    frameLeftOut();
+    ++m_picturesLeftOutBeforeSets;
+    m_reportNalType = -1;
+    if (m_totalFrameNum++ > 0)
+        m_curDts += m_pcrIncPerFrame;
+    m_curPts = m_curDts;
+    m_frameNum++;
+    m_firstFrame = false;
+}
+
 void HEVCStreamReader::incTimings()
 {
+    if (m_auLeftOut)
+    {
+        passPictureLeftOut();
+        return;
+    }
+    if (m_picturesLeftOutBeforeSets > 0)
+    {
+        LTRACE(LT_INFO, 2,
+               "HEVC: " << m_picturesLeftOutBeforeSets
+                        << (m_picturesLeftOutBeforeSets == 1 ? " picture comes" : " pictures come")
+                        << " before the first parameter sets of the stream and cannot be decoded. Left out; the "
+                           "pictures after them keep their place in time.");
+        m_picturesLeftOutBeforeSets = 0;
+    }
     if (StreamReport::wanted && m_reportNalType >= 0)
     {
         // slice_type: B 0, P 1, I 2. A picture whose slice header could not be read counts as a P picture. A group
@@ -1719,6 +1760,7 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
     m_lastIFrame = false;
     m_auHasMasteringSei = false;
     m_auHasCllSei = false;
+    m_auLeftOut = false;  // the access unit is read from its start again where the call is repeated
 
     const uint8_t* prevPos = nullptr;
     uint8_t* curPos = buff;
@@ -1732,7 +1774,36 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
         const auto nalType = static_cast<HevcUnit::NalType>((*curPos >> 1) & 0x3f);
         if (static_cast<int>(nalType) < 32 && ((curPos[0] & 1) || (curPos[1] >> 3)))
             refuseMultiLayer();  // a picture of a layer above the base layer
-        if (isSlice(nalType))
+        // A picture before the first parameter sets (passPictureLeftOut): its slices and the units after them that
+        // belong to it are told by their type alone, as isSlice and isSuffix tell them once the sets are there.
+        const bool noSets = !m_sps || !m_vps || !m_pps;
+        const bool vclWithoutSets =
+            noSets && ((nalType >= HevcUnit::NalType::TRAIL_N && nalType <= HevcUnit::NalType::RASL_R) ||
+                       (nalType >= HevcUnit::NalType::BLA_W_LP && nalType <= HevcUnit::NalType::RSV_IRAP_VCL23));
+        const bool suffixWithoutSets =
+            noSets && sliceFound &&
+            (nalType == HevcUnit::NalType::FD || nalType == HevcUnit::NalType::SEI_SUFFIX ||
+             (nalType >= HevcUnit::NalType::RSV_NVCL45 && nalType <= HevcUnit::NalType::RSV_NVCL47) ||
+             (nalType >= HevcUnit::NalType::UNSPEC56 && nalType <= HevcUnit::NalType::DVEL));
+        if (vclWithoutSets)
+        {
+            if ((curPos[2] & 0x80) || !sliceFound)
+            {
+                if (sliceFound)
+                {  // the first slice of the next picture
+                    m_lastDecodedPos = prevPos;
+                    incTimings();
+                    return 0;
+                }
+                m_auLeftOut = true;
+            }
+            sliceFound = true;
+        }
+        else if (suffixWithoutSets)
+        {
+            // stays with the picture before
+        }
+        else if (isSlice(nalType))
         {
             // The first slice of an access unit must say so (first_slice_segment_in_pic_flag). One that does not, after
             // the delimiter or SEI that began the access unit, has lost the flag with the rest of its header, or the

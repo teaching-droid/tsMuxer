@@ -110,6 +110,12 @@ class HEVCStreamReader final : public MPEGStreamReader
     // track. Keeps the first of each and ignores anything it cannot parse.
     void readElParameterSet(const uint8_t* nal, const uint8_t* nextNal);
     void incTimings();
+    // ** A PICTURE BEFORE THE FIRST PARAMETER SETS IS LEFT OUT. ** Its slices cannot be read or decoded; the access
+    // unit is ended as any other (its time and its place in the count pass), and none of its units is written
+    // (skipNal). m_auLeftOut: the access unit read last is such a one.
+    void passPictureLeftOut();
+    bool m_auLeftOut = false;
+    int m_picturesLeftOutBeforeSets = 0;
     int toFullPicOrder(const HevcSliceHeader* slice, unsigned pic_bits);
     // The place a period that begins at the picture being read begins at (toFullPicOrder)
     [[nodiscard]] int periodStart() const;
