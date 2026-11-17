@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 61 faults of earlier versions and brings 37 new features and improvements**, each listed below. One fault that 3.1.0 also has is not fixed in this version: it is listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 61 faults of earlier versions and brings 37 new features and improvements**, each listed below. One case is not fixed in this version: it is listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -184,7 +184,7 @@
 
 * **HEVC pictures that cannot be read were joined into one.** In a stream that begins before its first parameter sets, as a cut recording or the first clip of a cut playlist can, the pictures before them were put into one picture together with the first one that can be decoded, which no player could read, and the later parts of a cut playlist took the times of other pictures. Such pictures are now left out and keep their place in time, so the pictures after them and the sound stay in step.
 
-* **A join of files that begin inside an open group was timed wrong at the joint.** Where a later file of a join begins with an HEVC or VVC CRA picture or an H.264 recovery point, with the pictures shown before it, those pictures were put over the end of the file before, or before their own decoding in a join of TS or Matroska files, and a join of such an HEVC file could leave a gap of 4.6 s. A later file now goes on right after the last picture of the file before, its leading pictures kept, in a join of raw streams, TS and Matroska files alike.
+* **A join of files that begin inside an open group was timed wrong at the joint.** Where a later file of a join begins with an HEVC or VVC CRA picture or an H.264 I picture, with the pictures shown before it, and is no continuation of the file before (another recording, or the same cut joined to itself), those pictures were put over the end of the file before, or shown before their own decoding in a join of TS or Matroska files, and a join of such an HEVC file could leave a gap of 4.6 s. Such a file now begins after the last picture of the file before, its leading pictures kept, in a join of raw streams, TS and Matroska files alike. A recording split by size goes on as before.
 
 * **AVS tracks are named in the listing.** The video and sound of Chinese broadcasts (AVS, AVS2, AVS3) are not read; such a track was "Can't detect stream type" with a number, and is now named. MPEG audio or AC-3 beside it is read as before.
 
@@ -222,9 +222,7 @@
 
 ### Known issues
 
-This is also in 3.1.0.
-
-* **A made Dolby Vision layer of a stream that begins before its first parameter sets is timed as in 3.1.0.** Where a single layer Dolby Vision track whose start lost its parameter sets is written to a Blu-ray with its second layer made, the first picture that can be decoded is shown at the start of the stream, early by the pictures before it (0.5 s in a test). Written with `--no-dv-layer`, or to another output, it keeps its time.
+* **A made Dolby Vision layer of a stream that begins before its first parameter sets.** Where a single layer Dolby Vision track whose start lost its parameter sets is written to a Blu-ray with its second layer made (new in 3.2), the pictures before the first parameter sets are kept as in 3.1.0: they cannot be decoded, and the track, with its layer, starts early against the sound by them (0.5 s in a test). Written with `--no-dv-layer`, or to another output, such pictures are left out and the track keeps its time.
 
 ## tsMuxeR 3.1.0
 
