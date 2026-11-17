@@ -1776,7 +1776,7 @@ int HEVCStreamReader::intDecodeNAL(uint8_t* buff)
             refuseMultiLayer();  // a picture of a layer above the base layer
         // A picture before the first parameter sets (passPictureLeftOut): its slices and the units after them that
         // belong to it are told by their type alone, as isSlice and isSuffix tell them once the sets are there.
-        const bool noSets = !m_sps || !m_vps || !m_pps;
+        const bool noSets = (!m_sps || !m_vps || !m_pps) && !m_keepPicturesBeforeSets;
         const bool vclWithoutSets =
             noSets && ((nalType >= HevcUnit::NalType::TRAIL_N && nalType <= HevcUnit::NalType::RASL_R) ||
                        (nalType >= HevcUnit::NalType::BLA_W_LP && nalType <= HevcUnit::NalType::RSV_IRAP_VCL23));

@@ -2033,6 +2033,8 @@ bool METADemuxer::addDvLayers(const string& codec, const string& lineStreamName,
     layer["subTrack"] = "2";
     layer["level"] = "5.1";  // the level the second layer of a disc has, whatever the encoder of the picture chose
     addStream(codec, lineStreamName, base);
+    if (auto* hevc = dynamic_cast<HEVCStreamReader*>(m_codecInfo.back().m_streamReader))
+        hevc->keepPicturesBeforeSets();  // the layer is made as the reader counted before (see there)
     addStream(codec, lineStreamName, layer);
     return true;
 }

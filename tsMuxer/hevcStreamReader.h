@@ -99,6 +99,9 @@ class HEVCStreamReader final : public MPEGStreamReader
 
    public:
     void checkFileEnd(const std::string& fileName) override;
+    // the base of a made Dolby Vision layer keeps the pictures before the first parameter sets
+    // (m_keepPicturesBeforeSets)
+    void keepPicturesBeforeSets() { m_keepPicturesBeforeSets = true; }
 
    protected:
     bool skipNal(uint8_t* nal) override;
@@ -115,6 +118,10 @@ class HEVCStreamReader final : public MPEGStreamReader
     // (skipNal). m_auLeftOut: the access unit read last is such a one.
     void passPictureLeftOut();
     bool m_auLeftOut = false;
+    // The base of a Dolby Vision second layer this mux makes (METADemuxer::addDvLayers) keeps such pictures as before:
+    // the layer is made picture by picture as the reader counted them before (HevcDolbyVisionFilter::notePicture), and
+    // with them left out every picture of the layer had the data of a picture 12 places away in a test.
+    bool m_keepPicturesBeforeSets = false;
     int m_picturesLeftOutBeforeSets = 0;
     int toFullPicOrder(const HevcSliceHeader* slice, unsigned pic_bits);
     // The place a period that begins at the picture being read begins at (toFullPicOrder)
