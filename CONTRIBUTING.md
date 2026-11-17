@@ -13,3 +13,9 @@ A closed issue is never final. Open still means unfinished, and an issue closed 
 One issue is for one problem. A different problem, even a related one, goes into an issue of its own, so that each can be followed and closed on its own. Comments that are not about the problem of an issue may be moved to a new issue or hidden.
 
 When an issue is closed, kept open longer, or split up is decided by the maintainer, case by case.
+
+## Files and samples
+
+Please do not attach or link a whole film, a whole disc or other large files. A short sample is enough to find a problem, and better: tsMuxeR makes one itself. "Make a sample..." on the Input tab, or `--make-sample` on the command line, writes a .zip of up to 25 MB around the point where it goes wrong, small enough to attach to an issue. How to make it, and the report that goes with it: [Reporting a problem](docs/REPORTING_A_PROBLEM.md).
+
+An issue is public, and a sample holds a part of the film itself, so attach one only if you may share it. Whole files, and links to them, are removed. If more than a sample is needed, it is asked for in the issue.
