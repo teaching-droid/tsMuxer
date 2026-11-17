@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 49 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 50 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -129,6 +129,8 @@
 * **Sound a Blu-ray does not carry can be converted, by your own ffmpeg.** AAC, MP2, MP3, Opus, Vorbis, FLAC, ALAC, WavPack and LPCM at another rate are converted to AC-3 or LPCM before the mux, so a disc player plays them. `convert=ac3`, `convert=ac3:448`, `convert=lpcm:24` on a track's line, or `--convert-audio=ac3` for every such track of a Blu-ray or AVCHD output. AC-3 gets a rate a step above that of a lossy track, the most for a lossless one; LPCM keeps the bits and rate of the track where a disc takes them. `:stereo` makes the sound stereo, and `stereo=ac3` (or `--convert-stereo=both`) adds a stereo track beside a track of more channels. The converted sound keeps its place against the picture. ffmpeg is not part of tsMuxeR: give it with `--ffmpeg`, or put it beside tsMuxeR or on the search path. A track of a join, a playlist or a disc title is not converted. In the window, the General tab has the setting (Ask me, AC-3, LPCM, or leave the sound as it is), with the channels and the rate; with Ask me, Start muxing asks once for all such tracks, and "Remember my choice" keeps the answer.
 
 * **AC-3 packed for a digital output inside a WAV was muxed as noise.** A WAVE file whose samples hold AC-3 or E-AC-3 as IEC 61937 bursts, as made to be played over S/PDIF or HDMI, was listed as LPCM and muxed as LPCM, with a warning that it plays as noise. Its frames are now taken out, and the track is the AC-3 or E-AC-3 the file holds.
+
+* **AC-3 or DTS packed for a digital output in the LPCM track of an M2TS was muxed as noise without a word.** Such a track, and the PCM track of a Matroska file that holds such bursts, is now listed with a note that it plays as noise, and the mux warns. The bursts are not taken out of a container's track.
 
 * **Opus written to a transport stream was 6.5 ms late** for a usual encoder, and its padding at the end was played where a video track stood beside it. The time of an access unit now goes on by the samples the one before it keeps, and the last access unit says the samples to leave out.
 

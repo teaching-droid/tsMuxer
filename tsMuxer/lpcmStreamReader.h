@@ -157,7 +157,13 @@ class LPCMStreamReader final : public SimplePacketizerReader
     bool m_openSizeWaveFormat;
     // An RF64 or BW64 file: its sizes are in the ds64 chunk, the data chunk saying 0xFFFFFFFF
     bool m_rf64 = false;
-    bool m_burstsSaid = false;  // decodeWaveHeader: the PCM holds IEC 61937 bursts of coded sound
+    // ** CODED SOUND IN THE SAMPLES IS SAID, FROM ANY SOURCE. ** IEC 61937 bursts of AC-3 or DTS in 16-bit stereo PCM
+    // play as noise. Looked for in the first 64 KB of samples (lookForBursts): found, the listing says so, and the
+    // reader of the track warns once.
+    bool m_burstsSaid = false;
+    bool m_burstsFound = false;
+    int64_t m_burstScanLeft = 65536;
+    void lookForBursts(const uint8_t* p, const uint8_t* end, bool bigEndian);
     // The data chunk's size was given, so m_curChunkLen reaching 0 is the end of the audio and not
     // "size unknown". m_afterData is set at that end: the bytes that follow are a pad byte, a chunk
     // of tags, another data chunk or another file, and are looked at before any is taken for audio.

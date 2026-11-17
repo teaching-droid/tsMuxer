@@ -875,26 +875,39 @@ int LPCMStreamReader::decodeWaveHeader(uint8_t* buff, uint8_t* end)
     // AC-3, DTS and other coded sound is carried over S/PDIF and HDMI as IEC 61937 bursts in 16 bit stereo PCM, and a
     // WAV can hold such a capture. It was muxed as 2.0 LPCM without a word, which a player plays as noise. A burst
     // begins with the preamble words Pa 0xF872 and Pb 0x4E1F (IEC 61937-1), stored little-endian in a WAV.
-    // Said by the reader of the track only (its number is 1 or more), not again by the one that probes the file first.
-    if (!m_burstsSaid && m_streamIndex > 0 && m_bitsPerSample == 16 && !m_srcBits && m_channels == 2 &&
-        end - curPos >= 4)
-    {
-        static constexpr uint8_t PREAMBLE[] = {0x72, 0xF8, 0x1F, 0x4E};
-        const uint8_t* scanEnd = curPos + (std::min)(static_cast<ptrdiff_t>(65536), end - curPos) - 4;
-        for (const uint8_t* p = curPos; p <= scanEnd; p += 4)
-            if (memcmp(p, PREAMBLE, 4) == 0)
-            {
-                m_burstsSaid = true;
-                LTRACE(LT_WARN, 2,
-                       "Warning: the WAVE file of track "
-                           << m_streamIndex
-                           << " holds coded sound, such as AC-3 or DTS, packed as IEC 61937 bursts for S/PDIF or "
-                              "HDMI, not PCM. It is muxed as 2.0 LPCM, which a player plays as noise. Take the coded "
-                              "sound out of the file first and mux that.");
-                break;
-            }
-    }
+    // A container hands its PCM on as a WAV too (Matroska A_PCM, the PCM of an MP4 or MOV file).
+    lookForBursts(curPos, end, false);
     return static_cast<int>(curPos - buff);
+}
+
+// The preamble of a burst in the samples, in the first 64 KB of them. In a Blu-ray LPCM track (htM2TS) the samples
+// are stored high byte first, so the preamble is F8 72 4E 1F. That track was muxed as noise without a word, and a
+// Matroska track was warned of as "the WAVE file". Said by the reader of the track only (its number is 1 or more),
+// not again by the one that probes the file first; the listing of the track says it.
+void LPCMStreamReader::lookForBursts(const uint8_t* p, const uint8_t* end, const bool bigEndian)
+{
+    if (m_burstsFound || m_burstScanLeft <= 0 || m_bitsPerSample != 16 || m_srcBits || m_channels != 2 || end - p < 4)
+        return;
+    static constexpr uint8_t LE[] = {0x72, 0xF8, 0x1F, 0x4E};
+    static constexpr uint8_t BE[] = {0xF8, 0x72, 0x4E, 0x1F};
+    const uint8_t* preamble = bigEndian ? BE : LE;
+    const ptrdiff_t span = (std::min)(static_cast<ptrdiff_t>(m_burstScanLeft), end - p);
+    m_burstScanLeft -= span;
+    for (const uint8_t* q = p; q + 4 <= p + span; q += 4)
+        if (memcmp(q, preamble, 4) == 0)
+        {
+            m_burstsFound = true;
+            break;
+        }
+    if (!m_burstsFound || m_burstsSaid || m_streamIndex <= 0)
+        return;
+    m_burstsSaid = true;
+    const bool file = m_containerType == ContainerType::ctNone || m_containerType == ContainerType::ctLPCM;
+    LTRACE(LT_WARN, 2,
+           "Warning: " << (file ? "the WAVE file of track " : "the PCM of track ") << m_streamIndex
+                       << " holds coded sound, such as AC-3 or DTS, packed as IEC 61937 bursts for S/PDIF or "
+                          "HDMI, not PCM. It is muxed as 2.0 LPCM, which a player plays as noise. Take the coded "
+                          "sound out of the file first and mux that.");
 }
 
 void LPCMStreamReader::setDataChunkSize(const int64_t size, const bool known)
@@ -982,6 +995,7 @@ int LPCMStreamReader::decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, i
         const int audio_data_payload_size = decodeLPCMHeader(buff);
         if (end - buff < audio_data_payload_size + 4)
             return NOT_ENOUGH_BUFFER;
+        lookForBursts(buff + 4, buff + 4 + audio_data_payload_size, true);
         if (m_demuxMode)
         {
             const int32_t newSize = convertLPCMToWAV(buff + 4, buff + 4 + audio_data_payload_size);
@@ -1104,6 +1118,8 @@ const std::string LPCMStreamReader::getStreamInfo()
             << " bit on a disc or a TS";
     else
         str << "  Bits per sample: " << m_bitsPerSample << "bit";
+    if (m_burstsFound)
+        str << "  (holds coded sound packed for S/PDIF or HDMI, IEC 61937: plays as noise)";
     return str.str();
 }
 
