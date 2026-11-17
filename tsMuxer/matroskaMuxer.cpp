@@ -404,7 +404,8 @@ void MatroskaMuxer::intAddStream(const std::string& /*streamName*/, const std::s
             {"visual-impaired", MATROSKA_ID_TRACKFLAGVISUALIMPAIRED},
             {"text-descriptions", MATROSKA_ID_TRACKFLAGTEXTDESCRIPTIONS},
             {"original", MATROSKA_ID_TRACKFLAGORIGINAL},
-            {"commentary", MATROSKA_ID_TRACKFLAGCOMMENTARY}};
+            {"commentary", MATROSKA_ID_TRACKFLAGCOMMENTARY},
+            {"enabled", MATROSKA_ID_TRACKFLAGENABLED}};
         for (const auto& [option, flagId] : OPTIONS)
             if (const auto it = params.find(option); it != params.end())
                 track.flags[flagId] = it->second.empty() || !defaultParamMeansNo(it->second) ? 1 : 0;

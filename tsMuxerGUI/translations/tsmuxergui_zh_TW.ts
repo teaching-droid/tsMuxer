@@ -4512,6 +4512,26 @@ Build the ISO anyway?</source>
         <translation>評論</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Video</source>
+        <translation>視訊</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Matroska output only: the chosen video track is written as the default one (Default = Yes), whatever its source says. A disc and a transport stream have no such flag for video.</source>
+        <translation>僅用於 Matroska 輸出：所選視訊軌會寫為預設軌（Default = 是），不論其來源如何標示。光碟與傳輸串流沒有用於視訊的此旗標。</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Enabled</source>
+        <translation>啟用</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Unticked, a player does not play the track (Matroska FlagEnabled 0).</source>
+        <translation>取消勾選時，播放器不會播放此軌（Matroska FlagEnabled 0）。</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="980"/>
         <source>The name and the flags are written to a Matroska output only.</source>
         <translation>名稱和旗標只會寫入 Matroska 輸出。</translation>

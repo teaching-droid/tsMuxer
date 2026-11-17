@@ -3989,8 +3989,9 @@ void MatroskaDemuxer::loadChapters(const std::string& fileName)
 // dropped, or not parsed, so a remux lost the forced flag of a subtitle, the HDR metadata that lives only in the
 // container (common in files from other muxers), and a display aspect ratio given by the container. Read on a handle
 // of its own, keyed by track number, as strings the muxers take or leave:
-//   srcflags    forced=1,hearing=1,visual=1,descriptions=1,original=1,commentary=1 (the flags present, with their
-//   value) srccolour   m=,r=,t=,p=,cll=,fall= and rx= ry= gx= gy= bx= by= wx= wy= lmax= lmin= (the elements present)
+//   srcflags    forced=1,hearing=1,visual=1,descriptions=1,original=1,commentary=1,enabled=0 (the flags present,
+//               with their value)
+//   srccolour   m=,r=,t=,p=,cll=,fall= and rx= ry= gx= gy= bx= by= wx= wy= lmax= lmin= (the elements present)
 //   srcdisplay  WIDTHxHEIGHT, when the file gives a display size: in pixels, or as a shape at the picture's height
 // The first picture a VC-1 track in the Video for Windows mapping shows, as a time after its first block, in the file's
 // units. Such a track holds its pictures in decode order and is timed as they are decoded: a B picture is shown at its

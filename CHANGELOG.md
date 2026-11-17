@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 54 faults of earlier versions and brings 35 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 54 faults of earlier versions and brings 37 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -89,6 +89,10 @@
 * **A default track chosen for a Matroska output was not marked when the source marks another.** Where a Matroska source marks its first audio track as the default and the Default tracks box of the window, or `default` on a meta line, chose another one, the source's choice was kept: the chosen track was written as not default, with a warning that `default` was given on two tracks. The default chosen in the meta now decides; the source's flags count only for a type of track the meta names no default for.
 
 ### Command line and window
+
+* **The default video track of a Matroska output can be chosen in the window** (#66). The "Default tracks" box on the Blu-ray tab has a Video row: the chosen video track is written with Default = Yes, whatever its source says. On the command line `default` on a video line does the same, and `default=no` clears it. A disc and a transport stream have no such flag for video. Thanks to @oniiz86.
+
+* **The Enabled flag of a Matroska track can be set**, with `enabled=no` (or `enabled`) on its line or the "Enabled" box on the Matroska tab of the track. A track a player is not to play is listed with `enabled=no`.
 
 * **The "Disc title and pictures" box of the window sat far from its label** (#30). For a disc from the source disc or without a title, the box took the right half of the row. It now sits beside its label, and the folder box fills the row where it is shown. Thanks to @NTMPowers.
 

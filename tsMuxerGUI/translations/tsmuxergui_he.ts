@@ -4652,6 +4652,26 @@ Build the ISO anyway?</source>
         <translation>פרשנות</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Video</source>
+        <translation>וידאו</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Matroska output only: the chosen video track is written as the default one (Default = Yes), whatever its source says. A disc and a transport stream have no such flag for video.</source>
+        <translation>לפלט Matroska בלבד: רצועת הווידאו שנבחרה נכתבת כרצועת ברירת המחדל (Default = כן), בלי קשר למה שהמקור אומר. לדיסק ולזרם תעבורה אין סימון כזה לווידאו.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Enabled</source>
+        <translation>מופעלת</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Unticked, a player does not play the track (Matroska FlagEnabled 0).</source>
+        <translation>כשאינה מסומנת, נגן אינו מנגן את הרצועה (Matroska FlagEnabled 0).</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="980"/>
         <source>The name and the flags are written to a Matroska output only.</source>
         <translation>השם והסימונים נכתבים רק לפלט Matroska.</translation>

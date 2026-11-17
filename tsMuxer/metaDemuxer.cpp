@@ -1153,7 +1153,8 @@ void METADemuxer::openFile(const string& streamName)
                                              "alone, such as track=1 or track=4113.")
             // The Matroska flags took any value that is not a "no" word as a yes: forced=2 and original=bogus set them
             if (paramName == "forced" || paramName == "hearing-impaired" || paramName == "visual-impaired" ||
-                paramName == "text-descriptions" || paramName == "original" || paramName == "commentary")
+                paramName == "text-descriptions" || paramName == "original" || paramName == "commentary" ||
+                paramName == "enabled")
             {
                 const string lower = strToLowerCase(addParams[paramName]);
                 if (!lower.empty() && !defaultParamMeansNo(lower) && lower != "1" && lower != "yes" &&
@@ -4352,11 +4353,11 @@ static bool isKnownTrackParam(const std::string& name)
         "fonts-dir", "ass-as-srt", "keep-textst", "forced-pictures", "no-forced-track",
         // set internally, never written by a user, but accepted so a round tripped meta does
         // not warn. srcdefault is the source container's own default track flag.
-        "forced", "hearing-impaired", "visual-impaired", "text-descriptions", "original", "commentary", "srclang",
-        "srclangbcp47", "srcdefault", "srcname", "srcflags", "srccolour", "srcdisplay", "srcendpadding", "srcpgsrate",
-        "srccrop", "srcfieldorder", "srcprojection", "srccodecdelay", "srcvideolead", "srcopusskip", "srcrighteye",
-        "langbcp47", "srcvpxprivate", "srccodecid", "srcstartdelay", "srcstereomode", "srcalphamode", "srcstartms",
-        "srcaacsbr", "srcstartknown",
+        "forced", "hearing-impaired", "visual-impaired", "text-descriptions", "original", "commentary", "enabled",
+        "srclang", "srclangbcp47", "srcdefault", "srcname", "srcflags", "srccolour", "srcdisplay", "srcendpadding",
+        "srcpgsrate", "srccrop", "srcfieldorder", "srcprojection", "srccodecdelay", "srcvideolead", "srcopusskip",
+        "srcrighteye", "langbcp47", "srcvpxprivate", "srccodecid", "srcstartdelay", "srcstereomode", "srcalphamode",
+        "srcstartms", "srcaacsbr", "srcstartknown",
         // a part of a playlist's PG track (an eye of a stereo subtitle, an aligned subtitle), a picture-in-picture one
         "srcpgpart", "srcpip"};
     return known.find(name) != known.end();

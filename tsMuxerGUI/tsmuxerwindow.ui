@@ -1011,6 +1011,19 @@
                 </property>
                </widget>
               </item>
+              <item row="3" column="0">
+               <widget class="QCheckBox" name="mkvFlagEnabled">
+                <property name="toolTip">
+                 <string>Unticked, a player does not play the track (Matroska FlagEnabled 0).</string>
+                </property>
+                <property name="text">
+                 <string>Enabled</string>
+                </property>
+                <property name="checked">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
              </layout>
             </item>
             <item>
@@ -2095,6 +2108,29 @@
               </item>
               <item row="0" column="1" colspan="2">
                <widget class="QComboBox" name="defaultAudioTrackComboBox">
+                <property name="enabled">
+                 <bool>false</bool>
+                </property>
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="0">
+               <widget class="QCheckBox" name="defaultVideoTrackCheckBox">
+                <property name="toolTip">
+                 <string>Matroska output only: the chosen video track is written as the default one (Default = Yes), whatever its source says. A disc and a transport stream have no such flag for video.</string>
+                </property>
+                <property name="text">
+                 <string>Video</string>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1" colspan="2">
+               <widget class="QComboBox" name="defaultVideoTrackComboBox">
                 <property name="enabled">
                  <bool>false</bool>
                 </property>
@@ -3445,6 +3481,22 @@ p, li { white-space: pre-wrap; }
     <hint type="destinationlabel">
      <x>635</x>
      <y>492</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>defaultVideoTrackCheckBox</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>defaultVideoTrackComboBox</receiver>
+   <slot>setEnabled(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>569</x>
+     <y>520</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>635</x>
+     <y>518</y>
     </hint>
    </hints>
   </connection>

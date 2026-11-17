@@ -101,16 +101,16 @@ struct QtvCodecInfo
     // how many tracks the listing of its file gave
     qint64 sizeBytes = -1;
     int fileTracks = 0;
-    // For a Matroska output: the track's name (track-name=) and its six flags (forced, hearing-impaired,
-    // visual-impaired, text-descriptions, original, commentary, in that order). The src values are what the source
-    // said, which tsMuxeR keeps by itself, so the meta carries only what was changed.
+    // For a Matroska output: the track's name (track-name=) and its seven flags (forced, hearing-impaired,
+    // visual-impaired, text-descriptions, original, commentary, enabled, in that order; enabled is set by default). The
+    // src values are what the source said, which tsMuxeR keeps by itself, so the meta carries only what was changed.
     QString trackName;
     QString srcTrackName;
     // The language tsMuxeR listed for the source track. A Matroska output left without lang= keeps the source's own
     // language, its BCP 47 tag included, which a three letter lang= would replace.
     QString srcLang;
-    bool mkvFlags[6] = {};
-    bool srcMkvFlags[6] = {};
+    bool mkvFlags[7] = {false, false, false, false, false, false, true};
+    bool srcMkvFlags[7] = {false, false, false, false, false, false, true};
 };
 
 #endif

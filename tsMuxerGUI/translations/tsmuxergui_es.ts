@@ -4653,6 +4653,26 @@ Mantener la imagen en torno a 66 GB (las dos primeras capas) mejora las probabil
         <translation>Comentario</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Video</source>
+        <translation>Vídeo</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Matroska output only: the chosen video track is written as the default one (Default = Yes), whatever its source says. A disc and a transport stream have no such flag for video.</source>
+        <translation>Solo para una salida Matroska: la pista de vídeo elegida se escribe como la pista predeterminada (Default = Sí), diga lo que diga su origen. Un disco y un flujo de transporte no tienen esa marca para el vídeo.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Enabled</source>
+        <translation>Activada</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Unticked, a player does not play the track (Matroska FlagEnabled 0).</source>
+        <translation>Sin marcar, un reproductor no reproduce la pista (Matroska FlagEnabled 0).</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="980"/>
         <source>The name and the flags are written to a Matroska output only.</source>
         <translation>El nombre y los indicadores solo se escriben en una salida Matroska.</translation>

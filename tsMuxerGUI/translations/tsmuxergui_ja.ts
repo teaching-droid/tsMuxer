@@ -4652,6 +4652,26 @@ Build the ISO anyway?</source>
         <translation>コメンタリー</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Video</source>
+        <translation>ビデオ</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Matroska output only: the chosen video track is written as the default one (Default = Yes), whatever its source says. A disc and a transport stream have no such flag for video.</source>
+        <translation>Matroska 出力のみ: 選んだビデオトラックを、ソースの指定にかかわらず既定のトラック (Default = はい) として書き込みます。ディスクとトランスポートストリームにはビデオ用のこのフラグがありません。</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Enabled</source>
+        <translation>有効</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Unticked, a player does not play the track (Matroska FlagEnabled 0).</source>
+        <translation>チェックを外すと、プレーヤーはこのトラックを再生しません (Matroska FlagEnabled 0)。</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="980"/>
         <source>The name and the flags are written to a Matroska output only.</source>
         <translation>名前とフラグはMatroska出力にのみ書き込まれます。</translation>

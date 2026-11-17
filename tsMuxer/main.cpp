@@ -1041,7 +1041,8 @@ void detectStreamReader(const char* fileName, MPLSParser* mplsParser, bool isSub
                 static const std::pair<const char*, const char*> NAMES[] = {
                     {"forced=1", "forced"},          {"hearing=1", "hearing-impaired"},
                     {"visual=1", "visual-impaired"}, {"descriptions=1", "text-descriptions"},
-                    {"original=1", "original"},      {"commentary=1", "commentary"}};
+                    {"original=1", "original"},      {"commentary=1", "commentary"},
+                    {"enabled=0", "enabled=no"}};
                 std::string set;
                 for (const std::string& item : splitStr(streams[i].flags.c_str(), ','))
                     for (const auto& [src, option] : NAMES)

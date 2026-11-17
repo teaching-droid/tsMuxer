@@ -256,9 +256,9 @@ QString TI_DEFAULT_TAB_NAME() { return TsMuxerWindow::tr("General track options"
 
 QString TI_MKV_TAB_NAME() { return TsMuxerWindow::tr("Matroska options"); }
 
-// The meta keys of the six Matroska track flags, in the order of QtvCodecInfo::mkvFlags.
-const char* const MKV_FLAG_KEYS[6] = {"forced",   "hearing-impaired", "visual-impaired", "text-descriptions",
-                                      "original", "commentary"};
+// The meta keys of the seven Matroska track flags, in the order of QtvCodecInfo::mkvFlags.
+const char* const MKV_FLAG_KEYS[7] = {"forced",   "hearing-impaired", "visual-impaired", "text-descriptions",
+                                      "original", "commentary",       "enabled"};
 
 QString TS_SAVE_DIALOG_FILTER() { return makeFileFilter({{TsMuxerWindow::tr("Transport Stream"), {"ts"}}}); }
 
@@ -1137,7 +1137,7 @@ TsMuxerWindow::TsMuxerWindow()
         new QRegularExpressionValidator(QRegularExpression(QStringLiteral("[^\"]*")), ui->mkvTrackNameEdit));
     connect(ui->mkvTrackNameEdit, &QLineEdit::textChanged, this, &TsMuxerWindow::onMkvTrackOptionsChanged);
     for (QCheckBox* box : {ui->mkvFlagForced, ui->mkvFlagHearing, ui->mkvFlagVisual, ui->mkvFlagTextDesc,
-                           ui->mkvFlagOriginal, ui->mkvFlagCommentary})
+                           ui->mkvFlagOriginal, ui->mkvFlagCommentary, ui->mkvFlagEnabled})
         connect(box, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::onMkvTrackOptionsChanged);
     connect(ui->offsetsComboBox, comboBoxIndexChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
     connect(ui->forcedComboBox, comboBoxIndexChanged, this, &TsMuxerWindow::onAudioSubtitlesParamsChanged);
@@ -1524,6 +1524,8 @@ TsMuxerWindow::TsMuxerWindow()
     connect(ui->defaultSubTrackComboBox, comboBoxIndexChanged, this, &TsMuxerWindow::updateMetaLines);
     connect(ui->defaultAudioTrackCheckBox, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::updateMetaLines);
     connect(ui->defaultSubTrackCheckBox, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::updateMetaLines);
+    connect(ui->defaultVideoTrackComboBox, comboBoxIndexChanged, this, &TsMuxerWindow::updateMetaLines);
+    connect(ui->defaultVideoTrackCheckBox, &QCheckBox::checkStateChanged, this, &TsMuxerWindow::updateMetaLines);
     connect(ui->defaultSubTrackForcedOnlyCheckBox, &QCheckBox::checkStateChanged, this,
             &TsMuxerWindow::updateMetaLines);
     connect(ui->pipTransparencySpinBox, spinBoxValueChanged, this, &TsMuxerWindow::updateMetaLines);
@@ -3449,9 +3451,14 @@ void TsMuxerWindow::onTsMuxerCodecInfoReceived()
             if (codecInfo)
                 for (const QString& flag :
                      QtCompat::strMid(procStdOutput[i], QString("Stream flags: ").length()).split(", "))
+                {
                     for (int k = 0; k < 6; ++k)
                         if (flag == QLatin1String(MKV_FLAG_KEYS[k]))
                             codecInfo->mkvFlags[k] = codecInfo->srcMkvFlags[k] = true;
+                    // a track the source marks as one a player does not play
+                    if (flag == QLatin1String("enabled=no"))
+                        codecInfo->mkvFlags[6] = codecInfo->srcMkvFlags[6] = false;
+                }
             continue;
         }
         p = procStdOutput[i].indexOf("Track ID:    ");
@@ -4058,6 +4065,13 @@ void TsMuxerWindow::addTrackToDefaultComboBox(int trackRowIdx)
     {
         ui->defaultAudioTrackComboBox->addItem(text, trackRowIdx);
     }
+    // A video track as a Matroska output writes it: the second view of 3D (MVC) and the second layer of a dual layer
+    // Dolby Vision track are folded into the first, and are no track of their own.
+    else if (codecInfo->programName.startsWith('V') && codecInfo->subTrack < 2 &&
+             !codecInfo->programName.contains(QLatin1String("MVC")))
+    {
+        ui->defaultVideoTrackComboBox->addItem(text, trackRowIdx);
+    }
     else if (codecInfo->programName.startsWith('S'))
     {
         ui->defaultSubTrackComboBox->addItem(text, trackRowIdx);
@@ -4100,8 +4114,15 @@ void TsMuxerWindow::removeTrackFromDefaultComboBox(int trackRowIdx)
         removeTrackFromDefaultComboBox(ui->defaultSubTrackComboBox, ui->defaultSubTrackCheckBox, comboBoxIdx,
                                        trackRowIdx);
     }
+    comboBoxIdx = ui->defaultVideoTrackComboBox->findData(trackRowIdx);
+    if (comboBoxIdx != -1)
+    {
+        removeTrackFromDefaultComboBox(ui->defaultVideoTrackComboBox, ui->defaultVideoTrackCheckBox, comboBoxIdx,
+                                       trackRowIdx);
+    }
     fixupIndices(ui->defaultAudioTrackComboBox, trackRowIdx);
     fixupIndices(ui->defaultSubTrackComboBox, trackRowIdx);
+    fixupIndices(ui->defaultVideoTrackComboBox, trackRowIdx);
 }
 
 void TsMuxerWindow::updateTracksComboBox(QComboBox* comboBox)
@@ -4118,14 +4139,17 @@ void TsMuxerWindow::moveTrackInDefaultComboBox(int oldTrackRowIdx, int newTrackR
 {
     auto currentSubTrack = ui->defaultSubTrackComboBox->currentData();
     auto currentAudioTrack = ui->defaultAudioTrackComboBox->currentData();
+    auto currentVideoTrack = ui->defaultVideoTrackComboBox->currentData();
     ui->defaultSubTrackComboBox->clear();
     ui->defaultAudioTrackComboBox->clear();
+    ui->defaultVideoTrackComboBox->clear();
     for (int i = 0; i < ui->trackLV->rowCount(); ++i)
     {
         addTrackToDefaultComboBox(i);
     }
     postMoveComboBoxUpdate(ui->defaultAudioTrackComboBox, currentAudioTrack, oldTrackRowIdx, newTrackRowIdx);
     postMoveComboBoxUpdate(ui->defaultSubTrackComboBox, currentSubTrack, oldTrackRowIdx, newTrackRowIdx);
+    postMoveComboBoxUpdate(ui->defaultVideoTrackComboBox, currentVideoTrack, oldTrackRowIdx, newTrackRowIdx);
 }
 
 void TsMuxerWindow::postMoveComboBoxUpdate(QComboBox* comboBox, const QVariant& preMoveIndex, int oldIndex,
@@ -4231,6 +4255,7 @@ void TsMuxerWindow::onAudioSubtitlesParamsChanged()
     // is disturbed.
     updateTracksComboBox(ui->defaultAudioTrackComboBox);
     updateTracksComboBox(ui->defaultSubTrackComboBox);
+    updateTracksComboBox(ui->defaultVideoTrackComboBox);
 
     updateMetaLines();
 }
@@ -4474,9 +4499,9 @@ void TsMuxerWindow::showMkvTrackOptions(const QtvCodecInfo* codecInfo)
 {
     ui->tabWidgetTracks->addTab(ui->tabSheetMkv, TI_MKV_TAB_NAME());
     ui->mkvTrackNameEdit->setText(codecInfo->trackName);
-    QCheckBox* const boxes[6] = {ui->mkvFlagForced,   ui->mkvFlagHearing,  ui->mkvFlagVisual,
-                                 ui->mkvFlagTextDesc, ui->mkvFlagOriginal, ui->mkvFlagCommentary};
-    for (int k = 0; k < 6; ++k) boxes[k]->setChecked(codecInfo->mkvFlags[k]);
+    QCheckBox* const boxes[7] = {ui->mkvFlagForced,   ui->mkvFlagHearing,    ui->mkvFlagVisual, ui->mkvFlagTextDesc,
+                                 ui->mkvFlagOriginal, ui->mkvFlagCommentary, ui->mkvFlagEnabled};
+    for (int k = 0; k < 7; ++k) boxes[k]->setChecked(codecInfo->mkvFlags[k]);
     updateMkvTrackOptionsEnabled();
 }
 
@@ -4504,7 +4529,8 @@ void TsMuxerWindow::updateMkvTrackOptionsEnabled()
     for (QWidget* w : {static_cast<QWidget*>(ui->mkvTrackNameLabel), static_cast<QWidget*>(ui->mkvTrackNameEdit),
                        static_cast<QWidget*>(ui->mkvFlagForced), static_cast<QWidget*>(ui->mkvFlagHearing),
                        static_cast<QWidget*>(ui->mkvFlagVisual), static_cast<QWidget*>(ui->mkvFlagTextDesc),
-                       static_cast<QWidget*>(ui->mkvFlagOriginal), static_cast<QWidget*>(ui->mkvFlagCommentary)})
+                       static_cast<QWidget*>(ui->mkvFlagOriginal), static_cast<QWidget*>(ui->mkvFlagCommentary),
+                       static_cast<QWidget*>(ui->mkvFlagEnabled)})
         w->setEnabled(mkv);
 }
 
@@ -4516,9 +4542,10 @@ void TsMuxerWindow::onMkvTrackOptionsChanged()
     if (!codecInfo)
         return;
     codecInfo->trackName = ui->mkvTrackNameEdit->text();
-    const QCheckBox* const boxes[6] = {ui->mkvFlagForced,   ui->mkvFlagHearing,  ui->mkvFlagVisual,
-                                       ui->mkvFlagTextDesc, ui->mkvFlagOriginal, ui->mkvFlagCommentary};
-    for (int k = 0; k < 6; ++k) codecInfo->mkvFlags[k] = boxes[k]->isChecked();
+    const QCheckBox* const boxes[7] = {ui->mkvFlagForced,   ui->mkvFlagHearing,  ui->mkvFlagVisual,
+                                       ui->mkvFlagTextDesc, ui->mkvFlagOriginal, ui->mkvFlagCommentary,
+                                       ui->mkvFlagEnabled};
+    for (int k = 0; k < 7; ++k) codecInfo->mkvFlags[k] = boxes[k]->isChecked();
     updateMetaLines();
 }
 
@@ -7651,10 +7678,15 @@ QString TsMuxerWindow::buildMetaText()
                 name.remove(QLatin1Char('"'));
                 postfix += QString(", track-name=") + quoteStr(name);
             }
-            for (int k = 0; k < 6; ++k)
+            for (int k = 0; k < 7; ++k)
                 if (codecInfo->mkvFlags[k] != codecInfo->srcMkvFlags[k])
                     postfix += QString(", ") + MKV_FLAG_KEYS[k] + (codecInfo->mkvFlags[k] ? "" : "=0");
         }
+        // The video track chosen as the default one (#66): Matroska only, as a disc and a transport stream have no such
+        // flag for video. It stands above the source's own flag, as the audio and subtitle choices do.
+        if (ui->radioButtonMKV->isChecked() && ui->defaultVideoTrackCheckBox->isChecked() &&
+            ui->defaultVideoTrackComboBox->currentData().toInt() == i && codecInfo->programName.startsWith('V'))
+            postfix += QString(", default");
         if (isVideoCodec(codecInfo->displayName))
             metaContent.append(prefix + getVideoMetaInfo(codecInfo) + postfix + '\n');
         else
@@ -7759,6 +7791,10 @@ void TsMuxerWindow::updateBluRayTabEnabled()
         threeD->setEnabled(disk);  // --right-eye
     if (auto* defTracks = findChild<QGroupBox*>("defaultTracksGroupBox"))
         defTracks->setEnabled(mkvOrDisk);  // default= on the track lines
+    // The video row is Matroska only: a disc plays its one video, and has no default flag for it
+    ui->defaultVideoTrackCheckBox->setEnabled(ui->radioButtonMKV->isChecked());
+    ui->defaultVideoTrackComboBox->setEnabled(ui->radioButtonMKV->isChecked() &&
+                                              ui->defaultVideoTrackCheckBox->isChecked());
 
     // Inside that group, the automatic chapters are a disc matter: --auto-chapters is turned into
     // playlist marks by createMPLSFile and is read by nothing else, so for MKV its radio and its
@@ -8044,6 +8080,7 @@ void TsMuxerWindow::deleteTrack(int idx)
     trackLVItemSelectionChanged();
     updateTracksComboBox(ui->defaultAudioTrackComboBox);
     updateTracksComboBox(ui->defaultSubTrackComboBox);
+    updateTracksComboBox(ui->defaultVideoTrackComboBox);
 }
 
 void TsMuxerWindow::updateNum() {}

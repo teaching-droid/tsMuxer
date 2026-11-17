@@ -4512,6 +4512,26 @@ Creare comunque l&apos;ISO?</translation>
         <translation>Commento</translation>
     </message>
     <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Video</source>
+        <translation>Video</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Matroska output only: the chosen video track is written as the default one (Default = Yes), whatever its source says. A disc and a transport stream have no such flag for video.</source>
+        <translation>Solo per un output Matroska: la traccia video scelta viene scritta come traccia predefinita (Default = Sì), qualunque cosa dica la sorgente. Un disco e un transport stream non hanno questo flag per il video.</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Enabled</source>
+        <translation>Abilitata</translation>
+    </message>
+    <message>
+        <location filename="../tsmuxerwindow.ui" line="0"/>
+        <source>Unticked, a player does not play the track (Matroska FlagEnabled 0).</source>
+        <translation>Se non spuntata, un lettore non riproduce la traccia (Matroska FlagEnabled 0).</translation>
+    </message>
+    <message>
         <location filename="../tsmuxerwindow.ui" line="980"/>
         <source>The name and the flags are written to a Matroska output only.</source>
         <translation>Il nome e i flag sono scritti solo in un&apos;uscita Matroska.</translation>
