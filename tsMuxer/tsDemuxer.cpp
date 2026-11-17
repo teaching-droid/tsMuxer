@@ -1870,6 +1870,7 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
     if (isFirstBlock)
     {
         m_subWaitOn = false;  // each file waits on its own video
+        m_subWaitSoundPid = -1;
         m_subWaitDone = false;
     }
     if (isFirstBlock)
@@ -2072,6 +2073,71 @@ bool TSDemuxer::videoStartSettled() const
     return false;
 }
 
+bool TSDemuxer::timedFromSound(const int pid) const
+{
+    if (m_curFileNum != 0 || m_firstVideoPTS != -1)
+        return false;
+    const auto stream = m_pmt.pidList.find(pid);
+    const int program = stream != m_pmt.pidList.end() ? stream->second.m_programNumber : -1;
+    bool sound = false;
+    for (const auto& [otherPid, info] : m_pmt.pidList)
+    {
+        if (program >= 0 && info.m_programNumber != program)
+            continue;
+        if (isVideoPID(info.m_streamType))
+            return false;
+        sound |= isSoundTrack(info);
+    }
+    return sound;
+}
+
+bool TSDemuxer::soundStartSettled(const int pid) const
+{
+    const auto stream = m_pmt.pidList.find(pid);
+    const int program = stream != m_pmt.pidList.end() ? stream->second.m_programNumber : -1;
+    bool any = false;
+    for (const auto& [otherPid, info] : m_pmt.pidList)
+    {
+        if ((program >= 0 && info.m_programNumber != program) || !isSoundTrack(info))
+            continue;
+        if (m_firstPtsTime.find(otherPid) == m_firstPtsTime.end())
+            continue;  // not begun: a track that comes in late does not move the start of the program
+        // the first PES of a track of a type of sound are taken in runs, up to 16 (m_ptsPesSeen -1: done); of any
+        // other, the start needs two PES (fileStartReference)
+        const bool inRuns = isAudioStreamType(info.m_streamType) || info.m_soundDescriptor != 0;
+        const auto seen = m_ptsPesSeen.find(otherPid);
+        if (inRuns ? seen == m_ptsPesSeen.end() || seen->second != -1 : m_pesWithTime[otherPid] < 2)
+            return false;
+        if (!trackStartSettled(otherPid))
+            return false;
+        any = true;
+    }
+    return any;
+}
+
+int64_t TSDemuxer::subtitleBase(const int pid) const
+{
+    if (m_firstVideoPTS != -1)
+        return m_firstVideoPTS;
+    const auto own = m_firstPtsTime.find(pid);
+    if (own != m_firstPtsTime.end() && timedFromSound(pid))
+    {
+        const int64_t reference = fileStartReference(pid);
+        if (reference != -1)
+        {
+            // fileStartReference is on the 33 bit clock; the times here go on across a wrap (fullPts)
+            static constexpr int64_t CLOCK_WRAP = 1LL << 33;
+            int64_t d = (reference - own->second) % CLOCK_WRAP;
+            if (d >= CLOCK_WRAP / 2)
+                d -= CLOCK_WRAP;
+            else if (d < -CLOCK_WRAP / 2)
+                d += CLOCK_WRAP;
+            return own->second + d;
+        }
+    }
+    return m_firstPTS;
+}
+
 // The subtitle packets that waited for the start of the video (m_subWait), handed on in the order they came
 void TSDemuxer::handOnWaitingSubtitles(DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,
                                        MemoryBlock*& vect, int& lastPid)
@@ -2097,6 +2163,13 @@ void TSDemuxer::handOnWaitingSubtitles(DemuxedData& demuxedData, int64_t& discar
 void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedData, int64_t& discardSize,
                             const ClipPart* part, MemoryBlock*& vect, int& lastPid)
 {
+    // a subtitle of a file without video, before the start of its program's sound is settled (subtitleBase)
+    if (!m_subWaitOn && !m_subWaitDone && !m_noSubtitleWait && !m_subHandingOn && m_firstVideoPTS == -1 &&
+        m_acceptedPidCache[pid] && isSubtitlePid(pid) && timedFromSound(pid) && !soundStartSettled(pid))
+    {
+        m_subWaitOn = true;
+        m_subWaitSoundPid = pid;
+    }
     if (m_subWaitOn && !m_subHandingOn && m_acceptedPidCache[pid] && isSubtitlePid(pid))
     {
         if (m_subWait.size() < SUB_WAIT_MAX)
@@ -2109,7 +2182,8 @@ void TSDemuxer::demuxPacket(uint8_t* pkt, const int pid, DemuxedData& demuxedDat
     demuxOnePacket(pkt, pid, demuxedData, discardSize, part, vect, lastPid);
     // the start of the video is settled: the subtitles that waited for it go on, once the PES held at the start of the
     // file are all given back and the pictures shown before the first one have come (their lowest time is the start)
-    if (m_subWaitOn && !m_givingBack && !m_subHandingOn && videoStartSettled())
+    if (m_subWaitOn && !m_givingBack && !m_subHandingOn &&
+        (videoStartSettled() || (m_subWaitSoundPid != -1 && soundStartSettled(m_subWaitSoundPid))))
         endSubtitleWait(demuxedData, discardSize, part, vect, lastPid);
 }
 
@@ -2117,6 +2191,7 @@ void TSDemuxer::endSubtitleWait(DemuxedData& demuxedData, int64_t& discardSize, 
                                 MemoryBlock*& vect, int& lastPid)
 {
     m_subWaitOn = false;
+    m_subWaitSoundPid = -1;
     m_subWaitDone = true;
     handOnWaitingSubtitles(demuxedData, discardSize, part, vect, lastPid);
 }
@@ -2540,8 +2615,8 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
             convertDvbSubtitlePes(pid, sub, demuxedData, false, discardSize);
             if ((pesPacket->flagsLo & 0x80) == 0x80)
             {
-                // on the PGS timeline: from the first video picture, joined files one after another
-                const int64_t ptsBase = m_firstVideoPTS != -1 ? m_firstVideoPTS : m_firstPTS;
+                // on the PGS timeline: from the first video picture, joined files one after another (subtitleBase)
+                const int64_t ptsBase = subtitleBase(pid);
                 sub.pts = (fullPts(pesPacket->getPts()) - ptsBase + m_prevFileLen) * INTERNAL_PTS_FREQ / 90000;
             }
             else
@@ -2559,9 +2634,7 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
                      pkt + TS_FRAME_SIZE)
         {
             // A part cut from a clip starts at its key picture, also for a subtitle read before that picture
-            const int64_t ptsBase = part != nullptr && part->startCut ? part->firstShown()
-                                    : m_firstVideoPTS != -1           ? m_firstVideoPTS
-                                                                      : m_firstPTS;
+            const int64_t ptsBase = part != nullptr && part->startCut ? part->firstShown() : subtitleBase(pid);
             if ((pesPacket->flagsLo & 0xc0) == 0xc0)
             {
                 const int64_t pts = fullPts(pesPacket->getPts()) - ptsBase + m_prevFileLen;
@@ -3204,7 +3277,7 @@ void TSDemuxer::finishAribPes(const int pid, AribPes& sub, DemuxedData& demuxedD
         return;
     int64_t reference = videoReference(pid, false);
     if (reference == -1)
-        reference = m_firstPTS;
+        reference = subtitleBase(pid);
     const int64_t at = sub.pts - reference + m_prevFileLen;
     if (at < 0)
         return;  // before the first picture of its program
@@ -3380,6 +3453,7 @@ void TSDemuxer::openFile(const std::string& streamName)
     memset(m_leadDrop, 0, sizeof(m_leadDrop));
     m_subWait.clear();
     m_subWaitOn = false;
+    m_subWaitSoundPid = -1;
     m_subWaitDone = false;
     m_partCutBeforeHold.clear();
     m_leadHeld.clear();

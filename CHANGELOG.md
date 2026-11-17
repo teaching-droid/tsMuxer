@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 60 faults of earlier versions and brings 37 new features and improvements**, each listed below. Two faults that 3.1.0 also has are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 61 faults of earlier versions and brings 37 new features and improvements**, each listed below. One fault that 3.1.0 also has is not fixed in this version: it is listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -156,6 +156,8 @@
 
 ### Subtitles
 
+* **The subtitles of a transport stream without video could come late.** In a TS with sound and subtitles but no video, the subtitles were timed from the earliest time of any packet of the file, and the sound from the start of its own program: a data or teletext packet ahead of the sound made the subtitles late by its lead, 0.5 s in a test. The subtitles of such a program are now timed from the start of its sound.
+
 * **A lone .idx file is named for what it is** (#31 K59): the index of DVD subtitles, with the .sub file to give, or the word that it is missing. It was "Can't detect stream type".
 
 * **The forced pictures of a PGS track are written as a track of their own** (#20). A Blu-ray marks the pictures a player shows also with subtitles off, such as the translation of a sign. A Matroska output writes them also as a track of their own with the forced flag, named "Forced" or after the track, and a demux writes `<name>.forced.sup` beside `<name>.sup`. The whole track stays as it is. A track gets one where it has forced pictures and others, and its language has no track marked as forced already. `no-forced-track` on the line of the track leaves it out, and `forced-pictures` gives the forced pictures alone, in any output.
@@ -220,7 +222,7 @@
 
 ### Known issues
 
-These are also in 3.1.0.
+This is also in 3.1.0.
 
 * **A made Dolby Vision layer of a stream that begins before its first parameter sets is timed as in 3.1.0.** Where a single layer Dolby Vision track whose start lost its parameter sets is written to a Blu-ray with its second layer made, the first picture that can be decoded is shown at the start of the stream, early by the pictures before it (0.5 s in a test). Written with `--no-dv-layer`, or to another output, it keeps its time.
 
@@ -229,7 +231,6 @@ These are also in 3.1.0.
 
 
 
-* **Subtitles of a transport stream without video can be out of step with the sound.** In a TS that has sound and subtitles but no video, the subtitles are timed from the earliest start of any track, not from the start of the sound.
 
 ## tsMuxeR 3.1.0
 

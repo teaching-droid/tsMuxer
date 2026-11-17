@@ -346,6 +346,18 @@ class TSDemuxer final : public AbstractDemuxer
     static constexpr size_t SUB_WAIT_MAX = 8 << 20;  // past that, they go on, counted as before
     [[nodiscard]] bool isSubtitlePid(int pid) const;
     [[nodiscard]] bool videoStartSettled() const;
+    // ** AND THE SUBTITLES OF A FILE WITHOUT VIDEO WAIT FOR THE START OF ITS SOUND. ** Such a file is placed against
+    // the start of its program's sound (fileStartReference), which the sound tracks keep (getTrackStartInFile). Its
+    // subtitles were counted from the first time of any PES of the file (m_firstPTS): a teletext or data PES before
+    // the first sound PES made them late by as much, and a subtitle PES before it made them early. They are counted
+    // from that start now (subtitleBase), and wait until it is settled: every sound track of the program that has
+    // begun has its first PES taken in runs (m_ptsPesSeen), or the file ends. Only the first file of a source, whose
+    // starts are those its sound is placed by, and a program that lists sound and no video.
+    int m_subWaitSoundPid = -1;  // the subtitle track whose program's sound start the subtitles wait for; -1: none
+    [[nodiscard]] bool timedFromSound(int pid) const;
+    [[nodiscard]] bool soundStartSettled(int pid) const;
+    // where the PGS timeline of a subtitle track begins, 90 kHz
+    [[nodiscard]] int64_t subtitleBase(int pid) const;
     void handOnWaitingSubtitles(DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part,
                                 MemoryBlock*& vect, int& lastPid);
     void endSubtitleWait(DemuxedData& demuxedData, int64_t& discardSize, const ClipPart* part, MemoryBlock*& vect,
