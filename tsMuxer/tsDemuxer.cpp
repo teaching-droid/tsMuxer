@@ -2176,9 +2176,11 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
     // before the first PES of the track in the source: the next file of a recording split by its recorder goes on
     // with the rest of the PES the file before ended in, and the files of a join are read without opening the source
     // again, so the track's first PES is still known (m_clipStartOfPid).
+    // Sound is told as the start of a file without video tells it (isSoundTrack): by its stream type, or as stream type
+    // 0x06 by the descriptor that names it. The AC-3 and E-AC-3 of a DVB recording, carried so, and Opus kept the old
+    // rule: a cut DVB recording whose first sound PES header came after two whole AC-3 frames was 64 ms late.
     if (!pesStartCode && m_clipStartOfPid.find(pid) == m_clipStartOfPid.end())
-        if (const auto info = m_pmt.pidList.find(pid);
-            info != m_pmt.pidList.end() && isAudioStreamType(info->second.m_streamType))
+        if (const auto info = m_pmt.pidList.find(pid); info != m_pmt.pidList.end() && isSoundTrack(info->second))
             return;
     if (pesStartCode)
     {

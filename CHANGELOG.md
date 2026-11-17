@@ -54,7 +54,7 @@
 
 * **The sound of a program in a multiplex could come early by the pictures before its first I picture.** The programs of a multiplex each have a clock of their own, and where the count of its wraps differed between two pictures of one video track, a B picture shown before the first I picture looked later than it: the video was measured from the I picture, and the sound came early by the pictures between (84 ms on a recording). The two times are now compared as the clock counts them.
 
-* **The sound of a cut transport stream could come late by a frame or two.** Where a recording is cut inside a sound PES, the whole frames of that PES before the first PES header were muxed with the time of that header, so the sound came late by them: 64 ms in a test. A sound track now begins with its first PES, as in a part of a playlist.
+* **The sound of a cut transport stream could come late by a frame or two.** Where a recording is cut inside a sound PES, the whole frames of that PES before the first PES header were muxed with the time of that header, so the sound came late by them: 64 ms in a test. A sound track now begins with its first PES, as in a part of a playlist. This also applies to the AC-3 and E-AC-3 tracks of DVB broadcasts, and to Opus.
 
 ### VOB and MPEG program stream
 
