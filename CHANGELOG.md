@@ -1,6 +1,6 @@
 ## tsMuxeR 3.2.0
 
-**3.2.0 fixes 61 faults of earlier versions and brings 37 new features and improvements**, each listed below. One case is not fixed in this version: it is listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**3.2.0 fixes 64 faults of earlier versions and brings 37 new features and improvements**, each listed below. One case is not fixed in this version: it is listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 ### Discs and disc images
 
@@ -26,9 +26,9 @@
 
 * **Each track of a TS or disc output is named with its PID** in the log, with its kind, its language and, for HEVC, SDR, HDR10, HDR10+ or Dolby Vision. Thanks to Coopervid.
 
-* **AV1 in a transport stream that names no codec for it is listed and muxed, also cut.** A transport stream can carry AV1 under stream type 0x06 without any descriptor, in the low overhead format, as some muxers write it. Such a track was listed with "Can't detect stream type", and a cut of it was refused even with a `V_AV1` line. It is now found by its data, from its first whole OBU, and muxed whole or cut, also from a file without a PAT. A track of that type that holds other data is not taken for AV1. (#57) Thanks to @Moonghost-coder.
+* **AV1 in a transport stream that names no codec for it is listed and muxed, also cut.** A transport stream can carry AV1 under stream type 0x06 without any descriptor, in the low overhead format, as some muxers write it. A whole file of it was muxed, but 5 of 12 cuts of a test file failed, and a cut whose AV1 has start codes was listed with "Can't detect stream type" and refused even with a `V_AV1` line. It is now found by its data, from its first whole OBU, and muxed whole or cut, also from a file without a PAT. A track of that type that holds other data is not taken for AV1. (#57) Thanks to @Moonghost-coder.
 
-* **A damaged transport stream could make tsMuxeR read past the end of its data.** A packet whose adaptation field fills it holds no data, and the start of a PES was looked for behind it, past the end of the memory where the packet had been held back at the start of its track; a PES header could be read on past its packet; and the program number of a program map of a few bytes was read past its end. Each is read only as far as it goes now.
+* **A damaged transport stream could make tsMuxeR read past the end of its data.** A packet whose adaptation field fills it holds no data, and the start of a PES was looked for behind it, past the end of the memory where the packet had been held back at the start of its track; and the program number of a program map of a few bytes was read past its end. Each is read only as far as it goes now.
 
 * **The sound of AV1 in a transport stream could come early.** Where the sound of an AV1 film in a transport stream starts after its picture, it was muxed from the picture's start, without its delay, where the meta file gave no `timeshift=`: 300 ms early in a test, though the listing gave the delay right. The sound now keeps its delay.
 
@@ -48,7 +48,7 @@
 
 * **The sound of a transport stream without video could be listed hours late.** A stray PES in front of the sound, with a time far from the rest (left over by a receiver, or damaged), or a lone PES of another track, was taken as the start of the file: both tracks of a test file were listed 3 hours late, and the window wrote that as their timeshift=. They are measured against the earliest sound of their program now, as the mux places them.
 
-* **A cut MPEG-2 recording had its picture early and its sound late.** A transport stream of MPEG-2 video that begins inside a group of pictures, as nearly every cut TV recording does, started its video at the time of pictures that are left out: the sound came late by as much, 0.07 to 1.4 s on 20 of 24 broadcast recordings, in every output. The video now starts at its first sequence header, as H.264 does at its first parameter sets since 3.1.0: 19 of the 20 are in step, and the last is 83 ms off, where it was 0.5 s.
+* **A cut MPEG-2 recording had its picture early and its sound late.** A transport stream of MPEG-2 video that begins inside a group of pictures, as nearly every cut TV recording does, started its video at the time of pictures that are left out: the sound came late by as much, 0.07 to 1.4 s on 20 of 24 broadcast recordings, in every output. The video now starts at its first sequence header, as H.264 does at its first parameter sets since 3.1.0: all 20 are in step.
 
 * **A program of sound alone in a multiplex was listed with a delay of hours.** A radio service or a sound feed beside the television programs of a transport stream was measured against the video of another program, on another clock. Its tracks are now measured against the earliest of their own program.
 
@@ -62,7 +62,7 @@
 
 * **The delay a program stream's sound was listed with could be wrong**, and the window writes it as `timeshift=`. A file cut inside a group of pictures was measured from pictures the mux leaves out (-490 ms where -610 ms is right), a file whose first part is a short clip before its clock starts again from the second part (110 ms where 300 ms is right), and a file whose clock turns over at its start was off by the turn (38 ms where 110 ms is right). The delay is now measured from the first picture the mux keeps, in the first part of the file.
 
-* **An encrypted file after the first of a join was muxed as successful.** Only the first file of a join, or of a playlist, was tested for encryption, so an encrypted VOB or .m2ts after it was muxed as noise with "Mux successful complete". Every file is tested now.
+* **An encrypted file after the first of a join or a playlist was muxed as successful.** Only the first file of a join of VOB files, and only the first clip of a playlist, was tested for encryption, so an encrypted VOB or .m2ts after it was muxed as noise with "Mux successful complete". Every file is tested now.
 
 ### MP4 and MOV input
 
@@ -74,9 +74,9 @@
 
 * **A whole track of a cut-off MP4 could not be muxed.** Where a file stores its tracks one after the other and is cut off in the last one, a job that muxed only the whole one, as the video of a file whose sound comes after it, was refused for the track it does not mux. Only the tracks the job muxes are judged now, at the places it muxes them; a fragmented file, whose later fragments are missing for every track, stops the job for any of its tracks.
 
-* **A join of files of different codecs could be muxed as successful.** Where the tracks of a join are named by `track=`, as for MP4, Matroska and transport stream files, a file of another video codec was not checked: H.264 joined to HEVC gave only the pictures of the first file. A DTS file joined to an AC-3 file on a DTS line lost the AC-3 file without a word. Each file of a join is now checked, and a file of another codec stops the mux before anything is written. (#65) Thanks to @Moonghost-coder.
+* **A join of files of different codecs could be muxed as successful.** Where the tracks of a join are named by `track=`, as for MP4 and Matroska files, a file of another video codec was not checked: H.264 joined to HEVC gave only the pictures of the first file. A DTS file joined to an AC-3 file on a DTS line lost the AC-3 file without a word. Each file of a join is now checked, and a file of another codec stops the mux before anything is written. (#65) Thanks to @Moonghost-coder.
 
-* **The sound and subtitles of a fragmented MP4 without fragment start times came late.** A fragmented file whose fragments do not give their start time (a tfdt box), as MP4Box writes it with -frag, counted the start of its video edit list twice: the sound and the subtitles came 80 ms late with two B pictures. Such a file now gives the same times as the same streams in an ordinary MP4.
+* **The sound of a fragmented MP4 without fragment start times came late.** A fragmented file whose fragments do not give their start time (a tfdt box), as MP4Box writes it with -frag, counted the start of its video edit list twice: the sound came 80 ms late with two B pictures. Such a file now gives the same times as the same streams in an ordinary MP4.
 
 * **The subtitles of a fragmented MP4 could come late.** A text track in fragments was timed by adding up the lengths of its samples, not by the start each fragment gives. Where a sample runs past the start of the next fragment, as in a DASH file of MP4Box with a gap before the first subtitle, every later subtitle came that much late: 0.92 s in a test. Each subtitle now comes at the time its fragment gives.
 
@@ -98,7 +98,7 @@
 
 * **The default video track of a Matroska output can be chosen in the window** (#66). The "Default tracks" box on the Blu-ray tab has a Video row: the chosen video track is written with Default = Yes, whatever its source says. On the command line `default` on a video line does the same, and `default=no` clears it. A disc and a transport stream have no such flag for video. Thanks to @oniiz86.
 
-* **The Enabled flag of a Matroska track can be set**, with `enabled=no` (or `enabled`) on its line or the "Enabled" box on the Matroska tab of the track. A track a player is not to play is listed with `enabled=no`.
+* **The Enabled flag of a Matroska track can be set**, with `enabled=no` (or `enabled`) on its line or the "Enabled" box on the "Matroska options" tab of the track. A track a player is not to play is listed with `enabled=no`.
 
 * **The "Disc title and pictures" box of the window sat far from its label** (#30). For a disc from the source disc or without a title, the box took the right half of the row. It now sits beside its label, and the folder box fills the row where it is shown. Thanks to @NTMPowers.
 
@@ -128,7 +128,7 @@
 
 * **The window asks before a disc is written with a codec a Blu-ray does not have.** AAC, MPEG audio (MP2, MP3) and VVC can be muxed to a disc, and a disc player will most likely not play them. That was a line of the log; the window now asks before the mux, with "Write the disc anyway" and Cancel. (#60)
 
-* **The Note column of "Choose a title" is in the language of the window** (#31 K58), also for the titles left out and for DVD titles, and a folder that holds several discs is answered with a box that says so and names the discs.
+* **The Note column of "Choose a title" is in the language of the window**, also for the titles left out and for DVD titles, and a folder that holds several discs is answered with a box that says so and names the discs.
 
 * **A source given in place of the meta file made tsMuxeR run for minutes without a word.** It is now muxed (see above), or refused with the reason.
 
@@ -146,9 +146,13 @@
 
 * **Sound a Blu-ray does not carry can be converted, by your own ffmpeg.** AAC, MP2, MP3, Opus, Vorbis, FLAC, ALAC, WavPack and LPCM at another rate are converted to AC-3 or LPCM before the mux, so a disc player plays them. `convert=ac3`, `convert=ac3:448`, `convert=lpcm:24` on a track's line, or `--convert-audio=ac3` for every such track of a Blu-ray or AVCHD output. AC-3 gets a rate a step above that of a lossy track, the most for a lossless one; LPCM keeps the bits and rate of the track where a disc takes them. `:stereo` makes the sound stereo, and `stereo=ac3` (or `--convert-stereo=both`) adds a stereo track beside a track of more channels. The converted sound keeps its place against the picture. ffmpeg is not part of tsMuxeR: give it with `--ffmpeg`, or put it beside tsMuxeR or on the search path. A track of a join, a playlist or a disc title is not converted. In the window, the General tab has the setting (Ask me, AC-3, LPCM, or leave the sound as it is), with the channels and the rate; with Ask me, Start muxing asks once for all such tracks, and "Remember my choice" keeps the answer.
 
+* **Sound with damaged frames came early.** An AC-3 or E-AC-3 frame whose check sum is wrong, as a damaged disc gives, was left out, and every frame after it came one frame (32 ms) early: behind 30 such frames the sound ran 960 ms ahead of the picture, from a TS, a Matroska file or a demuxed track alike. Such a frame is now kept in its place, with a warning, and a player mutes or hides it as a disc player does. (#67) Thanks to @Nandos64.
+
+* **Sound after lost or damaged sound packets of a transport stream came early.** Where packets of a sound track of a TS or M2TS were lost, or garbled so that its frames could not be read, as on a damaged disc or in a recording with drop-outs, the sound after them came early by as much as was lost, to the end: 1 s of AC-3 packets gone, and the sound ran 960 ms ahead of the picture. The sound after such a loss now goes on at the time its packets give, for AC-3, E-AC-3, DTS, MPEG audio and AAC, also as a DVB recording carries them. Where the picture lost data at the same place, the sound stays with the picture, as before; a damaged time in one packet, or a jump of the clock, moves nothing. (#67) Thanks to @Nandos64.
+
 * **AC-3 packed for a digital output inside a WAV was muxed as noise.** A WAVE file whose samples hold AC-3 or E-AC-3 as IEC 61937 bursts, as made to be played over S/PDIF or HDMI, was listed as LPCM and muxed as LPCM, with a warning that it plays as noise. Its frames are now taken out, and the track is the AC-3 or E-AC-3 the file holds.
 
-* **AC-3 or DTS packed for a digital output in the LPCM track of an M2TS was muxed as noise without a word.** Such a track, and the PCM track of a Matroska file that holds such bursts, now gets a warning at the mux that it plays as noise, and the listing notes it where its first frames show the bursts. The bursts are not taken out of a container's track.
+* **AC-3 or DTS packed for a digital output in the LPCM track of an M2TS was muxed as noise without a word.** Such a track now gets a warning at the mux that it plays as noise, as the PCM track of a Matroska file that holds such bursts did already, and the listing notes both where their first frames show the bursts. The bursts are not taken out of a container's track.
 
 * **Opus written to a transport stream was 6.5 ms late** for a usual encoder, and its padding at the end was played where a video track stood beside it. The time of an access unit now goes on by the samples the one before it keeps, and the last access unit says the samples to leave out.
 
@@ -174,7 +178,9 @@
 
 * **Text subtitles drawn at 24, 30 or 60 fps came early,** by 0.1 %: 2.7 s at the end of 45 minutes. The rate was taken as 23.976, 29.97 or 59.94, the first standard rate near the one given, while the pictures said 24, 30 or 60. The nearest rate is taken now, for drawn text and for DVD and DVB subtitle pictures alike.
 
-* **A damaged PGS stream could end tsMuxeR without a message.** Where a PGS track is drawn again at another size, a later composition with a larger picture than the first, a run of pixels without an end of line, or a segment cut short was written or read outside its buffer. Such a stream is now read within its buffers. `video-width` without `video-height` on a PGS line, which ended the same way, is refused with the reason.
+* **DVD subtitles of an NTSC .idx and .sub pair came late with `fps=` on their line.** A .sub file holds no video, so the frame rate of its pictures is a guess from their height: 25 for 576 lines, 29.97 for the others. `fps=` converted the times from that guess, as the window writes it for a pair muxed with an encode of the film: beside a video of 23.976 fps every subtitle of an NTSC pair came 25 % late, the one at 100 s at 125 s. An NTSC DVD is not sped up, so the times of such a pair now stay, and `fps=` gives the rate of the pictures. A PAL pair is converted from 25 as before.
+
+* **A damaged PGS stream could end tsMuxeR without a message.** Where a PGS track is drawn again at another size, a later composition with a larger picture than the first, or a run of pixels without an end of line, was written outside its buffer, and the program ended without a message; a stream that ends in a segment cut short stopped the mux. Such a stream is now read within its buffers. `video-width` without `video-height` on a PGS line, which ended the same way, is refused with the reason.
 
 * **A PGS track drawn again at another size lost the forced mark of single objects.** A picture that shows a forced subtitle and another one at the same time was written as one object, marked as forced: a player that shows the forced subtitles alone showed the other one with them. The two stay two objects, each with its own mark, where they stand apart at the new size.
 
@@ -194,7 +200,7 @@
 
 * **The film of an H.264 transport stream could begin with its second group of pictures.** Where the first parameter sets of a recording come after a large SEI, as x264 writes its settings in front of them, the first PES was taken for one without them and left out with its pictures: the film began 2 s late, and the listing gave the sound a delay of -1861 ms where +139 ms is right. The whole start of the PES is looked at now.
 
-* **A cut placed exactly on a key picture could begin one key picture too early.** Where a file gives the length of a picture rounded, as a Matroska file does, its pictures stand a little after their place, and `--cut-start` at the time of a key picture took the key picture before it: seconds of film that were to be cut away.
+* **A cut placed exactly on a key picture could begin one key picture too early.** Where a file gives the length of a picture rounded, as a Matroska file does, its pictures can stand a little after their place, and `--cut-start` at the time of a key picture took the key picture before it: seconds of film that were to be cut away.
 
 * **HEVC video that begins inside an open group stood late from its first IDR picture on.** A stream that begins with a CRA picture and the pictures that lead it, as a cut of an open group does, and has an IDR picture later, had every picture from that IDR picture on as many pictures late as it has leading pictures at its start (with 3 of them, 125 ms at 24 pictures a second) against the sound, with a hole of that length in the picture times. The first IDR picture now follows the pictures before it. Such a stream also had pictures shown before they were decoded where it has more than a few leading pictures (19 of them with 15), and where its pictures are large the second picture had the decoding time of the first.
 
@@ -206,13 +212,13 @@
 
 * **A damaged HEVC stream could grow many times its size.** Where the HDR metadata of a stream comes only once, it is put in front of each key picture. A key picture with a damaged first slice got it again and again: a stream of 400 KB came out at 8.6 MB and took 26 s. The metadata now goes only in front of a slice that is read.
 
-* **A join of video files of different frame rates was muxed without a word.** All the pictures of a join are timed at one rate, so 1080p at 25 fps joined to 1080p at 24 played its second part 4 % slow and out of step with its sound. tsMuxeR now says so.
+* **A join of video files of different frame rates was muxed without a word.** All the pictures of a join are timed at one rate, so 1080p at 24 fps joined to 1080p at 25 played its second part 4 % slow and out of step with its sound. tsMuxeR now says so.
 
 ### Packages
 
 * **A Windows package of two stand-alone programs.** Beside the usual package there is one with `tsMuxeR.exe` and `tsMuxerGUI.exe` alone, each a single file without libraries beside it. ASS subtitles are drawn in the simpler way there, as the library for them is a set of files of its own.
 
-* **A Docker image of the command line.** `ghcr.io/teaching-droid/tsmuxer`, for x86-64, such as a NAS. The folder mounted at `/storage` is the working folder; the program writes as user 1000 or as `USER_ID` and `GROUP_ID`, so the files belong to you on the host; `docker stop` ends a job with exit code 4 and removes its unfinished output. ffmpeg is not part of the image: put an ffmpeg of your own in the folder mounted at `/config` and give it with `--ffmpeg=/config/ffmpeg`, for the audio conversion and the made Dolby Vision layer. See docs/DOCKER.md. (#22) Thanks to @NTMPowers.
+* **A Docker image of the command line.** `ghcr.io/teaching-droid/tsmuxer`, for x86-64, such as a NAS. The folder mounted at `/storage` is the working folder; the program writes as user 1000 or as `USER_ID` and `GROUP_ID`, so the files belong to you on the host; `docker stop` ends a job with exit code 4 and removes its unfinished output. ffmpeg is not part of the image: put an ffmpeg of your own in the folder mounted at `/config` and give it with `--ffmpeg=/config/ffmpeg`, for the audio conversion and the made Dolby Vision layer, which needs a libdovi of your own as well. See docs/DOCKER.md. (#22) Thanks to @NTMPowers.
 
 ### Other
 
