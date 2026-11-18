@@ -3,6 +3,8 @@
 #ifndef AC3_CODEC_H_
 #define AC3_CODEC_H_
 
+#include <vector>
+
 #include "avPacket.h"
 #include "mlpCodec.h"
 
@@ -175,6 +177,30 @@ class AC3Codec
 
     static bool crc32(const uint8_t* buf, int length);
     AC3ParseError parseHeader(uint8_t* buf, const uint8_t* end);
+
+    // ** A FRAME THAT FAILS ONLY ITS CHECK SUM KEEPS ITS PLACE. ** A frame whose crc2 is wrong was left out as a bad
+    // frame. The reader times each frame by counting the frames before it, in a raw .ac3 as in the track of a TS or a
+    // Matroska file, so every frame left out moved all the sound after it one frame (32 ms) early: a track of a
+    // damaged disc with 30 such frames played 960 ms ahead of its picture from there on, demuxed or muxed straight.
+    // Such a frame is kept now, as it is, and a player mutes or hides it as a disc player does. Only where the frame
+    // is surely one: outside the detection, behind a frame that passed whose header says the same (the kind, the
+    // rate, the size, the channel mode: headerKey), and with the next frame, or a timecode block and the next frame,
+    // beginning where its size says it ends. Anything else is left out as before, so data that is not AC-3 gains
+    // nothing. In a TrueHD track the unit behind a core frame is no frame, and a core frame is left out as before; so
+    // is the last frame of the data (m_dataEnds), which shifts nothing. Only the track reader keeps such frames
+    // (m_keepDamaged, AC3StreamReader), where each is said; the AC-3 side of merge-ac3 (TrueHDAC3MergeReader) still
+    // drops them as lost bytes. Not kept either, so still shifting the sound: a damaged frame in front of the first
+    // frame of its kind that passed, and frames of a ninth kind (MAX_GOOD_HEADERS) in a join of many layouts. The
+    // layout fields of the description (bsmod, channels, LFE) stay those of the frame before.
+    // Returns the frame length, 0 to leave it out, or NOT_ENOUGH_BUFFER while the next frame is not read yet.
+    int keepDamagedFrame(const uint8_t* buf, const uint8_t* end);
+    bool m_keepDamaged = false;  // set by AC3StreamReader
+    bool m_dataEnds = false;     // set by AC3StreamReader::flushPacket: nothing comes behind the data
+    static uint32_t headerKey(const uint8_t* buf);
+    std::vector<uint32_t> m_goodHeaders;  // headerKey of the frames that passed, at most MAX_GOOD_HEADERS
+    static constexpr size_t MAX_GOOD_HEADERS = 8;
+    bool m_frameDamaged = false;  // the frame decodeFrame returned last failed its check sum and was kept
+    int64_t m_damagedKept = 0;    // such frames, counted by the reader (AC3StreamReader::noteDamagedFrame)
 
     AC3ParseError testParseHeader(uint8_t* buf, uint8_t* end) const;
     bool testDecodeTestFrame(uint8_t* buf, uint8_t* end) const;

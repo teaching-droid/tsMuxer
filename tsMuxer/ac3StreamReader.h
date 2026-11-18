@@ -23,6 +23,7 @@ class AC3StreamReader final : public SimplePacketizerReader, public AC3Codec
         m_totalTHDSamples = 0;
         m_nextAc3Time = 0;
         m_needTrueHDProbe = false;
+        m_keepDamaged = true;  // AC3Codec::keepDamagedFrame
     }
     int getTSDescriptor(uint8_t* dstBuff, bool blurayMode, bool hdmvDescriptors) override;
     void setNewStyleAudioPES(const bool value) { m_useNewStyleAudioPES = value; }
@@ -116,8 +117,16 @@ class AC3StreamReader final : public SimplePacketizerReader, public AC3Codec
     int decodeFrame(uint8_t* buff, uint8_t* end, int& skipBytes, int& skipBeforeBytes) override
     {
         skipBeforeBytes = 0;
-        return AC3Codec::decodeFrame(buff, end, skipBytes);
+        const int len = AC3Codec::decodeFrame(buff, end, skipBytes);
+        if (m_frameDamaged)
+            noteDamagedFrame(m_readBytes - (m_bufEnd - buff));
+        return len;
     }
+    // A frame that failed its check sum and is kept (AC3Codec::keepDamagedFrame), at the place at in the data of the
+    // track: a warning for the first, a line for each after it, as for a frame left out. A frame is decoded more than
+    // once (at a sync and again to send it, and again after more data came), so it is counted by its place.
+    void noteDamagedFrame(int64_t at);
+    int64_t m_lastDamagedAt = -1;
     uint8_t* findFrame(uint8_t* buff, uint8_t* end) override;
     int wholeFrameSizeAt(const uint8_t* p, const uint8_t* end) override;
     [[nodiscard]] bool declaredByContainer() const override;

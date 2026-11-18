@@ -4,6 +4,7 @@
 
 #include <fs/systemlog.h>
 
+#include <algorithm>
 #include <sstream>
 
 #include "avCodecs.h"
@@ -456,6 +457,7 @@ int AC3Codec::decodeFrame(uint8_t* buf, uint8_t* end, int& skipBytes)
     {
         int rez = 0;
         m_frameIsCore = false;
+        m_frameDamaged = false;
 
         if (end - buf < 2)
             return NOT_ENOUGH_BUFFER;
@@ -473,8 +475,20 @@ int AC3Codec::decodeFrame(uint8_t* buf, uint8_t* end, int& skipBytes)
             if (err == AC3ParseError::NOT_ENOUGH_BUFFER)
                 return NOT_ENOUGH_BUFFER;
 
-            if (err != AC3ParseError::NO_ERROR)
+            if (err == AC3ParseError::CRC2)
+            {
+                const int kept = keepDamagedFrame(buf, end);
+                if (kept <= 0)
+                    return kept;  // left out as before, or the next frame is not read yet
+            }
+            else if (err != AC3ParseError::NO_ERROR)
                 return 0;  // parse error
+            else if (!m_testMode && m_goodHeaders.size() < MAX_GOOD_HEADERS)
+            {
+                const uint32_t key = headerKey(buf);
+                if (std::find(m_goodHeaders.begin(), m_goodHeaders.end(), key) == m_goodHeaders.end())
+                    m_goodHeaders.push_back(key);
+            }
 
             m_frameDuration = (INTERNAL_PTS_FREQ * m_samples) / m_sample_rate;
             rez = m_frame_size;
@@ -576,6 +590,7 @@ int AC3Codec::decodeFrame(uint8_t* buf, uint8_t* end, int& skipBytes)
                 THROW(ERR_INVALID_CODEC_FORMAT,
                       "down-to-ac3: this Dolby Digital Plus track has no AC-3 core to extract, so there is "
                       "nothing to keep. Mux it without down-to-ac3 to pass the track through unchanged.")
+            m_frameDamaged = false;           // a damaged E-AC-3 frame is stepped over as the others are, not kept
             skipBytes = rez + timecodeBlock;  // skip E-AC3 frame
             return 0;
         }
@@ -644,6 +659,71 @@ int AC3Codec::timecodeBlockAfter(const uint8_t* next, const uint8_t* end)
         LTRACE(LT_INFO, 2, "AC-3: a 16 byte timecode block in front of the frames is left out");
     }
     return BLOCK_SIZE;
+}
+
+// What a frame's header says it is, from the bytes that tell a frame of one stream from another: AC-3 by its rate and
+// size code, bsid, bsmod and channel mode; E-AC-3 by its stream type, substream, size, rate, blocks, channel mode, LFE
+// and bsid. The check sum covers these bytes too, so they can be the damaged ones: the key is no proof alone, and the
+// next frame where the size says is the other half.
+uint32_t AC3Codec::headerKey(const uint8_t* buf)
+{
+    // Every bit of the 29 of E-AC-3 is kept, beside the flag of the kind: a key that lost the top bit of byte 2 gave a
+    // dependent frame (stream type 1) and one of the reserved type 3 the same key
+    if ((buf[5] >> 3) > 10)
+        return 0x80000000u | static_cast<uint32_t>(buf[2]) << 21 | static_cast<uint32_t>(buf[3]) << 13 |
+               static_cast<uint32_t>(buf[4]) << 5 | static_cast<uint32_t>(buf[5] >> 3);
+    return static_cast<uint32_t>(buf[4]) << 16 | static_cast<uint32_t>(buf[5]) << 8 | (buf[6] & 0xE0);
+}
+
+int AC3Codec::keepDamagedFrame(const uint8_t* buf, const uint8_t* end)
+{
+    if (!m_keepDamaged || m_testMode || m_true_hd_mode || (m_bsid > 10 && (buf[2] >> 6) == 3) ||
+        std::find(m_goodHeaders.begin(), m_goodHeaders.end(), headerKey(buf)) == m_goodHeaders.end())
+        return 0;
+    const uint8_t* next = buf + m_frame_size;
+    // At the end of the data no frame follows, and the last frame shifts nothing behind it: it is left out as before.
+    // Waiting for more there would have the end of the stream send it as it is, unchecked and unsaid.
+    if (end - next < 2)
+        return m_dataEnds ? 0 : NOT_ENOUGH_BUFFER;
+    if (next[0] != 0x0B || next[1] != 0x77)
+    {
+        if (next[0] != 0x01 || next[1] != 0x10)
+            return 0;
+        if (end - next < 18)
+            return m_dataEnds ? 0 : NOT_ENOUGH_BUFFER;
+        if (next[16] != 0x0B || next[17] != 0x77)
+            return 0;
+    }
+    // What parseHeader sets behind the check sum and the frame's timing asks for, from this frame's own header: the
+    // frame read before it can be of another kind (the E-AC-3 frame in front of a core, the dependent frame in front
+    // of an independent one, the last frame of another file of a join)
+    if (m_bsid > 10)
+    {
+        m_strmtyp = buf[2] >> 6;
+        m_substreamid = (buf[2] >> 3) & 7;
+        const int fscod = buf[4] >> 6;
+        const int numblkscod = fscod == 3 ? 3 : (buf[4] >> 4) & 3;
+        if (fscod == 3 && ((buf[4] >> 4) & 3) == 3)
+            return 0;
+        m_sample_rate = fscod == 3 ? ff_ac3_freqs[(buf[4] >> 4) & 3] / 2 : ff_ac3_freqs[fscod];
+        m_samples = eac3_blocks[numblkscod] << 8;
+        m_bit_rateExt = m_frame_size * m_sample_rate * 8 / m_samples;
+        if (m_strmtyp != 1 && m_substreamid == 0)
+            startRatePeriod();
+        m_periodRateSum += m_bit_rateExt;
+    }
+    else
+    {
+        m_bsidBase = m_bsid;
+        m_strmtyp = 2;
+        startRatePeriod();
+        m_samples = AC3_FRAME_SIZE;
+        m_halfratecod = max(m_bsid, 8) - 8;
+        m_sample_rate = ff_ac3_freqs[m_fscod] >> m_halfratecod;
+        m_bit_rate = (ff_ac3_bitratetab[m_frmsizecod >> 1] * 1000) >> m_halfratecod;
+    }
+    m_frameDamaged = true;
+    return m_frame_size;
 }
 
 AC3Codec::AC3ParseError AC3Codec::testParseHeader(uint8_t* buf, uint8_t* end) const

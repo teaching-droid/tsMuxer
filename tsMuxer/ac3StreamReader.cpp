@@ -110,6 +110,29 @@ void AC3StreamReader::findTrueHDMajorSync()
             m_true_hd_mode = mlp.decodeFrame(p - 4, m_bufEnd);
 }
 
+void AC3StreamReader::noteDamagedFrame(const int64_t at)
+{
+    if (at <= m_lastDamagedAt)
+        return;
+    m_lastDamagedAt = at;
+    m_damagedKept++;
+    const std::string when =
+        floatToTime(static_cast<double>(static_cast<int64_t>(m_curPts * m_stretch) + m_timeOffset - PTS_CONST_OFFSET) /
+                        INTERNAL_PTS_FREQ,
+                    ',');
+    if (m_damagedKept == 1)
+        LTRACE(LT_WARN, 2,
+               "Warning: " << getCodecInfo().displayName << " stream (track " << m_streamIndex << "): the frame at "
+                           << when
+                           << " is damaged (its check sum is wrong). It is kept in its place, so the sound after it "
+                              "stays in step with the picture; a player mutes or hides such a frame. Each further one "
+                              "is noted in the log.");
+    else
+        LTRACE(LT_INFO, 2,
+               getCodecInfo().displayName << " stream (track " << m_streamIndex << "): damaged frame kept at " << when
+                                          << ".");
+}
+
 bool AC3StreamReader::isPriorityData(AVPacket* packet)
 {
     return (packet->size >= 2 && packet->data[0] == 0x0B && packet->data[1] == 0x77 && m_strmtyp != 1);
@@ -405,6 +428,7 @@ void AC3StreamReader::resetDecodeState()
     static_cast<AC3Codec&>(*this) = AC3Codec();
     m_downconvertToAC3 = downconvert;
     m_testMode = testMode;
+    m_keepDamaged = true;  // a setting of this reader, as in the constructor
 }
 
 int AC3StreamReader::flushPacket(AVPacket& avPacket)
@@ -424,6 +448,7 @@ int AC3StreamReader::flushPacket(AVPacket& avPacket)
             memmove(m_tmpBuffer.data(), m_tmpBuffer.data() + unitLen, static_cast<size_t>(m_tmpBufferLen));
         }
     }
+    m_dataEnds = true;  // a damaged last frame is left out as before (AC3Codec::keepDamagedFrame)
     const int rez = SimplePacketizerReader::flushPacket(avPacket);
     if (rez > 0 && !m_true_hd_mode)
         stampDependentFrame(avPacket);
