@@ -298,10 +298,12 @@ class TSDemuxer final : public AbstractDemuxer
         int64_t markFromPicture = INT64_MIN;  // the sound's PES time less the picture's decoding time there
         int farFromPicture = 0;               // PES since then whose distance from the picture moved by > 1 s
         int64_t markPts = INT64_MIN;          // the PES time of that mark
+        int64_t markVideoPes = 0;             // m_videoPesRead there
     };
     std::map<int, int64_t> m_discontinuityOfPid;  // packets with the discontinuity_indicator set, per PID
     int64_t m_videoStep = 0;                      // the step of the first video's decoding times before
     int64_t m_videoHoles = 0;                     // steps of it of more than 3.5 times the one before (noteSoundGap)
+    int m_videoBackSteps = 0;                     // steps back of a video's PES that give a presentation time only
     bool m_videoTimesReordered = false;  // PES with a presentation time only, in decoding order: no holes looked for
     [[nodiscard]] bool nearPicture(int pid, int64_t pts) const;
     std::map<int, SoundGap> m_soundGap;

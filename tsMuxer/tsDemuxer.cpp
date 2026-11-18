@@ -1318,12 +1318,13 @@ void TSDemuxer::noteSoundGap(const int pid, const int64_t pts, const bool cutPar
     if (pause <= 0)
     {
         SoundGap& now = m_soundGap[pid];
-        // after the last mark handed on (not after the PES before: a damaged time far ahead, which takes no mark,
-        // would hold off every mark after it); a time before it is a clock that went back, measured anew
+        // a time other than the last mark's (not after the PES before: a damaged time far ahead, which takes no
+        // mark, would hold off every mark after it); more than 1 s before it is a clock that went back, measured anew,
+        // and less is the time after a damaged one, which the reader compares with it
         if (!cutPart && m_curFileNum == 0 && !isJoinOfFiles() && !m_reframedPid[pid] && countsFrames(type) &&
             before.origin != -1 && pts != now.markPts && !damagedPes && nearPicture(pid, pts))
         {
-            const bool wentBack = now.markPts != INT64_MIN && pts < now.markPts;
+            const bool wentBack = now.markPts != INT64_MIN && pts < now.markPts - 90000;
             const auto lostOf = [this](const int p)
             {
                 const auto d = m_damage.find(p);
@@ -1360,10 +1361,15 @@ void TSDemuxer::noteSoundGap(const int pid, const int64_t pts, const bool cutPar
             const bool newClock = disc != now.markDisc || m_videoJumps != now.markVideoJumps ||
                                   videoLoss != now.markVideoLoss || newDistance || wentBack;
             const bool hole = lostPackets > now.markLost;
+            // a PES of the picture since the last mark (any without a picture): a loss of the picture shows in its
+            // next PES, so the sound does not move before one came
+            const bool videoSeen = m_firstVideoPid == -1 || m_videoPesRead != now.markVideoPes;
+            now.markVideoPes = m_videoPesRead;
             m_soundJumps[pid].push_back(TimeJump{m_handedBytes[pid], (pts - before.origin) * 100000 / 9,
-                                                 newClock ? PES_MARK_NEW_CLOCK
-                                                 : hole   ? PES_MARK_HOLE
-                                                          : 0,
+                                                 (newClock ? PES_MARK_NEW_CLOCK
+                                                  : hole   ? PES_MARK_HOLE
+                                                           : 0) |
+                                                     (videoSeen ? PES_MARK_VIDEO : 0),
                                                  PES_MARK});
             now.markPts = pts;
             now.markLost = lostPackets;
@@ -2575,7 +2581,8 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
                     }
                     // a video whose PES give only a presentation time and come in decoding order steps back and
                     // forth: its steps say nothing of a hole, and none is looked for in it
-                    else if (m_gapVideoPrev != -1 && curDts < m_gapVideoPrev && (pesPacket->flagsLo & 0xc0) != 0xc0)
+                    else if (m_gapVideoPrev != -1 && curDts < m_gapVideoPrev && (pesPacket->flagsLo & 0xc0) != 0xc0 &&
+                             ++m_videoBackSteps >= 3)  // three: one damaged time steps back once
                         m_videoTimesReordered = true;
 
                     m_gapVideoPrev = curDts;

@@ -196,7 +196,8 @@ class SimplePacketizerReader : public AbstractStreamReader
     {
         int64_t atByte;
         int64_t toNs;
-        int64_t atNs;  // for a PES mark (gapNs AbstractDemuxer::PES_MARK): PES_MARK_HOLE or PES_MARK_NEW_CLOCK
+        int64_t atNs;  // for a PES mark (gapNs AbstractDemuxer::PES_MARK): PES_MARK_HOLE or PES_MARK_NEW_CLOCK, and
+                       // PES_MARK_VIDEO
         int64_t gapNs;
     };
     std::deque<Jump> m_timeJumps;  // addTimeJump, in the order they come
@@ -214,9 +215,10 @@ class SimplePacketizerReader : public AbstractStreamReader
     // there
     bool m_movePending = false;
     bool m_pendingMissing = false;
+    bool m_pendingVideo = false;  // a PES of the picture came since the loss
     double m_pendingTo = 0.0;
     double m_pendingCur = 0.0;
-    void applyPesMark(double to, bool newClock, bool hole, bool firstOfPes);
+    void applyPesMark(double to, bool newClock, bool hole, bool video, bool firstOfPes);
     double m_markGap = 0.0;  // the moves of the clock not yet asked for (takeMarkGap)
 
    public:

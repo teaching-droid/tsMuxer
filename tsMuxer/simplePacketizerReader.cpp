@@ -1166,6 +1166,7 @@ void SimplePacketizerReader::applyTimeJumps()
     bool mark = false;
     int64_t kind = 0;
     bool hole = false;
+    bool video = false;
     double markTo = 0.0;
     int64_t markAt = 0;
     while (!m_timeJumps.empty() && at >= m_timeJumps.front().atByte)
@@ -1178,9 +1179,10 @@ void SimplePacketizerReader::applyTimeJumps()
         if (jump.gapNs == AbstractDemuxer::PES_MARK)
         {
             mark = true;
-            if (jump.atNs == AbstractDemuxer::PES_MARK_NEW_CLOCK)
+            if ((jump.atNs & 3) == AbstractDemuxer::PES_MARK_NEW_CLOCK)
                 kind = AbstractDemuxer::PES_MARK_NEW_CLOCK;
-            hole = hole || jump.atNs == AbstractDemuxer::PES_MARK_HOLE;
+            hole = hole || (jump.atNs & 3) == AbstractDemuxer::PES_MARK_HOLE;
+            video = video || (jump.atNs & AbstractDemuxer::PES_MARK_VIDEO) != 0;
             markTo = to;
             markAt = jump.atByte;
         }
@@ -1189,7 +1191,7 @@ void SimplePacketizerReader::applyTimeJumps()
             const double byGap = m_curPts + static_cast<double>(jump.gapNs) * INTERNAL_PTS_FREQ / 1e9;
             m_curPts = std::abs(to - byGap) <= INTERNAL_PTS_FREQ ? to : byGap;
             m_markBaseSet = false;  // the clock was placed anew: the next mark measures the difference again
-            mark = hole = false;
+            mark = hole = video = false;
             kind = 0;
             m_movePending = false;
         }
@@ -1199,7 +1201,8 @@ void SimplePacketizerReader::applyTimeJumps()
     // first byte or right behind the frame before it. Where bytes were stepped over in front of it, frames of that PES
     // were left out before it, and its time is not this frame's: the mark is not taken (applyPesMark).
     if (mark)
-        applyPesMark(markTo, kind == AbstractDemuxer::PES_MARK_NEW_CLOCK, hole, at == markAt || m_lastFrameEnd == at);
+        applyPesMark(markTo, kind == AbstractDemuxer::PES_MARK_NEW_CLOCK, hole, video,
+                     at == markAt || m_lastFrameEnd == at);
 }
 
 // ** THE TIME OF A PES AFTER LOST DATA. ** (TSDemuxer::noteSoundGap.) A mark measures how far the PES times stand
@@ -1207,15 +1210,19 @@ void SimplePacketizerReader::applyTimeJumps()
 // the first after the clock or the picture went on anew (newClock), every mark with no loss, and every mark of a loss
 // of less than half a frame. A mark where bytes were left out since the last mark taken (padding not counted), or
 // whose PES follows packets of the track missing by the continuity counter (hole), is a loss; it moves nothing yet:
-// the time of a PES after damage can be damaged too. The next PES confirms it, where the times of the two PES differ
-// by the frames counted between them, within half a frame: then the clock moves on to that next PES's time, by more
-// than half a frame and up to 10 s, and the gap comes one PES late (the sound of the PES after the loss stays early,
-// one frame on a disc). Where they do not agree, the reader measures anew and moves nothing. Never back. Every
-// decision is made at the first frame of a PES (firstOfPes); elsewhere it waits for the next PES that begins with one.
-void SimplePacketizerReader::applyPesMark(const double to, const bool newClock, const bool hole, const bool firstOfPes)
+// the time of a PES after damage can be damaged too, and a loss of the picture shows only in its next PES. A later
+// mark confirms it, once a PES of the picture came (video) and where the times of the two PES differ by the frames
+// counted between them, within half a frame: then the clock moves on to that later PES's time, by more than half a
+// frame and up to 10 s, and the gap comes a PES or two late (the sound of the PES after the loss stays early, one
+// frame on a disc). Where they do not agree, the later PES is the one to confirm. Never back. Every decision is made
+// at the first frame of a PES (firstOfPes); elsewhere it waits for the next PES that begins with one.
+void SimplePacketizerReader::applyPesMark(const double to, const bool newClock, const bool hole, const bool video,
+                                          const bool firstOfPes)
 {
     const int64_t lost = m_lostBytes - m_lostPadBytes + m_pendingLost - m_pendingPad;
     m_holePending = m_holePending || hole;
+    if (m_movePending && video)
+        m_pendingVideo = true;
     if (!m_markBaseSet || newClock || m_rebasePending)
     {
         if (!firstOfPes)
@@ -1233,35 +1240,50 @@ void SimplePacketizerReader::applyPesMark(const double to, const bool newClock, 
         return;
     const bool lossNow = lost > m_lostAtMark || m_holePending;
     const double ahead = to - m_markBase - m_curPts;
-    if (m_movePending)
+    const bool inRange = m_halfFrameLen > 0.0 && ahead > m_halfFrameLen && ahead <= 10.0 * INTERNAL_PTS_FREQ;
+    if (m_movePending && !lossNow)
     {
-        m_movePending = false;
         const double between = (to - m_pendingTo) - (m_curPts - m_pendingCur);
-        if (!lossNow && std::abs(between) <= m_halfFrameLen)
+        if (std::abs(between) > m_halfFrameLen)
         {
-            if (m_halfFrameLen > 0.0 && ahead > m_halfFrameLen && ahead <= 10.0 * INTERNAL_PTS_FREQ)
+            // they do not agree: one of the two times is damaged; this PES is the one to confirm now
+            if (inRange)
             {
-                LTRACE(LT_INFO, 2,
-                       getCodecInfo().displayName
-                           << " stream (track " << m_streamIndex
-                           << "): " << (m_pendingMissing ? "packets are missing" : "data was lost") << " before "
-                           << floatToTime(static_cast<double>(static_cast<int64_t>(m_pendingCur * m_stretch) +
-                                                              m_timeOffset - PTS_CONST_OFFSET) /
-                                              INTERNAL_PTS_FREQ,
-                                          ',')
-                           << "; the sound after it goes on at its own time, "
-                           << std::llround(ahead * 1000.0 / INTERNAL_PTS_FREQ) << " ms later.");
-                m_curPts += ahead;
-                m_markGap += ahead;
+                m_pendingTo = to;
+                m_pendingCur = m_curPts;
+            }
+            else
+            {
+                m_movePending = false;
+                if (std::abs(ahead) <= m_halfFrameLen)
+                    m_markBase = to - m_curPts;
             }
             return;
         }
-        if (!lossNow)
+        if (!m_pendingVideo)
+            return;  // the picture has not gone on yet since the loss: the next mark decides
+        m_movePending = false;
+        if (inRange)
         {
-            m_markBase = to - m_curPts;  // the time of the PES before was not the sound's: measured anew
-            return;
+            LTRACE(LT_INFO, 2,
+                   getCodecInfo().displayName
+                       << " stream (track " << m_streamIndex
+                       << "): " << (m_pendingMissing ? "packets are missing" : "data was lost") << " before "
+                       << floatToTime(static_cast<double>(static_cast<int64_t>(m_pendingCur * m_stretch) +
+                                                          m_timeOffset - PTS_CONST_OFFSET) /
+                                          INTERNAL_PTS_FREQ,
+                                      ',')
+                       << "; from "
+                       << floatToTime(static_cast<double>(static_cast<int64_t>(m_curPts * m_stretch) + m_timeOffset -
+                                                          PTS_CONST_OFFSET) /
+                                          INTERNAL_PTS_FREQ,
+                                      ',')
+                       << " the sound goes on at its own time, " << std::llround(ahead * 1000.0 / INTERNAL_PTS_FREQ)
+                       << " ms later.");
+            m_curPts += ahead;
+            m_markGap += ahead;
         }
-        // another loss between the two: this PES is the one to confirm now
+        return;
     }
     if (!lossNow)
     {
@@ -1271,9 +1293,11 @@ void SimplePacketizerReader::applyPesMark(const double to, const bool newClock, 
     m_pendingMissing = m_holePending && lost <= m_lostAtMark;
     m_lostAtMark = lost;
     m_holePending = false;
-    if (m_halfFrameLen > 0.0 && ahead > m_halfFrameLen && ahead <= 10.0 * INTERNAL_PTS_FREQ)
+    m_movePending = false;
+    if (inRange)
     {
         m_movePending = true;
+        m_pendingVideo = false;
         m_pendingTo = to;
         m_pendingCur = m_curPts;
     }
