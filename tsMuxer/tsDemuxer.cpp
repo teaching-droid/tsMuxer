@@ -1289,11 +1289,90 @@ bool TSDemuxer::keepJoinSound(const int pid, const StreamType type, const int64_
 // the picture, to its end. Where the next PES comes more than GAP_MIN after the one before while the first video goes
 // on without a jump of its own time and is near the time the sound comes back at, the track's times have a gap there
 // (takeTimeGaps), as at a joint of a join. A jump of the picture's time too is a discontinuity of the clock, which is
-// left as it was, as are shorter gaps.
-void TSDemuxer::noteSoundGap(const int pid, const int64_t pts, const bool cutPart)
+// left as it was, as is a shorter pause; data lost from a track goes by the PES marks below.
+void TSDemuxer::noteSoundGap(const int pid, const int64_t pts, const bool cutPart, const StreamType type,
+                             const bool pauses, const bool damagedPes)
 {
+    // ** AND SOUND AFTER LOST DATA GOES ON AT THE TIME OF ITS PES. ** Where packets of a track are lost, or its frames
+    // are damaged so that the reader leaves them out, as on a damaged disc or in a recording with drop-outs, the
+    // reader counted on from the frames it had, and all the sound after the loss came early by as much as was lost:
+    // 1 s of a track's packets gone, and the sound ran 1 s ahead of its picture to the end. A gap of less than
+    // GAP_MIN was left as it was. Each PES of a track whose frames the reader counts now hands on its time, placed by
+    // the data as a pause is (a PES mark, SimplePacketizerReader::applyPesMark): the reader moves its clock on to it,
+    // only forward, where it left bytes out since the last mark it took, or where the track's packets went missing by
+    // the continuity counter (a hole). Elsewhere the reader only measures how its count stands to the PES times, so a
+    // stream whose PES times wander against its frames is muxed as before. A mark is handed on only where its PES
+    // time can be trusted: not from a packet marked as damaged (transport_error_indicator), and near the picture's
+    // time, at about the distance from it the last mark had. Where the picture lost packets too, or the clock went on
+    // anew (a declared discontinuity, a jump of the picture's time), the reader only measures anew: the video readers
+    // count their pictures, so after such a loss the picture comes early as the sound does, and the sound stays with
+    // it. One file only, as for a pause: the sound of a later clip of a playlist follows on from the clip before, and
+    // a join of files has its own joints.
+    // pauses: whether a pause of more than GAP_MIN is a gap (the PMT names the codec); a track whose codec only a
+    // descriptor names (a DVB recording) takes PES marks, and its pauses of more than GAP_MIN stay as they were.
+    const SoundGap before = m_soundGap[pid];
     int64_t end = 0;
-    if (const int64_t pause = soundPause(pid, pts, end); pause > 0)
+    int64_t pause = soundPause(pid, pts, end);
+    if (!pauses)
+        pause = 0;
+    if (pause <= 0)
+    {
+        SoundGap& now = m_soundGap[pid];
+        // after the last mark handed on (not after the PES before: a damaged time far ahead, which takes no mark,
+        // would hold off every mark after it); a time before it is a clock that went back, measured anew
+        if (!cutPart && m_curFileNum == 0 && !isJoinOfFiles() && !m_reframedPid[pid] && countsFrames(type) &&
+            before.origin != -1 && pts != now.markPts && !damagedPes && nearPicture(pid, pts))
+        {
+            const bool wentBack = now.markPts != INT64_MIN && pts < now.markPts;
+            const auto lostOf = [this](const int p)
+            {
+                const auto d = m_damage.find(p);
+                return d != m_damage.end() ? d->second.lost : 0;
+            };
+            const auto discOf = [this](const int p)
+            {
+                const auto d = m_discontinuityOfPid.find(p);
+                return d != m_discontinuityOfPid.end() ? d->second : 0;
+            };
+            // a loss of the track: packets missing by the continuity counter since the last mark (which does not see
+            // 16 of them); bytes the reader left out, it counts itself
+            const int64_t lostPackets = lostOf(pid);
+            // the picture lost packets too, by the first video's continuity counter or a hole in its decoding times.
+            // The video reader counts its pictures, so the picture after such a loss can come early by it as the sound
+            // did: the sound stays with it, as before, and the reader only measures anew.
+            const int64_t videoLoss = m_firstVideoPid != -1 ? lostOf(m_firstVideoPid) + m_videoHoles : 0;
+            // a discontinuity of the clock the stream declares, on the track's own PID, the PCR PID of the program map
+            // (of a multiplex, the last read: one of its programs) or the first video's, or a jump of the picture's
+            // own time: the reader measures anew there and moves nothing
+            int64_t disc = discOf(pid) + (m_pmt.pcr_pid != pid ? discOf(m_pmt.pcr_pid) : 0);
+            if (m_firstVideoPid != -1 && m_firstVideoPid != pid && m_firstVideoPid != m_pmt.pcr_pid)
+                disc += discOf(m_firstVideoPid);
+            // the distance of the sound from the picture moved by more than 1 s since the last mark: the PES time is
+            // not the time the sound goes on at (a damaged one), and no mark is handed on. Where it stays so for three
+            // PES, the distance is a new one (an undeclared jump of the sound's own clock): the reader measures anew.
+            const int64_t fromPicture = m_firstVideoPid != -1 ? pts - m_gapVideoPrev : 0;
+            if (now.markFromPicture != INT64_MIN && std::llabs(fromPicture - now.markFromPicture) > 90000 &&
+                ++now.farFromPicture < 3)
+                return;
+            const bool newDistance = now.farFromPicture >= 3;
+            now.farFromPicture = 0;
+            now.markFromPicture = fromPicture;
+            const bool newClock = disc != now.markDisc || m_videoJumps != now.markVideoJumps ||
+                                  videoLoss != now.markVideoLoss || newDistance || wentBack;
+            const bool hole = lostPackets > now.markLost;
+            m_soundJumps[pid].push_back(TimeJump{m_handedBytes[pid], (pts - before.origin) * 100000 / 9,
+                                                 newClock ? PES_MARK_NEW_CLOCK
+                                                 : hole   ? PES_MARK_HOLE
+                                                          : 0,
+                                                 PES_MARK});
+            now.markPts = pts;
+            now.markLost = lostPackets;
+            now.markDisc = disc;
+            now.markVideoJumps = m_videoJumps;
+            now.markVideoLoss = videoLoss;
+        }
+        return;
+    }
     {
         // A join of files looks for it in each file (keepJoinSound). The sound of a later clip of a playlist, and of a
         // clip a playlist cuts, is not put against its picture: it follows on from the sound handed on before it, so
@@ -1318,6 +1397,41 @@ void TSDemuxer::noteSoundGap(const int pid, const int64_t pts, const bool cutPar
                "Track " << pid << " has no data from " << floatToTime(static_cast<double>(end - origin) / 90000.0)
                         << " for " << (pause + 45) / 90
                         << " ms, while the picture goes on: its sound goes on after a gap, at its own time.");
+    }
+}
+
+// A sound PES time a reader may go on at: within 5 s of the decoding time of the first video's PES before, as a pause
+// comes back (soundPause), and on that video's program. Without video any time is.
+bool TSDemuxer::nearPicture(const int pid, const int64_t pts) const
+{
+    if (m_firstVideoPid == -1)
+        return true;
+    const auto sound = m_pmt.pidList.find(pid);
+    const auto video = m_pmt.pidList.find(m_firstVideoPid);
+    if (sound != m_pmt.pidList.end() && video != m_pmt.pidList.end() &&
+        sound->second.m_programNumber != video->second.m_programNumber)
+        return false;
+    return m_gapVideoPrev != -1 && std::llabs(pts - m_gapVideoPrev) < 5 * 90000;
+}
+
+bool TSDemuxer::countsFrames(const StreamType type)
+{
+    switch (type)
+    {
+    case StreamType::AUDIO_AC3:
+    case StreamType::AUDIO_EAC3:
+    case StreamType::AUDIO_EAC3_ATSC:  // also the E-AC-3 descriptor of a DVB recording
+    case StreamType::AUDIO_EAC3_SECONDARY:
+    case StreamType::AUDIO_DTS:
+    case StreamType::AUDIO_DTS_HD:
+    case StreamType::AUDIO_DTS_HD_MA:
+    case StreamType::AUDIO_DTS_HD_SECONDARY:
+    case StreamType::AUDIO_MPEG1:
+    case StreamType::AUDIO_MPEG2:
+    case StreamType::AUDIO_AAC:
+        return true;
+    default:
+        return false;
     }
 }
 
@@ -2029,6 +2143,10 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
         }
         if (pid == m_pmtVersionPid && tsPacket->payloadStart)
             checkPmtVersion(frameData, m_curPos + TS_FRAME_SIZE);
+        // a discontinuity of the clock the stream declares (the PCR of a program, as a rule): the sound readers measure
+        // their PES marks anew there (noteSoundGap)
+        if (tsPacket->afExists && tsPacket->adaptiveField.length > 0 && tsPacket->adaptiveField.discontinuityIndicator)
+            m_discontinuityOfPid[pid]++;
         if (m_reportDamage && m_acceptedPidCache[pid])
             noteDamage(tsPacket, pid);
         else if (m_acceptedPidCache[pid] && tsPacket->dataExists)
@@ -2444,6 +2562,22 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
                     if (m_gapVideoPrev != -1 &&
                         (curDts - m_gapVideoPrev > 2 * 90000 || curDts < m_gapVideoPrev - 2 * 90000))
                         m_videoJumps++;
+                    // a hole in the picture's decoding times: a step of more than three and a half times the step
+                    // before, up to the jump above, as where pictures were lost and the continuity counter, over 16
+                    // packets or a multiple, cannot tell (noteSoundGap). Field and frame pictures, and a change
+                    // between 50 and 25 pictures a second, step by 2 or 2.5 times.
+                    else if (m_gapVideoPrev != -1 && curDts > m_gapVideoPrev && !m_videoTimesReordered)
+                    {
+                        const int64_t step = curDts - m_gapVideoPrev;
+                        if (m_videoStep > 0 && 2 * step > 7 * m_videoStep)
+                            m_videoHoles++;
+                        m_videoStep = step;
+                    }
+                    // a video whose PES give only a presentation time and come in decoding order steps back and
+                    // forth: its steps say nothing of a hole, and none is looked for in it
+                    else if (m_gapVideoPrev != -1 && curDts < m_gapVideoPrev && (pesPacket->flagsLo & 0xc0) != 0xc0)
+                        m_videoTimesReordered = true;
+
                     m_gapVideoPrev = curDts;
                     if (m_videoSpanDts.first == -1)
                         m_videoSpanDts.first = curDts;
@@ -2615,7 +2749,14 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
                                        : -1);
             else if (m_acceptedPidCache[pid] && streamInfo != m_pmt.pidList.end() &&
                      isAudioStreamType(streamInfo->second.m_streamType))
-                noteSoundGap(pid, curPts, part != nullptr);
+                noteSoundGap(pid, curPts, part != nullptr, streamInfo->second.m_streamType, true, tsPacket->tei);
+            // sound whose codec only a descriptor names (private data with an AC-3, E-AC-3, DTS or AAC descriptor or
+            // registration, as a DVB recording has it): PES marks too; its pauses of more than GAP_MIN stay as they
+            // were. Not a subtitle PID, whatever descriptors it also carries.
+            else if (m_acceptedPidCache[pid] && streamInfo != m_pmt.pidList.end() &&
+                     streamInfo->second.m_soundDescriptor != 0 && !isDvbSubtitlePid(pid))
+                noteSoundGap(pid, curPts, part != nullptr,
+                             static_cast<StreamType>(streamInfo->second.m_soundDescriptor), false, tsPacket->tei);
         }
         if (m_joinDrop[pid])
             return;

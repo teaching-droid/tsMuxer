@@ -64,7 +64,11 @@ class OpusStreamReader final : public SimplePacketizerReader
         SimplePacketizerReader::addTimeGap(atNs - m_joinLeftOutNs, gapNs);
     }
     // its packets are handed on with what the joints leave out (readPacket): the gap, as before
-    void addTimeJump(int64_t, int64_t, const int64_t atNs, const int64_t gapNs) override { addTimeGap(atNs, gapNs); }
+    void addTimeJump(int64_t, int64_t, const int64_t atNs, const int64_t gapNs) override
+    {
+        if (gapNs >= 0)  // a PES mark is no gap
+            addTimeGap(atNs, gapNs);
+    }
 
    protected:
     void fillDiscoveryData(StreamDiscoveryData& data) override;

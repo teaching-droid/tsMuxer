@@ -84,8 +84,16 @@ class AbstractStreamReader : public BaseAbstractStreamReader
     virtual void addTimeGap(int64_t atNs, int64_t gapNs) {}
     // The same gap, placed by the data: the frame that begins at or after byte atByte of the data given to the
     // reader is the first after the gap, and it comes toNs after the track's first frame. A reader that counts its
-    // frames from the data keeps it exactly; the others take it as the gap (atNs, gapNs).
-    virtual void addTimeJump(int64_t atByte, int64_t toNs, int64_t atNs, int64_t gapNs) { addTimeGap(atNs, gapNs); }
+    // frames from the data keeps it exactly; the others take it as the gap (atNs, gapNs). A PES mark (gapNs < 0,
+    // AbstractDemuxer::PES_MARK) is no gap: only a reader that counts its frames from the data takes it.
+    virtual void addTimeJump(int64_t atByte, int64_t toNs, int64_t atNs, int64_t gapNs)
+    {
+        if (gapNs >= 0)
+            addTimeGap(atNs, gapNs);
+    }
+    // How far PES marks moved the clock on since asked last, in internal ticks (SimplePacketizerReader): the packet
+    // after such a gap waits for the other streams as after the gap of a join (METADemuxer)
+    virtual int64_t takeMarkGap() { return 0; }
     // The data of the next setBuffer begins a later file of a join of files read one after the other
     virtual void onJoinedFileStart() {}
     // The same, placed by the data: a later file of a join begins at byte atByte of the data given to the reader (a

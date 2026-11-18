@@ -235,6 +235,13 @@ class AbstractDemuxer
         int64_t atNs;    // the gap as (where, how long), for a reader that cannot place it by its data
         int64_t gapNs;
     };
+    // gapNs of a TimeJump that is no gap but the time of a PES (TSDemuxer::noteSoundGap): the reader takes it only
+    // after it left bytes out, or where atNs is PES_MARK_HOLE (the PES follows packets of the track missing by the
+    // continuity counter), and only forward; at PES_MARK_NEW_CLOCK (the clock or the picture went on anew) it only
+    // measures anew
+    static constexpr int64_t PES_MARK = -1;
+    static constexpr int64_t PES_MARK_HOLE = 1;
+    static constexpr int64_t PES_MARK_NEW_CLOCK = 2;
     virtual std::vector<TimeJump> takeTimeJumps(int pid) { return {}; }
     // Where each later file of a plain join begins in the data handed on for a track, in bytes, taken out once asked
     // for (AbstractStreamReader::addJoinStart)

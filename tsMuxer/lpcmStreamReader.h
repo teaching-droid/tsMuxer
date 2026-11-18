@@ -79,7 +79,11 @@ class LPCMStreamReader final : public SimplePacketizerReader
                           PriorityDataInfo* priorityData) override;
     int readPacket(AVPacket& avPacket) override;
     // LPCM times its blocks by samples (readPacket): the gap, as before
-    void addTimeJump(int64_t, int64_t, const int64_t atNs, const int64_t gapNs) override { addTimeGap(atNs, gapNs); }
+    void addTimeJump(int64_t, int64_t, const int64_t atNs, const int64_t gapNs) override
+    {
+        if (gapNs >= 0)  // a PES mark is no gap
+            addTimeGap(atNs, gapNs);
+    }
     int flushPacket(AVPacket& avPacket) override;
     void onSplitEvent() override { m_firstFrame = true; }
     void setBuffer(uint8_t* data, uint32_t dataLen, bool lastBlock = false) override;

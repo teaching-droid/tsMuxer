@@ -56,7 +56,10 @@ class AC3StreamReader final : public SimplePacketizerReader, public AC3Codec
     {
         for (const auto& j : m_pendingJumps)
             if (m_true_hd_mode && !m_downconvertToAC3)
-                addTimeGap(j[2], j[3]);
+            {
+                if (j[3] >= 0)  // a PES mark is no gap: the units of TrueHD keep their own times
+                    addTimeGap(j[2], j[3]);
+            }
             else
                 SimplePacketizerReader::addTimeJump(j[0], j[1], j[2], j[3]);
         m_pendingJumps.clear();

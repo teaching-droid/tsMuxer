@@ -4,6 +4,7 @@
 #define SIMPLE_PACKETIZER_READER_H_
 
 #include <algorithm>
+#include <deque>
 
 #include "abstractStreamReader.h"
 #include "avCodecs.h"
@@ -195,10 +196,38 @@ class SimplePacketizerReader : public AbstractStreamReader
     {
         int64_t atByte;
         int64_t toNs;
+        int64_t atNs;  // for a PES mark (gapNs AbstractDemuxer::PES_MARK): PES_MARK_HOLE or PES_MARK_NEW_CLOCK
         int64_t gapNs;
     };
-    std::vector<Jump> m_timeJumps;  // addTimeJump, in the order they come
+    std::deque<Jump> m_timeJumps;  // addTimeJump, in the order they come
     void applyTimeJumps();
+    // The PES marks (applyTimeJumps): how far the PES times stand from the counted times at the last measure (the PES
+    // times need not count from the reader's first frame, and may wander against the frames), the lost bytes at the
+    // last mark taken (padding not counted), and where the last frame handed on ends in the data given
+    double m_markBase = 0.0;
+    bool m_markBaseSet = false;
+    int64_t m_lostAtMark = 0;
+    int64_t m_lastFrameEnd = -1;
+    bool m_rebasePending = false;  // a measure from scratch waits for the first frame of a PES
+    bool m_holePending = false;    // so does a hole the demuxer saw (PES_MARK_HOLE)
+    // a loss waits for the next PES to confirm it (applyPesMark): the time of the PES after the loss and the count
+    // there
+    bool m_movePending = false;
+    bool m_pendingMissing = false;
+    double m_pendingTo = 0.0;
+    double m_pendingCur = 0.0;
+    void applyPesMark(double to, bool newClock, bool hole, bool firstOfPes);
+    double m_markGap = 0.0;  // the moves of the clock not yet asked for (takeMarkGap)
+
+   public:
+    int64_t takeMarkGap() override
+    {
+        const auto gap = static_cast<int64_t>(m_markGap * m_stretch);
+        m_markGap = 0.0;
+        return gap;
+    }
+
+   protected:
     double m_lastMplsTime;
     double m_mplsOffset;
     double m_halfFrameLen;

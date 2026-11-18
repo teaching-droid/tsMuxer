@@ -289,11 +289,28 @@ class TSDemuxer final : public AbstractDemuxer
         int64_t prev = -1;    // the latest PES time
         int64_t step = 0;     // the shortest step from one PES to the next
         int videoJumps = 0;   // m_videoJumps at the PES before
+        // at the last PES mark handed on (noteSoundGap): the track's packets missing by the continuity counter, the
+        // discontinuities declared, the jumps and the losses of the picture
+        int64_t markLost = 0;
+        int64_t markDisc = 0;
+        int markVideoJumps = 0;
+        int64_t markVideoLoss = 0;
+        int64_t markFromPicture = INT64_MIN;  // the sound's PES time less the picture's decoding time there
+        int farFromPicture = 0;               // PES since then whose distance from the picture moved by > 1 s
+        int64_t markPts = INT64_MIN;          // the PES time of that mark
     };
+    std::map<int, int64_t> m_discontinuityOfPid;  // packets with the discontinuity_indicator set, per PID
+    int64_t m_videoStep = 0;                      // the step of the first video's decoding times before
+    int64_t m_videoHoles = 0;                     // steps of it of more than 3.5 times the one before (noteSoundGap)
+    bool m_videoTimesReordered = false;  // PES with a presentation time only, in decoding order: no holes looked for
+    [[nodiscard]] bool nearPicture(int pid, int64_t pts) const;
     std::map<int, SoundGap> m_soundGap;
     int64_t m_gapVideoPrev = -1;  // the decoding time of the first video's PES before
     int m_videoJumps = 0;         // how often the first video's time jumped (a discontinuity), see noteSoundGap
-    void noteSoundGap(int pid, int64_t pts, bool cutPart);
+    void noteSoundGap(int pid, int64_t pts, bool cutPart, StreamType type, bool pauses, bool damagedPes);
+    // The sound whose reader times each frame by counting (SimplePacketizerReader): AC-3, E-AC-3, DTS and DTS-HD, MPEG
+    // audio and AAC in ADTS. TrueHD, LPCM and the reframed tracks keep their own timing.
+    static bool countsFrames(StreamType type);
     int64_t soundPause(int pid, int64_t pts, int64_t& end);
     // The sound of a file whose first PES does not begin with a frame (skipsLeadingPes)
     static constexpr uint8_t LEAD_PES_MAX = 4;

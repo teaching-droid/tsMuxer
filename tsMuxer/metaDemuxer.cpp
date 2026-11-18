@@ -977,6 +977,10 @@ int METADemuxer::readPacket(AVPacket& avPacket)
                         m_codecInfo[minDtsIndex].m_lastDTS - m_codecInfo[minDtsIndex].m_timeShift;
                     const int res = m_codecInfo[minDtsIndex].m_streamReader->readPacket(avPacket);
                     m_codecInfo[minDtsIndex].m_lastAVRez = res;
+                    // sound after lost data of a TS goes on at its PES time (SimplePacketizerReader::applyPesMark):
+                    // its packet waits for the other streams, as after the gap of a join (below). A read that gave no
+                    // frame yet (the frame runs into the next block) hands the move on to the packet that does.
+                    chosen.m_markGap += m_codecInfo[minDtsIndex].m_streamReader->takeMarkGap();
                 }
                 else
                 {
@@ -1014,10 +1018,18 @@ int METADemuxer::readPacket(AVPacket& avPacket)
                 const bool firstData = !chosen.m_dataOut;
                 if (avPacket.size > 0)
                     chosen.m_dataOut = true;
-                if (!chosen.m_joinGaps.empty() && !chosen.m_flushed && avPacket.size > 0 &&
-                    avPacket.dts - (firstData ? chosen.m_timeShift : endBefore) >= chosen.m_joinGaps.front() / 2)
+                // the same for the packet after a move of the clock by PES marks, which needs no measure
+                const bool afterMark = chosen.m_markGap > 0 && !chosen.m_flushed && avPacket.size > 0;
+                if (afterMark)
+                    chosen.m_markGap = 0;
+                // (the gap of a join belongs to a later packet than the one after a move)
+                const bool afterJoinGap =
+                    !afterMark && !chosen.m_joinGaps.empty() && !chosen.m_flushed && avPacket.size > 0 &&
+                    avPacket.dts - (firstData ? chosen.m_timeShift : endBefore) >= chosen.m_joinGaps.front() / 2;
+                if (afterJoinGap || afterMark)
                 {
-                    chosen.m_joinGaps.erase(chosen.m_joinGaps.begin());
+                    if (afterJoinGap)
+                        chosen.m_joinGaps.erase(chosen.m_joinGaps.begin());
                     bool othersBehind = false;
                     for (int i = 0; i < static_cast<int>(m_codecInfo.size()); i++)
                         if (i != minDtsIndex && !m_codecInfo[i].m_flushed &&
@@ -7598,7 +7610,9 @@ int StreamInfo::read()
             for (const AbstractDemuxer::TimeJump& jump : wrapper->takeTimeJumps(m_readerID))
             {
                 m_streamReader->addTimeJump(jump.atByte, jump.toNs, jump.atNs, jump.gapNs);
-                m_joinGaps.push_back(llround(static_cast<double>(jump.gapNs) * INTERNAL_PTS_FREQ / 1e9));
+                // a PES mark is no gap: where it moves the clock, the reader says so (takeMarkGap)
+                if (jump.gapNs != AbstractDemuxer::PES_MARK)
+                    m_joinGaps.push_back(llround(static_cast<double>(jump.gapNs) * INTERNAL_PTS_FREQ / 1e9));
             }
             // where a later file of a join of transport streams or Matroska files begins in the track's data, as
             // onJoinedFileStart says it for a join of elementary streams

@@ -10,6 +10,7 @@
 #include <cstring>
 #include <iostream>
 
+#include "abstractDemuxer.h"  // PES_MARK
 #include "avCodecs.h"
 #include "tsMuxer.h"  // V3_flags
 #include "vodCoreException.h"
@@ -1144,9 +1145,10 @@ void SimplePacketizerReader::addTimeGap(const int64_t atNs, const int64_t gapNs)
     m_timeGaps.emplace_back(atNs, gapNs);
 }
 
-void SimplePacketizerReader::addTimeJump(const int64_t atByte, const int64_t toNs, int64_t, const int64_t gapNs)
+void SimplePacketizerReader::addTimeJump(const int64_t atByte, const int64_t toNs, const int64_t atNs,
+                                         const int64_t gapNs)
 {
-    m_timeJumps.push_back(Jump{atByte, toNs, gapNs});
+    m_timeJumps.push_back(Jump{atByte, toNs, atNs, gapNs});
 }
 
 // ** THE SOUND AFTER A PAUSE STARTS AT ITS OWN TIME, TO THE FRAME. ** The gap of a pause of the sound in a transport
@@ -1159,6 +1161,13 @@ void SimplePacketizerReader::applyTimeJumps()
     if (m_timeJumps.empty())
         return;
     const int64_t at = m_readBytes - (m_bufEnd - m_curPos);  // where the next frame begins in the data given
+    // Of the PES marks passed here, the last is the PES the next frame begins in: after damage the reader finds its
+    // place again some PES on, and the marks of the PES it stepped over are passed at once
+    bool mark = false;
+    int64_t kind = 0;
+    bool hole = false;
+    double markTo = 0.0;
+    int64_t markAt = 0;
     while (!m_timeJumps.empty() && at >= m_timeJumps.front().atByte)
     {
         // Where the clock of the reader is not that of the demuxer's PES times (a first PES on another clock, or a
@@ -1166,10 +1175,110 @@ void SimplePacketizerReader::applyTimeJumps()
         // is taken then, as before, within the second it may be off by.
         const Jump& jump = m_timeJumps.front();
         const double to = PTS_CONST_OFFSET + static_cast<double>(jump.toNs) * INTERNAL_PTS_FREQ / 1e9;
-        const double byGap = m_curPts + static_cast<double>(jump.gapNs) * INTERNAL_PTS_FREQ / 1e9;
-        m_curPts = std::abs(to - byGap) <= INTERNAL_PTS_FREQ ? to : byGap;
-        m_timeJumps.erase(m_timeJumps.begin());
+        if (jump.gapNs == AbstractDemuxer::PES_MARK)
+        {
+            mark = true;
+            if (jump.atNs == AbstractDemuxer::PES_MARK_NEW_CLOCK)
+                kind = AbstractDemuxer::PES_MARK_NEW_CLOCK;
+            hole = hole || jump.atNs == AbstractDemuxer::PES_MARK_HOLE;
+            markTo = to;
+            markAt = jump.atByte;
+        }
+        else
+        {
+            const double byGap = m_curPts + static_cast<double>(jump.gapNs) * INTERNAL_PTS_FREQ / 1e9;
+            m_curPts = std::abs(to - byGap) <= INTERNAL_PTS_FREQ ? to : byGap;
+            m_markBaseSet = false;  // the clock was placed anew: the next mark measures the difference again
+            mark = hole = false;
+            kind = 0;
+            m_movePending = false;
+        }
+        m_timeJumps.pop_front();
     }
+    // The PES time is that of the first frame that begins in the PES: the frame here, where it begins at the PES's
+    // first byte or right behind the frame before it. Where bytes were stepped over in front of it, frames of that PES
+    // were left out before it, and its time is not this frame's: the mark is not taken (applyPesMark).
+    if (mark)
+        applyPesMark(markTo, kind == AbstractDemuxer::PES_MARK_NEW_CLOCK, hole, at == markAt || m_lastFrameEnd == at);
+}
+
+// ** THE TIME OF A PES AFTER LOST DATA. ** (TSDemuxer::noteSoundGap.) A mark measures how far the PES times stand
+// from the counted times (m_markBase), so that PES times that wander against the frames move nothing: the first mark,
+// the first after the clock or the picture went on anew (newClock), every mark with no loss, and every mark of a loss
+// of less than half a frame. A mark where bytes were left out since the last mark taken (padding not counted), or
+// whose PES follows packets of the track missing by the continuity counter (hole), is a loss; it moves nothing yet:
+// the time of a PES after damage can be damaged too. The next PES confirms it, where the times of the two PES differ
+// by the frames counted between them, within half a frame: then the clock moves on to that next PES's time, by more
+// than half a frame and up to 10 s, and the gap comes one PES late (the sound of the PES after the loss stays early,
+// one frame on a disc). Where they do not agree, the reader measures anew and moves nothing. Never back. Every
+// decision is made at the first frame of a PES (firstOfPes); elsewhere it waits for the next PES that begins with one.
+void SimplePacketizerReader::applyPesMark(const double to, const bool newClock, const bool hole, const bool firstOfPes)
+{
+    const int64_t lost = m_lostBytes - m_lostPadBytes + m_pendingLost - m_pendingPad;
+    m_holePending = m_holePending || hole;
+    if (!m_markBaseSet || newClock || m_rebasePending)
+    {
+        if (!firstOfPes)
+        {
+            m_rebasePending = true;
+            return;
+        }
+        m_markBase = to - m_curPts;
+        m_markBaseSet = true;
+        m_rebasePending = m_holePending = m_movePending = false;
+        m_lostAtMark = lost;
+        return;
+    }
+    if (!firstOfPes)
+        return;
+    const bool lossNow = lost > m_lostAtMark || m_holePending;
+    const double ahead = to - m_markBase - m_curPts;
+    if (m_movePending)
+    {
+        m_movePending = false;
+        const double between = (to - m_pendingTo) - (m_curPts - m_pendingCur);
+        if (!lossNow && std::abs(between) <= m_halfFrameLen)
+        {
+            if (m_halfFrameLen > 0.0 && ahead > m_halfFrameLen && ahead <= 10.0 * INTERNAL_PTS_FREQ)
+            {
+                LTRACE(LT_INFO, 2,
+                       getCodecInfo().displayName
+                           << " stream (track " << m_streamIndex
+                           << "): " << (m_pendingMissing ? "packets are missing" : "data was lost") << " before "
+                           << floatToTime(static_cast<double>(static_cast<int64_t>(m_pendingCur * m_stretch) +
+                                                              m_timeOffset - PTS_CONST_OFFSET) /
+                                              INTERNAL_PTS_FREQ,
+                                          ',')
+                           << "; the sound after it goes on at its own time, "
+                           << std::llround(ahead * 1000.0 / INTERNAL_PTS_FREQ) << " ms later.");
+                m_curPts += ahead;
+                m_markGap += ahead;
+            }
+            return;
+        }
+        if (!lossNow)
+        {
+            m_markBase = to - m_curPts;  // the time of the PES before was not the sound's: measured anew
+            return;
+        }
+        // another loss between the two: this PES is the one to confirm now
+    }
+    if (!lossNow)
+    {
+        m_markBase = to - m_curPts;
+        return;
+    }
+    m_pendingMissing = m_holePending && lost <= m_lostAtMark;
+    m_lostAtMark = lost;
+    m_holePending = false;
+    if (m_halfFrameLen > 0.0 && ahead > m_halfFrameLen && ahead <= 10.0 * INTERNAL_PTS_FREQ)
+    {
+        m_movePending = true;
+        m_pendingTo = to;
+        m_pendingCur = m_curPts;
+    }
+    else if (std::abs(ahead) <= m_halfFrameLen)
+        m_markBase = to - m_curPts;
 }
 
 // A gap the source asks for (addTimeGap) begins at the frame that comes at its time, within half a frame
@@ -1532,6 +1641,7 @@ int SimplePacketizerReader::readPacket(AVPacket& avPacket)
         const int taken = frameLen + skipBytes + skipBeforeBytes;
         m_frameBytes += taken;
         noteRun(m_frameRuns, m_curPos + taken, taken);
+        m_lastFrameEnd = m_readBytes - (m_bufEnd - (m_curPos + taken));
         if (m_frameNum % 1000 == 0)
             LTRACE(LT_DEBUG, 0, "Processed " << m_frameNum << " " << getCodecInfo().displayName << " frames");
         m_curPos += frameLen + skipBytes + skipBeforeBytes;
