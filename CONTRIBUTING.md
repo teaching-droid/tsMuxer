@@ -1,5 +1,7 @@
 # Contributing
 
+Everyone in the issues, discussions and pull requests of this repository keeps to the [code of conduct](CODE_OF_CONDUCT.md).
+
 ## Issue follow-up and closure
 
 To keep the tracker manageable, issues marked *awaiting feedback* normally stay open for 14 days. A friendly reminder may be posted after 7 days, and if there is no reply after 14 days, the issue may be closed.
