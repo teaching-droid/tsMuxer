@@ -9281,8 +9281,20 @@ void TsMuxerWindow::showQueue()
                     return;
                 static const QStringList sources = {"*.ts",  "*.m2ts", "*.mts", "*.m2t", "*.mkv", "*.mka", "*.webm",
                                                     "*.mp4", "*.m4v",  "*.mov", "*.mpg", "*.vob", "*.evo"};
-                QStringList lines = queueLines();
-                int added = 0;
+                // The outputs the queue will write already, and those of this folder: two sources of one name
+                // (ep1.ts, ep1.mkv) gave two jobs onto one output, the second replacing the first without a word
+                const auto key = [](const QString& path)
+                {
+                    const QString name = QDir::cleanPath(QDir::fromNativeSeparators(path));
+#ifdef Q_OS_WIN
+                    return name.toLower();
+#else
+                    return name;
+#endif
+                };
+                QSet<QString> taken;
+                for (const QString& line : queueLines()) taken.insert(key(line.section('"', 3, 3)));
+                QStringList newLines;
                 int kept = 0;
                 for (const QFileInfo& file : QDir(from).entryInfoList(sources, QDir::Files, QDir::Name))
                 {
@@ -9290,6 +9302,10 @@ void TsMuxerWindow::showQueue()
                     // never onto the source itself: the same folder and the same kind
                     if (QFileInfo(output) == file)
                         output = to + "/" + file.completeBaseName() + ".new." + kind.toLower();
+                    // a name another job writes already: the source's extension goes into it (ep1.mkv.m2ts)
+                    for (int n = 2; taken.contains(key(output)); ++n)
+                        output = to + "/" + file.fileName() + (n > 2 ? "." + QString::number(n - 1) : QString()) + "." +
+                                 kind.toLower();
                     // An output that is there already was replaced when the queue ran, without the question that a job
                     // added with "Add to queue" asks (the same question, so its translations hold): No leaves it out.
                     if (QFile::exists(output))
@@ -9313,18 +9329,21 @@ void TsMuxerWindow::showQueue()
                                    quoteStr(QDir::toNativeSeparators(output));
                     if (const QStringList languages = takeLanguages(); !languages.isEmpty())
                         line += " --languages=" + languages.join(',');
-                    lines << line;
-                    ++added;
+                    newLines << line;
+                    taken.insert(key(output));
                 }
-                if (added == 0 && kept > 0)
+                if (newLines.isEmpty() && kept > 0)
                     return;  // every output was there already, and each was kept
-                if (added == 0)
+                if (newLines.isEmpty())
                 {
                     QMessageBox::information(
                         &dialog, tr("Add a folder..."),
                         tr("No file that tsMuxeR can add was found in %1.").arg(QDir::toNativeSeparators(from)));
                     return;
                 }
+                // The queue is read again only now: while a question was open, a queue that was running may have
+                // finished and taken its done jobs out, and the list read before would have put them back
+                const QStringList lines = queueLines() + newLines;
                 writeQueueLines(lines);
                 list->clear();
                 for (const QString& line : lines) list->addItem(line.section('"', 3, 3));
