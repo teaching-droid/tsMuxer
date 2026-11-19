@@ -9283,12 +9283,32 @@ void TsMuxerWindow::showQueue()
                                                     "*.mp4", "*.m4v",  "*.mov", "*.mpg", "*.vob", "*.evo"};
                 QStringList lines = queueLines();
                 int added = 0;
+                int kept = 0;
                 for (const QFileInfo& file : QDir(from).entryInfoList(sources, QDir::Files, QDir::Name))
                 {
                     QString output = to + "/" + file.completeBaseName() + "." + kind.toLower();
                     // never onto the source itself: the same folder and the same kind
                     if (QFileInfo(output) == file)
                         output = to + "/" + file.completeBaseName() + ".new." + kind.toLower();
+                    // An output that is there already was replaced when the queue ran, without the question that a job
+                    // added with "Add to queue" asks (the same question, so its translations hold): No leaves it out.
+                    if (QFile::exists(output))
+                    {
+                        //: Used in expressions "Overwrite existing %1" and "The output %1 already exists".
+                        const QString fileOrDir = tr("file");
+                        QMessageBox msgBox(&dialog);
+                        msgBox.setWindowTitle(tr("Overwrite existing %1?").arg(fileOrDir));
+                        msgBox.setText(tr("The output %1 \"%2\" already exists. Do you want to overwrite it?")
+                                           .arg(fileOrDir)
+                                           .arg(QDir::toNativeSeparators(output)));
+                        msgBox.setIcon(QMessageBox::Question);
+                        msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+                        if (msgBox.exec() != QMessageBox::Yes)
+                        {
+                            ++kept;
+                            continue;
+                        }
+                    }
                     QString line = quoteStr(QDir::toNativeSeparators(file.absoluteFilePath())) + " " +
                                    quoteStr(QDir::toNativeSeparators(output));
                     if (const QStringList languages = takeLanguages(); !languages.isEmpty())
@@ -9296,6 +9316,8 @@ void TsMuxerWindow::showQueue()
                     lines << line;
                     ++added;
                 }
+                if (added == 0 && kept > 0)
+                    return;  // every output was there already, and each was kept
                 if (added == 0)
                 {
                     QMessageBox::information(
