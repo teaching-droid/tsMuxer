@@ -3182,10 +3182,18 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
                 const bool text =
                     id == "S_TEXT/ASS" || id == "S_TEXT/SSA" || id == "S_TEXT/WEBVTT" || isWebmVttText(id);
                 const bool bitmap = id == "S_VOBSUB" || id == "S_DVBSUB";
-                const bool copy = !m_matroskaOutput ? text && codec == "S_TEXT/UTF8"
-                                  : m_matroskaOutput == 2
-                                      ? isWebmVttText(id)
-                                      : (text && codec == "S_TEXT/UTF8") || (bitmap && codec == "S_HDMV/PGS");
+                // forced-pictures takes the forced pictures alone, which only the PGS reader can pick out: a copy of
+                // VobSub kept every picture of the track, without a word (DVB pictures are never marked forced)
+                const bool forcedOnly = id == "S_VOBSUB" && addParams.count("forced-pictures") > 0;
+                const bool copy = !m_matroskaOutput       ? text && codec == "S_TEXT/UTF8"
+                                  : m_matroskaOutput == 2 ? isWebmVttText(id)
+                                                          : (text && codec == "S_TEXT/UTF8") ||
+                                                                (bitmap && codec == "S_HDMV/PGS" && !forcedOnly);
+                if (forcedOnly && codec == "S_HDMV/PGS" && m_matroskaOutput == 1)
+                    LTRACE(LT_INFO, 2,
+                           "Track " << pid << " of " << unquoteStr(fileList[0]) << " is " << id
+                                    << ": forced-pictures takes its forced pictures alone, so it goes into the "
+                                       "output drawn again as PGS.");
                 if (copy)
                 {
                     LTRACE(LT_INFO, 2,
@@ -3277,14 +3285,22 @@ int METADemuxer::addStream(const string& codecName, const string& lineStreamName
     // ** DVD SUBTITLES INTO A MATROSKA OUTPUT STAY VOBSUB. ** The sub-pictures of a VOB were drawn again as PGS for
     // every output, where a Matroska output keeps the VobSub of a Matroska source as it is. They go in as S_VOBSUB now,
     // each unit a block, with the .idx text of the colours of the IFO file as its CodecPrivate. WebM has no VobSub.
+    // forced-pictures: only the PGS reader picks out the forced pictures, so such a track is drawn as PGS below (a copy
+    // kept every picture, without a word)
     if (codecReader == nullptr && (m_matroskaOutput == 1 || m_demuxOutput) && codec == "S_HDMV/PGS" && pid >= 0x20 &&
         pid <= 0x3f && !fileList.empty())
     {
         const std::string first = unquoteStr(trimStr(fileList[0]));
         const std::string ext = strToUpperCase(extractFileExt(first));
         // A demux of a VOB gives what it holds, .idx and .sub; a demux of an .idx/.sub pair gives the pictures, .sup
-        if (ext == "VOB" || ext == "MPG" || ext == "MPEG" || ext == "EVO" ||
-            (m_matroskaOutput == 1 && isVobSubPair(first)))
+        const bool dvdSubtitles = ext == "VOB" || ext == "MPG" || ext == "MPEG" || ext == "EVO" ||
+                                  (m_matroskaOutput == 1 && isVobSubPair(first));
+        if (dvdSubtitles && addParams.count("forced-pictures") > 0)
+            LTRACE(LT_INFO, 2,
+                   "Track " << pid << " of " << first
+                            << " is DVD subtitles: forced-pictures takes their forced pictures alone, so they go into "
+                               "the output drawn again as PGS.");
+        else if (dvdSubtitles)
         {
             std::string idx = dvdSubtitleIdx(first);
             if (idx.empty())
