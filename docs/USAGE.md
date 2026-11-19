@@ -144,7 +144,7 @@ Nothing but the document is written, to the standard output or to the error outp
 {
   "format": 1,
   "program": "tsMuxeR",
-  "version": "3.2.0",
+  "version": "4.0.0",
   "source": "film.mkv",
   "listing": "tracks",
   "tracks": [

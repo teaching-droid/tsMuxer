@@ -1,6 +1,12 @@
-## tsMuxeR 3.2.0
+## tsMuxeR 4.0.0
 
-**3.2.0 fixes 64 faults of earlier versions and brings 37 new features and improvements**, each listed below. Two cases are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**4.0.0 fixes 64 faults of earlier versions and brings 37 new features and improvements**, each listed below. Two cases are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+
+**Why 4.0.0.** The version number follows Semantic Versioning (semver.org): the first number goes up when the same command can give another result than before. Three changes of this release do so, each for the reason given in its entry:
+
+* A demuxed sound file whose delay is zero is named with it (`DELAY 0ms`), so a script that looks for the old name does not find the file.
+* A PGS track that has forced pictures among its others gets them also as a track of their own in a Matroska output, and as `<name>.forced.sup` in a demux, so the same command gives one more track or file. `no-forced-track` on the line of the track leaves it out, and the output is as before.
+* The exit codes are 1 to 7, by what went wrong, where they were -1 to -4 (255 to 252 on Linux and macOS). 0 still means success.
 
 ### Discs and disc images
 
@@ -228,7 +234,7 @@
 
 ### Known issues
 
-* **A made Dolby Vision layer of a stream that begins before its first parameter sets.** Where a single layer Dolby Vision track whose start lost its parameter sets is written to a Blu-ray with its second layer made (new in 3.2), the pictures before the first parameter sets are kept as in 3.1.0: they cannot be decoded, and the track, with its layer, starts early against the sound by them (0.5 s in a test). Written with `--no-dv-layer`, or to another output, such pictures are left out and the track keeps its time.
+* **A made Dolby Vision layer of a stream that begins before its first parameter sets.** Where a single layer Dolby Vision track whose start lost its parameter sets is written to a Blu-ray with its second layer made (new in 4.0.0), the pictures before the first parameter sets are kept as in 3.1.0: they cannot be decoded, and the track, with its layer, starts early against the sound by them (0.5 s in a test). Written with `--no-dv-layer`, or to another output, such pictures are left out and the track keeps its time.
 
 * **Picture and sound after packets lost from both in a transport stream.** Where packets of the picture and of the sound of a TS or M2TS were lost at the same place, as on a damaged disc, the picture and the sound after the loss come early by as much as was lost: they stay in step with each other, but come earlier than in the source. 3.1.0 does the same.
 
