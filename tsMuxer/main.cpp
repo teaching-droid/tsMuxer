@@ -294,7 +294,21 @@ static std::string metaFromSource(const std::string& source, const std::string& 
             line += ", subTrack=" + std::to_string(stream.subTrack != 0 ? stream.subTrack
                                                    : stream.codecInfo.codecID == CODEC_V_MPEG4_H264_DEP ? 1
                                                                                                         : 2);
-        if (!stream.lang.empty() && stream.lang != "und")
+        // The language as the source tags it: lang= with three letters replaced the source's BCP 47 tag, so a track
+        // tagged fr-CA came out of `tsMuxeR film.mkv out.mkv` (and of the jobs of "Add a folder...") as fre without
+        // it, where a meta file of the window keeps it. lang= takes the tag and writes both. Only a tag that names a
+        // language tsMuxeR knows: any other would refuse the job, so the three letters go on as before.
+        const auto tagShape = [](const std::string& t)
+        {
+            return !t.empty() && t.size() <= 35 &&
+                   std::all_of(
+                       t.begin(), t.end(), [](const char c)
+                       { return c == '-' || (c >= '0' && c <= '9') || ((c | 0x20) >= 'a' && (c | 0x20) <= 'z'); });
+        };
+        if (!stream.langTag.empty() && stream.langTag != "und" && tagShape(stream.langTag) &&
+            !iso639FromBcp47(stream.langTag).empty())
+            line += ", lang=" + stream.langTag;
+        else if (!stream.lang.empty() && stream.lang != "und")
             line += ", lang=" + stream.lang;
         if (stream.codecInfo.programName[0] == 'A' && stream.delay != 0)
             line += ", timeshift=" + std::to_string(stream.delay) + "ms";
