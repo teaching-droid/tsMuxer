@@ -140,6 +140,14 @@ static bool isSourceNotMeta(const std::string& name)
     if (!file.open(name.c_str(), File::ofRead))
         return false;
     const int got = file.read(head, sizeof(head));
+    // A meta file saved in UTF-16 has a zero byte in every ASCII character, and was taken for a source, where 3.0.0
+    // refused it with the advice to save it as UTF-8 (refuseUnreadableMeta). Its byte order mark followed by text
+    // marks it, so it goes on to that refusal; a source that happens to start with FF FE is followed by no such text.
+    const auto text = [](const uint8_t c) { return c == '\t' || c == '\r' || c == '\n' || (c >= 0x20 && c < 0x7F); };
+    if (got >= 6 &&
+        ((head[0] == 0xFF && head[1] == 0xFE && text(head[2]) && head[3] == 0 && text(head[4]) && head[5] == 0) ||
+         (head[0] == 0xFE && head[1] == 0xFF && head[2] == 0 && text(head[3]) && head[4] == 0 && text(head[5]))))
+        return false;
     return got > 0 && std::find(head, head + got, 0) != head + got;
 }
 
