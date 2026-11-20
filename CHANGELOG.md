@@ -1,6 +1,6 @@
 ## tsMuxeR 4.0.0
 
-**4.0.0 fixes 65 faults of earlier versions and brings 37 new features and improvements**, each listed below. Two cases are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
+**4.0.0 fixes 66 faults of earlier versions and brings 37 new features and improvements**, each listed below. Two cases are not fixed in this version: they are listed under Known issues at the end. Tests cannot find every fault, so some may remain: if something does not work as it should, please report it, as docs/REPORTING_A_PROBLEM.md describes.
 
 **Why 4.0.0.** The version number follows Semantic Versioning (semver.org): the first number goes up when the same command can give another result than before. Three changes of this release do so, each for the reason given in its entry:
 
@@ -37,6 +37,8 @@
 * **A damaged transport stream could make tsMuxeR read past the end of its data.** A packet whose adaptation field fills it holds no data, and the start of a PES was looked for behind it, past the end of the memory where the packet had been held back at the start of its track; and the program number of a program map of a few bytes was read past its end. Each is read only as far as it goes now.
 
 * **A badly received recording was warned about as scrambled, and an encrypted track with reception errors was not refused.** A packet the receiver marks as damaged (transport_error_indicator) has header bits that cannot be trusted, and its scrambling bits were counted all the same: a recording with bad reception got warnings that thousands of its packets were marked scrambled, though nothing in it is encrypted, and a track damaged in every packet could be refused as scrambled. An encrypted track with some damaged packets was only warned about, as not all its packets were marked scrambled. Packets marked damaged are now left out of the check: a track whose other packets are all scrambled is refused as encrypted, also with reception errors, and a track damaged throughout is said to be so, as whether it is scrambled cannot be judged.
+
+* **The time of a DVB subtitle could be wrong far into a recording.** From about 5.4 hours into a recording, or earlier in a badly damaged one whose times seem to wrap, the time of a DVB subtitle was worked out wrong. It is right now.
 
 * **The sound of AV1 in a transport stream could come early.** Where the sound of an AV1 film in a transport stream starts after its picture, it was muxed from the picture's start, without its delay, where the meta file gave no `timeshift=`: 300 ms early in a test, though the listing gave the delay right. The sound now keeps its delay.
 

@@ -2783,7 +2783,9 @@ void TSDemuxer::demuxOnePacket(uint8_t* pkt, const int pid, DemuxedData& demuxed
             {
                 // on the PGS timeline: from the first video picture, joined files one after another (subtitleBase)
                 const int64_t ptsBase = subtitleBase(pid);
-                sub.pts = (fullPts(pesPacket->getPts()) - ptsBase + m_prevFileLen) * INTERNAL_PTS_FREQ / 90000;
+                // 90 kHz ticks to internal ones: by the whole factor, as the product with INTERNAL_PTS_FREQ ran over
+                // 64 bits from about 5.4 hours on (a long recording, or a damaged one whose times wrap)
+                sub.pts = (fullPts(pesPacket->getPts()) - ptsBase + m_prevFileLen) * (INTERNAL_PTS_FREQ / 90000);
             }
             else
                 sub.pts = -1;
