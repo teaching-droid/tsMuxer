@@ -43,7 +43,7 @@
 **/CMakeFiles
 cmake_install.cmake
 CMakeCache.txt
-/tsmuxer_main.sln.DotSettings.user
+*.DotSettings.user
 
 #Actual build output
 bin/tsMuxeR
@@ -55,14 +55,7 @@ bin/w32/
 bin/w32.zip
 bin/w64/
 bin/w64.zip
-build/
-build-arm64/
-build-x86_64/
-bld/
-climsvc/
-msvcbuild/
-guibuild*/
-clibuild*/
+*build*/
 /build.ninja
 *.log
 .DS_Store
