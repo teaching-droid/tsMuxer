@@ -105,9 +105,9 @@ class TSDemuxer final : public AbstractDemuxer
     // ** WHY A TRACK OR A FILE GIVES NOTHING TO READ. ** A listing said "Can't detect stream type" for a track whose
     // every packet is scrambled (the recording of an encrypted channel) and for a track the program map names but the
     // file does not carry, and said nothing at all for a TS without a PAT: the reader did not count what it saw.
-    // The packets with payload of a track in the listing's read, and how many of them are marked scrambled; false where
-    // no packet of the track was read
-    [[nodiscard]] bool packetsRead(int pid, int64_t& packets, int64_t& scrambled) const;
+    // The packets with payload of a track in the listing's read without the error indicator, how many of them are
+    // marked scrambled, and how many more the receiver marks as damaged; false where no packet of the track was read
+    [[nodiscard]] bool packetsRead(int pid, int64_t& packets, int64_t& scrambled, int64_t& damaged) const;
     // After getTrackList: the program table the scan found none of ("PAT", or "PMT" where a PAT names maps that never
     // came), or nullptr where the maps were found or the file held no TS packet at all; and whether the scan read the
     // whole file
@@ -478,6 +478,9 @@ class TSDemuxer final : public AbstractDemuxer
     // see packetsRead and missingProgramTable: packets with payload and those marked scrambled, of each track read
     // while no mux reports damage (a listing)
     std::map<int, std::pair<int64_t, int64_t>> m_listedPackets;
+    // packets of each track read that the receiver marks as damaged (transport_error_indicator): counted apart, as
+    // their header bits, the scrambling bits among them, cannot be trusted
+    std::map<int, int64_t> m_listedDamaged;
     const char* m_missingTable = nullptr;
     bool m_tableScanWhole = false;
     bool m_tracksFromPes = false;
@@ -579,7 +582,8 @@ class TSDemuxer final : public AbstractDemuxer
     struct PidDamage
     {
         int64_t packets = 0;    // with payload
-        int64_t scrambled = 0;  // of those, marked scrambled
+        int64_t scrambled = 0;  // of those without the error indicator, marked scrambled
+        int64_t damaged = 0;    // of those, marked damaged by the receiver (transport_error_indicator)
         int64_t lost = 0;       // packets missing by the continuity counter (at least)
         int64_t scrambledAt = -1;
         int64_t lostAt = -1;

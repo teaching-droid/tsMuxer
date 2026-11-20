@@ -2157,10 +2157,17 @@ int TSDemuxer::simpleDemuxBlock(DemuxedData& demuxedData, const PIDSet& accepted
             noteDamage(tsPacket, pid);
         else if (m_acceptedPidCache[pid] && tsPacket->dataExists)
         {
-            auto& [packets, scrambled] = m_listedPackets[pid];  // see packetsRead
-            ++packets;
-            if (tsPacket->sc != 0)
-                ++scrambled;
+            // A packet the receiver marks as damaged (transport_error_indicator) has header bits that cannot be
+            // trusted, its scrambling bits among them: in a badly received recording they were counted as scrambled
+            if (tsPacket->tei)
+                ++m_listedDamaged[pid];
+            else
+            {
+                auto& [packets, scrambled] = m_listedPackets[pid];  // see packetsRead
+                ++packets;
+                if (tsPacket->sc != 0)
+                    ++scrambled;
+            }
         }
         demuxPacket(m_curPos, pid, demuxedData, discardSize, part, vect, lastPid);
     }
@@ -3451,12 +3458,14 @@ void TSDemuxer::finishAribPes(const int pid, AribPes& sub, DemuxedData& demuxedD
 static_assert(TS_FRAME_SIZE == 188,
               "a TS packet is 188 bytes; an M2TS packet carries its 4 byte arrival stamp before them");
 
-bool TSDemuxer::packetsRead(const int pid, int64_t& packets, int64_t& scrambled) const
+bool TSDemuxer::packetsRead(const int pid, int64_t& packets, int64_t& scrambled, int64_t& damaged) const
 {
     const auto it = m_listedPackets.find(pid);
     packets = it == m_listedPackets.end() ? 0 : it->second.first;
     scrambled = it == m_listedPackets.end() ? 0 : it->second.second;
-    return packets > 0;
+    const auto bad = m_listedDamaged.find(pid);
+    damaged = bad == m_listedDamaged.end() ? 0 : bad->second;
+    return packets > 0 || damaged > 0;
 }
 
 bool TSDemuxer::isTextStPid(const int pid) const
@@ -3665,7 +3674,12 @@ void TSDemuxer::noteDamage(const TSPacket* tsPacket, const int pid)
         return last != m_damagePts.end() && first != m_firstPtsTime.end() ? last->second - first->second : -1;
     };
     damage.packets++;
-    if (tsPacket->sc != 0 && damage.scrambled++ == 0)
+    // A packet the receiver marks as damaged (transport_error_indicator) has header bits that cannot be trusted, its
+    // scrambling bits among them: a badly received recording got "marked scrambled" warnings for packets in the clear,
+    // and an encrypted track with reception errors was only warned about, as not all its packets were scrambled
+    if (tsPacket->tei)
+        damage.damaged++;
+    else if (tsPacket->sc != 0 && damage.scrambled++ == 0)
         damage.scrambledAt = at();
     // A discontinuity the stream declares (discontinuity_indicator) starts the count again
     const bool declared =
@@ -3707,17 +3721,28 @@ void TSDemuxer::reportDamage()
         LTRACE(LT_DEBUG, 0,
                "TS \"" << m_streamName << "\" PID " << pid << ": " << damage.packets << " packets, " << damage.lost
                        << " missing by the continuity counter" << where(damage.lostAt) << ", " << damage.scrambled
-                       << " marked scrambled");
-        if (damage.packets > 0 && damage.scrambled == damage.packets)
-            THROW(ERR_SOURCE, "Track " << pid << " of \"" << m_streamName << "\" is scrambled: all " << damage.packets
-                                       << " of its packets are marked so (transport_scrambling_control), and what "
-                                          "they hold cannot be read. A recording of an encrypted channel needs to be "
-                                          "decrypted before muxing; or leave the track out.")
+                       << " marked scrambled, " << damage.damaged << " marked damaged");
+        // the packets the receiver delivered without errors: only their scrambling bits say anything
+        const int64_t clean = damage.packets - damage.damaged;
+        const std::string unless = damage.damaged > 0
+                                       ? " (" + std::to_string(damage.damaged) +
+                                             " more are marked damaged by the receiver and say nothing about it)"
+                                       : std::string();
+        if (damage.packets > 0 && clean == 0)
+            LTRACE(LT_WARN, 2,
+                   "Warning: all " << damage.packets << " packets of track " << pid << " of \"" << m_streamName
+                                   << "\" are marked damaged by the receiver (transport_error_indicator), so whether "
+                                      "the track is scrambled cannot be judged, and what it holds is damaged.");
+        if (clean > 0 && damage.scrambled == clean)
+            THROW(ERR_SOURCE, "Track " << pid << " of \"" << m_streamName << "\" is scrambled: all " << clean
+                                       << " of its packets are marked so (transport_scrambling_control)" << unless
+                                       << ", and what they hold cannot be read. A recording of an encrypted channel "
+                                          "needs to be decrypted before muxing; or leave the track out.")
         if (damage.scrambled > 0)
             LTRACE(LT_WARN, 2,
-                   "Warning: " << damage.scrambled << " of the " << damage.packets << " packets of track " << pid
-                               << " of \"" << m_streamName << "\""
-                               << " are marked scrambled (transport_scrambling_control)" << where(damage.scrambledAt)
+                   "Warning: " << damage.scrambled << " of the " << clean << " packets of track " << pid << " of \""
+                               << m_streamName << "\"" << " are marked scrambled (transport_scrambling_control)"
+                               << where(damage.scrambledAt) << unless
                                << ". What they hold cannot be read, and the frames they belong to are damaged.");
         const auto info = m_pmt.pidList.find(pid);
         if (damage.lost > 0 && info != m_pmt.pidList.end() && isVideoPID(info->second.m_streamType))

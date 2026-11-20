@@ -5791,14 +5791,22 @@ DetectStreamRez METADemuxer::DetectStreamReader(const BufferedReaderManager& rea
             if (const auto* ts = dynamic_cast<TSDemuxer*>(demuxer.get());
                 ts && !trackRez.codecInfo.codecID && trackRez.notSupported.empty())
             {
-                int64_t packets = 0, scrambled = 0;
-                if (!ts->packetsRead(itr.first, packets, scrambled))
+                int64_t packets = 0, scrambled = 0, damaged = 0;
+                if (!ts->packetsRead(itr.first, packets, scrambled, damaged))
                     trackRez.notSupported =
                         wholeTracks ? "no data. The program map names this track, but the file has no packet of it."
                                     : "no data. The program map names this track, but the part of the file read "
                                       "has no packet of it.";
+                // Every packet the receiver marks as damaged (transport_error_indicator): their scrambling bits cannot
+                // be trusted, so whether the track is encrypted cannot be said
+                else if (packets == 0)
+                    trackRez.notSupported = "damaged throughout: all " + std::to_string(damaged) +
+                                            " packets read are marked damaged by the receiver "
+                                            "(transport_error_indicator), so whether the track is scrambled cannot "
+                                            "be judged.";
                 // Most packets, not all: a recording of an encrypted channel can carry a few packets in the clear (41
-                // of 49,707 of a real HD recording), and its track is still unreadable
+                // of 49,707 of a real HD recording), and its track is still unreadable. Packets marked damaged are
+                // left out of both counts.
                 else if (scrambled * 2 > packets)
                 {
                     std::ostringstream what;
