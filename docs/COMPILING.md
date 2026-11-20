@@ -1,6 +1,6 @@
 # Compiling
 
-The release binaries are made by the workflows under `.github/workflows/`. The sections Linux, Linux AppImage, MacOS (Native) and Windows (native, Visual Studio) describe what they do. The other sections come from earlier versions; the release builds do not use them, and they are not checked.
+The release binaries are made by the workflows under `.github/workflows/`. The sections below describe what they do.
 
 ## Requirements
 
@@ -19,20 +19,6 @@ The release binaries are made by the workflows under `.github/workflows/`. The s
 
 **Note on Windows Compatibility:** with the [qt6windows7](https://github.com/crystalidea/qt6windows7) patches, the
 32-bit and 64-bit builds run on Windows 7 and newer. See the Windows (native) section below.
-
-## Docker (Linux build)
-
-*This way is not used by the release builds, and it is not checked for this version. The workflows under `.github/workflows/` show how the release binaries are made.*
-
-You can use the [Docker container](https://github.com/jaminmc/tsmuxer_build) to build the Linux
-binaries. Browse to the tsMuxer repository and run:
-
-```
-docker run -it --rm -v $(pwd):/workdir -w="/workdir" jaminmc/tsmuxer_build bash -c ". scripts/rebuild_linux_with_gui_docker.sh"
-```
-
-The executables will be saved to the "bin" folder. Windows and Mac builds do not use Docker in
-this repository; see their own sections below.
 
 ## Linux
 
@@ -73,67 +59,6 @@ information an update tool reads. Each of these tools is a pinned release, check
 run. The workflow then starts the AppImage in clean Debian, Fedora, Arch and Ubuntu containers. To make one, run the
 workflow from the Actions tab of a fork, or follow its steps on Ubuntu 22.04.
 
-## Windows (MXE on Linux)
-
-*This way is not used by the release builds, and it is not checked for this version. The workflows under `.github/workflows/` show how the release binaries are made.*
-
-To compile tsMuxer and tsMuxerGUI for Windows using MXE on Linux you must follow the steps below on Ubuntu:
-
-```
-# setup pre-reqs
-sudo apt-get install -y software-properties-common
-sudo apt-get install -y apt-transport-https
-sudo apt-get install -y checkinstall
-sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys C6BF758A33A3A276
-
-# add MXE repo
-sudo add-apt-repository -y 'deb https://mirror.mxe.cc/repos/apt stretch main'
-sudo apt-get update
-
-# install necessary MXE components for building tsmuxer
-sudo apt-get install -y mxe-x86-64-w64-mingw32.static-zlib
-sudo apt-get install -y mxe-x86-64-w64-mingw32.static-harfbuzz
-sudo apt-get install -y mxe-x86-64-w64-mingw32.static-freetype
-sudo apt-get install -y mxe-x86-64-w64-mingw32.static-cmake
-sudo apt-get install -y mxe-x86-64-w64-mingw32.static-ccache
-sudo apt-get install -y mxe-x86-64-w64-mingw32.static-autotools
-sudo apt-get install -y mxe-x86-64-pc-linux-gnu-autotools
-sudo apt-get install -y mxe-x86-64-pc-linux-gnu-ccache
-sudo apt-get install -y mxe-x86-64-pc-linux-gnu-cc
-sudo apt-get install -y mxe-x86-64-pc-linux-gnu-cmake
-
-# manually fix some weird symlinks
-sudo rm /usr/lib/mxe/usr/x86_64-pc-linux-gnu/bin/x86_64-w64-mingw32.static-g++
-sudo rm /usr/lib/mxe/usr/x86_64-pc-linux-gnu/bin/x86_64-w64-mingw32.static-gcc
-sudo ln -s /usr/lib/mxe/usr/bin/x86_64-w64-mingw32.static-g++ /usr/lib/mxe/usr/x86_64-pc-linux-gnu/bin/x86_64-w64-mingw32.static-g++
-sudo ln -s /usr/lib/mxe/usr/bin/x86_64-w64-mingw32.static-gcc /usr/lib/mxe/usr/x86_64-pc-linux-gnu/bin/x86_64-w64-mingw32.static-gcc
-sudo rm /usr/lib/mxe/usr/x86_64-pc-linux-gnu/bin/g++
-sudo rm /usr/lib/mxe/usr/x86_64-pc-linux-gnu/bin/gcc
-sudo ln -s /usr/lib/mxe/usr/bin/x86_64-w64-mingw32.static-g++ /usr/lib/mxe/usr/x86_64-pc-linux-gnu/bin/g++
-sudo ln -s /usr/lib/mxe/usr/bin/x86_64-w64-mingw32.static-gcc /usr/lib/mxe/usr/x86_64-pc-linux-gnu/bin/gcc
-```
-
-If you want to compile the GUI as well you also need to install Qt6 for MXE:
-```
-sudo apt-get install -y mxe-x86-64-w64-mingw32.static-qt6
-```
-
-With all the dependencies set up we can now actually compile the code.
-
-Open the folder where the git repo is stored in a terminal and run the following to build just the command-line program:
-
-```
-# build the project
-./scripts/rebuild_mxe.sh
-```
-
-Or run the following to build the GUI as well:
-
-```
-# build the project
-./scripts/rebuild_mxe_with_gui.sh
-```
-
 ## Windows (native, Visual Studio)
 
 You need Visual Studio 2022 with the C++ workload, CMake, and Ninja.
@@ -152,139 +77,6 @@ those runs on Windows 10 and later.
 ```
 cmake -B build -DTSMUXER_GUI=ON -DCMAKE_PREFIX_PATH=C:/Qt/6.8.3/msvc2022_64
 cmake --build build --config Release
-```
-
-## Windows (Msys2)
-
-*This way is not used by the release builds, and it is not checked for this version. The workflows under `.github/workflows/` show how the release binaries are made.*
-
-To compile tsMuxer and tsMuxerGUI on Windows with Msys2, you must download and install [Msys2](https://www.msys2.org/). Once you have Msys2 fully configured, open an Msys2 prompt and run the following commands, depending on which build you require:
-
-Common:
-```
-pacman -Syu
-pacman -Sy --needed base-devel \
-flex \
-zlib-devel \
-git
-```
-
-Or just run:
-```
-./scripts/rebuild_msys2.sh
-```
-
-Close the Msys2 prompt and then open either a Mingw32 or a Mingw64 prompt, depending on whether you want to build for 32 or 64 bit.
-```
-pacman -Sy --needed $MINGW_PACKAGE_PREFIX-toolchain \
-$MINGW_PACKAGE_PREFIX-cmake \
-$MINGW_PACKAGE_PREFIX-freetype \
-$MINGW_PACKAGE_PREFIX-zlib \
-$MINGW_PACKAGE_PREFIX-ninja
-```
-
-If you intend to build the GUI as well you need to also install Qt6:
-```
-pacman -Sy --needed $MINGW_PACKAGE_PREFIX-qt6-static
-```
-
-Download tsMuxer repo and browse to its location:
-```
-cd ~
-git clone https://github.com/teaching-droid/tsMuxer.git
-cd tsMuxer
-```
-
-Then run:
-```
-./scripts/rebuild_msys2.sh
-```
-
-This will create in tsMuxer/bin statically compiled versions of tsMuxer and tsMuxerGUI - so no external DLL files are required.
-
-## MacOS (osxcross on Linux)
-
-*This way is not used by the release builds, and it is not checked for this version. The workflows under `.github/workflows/` show how the release binaries are made.*
-
-To use osxcross on Ubuntu to compile for OSX, first run the following commands:
-
-```
-# setup pre-reqs
-sudo apt-get install -y clang
-sudo apt-get install -y patch lzma-dev libxml2-dev libssl-dev python curl
-```
-
-Next you have a choice - compile osxcross from source or use a prepared package. To compile osxcross from source:
-
-```
-# set up a new osxcross installation
-cd /tmp
-git clone https://github.com/tpoechtrager/osxcross.git
-cd osxcross
-curl -sLo tarballs/MacOSX10.10.sdk.tar.xz "https://s3.eu.cloud-object-storage.appdomain.cloud/justdan96-public/MacOSX10.10.sdk.tar.xz"
-
-export SDK_VERSION="10.10"
-export OSX_VERSION_MIN="10.6"
-UNATTENDED=1 ./build.sh
-
-rm -rf "target/SDK/MacOSX10.10.sdk/usr/share/man"
-
-# copy to permanent home as root
-sudo su -
-cp -r target /usr/lib/osxcross                                                                                    
-cp -r tools /usr/lib/osxcross/ 
-exit
-
-# remove temporary folder
-cd ..
-rm -rf osxcross
-```
-
-To install osxcross from a pre-compiled package for Ubuntu 19 x86_64:
-
-```
-# download the package to /tmp
-curl -sLo /tmp/osxcross-6acb50-20191025.tgz "https://s3.eu.cloud-object-storage.appdomain.cloud/justdan96-public/osxcross-6acb50-20191025.tgz"
-
-# extract to correct location
-sudo su -
-cd /tmp
-mkdir /usr/lib/osxcross
-tar -xzf osxcross-6acb50-20191025.tgz --strip-components=1 -C /usr/lib/osxcross
-exit
-
-# remove tar file
-rm -f osxcross-6acb50-20191025.tgz
-```
-
-Now to setup the tsMuxer build dependencies for osxcross:
-
-```
-# install freetype and zlib in root session with osxcross-macports, dependencies for tsMuxer build
-sudo su -
-export MACOSX_DEPLOYMENT_TARGET=10.10
-export PATH=/usr/lib/osxcross/bin:/usr/lib/osxcross/tools:$PATH
-/usr/lib/osxcross/bin/osxcross-conf
-/usr/lib/osxcross/bin/osxcross-macports
-/usr/lib/osxcross/bin/osxcross-macports install freetype
-/usr/lib/osxcross/bin/osxcross-macports install zlib
-exit
-```
-
-With all the dependencies set up we can now actually compile the code.
-
-Open the folder where the git repo is stored in a terminal and run the following to build just the command-line program:
-
-```
-# build the project
-./scripts/rebuild_osxcross.sh
-```
-
-Or run the following to build the GUI as well:
-
-```
-# build the project
-./scripts/rebuild_osxcross_with_gui.sh
 ```
 
 ## MacOS (Native)
