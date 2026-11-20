@@ -179,7 +179,7 @@ static bool languageWanted(const CheckStreamRez& stream)
         // a tag with a region (fr-CA) takes only that tag where the track has one: the other French track is fr-FR
         if ((entry.find('-') == std::string::npos || tag.empty()) && !lang.empty() && iso639FromBcp47(entry) == lang)
             return true;
-        // a word of the name: VFQ in "Français VFQ 5.1"
+        // a word of the name: VFQ in a name such as "Francais VFQ 5.1"
         std::string spaced = name;
         for (char& c : spaced)
             if (!isalnum(static_cast<unsigned char>(c)) && static_cast<unsigned char>(c) < 0x80)
