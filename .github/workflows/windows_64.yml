@@ -202,6 +202,8 @@ jobs:
         Copy-Item "$env:GITHUB_WORKSPACE\LICENSE" "../bin/LICENSE" -Force
         Copy-Item "$env:GITHUB_WORKSPACE\NOTICE" "../bin/NOTICE" -Force
         Copy-Item "$env:GITHUB_WORKSPACE\licenses" "../bin/licenses" -Recurse -Force
+        # The Qt 6.7 parts belong to the AppImage and the macOS package; this package holds Qt 6.8.3.
+        Remove-Item "../bin/licenses/Qt-6.7-third-party.txt" -Force
         if (Test-Path "tsMuxerGUI/tsmuxergui.exe") {
           Copy-Item -Path "tsMuxerGUI/tsmuxergui.exe" -Destination "../bin/tsMuxerGUI.exe" -Force
           # Qt is a shared build here, so gather the Windows 7 patched Qt DLLs and plugins next to the GUI.
