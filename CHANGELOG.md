@@ -8,6 +8,8 @@
 * A PGS track that has forced pictures among its others gets them also as a track of their own in a Matroska output, and as `<name>.forced.sup` in a demux, so the same command gives one more track or file. `no-forced-track` on the line of the track leaves it out, and the output is as before.
 * The exit codes are 1 to 7, by what went wrong, where they were -1 to -4 (255 to 252 on Linux and macOS). 0 still means success.
 
+**The Intel macOS build has been back since 2.19.0, and Mac users are still asked to test.** It has been built and checked, but it has not been run on an Intel Mac, because no Mac is available here. If you have an Intel Mac, please try it and report whether it works. On any Mac, please also report whether ASS subtitles are drawn with libass after `brew install libass`, and what happens when you change the subtitle font and colour in the window.
+
 ### Discs and disc images
 
 * **A sample of a disc title.** `--make-sample` takes a playlist, or a Blu-ray folder or image with `--title=<number>` or `--title=main`: the sample is of the clip the title plays first, last, or at the time of `--at`, and the playlist and that clip's information file go into the zip with it. "Make a sample..." in the window takes a Blu-ray title too.
